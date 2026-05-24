@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: poe
+    description: Poe AI proxy operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,111 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /poe/classify:
+    post:
+      operationId: poeClassify
+      tags: [poe]
+      summary: Classify terrain zones via AI
+      description: Sends a depth grid image to Poe AI and returns 1024 zone labels (32×32 coarse grid)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PoeClassifyRequest"
+      responses:
+        "200":
+          description: Classification result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PoeClassifyResponse"
+        "402":
+          description: Poe credits exhausted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PoeError"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PoeError"
+
+  /poe/query:
+    post:
+      operationId: poeQuery
+      tags: [poe]
+      summary: Natural language terrain query
+      description: Interprets a user message and returns tool calls and/or a text response
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PoeQueryRequest"
+      responses:
+        "200":
+          description: Query result with optional tool calls and text
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PoeQueryResponse"
+        "402":
+          description: Poe credits exhausted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PoeError"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PoeError"
+
+  /poe/describe:
+    post:
+      operationId: poeDescribe
+      tags: [poe]
+      summary: Stream a location description via SSE
+      description: Returns a Server-Sent Event stream of geological description deltas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PoeDescribeRequest"
+      responses:
+        "200":
+          description: SSE stream of text deltas, terminated with data:[DONE]
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /poe/models:
+    get:
+      operationId: getPoeModels
+      tags: [poe]
+      summary: List available Poe models
+      description: Returns publicly available Poe models (cached 1 hour)
+      responses:
+        "200":
+          description: Model list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PoeModelList"
+        "502":
+          description: Could not reach Poe models endpoint
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PoeError"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +141,145 @@ components:
       required:
         - status
 
+    PoeError:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required:
+        - error
+        - message
+
+    PoeClassifyRequest:
+      type: object
+      properties:
+        gridBase64:
+          type: string
+          description: Base64-encoded PNG data URL of the 256×256 depth grid
+        waterType:
+          type: string
+          enum: [saltwater, freshwater]
+          default: saltwater
+        datasetId:
+          type: string
+          description: Dataset identifier used for cache keying
+      required:
+        - gridBase64
+
+    PoeClassifyResponse:
+      type: object
+      properties:
+        zones:
+          type: array
+          items:
+            type: string
+          description: 1024 zone labels in row-major order (32×32 coarse grid)
+        fromCache:
+          type: boolean
+          description: Whether the result was served from the in-memory cache
+      required:
+        - zones
+        - fromCache
+
+    ToolCall:
+      type: object
+      properties:
+        name:
+          type: string
+        args:
+          type: object
+          additionalProperties: true
+        id:
+          type: string
+      required:
+        - name
+        - args
+
+    PoeQueryRequest:
+      type: object
+      properties:
+        userMessage:
+          type: string
+          description: The user's natural language query
+        context:
+          type: object
+          additionalProperties: true
+          description: Terrain context (datasetName, waterType, minDepth, maxDepth, lon, lat, cameraDepth, zoneName)
+        history:
+          type: array
+          items:
+            type: object
+            properties:
+              role:
+                type: string
+              content:
+                type: string
+            required:
+              - role
+              - content
+          description: Last N conversation turns (server clips to 10)
+        previousResponseId:
+          type: string
+          description: Poe response ID for multi-turn context chaining
+      required:
+        - userMessage
+
+    PoeQueryResponse:
+      type: object
+      properties:
+        toolCalls:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolCall"
+        text:
+          type: string
+          nullable: true
+          description: Text reply when no tool calls are made
+        responseId:
+          type: string
+          nullable: true
+          description: Poe response ID for chaining
+      required:
+        - toolCalls
+
+    PoeDescribeRequest:
+      type: object
+      properties:
+        lon:
+          type: number
+        lat:
+          type: number
+        depth:
+          type: number
+        zoneName:
+          type: string
+        datasetName:
+          type: string
+        waterType:
+          type: string
+          enum: [saltwater, freshwater]
+
+    PoeModelList:
+      type: object
+      properties:
+        object:
+          type: string
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              object:
+                type: string
+              owned_by:
+                type: string
+              description:
+                type: string
+            required:
+              - id
+              - object
+              - owned_by
