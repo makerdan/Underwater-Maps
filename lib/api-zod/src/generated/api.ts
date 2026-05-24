@@ -96,7 +96,7 @@ export const GetDatasetsIdOverviewResponse = zod.object({
 
 
 /**
- * Accepts a UTF-8 text file with lon,lat,depth columns. Auto-detects delimiter, header rows, and column order. Returns both a full 256×256 grid and a 64×64 overview grid.
+ * Accepts a UTF-8 .xyz or .csv file with lon,lat,depth columns via multipart form upload. Auto-detects delimiter, header rows, and column order. Returns both a full terrain grid and a 64×64 overview grid.
  * @summary Upload an XYZ or CSV file and receive terrain data at two resolutions
  */
 export const postDatasetsUploadBodyResolutionDefault = 256;
@@ -106,8 +106,7 @@ export const postDatasetsUploadBodyResolutionMax = 512;
 
 
 export const PostDatasetsUploadBody = zod.object({
-  "fileContent": zod.string().describe('Raw UTF-8 text content of the XYZ or CSV file'),
-  "fileName": zod.string().describe('Original file name (used to detect format)'),
+  "file": zod.instanceof(File).describe('XYZ or CSV file with lon,lat,depth columns'),
   "resolution": zod.number().min(postDatasetsUploadBodyResolutionMin).max(postDatasetsUploadBodyResolutionMax).default(postDatasetsUploadBodyResolutionDefault).describe('Target grid resolution for the full terrain (overview is always 64)')
 })
 

@@ -248,6 +248,17 @@ export type GetDatasetsIdTerrainParams = {
 resolution?: number;
 };
 
+export type PostDatasetsUploadBody = {
+  /** XYZ or CSV file with lon,lat,depth columns */
+  file: Blob;
+  /**
+     * Target grid resolution for the full terrain (overview is always 64)
+     * @minimum 32
+     * @maximum 512
+     */
+  resolution?: number;
+};
+
 export type GetMarkersParams = {
 /**
  * Dataset slug to filter markers by

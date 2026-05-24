@@ -15,45 +15,41 @@ export const FileUpload = () => {
     if (!file) return;
 
     setError(null);
-    try {
-      const text = await file.text();
-      postDatasetsUpload.mutate({
-        data: {
-          fileContent: text,
-          fileName: file.name,
-          resolution: 256
-        }
-      }, {
+    const formData = new FormData();
+    formData.append("file", file, file.name);
+    formData.append("resolution", "256");
+
+    postDatasetsUpload.mutate(
+      { data: formData as unknown as { file: File; resolution?: number } },
+      {
         onSuccess: (data) => {
           setDatasetId(null);
           setTerrain(data.terrain);
         },
         onError: (err) => {
           setError(err.message || "Failed to parse terrain");
-        }
-      });
-    } catch (e) {
-      setError("Failed to read file");
-    }
+        },
+      }
+    );
   }, [postDatasetsUpload, setTerrain, setDatasetId]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      'text/csv': ['.csv'],
-      'text/plain': ['.xyz', '.txt']
+      "text/csv": [".csv"],
+      "text/plain": [".xyz", ".txt"],
     },
-    maxFiles: 1
+    maxFiles: 1,
   });
 
   return (
     <Card className="bg-background/80 backdrop-blur-md border-border text-foreground pointer-events-auto overflow-hidden">
       <CardContent className="p-0">
-        <div 
-          {...getRootProps()} 
+        <div
+          {...getRootProps()}
           data-testid="dropzone-terrain"
           className={`p-6 text-center cursor-pointer border-2 border-dashed transition-colors ${
-            isDragActive ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted/50'
+            isDragActive ? "border-primary bg-primary/10" : "border-border hover:bg-muted/50"
           }`}
         >
           <input {...getInputProps()} />

@@ -1,17 +1,19 @@
 import { Router } from "express";
+import multer from "multer";
 import {
   GetDatasetsResponse,
   GetDatasetsIdTerrainResponse,
   GetDatasetsIdOverviewResponse,
-  PostDatasetsUploadBody,
   PostDatasetsUploadResponse,
-} from "@workspace/api-zod";
+} from "@workspace/api-zod"; // eslint-disable-line @typescript-eslint/no-unused-vars
 import {
   PRESET_DATASETS,
   buildTerrainGrid,
   parseXyzCsv,
   gridPoints,
 } from "../lib/terrain.js";
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 const router = Router();
 
@@ -67,15 +69,18 @@ router.get("/datasets/:id/overview", async (req, res): Promise<void> => {
   }
 });
 
-// ── POST /datasets/upload ─────────────────────────────────────────────────────
-router.post("/datasets/upload", async (req, res): Promise<void> => {
-  const parsed = PostDatasetsUploadBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", message: parsed.error.message });
+// ── POST /datasets/upload (multipart/form-data via multer) ───────────────────
+router.post("/datasets/upload", upload.single("file"), async (req, res): Promise<void> => {
+  const file = req.file;
+  if (!file) {
+    res.status(400).json({ error: "missing_file", message: "No file uploaded. Send the XYZ/CSV as the 'file' field in a multipart/form-data request." });
     return;
   }
 
-  const { fileContent, fileName, resolution = 256 } = parsed.data;
+  const fileContent = file.buffer.toString("utf8");
+  const fileName = file.originalname;
+  const rawRes = req.body["resolution"];
+  const resolution = rawRes ? Math.max(32, Math.min(512, parseInt(String(rawRes), 10))) : 256;
 
   let points;
   try {
@@ -101,15 +106,18 @@ router.post("/datasets/upload", async (req, res): Promise<void> => {
   res.json(PostDatasetsUploadResponse.parse({ terrain, overview }));
 });
 
-// Backward-compat alias kept for existing frontend during transition
-router.post("/upload", async (req, res): Promise<void> => {
-  const parsed = PostDatasetsUploadBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", message: parsed.error.message });
+// Backward-compat alias: same multipart handling
+router.post("/upload", upload.single("file"), async (req, res): Promise<void> => {
+  const file = req.file;
+  if (!file) {
+    res.status(400).json({ error: "missing_file", message: "No file uploaded. Send the XYZ/CSV as the 'file' field in a multipart/form-data request." });
     return;
   }
 
-  const { fileContent, fileName, resolution = 256 } = parsed.data;
+  const fileContent = file.buffer.toString("utf8");
+  const fileName = file.originalname;
+  const rawRes = req.body["resolution"];
+  const resolution = rawRes ? Math.max(32, Math.min(512, parseInt(String(rawRes), 10))) : 256;
 
   let points;
   try {
@@ -130,8 +138,9 @@ router.post("/upload", async (req, res): Promise<void> => {
 
   const datasetName = fileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
   const terrain = gridPoints(points, resolution, "upload", datasetName);
+  const overview = gridPoints(points, 64, "upload", datasetName);
 
-  res.json(GetDatasetsIdTerrainResponse.parse(terrain));
+  res.json(PostDatasetsUploadResponse.parse({ terrain, overview }));
 });
 
 export default router;

@@ -110,13 +110,26 @@ paths:
       operationId: postDatasetsUpload
       tags: [datasets]
       summary: Upload an XYZ or CSV file and receive terrain data at two resolutions
-      description: Accepts a UTF-8 text file with lon,lat,depth columns. Auto-detects delimiter, header rows, and column order. Returns both a full 256×256 grid and a 64×64 overview grid.
+      description: Accepts a UTF-8 .xyz or .csv file with lon,lat,depth columns via multipart form upload. Auto-detects delimiter, header rows, and column order. Returns both a full terrain grid and a 64×64 overview grid.
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
-              $ref: "#/components/schemas/TerrainUploadInput"
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: XYZ or CSV file with lon,lat,depth columns
+                resolution:
+                  type: integer
+                  default: 256
+                  minimum: 32
+                  maximum: 512
+                  description: Target grid resolution for the full terrain (overview is always 64)
+              required:
+                - file
       responses:
         "200":
           description: Parsed terrain and overview grids

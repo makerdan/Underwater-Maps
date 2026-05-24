@@ -81,26 +81,15 @@ export const PRESET_DATASETS: DatasetMeta[] = [
     bbox: { minLon: -157.5, minLat: 17.5, maxLon: -153.5, maxLat: 20.3 },
   },
   {
-    id: "arctic-basin",
-    name: "Arctic Ocean Basin",
-    description: "Lomonosov Ridge divides the Arctic into two deep basins, ice-covered year-round",
+    id: "weddell-sea",
+    name: "Weddell Sea",
+    description: "Antarctic marginal sea with broad continental shelf and deep abyssal plain beneath drifting ice",
     waterType: "saltwater",
-    minDepth: 50,
-    maxDepth: 5450,
-    centerLon: 0.0,
-    centerLat: 87.5,
-    bbox: { minLon: -30.0, minLat: 85.0, maxLon: 30.0, maxLat: 90.0 },
-  },
-  {
-    id: "lake-baikal",
-    name: "Lake Baikal",
-    description: "World's deepest freshwater lake — contains 20% of Earth's unfrozen surface fresh water",
-    waterType: "freshwater",
-    minDepth: 5,
-    maxDepth: 1642,
-    centerLon: 108.0,
-    centerLat: 53.5,
-    bbox: { minLon: 103.0, minLat: 51.5, maxLon: 113.0, maxLat: 55.5 },
+    minDepth: 200,
+    maxDepth: 4500,
+    centerLon: -40.0,
+    centerLat: -72.0,
+    bbox: { minLon: -60.0, minLat: -78.0, maxLon: -20.0, maxLat: -66.0 },
   },
 ];
 
@@ -404,15 +393,13 @@ function buildSyntheticGrid(
       const seamount = Math.pow(Math.max(0, 1 - r * 2.5), 2.2);
       return Math.max(20, 5850 - (5850 - 20) * seamount * 0.85 + noise * 300 - 150);
     },
-    "arctic-basin": (nx, ny) => {
-      const noise = fbm(nx * 5 + 15, ny * 5 + 15, 5, 0.5, 2.1);
-      const ridge = Math.pow(Math.max(0, 1 - Math.abs(nx - 0.45) * 5.5), 2.0);
-      return 50 + ridge * 800 + (5450 - 50 - ridge * 800) * (ny * 0.65 + noise * 0.35);
-    },
-    "lake-baikal": (nx, ny) => {
-      const noise = fbm(nx * 8 + 30, ny * 8 + 30, 5, 0.5, 2.0);
-      const elongated = Math.pow(Math.max(0, 1 - Math.abs(nx - 0.5) * 3.0), 1.5);
-      return 5 + (1642 - 5) * (elongated * 0.72 + noise * 0.28);
+    "weddell-sea": (nx, ny) => {
+      const noise = fbm(nx * 5 + 12, ny * 5 + 12, 5, 0.5, 2.0);
+      // Continental shelf in the south (high ny), deep abyssal plain in the north
+      const shelfFactor = Math.max(0, ny - 0.6) / 0.4;
+      const shelf = 200 + 400 * noise;
+      const deep = 3500 + 1000 * noise;
+      return shelfFactor * shelf + (1 - shelfFactor) * deep;
     },
   };
 
@@ -508,52 +495,70 @@ export function gridPoints(
   const lonRange = maxLon - minLon || 1;
   const latRange = maxLat - minLat || 1;
 
-  const depths: number[] = new Array(N * N).fill(-1);
+  // Step 1: nearest-neighbour binning — accumulate depths per cell
+  const depthSums: number[] = new Array(N * N).fill(0);
   const counts: number[] = new Array(N * N).fill(0);
 
   for (const p of points) {
     const col = Math.min(N - 1, Math.floor(((p.lon - minLon) / lonRange) * N));
     const row = Math.min(N - 1, Math.floor(((p.lat - minLat) / latRange) * N));
     const idx = row * N + col;
-    if (depths[idx] === -1) {
-      depths[idx] = p.depth;
-    } else {
-      depths[idx]! += p.depth;
-    }
+    depthSums[idx]! += p.depth;
     counts[idx]!++;
   }
 
-  let minDepth = Infinity;
-  let maxDepth = -Infinity;
-
+  // Step 2: average bins that received multiple points
+  const depths: number[] = new Array(N * N).fill(0);
   for (let i = 0; i < N * N; i++) {
     if (counts[i]! > 0) {
-      depths[i] = depths[i]! / counts[i]!;
-    } else {
-      depths[i] = 0;
+      depths[i] = depthSums[i]! / counts[i]!;
     }
-    if (depths[i]! < minDepth) minDepth = depths[i]!;
-    if (depths[i]! > maxDepth) maxDepth = depths[i]!;
   }
 
-  // 3×3 smoothing pass
-  const smooth = new Array(N * N).fill(0);
-  for (let row = 0; row < N; row++) {
-    for (let col = 0; col < N; col++) {
-      let sum = 0,
-        n = 0;
-      for (let dr = -1; dr <= 1; dr++) {
-        for (let dc = -1; dc <= 1; dc++) {
+  // Step 3: inverse-distance-weighted (IDW) fill for sparse (empty) cells.
+  // For each empty cell we expand outward in concentric Chebyshev rings until
+  // we accumulate at least K weighted samples, then stop. Weight = 1 / dist².
+  const K_MIN = 8; // minimum neighbours to find before stopping
+  for (let i = 0; i < N * N; i++) {
+    if (counts[i]! > 0) continue; // cell already has data
+
+    const row = Math.floor(i / N);
+    const col = i % N;
+    let weightedSum = 0;
+    let weightSum = 0;
+    let found = 0;
+
+    for (let r = 1; r < N; r++) {
+      // Check only the outer ring at Chebyshev radius r
+      for (let dr = -r; dr <= r; dr++) {
+        for (let dc = -r; dc <= r; dc++) {
+          if (Math.abs(dr) !== r && Math.abs(dc) !== r) continue;
           const r2 = row + dr;
           const c2 = col + dc;
-          if (r2 >= 0 && r2 < N && c2 >= 0 && c2 < N) {
-            sum += depths[r2 * N + c2]!;
-            n++;
-          }
+          if (r2 < 0 || r2 >= N || c2 < 0 || c2 >= N) continue;
+          const j = r2 * N + c2;
+          if (counts[j]! === 0) continue;
+          const dist2 = dr * dr + dc * dc;
+          const w = 1 / dist2;
+          weightedSum += depths[j]! * w;
+          weightSum += w;
+          found++;
         }
       }
-      smooth[row * N + col] = sum / n;
+      if (found >= K_MIN) break; // enough neighbours collected
     }
+
+    if (weightSum > 0) {
+      depths[i] = weightedSum / weightSum;
+    }
+  }
+
+  // Step 4: compute min/max after fill
+  let minDepth = Infinity;
+  let maxDepth = -Infinity;
+  for (let i = 0; i < N * N; i++) {
+    if (depths[i]! < minDepth) minDepth = depths[i]!;
+    if (depths[i]! > maxDepth) maxDepth = depths[i]!;
   }
 
   return {
@@ -563,7 +568,7 @@ export function gridPoints(
     resolution: N,
     width: N,
     height: N,
-    depths: smooth as number[],
+    depths,
     minDepth: Math.round(minDepth),
     maxDepth: Math.round(maxDepth),
     minLon,

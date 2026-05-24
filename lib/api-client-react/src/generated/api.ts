@@ -33,9 +33,9 @@ import type {
   PoeError,
   PoeModelList,
   PoeQueryRequest,
+  PostDatasetsUploadBody,
   QueryResult,
   TerrainData,
-  TerrainUploadInput,
   UploadResult
 } from './api.schemas';
 
@@ -306,18 +306,23 @@ export const getPostDatasetsUploadUrl = () => {
 }
 
 /**
- * Accepts a UTF-8 text file with lon,lat,depth columns. Auto-detects delimiter, header rows, and column order. Returns both a full 256×256 grid and a 64×64 overview grid.
+ * Accepts a UTF-8 .xyz or .csv file with lon,lat,depth columns via multipart form upload. Auto-detects delimiter, header rows, and column order. Returns both a full terrain grid and a 64×64 overview grid.
  * @summary Upload an XYZ or CSV file and receive terrain data at two resolutions
  */
-export const postDatasetsUpload = async (terrainUploadInput: TerrainUploadInput, options?: RequestInit): Promise<UploadResult> => {
+export const postDatasetsUpload = async (postDatasetsUploadBody: PostDatasetsUploadBody, options?: RequestInit): Promise<UploadResult> => {
+    const formData = new FormData();
+formData.append(`file`, postDatasetsUploadBody.file);
+if(postDatasetsUploadBody.resolution !== undefined) {
+ formData.append(`resolution`, postDatasetsUploadBody.resolution.toString())
+ }
 
   return customFetch<UploadResult>(getPostDatasetsUploadUrl(),
   {
     ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      terrainUploadInput,)
+    method: 'POST'
+    ,
+    body:
+      formData,
   }
 );}
 
@@ -325,8 +330,8 @@ export const postDatasetsUpload = async (terrainUploadInput: TerrainUploadInput,
 
 
 export const getPostDatasetsUploadMutationOptions = <TError = ErrorType<ApiError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsUpload>>, TError,{data: BodyType<TerrainUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof postDatasetsUpload>>, TError,{data: BodyType<TerrainUploadInput>}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsUpload>>, TError,{data: BodyType<PostDatasetsUploadBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postDatasetsUpload>>, TError,{data: BodyType<PostDatasetsUploadBody>}, TContext> => {
 
 const mutationKey = ['postDatasetsUpload'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -338,7 +343,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postDatasetsUpload>>, {data: BodyType<TerrainUploadInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postDatasetsUpload>>, {data: BodyType<PostDatasetsUploadBody>}> = (props) => {
           const {data} = props ?? {};
 
           return  postDatasetsUpload(data,requestOptions)
@@ -352,18 +357,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type PostDatasetsUploadMutationResult = NonNullable<Awaited<ReturnType<typeof postDatasetsUpload>>>
-    export type PostDatasetsUploadMutationBody = BodyType<TerrainUploadInput>
+    export type PostDatasetsUploadMutationBody = BodyType<PostDatasetsUploadBody>
     export type PostDatasetsUploadMutationError = ErrorType<ApiError>
 
     /**
  * @summary Upload an XYZ or CSV file and receive terrain data at two resolutions
  */
 export const usePostDatasetsUpload = <TError = ErrorType<ApiError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsUpload>>, TError,{data: BodyType<TerrainUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsUpload>>, TError,{data: BodyType<PostDatasetsUploadBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof postDatasetsUpload>>,
         TError,
-        {data: BodyType<TerrainUploadInput>},
+        {data: BodyType<PostDatasetsUploadBody>},
         TContext
       > => {
       return useMutation(getPostDatasetsUploadMutationOptions(options));
