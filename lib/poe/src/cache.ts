@@ -18,14 +18,18 @@ export class PoeCache {
       this.store.delete(key);
       return undefined;
     }
+    this.store.delete(key);
+    this.store.set(key, entry);
     return entry.value;
   }
 
   set(key: string, value: string, ttlMs = TTL_MS): void {
-    if (this.store.size >= MAX_ENTRIES) {
-      const oldest = this.store.keys().next().value;
-      if (oldest !== undefined) {
-        this.store.delete(oldest);
+    if (this.store.has(key)) {
+      this.store.delete(key);
+    } else if (this.store.size >= MAX_ENTRIES) {
+      const lru = this.store.keys().next().value;
+      if (lru !== undefined) {
+        this.store.delete(lru);
       }
     }
     this.store.set(key, { value, expiresAt: Date.now() + ttlMs });

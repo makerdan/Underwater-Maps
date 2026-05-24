@@ -12,22 +12,79 @@ import type { PoeToolSchema } from "@workspace/poe";
 const router = Router();
 
 // ---------------------------------------------------------------------------
-// Auth middleware
+// Rate limiter
+// ---------------------------------------------------------------------------
+
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 30;
+const userRequestCounts = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const entry = userRequestCounts.get(userId);
+  if (!entry || now > entry.resetAt) {
+    userRequestCounts.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  if (entry.count >= RATE_LIMIT_MAX) return false;
+  entry.count++;
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Public: GET /models (no auth required)
+// ---------------------------------------------------------------------------
+
+let modelsCache: { data: unknown; expiresAt: number } | null = null;
+
+router.get("/models", async (_req, res) => {
+  if (modelsCache && Date.now() < modelsCache.expiresAt) {
+    res.json(modelsCache.data);
+    return;
+  }
+
+  try {
+    const response = await fetch("https://api.poe.com/v1/models", {
+      headers: { Authorization: `Bearer ${process.env["POE_API_KEY"] ?? ""}` },
+    });
+    const data = await response.json();
+    modelsCache = { data, expiresAt: Date.now() + 60 * 60 * 1000 };
+    res.json(data);
+  } catch {
+    res.status(502).json({ error: "models_unavailable", message: "Could not fetch Poe models list" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Auth middleware — applied to all routes below this point
 // ---------------------------------------------------------------------------
 
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const userId = (req as unknown as { auth?: { userId?: string } }).auth?.userId;
-  if (!userId) {
-    res.status(401).json({ error: "unauthenticated", message: "Authentication required to use AI features" });
+  if (userId) {
+    next();
     return;
   }
-  next();
+
+  // In development, allow bypass via X-Dev-User-Id header (for testing before
+  // Clerk is installed). This header is ignored in production.
+  if (process.env["NODE_ENV"] !== "production") {
+    const devUserId = (req.headers["x-dev-user-id"] as string | undefined) ?? "dev-anonymous";
+    (req as unknown as { auth: { userId: string } }).auth = { userId: devUserId };
+    next();
+    return;
+  }
+
+  res.status(401).json({
+    error: "unauthenticated",
+    message: "Authentication required to use AI features",
+  });
 }
 
 router.use(requireAuth);
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Shared helpers
 // ---------------------------------------------------------------------------
 
 const POINTS_PER_TOKEN: Record<string, number> = {
@@ -48,24 +105,8 @@ function estimatePoints(model: string, totalTokens: number): number {
   return Math.ceil((totalTokens / 1000) * rate);
 }
 
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX = 30;
-const userRequestCounts = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(userId: string): boolean {
-  const now = Date.now();
-  const entry = userRequestCounts.get(userId);
-  if (!entry || now > entry.resetAt) {
-    userRequestCounts.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-  if (entry.count >= RATE_LIMIT_MAX) return false;
-  entry.count++;
-  return true;
-}
-
 function getAuthenticatedUserId(req: Request): string {
-  return (req as unknown as { auth?: { userId?: string } }).auth!.userId!;
+  return (req as unknown as { auth: { userId: string } }).auth.userId;
 }
 
 async function logUsage(
@@ -160,7 +201,7 @@ router.post("/classify", async (req, res) => {
     return;
   }
 
-  const cacheKey = hashCacheKey(datasetId ?? "unknown", waterType, gridBase64.slice(0, 100));
+  const cacheKey = hashCacheKey(datasetId ?? "unknown", waterType, gridBase64);
   const cached = globalPoeCache.get(cacheKey);
   if (cached) {
     res.json({ zones: JSON.parse(cached), fromCache: true });
@@ -176,7 +217,13 @@ router.post("/classify", async (req, res) => {
       );
 
       const response = await (client as unknown as {
-        responses: { create: (b: Record<string, unknown>) => Promise<{ id: string; output_text: string; usage?: { input_tokens?: number; output_tokens?: number } }> };
+        responses: {
+          create: (b: Record<string, unknown>) => Promise<{
+            id: string;
+            output_text: string;
+            usage?: { input_tokens?: number; output_tokens?: number };
+          }>;
+        };
       }).responses.create({
         model: POE_MODELS.CLASSIFY,
         input,
@@ -220,7 +267,7 @@ router.post("/classify", async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// Query (multi-turn, tool-calling)
+// Query (multi-turn, tool-calling via Responses API)
 // ---------------------------------------------------------------------------
 
 const BATHYSCAN_TOOLS: PoeToolSchema[] = [
@@ -261,7 +308,7 @@ const BATHYSCAN_TOOLS: PoeToolSchema[] = [
     type: "function",
     function: {
       name: "highlightZone",
-      description: "Highlight a terrain zone type across the entire dataset",
+      description: "Highlight all cells of a specific terrain zone type across the dataset",
       parameters: {
         type: "object",
         properties: {
@@ -279,7 +326,72 @@ const BATHYSCAN_TOOLS: PoeToolSchema[] = [
     type: "function",
     function: {
       name: "resetView",
-      description: "Reset the camera to the default overview position",
+      description: "Reset the camera to the default overview position for the current dataset",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "setColormap",
+      description: "Change the depth-to-colour mapping used to render the terrain",
+      parameters: {
+        type: "object",
+        properties: {
+          colormap: {
+            type: "string",
+            enum: ["viridis", "plasma", "turbo", "ocean", "terrain", "greys"],
+            description: "Named colormap to apply",
+          },
+        },
+        required: ["colormap"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "toggleWireframe",
+      description: "Toggle wireframe mode on or off for the terrain mesh",
+      parameters: {
+        type: "object",
+        properties: {
+          enabled: { type: "boolean", description: "true to show wireframe, false to hide" },
+        },
+        required: ["enabled"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "setVerticalExaggeration",
+      description: "Adjust how much the depth axis is vertically exaggerated in the 3D view",
+      parameters: {
+        type: "object",
+        properties: {
+          factor: {
+            type: "number",
+            description: "Exaggeration multiplier (1 = true scale, 2–10 = exaggerated)",
+          },
+        },
+        required: ["factor"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "showDatasetInfo",
+      description: "Display metadata panel for the current dataset (source, resolution, collection date)",
       parameters: {
         type: "object",
         properties: {},
@@ -289,6 +401,14 @@ const BATHYSCAN_TOOLS: PoeToolSchema[] = [
     },
   },
 ];
+
+type ResponsesOutputItem = {
+  type: string;
+  name?: string;
+  arguments?: string;
+  call_id?: string;
+  content?: Array<{ type: string; text?: string }>;
+};
 
 router.post("/query", async (req, res) => {
   const userId = getAuthenticatedUserId(req);
@@ -312,60 +432,76 @@ router.post("/query", async (req, res) => {
   }
 
   const systemPrompt = context
-    ? `You are BathyScan's AI guide for underwater terrain exploration. Dataset: "${context["datasetName"] ?? "Unknown"}". Water type: ${context["waterType"] ?? "saltwater"}. Depth range: ${context["minDepth"] ?? 0}m to ${context["maxDepth"] ?? 0}m. Camera position: lon ${context["lon"] ?? 0}, lat ${context["lat"] ?? 0}, depth ${context["cameraDepth"] ?? 0}m. Zone: "${context["zoneName"] ?? "unknown"}". When the user asks to navigate, move the camera, highlight zones, or filter depths — call the appropriate tool. Answer geological questions directly in text. Be concise and scientific.`
+    ? `You are BathyScan's AI guide for underwater terrain exploration. Dataset: "${context["datasetName"] ?? "Unknown"}". Water type: ${context["waterType"] ?? "saltwater"}. Depth range: ${context["minDepth"] ?? 0}m to ${context["maxDepth"] ?? 0}m. Camera position: lon ${context["lon"] ?? 0}, lat ${context["lat"] ?? 0}, depth ${context["cameraDepth"] ?? 0}m. Zone: "${context["zoneName"] ?? "unknown"}". When the user asks to navigate, highlight zones, filter depths, change the view, or adjust settings — call the appropriate tool. Answer geological questions directly in text. Be concise and scientific.`
     : "You are BathyScan's AI terrain guide. Help the user explore and understand the seafloor terrain.";
 
   try {
     const client = getPoeClient();
 
-    const messages = [
-      { role: "system" as const, content: systemPrompt },
-      ...history.slice(-10).map((h) => ({ role: h.role as "user" | "assistant", content: h.content })),
-      { role: "user" as const, content: userMessage },
+    const inputMessages: Array<{ role: string; content: string }> = [
+      ...history.slice(-10),
+      { role: "user", content: userMessage },
     ];
 
-    const tools = includeTools ? (BATHYSCAN_TOOLS as Parameters<typeof client.chat.completions.create>[0]["tools"]) : undefined;
+    const body: Record<string, unknown> = {
+      model: POE_MODELS.QUERY_TOOLS,
+      input: inputMessages,
+      instructions: systemPrompt,
+      temperature: 0.3,
+      max_output_tokens: 1024,
+      truncation: "auto",
+    };
+
+    if (previousResponseId) {
+      body["previous_response_id"] = previousResponseId;
+    }
+
+    if (includeTools) {
+      body["tools"] = BATHYSCAN_TOOLS;
+      body["tool_choice"] = "auto";
+    }
 
     const response = await withRetry(
       () =>
-        client.chat.completions.create({
-          model: POE_MODELS.QUERY_TOOLS,
-          messages,
-          tools,
-          tool_choice: includeTools ? "auto" : undefined,
-          temperature: 0.3,
-          max_tokens: 1024,
-          stream: false,
-        }),
+        (client as unknown as {
+          responses: {
+            create: (b: Record<string, unknown>) => Promise<{
+              id: string;
+              output_text: string;
+              output?: ResponsesOutputItem[];
+              usage?: { input_tokens?: number; output_tokens?: number };
+            }>;
+          };
+        }).responses.create(body),
       3,
     );
 
-    const message = response.choices[0]?.message;
-
-    const toolCalls = (message?.tool_calls ?? []).map((tc) => ({
-      name: tc.function.name,
-      args: (() => {
-        try {
-          return JSON.parse(tc.function.arguments);
-        } catch {
-          return {};
-        }
-      })(),
-      id: tc.id,
-    }));
+    const toolCalls = (response.output ?? [])
+      .filter((item) => item.type === "function_call")
+      .map((item) => ({
+        name: item.name ?? "",
+        args: (() => {
+          try {
+            return JSON.parse(item.arguments ?? "{}");
+          } catch {
+            return {};
+          }
+        })(),
+        id: item.call_id,
+      }));
 
     await logUsage(
       userId,
       POE_MODELS.QUERY_TOOLS,
       "query",
-      response.usage?.prompt_tokens ?? 0,
-      response.usage?.completion_tokens ?? 0,
+      response.usage?.input_tokens ?? 0,
+      response.usage?.output_tokens ?? 0,
     );
 
     res.json({
       toolCalls,
-      text: message?.content ?? null,
-      responseId: response.id ?? previousResponseId ?? null,
+      text: response.output_text ?? null,
+      responseId: response.id ?? null,
     });
   } catch (err) {
     handlePoeError(err, res);
@@ -441,30 +577,6 @@ router.post("/describe", async (req, res) => {
       res.write(`data: ${JSON.stringify({ error: "stream_error" })}\n\n`);
       res.end();
     }
-  }
-});
-
-// ---------------------------------------------------------------------------
-// Models list (cached 1 hour)
-// ---------------------------------------------------------------------------
-
-let modelsCache: { data: unknown; expiresAt: number } | null = null;
-
-router.get("/models", async (_req, res) => {
-  if (modelsCache && Date.now() < modelsCache.expiresAt) {
-    res.json(modelsCache.data);
-    return;
-  }
-
-  try {
-    const response = await fetch("https://api.poe.com/v1/models", {
-      headers: { Authorization: `Bearer ${process.env["POE_API_KEY"] ?? ""}` },
-    });
-    const data = await response.json();
-    modelsCache = { data, expiresAt: Date.now() + 60 * 60 * 1000 };
-    res.json(data);
-  } catch {
-    res.status(502).json({ error: "models_unavailable", message: "Could not fetch Poe models list" });
   }
 });
 

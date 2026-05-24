@@ -1,3 +1,4 @@
+import { deflateRawSync } from "node:zlib";
 import type { ResponsesInputItem, TerrainGrid } from "./types.js";
 
 export function buildVisionInput(
@@ -53,24 +54,18 @@ export function depthGridToBase64Png(grid: TerrainGrid, targetSize = 256): strin
     }
   }
 
-  return buildDataUrlFromPixels(pixels, size, size);
-}
-
-function buildDataUrlFromPixels(pixels: Uint8Array, width: number, height: number): string {
-  const pngBytes = encodePngGreyscale(pixels, width, height);
+  const pngBytes = encodePngGreyscale(pixels, size, size);
   const base64 = Buffer.from(pngBytes).toString("base64");
   return `data:image/png;base64,${base64}`;
 }
 
 function encodePngGreyscale(rgba: Uint8Array, width: number, height: number): Uint8Array {
-  const { deflateRawSync } = require("zlib") as typeof import("zlib");
-
   const rowSize = width + 1;
   const rawData = new Uint8Array(rowSize * height);
   for (let y = 0; y < height; y++) {
     rawData[y * rowSize] = 0;
     for (let x = 0; x < width; x++) {
-      rawData[y * rowSize + 1 + x] = rgba[(y * width + x) * 4];
+      rawData[y * rowSize + 1 + x] = rgba[(y * width + x) * 4]!;
     }
   }
 
