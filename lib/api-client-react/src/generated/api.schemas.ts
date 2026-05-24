@@ -104,8 +104,10 @@ export interface PoeModelList {
 }
 
 export interface ApiError {
+  /** Machine-readable error code */
   error: string;
-  message: string;
+  /** Human-readable description of what went wrong */
+  details: string;
 }
 
 export type DatasetMetaWaterType = typeof DatasetMetaWaterType[keyof typeof DatasetMetaWaterType];

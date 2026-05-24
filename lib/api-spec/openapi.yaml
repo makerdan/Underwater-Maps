@@ -486,11 +486,13 @@ components:
       properties:
         error:
           type: string
-        message:
+          description: Machine-readable error code
+        details:
           type: string
+          description: Human-readable description of what went wrong
       required:
         - error
-        - message
+        - details
 
     DatasetMeta:
       type: object

@@ -15,12 +15,8 @@ export const FileUpload = () => {
     if (!file) return;
 
     setError(null);
-    const formData = new FormData();
-    formData.append("file", file, file.name);
-    formData.append("resolution", "256");
-
     postDatasetsUpload.mutate(
-      { data: formData as unknown as { file: File; resolution?: number } },
+      { data: { file, resolution: 256 } },
       {
         onSuccess: (data) => {
           setDatasetId(null);

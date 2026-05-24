@@ -42,13 +42,13 @@ router.get("/datasets/:id/terrain", async (req, res): Promise<void> => {
   try {
     const grid = await buildTerrainGrid(id, resolution);
     if (!grid) {
-      res.status(404).json({ error: "not_found", message: `Dataset '${id}' not found` });
+      res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
       return;
     }
     res.json(GetDatasetsIdTerrainResponse.parse(grid));
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Upstream fetch failed";
-    res.status(502).json({ error: "upstream_error", message: msg });
+    res.status(502).json({ error: "upstream_error", details: msg });
   }
 });
 
@@ -59,13 +59,13 @@ router.get("/datasets/:id/overview", async (req, res): Promise<void> => {
   try {
     const grid = await buildTerrainGrid(id, 64);
     if (!grid) {
-      res.status(404).json({ error: "not_found", message: `Dataset '${id}' not found` });
+      res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
       return;
     }
     res.json(GetDatasetsIdOverviewResponse.parse(grid));
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Upstream fetch failed";
-    res.status(502).json({ error: "upstream_error", message: msg });
+    res.status(502).json({ error: "upstream_error", details: msg });
   }
 });
 
@@ -73,7 +73,7 @@ router.get("/datasets/:id/overview", async (req, res): Promise<void> => {
 router.post("/datasets/upload", upload.single("file"), async (req, res): Promise<void> => {
   const file = req.file;
   if (!file) {
-    res.status(400).json({ error: "missing_file", message: "No file uploaded. Send the XYZ/CSV as the 'file' field in a multipart/form-data request." });
+    res.status(400).json({ error: "missing_file", details: "No file uploaded. Send the XYZ/CSV as the 'file' field in a multipart/form-data request." });
     return;
   }
 
@@ -87,14 +87,14 @@ router.post("/datasets/upload", upload.single("file"), async (req, res): Promise
     points = parseXyzCsv(fileContent, fileName);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Parse error";
-    res.status(400).json({ error: "parse_error", message: msg });
+    res.status(400).json({ error: "parse_error", details: msg });
     return;
   }
 
   if (points.length < 10) {
     res.status(400).json({
       error: "insufficient_data",
-      message: "File must contain at least 10 valid (lon, lat, depth) rows",
+      details: "File must contain at least 10 valid (lon, lat, depth) rows",
     });
     return;
   }
@@ -110,7 +110,7 @@ router.post("/datasets/upload", upload.single("file"), async (req, res): Promise
 router.post("/upload", upload.single("file"), async (req, res): Promise<void> => {
   const file = req.file;
   if (!file) {
-    res.status(400).json({ error: "missing_file", message: "No file uploaded. Send the XYZ/CSV as the 'file' field in a multipart/form-data request." });
+    res.status(400).json({ error: "missing_file", details: "No file uploaded. Send the XYZ/CSV as the 'file' field in a multipart/form-data request." });
     return;
   }
 
@@ -124,14 +124,14 @@ router.post("/upload", upload.single("file"), async (req, res): Promise<void> =>
     points = parseXyzCsv(fileContent, fileName);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Parse error";
-    res.status(400).json({ error: "parse_error", message: msg });
+    res.status(400).json({ error: "parse_error", details: msg });
     return;
   }
 
   if (points.length < 10) {
     res.status(400).json({
       error: "insufficient_data",
-      message: "File must contain at least 10 valid (lon, lat, depth) rows",
+      details: "File must contain at least 10 valid (lon, lat, depth) rows",
     });
     return;
   }

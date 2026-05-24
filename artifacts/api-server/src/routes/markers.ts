@@ -8,7 +8,7 @@ const router = Router();
 router.get("/markers", async (req, res): Promise<void> => {
   const parsed = GetMarkersQueryParams.safeParse(req.query);
   if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", message: "datasetId query parameter is required" });
+    res.status(400).json({ error: "invalid_request", details: "datasetId query parameter is required" });
     return;
   }
 
@@ -25,7 +25,7 @@ router.get("/markers", async (req, res): Promise<void> => {
 router.post("/markers", async (req, res): Promise<void> => {
   const parsed = PostMarkersBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", message: parsed.error.message });
+    res.status(400).json({ error: "invalid_request", details: parsed.error.message });
     return;
   }
 
@@ -42,7 +42,7 @@ router.post("/markers", async (req, res): Promise<void> => {
 router.delete("/markers/:id", async (req, res): Promise<void> => {
   const parsed = DeleteMarkersIdParams.safeParse(req.params);
   if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", message: "Invalid id" });
+    res.status(400).json({ error: "invalid_request", details: "Invalid marker id" });
     return;
   }
 
@@ -53,7 +53,7 @@ router.delete("/markers/:id", async (req, res): Promise<void> => {
     .returning({ id: markersTable.id });
 
   if (!deleted.length) {
-    res.status(404).json({ error: "not_found", message: `Marker '${id}' not found` });
+    res.status(404).json({ error: "not_found", details: `Marker '${id}' not found` });
     return;
   }
 
