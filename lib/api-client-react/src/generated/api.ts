@@ -207,7 +207,7 @@ export const getUploadTerrainUrl = () => {
 
 
 
-  return `/api/datasets/upload`
+  return `/api/upload`
 }
 
 /**

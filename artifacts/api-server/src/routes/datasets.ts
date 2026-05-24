@@ -36,7 +36,7 @@ router.get("/datasets/:id/terrain", async (req, res): Promise<void> => {
   const rawRes = req.query["resolution"];
   const resolution = rawRes ? Math.max(32, Math.min(512, parseInt(String(rawRes), 10))) : 128;
 
-  const grid = buildTerrainGrid(id, resolution);
+  const grid = await buildTerrainGrid(id, resolution);
   if (!grid) {
     res.status(404).json({ error: "not_found", message: `Dataset '${id}' not found` });
     return;
@@ -45,7 +45,7 @@ router.get("/datasets/:id/terrain", async (req, res): Promise<void> => {
   res.json(GetDatasetTerrainResponse.parse(grid));
 });
 
-router.post("/datasets/upload", async (req, res): Promise<void> => {
+router.post("/upload", async (req, res): Promise<void> => {
   const parsed = UploadTerrainBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", message: parsed.error.message });

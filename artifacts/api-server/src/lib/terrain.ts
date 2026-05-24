@@ -102,11 +102,193 @@ export const PRESET_DATASETS: DatasetMeta[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Deterministic pseudo-noise (value noise, seeded)
+// GEBCO WCS fetch
+// ---------------------------------------------------------------------------
+
+const GEBCO_WCS =
+  "https://www.gebco.net/data_and_products/gebco_web_services/web_map_service/mapserv";
+
+/**
+ * Parse an ESRI Arc/Info ASCII Grid (AAIGRID) string.
+ * Returns { ncols, nrows, nodata, values } where values is flat row-major array
+ * of elevation values in metres (negative = below sea level).
+ */
+function parseAsciiGrid(text: string): {
+  ncols: number;
+  nrows: number;
+  nodata: number;
+  values: number[];
+} {
+  const lines = text.split(/\r?\n/);
+  let ncols = 0;
+  let nrows = 0;
+  let nodata = -9999;
+  let dataStart = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!.trim().toLowerCase();
+    if (!line) continue;
+    if (line.startsWith("ncols")) {
+      ncols = parseInt(line.split(/\s+/)[1]!, 10);
+    } else if (line.startsWith("nrows")) {
+      nrows = parseInt(line.split(/\s+/)[1]!, 10);
+    } else if (line.startsWith("nodata_value") || line.startsWith("nodata")) {
+      nodata = parseFloat(line.split(/\s+/)[1]!);
+    } else if (!isNaN(parseFloat(line.split(/\s+/)[0]!))) {
+      dataStart = i;
+      break;
+    }
+  }
+
+  const values: number[] = [];
+  for (let i = dataStart; i < lines.length; i++) {
+    const tokens = lines[i]!.trim().split(/\s+/);
+    for (const tok of tokens) {
+      if (tok) values.push(parseFloat(tok));
+    }
+  }
+
+  return { ncols, nrows, nodata, values };
+}
+
+/**
+ * Fetch real bathymetric data from GEBCO WCS for a given bounding box.
+ * GEBCO elevation is negative for ocean depth; we convert to positive depth values.
+ * Land cells (positive elevation) are replaced with 0.
+ */
+async function fetchGebcoGrid(
+  bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number },
+  resolution: number
+): Promise<{ depths: number[]; minDepth: number; maxDepth: number }> {
+  const { minLon, minLat, maxLon, maxLat } = bbox;
+  const params = new URLSearchParams({
+    service: "WCS",
+    version: "1.0.0",
+    request: "GetCoverage",
+    coverage: "gebco_latest_2",
+    crs: "EPSG:4326",
+    bbox: `${minLon},${minLat},${maxLon},${maxLat}`,
+    format: "image/x-aaigrid",
+    width: String(resolution),
+    height: String(resolution),
+  });
+
+  const url = `${GEBCO_WCS}?${params.toString()}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  let text: string;
+  try {
+    const resp = await fetch(url, { signal: controller.signal });
+    if (!resp.ok) throw new Error(`GEBCO WCS returned HTTP ${resp.status}`);
+    text = await resp.text();
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  const { ncols, nrows, nodata, values } = parseAsciiGrid(text);
+
+  if (!ncols || !nrows || values.length === 0) {
+    throw new Error("GEBCO WCS returned an empty or invalid grid");
+  }
+
+  // GEBCO uses row-major, top-to-bottom, left-to-right
+  // Convert elevation (negative = ocean) to positive depth
+  const depths: number[] = new Array(resolution * resolution).fill(0);
+  let minDepth = Infinity;
+  let maxDepth = -Infinity;
+
+  for (let row = 0; row < resolution; row++) {
+    for (let col = 0; col < resolution; col++) {
+      // Map our output grid indices to the raw grid indices
+      const srcRow = Math.min(nrows - 1, Math.floor((row / resolution) * nrows));
+      const srcCol = Math.min(ncols - 1, Math.floor((col / resolution) * ncols));
+      const elev = values[srcRow * ncols + srcCol];
+
+      let depth = 0;
+      if (elev !== undefined && elev !== nodata && elev < 0) {
+        depth = -elev; // positive depth below sea level
+      }
+
+      depths[row * resolution + col] = depth;
+      if (depth < minDepth) minDepth = depth;
+      if (depth > maxDepth) maxDepth = depth;
+    }
+  }
+
+  if (!isFinite(minDepth)) minDepth = 0;
+  if (!isFinite(maxDepth)) maxDepth = 0;
+
+  return { depths, minDepth, maxDepth };
+}
+
+// ---------------------------------------------------------------------------
+// Terrain cache & grid builder
+// ---------------------------------------------------------------------------
+
+const terrainCache = new Map<string, TerrainGrid>();
+
+export async function buildTerrainGrid(
+  datasetId: string,
+  resolution = 128
+): Promise<TerrainGrid | null> {
+  const cacheKey = `${datasetId}:${resolution}`;
+  const cached = terrainCache.get(cacheKey);
+  if (cached) return cached;
+
+  const meta = PRESET_DATASETS.find((d) => d.id === datasetId);
+  if (!meta) return null;
+
+  const N = Math.max(32, Math.min(512, resolution));
+
+  let depths: number[];
+  let minDepth: number;
+  let maxDepth: number;
+
+  try {
+    const gebco = await fetchGebcoGrid(meta.bbox, N);
+    depths = gebco.depths;
+    minDepth = gebco.minDepth;
+    maxDepth = gebco.maxDepth;
+  } catch (err) {
+    // Fallback to synthetic data if GEBCO is unreachable (dev / offline)
+    console.warn(
+      `[terrain] GEBCO WCS unavailable for ${datasetId}: ${(err as Error).message}. Using synthetic fallback.`
+    );
+    const synth = buildSyntheticGrid(datasetId, N, meta);
+    depths = synth.depths;
+    minDepth = synth.minDepth;
+    maxDepth = synth.maxDepth;
+  }
+
+  const grid: TerrainGrid = {
+    datasetId,
+    name: meta.name,
+    waterType: meta.waterType,
+    resolution: N,
+    width: N,
+    height: N,
+    depths,
+    minDepth: Math.round(minDepth),
+    maxDepth: Math.round(maxDepth),
+    minLon: meta.bbox.minLon,
+    maxLon: meta.bbox.maxLon,
+    minLat: meta.bbox.minLat,
+    maxLat: meta.bbox.maxLat,
+    centerLon: meta.centerLon,
+    centerLat: meta.centerLat,
+  };
+
+  terrainCache.set(cacheKey, grid);
+  return grid;
+}
+
+// ---------------------------------------------------------------------------
+// Synthetic fallback (value-noise, used when GEBCO WCS is unreachable)
 // ---------------------------------------------------------------------------
 
 function hash(n: number): number {
-  let x = Math.sin(n) * 43758.5453123;
+  const x = Math.sin(n) * 43758.5453123;
   return x - Math.floor(x);
 }
 
@@ -136,7 +318,13 @@ function valueNoise(x: number, y: number): number {
   return lerp(lerp(a, b, ux), lerp(c, d, ux), uy);
 }
 
-function fbm(x: number, y: number, octaves: number, persistence: number, lacunarity: number): number {
+function fbm(
+  x: number,
+  y: number,
+  octaves: number,
+  persistence: number,
+  lacunarity: number
+): number {
   let value = 0;
   let amplitude = 1.0;
   let frequency = 1.0;
@@ -150,145 +338,76 @@ function fbm(x: number, y: number, octaves: number, persistence: number, lacunar
   return value / maxValue;
 }
 
-// ---------------------------------------------------------------------------
-// Terrain generators per dataset
-// ---------------------------------------------------------------------------
+function buildSyntheticGrid(
+  datasetId: string,
+  N: number,
+  meta: DatasetMeta
+): { depths: number[]; minDepth: number; maxDepth: number } {
+  const depthFns: Record<string, (nx: number, ny: number) => number> = {
+    "mariana-trench": (nx, ny) => {
+      const noise = fbm(nx * 8 + 10, ny * 8 + 10, 6, 0.5, 2.1);
+      const trenchFactor = Math.pow(Math.max(0, 1 - Math.abs(ny - 0.5) * 3.5), 2.5);
+      return 3200 + (10935 - 3200) * (trenchFactor * 0.78 + noise * 0.22);
+    },
+    "mid-atlantic-ridge": (nx, ny) => {
+      const noise = fbm(nx * 6 + 20, ny * 6 + 20, 5, 0.55, 2.0);
+      const ridgeFactor = Math.pow(Math.max(0, 1 - Math.abs(nx - 0.5) * 4), 1.8);
+      const riftFactor = Math.pow(Math.max(0, 1 - Math.abs(nx - 0.5) * 12), 4);
+      return Math.max(1400, 4600 - (4600 - 1400) * ridgeFactor * 0.8 + (3000 - 1400) * riftFactor * 0.3 + noise * 400 - 200);
+    },
+    "mediterranean-basin": (nx, ny) => {
+      const noise = fbm(nx * 10 + 5, ny * 10 + 5, 5, 0.5, 2.0);
+      const basins = 0.5 + 0.5 * Math.sin(nx * Math.PI * 3) * Math.sin(ny * Math.PI * 1.5);
+      return 100 + (5267 - 100) * (basins * 0.6 + noise * 0.4);
+    },
+    "hawaii-seamount": (nx, ny) => {
+      const noise = fbm(nx * 7 + 3, ny * 7 + 3, 6, 0.5, 2.1);
+      const r = Math.sqrt((nx - 0.6) ** 2 + (ny - 0.4) ** 2);
+      const seamount = Math.pow(Math.max(0, 1 - r * 2.5), 2.2);
+      return Math.max(20, 5850 - (5850 - 20) * seamount * 0.85 + noise * 300 - 150);
+    },
+    "arctic-basin": (nx, ny) => {
+      const noise = fbm(nx * 5 + 15, ny * 5 + 15, 5, 0.5, 2.1);
+      const ridge = Math.pow(Math.max(0, 1 - Math.abs(nx - 0.45) * 5.5), 2.0);
+      return 50 + ridge * 800 + (5450 - 50 - ridge * 800) * (ny * 0.65 + noise * 0.35);
+    },
+    "lake-baikal": (nx, ny) => {
+      const noise = fbm(nx * 8 + 30, ny * 8 + 30, 5, 0.5, 2.0);
+      const elongated = Math.pow(Math.max(0, 1 - Math.abs(nx - 0.5) * 3.0), 1.5);
+      return 5 + (1642 - 5) * (elongated * 0.72 + noise * 0.28);
+    },
+  };
 
-type DepthFn = (nx: number, ny: number) => number;
+  const depthFn = depthFns[datasetId] ?? ((nx, ny) => {
+    const noise = fbm(nx * 6 + 7, ny * 6 + 7, 5, 0.5, 2.0);
+    return meta.minDepth + (meta.maxDepth - meta.minDepth) * noise;
+  });
 
-function marianaDepthFn(nx: number, ny: number): number {
-  const noise = fbm(nx * 8 + 10, ny * 8 + 10, 6, 0.5, 2.1);
-  const trenchFactor = Math.pow(Math.max(0, 1 - Math.abs(ny - 0.5) * 3.5), 2.5);
-  const shelf = (1 - Math.pow(nx, 2)) * 0.12;
-  const base = 3200;
-  const trench = 10935;
-  return base + (trench - base) * (trenchFactor * 0.78 + noise * 0.22) + shelf * 800;
-}
-
-function midAtlanticDepthFn(nx: number, ny: number): number {
-  const noise = fbm(nx * 6 + 20, ny * 6 + 20, 5, 0.55, 2.0);
-  const ridgeFactor = Math.pow(Math.max(0, 1 - Math.abs(nx - 0.5) * 4), 1.8);
-  const riftFactor = Math.pow(Math.max(0, 1 - Math.abs(nx - 0.5) * 12), 4);
-  const base = 4600;
-  const ridgeCrest = 1400;
-  const riftDepth = 3000;
-  const depth = base - (base - ridgeCrest) * ridgeFactor * 0.8 + (riftDepth - ridgeCrest) * riftFactor * 0.3;
-  return Math.max(ridgeCrest, depth + noise * 400 - 200);
-}
-
-function mediterraneanDepthFn(nx: number, ny: number): number {
-  const noise = fbm(nx * 10 + 5, ny * 10 + 5, 5, 0.5, 2.0);
-  const basins = 0.5 + 0.5 * Math.sin(nx * Math.PI * 3) * Math.sin(ny * Math.PI * 1.5);
-  const shelf = Math.pow(Math.min(1, Math.abs(ny - 0.5) * 2.5 + Math.abs(nx - 0.5) * 1.5), 1.5) * 0.1;
-  const base = 100 + shelf * 1000;
-  const max = 5267;
-  return base + (max - base) * (basins * 0.6 + noise * 0.4) * (1 - shelf * 0.5);
-}
-
-function hawaiiDepthFn(nx: number, ny: number): number {
-  const noise = fbm(nx * 7 + 3, ny * 7 + 3, 6, 0.5, 2.1);
-  const dx = (nx - 0.6);
-  const dy = (ny - 0.4);
-  const r = Math.sqrt(dx * dx + dy * dy);
-  const seamount = Math.pow(Math.max(0, 1 - r * 2.5), 2.2);
-  const dx2 = (nx - 0.25);
-  const dy2 = (ny - 0.6);
-  const r2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
-  const seamount2 = Math.pow(Math.max(0, 1 - r2 * 3.0), 2.0) * 0.6;
-  const base = 5850;
-  const peak = 20;
-  return Math.max(peak, base - (base - peak) * (seamount + seamount2) * 0.85 + noise * 300 - 150);
-}
-
-function arcticDepthFn(nx: number, ny: number): number {
-  const noise = fbm(nx * 5 + 15, ny * 5 + 15, 5, 0.5, 2.1);
-  const ridge = Math.pow(Math.max(0, 1 - Math.abs(nx - 0.45) * 5.5), 2.0);
-  const alpha = ny * 0.6 + ridge * 0.4;
-  const base = 50 + ridge * 800;
-  const max = 5450;
-  return base + (max - base) * (alpha * 0.65 + noise * 0.35);
-}
-
-function baikalDepthFn(nx: number, ny: number): number {
-  const noise = fbm(nx * 8 + 30, ny * 8 + 30, 5, 0.5, 2.0);
-  const elongated = Math.pow(Math.max(0, 1 - Math.abs(nx - 0.5) * 3.0), 1.5);
-  const midRift = Math.pow(Math.max(0, 1 - Math.abs(ny - 0.5) * 2.0), 2.0) * 0.5;
-  const shallowEnds = 1 - Math.pow(Math.abs(ny - 0.5) * 1.8, 2);
-  const base = 5;
-  const max = 1642;
-  const factor = elongated * (0.6 + midRift * 0.4) * Math.max(0.1, shallowEnds);
-  return base + (max - base) * (factor * 0.72 + noise * 0.28);
-}
-
-const DEPTH_GENERATORS: Record<string, DepthFn> = {
-  "mariana-trench": marianaDepthFn,
-  "mid-atlantic-ridge": midAtlanticDepthFn,
-  "mediterranean-basin": mediterraneanDepthFn,
-  "hawaii-seamount": hawaiiDepthFn,
-  "arctic-basin": arcticDepthFn,
-  "lake-baikal": baikalDepthFn,
-};
-
-// ---------------------------------------------------------------------------
-// Grid builder
-// ---------------------------------------------------------------------------
-
-const terrainCache = new Map<string, TerrainGrid>();
-
-export function buildTerrainGrid(datasetId: string, resolution = 128): TerrainGrid | null {
-  const cacheKey = `${datasetId}:${resolution}`;
-  const cached = terrainCache.get(cacheKey);
-  if (cached) return cached;
-
-  const meta = PRESET_DATASETS.find((d) => d.id === datasetId);
-  if (!meta) return null;
-
-  const depthFn = DEPTH_GENERATORS[datasetId];
-  if (!depthFn) return null;
-
-  const N = Math.max(32, Math.min(512, resolution));
   const depths: number[] = new Array(N * N);
   let minDepth = Infinity;
   let maxDepth = -Infinity;
 
   for (let row = 0; row < N; row++) {
     for (let col = 0; col < N; col++) {
-      const nx = col / (N - 1);
-      const ny = row / (N - 1);
-      const d = depthFn(nx, ny);
+      const d = depthFn(col / (N - 1), row / (N - 1));
       depths[row * N + col] = d;
       if (d < minDepth) minDepth = d;
       if (d > maxDepth) maxDepth = d;
     }
   }
 
-  const grid: TerrainGrid = {
-    datasetId,
-    name: meta.name,
-    waterType: meta.waterType,
-    resolution: N,
-    width: N,
-    height: N,
-    depths,
-    minDepth: Math.round(minDepth),
-    maxDepth: Math.round(maxDepth),
-    minLon: meta.bbox.minLon,
-    maxLon: meta.bbox.maxLon,
-    minLat: meta.bbox.minLat,
-    maxLat: meta.bbox.maxLat,
-    centerLon: meta.centerLon,
-    centerLat: meta.centerLat,
-  };
-
-  terrainCache.set(cacheKey, grid);
-  return grid;
+  return { depths, minDepth, maxDepth };
 }
 
 // ---------------------------------------------------------------------------
 // CSV / XYZ parser and gridder
 // ---------------------------------------------------------------------------
 
-interface RawPoint { lon: number; lat: number; depth: number }
+interface RawPoint {
+  lon: number;
+  lat: number;
+  depth: number;
+}
 
 export function parseXyzCsv(content: string, fileName: string): RawPoint[] {
   const lines = content.split(/\r?\n/).filter((l) => l.trim() && !l.trim().startsWith("#"));
@@ -308,7 +427,9 @@ export function parseXyzCsv(content: string, fileName: string): RawPoint[] {
     const headers = first.toLowerCase().split(sep);
     lonIdx = Math.max(0, headers.findIndex((h) => h.includes("lon") || h === "x" || h === "long"));
     latIdx = Math.max(0, headers.findIndex((h) => h.includes("lat") || h === "y"));
-    const dIdx = headers.findIndex((h) => h.includes("dep") || h.includes("z") || h.includes("depth") || h.includes("elev"));
+    const dIdx = headers.findIndex(
+      (h) => h.includes("dep") || h.includes("z") || h.includes("depth") || h.includes("elev")
+    );
     depthIdx = dIdx >= 0 ? dIdx : 2;
   }
 
@@ -326,11 +447,18 @@ export function parseXyzCsv(content: string, fileName: string): RawPoint[] {
   return points;
 }
 
-export function gridPoints(points: RawPoint[], resolution: number, datasetId: string, name: string): TerrainGrid {
+export function gridPoints(
+  points: RawPoint[],
+  resolution: number,
+  datasetId: string,
+  name: string
+): TerrainGrid {
   const N = Math.max(32, Math.min(512, resolution));
 
-  let minLon = Infinity, maxLon = -Infinity;
-  let minLat = Infinity, maxLat = -Infinity;
+  let minLon = Infinity,
+    maxLon = -Infinity;
+  let minLat = Infinity,
+    maxLat = -Infinity;
 
   for (const p of points) {
     if (p.lon < minLon) minLon = p.lon;
@@ -370,10 +498,12 @@ export function gridPoints(points: RawPoint[], resolution: number, datasetId: st
     if (depths[i]! > maxDepth) maxDepth = depths[i]!;
   }
 
+  // 3×3 smoothing pass
   const smooth = new Array(N * N).fill(0);
   for (let row = 0; row < N; row++) {
     for (let col = 0; col < N; col++) {
-      let sum = 0, n = 0;
+      let sum = 0,
+        n = 0;
       for (let dr = -1; dr <= 1; dr++) {
         for (let dc = -1; dc <= 1; dc++) {
           const r2 = row + dr;
