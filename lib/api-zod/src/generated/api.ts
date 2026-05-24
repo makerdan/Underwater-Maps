@@ -9,6 +9,91 @@ import * as zod from 'zod';
 
 
 /**
+ * Returns metadata for all built-in GEBCO and demo datasets
+ * @summary List available pre-loaded bathymetric regions
+ */
+export const ListDatasetsResponseItem = zod.object({
+  "id": zod.string().describe('Stable slug used in API paths'),
+  "name": zod.string().describe('Human-readable region name'),
+  "description": zod.string().describe('One-line geological description'),
+  "waterType": zod.enum(['saltwater', 'freshwater']),
+  "minDepth": zod.number().describe('Shallowest point in metres (positive = below sea level)'),
+  "maxDepth": zod.number().describe('Deepest point in metres'),
+  "centerLon": zod.number(),
+  "centerLat": zod.number(),
+  "bbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}).describe('Bounding box [minLon, minLat, maxLon, maxLat]')
+})
+export const ListDatasetsResponse = zod.array(ListDatasetsResponseItem)
+
+
+/**
+ * Returns a depth grid for the given dataset ID, suitable for building a Three.js terrain mesh
+ * @summary Get gridded terrain data for a dataset
+ */
+export const GetDatasetTerrainParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetDatasetTerrainResponse = zod.object({
+  "datasetId": zod.string(),
+  "name": zod.string(),
+  "waterType": zod.enum(['saltwater', 'freshwater']),
+  "resolution": zod.number().describe('Grid side length N (grid is NxN)'),
+  "width": zod.number(),
+  "height": zod.number(),
+  "depths": zod.array(zod.number()).describe('Row-major flat array of depth values (metres, positive = below surface)'),
+  "minDepth": zod.number(),
+  "maxDepth": zod.number(),
+  "minLon": zod.number(),
+  "maxLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLat": zod.number(),
+  "centerLon": zod.number(),
+  "centerLat": zod.number()
+})
+
+
+/**
+ * Accepts a UTF-8 text file with lon,lat,depth columns and returns a gridded terrain mesh
+ * @summary Upload an XYZ or CSV file and receive terrain data
+ */
+export const uploadTerrainBodyResolutionDefault = 128;
+export const uploadTerrainBodyResolutionMin = 32;
+export const uploadTerrainBodyResolutionMax = 512;
+
+
+
+export const UploadTerrainBody = zod.object({
+  "fileContent": zod.string().describe('Raw UTF-8 text content of the XYZ or CSV file'),
+  "fileName": zod.string().describe('Original file name (used to detect format)'),
+  "resolution": zod.number().min(uploadTerrainBodyResolutionMin).max(uploadTerrainBodyResolutionMax).default(uploadTerrainBodyResolutionDefault).describe('Target grid resolution')
+})
+
+export const UploadTerrainResponse = zod.object({
+  "datasetId": zod.string(),
+  "name": zod.string(),
+  "waterType": zod.enum(['saltwater', 'freshwater']),
+  "resolution": zod.number().describe('Grid side length N (grid is NxN)'),
+  "width": zod.number(),
+  "height": zod.number(),
+  "depths": zod.array(zod.number()).describe('Row-major flat array of depth values (metres, positive = below surface)'),
+  "minDepth": zod.number(),
+  "maxDepth": zod.number(),
+  "minLon": zod.number(),
+  "maxLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLat": zod.number(),
+  "centerLon": zod.number(),
+  "centerLat": zod.number()
+})
+
+
+/**
  * Returns server health status
  * @summary Health check
  */

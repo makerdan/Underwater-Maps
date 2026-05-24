@@ -6,7 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface PoeClassifyResponse {
+export interface ClassifyResult {
   /** 1024 zone labels in row-major order (32×32 coarse grid) */
   zones: string[];
   /** Whether the result was served from the in-memory cache */

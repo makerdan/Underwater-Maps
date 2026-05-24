@@ -12,7 +12,84 @@ tags:
     description: Health operations
   - name: poe
     description: Poe AI proxy operations
+  - name: datasets
+    description: Bathymetric dataset operations
 paths:
+  /datasets:
+    get:
+      operationId: listDatasets
+      tags: [datasets]
+      summary: List available pre-loaded bathymetric regions
+      description: Returns metadata for all built-in GEBCO and demo datasets
+      responses:
+        "200":
+          description: Dataset list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DatasetMeta"
+
+  /datasets/{id}/terrain:
+    get:
+      operationId: getDatasetTerrain
+      tags: [datasets]
+      summary: Get gridded terrain data for a dataset
+      description: Returns a depth grid for the given dataset ID, suitable for building a Three.js terrain mesh
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Terrain grid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TerrainData"
+        "404":
+          description: Dataset not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Upstream data fetch failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /datasets/upload:
+    post:
+      operationId: uploadTerrain
+      tags: [datasets]
+      summary: Upload an XYZ or CSV file and receive terrain data
+      description: Accepts a UTF-8 text file with lon,lat,depth columns and returns a gridded terrain mesh
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TerrainUploadInput"
+      responses:
+        "200":
+          description: Parsed terrain data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TerrainData"
+        "400":
+          description: Unparseable file or missing columns
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+
   /healthz:
     get:
       operationId: healthCheck
@@ -45,7 +122,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PoeClassifyResponse"
+                $ref: "#/components/schemas/ClassifyResult"
         "402":
           description: Poe credits exhausted
           content:
@@ -77,7 +154,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PoeQueryResponse"
+                $ref: "#/components/schemas/QueryResult"
         "402":
           description: Poe credits exhausted
           content:
@@ -168,7 +245,7 @@ components:
       required:
         - gridBase64
 
-    PoeClassifyResponse:
+    ClassifyResult:
       type: object
       properties:
         zones:
@@ -226,7 +303,7 @@ components:
       required:
         - userMessage
 
-    PoeQueryResponse:
+    QueryResult:
       type: object
       properties:
         toolCalls:
@@ -283,3 +360,133 @@ components:
               - id
               - object
               - owned_by
+
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required:
+        - error
+        - message
+
+    DatasetMeta:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Stable slug used in API paths
+        name:
+          type: string
+          description: Human-readable region name
+        description:
+          type: string
+          description: One-line geological description
+        waterType:
+          type: string
+          enum: [saltwater, freshwater]
+        minDepth:
+          type: number
+          description: Shallowest point in metres (positive = below sea level)
+        maxDepth:
+          type: number
+          description: Deepest point in metres
+        centerLon:
+          type: number
+        centerLat:
+          type: number
+        bbox:
+          type: object
+          description: Bounding box [minLon, minLat, maxLon, maxLat]
+          properties:
+            minLon: { type: number }
+            minLat: { type: number }
+            maxLon: { type: number }
+            maxLat: { type: number }
+          required: [minLon, minLat, maxLon, maxLat]
+      required:
+        - id
+        - name
+        - description
+        - waterType
+        - minDepth
+        - maxDepth
+        - centerLon
+        - centerLat
+        - bbox
+
+    TerrainData:
+      type: object
+      properties:
+        datasetId:
+          type: string
+        name:
+          type: string
+        waterType:
+          type: string
+          enum: [saltwater, freshwater]
+        resolution:
+          type: integer
+          description: Grid side length N (grid is NxN)
+        width:
+          type: integer
+        height:
+          type: integer
+        depths:
+          type: array
+          items:
+            type: number
+          description: Row-major flat array of depth values (metres, positive = below surface)
+        minDepth:
+          type: number
+        maxDepth:
+          type: number
+        minLon:
+          type: number
+        maxLon:
+          type: number
+        minLat:
+          type: number
+        maxLat:
+          type: number
+        centerLon:
+          type: number
+        centerLat:
+          type: number
+      required:
+        - datasetId
+        - name
+        - waterType
+        - resolution
+        - width
+        - height
+        - depths
+        - minDepth
+        - maxDepth
+        - minLon
+        - maxLon
+        - minLat
+        - maxLat
+        - centerLon
+        - centerLat
+
+    TerrainUploadInput:
+      type: object
+      properties:
+        fileContent:
+          type: string
+          description: Raw UTF-8 text content of the XYZ or CSV file
+        fileName:
+          type: string
+          description: Original file name (used to detect format)
+        resolution:
+          type: integer
+          default: 128
+          minimum: 32
+          maximum: 512
+          description: Target grid resolution
+      required:
+        - fileContent
+        - fileName

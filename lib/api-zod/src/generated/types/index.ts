@@ -6,10 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './apiError';
+export * from './classifyResult';
+export * from './datasetMeta';
+export * from './datasetMetaBbox';
+export * from './datasetMetaWaterType';
 export * from './healthStatus';
 export * from './poeClassifyRequest';
 export * from './poeClassifyRequestWaterType';
-export * from './poeClassifyResponse';
 export * from './poeDescribeRequest';
 export * from './poeDescribeRequestWaterType';
 export * from './poeError';
@@ -18,6 +22,9 @@ export * from './poeModelListDataItem';
 export * from './poeQueryRequest';
 export * from './poeQueryRequestContext';
 export * from './poeQueryRequestHistoryItem';
-export * from './poeQueryResponse';
+export * from './queryResult';
+export * from './terrainData';
+export * from './terrainDataWaterType';
+export * from './terrainUploadInput';
 export * from './toolCall';
 export * from './toolCallArgs';

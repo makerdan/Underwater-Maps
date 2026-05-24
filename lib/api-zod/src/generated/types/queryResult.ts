@@ -7,7 +7,7 @@
  */
 import type { ToolCall } from './toolCall';
 
-export interface PoeQueryResponse {
+export interface QueryResult {
   toolCalls: ToolCall[];
   /** Text reply when no tool calls are made */
   text?: string | null;

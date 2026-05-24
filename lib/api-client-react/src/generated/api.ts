@@ -20,14 +20,18 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ApiError,
+  ClassifyResult,
+  DatasetMeta,
   HealthStatus,
   PoeClassifyRequest,
-  PoeClassifyResponse,
   PoeDescribeRequest,
   PoeError,
   PoeModelList,
   PoeQueryRequest,
-  PoeQueryResponse
+  QueryResult,
+  TerrainData,
+  TerrainUploadInput
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -41,6 +45,234 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
+
+export const getListDatasetsUrl = () => {
+
+
+
+
+  return `/api/datasets`
+}
+
+/**
+ * Returns metadata for all built-in GEBCO and demo datasets
+ * @summary List available pre-loaded bathymetric regions
+ */
+export const listDatasets = async ( options?: RequestInit): Promise<DatasetMeta[]> => {
+
+  return customFetch<DatasetMeta[]>(getListDatasetsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListDatasetsQueryKey = () => {
+    return [
+    `/api/datasets`
+    ] as const;
+    }
+
+
+export const getListDatasetsQueryOptions = <TData = Awaited<ReturnType<typeof listDatasets>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDatasets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListDatasetsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDatasets>>> = ({ signal }) => listDatasets({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDatasets>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListDatasetsQueryResult = NonNullable<Awaited<ReturnType<typeof listDatasets>>>
+export type ListDatasetsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List available pre-loaded bathymetric regions
+ */
+
+export function useListDatasets<TData = Awaited<ReturnType<typeof listDatasets>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDatasets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListDatasetsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetDatasetTerrainUrl = (id: string,) => {
+
+
+
+
+  return `/api/datasets/${id}/terrain`
+}
+
+/**
+ * Returns a depth grid for the given dataset ID, suitable for building a Three.js terrain mesh
+ * @summary Get gridded terrain data for a dataset
+ */
+export const getDatasetTerrain = async (id: string, options?: RequestInit): Promise<TerrainData> => {
+
+  return customFetch<TerrainData>(getGetDatasetTerrainUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDatasetTerrainQueryKey = (id: string,) => {
+    return [
+    `/api/datasets/${id}/terrain`
+    ] as const;
+    }
+
+
+export const getGetDatasetTerrainQueryOptions = <TData = Awaited<ReturnType<typeof getDatasetTerrain>>, TError = ErrorType<ApiError>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetTerrain>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDatasetTerrainQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDatasetTerrain>>> = ({ signal }) => getDatasetTerrain(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDatasetTerrain>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDatasetTerrainQueryResult = NonNullable<Awaited<ReturnType<typeof getDatasetTerrain>>>
+export type GetDatasetTerrainQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get gridded terrain data for a dataset
+ */
+
+export function useGetDatasetTerrain<TData = Awaited<ReturnType<typeof getDatasetTerrain>>, TError = ErrorType<ApiError>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetTerrain>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDatasetTerrainQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUploadTerrainUrl = () => {
+
+
+
+
+  return `/api/datasets/upload`
+}
+
+/**
+ * Accepts a UTF-8 text file with lon,lat,depth columns and returns a gridded terrain mesh
+ * @summary Upload an XYZ or CSV file and receive terrain data
+ */
+export const uploadTerrain = async (terrainUploadInput: TerrainUploadInput, options?: RequestInit): Promise<TerrainData> => {
+
+  return customFetch<TerrainData>(getUploadTerrainUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      terrainUploadInput,)
+  }
+);}
+
+
+
+
+export const getUploadTerrainMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadTerrain>>, TError,{data: BodyType<TerrainUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadTerrain>>, TError,{data: BodyType<TerrainUploadInput>}, TContext> => {
+
+const mutationKey = ['uploadTerrain'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadTerrain>>, {data: BodyType<TerrainUploadInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  uploadTerrain(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadTerrainMutationResult = NonNullable<Awaited<ReturnType<typeof uploadTerrain>>>
+    export type UploadTerrainMutationBody = BodyType<TerrainUploadInput>
+    export type UploadTerrainMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Upload an XYZ or CSV file and receive terrain data
+ */
+export const useUploadTerrain = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadTerrain>>, TError,{data: BodyType<TerrainUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof uploadTerrain>>,
+        TError,
+        {data: BodyType<TerrainUploadInput>},
+        TContext
+      > => {
+      return useMutation(getUploadTerrainMutationOptions(options));
+    }
 
 export const getHealthCheckUrl = () => {
 
@@ -132,9 +364,9 @@ export const getPoeClassifyUrl = () => {
  * Sends a depth grid image to Poe AI and returns 1024 zone labels (32×32 coarse grid)
  * @summary Classify terrain zones via AI
  */
-export const poeClassify = async (poeClassifyRequest: PoeClassifyRequest, options?: RequestInit): Promise<PoeClassifyResponse> => {
+export const poeClassify = async (poeClassifyRequest: PoeClassifyRequest, options?: RequestInit): Promise<ClassifyResult> => {
 
-  return customFetch<PoeClassifyResponse>(getPoeClassifyUrl(),
+  return customFetch<ClassifyResult>(getPoeClassifyUrl(),
   {
     ...options,
     method: 'POST',
@@ -204,9 +436,9 @@ export const getPoeQueryUrl = () => {
  * Interprets a user message and returns tool calls and/or a text response
  * @summary Natural language terrain query
  */
-export const poeQuery = async (poeQueryRequest: PoeQueryRequest, options?: RequestInit): Promise<PoeQueryResponse> => {
+export const poeQuery = async (poeQueryRequest: PoeQueryRequest, options?: RequestInit): Promise<QueryResult> => {
 
-  return customFetch<PoeQueryResponse>(getPoeQueryUrl(),
+  return customFetch<QueryResult>(getPoeQueryUrl(),
   {
     ...options,
     method: 'POST',

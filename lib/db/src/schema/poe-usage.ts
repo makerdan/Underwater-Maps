@@ -14,6 +14,6 @@ export const poeUsageLogTable = pgTable("poe_usage_log", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const insertPoeUsageLogSchema = createInsertSchema(poeUsageLogTable).omit({ id: true, createdAt: true });
+export const insertPoeUsageLogSchema = createInsertSchema(poeUsageLogTable).omit({ createdAt: true });
 export type InsertPoeUsageLog = z.infer<typeof insertPoeUsageLogSchema>;
 export type PoeUsageLog = typeof poeUsageLogTable.$inferSelect;

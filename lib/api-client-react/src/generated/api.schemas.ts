@@ -30,7 +30,7 @@ export interface PoeClassifyRequest {
   datasetId?: string;
 }
 
-export interface PoeClassifyResponse {
+export interface ClassifyResult {
   /** 1024 zone labels in row-major order (32×32 coarse grid) */
   zones: string[];
   /** Whether the result was served from the in-memory cache */
@@ -66,7 +66,7 @@ export interface PoeQueryRequest {
   previousResponseId?: string;
 }
 
-export interface PoeQueryResponse {
+export interface QueryResult {
   toolCalls: ToolCall[];
   /** Text reply when no tool calls are made */
   text?: string | null;
@@ -101,5 +101,87 @@ export type PoeModelListDataItem = {
 export interface PoeModelList {
   object?: string;
   data?: PoeModelListDataItem[];
+}
+
+export interface ApiError {
+  error: string;
+  message: string;
+}
+
+export type DatasetMetaWaterType = typeof DatasetMetaWaterType[keyof typeof DatasetMetaWaterType];
+
+
+export const DatasetMetaWaterType = {
+  saltwater: 'saltwater',
+  freshwater: 'freshwater',
+} as const;
+
+/**
+ * Bounding box [minLon, minLat, maxLon, maxLat]
+ */
+export type DatasetMetaBbox = {
+  minLon: number;
+  minLat: number;
+  maxLon: number;
+  maxLat: number;
+};
+
+export interface DatasetMeta {
+  /** Stable slug used in API paths */
+  id: string;
+  /** Human-readable region name */
+  name: string;
+  /** One-line geological description */
+  description: string;
+  waterType: DatasetMetaWaterType;
+  /** Shallowest point in metres (positive = below sea level) */
+  minDepth: number;
+  /** Deepest point in metres */
+  maxDepth: number;
+  centerLon: number;
+  centerLat: number;
+  /** Bounding box [minLon, minLat, maxLon, maxLat] */
+  bbox: DatasetMetaBbox;
+}
+
+export type TerrainDataWaterType = typeof TerrainDataWaterType[keyof typeof TerrainDataWaterType];
+
+
+export const TerrainDataWaterType = {
+  saltwater: 'saltwater',
+  freshwater: 'freshwater',
+} as const;
+
+export interface TerrainData {
+  datasetId: string;
+  name: string;
+  waterType: TerrainDataWaterType;
+  /** Grid side length N (grid is NxN) */
+  resolution: number;
+  width: number;
+  height: number;
+  /** Row-major flat array of depth values (metres, positive = below surface) */
+  depths: number[];
+  minDepth: number;
+  maxDepth: number;
+  minLon: number;
+  maxLon: number;
+  minLat: number;
+  maxLat: number;
+  centerLon: number;
+  centerLat: number;
+}
+
+export interface TerrainUploadInput {
+  /** Raw UTF-8 text content of the XYZ or CSV file */
+  fileContent: string;
+  /** Original file name (used to detect format) */
+  fileName: string;
+  /**
+     * Target grid resolution
+     * @minimum 32
+     * @maximum 512
+     */
+  resolution?: number;
 }
 
