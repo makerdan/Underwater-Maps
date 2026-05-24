@@ -1,4 +1,5 @@
 import type OpenAI from "openai";
+import type { z } from "zod";
 
 export type MessageRole = "system" | "user" | "assistant" | "tool";
 
@@ -60,6 +61,7 @@ export interface PoeJsonSchema {
   name: string;
   schema: Record<string, unknown>;
   strict?: boolean;
+  zodSchema?: z.ZodTypeAny;
 }
 
 export interface PoeRespondParams {

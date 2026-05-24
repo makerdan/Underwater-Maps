@@ -1,6 +1,7 @@
 import { getPoeClient } from "./client.js";
 import type { PoeRespondParams, PoeResponseResult } from "./types.js";
 import { z } from "zod";
+import { ZoneParseError } from "./errors.js";
 
 export async function poeRespond(params: PoeRespondParams): Promise<PoeResponseResult> {
   const client = getPoeClient();
@@ -35,20 +36,35 @@ export async function poeRespond(params: PoeRespondParams): Promise<PoeResponseR
   }
 
   const response = await (client as unknown as {
-    responses: { create: (b: Record<string, unknown>) => Promise<{
-      id: string;
-      output_text: string;
-      usage?: { input_tokens?: number; output_tokens?: number };
-    }>};
+    responses: {
+      create: (b: Record<string, unknown>) => Promise<{
+        id: string;
+        output_text: string;
+        usage?: { input_tokens?: number; output_tokens?: number };
+      }>;
+    };
   }).responses.create(body);
 
   const text = response.output_text ?? "";
 
   if (params.jsonSchema) {
+    let parsed: unknown;
     try {
-      JSON.parse(text);
+      parsed = JSON.parse(text);
     } catch {
-      throw new Error(`Poe returned invalid JSON for schema "${params.jsonSchema.name}": ${text.slice(0, 200)}`);
+      throw new ZoneParseError(
+        `Poe returned invalid JSON for schema "${params.jsonSchema.name}": ${text.slice(0, 200)}`,
+      );
+    }
+
+    if (params.jsonSchema.zodSchema) {
+      const result = params.jsonSchema.zodSchema.safeParse(parsed);
+      if (!result.success) {
+        throw new ZoneParseError(
+          `Poe response failed schema validation for "${params.jsonSchema.name}": ` +
+            result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", "),
+        );
+      }
     }
   }
 
@@ -63,6 +79,16 @@ export async function poeRespond(params: PoeRespondParams): Promise<PoeResponseR
 }
 
 export function validateWithSchema<T>(text: string, schema: z.ZodType<T>): T {
-  const parsed = JSON.parse(text);
-  return schema.parse(parsed);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new ZoneParseError(`Failed to parse JSON: ${text.slice(0, 200)}`);
+  }
+  const result = schema.safeParse(parsed);
+  if (!result.success) {
+    const msg = result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", ");
+    throw new ZoneParseError(`Schema validation failed: ${msg}`);
+  }
+  return result.data;
 }
