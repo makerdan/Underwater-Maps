@@ -14,10 +14,12 @@ tags:
     description: Poe AI proxy operations
   - name: datasets
     description: Bathymetric dataset operations
+  - name: markers
+    description: Persisted point-of-interest marker operations
 paths:
   /datasets:
     get:
-      operationId: listDatasets
+      operationId: getDatasets
       tags: [datasets]
       summary: List available pre-loaded bathymetric regions
       description: Returns metadata for all built-in GEBCO and demo datasets
@@ -33,16 +35,24 @@ paths:
 
   /datasets/{id}/terrain:
     get:
-      operationId: getDatasetTerrain
+      operationId: getDatasetsIdTerrain
       tags: [datasets]
       summary: Get gridded terrain data for a dataset
-      description: Returns a depth grid for the given dataset ID, suitable for building a Three.js terrain mesh
+      description: Returns a 256×256 depth grid for the given dataset ID, suitable for building a Three.js terrain mesh
       parameters:
         - in: path
           name: id
           required: true
           schema:
             type: string
+        - in: query
+          name: resolution
+          required: false
+          schema:
+            type: integer
+            default: 256
+            minimum: 32
+            maximum: 512
       responses:
         "200":
           description: Terrain grid
@@ -63,12 +73,44 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
-  /upload:
-    post:
-      operationId: uploadTerrain
+  /datasets/{id}/overview:
+    get:
+      operationId: getDatasetsIdOverview
       tags: [datasets]
-      summary: Upload an XYZ or CSV file and receive terrain data
-      description: Accepts a UTF-8 text file with lon,lat,depth columns and returns a gridded terrain mesh
+      summary: Get a low-resolution overview terrain for a dataset
+      description: Returns a 64×64 downsampled depth grid for use in the overview map — lightweight alternative to the full terrain
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Overview terrain grid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TerrainData"
+        "404":
+          description: Dataset not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Upstream data fetch failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /datasets/upload:
+    post:
+      operationId: postDatasetsUpload
+      tags: [datasets]
+      summary: Upload an XYZ or CSV file and receive terrain data at two resolutions
+      description: Accepts a UTF-8 text file with lon,lat,depth columns. Auto-detects delimiter, header rows, and column order. Returns both a full 256×256 grid and a 64×64 overview grid.
       requestBody:
         required: true
         content:
@@ -77,18 +119,83 @@ paths:
               $ref: "#/components/schemas/TerrainUploadInput"
       responses:
         "200":
-          description: Parsed terrain data
+          description: Parsed terrain and overview grids
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TerrainData"
+                $ref: "#/components/schemas/UploadResult"
         "400":
-          description: Unparseable file or missing columns
+          description: Unparseable file or insufficient valid points
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /markers:
+    get:
+      operationId: getMarkers
+      tags: [markers]
+      summary: List persisted markers for a dataset
+      parameters:
+        - in: query
+          name: datasetId
+          required: true
+          schema:
+            type: string
+          description: Dataset slug to filter markers by
+      responses:
+        "200":
+          description: Marker list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Marker"
+    post:
+      operationId: postMarkers
+      tags: [markers]
+      summary: Create a new marker
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarkerInput"
+      responses:
+        "201":
+          description: Created marker
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Marker"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /markers/{id}:
+    delete:
+      operationId: deleteMarkersId
+      tags: [markers]
+      summary: Delete a marker by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Marker deleted
+        "404":
+          description: Marker not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 
   /healthz:
     get:
@@ -483,10 +590,86 @@ components:
           description: Original file name (used to detect format)
         resolution:
           type: integer
-          default: 128
+          default: 256
           minimum: 32
           maximum: 512
-          description: Target grid resolution
+          description: Target grid resolution for the full terrain (overview is always 64)
       required:
         - fileContent
         - fileName
+
+    UploadResult:
+      type: object
+      description: Full terrain and overview grids generated from an uploaded file
+      properties:
+        terrain:
+          $ref: "#/components/schemas/TerrainData"
+        overview:
+          $ref: "#/components/schemas/TerrainData"
+      required:
+        - terrain
+        - overview
+
+    Marker:
+      type: object
+      properties:
+        id:
+          type: string
+          description: UUID primary key
+        datasetId:
+          type: string
+          description: Dataset this marker belongs to
+        lon:
+          type: number
+        lat:
+          type: number
+        depth:
+          type: number
+          description: Depth in metres (positive = below surface)
+        type:
+          type: string
+          enum: [fish, shipwreck, coral, vent, custom]
+        label:
+          type: string
+        notes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - datasetId
+        - lon
+        - lat
+        - depth
+        - type
+        - label
+        - createdAt
+
+    MarkerInput:
+      type: object
+      properties:
+        datasetId:
+          type: string
+        lon:
+          type: number
+        lat:
+          type: number
+        depth:
+          type: number
+        type:
+          type: string
+          enum: [fish, shipwreck, coral, vent, custom]
+          default: custom
+        label:
+          type: string
+        notes:
+          type: string
+          nullable: true
+      required:
+        - datasetId
+        - lon
+        - lat
+        - depth
+        - label

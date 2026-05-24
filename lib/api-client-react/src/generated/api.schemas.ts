@@ -178,10 +178,80 @@ export interface TerrainUploadInput {
   /** Original file name (used to detect format) */
   fileName: string;
   /**
-     * Target grid resolution
+     * Target grid resolution for the full terrain (overview is always 64)
      * @minimum 32
      * @maximum 512
      */
   resolution?: number;
 }
+
+/**
+ * Full terrain and overview grids generated from an uploaded file
+ */
+export interface UploadResult {
+  terrain: TerrainData;
+  overview: TerrainData;
+}
+
+export type MarkerType = typeof MarkerType[keyof typeof MarkerType];
+
+
+export const MarkerType = {
+  fish: 'fish',
+  shipwreck: 'shipwreck',
+  coral: 'coral',
+  vent: 'vent',
+  custom: 'custom',
+} as const;
+
+export interface Marker {
+  /** UUID primary key */
+  id: string;
+  /** Dataset this marker belongs to */
+  datasetId: string;
+  lon: number;
+  lat: number;
+  /** Depth in metres (positive = below surface) */
+  depth: number;
+  type: MarkerType;
+  label: string;
+  notes?: string | null;
+  createdAt: string;
+}
+
+export type MarkerInputType = typeof MarkerInputType[keyof typeof MarkerInputType];
+
+
+export const MarkerInputType = {
+  fish: 'fish',
+  shipwreck: 'shipwreck',
+  coral: 'coral',
+  vent: 'vent',
+  custom: 'custom',
+} as const;
+
+export interface MarkerInput {
+  datasetId: string;
+  lon: number;
+  lat: number;
+  depth: number;
+  type?: MarkerInputType;
+  label: string;
+  notes?: string | null;
+}
+
+export type GetDatasetsIdTerrainParams = {
+/**
+ * @minimum 32
+ * @maximum 512
+ */
+resolution?: number;
+};
+
+export type GetMarkersParams = {
+/**
+ * Dataset slug to filter markers by
+ */
+datasetId: string;
+};
 

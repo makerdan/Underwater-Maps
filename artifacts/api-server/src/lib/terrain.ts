@@ -1,3 +1,6 @@
+import { promises as fsPromises } from "fs";
+import path from "path";
+
 export interface TerrainGrid {
   datasetId: string;
   name: string;
@@ -223,29 +226,63 @@ async function fetchGebcoGrid(
 }
 
 // ---------------------------------------------------------------------------
-// Terrain cache & grid builder
+// Terrain cache & grid builder (memory + disk)
 // ---------------------------------------------------------------------------
 
-const terrainCache = new Map<string, TerrainGrid>();
+const DISK_CACHE_DIR = "/tmp/gebco-cache";
+const memoryCache = new Map<string, TerrainGrid>();
+
+async function readDiskCache(key: string): Promise<TerrainGrid | null> {
+  try {
+    const file = path.join(DISK_CACHE_DIR, `${key}.json`);
+    const raw = await fsPromises.readFile(file, "utf8");
+    return JSON.parse(raw) as TerrainGrid;
+  } catch {
+    return null;
+  }
+}
+
+async function writeDiskCache(key: string, grid: TerrainGrid): Promise<void> {
+  try {
+    await fsPromises.mkdir(DISK_CACHE_DIR, { recursive: true });
+    const file = path.join(DISK_CACHE_DIR, `${key}.json`);
+    await fsPromises.writeFile(file, JSON.stringify(grid), "utf8");
+  } catch (err) {
+    console.warn(`[terrain] Failed to write disk cache for ${key}: ${(err as Error).message}`);
+  }
+}
 
 export async function buildTerrainGrid(
   datasetId: string,
-  resolution = 128
+  resolution = 256
 ): Promise<TerrainGrid | null> {
-  const cacheKey = `${datasetId}:${resolution}`;
-  const cached = terrainCache.get(cacheKey);
-  if (cached) return cached;
+  const safeId = datasetId.replace(/[^a-z0-9-]/gi, "_");
+  const cacheKey = `${safeId}-${resolution}`;
+
+  // 1. Memory cache (fastest)
+  const mem = memoryCache.get(cacheKey);
+  if (mem) return mem;
 
   const meta = PRESET_DATASETS.find((d) => d.id === datasetId);
   if (!meta) return null;
 
   const N = Math.max(32, Math.min(512, resolution));
 
+  // 2. Disk cache
+  const disk = await readDiskCache(cacheKey);
+  if (disk) {
+    console.info(`[terrain] Disk cache hit: ${cacheKey}`);
+    memoryCache.set(cacheKey, disk);
+    return disk;
+  }
+
+  // 3. Fetch from GEBCO WCS
   let depths: number[];
   let minDepth: number;
   let maxDepth: number;
 
   try {
+    console.info(`[terrain] Fetching GEBCO WCS for ${datasetId} at ${N}×${N}…`);
     const gebco = await fetchGebcoGrid(meta.bbox, N);
     depths = gebco.depths;
     minDepth = gebco.minDepth;
@@ -279,7 +316,8 @@ export async function buildTerrainGrid(
     centerLat: meta.centerLat,
   };
 
-  terrainCache.set(cacheKey, grid);
+  memoryCache.set(cacheKey, grid);
+  await writeDiskCache(cacheKey, grid);
   return grid;
 }
 

@@ -12,7 +12,7 @@ import * as zod from 'zod';
  * Returns metadata for all built-in GEBCO and demo datasets
  * @summary List available pre-loaded bathymetric regions
  */
-export const ListDatasetsResponseItem = zod.object({
+export const GetDatasetsResponseItem = zod.object({
   "id": zod.string().describe('Stable slug used in API paths'),
   "name": zod.string().describe('Human-readable region name'),
   "description": zod.string().describe('One-line geological description'),
@@ -28,18 +28,28 @@ export const ListDatasetsResponseItem = zod.object({
   "maxLat": zod.number()
 }).describe('Bounding box [minLon, minLat, maxLon, maxLat]')
 })
-export const ListDatasetsResponse = zod.array(ListDatasetsResponseItem)
+export const GetDatasetsResponse = zod.array(GetDatasetsResponseItem)
 
 
 /**
- * Returns a depth grid for the given dataset ID, suitable for building a Three.js terrain mesh
+ * Returns a 256×256 depth grid for the given dataset ID, suitable for building a Three.js terrain mesh
  * @summary Get gridded terrain data for a dataset
  */
-export const GetDatasetTerrainParams = zod.object({
+export const GetDatasetsIdTerrainParams = zod.object({
   "id": zod.coerce.string()
 })
 
-export const GetDatasetTerrainResponse = zod.object({
+export const getDatasetsIdTerrainQueryResolutionDefault = 256;
+export const getDatasetsIdTerrainQueryResolutionMin = 32;
+export const getDatasetsIdTerrainQueryResolutionMax = 512;
+
+
+
+export const GetDatasetsIdTerrainQueryParams = zod.object({
+  "resolution": zod.coerce.number().min(getDatasetsIdTerrainQueryResolutionMin).max(getDatasetsIdTerrainQueryResolutionMax).default(getDatasetsIdTerrainQueryResolutionDefault)
+})
+
+export const GetDatasetsIdTerrainResponse = zod.object({
   "datasetId": zod.string(),
   "name": zod.string(),
   "waterType": zod.enum(['saltwater', 'freshwater']),
@@ -59,22 +69,14 @@ export const GetDatasetTerrainResponse = zod.object({
 
 
 /**
- * Accepts a UTF-8 text file with lon,lat,depth columns and returns a gridded terrain mesh
- * @summary Upload an XYZ or CSV file and receive terrain data
+ * Returns a 64×64 downsampled depth grid for use in the overview map — lightweight alternative to the full terrain
+ * @summary Get a low-resolution overview terrain for a dataset
  */
-export const uploadTerrainBodyResolutionDefault = 128;
-export const uploadTerrainBodyResolutionMin = 32;
-export const uploadTerrainBodyResolutionMax = 512;
-
-
-
-export const UploadTerrainBody = zod.object({
-  "fileContent": zod.string().describe('Raw UTF-8 text content of the XYZ or CSV file'),
-  "fileName": zod.string().describe('Original file name (used to detect format)'),
-  "resolution": zod.number().min(uploadTerrainBodyResolutionMin).max(uploadTerrainBodyResolutionMax).default(uploadTerrainBodyResolutionDefault).describe('Target grid resolution')
+export const GetDatasetsIdOverviewParams = zod.object({
+  "id": zod.coerce.string()
 })
 
-export const UploadTerrainResponse = zod.object({
+export const GetDatasetsIdOverviewResponse = zod.object({
   "datasetId": zod.string(),
   "name": zod.string(),
   "waterType": zod.enum(['saltwater', 'freshwater']),
@@ -90,6 +92,105 @@ export const UploadTerrainResponse = zod.object({
   "maxLat": zod.number(),
   "centerLon": zod.number(),
   "centerLat": zod.number()
+})
+
+
+/**
+ * Accepts a UTF-8 text file with lon,lat,depth columns. Auto-detects delimiter, header rows, and column order. Returns both a full 256×256 grid and a 64×64 overview grid.
+ * @summary Upload an XYZ or CSV file and receive terrain data at two resolutions
+ */
+export const postDatasetsUploadBodyResolutionDefault = 256;
+export const postDatasetsUploadBodyResolutionMin = 32;
+export const postDatasetsUploadBodyResolutionMax = 512;
+
+
+
+export const PostDatasetsUploadBody = zod.object({
+  "fileContent": zod.string().describe('Raw UTF-8 text content of the XYZ or CSV file'),
+  "fileName": zod.string().describe('Original file name (used to detect format)'),
+  "resolution": zod.number().min(postDatasetsUploadBodyResolutionMin).max(postDatasetsUploadBodyResolutionMax).default(postDatasetsUploadBodyResolutionDefault).describe('Target grid resolution for the full terrain (overview is always 64)')
+})
+
+export const PostDatasetsUploadResponse = zod.object({
+  "terrain": zod.object({
+  "datasetId": zod.string(),
+  "name": zod.string(),
+  "waterType": zod.enum(['saltwater', 'freshwater']),
+  "resolution": zod.number().describe('Grid side length N (grid is NxN)'),
+  "width": zod.number(),
+  "height": zod.number(),
+  "depths": zod.array(zod.number()).describe('Row-major flat array of depth values (metres, positive = below surface)'),
+  "minDepth": zod.number(),
+  "maxDepth": zod.number(),
+  "minLon": zod.number(),
+  "maxLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLat": zod.number(),
+  "centerLon": zod.number(),
+  "centerLat": zod.number()
+}),
+  "overview": zod.object({
+  "datasetId": zod.string(),
+  "name": zod.string(),
+  "waterType": zod.enum(['saltwater', 'freshwater']),
+  "resolution": zod.number().describe('Grid side length N (grid is NxN)'),
+  "width": zod.number(),
+  "height": zod.number(),
+  "depths": zod.array(zod.number()).describe('Row-major flat array of depth values (metres, positive = below surface)'),
+  "minDepth": zod.number(),
+  "maxDepth": zod.number(),
+  "minLon": zod.number(),
+  "maxLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLat": zod.number(),
+  "centerLon": zod.number(),
+  "centerLat": zod.number()
+})
+}).describe('Full terrain and overview grids generated from an uploaded file')
+
+
+/**
+ * @summary List persisted markers for a dataset
+ */
+export const GetMarkersQueryParams = zod.object({
+  "datasetId": zod.coerce.string().describe('Dataset slug to filter markers by')
+})
+
+export const GetMarkersResponseItem = zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "datasetId": zod.string().describe('Dataset this marker belongs to'),
+  "lon": zod.number(),
+  "lat": zod.number(),
+  "depth": zod.number().describe('Depth in metres (positive = below surface)'),
+  "type": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom']),
+  "label": zod.string(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const GetMarkersResponse = zod.array(GetMarkersResponseItem)
+
+
+/**
+ * @summary Create a new marker
+ */
+export const postMarkersBodyTypeDefault = `custom`;
+
+export const PostMarkersBody = zod.object({
+  "datasetId": zod.string(),
+  "lon": zod.number(),
+  "lat": zod.number(),
+  "depth": zod.number(),
+  "type": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom']).default(postMarkersBodyTypeDefault),
+  "label": zod.string(),
+  "notes": zod.string().nullish()
+})
+
+
+/**
+ * @summary Delete a marker by ID
+ */
+export const DeleteMarkersIdParams = zod.object({
+  "id": zod.coerce.string()
 })
 
 

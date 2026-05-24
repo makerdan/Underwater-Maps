@@ -1,13 +1,13 @@
 import React, { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { Card, CardContent } from "@/components/ui/card";
-import { useUploadTerrain } from "@workspace/api-client-react";
+import { usePostDatasetsUpload } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { Spinner } from "@/components/ui/spinner";
 
 export const FileUpload = () => {
   const { setTerrain, setDatasetId } = useAppState();
-  const uploadTerrain = useUploadTerrain();
+  const postDatasetsUpload = usePostDatasetsUpload();
   const [error, setError] = useState<string | null>(null);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
@@ -17,16 +17,16 @@ export const FileUpload = () => {
     setError(null);
     try {
       const text = await file.text();
-      uploadTerrain.mutate({
+      postDatasetsUpload.mutate({
         data: {
           fileContent: text,
           fileName: file.name,
-          resolution: 128
+          resolution: 256
         }
       }, {
         onSuccess: (data) => {
           setDatasetId(null);
-          setTerrain(data);
+          setTerrain(data.terrain);
         },
         onError: (err) => {
           setError(err.message || "Failed to parse terrain");
@@ -35,7 +35,7 @@ export const FileUpload = () => {
     } catch (e) {
       setError("Failed to read file");
     }
-  }, [uploadTerrain, setTerrain, setDatasetId]);
+  }, [postDatasetsUpload, setTerrain, setDatasetId]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -57,7 +57,7 @@ export const FileUpload = () => {
           }`}
         >
           <input {...getInputProps()} />
-          {uploadTerrain.isPending ? (
+          {postDatasetsUpload.isPending ? (
             <div className="flex flex-col items-center gap-2">
               <Spinner className="w-5 h-5 text-primary" />
               <p className="text-xs text-muted-foreground">Parsing grid...</p>

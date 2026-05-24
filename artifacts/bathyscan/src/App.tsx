@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { useListDatasets, useGetDatasetTerrain, getGetDatasetTerrainQueryKey } from "@workspace/api-client-react";
+import { useGetDatasets, useGetDatasetsIdTerrain, getGetDatasetsIdTerrainQueryKey } from "@workspace/api-client-react";
 import { AppProvider, useAppState } from "@/lib/context";
 import { TerrainScene } from "@/components/TerrainScene";
 import { HUD } from "@/components/HUD";
@@ -13,7 +13,7 @@ import { DepthLegend } from "@/components/DepthLegend";
 const queryClient = new QueryClient();
 
 function Main() {
-  const { data: datasets } = useListDatasets();
+  const { data: datasets } = useGetDatasets();
   const { datasetId, setDatasetId, setTerrain, terrain } = useAppState();
 
   useEffect(() => {
@@ -22,10 +22,10 @@ function Main() {
     }
   }, [datasets, datasetId, setDatasetId]);
 
-  const { data: fetchedTerrain, isLoading } = useGetDatasetTerrain(datasetId || "", {
+  const { data: fetchedTerrain, isLoading } = useGetDatasetsIdTerrain(datasetId || "", undefined, {
     query: {
       enabled: !!datasetId,
-      queryKey: getGetDatasetTerrainQueryKey(datasetId || "")
+      queryKey: getGetDatasetsIdTerrainQueryKey(datasetId || "")
     }
   });
 

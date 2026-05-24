@@ -23,7 +23,11 @@ import type {
   ApiError,
   ClassifyResult,
   DatasetMeta,
+  GetDatasetsIdTerrainParams,
+  GetMarkersParams,
   HealthStatus,
+  Marker,
+  MarkerInput,
   PoeClassifyRequest,
   PoeDescribeRequest,
   PoeError,
@@ -31,7 +35,8 @@ import type {
   PoeQueryRequest,
   QueryResult,
   TerrainData,
-  TerrainUploadInput
+  TerrainUploadInput,
+  UploadResult
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -46,7 +51,7 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
-export const getListDatasetsUrl = () => {
+export const getGetDatasetsUrl = () => {
 
 
 
@@ -58,9 +63,9 @@ export const getListDatasetsUrl = () => {
  * Returns metadata for all built-in GEBCO and demo datasets
  * @summary List available pre-loaded bathymetric regions
  */
-export const listDatasets = async ( options?: RequestInit): Promise<DatasetMeta[]> => {
+export const getDatasets = async ( options?: RequestInit): Promise<DatasetMeta[]> => {
 
-  return customFetch<DatasetMeta[]>(getListDatasetsUrl(),
+  return customFetch<DatasetMeta[]>(getGetDatasetsUrl(),
   {
     ...options,
     method: 'GET'
@@ -73,45 +78,45 @@ export const listDatasets = async ( options?: RequestInit): Promise<DatasetMeta[
 
 
 
-export const getListDatasetsQueryKey = () => {
+export const getGetDatasetsQueryKey = () => {
     return [
     `/api/datasets`
     ] as const;
     }
 
 
-export const getListDatasetsQueryOptions = <TData = Awaited<ReturnType<typeof listDatasets>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDatasets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetDatasetsQueryOptions = <TData = Awaited<ReturnType<typeof getDatasets>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListDatasetsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetDatasetsQueryKey();
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDatasets>>> = ({ signal }) => listDatasets({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDatasets>>> = ({ signal }) => getDatasets({ signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDatasets>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDatasets>>, TError, TData> & { queryKey: QueryKey }
 }
 
-export type ListDatasetsQueryResult = NonNullable<Awaited<ReturnType<typeof listDatasets>>>
-export type ListDatasetsQueryError = ErrorType<unknown>
+export type GetDatasetsQueryResult = NonNullable<Awaited<ReturnType<typeof getDatasets>>>
+export type GetDatasetsQueryError = ErrorType<unknown>
 
 
 /**
  * @summary List available pre-loaded bathymetric regions
  */
 
-export function useListDatasets<TData = Awaited<ReturnType<typeof listDatasets>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDatasets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export function useGetDatasets<TData = Awaited<ReturnType<typeof getDatasets>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getListDatasetsQueryOptions(options)
+  const queryOptions = getGetDatasetsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -124,21 +129,30 @@ export function useListDatasets<TData = Awaited<ReturnType<typeof listDatasets>>
 
 
 
-export const getGetDatasetTerrainUrl = (id: string,) => {
+export const getGetDatasetsIdTerrainUrl = (id: string,
+    params?: GetDatasetsIdTerrainParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/datasets/${id}/terrain`
+  return stringifiedParams.length > 0 ? `/api/datasets/${id}/terrain?${stringifiedParams}` : `/api/datasets/${id}/terrain`
 }
 
 /**
- * Returns a depth grid for the given dataset ID, suitable for building a Three.js terrain mesh
+ * Returns a 256×256 depth grid for the given dataset ID, suitable for building a Three.js terrain mesh
  * @summary Get gridded terrain data for a dataset
  */
-export const getDatasetTerrain = async (id: string, options?: RequestInit): Promise<TerrainData> => {
+export const getDatasetsIdTerrain = async (id: string,
+    params?: GetDatasetsIdTerrainParams, options?: RequestInit): Promise<TerrainData> => {
 
-  return customFetch<TerrainData>(getGetDatasetTerrainUrl(id),
+  return customFetch<TerrainData>(getGetDatasetsIdTerrainUrl(id,params),
   {
     ...options,
     method: 'GET'
@@ -151,45 +165,48 @@ export const getDatasetTerrain = async (id: string, options?: RequestInit): Prom
 
 
 
-export const getGetDatasetTerrainQueryKey = (id: string,) => {
+export const getGetDatasetsIdTerrainQueryKey = (id: string,
+    params?: GetDatasetsIdTerrainParams,) => {
     return [
-    `/api/datasets/${id}/terrain`
+    `/api/datasets/${id}/terrain`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetDatasetTerrainQueryOptions = <TData = Awaited<ReturnType<typeof getDatasetTerrain>>, TError = ErrorType<ApiError>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetTerrain>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetDatasetsIdTerrainQueryOptions = <TData = Awaited<ReturnType<typeof getDatasetsIdTerrain>>, TError = ErrorType<ApiError>>(id: string,
+    params?: GetDatasetsIdTerrainParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetsIdTerrain>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetDatasetTerrainQueryKey(id);
+  const queryKey =  queryOptions?.queryKey ?? getGetDatasetsIdTerrainQueryKey(id,params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDatasetTerrain>>> = ({ signal }) => getDatasetTerrain(id, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDatasetsIdTerrain>>> = ({ signal }) => getDatasetsIdTerrain(id,params, { signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDatasetTerrain>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDatasetsIdTerrain>>, TError, TData> & { queryKey: QueryKey }
 }
 
-export type GetDatasetTerrainQueryResult = NonNullable<Awaited<ReturnType<typeof getDatasetTerrain>>>
-export type GetDatasetTerrainQueryError = ErrorType<ApiError>
+export type GetDatasetsIdTerrainQueryResult = NonNullable<Awaited<ReturnType<typeof getDatasetsIdTerrain>>>
+export type GetDatasetsIdTerrainQueryError = ErrorType<ApiError>
 
 
 /**
  * @summary Get gridded terrain data for a dataset
  */
 
-export function useGetDatasetTerrain<TData = Awaited<ReturnType<typeof getDatasetTerrain>>, TError = ErrorType<ApiError>>(
- id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetTerrain>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export function useGetDatasetsIdTerrain<TData = Awaited<ReturnType<typeof getDatasetsIdTerrain>>, TError = ErrorType<ApiError>>(
+ id: string,
+    params?: GetDatasetsIdTerrainParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetsIdTerrain>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetDatasetTerrainQueryOptions(id,options)
+  const queryOptions = getGetDatasetsIdTerrainQueryOptions(id,params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -202,21 +219,99 @@ export function useGetDatasetTerrain<TData = Awaited<ReturnType<typeof getDatase
 
 
 
-export const getUploadTerrainUrl = () => {
+export const getGetDatasetsIdOverviewUrl = (id: string,) => {
 
 
 
 
-  return `/api/upload`
+  return `/api/datasets/${id}/overview`
 }
 
 /**
- * Accepts a UTF-8 text file with lon,lat,depth columns and returns a gridded terrain mesh
- * @summary Upload an XYZ or CSV file and receive terrain data
+ * Returns a 64×64 downsampled depth grid for use in the overview map — lightweight alternative to the full terrain
+ * @summary Get a low-resolution overview terrain for a dataset
  */
-export const uploadTerrain = async (terrainUploadInput: TerrainUploadInput, options?: RequestInit): Promise<TerrainData> => {
+export const getDatasetsIdOverview = async (id: string, options?: RequestInit): Promise<TerrainData> => {
 
-  return customFetch<TerrainData>(getUploadTerrainUrl(),
+  return customFetch<TerrainData>(getGetDatasetsIdOverviewUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDatasetsIdOverviewQueryKey = (id: string,) => {
+    return [
+    `/api/datasets/${id}/overview`
+    ] as const;
+    }
+
+
+export const getGetDatasetsIdOverviewQueryOptions = <TData = Awaited<ReturnType<typeof getDatasetsIdOverview>>, TError = ErrorType<ApiError>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetsIdOverview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDatasetsIdOverviewQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDatasetsIdOverview>>> = ({ signal }) => getDatasetsIdOverview(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDatasetsIdOverview>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDatasetsIdOverviewQueryResult = NonNullable<Awaited<ReturnType<typeof getDatasetsIdOverview>>>
+export type GetDatasetsIdOverviewQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get a low-resolution overview terrain for a dataset
+ */
+
+export function useGetDatasetsIdOverview<TData = Awaited<ReturnType<typeof getDatasetsIdOverview>>, TError = ErrorType<ApiError>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetsIdOverview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDatasetsIdOverviewQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPostDatasetsUploadUrl = () => {
+
+
+
+
+  return `/api/datasets/upload`
+}
+
+/**
+ * Accepts a UTF-8 text file with lon,lat,depth columns. Auto-detects delimiter, header rows, and column order. Returns both a full 256×256 grid and a 64×64 overview grid.
+ * @summary Upload an XYZ or CSV file and receive terrain data at two resolutions
+ */
+export const postDatasetsUpload = async (terrainUploadInput: TerrainUploadInput, options?: RequestInit): Promise<UploadResult> => {
+
+  return customFetch<UploadResult>(getPostDatasetsUploadUrl(),
   {
     ...options,
     method: 'POST',
@@ -229,11 +324,11 @@ export const uploadTerrain = async (terrainUploadInput: TerrainUploadInput, opti
 
 
 
-export const getUploadTerrainMutationOptions = <TError = ErrorType<ApiError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadTerrain>>, TError,{data: BodyType<TerrainUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof uploadTerrain>>, TError,{data: BodyType<TerrainUploadInput>}, TContext> => {
+export const getPostDatasetsUploadMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsUpload>>, TError,{data: BodyType<TerrainUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postDatasetsUpload>>, TError,{data: BodyType<TerrainUploadInput>}, TContext> => {
 
-const mutationKey = ['uploadTerrain'];
+const mutationKey = ['postDatasetsUpload'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -243,10 +338,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadTerrain>>, {data: BodyType<TerrainUploadInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postDatasetsUpload>>, {data: BodyType<TerrainUploadInput>}> = (props) => {
           const {data} = props ?? {};
 
-          return  uploadTerrain(data,requestOptions)
+          return  postDatasetsUpload(data,requestOptions)
         }
 
 
@@ -256,22 +351,247 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type UploadTerrainMutationResult = NonNullable<Awaited<ReturnType<typeof uploadTerrain>>>
-    export type UploadTerrainMutationBody = BodyType<TerrainUploadInput>
-    export type UploadTerrainMutationError = ErrorType<ApiError>
+    export type PostDatasetsUploadMutationResult = NonNullable<Awaited<ReturnType<typeof postDatasetsUpload>>>
+    export type PostDatasetsUploadMutationBody = BodyType<TerrainUploadInput>
+    export type PostDatasetsUploadMutationError = ErrorType<ApiError>
 
     /**
- * @summary Upload an XYZ or CSV file and receive terrain data
+ * @summary Upload an XYZ or CSV file and receive terrain data at two resolutions
  */
-export const useUploadTerrain = <TError = ErrorType<ApiError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadTerrain>>, TError,{data: BodyType<TerrainUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const usePostDatasetsUpload = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsUpload>>, TError,{data: BodyType<TerrainUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof uploadTerrain>>,
+        Awaited<ReturnType<typeof postDatasetsUpload>>,
         TError,
         {data: BodyType<TerrainUploadInput>},
         TContext
       > => {
-      return useMutation(getUploadTerrainMutationOptions(options));
+      return useMutation(getPostDatasetsUploadMutationOptions(options));
+    }
+
+export const getGetMarkersUrl = (params: GetMarkersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/markers?${stringifiedParams}` : `/api/markers`
+}
+
+/**
+ * @summary List persisted markers for a dataset
+ */
+export const getMarkers = async (params: GetMarkersParams, options?: RequestInit): Promise<Marker[]> => {
+
+  return customFetch<Marker[]>(getGetMarkersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMarkersQueryKey = (params?: GetMarkersParams,) => {
+    return [
+    `/api/markers`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetMarkersQueryOptions = <TData = Awaited<ReturnType<typeof getMarkers>>, TError = ErrorType<unknown>>(params: GetMarkersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMarkers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMarkersQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMarkers>>> = ({ signal }) => getMarkers(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMarkers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMarkersQueryResult = NonNullable<Awaited<ReturnType<typeof getMarkers>>>
+export type GetMarkersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List persisted markers for a dataset
+ */
+
+export function useGetMarkers<TData = Awaited<ReturnType<typeof getMarkers>>, TError = ErrorType<unknown>>(
+ params: GetMarkersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMarkers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMarkersQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPostMarkersUrl = () => {
+
+
+
+
+  return `/api/markers`
+}
+
+/**
+ * @summary Create a new marker
+ */
+export const postMarkers = async (markerInput: MarkerInput, options?: RequestInit): Promise<Marker> => {
+
+  return customFetch<Marker>(getPostMarkersUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      markerInput,)
+  }
+);}
+
+
+
+
+export const getPostMarkersMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postMarkers>>, TError,{data: BodyType<MarkerInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postMarkers>>, TError,{data: BodyType<MarkerInput>}, TContext> => {
+
+const mutationKey = ['postMarkers'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postMarkers>>, {data: BodyType<MarkerInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  postMarkers(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostMarkersMutationResult = NonNullable<Awaited<ReturnType<typeof postMarkers>>>
+    export type PostMarkersMutationBody = BodyType<MarkerInput>
+    export type PostMarkersMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Create a new marker
+ */
+export const usePostMarkers = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postMarkers>>, TError,{data: BodyType<MarkerInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postMarkers>>,
+        TError,
+        {data: BodyType<MarkerInput>},
+        TContext
+      > => {
+      return useMutation(getPostMarkersMutationOptions(options));
+    }
+
+export const getDeleteMarkersIdUrl = (id: string,) => {
+
+
+
+
+  return `/api/markers/${id}`
+}
+
+/**
+ * @summary Delete a marker by ID
+ */
+export const deleteMarkersId = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteMarkersIdUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteMarkersIdMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMarkersId>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteMarkersId>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteMarkersId'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteMarkersId>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteMarkersId(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteMarkersIdMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMarkersId>>>
+
+    export type DeleteMarkersIdMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Delete a marker by ID
+ */
+export const useDeleteMarkersId = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMarkersId>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteMarkersId>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteMarkersIdMutationOptions(options));
     }
 
 export const getHealthCheckUrl = () => {
