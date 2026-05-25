@@ -757,6 +757,164 @@ export const GetSubstrateResponse = zod.object({
 
 
 /**
+ * Returns all entries in the dataset discovery catalog, optionally filtered by data type, water type, or bounding box.
+ * @summary List all known public data sources in the catalog
+ */
+export const GetDatasetsCatalogQueryParams = zod.object({
+  "dataType": zod.enum(['bathymetry', 'substrate', 'habitat', 'lidar', 'chart']).optional(),
+  "waterType": zod.enum(['saltwater', 'freshwater']).optional()
+})
+
+export const GetDatasetsCatalogResponseItem = zod.object({
+  "id": zod.string().describe('Stable slug identifier'),
+  "name": zod.string(),
+  "sourceAgency": zod.string().describe('Organisation that produced the data (e.g. NOAA\/NCEI, GEBCO, Alaska DNR)'),
+  "dataType": zod.enum(['bathymetry', 'substrate', 'habitat', 'lidar', 'chart']),
+  "resolutionMMin": zod.number().nullish().describe('Finest resolution in metres'),
+  "resolutionMMax": zod.number().nullish().describe('Coarsest resolution in metres'),
+  "coverageBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}),
+  "endpointUrl": zod.string().nullish(),
+  "accessNotes": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "keywords": zod.string().nullish().describe('Comma-separated keyword tags'),
+  "lastUpdated": zod.string().nullish(),
+  "waterType": zod.enum(['saltwater', 'freshwater']),
+  "createdAt": zod.coerce.date()
+}).describe('A known public data source in the discovery catalog')
+export const GetDatasetsCatalogResponse = zod.array(GetDatasetsCatalogResponseItem)
+
+
+/**
+ * Full-text keyword search with optional type, waterType, and bounding-box filters. Returns results ranked by keyword relevance.
+ * @summary Keyword search over the dataset catalog
+ */
+export const GetDatasetsCatalogSearchQueryParams = zod.object({
+  "q": zod.coerce.string().optional().describe('Free-text search query'),
+  "dataType": zod.enum(['bathymetry', 'substrate', 'habitat', 'lidar', 'chart']).optional(),
+  "waterType": zod.enum(['saltwater', 'freshwater']).optional(),
+  "minLon": zod.coerce.number().optional(),
+  "minLat": zod.coerce.number().optional(),
+  "maxLon": zod.coerce.number().optional(),
+  "maxLat": zod.coerce.number().optional()
+})
+
+export const GetDatasetsCatalogSearchResponseItem = zod.object({
+  "id": zod.string().describe('Stable slug identifier'),
+  "name": zod.string(),
+  "sourceAgency": zod.string().describe('Organisation that produced the data (e.g. NOAA\/NCEI, GEBCO, Alaska DNR)'),
+  "dataType": zod.enum(['bathymetry', 'substrate', 'habitat', 'lidar', 'chart']),
+  "resolutionMMin": zod.number().nullish().describe('Finest resolution in metres'),
+  "resolutionMMax": zod.number().nullish().describe('Coarsest resolution in metres'),
+  "coverageBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}),
+  "endpointUrl": zod.string().nullish(),
+  "accessNotes": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "keywords": zod.string().nullish().describe('Comma-separated keyword tags'),
+  "lastUpdated": zod.string().nullish(),
+  "waterType": zod.enum(['saltwater', 'freshwater']),
+  "createdAt": zod.coerce.date()
+}).describe('A known public data source in the discovery catalog').and(zod.object({
+  "relevanceScore": zod.number().describe('0–1 relevance to the search query')
+}))
+export const GetDatasetsCatalogSearchResponse = zod.array(GetDatasetsCatalogSearchResponseItem)
+
+
+/**
+ * Queues a catalog dataset for caching and associates it with the authenticated user's account. Returns a save job record.
+ * @summary Save a catalog dataset to the user's account
+ */
+export const PostDatasetsCatalogIdSaveParams = zod.object({
+  "id": zod.coerce.string().describe('Catalog dataset ID')
+})
+
+
+/**
+ * Returns all catalog datasets the user has saved, joined with catalog metadata.
+ * @summary List the authenticated user's saved catalog datasets
+ */
+export const GetDatasetsMySavesResponseItem = zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "catalogId": zod.string().describe('References the dataset_catalog.id'),
+  "status": zod.enum(['queued', 'processing', 'ready', 'failed']),
+  "requestedAt": zod.coerce.date(),
+  "readyAt": zod.coerce.date().nullish(),
+  "cacheKey": zod.string().nullish(),
+  "errorMessage": zod.string().nullish(),
+  "catalog": zod.object({
+  "id": zod.string().describe('Stable slug identifier'),
+  "name": zod.string(),
+  "sourceAgency": zod.string().describe('Organisation that produced the data (e.g. NOAA\/NCEI, GEBCO, Alaska DNR)'),
+  "dataType": zod.enum(['bathymetry', 'substrate', 'habitat', 'lidar', 'chart']),
+  "resolutionMMin": zod.number().nullish().describe('Finest resolution in metres'),
+  "resolutionMMax": zod.number().nullish().describe('Coarsest resolution in metres'),
+  "coverageBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}),
+  "endpointUrl": zod.string().nullish(),
+  "accessNotes": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "keywords": zod.string().nullish().describe('Comma-separated keyword tags'),
+  "lastUpdated": zod.string().nullish(),
+  "waterType": zod.enum(['saltwater', 'freshwater']),
+  "createdAt": zod.coerce.date()
+}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)')
+}).describe('A user\'s saved reference to a catalog dataset')
+export const GetDatasetsMySavesResponse = zod.array(GetDatasetsMySavesResponseItem)
+
+
+/**
+ * @summary Poll the status of a user's save job
+ */
+export const GetDatasetsMySavesIdStatusParams = zod.object({
+  "id": zod.coerce.string().describe('Save record UUID')
+})
+
+export const GetDatasetsMySavesIdStatusResponse = zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "catalogId": zod.string().describe('References the dataset_catalog.id'),
+  "status": zod.enum(['queued', 'processing', 'ready', 'failed']),
+  "requestedAt": zod.coerce.date(),
+  "readyAt": zod.coerce.date().nullish(),
+  "cacheKey": zod.string().nullish(),
+  "errorMessage": zod.string().nullish(),
+  "catalog": zod.object({
+  "id": zod.string().describe('Stable slug identifier'),
+  "name": zod.string(),
+  "sourceAgency": zod.string().describe('Organisation that produced the data (e.g. NOAA\/NCEI, GEBCO, Alaska DNR)'),
+  "dataType": zod.enum(['bathymetry', 'substrate', 'habitat', 'lidar', 'chart']),
+  "resolutionMMin": zod.number().nullish().describe('Finest resolution in metres'),
+  "resolutionMMax": zod.number().nullish().describe('Coarsest resolution in metres'),
+  "coverageBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}),
+  "endpointUrl": zod.string().nullish(),
+  "accessNotes": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "keywords": zod.string().nullish().describe('Comma-separated keyword tags'),
+  "lastUpdated": zod.string().nullish(),
+  "waterType": zod.enum(['saltwater', 'freshwater']),
+  "createdAt": zod.coerce.date()
+}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)')
+}).describe('A user\'s saved reference to a catalog dataset')
+
+
+/**
  * Returns GeoJSON EFH zone polygons for the requested area.
 Currently covers the Thorne Bay / Clarence Strait / SE Alaska region.
 Data credit: NOAA Fisheries / NMFS Alaska Region.

@@ -22,9 +22,13 @@ import type {
 import type {
   ApiError,
   ClassifyResult,
+  DatasetCatalogEntry,
+  DatasetCatalogSearchResult,
   DatasetMeta,
   DeleteMarkersMine200,
   EfhFeatureCollection,
+  GetDatasetsCatalogParams,
+  GetDatasetsCatalogSearchParams,
   GetDatasetsIdTerrainParams,
   GetDatasetsParams,
   GetEfhParams,
@@ -47,6 +51,7 @@ import type {
   TerrainData,
   TrailPointsPage,
   UploadResult,
+  UserCatalogSave,
   UserDatasetMeta,
   UserSettings
 } from './api.schemas';
@@ -1898,6 +1903,402 @@ export function useGetSubstrate<TData = Awaited<ReturnType<typeof getSubstrate>>
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetSubstrateQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetDatasetsCatalogUrl = (params?: GetDatasetsCatalogParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/datasets/catalog?${stringifiedParams}` : `/api/datasets/catalog`
+}
+
+/**
+ * Returns all entries in the dataset discovery catalog, optionally filtered by data type, water type, or bounding box.
+ * @summary List all known public data sources in the catalog
+ */
+export const getDatasetsCatalog = async (params?: GetDatasetsCatalogParams, options?: RequestInit): Promise<DatasetCatalogEntry[]> => {
+
+  return customFetch<DatasetCatalogEntry[]>(getGetDatasetsCatalogUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDatasetsCatalogQueryKey = (params?: GetDatasetsCatalogParams,) => {
+    return [
+    `/api/datasets/catalog`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDatasetsCatalogQueryOptions = <TData = Awaited<ReturnType<typeof getDatasetsCatalog>>, TError = ErrorType<unknown>>(params?: GetDatasetsCatalogParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetsCatalog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDatasetsCatalogQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDatasetsCatalog>>> = ({ signal }) => getDatasetsCatalog(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDatasetsCatalog>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDatasetsCatalogQueryResult = NonNullable<Awaited<ReturnType<typeof getDatasetsCatalog>>>
+export type GetDatasetsCatalogQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all known public data sources in the catalog
+ */
+
+export function useGetDatasetsCatalog<TData = Awaited<ReturnType<typeof getDatasetsCatalog>>, TError = ErrorType<unknown>>(
+ params?: GetDatasetsCatalogParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetsCatalog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDatasetsCatalogQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetDatasetsCatalogSearchUrl = (params?: GetDatasetsCatalogSearchParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/datasets/catalog/search?${stringifiedParams}` : `/api/datasets/catalog/search`
+}
+
+/**
+ * Full-text keyword search with optional type, waterType, and bounding-box filters. Returns results ranked by keyword relevance.
+ * @summary Keyword search over the dataset catalog
+ */
+export const getDatasetsCatalogSearch = async (params?: GetDatasetsCatalogSearchParams, options?: RequestInit): Promise<DatasetCatalogSearchResult[]> => {
+
+  return customFetch<DatasetCatalogSearchResult[]>(getGetDatasetsCatalogSearchUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDatasetsCatalogSearchQueryKey = (params?: GetDatasetsCatalogSearchParams,) => {
+    return [
+    `/api/datasets/catalog/search`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDatasetsCatalogSearchQueryOptions = <TData = Awaited<ReturnType<typeof getDatasetsCatalogSearch>>, TError = ErrorType<unknown>>(params?: GetDatasetsCatalogSearchParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetsCatalogSearch>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDatasetsCatalogSearchQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDatasetsCatalogSearch>>> = ({ signal }) => getDatasetsCatalogSearch(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDatasetsCatalogSearch>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDatasetsCatalogSearchQueryResult = NonNullable<Awaited<ReturnType<typeof getDatasetsCatalogSearch>>>
+export type GetDatasetsCatalogSearchQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Keyword search over the dataset catalog
+ */
+
+export function useGetDatasetsCatalogSearch<TData = Awaited<ReturnType<typeof getDatasetsCatalogSearch>>, TError = ErrorType<unknown>>(
+ params?: GetDatasetsCatalogSearchParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetsCatalogSearch>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDatasetsCatalogSearchQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPostDatasetsCatalogIdSaveUrl = (id: string,) => {
+
+
+
+
+  return `/api/datasets/catalog/${id}/save`
+}
+
+/**
+ * Queues a catalog dataset for caching and associates it with the authenticated user's account. Returns a save job record.
+ * @summary Save a catalog dataset to the user's account
+ */
+export const postDatasetsCatalogIdSave = async (id: string, options?: RequestInit): Promise<UserCatalogSave> => {
+
+  return customFetch<UserCatalogSave>(getPostDatasetsCatalogIdSaveUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getPostDatasetsCatalogIdSaveMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsCatalogIdSave>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postDatasetsCatalogIdSave>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['postDatasetsCatalogIdSave'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postDatasetsCatalogIdSave>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  postDatasetsCatalogIdSave(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostDatasetsCatalogIdSaveMutationResult = NonNullable<Awaited<ReturnType<typeof postDatasetsCatalogIdSave>>>
+
+    export type PostDatasetsCatalogIdSaveMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Save a catalog dataset to the user's account
+ */
+export const usePostDatasetsCatalogIdSave = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsCatalogIdSave>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postDatasetsCatalogIdSave>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getPostDatasetsCatalogIdSaveMutationOptions(options));
+    }
+
+export const getGetDatasetsMySavesUrl = () => {
+
+
+
+
+  return `/api/datasets/my-saves`
+}
+
+/**
+ * Returns all catalog datasets the user has saved, joined with catalog metadata.
+ * @summary List the authenticated user's saved catalog datasets
+ */
+export const getDatasetsMySaves = async ( options?: RequestInit): Promise<UserCatalogSave[]> => {
+
+  return customFetch<UserCatalogSave[]>(getGetDatasetsMySavesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDatasetsMySavesQueryKey = () => {
+    return [
+    `/api/datasets/my-saves`
+    ] as const;
+    }
+
+
+export const getGetDatasetsMySavesQueryOptions = <TData = Awaited<ReturnType<typeof getDatasetsMySaves>>, TError = ErrorType<ApiError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetsMySaves>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDatasetsMySavesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDatasetsMySaves>>> = ({ signal }) => getDatasetsMySaves({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDatasetsMySaves>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDatasetsMySavesQueryResult = NonNullable<Awaited<ReturnType<typeof getDatasetsMySaves>>>
+export type GetDatasetsMySavesQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List the authenticated user's saved catalog datasets
+ */
+
+export function useGetDatasetsMySaves<TData = Awaited<ReturnType<typeof getDatasetsMySaves>>, TError = ErrorType<ApiError>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetsMySaves>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDatasetsMySavesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetDatasetsMySavesIdStatusUrl = (id: string,) => {
+
+
+
+
+  return `/api/datasets/my-saves/${id}/status`
+}
+
+/**
+ * @summary Poll the status of a user's save job
+ */
+export const getDatasetsMySavesIdStatus = async (id: string, options?: RequestInit): Promise<UserCatalogSave> => {
+
+  return customFetch<UserCatalogSave>(getGetDatasetsMySavesIdStatusUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDatasetsMySavesIdStatusQueryKey = (id: string,) => {
+    return [
+    `/api/datasets/my-saves/${id}/status`
+    ] as const;
+    }
+
+
+export const getGetDatasetsMySavesIdStatusQueryOptions = <TData = Awaited<ReturnType<typeof getDatasetsMySavesIdStatus>>, TError = ErrorType<ApiError>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetsMySavesIdStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDatasetsMySavesIdStatusQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDatasetsMySavesIdStatus>>> = ({ signal }) => getDatasetsMySavesIdStatus(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDatasetsMySavesIdStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDatasetsMySavesIdStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getDatasetsMySavesIdStatus>>>
+export type GetDatasetsMySavesIdStatusQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Poll the status of a user's save job
+ */
+
+export function useGetDatasetsMySavesIdStatus<TData = Awaited<ReturnType<typeof getDatasetsMySavesIdStatus>>, TError = ErrorType<ApiError>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetsMySavesIdStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDatasetsMySavesIdStatusQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

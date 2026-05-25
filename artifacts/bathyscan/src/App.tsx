@@ -28,6 +28,7 @@ import { DepthProfilePanel } from "@/components/DepthProfilePanel";
 import { MarkerDetailCard } from "@/components/MarkerDetailCard";
 import { OverviewMap } from "@/components/OverviewMap";
 import { ZoneOverlay } from "@/components/ZoneOverlay";
+import { FindDataPanel } from "@/components/FindDataPanel";
 import { HabitatPanel } from "@/components/HabitatPanel";
 import { QueryPanel } from "@/components/QueryPanel";
 import { TrailRecorder } from "@/components/TrailRecorder";
@@ -169,6 +170,8 @@ function Main() {
   } = useAppState();
   const markerFormOpen = useUiStore((s) => s.markerFormOpen);
   const overviewOpen = useUiStore((s) => s.overviewOpen);
+  const findDataPanelOpen = useUiStore((s) => s.findDataPanelOpen);
+  const setFindDataPanelOpen = useUiStore((s) => s.setFindDataPanelOpen);
   const gpsActive = useGpsStore((s) => s.active);
   // Settings-driven UI visibility + tidal defaults
   const autoLoadTidal = useSettingsStore((st) => st.autoLoadTidal);
@@ -574,6 +577,11 @@ function Main() {
 
         {/* Full-screen overview map — z-40, rendered above all HUD elements */}
         {overviewOpen && <OverviewMap />}
+
+        {/* Find Data slide-in panel — z-50, right side */}
+        {findDataPanelOpen && (
+          <FindDataPanel onClose={() => setFindDataPanelOpen(false)} />
+        )}
 
         {/*
           NOTE: <ContextMenu />, <MeasurementBanner /> and <MarkerDetailCard />

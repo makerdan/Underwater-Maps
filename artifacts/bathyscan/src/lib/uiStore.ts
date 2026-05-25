@@ -26,6 +26,9 @@ interface UiStore {
   /** Show EFH zone polygon outlines in the 3D scene. */
   efhOverlayEnabled: boolean;
   setEfhOverlayEnabled: (enabled: boolean) => void;
+  /** Controls visibility of the Find Data slide-in panel. */
+  findDataPanelOpen: boolean;
+  setFindDataPanelOpen: (open: boolean) => void;
 }
 
 export const useUiStore = create<UiStore>((set) => ({
@@ -47,4 +50,6 @@ export const useUiStore = create<UiStore>((set) => ({
   setSubstrateColorMode: (enabled) => set({ substrateColorMode: enabled }),
   efhOverlayEnabled: false,
   setEfhOverlayEnabled: (enabled) => set({ efhOverlayEnabled: enabled }),
+  findDataPanelOpen: false,
+  setFindDataPanelOpen: (open) => set({ findDataPanelOpen: open }),
 }));

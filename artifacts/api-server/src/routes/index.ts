@@ -11,6 +11,7 @@ import trailsRouter from "./trails";
 import meRouter from "./me";
 import substrateRouter from "./substrate";
 import efhRouter from "./efh";
+import catalogSavesRouter from "./catalog-saves";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(trailsRouter);
 router.use(meRouter);
 router.use(substrateRouter);
 router.use(efhRouter);
+router.use(catalogSavesRouter);
 
 export default router;

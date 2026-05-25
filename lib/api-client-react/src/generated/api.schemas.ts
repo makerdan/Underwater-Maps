@@ -573,6 +573,89 @@ export interface EfhFeatureCollection {
   metadata?: EfhFeatureCollectionMetadata;
 }
 
+export type DatasetCatalogEntryDataType = typeof DatasetCatalogEntryDataType[keyof typeof DatasetCatalogEntryDataType];
+
+
+export const DatasetCatalogEntryDataType = {
+  bathymetry: 'bathymetry',
+  substrate: 'substrate',
+  habitat: 'habitat',
+  lidar: 'lidar',
+  chart: 'chart',
+} as const;
+
+export type DatasetCatalogEntryCoverageBbox = {
+  minLon: number;
+  minLat: number;
+  maxLon: number;
+  maxLat: number;
+};
+
+export type DatasetCatalogEntryWaterType = typeof DatasetCatalogEntryWaterType[keyof typeof DatasetCatalogEntryWaterType];
+
+
+export const DatasetCatalogEntryWaterType = {
+  saltwater: 'saltwater',
+  freshwater: 'freshwater',
+} as const;
+
+/**
+ * A known public data source in the discovery catalog
+ */
+export interface DatasetCatalogEntry {
+  /** Stable slug identifier */
+  id: string;
+  name: string;
+  /** Organisation that produced the data (e.g. NOAA/NCEI, GEBCO, Alaska DNR) */
+  sourceAgency: string;
+  dataType: DatasetCatalogEntryDataType;
+  /** Finest resolution in metres */
+  resolutionMMin?: number | null;
+  /** Coarsest resolution in metres */
+  resolutionMMax?: number | null;
+  coverageBbox: DatasetCatalogEntryCoverageBbox;
+  endpointUrl?: string | null;
+  accessNotes?: string | null;
+  description?: string | null;
+  /** Comma-separated keyword tags */
+  keywords?: string | null;
+  lastUpdated?: string | null;
+  waterType: DatasetCatalogEntryWaterType;
+  createdAt: string;
+}
+
+export type DatasetCatalogSearchResult = DatasetCatalogEntry & {
+  /** 0–1 relevance to the search query */
+  relevanceScore: number;
+};
+
+export type UserCatalogSaveStatus = typeof UserCatalogSaveStatus[keyof typeof UserCatalogSaveStatus];
+
+
+export const UserCatalogSaveStatus = {
+  queued: 'queued',
+  processing: 'processing',
+  ready: 'ready',
+  failed: 'failed',
+} as const;
+
+/**
+ * A user's saved reference to a catalog dataset
+ */
+export interface UserCatalogSave {
+  /** UUID primary key */
+  id: string;
+  /** References the dataset_catalog.id */
+  catalogId: string;
+  status: UserCatalogSaveStatus;
+  requestedAt: string;
+  readyAt?: string | null;
+  cacheKey?: string | null;
+  errorMessage?: string | null;
+  /** Embedded catalog metadata (present when returned from list/status endpoints) */
+  catalog?: DatasetCatalogEntry | null;
+}
+
 export interface GpsTrailInput {
   datasetId: string;
   name: string;
@@ -679,6 +762,62 @@ page?: number;
  */
 pageSize?: number;
 };
+
+export type GetDatasetsCatalogParams = {
+dataType?: GetDatasetsCatalogDataType;
+waterType?: GetDatasetsCatalogWaterType;
+};
+
+export type GetDatasetsCatalogDataType = typeof GetDatasetsCatalogDataType[keyof typeof GetDatasetsCatalogDataType];
+
+
+export const GetDatasetsCatalogDataType = {
+  bathymetry: 'bathymetry',
+  substrate: 'substrate',
+  habitat: 'habitat',
+  lidar: 'lidar',
+  chart: 'chart',
+} as const;
+
+export type GetDatasetsCatalogWaterType = typeof GetDatasetsCatalogWaterType[keyof typeof GetDatasetsCatalogWaterType];
+
+
+export const GetDatasetsCatalogWaterType = {
+  saltwater: 'saltwater',
+  freshwater: 'freshwater',
+} as const;
+
+export type GetDatasetsCatalogSearchParams = {
+/**
+ * Free-text search query
+ */
+q?: string;
+dataType?: GetDatasetsCatalogSearchDataType;
+waterType?: GetDatasetsCatalogSearchWaterType;
+minLon?: number;
+minLat?: number;
+maxLon?: number;
+maxLat?: number;
+};
+
+export type GetDatasetsCatalogSearchDataType = typeof GetDatasetsCatalogSearchDataType[keyof typeof GetDatasetsCatalogSearchDataType];
+
+
+export const GetDatasetsCatalogSearchDataType = {
+  bathymetry: 'bathymetry',
+  substrate: 'substrate',
+  habitat: 'habitat',
+  lidar: 'lidar',
+  chart: 'chart',
+} as const;
+
+export type GetDatasetsCatalogSearchWaterType = typeof GetDatasetsCatalogSearchWaterType[keyof typeof GetDatasetsCatalogSearchWaterType];
+
+
+export const GetDatasetsCatalogSearchWaterType = {
+  saltwater: 'saltwater',
+  freshwater: 'freshwater',
+} as const;
 
 export type GetEfhParams = {
 /**

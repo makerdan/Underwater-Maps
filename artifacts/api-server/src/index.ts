@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { buildTerrainGrid } from "./lib/terrain.js";
+import { seedDatasetCatalog } from "./lib/catalogSeeder.js";
 
 const rawPort = process.env["PORT"];
 
@@ -30,5 +31,10 @@ app.listen(port, (err) => {
     logger.info({ datasetId: "thorne-bay", resolution: 64 }, "Terrain cache warmed");
   }).catch((warmErr: unknown) => {
     logger.warn({ err: warmErr }, "Terrain pre-warm failed (non-critical)");
+  });
+
+  // Seed the dataset discovery catalog on startup (idempotent).
+  void seedDatasetCatalog().catch((seedErr: unknown) => {
+    logger.warn({ err: seedErr }, "Catalog seed failed (non-critical)");
   });
 });

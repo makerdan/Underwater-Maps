@@ -704,6 +704,183 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /datasets/catalog:
+    get:
+      operationId: getDatasetsCatalog
+      tags: [datasets]
+      summary: List all known public data sources in the catalog
+      description: Returns all entries in the dataset discovery catalog, optionally filtered by data type, water type, or bounding box.
+      parameters:
+        - in: query
+          name: dataType
+          required: false
+          schema:
+            type: string
+            enum: [bathymetry, substrate, habitat, lidar, chart]
+        - in: query
+          name: waterType
+          required: false
+          schema:
+            type: string
+            enum: [saltwater, freshwater]
+      responses:
+        "200":
+          description: List of catalog entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DatasetCatalogEntry"
+
+  /datasets/catalog/search:
+    get:
+      operationId: getDatasetsCatalogSearch
+      tags: [datasets]
+      summary: Keyword search over the dataset catalog
+      description: Full-text keyword search with optional type, waterType, and bounding-box filters. Returns results ranked by keyword relevance.
+      parameters:
+        - in: query
+          name: q
+          required: false
+          schema:
+            type: string
+          description: Free-text search query
+        - in: query
+          name: dataType
+          required: false
+          schema:
+            type: string
+            enum: [bathymetry, substrate, habitat, lidar, chart]
+        - in: query
+          name: waterType
+          required: false
+          schema:
+            type: string
+            enum: [saltwater, freshwater]
+        - in: query
+          name: minLon
+          required: false
+          schema:
+            type: number
+        - in: query
+          name: minLat
+          required: false
+          schema:
+            type: number
+        - in: query
+          name: maxLon
+          required: false
+          schema:
+            type: number
+        - in: query
+          name: maxLat
+          required: false
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Ranked list of matching catalog entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DatasetCatalogSearchResult"
+
+  /datasets/catalog/{id}/save:
+    post:
+      operationId: postDatasetsCatalogIdSave
+      tags: [datasets]
+      summary: Save a catalog dataset to the user's account
+      description: Queues a catalog dataset for caching and associates it with the authenticated user's account. Returns a save job record.
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Catalog dataset ID
+      responses:
+        "201":
+          description: Save job created (status queued or ready)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserCatalogSave"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Catalog entry not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /datasets/my-saves:
+    get:
+      operationId: getDatasetsMySaves
+      tags: [datasets]
+      summary: List the authenticated user's saved catalog datasets
+      description: Returns all catalog datasets the user has saved, joined with catalog metadata.
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: List of user save records with embedded catalog metadata
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserCatalogSave"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /datasets/my-saves/{id}/status:
+    get:
+      operationId: getDatasetsMySavesIdStatus
+      tags: [datasets]
+      summary: Poll the status of a user's save job
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Save record UUID
+      responses:
+        "200":
+          description: Current status of the save job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserCatalogSave"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Save record not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /efh:
     get:
       operationId: getEfh
@@ -1413,6 +1590,116 @@ components:
       required:
         - type
         - features
+
+    DatasetCatalogEntry:
+      type: object
+      description: A known public data source in the discovery catalog
+      properties:
+        id:
+          type: string
+          description: Stable slug identifier
+        name:
+          type: string
+        sourceAgency:
+          type: string
+          description: Organisation that produced the data (e.g. NOAA/NCEI, GEBCO, Alaska DNR)
+        dataType:
+          type: string
+          enum: [bathymetry, substrate, habitat, lidar, chart]
+        resolutionMMin:
+          type: number
+          nullable: true
+          description: Finest resolution in metres
+        resolutionMMax:
+          type: number
+          nullable: true
+          description: Coarsest resolution in metres
+        coverageBbox:
+          type: object
+          properties:
+            minLon: { type: number }
+            minLat: { type: number }
+            maxLon: { type: number }
+            maxLat: { type: number }
+          required: [minLon, minLat, maxLon, maxLat]
+        endpointUrl:
+          type: string
+          nullable: true
+        accessNotes:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        keywords:
+          type: string
+          nullable: true
+          description: Comma-separated keyword tags
+        lastUpdated:
+          type: string
+          nullable: true
+        waterType:
+          type: string
+          enum: [saltwater, freshwater]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - sourceAgency
+        - dataType
+        - coverageBbox
+        - waterType
+        - createdAt
+
+    DatasetCatalogSearchResult:
+      allOf:
+        - $ref: "#/components/schemas/DatasetCatalogEntry"
+        - type: object
+          properties:
+            relevanceScore:
+              type: number
+              description: 0–1 relevance to the search query
+          required:
+            - relevanceScore
+
+    UserCatalogSave:
+      type: object
+      description: A user's saved reference to a catalog dataset
+      properties:
+        id:
+          type: string
+          description: UUID primary key
+        catalogId:
+          type: string
+          description: References the dataset_catalog.id
+        status:
+          type: string
+          enum: [queued, processing, ready, failed]
+        requestedAt:
+          type: string
+          format: date-time
+        readyAt:
+          type: string
+          format: date-time
+          nullable: true
+        cacheKey:
+          type: string
+          nullable: true
+        errorMessage:
+          type: string
+          nullable: true
+        catalog:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/DatasetCatalogEntry"
+          description: Embedded catalog metadata (present when returned from list/status endpoints)
+      required:
+        - id
+        - catalogId
+        - status
+        - requestedAt
 
     GpsTrailInput:
       type: object

@@ -285,12 +285,34 @@ export const HUD: React.FC = () => {
         </div>
       )}
 
-      {/* ── Bottom-right: substrate + EFH overlay toggles ── */}
+      {/* ── Bottom-right: Find Data button + substrate + EFH overlay toggles ── */}
       {terrain && (
         <div
           className="absolute bottom-3 right-3 flex flex-col gap-1 items-end"
           style={{ pointerEvents: "auto" }}
         >
+          {/* Find Data panel toggle */}
+          <button
+            onClick={() => {
+              const { findDataPanelOpen, setFindDataPanelOpen } = useUiStore.getState();
+              setFindDataPanelOpen(!findDataPanelOpen);
+            }}
+            style={{
+              background: "rgba(0,10,20,0.75)",
+              border: "1px solid rgba(0,229,255,0.2)",
+              borderRadius: 4,
+              color: "#00e5ff",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 9,
+              padding: "3px 10px",
+              cursor: "pointer",
+              letterSpacing: "0.1em",
+              backdropFilter: "blur(4px)",
+              textShadow: "0 0 6px rgba(0,229,255,0.4)",
+            }}
+          >
+            🔍 FIND DATA
+          </button>
           {/* Substrate colour toggle */}
           <button
             aria-pressed={substrateColorMode}

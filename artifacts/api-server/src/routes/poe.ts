@@ -555,6 +555,35 @@ const BATHYSCAN_TOOLS: PoeToolSchema[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "searchDatasets",
+      description:
+        "Search the BathyScan public dataset catalog for bathymetry, substrate, habitat (EFH), lidar, or chart data. Use this when the user asks to find data, discover datasets, or look for coverage in a geographic area.",
+      parameters: {
+        type: "object",
+        properties: {
+          q: {
+            type: "string",
+            description: "Free-text search query derived from the user's request (location names, species, data type keywords, etc.)",
+          },
+          dataType: {
+            type: "string",
+            enum: ["bathymetry", "substrate", "habitat", "lidar", "chart"],
+            description: "Optional: constrain results to a specific data type",
+          },
+          waterType: {
+            type: "string",
+            enum: ["saltwater", "freshwater"],
+            description: "Optional: constrain to saltwater or freshwater datasets",
+          },
+        },
+        required: ["q"],
+        additionalProperties: false,
+      },
+    },
+  },
 ];
 
 type ResponsesOutputItem = {
