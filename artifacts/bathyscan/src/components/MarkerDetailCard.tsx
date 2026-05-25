@@ -6,7 +6,8 @@ import React, { useEffect } from "react";
 import { useMarkerDetailStore } from "@/lib/markerDetailStore";
 import { MARKER_COLOR, MARKER_ICON } from "@/lib/markerConstants";
 import { useSettingsStore } from "@/lib/settingsStore";
-import { formatDepth } from "@/lib/units";
+import { formatDepth, formatTemperature } from "@/lib/units";
+import { waterTemperatureC } from "@/lib/waterTemp";
 
 const MONO: React.CSSProperties = {
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
@@ -83,6 +84,10 @@ export const MarkerDetailCard: React.FC = () => {
         <span style={{ color: "#00e5ff" }}>{marker.lat.toFixed(5)}°</span>
         <span style={{ color: "#475569" }}>DEPTH</span>
         <span style={{ color: "#fb923c" }}>{formatDepth(marker.depth, { units })}</span>
+        <span style={{ color: "#475569" }}>TEMP</span>
+        <span style={{ color: "#fb923c" }}>
+          {formatTemperature(waterTemperatureC(marker.depth), { units })}
+        </span>
         {createdAt && (
           <>
             <span style={{ color: "#475569" }}>CREATED</span>

@@ -9,7 +9,8 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { useDriftStore } from "@/lib/driftStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
 import { mphToKnots } from "@/lib/boatSpeed";
-import { formatDepth, formatSpeed } from "@/lib/units";
+import { formatDepth, formatSpeed, formatTemperature } from "@/lib/units";
+import { waterTemperatureC } from "@/lib/waterTemp";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
@@ -338,6 +339,15 @@ export const HUD: React.FC = () => {
                   <span style={{ color: "#475569" }}>▼ </span>
                   <span style={{ ...CYAN, fontSize: 13, fontWeight: 700 }}>
                     {fmtDepth(crosshairGps.depth)}
+                  </span>
+                </div>
+                <div
+                  data-testid="hud-water-temp"
+                  style={{ marginTop: 2, fontSize: 10 }}
+                >
+                  <span style={{ color: "#475569" }}>🌡 TEMP </span>
+                  <span style={{ color: "#fb923c", textShadow: "0 0 6px rgba(251,146,60,0.4)" }}>
+                    {formatTemperature(waterTemperatureC(crosshairGps.depth), { units }).toUpperCase()}
                   </span>
                 </div>
               </>
