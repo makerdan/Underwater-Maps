@@ -17,7 +17,20 @@ export interface TerrainGrid {
   maxLat: number;
   centerLon: number;
   centerLat: number;
+  version?: number;
 }
+
+/**
+ * Terrain cache version. Bump this whenever the grid-generation pipeline
+ * changes in a way that makes previously cached grids stale (e.g. new
+ * smoothing pass, changed depth conversion, different resolution mapping).
+ * Cached entries with a lower version are discarded on read.
+ *
+ * History:
+ *   1 — initial cache format
+ *   2 — Task #26: smoothSpikes pass added in buildTerrainGrid
+ */
+export const TERRAIN_CACHE_VERSION = 2;
 
 export interface DatasetMeta {
   id: string;
@@ -225,7 +238,17 @@ async function readDiskCache(key: string): Promise<TerrainGrid | null> {
   try {
     const file = path.join(DISK_CACHE_DIR, `${key}.json`);
     const raw = await fsPromises.readFile(file, "utf8");
-    return JSON.parse(raw) as TerrainGrid;
+    const parsed = JSON.parse(raw) as TerrainGrid;
+    const version = parsed.version ?? 1;
+    if (version < TERRAIN_CACHE_VERSION) {
+      console.info(
+        `[terrain] Discarding stale cache ${key} (v${version} < v${TERRAIN_CACHE_VERSION})`
+      );
+      // Best-effort removal so the stale file doesn't linger on disk.
+      fsPromises.unlink(file).catch(() => {});
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -235,7 +258,8 @@ async function writeDiskCache(key: string, grid: TerrainGrid): Promise<void> {
   try {
     await fsPromises.mkdir(DISK_CACHE_DIR, { recursive: true });
     const file = path.join(DISK_CACHE_DIR, `${key}.json`);
-    await fsPromises.writeFile(file, JSON.stringify(grid), "utf8");
+    const stamped: TerrainGrid = { ...grid, version: TERRAIN_CACHE_VERSION };
+    await fsPromises.writeFile(file, JSON.stringify(stamped), "utf8");
   } catch (err) {
     console.warn(`[terrain] Failed to write disk cache for ${key}: ${(err as Error).message}`);
   }
