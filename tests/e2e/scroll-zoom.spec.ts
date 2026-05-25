@@ -54,8 +54,7 @@ function distance(
 test.describe("BathyScan — scroll-to-zoom controls", () => {
   test.beforeEach(async ({ page }) => {
     // Defensive stubs: prevent DatasetPanel / folder tree from crashing on
-    // pre-existing malformed responses, and hide Vite's HMR error overlay so
-    // it can't swallow events on the Settings page.
+    // pre-existing malformed responses.
     const emptyJson = (route: import("@playwright/test").Route) =>
       route.fulfill({
         status: 200,
@@ -65,16 +64,6 @@ test.describe("BathyScan — scroll-to-zoom controls", () => {
     await page.route("**/api/user/folders**", emptyJson);
     await page.route("**/api/datasets**", emptyJson);
     await page.route("**/api/user/datasets**", emptyJson);
-    await page.addInitScript(() => {
-      const remove = () => {
-        document.querySelectorAll("vite-error-overlay").forEach((n) => n.remove());
-      };
-      new MutationObserver(remove).observe(document.documentElement, {
-        childList: true,
-        subtree: true,
-      });
-      remove();
-    });
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await waitForTestApi(page);

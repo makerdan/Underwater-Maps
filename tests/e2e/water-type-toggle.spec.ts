@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 
 /**
  * Water-type toggle end-to-end test.
@@ -22,29 +22,6 @@ import { test, expect, type Page } from "@playwright/test";
 const SALTWATER_DATASET = "btn-dataset-thorne-bay";
 const FRESHWATER_DATASET = "btn-dataset-lake-superior";
 
-/**
- * Suppress the Replit `vite-plugin-runtime-error-modal` overlay for the
- * lifetime of the page. In headless tests WebGL context creation fails for
- * the Three.js canvas, which causes the runtime-error overlay to be
- * (re-)injected on every error event and intercept pointer events on the
- * toggle. We install a MutationObserver before any app code runs that
- * strips the overlay element the moment it is appended to <body>.
- */
-async function suppressRuntimeOverlay(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    const remove = () => {
-      document
-        .querySelectorAll("vite-error-overlay, vite-plugin-checker-error-overlay")
-        .forEach((el) => el.remove());
-    };
-    remove();
-    const obs = new MutationObserver(remove);
-    const start = () => obs.observe(document.documentElement, { childList: true, subtree: true });
-    if (document.documentElement) start();
-    else document.addEventListener("DOMContentLoaded", start);
-  });
-}
-
 test.describe("Water-type toggle", () => {
   test("switching to freshwater and back updates UI, datasets, and colormap", async ({ page }) => {
     test.setTimeout(120_000);
@@ -59,7 +36,6 @@ test.describe("Water-type toggle", () => {
       data: { waterType: "saltwater" },
     });
 
-    await suppressRuntimeOverlay(page);
     await page.goto("/");
 
     const saltBtn = page.locator('[data-testid="water-type-saltwater"]');
@@ -96,12 +72,7 @@ test.describe("Water-type toggle", () => {
     // ---- Switch to freshwater ---------------------------------------------
     await page.goto("/");
     await expect(freshBtn).toBeVisible({ timeout: 20_000 });
-    // The runtime-error overlay can re-mount on every HMR/error event, so
-    // re-dismiss right before the interaction and use force to bypass any
-    // we miss racing back in.
-    // Click via element.click() in the page context to bypass any
-    // runtime-error overlay that may have re-mounted between strips.
-    await freshBtn.evaluate((el) => (el as HTMLButtonElement).click());
+    await freshBtn.click();
 
     // Freshwater button now wears its theme color (#4ade80); saltwater dims
     // to the inactive slate color. Wait for the style transition to settle.
@@ -133,7 +104,7 @@ test.describe("Water-type toggle", () => {
     // ---- Switch back to saltwater -----------------------------------------
     await page.goto("/");
     await expect(saltBtn).toBeVisible({ timeout: 20_000 });
-    await saltBtn.evaluate((el) => (el as HTMLButtonElement).click());
+    await saltBtn.click();
 
     // Saltwater dataset reappears; freshwater preset is filtered out again.
     await expect(page.locator(`[data-testid="${SALTWATER_DATASET}"]`)).toBeVisible({ timeout: 10_000 });

@@ -11,28 +11,6 @@ import { test, expect, type Page } from "@playwright/test";
  * does not depend on live NOAA data being reachable from the test env.
  */
 
-/**
- * Suppress the Replit `vite-plugin-runtime-error-modal` overlay. In headless
- * Playwright runs the Three.js canvas often fails to obtain a WebGL context,
- * which makes the runtime-error overlay intercept pointer events on the
- * top-bar toggles. Strip the overlay whenever it is (re-)injected.
- */
-async function suppressRuntimeOverlay(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    const remove = () => {
-      document
-        .querySelectorAll("vite-error-overlay, vite-plugin-checker-error-overlay")
-        .forEach((el) => el.remove());
-    };
-    remove();
-    const obs = new MutationObserver(remove);
-    const start = () =>
-      obs.observe(document.documentElement, { childList: true, subtree: true });
-    if (document.documentElement) start();
-    else document.addEventListener("DOMContentLoaded", start);
-  });
-}
-
 async function appIsSignedIn(page: Page): Promise<boolean> {
   return page
     .locator("canvas")
@@ -94,7 +72,6 @@ function buildMockSchedule() {
 
 test.describe("Tide HUD scrubber slack visuals", () => {
   test.beforeEach(async ({ page }) => {
-    await suppressRuntimeOverlay(page);
     // Mock the schedule endpoint with a deterministic 7-day slack schedule.
     await page.route("**/api/tidal/schedule*", async (route) => {
       await route.fulfill({

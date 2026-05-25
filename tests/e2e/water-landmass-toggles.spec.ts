@@ -246,34 +246,16 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
     const provenanceHeader = page.locator('[aria-label="Toggle data provenance"]').first();
     await expect(provenanceHeader).toBeVisible({ timeout: 10_000 });
 
-    // Vite's runtime-error overlay can intercept clicks in dev mode when an
-    // unrelated WebGL/runtime error fires. Strip it so the expand-toggle
-    // click can land.
-    await page.evaluate(() => {
-      document.querySelectorAll("vite-error-overlay").forEach((el) => el.remove());
-    });
-
-    // Retry the expand click up to 3 times — the click can be eaten by a
-    // re-rendered overlay between strip + click.
-    for (let i = 0; i < 3; i++) {
-      if ((await provenanceHeader.getAttribute("aria-expanded")) === "true") break;
-      await page.evaluate(() => {
-        document.querySelectorAll("vite-error-overlay").forEach((el) => el.remove());
-      });
-      await provenanceHeader.click({ force: true });
-      await page.waitForTimeout(300);
+    if ((await provenanceHeader.getAttribute("aria-expanded")) !== "true") {
+      await provenanceHeader.click();
     }
 
     const downloadBtn = page.locator('[data-testid="btn-download-topography"]');
     await expect(downloadBtn).toBeVisible({ timeout: 10_000 });
 
-    await page.evaluate(() => {
-      document.querySelectorAll("vite-error-overlay").forEach((el) => el.remove());
-    });
-
     const [download] = await Promise.all([
       page.waitForEvent("download", { timeout: 10_000 }),
-      downloadBtn.click({ force: true }),
+      downloadBtn.click(),
     ]);
     expect(download.suggestedFilename()).toBe("hawaii-seamount-topography.json");
   });

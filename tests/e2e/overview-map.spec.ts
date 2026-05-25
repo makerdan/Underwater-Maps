@@ -56,22 +56,6 @@ async function clearPendingDropIn(page: Page): Promise<void> {
 }
 
 /**
- * Vite's dev runtime error overlay (a `<vite-error-overlay>` custom element)
- * intercepts pointer events whenever a runtime error has been logged — which
- * happens in headless chromium when the WebGL context fails to initialize.
- * That's a pre-existing environmental issue unrelated to the code under test.
- * We inject a CSS rule that permanently hides it so it can't block clicks,
- * even on instances that vite re-creates after each new error.
- */
-async function suppressViteErrorOverlay(page: Page): Promise<void> {
-  await page
-    .addStyleTag({
-      content: "vite-error-overlay { display: none !important; pointer-events: none !important; }",
-    })
-    .catch(() => {});
-}
-
-/**
  * Locates the full-screen OverviewMap canvas (NOT the small Minimap canvas).
  * It is the `<canvas>` that lives as a direct child of the overlay container
  * which also hosts the `.overview-map-header`.
@@ -81,41 +65,21 @@ function overviewCanvas(page: Page) {
 }
 
 /**
- * Dispatches a right-click (contextmenu) event directly on the OverviewMap
- * canvas at the given fractional position (0..1 of width/height). We dispatch
- * rather than using Playwright's `.click({ button: 'right' })` because Vite's
- * runtime error overlay (triggered by headless chromium's WebGL failures)
- * keeps re-appearing on every new error and intercepts pointer events. Going
- * straight through the DOM event API exercises the exact same handleContextMenu
- * listener the production UI invokes, without depending on a working pointer
- * stack.
+ * Right-clicks the OverviewMap canvas at the given fractional position
+ * (0..1 of width/height).
  */
 async function rightClickOverviewCanvas(
   page: Page,
   fracX: number,
   fracY: number,
 ): Promise<void> {
-  await page.evaluate(
-    ({ fracX, fracY }) => {
-      const header = document.querySelector(".overview-map-header");
-      const container = header?.parentElement;
-      const canvas = container?.querySelector("canvas") as HTMLCanvasElement | null;
-      if (!canvas) throw new Error("OverviewMap canvas not found");
-      const rect = canvas.getBoundingClientRect();
-      const clientX = rect.left + rect.width * fracX;
-      const clientY = rect.top + rect.height * fracY;
-      const evt = new MouseEvent("contextmenu", {
-        bubbles: true,
-        cancelable: true,
-        clientX,
-        clientY,
-        button: 2,
-        buttons: 2,
-      });
-      canvas.dispatchEvent(evt);
-    },
-    { fracX, fracY },
-  );
+  const canvas = overviewCanvas(page);
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("OverviewMap canvas not found");
+  await canvas.click({
+    button: "right",
+    position: { x: box.width * fracX, y: box.height * fracY },
+  });
 }
 
 test.describe("BathyScan — Overview Map", () => {
@@ -220,7 +184,6 @@ test.describe("BathyScan — Overview Map", () => {
       if (!(await ensureSignedInOrSkip(page))) return;
 
       await openOverview(page);
-      await suppressViteErrorOverlay(page);
       await expect(overviewCanvas(page)).toBeVisible({ timeout: 5_000 });
 
       await rightClickOverviewCanvas(page, 0.5, 0.5);
@@ -262,7 +225,6 @@ test.describe("BathyScan — Overview Map", () => {
 
       await openOverview(page);
       await clearPendingDropIn(page);
-      await suppressViteErrorOverlay(page);
       await expect(overviewCanvas(page)).toBeVisible({ timeout: 5_000 });
 
       await rightClickOverviewCanvas(page, 0.35, 0.6);
@@ -330,7 +292,6 @@ test.describe("BathyScan — Overview Map", () => {
         .catch(() => {});
 
       await openOverview(page);
-      await suppressViteErrorOverlay(page);
       await expect(overviewCanvas(page)).toBeVisible({ timeout: 5_000 });
 
       await rightClickOverviewCanvas(page, 0.7, 0.4);

@@ -106,11 +106,7 @@ async function openUploadAccordion(page: Page): Promise<void> {
   // TERRAIN" accordion to reveal the dropzone.
   const toggle = page.getByRole("button", { name: /UPLOAD CUSTOM TERRAIN/i });
   await expect(toggle).toBeVisible();
-  // `.click()` (even with force:true) dispatches at viewport coordinates,
-  // which a stray <vite-error-overlay> from R3F's WebGL failure in headless
-  // Chromium intercepts. Calling `el.click()` directly on the element
-  // bypasses the overlay and dispatches the React onClick reliably.
-  await toggle.evaluate((el: HTMLElement) => el.click());
+  await toggle.click();
   await expect(page.getByTestId("dropzone-terrain")).toBeVisible();
 }
 
@@ -126,23 +122,6 @@ async function uploadCsvViaDropzone(page: Page, filename: string): Promise<void>
 }
 
 test.describe("upload auto-save end-to-end", () => {
-  test.beforeEach(async ({ page }) => {
-    // Headless Chromium has no WebGL context, so R3F throws on Canvas mount
-    // and Vite's HMR runtime-error overlay paints a full-viewport element
-    // that intercepts pointer events. Suppress it; the DOM-driven dropzone
-    // we exercise here is unrelated to the 3D scene.
-    await page.addInitScript(() => {
-      const remove = () => {
-        document.querySelectorAll("vite-error-overlay").forEach((n) => n.remove());
-      };
-      new MutationObserver(remove).observe(document.documentElement, {
-        childList: true,
-        subtree: true,
-      });
-      remove();
-    });
-  });
-
   test.beforeAll(async ({ request }) => {
     const probe = await request.get(`${API_BASE}/api/datasets`);
     expect(
@@ -227,7 +206,7 @@ test.describe("upload auto-save end-to-end", () => {
     //    which returns 200 (auth-bypassed). Headless Chromium lacks WebGL
     //    so we don't assert the 3D canvas rendered, but a successful
     //    click must not surface the "Failed to load" inline error banner.
-    await persistedRow.evaluate((el: HTMLElement) => el.click());
+    await persistedRow.click();
     await expect(page.getByTestId("user-dataset-load-error")).toHaveCount(0);
   });
 

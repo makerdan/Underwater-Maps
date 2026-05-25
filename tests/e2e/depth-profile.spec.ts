@@ -32,18 +32,6 @@ test.describe("BathyScan — Depth profile flow", () => {
     await page.route("**/api/user/folders**", emptyJson);
     await page.route("**/api/datasets**", emptyJson);
     await page.route("**/api/user/datasets**", emptyJson);
-    // Hide Vite's HMR runtime-error overlay if it appears for pre-existing
-    // unrelated errors so it doesn't intercept pointer events.
-    await page.addInitScript(() => {
-      const remove = () => {
-        document.querySelectorAll("vite-error-overlay").forEach((n) => n.remove());
-      };
-      new MutationObserver(remove).observe(document.documentElement, {
-        childList: true,
-        subtree: true,
-      });
-      remove();
-    });
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await waitForTestApi(page);
@@ -68,12 +56,7 @@ test.describe("BathyScan — Depth profile flow", () => {
       .locator('[role="menuitem"]')
       .filter({ hasText: "Start depth profile here" });
     await expect(startItem).toBeVisible();
-    // Dispatch the click directly on the menu item element. A plain
-    // `.click()` (even with force:true) dispatches at viewport coordinates,
-    // which can be intercepted by a stray <vite-error-overlay> from a
-    // pre-existing unrelated runtime error in DatasetPanel. Calling
-    // `el.click()` on the element guarantees the React onClick fires.
-    await startItem.evaluate((el: HTMLElement) => el.click());
+    await startItem.click();
     await expect(menu).toHaveCount(0);
 
     // Panel should not yet be rendered (only anchor set)
@@ -94,7 +77,7 @@ test.describe("BathyScan — Depth profile flow", () => {
       .locator('[role="menuitem"]')
       .filter({ hasText: "End depth profile here" });
     await expect(endItem).toBeVisible();
-    await endItem.evaluate((el: HTMLElement) => el.click());
+    await endItem.click();
     await expect(menu).toHaveCount(0);
 
     // ── Panel renders with chart + stats ──
@@ -127,7 +110,7 @@ test.describe("BathyScan — Depth profile flow", () => {
     // ── × button dismisses the panel ──
     await panel
       .getByRole("button", { name: /close depth profile/i })
-      .evaluate((el: HTMLElement) => el.click());
+      .click();
     await expect(panel).toHaveCount(0);
     expect(
       await page.evaluate(() =>
