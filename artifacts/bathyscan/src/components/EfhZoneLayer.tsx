@@ -1,17 +1,23 @@
 /**
- * EfhZoneLayer — Essential Fish Habitat polygon outlines in the 3D R3F scene.
+ * EfhZoneLayer — Essential Fish Habitat polygons in the 3D R3F scene.
  *
- * Renders each EFH species zone as a flat LINE_LOOP polygon outline floating
- * slightly above the ocean surface (Y = 1.2), coloured by species.
+ * Renders each EFH species zone as both:
+ *   - a semi-transparent filled polygon (ShapeGeometry) draped just above the
+ *     ocean surface, colored by species, and
+ *   - a brighter LINE_LOOP outline floating slightly higher.
+ *
+ * Colors and alphas mirror the OverviewMap 2D legend (fill ≈ 0.18 alpha,
+ * outline ≈ 0.85 alpha), so the same species reads as the same hue in both
+ * views.
  *
  * Only visible when efhOverlayEnabled is true in uiStore and the active dataset
- * has bundled EFH data (currently only "thorne-bay").
+ * has bundled EFH data.
  *
  * Coordinate mapping mirrors lonLatToWorldXZ in terrain.ts:
  *   worldX = ((lon - minLon) / lonRange) * WORLD_SIZE - WORLD_SIZE / 2
  *   worldZ = ((lat - minLat) / latRange) * WORLD_SIZE - WORLD_SIZE / 2
  */
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
@@ -20,8 +26,10 @@ import { useGetEfh, getGetEfhQueryKey } from "@workspace/api-client-react";
 import type { EfhFeature } from "@workspace/api-client-react";
 
 const EFH_DATASETS = new Set(["thorne-bay"]);
-/** Y elevation for EFH zone outlines — float above ocean surface */
-const EFH_ZONE_Y = 1.2;
+/** Y elevation for EFH filled polygons — just above ocean surface (Y=0). */
+const EFH_FILL_Y = 1.0;
+/** Y elevation for EFH outlines — slightly above the fill so they are not z-fought. */
+const EFH_OUTLINE_Y = 1.2;
 
 function lonToWorldX(lon: number, minLon: number, lonRange: number): number {
   return ((lon - minLon) / lonRange) * WORLD_SIZE - WORLD_SIZE / 2;
@@ -41,46 +49,87 @@ function ringToLineGeometry(
   for (const pt of ring) {
     const x = lonToWorldX(pt[0] ?? 0, minLon, lonRange);
     const z = latToWorldZ(pt[1] ?? 0, minLat, latRange);
-    pts.push(x, EFH_ZONE_Y, z);
+    pts.push(x, EFH_OUTLINE_Y, z);
   }
   // Ensure the loop is closed by repeating the first point
   if (ring.length > 1) {
     const p = ring[0]!;
-    pts.push(lonToWorldX(p[0] ?? 0, minLon, lonRange), EFH_ZONE_Y, latToWorldZ(p[1] ?? 0, minLat, latRange));
+    pts.push(
+      lonToWorldX(p[0] ?? 0, minLon, lonRange),
+      EFH_OUTLINE_Y,
+      latToWorldZ(p[1] ?? 0, minLat, latRange),
+    );
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
   return geo;
 }
 
-/** One species zone: a line loop + its hex color. */
-interface ZoneLine {
-  geometry: THREE.BufferGeometry;
+/**
+ * Build a flat horizontal ShapeGeometry from a GeoJSON polygon (outer ring +
+ * optional holes). The returned geometry lies in the XZ plane at Y = EFH_FILL_Y.
+ */
+function polygonToFillGeometry(
+  rings: number[][][],
+  minLon: number, lonRange: number,
+  minLat: number, latRange: number,
+): THREE.BufferGeometry | null {
+  const outer = rings[0];
+  if (!outer || outer.length < 3) return null;
+
+  const toV2 = (pt: number[]): THREE.Vector2 =>
+    new THREE.Vector2(
+      lonToWorldX(pt[0] ?? 0, minLon, lonRange),
+      latToWorldZ(pt[1] ?? 0, minLat, latRange),
+    );
+
+  const shape = new THREE.Shape(outer.map(toV2));
+  for (let i = 1; i < rings.length; i++) {
+    const hole = rings[i];
+    if (!hole || hole.length < 3) continue;
+    shape.holes.push(new THREE.Path(hole.map(toV2)));
+  }
+
+  const geo = new THREE.ShapeGeometry(shape);
+  // ShapeGeometry produces vertices in the XY plane (Z=0). Lay it flat in the
+  // world XZ plane at Y = EFH_FILL_Y. The Vector2.y values above were lat→Z,
+  // so rotating −π/2 around X moves them into +Z and gives the right facing.
+  geo.rotateX(-Math.PI / 2);
+  geo.translate(0, EFH_FILL_Y, 0);
+  return geo;
+}
+
+/** One species zone: a fill mesh + line loop + its hex color. */
+interface ZoneRender {
+  fillGeometry: THREE.BufferGeometry | null;
+  outlineGeometry: THREE.BufferGeometry;
   color: string;
   commonName: string;
 }
 
-function buildZoneLines(
+function buildZoneRenders(
   features: EfhFeature[],
   minLon: number, maxLon: number,
   minLat: number, maxLat: number,
-): ZoneLine[] {
+): ZoneRender[] {
   const lonRange = maxLon - minLon || 1;
   const latRange = maxLat - minLat || 1;
-  const lines: ZoneLine[] = [];
+  const out: ZoneRender[] = [];
 
   for (const feature of features) {
     const geom = feature.geometry as { type?: string; coordinates?: number[][][] };
     if (geom.type !== "Polygon" || !geom.coordinates?.[0]) continue;
 
-    const geo = ringToLineGeometry(geom.coordinates[0], minLon, lonRange, minLat, latRange);
-    lines.push({
-      geometry: geo,
+    const outline = ringToLineGeometry(geom.coordinates[0], minLon, lonRange, minLat, latRange);
+    const fill = polygonToFillGeometry(geom.coordinates, minLon, lonRange, minLat, latRange);
+    out.push({
+      fillGeometry: fill,
+      outlineGeometry: outline,
       color: feature.properties.color ?? "#00e5ff",
       commonName: feature.properties.commonName ?? feature.properties.species ?? "",
     });
   }
-  return lines;
+  return out;
 }
 
 export const EfhZoneLayer: React.FC = () => {
@@ -95,28 +144,52 @@ export const EfhZoneLayer: React.FC = () => {
     { query: { enabled: hasEfh && efhOverlayEnabled, queryKey: getGetEfhQueryKey({ datasetId }) } },
   );
 
-  const zoneLines = useMemo(() => {
+  const zones = useMemo(() => {
     if (!efhData?.features || !terrain) return [];
-    return buildZoneLines(
+    return buildZoneRenders(
       efhData.features,
       terrain.minLon, terrain.maxLon,
       terrain.minLat, terrain.maxLat,
     );
   }, [efhData, terrain]);
 
-  if (!efhOverlayEnabled || !zoneLines.length) return null;
+  // Free GPU buffers when zones change or the component unmounts
+  useEffect(() => {
+    return () => {
+      for (const z of zones) {
+        z.outlineGeometry.dispose();
+        z.fillGeometry?.dispose();
+      }
+    };
+  }, [zones]);
+
+  if (!efhOverlayEnabled || !zones.length) return null;
 
   return (
     <group name="efh-zones">
-      {zoneLines.map((zone, i) => (
-        <lineLoop key={i} geometry={zone.geometry}>
-          <lineBasicMaterial
-            color={zone.color}
-            transparent
-            opacity={0.85}
-            linewidth={2}
-          />
-        </lineLoop>
+      {zones.map((zone, i) => (
+        <React.Fragment key={i}>
+          {zone.fillGeometry && (
+            <mesh geometry={zone.fillGeometry} renderOrder={2}>
+              <meshBasicMaterial
+                color={zone.color}
+                transparent
+                opacity={0.18}
+                depthWrite={false}
+                side={THREE.DoubleSide}
+              />
+            </mesh>
+          )}
+          <lineLoop geometry={zone.outlineGeometry} renderOrder={3}>
+            <lineBasicMaterial
+              color={zone.color}
+              transparent
+              opacity={0.85}
+              depthWrite={false}
+              linewidth={2}
+            />
+          </lineLoop>
+        </React.Fragment>
       ))}
     </group>
   );
