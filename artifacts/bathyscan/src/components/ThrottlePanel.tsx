@@ -9,6 +9,7 @@ import { useAppState } from "@/lib/context";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { formatSpeed } from "@/lib/units";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
+import { HelpIcon } from "@/components/help/HelpButton";
 
 const LEVER_TRACK_H = 160;
 const LEVER_THUMB_H = 28;
@@ -165,7 +166,10 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
           borderBottom: "1px solid rgba(0,229,255,0.1)",
         }}
       >
-        <span style={{ fontSize: 9, letterSpacing: "0.25em", color: "#475569" }}>THROTTLE</span>
+        <span style={{ fontSize: 9, letterSpacing: "0.25em", color: "#475569", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          THROTTLE
+          <HelpIcon articleId="throttle" label="Throttle panel" />
+        </span>
         <div style={{ display: "flex", gap: 4 }}>
           <ViewscreenTooltip label="Collapse the throttle panel" side="left">
             <button

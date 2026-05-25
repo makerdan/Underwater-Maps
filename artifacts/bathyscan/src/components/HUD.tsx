@@ -401,6 +401,11 @@ export const HUD: React.FC = () => {
           className="absolute bottom-3 right-3 flex flex-col gap-1 items-end"
           style={{ pointerEvents: "auto" }}
         >
+          {/* Help shortcut for the overlay toggle cluster */}
+          <div style={{ alignSelf: "flex-end" }}>
+            <HelpIcon articleId="hud-overlays" label="HUD overlay toggles" />
+          </div>
+
           {/* Find Data panel toggle */}
           <ViewscreenTooltip label="Browse datasets, markers and habitats" side="left">
             <button

@@ -6,6 +6,7 @@ import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { formatDistance, formatDepth } from "@/lib/units";
 import { useTidalSchedule, type TidalScheduleEvent } from "@/hooks/useTidalSchedule";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
+import { HelpIcon } from "@/components/help/HelpButton";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(2,8,18,0.94)",
@@ -188,8 +189,11 @@ export const TidePanel: React.FC<TidePanelProps> = ({
           style={{ borderBottom: collapsed ? "none" : "1px solid rgba(0,229,255,0.1)" }}
           onClick={() => togglePanel("tide")}
         >
-          <span style={{ ...CYAN, fontSize: 10, letterSpacing: "0.2em" }}>
+          <span style={{ ...CYAN, fontSize: 10, letterSpacing: "0.2em", display: "inline-flex", alignItems: "center", gap: 6 }}>
             ◉ TIDAL OVERLAY
+            <span onClick={(e) => e.stopPropagation()} style={{ display: "inline-flex" }}>
+              <HelpIcon articleId="tidal-overlay" label="Tidal overlay" />
+            </span>
           </span>
           <span style={DIM}>{collapsed ? "▲" : "▼"}</span>
         </div>

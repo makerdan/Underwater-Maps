@@ -26,6 +26,7 @@ import {
 } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
+import { HelpIcon } from "@/components/help/HelpButton";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -399,7 +400,10 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     <div style={PANEL} role="dialog" aria-label="Find Data panel">
       {/* Header */}
       <div style={HEADER}>
-        <span style={TITLE}>Find Data</span>
+        <span style={{ ...TITLE, display: "inline-flex", alignItems: "center", gap: 8 }}>
+          Find Data
+          <HelpIcon articleId="find-data" label="Find Data" />
+        </span>
         <ViewscreenTooltip label="Close Find Data" side="left">
           <button
             onClick={onClose}
