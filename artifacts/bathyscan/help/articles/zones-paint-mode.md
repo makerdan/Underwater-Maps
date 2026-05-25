@@ -25,6 +25,9 @@ The **Zone overlay** panel (left side, below Datasets) toggles a coloured tint o
 
 The AI is good but not perfect. Open the Zone overlay panel and click **Paint** to enter **Paint mode**:
 
+![Brush sweeping across the zone grid, repainting cells](/help/paint-mode.gif)
+
+
 1. Pick a target zone from the swatch list.
 2. Move the cursor over the terrain — cells under the brush change colour.
 3. Click and drag to repaint.

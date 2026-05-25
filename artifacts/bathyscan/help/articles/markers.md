@@ -11,6 +11,8 @@ Markers are persistent pins you drop on the seafloor to remember a spot.
 
 ## Dropping a marker
 
+![Press G, fill the Drop Marker form, save](/help/marker-drop.gif)
+
 1. Enter **Fly mode** by clicking the scene.
 2. Aim the crosshair at the target.
 3. Press **G** or **right-click**.
