@@ -41,6 +41,7 @@ export type TimeFormat = "utc" | "local" | "12h" | "24h";
 export type CurrentArrowDensity = "sparse" | "normal" | "dense";
 export type TidalDepthLayer = "surface" | "mid" | "near-bottom";
 export type TrailRetention = "7" | "30" | "90" | "all";
+export type ConditionsOverlayStyle = "arrows" | "particles";
 
 export type SettingsSection =
   | "camera"
@@ -137,6 +138,12 @@ export interface SettingsState {
   autoLoadTidal: boolean;
   defaultTidalDepthLayer: TidalDepthLayer;
   currentArrowDensity: CurrentArrowDensity;
+  /**
+   * Visual style for the always-on Wind / Tide / Current overlays. "arrows"
+   * (default) keeps the directional arrow field; "particles" replaces it
+   * with a streaming particle flow that emphasises eddies and shear.
+   */
+  conditionsOverlayStyle: ConditionsOverlayStyle;
 
   // ── Bathymetric Currents Simulation (Task #136) ──────────────────────
   /** Master enable for the bathymetry-shaped current simulation. */
@@ -280,6 +287,7 @@ interface SettingsActions {
   setAutoLoadTidal: (v: boolean) => void;
   setDefaultTidalDepthLayer: (v: TidalDepthLayer) => void;
   setCurrentArrowDensity: (v: CurrentArrowDensity) => void;
+  setConditionsOverlayStyle: (v: ConditionsOverlayStyle) => void;
 
   // Currents (Task #136)
   setCurrentsEnabled: (v: boolean) => void;
@@ -494,6 +502,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   autoLoadTidal: true,
   defaultTidalDepthLayer: "surface",
   currentArrowDensity: "normal",
+  conditionsOverlayStyle: "arrows",
 
   // Currents (Task #136)
   currentsEnabled: false,
@@ -563,7 +572,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "defaultMarkerType", "defaultDepthPoleColor", "showMarkerLabels",
     "visibleMarkerTypes", "privateMarkers", "markerClusterThreshold",
   ],
-  tidal: ["autoLoadTidal", "defaultTidalDepthLayer", "currentArrowDensity"],
+  tidal: ["autoLoadTidal", "defaultTidalDepthLayer", "currentArrowDensity", "conditionsOverlayStyle"],
   currents: [
     "currentsEnabled", "currentsSource", "currentsManualDirectionDeg",
     "currentsManualSpeedKt", "currentsTidePhase", "currentsAutoAdvance",
@@ -693,6 +702,7 @@ export const useSettingsStore = create<SettingsStore>()(
         setAutoLoadTidal: setter("autoLoadTidal"),
         setDefaultTidalDepthLayer: setter("defaultTidalDepthLayer"),
         setCurrentArrowDensity: setter("currentArrowDensity"),
+        setConditionsOverlayStyle: setter("conditionsOverlayStyle"),
 
         // Currents (Task #136)
         setCurrentsEnabled: setter("currentsEnabled"),

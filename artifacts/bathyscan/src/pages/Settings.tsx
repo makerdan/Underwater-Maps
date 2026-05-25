@@ -1102,6 +1102,16 @@ function TidalSection() {
               { value: "dense", label: "Dense" },
             ]}
           />
+          <SelectRow
+            label="Overlay Style"
+            value={s.conditionsOverlayStyle}
+            onChange={s.setConditionsOverlayStyle}
+            options={[
+              { value: "arrows", label: "Arrows" },
+              { value: "particles", label: "Particles" },
+            ]}
+            sublabel="How Wind, Tide &amp; Current overlays are drawn"
+          />
         </div>
       </AdvancedDisclosure>
     </>

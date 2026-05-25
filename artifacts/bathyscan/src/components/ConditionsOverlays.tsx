@@ -12,6 +12,8 @@ import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
 import { MAX_DEPTH_WORLD, WORLD_SIZE } from "@/lib/terrain";
 import type { TerrainData } from "@workspace/api-client-react";
 import { DirectionArrowField } from "@/components/DirectionArrowField";
+import { DirectionParticleField } from "@/components/DirectionParticleField";
+import { useSettingsStore } from "@/lib/settingsStore";
 import {
   LAYER_OFFSETS,
   LAYER_SPEED_ATTENUATE,
@@ -72,6 +74,7 @@ export function windColor(knots: number): string {
 export const WindOverlay: React.FC = () => {
   const { terrain } = useAppState();
   const active = useUiStore((s) => s.windOverlayActive);
+  const style = useSettingsStore((s) => s.conditionsOverlayStyle);
   const { snapshot, estimated, fallback } = useSurfaceConditions(active);
 
   if (!active || !terrain) return null;
@@ -84,18 +87,37 @@ export const WindOverlay: React.FC = () => {
   // Wind arrows float a little above the sea surface so they are clearly
   // separated from current arrows below.
   const surfY = seaSurfaceY(terrain) + 3.0;
+  const color = windColor(speed);
+  const opacity = estimated ? 0.55 : 0.85;
+
+  if (style === "particles") {
+    return (
+      <DirectionParticleField
+        directionDeg={towardDeg}
+        magnitude={Math.max(0.5, speed)}
+        referenceMagnitude={12}
+        color={color}
+        layerY={surfY}
+        density={14}
+        baseSize={0.8}
+        animate
+        opacity={opacity}
+        renderOrder={4}
+      />
+    );
+  }
 
   return (
     <DirectionArrowField
       directionDeg={towardDeg}
       magnitude={Math.max(0.5, speed)}
       referenceMagnitude={12}
-      color={windColor(speed)}
+      color={color}
       layerY={surfY}
       density={6}
       baseScale={1.5}
       animate
-      opacity={estimated ? 0.55 : 0.85}
+      opacity={opacity}
       renderOrder={4}
     />
   );
@@ -104,6 +126,7 @@ export const WindOverlay: React.FC = () => {
 export const TideOverlay: React.FC = () => {
   const { terrain } = useAppState();
   const active = useUiStore((s) => s.tideOverlayActive);
+  const style = useSettingsStore((s) => s.conditionsOverlayStyle);
   const { snapshot, estimated, fallback } = useSurfaceConditions(active);
 
   // Constrain tide arrows to the shallow/shoreline band — tides drive flow
@@ -123,6 +146,24 @@ export const TideOverlay: React.FC = () => {
   // Colour reflects rising (flood, green) vs falling (ebb, amber).
   const surfY = seaSurfaceY(terrain) + 1.2;
   const color = rising ? "#34d399" : "#fbbf24";
+  const opacity = estimated ? 0.5 : 0.8;
+
+  if (style === "particles") {
+    return (
+      <DirectionParticleField
+        directionDeg={dir}
+        magnitude={Math.max(0.3, speed)}
+        referenceMagnitude={1.0}
+        color={color}
+        layerY={surfY}
+        positions={positions}
+        baseSize={0.7}
+        animate
+        opacity={opacity}
+        renderOrder={3}
+      />
+    );
+  }
 
   return (
     <DirectionArrowField
@@ -134,7 +175,7 @@ export const TideOverlay: React.FC = () => {
       positions={positions}
       baseScale={1.3}
       animate
-      opacity={estimated ? 0.5 : 0.8}
+      opacity={opacity}
       renderOrder={3}
     />
   );
@@ -144,6 +185,7 @@ export const CurrentOverlay: React.FC = () => {
   const { terrain } = useAppState();
   const active = useUiStore((s) => s.currentOverlayActive);
   const layers = useUiStore((s) => s.currentDepthLayers);
+  const style = useSettingsStore((s) => s.conditionsOverlayStyle);
   const { snapshot, estimated, fallback } = useSurfaceConditions(active);
 
   if (!active || !terrain || layers.length === 0) return null;
@@ -151,24 +193,44 @@ export const CurrentOverlay: React.FC = () => {
   const speed = snapshot?.tidalSpeedKnots ?? fallback.tidalSpeedKnots;
   const dir = snapshot?.tidalDegrees ?? fallback.tidalDegrees;
   const surfY = seaSurfaceY(terrain);
+  const opacity = estimated ? 0.5 : 0.75;
 
   return (
     <>
       {layers.map((layer, idx) => {
         const attenuate = LAYER_SPEED_ATTENUATE[layer] ?? 1.0;
         const yOffset = LAYER_OFFSETS[layer] ?? 0;
+        const layerColor = LAYER_COLORS[layer];
+        const mag = Math.max(0.3, speed * attenuate);
+        if (style === "particles") {
+          return (
+            <DirectionParticleField
+              key={layer}
+              directionDeg={dir}
+              magnitude={mag}
+              referenceMagnitude={1.0}
+              color={layerColor}
+              layerY={surfY + yOffset}
+              density={14}
+              baseSize={0.7}
+              animate
+              opacity={opacity}
+              renderOrder={2 + idx}
+            />
+          );
+        }
         return (
           <DirectionArrowField
             key={layer}
             directionDeg={dir}
-            magnitude={Math.max(0.3, speed * attenuate)}
+            magnitude={mag}
             referenceMagnitude={1.0}
-            color={LAYER_COLORS[layer]}
+            color={layerColor}
             layerY={surfY + yOffset}
             density={6}
             baseScale={1.3}
             animate
-            opacity={estimated ? 0.5 : 0.75}
+            opacity={opacity}
             renderOrder={2 + idx}
           />
         );
