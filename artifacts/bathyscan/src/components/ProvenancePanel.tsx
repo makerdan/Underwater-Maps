@@ -9,6 +9,7 @@
  */
 import React, { useState } from "react";
 import type { TerrainData } from "@workspace/api-client-react";
+import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 interface ProvenancePanelProps {
   terrain: TerrainData;
@@ -63,6 +64,7 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
       }}
     >
       {/* Header row — always visible */}
+      <ViewscreenTooltip label={expanded ? "Hide source details" : "Show source details"} side="right">
       <div
         style={{
           display: "flex",
@@ -125,9 +127,12 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
         )}
 
         {terrain.hasTopography && (
+          <ViewscreenTooltip
+            label="Has above-water terrain — enable Show landmass in Settings"
+            side="top"
+          >
           <span
             data-testid="topo-badge"
-            title="Includes above-water terrain (topography). Enable 'Show landmass' in Settings to render it."
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -145,6 +150,7 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
           >
             TOPO
           </span>
+          </ViewscreenTooltip>
         )}
 
         <span
@@ -158,6 +164,7 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
           {expanded ? "▲" : "▼"}
         </span>
       </div>
+      </ViewscreenTooltip>
 
       {/* Expanded detail */}
       {expanded && (

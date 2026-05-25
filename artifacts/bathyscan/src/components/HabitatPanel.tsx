@@ -29,6 +29,7 @@ import {
   getGetMarkersQueryKey,
 } from "@workspace/api-client-react";
 import { formatDepth } from "@/lib/units";
+import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 // ---------------------------------------------------------------------------
 // Style constants (match ZoneOverlay.tsx)
@@ -121,41 +122,45 @@ const HotspotCard: React.FC<HotspotCardProps> = ({
       </div>
     </div>
     <div className="flex gap-1 mt-2">
-      <button
-        onClick={() => onFly(hotspot)}
-        style={{
-          flex: 1,
-          fontSize: 10,
-          letterSpacing: "0.1em",
-          padding: "4px 0",
-          border: "1px solid rgba(0,229,255,0.35)",
-          borderRadius: 3,
-          background: "transparent",
-          color: "#00e5ff",
-          cursor: "pointer",
-          fontFamily: "inherit",
-        }}
-      >
-        FLY THERE
-      </button>
-      <button
-        onClick={() => onDrop(hotspot)}
-        disabled={dropping}
-        style={{
-          flex: 1,
-          fontSize: 10,
-          letterSpacing: "0.1em",
-          padding: "4px 0",
-          border: "1px solid rgba(251,146,60,0.4)",
-          borderRadius: 3,
-          background: "transparent",
-          color: dropping ? "#94a3b8" : "#fb923c",
-          cursor: dropping ? "default" : "pointer",
-          fontFamily: "inherit",
-        }}
-      >
-        {dropping ? "..." : "DROP PIN"}
-      </button>
+      <ViewscreenTooltip label="Move the camera to this hotspot" side="top">
+        <button
+          onClick={() => onFly(hotspot)}
+          style={{
+            flex: 1,
+            fontSize: 10,
+            letterSpacing: "0.1em",
+            padding: "4px 0",
+            border: "1px solid rgba(0,229,255,0.35)",
+            borderRadius: 3,
+            background: "transparent",
+            color: "#00e5ff",
+            cursor: "pointer",
+            fontFamily: "inherit",
+          }}
+        >
+          FLY THERE
+        </button>
+      </ViewscreenTooltip>
+      <ViewscreenTooltip label="Save this hotspot as a marker" side="top">
+        <button
+          onClick={() => onDrop(hotspot)}
+          disabled={dropping}
+          style={{
+            flex: 1,
+            fontSize: 10,
+            letterSpacing: "0.1em",
+            padding: "4px 0",
+            border: "1px solid rgba(251,146,60,0.4)",
+            borderRadius: 3,
+            background: "transparent",
+            color: dropping ? "#94a3b8" : "#fb923c",
+            cursor: dropping ? "default" : "pointer",
+            fontFamily: "inherit",
+          }}
+        >
+          {dropping ? "..." : "DROP PIN"}
+        </button>
+      </ViewscreenTooltip>
     </div>
   </div>
   );
@@ -284,6 +289,7 @@ export const HabitatPanel: React.FC = () => {
   return (
     <div style={PANEL} className="habitat-panel">
       {/* Header */}
+      <ViewscreenTooltip label={collapsed ? "Expand habitat panel" : "Collapse habitat panel"} side="right">
       <button
         onClick={() => togglePanel("habitat")}
         className="w-full flex items-center justify-between px-3 py-2"
@@ -312,6 +318,7 @@ export const HabitatPanel: React.FC = () => {
           </span>
         </span>
       </button>
+      </ViewscreenTooltip>
 
       {!collapsed && (
         <div className="px-3 py-2">

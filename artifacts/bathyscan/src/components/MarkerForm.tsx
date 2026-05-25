@@ -26,6 +26,7 @@ import {
   DEPTH_POLE_DEFAULT_COLOUR,
   type MarkerTypeValue,
 } from "@/lib/markerConstants";
+import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(2,8,24,0.92)",
@@ -175,21 +176,23 @@ export const MarkerForm: React.FC = () => {
           ▼ DROP MARKER
         </span>
         <HelpIcon articleId="markers" label="Markers" />
-        <button
-          onClick={handleCancel}
-          style={{
-            background: "none",
-            border: "none",
-            color: "#475569",
-            fontSize: 14,
-            cursor: "pointer",
-            lineHeight: 1,
-            padding: "0 2px",
-          }}
-          title="Cancel"
-        >
-          ×
-        </button>
+        <ViewscreenTooltip label="Close without saving" side="left">
+          <button
+            onClick={handleCancel}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#475569",
+              fontSize: 14,
+              cursor: "pointer",
+              lineHeight: 1,
+              padding: "0 2px",
+            }}
+            aria-label="Cancel"
+          >
+            ×
+          </button>
+        </ViewscreenTooltip>
       </div>
 
       {/* Offline save feedback */}
@@ -258,8 +261,8 @@ export const MarkerForm: React.FC = () => {
             {visibleMarkerTypes.map((t) => {
               const active = markerType === t.value;
               return (
+                <ViewscreenTooltip key={t.value} label={`Mark this point as ${t.label.toLowerCase()}`} side="top">
                 <button
-                  key={t.value}
                   type="button"
                   onClick={() => setMarkerType(t.value)}
                   style={{
@@ -277,6 +280,7 @@ export const MarkerForm: React.FC = () => {
                 >
                   {t.icon} {t.label}
                 </button>
+                </ViewscreenTooltip>
               );
             })}
           </div>

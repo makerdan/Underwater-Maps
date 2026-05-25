@@ -11,6 +11,7 @@ import { useGpsStore } from "@/lib/gpsStore";
 import { useTrailStore } from "@/lib/trailStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useAppState } from "@/lib/context";
+import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 const FONT: React.CSSProperties = {
   fontFamily: "'JetBrains Mono', monospace",
@@ -197,23 +198,23 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
             <span style={{ color: "#475569", fontSize: 9 }}>COLOUR</span>
             <div style={{ display: "flex", gap: 4, marginLeft: 4 }}>
               {TRAIL_COLOURS.map((col) => (
-                <button
-                  key={col}
-                  onClick={() => setTrailColour(col)}
-                  title={col}
-                  data-testid={`trail-colour-${col.replace("#", "")}`}
-                  style={{
-                    width: 14,
-                    height: 14,
-                    borderRadius: "50%",
-                    background: col,
-                    border: trailColour === col ? "2px solid #fff" : "2px solid transparent",
-                    cursor: "pointer",
-                    padding: 0,
-                    outline: trailColour === col ? "1px solid rgba(255,255,255,0.5)" : "none",
-                    outlineOffset: 1,
-                  }}
-                />
+                <ViewscreenTooltip key={col} label={`Use ${col} for this trail`} side="top">
+                  <button
+                    onClick={() => setTrailColour(col)}
+                    data-testid={`trail-colour-${col.replace("#", "")}`}
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: "50%",
+                      background: col,
+                      border: trailColour === col ? "2px solid #fff" : "2px solid transparent",
+                      cursor: "pointer",
+                      padding: 0,
+                      outline: trailColour === col ? "1px solid rgba(255,255,255,0.5)" : "none",
+                      outlineOffset: 1,
+                    }}
+                  />
+                </ViewscreenTooltip>
               ))}
             </div>
           </div>
@@ -223,8 +224,8 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
             <span style={{ color: "#475569", fontSize: 9 }}>INTERVAL</span>
             <div style={{ display: "flex", gap: 3, marginLeft: 4 }}>
               {INTERVALS.map((iv) => (
+                <ViewscreenTooltip key={iv.ms} label={`Sample a GPS point every ${iv.label}`} side="top">
                 <button
-                  key={iv.ms}
                   onClick={() => setGpsRecordingInterval(iv.ms)}
                   style={{
                     background: gpsRecordingInterval === iv.ms ? "rgba(0,229,255,0.15)" : "none",
@@ -239,10 +240,12 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
                 >
                   {iv.label}
                 </button>
+                </ViewscreenTooltip>
               ))}
             </div>
           </div>
 
+          <ViewscreenTooltip label="Begin recording your GPS trail" side="top">
           <button
             onClick={() => startRecording(gpsRecordingInterval)}
             data-testid="trail-start-btn"
@@ -261,6 +264,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
           >
             ⏺ START RECORDING
           </button>
+          </ViewscreenTooltip>
         </>
       ) : (
         <>
@@ -271,6 +275,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
           <div style={{ fontSize: 9, color: "#475569", marginBottom: 6 }}>
             every {selectedInterval.label}
           </div>
+          <ViewscreenTooltip label="Stop recording and save this trail" side="top">
           <button
             onClick={() => void handleStop()}
             disabled={saving}
@@ -290,6 +295,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
           >
             {saving ? "SAVING..." : "⏹ STOP & SAVE"}
           </button>
+          </ViewscreenTooltip>
         </>
       )}
 

@@ -22,6 +22,7 @@ import { useOfflineStore } from "@/lib/offlineStore";
 import { SALTWATER_ZONES, FRESHWATER_ZONES } from "@/lib/zoneMap";
 import type { QueryContext } from "@/lib/queryLLM";
 import type { ToolOptions } from "@/lib/queryTools";
+import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 const HISTORY_KEY = "bsquery-history";
 const MAX_HISTORY = 10;
@@ -169,13 +170,15 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
           ◈ NATURAL LANGUAGE QUERY
           <HelpIcon articleId="ai-assistant" label="AI assistant" />
         </span>
-        <button
-          onClick={onClose}
-          style={{ fontSize: 11, color: "#475569", cursor: "pointer", background: "none", border: "none", letterSpacing: "0.1em" }}
-          aria-label="Close query panel"
-        >
-          ✕ ESC
-        </button>
+        <ViewscreenTooltip label="Close query panel (Esc)" side="left">
+          <button
+            onClick={onClose}
+            style={{ fontSize: 11, color: "#475569", cursor: "pointer", background: "none", border: "none", letterSpacing: "0.1em" }}
+            aria-label="Close query panel"
+          >
+            ✕ ESC
+          </button>
+        </ViewscreenTooltip>
       </div>
 
       {/* Offline notice */}
@@ -220,6 +223,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
             cursor: isOnline ? undefined : "not-allowed",
           }}
         />
+        <ViewscreenTooltip label="Send your question to the assistant" side="top">
         <button
           data-testid="query-submit"
           onClick={() => void handleSubmit(query)}
@@ -239,14 +243,15 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
         >
           {loading ? "…" : "SUBMIT"}
         </button>
+        </ViewscreenTooltip>
       </div>
 
       {/* Starter chips — shown when input is empty */}
       {!query && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
           {STARTER_QUERIES.map((q) => (
+            <ViewscreenTooltip key={q} label="Try this example question" side="top">
             <button
-              key={q}
               onClick={() => { setQuery(q); void handleSubmit(q); }}
               style={{
                 background: "rgba(0,229,255,0.07)",
@@ -265,6 +270,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
             >
               {q}
             </button>
+            </ViewscreenTooltip>
           ))}
         </div>
       )}
@@ -315,8 +321,8 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {history.map((h, i) => (
+              <ViewscreenTooltip key={i} label="Run this past query again" side="top">
               <button
-                key={i}
                 onClick={() => { setQuery(h); void handleSubmit(h); }}
                 style={{
                   textAlign: "left",
@@ -334,6 +340,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
               >
                 ▸ {h}
               </button>
+              </ViewscreenTooltip>
             ))}
           </div>
         </div>

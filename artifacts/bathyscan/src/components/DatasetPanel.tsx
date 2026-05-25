@@ -36,6 +36,7 @@ import { DatasetFolderTree } from "@/components/DatasetFolderTree";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { WaterTypeToggle } from "@/components/WaterTypeToggle";
 import { HelpIcon } from "@/components/help/HelpButton";
+import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 const EFH_DATASETS = new Set(["thorne-bay"]);
 
@@ -407,22 +408,24 @@ export const DatasetPanel: React.FC = () => {
   return (
     <div style={{ ...PANEL, pointerEvents: "auto" }} className="dataset-panel select-none">
       {/* Header */}
-      <button
-        onClick={() => togglePanel("datasets")}
-        className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors rounded-t"
-        style={{ cursor: "pointer" }}
-      >
-        <span className="uppercase tracking-widest" style={{ fontSize: 10, ...CYAN, fontWeight: 700 }}>
-          ▼ Datasets
-        </span>
-        <div className="flex items-center gap-2">
-          {anyLoading && (
-            <span className="animate-spin" style={{ fontSize: 10 }}>◌</span>
-          )}
-          <HelpIcon articleId="datasets-uploads" label="Datasets and uploads" />
-          <span style={{ color: "#cbd5e1", fontSize: 12 }}>{collapsed ? "▸" : "▾"}</span>
-        </div>
-      </button>
+      <ViewscreenTooltip label={collapsed ? "Expand datasets panel" : "Collapse datasets panel"} side="right">
+        <button
+          onClick={() => togglePanel("datasets")}
+          className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors rounded-t"
+          style={{ cursor: "pointer" }}
+        >
+          <span className="uppercase tracking-widest" style={{ fontSize: 10, ...CYAN, fontWeight: 700 }}>
+            ▼ Datasets
+          </span>
+          <div className="flex items-center gap-2">
+            {anyLoading && (
+              <span className="animate-spin" style={{ fontSize: 10 }}>◌</span>
+            )}
+            <HelpIcon articleId="datasets-uploads" label="Datasets and uploads" />
+            <span style={{ color: "#cbd5e1", fontSize: 12 }}>{collapsed ? "▸" : "▾"}</span>
+          </div>
+        </button>
+      </ViewscreenTooltip>
 
       {!collapsed && (
         <div>
@@ -500,8 +503,8 @@ export const DatasetPanel: React.FC = () => {
               const active = ds.id === datasetId && !pendingId && !activeUserDatasetId;
               const loading = ds.id === loadingId;
               return (
+                <ViewscreenTooltip key={ds.id} label={`Load ${ds.name}`} side="right">
                 <button
-                  key={ds.id}
                   data-testid={`btn-dataset-${ds.id}`}
                   onClick={() => (isOnline || cachedIds.has(ds.id)) && handleSelectPreset(ds)}
                   disabled={!isOnline && !cachedIds.has(ds.id)}
@@ -529,21 +532,23 @@ export const DatasetPanel: React.FC = () => {
                         <span className="animate-pulse" style={{ color: "#00e5ff" }}>◌</span>
                       ) : !isOnline ? (
                         cachedIds.has(ds.id) ? (
-                          <span
-                            data-testid={`cache-badge-${ds.id}`}
-                            style={{ color: "#4ade80", letterSpacing: "0.1em" }}
-                            title="Available offline"
-                          >
-                            ✓
-                          </span>
+                          <ViewscreenTooltip label="Cached — works offline" side="left">
+                            <span
+                              data-testid={`cache-badge-${ds.id}`}
+                              style={{ color: "#4ade80", letterSpacing: "0.1em" }}
+                            >
+                              ✓
+                            </span>
+                          </ViewscreenTooltip>
                         ) : (
-                          <span
-                            data-testid={`unavailable-badge-${ds.id}`}
-                            style={{ color: "#ef4444", letterSpacing: "0.1em" }}
-                            title="Not available offline"
-                          >
-                            ✗
-                          </span>
+                          <ViewscreenTooltip label="Not cached — needs internet" side="left">
+                            <span
+                              data-testid={`unavailable-badge-${ds.id}`}
+                              style={{ color: "#ef4444", letterSpacing: "0.1em" }}
+                            >
+                              ✗
+                            </span>
+                          </ViewscreenTooltip>
                         )
                       ) : ds.waterType === "saltwater" ? "≋" : "~"}
                     </span>
@@ -568,6 +573,7 @@ export const DatasetPanel: React.FC = () => {
                     </div>
                   )}
                 </button>
+                </ViewscreenTooltip>
               );
             })}
           </div>
@@ -710,26 +716,28 @@ export const DatasetPanel: React.FC = () => {
                           <span style={{ fontSize: 9, color: "#334155", flexShrink: 0 }}>
                             {Math.round(m.depth)}m
                           </span>
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            onClick={(e) => handleDeleteMarker(e, m.id)}
-                            onKeyDown={(e) =>
-                              e.key === "Enter" &&
-                              handleDeleteMarker(e as unknown as React.MouseEvent, m.id)
-                            }
-                            className="opacity-0 group-hover:opacity-100 transition-opacity"
-                            style={{
-                              fontSize: 11,
-                              color: "#cbd5e1",
-                              cursor: "pointer",
-                              lineHeight: 1,
-                              padding: "0 2px",
-                              flexShrink: 0,
-                            }}
-                          >
-                            ×
-                          </span>
+                          <ViewscreenTooltip label="Delete this marker" side="left">
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => handleDeleteMarker(e, m.id)}
+                              onKeyDown={(e) =>
+                                e.key === "Enter" &&
+                                handleDeleteMarker(e as unknown as React.MouseEvent, m.id)
+                              }
+                              className="opacity-0 group-hover:opacity-100 transition-opacity"
+                              style={{
+                                fontSize: 11,
+                                color: "#cbd5e1",
+                                cursor: "pointer",
+                                lineHeight: 1,
+                                padding: "0 2px",
+                                flexShrink: 0,
+                              }}
+                            >
+                              ×
+                            </span>
+                          </ViewscreenTooltip>
                         </div>
                       </button>
                     );
@@ -741,6 +749,7 @@ export const DatasetPanel: React.FC = () => {
 
           {/* ── Upload accordion ── */}
           <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}>
+            <ViewscreenTooltip label={uploadOpen ? "Hide upload area" : "Upload your own terrain file"} side="right">
             <button
               onClick={() => setUploadOpen((o) => !o)}
               className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
@@ -751,6 +760,7 @@ export const DatasetPanel: React.FC = () => {
               </span>
               <span style={{ color: "#cbd5e1", fontSize: 11 }}>{uploadOpen ? "−" : "+"}</span>
             </button>
+            </ViewscreenTooltip>
 
             {uploadOpen && (
               <div className="px-2 pb-2">

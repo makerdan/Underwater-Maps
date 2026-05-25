@@ -1,6 +1,7 @@
 import React from "react";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
+import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 const BINDINGS: { key: string; action: string }[] = [
   { key: "Click", action: "Lock mouse / enter fly mode" },
@@ -37,6 +38,7 @@ export const KeyboardShortcutsPanel: React.FC = () => {
 
   return (
     <div style={{ ...PANEL, pointerEvents: "auto" }} className="select-none">
+      <ViewscreenTooltip label={collapsed ? "Show keyboard shortcuts" : "Hide keyboard shortcuts"} side="right">
       <button
         onClick={() => toggle("keyboardShortcuts")}
         className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors rounded-t"
@@ -55,6 +57,7 @@ export const KeyboardShortcutsPanel: React.FC = () => {
           </span>
         </span>
       </button>
+      </ViewscreenTooltip>
 
       {!collapsed && (
         <div

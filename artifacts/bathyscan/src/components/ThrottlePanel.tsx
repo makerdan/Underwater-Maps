@@ -8,6 +8,7 @@ import {
 import { useAppState } from "@/lib/context";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { formatSpeed } from "@/lib/units";
+import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 const LEVER_TRACK_H = 160;
 const LEVER_THUMB_H = 28;
@@ -129,26 +130,27 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
 
   if (minimized) {
     return (
-      <div
-        style={{
-          ...PANEL_STYLE,
-          padding: "6px 12px",
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          cursor: "pointer",
-          fontSize: 11,
-          letterSpacing: "0.12em",
-        }}
-        onClick={() => setMinimized(false)}
-        title="Expand throttle panel"
-      >
-        <span style={{ color: "#22d3ee", fontSize: 13 }}>⛵</span>
-        <span style={CYAN}>{formatSpeed(boatSpeedMph, { units }).toUpperCase()}</span>
-        <span style={{ color: "#475569" }}>/</span>
-        <span style={{ color: "#7dd3fc" }}>{knots.toFixed(1)} KT</span>
-        <span style={{ color: "#1e3a5f", fontSize: 10 }}>▲</span>
-      </div>
+      <ViewscreenTooltip label="Expand throttle panel" side="left">
+        <div
+          style={{
+            ...PANEL_STYLE,
+            padding: "6px 12px",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            cursor: "pointer",
+            fontSize: 11,
+            letterSpacing: "0.12em",
+          }}
+          onClick={() => setMinimized(false)}
+        >
+          <span style={{ color: "#22d3ee", fontSize: 13 }}>⛵</span>
+          <span style={CYAN}>{formatSpeed(boatSpeedMph, { units }).toUpperCase()}</span>
+          <span style={{ color: "#475569" }}>/</span>
+          <span style={{ color: "#7dd3fc" }}>{knots.toFixed(1)} KT</span>
+          <span style={{ color: "#1e3a5f", fontSize: 10 }}>▲</span>
+        </div>
+      </ViewscreenTooltip>
     );
   }
 
@@ -165,37 +167,39 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
       >
         <span style={{ fontSize: 9, letterSpacing: "0.25em", color: "#475569" }}>THROTTLE</span>
         <div style={{ display: "flex", gap: 4 }}>
-          <button
-            onClick={() => setMinimized(true)}
-            title="Minimize"
-            style={{
-              background: "none",
-              border: "none",
-              color: "#334155",
-              cursor: "pointer",
-              fontSize: 10,
-              padding: "0 2px",
-              lineHeight: 1,
-            }}
-          >
-            ▼
-          </button>
-          {onClose && (
+          <ViewscreenTooltip label="Collapse the throttle panel" side="left">
             <button
-              onClick={onClose}
-              title="Close throttle panel"
+              onClick={() => setMinimized(true)}
               style={{
                 background: "none",
                 border: "none",
                 color: "#334155",
                 cursor: "pointer",
-                fontSize: 11,
+                fontSize: 10,
                 padding: "0 2px",
                 lineHeight: 1,
               }}
             >
-              ✕
+              ▼
             </button>
+          </ViewscreenTooltip>
+          {onClose && (
+            <ViewscreenTooltip label="Close the throttle panel" side="left">
+              <button
+                onClick={onClose}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#334155",
+                  cursor: "pointer",
+                  fontSize: 11,
+                  padding: "0 2px",
+                  lineHeight: 1,
+                }}
+              >
+                ✕
+              </button>
+            </ViewscreenTooltip>
           )}
         </div>
       </div>

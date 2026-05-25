@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 export const DatasetPicker = ({ datasets, isLoading }: { datasets: DatasetMeta[], isLoading: boolean }) => {
   const { datasetId, setDatasetId } = useAppState();
@@ -21,8 +22,8 @@ export const DatasetPicker = ({ datasets, isLoading }: { datasets: DatasetMeta[]
         <ScrollArea className="h-64">
           <div className="flex flex-col space-y-1 p-2">
             {datasets.map(ds => (
+              <ViewscreenTooltip key={ds.id} label={`Load ${ds.name}`} side="right">
               <button
-                key={ds.id}
                 data-testid={`btn-dataset-${ds.id}`}
                 onClick={() => setDatasetId(ds.id)}
                 className={`text-left p-3 rounded-md transition-colors ${
@@ -41,6 +42,7 @@ export const DatasetPicker = ({ datasets, isLoading }: { datasets: DatasetMeta[]
                   <span>{ds.minDepth}m - {ds.maxDepth}m</span>
                 </div>
               </button>
+              </ViewscreenTooltip>
             ))}
           </div>
         </ScrollArea>

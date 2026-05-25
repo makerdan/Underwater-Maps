@@ -4,6 +4,7 @@ import { colormapCanvas } from "@/lib/colormap";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { formatDepth } from "@/lib/units";
+import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 export const DepthScaleBar: React.FC = () => {
   const { terrain } = useAppState();
@@ -32,18 +33,20 @@ export const DepthScaleBar: React.FC = () => {
         <span>{formatDepth((terrain.minDepth + terrain.maxDepth) / 2, { units })}</span>
         <span>{formatDepth(terrain.maxDepth, { units })}</span>
       </div>
-      <div className="flex flex-col justify-between items-center">
-        <img
-          ref={imgRef}
-          alt="depth colormap"
-          style={{
-            width: 14,
-            height: 200,
-            border: "1px solid rgba(0,229,255,0.2)",
-            borderRadius: 2,
-            display: "block",
-          }}
-        />
+      <div className="flex flex-col justify-between items-center" style={{ pointerEvents: "auto" }}>
+        <ViewscreenTooltip label="Colour scale for seafloor depth" side="left">
+          <img
+            ref={imgRef}
+            alt="depth colormap"
+            style={{
+              width: 14,
+              height: 200,
+              border: "1px solid rgba(0,229,255,0.2)",
+              borderRadius: 2,
+              display: "block",
+            }}
+          />
+        </ViewscreenTooltip>
       </div>
     </div>
   );

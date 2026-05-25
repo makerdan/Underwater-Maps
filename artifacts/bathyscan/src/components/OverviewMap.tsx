@@ -41,6 +41,7 @@ import { useTrailStore } from "@/lib/trailStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { formatDepth, formatDistance } from "@/lib/units";
+import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 interface TooltipState {
   visible: boolean;
@@ -590,6 +591,7 @@ export const OverviewMap: React.FC = () => {
               gpsPosition.longitude <= overviewGrid.maxLon;
             if (!inBounds) return null;
             return (
+              <ViewscreenTooltip label="Dive in at your GPS position" side="bottom">
               <button
                 onClick={() => {
                   const { x: worldX, z: worldZ } = lonLatToWorldXZ(
@@ -616,11 +618,13 @@ export const OverviewMap: React.FC = () => {
               >
                 ↓ DIVE HERE
               </button>
+              </ViewscreenTooltip>
             );
           })()}
 
           {/* EFH overlay toggle — only shown for datasets with bundled EFH zones */}
           {hasEfh && (
+            <ViewscreenTooltip label="Toggle Essential Fish Habitat zones" side="bottom">
             <button
               onClick={() => setShowEfh(!showEfh)}
               aria-pressed={showEfh}
@@ -640,10 +644,12 @@ export const OverviewMap: React.FC = () => {
             >
               🐟 EFH
             </button>
+            </ViewscreenTooltip>
           )}
 
           {/* Trail list toggle */}
           {trailsData && trailsData.length > 0 && (
+            <ViewscreenTooltip label="Show saved GPS trails" side="bottom">
             <button
               onClick={() => setShowTrailList((v) => !v)}
               style={{
@@ -662,8 +668,10 @@ export const OverviewMap: React.FC = () => {
             >
               🗺 TRAILS ({trailsData.length})
             </button>
+            </ViewscreenTooltip>
           )}
 
+          <ViewscreenTooltip label="Use your device's GPS for location" side="bottom">
           <button
             onClick={() => startWatching()}
             data-testid="gps-activate-btn"
@@ -684,7 +692,9 @@ export const OverviewMap: React.FC = () => {
           >
             {gpsActive ? "📍 GPS ACTIVE" : "📍 MY LOCATION"}
           </button>
+          </ViewscreenTooltip>
 
+          <ViewscreenTooltip label="Close the overview map (O)" side="bottom">
           <button
             onClick={() => setOverviewOpen(false)}
             style={{
@@ -703,6 +713,7 @@ export const OverviewMap: React.FC = () => {
           >
             ✕ CLOSE
           </button>
+          </ViewscreenTooltip>
         </div>
       </div>
 

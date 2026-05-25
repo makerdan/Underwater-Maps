@@ -25,6 +25,7 @@ import {
   type UserCatalogSave,
 } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
+import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -206,23 +207,26 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
 
       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
         {presetId && (
-          <button
-            onClick={() => onLoad(presetId)}
-            style={{
-              fontSize: 8,
-              padding: "3px 10px",
-              background: "rgba(0,229,255,0.1)",
-              border: "1px solid rgba(0,229,255,0.3)",
-              borderRadius: 3,
-              color: "#00e5ff",
-              cursor: "pointer",
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-            }}
-          >
-            Load
-          </button>
+          <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
+            <button
+              onClick={() => onLoad(presetId)}
+              style={{
+                fontSize: 8,
+                padding: "3px 10px",
+                background: "rgba(0,229,255,0.1)",
+                border: "1px solid rgba(0,229,255,0.3)",
+                borderRadius: 3,
+                color: "#00e5ff",
+                cursor: "pointer",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+              }}
+            >
+              Load
+            </button>
+          </ViewscreenTooltip>
         )}
+        <ViewscreenTooltip label={saved ? "Already in your saved list" : "Save to your library"} side="top">
         <button
           onClick={() => !saved && !saving && onSave(entry.id)}
           disabled={saved || saving}
@@ -240,6 +244,7 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
         >
           {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
         </button>
+        </ViewscreenTooltip>
       </div>
 
       <div style={scoreBarStyle(entry.relevanceScore)} />
@@ -282,6 +287,7 @@ const SaveCard: React.FC<{
         </span>
       </div>
       {save.status === "ready" && save.catalogId.startsWith("preset-") && (
+        <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
         <button
           onClick={() => onLoad(save.catalogId.replace("preset-", ""))}
           style={{
@@ -299,6 +305,7 @@ const SaveCard: React.FC<{
         >
           Load into viewer
         </button>
+        </ViewscreenTooltip>
       )}
     </div>
   );
@@ -393,30 +400,36 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
       {/* Header */}
       <div style={HEADER}>
         <span style={TITLE}>Find Data</span>
-        <button
-          onClick={onClose}
-          aria-label="Close Find Data panel"
-          style={{
-            background: "none",
-            border: "none",
-            color: "#475569",
-            cursor: "pointer",
-            fontSize: 14,
-            lineHeight: 1,
-          }}
-        >
-          ✕
-        </button>
+        <ViewscreenTooltip label="Close Find Data" side="left">
+          <button
+            onClick={onClose}
+            aria-label="Close Find Data panel"
+            style={{
+              background: "none",
+              border: "none",
+              color: "#475569",
+              cursor: "pointer",
+              fontSize: 14,
+              lineHeight: 1,
+            }}
+          >
+            ✕
+          </button>
+        </ViewscreenTooltip>
       </div>
 
       {/* Tabs */}
       <div style={TAB_BAR}>
-        <button style={tabStyle(tab === "search")} onClick={() => setTab("search")}>
-          Search
-        </button>
-        <button style={tabStyle(tab === "saves")} onClick={() => setTab("saves")}>
-          My Saves
-        </button>
+        <ViewscreenTooltip label="Search the dataset catalog" side="bottom">
+          <button style={tabStyle(tab === "search")} onClick={() => setTab("search")}>
+            Search
+          </button>
+        </ViewscreenTooltip>
+        <ViewscreenTooltip label="See datasets you saved" side="bottom">
+          <button style={tabStyle(tab === "saves")} onClick={() => setTab("saves")}>
+            My Saves
+          </button>
+        </ViewscreenTooltip>
       </div>
 
       {/* Search tab */}
@@ -434,8 +447,8 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             />
             <div style={{ display: "flex", gap: 4, marginTop: 8, flexWrap: "wrap" }}>
               {["", "bathymetry", "substrate", "habitat", "lidar", "chart"].map((dt) => (
+                <ViewscreenTooltip key={dt} label={dt === "" ? "Show all data types" : `Filter to ${dt} datasets`} side="bottom">
                 <button
-                  key={dt}
                   onClick={() => setDataTypeFilter(dt)}
                   style={{
                     fontSize: 8,
@@ -451,6 +464,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 >
                   {dt === "" ? "All" : (DATA_TYPE_ICONS[dt] ?? "") + " " + dt}
                 </button>
+                </ViewscreenTooltip>
               ))}
             </div>
             {isSearching && (

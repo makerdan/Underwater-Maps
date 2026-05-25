@@ -8,6 +8,7 @@ import { depthToColor } from "@/lib/colormap";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { WORLD_SIZE } from "@/lib/terrain";
 import { MARKER_COLOR } from "@/lib/markerConstants";
+import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 const W = 180;
 const H = 180;
@@ -221,23 +222,26 @@ export const Minimap: React.FC = () => {
         pointerEvents: "auto",
       }}
     >
-      <button
-        onClick={() => setOverviewOpen(true)}
-        style={{
-          fontFamily: "'JetBrains Mono', monospace",
-          fontSize: 9,
-          letterSpacing: "0.15em",
-          color: "#475569",
-          background: "rgba(0,10,20,0.75)",
-          border: "1px solid rgba(0,229,255,0.15)",
-          borderRadius: 3,
-          padding: "3px 8px",
-          cursor: "pointer",
-        }}
-        className="hover:text-cyan-400 transition-colors"
-      >
-        ▲ OVERVIEW
-      </button>
+      <ViewscreenTooltip label="Open the full overview map" side="left">
+        <button
+          onClick={() => setOverviewOpen(true)}
+          style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 9,
+            letterSpacing: "0.15em",
+            color: "#475569",
+            background: "rgba(0,10,20,0.75)",
+            border: "1px solid rgba(0,229,255,0.15)",
+            borderRadius: 3,
+            padding: "3px 8px",
+            cursor: "pointer",
+          }}
+          className="hover:text-cyan-400 transition-colors"
+        >
+          ▲ OVERVIEW
+        </button>
+      </ViewscreenTooltip>
+
 
       <div
         style={{
@@ -248,14 +252,15 @@ export const Minimap: React.FC = () => {
           boxShadow: "0 0 12px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,229,255,0.1)",
         }}
       >
-        <canvas
-          ref={canvasRef}
-          width={W}
-          height={H}
-          onClick={handleClick}
-          style={{ display: "block", cursor: "crosshair" }}
-          title="Click to teleport here"
-        />
+        <ViewscreenTooltip label="Click to teleport here" side="left">
+          <canvas
+            ref={canvasRef}
+            width={W}
+            height={H}
+            onClick={handleClick}
+            style={{ display: "block", cursor: "crosshair" }}
+          />
+        </ViewscreenTooltip>
         {/* Corner label */}
         <div
           style={{

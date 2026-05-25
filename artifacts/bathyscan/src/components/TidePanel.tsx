@@ -5,6 +5,7 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { formatDistance, formatDepth } from "@/lib/units";
 import { useTidalSchedule, type TidalScheduleEvent } from "@/hooks/useTidalSchedule";
+import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(2,8,18,0.94)",
@@ -181,16 +182,18 @@ export const TidePanel: React.FC<TidePanelProps> = ({
   return (
     <div style={PANEL}>
       {/* Header */}
-      <div
-        className="flex items-center justify-between px-2 py-1.5 cursor-pointer"
-        style={{ borderBottom: collapsed ? "none" : "1px solid rgba(0,229,255,0.1)" }}
-        onClick={() => togglePanel("tide")}
-      >
-        <span style={{ ...CYAN, fontSize: 10, letterSpacing: "0.2em" }}>
-          ◉ TIDAL OVERLAY
-        </span>
-        <span style={DIM}>{collapsed ? "▲" : "▼"}</span>
-      </div>
+      <ViewscreenTooltip label={collapsed ? "Expand tide panel" : "Collapse tide panel"} side="left">
+        <div
+          className="flex items-center justify-between px-2 py-1.5 cursor-pointer"
+          style={{ borderBottom: collapsed ? "none" : "1px solid rgba(0,229,255,0.1)" }}
+          onClick={() => togglePanel("tide")}
+        >
+          <span style={{ ...CYAN, fontSize: 10, letterSpacing: "0.2em" }}>
+            ◉ TIDAL OVERLAY
+          </span>
+          <span style={DIM}>{collapsed ? "▲" : "▼"}</span>
+        </div>
+      </ViewscreenTooltip>
 
       {!collapsed && (
         <div className="px-2 py-2 space-y-2">
@@ -313,8 +316,12 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                 <div style={LABEL}>Current layer</div>
                 <div className="flex gap-1 mt-0.5">
                   {DEPTH_LAYERS.map((l) => (
-                    <button
+                    <ViewscreenTooltip
                       key={l}
+                      label={`Show ${LAYER_LABELS[l].toLowerCase()} current layer`}
+                      side="bottom"
+                    >
+                    <button
                       onClick={() => onDepthLayerChange(l)}
                       style={{
                         fontSize: 10,
@@ -329,6 +336,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                     >
                       {LAYER_LABELS[l]}
                     </button>
+                    </ViewscreenTooltip>
                   ))}
                 </div>
               </div>
@@ -352,11 +360,13 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                         day: "numeric",
                       });
                 const slackCount = slackCountsByDay[offset] ?? 0;
+                const dayTip = slackCount > 0
+                  ? `${slackCount} slack window${slackCount === 1 ? "" : "s"} this day`
+                  : "Jump to this day";
                 return (
+                  <ViewscreenTooltip key={offset} label={dayTip} side="bottom">
                   <button
-                    key={offset}
                     onClick={() => setDay(offset)}
-                    title={slackCount > 0 ? `${slackCount} slack window${slackCount === 1 ? "" : "s"} this day` : undefined}
                     style={{
                       fontSize: 10,
                       padding: "2px 6px",
@@ -388,6 +398,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                       </span>
                     )}
                   </button>
+                  </ViewscreenTooltip>
                 );
               })}
             </div>
