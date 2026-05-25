@@ -52,8 +52,6 @@ function SpeedDots({ index, total }: { index: number; total: number }) {
 export const HUD: React.FC = () => {
   const crosshairGps = useCameraStore((s) => s.crosshairGps);
   const lastClickedGps = useCameraStore((s) => s.lastClickedGps);
-  const cameraLon = useCameraStore((s) => s.cameraLon);
-  const cameraLat = useCameraStore((s) => s.cameraLat);
   const cameraDepth = useCameraStore((s) => s.cameraDepth);
   const heading = useCameraStore((s) => s.heading);
   const mode = useCameraStore((s) => s.mode);
@@ -284,14 +282,6 @@ export const HUD: React.FC = () => {
           <div style={{ ...PANEL, minWidth: 200 }}>
             <div style={{ color: "#475569", fontSize: 9, letterSpacing: "0.2em", marginBottom: 3 }}>
               CAMERA POSITION
-            </div>
-            <div>
-              <span style={{ color: "#475569" }}>LON </span>
-              <span style={CYAN}>{fmtCoord(cameraLon)}</span>
-            </div>
-            <div>
-              <span style={{ color: "#475569" }}>LAT </span>
-              <span style={CYAN}>{fmtCoord(cameraLat)}</span>
             </div>
             <div>
               <span style={{ color: "#475569" }}>DEPTH </span>

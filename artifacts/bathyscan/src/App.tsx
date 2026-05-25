@@ -14,6 +14,7 @@ import { Settings } from "@/pages/Settings";
 import { HUD } from "@/components/HUD";
 import { DepthScaleBar } from "@/components/DepthScaleBar";
 import { DatasetPanel } from "@/components/DatasetPanel";
+import { CameraCoordsReadout } from "@/components/CameraCoordsReadout";
 import { Minimap } from "@/components/Minimap";
 import { ControlsLegend } from "@/components/ControlsLegend";
 import { AppHeader } from "@/components/AppHeader";
@@ -372,19 +373,29 @@ function Main() {
           <DepthScaleBar />
         </div>
 
-        {/* Dataset panel — top-left, vertically scrollable when content overflows */}
+        {/* Dataset panel — top-left, vertically scrollable when content overflows.
+            Lat/long readout is pinned to the bottom so it isn't covered by the
+            scrolling panels above. */}
         <div
-          className="absolute top-12 left-4 z-20 flex flex-col gap-2 overflow-y-auto overscroll-contain"
-          style={{
-            maxHeight: "calc(100vh - 7rem)",
-            paddingRight: 4,
-            scrollbarWidth: "thin",
-            scrollbarColor: "rgba(0,229,255,0.35) transparent",
-          }}
+          className="absolute top-12 left-4 z-20 flex flex-col gap-2"
+          style={{ maxHeight: "calc(100vh - 7rem)" }}
         >
-          <DatasetPanel />
-          <ZoneOverlay />
-          <HabitatPanel />
+          <div
+            className="flex flex-col gap-2 overflow-y-auto overscroll-contain min-h-0"
+            style={{
+              paddingRight: 4,
+              scrollbarWidth: "thin",
+              scrollbarColor: "rgba(0,229,255,0.35) transparent",
+              flex: "1 1 auto",
+            }}
+          >
+            <DatasetPanel />
+            <ZoneOverlay />
+            <HabitatPanel />
+          </div>
+          <div style={{ flex: "0 0 auto" }}>
+            <CameraCoordsReadout />
+          </div>
         </div>
 
         {/* Tidal + Realistic toggle buttons — top-right of scene */}
