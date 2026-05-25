@@ -626,7 +626,7 @@ export const DatasetPanel: React.FC = () => {
                             </span>
                           </ViewscreenTooltip>
                         )
-                      ) : ds.waterType === "saltwater" ? "≋" : "~"}
+                      ) : null}
                     </span>
                   </div>
                   <div style={{ fontSize: 10, color: "#cbd5e1", marginTop: 2, letterSpacing: "0.05em" }}>
