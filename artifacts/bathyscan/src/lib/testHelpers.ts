@@ -35,6 +35,10 @@ export interface BathyTestApi {
   getMeasurementResult: () =>
     | { distanceKm: number; depthDeltaM: number }
     | null;
+  setOverviewOpen: (open: boolean) => void;
+  isOverviewOpen: () => boolean;
+  getPendingDropIn: () => { worldX: number; worldZ: number } | null;
+  clearPendingDropIn: () => void;
 }
 
 declare global {
@@ -121,5 +125,9 @@ export function installTestHelpers(): void {
       const r = useMeasureStore.getState().result;
       return r ? { distanceKm: r.distanceKm, depthDeltaM: r.depthDeltaM } : null;
     },
+    setOverviewOpen: (open) => useUiStore.getState().setOverviewOpen(open),
+    isOverviewOpen: () => useUiStore.getState().overviewOpen,
+    getPendingDropIn: () => useUiStore.getState().pendingDropIn,
+    clearPendingDropIn: () => useUiStore.getState().clearPendingDropIn(),
   };
 }
