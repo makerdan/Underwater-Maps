@@ -353,8 +353,16 @@ function Main() {
           <DepthScaleBar />
         </div>
 
-        {/* Dataset panel — top-left */}
-        <div className="absolute top-12 left-4 z-20 flex flex-col gap-2">
+        {/* Dataset panel — top-left, vertically scrollable when content overflows */}
+        <div
+          className="absolute top-12 left-4 z-20 flex flex-col gap-2 overflow-y-auto overscroll-contain"
+          style={{
+            maxHeight: "calc(100vh - 7rem)",
+            paddingRight: 4,
+            scrollbarWidth: "thin",
+            scrollbarColor: "rgba(0,229,255,0.35) transparent",
+          }}
+        >
           <DatasetPanel />
           <ZoneOverlay />
           <HabitatPanel />
