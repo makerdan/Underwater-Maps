@@ -112,6 +112,8 @@ interface DriftStore {
   addDriftWaypoint: (wp: TrollWaypoint) => void;
   removeDriftWaypoint: (index: number) => void;
   moveDriftWaypoint: (index: number, direction: -1 | 1) => void;
+  /** Reposition an existing waypoint in place (used by 3D drag-to-fine-tune). */
+  updateDriftWaypoint: (index: number, wp: TrollWaypoint) => void;
   clearDriftWaypoints: () => void;
   setDriftWaypoints: (wps: TrollWaypoint[]) => void;
 }
@@ -181,6 +183,13 @@ export const useDriftStore = create<DriftStore>((set) => ({
     set((s) => ({ driftWaypoints: [...s.driftWaypoints, wp] })),
   removeDriftWaypoint: (index) =>
     set((s) => ({ driftWaypoints: s.driftWaypoints.filter((_, i) => i !== index) })),
+  updateDriftWaypoint: (index, wp) =>
+    set((s) => {
+      if (index < 0 || index >= s.driftWaypoints.length) return s;
+      const next = s.driftWaypoints.slice();
+      next[index] = wp;
+      return { driftWaypoints: next };
+    }),
   moveDriftWaypoint: (index, direction) =>
     set((s) => {
       const next = [...s.driftWaypoints];

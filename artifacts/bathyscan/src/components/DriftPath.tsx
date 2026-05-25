@@ -9,11 +9,12 @@
  *       computed angle, terminating at the estimated hook depth
  */
 
-import React, { useMemo } from "react";
+import React, { useMemo, useRef, useEffect, useCallback } from "react";
 import { Line } from "@react-three/drei";
+import { useThree, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { useDriftStore } from "@/lib/driftStore";
-import { lonLatToWorldXZ } from "@/lib/terrain";
+import { lonLatToWorldXZ, worldXZToLonLat } from "@/lib/terrain";
 import { useAppState } from "@/lib/context";
 
 const RIBBON_COLOR = 0x22d3ee;
@@ -87,7 +88,78 @@ const ForceArrow: React.FC<{
 
 export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
   const { driftPath, driftHour, lineLengthM, driftWaypoints, driftMode } = useDriftStore();
+  const updateDriftWaypoint = useDriftStore((s) => s.updateDriftWaypoint);
   const { terrain } = useAppState();
+  const { camera, gl } = useThree();
+
+  // Drag-to-fine-tune state for trolling waypoint flags. We track the drag in a
+  // ref so pointer move/up listeners can read the latest index without
+  // re-binding on every render.
+  const dragStateRef = useRef<{ index: number; pointerId: number } | null>(null);
+  const waterPlane = useMemo(
+    () => new THREE.Plane(new THREE.Vector3(0, 1, 0), -surfaceY),
+    [surfaceY],
+  );
+  const raycaster = useMemo(() => new THREE.Raycaster(), []);
+
+  useEffect(() => {
+    if (!terrain) return;
+    const onMove = (ev: PointerEvent) => {
+      const state = dragStateRef.current;
+      if (!state || state.pointerId !== ev.pointerId) return;
+      const rect = gl.domElement.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((ev.clientX - rect.left) / rect.width) * 2 - 1,
+        -((ev.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      raycaster.setFromCamera(ndc, camera);
+      const hit = new THREE.Vector3();
+      if (raycaster.ray.intersectPlane(waterPlane, hit)) {
+        const { lon, lat } = worldXZToLonLat(hit.x, hit.z, terrain);
+        updateDriftWaypoint(state.index, { lat, lon });
+      }
+    };
+    const onUp = (ev: PointerEvent) => {
+      if (dragStateRef.current?.pointerId === ev.pointerId) {
+        dragStateRef.current = null;
+        document.body.style.cursor = "";
+      }
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      // If the component unmounts mid-drag, restore the cursor so the user
+      // isn't stuck with a "grabbing" cursor after leaving Drift Planner.
+      if (dragStateRef.current) {
+        dragStateRef.current = null;
+        document.body.style.cursor = "";
+      }
+    };
+  }, [terrain, camera, gl, raycaster, waterPlane, updateDriftWaypoint]);
+
+  const handleFlagPointerDown = useCallback(
+    (index: number) => (e: ThreeEvent<PointerEvent>) => {
+      // Stop the event from reaching DriftWaterPlane.onPointerDown, which would
+      // otherwise treat the press as a click-to-add-waypoint.
+      e.stopPropagation();
+      dragStateRef.current = { index, pointerId: e.pointerId };
+      document.body.style.cursor = "grabbing";
+    },
+    [],
+  );
+
+  const handleFlagPointerOver = useCallback((e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation();
+    if (!dragStateRef.current) document.body.style.cursor = "grab";
+  }, []);
+
+  const handleFlagPointerOut = useCallback(() => {
+    if (!dragStateRef.current) document.body.style.cursor = "";
+  }, []);
 
   const waypointMarkers = useMemo(() => {
     if (!terrain || driftMode !== "trolling" || driftWaypoints.length === 0) return null;
@@ -269,7 +341,13 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
         const isActive = activeTarget === m.index;
         const color = isActive ? 0xfbbf24 : 0x22d3ee;
         return (
-          <group key={`wp-${m.index}`} position={[m.x, surfaceY + 0.05, m.z]}>
+          <group
+            key={`wp-${m.index}`}
+            position={[m.x, surfaceY + 0.05, m.z]}
+            onPointerDown={handleFlagPointerDown(m.index)}
+            onPointerOver={handleFlagPointerOver}
+            onPointerOut={handleFlagPointerOut}
+          >
             {/* Flag pole */}
             <mesh position={[0, 0.5, 0]}>
               <cylinderGeometry args={[0.04, 0.04, 1.0, 6]} />
@@ -280,7 +358,7 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
               <boxGeometry args={[0.4, 0.22, 0.02]} />
               <meshStandardMaterial color={color} emissive={color} emissiveIntensity={isActive ? 0.8 : 0.4} />
             </mesh>
-            {/* Base ring on water */}
+            {/* Base ring on water — slightly larger hit target for easier grabbing */}
             <mesh rotation={[-Math.PI / 2, 0, 0]}>
               <torusGeometry args={[0.32, 0.06, 6, 16]} />
               <meshStandardMaterial color={color} emissive={color} emissiveIntensity={isActive ? 0.9 : 0.35} />
