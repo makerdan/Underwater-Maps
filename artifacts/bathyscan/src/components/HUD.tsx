@@ -10,10 +10,15 @@ import { useDriftStore } from "@/lib/driftStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
 import { mphToKnots } from "@/lib/boatSpeed";
 import { formatDepth, formatSpeed, formatTemperature } from "@/lib/units";
-import { estimateWaterTemperature } from "@/lib/waterTemp";
+import {
+  estimateWaterTemperature,
+  resolveTemperatureProfile,
+} from "@/lib/waterTemp";
 import { useSurfaceTemperature } from "@/hooks/useSurfaceTemperature";
+import { useTemperatureProfile } from "@/hooks/useTemperatureProfile";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
+import { TemperatureProfileChart } from "@/components/TemperatureProfileChart";
 
 const EFH_DATASETS = new Set(["thorne-bay"]);
 
@@ -56,6 +61,7 @@ function SpeedDots({ index, total, activeStyle }: { index: number; total: number
 }
 
 export const HUD: React.FC = () => {
+  const [tempProfileOpen, setTempProfileOpen] = React.useState(false);
   const crosshairGps = useCameraStore((s) => s.crosshairGps);
   const lastClickedGps = useCameraStore((s) => s.lastClickedGps);
   const cameraDepth = useCameraStore((s) => s.cameraDepth);
@@ -117,6 +123,14 @@ export const HUD: React.FC = () => {
   const hudCenterLat = terrain ? (terrain.minLat + terrain.maxLat) / 2 : null;
   const hudCenterLon = terrain ? (terrain.minLon + terrain.maxLon) / 2 : null;
   const { anchor: sstAnchor } = useSurfaceTemperature(
+    hudCenterLat,
+    hudCenterLon,
+    !!terrain,
+  );
+  // Real per-location depth profile (bundled CTD / Argo / reanalysis). When
+  // available we plot the measured samples; otherwise we fall back to the
+  // surface-anchored thermocline model via `resolveTemperatureProfile`.
+  const { profile: realProfile } = useTemperatureProfile(
     hudCenterLat,
     hudCenterLon,
     !!terrain,
@@ -392,33 +406,80 @@ export const HUD: React.FC = () => {
                 {(() => {
                   const sample = estimateWaterTemperature(crosshairGps.depth, sstAnchor);
                   const tooltip = sample.live
-                    ? `${sample.source}${sample.timestamp ? ` · sampled ${new Date(sample.timestamp).toUTCString()}` : ""}`
-                    : "No live ocean feed available — showing an estimated thermocline based on a typical 15 °C surface.";
+                    ? `${sample.source}${sample.timestamp ? ` · sampled ${new Date(sample.timestamp).toUTCString()}` : ""} — click for full depth profile`
+                    : "No live ocean feed available — showing an estimated thermocline. Click for full depth profile.";
+                  const profileDepth = Math.max(
+                    crosshairGps.depth ?? 0,
+                    cameraDepth ?? 0,
+                    200,
+                  );
+                  const { profile, measured } = resolveTemperatureProfile(
+                    realProfile,
+                    sstAnchor,
+                    profileDepth,
+                  );
                   return (
-                    <div
-                      data-testid="hud-water-temp"
-                      title={tooltip}
-                      style={{ marginTop: 2, fontSize: 10 }}
-                    >
-                      <span style={{ color: "#475569" }}>🌡 TEMP </span>
-                      <span style={{ color: "#fb923c", textShadow: "0 0 6px rgba(251,146,60,0.4)" }}>
-                        {formatTemperature(sample.celsius, { units }).toUpperCase()}
-                      </span>
-                      <span
-                        data-testid="hud-water-temp-source"
+                    <div style={{ marginTop: 2, fontSize: 10 }}>
+                      <button
+                        data-testid="hud-water-temp"
+                        type="button"
+                        title={tooltip}
+                        aria-expanded={tempProfileOpen}
+                        aria-label="Show temperature profile"
+                        onClick={() => setTempProfileOpen((v) => !v)}
                         style={{
-                          marginLeft: 4,
-                          fontSize: 8,
-                          letterSpacing: "0.15em",
-                          color: sample.live ? "#22d3ee" : "#f59e0b",
-                          background: sample.live ? "rgba(0,229,255,0.08)" : "rgba(245,158,11,0.10)",
-                          border: `1px solid ${sample.live ? "rgba(0,229,255,0.25)" : "rgba(245,158,11,0.4)"}`,
-                          borderRadius: 2,
+                          pointerEvents: "auto",
+                          background: tempProfileOpen ? "rgba(251,146,60,0.10)" : "transparent",
+                          border: `1px solid ${tempProfileOpen ? "rgba(251,146,60,0.4)" : "transparent"}`,
+                          borderRadius: 3,
                           padding: "1px 4px",
+                          cursor: "pointer",
+                          color: "inherit",
+                          font: "inherit",
+                          letterSpacing: "inherit",
                         }}
                       >
-                        {sample.live ? "LIVE" : "EST"}
-                      </span>
+                        <span style={{ color: "#475569" }}>🌡 TEMP </span>
+                        <span style={{ color: "#fb923c", textShadow: "0 0 6px rgba(251,146,60,0.4)" }}>
+                          {formatTemperature(sample.celsius, { units }).toUpperCase()}
+                        </span>
+                        <span
+                          data-testid="hud-water-temp-source"
+                          style={{
+                            marginLeft: 4,
+                            fontSize: 8,
+                            letterSpacing: "0.15em",
+                            color: sample.live ? "#22d3ee" : "#f59e0b",
+                            background: sample.live ? "rgba(0,229,255,0.08)" : "rgba(245,158,11,0.10)",
+                            border: `1px solid ${sample.live ? "rgba(0,229,255,0.25)" : "rgba(245,158,11,0.4)"}`,
+                            borderRadius: 2,
+                            padding: "1px 4px",
+                          }}
+                        >
+                          {sample.live ? "LIVE" : "EST"}
+                        </span>
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            marginLeft: 4,
+                            color: "#64748b",
+                            fontSize: 9,
+                          }}
+                        >
+                          {tempProfileOpen ? "▴" : "▾"}
+                        </span>
+                      </button>
+                      {tempProfileOpen && (
+                        <div style={{ marginTop: 6, display: "flex", justifyContent: "center" }}>
+                          <TemperatureProfileChart
+                            profile={profile}
+                            units={units}
+                            highlightDepthM={crosshairGps.depth}
+                            measured={measured}
+                            onClose={() => setTempProfileOpen(false)}
+                          />
+                        </div>
+                      )}
                     </div>
                   );
                 })()}

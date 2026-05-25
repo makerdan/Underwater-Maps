@@ -16,6 +16,10 @@ vi.mock("@/hooks/useSurfaceTemperature", () => ({
   useSurfaceTemperature: () => ({ anchor: null, loading: false, error: false }),
 }));
 
+vi.mock("@/hooks/useTemperatureProfile", () => ({
+  useTemperatureProfile: () => ({ profile: null, loading: false, error: false }),
+}));
+
 vi.mock("@/lib/gpsStore", () => ({
   useGpsStore: (sel: (s: { active: boolean; position: null }) => unknown) =>
     sel({ active: false, position: null }),

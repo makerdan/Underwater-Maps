@@ -10,6 +10,10 @@ vi.mock("@/hooks/useSurfaceTemperature", () => ({
   useSurfaceTemperature: () => ({ anchor: null, loading: false, error: false }),
 }));
 
+vi.mock("@/hooks/useTemperatureProfile", () => ({
+  useTemperatureProfile: () => ({ profile: null, loading: false, error: false }),
+}));
+
 vi.mock("@/lib/context", () => ({
   SPEEDS: [0.05, 0.15, 0.5, 1.5, 5.0],
   useAppState: () => ({

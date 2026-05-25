@@ -844,6 +844,30 @@ export interface WaterTemperature {
   sourceUrl?: string;
 }
 
+export interface TemperatureProfileSample {
+  /** Depth below the surface in metres */
+  depthM: number;
+  /** Water temperature in degrees Celsius */
+  temperatureC: number;
+}
+
+export interface TemperatureProfile {
+  /** True when a real depth-resolved profile was found */
+  available: boolean;
+  lat: number;
+  lon: number;
+  /** Sorted shallow→deep depth/temperature samples (empty when available=false) */
+  samples: TemperatureProfileSample[];
+  /** Human-readable attribution for the profile source */
+  source?: string;
+  /** Canonical URL for the data source */
+  sourceUrl?: string;
+  /** ISO 8601 UTC timestamp of the measurement (when applicable) */
+  timestamp?: string;
+  /** Identifier of the underlying data provider (e.g. "bundled-ctd", "argo", "woa", "estimated") */
+  provider?: string;
+}
+
 export type SlackBlockPhase = typeof SlackBlockPhase[keyof typeof SlackBlockPhase];
 
 
@@ -1081,6 +1105,17 @@ lon: number;
 };
 
 export type GetWaterTemperatureParams = {
+/**
+ * Latitude of query point
+ */
+lat: number;
+/**
+ * Longitude of query point
+ */
+lon: number;
+};
+
+export type GetTemperatureProfileParams = {
 /**
  * Latitude of query point
  */

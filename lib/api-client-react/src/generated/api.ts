@@ -37,6 +37,7 @@ import type {
   GetEfhParams,
   GetMarkersParams,
   GetSurfaceConditionsParams,
+  GetTemperatureProfileParams,
   GetTrailsIdPointsParams,
   GetTrailsParams,
   GetWaterTemperatureParams,
@@ -57,6 +58,7 @@ import type {
   RenameDatasetFolderBody,
   SubstrateFeatureCollection,
   SurfaceConditions,
+  TemperatureProfile,
   TerrainData,
   TrailPointsPage,
   TrollingPreset,
@@ -3364,6 +3366,98 @@ export function useGetWaterTemperature<TData = Awaited<ReturnType<typeof getWate
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetWaterTemperatureQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetTemperatureProfileUrl = (params: GetTemperatureProfileParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/temperature-profile?${stringifiedParams}` : `/api/temperature-profile`
+}
+
+/**
+ * Returns a real per-location temperature-vs-depth profile when one
+is available from a bundled CTD cast, an Argo float, or an
+oceanographic reanalysis dataset. The samples are sorted
+shallow→deep so a client can plot them directly. When no real
+profile is available the response is `{ available: false, ... }`
+and the caller is expected to fall back to its surface-anchored
+thermocline model.
+
+ * @summary Fetch a depth-resolved temperature profile for a lat/lon point
+ */
+export const getTemperatureProfile = async (params: GetTemperatureProfileParams, options?: RequestInit): Promise<TemperatureProfile> => {
+
+  return customFetch<TemperatureProfile>(getGetTemperatureProfileUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTemperatureProfileQueryKey = (params?: GetTemperatureProfileParams,) => {
+    return [
+    `/api/temperature-profile`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetTemperatureProfileQueryOptions = <TData = Awaited<ReturnType<typeof getTemperatureProfile>>, TError = ErrorType<ApiError>>(params: GetTemperatureProfileParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTemperatureProfile>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTemperatureProfileQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTemperatureProfile>>> = ({ signal }) => getTemperatureProfile(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTemperatureProfile>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTemperatureProfileQueryResult = NonNullable<Awaited<ReturnType<typeof getTemperatureProfile>>>
+export type GetTemperatureProfileQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Fetch a depth-resolved temperature profile for a lat/lon point
+ */
+
+export function useGetTemperatureProfile<TData = Awaited<ReturnType<typeof getTemperatureProfile>>, TError = ErrorType<ApiError>>(
+ params: GetTemperatureProfileParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTemperatureProfile>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTemperatureProfileQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

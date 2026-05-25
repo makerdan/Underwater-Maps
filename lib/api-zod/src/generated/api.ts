@@ -1233,6 +1233,37 @@ export const GetWaterTemperatureResponse = zod.object({
 
 
 /**
+ * Returns a real per-location temperature-vs-depth profile when one
+is available from a bundled CTD cast, an Argo float, or an
+oceanographic reanalysis dataset. The samples are sorted
+shallow→deep so a client can plot them directly. When no real
+profile is available the response is `{ available: false, ... }`
+and the caller is expected to fall back to its surface-anchored
+thermocline model.
+
+ * @summary Fetch a depth-resolved temperature profile for a lat/lon point
+ */
+export const GetTemperatureProfileQueryParams = zod.object({
+  "lat": zod.coerce.number().describe('Latitude of query point'),
+  "lon": zod.coerce.number().describe('Longitude of query point')
+})
+
+export const GetTemperatureProfileResponse = zod.object({
+  "available": zod.boolean().describe('True when a real depth-resolved profile was found'),
+  "lat": zod.number(),
+  "lon": zod.number(),
+  "samples": zod.array(zod.object({
+  "depthM": zod.number().describe('Depth below the surface in metres'),
+  "temperatureC": zod.number().describe('Water temperature in degrees Celsius')
+})).describe('Sorted shallow→deep depth\/temperature samples (empty when available=false)'),
+  "source": zod.string().optional().describe('Human-readable attribution for the profile source'),
+  "sourceUrl": zod.string().optional().describe('Canonical URL for the data source'),
+  "timestamp": zod.string().optional().describe('ISO 8601 UTC timestamp of the measurement (when applicable)'),
+  "provider": zod.string().optional().describe('Identifier of the underlying data provider (e.g. \"bundled-ctd\", \"argo\", \"woa\", \"estimated\")')
+})
+
+
+/**
  * Returns GeoJSON EFH zone polygons for the requested area.
 Currently covers the Thorne Bay / Clarence Strait / SE Alaska region.
 Data credit: NOAA Fisheries / NMFS Alaska Region.

@@ -1308,6 +1308,46 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /temperature-profile:
+    get:
+      operationId: getTemperatureProfile
+      tags: [drift-planner]
+      summary: Fetch a depth-resolved temperature profile for a lat/lon point
+      description: |
+        Returns a real per-location temperature-vs-depth profile when one
+        is available from a bundled CTD cast, an Argo float, or an
+        oceanographic reanalysis dataset. The samples are sorted
+        shallow→deep so a client can plot them directly. When no real
+        profile is available the response is `{ available: false, ... }`
+        and the caller is expected to fall back to its surface-anchored
+        thermocline model.
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+          description: Latitude of query point
+        - name: lon
+          in: query
+          required: true
+          schema:
+            type: number
+          description: Longitude of query point
+      responses:
+        "200":
+          description: Depth-resolved temperature profile for the point
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemperatureProfile"
+        "400":
+          description: Missing or invalid lat/lon
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /efh:
     get:
       operationId: getEfh
@@ -2367,6 +2407,52 @@ components:
         - available
         - lat
         - lon
+
+    TemperatureProfileSample:
+      type: object
+      properties:
+        depthM:
+          type: number
+          description: Depth below the surface in metres
+        temperatureC:
+          type: number
+          description: Water temperature in degrees Celsius
+      required:
+        - depthM
+        - temperatureC
+
+    TemperatureProfile:
+      type: object
+      properties:
+        available:
+          type: boolean
+          description: True when a real depth-resolved profile was found
+        lat:
+          type: number
+        lon:
+          type: number
+        samples:
+          type: array
+          description: Sorted shallow→deep depth/temperature samples (empty when available=false)
+          items:
+            $ref: "#/components/schemas/TemperatureProfileSample"
+        source:
+          type: string
+          description: Human-readable attribution for the profile source
+        sourceUrl:
+          type: string
+          description: Canonical URL for the data source
+        timestamp:
+          type: string
+          description: ISO 8601 UTC timestamp of the measurement (when applicable)
+        provider:
+          type: string
+          description: Identifier of the underlying data provider (e.g. "bundled-ctd", "argo", "woa", "estimated")
+      required:
+        - available
+        - lat
+        - lon
+        - samples
 
     HourlySurfaceCondition:
       type: object
