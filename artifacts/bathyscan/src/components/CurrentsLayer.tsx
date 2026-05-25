@@ -212,14 +212,24 @@ const CurrentArrowLayer: React.FC<ArrowLayerProps> = ({ field, surfaceY }) => {
 const STREAMLINE_COUNT = 36;
 const STREAMLINE_SAMPLES = 24;
 const STREAMLINE_STEP = 0.7; // world units per integration step
-const STREAMLINE_ANIM_SPEED = 0.4; // cycles per second
+/**
+ * Number of dash cycles visible along a streamline's full traced length when
+ * every sample is at unit-normalized speed. With STREAMLINE_SAMPLES = 24 this
+ * yields roughly 3 marching dashes per line — busy enough to read direction
+ * but not noisy.
+ */
+const STREAMLINE_DASH_FREQ = 3.0;
+/** Cycles per second a feature on the line completes (visual pacing). */
+const STREAMLINE_MARCH_HZ = 0.6;
 
 interface StreamlineLayerProps {
   field: FlowField;
   surfaceY: number;
+  /** When false, holds the marching phase steady (animation paused). */
+  animate: boolean;
 }
 
-const CurrentStreamlineLayer: React.FC<StreamlineLayerProps> = ({ field, surfaceY }) => {
+const CurrentStreamlineLayer: React.FC<StreamlineLayerProps> = ({ field, surfaceY, animate }) => {
   const groupRef = useRef<THREE.Group>(null);
   const timeRef = useRef(0);
 
@@ -238,11 +248,18 @@ const CurrentStreamlineLayer: React.FC<StreamlineLayerProps> = ({ field, surface
     return arr;
   }, []);
 
-  // Pre-allocate line geometries (one per streamline).
+  /**
+   * Allocate geometry/material/buffers ONCE per seed set. We never recreate
+   * GPU resources for tide-phase ambient changes — instead we mutate the
+   * existing position/baseColor/phaseCoord buffers in place via the effect
+   * below. This keeps allocations stable while auto-advance is running.
+   */
   const lines = useMemo(() => {
     return seeds.map(() => {
       const positions = new Float32Array(STREAMLINE_SAMPLES * 3);
       const colors = new Float32Array(STREAMLINE_SAMPLES * 3);
+      const baseColors = new Float32Array(STREAMLINE_SAMPLES * 3);
+      const phaseCoord = new Float32Array(STREAMLINE_SAMPLES);
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
       geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
@@ -252,21 +269,44 @@ const CurrentStreamlineLayer: React.FC<StreamlineLayerProps> = ({ field, surface
         opacity: 0.7,
         depthWrite: false,
       });
-      return { geo, mat, positions, colors };
+      return { geo, mat, positions, colors, baseColors, phaseCoord };
     });
   }, [seeds]);
 
-  useFrame((_, delta) => {
-    timeRef.current += delta;
-    const tphase = (timeRef.current * STREAMLINE_ANIM_SPEED) % 1;
-    const maxS = Math.max(0.001, field.maxSpeed);
+  // Dispose GPU resources only when the seed set changes (essentially never)
+  // or this layer unmounts.
+  useEffect(() => {
+    return () => {
+      for (const ln of lines) {
+        ln.geo.dispose();
+        ln.mat.dispose();
+      }
+    };
+  }, [lines]);
 
+  /**
+   * Re-trace every streamline when the flow field or surface changes, writing
+   * into the existing buffers. Per vertex we store:
+   *   - `positions`: world-space polyline samples
+   *   - `baseColors`: the unmodulated speed colour
+   *   - `phaseCoord`: a unitless "fluid-time" coordinate τ that increases
+   *     faster where the flow is slow. A dash riding the current keeps τ
+   *     constant, so animating brightness with sin(2π·(τ − t·MARCH_HZ))
+   *     produces dashes that march at the local fluid speed.
+   * Per-frame work then collapses to a single sin() per vertex with no
+   * flow-field integration — strictly cheaper than the previous
+   * trace-every-frame implementation.
+   */
+  useEffect(() => {
+    const maxS = Math.max(0.001, field.maxSpeed);
     for (let k = 0; k < seeds.length; k++) {
       const seed = seeds[k]!;
-      const { positions, colors, geo } = lines[k]!;
+      const { positions, baseColors, phaseCoord, geo } = lines[k]!;
 
       let x = seed.x;
       let z = seed.z;
+      let tau = 0;
+      let stalledFrom = STREAMLINE_SAMPLES;
       for (let i = 0; i < STREAMLINE_SAMPLES; i++) {
         positions[i * 3] = x;
         positions[i * 3 + 1] = surfaceY + 0.06;
@@ -275,35 +315,77 @@ const CurrentStreamlineLayer: React.FC<StreamlineLayerProps> = ({ field, surface
         const s = sampleFlowField(field, x, z);
         const norm = s.speed / maxS;
         const c = speedToColor(norm);
-        // Animate along arc-length using tphase to fade in/out leading edge.
-        const head = (i / STREAMLINE_SAMPLES + tphase) % 1;
-        const alpha = 0.25 + 0.75 * Math.sin(head * Math.PI);
-        colors[i * 3] = c.r * alpha;
-        colors[i * 3 + 1] = c.g * alpha;
-        colors[i * 3 + 2] = c.b * alpha;
+        baseColors[i * 3] = c.r;
+        baseColors[i * 3 + 1] = c.g;
+        baseColors[i * 3 + 2] = c.b;
 
         if (s.speed === 0) {
-          // Stalled — collapse remaining samples to this point.
+          stalledFrom = i + 1;
           for (let j = i + 1; j < STREAMLINE_SAMPLES; j++) {
             positions[j * 3] = x;
             positions[j * 3 + 1] = surfaceY + 0.06;
             positions[j * 3 + 2] = z;
-            colors[j * 3] = 0; colors[j * 3 + 1] = 0; colors[j * 3 + 2] = 0;
+            baseColors[j * 3] = 0;
+            baseColors[j * 3 + 1] = 0;
+            baseColors[j * 3 + 2] = 0;
+            phaseCoord[j] = tau;
           }
           break;
         }
+        // dτ = (arc step in normalized speed units). Using normalized speed
+        // keeps the visual dash wavelength stable across fields with very
+        // different magnitudes while preserving the relative
+        // faster-here-slower-there feel.
+        const dtau = STREAMLINE_STEP * (norm > 0 ? 1 / Math.max(0.05, norm) : 0);
+        tau += dtau;
+        phaseCoord[i] = tau;
         x += (s.vx / s.speed) * STREAMLINE_STEP;
         z += (s.vz / s.speed) * STREAMLINE_STEP;
       }
+
+      // Normalize phaseCoord so the line spans STREAMLINE_DASH_FREQ cycles
+      // end-to-end regardless of how far it actually traced before stalling.
+      const lastIdx = Math.max(0, stalledFrom - 1);
+      const tauMax = phaseCoord[lastIdx] || 1;
+      for (let i = 0; i < STREAMLINE_SAMPLES; i++) {
+        phaseCoord[i] = (phaseCoord[i]! / tauMax) * STREAMLINE_DASH_FREQ;
+      }
+
       (geo.attributes["position"] as THREE.BufferAttribute).needsUpdate = true;
+    }
+  }, [lines, seeds, field, surfaceY]);
+
+  useFrame((_, delta) => {
+    if (animate) timeRef.current += delta;
+    const phase = timeRef.current * STREAMLINE_MARCH_HZ;
+    const TWO_PI = Math.PI * 2;
+
+    for (let k = 0; k < lines.length; k++) {
+      const { geo, colors, baseColors, phaseCoord } = lines[k]!;
+      for (let i = 0; i < STREAMLINE_SAMPLES; i++) {
+        // Brightness wave moves against τ at MARCH_HZ cycles/sec — dashes
+        // appear to march downstream at the local fluid speed.
+        const wave = Math.sin(TWO_PI * (phaseCoord[i]! - phase));
+        const alpha = 0.25 + 0.75 * (0.5 + 0.5 * wave);
+        colors[i * 3] = baseColors[i * 3]! * alpha;
+        colors[i * 3 + 1] = baseColors[i * 3 + 1]! * alpha;
+        colors[i * 3 + 2] = baseColors[i * 3 + 2]! * alpha;
+      }
       (geo.attributes["color"] as THREE.BufferAttribute).needsUpdate = true;
     }
   });
 
+  // Build the THREE.Line objects once per stable line set so React doesn't
+  // recreate them on every field change.
+  const lineObjects = useMemo(
+    () => lines.map((ln) => new THREE.Line(ln.geo, ln.mat)),
+    [lines],
+  );
+
   return (
     <group ref={groupRef} renderOrder={4}>
-      {lines.map((ln, i) => (
-        <primitive key={i} object={new THREE.Line(ln.geo, ln.mat)} />
+      {lineObjects.map((obj, i) => (
+        <primitive key={i} object={obj} />
       ))}
     </group>
   );
@@ -384,7 +466,13 @@ export const CurrentsLayer: React.FC<CurrentsLayerProps> = ({ terrain, noaaAmbie
         <CurrentParticleLayer field={field} surfaceY={surfaceY} terrain={terrain} />
       )}
       {showArrows && <CurrentArrowLayer field={field} surfaceY={surfaceY} />}
-      {showStreamlines && <CurrentStreamlineLayer field={field} surfaceY={surfaceY} />}
+      {showStreamlines && (
+        <CurrentStreamlineLayer
+          field={field}
+          surfaceY={surfaceY}
+          animate={autoAdvance && !reducedMotion}
+        />
+      )}
     </>
   );
 };
