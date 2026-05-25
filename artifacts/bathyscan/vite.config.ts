@@ -32,7 +32,12 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss({ optimize: false }),
-    runtimeErrorOverlay(),
+    // The runtime error overlay intercepts pointer events whenever any
+    // runtime error fires (e.g. headless Chromium failing to create a
+    // WebGL context). That blocks Playwright clicks against the HUD.
+    // Skip the overlay plugin in e2e auth-bypass mode so the dev server
+    // stays clickable. Production builds are unaffected.
+    ...(process.env.VITE_DEV_AUTH_BYPASS === "1" ? [] : [runtimeErrorOverlay()]),
     VitePWA({
       registerType: "autoUpdate",
       strategies: "injectManifest",
