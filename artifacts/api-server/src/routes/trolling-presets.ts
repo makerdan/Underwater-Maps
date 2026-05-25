@@ -26,7 +26,7 @@ router.post("/trolling-presets", requireAuth, async (req, res): Promise<void> =>
     return;
   }
   const userId = (req as AuthenticatedRequest).clerkUserId;
-  const { name, headingDeg, speedKnots, startLat, startLon } = parsed.data;
+  const { name, headingDeg, speedKnots, startLat, startLon, waypoints } = parsed.data;
 
   const [created] = await db
     .insert(trollingPresetsTable)
@@ -37,6 +37,7 @@ router.post("/trolling-presets", requireAuth, async (req, res): Promise<void> =>
       speedKnots,
       startLat: startLat ?? null,
       startLon: startLon ?? null,
+      waypoints: waypoints ?? [],
     })
     .returning();
 

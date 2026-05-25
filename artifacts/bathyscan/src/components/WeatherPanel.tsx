@@ -129,6 +129,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     removeDriftWaypoint,
     moveDriftWaypoint,
     clearDriftWaypoints,
+    setDriftWaypoints,
   } = useDriftStore();
 
   const queryClient = useQueryClient();
@@ -156,6 +157,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
           speedKnots: Math.max(0, Math.min(TROLL_MAX_KNOTS, boatSpeedKnots)),
           startLat: driftStartLat,
           startLon: driftStartLon,
+          waypoints: driftWaypoints.map((wp) => ({ lat: wp.lat, lon: wp.lon })),
         },
       });
       setPresetName("");
@@ -163,7 +165,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     } catch (err) {
       setPresetError(err instanceof Error ? err.message : "Save failed");
     }
-  }, [presetName, postPresetMutation, boatHeadingDeg, boatSpeedKnots, driftStartLat, driftStartLon, queryClient, presetsQueryKey]);
+  }, [presetName, postPresetMutation, boatHeadingDeg, boatSpeedKnots, driftStartLat, driftStartLon, driftWaypoints, queryClient, presetsQueryKey]);
 
   const handleLoadPreset = useCallback((presetId: string) => {
     const preset = trollingPresets?.find((p) => p.id === presetId);
@@ -173,8 +175,13 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     if (preset.startLat != null && preset.startLon != null) {
       setDriftStart(preset.startLat, preset.startLon);
     }
+    setDriftWaypoints(
+      Array.isArray(preset.waypoints)
+        ? preset.waypoints.map((wp) => ({ lat: wp.lat, lon: wp.lon }))
+        : [],
+    );
     setDriftMode("trolling");
-  }, [trollingPresets, setBoatHeadingDeg, setBoatSpeedKnots, setDriftStart, setDriftMode]);
+  }, [trollingPresets, setBoatHeadingDeg, setBoatSpeedKnots, setDriftStart, setDriftWaypoints, setDriftMode]);
 
   const handleDeletePreset = useCallback(async (presetId: string) => {
     try {

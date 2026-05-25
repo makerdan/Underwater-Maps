@@ -866,6 +866,19 @@ export interface SlackBlock {
   nextReversalAt: string;
 }
 
+export interface TrollingPresetWaypoint {
+  /**
+     * @minimum -90
+     * @maximum 90
+     */
+  lat: number;
+  /**
+     * @minimum -180
+     * @maximum 180
+     */
+  lon: number;
+}
+
 export interface TrollingPreset {
   /** UUID primary key */
   id: string;
@@ -883,6 +896,7 @@ export interface TrollingPreset {
   speedKnots: number;
   startLat?: number | null;
   startLon?: number | null;
+  waypoints: TrollingPresetWaypoint[];
   createdAt: string;
 }
 
@@ -904,6 +918,8 @@ export interface TrollingPresetInput {
   speedKnots: number;
   startLat?: number | null;
   startLon?: number | null;
+  /** @maxItems 50 */
+  waypoints?: TrollingPresetWaypoint[];
 }
 
 export type MarkerInputType = typeof MarkerInputType[keyof typeof MarkerInputType];

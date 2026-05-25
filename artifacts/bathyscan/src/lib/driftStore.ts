@@ -113,6 +113,7 @@ interface DriftStore {
   removeDriftWaypoint: (index: number) => void;
   moveDriftWaypoint: (index: number, direction: -1 | 1) => void;
   clearDriftWaypoints: () => void;
+  setDriftWaypoints: (wps: TrollWaypoint[]) => void;
 }
 
 export const TROLL_MAX_KNOTS = 10;
@@ -189,4 +190,5 @@ export const useDriftStore = create<DriftStore>((set) => ({
       return { driftWaypoints: next };
     }),
   clearDriftWaypoints: () => set({ driftWaypoints: [] }),
+  setDriftWaypoints: (wps) => set({ driftWaypoints: wps }),
 }));

@@ -2447,6 +2447,10 @@ components:
         startLon:
           type: number
           nullable: true
+        waypoints:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrollingPresetWaypoint"
         createdAt:
           type: string
           format: date-time
@@ -2456,7 +2460,23 @@ components:
         - name
         - headingDeg
         - speedKnots
+        - waypoints
         - createdAt
+
+    TrollingPresetWaypoint:
+      type: object
+      properties:
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+        lon:
+          type: number
+          minimum: -180
+          maximum: 180
+      required:
+        - lat
+        - lon
 
     TrollingPresetInput:
       type: object
@@ -2479,6 +2499,11 @@ components:
         startLon:
           type: number
           nullable: true
+        waypoints:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/TrollingPresetWaypoint"
       required:
         - name
         - headingDeg

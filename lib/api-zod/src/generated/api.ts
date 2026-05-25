@@ -816,6 +816,12 @@ export const getTrollingPresetsResponseHeadingDegMax = 360;
 export const getTrollingPresetsResponseSpeedKnotsMin = 0;
 export const getTrollingPresetsResponseSpeedKnotsMax = 10;
 
+export const getTrollingPresetsResponseWaypointsItemLatMin = -90;
+export const getTrollingPresetsResponseWaypointsItemLatMax = 90;
+
+export const getTrollingPresetsResponseWaypointsItemLonMin = -180;
+export const getTrollingPresetsResponseWaypointsItemLonMax = 180;
+
 
 
 export const GetTrollingPresetsResponseItem = zod.object({
@@ -826,6 +832,10 @@ export const GetTrollingPresetsResponseItem = zod.object({
   "speedKnots": zod.number().min(getTrollingPresetsResponseSpeedKnotsMin).max(getTrollingPresetsResponseSpeedKnotsMax),
   "startLat": zod.number().nullish(),
   "startLon": zod.number().nullish(),
+  "waypoints": zod.array(zod.object({
+  "lat": zod.number().min(getTrollingPresetsResponseWaypointsItemLatMin).max(getTrollingPresetsResponseWaypointsItemLatMax),
+  "lon": zod.number().min(getTrollingPresetsResponseWaypointsItemLonMin).max(getTrollingPresetsResponseWaypointsItemLonMax)
+})),
   "createdAt": zod.coerce.date()
 })
 export const GetTrollingPresetsResponse = zod.array(GetTrollingPresetsResponseItem)
@@ -842,6 +852,14 @@ export const postTrollingPresetsBodyHeadingDegMax = 360;
 export const postTrollingPresetsBodySpeedKnotsMin = 0;
 export const postTrollingPresetsBodySpeedKnotsMax = 10;
 
+export const postTrollingPresetsBodyWaypointsItemLatMin = -90;
+export const postTrollingPresetsBodyWaypointsItemLatMax = 90;
+
+export const postTrollingPresetsBodyWaypointsItemLonMin = -180;
+export const postTrollingPresetsBodyWaypointsItemLonMax = 180;
+
+export const postTrollingPresetsBodyWaypointsMax = 50;
+
 
 
 export const PostTrollingPresetsBody = zod.object({
@@ -849,7 +867,11 @@ export const PostTrollingPresetsBody = zod.object({
   "headingDeg": zod.number().min(postTrollingPresetsBodyHeadingDegMin).max(postTrollingPresetsBodyHeadingDegMax),
   "speedKnots": zod.number().min(postTrollingPresetsBodySpeedKnotsMin).max(postTrollingPresetsBodySpeedKnotsMax),
   "startLat": zod.number().nullish(),
-  "startLon": zod.number().nullish()
+  "startLon": zod.number().nullish(),
+  "waypoints": zod.array(zod.object({
+  "lat": zod.number().min(postTrollingPresetsBodyWaypointsItemLatMin).max(postTrollingPresetsBodyWaypointsItemLatMax),
+  "lon": zod.number().min(postTrollingPresetsBodyWaypointsItemLonMin).max(postTrollingPresetsBodyWaypointsItemLonMax)
+})).max(postTrollingPresetsBodyWaypointsMax).optional()
 })
 
 
