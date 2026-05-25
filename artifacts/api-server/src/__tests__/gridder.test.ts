@@ -71,3 +71,43 @@ describe("gridPoints", () => {
     expect(grid.depths.every((d) => Number.isFinite(d))).toBe(true);
   });
 });
+
+describe("gridPoints — smoothing option (Task #66)", () => {
+  // A deliberately spiky synthetic point cloud: alternating shallow / deep
+  // measurements on a coarse grid. After resampling to N×N this produces
+  // neighbour pairs with depth jumps well past the 70° spike threshold.
+  function makeSpikyPoints() {
+    const pts: { lon: number; lat: number; depth: number }[] = [];
+    for (let r = 0; r < 10; r++) {
+      for (let c = 0; c < 10; c++) {
+        const spike = (r + c) % 2 === 0 ? 50 : 500;
+        pts.push({ lon: c * 0.1, lat: r * 0.1, depth: spike });
+      }
+    }
+    return pts;
+  }
+
+  it("produces a wider depth range when smoothing is disabled", () => {
+    const pts = makeSpikyPoints();
+    const smoothed = gridPoints(pts, 64, "spiky", "Spiky", { smoothing: true });
+    const raw = gridPoints(pts, 64, "spiky", "Spiky", { smoothing: false });
+
+    const smoothedRange = smoothed.maxDepth - smoothed.minDepth;
+    const rawRange = raw.maxDepth - raw.minDepth;
+
+    // Sanity: the raw grid should preserve close-to-original spikes (~450 m).
+    expect(rawRange).toBeGreaterThan(400);
+    // The smoothed grid must collapse spikes, narrowing the range.
+    expect(rawRange).toBeGreaterThan(smoothedRange);
+    // The depths arrays must actually differ — proves smoothing ran.
+    expect(raw.depths).not.toEqual(smoothed.depths);
+  });
+
+  it("defaults smoothing to ON when no option is passed", () => {
+    const pts = makeSpikyPoints();
+    const def = gridPoints(pts, 64, "spiky", "Spiky");
+    const smoothed = gridPoints(pts, 64, "spiky", "Spiky", { smoothing: true });
+    // Defaulted call and explicit smoothing:true must produce identical depths.
+    expect(def.depths).toEqual(smoothed.depths);
+  });
+});
