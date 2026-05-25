@@ -8,7 +8,12 @@ vi.mock("@/lib/context", () => ({
   useAppState: () => ({
     realisticMode: false,
     boatSpeedMph: 5,
+    terrain: null,
   }),
+}));
+
+vi.mock("@/hooks/useSurfaceTemperature", () => ({
+  useSurfaceTemperature: () => ({ anchor: null, loading: false, error: false }),
 }));
 
 vi.mock("@/lib/gpsStore", () => ({

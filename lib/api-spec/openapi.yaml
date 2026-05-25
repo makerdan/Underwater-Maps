@@ -1270,6 +1270,44 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /water-temperature:
+    get:
+      operationId: getWaterTemperature
+      tags: [drift-planner]
+      summary: Fetch current sea-surface temperature for a lat/lon point
+      description: |
+        Returns the current sea-surface temperature (°C) at the requested
+        lat/lon from the Open-Meteo Marine API. Used by BathyScan's HUD
+        temperature readout as the surface anchor of a thermocline model.
+        Returns available=false when the live feed is unreachable so the
+        caller can gracefully fall back to a synthetic estimate.
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+          description: Latitude of query point
+        - name: lon
+          in: query
+          required: true
+          schema:
+            type: number
+          description: Longitude of query point
+      responses:
+        "200":
+          description: Current sea-surface temperature for the point
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WaterTemperature"
+        "400":
+          description: Missing or invalid lat/lon
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /efh:
     get:
       operationId: getEfh
@@ -2299,6 +2337,33 @@ components:
         - lat
         - lon
         - hours
+
+    WaterTemperature:
+      type: object
+      properties:
+        available:
+          type: boolean
+          description: True when a live sea-surface temperature was retrieved
+        lat:
+          type: number
+        lon:
+          type: number
+        sstCelsius:
+          type: number
+          description: Sea-surface temperature in degrees Celsius (omitted when available=false)
+        timestamp:
+          type: string
+          description: ISO 8601 UTC timestamp of the sample (top of hour)
+        source:
+          type: string
+          description: Human-readable attribution for the data source
+        sourceUrl:
+          type: string
+          description: Canonical URL for the data source
+      required:
+        - available
+        - lat
+        - lon
 
     HourlySurfaceCondition:
       type: object

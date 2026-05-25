@@ -7,7 +7,8 @@ import { useMarkerDetailStore } from "@/lib/markerDetailStore";
 import { MARKER_COLOR, MARKER_ICON } from "@/lib/markerConstants";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { formatDepth, formatTemperature } from "@/lib/units";
-import { waterTemperatureC } from "@/lib/waterTemp";
+import { estimateWaterTemperature } from "@/lib/waterTemp";
+import { useSurfaceTemperature } from "@/hooks/useSurfaceTemperature";
 
 const MONO: React.CSSProperties = {
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
@@ -17,6 +18,7 @@ export const MarkerDetailCard: React.FC = () => {
   const marker = useMarkerDetailStore((s) => s.marker);
   const hide = useMarkerDetailStore((s) => s.hide);
   const units = useSettingsStore((s) => s.units);
+  const { anchor: sstAnchor } = useSurfaceTemperature(!!marker);
 
   useEffect(() => {
     if (!marker) return;
@@ -85,9 +87,27 @@ export const MarkerDetailCard: React.FC = () => {
         <span style={{ color: "#475569" }}>DEPTH</span>
         <span style={{ color: "#fb923c" }}>{formatDepth(marker.depth, { units })}</span>
         <span style={{ color: "#475569" }}>TEMP</span>
-        <span style={{ color: "#fb923c" }}>
-          {formatTemperature(waterTemperatureC(marker.depth), { units })}
-        </span>
+        {(() => {
+          const sample = estimateWaterTemperature(marker.depth, sstAnchor);
+          const tooltip = sample.live
+            ? `${sample.source}${sample.timestamp ? ` · sampled ${new Date(sample.timestamp).toUTCString()}` : ""}`
+            : "No live ocean feed available — showing an estimated thermocline based on a typical 15 °C surface.";
+          return (
+            <span style={{ color: "#fb923c" }} title={tooltip}>
+              {formatTemperature(sample.celsius, { units })}
+              <span
+                style={{
+                  marginLeft: 6,
+                  fontSize: 8,
+                  letterSpacing: "0.15em",
+                  color: sample.live ? "#22d3ee" : "#f59e0b",
+                }}
+              >
+                {sample.live ? "LIVE" : "EST"}
+              </span>
+            </span>
+          );
+        })()}
         {createdAt && (
           <>
             <span style={{ color: "#475569" }}>CREATED</span>

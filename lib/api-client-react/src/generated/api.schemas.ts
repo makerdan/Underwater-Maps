@@ -825,6 +825,21 @@ export interface SurfaceConditions {
   hours: HourlySurfaceCondition[];
 }
 
+export interface WaterTemperature {
+  /** True when a live sea-surface temperature was retrieved */
+  available: boolean;
+  lat: number;
+  lon: number;
+  /** Sea-surface temperature in degrees Celsius (omitted when available=false) */
+  sstCelsius?: number;
+  /** ISO 8601 UTC timestamp of the sample (top of hour) */
+  timestamp?: string;
+  /** Human-readable attribution for the data source */
+  source?: string;
+  /** Canonical URL for the data source */
+  sourceUrl?: string;
+}
+
 export type SlackBlockPhase = typeof SlackBlockPhase[keyof typeof SlackBlockPhase];
 
 
@@ -1035,6 +1050,17 @@ export const GetDatasetsCatalogSearchWaterType = {
 } as const;
 
 export type GetSurfaceConditionsParams = {
+/**
+ * Latitude of query point
+ */
+lat: number;
+/**
+ * Longitude of query point
+ */
+lon: number;
+};
+
+export type GetWaterTemperatureParams = {
 /**
  * Latitude of query point
  */

@@ -15,6 +15,7 @@ import efhRouter from "./efh";
 import catalogSavesRouter from "./catalog-saves";
 import surfaceConditionsRouter from "./surface-conditions";
 import trollingPresetsRouter from "./trolling-presets";
+import waterTemperatureRouter from "./water-temperature";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(efhRouter);
 router.use(catalogSavesRouter);
 router.use(surfaceConditionsRouter);
 router.use(trollingPresetsRouter);
+router.use(waterTemperatureRouter);
 
 export default router;

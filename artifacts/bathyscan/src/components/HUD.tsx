@@ -10,7 +10,8 @@ import { useDriftStore } from "@/lib/driftStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
 import { mphToKnots } from "@/lib/boatSpeed";
 import { formatDepth, formatSpeed, formatTemperature } from "@/lib/units";
-import { waterTemperatureC } from "@/lib/waterTemp";
+import { estimateWaterTemperature } from "@/lib/waterTemp";
+import { useSurfaceTemperature } from "@/hooks/useSurfaceTemperature";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
@@ -110,6 +111,10 @@ export const HUD: React.FC = () => {
   const setCurrentOverlayActive = useUiStore((s) => s.setCurrentOverlayActive);
   const { terrain } = useAppState();
   const hasEfh = EFH_DATASETS.has(terrain?.datasetId ?? "");
+
+  // Live sea-surface temperature for the dataset centre — used as the
+  // surface anchor of the thermocline model below.
+  const { anchor: sstAnchor } = useSurfaceTemperature(!!terrain);
 
   const speed = SPEEDS[speedIndex] ?? 0.15;
   const isFly = mode === "fly";
@@ -378,15 +383,39 @@ export const HUD: React.FC = () => {
                     {fmtDepth(crosshairGps.depth)}
                   </span>
                 </div>
-                <div
-                  data-testid="hud-water-temp"
-                  style={{ marginTop: 2, fontSize: 10 }}
-                >
-                  <span style={{ color: "#475569" }}>🌡 TEMP </span>
-                  <span style={{ color: "#fb923c", textShadow: "0 0 6px rgba(251,146,60,0.4)" }}>
-                    {formatTemperature(waterTemperatureC(crosshairGps.depth), { units }).toUpperCase()}
-                  </span>
-                </div>
+                {(() => {
+                  const sample = estimateWaterTemperature(crosshairGps.depth, sstAnchor);
+                  const tooltip = sample.live
+                    ? `${sample.source}${sample.timestamp ? ` · sampled ${new Date(sample.timestamp).toUTCString()}` : ""}`
+                    : "No live ocean feed available — showing an estimated thermocline based on a typical 15 °C surface.";
+                  return (
+                    <div
+                      data-testid="hud-water-temp"
+                      title={tooltip}
+                      style={{ marginTop: 2, fontSize: 10 }}
+                    >
+                      <span style={{ color: "#475569" }}>🌡 TEMP </span>
+                      <span style={{ color: "#fb923c", textShadow: "0 0 6px rgba(251,146,60,0.4)" }}>
+                        {formatTemperature(sample.celsius, { units }).toUpperCase()}
+                      </span>
+                      <span
+                        data-testid="hud-water-temp-source"
+                        style={{
+                          marginLeft: 4,
+                          fontSize: 8,
+                          letterSpacing: "0.15em",
+                          color: sample.live ? "#22d3ee" : "#f59e0b",
+                          background: sample.live ? "rgba(0,229,255,0.08)" : "rgba(245,158,11,0.10)",
+                          border: `1px solid ${sample.live ? "rgba(0,229,255,0.25)" : "rgba(245,158,11,0.4)"}`,
+                          borderRadius: 2,
+                          padding: "1px 4px",
+                        }}
+                      >
+                        {sample.live ? "LIVE" : "EST"}
+                      </span>
+                    </div>
+                  );
+                })()}
               </>
             ) : (
               <div style={{ color: "#1e3a5f" }}>— NO TERRAIN —</div>

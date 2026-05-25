@@ -1185,6 +1185,31 @@ export const GetSurfaceConditionsResponse = zod.object({
 
 
 /**
+ * Returns the current sea-surface temperature (°C) at the requested
+lat/lon from the Open-Meteo Marine API. Used by BathyScan's HUD
+temperature readout as the surface anchor of a thermocline model.
+Returns available=false when the live feed is unreachable so the
+caller can gracefully fall back to a synthetic estimate.
+
+ * @summary Fetch current sea-surface temperature for a lat/lon point
+ */
+export const GetWaterTemperatureQueryParams = zod.object({
+  "lat": zod.coerce.number().describe('Latitude of query point'),
+  "lon": zod.coerce.number().describe('Longitude of query point')
+})
+
+export const GetWaterTemperatureResponse = zod.object({
+  "available": zod.boolean().describe('True when a live sea-surface temperature was retrieved'),
+  "lat": zod.number(),
+  "lon": zod.number(),
+  "sstCelsius": zod.number().optional().describe('Sea-surface temperature in degrees Celsius (omitted when available=false)'),
+  "timestamp": zod.string().optional().describe('ISO 8601 UTC timestamp of the sample (top of hour)'),
+  "source": zod.string().optional().describe('Human-readable attribution for the data source'),
+  "sourceUrl": zod.string().optional().describe('Canonical URL for the data source')
+})
+
+
+/**
  * Returns GeoJSON EFH zone polygons for the requested area.
 Currently covers the Thorne Bay / Clarence Strait / SE Alaska region.
 Data credit: NOAA Fisheries / NMFS Alaska Region.

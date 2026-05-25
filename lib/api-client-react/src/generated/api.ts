@@ -39,6 +39,7 @@ import type {
   GetSurfaceConditionsParams,
   GetTrailsIdPointsParams,
   GetTrailsParams,
+  GetWaterTemperatureParams,
   GpsTrail,
   GpsTrailInput,
   HealthStatus,
@@ -63,7 +64,8 @@ import type {
   UploadResult,
   UserCatalogSave,
   UserDatasetMeta,
-  UserSettings
+  UserSettings,
+  WaterTemperature
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -3272,6 +3274,96 @@ export function useGetSurfaceConditions<TData = Awaited<ReturnType<typeof getSur
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetSurfaceConditionsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetWaterTemperatureUrl = (params: GetWaterTemperatureParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/water-temperature?${stringifiedParams}` : `/api/water-temperature`
+}
+
+/**
+ * Returns the current sea-surface temperature (°C) at the requested
+lat/lon from the Open-Meteo Marine API. Used by BathyScan's HUD
+temperature readout as the surface anchor of a thermocline model.
+Returns available=false when the live feed is unreachable so the
+caller can gracefully fall back to a synthetic estimate.
+
+ * @summary Fetch current sea-surface temperature for a lat/lon point
+ */
+export const getWaterTemperature = async (params: GetWaterTemperatureParams, options?: RequestInit): Promise<WaterTemperature> => {
+
+  return customFetch<WaterTemperature>(getGetWaterTemperatureUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetWaterTemperatureQueryKey = (params?: GetWaterTemperatureParams,) => {
+    return [
+    `/api/water-temperature`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetWaterTemperatureQueryOptions = <TData = Awaited<ReturnType<typeof getWaterTemperature>>, TError = ErrorType<ApiError>>(params: GetWaterTemperatureParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWaterTemperature>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetWaterTemperatureQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWaterTemperature>>> = ({ signal }) => getWaterTemperature(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWaterTemperature>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetWaterTemperatureQueryResult = NonNullable<Awaited<ReturnType<typeof getWaterTemperature>>>
+export type GetWaterTemperatureQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Fetch current sea-surface temperature for a lat/lon point
+ */
+
+export function useGetWaterTemperature<TData = Awaited<ReturnType<typeof getWaterTemperature>>, TError = ErrorType<ApiError>>(
+ params: GetWaterTemperatureParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWaterTemperature>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetWaterTemperatureQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
