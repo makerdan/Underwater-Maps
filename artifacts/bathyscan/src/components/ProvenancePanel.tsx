@@ -2,7 +2,7 @@
  * ProvenancePanel — collapsible HUD inset showing data source provenance.
  *
  * Displayed below the dataset name in the DatasetPanel. Shows:
- *  • Data source badge (NCEI Multibeam / GEBCO / Synthetic)
+ *  • Data source badge (NCEI Multibeam / GEBCO / Simulated)
  *  • Resolution and grid size
  *  • Credit link
  *  • EFH availability badge for supported datasets
@@ -36,7 +36,7 @@ const SOURCE_META: Record<
     creditUrl: "https://www.gebco.net/data_and_products/gridded_bathymetry_data/",
   },
   synthetic: {
-    label: "Synthetic",
+    label: "Simulated",
     color: "#f59e0b",
     description:
       "Procedurally generated terrain. Real upstream data sources (NCEI, GEBCO) were unreachable.",
