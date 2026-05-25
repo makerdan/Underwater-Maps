@@ -2717,13 +2717,15 @@ export const getGetSubstrateUrl = (id: string,) => {
 }
 
 /**
- * Returns a GeoJSON FeatureCollection of grid-cell polygons with CMECS substrate
-classification (bedrock / gravel / sand / mud) derived from terrain slope and depth.
-Methodology follows the Coastal and Marine Ecological Classification Standard (CMECS).
-For surveyed areas, real substrate data is available from Alaska ShoreZone GIS
-(https://alaskafisheries.noaa.gov/shorezone/).
+ * Returns a GeoJSON FeatureCollection of substrate polygons sourced from the
+ShoreZone Coastal Habitat Mapping Program (NOAA AKR / ADF&G — public domain,
+https://alaskafisheries.noaa.gov/shorezone/). Each polygon is a ShoreZone
+inter-tidal zone (ITZ) unit with its `Mat_Desc` and `Form_Desc` attributes
+classified into a CMECS broad substrate class (bedrock / gravel / sand / mud).
+The bundled dataset is refreshed offline via the
+`pnpm --filter @workspace/scripts run build-shorezone` script.
 
- * @summary Terrain-derived seafloor substrate classification
+ * @summary Real Alaska ShoreZone substrate polygons
  */
 export const getSubstrate = async (id: string, options?: RequestInit): Promise<SubstrateFeatureCollection> => {
 
@@ -2770,7 +2772,7 @@ export type GetSubstrateQueryError = ErrorType<ApiError>
 
 
 /**
- * @summary Terrain-derived seafloor substrate classification
+ * @summary Real Alaska ShoreZone substrate polygons
  */
 
 export function useGetSubstrate<TData = Awaited<ReturnType<typeof getSubstrate>>, TError = ErrorType<ApiError>>(

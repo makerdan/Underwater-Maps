@@ -945,13 +945,15 @@ export const GetPoeModelsResponse = zod.object({
 
 
 /**
- * Returns a GeoJSON FeatureCollection of grid-cell polygons with CMECS substrate
-classification (bedrock / gravel / sand / mud) derived from terrain slope and depth.
-Methodology follows the Coastal and Marine Ecological Classification Standard (CMECS).
-For surveyed areas, real substrate data is available from Alaska ShoreZone GIS
-(https://alaskafisheries.noaa.gov/shorezone/).
+ * Returns a GeoJSON FeatureCollection of substrate polygons sourced from the
+ShoreZone Coastal Habitat Mapping Program (NOAA AKR / ADF&G — public domain,
+https://alaskafisheries.noaa.gov/shorezone/). Each polygon is a ShoreZone
+inter-tidal zone (ITZ) unit with its `Mat_Desc` and `Form_Desc` attributes
+classified into a CMECS broad substrate class (bedrock / gravel / sand / mud).
+The bundled dataset is refreshed offline via the
+`pnpm --filter @workspace/scripts run build-shorezone` script.
 
- * @summary Terrain-derived seafloor substrate classification
+ * @summary Real Alaska ShoreZone substrate polygons
  */
 export const GetSubstrateParams = zod.object({
   "id": zod.coerce.string().describe('Dataset identifier')
@@ -962,12 +964,15 @@ export const GetSubstrateResponse = zod.object({
   "features": zod.array(zod.object({
   "type": zod.enum(['Feature']),
   "properties": zod.object({
+  "unitId": zod.string().describe('ShoreZone PHY_IDENT — stable unit identifier'),
   "substrate": zod.enum(['bedrock', 'gravel', 'sand', 'mud']).describe('CMECS broad substrate class'),
-  "slopeAngleDeg": zod.number().describe('Terrain slope at this cell (degrees)'),
-  "depthM": zod.number().describe('Depth at this cell (metres)'),
+  "shoreZoneClass": zod.string().describe('Human-readable ShoreZone class (e.g. \"Rock Platform\", \"Clastic Beach\")'),
   "cmecsCode": zod.string().describe('CMECS substrate classification code and label'),
-  "color": zod.string().describe('Suggested hex color for rendering')
-}),
+  "color": zod.string().describe('Suggested hex color for rendering'),
+  "szMaterial": zod.string().nullish().describe('Raw ShoreZone Mat_Desc (Rock \/ Clastic \/ Biogenic)'),
+  "szForm": zod.string().nullish().describe('Raw ShoreZone Form_Desc (Cliff \/ Platform \/ Beach \/ Tidal Flat \/ Marsh)'),
+  "areaSqM": zod.number().nullish().describe('Polygon area in square metres from the upstream Area attribute')
+}).describe('Per-feature properties for an Alaska ShoreZone substrate polygon.\n'),
   "geometry": zod.record(zod.string(), zod.unknown())
 })),
   "metadata": zod.record(zod.string(), zod.unknown()).optional()

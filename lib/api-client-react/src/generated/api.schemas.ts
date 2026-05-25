@@ -569,17 +569,27 @@ export const SubstratePropertiesSubstrate = {
   mud: 'mud',
 } as const;
 
+/**
+ * Per-feature properties for an Alaska ShoreZone substrate polygon.
+
+ */
 export interface SubstrateProperties {
+  /** ShoreZone PHY_IDENT — stable unit identifier */
+  unitId: string;
   /** CMECS broad substrate class */
   substrate: SubstratePropertiesSubstrate;
-  /** Terrain slope at this cell (degrees) */
-  slopeAngleDeg: number;
-  /** Depth at this cell (metres) */
-  depthM: number;
+  /** Human-readable ShoreZone class (e.g. "Rock Platform", "Clastic Beach") */
+  shoreZoneClass: string;
   /** CMECS substrate classification code and label */
   cmecsCode: string;
   /** Suggested hex color for rendering */
   color: string;
+  /** Raw ShoreZone Mat_Desc (Rock / Clastic / Biogenic) */
+  szMaterial?: string | null;
+  /** Raw ShoreZone Form_Desc (Cliff / Platform / Beach / Tidal Flat / Marsh) */
+  szForm?: string | null;
+  /** Polygon area in square metres from the upstream Area attribute */
+  areaSqM?: number | null;
 }
 
 export type SubstrateFeatureType = typeof SubstrateFeatureType[keyof typeof SubstrateFeatureType];

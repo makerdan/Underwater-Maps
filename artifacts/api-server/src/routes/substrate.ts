@@ -1,108 +1,51 @@
 /**
- * /substrate/:id — terrain-derived seafloor substrate estimates.
+ * /substrate/:id — real Alaska ShoreZone substrate polygons.
  *
- * Computes substrate classification (bedrock / gravel / sand / mud) for each
- * grid cell from the terrain's slope and depth, following CMECS (Coastal and
- * Marine Ecological Classification Standard) broad categories:
+ * Returns a GeoJSON FeatureCollection of substrate polygons sourced from the
+ * Alaska ShoreZone Coastal Habitat Mapping Program (NOAA AKR / ADF&G,
+ * https://alaskafisheries.noaa.gov/shorezone/). The bundled regional dataset
+ * is filtered to each preset dataset's AOI bbox at request time, so the
+ * features returned for `/api/substrate/:id` are guaranteed to lie within
+ * the dataset's bbox.
  *
- *   bedrock  — slope > 30°, hard substrate
- *   gravel   — slope 12–30° or steep-ish shallow area
- *   sand     — slope < 12°, depth 0–80 m
- *   mud      — slope < 12°, depth > 80 m
+ * For datasets whose AOI does not overlap published ShoreZone polygon
+ * coverage (e.g. Thorne Bay / Prince of Wales Island), the response is an
+ * honest empty FeatureCollection together with metadata describing the
+ * nearest real ShoreZone coverage area and great-circle distance.
  *
- * Returns a GeoJSON FeatureCollection of grid-cell polygons with a `substrate`
- * property. Cells are 1/8 the terrain resolution to keep the response small.
+ * Each returned feature carries:
+ *   • substrate      — CMECS broad category (bedrock / gravel / sand / mud)
+ *   • shoreZoneClass — original ShoreZone descriptive class
+ *   • cmecsCode      — CMECS classification code
+ *   • color          — rendering hint (same palette as the client expects)
+ *   • unitId         — ShoreZone PHY_IDENT
+ *   • szMaterial / szForm — raw ShoreZone Mat_Desc / Form_Desc
+ *   • areaSqM        — polygon area (m²)
  *
- * Credit: Substrate classification methodology following CMECS / NOAA standards.
- * Real substrate data: Alaska ShoreZone GIS (intertidal) and NCEI Smooth Sheets
- * (subtidal) — https://alaskafisheries.noaa.gov/shorezone/
+ * The response includes `source: "alaska-shorezone"` so clients can attribute
+ * the data correctly.
+ *
+ * Credit: Alaska ShoreZone (NOAA Alaska Regional Office / ADF&G) — public domain.
  */
 
 import { Router } from "express";
-import { ALL_PRESET_DATASETS, buildTerrainGrid } from "../lib/terrain.js";
+import { ALL_PRESET_DATASETS } from "../lib/terrain.js";
+import {
+  ALASKA_SHOREZONE,
+  getShoreZoneIntersectingBbox,
+  nearestCoverageKm,
+} from "../lib/shoreZoneData.js";
 
 const router = Router();
-
-type SubstrateClass = "bedrock" | "gravel" | "sand" | "mud";
-
-interface SubstrateFeature {
-  type: "Feature";
-  properties: {
-    substrate: SubstrateClass;
-    slopeAngleDeg: number;
-    depthM: number;
-    /** CMECS substrate code */
-    cmecsCode: string;
-    color: string;
-  };
-  geometry: {
-    type: "Polygon";
-    coordinates: number[][][];
-  };
-}
-
-const SUBSTRATE_COLORS: Record<SubstrateClass, string> = {
-  bedrock: "#6b6b6b",
-  gravel: "#b0956a",
-  sand:   "#e2d5a0",
-  mud:    "#8b7355",
-};
-
-const CMECS_CODES: Record<SubstrateClass, string> = {
-  bedrock: "2.1.1 Consolidated Mineral Substrate",
-  gravel:  "2.2.1 Mixed Coarse Unconsolidated Substrate",
-  sand:    "2.2.2 Sand",
-  mud:     "2.2.4 Fine Unconsolidated Substrate",
-};
-
-function classifySubstrate(slopeDeg: number, depthM: number): SubstrateClass {
-  if (slopeDeg > 30) return "bedrock";
-  if (slopeDeg > 12 || (slopeDeg > 6 && depthM < 40)) return "gravel";
-  if (depthM <= 80) return "sand";
-  return "mud";
-}
-
-/**
- * Compute slope in degrees at each cell using central differences.
- * Grid is row-major, top-to-bottom, left-to-right.
- * Returns Float32Array of length N×N.
- */
-function computeSlopes(depths: number[], N: number, lonSpanDeg: number, latSpanDeg: number): Float32Array {
-  const slopes = new Float32Array(N * N);
-  const mPerDegLat = 111_320;
-  const centerLat = 55.69; // approximate for SE Alaska
-  const mPerDegLon = mPerDegLat * Math.cos((centerLat * Math.PI) / 180);
-
-  const dxM = (lonSpanDeg / (N - 1)) * mPerDegLon;
-  const dyM = (latSpanDeg / (N - 1)) * mPerDegLat;
-
-  for (let row = 0; row < N; row++) {
-    for (let col = 0; col < N; col++) {
-      const r0 = Math.max(0, row - 1);
-      const r1 = Math.min(N - 1, row + 1);
-      const c0 = Math.max(0, col - 1);
-      const c1 = Math.min(N - 1, col + 1);
-
-      const dh = (col === 0 || col === N - 1 ? 1 : 2) * dxM;
-      const dv = (row === 0 || row === N - 1 ? 1 : 2) * dyM;
-
-      const dzX = (depths[row * N + c1]! - depths[row * N + c0]!) / dh;
-      const dzY = (depths[r1 * N + col]! - depths[r0 * N + col]!) / dv;
-
-      slopes[row * N + col] = Math.atan(Math.sqrt(dzX * dzX + dzY * dzY)) * (180 / Math.PI);
-    }
-  }
-  return slopes;
-}
 
 /**
  * GET /substrate/:id
  *
- * Returns a GeoJSON FeatureCollection with substrate polygon for each
- * sub-sampled grid cell. Sub-samples the terrain at 1/8 resolution to
- * keep the response under ~500 features.
+ * Returns the ShoreZone substrate FeatureCollection for the dataset.
+ * Responds 404 if the dataset id is unknown, or 200 with an empty
+ * collection if no published ShoreZone polygons overlap the dataset bbox.
  */
-router.get("/substrate/:id", async (req, res) => {
+router.get("/substrate/:id", (req, res) => {
   const datasetId = req.params["id"]!;
   const meta = ALL_PRESET_DATASETS.find((d) => d.id === datasetId);
   if (!meta) {
@@ -110,70 +53,55 @@ router.get("/substrate/:id", async (req, res) => {
     return;
   }
 
-  const grid = await buildTerrainGrid(datasetId, 64);
-  if (!grid) {
-    res.status(404).json({ error: "not_found", details: `No terrain data for '${datasetId}'` });
+  const features = getShoreZoneIntersectingBbox(meta.bbox);
+  const baseMetadata = {
+    datasetId,
+    datasetBbox: meta.bbox,
+    source: "alaska-shorezone" as const,
+    sourceName: ALASKA_SHOREZONE.metadata.sourceName,
+    sourceLayer: ALASKA_SHOREZONE.metadata.sourceLayer,
+    sourceService: ALASKA_SHOREZONE.metadata.sourceService,
+    sourceRegion: ALASKA_SHOREZONE.metadata.region,
+    sourceBbox: ALASKA_SHOREZONE.metadata.bbox,
+    creditUrl: ALASKA_SHOREZONE.metadata.creditUrl,
+    fetchedAt: ALASKA_SHOREZONE.metadata.fetchedAt,
+    featureCount: features.length,
+    totalFeatures: features.length,
+    methodology:
+      "Substrate polygons from the Alaska ShoreZone coastal mapping " +
+      "AK_SZ_ITZ_Polygons layer (NOAA AKR / ADF&G). Each feature is a " +
+      "ShoreZone intertidal-zone unit classified into CMECS broad substrate " +
+      "categories (bedrock / gravel / sand / mud) via its Mat_Desc + " +
+      "Form_Desc attributes. The regional bundle is filtered to the dataset " +
+      "AOI bbox at request time.",
+    credit: "Alaska ShoreZone (NOAA AKR / ADF&G) — public domain",
+  };
+
+  if (features.length === 0) {
+    const distanceKm = nearestCoverageKm(meta.bbox);
+    res.json({
+      type: "FeatureCollection",
+      features: [],
+      metadata: {
+        ...baseMetadata,
+        nearestCoverage: {
+          region: ALASKA_SHOREZONE.metadata.region,
+          bbox: ALASKA_SHOREZONE.metadata.bbox,
+          distanceKm: Math.round(distanceKm),
+        },
+        note:
+          `No published Alaska ShoreZone polygons intersect the '${datasetId}' AOI bbox. ` +
+          `Nearest real ShoreZone coverage is the ${ALASKA_SHOREZONE.metadata.region}, ` +
+          `~${Math.round(distanceKm)} km from this dataset's centre.`,
+      },
+    });
     return;
-  }
-
-  const { depths, resolution: N, minLon, maxLon, minLat, maxLat } = grid;
-  const lonSpan = maxLon - minLon;
-  const latSpan = maxLat - minLat;
-  const cellW = lonSpan / N;
-  const cellH = latSpan / N;
-
-  const slopes = computeSlopes(depths, N, lonSpan, latSpan);
-
-  const features: SubstrateFeature[] = [];
-
-  for (let row = 0; row < N; row++) {
-    for (let col = 0; col < N; col++) {
-      const idx = row * N + col;
-      const depthM = depths[idx] ?? 0;
-      const slopeDeg = slopes[idx] ?? 0;
-      const substrate = classifySubstrate(slopeDeg, depthM);
-
-      // Cell corners in lon/lat
-      const west  = minLon + col * cellW;
-      const east  = west + cellW;
-      const south = minLat + row * cellH;
-      const north = south + cellH;
-
-      features.push({
-        type: "Feature",
-        properties: {
-          substrate,
-          slopeAngleDeg: Math.round(slopeDeg * 10) / 10,
-          depthM: Math.round(depthM),
-          cmecsCode: CMECS_CODES[substrate],
-          color: SUBSTRATE_COLORS[substrate],
-        },
-        geometry: {
-          type: "Polygon",
-          coordinates: [[
-            [west,  south],
-            [east,  south],
-            [east,  north],
-            [west,  north],
-            [west,  south],
-          ]],
-        },
-      });
-    }
   }
 
   res.json({
     type: "FeatureCollection",
     features,
-    metadata: {
-      datasetId,
-      resolution: N,
-      totalFeatures: features.length,
-      methodology: "Terrain-slope + depth derived substrate (CMECS categories). " +
-        "For surveyed areas, real substrate data is from Alaska ShoreZone GIS " +
-        "(https://alaskafisheries.noaa.gov/shorezone/) and NCEI Smooth Sheets.",
-      credit: "NOAA / CMECS substrate classification standard",
-    },
+    metadata: baseMetadata,
   });
 });
 

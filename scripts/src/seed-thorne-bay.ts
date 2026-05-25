@@ -81,10 +81,13 @@ async function main(): Promise<void> {
     console.error(`  ✗ EFH seed failed: ${(err as Error).message}`);
   }
 
-  console.log("\n▶ Seeding substrate classification…");
+  console.log("\n▶ Seeding ShoreZone substrate polygons…");
   try {
     const sub = await fetchSubstrate();
-    console.log(`  ✔ Substrate: ${sub.features.length} grid-cell features`);
+    console.log(
+      `  ✔ Substrate: ${sub.features.length} ShoreZone shore-unit polygons ` +
+        `(source: alaska-shorezone)`,
+    );
   } catch (err) {
     console.error(`  ✗ Substrate seed failed: ${(err as Error).message}`);
   }

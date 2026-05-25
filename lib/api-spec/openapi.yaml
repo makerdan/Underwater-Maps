@@ -1020,13 +1020,21 @@ paths:
     get:
       operationId: getSubstrate
       tags: [datasets]
-      summary: Terrain-derived seafloor substrate classification
+      summary: Real Alaska ShoreZone substrate polygons
       description: |
-        Returns a GeoJSON FeatureCollection of grid-cell polygons with CMECS substrate
-        classification (bedrock / gravel / sand / mud) derived from terrain slope and depth.
-        Methodology follows the Coastal and Marine Ecological Classification Standard (CMECS).
-        For surveyed areas, real substrate data is available from Alaska ShoreZone GIS
-        (https://alaskafisheries.noaa.gov/shorezone/).
+        Returns a GeoJSON FeatureCollection of substrate polygons sourced from the
+        Alaska ShoreZone Coastal Habitat Mapping Program (NOAA AKR / ADF&G — public
+        domain, https://alaskafisheries.noaa.gov/shorezone/). Each polygon is a
+        ShoreZone intertidal-zone (ITZ) unit from the `AK_SZ_ITZ_Polygons` layer
+        whose `Mat_Desc` and `Form_Desc` attributes have been classified into a
+        CMECS broad substrate class (bedrock / gravel / sand / mud).
+
+        The server bundles a regional Alaska ShoreZone collection (refreshed
+        offline via `pnpm --filter @workspace/scripts run build-shorezone`) and
+        filters it to the dataset's AOI bbox at request time. Datasets whose AOI
+        does not overlap published ShoreZone polygon coverage receive an empty
+        FeatureCollection together with a `nearestCoverage` block in `metadata`
+        describing where real ShoreZone coverage actually exists.
       parameters:
         - name: id
           in: path
@@ -1960,27 +1968,41 @@ components:
 
     SubstrateProperties:
       type: object
+      description: |
+        Per-feature properties for an Alaska ShoreZone substrate polygon.
       properties:
+        unitId:
+          type: string
+          description: ShoreZone PHY_IDENT — stable unit identifier
         substrate:
           type: string
           enum: [bedrock, gravel, sand, mud]
           description: CMECS broad substrate class
-        slopeAngleDeg:
-          type: number
-          description: Terrain slope at this cell (degrees)
-        depthM:
-          type: number
-          description: Depth at this cell (metres)
+        shoreZoneClass:
+          type: string
+          description: Human-readable ShoreZone class (e.g. "Rock Platform", "Clastic Beach")
         cmecsCode:
           type: string
           description: CMECS substrate classification code and label
         color:
           type: string
           description: Suggested hex color for rendering
+        szMaterial:
+          type: string
+          nullable: true
+          description: Raw ShoreZone Mat_Desc (Rock / Clastic / Biogenic)
+        szForm:
+          type: string
+          nullable: true
+          description: Raw ShoreZone Form_Desc (Cliff / Platform / Beach / Tidal Flat / Marsh)
+        areaSqM:
+          type: number
+          nullable: true
+          description: Polygon area in square metres from the upstream Area attribute
       required:
+        - unitId
         - substrate
-        - slopeAngleDeg
-        - depthM
+        - shoreZoneClass
         - cmecsCode
         - color
 
