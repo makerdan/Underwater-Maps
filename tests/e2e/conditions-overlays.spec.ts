@@ -101,10 +101,9 @@ test.describe("Wind / Tide / Current overlays", () => {
     }
     await clearViteOverlay(page);
 
-    // App.tsx mounts <ConditionsLegend /> in two slots so a copy lives near
-    // the HUD and a copy lives bottom-left near the speed panel. We assert on
-    // the first instance to keep the test independent of layout decisions.
-    const legend = page.locator("[data-testid='conditions-legend']").first();
+    // App.tsx mounts exactly one <ConditionsLegend />, bottom-left above the
+    // HUD speed panel.
+    const legend = page.locator("[data-testid='conditions-legend']");
     const windBtn = page.locator("[data-testid='overlay-toggle-wind']");
     const tideBtn = page.locator("[data-testid='overlay-toggle-tide']");
     const curBtn = page.locator("[data-testid='overlay-toggle-current']");
@@ -188,7 +187,7 @@ test.describe("Wind / Tide / Current overlays", () => {
 
     // Legend stays visible after reload because two overlays are still on.
     await expect(
-      page.locator("[data-testid='conditions-legend']").first(),
+      page.locator("[data-testid='conditions-legend']"),
     ).toBeVisible({ timeout: 10_000 });
   });
 
@@ -213,7 +212,7 @@ test.describe("Wind / Tide / Current overlays", () => {
     await clickTestId(page, "overlay-toggle-wind");
     await clickTestId(page, "overlay-toggle-tide");
 
-    const legend = page.locator("[data-testid='conditions-legend']").first();
+    const legend = page.locator("[data-testid='conditions-legend']");
     await expect(legend).toBeVisible({ timeout: 10_000 });
 
     // ESTIMATED badge appears (React Query may retry once before settling).

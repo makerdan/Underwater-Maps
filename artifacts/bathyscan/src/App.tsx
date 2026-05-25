@@ -479,9 +479,6 @@ function Main() {
             <HUD />
           </div>
           {showDepthScaleBar && <DepthScaleBar />}
-          <div className="relative" style={{ zIndex: 10 }}>
-            <ConditionsLegend />
-          </div>
         </div>
 
         {/* Help launch button — upper-left of main interactive area */}
