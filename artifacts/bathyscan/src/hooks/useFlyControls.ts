@@ -37,8 +37,6 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   const rightDir = useRef(new THREE.Vector3());
   const lightPos = useRef(new THREE.Vector3());
   const orbitTargetArr = useRef<[number, number, number]>([0, -10, 0]);
-  const initialized = useRef(false);
-
   // ---------------------------------------------------------------------------
   // Camera initialisation: place 10 units above deepest terrain point
   // ---------------------------------------------------------------------------
@@ -66,12 +64,9 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
     camera.quaternion.setFromEuler(euler.current);
   }, [camera]);
 
-  // Initialise once when terrain first loads
+  // Reset camera each time a new terrain dataset is loaded
   useEffect(() => {
-    if (terrain && !initialized.current) {
-      initialized.current = true;
-      resetCamera();
-    }
+    if (terrain) resetCamera();
   }, [terrain, resetCamera]);
 
   // ---------------------------------------------------------------------------
