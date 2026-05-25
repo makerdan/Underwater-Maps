@@ -106,7 +106,7 @@ const S = {
     width: 180,
     flexShrink: 0,
     borderRight: "1px solid rgba(0,229,255,0.1)",
-    padding: "20px 0",
+    padding: "20px 0 25vh 0",
   } as React.CSSProperties,
 
   content: {
