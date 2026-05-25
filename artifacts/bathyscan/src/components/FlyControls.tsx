@@ -14,6 +14,8 @@ export const FlyControls = () => {
   const keys = useRef<Record<string, boolean>>({});
   const isPointerLocked = useRef(false);
   const euler = useRef(new THREE.Euler(0, 0, 0, "YXZ"));
+  const speedIndexRef = useRef(speedIndex);
+  useEffect(() => { speedIndexRef.current = speedIndex; }, [speedIndex]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -49,9 +51,9 @@ export const FlyControls = () => {
 
     const onWheel = (e: WheelEvent) => {
       if (e.deltaY > 0) {
-        setSpeedIndex(Math.min(SPEEDS.length - 1, speedIndex + 1));
+        setSpeedIndex(Math.min(SPEEDS.length - 1, speedIndexRef.current + 1));
       } else {
-        setSpeedIndex(Math.max(0, speedIndex - 1));
+        setSpeedIndex(Math.max(0, speedIndexRef.current - 1));
       }
     };
 

@@ -110,12 +110,26 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       if (e.code === "Tab") {
         e.preventDefault();
         if (modeRef.current === "fly") {
-          // Compute orbit centre — point 20 units in front of camera
+          // Compute orbit centre by raycasting terrain; fall back to 20u ahead
           camera.getWorldDirection(lookDir.current);
-          const cx = camera.position.x + lookDir.current.x * 20;
-          const cy = camera.position.y + lookDir.current.y * 20;
-          const cz = camera.position.z + lookDir.current.z * 20;
-          orbitTargetArr.current = [cx, cy, cz];
+          const mesh = terrainMeshRef.current;
+          let hit = false;
+          if (mesh) {
+            raycaster.current.set(camera.position, lookDir.current);
+            const hits = raycaster.current.intersectObject(mesh, false);
+            if (hits[0]) {
+              const pt = hits[0].point;
+              orbitTargetArr.current = [pt.x, pt.y, pt.z];
+              hit = true;
+            }
+          }
+          if (!hit) {
+            orbitTargetArr.current = [
+              camera.position.x + lookDir.current.x * 20,
+              camera.position.y + lookDir.current.y * 20,
+              camera.position.z + lookDir.current.z * 20,
+            ];
+          }
           if (isLocked.current) document.exitPointerLock();
           setMode("orbit");
         } else {
@@ -160,6 +174,8 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
 
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
+      // Only pin GPS while in fly mode
+      if (modeRef.current !== "fly") return;
       const gps = useCameraStore.getState().crosshairGps;
       if (gps) useCameraStore.getState().setLastClickedGps(gps);
     };
@@ -177,7 +193,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       gl.domElement.removeEventListener("wheel", handleWheel);
       gl.domElement.removeEventListener("contextmenu", handleContextMenu);
     };
-  }, [camera, gl.domElement, setMode, setSpeedIndex]);
+  }, [camera, gl.domElement, setMode, setSpeedIndex, terrainMeshRef]);
 
   // ---------------------------------------------------------------------------
   // Frame loop
