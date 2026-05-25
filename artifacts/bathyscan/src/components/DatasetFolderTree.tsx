@@ -147,6 +147,9 @@ export const DatasetFolderTree: React.FC<Props> = ({
   const handleMoveConfirm = useCallback(
     (targetFolderId: string | null) => {
       if (!moveTarget) return;
+      // Keep the Move-to dialog mounted while the mutation is in flight so
+      // the Move button can show its spinner; close it on settle (success
+      // or error) instead of synchronously after dispatch.
       if (moveTarget.kind === "folder") {
         moveFolder.mutate(
           { id: moveTarget.id, data: { parentId: targetFolderId } },
@@ -157,6 +160,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
             },
             onError: (err) =>
               setError(err instanceof Error ? err.message : "Move failed"),
+            onSettled: () => setMoveTarget(null),
           },
         );
       } else {
@@ -169,10 +173,10 @@ export const DatasetFolderTree: React.FC<Props> = ({
             },
             onError: (err) =>
               setError(err instanceof Error ? err.message : "Move failed"),
+            onSettled: () => setMoveTarget(null),
           },
         );
       }
-      setMoveTarget(null);
     },
     [moveTarget, moveFolder, moveDataset, setExpand, invalidateAll],
   );
@@ -276,6 +280,30 @@ export const DatasetFolderTree: React.FC<Props> = ({
     }
     return { deletingFolderIds: folderIds, deletingDatasetIds: datasetIds };
   }, [pendingDeleteFolderId, tree.byId, datasets]);
+
+  // Same idea for in-flight moves (Move-to dialog + drag-and-drop): dim the
+  // moving folder + its descendant subtree (or the moving dataset row) until
+  // the mutation settles, so the tree gives visible feedback during the move.
+  const pendingMoveFolderId =
+    moveFolder.isPending ? moveFolder.variables?.id ?? null : null;
+  const pendingMoveDatasetId =
+    moveDataset.isPending ? moveDataset.variables?.id ?? null : null;
+  const { movingFolderIds, movingDatasetIds } = useMemo(() => {
+    const folderIds = new Set<string>();
+    const datasetIds = new Set<string>();
+    if (pendingMoveFolderId) {
+      const descendants = descendantFolderIds(tree.byId, pendingMoveFolderId);
+      folderIds.add(pendingMoveFolderId);
+      descendants.forEach((id) => folderIds.add(id));
+      for (const ds of datasets) {
+        if (ds.folderId && folderIds.has(ds.folderId)) {
+          datasetIds.add(ds.id);
+        }
+      }
+    }
+    if (pendingMoveDatasetId) datasetIds.add(pendingMoveDatasetId);
+    return { movingFolderIds: folderIds, movingDatasetIds: datasetIds };
+  }, [pendingMoveFolderId, pendingMoveDatasetId, tree.byId, datasets]);
 
   // ─── Drag & drop ─────────────────────────────────────────────────────────
   const handleDragStart = (e: DragStartEvent) => {
@@ -522,7 +550,12 @@ export const DatasetFolderTree: React.FC<Props> = ({
     const isExpanded = expanded[node.folder.id] ?? false;
     const isRenaming = renaming?.kind === "folder" && renaming.id === node.folder.id;
     const isDraggingThis = dragging?.kind === "folder" && dragging.id === node.folder.id;
-    const deleting = deletingFolderIds.has(node.folder.id);
+    // A folder dims while it's being deleted OR while it (or an ancestor)
+    // is being moved — both flows want the same "operation in flight"
+    // affordance on the row and its subtree.
+    const deleting =
+      deletingFolderIds.has(node.folder.id) ||
+      movingFolderIds.has(node.folder.id);
     trackRow("folder", node.folder.id);
     return (
       <FolderRow
@@ -550,7 +583,8 @@ export const DatasetFolderTree: React.FC<Props> = ({
     // is being recursively deleted.
     const deleting =
       (deleteDataset.isPending && deleteDataset.variables?.id === ds.id) ||
-      deletingDatasetIds.has(ds.id);
+      deletingDatasetIds.has(ds.id) ||
+      movingDatasetIds.has(ds.id);
     const isRenaming = renaming?.kind === "dataset" && renaming.id === ds.id;
     trackRow("dataset", ds.id);
     return (
@@ -669,6 +703,13 @@ export const DatasetFolderTree: React.FC<Props> = ({
           <MoveToDialog
             tree={tree}
             target={moveTarget}
+            isPending={
+              (moveTarget.kind === "folder"
+                ? moveFolder.isPending &&
+                  moveFolder.variables?.id === moveTarget.id
+                : moveDataset.isPending &&
+                  moveDataset.variables?.id === moveTarget.id) || false
+            }
             onCancel={() => setMoveTarget(null)}
             onConfirm={handleMoveConfirm}
           />
@@ -874,13 +915,15 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
       data-kind="dataset"
       data-id={ds.id}
       data-testid={`btn-user-dataset-${ds.id}`}
+      data-deleting={deleting ? "true" : undefined}
+      aria-busy={deleting || undefined}
       {...attributes}
       {...listeners}
-      tabIndex={0}
+      tabIndex={deleting ? -1 : 0}
       role="button"
-      onClick={onClick}
-      onContextMenu={onContextMenu}
-      onDoubleClick={onDoubleClick}
+      onClick={deleting ? undefined : onClick}
+      onContextMenu={deleting ? undefined : onContextMenu}
+      onDoubleClick={deleting ? undefined : onDoubleClick}
       style={{
         display: "block",
         padding: `4px ${ROW_PADDING_X}px 4px ${ROW_PADDING_X + indent + 16}px`,
@@ -888,8 +931,9 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
         borderLeft: active
           ? "2px solid rgba(0,229,255,0.6)"
           : "2px solid transparent",
-        cursor: "pointer",
+        cursor: deleting ? "wait" : "pointer",
         opacity: deleting || isDragging ? 0.4 : 1,
+        pointerEvents: deleting ? "none" : undefined,
         outline: "none",
         userSelect: "none",
       }}
@@ -1018,9 +1062,10 @@ const MoveToDialog: React.FC<{
     name: string;
     currentParentId: string | null;
   };
+  isPending?: boolean;
   onCancel: () => void;
   onConfirm: (targetFolderId: string | null) => void;
-}> = ({ tree, target, onCancel, onConfirm }) => {
+}> = ({ tree, target, isPending = false, onCancel, onConfirm }) => {
   const options = useMemo(() => buildMoveOptions(tree, target), [tree, target]);
   const firstEnabledIdx = options.findIndex((o) => !o.disabled);
   const [selectedIdx, setSelectedIdx] = useState<number>(
@@ -1057,10 +1102,10 @@ const MoveToDialog: React.FC<{
       moveSelection(-1);
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (canConfirm) onConfirm(selected!.id);
+      if (canConfirm && !isPending) onConfirm(selected!.id);
     } else if (e.key === "Escape") {
       e.preventDefault();
-      onCancel();
+      if (!isPending) onCancel();
     }
   };
 
@@ -1079,7 +1124,8 @@ const MoveToDialog: React.FC<{
         justifyContent: "center",
         zIndex: 10000,
       }}
-      onClick={onCancel}
+      onClick={isPending ? undefined : onCancel}
+      aria-busy={isPending || undefined}
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -1130,11 +1176,11 @@ const MoveToDialog: React.FC<{
                 aria-disabled={opt.disabled}
                 data-testid={`move-opt-${opt.id ?? "__root__"}`}
                 onClick={() => {
-                  if (opt.disabled) return;
+                  if (opt.disabled || isPending) return;
                   setSelectedIdx(idx);
                 }}
                 onDoubleClick={() => {
-                  if (!opt.disabled) onConfirm(opt.id);
+                  if (!opt.disabled && !isPending) onConfirm(opt.id);
                 }}
                 title={opt.disabledReason}
                 style={{
@@ -1179,6 +1225,7 @@ const MoveToDialog: React.FC<{
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button
             onClick={onCancel}
+            disabled={isPending}
             data-testid="move-to-cancel"
             style={{
               background: "transparent",
@@ -1186,29 +1233,55 @@ const MoveToDialog: React.FC<{
               color: "#94a3b8",
               padding: "4px 12px",
               borderRadius: 3,
-              cursor: "pointer",
+              cursor: isPending ? "not-allowed" : "pointer",
+              opacity: isPending ? 0.5 : 1,
               fontSize: 11,
             }}
           >
             Cancel
           </button>
           <button
-            onClick={() => canConfirm && onConfirm(selected!.id)}
-            disabled={!canConfirm}
+            onClick={() => canConfirm && !isPending && onConfirm(selected!.id)}
+            disabled={!canConfirm || isPending}
             data-testid="move-to-confirm"
             style={{
               background: canConfirm
-                ? "rgba(0,229,255,0.18)"
+                ? isPending
+                  ? "rgba(0,229,255,0.10)"
+                  : "rgba(0,229,255,0.18)"
                 : "rgba(100,116,139,0.12)",
               border: `1px solid ${canConfirm ? "rgba(0,229,255,0.55)" : "rgba(100,116,139,0.3)"}`,
               color: canConfirm ? "#00e5ff" : "#475569",
               padding: "4px 12px",
               borderRadius: 3,
-              cursor: canConfirm ? "pointer" : "not-allowed",
+              cursor: isPending
+                ? "wait"
+                : canConfirm
+                  ? "pointer"
+                  : "not-allowed",
+              opacity: isPending ? 0.7 : 1,
               fontSize: 11,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
             }}
           >
-            Move
+            {isPending && (
+              <span
+                className="animate-spin"
+                aria-hidden="true"
+                data-testid="move-to-spinner"
+                style={{
+                  display: "inline-block",
+                  width: 10,
+                  height: 10,
+                  borderRadius: "50%",
+                  border: "1.5px solid rgba(0,229,255,0.35)",
+                  borderTopColor: "#00e5ff",
+                }}
+              />
+            )}
+            {isPending ? "Moving…" : "Move"}
           </button>
         </div>
       </div>
