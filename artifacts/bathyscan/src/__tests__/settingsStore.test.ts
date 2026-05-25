@@ -130,4 +130,64 @@ describe("settingsStore", () => {
     expect(after.hudOpacity).toBe(0.55);
     expect(after.fieldOfView).toBe(72);
   });
+
+  it("initial state matches DEFAULT_SETTINGS for every defined key", () => {
+    const state = useSettingsStore.getState() as unknown as Record<string, unknown>;
+    for (const key of Object.keys(DEFAULT_SETTINGS) as (keyof typeof DEFAULT_SETTINGS)[]) {
+      expect(state[key]).toEqual(DEFAULT_SETTINGS[key]);
+    }
+  });
+
+  it("hydrateFromServer refreshes syncedSnapshot for merged fields", () => {
+    const s = useSettingsStore.getState();
+    s.setFieldOfView(72);
+    s.hydrateFromServer({ hudOpacity: 0.55 } as Partial<typeof DEFAULT_SETTINGS>);
+    const snap = useSettingsStore.getState().syncedSnapshot ?? {};
+    // Snapshot reflects the merged state (server value + prior client edit).
+    expect(snap.hudOpacity).toBe(0.55);
+    expect(snap.fieldOfView).toBe(72);
+  });
+
+  it("hydrateFromServer ignores unknown keys in the payload", () => {
+    const before = useSettingsStore.getState();
+    const beforeFov = before.fieldOfView;
+    const beforeHud = before.hudOpacity;
+    before.hydrateFromServer({
+      hudOpacity: 0.42,
+      // Unknown / future server keys must not corrupt known fields or the snapshot.
+      somethingUnknown: "boom",
+      anotherFake: 999,
+    } as unknown as Partial<typeof DEFAULT_SETTINGS>);
+
+    const after = useSettingsStore.getState();
+    expect(after.hudOpacity).toBe(0.42);
+    expect(after.fieldOfView).toBe(beforeFov);
+    expect(beforeHud).not.toBe(0.42);
+
+    // Unknown keys must not be applied to store state.
+    const stateAsRecord = after as unknown as Record<string, unknown>;
+    expect(stateAsRecord.somethingUnknown).toBeUndefined();
+    expect(stateAsRecord.anotherFake).toBeUndefined();
+
+    const snap = after.syncedSnapshot ?? {};
+    expect(snap).not.toHaveProperty("somethingUnknown");
+    expect(snap).not.toHaveProperty("anotherFake");
+    // Snapshot only contains known DEFAULT_SETTINGS keys.
+    const allowed = new Set(Object.keys(DEFAULT_SETTINGS));
+    for (const k of Object.keys(snap)) {
+      expect(allowed.has(k)).toBe(true);
+    }
+  });
+
+  it("persists under the localStorage key 'bathyscan:settings'", async () => {
+    useSettingsStore.getState().setFieldOfView(81);
+    // Zustand's persist middleware writes asynchronously; flush microtasks.
+    await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 0));
+
+    const raw = localStorage.getItem("bathyscan:settings");
+    expect(raw).not.toBeNull();
+    const parsed = JSON.parse(raw as string);
+    expect(parsed.state.fieldOfView).toBe(81);
+  });
 });

@@ -137,6 +137,29 @@ test.describe("Settings page", () => {
     await expect(page.locator("text=CANCEL")).toBeVisible();
   });
 
+  test("RESET ALL SETTINGS restores colormap to ocean after a change", async ({ page }) => {
+    await page.goto("/settings");
+    await page.waitForLoadState("networkidle");
+
+    // Visuals tab is active by default. Find the Depth Colormap select.
+    const colormapSelect = page.locator("select").filter({ hasText: "Ocean (blue)" }).first();
+    await expect(colormapSelect).toBeVisible({ timeout: 5_000 });
+
+    // Sanity: starts on 'ocean'.
+    await expect(colormapSelect).toHaveValue("ocean");
+
+    // Change to 'viridis' and confirm the value flips.
+    await colormapSelect.selectOption("viridis");
+    await expect(colormapSelect).toHaveValue("viridis");
+
+    // Trigger the global reset (two-step confirm).
+    await page.locator("[data-testid='reset-all-btn']").click();
+    await page.locator("[data-testid='confirm-reset-all-btn']").click();
+
+    // Colormap should return to its default.
+    await expect(colormapSelect).toHaveValue("ocean");
+  });
+
   test("comma keyboard shortcut navigates to /settings from the main page", async ({ page }) => {
     await page.goto("/");
     await page.waitForLoadState("networkidle");

@@ -725,8 +725,17 @@ export const useSettingsStore = create<SettingsStore>()(
 
         hydrateFromServer: (partial) =>
           set((state) => {
-            const merged = { ...state, ...partial };
-            return { ...partial, syncedSnapshot: snapshotData(merged) };
+            // Drop any keys the client doesn't know about so a future
+            // server-only field can't corrupt store state.
+            const known: Partial<SettingsState> = {};
+            for (const k of Object.keys(partial) as (keyof SettingsState)[]) {
+              if (k in DEFAULT_SETTINGS) {
+                (known as Record<string, unknown>)[k as string] =
+                  (partial as Record<string, unknown>)[k as string];
+              }
+            }
+            const merged = { ...state, ...known };
+            return { ...known, syncedSnapshot: snapshotData(merged) };
           }),
 
         resetSection: (section) => {
