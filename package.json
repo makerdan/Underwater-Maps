@@ -4,9 +4,11 @@
   "license": "MIT",
   "scripts": {
     "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
+    "postinstall": "pnpm --filter @workspace/api-spec run codegen:generate",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "check:codegen": "pnpm --filter @workspace/api-spec run check:codegen",
+    "typecheck": "pnpm run check:codegen && pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "lint": "eslint artifacts/bathyscan/src artifacts/api-server/src",
     "test:unit": "pnpm -r --if-present run test:unit",
     "test:e2e": "playwright test",
