@@ -87,7 +87,8 @@ export const OverviewMap: React.FC = () => {
 
   // --- Panel state ---
   const [showTrailList, setShowTrailList] = useState(false);
-  const [showEfh, setShowEfh] = useState(false);
+  const showEfh = useUiStore((s) => s.efhOverlayEnabled);
+  const setShowEfh = useUiStore((s) => s.setEfhOverlayEnabled);
   const showEfhRef = useRef(false);
 
   // --- Canvas ref ---
@@ -621,7 +622,7 @@ export const OverviewMap: React.FC = () => {
           {/* EFH overlay toggle — only shown for datasets with bundled EFH zones */}
           {hasEfh && (
             <button
-              onClick={() => setShowEfh((v) => !v)}
+              onClick={() => setShowEfh(!showEfh)}
               aria-pressed={showEfh}
               style={{
                 background: showEfh ? "rgba(34,197,94,0.15)" : "rgba(0,10,20,0.75)",
