@@ -18,6 +18,7 @@ import { Minimap } from "@/components/Minimap";
 import { ControlsLegend } from "@/components/ControlsLegend";
 import { AppHeader } from "@/components/AppHeader";
 import { TidePanel } from "@/components/TidePanel";
+import { ThrottlePanel } from "@/components/ThrottlePanel";
 import { MarkerForm } from "@/components/MarkerForm";
 import { OverviewMap } from "@/components/OverviewMap";
 import { ZoneOverlay } from "@/components/ZoneOverlay";
@@ -151,7 +152,10 @@ function ClerkQueryClientCacheInvalidator() {
 
 function Main() {
   const { data: datasets } = useGetDatasets();
-  const { datasetId, setDatasetId, terrain, tidalOverlay, setTidalOverlay } = useAppState();
+  const {
+    datasetId, setDatasetId, terrain, tidalOverlay, setTidalOverlay,
+    realisticMode, setRealisticMode,
+  } = useAppState();
   const markerFormOpen = useUiStore((s) => s.markerFormOpen);
   const overviewOpen = useUiStore((s) => s.overviewOpen);
   const gpsActive = useGpsStore((s) => s.active);
@@ -368,8 +372,29 @@ function Main() {
           <HabitatPanel />
         </div>
 
-        {/* Tidal toggle button — top-right of scene */}
-        <div className="absolute top-3 right-16 z-20">
+        {/* Tidal + Realistic toggle buttons — top-right of scene */}
+        <div className="absolute top-3 right-16 z-20 flex gap-2">
+          <button
+            onClick={() => setRealisticMode(!realisticMode)}
+            title={realisticMode ? "Disable Realistic Mode" : "Enable Realistic Mode (boat throttle)"}
+            style={{
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              fontSize: 10,
+              letterSpacing: "0.18em",
+              padding: "4px 10px",
+              borderRadius: 3,
+              border: `1px solid ${realisticMode ? "rgba(34,211,238,0.5)" : "rgba(0,229,255,0.15)"}`,
+              background: realisticMode ? "rgba(34,211,238,0.12)" : "rgba(0,10,20,0.75)",
+              color: realisticMode ? "#22d3ee" : "#475569",
+              textShadow: realisticMode ? "0 0 8px rgba(34,211,238,0.5)" : "none",
+              cursor: "pointer",
+              userSelect: "none",
+              backdropFilter: "blur(4px)",
+              transition: "all 0.15s ease",
+            }}
+          >
+            {realisticMode ? "◉" : "○"} REALISTIC
+          </button>
           <button
             onClick={() => setTidalOverlay(!tidalOverlay)}
             title={tidalOverlay ? "Disable Tidal Overlay" : "Enable Tidal Overlay"}
@@ -404,6 +429,13 @@ function Main() {
               scrubDatetime={scrubDatetime}
               onScrubChange={setScrubDatetime}
             />
+          </div>
+        )}
+
+        {/* Throttle panel — bottom-right above minimap, visible when realistic mode is on */}
+        {realisticMode && (
+          <div className="absolute z-20" style={{ bottom: 90, right: 16 }}>
+            <ThrottlePanel onClose={() => setRealisticMode(false)} />
           </div>
         )}
 

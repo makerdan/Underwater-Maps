@@ -1,11 +1,12 @@
 import React from "react";
-import { SPEEDS } from "@/lib/context";
+import { SPEEDS, useAppState } from "@/lib/context";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
+import { mphToKnots } from "@/lib/boatSpeed";
 
 const HUD_STYLE: React.CSSProperties = {
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
@@ -53,6 +54,7 @@ export const HUD: React.FC = () => {
   const heading = useCameraStore((s) => s.heading);
   const mode = useCameraStore((s) => s.mode);
   const speedIndex = useCameraStore((s) => s.speedIndex);
+  const { realisticMode, boatSpeedMph } = useAppState();
 
   const gpsActive = useGpsStore((s) => s.active);
   const gpsPosition = useGpsStore((s) => s.position);
@@ -266,8 +268,32 @@ export const HUD: React.FC = () => {
 
         <div style={{ ...PANEL, display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ color: "#475569" }}>SPD </span>
-          <SpeedDots index={speedIndex} total={SPEEDS.length} />
-          <span style={{ color: "#475569", marginLeft: 4 }}>{speed.toFixed(2)} u/s</span>
+          {realisticMode ? (
+            <>
+              <span style={CYAN}>{boatSpeedMph % 1 === 0 ? boatSpeedMph : boatSpeedMph.toFixed(1)} MPH</span>
+              <span style={{ color: "#475569" }}>/</span>
+              <span style={{ color: "#7dd3fc" }}>{mphToKnots(boatSpeedMph).toFixed(1)} KT</span>
+              <span
+                style={{
+                  fontSize: 8,
+                  letterSpacing: "0.15em",
+                  color: "#22d3ee",
+                  background: "rgba(0,229,255,0.08)",
+                  border: "1px solid rgba(0,229,255,0.25)",
+                  borderRadius: 2,
+                  padding: "1px 4px",
+                  marginLeft: 2,
+                }}
+              >
+                REAL
+              </span>
+            </>
+          ) : (
+            <>
+              <SpeedDots index={speedIndex} total={SPEEDS.length} />
+              <span style={{ color: "#475569", marginLeft: 4 }}>{speed.toFixed(2)} u/s</span>
+            </>
+          )}
         </div>
 
         {lastClickedGps && (

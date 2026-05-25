@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 import type { TerrainData } from "@workspace/api-client-react";
+import { BOAT_DEFAULT_MPH, BOAT_MIN_MPH, BOAT_MAX_MPH } from "./boatSpeed";
 
 export type AppMode = "fly" | "orbit";
 
@@ -18,6 +19,10 @@ interface AppState {
   setCameraPos: (p: [number, number, number]) => void;
   tidalOverlay: boolean;
   setTidalOverlay: (b: boolean) => void;
+  realisticMode: boolean;
+  setRealisticMode: (b: boolean) => void;
+  boatSpeedMph: number;
+  setBoatSpeedMph: (mph: number) => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -32,21 +37,48 @@ function readLocalBool(key: string, fallback: boolean): boolean {
   }
 }
 
+function readLocalNumber(key: string, fallback: number): number {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
+    const n = parseFloat(raw);
+    return isNaN(n) ? fallback : n;
+  } catch {
+    return fallback;
+  }
+}
+
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [mode, setMode] = useState<AppMode>("fly");
   const [datasetId, setDatasetId] = useState<string | null>(null);
   const [terrain, setTerrain] = useState<TerrainData | null>(null);
   const [speedIndex, setSpeedIndex] = useState<number>(1);
   const [cameraPos, setCameraPos] = useState<[number, number, number]>([0, 0, 0]);
+
   const [tidalOverlay, setTidalOverlayRaw] = useState<boolean>(() =>
     readLocalBool("bathyscan:tidalOverlay", false),
   );
+  const [realisticMode, setRealisticModeRaw] = useState<boolean>(() =>
+    readLocalBool("bathyscan:realisticMode", false),
+  );
+  const [boatSpeedMph, setBoatSpeedMphRaw] = useState<number>(() => {
+    const raw = readLocalNumber("bathyscan:boatSpeedMph", BOAT_DEFAULT_MPH);
+    return Math.max(BOAT_MIN_MPH, Math.min(BOAT_MAX_MPH, raw));
+  });
 
   function setTidalOverlay(b: boolean) {
     setTidalOverlayRaw(b);
-    try {
-      localStorage.setItem("bathyscan:tidalOverlay", String(b));
-    } catch {}
+    try { localStorage.setItem("bathyscan:tidalOverlay", String(b)); } catch {}
+  }
+
+  function setRealisticMode(b: boolean) {
+    setRealisticModeRaw(b);
+    try { localStorage.setItem("bathyscan:realisticMode", String(b)); } catch {}
+  }
+
+  function setBoatSpeedMph(mph: number) {
+    setBoatSpeedMphRaw(mph);
+    try { localStorage.setItem("bathyscan:boatSpeedMph", String(mph)); } catch {}
   }
 
   return (
@@ -64,6 +96,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setCameraPos,
         tidalOverlay,
         setTidalOverlay,
+        realisticMode,
+        setRealisticMode,
+        boatSpeedMph,
+        setBoatSpeedMph,
       }}
     >
       {children}

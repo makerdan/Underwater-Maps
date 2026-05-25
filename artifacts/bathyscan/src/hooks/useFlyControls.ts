@@ -7,6 +7,7 @@ import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
 import { worldXZToLonLat, worldYToMetres, lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
 import { useJoystickStore } from "@/components/VirtualJoystick";
+import { computeMetersPerWorldUnit, boatMphToWorldUnitsPerSecond } from "@/lib/boatSpeed";
 
 interface FlyControlsOptions {
   terrainMeshRef: React.RefObject<THREE.Mesh | null>;
@@ -15,16 +16,23 @@ interface FlyControlsOptions {
 
 export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions) {
   const { camera, gl } = useThree();
-  const { mode, setMode, speedIndex, setSpeedIndex, terrain, setCameraPos } = useAppState();
+  const {
+    mode, setMode, speedIndex, setSpeedIndex, terrain, setCameraPos,
+    realisticMode, boatSpeedMph,
+  } = useAppState();
 
   // Refs for event-listener / useFrame closures to stay current
   const modeRef = useRef(mode);
   const speedIndexRef = useRef(speedIndex);
   const terrainRef = useRef<TerrainData | null>(terrain);
+  const realisticModeRef = useRef(realisticMode);
+  const boatSpeedMphRef = useRef(boatSpeedMph);
 
   useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { speedIndexRef.current = speedIndex; }, [speedIndex]);
   useEffect(() => { terrainRef.current = terrain; }, [terrain]);
+  useEffect(() => { realisticModeRef.current = realisticMode; }, [realisticMode]);
+  useEffect(() => { boatSpeedMphRef.current = boatSpeedMph; }, [boatSpeedMph]);
 
   // Sync mode and speedIndex to cameraStore for HUD reads
   useEffect(() => { useCameraStore.getState().setMode(mode); }, [mode]);
@@ -171,6 +179,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
+      if (realisticModeRef.current) return;
       if (e.deltaY > 0) {
         setSpeedIndex(Math.min(SPEEDS.length - 1, speedIndexRef.current + 1));
       } else {
@@ -229,8 +238,15 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
 
     // 2. WASD movement (fly mode only)
     if (modeRef.current === "fly") {
-      const speed = SPEEDS[speedIndexRef.current] ?? 0.15;
-      const scaledSpeed = speed * delta * 60;
+      let scaledSpeed: number;
+      if (realisticModeRef.current && terrainRef.current) {
+        const mpu = computeMetersPerWorldUnit(terrainRef.current);
+        const wups = boatMphToWorldUnitsPerSecond(boatSpeedMphRef.current, mpu);
+        scaledSpeed = wups * delta;
+      } else {
+        const speed = SPEEDS[speedIndexRef.current] ?? 0.15;
+        scaledSpeed = speed * delta * 60;
+      }
 
       camera.getWorldDirection(moveDir.current);
       rightDir.current.crossVectors(moveDir.current, camera.up).normalize();
