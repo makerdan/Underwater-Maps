@@ -15,10 +15,18 @@ export const DepthScaleBar: React.FC = () => {
   const deep = usePaletteStore((s) => s.deep);
 
   useEffect(() => {
-    if (!imgRef.current) return;
+    // `terrain` is in the dep list so this effect re-runs once terrain
+    // finishes loading. Without it, the very first mount happens while
+    // `terrain` is still null — the conditional return below renders
+    // nothing, so imgRef.current is null and the effect bails. When
+    // terrain then arrives and the <img> finally renders, this effect
+    // would never re-fire (colormapTheme/shallow/deep haven't changed),
+    // leaving the scale bar with an empty `src` until the user touches
+    // a palette setting. Including `terrain` here closes that hole.
+    if (!imgRef.current || !terrain) return;
     const canvas = colormapCanvas(20, 200, colormapTheme);
     imgRef.current.src = canvas.toDataURL();
-  }, [colormapTheme, shallow, deep]);
+  }, [colormapTheme, shallow, deep, terrain]);
 
   if (!terrain) return null;
 
