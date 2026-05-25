@@ -6,7 +6,6 @@
  * Gated on `import.meta.env.DEV` so this code is tree-shaken out of
  * production builds.
  */
-import type { TerrainData } from "@workspace/api-client-react";
 import { useContextMenuStore, type ContextMenuItem } from "./contextMenuStore";
 import { useMeasureStore } from "./measureStore";
 import { useMarkerDetailStore } from "./markerDetailStore";
@@ -20,7 +19,39 @@ import {
   deleteMarkersId,
   getGetMarkersQueryKey,
   type Marker,
+  type TerrainData,
 } from "@workspace/api-client-react";
+import { useDepthProfileStore, buildProfile } from "./depthProfileStore";
+
+/** Small synthetic terrain grid used by e2e tests when no real dataset is
+ *  loaded (no signed-in user). Depth ramps west→east 0→1000m so the profile
+ *  has a non-zero MIN/MAX range. */
+function syntheticTestGrid(): TerrainData {
+  const N = 32;
+  const depths: number[] = new Array(N * N);
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      depths[r * N + c] = (c / (N - 1)) * 1000;
+    }
+  }
+  return {
+    datasetId: "e2e-synthetic",
+    name: "e2e",
+    waterType: "saltwater",
+    resolution: N,
+    width: N,
+    height: N,
+    depths,
+    minDepth: 0,
+    maxDepth: 1000,
+    minLon: -132.5,
+    maxLon: -132.3,
+    minLat: 55.9,
+    maxLat: 56.1,
+    centerLon: -132.4,
+    centerLat: 56.0,
+  } as unknown as TerrainData;
+}
 
 // AppContext-backed setter wired up by the in-tree <TestBridge/> component
 // mounted inside <AppProvider/>. Without this, helpers have no way to reach
@@ -124,6 +155,15 @@ export interface BathyTestApi {
     hash: string;
     sample: number[];
   } | null;
+  showDepthProfileTerrainMenu: (
+    x: number,
+    y: number,
+    point: { lon: number; lat: number; depth: number },
+  ) => void;
+  clearDepthProfile: () => void;
+  getDepthProfileSummary: () =>
+    | { points: number; totalDistanceM: number; minDepthM: number; maxDepthM: number }
+    | null;
 }
 
 declare global {
@@ -135,6 +175,45 @@ declare global {
 export function installTestHelpers(): void {
   if (!import.meta.env.DEV) return;
   if (typeof window === "undefined") return;
+
+  const buildDepthProfileTerrainMenuItems = (
+    lon: number,
+    lat: number,
+    depth: number,
+  ): ContextMenuItem[] => {
+    const profileAnchor = useDepthProfileStore.getState().anchor;
+    const items: ContextMenuItem[] = [
+      {
+        label: profileAnchor
+          ? "End depth profile here"
+          : "Start depth profile here",
+        icon: "📈",
+        onClick: () => {
+          const store = useDepthProfileStore.getState();
+          if (store.anchor) {
+            const grid = syntheticTestGrid();
+            const result = buildProfile(
+              grid,
+              store.anchor,
+              { lon, lat, depth },
+              null,
+            );
+            store.setProfile(result);
+          } else {
+            store.setAnchor({ lon, lat, depth });
+          }
+        },
+      },
+    ];
+    if (profileAnchor) {
+      items.push({
+        label: "Cancel depth profile",
+        icon: "✖",
+        onClick: () => useDepthProfileStore.getState().clearAnchor(),
+      });
+    }
+    return items;
+  };
 
   const buildTerrainMenuItems = (
     lon: number,
@@ -335,6 +414,29 @@ export function installTestHelpers(): void {
       const step = Math.max(1, Math.floor(zm.length / 16));
       for (let i = 0; i < zm.length; i += step) sample.push(zm[i] ?? 0);
       return { length: zm.length, hasEdits: s.hasEdits, hash, sample };
+    },
+    showDepthProfileTerrainMenu: (x, y, point) =>
+      useContextMenuStore
+        .getState()
+        .show(
+          x,
+          y,
+          buildDepthProfileTerrainMenuItems(point.lon, point.lat, point.depth),
+        ),
+    clearDepthProfile: () => {
+      useDepthProfileStore.getState().clearAnchor();
+      useDepthProfileStore.getState().clearProfile();
+    },
+    getDepthProfileSummary: () => {
+      const p = useDepthProfileStore.getState().profile;
+      return p
+        ? {
+            points: p.points.length,
+            totalDistanceM: p.totalDistanceM,
+            minDepthM: p.minDepthM,
+            maxDepthM: p.maxDepthM,
+          }
+        : null;
     },
   };
 }
