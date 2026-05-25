@@ -634,7 +634,7 @@ export const DatasetPanel: React.FC = () => {
                   </div>
                   <div
                     style={{
-                      fontSize: 9, color: "#334155", marginTop: 1,
+                      fontSize: 9, color: "#ffffff", marginTop: 1,
                       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                     }}
                   >
