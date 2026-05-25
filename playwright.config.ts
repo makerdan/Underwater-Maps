@@ -38,8 +38,14 @@ export default defineConfig({
       stderr: "pipe",
     },
     {
+      // VITE_DEV_AUTH_BYPASS=1 makes devAuth.ts stub out Clerk and inject the
+      // `x-e2e-user-id` header on every /api/* fetch. This is dev-build-only
+      // (gated on import.meta.env.DEV) so it cannot ship to production.
+      // With this set, canvas-gated specs (drift-planner, slack-tide,
+      // gps-trail, smoke, currents) render the authenticated UI and assert
+      // instead of skipping on "canvas not visible".
       command:
-        "PORT=3150 BASE_PATH=/ pnpm --filter @workspace/bathyscan run dev",
+        "PORT=3150 BASE_PATH=/ VITE_DEV_AUTH_BYPASS=1 pnpm --filter @workspace/bathyscan run dev",
       url: "http://localhost:3150",
       reuseExistingServer: !process.env["CI"],
       timeout: 60_000,
