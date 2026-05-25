@@ -247,3 +247,184 @@ describe("computeDrift — bottom-reach flag", () => {
     expect(justTooDeep[0]!.bottomReached).toBe(false);
   });
 });
+
+describe("computeDrift — waypoint-following trolling circuit", () => {
+  // Flat-water defaults: no tide, no wind. Boat motion is the only displacement
+  // so the math is exact and easy to reason about.
+  const calmConditions = makeConditions({});
+
+  it("single downstream waypoint: targetWaypointIndex cycles 0 -> -1 as legs complete", () => {
+    // Waypoint ~11.1 km east of start at lat=0.5 (0.1° lon * 111km/° * cos(0.5°)).
+    // Boat = 3 kt = 5.556 km/h, so each leg out/back takes 2 hours.
+    // Expected end-of-hour targetWaypointIndex sequence:
+    //   h0: still heading to wp0  -> target = 0  (halfway, remaining ~5.55 km)
+    //   h1: reaches wp0, flips    -> target = -1 (return-to-start, remaining ~11.1 km)
+    //   h2: halfway back          -> target = -1
+    //   h3: reaches start, flips  -> target = 0
+    //   h4: halfway to wp0        -> target = 0
+    //   ...
+    const path = computeDrift({
+      conditions: calmConditions,
+      startLat: 0.5,
+      startLon: 0.5,
+      lineLengthM: 50,
+      lineWeightG: 500,
+      terrain: makeFlatGrid(100),
+      mode: "trolling",
+      boatSpeedKnots: 3,
+      trollWaypoints: [{ lat: 0.5, lon: 0.6 }],
+    });
+
+    expect(path).toHaveLength(24);
+    // Hour 0 end: still chasing wp0.
+    expect(path[0]!.targetWaypointIndex).toBe(0);
+    expect(path[0]!.activeLegIndex).toBe(0);
+    // Hour 1 end: just completed the outbound leg, now on the return leg.
+    expect(path[1]!.targetWaypointIndex).toBe(-1);
+    expect(path[1]!.activeLegIndex).toBe(1);
+    // Hour 3 end: just completed the return leg, back chasing wp0.
+    expect(path[3]!.targetWaypointIndex).toBe(0);
+    expect(path[3]!.activeLegIndex).toBe(0);
+
+    // Across the full 24 hours both userIndex values (0 and -1) appear.
+    const targets = new Set(path.map((p) => p.targetWaypointIndex));
+    expect(targets.has(0)).toBe(true);
+    expect(targets.has(-1)).toBe(true);
+
+    // Sanity: every hour reports both bookkeeping fields when on a circuit.
+    for (const wp of path) {
+      expect(wp.activeLegIndex).toBeDefined();
+      expect(wp.legRemainingKm).toBeDefined();
+      expect(wp.targetWaypointIndex).toBeDefined();
+      expect(wp.legRemainingKm!).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it("two-waypoint circuit produces a back-and-forth pattern over 24 hours", () => {
+    // Triangle circuit: start -> wp0 -> wp1 -> start, each leg ~5.55 km (and
+    // the wp1->start diagonal a bit longer). Boat 3 kt => leg 0/1 take ~1 h
+    // each, so many laps fit in 24 h and all three userIndex values appear.
+    const path = computeDrift({
+      conditions: calmConditions,
+      startLat: 0.5,
+      startLon: 0.5,
+      lineLengthM: 50,
+      lineWeightG: 500,
+      terrain: makeFlatGrid(100),
+      mode: "trolling",
+      boatSpeedKnots: 3,
+      trollWaypoints: [
+        { lat: 0.5, lon: 0.55 },
+        { lat: 0.55, lon: 0.55 },
+      ],
+    });
+
+    const targets = path.map((p) => p.targetWaypointIndex!);
+    // All three userIndex values are visited across the day.
+    expect(new Set(targets)).toEqual(new Set([0, 1, -1]));
+
+    // The leg-target sequence must respect circuit order: each non-repeating
+    // transition is one of 0->1, 1->-1, -1->0 (never e.g. 0->-1 directly).
+    const allowed = new Set(["0->1", "1->-1", "-1->0"]);
+    for (let i = 1; i < targets.length; i++) {
+      if (targets[i] === targets[i - 1]) continue;
+      expect(allowed.has(`${targets[i - 1]}->${targets[i]}`)).toBe(true);
+    }
+  });
+
+  it("legRemainingKm decreases monotonically within a leg and resets when the leg flips", () => {
+    // Long single-waypoint leg (~22.2 km east) at 3 kt => takes 4 hours.
+    // Hours 0..2 share leg 0 (target=0) with strictly decreasing remaining;
+    // hour 3 completes that leg and resets remaining to ~22.2 km on the
+    // return-to-start leg (target=-1).
+    const path = computeDrift({
+      conditions: calmConditions,
+      startLat: 0.5,
+      startLon: 0.5,
+      lineLengthM: 50,
+      lineWeightG: 500,
+      terrain: makeFlatGrid(100),
+      mode: "trolling",
+      boatSpeedKnots: 3,
+      trollWaypoints: [{ lat: 0.5, lon: 0.7 }],
+    });
+
+    // Group consecutive hours sharing the same (activeLegIndex, targetWaypointIndex)
+    // and assert the remaining distance is strictly decreasing inside the run,
+    // then jumps back up at the leg boundary.
+    let runStart = 0;
+    let sawMonotonicRun = false;
+    let sawLegReset = false;
+    for (let i = 1; i <= path.length; i++) {
+      const prev = path[i - 1]!;
+      const cur = i < path.length ? path[i]! : null;
+      const sameLeg =
+        cur !== null &&
+        cur.activeLegIndex === prev.activeLegIndex &&
+        cur.targetWaypointIndex === prev.targetWaypointIndex;
+      if (sameLeg) continue;
+      // Close out the run [runStart, i-1].
+      if (i - runStart >= 2) {
+        sawMonotonicRun = true;
+        for (let j = runStart + 1; j <= i - 1; j++) {
+          expect(path[j]!.legRemainingKm!).toBeLessThan(path[j - 1]!.legRemainingKm!);
+        }
+      }
+      if (cur !== null) {
+        // Leg flipped: the new leg's remaining distance should jump up
+        // relative to the just-ended leg's last remaining.
+        expect(cur.legRemainingKm!).toBeGreaterThan(prev.legRemainingKm!);
+        sawLegReset = true;
+      }
+      runStart = i;
+    }
+    expect(sawMonotonicRun).toBe(true);
+    expect(sawLegReset).toBe(true);
+  });
+
+  it("trollWaypoints with boatSpeedKnots=0 falls back to pure drift (waypoints ignored)", () => {
+    // With a real drift vector but zero boat propulsion, the waypoint branch
+    // must NOT activate: positions should match the no-waypoints trolling
+    // path, and the circuit-only fields should be undefined.
+    const conditions = makeConditions({
+      tidalSpeedKnots: 1,
+      tidalDegrees: 45,
+      windSpeedKnots: 6,
+      windDegrees: 180,
+    });
+    const withWaypoints = computeDrift({
+      conditions,
+      startLat: 0.5,
+      startLon: 0.5,
+      lineLengthM: 50,
+      lineWeightG: 500,
+      terrain: makeFlatGrid(100),
+      mode: "trolling",
+      boatSpeedKnots: 0,
+      boatHeadingDeg: 270,
+      trollWaypoints: [
+        { lat: 0.6, lon: 0.6 },
+        { lat: 0.4, lon: 0.4 },
+      ],
+    });
+    const pureDrift = computeDrift({
+      conditions,
+      startLat: 0.5,
+      startLon: 0.5,
+      lineLengthM: 50,
+      lineWeightG: 500,
+      terrain: makeFlatGrid(100),
+      mode: "drift",
+    });
+
+    expect(withWaypoints).toHaveLength(24);
+    for (let i = 0; i < 24; i++) {
+      expect(withWaypoints[i]!.lat).toBeCloseTo(pureDrift[i]!.lat, 12);
+      expect(withWaypoints[i]!.lon).toBeCloseTo(pureDrift[i]!.lon, 12);
+      // Circuit bookkeeping must be absent when the waypoint branch is off.
+      expect(withWaypoints[i]!.activeLegIndex).toBeUndefined();
+      expect(withWaypoints[i]!.legRemainingKm).toBeUndefined();
+      expect(withWaypoints[i]!.targetWaypointIndex).toBeUndefined();
+    }
+  });
+});
