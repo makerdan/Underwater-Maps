@@ -14,7 +14,7 @@ import {
   parseXyzCsv,
   gridPoints,
 } from "../lib/terrain.js";
-import { datasetZonesCache } from "./poe.js";
+import { datasetZonesCache, readZoneDiskForDataset } from "./poe.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
@@ -73,15 +73,43 @@ router.get("/datasets/:id/overview", async (req, res): Promise<void> => {
 });
 
 // ── GET /datasets/:id/zones ────────────────────────────────────────────────────
-// Returns the most-recent AI classification for this dataset from the in-memory
-// cache populated by POST /poe/classify.  404 when not yet classified.
-router.get("/datasets/:id/zones", (req, res): void => {
+// Returns the most-recent AI classification for this dataset.
+// Checks memory cache first, then disk cache (survives restarts).
+// Preset dataset results are public; user-dataset results require auth.
+router.get("/datasets/:id/zones", async (req, res): Promise<void> => {
   const { id } = req.params as { id: string };
-  const cached = datasetZonesCache.get(id);
-  if (cached) {
-    res.json(cached);
+
+  // Auth gate for user-uploaded datasets (preset IDs are public knowledge)
+  const isPreset = PRESET_DATASETS.some((d) => d.id === id);
+  if (!isPreset) {
+    const auth = getAuth(req);
+    const userId = auth?.userId ?? null;
+    // In dev, allow bypass via header
+    const devUserId =
+      process.env["NODE_ENV"] !== "production"
+        ? ((req.headers["x-dev-user-id"] as string | undefined) ?? null)
+        : null;
+    if (!userId && !devUserId) {
+      res.status(401).json({ error: "unauthenticated", message: "Authentication required" });
+      return;
+    }
+  }
+
+  // 1. Memory cache
+  const inMemory = datasetZonesCache.get(id);
+  if (inMemory) {
+    res.json(inMemory);
     return;
   }
+
+  // 2. Disk cache (hydrated on startup but may lag for just-written entries)
+  const onDisk = await readZoneDiskForDataset(id);
+  if (onDisk) {
+    datasetZonesCache.set(id, onDisk); // warm the memory cache
+    res.json(onDisk);
+    return;
+  }
+
   res.status(404).json({ error: "not_found", message: "No cached classification for this dataset" });
 });
 

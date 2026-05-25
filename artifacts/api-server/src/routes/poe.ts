@@ -1,4 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
+import { promises as fsPromises } from "fs";
+import path from "path";
 import { getPoeClient } from "@workspace/poe";
 import { withRetry } from "@workspace/poe";
 import { PoeCreditsError, PoeRateLimitError, PoeAuthError } from "@workspace/poe";
@@ -162,6 +164,61 @@ const datasetZonesCache = new Map<string, CachedZones>();
 export { datasetZonesCache };
 
 // ---------------------------------------------------------------------------
+// Disk persistence for zone cache — survives process restarts
+// Stored alongside terrain cache at /tmp/zone-cache/<datasetId>.json
+// ---------------------------------------------------------------------------
+
+const ZONE_CACHE_DIR = "/tmp/zone-cache";
+
+export async function readZoneDiskForDataset(datasetId: string): Promise<CachedZones | null> {
+  return readZoneDisk(datasetId);
+}
+
+async function readZoneDisk(datasetId: string): Promise<CachedZones | null> {
+  try {
+    const file = path.join(ZONE_CACHE_DIR, `${datasetId}.json`);
+    const raw = await fsPromises.readFile(file, "utf8");
+    return JSON.parse(raw) as CachedZones;
+  } catch {
+    return null;
+  }
+}
+
+async function writeZoneDisk(datasetId: string, data: CachedZones): Promise<void> {
+  try {
+    await fsPromises.mkdir(ZONE_CACHE_DIR, { recursive: true });
+    const file = path.join(ZONE_CACHE_DIR, `${datasetId}.json`);
+    await fsPromises.writeFile(file, JSON.stringify(data), "utf8");
+  } catch (err) {
+    console.warn(`[zones] Failed to write disk cache for ${datasetId}: ${(err as Error).message}`);
+  }
+}
+
+/** Hydrate in-memory cache from disk on startup (non-blocking). */
+async function hydrateCacheFromDisk(): Promise<void> {
+  try {
+    await fsPromises.mkdir(ZONE_CACHE_DIR, { recursive: true });
+    const files = await fsPromises.readdir(ZONE_CACHE_DIR);
+    await Promise.all(
+      files
+        .filter((f) => f.endsWith(".json"))
+        .map(async (f) => {
+          const id = f.slice(0, -5);
+          const data = await readZoneDisk(id);
+          if (data && !datasetZonesCache.has(id)) {
+            datasetZonesCache.set(id, data);
+          }
+        }),
+    );
+  } catch {
+    // Non-fatal — cache simply starts empty
+  }
+}
+
+// Kick off hydration immediately (no await — non-blocking)
+void hydrateCacheFromDisk();
+
+// ---------------------------------------------------------------------------
 // Classify
 // ---------------------------------------------------------------------------
 
@@ -269,9 +326,11 @@ router.post("/classify", async (req, res) => {
 
     globalPoeCache.set(cacheKey, JSON.stringify(zones));
 
-    // Populate secondary dataset-level cache so GET /zones/:id works
+    // Populate secondary dataset-level cache (memory + disk) for GET /datasets/:id/zones
     if (datasetId) {
-      datasetZonesCache.set(datasetId, { zones, waterType, classifiedAt: Date.now() });
+      const cached: CachedZones = { zones, waterType, classifiedAt: Date.now() };
+      datasetZonesCache.set(datasetId, cached);
+      void writeZoneDisk(datasetId, cached);
     }
 
     await logUsage(
