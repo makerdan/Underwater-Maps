@@ -218,6 +218,25 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
               <div style={LABEL}>TIDAL CURRENT</div>
               <div style={{ ...VALUE, color: "#34d399" }}>{cond.tidalSpeedKnots.toFixed(1)} kt</div>
               <div style={{ fontSize: 9, color: "#475569" }}>{degToCardinal(cond.tidalDegrees)} {Math.round(cond.tidalDegrees)}°</div>
+              {data?.tidalDataSource === "noaa-coops" && data.tidalStationName ? (
+                <div
+                  data-testid="tidal-source"
+                  style={{ fontSize: 8, color: "#64748b", marginTop: 2, letterSpacing: "0.05em" }}
+                  title={`NOAA CO-OPS station ${data.tidalStationId ?? ""}`}
+                >
+                  NOAA: {data.tidalStationName}
+                  {typeof data.tidalStationDistanceKm === "number"
+                    ? ` (${data.tidalStationDistanceKm.toFixed(1)} km away)`
+                    : ""}
+                </div>
+              ) : (
+                <div
+                  data-testid="tidal-source"
+                  style={{ fontSize: 8, color: "#64748b", marginTop: 2, letterSpacing: "0.05em", fontStyle: "italic" }}
+                >
+                  Estimated tidal current
+                </div>
+              )}
             </div>
           </div>
           <div>
