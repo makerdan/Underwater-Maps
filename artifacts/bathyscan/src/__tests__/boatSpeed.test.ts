@@ -83,21 +83,26 @@ describe("computeMetersPerWorldUnit", () => {
     expect(computeMetersPerWorldUnit(grid)).toBe(1);
   });
 
-  it("returns a finite, positive value for terrain crossing the antimeridian", () => {
-    // Bounds straddling +/-180°. The current implementation uses raw
-    // longitude differences in the haversine formula, so antimeridian
-    // crossings are measured the long way around the globe rather than
-    // through the seam. We still expect a finite, positive number so the
-    // realistic-mode speed conversion never divides by zero or NaN.
+  it("measures the short-arc width for terrain crossing the antimeridian", () => {
+    // Bounds straddling +/-180° at the equator. The short-arc longitude
+    // span is 0.2°, which is ~22.24 km at the equator. The naive raw
+    // diff would yield ~359.8° and measure the long way around the globe.
     const grid = makeGrid({
       minLon: 179.9,
       maxLon: -179.9,
       minLat: 0,
       maxLat: 0.1,
     });
+    const centerLat = (grid.minLat + grid.maxLat) / 2;
+    const expectedWidth = haversineRef(0, centerLat, 0.2, centerLat);
+    const expectedMpu = expectedWidth / WORLD_SIZE;
+
     const mpu = computeMetersPerWorldUnit(grid);
-    expect(Number.isFinite(mpu)).toBe(true);
-    expect(mpu).toBeGreaterThan(0);
+    expect(mpu).toBeCloseTo(expectedMpu, 6);
+    // ~22.24 km / WORLD_SIZE; sanity-check the order of magnitude.
+    const widthM = mpu * WORLD_SIZE;
+    expect(widthM).toBeGreaterThan(22_000);
+    expect(widthM).toBeLessThan(22_500);
   });
 });
 

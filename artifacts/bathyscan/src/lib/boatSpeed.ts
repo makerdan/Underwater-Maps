@@ -22,9 +22,17 @@ function haversineMeters(
   return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function shortArcLonDelta(minLon: number, maxLon: number): number {
+  let d = (maxLon - minLon) % 360;
+  if (d > 180) d -= 360;
+  if (d <= -180) d += 360;
+  return d;
+}
+
 export function computeMetersPerWorldUnit(grid: TerrainData): number {
   const centerLat = (grid.minLat + grid.maxLat) / 2;
-  const widthM = haversineMeters(grid.minLon, centerLat, grid.maxLon, centerLat);
+  const dLon = shortArcLonDelta(grid.minLon, grid.maxLon);
+  const widthM = haversineMeters(0, centerLat, dLon, centerLat);
   const mpu = widthM / WORLD_SIZE;
   return mpu > 0 ? mpu : 1;
 }
