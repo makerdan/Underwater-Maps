@@ -536,6 +536,8 @@ export const OverviewMap: React.FC = () => {
 
           <button
             onClick={() => startWatching()}
+            data-testid="gps-activate-btn"
+            aria-pressed={gpsActive}
             style={{
               background: gpsActive ? "rgba(59,130,246,0.15)" : "rgba(0,10,20,0.75)",
               border: `1px solid ${gpsActive ? "rgba(59,130,246,0.5)" : "rgba(0,229,255,0.2)"}`,

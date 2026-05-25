@@ -2,12 +2,14 @@
  * TrailRecorder — floating UI for recording GPS trails.
  *
  * Shows: record/stop button, elapsed time, point count, offline notice.
- * Sampling interval is user-configurable (5 s – 60 s).
+ * Sampling interval is read from settingsStore.gpsRecordingInterval.
+ * Trail colour is user-selectable from a fixed palette.
  * On stop: saves trail to server (or buffers to localStorage if offline).
  */
 import React, { useEffect, useState } from "react";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useTrailStore } from "@/lib/trailStore";
+import { useSettingsStore } from "@/lib/settingsStore";
 import { useAppState } from "@/lib/context";
 
 const FONT: React.CSSProperties = {
@@ -26,9 +28,20 @@ const INTERVALS = [
   { label: "60 s", ms: 60_000 },
 ];
 
+// Fixed trail colour palette
+const TRAIL_COLOURS = [
+  "#ff6600",
+  "#ef4444",
+  "#22d3ee",
+  "#a3e635",
+  "#f59e0b",
+  "#a855f7",
+];
+
 async function saveTrailToServer(
   datasetId: string,
   name: string,
+  colour: string,
   startedAt: number,
   endedAt: number,
   points: ReturnType<typeof useTrailStore.getState>["currentPoints"],
@@ -36,6 +49,7 @@ async function saveTrailToServer(
   const body = {
     datasetId,
     name,
+    colour,
     startedAt: new Date(startedAt).toISOString(),
     endedAt: new Date(endedAt).toISOString(),
     points: points.map((p) => ({
@@ -59,12 +73,13 @@ async function saveTrailToServer(
 function bufferTrailOffline(
   datasetId: string,
   name: string,
+  colour: string,
   startedAt: number,
   endedAt: number,
   points: ReturnType<typeof useTrailStore.getState>["currentPoints"],
 ) {
   const key = `pending-trail-${crypto.randomUUID()}`;
-  localStorage.setItem(key, JSON.stringify({ datasetId, name, startedAt, endedAt, points }));
+  localStorage.setItem(key, JSON.stringify({ datasetId, name, colour, startedAt, endedAt, points }));
 }
 
 interface Props {
@@ -76,11 +91,14 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
   const { recording, currentPoints, startedAt, startRecording, stopRecording } = useTrailStore();
   const { terrain } = useAppState();
 
+  const gpsRecordingInterval = useSettingsStore((s) => s.gpsRecordingInterval);
+  const setGpsRecordingInterval = useSettingsStore((s) => s.setGpsRecordingInterval);
+
   const [elapsed, setElapsed] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [trailName, setTrailName] = useState("");
-  const [intervalIdx, setIntervalIdx] = useState(1); // default 10 s
+  const [trailColour, setTrailColour] = useState(TRAIL_COLOURS[0]!);
 
   // Elapsed timer
   useEffect(() => {
@@ -108,15 +126,15 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
 
     try {
       if (!navigator.onLine) {
-        bufferTrailOffline(terrain.datasetId, name, startedAt, endedAt, points);
+        bufferTrailOffline(terrain.datasetId, name, trailColour, startedAt, endedAt, points);
       } else {
-        await saveTrailToServer(terrain.datasetId, name, startedAt, endedAt, points);
+        await saveTrailToServer(terrain.datasetId, name, trailColour, startedAt, endedAt, points);
         onTrailSaved?.();
       }
       setTrailName("");
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Failed to save trail");
-      bufferTrailOffline(terrain.datasetId, name, startedAt, endedAt, points);
+      bufferTrailOffline(terrain.datasetId, name, trailColour, startedAt, endedAt, points);
     } finally {
       setSaving(false);
     }
@@ -128,13 +146,13 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
     borderRadius: 4,
     padding: "8px 12px",
     backdropFilter: "blur(6px)",
-    minWidth: 190,
+    minWidth: 200,
   };
 
-  const selectedInterval = INTERVALS[intervalIdx] ?? INTERVALS[1]!;
+  const selectedInterval = INTERVALS.find((iv) => iv.ms === gpsRecordingInterval) ?? INTERVALS[1]!;
 
   return (
-    <div style={{ ...FONT, ...PANEL }}>
+    <div data-testid="trail-recorder" style={{ ...FONT, ...PANEL }}>
       <div style={{ color: "#00e5ff", fontSize: 9, letterSpacing: "0.2em", marginBottom: 6, fontWeight: 700 }}>
         ⏺ GPS TRAIL
       </div>
@@ -146,6 +164,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
             value={trailName}
             onChange={(e) => setTrailName(e.target.value.slice(0, 60))}
             placeholder="Trail name (optional)"
+            data-testid="trail-name-input"
             style={{
               width: "100%",
               background: "rgba(0,229,255,0.04)",
@@ -161,19 +180,45 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
             }}
           />
 
+          {/* Trail colour picker */}
+          <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
+            <span style={{ color: "#475569", fontSize: 9 }}>COLOUR</span>
+            <div style={{ display: "flex", gap: 4, marginLeft: 4 }}>
+              {TRAIL_COLOURS.map((col) => (
+                <button
+                  key={col}
+                  onClick={() => setTrailColour(col)}
+                  title={col}
+                  data-testid={`trail-colour-${col.replace("#", "")}`}
+                  style={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: "50%",
+                    background: col,
+                    border: trailColour === col ? "2px solid #fff" : "2px solid transparent",
+                    cursor: "pointer",
+                    padding: 0,
+                    outline: trailColour === col ? "1px solid rgba(255,255,255,0.5)" : "none",
+                    outlineOffset: 1,
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+
           {/* Sampling interval selector */}
           <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
             <span style={{ color: "#475569", fontSize: 9 }}>INTERVAL</span>
             <div style={{ display: "flex", gap: 3, marginLeft: 4 }}>
-              {INTERVALS.map((iv, i) => (
+              {INTERVALS.map((iv) => (
                 <button
                   key={iv.ms}
-                  onClick={() => setIntervalIdx(i)}
+                  onClick={() => setGpsRecordingInterval(iv.ms)}
                   style={{
-                    background: intervalIdx === i ? "rgba(0,229,255,0.15)" : "none",
-                    border: `1px solid ${intervalIdx === i ? "rgba(0,229,255,0.5)" : "rgba(0,229,255,0.1)"}`,
+                    background: gpsRecordingInterval === iv.ms ? "rgba(0,229,255,0.15)" : "none",
+                    border: `1px solid ${gpsRecordingInterval === iv.ms ? "rgba(0,229,255,0.5)" : "rgba(0,229,255,0.1)"}`,
                     borderRadius: 2,
-                    color: intervalIdx === i ? "#00e5ff" : "#475569",
+                    color: gpsRecordingInterval === iv.ms ? "#00e5ff" : "#475569",
                     fontSize: 9,
                     padding: "1px 5px",
                     cursor: "pointer",
@@ -187,7 +232,8 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
           </div>
 
           <button
-            onClick={() => startRecording(selectedInterval.ms)}
+            onClick={() => startRecording(gpsRecordingInterval)}
+            data-testid="trail-start-btn"
             style={{
               background: "rgba(239,68,68,0.15)",
               border: "1px solid rgba(239,68,68,0.5)",
@@ -207,8 +253,8 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
       ) : (
         <>
           <div style={{ display: "flex", gap: 16, marginBottom: 2, color: "#94a3b8" }}>
-            <span><span style={{ color: "#ef4444" }}>⏺ </span>{fmtElapsed(elapsed)}</span>
-            <span>{currentPoints.length} pts</span>
+            <span data-testid="trail-elapsed"><span style={{ color: "#ef4444" }}>⏺ </span>{fmtElapsed(elapsed)}</span>
+            <span data-testid="trail-point-count">{currentPoints.length} pts</span>
           </div>
           <div style={{ fontSize: 9, color: "#475569", marginBottom: 6 }}>
             every {selectedInterval.label}
@@ -216,6 +262,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
           <button
             onClick={() => void handleStop()}
             disabled={saving}
+            data-testid="trail-stop-btn"
             style={{
               background: "rgba(0,229,255,0.1)",
               border: "1px solid rgba(0,229,255,0.35)",
