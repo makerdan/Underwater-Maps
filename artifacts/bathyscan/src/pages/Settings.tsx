@@ -16,8 +16,10 @@ import {
   useSectionDirty,
   getDataSnapshot,
   SETTINGS_SCHEMA_VERSION,
+  DEFAULT_SETTINGS,
   type MarkerType,
   type SettingsSection,
+  type SettingsState,
 } from "@/lib/settingsStore";
 import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1638,7 +1640,98 @@ function AccountSection() {
   const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [accountMsg, setAccountMsg] = useState<string | null>(null);
+  const [settingsMsg, setSettingsMsg] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const hydrateFromServerSettings = useSettingsStore((st) => st.hydrateFromServer);
   const { signOut } = useClerk();
+
+  const showSettingsMsg = (msg: string, ms = 3500) => {
+    setSettingsMsg(msg);
+    setTimeout(() => setSettingsMsg(null), ms);
+  };
+
+  const handleExportSettings = () => {
+    try {
+      const state = useSettingsStore.getState() as unknown as Record<string, unknown>;
+      const data: Record<string, unknown> = {};
+      for (const k of Object.keys(DEFAULT_SETTINGS) as (keyof SettingsState)[]) {
+        if (k === "syncedSnapshot") continue;
+        if (k in state) data[k] = state[k as string];
+      }
+      const payload = {
+        type: "bathyscan-settings",
+        schemaVersion: SETTINGS_SCHEMA_VERSION,
+        exportedAt: new Date().toISOString(),
+        settings: data,
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `bathyscan-settings-${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showSettingsMsg("✓ Settings exported");
+    } catch (err) {
+      showSettingsMsg(`✗ ${(err as Error).message}`, 4500);
+    }
+  };
+
+  const handleImportSettings = async (file: File) => {
+    try {
+      const text = await file.text();
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error("File is not valid JSON");
+      }
+      if (!parsed || typeof parsed !== "object") {
+        throw new Error("Invalid settings file");
+      }
+      const root = parsed as Record<string, unknown>;
+      const rawSettings =
+        root.settings && typeof root.settings === "object"
+          ? (root.settings as Record<string, unknown>)
+          : root;
+
+      if (
+        "type" in root &&
+        root.type !== undefined &&
+        root.type !== "bathyscan-settings"
+      ) {
+        throw new Error("Not a BathyScan settings file");
+      }
+
+      const validated: Partial<SettingsState> = {};
+      let accepted = 0;
+      let skipped = 0;
+      for (const k of Object.keys(rawSettings)) {
+        if (k === "syncedSnapshot" || k === "schemaVersion") continue;
+        if (!(k in DEFAULT_SETTINGS)) { skipped++; continue; }
+        const expected = DEFAULT_SETTINGS[k as keyof SettingsState];
+        const value = rawSettings[k];
+        const expectedType = Array.isArray(expected) ? "array" : typeof expected;
+        const actualType = Array.isArray(value) ? "array" : typeof value;
+        if (expectedType !== actualType) { skipped++; continue; }
+        if (expectedType === "object" && expected !== null) {
+          if (value === null || Array.isArray(value)) { skipped++; continue; }
+        }
+        (validated as Record<string, unknown>)[k] = value;
+        accepted++;
+      }
+      if (accepted === 0) {
+        throw new Error("No valid settings found in file");
+      }
+      hydrateFromServerSettings(validated);
+      const suffix = skipped > 0 ? ` (${skipped} skipped)` : "";
+      showSettingsMsg(`✓ Imported ${accepted} settings${suffix}`);
+    } catch (err) {
+      showSettingsMsg(`✗ ${(err as Error).message}`, 4500);
+    }
+  };
 
   const handleExport = async () => {
     setExporting(true);
@@ -1718,6 +1811,76 @@ function AccountSection() {
           onChange={s.setTelemetryOptIn}
           sublabel="Help improve BathyScan by sharing anonymised usage events"
         />
+      </div>
+      <div style={S.card}>
+        <div style={S.cardHeader}>SETTINGS BACKUP</div>
+        <div style={{ padding: "14px 16px" }}>
+          <div style={{ fontSize: 10, color: "#64748b", marginBottom: 12 }}>
+            Save all your BathyScan settings (colormaps, sensitivity, fog, lamp,
+            marker visibility, and more) to a file, or restore them from a previous export.
+          </div>
+          {settingsMsg && (
+            <div
+              data-testid="settings-backup-msg"
+              style={{
+                fontSize: 9,
+                color: settingsMsg.startsWith("✓") ? "#4ade80" : "#f87171",
+                letterSpacing: "0.12em",
+                marginBottom: 8,
+              }}
+            >
+              {settingsMsg}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              onClick={handleExportSettings}
+              data-testid="export-settings-btn"
+              style={{
+                background: "rgba(0,229,255,0.06)",
+                border: "1px solid rgba(0,229,255,0.25)",
+                borderRadius: 3,
+                color: "#67e8f9",
+                fontSize: 9,
+                letterSpacing: "0.15em",
+                padding: "6px 14px",
+                cursor: "pointer",
+                fontFamily: FONT,
+              }}
+            >
+              EXPORT SETTINGS
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              data-testid="import-settings-btn"
+              style={{
+                background: "rgba(100,116,139,0.08)",
+                border: "1px solid rgba(100,116,139,0.3)",
+                borderRadius: 3,
+                color: "#cbd5e1",
+                fontSize: 9,
+                letterSpacing: "0.15em",
+                padding: "6px 14px",
+                cursor: "pointer",
+                fontFamily: FONT,
+              }}
+            >
+              IMPORT SETTINGS
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json,.json"
+              data-testid="import-settings-input"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void handleImportSettings(f);
+                e.target.value = "";
+              }}
+            />
+          </div>
+        </div>
       </div>
       <div style={S.card}>
         <div style={S.cardHeader}>YOUR DATA</div>
