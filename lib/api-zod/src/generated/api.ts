@@ -172,6 +172,7 @@ export const PostDatasetsUploadResponse = zod.object({
   "name": zod.string().describe('Dataset name derived from the uploaded filename'),
   "minDepth": zod.number(),
   "maxDepth": zod.number(),
+  "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
   "createdAt": zod.coerce.date()
 }).optional().describe('Metadata for the freshly-saved row, suitable for optimistically inserting into the \"My Uploads\" list without a refetch'),
   "saveError": zod.string().optional().describe('Human-readable error string returned when the request was authenticated but the auto-save to the user\'s account failed. The terrain itself is still returned so the session is usable.')
@@ -187,6 +188,7 @@ export const GetUserDatasetsResponseItem = zod.object({
   "name": zod.string().describe('Dataset name derived from the uploaded filename'),
   "minDepth": zod.number(),
   "maxDepth": zod.number(),
+  "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
   "createdAt": zod.coerce.date()
 }).describe('Metadata for a user-saved custom terrain dataset')
 export const GetUserDatasetsResponse = zod.array(GetUserDatasetsResponseItem)
@@ -257,6 +259,138 @@ export const GetUserDatasetsIdOverviewResponse = zod.object({
  */
 export const DeleteUserDatasetsIdParams = zod.object({
   "id": zod.coerce.string()
+})
+
+
+/**
+ * @summary Move a user dataset into a folder (or to the root)
+ */
+export const PatchUserDatasetsIdMoveParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const PatchUserDatasetsIdMoveBody = zod.object({
+  "folderId": zod.string().nullable()
+})
+
+export const PatchUserDatasetsIdMoveResponse = zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "name": zod.string().describe('Dataset name derived from the uploaded filename'),
+  "minDepth": zod.number(),
+  "maxDepth": zod.number(),
+  "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
+  "createdAt": zod.coerce.date()
+}).describe('Metadata for a user-saved custom terrain dataset')
+
+
+/**
+ * @summary Duplicate a user dataset into the same folder
+ */
+export const PostUserDatasetsIdDuplicateParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+
+/**
+ * @summary Rename a user dataset
+ */
+export const PatchUserDatasetsIdRenameParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const PatchUserDatasetsIdRenameBody = zod.object({
+  "name": zod.string()
+})
+
+export const PatchUserDatasetsIdRenameResponse = zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "name": zod.string().describe('Dataset name derived from the uploaded filename'),
+  "minDepth": zod.number(),
+  "maxDepth": zod.number(),
+  "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
+  "createdAt": zod.coerce.date()
+}).describe('Metadata for a user-saved custom terrain dataset')
+
+
+/**
+ * @summary List all dataset folders for the current user
+ */
+export const GetUserFoldersResponseItem = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "parentId": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).describe('A folder within the user\'s dataset library tree')
+export const GetUserFoldersResponse = zod.array(GetUserFoldersResponseItem)
+
+
+/**
+ * @summary Create a new folder
+ */
+export const PostUserFoldersBody = zod.object({
+  "name": zod.string(),
+  "parentId": zod.string().nullish()
+})
+
+
+/**
+ * @summary Rename a folder
+ */
+export const PatchUserFoldersIdRenameParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const PatchUserFoldersIdRenameBody = zod.object({
+  "name": zod.string()
+})
+
+export const PatchUserFoldersIdRenameResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "parentId": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).describe('A folder within the user\'s dataset library tree')
+
+
+/**
+ * @summary Move a folder to a new parent
+ */
+export const PatchUserFoldersIdMoveParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const PatchUserFoldersIdMoveBody = zod.object({
+  "parentId": zod.string().nullable()
+})
+
+export const PatchUserFoldersIdMoveResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "parentId": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).describe('A folder within the user\'s dataset library tree')
+
+
+/**
+ * @summary Duplicate a folder (recursive deep copy)
+ */
+export const PostUserFoldersIdDuplicateParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+
+/**
+ * @summary Delete a folder
+ */
+export const DeleteUserFoldersIdParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const DeleteUserFoldersIdBody = zod.object({
+  "mode": zod.enum(['contents', 'promote']).describe('contents = delete folder and everything inside; promote = move children to grandparent before deleting')
 })
 
 

@@ -279,6 +279,263 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /user/datasets/{id}/move:
+    patch:
+      operationId: patchUserDatasetsIdMove
+      tags: [user-datasets]
+      summary: Move a user dataset into a folder (or to the root)
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveDatasetBody"
+      responses:
+        "200":
+          description: Updated dataset metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDatasetMeta"
+        "400":
+          description: Invalid target folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Dataset not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /user/datasets/{id}/duplicate:
+    post:
+      operationId: postUserDatasetsIdDuplicate
+      tags: [user-datasets]
+      summary: Duplicate a user dataset into the same folder
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: Created duplicate metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDatasetMeta"
+        "404":
+          description: Dataset not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /user/datasets/{id}/rename:
+    patch:
+      operationId: patchUserDatasetsIdRename
+      tags: [user-datasets]
+      summary: Rename a user dataset
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameDatasetFolderBody"
+      responses:
+        "200":
+          description: Renamed dataset metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDatasetMeta"
+        "400":
+          description: Invalid name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /user/folders:
+    get:
+      operationId: getUserFolders
+      tags: [user-datasets]
+      summary: List all dataset folders for the current user
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Folder list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DatasetFolder"
+    post:
+      operationId: postUserFolders
+      tags: [user-datasets]
+      summary: Create a new folder
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDatasetFolderBody"
+      responses:
+        "201":
+          description: Created folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetFolder"
+        "400":
+          description: Invalid name or duplicate sibling
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /user/folders/{id}/rename:
+    patch:
+      operationId: patchUserFoldersIdRename
+      tags: [user-datasets]
+      summary: Rename a folder
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameDatasetFolderBody"
+      responses:
+        "200":
+          description: Renamed folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetFolder"
+        "400":
+          description: Invalid name or duplicate sibling
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /user/folders/{id}/move:
+    patch:
+      operationId: patchUserFoldersIdMove
+      tags: [user-datasets]
+      summary: Move a folder to a new parent
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveDatasetFolderBody"
+      responses:
+        "200":
+          description: Moved folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetFolder"
+        "400":
+          description: Invalid target (cycle or duplicate sibling)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /user/folders/{id}/duplicate:
+    post:
+      operationId: postUserFoldersIdDuplicate
+      tags: [user-datasets]
+      summary: Duplicate a folder (recursive deep copy)
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: Created folder root
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetFolder"
+
+  /user/folders/{id}:
+    delete:
+      operationId: deleteUserFoldersId
+      tags: [user-datasets]
+      summary: Delete a folder
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteDatasetFolderBody"
+      responses:
+        "204":
+          description: Folder deleted
+        "404":
+          description: Folder not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /markers:
     get:
       operationId: getMarkers
@@ -1419,6 +1676,10 @@ components:
           type: number
         maxDepth:
           type: number
+        folderId:
+          type: string
+          nullable: true
+          description: Parent folder UUID, or null when at the library root
         createdAt:
           type: string
           format: date-time
@@ -1428,6 +1689,76 @@ components:
         - minDepth
         - maxDepth
         - createdAt
+
+    DatasetFolder:
+      type: object
+      description: A folder within the user's dataset library tree
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        parentId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - createdAt
+        - updatedAt
+
+    CreateDatasetFolderBody:
+      type: object
+      properties:
+        name:
+          type: string
+        parentId:
+          type: string
+          nullable: true
+      required:
+        - name
+
+    RenameDatasetFolderBody:
+      type: object
+      properties:
+        name:
+          type: string
+      required:
+        - name
+
+    MoveDatasetFolderBody:
+      type: object
+      properties:
+        parentId:
+          type: string
+          nullable: true
+      required:
+        - parentId
+
+    DeleteDatasetFolderBody:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [contents, promote]
+          description: contents = delete folder and everything inside; promote = move children to grandparent before deleting
+      required:
+        - mode
+
+    MoveDatasetBody:
+      type: object
+      properties:
+        folderId:
+          type: string
+          nullable: true
+      required:
+        - folderId
 
     Marker:
       type: object

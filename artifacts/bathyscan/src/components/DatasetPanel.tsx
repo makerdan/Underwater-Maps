@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
-import { HelpIcon } from "@/components/help/HelpButton";
 import type { FileRejection } from "react-dropzone";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@clerk/react";
@@ -33,18 +32,19 @@ import { useOfflineStore } from "@/lib/offlineStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { WaterTypeToggle } from "@/components/WaterTypeToggle";
 import { ProvenancePanel } from "@/components/ProvenancePanel";
+import { DatasetFolderTree } from "@/components/DatasetFolderTree";
 
 const EFH_DATASETS = new Set(["thorne-bay"]);
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 const PANEL: React.CSSProperties = {
-  background: "rgba(2,8,18,0.94)",
-  border: "1px solid rgba(0,229,255,0.28)",
+  background: "rgba(0,10,20,0.82)",
+  border: "1px solid rgba(0,229,255,0.18)",
   borderRadius: 6,
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-  color: "#cbd5e1",
-  fontSize: 12,
+  color: "#94a3b8",
+  fontSize: 11,
   minWidth: 220,
   maxWidth: 260,
   backdropFilter: "blur(6px)",
@@ -102,7 +102,6 @@ export const DatasetPanel: React.FC = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const waterType = useSettingsStore((s) => s.waterType);
-  const showLandmass = useSettingsStore((s) => s.showLandmass);
 
   // ─── Fetch dataset lists ───────────────────────────────────────────────────
   const { data: datasets, isLoading: datasetsLoading } = useGetDatasets();
@@ -269,23 +268,19 @@ export const DatasetPanel: React.FC = () => {
     setPendingUserDatasetId(null);
   };
 
-  // ─── Delete user dataset ───────────────────────────────────────────────────
+  // ─── Delete user dataset (mutation surface kept for compatibility) ────────
   const deleteMutation = useDeleteUserDatasetsId();
 
-  const handleDelete = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    deleteMutation.mutate(
-      { id },
-      {
-        onSuccess: () => {
-          void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
-          if (activeUserDatasetId === id) {
-            setActiveUserDatasetId(null);
-          }
-        },
-      },
-    );
-  };
+  // When a delete completes in the tree, clear active selection if needed.
+  useEffect(() => {
+    if (
+      deleteMutation.isSuccess &&
+      typeof deleteMutation.variables?.id === "string" &&
+      activeUserDatasetId === deleteMutation.variables.id
+    ) {
+      setActiveUserDatasetId(null);
+    }
+  }, [deleteMutation.isSuccess, deleteMutation.variables, activeUserDatasetId]);
 
   // ─── Upload ────────────────────────────────────────────────────────────────
   const postDatasetsUpload = usePostDatasetsUpload();
@@ -346,40 +341,11 @@ export const DatasetPanel: React.FC = () => {
             void useClassificationStore.getState().classify(data.terrain);
             if (data.savedDatasetId) {
               setActiveUserDatasetId(data.savedDatasetId);
-              // Optimistically insert the new row into the MY UPLOADS cache so
-              // the panel updates instantly without waiting for the refetch.
-              const meta: UserDatasetMeta = data.savedDatasetMeta ?? {
-                id: data.savedDatasetId,
-                name: file.name.replace(/\.[^.]+$/, "").replace(/[_-]/g, " "),
-                minDepth: data.terrain.minDepth,
-                maxDepth: data.terrain.maxDepth,
-                createdAt: new Date().toISOString(),
-              };
-              qc.setQueryData<UserDatasetMeta[]>(
-                getGetUserDatasetsQueryKey(),
-                (prev) => {
-                  const existing = prev ?? [];
-                  if (existing.some((d) => d.id === meta.id)) return existing;
-                  return [meta, ...existing];
-                },
-              );
               void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
-              setUploadOpen(false);
             } else {
               setActiveUserDatasetId(null);
-              if (isSignedIn) {
-                // Authenticated user but server didn't (or couldn't) save.
-                // Keep the upload panel open and surface a clear error so the
-                // user knows the terrain won't be there after refresh.
-                setUploadError(
-                  data.saveError
-                    ? `Uploaded, but couldn't save to your account — ${data.saveError}`
-                    : "Uploaded, but couldn't save to your account — try again",
-                );
-              } else {
-                setUploadOpen(false);
-              }
             }
+            setUploadOpen(false);
           },
           onError: (err) => {
             setUploadError(err instanceof Error ? err.message : "Parse failed");
@@ -387,7 +353,7 @@ export const DatasetPanel: React.FC = () => {
         },
       );
     },
-    [postDatasetsUpload, setDatasetId, setTerrain, qc, isSignedIn],
+    [postDatasetsUpload, setDatasetId, setTerrain, qc],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -439,14 +405,13 @@ export const DatasetPanel: React.FC = () => {
         className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors rounded-t"
         style={{ cursor: "pointer" }}
       >
-        <span className="uppercase tracking-widest" style={{ fontSize: 11, ...CYAN, fontWeight: 700 }}>
+        <span className="uppercase tracking-widest" style={{ fontSize: 10, ...CYAN, fontWeight: 700 }}>
           ▼ Datasets
         </span>
         <div className="flex items-center gap-2">
           {anyLoading && (
             <span className="animate-spin" style={{ fontSize: 10 }}>◌</span>
           )}
-          <HelpIcon articleId="datasets-uploads" label="Datasets and uploads" />
           <span style={{ color: "#475569", fontSize: 12 }}>{collapsed ? "▸" : "▾"}</span>
         </div>
       </button>
@@ -462,7 +427,7 @@ export const DatasetPanel: React.FC = () => {
             justifyContent: "space-between",
             gap: 8,
           }}>
-            <span style={{ fontSize: 10, letterSpacing: "0.12em", color: "#94a3b8" }}>ENVIRONMENT</span>
+            <span style={{ fontSize: 8, letterSpacing: "0.12em", color: "#334155" }}>ENVIRONMENT</span>
             <WaterTypeToggle />
           </div>
           {/* ── Built-in dataset list ── */}
@@ -575,58 +540,23 @@ export const DatasetPanel: React.FC = () => {
                       ) : ds.waterType === "saltwater" ? "≋" : "~"}
                     </span>
                   </div>
-                  <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2, letterSpacing: "0.05em" }}>
+                  <div style={{ fontSize: 9, color: "#475569", marginTop: 1, letterSpacing: "0.05em" }}>
                     {ds.minDepth}m – {ds.maxDepth}m
                   </div>
                   <div
                     style={{
-                      fontSize: 10, color: "#94a3b8", marginTop: 1,
+                      fontSize: 9, color: "#334155", marginTop: 1,
                       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                     }}
                   >
                     {ds.description}
                   </div>
-                  {ds.hasTopography && (
-                    <span
-                      data-testid={`topo-badge-${ds.id}`}
-                      title="Includes above-water terrain"
-                      style={{
-                        display: "inline-block",
-                        marginTop: 2,
-                        fontSize: 8,
-                        color: "#f59e0b",
-                        border: "1px solid rgba(245,158,11,0.35)",
-                        borderRadius: 3,
-                        padding: "0 4px",
-                        letterSpacing: "0.08em",
-                      }}
-                    >
-                      TOPO
-                    </span>
-                  )}
                   {active && terrain && terrain.datasetId === ds.id && (
                     <div onClick={(e) => e.stopPropagation()}>
                       <ProvenancePanel
                         terrain={terrain}
                         hasEfh={EFH_DATASETS.has(ds.id)}
                       />
-                      {showLandmass && !terrain.hasTopography && (
-                        <div
-                          data-testid="landmass-no-topo-hint"
-                          style={{
-                            marginTop: 4,
-                            fontSize: 9,
-                            color: "#f59e0b",
-                            lineHeight: 1.4,
-                            padding: "3px 6px",
-                            background: "rgba(245,158,11,0.06)",
-                            border: "1px solid rgba(245,158,11,0.25)",
-                            borderRadius: 3,
-                          }}
-                        >
-                          Landmass toggle is on, but this dataset doesn't include topography. Pick a coastal dataset (TOPO badge) to see land.
-                        </div>
-                      )}
                     </div>
                   )}
                 </button>
@@ -634,22 +564,16 @@ export const DatasetPanel: React.FC = () => {
             })}
           </div>
 
-          {/* ── My Uploads section (signed-in only) ── */}
+          {/* ── My Library (folders + uploads), signed-in only ── */}
           {isSignedIn && (
             <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}>
-              <div
-                className="px-3 py-1 flex items-center gap-2"
-                style={{ fontSize: 10, letterSpacing: "0.12em", color: "#94a3b8" }}
-              >
-                <span>▲ MY UPLOADS</span>
-                {userDatasetsLoading && (
+              {userDatasetsLoading && (
+                <div
+                  className="px-3 py-1 flex items-center gap-2"
+                  style={{ fontSize: 9, letterSpacing: "0.12em", color: "#334155" }}
+                >
                   <span className="animate-spin" style={{ fontSize: 9, color: "#475569" }}>◌</span>
-                )}
-              </div>
-
-              {(userDatasets ?? []).length === 0 && !userDatasetsLoading && (
-                <div style={{ fontSize: 10, color: "#94a3b8", padding: "4px 12px 8px" }}>
-                  No saved terrains yet
+                  <span>LOADING…</span>
                 </div>
               )}
 
@@ -710,72 +634,17 @@ export const DatasetPanel: React.FC = () => {
                 </div>
               )}
 
-              {(userDatasets ?? []).map((ds) => {
-                const active = ds.id === activeUserDatasetId && !pendingUserDatasetId;
-                const loading = ds.id === loadingId;
-                const deleting = deleteMutation.isPending && deleteMutation.variables?.id === ds.id;
-                const date = new Date(ds.createdAt).toLocaleDateString(undefined, {
-                  month: "short", day: "numeric",
-                });
-                return (
-                  <button
-                    key={ds.id}
-                    data-testid={`btn-user-dataset-${ds.id}`}
-                    onClick={() => handleSelectUserDataset(ds)}
-                    className="w-full text-left px-3 py-2 transition-colors hover:bg-white/5 group"
-                    style={{
-                      background: active ? "rgba(0,229,255,0.07)" : "transparent",
-                      borderLeft: active ? "2px solid rgba(0,229,255,0.6)" : "2px solid transparent",
-                      cursor: "pointer",
-                      opacity: deleting ? 0.4 : 1,
-                    }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span
-                        style={{
-                          fontSize: 11, fontWeight: active ? 700 : 400,
-                          color: active ? "#00e5ff" : "#94a3b8",
-                          textShadow: active ? "0 0 6px rgba(0,229,255,0.3)" : "none",
-                          flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {ds.name}
-                      </span>
-                      <div className="flex items-center gap-1 ml-1">
-                        {loading && (
-                          <span className="animate-pulse" style={{ fontSize: 9, color: "#00e5ff" }}>◌</span>
-                        )}
-                        {!loading && (
-                          <span
-                            data-testid={`btn-delete-user-dataset-${ds.id}`}
-                            role="button"
-                            tabIndex={0}
-                            onClick={(e) => handleDelete(e, ds.id)}
-                            onKeyDown={(e) => e.key === "Enter" && handleDelete(e as unknown as React.MouseEvent, ds.id)}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity"
-                            style={{
-                              fontSize: 10, color: "#475569", cursor: "pointer", lineHeight: 1,
-                              padding: "1px 3px", borderRadius: 2,
-                            }}
-                          >
-                            ×
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 10, color: "#94a3b8", marginTop: 2, letterSpacing: "0.05em",
-                        display: "flex", justifyContent: "space-between",
-                      }}
-                    >
-                      <span>{ds.minDepth}m – {ds.maxDepth}m</span>
-                      <span style={{ color: "#64748b" }}>{date}</span>
-                    </div>
-                  </button>
-                );
-              })}
+              <DatasetFolderTree
+                datasets={userDatasets ?? []}
+                activeUserDatasetId={pendingUserDatasetId ? null : activeUserDatasetId}
+                loadingId={loadingId}
+                deletingId={
+                  deleteMutation.isPending && typeof deleteMutation.variables?.id === "string"
+                    ? deleteMutation.variables.id
+                    : null
+                }
+                onSelectDataset={handleSelectUserDataset}
+              />
             </div>
           )}
 
@@ -787,16 +656,16 @@ export const DatasetPanel: React.FC = () => {
                 className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
                 style={{ cursor: "pointer" }}
               >
-                <span style={{ fontSize: 10, letterSpacing: "0.12em", color: "#94a3b8" }}>
+                <span style={{ fontSize: 9, letterSpacing: "0.12em", color: "#334155" }}>
                   ▼ MARKERS {markers?.length ? `(${markers.length})` : ""}
                 </span>
-                <span style={{ color: "#94a3b8", fontSize: 11 }}>{markersOpen ? "−" : "+"}</span>
+                <span style={{ color: "#475569", fontSize: 10 }}>{markersOpen ? "−" : "+"}</span>
               </button>
 
               {markersOpen && (
                 <div style={{ paddingBottom: 4 }}>
                   {!markers?.length && (
-                    <div style={{ fontSize: 10, color: "#94a3b8", padding: "4px 12px 6px" }}>
+                    <div style={{ fontSize: 9, color: "#334155", padding: "4px 12px 6px" }}>
                       No markers yet — press G or right-click to drop one
                     </div>
                   )}
@@ -821,8 +690,8 @@ export const DatasetPanel: React.FC = () => {
                           <span
                             style={{
                               flex: 1,
-                              fontSize: 11,
-                              color: "#e2e8f0",
+                              fontSize: 10,
+                              color: "#cbd5e1",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
@@ -830,7 +699,7 @@ export const DatasetPanel: React.FC = () => {
                           >
                             {m.label}
                           </span>
-                          <span style={{ fontSize: 10, color: "#94a3b8", flexShrink: 0 }}>
+                          <span style={{ fontSize: 9, color: "#334155", flexShrink: 0 }}>
                             {Math.round(m.depth)}m
                           </span>
                           <span
@@ -869,10 +738,10 @@ export const DatasetPanel: React.FC = () => {
               className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
               style={{ cursor: "pointer" }}
             >
-              <span style={{ fontSize: 10, letterSpacing: "0.15em", color: "#94a3b8" }}>
+              <span style={{ fontSize: 9, letterSpacing: "0.15em", color: "#475569" }}>
                 ▲ UPLOAD CUSTOM TERRAIN
               </span>
-              <span style={{ color: "#94a3b8", fontSize: 11 }}>{uploadOpen ? "−" : "+"}</span>
+              <span style={{ color: "#475569", fontSize: 10 }}>{uploadOpen ? "−" : "+"}</span>
             </button>
 
             {uploadOpen && (
@@ -881,13 +750,13 @@ export const DatasetPanel: React.FC = () => {
                   <div
                     data-testid="upload-offline-notice"
                     style={{
-                      border: "1px dashed rgba(239,68,68,0.35)",
-                      background: "rgba(239,68,68,0.06)",
+                      border: "1px dashed rgba(239,68,68,0.25)",
+                      background: "rgba(239,68,68,0.04)",
                       borderRadius: 4,
                       padding: "12px 8px",
                       textAlign: "center",
-                      fontSize: 10,
-                      color: "#fca5a5",
+                      fontSize: 9,
+                      color: "#f87171",
                       letterSpacing: "0.1em",
                     }}
                   >
@@ -927,21 +796,21 @@ export const DatasetPanel: React.FC = () => {
                       <input {...getInputProps()} />
                       {postDatasetsUpload.isPending ? (
                         <div>
-                          <div className="animate-pulse" style={{ ...CYAN, fontSize: 11, marginBottom: 2 }}>
+                          <div className="animate-pulse" style={{ ...CYAN, fontSize: 10, marginBottom: 2 }}>
                             ◌ Uploading &amp; parsing...
                           </div>
-                          <div style={{ fontSize: 10, color: "#94a3b8" }}>{Math.round(uploadProgress)}%</div>
+                          <div style={{ fontSize: 9, color: "#334155" }}>{Math.round(uploadProgress)}%</div>
                         </div>
                       ) : (
                         <>
-                          <div style={{ fontSize: 11, color: "#cbd5e1", marginBottom: 3 }}>
+                          <div style={{ fontSize: 10, color: "#64748b", marginBottom: 3 }}>
                             Drop .xyz or .csv here
                           </div>
-                          <div style={{ fontSize: 10, color: "#94a3b8" }}>
+                          <div style={{ fontSize: 9, color: "#334155" }}>
                             up to 50 MB{isSignedIn ? " · auto-saved to account" : ""}
                           </div>
                           {uploadError && (
-                            <div style={{ fontSize: 10, color: "#f87171", marginTop: 4 }}>⚠ {uploadError}</div>
+                            <div style={{ fontSize: 9, color: "#f87171", marginTop: 4 }}>⚠ {uploadError}</div>
                           )}
                         </>
                       )}

@@ -410,6 +410,8 @@ export interface UserDatasetMeta {
   name: string;
   minDepth: number;
   maxDepth: number;
+  /** Parent folder UUID, or null when at the library root */
+  folderId?: string | null;
   createdAt: string;
 }
 
@@ -425,6 +427,50 @@ export interface UploadResult {
   savedDatasetMeta?: UserDatasetMeta;
   /** Human-readable error string returned when the request was authenticated but the auto-save to the user's account failed. The terrain itself is still returned so the session is usable. */
   saveError?: string;
+}
+
+/**
+ * A folder within the user's dataset library tree
+ */
+export interface DatasetFolder {
+  id: string;
+  name: string;
+  parentId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDatasetFolderBody {
+  name: string;
+  parentId?: string | null;
+}
+
+export interface RenameDatasetFolderBody {
+  name: string;
+}
+
+export interface MoveDatasetFolderBody {
+  parentId: string | null;
+}
+
+/**
+ * contents = delete folder and everything inside; promote = move children to grandparent before deleting
+ */
+export type DeleteDatasetFolderBodyMode = typeof DeleteDatasetFolderBodyMode[keyof typeof DeleteDatasetFolderBodyMode];
+
+
+export const DeleteDatasetFolderBodyMode = {
+  contents: 'contents',
+  promote: 'promote',
+} as const;
+
+export interface DeleteDatasetFolderBody {
+  /** contents = delete folder and everything inside; promote = move children to grandparent before deleting */
+  mode: DeleteDatasetFolderBodyMode;
+}
+
+export interface MoveDatasetBody {
+  folderId: string | null;
 }
 
 export type MarkerType = typeof MarkerType[keyof typeof MarkerType];

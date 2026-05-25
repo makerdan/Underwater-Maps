@@ -1,4 +1,5 @@
 import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { datasetFoldersTable } from "./dataset-folders.js";
 
 export const userCatalogSavesTable = pgTable("user_catalog_saves", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -9,6 +10,7 @@ export const userCatalogSavesTable = pgTable("user_catalog_saves", {
   readyAt: timestamp("ready_at"),
   cacheKey: text("cache_key"),
   errorMessage: text("error_message"),
+  folderId: uuid("folder_id").references(() => datasetFoldersTable.id, { onDelete: "set null" }),
 });
 
 export type UserCatalogSave = typeof userCatalogSavesTable.$inferSelect;

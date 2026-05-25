@@ -156,6 +156,9 @@ export interface SettingsState {
   /** Per-dataset saved camera spawn positions (set via "Set as home" context menu). */
   datasetHomePositions: Record<string, DatasetHomePosition>;
 
+  /** Expand/collapse state for dataset library folders, keyed by folder id. */
+  datasetFolderExpanded: Record<string, boolean>;
+
   // ── Environment ───────────────────────────────────────────────────────
   waterType: WaterType;
 
@@ -463,6 +466,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   telemetryOptIn: false,
 
   datasetHomePositions: {},
+  datasetFolderExpanded: {},
 
   waterType: "saltwater",
 };

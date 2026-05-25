@@ -22,9 +22,12 @@ import type {
 import type {
   ApiError,
   ClassifyResult,
+  CreateDatasetFolderBody,
   DatasetCatalogEntry,
   DatasetCatalogSearchResult,
+  DatasetFolder,
   DatasetMeta,
+  DeleteDatasetFolderBody,
   DeleteMarkersMine200,
   EfhFeatureCollection,
   GetDatasetsCatalogParams,
@@ -41,6 +44,8 @@ import type {
   HealthStatus,
   Marker,
   MarkerInput,
+  MoveDatasetBody,
+  MoveDatasetFolderBody,
   PoeClassifyRequest,
   PoeDescribeRequest,
   PoeError,
@@ -48,6 +53,7 @@ import type {
   PoeQueryRequest,
   PostDatasetsUploadBody,
   QueryResult,
+  RenameDatasetFolderBody,
   SubstrateFeatureCollection,
   SurfaceConditions,
   TerrainData,
@@ -700,6 +706,654 @@ export const useDeleteUserDatasetsId = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getDeleteUserDatasetsIdMutationOptions(options));
+    }
+
+export const getPatchUserDatasetsIdMoveUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/datasets/${id}/move`
+}
+
+/**
+ * @summary Move a user dataset into a folder (or to the root)
+ */
+export const patchUserDatasetsIdMove = async (id: string,
+    moveDatasetBody: MoveDatasetBody, options?: RequestInit): Promise<UserDatasetMeta> => {
+
+  return customFetch<UserDatasetMeta>(getPatchUserDatasetsIdMoveUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      moveDatasetBody,)
+  }
+);}
+
+
+
+
+export const getPatchUserDatasetsIdMoveMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchUserDatasetsIdMove>>, TError,{id: string;data: BodyType<MoveDatasetBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchUserDatasetsIdMove>>, TError,{id: string;data: BodyType<MoveDatasetBody>}, TContext> => {
+
+const mutationKey = ['patchUserDatasetsIdMove'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchUserDatasetsIdMove>>, {id: string;data: BodyType<MoveDatasetBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  patchUserDatasetsIdMove(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchUserDatasetsIdMoveMutationResult = NonNullable<Awaited<ReturnType<typeof patchUserDatasetsIdMove>>>
+    export type PatchUserDatasetsIdMoveMutationBody = BodyType<MoveDatasetBody>
+    export type PatchUserDatasetsIdMoveMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Move a user dataset into a folder (or to the root)
+ */
+export const usePatchUserDatasetsIdMove = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchUserDatasetsIdMove>>, TError,{id: string;data: BodyType<MoveDatasetBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof patchUserDatasetsIdMove>>,
+        TError,
+        {id: string;data: BodyType<MoveDatasetBody>},
+        TContext
+      > => {
+      return useMutation(getPatchUserDatasetsIdMoveMutationOptions(options));
+    }
+
+export const getPostUserDatasetsIdDuplicateUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/datasets/${id}/duplicate`
+}
+
+/**
+ * @summary Duplicate a user dataset into the same folder
+ */
+export const postUserDatasetsIdDuplicate = async (id: string, options?: RequestInit): Promise<UserDatasetMeta> => {
+
+  return customFetch<UserDatasetMeta>(getPostUserDatasetsIdDuplicateUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getPostUserDatasetsIdDuplicateMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postUserDatasetsIdDuplicate>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postUserDatasetsIdDuplicate>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['postUserDatasetsIdDuplicate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postUserDatasetsIdDuplicate>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  postUserDatasetsIdDuplicate(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostUserDatasetsIdDuplicateMutationResult = NonNullable<Awaited<ReturnType<typeof postUserDatasetsIdDuplicate>>>
+
+    export type PostUserDatasetsIdDuplicateMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Duplicate a user dataset into the same folder
+ */
+export const usePostUserDatasetsIdDuplicate = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postUserDatasetsIdDuplicate>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postUserDatasetsIdDuplicate>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getPostUserDatasetsIdDuplicateMutationOptions(options));
+    }
+
+export const getPatchUserDatasetsIdRenameUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/datasets/${id}/rename`
+}
+
+/**
+ * @summary Rename a user dataset
+ */
+export const patchUserDatasetsIdRename = async (id: string,
+    renameDatasetFolderBody: RenameDatasetFolderBody, options?: RequestInit): Promise<UserDatasetMeta> => {
+
+  return customFetch<UserDatasetMeta>(getPatchUserDatasetsIdRenameUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      renameDatasetFolderBody,)
+  }
+);}
+
+
+
+
+export const getPatchUserDatasetsIdRenameMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchUserDatasetsIdRename>>, TError,{id: string;data: BodyType<RenameDatasetFolderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchUserDatasetsIdRename>>, TError,{id: string;data: BodyType<RenameDatasetFolderBody>}, TContext> => {
+
+const mutationKey = ['patchUserDatasetsIdRename'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchUserDatasetsIdRename>>, {id: string;data: BodyType<RenameDatasetFolderBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  patchUserDatasetsIdRename(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchUserDatasetsIdRenameMutationResult = NonNullable<Awaited<ReturnType<typeof patchUserDatasetsIdRename>>>
+    export type PatchUserDatasetsIdRenameMutationBody = BodyType<RenameDatasetFolderBody>
+    export type PatchUserDatasetsIdRenameMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Rename a user dataset
+ */
+export const usePatchUserDatasetsIdRename = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchUserDatasetsIdRename>>, TError,{id: string;data: BodyType<RenameDatasetFolderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof patchUserDatasetsIdRename>>,
+        TError,
+        {id: string;data: BodyType<RenameDatasetFolderBody>},
+        TContext
+      > => {
+      return useMutation(getPatchUserDatasetsIdRenameMutationOptions(options));
+    }
+
+export const getGetUserFoldersUrl = () => {
+
+
+
+
+  return `/api/user/folders`
+}
+
+/**
+ * @summary List all dataset folders for the current user
+ */
+export const getUserFolders = async ( options?: RequestInit): Promise<DatasetFolder[]> => {
+
+  return customFetch<DatasetFolder[]>(getGetUserFoldersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUserFoldersQueryKey = () => {
+    return [
+    `/api/user/folders`
+    ] as const;
+    }
+
+
+export const getGetUserFoldersQueryOptions = <TData = Awaited<ReturnType<typeof getUserFolders>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserFolders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUserFoldersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUserFolders>>> = ({ signal }) => getUserFolders({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUserFolders>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUserFoldersQueryResult = NonNullable<Awaited<ReturnType<typeof getUserFolders>>>
+export type GetUserFoldersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all dataset folders for the current user
+ */
+
+export function useGetUserFolders<TData = Awaited<ReturnType<typeof getUserFolders>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserFolders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUserFoldersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPostUserFoldersUrl = () => {
+
+
+
+
+  return `/api/user/folders`
+}
+
+/**
+ * @summary Create a new folder
+ */
+export const postUserFolders = async (createDatasetFolderBody: CreateDatasetFolderBody, options?: RequestInit): Promise<DatasetFolder> => {
+
+  return customFetch<DatasetFolder>(getPostUserFoldersUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createDatasetFolderBody,)
+  }
+);}
+
+
+
+
+export const getPostUserFoldersMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postUserFolders>>, TError,{data: BodyType<CreateDatasetFolderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postUserFolders>>, TError,{data: BodyType<CreateDatasetFolderBody>}, TContext> => {
+
+const mutationKey = ['postUserFolders'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postUserFolders>>, {data: BodyType<CreateDatasetFolderBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  postUserFolders(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostUserFoldersMutationResult = NonNullable<Awaited<ReturnType<typeof postUserFolders>>>
+    export type PostUserFoldersMutationBody = BodyType<CreateDatasetFolderBody>
+    export type PostUserFoldersMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Create a new folder
+ */
+export const usePostUserFolders = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postUserFolders>>, TError,{data: BodyType<CreateDatasetFolderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postUserFolders>>,
+        TError,
+        {data: BodyType<CreateDatasetFolderBody>},
+        TContext
+      > => {
+      return useMutation(getPostUserFoldersMutationOptions(options));
+    }
+
+export const getPatchUserFoldersIdRenameUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/folders/${id}/rename`
+}
+
+/**
+ * @summary Rename a folder
+ */
+export const patchUserFoldersIdRename = async (id: string,
+    renameDatasetFolderBody: RenameDatasetFolderBody, options?: RequestInit): Promise<DatasetFolder> => {
+
+  return customFetch<DatasetFolder>(getPatchUserFoldersIdRenameUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      renameDatasetFolderBody,)
+  }
+);}
+
+
+
+
+export const getPatchUserFoldersIdRenameMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchUserFoldersIdRename>>, TError,{id: string;data: BodyType<RenameDatasetFolderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchUserFoldersIdRename>>, TError,{id: string;data: BodyType<RenameDatasetFolderBody>}, TContext> => {
+
+const mutationKey = ['patchUserFoldersIdRename'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchUserFoldersIdRename>>, {id: string;data: BodyType<RenameDatasetFolderBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  patchUserFoldersIdRename(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchUserFoldersIdRenameMutationResult = NonNullable<Awaited<ReturnType<typeof patchUserFoldersIdRename>>>
+    export type PatchUserFoldersIdRenameMutationBody = BodyType<RenameDatasetFolderBody>
+    export type PatchUserFoldersIdRenameMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Rename a folder
+ */
+export const usePatchUserFoldersIdRename = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchUserFoldersIdRename>>, TError,{id: string;data: BodyType<RenameDatasetFolderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof patchUserFoldersIdRename>>,
+        TError,
+        {id: string;data: BodyType<RenameDatasetFolderBody>},
+        TContext
+      > => {
+      return useMutation(getPatchUserFoldersIdRenameMutationOptions(options));
+    }
+
+export const getPatchUserFoldersIdMoveUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/folders/${id}/move`
+}
+
+/**
+ * @summary Move a folder to a new parent
+ */
+export const patchUserFoldersIdMove = async (id: string,
+    moveDatasetFolderBody: MoveDatasetFolderBody, options?: RequestInit): Promise<DatasetFolder> => {
+
+  return customFetch<DatasetFolder>(getPatchUserFoldersIdMoveUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      moveDatasetFolderBody,)
+  }
+);}
+
+
+
+
+export const getPatchUserFoldersIdMoveMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchUserFoldersIdMove>>, TError,{id: string;data: BodyType<MoveDatasetFolderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchUserFoldersIdMove>>, TError,{id: string;data: BodyType<MoveDatasetFolderBody>}, TContext> => {
+
+const mutationKey = ['patchUserFoldersIdMove'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchUserFoldersIdMove>>, {id: string;data: BodyType<MoveDatasetFolderBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  patchUserFoldersIdMove(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchUserFoldersIdMoveMutationResult = NonNullable<Awaited<ReturnType<typeof patchUserFoldersIdMove>>>
+    export type PatchUserFoldersIdMoveMutationBody = BodyType<MoveDatasetFolderBody>
+    export type PatchUserFoldersIdMoveMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Move a folder to a new parent
+ */
+export const usePatchUserFoldersIdMove = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchUserFoldersIdMove>>, TError,{id: string;data: BodyType<MoveDatasetFolderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof patchUserFoldersIdMove>>,
+        TError,
+        {id: string;data: BodyType<MoveDatasetFolderBody>},
+        TContext
+      > => {
+      return useMutation(getPatchUserFoldersIdMoveMutationOptions(options));
+    }
+
+export const getPostUserFoldersIdDuplicateUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/folders/${id}/duplicate`
+}
+
+/**
+ * @summary Duplicate a folder (recursive deep copy)
+ */
+export const postUserFoldersIdDuplicate = async (id: string, options?: RequestInit): Promise<DatasetFolder> => {
+
+  return customFetch<DatasetFolder>(getPostUserFoldersIdDuplicateUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getPostUserFoldersIdDuplicateMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postUserFoldersIdDuplicate>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postUserFoldersIdDuplicate>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['postUserFoldersIdDuplicate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postUserFoldersIdDuplicate>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  postUserFoldersIdDuplicate(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostUserFoldersIdDuplicateMutationResult = NonNullable<Awaited<ReturnType<typeof postUserFoldersIdDuplicate>>>
+
+    export type PostUserFoldersIdDuplicateMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Duplicate a folder (recursive deep copy)
+ */
+export const usePostUserFoldersIdDuplicate = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postUserFoldersIdDuplicate>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postUserFoldersIdDuplicate>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getPostUserFoldersIdDuplicateMutationOptions(options));
+    }
+
+export const getDeleteUserFoldersIdUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/folders/${id}`
+}
+
+/**
+ * @summary Delete a folder
+ */
+export const deleteUserFoldersId = async (id: string,
+    deleteDatasetFolderBody: DeleteDatasetFolderBody, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteUserFoldersIdUrl(id),
+  {
+    ...options,
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      deleteDatasetFolderBody,)
+  }
+);}
+
+
+
+
+export const getDeleteUserFoldersIdMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUserFoldersId>>, TError,{id: string;data: BodyType<DeleteDatasetFolderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteUserFoldersId>>, TError,{id: string;data: BodyType<DeleteDatasetFolderBody>}, TContext> => {
+
+const mutationKey = ['deleteUserFoldersId'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteUserFoldersId>>, {id: string;data: BodyType<DeleteDatasetFolderBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  deleteUserFoldersId(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteUserFoldersIdMutationResult = NonNullable<Awaited<ReturnType<typeof deleteUserFoldersId>>>
+    export type DeleteUserFoldersIdMutationBody = BodyType<DeleteDatasetFolderBody>
+    export type DeleteUserFoldersIdMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Delete a folder
+ */
+export const useDeleteUserFoldersId = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUserFoldersId>>, TError,{id: string;data: BodyType<DeleteDatasetFolderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteUserFoldersId>>,
+        TError,
+        {id: string;data: BodyType<DeleteDatasetFolderBody>},
+        TContext
+      > => {
+      return useMutation(getDeleteUserFoldersIdMutationOptions(options));
     }
 
 export const getGetMarkersUrl = (params: GetMarkersParams,) => {
