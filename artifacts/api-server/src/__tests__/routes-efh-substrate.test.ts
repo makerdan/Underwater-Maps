@@ -28,11 +28,11 @@ describe("GET /efh", () => {
   });
 
   it("returns empty features for unsupported datasetId", async () => {
-    const res = await request(app).get("/api/efh?datasetId=mariana-trench");
+    const res = await request(app).get("/api/efh?datasetId=no-such-dataset");
     expect(res.status).toBe(200);
     expect(res.body.type).toBe("FeatureCollection");
     expect(res.body.features).toHaveLength(0);
-    expect(res.body.metadata?.note).toContain("mariana-trench");
+    expect(res.body.metadata?.note).toContain("no-such-dataset");
   });
 
   // --- Multi-dataset coverage (task #314) ----------------------------------
@@ -201,7 +201,7 @@ describe("GET /substrate/:id", () => {
   });
 
   it("returns empty collection with honest nearest-coverage metadata for AOIs outside SE Alaska", async () => {
-    const res = await request(app).get("/api/substrate/mariana-trench");
+    const res = await request(app).get("/api/substrate/lake-fork");
     expect(res.status).toBe(200);
     expect(res.body.type).toBe("FeatureCollection");
     expect(res.body.features).toHaveLength(0);
@@ -413,7 +413,7 @@ describe("GET /substrate/:id", () => {
 
   it("getSubstrateForDataset returns honest empty for an AOI outside SE Alaska", async () => {
     const { getSubstrateForDataset } = await import("../lib/shoreZoneData.js");
-    const slice = getSubstrateForDataset("mariana-trench", {
+    const slice = getSubstrateForDataset("no-such-dataset", {
       minLon: 141.0, minLat: 10.5, maxLon: 143.5, maxLat: 12.2,
     });
     expect(slice.hasCoverage).toBe(false);

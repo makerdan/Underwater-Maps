@@ -7,10 +7,10 @@ import request from "supertest";
 vi.mock("@workspace/db", () => {
   const row = {
     id: "11111111-1111-1111-1111-111111111111",
-    datasetId: "mariana-trench",
-    lon: 142.2,
-    lat: 11.35,
-    depth: 5000,
+    datasetId: "thorne-bay",
+    lon: -132.53,
+    lat: 55.69,
+    depth: 100,
     type: "custom",
     label: "Test Marker",
     notes: null,
@@ -78,7 +78,7 @@ const AUTHED_HEADER = { "x-mock-clerk-user-id": "user_test123" };
 
 describe("GET /api/markers", () => {
   it("returns 200 with an array when datasetId is provided (no auth required)", async () => {
-    const res = await request(app).get("/api/markers?datasetId=mariana-trench");
+    const res = await request(app).get("/api/markers?datasetId=thorne-bay");
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
   });
@@ -93,7 +93,7 @@ describe("POST /api/markers — auth required", () => {
   it("returns 401 when no auth session is present", async () => {
     const res = await request(app)
       .post("/api/markers")
-      .send({ datasetId: "mariana-trench", lon: 142.2, lat: 11.35, depth: 5000, label: "Test" });
+      .send({ datasetId: "thorne-bay", lon: -132.53, lat: 55.69, depth: 100, label: "Test" });
     expect(res.status).toBe(401);
     expect(res.body).toHaveProperty("error", "Unauthorized");
   });
@@ -102,10 +102,10 @@ describe("POST /api/markers — auth required", () => {
     const res = await request(app)
       .post("/api/markers")
       .set(AUTHED_HEADER)
-      .send({ datasetId: "mariana-trench", lon: 142.2, lat: 11.35, depth: 5000, label: "Test" });
+      .send({ datasetId: "thorne-bay", lon: -132.53, lat: 55.69, depth: 100, label: "Test" });
     expect(res.status).toBe(201);
     expect(res.body).toHaveProperty("id");
-    expect(res.body).toHaveProperty("datasetId", "mariana-trench");
+    expect(res.body).toHaveProperty("datasetId", "thorne-bay");
     expect(res.body).toHaveProperty("userId", "user_test123");
   });
 

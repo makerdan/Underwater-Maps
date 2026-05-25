@@ -31,7 +31,7 @@
 import { test, expect } from "@playwright/test";
 import type { Page, APIResponse } from "@playwright/test";
 
-const DATASET_ID = "mariana-trench";
+const DATASET_ID = "thorne-bay";
 const TEST_USER_ID = "e2e-user";
 const API_BASE = process.env["E2E_API_BASE_URL"] ?? "http://127.0.0.1:3151";
 

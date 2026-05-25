@@ -1660,7 +1660,7 @@ components:
           default: fish
         defaultRegion:
           type: string
-          default: mariana-trench
+          default: thorne-bay
         gpsRecordingInterval:
           type: integer
           minimum: 1000

@@ -15,11 +15,11 @@ const datasets = [
     waterType: "saltwater",
   },
   {
-    id: "lake-michigan",
-    name: "Lake Michigan",
-    description: "Freshwater Great Lake",
+    id: "lake-fork",
+    name: "Lake Fork Reservoir — East Texas",
+    description: "Trophy largemouth bass reservoir",
     minDepth: 0,
-    maxDepth: 281,
+    maxDepth: 21,
     waterType: "freshwater",
   },
 ];

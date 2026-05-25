@@ -1646,9 +1646,15 @@ function DatasetSection() {
           value={s.defaultRegion}
           onChange={s.setDefaultRegion}
           options={[
-            { value: "mariana-trench", label: "Mariana Trench" },
-            { value: "mid-atlantic-ridge", label: "Mid-Atlantic Ridge" },
-            { value: "monterey-canyon", label: "Monterey Canyon" },
+            { value: "thorne-bay", label: "Thorne Bay — SE Alaska" },
+            { value: "glacier-bay", label: "Glacier Bay — SE Alaska" },
+            { value: "icy-strait", label: "Icy Strait — SE Alaska" },
+            { value: "sitka-sound", label: "Sitka Sound — SE Alaska" },
+            { value: "juneau-approaches", label: "Juneau Approaches — SE Alaska" },
+            { value: "ketchikan", label: "Ketchikan — SE Alaska" },
+            { value: "lake-fork", label: "Lake Fork — East Texas" },
+            { value: "sam-rayburn", label: "Sam Rayburn — East Texas" },
+            { value: "toledo-bend", label: "Toledo Bend — TX/LA" },
           ]}
           sublabel="Dataset loaded when the app starts"
         />

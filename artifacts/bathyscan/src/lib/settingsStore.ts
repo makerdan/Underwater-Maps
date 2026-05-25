@@ -541,7 +541,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   trailRetention: "30",
 
   // Data
-  defaultRegion: "mariana-trench",
+  defaultRegion: "thorne-bay",
   autoLoadLastDataset: true,
 
   // Accessibility

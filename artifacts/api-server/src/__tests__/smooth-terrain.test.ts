@@ -125,7 +125,7 @@ vi.mock("@clerk/shared/keys", () => ({
 import app from "../app.js";
 
 const DISK_CACHE_DIR = "/tmp/gebco-cache";
-const DATASET_ID = "mariana-trench"; // does not use NCEI → straight to GEBCO
+const DATASET_ID = "glacier-bay"; // does not use NCEI → straight to GEBCO
 const TEST_USER = "user_smooth_test";
 const AUTH_HEADER = { "x-mock-clerk-user-id": TEST_USER };
 

@@ -20,7 +20,7 @@ import { test, expect } from "@playwright/test";
  */
 
 const SALTWATER_DATASET = "btn-dataset-thorne-bay";
-const FRESHWATER_DATASET = "btn-dataset-lake-superior";
+const FRESHWATER_DATASET = "btn-dataset-lake-fork";
 
 test.describe("Water-type toggle", () => {
   test("switching to freshwater and back updates UI, datasets, and colormap", async ({ page }) => {
