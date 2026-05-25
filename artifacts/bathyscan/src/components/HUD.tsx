@@ -10,6 +10,8 @@ import { lonLatToWorldXZ } from "@/lib/terrain";
 import { mphToKnots } from "@/lib/boatSpeed";
 import { formatDepth, formatSpeed } from "@/lib/units";
 
+const EFH_DATASETS = new Set(["thorne-bay"]);
+
 const CYAN: React.CSSProperties = {
   color: "#00e5ff",
   textShadow: "0 0 8px rgba(0,229,255,0.6)",
@@ -71,6 +73,13 @@ export const HUD: React.FC = () => {
   const coordinateFormat = useSettingsStore((s) => s.coordinateFormat);
   const units = useSettingsStore((s) => s.units);
   const hudOpacity = useSettingsStore((s) => s.hudOpacity);
+
+  const substrateColorMode = useUiStore((s) => s.substrateColorMode);
+  const setSubstrateColorMode = useUiStore((s) => s.setSubstrateColorMode);
+  const efhOverlayEnabled = useUiStore((s) => s.efhOverlayEnabled);
+  const setEfhOverlayEnabled = useUiStore((s) => s.setEfhOverlayEnabled);
+  const { terrain } = useAppState();
+  const hasEfh = EFH_DATASETS.has(terrain?.datasetId ?? "");
 
   const speed = SPEEDS[speedIndex] ?? 0.15;
   const isFly = mode === "fly";
@@ -273,6 +282,56 @@ export const HUD: React.FC = () => {
               <div style={{ color: "#1e3a5f" }}>— NO TERRAIN —</div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── Bottom-right: substrate + EFH overlay toggles ── */}
+      {terrain && (
+        <div
+          className="absolute bottom-3 right-3 flex flex-col gap-1 items-end"
+          style={{ pointerEvents: "auto" }}
+        >
+          {/* Substrate colour toggle */}
+          <button
+            aria-pressed={substrateColorMode}
+            onClick={() => setSubstrateColorMode(!substrateColorMode)}
+            style={{
+              background: substrateColorMode ? "rgba(226,213,160,0.15)" : "rgba(0,10,20,0.75)",
+              border: `1px solid ${substrateColorMode ? "rgba(226,213,160,0.5)" : "rgba(0,229,255,0.15)"}`,
+              borderRadius: 4,
+              color: substrateColorMode ? "#e2d5a0" : "#475569",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 9,
+              padding: "3px 10px",
+              cursor: "pointer",
+              letterSpacing: "0.1em",
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            ◼ SUBSTRATE
+          </button>
+
+          {/* EFH zone toggle — only for datasets with bundled EFH data */}
+          {hasEfh && (
+            <button
+              aria-pressed={efhOverlayEnabled}
+              onClick={() => setEfhOverlayEnabled(!efhOverlayEnabled)}
+              style={{
+                background: efhOverlayEnabled ? "rgba(34,197,94,0.15)" : "rgba(0,10,20,0.75)",
+                border: `1px solid ${efhOverlayEnabled ? "rgba(34,197,94,0.5)" : "rgba(0,229,255,0.15)"}`,
+                borderRadius: 4,
+                color: efhOverlayEnabled ? "#4ade80" : "#475569",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9,
+                padding: "3px 10px",
+                cursor: "pointer",
+                letterSpacing: "0.1em",
+                backdropFilter: "blur(4px)",
+              }}
+            >
+              🐟 EFH ZONES
+            </button>
+          )}
         </div>
       )}
 

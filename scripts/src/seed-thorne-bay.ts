@@ -29,7 +29,7 @@ interface TerrainData {
 }
 
 async function fetchTerrain(resolution: number): Promise<TerrainData> {
-  const url = `${API_URL}/datasets/${DATASET_ID}/terrain?resolution=${resolution}`;
+  const url = `${API_URL}/api/datasets/${DATASET_ID}/terrain?resolution=${resolution}`;
   console.log(`  GET ${url}`);
 
   const resp = await fetch(url, { signal: AbortSignal.timeout(120_000) });
@@ -41,7 +41,7 @@ async function fetchTerrain(resolution: number): Promise<TerrainData> {
 }
 
 async function fetchEfh(): Promise<{ features: unknown[] }> {
-  const url = `${API_URL}/efh?datasetId=${DATASET_ID}`;
+  const url = `${API_URL}/api/efh?datasetId=${DATASET_ID}`;
   console.log(`  GET ${url}`);
   const resp = await fetch(url, { signal: AbortSignal.timeout(30_000) });
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -49,7 +49,7 @@ async function fetchEfh(): Promise<{ features: unknown[] }> {
 }
 
 async function fetchSubstrate(): Promise<{ features: unknown[] }> {
-  const url = `${API_URL}/substrate/${DATASET_ID}`;
+  const url = `${API_URL}/api/substrate/${DATASET_ID}`;
   console.log(`  GET ${url}`);
   const resp = await fetch(url, { signal: AbortSignal.timeout(60_000) });
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);

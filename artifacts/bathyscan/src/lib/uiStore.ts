@@ -20,6 +20,12 @@ interface UiStore {
   /** Which texture slot (0–3) the paint brush is currently set to. */
   zonePaintSlot: 0 | 1 | 2 | 3;
   setZonePaintSlot: (slot: 0 | 1 | 2 | 3) => void;
+  /** Show CMECS substrate colour mode on the terrain mesh (overrides depth colormap). */
+  substrateColorMode: boolean;
+  setSubstrateColorMode: (enabled: boolean) => void;
+  /** Show EFH zone polygon outlines in the 3D scene. */
+  efhOverlayEnabled: boolean;
+  setEfhOverlayEnabled: (enabled: boolean) => void;
 }
 
 export const useUiStore = create<UiStore>((set) => ({
@@ -37,4 +43,8 @@ export const useUiStore = create<UiStore>((set) => ({
   setZonePaintMode: (enabled) => set({ zonePaintMode: enabled }),
   zonePaintSlot: 0,
   setZonePaintSlot: (slot) => set({ zonePaintSlot: slot }),
+  substrateColorMode: false,
+  setSubstrateColorMode: (enabled) => set({ substrateColorMode: enabled }),
+  efhOverlayEnabled: false,
+  setEfhOverlayEnabled: (enabled) => set({ efhOverlayEnabled: enabled }),
 }));

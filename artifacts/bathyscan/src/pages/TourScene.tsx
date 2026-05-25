@@ -9,6 +9,7 @@ import {
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
 import { TerrainMesh } from "@/components/TerrainMesh";
+import { EfhZoneLayer } from "@/components/EfhZoneLayer";
 import { Particles } from "@/components/Particles";
 import { Caustics } from "@/components/Caustics";
 import { useFlyControls } from "@/hooks/useFlyControls";
@@ -178,6 +179,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
 
       <Particles />
       {terrain && <TerrainMesh ref={terrainMeshRef} grid={terrain} />}
+      <EfhZoneLayer />
       <Caustics />
 
       {tidalOverlay && terrain && (
