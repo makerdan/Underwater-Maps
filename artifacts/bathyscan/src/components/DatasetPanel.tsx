@@ -387,12 +387,14 @@ export const DatasetPanel: React.FC = () => {
                 <button
                   key={ds.id}
                   data-testid={`btn-dataset-${ds.id}`}
-                  onClick={() => handleSelectPreset(ds)}
+                  onClick={() => (isOnline || cachedIds.has(ds.id)) && handleSelectPreset(ds)}
+                  disabled={!isOnline && !cachedIds.has(ds.id)}
                   className="w-full text-left px-3 py-2 transition-colors hover:bg-white/5"
                   style={{
                     background: active ? "rgba(0,229,255,0.07)" : "transparent",
                     borderLeft: active ? "2px solid #00e5ff" : "2px solid transparent",
-                    cursor: "pointer",
+                    cursor: !isOnline && !cachedIds.has(ds.id) ? "not-allowed" : "pointer",
+                    opacity: !isOnline && !cachedIds.has(ds.id) ? 0.4 : 1,
                   }}
                 >
                   <div className="flex items-center justify-between">

@@ -35,52 +35,12 @@ export default defineConfig({
     runtimeErrorOverlay(),
     VitePWA({
       registerType: "autoUpdate",
-      strategies: "generateSW",
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
       injectRegister: "auto",
       base: basePath + "/",
       manifest: false,
-      workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-        navigateFallback: null,
-        runtimeCaching: [
-          {
-            urlPattern: /\/api\/datasets$/,
-            handler: "StaleWhileRevalidate",
-            options: {
-              cacheName: "api-datasets",
-              expiration: { maxEntries: 5, maxAgeSeconds: 60 * 60 * 24 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          {
-            urlPattern: /\/api\/datasets\/[^/]+\/terrain/,
-            handler: "StaleWhileRevalidate",
-            options: {
-              cacheName: "api-terrain",
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 7 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          {
-            urlPattern: /\/api\/datasets\/[^/]+\/overview/,
-            handler: "StaleWhileRevalidate",
-            options: {
-              cacheName: "api-overview",
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 7 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          {
-            urlPattern: /\/api\/markers\?/,
-            handler: "StaleWhileRevalidate",
-            options: {
-              cacheName: "api-markers",
-              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
-      },
       devOptions: {
         enabled: false,
       },
