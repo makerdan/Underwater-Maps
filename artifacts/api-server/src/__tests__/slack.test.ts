@@ -100,6 +100,37 @@ describe("/api/tidal slack block", () => {
   });
 });
 
+describe("/api/tidal/schedule", () => {
+  it("returns slack events with windows for the next N days", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new Error("network disabled");
+    }));
+    const { default: app } = await import("../app");
+    const res = await request(app).get("/api/tidal/schedule?lat=55.6&lon=-132.5&days=3");
+    expect(res.status).toBe(200);
+    expect(res.body.available).toBe(true);
+    expect(res.body.source).toBe("estimated");
+    expect(Array.isArray(res.body.events)).toBe(true);
+    // ~4 hi/lo events per day × 3 days ≈ 12
+    expect(res.body.events.length).toBeGreaterThanOrEqual(8);
+    expect(res.body.events.length).toBeLessThanOrEqual(16);
+    for (const e of res.body.events) {
+      expect(["high", "low"]).toContain(e.type);
+      expect(typeof e.height).toBe("number");
+      expect(typeof e.nextDirectionDeg).toBe("number");
+      expect(new Date(e.windowStart).getTime()).toBeLessThan(new Date(e.time).getTime());
+      expect(new Date(e.windowEnd).getTime()).toBeGreaterThan(new Date(e.time).getTime());
+    }
+    vi.unstubAllGlobals();
+  });
+
+  it("rejects missing lat/lon", async () => {
+    const { default: app } = await import("../app");
+    const res = await request(app).get("/api/tidal/schedule");
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("/api/surface-conditions slack fields", () => {
   it("hourly entries include isSlack and phase", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => {

@@ -1,9 +1,10 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import type { TidalDataResult } from "@/hooks/useTidalData";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { formatDistance, formatDepth } from "@/lib/units";
+import { useTidalSchedule, type TidalScheduleEvent } from "@/hooks/useTidalSchedule";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(2,8,18,0.94)",
@@ -51,6 +52,13 @@ interface TidePanelProps {
   onDepthLayerChange: (l: DepthLayer) => void;
   scrubDatetime: Date | null;
   onScrubChange: (d: Date | null) => void;
+  lat: number | null;
+  lon: number | null;
+}
+
+function compassLabelLocal(deg: number): string {
+  const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  return dirs[Math.round(deg / 45) % 8] ?? "N";
 }
 
 const DEPTH_LAYERS: DepthLayer[] = ["surface", "mid", "near-bottom"];
@@ -67,10 +75,14 @@ export const TidePanel: React.FC<TidePanelProps> = ({
   onDepthLayerChange,
   scrubDatetime,
   onScrubChange,
+  lat,
+  lon,
 }) => {
   const collapsed = usePanelCollapseStore((s) => s.collapsed.tide);
   const togglePanel = usePanelCollapseStore((s) => s.toggle);
+  const [hoveredEvent, setHoveredEvent] = useState<TidalScheduleEvent | null>(null);
   const units = useSettingsStore((s) => s.units);
+  const { schedule } = useTidalSchedule(lat, lon, 7);
 
   const today = useMemo(() => {
     const d = new Date();
@@ -119,6 +131,52 @@ export const TidePanel: React.FC<TidePanelProps> = ({
     if (!scrubDay) return 0;
     return Math.round((scrubDay.getTime() - today.getTime()) / 86_400_000);
   }, [scrubDay, today]);
+
+  // Bucket schedule events by day-offset for badge counts.
+  const slackCountsByDay = useMemo(() => {
+    const counts: Record<number, number> = {};
+    if (!schedule) return counts;
+    for (const e of schedule.events) {
+      const t = new Date(e.time);
+      const dayStart = Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate());
+      const offset = Math.round((dayStart - today.getTime()) / 86_400_000);
+      if (offset < 0 || offset > 6) continue;
+      counts[offset] = (counts[offset] ?? 0) + 1;
+    }
+    return counts;
+  }, [schedule, today]);
+
+  // Slack windows that intersect the currently-selected day, projected
+  // onto the 0–24h slider range as percentages.
+  const slackBandsForSelectedDay = useMemo(() => {
+    if (!schedule) return [] as Array<{
+      leftPct: number;
+      widthPct: number;
+      centerPct: number;
+      event: TidalScheduleEvent;
+    }>;
+    const dayStartMs = (scrubDay ?? today).getTime();
+    const dayEndMs = dayStartMs + 86_400_000;
+    const out: Array<{
+      leftPct: number;
+      widthPct: number;
+      centerPct: number;
+      event: TidalScheduleEvent;
+    }> = [];
+    for (const e of schedule.events) {
+      const wsMs = new Date(e.windowStart).getTime();
+      const weMs = new Date(e.windowEnd).getTime();
+      if (weMs < dayStartMs || wsMs > dayEndMs) continue;
+      const clampedStart = Math.max(wsMs, dayStartMs);
+      const clampedEnd = Math.min(weMs, dayEndMs);
+      const leftPct = ((clampedStart - dayStartMs) / 86_400_000) * 100;
+      const widthPct = ((clampedEnd - clampedStart) / 86_400_000) * 100;
+      const centerMs = new Date(e.time).getTime();
+      const centerPct = Math.max(0, Math.min(100, ((centerMs - dayStartMs) / 86_400_000) * 100));
+      out.push({ leftPct, widthPct, centerPct, event: e });
+    }
+    return out;
+  }, [schedule, scrubDay, today]);
 
   return (
     <div style={PANEL}>
@@ -293,10 +351,12 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                         month: "numeric",
                         day: "numeric",
                       });
+                const slackCount = slackCountsByDay[offset] ?? 0;
                 return (
                   <button
                     key={offset}
                     onClick={() => setDay(offset)}
+                    title={slackCount > 0 ? `${slackCount} slack window${slackCount === 1 ? "" : "s"} this day` : undefined}
                     style={{
                       fontSize: 10,
                       padding: "2px 6px",
@@ -309,9 +369,24 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                       color: offset === selectedDayOffset ? "#38bdf8" : "#cbd5e1",
                       cursor: "pointer",
                       whiteSpace: "nowrap",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
                     }}
                   >
-                    {label}
+                    <span>{label}</span>
+                    {slackCount > 0 && (
+                      <span
+                        style={{
+                          color: "#c084fc",
+                          fontSize: 9,
+                          letterSpacing: 0,
+                          opacity: 0.9,
+                        }}
+                      >
+                        ◐{slackCount}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -321,20 +396,128 @@ export const TidePanel: React.FC<TidePanelProps> = ({
             <div className="mt-1.5">
               <div className="flex items-center gap-2">
                 <span style={{ ...DIM, fontSize: 10, minWidth: 20 }}>00</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={23}
-                  value={scrubHour}
-                  onChange={(e) => setHour(parseInt(e.target.value, 10))}
-                  style={{ flex: 1, accentColor: "#00e5ff", height: 4 }}
-                />
+                <div style={{ flex: 1, position: "relative", height: 18 }}>
+                  {/* Slack window band overlay (purple shading) */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      right: 0,
+                      top: 6,
+                      height: 6,
+                      pointerEvents: "none",
+                    }}
+                  >
+                    {slackBandsForSelectedDay.map((b, i) => (
+                      <div
+                        key={`band-${i}`}
+                        style={{
+                          position: "absolute",
+                          left: `${b.leftPct}%`,
+                          width: `${Math.max(0.4, b.widthPct)}%`,
+                          top: 0,
+                          height: "100%",
+                          background:
+                            "linear-gradient(90deg, rgba(168,85,247,0) 0%, rgba(168,85,247,0.55) 50%, rgba(168,85,247,0) 100%)",
+                          borderRadius: 2,
+                        }}
+                      />
+                    ))}
+                  </div>
+                  {/* Slack center ticks (hoverable) */}
+                  {slackBandsForSelectedDay.map((b, i) => (
+                    <div
+                      key={`tick-${i}`}
+                      onMouseEnter={() => setHoveredEvent(b.event)}
+                      onMouseLeave={() =>
+                        setHoveredEvent((cur) => (cur === b.event ? null : cur))
+                      }
+                      style={{
+                        position: "absolute",
+                        left: `calc(${b.centerPct}% - 4px)`,
+                        top: 1,
+                        width: 8,
+                        height: 16,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: 3,
+                          top: 0,
+                          width: 2,
+                          height: "100%",
+                          background:
+                            b.event.type === "high" ? "#c084fc" : "#f0abfc",
+                          boxShadow: "0 0 4px rgba(192,132,252,0.7)",
+                          borderRadius: 1,
+                        }}
+                      />
+                    </div>
+                  ))}
+                  <input
+                    type="range"
+                    min={0}
+                    max={23}
+                    value={scrubHour}
+                    onChange={(e) => setHour(parseInt(e.target.value, 10))}
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      right: 0,
+                      top: 0,
+                      width: "100%",
+                      accentColor: "#00e5ff",
+                      height: 18,
+                      background: "transparent",
+                    }}
+                  />
+                </div>
                 <span style={{ ...DIM, fontSize: 10, minWidth: 20 }}>23</span>
               </div>
               <div style={{ textAlign: "center", ...CYAN, fontSize: 10, marginTop: 2 }}>
                 {String(scrubHour).padStart(2, "0")}:00 UTC
                 {scrubDatetime ? "" : " (Live)"}
               </div>
+              {hoveredEvent && (
+                <div
+                  style={{
+                    marginTop: 4,
+                    padding: "3px 6px",
+                    borderRadius: 2,
+                    background: "rgba(168,85,247,0.12)",
+                    border: "1px solid rgba(168,85,247,0.4)",
+                    color: "#e9d5ff",
+                    fontSize: 10,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  <div>
+                    <span style={{ color: "#c084fc", fontWeight: 600 }}>
+                      {hoveredEvent.type === "high" ? "Slack ↑ High" : "Slack ↓ Low"}
+                    </span>{" "}
+                    <span style={DIM}>
+                      {new Date(hoveredEvent.time).toLocaleString("en-US", {
+                        weekday: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        timeZone: "UTC",
+                      })}{" "}
+                      UTC
+                    </span>
+                  </div>
+                  <div style={{ ...DIM, fontSize: 9 }}>
+                    Reverses to{" "}
+                    <span style={{ color: "#7dd3fc" }}>
+                      {hoveredEvent.type === "high" ? "ebb" : "flood"}
+                    </span>{" "}
+                    → {compassLabelLocal(hoveredEvent.nextDirectionDeg)} (
+                    {hoveredEvent.nextDirectionDeg}°) · height{" "}
+                    {formatDepth(hoveredEvent.height, { units, decimals: 2 })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -535,6 +535,8 @@ function Main() {
                 onDepthLayerChange={setDepthLayer}
                 scrubDatetime={scrubDatetime}
                 onScrubChange={setScrubDatetime}
+                lat={centerLat}
+                lon={centerLon}
               />
             )}
           </div>
