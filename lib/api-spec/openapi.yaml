@@ -1602,7 +1602,7 @@ components:
           type: array
           items:
             type: string
-            enum: [fish, shipwreck, coral, vent, custom, log, vegetation, sample, bass, trout, pike, walleye, crayfish]
+            enum: [fish, shipwreck, coral, vent, custom, depth_pole, log, vegetation, sample, bass, trout, pike, walleye, crayfish]
           default: [fish, shipwreck, coral, vent, custom]
         showMarkerLabels:
           type: boolean
@@ -1616,7 +1616,7 @@ components:
           default: false
         defaultMarkerType:
           type: string
-          enum: [fish, shipwreck, coral, vent, custom, log, vegetation, sample, bass, trout, pike, walleye, crayfish]
+          enum: [fish, shipwreck, coral, vent, custom, depth_pole, log, vegetation, sample, bass, trout, pike, walleye, crayfish]
           default: fish
         defaultRegion:
           type: string
