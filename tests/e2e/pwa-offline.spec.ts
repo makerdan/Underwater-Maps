@@ -4,15 +4,34 @@ import { test, expect } from "@playwright/test";
  * PWA / Offline Mode E2E tests.
  *
  * Strategy:
- * - After initial load, intercept all API network requests with page.route to
- *   simulate going offline, then verify the UI reacts correctly.
- * - Tests that depend on the 3D scene being loaded first check for the canvas
- *   element and skip gracefully when the app is not signed in or not loaded.
- * - Navigation uses `domcontentloaded` to avoid hanging on long-running AI
- *   requests (matching the pattern in gps-trail.spec.ts).
+ * 1. Manifest/meta/icon tests — request the static assets directly.
+ * 2. Offline-UI tests — load the app, then dispatch the offline event and
+ *    optionally block API routes with page.route, then assert the UI adapts.
+ * 3. Warm-load + network-abort test — let the app load fully (terrain warm-
+ *    up), then intercept ALL requests to simulate the device going offline;
+ *    verify the canvas is still present, the offline badge appears, the query
+ *    panel is disabled, and the dataset picker shows unavailable indicators.
  */
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3150";
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+async function goOffline(page: import("@playwright/test").Page) {
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "onLine", { get: () => false, configurable: true });
+    window.dispatchEvent(new Event("offline"));
+  });
+}
+
+async function goOnline(page: import("@playwright/test").Page) {
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "onLine", { get: () => true, configurable: true });
+    window.dispatchEvent(new Event("online"));
+  });
+}
+
+// ── Manifest & meta tags ─────────────────────────────────────────────────────
 
 test.describe("PWA manifest & meta tags", () => {
   test("manifest.json is served with correct fields", async ({ page }) => {
@@ -31,10 +50,14 @@ test.describe("PWA manifest & meta tags", () => {
 
   test("index.html has manifest link, theme-color, and apple-mobile-web-app meta", async ({ page }) => {
     await page.goto(BASE, { waitUntil: "domcontentloaded" });
-    const manifestHref = await page.$eval('link[rel="manifest"]', (el) => el.getAttribute("href")).catch(() => null);
+    const manifestHref = await page
+      .$eval('link[rel="manifest"]', (el) => el.getAttribute("href"))
+      .catch(() => null);
     expect(manifestHref).not.toBeNull();
 
-    const themeColor = await page.$eval('meta[name="theme-color"]', (el) => el.getAttribute("content")).catch(() => null);
+    const themeColor = await page
+      .$eval('meta[name="theme-color"]', (el) => el.getAttribute("content"))
+      .catch(() => null);
     expect(themeColor).toBe("#020818");
 
     const appleCapable = await page.$('meta[name="apple-mobile-web-app-capable"]');
@@ -47,60 +70,46 @@ test.describe("PWA manifest & meta tags", () => {
   test("icon-192.png is served as image/png", async ({ page }) => {
     const res = await page.goto(`${BASE}/icon-192.png`, { waitUntil: "domcontentloaded" });
     expect(res?.status()).toBe(200);
-    const ct = res?.headers()["content-type"] ?? "";
-    expect(ct).toMatch(/image\/png/);
+    expect(res?.headers()["content-type"]).toMatch(/image\/png/);
   });
 
   test("icon-512.png is served as image/png", async ({ page }) => {
     const res = await page.goto(`${BASE}/icon-512.png`, { waitUntil: "domcontentloaded" });
     expect(res?.status()).toBe(200);
-    const ct = res?.headers()["content-type"] ?? "";
-    expect(ct).toMatch(/image\/png/);
+    expect(res?.headers()["content-type"]).toMatch(/image\/png/);
   });
 });
+
+// ── Offline indicator & query panel ─────────────────────────────────────────
 
 test.describe("Offline indicator & query panel", () => {
   test("offline badge appears when offline event is dispatched", async ({ page }) => {
     await page.goto(BASE, { waitUntil: "domcontentloaded" });
 
-    const canvas = await page.$("canvas");
-    if (!canvas) {
+    if (!(await page.$("canvas"))) {
       test.skip();
       return;
     }
 
-    // Simulate going offline via browser events
-    await page.evaluate(() => {
-      Object.defineProperty(navigator, "onLine", { get: () => false, configurable: true });
-      window.dispatchEvent(new Event("offline"));
-    });
+    await goOffline(page);
 
     const badge = page.locator('[data-testid="offline-badge"]');
     await expect(badge).toBeVisible({ timeout: 3000 });
     await expect(badge).toContainText("OFFLINE");
 
-    // Simulate going back online
-    await page.evaluate(() => {
-      Object.defineProperty(navigator, "onLine", { get: () => true, configurable: true });
-      window.dispatchEvent(new Event("online"));
-    });
-
+    await goOnline(page);
     await expect(badge).not.toBeVisible({ timeout: 3000 });
   });
 
   test("query panel shows offline notice and disables input when offline", async ({ page }) => {
     await page.goto(BASE, { waitUntil: "domcontentloaded" });
 
-    const canvas = await page.$("canvas");
-    if (!canvas) {
+    if (!(await page.$("canvas"))) {
       test.skip();
       return;
     }
 
-    await page.evaluate(() => {
-      Object.defineProperty(navigator, "onLine", { get: () => false, configurable: true });
-      window.dispatchEvent(new Event("offline"));
-    });
+    await goOffline(page);
 
     const trigger = page.locator('[data-testid="query-panel-trigger"]');
     if (await trigger.isVisible()) {
@@ -122,38 +131,105 @@ test.describe("Offline indicator & query panel", () => {
   });
 });
 
+// ── Warm-load + full network-abort offline scenario ──────────────────────────
+
 test.describe("Offline network-abort scenario", () => {
-  test("offline badge appears when all API routes are blocked", async ({ page }) => {
-    // Let the page load first (without blocking)
+  /**
+   * After the app has had a chance to load, we block all network requests and
+   * simulate the offline event.  We verify:
+   *   - The 3-D canvas element is still present (terrain rendered before abort)
+   *   - The offline badge is shown
+   *   - Any dataset listed in the picker shows an availability indicator
+   *   - The query panel input is disabled
+   */
+  test("canvas persists and offline badge appears after full network block", async ({ page }) => {
+    // 1. Load the app and wait for the canvas + terrain to appear
     await page.goto(BASE, { waitUntil: "domcontentloaded" });
 
     const canvas = await page.$("canvas");
     if (!canvas) {
+      // Not signed in — terrain never loads; skip gracefully
       test.skip();
       return;
     }
 
-    // Block all API requests to simulate offline
+    // Give the terrain a moment to start loading
+    await page.waitForTimeout(1500);
+
+    // 2. Block all API routes to simulate device going offline
     await page.route("**/api/**", (route) => route.abort("failed"));
 
-    // Dispatch offline event to drive the store
-    await page.evaluate(() => {
-      Object.defineProperty(navigator, "onLine", { get: () => false, configurable: true });
-      window.dispatchEvent(new Event("offline"));
-    });
+    // 3. Dispatch the offline event so the store updates
+    await goOffline(page);
 
+    // 4. The canvas element must still be in the DOM (terrain rendered pre-abort)
+    const canvasAfter = page.locator("canvas");
+    await expect(canvasAfter).toBeAttached({ timeout: 3000 });
+
+    // 5. Offline badge must be visible
     const badge = page.locator('[data-testid="offline-badge"]');
     await expect(badge).toBeVisible({ timeout: 4000 });
     await expect(badge).toContainText("OFFLINE");
   });
 
+  test("query panel is disabled and shows offline notice after network block", async ({ page }) => {
+    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+
+    if (!(await page.$("canvas"))) {
+      test.skip();
+      return;
+    }
+
+    await page.waitForTimeout(1000);
+    await page.route("**/api/**", (route) => route.abort("failed"));
+    await goOffline(page);
+
+    // Open the query panel
+    const trigger = page.locator('[data-testid="query-panel-trigger"]');
+    if (await trigger.isVisible()) {
+      await trigger.click();
+    } else {
+      await page.keyboard.press("/");
+    }
+
+    const queryInput = page.locator('[data-testid="query-input"]');
+    await expect(queryInput).toBeVisible({ timeout: 3000 });
+    await expect(queryInput).toBeDisabled();
+
+    const offlineNotice = page.locator('[data-testid="query-offline-notice"]');
+    await expect(offlineNotice).toBeVisible();
+  });
+
+  test("dataset picker shows availability indicators when offline", async ({ page }) => {
+    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+
+    if (!(await page.$("canvas"))) {
+      test.skip();
+      return;
+    }
+
+    await page.waitForTimeout(1000);
+    await page.route("**/api/**", (route) => route.abort("failed"));
+    await goOffline(page);
+
+    // The dataset panel should show either cached (✓) or unavailable (✗) badges.
+    // In the test environment the SW cache is cold, so we expect ✗ badges.
+    const unavailableBadges = page.locator('[data-testid^="unavailable-badge-"]');
+    const cachedBadges = page.locator('[data-testid^="cache-badge-"]');
+
+    // At least one of the two types of badge must be visible (datasets listed)
+    const unavailableCount = await unavailableBadges.count();
+    const cachedCount = await cachedBadges.count();
+    expect(unavailableCount + cachedCount).toBeGreaterThan(0);
+  });
+
   test("Settings page is accessible and shows cache management UI", async ({ page }) => {
     await page.goto(`${BASE}/settings`, { waitUntil: "domcontentloaded" });
-    // Settings page should render without crashing
+
     const clearBtn = page.locator('[data-testid="clear-all-cache-btn"]');
     await expect(clearBtn).toBeVisible({ timeout: 5000 });
     await expect(clearBtn).toContainText("CLEAR ALL");
-    // Pending markers count is shown
+
     const pendingCount = page.locator('[data-testid="pending-markers-count"]');
     await expect(pendingCount).toBeVisible();
   });
