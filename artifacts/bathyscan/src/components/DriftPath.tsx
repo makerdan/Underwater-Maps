@@ -45,9 +45,11 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
     if (!driftPath) return null;
     const wp = driftPath[driftHour];
     if (!wp) return null;
-    const angleRad = (wp.lineAngleDeg * Math.PI) / 180;
+    // During slack the line hangs vertical regardless of stored angle.
+    const effectiveAngle = wp.isSlack ? 0 : wp.lineAngleDeg;
+    const angleRad = (effectiveAngle * Math.PI) / 180;
     const horizontalReach = lineLengthM * Math.sin(angleRad);
-    const verticalDrop = wp.hookDepthM;
+    const verticalDrop = wp.isSlack ? lineLengthM : wp.hookDepthM;
     const scaleFactor = 0.015;
     const start = new THREE.Vector3(wp.worldX, surfaceY, wp.worldZ);
     const headingRad = (wp.headingDeg * Math.PI) / 180;
@@ -76,20 +78,40 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
         </mesh>
       )}
 
-      {/* Hourly buoy markers */}
-      {driftPath.map((wp, i) => (
-        <mesh
-          key={i}
-          position={[wp.worldX, surfaceY + 0.22, wp.worldZ]}
-        >
-          <sphereGeometry args={[i === driftHour ? 0.28 : 0.16, 8, 8]} />
-          <meshStandardMaterial
-            color={i === driftHour ? BUOY_ACTIVE_COLOR : BUOY_COLOR}
-            emissive={i === driftHour ? BUOY_ACTIVE_COLOR : BUOY_COLOR}
-            emissiveIntensity={i === driftHour ? 0.9 : 0.25}
-          />
-        </mesh>
-      ))}
+      {/* Hourly buoy markers — slack hours render as a hollow ring */}
+      {driftPath.map((wp, i) => {
+        const isActive = i === driftHour;
+        const radius = isActive ? 0.28 : 0.16;
+        if (wp.isSlack) {
+          return (
+            <mesh
+              key={i}
+              position={[wp.worldX, surfaceY + 0.22, wp.worldZ]}
+              rotation={[-Math.PI / 2, 0, 0]}
+            >
+              <torusGeometry args={[radius, radius * 0.22, 6, 16]} />
+              <meshStandardMaterial
+                color={isActive ? BUOY_ACTIVE_COLOR : 0xc084fc}
+                emissive={isActive ? BUOY_ACTIVE_COLOR : 0xa855f7}
+                emissiveIntensity={isActive ? 0.9 : 0.4}
+              />
+            </mesh>
+          );
+        }
+        return (
+          <mesh
+            key={i}
+            position={[wp.worldX, surfaceY + 0.22, wp.worldZ]}
+          >
+            <sphereGeometry args={[radius, 8, 8]} />
+            <meshStandardMaterial
+              color={isActive ? BUOY_ACTIVE_COLOR : BUOY_COLOR}
+              emissive={isActive ? BUOY_ACTIVE_COLOR : BUOY_COLOR}
+              emissiveIntensity={isActive ? 0.9 : 0.25}
+            />
+          </mesh>
+        );
+      })}
 
       {/* Fishing line at active hour */}
       {fishingLinePoints && (

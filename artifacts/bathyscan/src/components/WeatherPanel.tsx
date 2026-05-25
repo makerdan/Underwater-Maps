@@ -111,6 +111,8 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     setManualTidalSpeedKnots,
     manualTidalDegrees,
     setManualTidalDegrees,
+    manualSlackNow,
+    setManualSlackNow,
   } = useDriftStore();
 
   const centerLat = terrain ? (terrain.minLat + terrain.maxLat) / 2 : 0;
@@ -150,13 +152,16 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
 
   const recomputeWithManual = useCallback(() => {
     if (!terrain) return;
+    const tidalSpeed = manualSlackNow ? 0 : manualTidalSpeedKnots;
     const manualConditions = Array.from({ length: 24 }, (_, h) => ({
       hour: h,
       windSpeedKnots: manualWindSpeedKnots,
       windDegrees: manualWindDegrees,
-      tidalSpeedKnots: manualTidalSpeedKnots,
+      tidalSpeedKnots: tidalSpeed,
       tidalDegrees: manualTidalDegrees,
       waveHeightM: 0.3,
+      isSlack: manualSlackNow,
+      phase: manualSlackNow ? ("slack-high" as const) : undefined,
     }));
     setDriftConditions(manualConditions);
     const startLat = driftStartLat ?? centerLat;
@@ -272,9 +277,18 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
               <input type="range" min={0} max={359} value={manualWindDegrees} onChange={(e) => setManualWindDegrees(Number(e.target.value))} style={sliderStyle} />
             </div>
             <div>
-              <div style={LABEL}>TIDAL {manualTidalSpeedKnots} kt @ {manualTidalDegrees}°</div>
-              <input type="range" min={0} max={6} step={0.1} value={manualTidalSpeedKnots} onChange={(e) => setManualTidalSpeedKnots(Number(e.target.value))} style={sliderStyle} />
+              <div style={LABEL}>TIDAL {manualSlackNow ? "0.0 (slack)" : manualTidalSpeedKnots} kt @ {manualTidalDegrees}°</div>
+              <input type="range" min={0} max={6} step={0.1} value={manualTidalSpeedKnots} disabled={manualSlackNow} onChange={(e) => setManualTidalSpeedKnots(Number(e.target.value))} style={{ ...sliderStyle, opacity: manualSlackNow ? 0.4 : 1 }} />
               <input type="range" min={0} max={359} value={manualTidalDegrees} onChange={(e) => setManualTidalDegrees(Number(e.target.value))} style={sliderStyle} />
+              <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, color: manualSlackNow ? "#c084fc" : "#64748b", cursor: "pointer", fontSize: 9, letterSpacing: "0.1em" }}>
+                <input
+                  type="checkbox"
+                  checked={manualSlackNow}
+                  onChange={(e) => setManualSlackNow(e.target.checked)}
+                  style={{ accentColor: "#c084fc" }}
+                />
+                SLACK NOW (force current to 0)
+              </label>
             </div>
             <button
               onClick={recomputeWithManual}

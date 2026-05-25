@@ -9,15 +9,25 @@
  *   - Tidal current:
  *       1. NOAA CO-OPS current predictions for nearest station within
  *          NOAA_STATION_MAX_KM of the requested point ("noaa-coops"), OR
- *       2. Sinusoidal M2 approximation (12.4 h period) as graceful fallback
- *          ("sinusoidal") for points outside NOAA coverage or when the NOAA
- *          fetch fails.
+ *       2. Shared slack-tide synthetic model (see lib/slack.ts) using a
+ *          semi-diurnal schedule anchored on local solar noon
+ *          ("sinusoidal") for points outside NOAA coverage or when the
+ *          NOAA fetch fails.
+ *
+ * Either source yields per-hour `isSlack` + `phase` metadata so the UI can
+ * fade arrows, halt drift, and label the timeline at slack tides.
  *
  * The overall response includes an `estimatedConditions` flag for wind/wave
  * estimation and a separate `tidalDataSource` field for the tidal source.
  */
 
 import { Router } from "express";
+import {
+  buildSyntheticEvents,
+  computeSlackSample,
+  SLACK_THRESHOLD_DEFAULT,
+  type TidePhase,
+} from "../lib/slack.js";
 
 const router = Router();
 
@@ -34,6 +44,8 @@ interface HourlySurfaceCondition {
   tidalSpeedKnots: number;
   tidalDegrees: number;
   waveHeightM: number;
+  isSlack: boolean;
+  phase: TidePhase;
 }
 
 interface NoaaStation {
@@ -46,23 +58,45 @@ interface NoaaStation {
 interface TidalHour {
   tidalSpeedKnots: number;
   tidalDegrees: number;
+  isSlack: boolean;
+  phase: TidePhase;
 }
 
 // ---------------------------------------------------------------------------
-// Sinusoidal M2 tidal model (fallback)
+// Tidal hourly series using the shared slack model (NOAA-free fallback)
 // ---------------------------------------------------------------------------
 
-export function buildSinusoidalTidalHours(lat: number, lon: number): TidalHour[] {
-  const period = 12.4;
-  const maxSpeed = 1.2;
-  const baseDir = ((lat + lon) * 73.1) % 360;
+export function buildSinusoidalTidalHours(
+  lat: number,
+  lon: number,
+  startMs: number = nowTopOfHourMs(),
+): TidalHour[] {
+  const peakSpeed = 1.2;
+  const floodBearing = ((lat + lon) * 73.1 + 360) % 360;
+  const events = buildSyntheticEvents(startMs, lon);
 
   return Array.from({ length: 24 }, (_, h) => {
-    const phase = (h / period) * Math.PI * 2;
-    const speed = Math.abs(Math.sin(phase)) * maxSpeed;
-    const dir = Math.round(baseDir + (Math.sin(phase) > 0 ? 0 : 180)) % 360;
-    return { tidalSpeedKnots: Math.round(speed * 10) / 10, tidalDegrees: dir };
+    const t = startMs + h * 3600 * 1000;
+    const s = computeSlackSample({
+      events,
+      refTime: t,
+      peakSpeedKnots: peakSpeed,
+      floodBearingDeg: floodBearing,
+      slackThresholdKnots: SLACK_THRESHOLD_DEFAULT,
+    });
+    return {
+      tidalSpeedKnots: Math.round(s.speedKnots * 100) / 100,
+      tidalDegrees: Math.round(s.directionDeg) % 360,
+      isSlack: s.slack.isSlack,
+      phase: s.slack.phase,
+    };
   });
+}
+
+function nowTopOfHourMs(): number {
+  const now = new Date();
+  now.setUTCMinutes(0, 0, 0);
+  return now.getTime();
 }
 
 // ---------------------------------------------------------------------------
@@ -140,6 +174,10 @@ interface NoaaPredictionRow {
  * Convert NOAA CO-OPS hourly current predictions into 24 entries matching
  * hours 0..23 UTC for the given UTC date. Velocity_Major is signed knots:
  * positive = flood direction, negative = ebb direction.
+ *
+ * Per-hour slack metadata is derived from the absolute speed (using
+ * SLACK_THRESHOLD_DEFAULT) and the sign of Velocity_Major (positive →
+ * flooding, negative → ebbing, slack → slack).
  */
 export function parseNoaaPredictions(
   raw: { current_predictions?: { cp?: NoaaPredictionRow[] } },
@@ -179,9 +217,22 @@ export function parseNoaaPredictions(
     } else {
       dir = 0;
     }
+    const isSlack = speed < SLACK_THRESHOLD_DEFAULT;
+    // Sign of v: ≥0 means flooding (so slack here is the slack-low that
+    // precedes flooding); <0 means ebbing (slack here is the slack-high
+    // that precedes ebbing).
+    const phase: TidePhase = isSlack
+      ? v >= 0
+        ? "slack-low"
+        : "slack-high"
+      : v >= 0
+        ? "flooding"
+        : "ebbing";
     byHour.set(rh, {
       tidalSpeedKnots: Math.round(speed * 10) / 10,
       tidalDegrees: Math.round(((dir % 360) + 360) % 360),
+      isSlack,
+      phase,
     });
   }
 
@@ -189,7 +240,7 @@ export function parseNoaaPredictions(
 
   // Fill all 24 hours, repeating the last known value for any gaps.
   const out: TidalHour[] = [];
-  let last: TidalHour = { tidalSpeedKnots: 0, tidalDegrees: 0 };
+  let last: TidalHour = { tidalSpeedKnots: 0, tidalDegrees: 0, isSlack: true, phase: "slack-low" };
   for (let h = 0; h < 24; h++) {
     const v = byHour.get(h);
     if (v) last = v;
@@ -222,7 +273,7 @@ async function fetchWithTimeout(url: string, timeoutMs = 6000): Promise<Response
 }
 
 // ---------------------------------------------------------------------------
-// Tidal resolution — try NOAA, fall back to sinusoidal
+// Tidal resolution — try NOAA, fall back to slack-model synthetic series
 // ---------------------------------------------------------------------------
 
 interface ResolvedTidal {
@@ -233,12 +284,12 @@ interface ResolvedTidal {
   distanceKm?: number;
 }
 
-async function resolveTidal(lat: number, lon: number): Promise<ResolvedTidal> {
+async function resolveTidal(lat: number, lon: number, startMs: number): Promise<ResolvedTidal> {
   try {
     const stations = await fetchNoaaStations();
     const nearest = findNearestStation(stations, lat, lon);
     if (nearest) {
-      const hours = await fetchNoaaPredictions(nearest.station.id, new Date());
+      const hours = await fetchNoaaPredictions(nearest.station.id, new Date(startMs));
       if (hours) {
         return {
           hours,
@@ -250,9 +301,9 @@ async function resolveTidal(lat: number, lon: number): Promise<ResolvedTidal> {
       }
     }
   } catch {
-    // fall through to sinusoidal
+    // fall through to slack-model synthetic series
   }
-  return { hours: buildSinusoidalTidalHours(lat, lon), source: "sinusoidal" };
+  return { hours: buildSinusoidalTidalHours(lat, lon, startMs), source: "sinusoidal" };
 }
 
 // ---------------------------------------------------------------------------
@@ -271,7 +322,11 @@ router.get("/surface-conditions", async (req, res): Promise<void> => {
     return;
   }
 
-  const tidal = await resolveTidal(lat, lon);
+  // Anchor the 24-hour series at the top of the current UTC hour so each
+  // index aligns with a wall-clock hour.
+  const startMs = nowTopOfHourMs();
+
+  const tidal = await resolveTidal(lat, lon, startMs);
 
   let windData: { windSpeedKnots: number; windDegrees: number }[] | null = null;
   let waveData: { waveHeightM: number }[] | null = null;
@@ -327,6 +382,8 @@ router.get("/surface-conditions", async (req, res): Promise<void> => {
     waveHeightM: waveData?.[h]?.waveHeightM ?? 0.3,
     tidalSpeedKnots: tidal.hours[h]!.tidalSpeedKnots,
     tidalDegrees: tidal.hours[h]!.tidalDegrees,
+    isSlack: tidal.hours[h]!.isSlack,
+    phase: tidal.hours[h]!.phase,
   }));
 
   res.json({

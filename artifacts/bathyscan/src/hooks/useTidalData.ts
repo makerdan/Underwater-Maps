@@ -3,6 +3,16 @@ import { useState, useEffect, useRef } from "react";
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const POLL_INTERVAL_MS = 10 * 60 * 1000;
 
+export type TidePhase = "flooding" | "ebbing" | "slack-high" | "slack-low";
+
+export interface SlackBlock {
+  isSlack: boolean;
+  phase: TidePhase;
+  minutesToSlack: number;
+  minutesSinceSlack: number;
+  nextReversalAt: string;
+}
+
 export type TidalDataResult =
   | { available: false }
   | {
@@ -12,8 +22,10 @@ export type TidalDataResult =
       currentSpeed: number;
       nextEvent?: { type: "high" | "low"; time: string; height: number };
       stationName: string;
-      stationId: string;
+      stationId?: string;
       isPredicted: boolean;
+      source?: "noaa" | "estimated";
+      slack?: SlackBlock;
     };
 
 export function useTidalData(

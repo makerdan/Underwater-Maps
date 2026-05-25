@@ -201,6 +201,39 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                 </div>
               </div>
 
+              {/* Slack tide status */}
+              {data.slack && (
+                <div
+                  style={{
+                    padding: "4px 6px",
+                    borderRadius: 3,
+                    background: data.slack.isSlack
+                      ? "rgba(168,85,247,0.12)"
+                      : "rgba(0,229,255,0.06)",
+                    border: `1px solid ${
+                      data.slack.isSlack
+                        ? "rgba(168,85,247,0.4)"
+                        : "rgba(0,229,255,0.15)"
+                    }`,
+                  }}
+                >
+                  {data.slack.isSlack ? (
+                    <div style={{ color: "#c084fc", fontSize: 10 }}>
+                      ◐ Slack tide — current reversing
+                      <div style={{ ...DIM, fontSize: 9, marginTop: 1 }}>
+                        Next flow in {data.slack.minutesToSlack} min
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ color: "#7dd3fc", fontSize: 10 }}>
+                      {data.slack.phase === "flooding" ? "Flooding" : "Ebbing"}{" "}
+                      {compassLabel(data.currentDirection)} · slack in{" "}
+                      {data.slack.minutesToSlack} min
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Next event */}
               {data.nextEvent && (
                 <div>

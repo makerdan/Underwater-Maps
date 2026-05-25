@@ -741,6 +741,19 @@ export const SurfaceConditionsTidalDataSource = {
   sinusoidal: 'sinusoidal',
 } as const;
 
+/**
+ * Tidal phase for this hour
+ */
+export type HourlySurfaceConditionPhase = typeof HourlySurfaceConditionPhase[keyof typeof HourlySurfaceConditionPhase];
+
+
+export const HourlySurfaceConditionPhase = {
+  flooding: 'flooding',
+  ebbing: 'ebbing',
+  'slack-high': 'slack-high',
+  'slack-low': 'slack-low',
+} as const;
+
 export interface HourlySurfaceCondition {
   /**
      * @minimum 0
@@ -752,6 +765,10 @@ export interface HourlySurfaceCondition {
   tidalSpeedKnots: number;
   tidalDegrees: number;
   waveHeightM: number;
+  /** True when the modeled tidal current is below the slack threshold (~0.1 kn) */
+  isSlack?: boolean;
+  /** Tidal phase for this hour */
+  phase?: HourlySurfaceConditionPhase;
 }
 
 export interface SurfaceConditions {
@@ -770,6 +787,28 @@ export interface SurfaceConditions {
   /** True when actual data was unavailable and defaults were substituted */
   estimatedConditions?: boolean;
   hours: HourlySurfaceCondition[];
+}
+
+export type SlackBlockPhase = typeof SlackBlockPhase[keyof typeof SlackBlockPhase];
+
+
+export const SlackBlockPhase = {
+  flooding: 'flooding',
+  ebbing: 'ebbing',
+  'slack-high': 'slack-high',
+  'slack-low': 'slack-low',
+} as const;
+
+/**
+ * Slack-tide context for a single instant
+ */
+export interface SlackBlock {
+  isSlack: boolean;
+  phase: SlackBlockPhase;
+  minutesToSlack: number;
+  minutesSinceSlack: number;
+  /** ISO timestamp of the next slack (next high/low) */
+  nextReversalAt: string;
 }
 
 export type MarkerInputType = typeof MarkerInputType[keyof typeof MarkerInputType];

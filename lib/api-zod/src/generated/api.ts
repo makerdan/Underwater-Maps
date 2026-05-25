@@ -1109,7 +1109,9 @@ export const GetSurfaceConditionsResponse = zod.object({
   "windDegrees": zod.number(),
   "tidalSpeedKnots": zod.number(),
   "tidalDegrees": zod.number(),
-  "waveHeightM": zod.number()
+  "waveHeightM": zod.number(),
+  "isSlack": zod.boolean().optional().describe('True when the modeled tidal current is below the slack threshold (~0.1 kn)'),
+  "phase": zod.enum(['flooding', 'ebbing', 'slack-high', 'slack-low']).optional().describe('Tidal phase for this hour')
 }))
 })
 

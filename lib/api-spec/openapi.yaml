@@ -2192,6 +2192,13 @@ components:
           type: number
         waveHeightM:
           type: number
+        isSlack:
+          type: boolean
+          description: True when the modeled tidal current is below the slack threshold (~0.1 kn)
+        phase:
+          type: string
+          enum: [flooding, ebbing, slack-high, slack-low]
+          description: Tidal phase for this hour
       required:
         - hour
         - windSpeedKnots
@@ -2199,6 +2206,29 @@ components:
         - tidalSpeedKnots
         - tidalDegrees
         - waveHeightM
+
+    SlackBlock:
+      type: object
+      description: Slack-tide context for a single instant
+      properties:
+        isSlack:
+          type: boolean
+        phase:
+          type: string
+          enum: [flooding, ebbing, slack-high, slack-low]
+        minutesToSlack:
+          type: number
+        minutesSinceSlack:
+          type: number
+        nextReversalAt:
+          type: string
+          description: ISO timestamp of the next slack (next high/low)
+      required:
+        - isSlack
+        - phase
+        - minutesToSlack
+        - minutesSinceSlack
+        - nextReversalAt
 
     MarkerInput:
       type: object

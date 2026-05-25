@@ -162,6 +162,7 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
 
     const worldPos = lonLatToWorldXZ(curLon, curLat, terrain);
 
+    const isSlack = !!cond.isSlack || cond.tidalSpeedKnots < 0.1;
     waypoints.push({
       hour: h,
       lat: curLat,
@@ -173,6 +174,8 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
       bottomReached,
       driftSpeedKnots: Math.round(resultantKnots * 10) / 10,
       headingDeg,
+      isSlack,
+      phase: cond.phase,
     });
 
     curLat = nextLat;

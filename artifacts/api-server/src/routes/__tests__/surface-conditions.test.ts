@@ -86,9 +86,9 @@ describe("parseNoaaPredictions", () => {
     const hrs = parseNoaaPredictions(raw, date);
     expect(hrs).not.toBeNull();
     expect(hrs).toHaveLength(24);
-    expect(hrs![0]).toEqual({ tidalSpeedKnots: 0.9, tidalDegrees: 50 });
-    expect(hrs![1]).toEqual({ tidalSpeedKnots: 1.1, tidalDegrees: 230 });
-    expect(hrs![2]).toEqual({ tidalSpeedKnots: 0.4, tidalDegrees: 50 });
+    expect(hrs![0]).toEqual({ tidalSpeedKnots: 0.9, tidalDegrees: 50, isSlack: false, phase: "flooding" });
+    expect(hrs![1]).toEqual({ tidalSpeedKnots: 1.1, tidalDegrees: 230, isSlack: false, phase: "ebbing" });
+    expect(hrs![2]).toEqual({ tidalSpeedKnots: 0.4, tidalDegrees: 50, isSlack: false, phase: "flooding" });
     // Gaps fill with the last known value
     expect(hrs![23]).toEqual(hrs![2]);
   });

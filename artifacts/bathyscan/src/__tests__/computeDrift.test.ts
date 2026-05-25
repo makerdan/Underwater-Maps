@@ -33,8 +33,9 @@ function makeCondition(
   tidalDegrees = 0,
   waveHeightM = 0.2,
   hour = 0,
+  isSlack?: boolean,
 ): HourlySurfaceCondition {
-  return { hour, windSpeedKnots, windDegrees, tidalSpeedKnots, tidalDegrees, waveHeightM };
+  return { hour, windSpeedKnots, windDegrees, tidalSpeedKnots, tidalDegrees, waveHeightM, isSlack };
 }
 
 const terrain = makeGrid(50);
@@ -180,6 +181,42 @@ describe("computeDrift", () => {
     });
     // hookDepthM = 50, terrain = 500 → not in reach (50 < 495)
     expect(path[0]!.bottomReached).toBe(false);
+  });
+
+  it("a slack hour (tidal=0) produces ~0 tidal displacement; wind leeway still applies", () => {
+    const cond: HourlySurfaceCondition[] = [];
+    // Hour 0: wind only, tidal 0 with isSlack flag
+    cond.push(makeCondition(8, 0, 0, 0, 0.2, 0, true));
+    for (let h = 1; h < 24; h++) cond.push(makeCondition(8, 0, 0, 0, 0.2, h, true));
+    const path = computeDrift({
+      conditions: cond,
+      startLat: 55.05,
+      startLon: -130.95,
+      lineLengthM: 200,
+      lineWeightG: 500,
+      terrain,
+    });
+    expect(path[0]!.isSlack).toBe(true);
+    // Drift after the slack hour: wind leeway only (8 kt × 3% × 30% weight)
+    const dLat = path[1]!.lat - path[0]!.lat;
+    // 8 kt wind north → 0.24 kt leeway × 0.3 weight ≈ 0.072 kt ≈ 0.13 km ≈ 0.0012°
+    expect(dLat).toBeGreaterThan(0);
+    expect(dLat).toBeLessThan(0.005);
+  });
+
+  it("a slack hour with no wind produces zero displacement", () => {
+    const cond = Array.from({ length: 24 }, (_, h) => makeCondition(0, 0, 0, 0, 0.2, h, true));
+    const path = computeDrift({
+      conditions: cond,
+      startLat: 55.05,
+      startLon: -130.95,
+      lineLengthM: 200,
+      lineWeightG: 500,
+      terrain,
+    });
+    expect(path[0]!.isSlack).toBe(true);
+    expect(path[1]!.lat).toBeCloseTo(path[0]!.lat, 6);
+    expect(path[1]!.lon).toBeCloseTo(path[0]!.lon, 6);
   });
 
   it("wind leeway at 3% contributes to resultant current", () => {

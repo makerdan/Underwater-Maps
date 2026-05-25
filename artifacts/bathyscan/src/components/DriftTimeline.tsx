@@ -77,6 +77,14 @@ export const DriftTimeline: React.FC = () => {
               <span style={{ fontSize: 7, color: bottom ? "#4ade80" : "#ef4444", marginTop: 1 }}>
                 {bottom ? "●" : "○"}
               </span>
+              {w.isSlack && (
+                <span
+                  title="Slack tide"
+                  style={{ fontSize: 7, color: "#c084fc", marginTop: 1, letterSpacing: 0 }}
+                >
+                  ◐ SLK
+                </span>
+              )}
             </button>
           );
         })}
@@ -91,7 +99,15 @@ export const DriftTimeline: React.FC = () => {
           </div>
           <div>
             <div style={{ color: "#475569", fontSize: 8, letterSpacing: "0.18em" }}>LINE ANGLE</div>
-            <div style={{ color: "#fbbf24", fontWeight: 700 }}>{wp.lineAngleDeg.toFixed(0)}° from vertical</div>
+            {wp.isSlack ? (
+              <div style={{ color: "#c084fc", fontWeight: 700 }}>
+                Line vertical — slack tide
+              </div>
+            ) : (
+              <div style={{ color: "#fbbf24", fontWeight: 700 }}>
+                {wp.lineAngleDeg.toFixed(0)}° from vertical
+              </div>
+            )}
           </div>
           <div>
             <div style={{ color: "#475569", fontSize: 8, letterSpacing: "0.18em" }}>HOOK DEPTH</div>

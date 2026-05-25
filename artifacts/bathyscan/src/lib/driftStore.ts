@@ -14,6 +14,8 @@
 
 import { create } from "zustand";
 
+export type TidePhase = "flooding" | "ebbing" | "slack-high" | "slack-low";
+
 export interface HourlySurfaceCondition {
   hour: number;
   windSpeedKnots: number;
@@ -21,6 +23,8 @@ export interface HourlySurfaceCondition {
   tidalSpeedKnots: number;
   tidalDegrees: number;
   waveHeightM: number;
+  isSlack?: boolean;
+  phase?: TidePhase;
 }
 
 export interface DriftWaypoint {
@@ -34,6 +38,8 @@ export interface DriftWaypoint {
   bottomReached: boolean;
   driftSpeedKnots: number;
   headingDeg: number;
+  isSlack: boolean;
+  phase?: TidePhase;
 }
 
 interface DriftStore {
@@ -71,6 +77,8 @@ interface DriftStore {
   setManualTidalSpeedKnots: (v: number) => void;
   manualTidalDegrees: number;
   setManualTidalDegrees: (v: number) => void;
+  manualSlackNow: boolean;
+  setManualSlackNow: (b: boolean) => void;
 }
 
 function readLocalBool(key: string, fallback: boolean): boolean {
@@ -121,4 +129,6 @@ export const useDriftStore = create<DriftStore>((set) => ({
   setManualTidalSpeedKnots: (v) => set({ manualTidalSpeedKnots: v }),
   manualTidalDegrees: 180,
   setManualTidalDegrees: (v) => set({ manualTidalDegrees: v }),
+  manualSlackNow: false,
+  setManualSlackNow: (b) => set({ manualSlackNow: b }),
 }));

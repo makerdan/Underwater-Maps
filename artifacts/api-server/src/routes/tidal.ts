@@ -1,5 +1,12 @@
 import { Router } from "express";
 import { logger } from "../lib/logger.js";
+import {
+  buildSyntheticEvents,
+  computeSlackSample,
+  SLACK_THRESHOLD_DEFAULT,
+  type SlackBlock,
+  type TideEvent,
+} from "../lib/slack.js";
 
 const router = Router();
 
@@ -21,6 +28,8 @@ interface TidalResponse {
   stationName?: string;
   stationId?: string;
   isPredicted?: boolean;
+  source?: "noaa" | "estimated";
+  slack?: SlackBlock;
 }
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -92,131 +101,89 @@ function toNoaaDateStr(d: Date): string {
   return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
 }
 
-interface WaterLevelResult {
-  height: number;
-  prevHeight: number | null;
-  nextHeight: number | null;
-}
-
-async function getWaterLevelWithSlope(
+/**
+ * Fetch high/low tide events covering the window [refTime - 1d, refTime + 2d]
+ * so the slack sampler always has a bracket on either side of refTime.
+ */
+async function getHighLowEvents(
   stationId: string,
-  datetime?: Date,
-): Promise<WaterLevelResult | null> {
+  refTime: Date,
+): Promise<TideEvent[] | null> {
   try {
-    const refTime = datetime ?? new Date();
-
-    const windowStart = new Date(refTime.getTime() - 2 * 60 * 60 * 1000);
-    const windowEnd = new Date(refTime.getTime() + 2 * 60 * 60 * 1000);
-
-    if (datetime) {
-      const url =
-        `${NOAA_BASE}/api/prod/datagetter?station=${stationId}&product=predictions` +
-        `&datum=MLLW&time_zone=GMT&units=metric&format=json` +
-        `&begin_date=${toNoaaDateStr(windowStart)}&end_date=${toNoaaDateStr(windowEnd)}&interval=h`;
-      const resp = await fetchJson<{ predictions?: Array<{ t: string; v: string }> }>(url);
-      const pts = (resp.predictions ?? []).map((p) => ({
-        time: new Date(p.t.replace(" ", "T") + "Z").getTime(),
-        v: parseFloat(p.v),
-      }));
-      if (!pts.length) return null;
-      const refMs = refTime.getTime();
-      const sorted = pts.sort((a, b) => Math.abs(a.time - refMs) - Math.abs(b.time - refMs));
-      const closest = sorted[0]!;
-      const idx = pts.sort((a, b) => a.time - b.time).findIndex((p) => p.time === closest.time);
-      const ordered = pts.sort((a, b) => a.time - b.time);
-      return {
-        height: closest.v,
-        prevHeight: ordered[idx - 1]?.v ?? null,
-        nextHeight: ordered[idx + 1]?.v ?? null,
-      };
-    } else {
-      const url =
-        `${NOAA_BASE}/api/prod/datagetter?station=${stationId}&product=water_level` +
-        `&datum=MLLW&time_zone=GMT&units=metric&format=json` +
-        `&begin_date=${toNoaaDateStr(windowStart)}&end_date=${toNoaaDateStr(windowEnd)}`;
-      const resp = await fetchJson<{ data?: Array<{ t: string; v: string }> }>(url);
-      const pts = (resp.data ?? []).filter((p) => p.v && !isNaN(parseFloat(p.v))).map((p) => ({
-        time: new Date(p.t.replace(" ", "T") + "Z").getTime(),
-        v: parseFloat(p.v),
-      }));
-      if (!pts.length) return null;
-      const refMs = refTime.getTime();
-      const closest = pts.reduce((a, b) =>
-        Math.abs(a.time - refMs) < Math.abs(b.time - refMs) ? a : b,
-      );
-      const idx = pts.findIndex((p) => p.time === closest.time);
-      return {
-        height: closest.v,
-        prevHeight: pts[idx - 1]?.v ?? null,
-        nextHeight: pts[idx + 1]?.v ?? null,
-      };
-    }
-  } catch (err) {
-    logger.warn({ err }, "Failed to fetch water level");
-    return null;
-  }
-}
-
-async function getNextTidalEvent(
-  stationId: string,
-  datetime?: Date,
-): Promise<{ type: "high" | "low"; time: string; height: number } | null> {
-  try {
-    const now = datetime ?? new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    const start = new Date(refTime.getTime() - 24 * 3600 * 1000);
+    const end = new Date(refTime.getTime() + 48 * 3600 * 1000);
     const url =
       `${NOAA_BASE}/api/prod/datagetter?station=${stationId}&product=predictions` +
       `&datum=MLLW&time_zone=GMT&units=metric&format=json&interval=hilo` +
-      `&begin_date=${toNoaaDateStr(now)}&end_date=${toNoaaDateStr(tomorrow)}`;
+      `&begin_date=${toNoaaDateStr(start)}&end_date=${toNoaaDateStr(end)}`;
     const resp = await fetchJson<{
       predictions?: Array<{ t: string; v: string; type: "H" | "L" }>;
     }>(url);
-    const predictions = resp.predictions ?? [];
-    const future = predictions.filter(
-      (p) => new Date(p.t.replace(" ", "T") + "Z") > now,
-    );
-    if (!future.length) return null;
-    const next = future[0]!;
-    return {
-      type: next.type === "H" ? "high" : "low",
-      time: next.t,
-      height: parseFloat(next.v),
-    };
+    const events: TideEvent[] = (resp.predictions ?? []).map((p) => ({
+      type: p.type === "H" ? "high" : "low",
+      time: new Date(p.t.replace(" ", "T") + "Z").getTime(),
+      height: parseFloat(p.v),
+    }));
+    events.sort((a, b) => a.time - b.time);
+    return events.length > 0 ? events : null;
   } catch (err) {
-    logger.warn({ err }, "Failed to fetch tidal predictions");
+    logger.warn({ err }, "Failed to fetch tidal hi/lo predictions");
     return null;
   }
 }
 
-function deriveTidalCurrent(
-  result: WaterLevelResult,
-  station: NoaaStation,
-  areaLat: number,
-  areaLon: number,
-): { direction: number; speed: number } {
-  const prev = result.prevHeight;
-  const next = result.nextHeight;
-  const curr = result.height;
+/**
+ * Estimate water level at refTime by interpolating between surrounding
+ * hi/lo events with a cosine curve.
+ */
+function interpolateHeight(events: TideEvent[], refMs: number): number {
+  let prev: TideEvent | null = null;
+  let next: TideEvent | null = null;
+  for (const e of events) {
+    if (e.time <= refMs) prev = e;
+    else if (!next) { next = e; break; }
+  }
+  if (!prev && !next) return 0;
+  if (!prev && next) return next.height;
+  if (prev && !next) return prev.height;
+  if (!prev || !next) return 0;
+  const span = next.time - prev.time;
+  if (span <= 0) return prev.height;
+  const t = (refMs - prev.time) / span;
+  // smooth cosine interpolation (1 → 0 over the half-cycle)
+  const c = (1 - Math.cos(Math.PI * t)) / 2;
+  return prev.height + (next.height - prev.height) * c;
+}
 
-  const slope =
-    prev !== null && next !== null
-      ? (next - prev) / 2
-      : prev !== null
-        ? curr - prev
-        : next !== null
-          ? next - curr
-          : 0;
+/**
+ * Pick peak current speed from the tidal range surrounding refTime.
+ * Larger tide swings ⇒ stronger currents. Clamps to [0.2, 3.0] kt.
+ */
+function estimatePeakSpeed(events: TideEvent[], refMs: number): number {
+  let prev: TideEvent | null = null;
+  let next: TideEvent | null = null;
+  for (const e of events) {
+    if (e.time <= refMs) prev = e;
+    else if (!next) { next = e; break; }
+  }
+  if (!prev || !next) return 1.0;
+  const range = Math.abs(next.height - prev.height);
+  return Math.max(0.2, Math.min(3.0, range * 0.6));
+}
 
-  const rising = slope >= 0;
-  const absSlope = Math.abs(slope);
-  const speed = Math.min(3.0, absSlope * 8);
-
-  const floodBearing = bearingDeg(station.lat, station.lng, areaLat, areaLon);
-  const ebbBearing = (floodBearing + 180) % 360;
-  const direction = rising ? floodBearing : ebbBearing;
-
-  return { direction, speed };
+function nextEventFrom(events: TideEvent[], refMs: number):
+  | { type: "high" | "low"; time: string; height: number }
+  | undefined {
+  for (const e of events) {
+    if (e.time > refMs) {
+      return {
+        type: e.type,
+        time: new Date(e.time).toISOString(),
+        height: e.height,
+      };
+    }
+  }
+  return undefined;
 }
 
 // GET /tidal?lat=&lon=&datetime=
@@ -239,35 +206,55 @@ router.get("/tidal", async (req, res): Promise<void> => {
     }
   }
 
+  const refTime = datetime ?? new Date();
+  const refMs = refTime.getTime();
   const station = await getNearestStation(lat, lon);
-  if (!station) {
-    const body: TidalResponse = { available: false };
-    res.json(body);
-    return;
+
+  let events: TideEvent[] | null = null;
+  let source: "noaa" | "estimated" = "estimated";
+  let floodBearing: number;
+  let stationName: string | undefined;
+  let stationId: string | undefined;
+
+  if (station) {
+    events = await getHighLowEvents(station.id, refTime);
+    if (events && events.length > 0) {
+      source = "noaa";
+      stationName = station.name;
+      stationId = station.id;
+    }
+    floodBearing = bearingDeg(station.lat, station.lng, lat, lon);
+  } else {
+    floodBearing = ((lat + lon) * 73.1 + 360) % 360;
   }
 
-  const [waterLevel, nextEvent] = await Promise.all([
-    getWaterLevelWithSlope(station.id, datetime),
-    getNextTidalEvent(station.id, datetime),
-  ]);
-
-  if (waterLevel === null) {
-    const body: TidalResponse = { available: false };
-    res.json(body);
-    return;
+  if (!events) {
+    events = buildSyntheticEvents(refMs, lon);
+    source = "estimated";
   }
 
-  const { direction, speed } = deriveTidalCurrent(waterLevel, station, lat, lon);
+  const peakSpeedKnots = estimatePeakSpeed(events, refMs);
+  const sample = computeSlackSample({
+    events,
+    refTime: refMs,
+    peakSpeedKnots,
+    floodBearingDeg: floodBearing,
+    slackThresholdKnots: SLACK_THRESHOLD_DEFAULT,
+  });
+
+  const tideHeight = interpolateHeight(events, refMs);
 
   const body: TidalResponse = {
     available: true,
-    tideHeight: waterLevel.height,
-    currentDirection: direction,
-    currentSpeed: speed,
-    nextEvent: nextEvent ?? undefined,
-    stationName: station.name,
-    stationId: station.id,
-    isPredicted: !!datetime,
+    tideHeight,
+    currentDirection: sample.directionDeg,
+    currentSpeed: sample.speedKnots,
+    nextEvent: nextEventFrom(events, refMs),
+    stationName: stationName ?? (source === "estimated" ? "Estimated (no nearby station)" : undefined),
+    stationId,
+    isPredicted: source === "estimated" || !!datetime,
+    source,
+    slack: sample.slack,
   };
   res.json(body);
 });

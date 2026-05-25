@@ -99,13 +99,24 @@ export const TidalCurrentArrows: React.FC<TidalCurrentArrowsProps> = ({
     progressRef.current = new Float32Array(count).map(() => Math.random());
   }, [terrain, yOffset, count]);
 
+  const slackLerpRef = useRef(0);
+
   useFrame((_, delta) => {
     const mesh = meshRef.current;
     if (!mesh) return;
 
-    const speed = currentSpeed * attenuate * SPEED_SCALE;
+    const SLACK_THRESHOLD = 0.1;
+    const slackTarget = currentSpeed < SLACK_THRESHOLD ? 1 : 0;
+    slackLerpRef.current += (slackTarget - slackLerpRef.current) * Math.min(1, delta * 1.5);
+    const slackBlend = slackLerpRef.current;
+
+    const baseSpeed = currentSpeed * attenuate * SPEED_SCALE;
+    const speed = baseSpeed * (1 - slackBlend);
+    const opacityScale = 1 - slackBlend * 0.7; // fade to ~30% during slack
     const dummy = new THREE.Object3D();
     const yaw = -dirRad;
+
+    material.opacity = 0.75 * opacityScale;
 
     for (let i = 0; i < count; i++) {
       const base = basePositions.current[i];
@@ -118,7 +129,7 @@ export const TidalCurrentArrows: React.FC<TidalCurrentArrowsProps> = ({
       const x = base[0] + dirVec.x * travel;
       const z = base[2] + dirVec.z * travel;
       const opacity = 0.4 + 0.6 * Math.sin(t * Math.PI);
-      const scale = ARROW_SCALE * opacity;
+      const scale = ARROW_SCALE * opacity * (1 - slackBlend * 0.4);
 
       dummy.position.set(x, surfaceY + yOffset, z);
       dummy.rotation.y = yaw;
