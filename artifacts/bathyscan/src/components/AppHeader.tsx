@@ -1,5 +1,5 @@
 import React from "react";
-import { useUser, useClerk } from "@clerk/react";
+import { useUser, useClerk } from "@/lib/clerkCompat";
 import { useLocation } from "wouter";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 

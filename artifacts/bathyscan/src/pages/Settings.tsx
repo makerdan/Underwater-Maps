@@ -8,7 +8,7 @@
  */
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useLocation } from "wouter";
-import { useUser, useClerk } from "@clerk/react";
+import { useUser, useClerk } from "@/lib/clerkCompat";
 import { keys as idbKeys, clear as idbClear } from "idb-keyval";
 import { useGetSettings, usePutSettings, useDeleteMarkersMine, getGetSettingsQueryKey } from "@workspace/api-client-react";
 import {

@@ -82,3 +82,30 @@
 - Accessibility audit
 - Cross-browser testing beyond Chrome
 - GLERL/USGS freshwater bathymetry pipeline (tracked in follow-up tasks)
+
+---
+
+## Dev auth bypass (local development only)
+
+For faster iteration when the agent or screenshot tools need to see the
+authenticated UI without going through Clerk sign-in, BathyScan supports a
+hard-gated dev-only bypass.
+
+**To enable locally:**
+
+1. In `artifacts/bathyscan/.env.local`, set `VITE_DEV_AUTH_BYPASS=1`.
+2. In the api-server env, set `E2E_AUTH_BYPASS=1`.
+3. Restart both workflows.
+
+Once active, the app loads directly into the authenticated UI as a fake
+"Dev User" (`dev-user-bypass`), and every `/api/*` request is signed with
+the `x-e2e-user-id` header the API server's existing
+`E2E_AUTH_BYPASS` middleware already honors.
+
+**Safety:** The bypass flag is read through `import.meta.env.DEV`, so it
+is a compile-time `false` in production builds — the shim branches are
+tree-shaken away. A startup assertion (`assertDevAuthBypassSafe`) also
+throws if the env var is somehow set in a non-dev bundle. Never enable in
+production.
+
+Files: `src/lib/devAuth.ts`, `src/lib/clerkCompat.tsx`, `src/main.tsx`.

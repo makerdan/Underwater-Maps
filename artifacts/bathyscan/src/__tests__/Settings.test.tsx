@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 
 // ---- Heavy module mocks (Clerk, react-query, API hooks, wouter, idb) ----
-vi.mock("@clerk/react", () => ({
+vi.mock("@/lib/clerkCompat", () => ({
   useUser: () => ({
     user: { primaryEmailAddress: { emailAddress: "test@example.com" }, username: "test" },
     isSignedIn: true,

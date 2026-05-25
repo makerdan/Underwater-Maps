@@ -34,7 +34,7 @@ vi.mock("@/lib/context", () => ({
   }),
 }));
 
-vi.mock("@clerk/react", () => ({
+vi.mock("@/lib/clerkCompat", () => ({
   useAuth: () => ({ isSignedIn: false }),
 }));
 
