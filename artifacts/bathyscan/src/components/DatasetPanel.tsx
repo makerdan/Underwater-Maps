@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/clerkCompat";
 import {
   useGetDatasets,
+  getGetDatasetsQueryKey,
   useGetDatasetsIdOverview,
   useGetDatasetsIdTerrain,
   useGetUserDatasets,
@@ -107,7 +108,10 @@ export const DatasetPanel: React.FC = () => {
   const waterType = useSettingsStore((s) => s.waterType);
 
   // ─── Fetch dataset lists ───────────────────────────────────────────────────
-  const { data: datasets, isLoading: datasetsLoading } = useGetDatasets();
+  const { data: datasets, isLoading: datasetsLoading } = useGetDatasets(
+    { waterType },
+    { query: { queryKey: getGetDatasetsQueryKey({ waterType }) } },
+  );
   const { data: userDatasets, isLoading: userDatasetsLoading } = useGetUserDatasets({
     query: { enabled: !!isSignedIn, queryKey: getGetUserDatasetsQueryKey() },
   });
@@ -492,7 +496,7 @@ export const DatasetPanel: React.FC = () => {
                 </div>
               </div>
             )}
-            {(datasets ?? []).filter((ds) => ds.waterType === waterType).map((ds) => {
+            {(datasets ?? []).map((ds) => {
               const active = ds.id === datasetId && !pendingId && !activeUserDatasetId;
               const loading = ds.id === loadingId;
               return (

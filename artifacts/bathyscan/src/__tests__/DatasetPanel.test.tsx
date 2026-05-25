@@ -75,7 +75,12 @@ vi.mock("@/lib/offlineStore", () => ({
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
-  useGetDatasets: () => ({ data: datasets, isLoading: false }),
+  useGetDatasets: (params?: { waterType?: "saltwater" | "freshwater" }) => ({
+    data: params?.waterType
+      ? datasets.filter((d) => d.waterType === params.waterType)
+      : datasets,
+    isLoading: false,
+  }),
   useGetUserDatasets: () => ({ data: [], isLoading: false }),
   usePutSettings: () => ({ mutate: vi.fn() }),
   useGetDatasetsIdOverview: () => ({ data: null, isError: false }),
@@ -94,6 +99,7 @@ vi.mock("@workspace/api-client-react", () => ({
     isPending: false,
     isSuccess: false,
   }),
+  getGetDatasetsQueryKey: (params?: unknown) => ["datasets", ...(params ? [params] : [])],
   getGetDatasetsIdTerrainQueryKey: (id: string) => ["datasets", id, "terrain"],
   getGetDatasetsIdOverviewQueryKey: (id: string) => ["datasets", id, "overview"],
   getGetUserDatasetsQueryKey: () => ["user-datasets"],
@@ -114,7 +120,7 @@ describe("DatasetPanel", () => {
     expect(screen.getByText("Deep saltwater fjord")).toBeInTheDocument();
     expect(screen.getByTestId("btn-dataset-alaska-fjord")).toBeInTheDocument();
     // Freshwater dataset is filtered out under the default saltwater setting.
-    expect(screen.queryByText("Lake Tahoe")).not.toBeInTheDocument();
+    expect(screen.queryByText("Lake Michigan")).not.toBeInTheDocument();
   });
 
   it("clicking a dataset triggers loading state (pending fetch)", () => {

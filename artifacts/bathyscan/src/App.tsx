@@ -7,7 +7,7 @@ import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { useGetDatasets } from "@workspace/api-client-react";
+import { useGetDatasets, getGetDatasetsQueryKey } from "@workspace/api-client-react";
 import { AppProvider, useAppState } from "@/lib/context";
 import { registerTestBridge } from "@/lib/testHelpers";
 import { useTerrainStore } from "@/lib/terrainStore";
@@ -183,7 +183,11 @@ function ClerkQueryClientCacheInvalidator() {
 
 function Main() {
   const [, setLocation] = useLocation();
-  const { data: datasets } = useGetDatasets();
+  const waterTypeForDatasets = useSettingsStore((s) => s.waterType);
+  const { data: datasets } = useGetDatasets(
+    { waterType: waterTypeForDatasets },
+    { query: { queryKey: getGetDatasetsQueryKey({ waterType: waterTypeForDatasets }) } },
+  );
   const {
     datasetId, setDatasetId, terrain, tidalOverlay, setTidalOverlay,
     realisticMode, setRealisticMode,
@@ -250,17 +254,16 @@ function Main() {
     }
   }, [tidalData, setNoaaAmbient]);
 
-  const waterType = useSettingsStore((s) => s.waterType);
+  const waterType = waterTypeForDatasets;
 
   const hasAutoSelectedRef = useRef(false);
   useEffect(() => {
     if (hasAutoSelectedRef.current) return;
     if (datasets?.length && !datasetId) {
       hasAutoSelectedRef.current = true;
-      const first = datasets.find((d) => d.waterType === waterType) ?? datasets[0];
-      setDatasetId(first?.id ?? null);
+      setDatasetId(datasets[0]?.id ?? null);
     }
-  }, [datasets, datasetId, setDatasetId, waterType]);
+  }, [datasets, datasetId, setDatasetId]);
 
   // Side-effects on water-type switch:
   // 1) Clear derived state computed for the previous environment
@@ -288,8 +291,8 @@ function Main() {
         st.setColormapTheme?.(nextDefault);
       }
     } catch {}
-    const first = (datasets ?? []).find((d) => d.waterType === waterType);
-    if (first?.id) setDatasetId(first.id);
+    const first = (datasets ?? [])[0];
+    if (first?.id && first.waterType === waterType) setDatasetId(first.id);
     else setDatasetId(null);
     hasAutoSelectedRef.current = false;
   }, [waterType, datasets, setDatasetId]);
