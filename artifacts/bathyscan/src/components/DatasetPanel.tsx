@@ -92,6 +92,8 @@ export const DatasetPanel: React.FC = () => {
   const togglePanel = usePanelCollapseStore((s) => s.toggle);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [lastUploadedFile, setLastUploadedFile] = useState<File | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
   // ─── Preset dataset pending fetch ─────────────────────────────────────────
@@ -318,9 +320,56 @@ export const DatasetPanel: React.FC = () => {
     };
   }, [postDatasetsUpload.isPending, postDatasetsUpload.isSuccess]);
 
+  const uploadFile = useCallback(
+    (file: File, { isRetry }: { isRetry?: boolean } = {}) => {
+      postDatasetsUpload.mutate(
+        { data: { file, resolution: 256 } },
+        {
+          onSuccess: (data) => {
+            if (!isRetry) {
+              setDatasetId(null);
+              setTerrain(data.terrain);
+              useTerrainStore.getState().setGrids({
+                activeGrid: data.terrain,
+                overviewGrid: data.overview,
+              });
+              useClassificationStore.getState().clearZoneMap();
+              void useClassificationStore.getState().classify(data.terrain);
+            }
+            if (data.savedDatasetId) {
+              setActiveUserDatasetId(data.savedDatasetId);
+              void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+              setSaveError(null);
+              setLastUploadedFile(null);
+              if (!isRetry) setUploadOpen(false);
+            } else if (data.saveError) {
+              setSaveError(data.saveError);
+              setLastUploadedFile(file);
+              if (!isRetry) setActiveUserDatasetId(null);
+            } else {
+              if (!isRetry) setActiveUserDatasetId(null);
+              setSaveError(null);
+              setLastUploadedFile(null);
+              if (!isRetry) setUploadOpen(false);
+            }
+          },
+          onError: (err) => {
+            if (isRetry) {
+              setSaveError(err instanceof Error ? err.message : "Retry failed");
+            } else {
+              setUploadError(err instanceof Error ? err.message : "Parse failed");
+            }
+          },
+        },
+      );
+    },
+    [postDatasetsUpload, setDatasetId, setTerrain, qc],
+  );
+
   const onDrop = useCallback(
     (accepted: File[], rejected: FileRejection[]) => {
       setUploadError(null);
+      setSaveError(null);
       if (rejected.length) {
         const code = rejected[0]?.errors[0]?.code;
         if (code === "file-too-large") {
@@ -334,35 +383,15 @@ export const DatasetPanel: React.FC = () => {
       }
       const file = accepted[0];
       if (!file) return;
-
-      postDatasetsUpload.mutate(
-        { data: { file, resolution: 256 } },
-        {
-          onSuccess: (data) => {
-            setDatasetId(null);
-            setTerrain(data.terrain);
-            useTerrainStore.getState().setGrids({
-              activeGrid: data.terrain,
-              overviewGrid: data.overview,
-            });
-            useClassificationStore.getState().clearZoneMap();
-            void useClassificationStore.getState().classify(data.terrain);
-            if (data.savedDatasetId) {
-              setActiveUserDatasetId(data.savedDatasetId);
-              void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
-            } else {
-              setActiveUserDatasetId(null);
-            }
-            setUploadOpen(false);
-          },
-          onError: (err) => {
-            setUploadError(err instanceof Error ? err.message : "Parse failed");
-          },
-        },
-      );
+      uploadFile(file);
     },
-    [postDatasetsUpload, setDatasetId, setTerrain, qc],
+    [uploadFile],
   );
+
+  const handleRetrySave = useCallback(() => {
+    if (!lastUploadedFile || postDatasetsUpload.isPending) return;
+    uploadFile(lastUploadedFile, { isRetry: true });
+  }, [lastUploadedFile, postDatasetsUpload.isPending, uploadFile]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -833,6 +862,44 @@ export const DatasetPanel: React.FC = () => {
                         </>
                       )}
                     </div>
+                    {saveError && lastUploadedFile && (
+                      <div
+                        data-testid="upload-save-error"
+                        style={{
+                          marginTop: 6,
+                          padding: "6px 8px",
+                          border: "1px solid rgba(248,113,113,0.4)",
+                          background: "rgba(248,113,113,0.08)",
+                          borderRadius: 4,
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ fontSize: 10, color: "#fca5a5", flex: 1, lineHeight: 1.4 }}>
+                          ⚠ Uploaded, but couldn&apos;t save to your account — {saveError}
+                        </div>
+                        <button
+                          type="button"
+                          data-testid="upload-retry-save"
+                          onClick={handleRetrySave}
+                          disabled={postDatasetsUpload.isPending}
+                          style={{
+                            fontSize: 10,
+                            padding: "3px 8px",
+                            border: "1px solid rgba(0,229,255,0.4)",
+                            background: "rgba(0,229,255,0.08)",
+                            color: "#00e5ff",
+                            borderRadius: 3,
+                            cursor: postDatasetsUpload.isPending ? "wait" : "pointer",
+                            whiteSpace: "nowrap",
+                            letterSpacing: "0.08em",
+                          }}
+                        >
+                          {postDatasetsUpload.isPending ? "…" : "Retry save"}
+                        </button>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
