@@ -142,17 +142,37 @@ function toNoaaDateStr(d: Date): string {
 }
 
 /**
+ * In-memory cache of recent getHighLowEvents results. NOAA's hi/lo
+ * predictions are stable for a given day window, so a short TTL keeps
+ * the tidal panel snappy without re-hitting NOAA on every request.
+ */
+const highLowEventsCache = new Map<string, { result: TideEvent[] | null; ts: number }>();
+const HIGH_LOW_EVENTS_TTL_MS = 30 * 60 * 1000;
+
+/** Exposed for tests so they can reset state between cases. */
+export function __clearHighLowEventsCacheForTests(): void {
+  highLowEventsCache.clear();
+}
+
+/**
  * Fetch high/low tide events covering [refTime - beforeDays, refTime + afterDays].
  */
-async function getHighLowEvents(
+export async function getHighLowEvents(
   stationId: string,
   refTime: Date,
   beforeDays = 1,
   afterDays = 2,
 ): Promise<TideEvent[] | null> {
+  const start = new Date(refTime.getTime() - beforeDays * 24 * 3600 * 1000);
+  const end = new Date(refTime.getTime() + afterDays * 24 * 3600 * 1000);
+  const cacheKey = `${stationId}|${toNoaaDateStr(start)}|${toNoaaDateStr(end)}`;
+  const now = Date.now();
+  const cached = highLowEventsCache.get(cacheKey);
+  if (cached && now - cached.ts < HIGH_LOW_EVENTS_TTL_MS) {
+    return cached.result;
+  }
+
   try {
-    const start = new Date(refTime.getTime() - beforeDays * 24 * 3600 * 1000);
-    const end = new Date(refTime.getTime() + afterDays * 24 * 3600 * 1000);
     const url =
       `${NOAA_BASE}/api/prod/datagetter?station=${stationId}&product=predictions` +
       `&datum=MLLW&time_zone=GMT&units=metric&format=json&interval=hilo` +
@@ -166,7 +186,9 @@ async function getHighLowEvents(
       height: parseFloat(p.v),
     }));
     events.sort((a, b) => a.time - b.time);
-    return events.length > 0 ? events : null;
+    const result = events.length > 0 ? events : null;
+    highLowEventsCache.set(cacheKey, { result, ts: now });
+    return result;
   } catch (err) {
     logger.warn({ err }, "Failed to fetch tidal hi/lo predictions");
     return null;
