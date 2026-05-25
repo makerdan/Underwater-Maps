@@ -33,6 +33,7 @@ import { useOfflineStore } from "@/lib/offlineStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { ProvenancePanel } from "@/components/ProvenancePanel";
 import { DatasetFolderTree } from "@/components/DatasetFolderTree";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { WaterTypeToggle } from "@/components/WaterTypeToggle";
 import { HelpIcon } from "@/components/help/HelpButton";
@@ -689,12 +690,14 @@ export const DatasetPanel: React.FC = () => {
                 </div>
               )}
 
-              <DatasetFolderTree
-                datasets={userDatasets ?? []}
-                activeUserDatasetId={pendingUserDatasetId ? null : activeUserDatasetId}
-                loadingId={loadingId}
-                onSelectDataset={handleSelectUserDataset}
-              />
+              <ErrorBoundary label="the dataset library">
+                <DatasetFolderTree
+                  datasets={userDatasets ?? []}
+                  activeUserDatasetId={pendingUserDatasetId ? null : activeUserDatasetId}
+                  loadingId={loadingId}
+                  onSelectDataset={handleSelectUserDataset}
+                />
+              </ErrorBoundary>
             </div>
           )}
 

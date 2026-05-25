@@ -51,19 +51,38 @@ export function buildLibraryTree(
     }
   }
 
-  // Sort folders by name; assign depth via BFS
+  // Sort folders by name; assign depth via BFS.
+  // Names may legitimately be missing in dev/test data (and would otherwise
+  // throw inside localeCompare), so coerce to an empty string defensively
+  // and warn once so the bad record is still surfaced to developers.
+  const safeName = (v: unknown): string => {
+    if (typeof v === "string") return v;
+    if (v == null) {
+      if (typeof console !== "undefined") {
+        console.warn("[datasetLibrary] record missing name; sorting as empty string");
+      }
+      return "";
+    }
+    return String(v);
+  };
   const sortNodes = (arr: FolderNode[]) =>
-    arr.sort((a, b) => a.folder.name.localeCompare(b.folder.name, undefined, { sensitivity: "base" }));
+    arr.sort((a, b) =>
+      safeName(a.folder.name).localeCompare(safeName(b.folder.name), undefined, { sensitivity: "base" }),
+    );
   sortNodes(roots);
   const stack: { node: FolderNode; depth: number }[] = roots.map((n) => ({ node: n, depth: 0 }));
   while (stack.length) {
     const { node, depth } = stack.pop()!;
     node.depth = depth;
     sortNodes(node.children);
-    node.datasets.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+    node.datasets.sort((a, b) =>
+      safeName(a.name).localeCompare(safeName(b.name), undefined, { sensitivity: "base" }),
+    );
     for (const c of node.children) stack.push({ node: c, depth: depth + 1 });
   }
-  rootDatasets.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  rootDatasets.sort((a, b) =>
+    safeName(a.name).localeCompare(safeName(b.name), undefined, { sensitivity: "base" }),
+  );
 
   return { roots, rootDatasets, byId };
 }

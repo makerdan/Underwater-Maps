@@ -44,6 +44,17 @@ describe("buildLibraryTree", () => {
     expect(tree.rootDatasets.map((d) => d.id)).toEqual(["d1"]);
   });
 
+  it("does not throw when a folder or dataset is missing a name", () => {
+    const badFolder = { ...folder("a", "A"), name: undefined as unknown as string };
+    const badDataset = { ...ds("d1", "d1"), name: undefined as unknown as string };
+    expect(() =>
+      buildLibraryTree(
+        [badFolder, folder("b", "B")],
+        [badDataset, ds("d2", "d2")],
+      ),
+    ).not.toThrow();
+  });
+
   it("assigns increasing depth", () => {
     const tree = buildLibraryTree(
       [folder("a", "A"), folder("b", "B", "a"), folder("c", "C", "b")],
