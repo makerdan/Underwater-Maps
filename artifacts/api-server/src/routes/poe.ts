@@ -754,4 +754,132 @@ router.post("/describe", async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Help Q&A — answers user questions about BathyScan using in-app help
+// articles as grounding context. Restricted to app-related topics by the
+// system prompt. Auth + rate limit are already applied via router.use above.
+// ---------------------------------------------------------------------------
+
+import { readFileSync, readdirSync, existsSync } from "fs";
+import { fileURLToPath } from "url";
+
+function resolveHelpDir(): string | null {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    process.env["BATHYSCAN_HELP_DIR"],
+    path.resolve(here, "../../../bathyscan/help/articles"),
+    path.resolve(here, "../../bathyscan/help/articles"),
+    path.resolve(process.cwd(), "artifacts/bathyscan/help/articles"),
+    path.resolve(process.cwd(), "../bathyscan/help/articles"),
+    path.resolve(process.cwd(), "bathyscan/help/articles"),
+  ].filter((p): p is string => Boolean(p));
+  for (const candidate of candidates) {
+    try {
+      if (existsSync(candidate) && readdirSync(candidate).some((f) => f.endsWith(".md"))) {
+        return candidate;
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+  return null;
+}
+
+let helpContextCache: string | null = null;
+
+function loadHelpContext(): string {
+  if (helpContextCache !== null) return helpContextCache;
+  const dir = resolveHelpDir();
+  if (!dir) {
+    console.warn("[poe/help] Could not locate bathyscan/help/articles directory");
+    helpContextCache = "";
+    return helpContextCache;
+  }
+  try {
+    const files = readdirSync(dir).filter((f) => f.endsWith(".md"));
+    const chunks: string[] = [];
+    for (const f of files) {
+      const raw = readFileSync(path.join(dir, f), "utf8");
+      const stripped = raw.replace(/^---[\s\S]*?---\n?/, "").trim();
+      chunks.push(`# Article: ${f}\n\n${stripped}`);
+    }
+    helpContextCache = chunks.join("\n\n---\n\n");
+    console.log(`[poe/help] Loaded ${files.length} help articles from ${dir}`);
+  } catch (err) {
+    console.warn("[poe/help] Could not load help articles:", (err as Error).message);
+    helpContextCache = "";
+  }
+  return helpContextCache;
+}
+
+const HELP_SYSTEM_PROMPT = `You are the in-app help assistant for BathyScan, a 3D seafloor and lake-bed exploration web app. Answer the user's question using ONLY the help articles provided below as grounding truth. If the question is not about BathyScan or the answer is not in the articles, politely say you can only answer questions about the BathyScan app. Keep answers concise (3-6 sentences) and refer to specific features, panels, and keyboard shortcuts by name when relevant. Do not invent features that are not described in the articles.`;
+
+router.post("/help", async (req, res) => {
+  const userId = getAuthenticatedUserId(req);
+  const { question, history = [] } = req.body as {
+    question?: string;
+    history?: Array<{ role: string; content: string }>;
+  };
+
+  if (!question || typeof question !== "string" || !question.trim()) {
+    res.status(400).json({ error: "missing_field", message: "question is required" });
+    return;
+  }
+  if (question.length > 1000) {
+    res.status(400).json({ error: "too_long", message: "question must be ≤ 1000 characters" });
+    return;
+  }
+
+  const helpContext = loadHelpContext();
+  const systemPrompt = `${HELP_SYSTEM_PROMPT}\n\n=== BATHYSCAN HELP ARTICLES ===\n\n${helpContext}`;
+
+  const cleanHistory = (Array.isArray(history) ? history : [])
+    .slice(-8)
+    .filter(
+      (m) =>
+        m &&
+        typeof m === "object" &&
+        (m.role === "user" || m.role === "assistant") &&
+        typeof m.content === "string",
+    )
+    .map((m) => ({ role: m.role, content: m.content.slice(0, 2000) }));
+
+  try {
+    const client = getPoeClient();
+    const typedHistory = cleanHistory.map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    }));
+    const completion = await withRetry(
+      () =>
+        client.chat.completions.create({
+          model: POE_MODELS.DESCRIBE_QUICK,
+          messages: [
+            { role: "system" as const, content: systemPrompt },
+            ...typedHistory,
+            { role: "user" as const, content: question.trim() },
+          ],
+          max_tokens: 400,
+          temperature: 0.3,
+          stream: false,
+        }),
+      2,
+    );
+
+    const answer = completion.choices[0]?.message?.content ?? "";
+    const usage = completion.usage;
+    await logUsage(
+      userId,
+      POE_MODELS.DESCRIBE_QUICK,
+      "help",
+      usage?.prompt_tokens ?? 0,
+      usage?.completion_tokens ?? 0,
+    );
+
+    res.json({ answer });
+  } catch (err) {
+    handlePoeError(err, res);
+  }
+});
+
 export default router;

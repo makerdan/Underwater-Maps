@@ -47,6 +47,9 @@ import { useGetSettings, getGetSettingsQueryKey } from "@workspace/api-client-re
 import { useDriftStore } from "@/lib/driftStore";
 import { WeatherPanel } from "@/components/WeatherPanel";
 import { DriftTimeline } from "@/components/DriftTimeline";
+import { HelpButton } from "@/components/help/HelpButton";
+import { HelpWindow } from "@/components/help/HelpWindow";
+import "@/components/help/help.css";
 
 const queryClient = new QueryClient();
 
@@ -438,6 +441,12 @@ function Main() {
           <HUD />
           {showDepthScaleBar && <DepthScaleBar />}
         </div>
+
+        {/* Help launch button — upper-left of main interactive area */}
+        <HelpButton />
+
+        {/* Help floating window (renders only when open) */}
+        <HelpWindow />
 
         {/* Combined side pane — Datasets, Camera Position, Keyboard, and
             Tidal Overlay all live inside one vertically-scrollable container

@@ -11,6 +11,7 @@ import React from "react";
 import { useDepthProfileStore } from "@/lib/depthProfileStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { formatDistance, formatDepth } from "@/lib/units";
+import { HelpIcon } from "@/components/help/HelpButton";
 
 // Representative colours for the four terrain texture slots. Mirrors the
 // dominant RGB used by lib/textures.ts so users can tie the strip back to
@@ -131,8 +132,9 @@ export const DepthProfilePanel: React.FC = () => {
     >
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-        <div style={{ fontSize: 10, letterSpacing: "0.22em", color: "#00e5ff" }}>
+        <div style={{ fontSize: 10, letterSpacing: "0.22em", color: "#00e5ff", display: "flex", alignItems: "center" }}>
           ▼ DEPTH PROFILE
+          <HelpIcon articleId="depth-profile" label="Depth profile" />
         </div>
         <button
           aria-label="Close depth profile"

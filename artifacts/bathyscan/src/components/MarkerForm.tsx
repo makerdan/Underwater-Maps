@@ -13,6 +13,7 @@ import { useUiStore } from "@/lib/uiStore";
 import { useAppState } from "@/lib/context";
 import { useOfflineStore } from "@/lib/offlineStore";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { HelpIcon } from "@/components/help/HelpButton";
 import { formatDepth } from "@/lib/units";
 import {
   usePostMarkers,
@@ -173,6 +174,7 @@ export const MarkerForm: React.FC = () => {
         >
           ▼ DROP MARKER
         </span>
+        <HelpIcon articleId="markers" label="Markers" />
         <button
           onClick={handleCancel}
           style={{

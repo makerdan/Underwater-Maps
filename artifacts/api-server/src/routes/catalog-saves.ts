@@ -10,7 +10,7 @@
 
 import { Router } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, datasetCatalogTable, userCatalogSavesTable } from "@workspace/db";
+import { db, userCatalogSavesTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import {
   getCatalogEntries,

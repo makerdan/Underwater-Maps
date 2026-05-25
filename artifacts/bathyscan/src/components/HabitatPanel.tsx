@@ -13,6 +13,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useHabitatStore } from "@/lib/habitatStore";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useUiStore } from "@/lib/uiStore";
+import { HelpIcon } from "@/components/help/HelpButton";
 import { useAppState } from "@/lib/context";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
@@ -279,8 +280,11 @@ export const HabitatPanel: React.FC = () => {
         >
           ◈ Habitat Layer
         </span>
-        <span style={{ fontSize: 11, color: "#94a3b8" }}>
-          {collapsed ? "▶" : "▼"}
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <HelpIcon articleId="ai-assistant" label="Habitat layer" />
+          <span style={{ fontSize: 11, color: "#94a3b8" }}>
+            {collapsed ? "▶" : "▼"}
+          </span>
         </span>
       </button>
 

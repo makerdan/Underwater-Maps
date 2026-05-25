@@ -13,6 +13,7 @@
  */
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { queryLLM } from "@/lib/queryLLM";
+import { HelpIcon } from "@/components/help/HelpButton";
 import { executeTool } from "@/lib/queryTools";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useCameraStore } from "@/lib/cameraStore";
@@ -164,8 +165,9 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
     >
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <span style={{ fontSize: 10, letterSpacing: "0.22em", color: "#00e5ff", opacity: 0.85 }}>
+        <span style={{ fontSize: 10, letterSpacing: "0.22em", color: "#00e5ff", opacity: 0.85, display: "flex", alignItems: "center" }}>
           ◈ NATURAL LANGUAGE QUERY
+          <HelpIcon articleId="ai-assistant" label="AI assistant" />
         </span>
         <button
           onClick={onClose}

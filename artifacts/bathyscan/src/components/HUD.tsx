@@ -9,6 +9,7 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
 import { mphToKnots } from "@/lib/boatSpeed";
 import { formatDepth, formatSpeed } from "@/lib/units";
+import { HelpIcon } from "@/components/help/HelpButton";
 
 const EFH_DATASETS = new Set(["thorne-bay"]);
 
@@ -186,6 +187,9 @@ export const HUD: React.FC = () => {
             <span style={CYAN}>{Math.round(heading).toString().padStart(3, "0")}°</span>
           </div>
         )}
+        <div style={{ pointerEvents: "auto" }}>
+          <HelpIcon articleId="interface-tour" label="Help: HUD overlay" />
+        </div>
 
         {/* GPS dive button in HUD */}
         {gpsInBounds && (

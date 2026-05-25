@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { HelpIcon } from "@/components/help/HelpButton";
 
 const BINDINGS: { key: string; action: string }[] = [
   { key: "Click", action: "Lock mouse / enter fly mode" },
@@ -45,8 +46,11 @@ export const KeyboardShortcutsPanel: React.FC = () => {
         >
           ▼ Keyboard
         </span>
-        <span style={{ color: "#94a3b8", fontSize: 12 }}>
-          {collapsed ? "▸" : "▾"}
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <HelpIcon articleId="keyboard-shortcuts" label="Keyboard shortcuts" />
+          <span style={{ color: "#94a3b8", fontSize: 12 }}>
+            {collapsed ? "▸" : "▾"}
+          </span>
         </span>
       </button>
 

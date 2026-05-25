@@ -25,6 +25,19 @@ import { getGetMarkersQueryKey } from "@workspace/api-client-react";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { usePaletteStore, DEFAULT_SHALLOW, DEFAULT_DEEP } from "@/lib/paletteStore";
 import { colormapCanvas } from "@/lib/colormap";
+import { HelpIcon } from "@/components/help/HelpButton";
+
+const SectionTitle: React.FC<{ children: React.ReactNode; helpId?: string; helpLabel?: string }> =
+  ({ children, helpId, helpLabel }) => (
+    <h2 style={S.sectionTitle}>
+      {children}
+      {helpId && (
+        <span style={{ marginLeft: 8, display: "inline-block", verticalAlign: "middle" }}>
+          <HelpIcon articleId={helpId} {...(helpLabel ? { label: helpLabel } : {})} />
+        </span>
+      )}
+    </h2>
+  );
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -532,7 +545,7 @@ function VisualsSection() {
   const s = useSettingsStore();
   return (
     <>
-      <h2 style={S.sectionTitle}>◈ VISUALS &amp; PERFORMANCE</h2>
+      <SectionTitle helpId="settings" helpLabel="Visuals & Performance">◈ VISUALS &amp; PERFORMANCE</SectionTitle>
       <SectionActionsRow section="visuals" />
       <div style={S.card}>
         <div style={S.cardHeader}>QUALITY PRESET</div>
@@ -684,7 +697,7 @@ function NavigationSection() {
   const s = useSettingsStore();
   return (
     <>
-      <h2 style={S.sectionTitle}>◈ CAMERA &amp; CONTROLS</h2>
+      <SectionTitle helpId="keyboard-shortcuts" helpLabel="Camera & Controls">◈ CAMERA &amp; CONTROLS</SectionTitle>
       <SectionActionsRow section="camera" />
       <div style={S.card}>
         <div style={S.cardHeader}>BASICS</div>
@@ -804,7 +817,7 @@ function HUDSection() {
   const s = useSettingsStore();
   return (
     <>
-      <h2 style={S.sectionTitle}>◈ HUD &amp; LAYOUT</h2>
+      <SectionTitle helpId="interface-tour" helpLabel="HUD & Layout">◈ HUD &amp; LAYOUT</SectionTitle>
       <SectionActionsRow section="hud" />
       <div style={S.card}>
         <div style={S.cardHeader}>VISIBILITY</div>
@@ -949,7 +962,7 @@ function MarkersSection() {
 
   return (
     <>
-      <h2 style={S.sectionTitle}>◈ MARKERS</h2>
+      <SectionTitle helpId="markers" helpLabel="Markers">◈ MARKERS</SectionTitle>
       <SectionActionsRow section="markers" />
       <div style={S.card}>
         <div style={S.cardHeader}>VISIBILITY</div>
@@ -1049,7 +1062,7 @@ function HabitatSection() {
   const s = useSettingsStore();
   return (
     <>
-      <h2 style={S.sectionTitle}>◈ HABITAT DEFAULTS</h2>
+      <SectionTitle helpId="ai-assistant" helpLabel="Habitat Defaults">◈ HABITAT DEFAULTS</SectionTitle>
       <SectionActionsRow section="habitat" />
       <div style={S.card}>
         <div style={S.cardHeader}>BEHAVIOUR</div>
@@ -1263,7 +1276,7 @@ function GlobalResetFooter() {
 function ShortcutsSection() {
   return (
     <>
-      <h2 style={S.sectionTitle}>◈ KEYBOARD SHORTCUTS</h2>
+      <SectionTitle helpId="keyboard-shortcuts" helpLabel="Keyboard Shortcuts">◈ KEYBOARD SHORTCUTS</SectionTitle>
       <div style={S.card}>
         <div style={S.cardHeader}>REFERENCE</div>
         <div style={{ padding: "8px 16px" }}>
@@ -1305,7 +1318,7 @@ function DatasetSection() {
   const s = useSettingsStore();
   return (
     <>
-      <h2 style={S.sectionTitle}>◈ DATA &amp; STORAGE</h2>
+      <SectionTitle helpId="datasets-uploads" helpLabel="Data & Storage">◈ DATA &amp; STORAGE</SectionTitle>
       <SectionActionsRow section="data" />
       <div style={S.card}>
         <div style={S.cardHeader}>DEFAULTS</div>
@@ -1447,7 +1460,7 @@ function OfflineSection() {
 
   return (
     <>
-      <h2 style={S.sectionTitle}>◈ OFFLINE &amp; STORAGE</h2>
+      <SectionTitle helpId="troubleshooting" helpLabel="Offline & Storage">◈ OFFLINE &amp; STORAGE</SectionTitle>
       <div style={S.card}>
         <div style={S.cardHeader}>CACHED TERRAIN DATA</div>
         <div style={{ padding: "12px 16px" }}>
@@ -1584,7 +1597,7 @@ function AccountSection() {
 
   return (
     <>
-      <h2 style={S.sectionTitle}>◈ ACCOUNT &amp; PRIVACY</h2>
+      <SectionTitle helpId="settings" helpLabel="Account & Privacy">◈ ACCOUNT &amp; PRIVACY</SectionTitle>
       <SectionResetRow section="account" />
       {user && (
         <div style={S.card}>

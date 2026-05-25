@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
+import { HelpIcon } from "@/components/help/HelpButton";
 import type { FileRejection } from "react-dropzone";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@clerk/react";
@@ -445,6 +446,7 @@ export const DatasetPanel: React.FC = () => {
           {anyLoading && (
             <span className="animate-spin" style={{ fontSize: 10 }}>◌</span>
           )}
+          <HelpIcon articleId="datasets-uploads" label="Datasets and uploads" />
           <span style={{ color: "#475569", fontSize: 12 }}>{collapsed ? "▸" : "▾"}</span>
         </div>
       </button>

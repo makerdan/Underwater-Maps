@@ -25,7 +25,6 @@ import {
   type UserCatalogSave,
 } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
-import { useUiStore } from "@/lib/uiStore";
 
 // ---------------------------------------------------------------------------
 // Types

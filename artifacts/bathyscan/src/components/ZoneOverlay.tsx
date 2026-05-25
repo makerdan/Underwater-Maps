@@ -13,6 +13,7 @@
 import React from "react";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useUiStore } from "@/lib/uiStore";
+import { HelpIcon } from "@/components/help/HelpButton";
 import { useAppState } from "@/lib/context";
 import {
   SALTWATER_ZONES,
@@ -82,6 +83,7 @@ export const ZoneOverlay: React.FC = () => {
         >
           ◈ Zone Analysis
         </span>
+        <HelpIcon articleId="zones-paint-mode" label="Zones and paint mode" />
         {loading && (
           <span className="animate-spin" style={{ fontSize: 10, color: "#00e5ff" }}>
             ◌
