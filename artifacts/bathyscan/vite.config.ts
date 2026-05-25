@@ -1,9 +1,46 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { VitePWA } from "vite-plugin-pwa";
+
+/**
+ * Build-time guard: fail the production build if the dev-only e2e test
+ * back door (`window.__bathyTest`, installed by `src/lib/testHelpers.ts`)
+ * leaks into any emitted chunk. The helpers expose a
+ * `setRequestHeaders` API that can forge auth headers on real DELETE
+ * calls, so they must never ship.
+ *
+ * Paired with the call-site gate in `src/main.tsx` and the runtime
+ * `PROD` throw in `installTestHelpers` — this plugin catches the case
+ * where someone re-introduces an unconditional call (Vite's dead-code
+ * elimination would still inline the throw, and we would catch it
+ * here before it could ever reach a deploy).
+ */
+function failOnTestBackdoor(): Plugin {
+  const NEEDLE = "__bathyTest";
+  return {
+    name: "bathyscan:fail-on-test-backdoor",
+    apply: "build",
+    enforce: "post",
+    generateBundle(_options, bundle) {
+      if (process.env.NODE_ENV !== "production") return;
+      const offenders: string[] = [];
+      for (const [fileName, chunk] of Object.entries(bundle)) {
+        if (chunk.type !== "chunk") continue;
+        if (chunk.code.includes(NEEDLE)) offenders.push(fileName);
+      }
+      if (offenders.length > 0) {
+        throw new Error(
+          `[bathyscan] production bundle contains the dev-only test back door "${NEEDLE}". ` +
+            `Offending chunks: ${offenders.join(", ")}. ` +
+            `See artifacts/bathyscan/src/lib/testHelpers.ts for the gating contract.`,
+        );
+      }
+    },
+  };
+}
 
 const rawPort = process.env.PORT;
 
@@ -30,6 +67,7 @@ if (!basePath) {
 export default defineConfig({
   base: basePath,
   plugins: [
+    failOnTestBackdoor(),
     react(),
     tailwindcss({ optimize: false }),
     // The runtime error overlay intercepts pointer events whenever any

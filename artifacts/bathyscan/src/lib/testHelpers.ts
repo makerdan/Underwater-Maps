@@ -3,8 +3,21 @@
  * tests (Playwright) can drive the UI without going through the full
  * Clerk-authenticated 3D canvas + raycaster pipeline.
  *
- * Gated on `import.meta.env.DEV` so this code is tree-shaken out of
- * production builds.
+ * Hard gates (defense in depth):
+ *   1. The call site in `main.tsx` is wrapped in
+ *      `import.meta.env.DEV && import.meta.env.VITE_DEV_AUTH_BYPASS === "1"`,
+ *      which Vite statically replaces in production builds so the entire
+ *      module — and `window.__bathyTest` with it — is tree-shaken away.
+ *   2. `installTestHelpers()` itself re-checks both flags at runtime and
+ *      throws in `import.meta.env.PROD` so any accidental call in a
+ *      production bundle crashes loudly instead of silently exposing the
+ *      forge-auth-headers back door.
+ *   3. A Vite plugin (`failOnTestBackdoor` in `vite.config.ts`) inspects
+ *      every emitted chunk during production builds and fails the build
+ *      if the literal `__bathyTest` is present.
+ *   4. A vitest build-inspection test (`testHelpers.bundle.test.ts`) runs
+ *      a real production build and asserts `__bathyTest` is absent from
+ *      the output, so this guard is exercised in CI.
  */
 import { useContextMenuStore, type ContextMenuItem } from "./contextMenuStore";
 import { useMeasureStore } from "./measureStore";
@@ -253,7 +266,18 @@ declare global {
 }
 
 export function installTestHelpers(): void {
+  // Hard runtime guards — see file header for the full defense-in-depth
+  // story. Both checks are deliberately redundant with the call-site gate
+  // in main.tsx so that even if someone re-introduces an unconditional
+  // call, this back door cannot ship.
+  if (import.meta.env.PROD) {
+    throw new Error(
+      "[bathyscan] installTestHelpers() must never run in a production build. " +
+        "window.__bathyTest exposes forge-auth-headers helpers and is e2e-only.",
+    );
+  }
   if (!import.meta.env.DEV) return;
+  if (import.meta.env.VITE_DEV_AUTH_BYPASS !== "1") return;
   if (typeof window === "undefined") return;
 
   const buildDepthProfileTerrainMenuItems = (
