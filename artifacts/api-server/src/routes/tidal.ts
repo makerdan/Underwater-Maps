@@ -425,7 +425,7 @@ router.get("/tidal/schedule", async (req, res): Promise<void> => {
   }
   const endMs = startTime.getTime() + days * 24 * 3600 * 1000;
 
-  const station = await getNearestStation(lat, lon);
+  const station = await getNearestHeightsStation(lat, lon);
   let events: TideEvent[] | null = null;
   let source: "noaa" | "estimated" = "estimated";
   let floodBearing: number;
