@@ -79,6 +79,18 @@ export default defineConfig({
     fs: {
       strict: true,
     },
+    // In e2e mode, the api-server is started on a separate port by Playwright
+    // and the frontend's relative `/api/*` requests must be proxied to it.
+    ...(process.env.E2E_API_SERVER_URL
+      ? {
+          proxy: {
+            "/api": {
+              target: process.env.E2E_API_SERVER_URL,
+              changeOrigin: true,
+            },
+          },
+        }
+      : {}),
   },
   preview: {
     port,

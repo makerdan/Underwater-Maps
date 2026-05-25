@@ -461,20 +461,19 @@ function Main() {
           </div>
         )}
 
-        {/* Measurement banner — z-25, below crosshair */}
-        <MeasurementBanner />
-
         {/* Depth-profile chart — bottom-centre, z-36 */}
         <DepthProfilePanel />
-
-        {/* Marker detail card — z-35, right side */}
-        <MarkerDetailCard />
 
         {/* Full-screen overview map — z-40, rendered above all HUD elements */}
         {overviewOpen && <OverviewMap />}
 
-        {/* Global right-click context menu — rendered into document.body via portal */}
-        <ContextMenu />
+        {/*
+          NOTE: <ContextMenu />, <MeasurementBanner /> and <MarkerDetailCard />
+          are mounted globally in HomeRoute so they remain reachable from the
+          dev-only window.__bathyTest helper used by e2e tests, and so the
+          right-click portal lifecycle is identical in signed-in / signed-out
+          flows.
+        */}
 
         {/* iOS "Add to Home Screen" install hint */}
         {showIosInstallHint && (
@@ -674,6 +673,17 @@ function HomeRoute() {
       <Show when="signed-out">
         <LandingPage />
       </Show>
+      {/*
+        Global UI surfaces (context menu, measurement banner, marker detail
+        card) are mounted regardless of auth state so their stores can be
+        driven independently. They render nothing unless their store has
+        active state, so they're harmless on the signed-out landing page,
+        and this also makes them reachable from e2e tests via the dev-only
+        window.__bathyTest helper.
+      */}
+      <ContextMenu />
+      <MeasurementBanner />
+      <MarkerDetailCard />
     </>
   );
 }
