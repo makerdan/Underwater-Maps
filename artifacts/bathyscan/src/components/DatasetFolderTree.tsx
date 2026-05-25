@@ -231,7 +231,13 @@ export const DatasetFolderTree: React.FC<Props> = ({
   const handleDelete = () => {
     if (!confirmDelete) return;
     if (confirmDelete.kind === "dataset") {
-      deleteDataset.mutate({ id: confirmDelete.id }, { onSuccess: invalidateAll });
+      deleteDataset.mutate(
+        { id: confirmDelete.id },
+        {
+          onSuccess: invalidateAll,
+          onSettled: () => setConfirmDelete(null),
+        },
+      );
     } else {
       // Recursive delete (mode: "contents") is required when the folder has
       // children; for empty folders we still send "contents" since the API
@@ -240,11 +246,36 @@ export const DatasetFolderTree: React.FC<Props> = ({
       const mode = confirmDelete.recursive ? "contents" : "contents";
       deleteFolder.mutate(
         { id: confirmDelete.id, data: { mode } },
-        { onSuccess: invalidateAll },
+        {
+          onSuccess: invalidateAll,
+          onSettled: () => setConfirmDelete(null),
+        },
       );
     }
-    setConfirmDelete(null);
   };
+
+  // Compute the set of folder ids and dataset ids currently being deleted
+  // by a pending deleteFolder mutation (the target folder itself + all of
+  // its descendant folders + every dataset under any of those folders).
+  // This lets us dim the entire subtree while the recursive delete is in
+  // flight, mirroring the per-dataset dimming we already do.
+  const pendingDeleteFolderId =
+    deleteFolder.isPending ? deleteFolder.variables?.id ?? null : null;
+  const { deletingFolderIds, deletingDatasetIds } = useMemo(() => {
+    const folderIds = new Set<string>();
+    const datasetIds = new Set<string>();
+    if (pendingDeleteFolderId) {
+      const descendants = descendantFolderIds(tree.byId, pendingDeleteFolderId);
+      folderIds.add(pendingDeleteFolderId);
+      descendants.forEach((id) => folderIds.add(id));
+      for (const ds of datasets) {
+        if (ds.folderId && folderIds.has(ds.folderId)) {
+          datasetIds.add(ds.id);
+        }
+      }
+    }
+    return { deletingFolderIds: folderIds, deletingDatasetIds: datasetIds };
+  }, [pendingDeleteFolderId, tree.byId, datasets]);
 
   // ─── Drag & drop ─────────────────────────────────────────────────────────
   const handleDragStart = (e: DragStartEvent) => {
@@ -491,6 +522,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
     const isExpanded = expanded[node.folder.id] ?? false;
     const isRenaming = renaming?.kind === "folder" && renaming.id === node.folder.id;
     const isDraggingThis = dragging?.kind === "folder" && dragging.id === node.folder.id;
+    const deleting = deletingFolderIds.has(node.folder.id);
     trackRow("folder", node.folder.id);
     return (
       <FolderRow
@@ -503,6 +535,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
         isRenaming={isRenaming}
         renameInput={isRenaming ? renderRenameInput(node.folder.name) : null}
         isDraggingThis={isDraggingThis}
+        deleting={deleting}
         registerRow={registerRow}
       />
     );
@@ -513,9 +546,11 @@ export const DatasetFolderTree: React.FC<Props> = ({
     const loading = ds.id === loadingId;
     // Drive the "deleting" UX directly from the mutation state so the row
     // dims and disables as soon as the mutation begins, with no extra state
-    // to thread through props.
+    // to thread through props. A dataset also dims when an ancestor folder
+    // is being recursively deleted.
     const deleting =
-      deleteDataset.isPending && deleteDataset.variables?.id === ds.id;
+      (deleteDataset.isPending && deleteDataset.variables?.id === ds.id) ||
+      deletingDatasetIds.has(ds.id);
     const isRenaming = renaming?.kind === "dataset" && renaming.id === ds.id;
     trackRow("dataset", ds.id);
     return (
@@ -654,6 +689,13 @@ export const DatasetFolderTree: React.FC<Props> = ({
                   : "This folder will be permanently deleted."
                 : "This terrain will be permanently deleted."
             }
+            isPending={
+              confirmDelete.kind === "folder"
+                ? deleteFolder.isPending &&
+                  deleteFolder.variables?.id === confirmDelete.id
+                : deleteDataset.isPending &&
+                  deleteDataset.variables?.id === confirmDelete.id
+            }
             onCancel={() => setConfirmDelete(null)}
             onConfirm={handleDelete}
           />
@@ -671,6 +713,7 @@ interface FolderRowProps {
   isExpanded: boolean;
   isRenaming: boolean;
   isDraggingThis: boolean;
+  deleting: boolean;
   renameInput: React.ReactNode;
   onToggle: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
@@ -683,6 +726,7 @@ const FolderRow: React.FC<FolderRowProps> = ({
   isExpanded,
   isRenaming,
   isDraggingThis,
+  deleting,
   renameInput,
   onToggle,
   onContextMenu,
@@ -724,23 +768,26 @@ const FolderRow: React.FC<FolderRowProps> = ({
       data-kind="folder"
       data-id={node.folder.id}
       data-testid={`folder-row-${node.folder.id}`}
+      data-deleting={deleting ? "true" : undefined}
+      aria-busy={deleting || undefined}
       {...attributes}
       {...listeners}
-      tabIndex={0}
-      onContextMenu={onContextMenu}
-      onDoubleClick={onDoubleClick}
-      onClick={onToggle}
+      tabIndex={deleting ? -1 : 0}
+      onContextMenu={deleting ? undefined : onContextMenu}
+      onDoubleClick={deleting ? undefined : onDoubleClick}
+      onClick={deleting ? undefined : onToggle}
       style={{
         display: "flex",
         alignItems: "center",
         gap: 6,
         padding: `4px ${ROW_PADDING_X}px 4px ${ROW_PADDING_X + indent}px`,
-        cursor: "pointer",
+        cursor: deleting ? "wait" : "pointer",
         fontSize: 11,
         color: "#cbd5e1",
         background: isOver ? "rgba(0,229,255,0.12)" : "transparent",
         outline: "none",
-        opacity: isDraggingThis ? 0.4 : 1,
+        opacity: deleting || isDraggingThis ? 0.4 : 1,
+        pointerEvents: deleting ? "none" : undefined,
         userSelect: "none",
       }}
     >
@@ -1172,20 +1219,22 @@ const MoveToDialog: React.FC<{
 const ConfirmDialog: React.FC<{
   title: string;
   message: string;
+  isPending?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
-}> = ({ title, message, onCancel, onConfirm }) => {
+}> = ({ title, message, isPending = false, onCancel, onConfirm }) => {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
+      if (e.key === "Escape" && !isPending) onCancel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  }, [onCancel, isPending]);
 
   return (
     <div
       data-testid="confirm-delete-dialog"
+      aria-busy={isPending || undefined}
       style={{
         position: "fixed",
         inset: 0,
@@ -1195,7 +1244,7 @@ const ConfirmDialog: React.FC<{
         justifyContent: "center",
         zIndex: 10000,
       }}
-      onClick={onCancel}
+      onClick={isPending ? undefined : onCancel}
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -1215,6 +1264,7 @@ const ConfirmDialog: React.FC<{
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button
             onClick={onCancel}
+            disabled={isPending}
             data-testid="confirm-delete-cancel"
             style={{
               background: "transparent",
@@ -1222,7 +1272,8 @@ const ConfirmDialog: React.FC<{
               color: "#94a3b8",
               padding: "4px 12px",
               borderRadius: 3,
-              cursor: "pointer",
+              cursor: isPending ? "not-allowed" : "pointer",
+              opacity: isPending ? 0.5 : 1,
               fontSize: 11,
             }}
           >
@@ -1230,19 +1281,41 @@ const ConfirmDialog: React.FC<{
           </button>
           <button
             onClick={onConfirm}
+            disabled={isPending}
             data-testid="confirm-delete-confirm"
             autoFocus
             style={{
-              background: "rgba(239,68,68,0.18)",
+              background: isPending
+                ? "rgba(239,68,68,0.10)"
+                : "rgba(239,68,68,0.18)",
               border: "1px solid rgba(239,68,68,0.55)",
               color: "#fca5a5",
               padding: "4px 12px",
               borderRadius: 3,
-              cursor: "pointer",
+              cursor: isPending ? "wait" : "pointer",
+              opacity: isPending ? 0.7 : 1,
               fontSize: 11,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
             }}
           >
-            Delete
+            {isPending && (
+              <span
+                className="animate-spin"
+                aria-hidden="true"
+                data-testid="confirm-delete-spinner"
+                style={{
+                  display: "inline-block",
+                  width: 10,
+                  height: 10,
+                  borderRadius: "50%",
+                  border: "1.5px solid rgba(252,165,165,0.35)",
+                  borderTopColor: "#fca5a5",
+                }}
+              />
+            )}
+            {isPending ? "Deleting…" : "Delete"}
           </button>
         </div>
       </div>
