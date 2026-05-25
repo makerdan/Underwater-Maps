@@ -193,6 +193,14 @@ export interface SettingsState {
    * Used by `useSectionDirty()` to drive per-section Save buttons.
    */
   syncedSnapshot?: Partial<SettingsState>;
+
+  /**
+   * ISO timestamp of the most recent successful sync with the server (either
+   * a GET hydration or a PUT save). `null` when the user has never synced
+   * (signed-out, offline, or first launch). Surfaced in the Account tab so
+   * users can confirm cross-device sync is working.
+   */
+  lastSyncedAt: string | null;
 }
 
 interface SettingsActions {
@@ -320,8 +328,12 @@ interface SettingsActions {
   /** Reset every setting back to defaults (preserves datasetHomePositions). */
   resetAll: () => void;
 
-  /** Mark every section as saved (snapshot equals current data values). */
-  markAllSaved: () => void;
+  /**
+   * Mark every section as saved (snapshot equals current data values).
+   * Pass the server-provided ISO timestamp (from the PUT response) so the
+   * "Last synced" indicator in the Account tab reflects the server's clock.
+   */
+  markAllSaved: (lastSyncedAt?: string | null) => void;
 }
 
 export type SettingsStore = SettingsState & SettingsActions;
@@ -515,6 +527,8 @@ export const DEFAULT_SETTINGS: SettingsState = {
   datasetFolderExpanded: {},
 
   waterType: "saltwater",
+
+  lastSyncedAt: null,
 };
 
 export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
@@ -567,7 +581,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
  * since it is mutated outside the per-section editors.
  */
 const DATA_KEYS: (keyof SettingsState)[] = (Object.keys(DEFAULT_SETTINGS) as (keyof SettingsState)[])
-  .filter((k) => k !== "datasetHomePositions");
+  .filter((k) => k !== "datasetHomePositions" && k !== "lastSyncedAt");
 
 function snapshotData(state: Partial<SettingsState>): Partial<SettingsState> {
   const out: Partial<SettingsState> = {};
@@ -596,6 +610,7 @@ export const useSettingsStore = create<SettingsStore>()(
       return {
         ...DEFAULT_SETTINGS,
         syncedSnapshot: snapshotData(DEFAULT_SETTINGS),
+        lastSyncedAt: null,
 
         // Camera
         setDefaultNavMode: setter("defaultNavMode"),
@@ -725,17 +740,50 @@ export const useSettingsStore = create<SettingsStore>()(
 
         hydrateFromServer: (partial) =>
           set((state) => {
-            // Drop any keys the client doesn't know about so a future
-            // server-only field can't corrupt store state.
-            const known: Partial<SettingsState> = {};
-            for (const k of Object.keys(partial) as (keyof SettingsState)[]) {
-              if (k in DEFAULT_SETTINGS) {
-                (known as Record<string, unknown>)[k as string] =
-                  (partial as Record<string, unknown>)[k as string];
-              }
+            const partialRec = partial as Record<string, unknown>;
+            const serverUpdatedAt =
+              typeof partialRec.__updatedAt === "string"
+                ? (partialRec.__updatedAt as string)
+                : undefined;
+
+            // Recency check: only apply server values when the server has
+            // moved forward since the last time we synced. If we've never
+            // synced (`lastSyncedAt == null`) the server is authoritative
+            // for any field we haven't locally edited.
+            const lastSyncedAt = state.lastSyncedAt;
+            const serverIsNewer =
+              !lastSyncedAt ||
+              (serverUpdatedAt !== undefined && serverUpdatedAt > lastSyncedAt);
+
+            if (!serverIsNewer) {
+              // Server hasn't changed since our last sync. Just refresh the
+              // displayed "Last synced" timestamp if the server reported one.
+              return {
+                lastSyncedAt: serverUpdatedAt ?? state.lastSyncedAt,
+              };
             }
-            const merged = { ...state, ...known };
-            return { ...known, syncedSnapshot: snapshotData(merged) };
+
+            // Server is newer than what we last saw — server wins. Apply every
+            // known data field from the payload, overwriting any local value
+            // (including unsynced local edits). `syncedSnapshot` also advances
+            // to the new server values so dirty-tracking goes clean.
+            const snap = (state.syncedSnapshot ?? {}) as Record<string, unknown>;
+            const dataKeySet = new Set<string>(DATA_KEYS as string[]);
+            const applied: Record<string, unknown> = {};
+            const nextSnap: Record<string, unknown> = { ...snap };
+
+            for (const [k, serverVal] of Object.entries(partialRec)) {
+              if (k === "__updatedAt") continue;
+              if (!dataKeySet.has(k)) continue;
+              applied[k] = serverVal;
+              nextSnap[k] = serverVal;
+            }
+
+            return {
+              ...(applied as Partial<SettingsState>),
+              syncedSnapshot: nextSnap as Partial<SettingsState>,
+              lastSyncedAt: serverUpdatedAt ?? new Date().toISOString(),
+            };
           }),
 
         resetSection: (section) => {
@@ -756,8 +804,14 @@ export const useSettingsStore = create<SettingsStore>()(
           });
         },
 
-        markAllSaved: () =>
-          set((state) => ({ syncedSnapshot: snapshotData(state) })),
+        markAllSaved: (lastSyncedAt) =>
+          set((state) => ({
+            syncedSnapshot: snapshotData(state),
+            lastSyncedAt:
+              lastSyncedAt === undefined
+                ? new Date().toISOString()
+                : lastSyncedAt,
+          })),
       };
     },
     {
@@ -781,6 +835,9 @@ export const useSettingsStore = create<SettingsStore>()(
       onRehydrateStorage: () => (state) => {
         if (state) {
           state.syncedSnapshot = snapshotData(state);
+          // Preserved as-is from persisted state if present; defaults to null
+          // so the Account tab can show "Never" until the first sync lands.
+          if (state.lastSyncedAt === undefined) state.lastSyncedAt = null;
         }
       },
     },

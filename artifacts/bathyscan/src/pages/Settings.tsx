@@ -29,6 +29,27 @@ import { usePaletteStore, DEFAULT_SHALLOW, DEFAULT_DEEP } from "@/lib/paletteSto
 import { colormapCanvas } from "@/lib/colormap";
 import { HelpIcon } from "@/components/help/HelpButton";
 
+/**
+ * Format an ISO timestamp into a short human-readable "last synced" label.
+ * Uses relative phrasing for recent syncs ("Just now", "5 min ago") and
+ * falls back to a localised absolute date once it's older than a day.
+ */
+function formatLastSynced(iso: string): string {
+  const ms = Date.parse(iso);
+  if (Number.isNaN(ms)) return iso;
+  const diffSec = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+  if (diffSec < 10) return "JUST NOW";
+  if (diffSec < 60) return `${diffSec}S AGO`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} MIN AGO`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}H AGO`;
+  const d = new Date(ms);
+  return d.toLocaleString(undefined, {
+    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+  }).toUpperCase();
+}
+
 const SectionTitle: React.FC<{ children: React.ReactNode; helpId?: string; helpLabel?: string }> =
   ({ children, helpId, helpLabel }) => (
     <h2 style={S.sectionTitle}>
@@ -1775,6 +1796,7 @@ function AccountSection() {
     }
   };
 
+  const lastSyncedAt = useSettingsStore((st) => st.lastSyncedAt);
   return (
     <>
       <SectionTitle helpId="settings" helpLabel="Account & Privacy">◈ ACCOUNT &amp; PRIVACY</SectionTitle>
@@ -1800,6 +1822,21 @@ function AccountSection() {
             >
               SIGN OUT
             </button>
+          </div>
+          <div
+            style={{
+              padding: "6px 16px 12px",
+              fontSize: 9,
+              letterSpacing: "0.12em",
+              color: "#64748b",
+              fontFamily: "'JetBrains Mono', monospace",
+            }}
+            data-testid="last-synced-row"
+          >
+            LAST SYNCED:{" "}
+            <span style={{ color: lastSyncedAt ? "#94a3b8" : "#475569" }}>
+              {lastSyncedAt ? formatLastSynced(lastSyncedAt) : "NEVER"}
+            </span>
           </div>
         </div>
       )}
@@ -2035,12 +2072,16 @@ export function Settings() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydrateFromServer = useSettingsStore((s) => s.hydrateFromServer);
 
-  // Load settings from server on mount (authenticated only)
+  // Load settings from server on mount (authenticated only). Force a fresh
+  // fetch on every mount so opening Settings on a different device pulls the
+  // latest server state instead of relying on react-query's in-memory cache.
   const { data: serverSettings } = useGetSettings({
     query: {
       enabled: !!isSignedIn,
       retry: false,
       queryKey: getGetSettingsQueryKey(),
+      refetchOnMount: "always",
+      staleTime: 0,
     },
   });
 
@@ -2086,15 +2127,18 @@ export function Settings() {
     }
     if (!isSignedIn) {
       // Local-only save — already persisted to localStorage by zustand.
-      markAllSaved();
+      // Pass `null` so the "Last synced" indicator stays empty for
+      // signed-out users (there's no server to sync with).
+      markAllSaved(null);
       flashSavedMsg();
       return;
     }
     const data = buildPayload();
-    await saveSettingsAsync({
+    const resp = await saveSettingsAsync({
       data: data as Parameters<typeof saveSettingsAsync>[0]["data"],
     });
-    markAllSaved();
+    const serverStamp = (resp as Record<string, unknown> | undefined)?.__updatedAt;
+    markAllSaved(typeof serverStamp === "string" ? serverStamp : undefined);
     flashSavedMsg();
   }, [isSignedIn, saveSettingsAsync, markAllSaved, flashSavedMsg, buildPayload]);
 

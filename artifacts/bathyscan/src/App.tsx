@@ -875,8 +875,16 @@ function LandingPage() {
 }
 
 function SettingsHydrator() {
+  // Always refetch on mount so opening the app on a different device (or
+  // after clearing local storage) re-reads the latest server snapshot
+  // instead of trusting react-query's in-memory cache.
   const { data: serverSettings } = useGetSettings({
-    query: { enabled: true, queryKey: getGetSettingsQueryKey() },
+    query: {
+      enabled: true,
+      queryKey: getGetSettingsQueryKey(),
+      refetchOnMount: "always",
+      staleTime: 0,
+    },
   });
   const hydrateFromServer = useSettingsStore((s) => s.hydrateFromServer);
   useEffect(() => {

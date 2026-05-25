@@ -125,6 +125,9 @@ describe("settingsStore", () => {
   it("hydrateFromServer merges partial server state without clobbering unrelated fields", () => {
     const s = useSettingsStore.getState();
     s.setFieldOfView(72);
+    // Treat the local fieldOfView change as already synced so the server
+    // hydrate doesn't see it as a pending local edit and overwrite it.
+    s.markAllSaved(null);
     s.hydrateFromServer({ hudOpacity: 0.55 } as Partial<typeof DEFAULT_SETTINGS>);
     const after = useSettingsStore.getState();
     expect(after.hudOpacity).toBe(0.55);
@@ -141,6 +144,9 @@ describe("settingsStore", () => {
   it("hydrateFromServer refreshes syncedSnapshot for merged fields", () => {
     const s = useSettingsStore.getState();
     s.setFieldOfView(72);
+    // Treat the local fieldOfView change as already synced so hydrate is
+    // allowed to apply server values.
+    s.markAllSaved(null);
     s.hydrateFromServer({ hudOpacity: 0.55 } as Partial<typeof DEFAULT_SETTINGS>);
     const snap = useSettingsStore.getState().syncedSnapshot ?? {};
     // Snapshot reflects the merged state (server value + prior client edit).
@@ -189,5 +195,63 @@ describe("settingsStore", () => {
     expect(raw).not.toBeNull();
     const parsed = JSON.parse(raw as string);
     expect(parsed.state.fieldOfView).toBe(81);
+  });
+
+  it("hydrateFromServer applies server fields when local has never synced", () => {
+    // lastSyncedAt is null on a fresh install — server is authoritative
+    // for any field the user hasn't already edited.
+    // Reset baseline so this field has no local edit relative to snapshot.
+    useSettingsStore.getState().markAllSaved(null);
+    useSettingsStore.getState().hydrateFromServer({
+      hudOpacity: 0.33,
+      __updatedAt: "2026-05-02T10:00:00.000Z",
+    } as Partial<typeof DEFAULT_SETTINGS>);
+    const after = useSettingsStore.getState();
+    expect(after.hudOpacity).toBe(0.33);
+    expect(after.lastSyncedAt).toBe("2026-05-02T10:00:00.000Z");
+  });
+
+  it("hydrateFromServer: when server is newer than lastSyncedAt, server wins for every field", () => {
+    // Establish a sync baseline at an older timestamp.
+    useSettingsStore.getState().markAllSaved("2026-04-01T00:00:00.000Z");
+    // User locally tweaks fieldOfView after the baseline.
+    useSettingsStore.getState().setFieldOfView(99);
+
+    // Server (different device) sent a newer payload changing both fields.
+    useSettingsStore.getState().hydrateFromServer({
+      fieldOfView: 30,
+      hudOpacity: 0.7,
+      __updatedAt: "2026-05-01T12:00:00.000Z",
+    } as Partial<typeof DEFAULT_SETTINGS>);
+
+    const after = useSettingsStore.getState();
+    // Server is newer → server wins, even over an unsynced local edit.
+    expect(after.fieldOfView).toBe(30);
+    expect(after.hudOpacity).toBe(0.7);
+    expect(after.lastSyncedAt).toBe("2026-05-01T12:00:00.000Z");
+  });
+
+  it("hydrateFromServer skips application when server is not newer than lastSyncedAt", () => {
+    useSettingsStore.setState({
+      lastSyncedAt: "2026-05-10T00:00:00.000Z",
+      hudOpacity: 0.5,
+    });
+    useSettingsStore.getState().hydrateFromServer({
+      hudOpacity: 0.9,
+      __updatedAt: "2026-05-01T00:00:00.000Z",
+    } as Partial<typeof DEFAULT_SETTINGS>);
+    const after = useSettingsStore.getState();
+    // Server timestamp is older — value must not overwrite local.
+    expect(after.hudOpacity).toBe(0.5);
+  });
+
+  it("markAllSaved stamps lastSyncedAt to now by default", () => {
+    const before = Date.now();
+    useSettingsStore.getState().markAllSaved();
+    const stamped = useSettingsStore.getState().lastSyncedAt;
+    expect(stamped).not.toBeNull();
+    const ts = Date.parse(stamped as string);
+    expect(ts).toBeGreaterThanOrEqual(before);
+    expect(ts).toBeLessThanOrEqual(Date.now());
   });
 });

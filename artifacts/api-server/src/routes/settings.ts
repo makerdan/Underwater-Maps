@@ -86,11 +86,17 @@ router.put("/settings", requireAuth, async (req, res): Promise<void> => {
   for (const [k, v] of Object.entries(body)) {
     if (!(k in DEFAULT_SETTINGS)) extras[k] = v;
   }
+  // Server is the source of truth for the sync timestamp — never trust the
+  // client's value here. This is what cross-device hydration uses to decide
+  // whether the stored server state is newer than the local snapshot.
+  delete extras.__updatedAt;
+  const updatedAt = new Date().toISOString();
 
   const merged = {
     ...DEFAULT_SETTINGS,
     ...(parsed.data as Record<string, unknown>),
     ...extras,
+    __updatedAt: updatedAt,
   };
 
   await db
