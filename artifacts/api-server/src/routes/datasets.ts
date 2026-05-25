@@ -172,18 +172,24 @@ router.post("/datasets/upload", upload.single("file"), async (req, res): Promise
   }
 
   const datasetName = fileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
-  const terrain = gridPoints(points, resolution, "upload", datasetName);
-  const overview = gridPoints(points, 64, "upload", datasetName);
 
-  // Auto-save to the user's account when authenticated
+  // Auto-save to the user's account when authenticated. We generate the row
+  // UUID client-side so that the stored grids carry the real datasetId from
+  // the start (instead of the legacy "upload" placeholder).
   let savedDatasetId: string | undefined;
   const auth = getAuth(req);
   const userId = auth?.userId ?? null;
+  const gridId = userId ? crypto.randomUUID() : "upload";
+
+  const terrain = gridPoints(points, resolution, gridId, datasetName);
+  const overview = gridPoints(points, 64, gridId, datasetName);
+
   if (userId) {
     try {
       const [saved] = await db
         .insert(customDatasetsTable)
         .values({
+          id: gridId,
           userId,
           name: datasetName,
           minDepth: terrain.minDepth,
