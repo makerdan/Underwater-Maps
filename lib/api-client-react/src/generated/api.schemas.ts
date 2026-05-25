@@ -335,6 +335,22 @@ export const TerrainDataWaterType = {
   freshwater: 'freshwater',
 } as const;
 
+/**
+ * Which upstream data service produced this grid.
+ncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
+gebco     — GEBCO 2024 WCS (~400 m global grid)
+synthetic — fbm fallback used when all upstream services are unreachable
+
+ */
+export type TerrainDataDataSource = typeof TerrainDataDataSource[keyof typeof TerrainDataDataSource];
+
+
+export const TerrainDataDataSource = {
+  ncei: 'ncei',
+  gebco: 'gebco',
+  synthetic: 'synthetic',
+} as const;
+
 export interface TerrainData {
   datasetId: string;
   name: string;
@@ -353,8 +369,14 @@ export interface TerrainData {
   maxLat: number;
   centerLon: number;
   centerLat: number;
-  /** True when the grid was produced from the synthetic fbm fallback because the upstream bathymetry service was unreachable. */
+  /** Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback. */
   synthetic?: boolean;
+  /** Which upstream data service produced this grid.
+  ncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
+  gebco     — GEBCO 2024 WCS (~400 m global grid)
+  synthetic — fbm fallback used when all upstream services are unreachable
+   */
+  dataSource?: TerrainDataDataSource;
 }
 
 export interface TerrainUploadInput {
@@ -448,6 +470,107 @@ export interface GpsTrail {
   endedAt: string;
   pointCount: number;
   createdAt: string;
+}
+
+/**
+ * CMECS broad substrate class
+ */
+export type SubstratePropertiesSubstrate = typeof SubstratePropertiesSubstrate[keyof typeof SubstratePropertiesSubstrate];
+
+
+export const SubstratePropertiesSubstrate = {
+  bedrock: 'bedrock',
+  gravel: 'gravel',
+  sand: 'sand',
+  mud: 'mud',
+} as const;
+
+export interface SubstrateProperties {
+  /** CMECS broad substrate class */
+  substrate: SubstratePropertiesSubstrate;
+  /** Terrain slope at this cell (degrees) */
+  slopeAngleDeg: number;
+  /** Depth at this cell (metres) */
+  depthM: number;
+  /** CMECS substrate classification code and label */
+  cmecsCode: string;
+  /** Suggested hex color for rendering */
+  color: string;
+}
+
+export type SubstrateFeatureType = typeof SubstrateFeatureType[keyof typeof SubstrateFeatureType];
+
+
+export const SubstrateFeatureType = {
+  Feature: 'Feature',
+} as const;
+
+export type SubstrateFeatureGeometry = { [key: string]: unknown };
+
+export interface SubstrateFeature {
+  type: SubstrateFeatureType;
+  properties: SubstrateProperties;
+  geometry: SubstrateFeatureGeometry;
+}
+
+export type SubstrateFeatureCollectionType = typeof SubstrateFeatureCollectionType[keyof typeof SubstrateFeatureCollectionType];
+
+
+export const SubstrateFeatureCollectionType = {
+  FeatureCollection: 'FeatureCollection',
+} as const;
+
+export type SubstrateFeatureCollectionMetadata = { [key: string]: unknown };
+
+export interface SubstrateFeatureCollection {
+  type: SubstrateFeatureCollectionType;
+  features: SubstrateFeature[];
+  metadata?: SubstrateFeatureCollectionMetadata;
+}
+
+export interface EfhSpeciesProperties {
+  /** Scientific species name (snake_case) */
+  species: string;
+  commonName: string;
+  /** Fishery Management Plan name */
+  fmp: string;
+  /** [minDepth, maxDepth] in metres */
+  depthRangeM: number[];
+  habitatDescription: string;
+  source: string;
+  creditUrl: string;
+  /** Suggested hex color for rendering */
+  color: string;
+}
+
+export type EfhFeatureType = typeof EfhFeatureType[keyof typeof EfhFeatureType];
+
+
+export const EfhFeatureType = {
+  Feature: 'Feature',
+} as const;
+
+export type EfhFeatureGeometry = { [key: string]: unknown };
+
+export interface EfhFeature {
+  type: EfhFeatureType;
+  properties: EfhSpeciesProperties;
+  geometry: EfhFeatureGeometry;
+}
+
+export type EfhFeatureCollectionType = typeof EfhFeatureCollectionType[keyof typeof EfhFeatureCollectionType];
+
+
+export const EfhFeatureCollectionType = {
+  FeatureCollection: 'FeatureCollection',
+} as const;
+
+export type EfhFeatureCollectionMetadata = { [key: string]: unknown };
+
+export interface EfhFeatureCollection {
+  type: EfhFeatureCollectionType;
+  features: EfhFeature[];
+  metadata?: EfhFeatureCollectionMetadata;
 }
 
 export interface GpsTrailInput {
@@ -555,5 +678,16 @@ page?: number;
  * @maximum 1000
  */
 pageSize?: number;
+};
+
+export type GetEfhParams = {
+/**
+ * Filter to a known preset dataset's AOI (e.g. thorne-bay)
+ */
+datasetId?: string;
+/**
+ * Comma-separated species names or common names to filter
+ */
+species?: string;
 };
 

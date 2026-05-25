@@ -31,6 +31,9 @@ import { useClassificationStore } from "@/lib/classificationStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { WaterTypeToggle } from "@/components/WaterTypeToggle";
+import { ProvenancePanel } from "@/components/ProvenancePanel";
+
+const EFH_DATASETS = new Set(["thorne-bay"]);
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
@@ -551,6 +554,14 @@ export const DatasetPanel: React.FC = () => {
                   >
                     {ds.description}
                   </div>
+                  {active && terrain && terrain.datasetId === ds.id && (
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <ProvenancePanel
+                        terrain={terrain}
+                        hasEfh={EFH_DATASETS.has(ds.id)}
+                      />
+                    </div>
+                  )}
                 </button>
               );
             })}

@@ -672,6 +672,67 @@ paths:
               schema:
                 $ref: "#/components/schemas/PoeError"
 
+  /substrate/{id}:
+    get:
+      operationId: getSubstrate
+      tags: [datasets]
+      summary: Terrain-derived seafloor substrate classification
+      description: |
+        Returns a GeoJSON FeatureCollection of grid-cell polygons with CMECS substrate
+        classification (bedrock / gravel / sand / mud) derived from terrain slope and depth.
+        Methodology follows the Coastal and Marine Ecological Classification Standard (CMECS).
+        For surveyed areas, real substrate data is available from Alaska ShoreZone GIS
+        (https://alaskafisheries.noaa.gov/shorezone/).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Dataset identifier
+      responses:
+        "200":
+          description: GeoJSON FeatureCollection of substrate polygons
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubstrateFeatureCollection"
+        "404":
+          description: Dataset not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /efh:
+    get:
+      operationId: getEfh
+      tags: [datasets]
+      summary: Essential Fish Habitat (EFH) zones
+      description: |
+        Returns GeoJSON EFH zone polygons for the requested area.
+        Currently covers the Thorne Bay / Clarence Strait / SE Alaska region.
+        Data credit: NOAA Fisheries / NMFS Alaska Region.
+        https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles
+      parameters:
+        - name: datasetId
+          in: query
+          schema:
+            type: string
+          description: Filter to a known preset dataset's AOI (e.g. thorne-bay)
+        - name: species
+          in: query
+          schema:
+            type: string
+          description: Comma-separated species names or common names to filter
+      responses:
+        "200":
+          description: GeoJSON FeatureCollection of EFH zone polygons
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EfhFeatureCollection"
+
 components:
   schemas:
     HealthStatus:
@@ -1047,7 +1108,15 @@ components:
           type: number
         synthetic:
           type: boolean
-          description: True when the grid was produced from the synthetic fbm fallback because the upstream bathymetry service was unreachable.
+          description: "Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback."
+        dataSource:
+          type: string
+          enum: [ncei, gebco, synthetic]
+          description: |
+            Which upstream data service produced this grid.
+            ncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
+            gebco     — GEBCO 2024 WCS (~400 m global grid)
+            synthetic — fbm fallback used when all upstream services are unreachable
       required:
         - datasetId
         - name
@@ -1217,6 +1286,133 @@ components:
         - endedAt
         - pointCount
         - createdAt
+
+    SubstrateProperties:
+      type: object
+      properties:
+        substrate:
+          type: string
+          enum: [bedrock, gravel, sand, mud]
+          description: CMECS broad substrate class
+        slopeAngleDeg:
+          type: number
+          description: Terrain slope at this cell (degrees)
+        depthM:
+          type: number
+          description: Depth at this cell (metres)
+        cmecsCode:
+          type: string
+          description: CMECS substrate classification code and label
+        color:
+          type: string
+          description: Suggested hex color for rendering
+      required:
+        - substrate
+        - slopeAngleDeg
+        - depthM
+        - cmecsCode
+        - color
+
+    SubstrateFeature:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [Feature]
+        properties:
+          $ref: "#/components/schemas/SubstrateProperties"
+        geometry:
+          type: object
+          additionalProperties: true
+      required:
+        - type
+        - properties
+        - geometry
+
+    SubstrateFeatureCollection:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [FeatureCollection]
+        features:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubstrateFeature"
+        metadata:
+          type: object
+          additionalProperties: true
+      required:
+        - type
+        - features
+
+    EfhSpeciesProperties:
+      type: object
+      properties:
+        species:
+          type: string
+          description: Scientific species name (snake_case)
+        commonName:
+          type: string
+        fmp:
+          type: string
+          description: Fishery Management Plan name
+        depthRangeM:
+          type: array
+          items:
+            type: number
+          description: "[minDepth, maxDepth] in metres"
+        habitatDescription:
+          type: string
+        source:
+          type: string
+        creditUrl:
+          type: string
+        color:
+          type: string
+          description: Suggested hex color for rendering
+      required:
+        - species
+        - commonName
+        - fmp
+        - depthRangeM
+        - habitatDescription
+        - source
+        - creditUrl
+        - color
+
+    EfhFeature:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [Feature]
+        properties:
+          $ref: "#/components/schemas/EfhSpeciesProperties"
+        geometry:
+          type: object
+          additionalProperties: true
+      required:
+        - type
+        - properties
+        - geometry
+
+    EfhFeatureCollection:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [FeatureCollection]
+        features:
+          type: array
+          items:
+            $ref: "#/components/schemas/EfhFeature"
+        metadata:
+          type: object
+          additionalProperties: true
+      required:
+        - type
+        - features
 
     GpsTrailInput:
       type: object

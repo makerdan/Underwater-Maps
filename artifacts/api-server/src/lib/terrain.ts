@@ -1,6 +1,14 @@
 import { promises as fsPromises } from "fs";
 import path from "path";
 
+/**
+ * Which upstream data service produced this grid.
+ *   "ncei"      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
+ *   "gebco"     — GEBCO 2024 WCS (~400 m global grid)
+ *   "synthetic" — fbm fallback used when all upstream services are unreachable
+ */
+export type TerrainDataSource = "ncei" | "gebco" | "synthetic";
+
 export interface TerrainGrid {
   datasetId: string;
   name: string;
@@ -23,8 +31,11 @@ export interface TerrainGrid {
    * unreachable or returned an unusable response. Clients can surface
    * a "synthetic data" badge so users know the terrain is not a real
    * survey.
+   * @deprecated Use `dataSource` for a more descriptive indicator.
    */
   synthetic?: boolean;
+  /** Which upstream source produced this grid. */
+  dataSource?: TerrainDataSource;
   version?: number;
 }
 
@@ -57,6 +68,18 @@ export interface DatasetMeta {
 // ---------------------------------------------------------------------------
 
 export const PRESET_DATASETS: DatasetMeta[] = [
+  {
+    id: "thorne-bay",
+    name: "Thorne Bay — SE Alaska",
+    description:
+      "Clarence Strait and Thorne Bay, Prince of Wales Island — Inside Passage fishing grounds with rocky seafloor, kelp forests, and deep fjord channels (50-mi radius)",
+    waterType: "saltwater",
+    minDepth: 10,
+    maxDepth: 370,
+    centerLon: -132.53,
+    centerLat: 55.69,
+    bbox: { minLon: -133.5, minLat: 55.0, maxLon: -131.5, maxLat: 56.5 },
+  },
   {
     id: "mariana-trench",
     name: "Mariana Trench",
@@ -176,6 +199,103 @@ export const ALL_PRESET_DATASETS: DatasetMeta[] = [
   ...PRESET_DATASETS,
   ...FRESHWATER_PRESET_DATASETS,
 ];
+
+// ---------------------------------------------------------------------------
+// NCEI Bag Mosaic WCS fetch (high-resolution multibeam, tried first for
+// datasets that declare a preferred NCEI source)
+// ---------------------------------------------------------------------------
+
+const NCEI_WCS =
+  "https://gis.ngdc.noaa.gov/arcgis/services/bag_mosaic/ImageServer/WCSServer";
+
+/**
+ * Datasets that should prefer the NCEI Bag Mosaic WCS over GEBCO.
+ * NCEI has high-resolution multibeam coverage for surveyed coastal areas.
+ */
+const NCEI_PREFERRED_DATASETS = new Set(["thorne-bay"]);
+
+/**
+ * Fetch bathymetric data from the NCEI Bag Mosaic WCS for a given bounding box.
+ *
+ * The NCEI Bag Mosaic is a composite of multibeam surveys at 1–50 m resolution
+ * for surveyed US coastal and Alaskan waters. Not all areas are covered; an error
+ * or empty response means GEBCO should be used as fallback.
+ *
+ * Returns the same shape as fetchGebcoGrid for a transparent swap-in.
+ */
+async function fetchNceiGrid(
+  bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number },
+  resolution: number
+): Promise<{ depths: number[]; minDepth: number; maxDepth: number }> {
+  const { minLon, minLat, maxLon, maxLat } = bbox;
+  const params = new URLSearchParams({
+    SERVICE: "WCS",
+    VERSION: "1.0.0",
+    REQUEST: "GetCoverage",
+    COVERAGE: "1",
+    CRS: "EPSG:4326",
+    BBOX: `${minLon},${minLat},${maxLon},${maxLat}`,
+    FORMAT: "image/x-aaigrid",
+    WIDTH: String(resolution),
+    HEIGHT: String(resolution),
+  });
+
+  const url = `${NCEI_WCS}?${params.toString()}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20_000);
+  let text: string;
+  try {
+    const resp = await fetch(url, { signal: controller.signal });
+    if (!resp.ok) throw new Error(`NCEI WCS returned HTTP ${resp.status}`);
+    text = await resp.text();
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  // NCEI may return an XML error document when coverage is unavailable
+  if (text.trim().startsWith("<") || text.trim().startsWith("<?")) {
+    throw new Error("NCEI WCS returned an XML response (coverage unavailable)");
+  }
+
+  const { ncols, nrows, nodata, values } = parseAsciiGrid(text);
+  if (!ncols || !nrows || values.length === 0) {
+    throw new Error("NCEI WCS returned an empty or invalid ASCII grid");
+  }
+
+  // NCEI elevation is negative for ocean depth; convert to positive depth.
+  // No-data cells (no coverage) are set to 0 (sea surface).
+  const depths: number[] = new Array(resolution * resolution).fill(0);
+  let minDepth = Infinity;
+  let maxDepth = -Infinity;
+
+  for (let row = 0; row < resolution; row++) {
+    for (let col = 0; col < resolution; col++) {
+      const srcRow = Math.min(nrows - 1, Math.floor((row / resolution) * nrows));
+      const srcCol = Math.min(ncols - 1, Math.floor((col / resolution) * ncols));
+      const elev = values[srcRow * ncols + srcCol];
+
+      let depth = 0;
+      if (elev !== undefined && elev !== nodata && elev < 0) {
+        depth = -elev;
+      }
+
+      depths[row * resolution + col] = depth;
+      if (depth < minDepth) minDepth = depth;
+      if (depth > maxDepth) maxDepth = depth;
+    }
+  }
+
+  if (!isFinite(minDepth)) minDepth = 0;
+  if (!isFinite(maxDepth)) maxDepth = 0;
+
+  // Sanity check: a grid with negligible variance is likely a no-data tile
+  if (maxDepth - minDepth < 5) {
+    throw new Error(`NCEI WCS returned near-flat grid (range ${maxDepth - minDepth} m) — likely no coverage`);
+  }
+
+  return { depths, minDepth, maxDepth };
+}
 
 // ---------------------------------------------------------------------------
 // GEBCO WCS fetch
@@ -362,28 +482,68 @@ export async function buildTerrainGrid(
     return disk;
   }
 
-  // 3. Fetch from GEBCO WCS
+  // 3. Fetch from upstream source:
+  //    NCEI Bag Mosaic WCS → GEBCO WCS → synthetic fallback
   let depths: number[];
   let minDepth: number;
   let maxDepth: number;
   let synthetic = false;
+  let dataSource: TerrainDataSource = "gebco";
 
-  try {
-    console.info(`[terrain] Fetching GEBCO WCS for ${datasetId} at ${N}×${N}…`);
-    const gebco = await fetchGebcoGrid(meta.bbox, N);
-    depths = gebco.depths;
-    minDepth = gebco.minDepth;
-    maxDepth = gebco.maxDepth;
-  } catch (err) {
-    // Fallback to synthetic data if GEBCO is unreachable (dev / offline)
-    console.warn(
-      `[terrain] GEBCO WCS unavailable for ${datasetId}: ${(err as Error).message}. Using synthetic fallback.`
-    );
-    const synth = buildSyntheticGrid(datasetId, N, meta);
-    depths = synth.depths;
-    minDepth = synth.minDepth;
-    maxDepth = synth.maxDepth;
-    synthetic = true;
+  // Try NCEI first for datasets with high-resolution multibeam coverage
+  if (NCEI_PREFERRED_DATASETS.has(datasetId)) {
+    try {
+      console.info(`[terrain] Trying NCEI Bag Mosaic WCS for ${datasetId} at ${N}×${N}…`);
+      const ncei = await fetchNceiGrid(meta.bbox, N);
+      depths = ncei.depths;
+      minDepth = ncei.minDepth;
+      maxDepth = ncei.maxDepth;
+      dataSource = "ncei";
+      console.info(`[terrain] NCEI data fetched successfully for ${datasetId}`);
+    } catch (nceiErr) {
+      console.info(
+        `[terrain] NCEI WCS unavailable for ${datasetId}: ${(nceiErr as Error).message}. Falling back to GEBCO.`
+      );
+      // Fall through to GEBCO below
+      try {
+        console.info(`[terrain] Fetching GEBCO WCS for ${datasetId} at ${N}×${N}…`);
+        const gebco = await fetchGebcoGrid(meta.bbox, N);
+        depths = gebco.depths;
+        minDepth = gebco.minDepth;
+        maxDepth = gebco.maxDepth;
+        dataSource = "gebco";
+      } catch (gebcoErr) {
+        console.warn(
+          `[terrain] GEBCO WCS also unavailable for ${datasetId}: ${(gebcoErr as Error).message}. Using synthetic fallback.`
+        );
+        const synth = buildSyntheticGrid(datasetId, N, meta);
+        depths = synth.depths;
+        minDepth = synth.minDepth;
+        maxDepth = synth.maxDepth;
+        synthetic = true;
+        dataSource = "synthetic";
+      }
+    }
+  } else {
+    try {
+      console.info(`[terrain] Fetching GEBCO WCS for ${datasetId} at ${N}×${N}…`);
+      const gebco = await fetchGebcoGrid(meta.bbox, N);
+      depths = gebco.depths;
+      minDepth = gebco.minDepth;
+      maxDepth = gebco.maxDepth;
+      dataSource = "gebco";
+    } catch (err) {
+      // Fallback to synthetic data if GEBCO is unreachable (dev / offline)
+      console.warn(
+        `[terrain] GEBCO WCS unavailable for ${datasetId}: ${(err as Error).message}. Using synthetic fallback.`
+      );
+      const synth = buildSyntheticGrid(datasetId, N, meta);
+      depths = synth.depths;
+      minDepth = synth.minDepth;
+      maxDepth = synth.maxDepth;
+      synthetic = true;
+      dataSource = "synthetic";
+    }
   }
 
   // Smooth spikes before finalising the grid (skipped when the user has
@@ -417,6 +577,7 @@ export async function buildTerrainGrid(
     centerLon: meta.centerLon,
     centerLat: meta.centerLat,
     synthetic,
+    dataSource,
   };
 
   memoryCache.set(cacheKey, grid);
@@ -549,6 +710,35 @@ function buildSyntheticGrid(
       const shelf = 200 + 400 * noise;
       const deep = 3500 + 1000 * noise;
       return shelfFactor * shelf + (1 - shelfFactor) * deep;
+    },
+    "thorne-bay": (nx, ny) => {
+      // Model: Clarence Strait (N–S oriented, ~10 km wide), with Thorne Bay inlet.
+      // The bbox spans ~2° lon × 1.5° lat of SE Alaska Inside Passage.
+      const noise = fbm(nx * 12 + 17, ny * 12 + 17, 6, 0.52, 2.1);
+      const fineNoise = fbm(nx * 28 + 3, ny * 28 + 3, 4, 0.45, 2.2) * 0.15;
+
+      // Clarence Strait: deep N–S channel offset slightly west of centre
+      const straitCx = nx - 0.45;
+      const straitWidth = 0.18;
+      const straitDepth = Math.pow(Math.max(0, 1 - Math.abs(straitCx) / straitWidth), 1.4);
+
+      // Broad shelf areas on both sides
+      const shelf = Math.max(0, 1 - straitDepth * 2.5);
+
+      // Thorne Bay inlet: shallower pocket on the SW at ~(0.25, 0.55)
+      const tbDx = nx - 0.25;
+      const tbDy = ny - 0.55;
+      const thorneBayBowl = Math.pow(Math.max(0, 1 - (tbDx * tbDx * 30 + tbDy * tbDy * 20)), 1.5);
+
+      // Composite depth
+      const channelDepth = 180 + 190 * straitDepth;
+      const shelfDepth = 15 + 60 * shelf;
+      const thorneBayDepth = 10 + 55 * (1 - thorneBayBowl);
+      let depth = straitDepth * channelDepth + (1 - straitDepth) * shelfDepth;
+      // Blend in Thorne Bay bowl
+      depth = depth * (1 - thorneBayBowl * 0.6) + thorneBayDepth * (thorneBayBowl * 0.6);
+
+      return Math.max(10, depth + (noise - 0.5) * 60 + (fineNoise - 0.075) * 40);
     },
   };
 

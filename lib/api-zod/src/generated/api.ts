@@ -69,7 +69,8 @@ export const GetDatasetsIdTerrainResponse = zod.object({
   "maxLat": zod.number(),
   "centerLon": zod.number(),
   "centerLat": zod.number(),
-  "synthetic": zod.boolean().optional().describe('True when the grid was produced from the synthetic fbm fallback because the upstream bathymetry service was unreachable.')
+  "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
+  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic']).optional().describe('Which upstream data service produced this grid.\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\n')
 })
 
 
@@ -97,7 +98,8 @@ export const GetDatasetsIdOverviewResponse = zod.object({
   "maxLat": zod.number(),
   "centerLon": zod.number(),
   "centerLat": zod.number(),
-  "synthetic": zod.boolean().optional().describe('True when the grid was produced from the synthetic fbm fallback because the upstream bathymetry service was unreachable.')
+  "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
+  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic']).optional().describe('Which upstream data service produced this grid.\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\n')
 })
 
 
@@ -133,7 +135,8 @@ export const PostDatasetsUploadResponse = zod.object({
   "maxLat": zod.number(),
   "centerLon": zod.number(),
   "centerLat": zod.number(),
-  "synthetic": zod.boolean().optional().describe('True when the grid was produced from the synthetic fbm fallback because the upstream bathymetry service was unreachable.')
+  "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
+  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic']).optional().describe('Which upstream data service produced this grid.\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\n')
 }),
   "overview": zod.object({
   "datasetId": zod.string(),
@@ -151,7 +154,8 @@ export const PostDatasetsUploadResponse = zod.object({
   "maxLat": zod.number(),
   "centerLon": zod.number(),
   "centerLat": zod.number(),
-  "synthetic": zod.boolean().optional().describe('True when the grid was produced from the synthetic fbm fallback because the upstream bathymetry service was unreachable.')
+  "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
+  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic']).optional().describe('Which upstream data service produced this grid.\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\n')
 }),
   "savedDatasetId": zod.string().optional().describe('UUID of the saved custom dataset row (only present when the request was authenticated)')
 }).describe('Full terrain and overview grids generated from an uploaded file. When the user is authenticated the terrain is also persisted and savedDatasetId is returned.')
@@ -194,7 +198,8 @@ export const GetUserDatasetsIdTerrainResponse = zod.object({
   "maxLat": zod.number(),
   "centerLon": zod.number(),
   "centerLat": zod.number(),
-  "synthetic": zod.boolean().optional().describe('True when the grid was produced from the synthetic fbm fallback because the upstream bathymetry service was unreachable.')
+  "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
+  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic']).optional().describe('Which upstream data service produced this grid.\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\n')
 })
 
 
@@ -221,7 +226,8 @@ export const GetUserDatasetsIdOverviewResponse = zod.object({
   "maxLat": zod.number(),
   "centerLon": zod.number(),
   "centerLat": zod.number(),
-  "synthetic": zod.boolean().optional().describe('True when the grid was produced from the synthetic fbm fallback because the upstream bathymetry service was unreachable.')
+  "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
+  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic']).optional().describe('Which upstream data service produced this grid.\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\n')
 })
 
 
@@ -717,6 +723,69 @@ export const GetPoeModelsResponse = zod.object({
   "owned_by": zod.string(),
   "description": zod.string().optional()
 })).optional()
+})
+
+
+/**
+ * Returns a GeoJSON FeatureCollection of grid-cell polygons with CMECS substrate
+classification (bedrock / gravel / sand / mud) derived from terrain slope and depth.
+Methodology follows the Coastal and Marine Ecological Classification Standard (CMECS).
+For surveyed areas, real substrate data is available from Alaska ShoreZone GIS
+(https://alaskafisheries.noaa.gov/shorezone/).
+
+ * @summary Terrain-derived seafloor substrate classification
+ */
+export const GetSubstrateParams = zod.object({
+  "id": zod.coerce.string().describe('Dataset identifier')
+})
+
+export const GetSubstrateResponse = zod.object({
+  "type": zod.enum(['FeatureCollection']),
+  "features": zod.array(zod.object({
+  "type": zod.enum(['Feature']),
+  "properties": zod.object({
+  "substrate": zod.enum(['bedrock', 'gravel', 'sand', 'mud']).describe('CMECS broad substrate class'),
+  "slopeAngleDeg": zod.number().describe('Terrain slope at this cell (degrees)'),
+  "depthM": zod.number().describe('Depth at this cell (metres)'),
+  "cmecsCode": zod.string().describe('CMECS substrate classification code and label'),
+  "color": zod.string().describe('Suggested hex color for rendering')
+}),
+  "geometry": zod.record(zod.string(), zod.unknown())
+})),
+  "metadata": zod.record(zod.string(), zod.unknown()).optional()
+})
+
+
+/**
+ * Returns GeoJSON EFH zone polygons for the requested area.
+Currently covers the Thorne Bay / Clarence Strait / SE Alaska region.
+Data credit: NOAA Fisheries / NMFS Alaska Region.
+https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles
+
+ * @summary Essential Fish Habitat (EFH) zones
+ */
+export const GetEfhQueryParams = zod.object({
+  "datasetId": zod.coerce.string().optional().describe('Filter to a known preset dataset\'s AOI (e.g. thorne-bay)'),
+  "species": zod.coerce.string().optional().describe('Comma-separated species names or common names to filter')
+})
+
+export const GetEfhResponse = zod.object({
+  "type": zod.enum(['FeatureCollection']),
+  "features": zod.array(zod.object({
+  "type": zod.enum(['Feature']),
+  "properties": zod.object({
+  "species": zod.string().describe('Scientific species name (snake_case)'),
+  "commonName": zod.string(),
+  "fmp": zod.string().describe('Fishery Management Plan name'),
+  "depthRangeM": zod.array(zod.number()).describe('[minDepth, maxDepth] in metres'),
+  "habitatDescription": zod.string(),
+  "source": zod.string(),
+  "creditUrl": zod.string(),
+  "color": zod.string().describe('Suggested hex color for rendering')
+}),
+  "geometry": zod.record(zod.string(), zod.unknown())
+})),
+  "metadata": zod.record(zod.string(), zod.unknown()).optional()
 })
 
 

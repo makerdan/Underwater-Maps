@@ -9,6 +9,8 @@ import tidalRouter from "./tidal";
 import queryRouter from "./query";
 import trailsRouter from "./trails";
 import meRouter from "./me";
+import substrateRouter from "./substrate";
+import efhRouter from "./efh";
 
 const router: IRouter = Router();
 
@@ -22,5 +24,7 @@ router.use(tidalRouter);
 router.use(queryRouter);
 router.use(trailsRouter);
 router.use(meRouter);
+router.use(substrateRouter);
+router.use(efhRouter);
 
 export default router;

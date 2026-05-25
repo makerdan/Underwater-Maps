@@ -24,8 +24,10 @@ import type {
   ClassifyResult,
   DatasetMeta,
   DeleteMarkersMine200,
+  EfhFeatureCollection,
   GetDatasetsIdTerrainParams,
   GetDatasetsParams,
+  GetEfhParams,
   GetMarkersParams,
   GetTrailsIdPointsParams,
   GetTrailsParams,
@@ -41,6 +43,7 @@ import type {
   PoeQueryRequest,
   PostDatasetsUploadBody,
   QueryResult,
+  SubstrateFeatureCollection,
   TerrainData,
   TrailPointsPage,
   UploadResult,
@@ -1812,6 +1815,178 @@ export function useGetPoeModels<TData = Awaited<ReturnType<typeof getPoeModels>>
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetPoeModelsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetSubstrateUrl = (id: string,) => {
+
+
+
+
+  return `/api/substrate/${id}`
+}
+
+/**
+ * Returns a GeoJSON FeatureCollection of grid-cell polygons with CMECS substrate
+classification (bedrock / gravel / sand / mud) derived from terrain slope and depth.
+Methodology follows the Coastal and Marine Ecological Classification Standard (CMECS).
+For surveyed areas, real substrate data is available from Alaska ShoreZone GIS
+(https://alaskafisheries.noaa.gov/shorezone/).
+
+ * @summary Terrain-derived seafloor substrate classification
+ */
+export const getSubstrate = async (id: string, options?: RequestInit): Promise<SubstrateFeatureCollection> => {
+
+  return customFetch<SubstrateFeatureCollection>(getGetSubstrateUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSubstrateQueryKey = (id: string,) => {
+    return [
+    `/api/substrate/${id}`
+    ] as const;
+    }
+
+
+export const getGetSubstrateQueryOptions = <TData = Awaited<ReturnType<typeof getSubstrate>>, TError = ErrorType<ApiError>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSubstrate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSubstrateQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSubstrate>>> = ({ signal }) => getSubstrate(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSubstrate>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSubstrateQueryResult = NonNullable<Awaited<ReturnType<typeof getSubstrate>>>
+export type GetSubstrateQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Terrain-derived seafloor substrate classification
+ */
+
+export function useGetSubstrate<TData = Awaited<ReturnType<typeof getSubstrate>>, TError = ErrorType<ApiError>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSubstrate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSubstrateQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetEfhUrl = (params?: GetEfhParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/efh?${stringifiedParams}` : `/api/efh`
+}
+
+/**
+ * Returns GeoJSON EFH zone polygons for the requested area.
+Currently covers the Thorne Bay / Clarence Strait / SE Alaska region.
+Data credit: NOAA Fisheries / NMFS Alaska Region.
+https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles
+
+ * @summary Essential Fish Habitat (EFH) zones
+ */
+export const getEfh = async (params?: GetEfhParams, options?: RequestInit): Promise<EfhFeatureCollection> => {
+
+  return customFetch<EfhFeatureCollection>(getGetEfhUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetEfhQueryKey = (params?: GetEfhParams,) => {
+    return [
+    `/api/efh`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetEfhQueryOptions = <TData = Awaited<ReturnType<typeof getEfh>>, TError = ErrorType<unknown>>(params?: GetEfhParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEfh>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetEfhQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getEfh>>> = ({ signal }) => getEfh(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getEfh>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetEfhQueryResult = NonNullable<Awaited<ReturnType<typeof getEfh>>>
+export type GetEfhQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Essential Fish Habitat (EFH) zones
+ */
+
+export function useGetEfh<TData = Awaited<ReturnType<typeof getEfh>>, TError = ErrorType<unknown>>(
+ params?: GetEfhParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEfh>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetEfhQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
