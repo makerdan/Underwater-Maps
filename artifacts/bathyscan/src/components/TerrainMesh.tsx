@@ -2,11 +2,12 @@ import React, { useMemo, useEffect, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { TerrainData } from "@workspace/api-client-react";
-import { buildTerrainGeometry, computeZoneWeights, WORLD_SIZE } from "@/lib/terrain";
+import { buildTerrainGeometry, computeZoneWeights, computeSlopeAttribute, WORLD_SIZE } from "@/lib/terrain";
 import { getTerrainTextures } from "@/lib/textures";
 import { createTerrainShaderMaterial } from "@/lib/terrainShader";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useUiStore } from "@/lib/uiStore";
+import { useHighlightStore } from "@/lib/highlightStore";
 
 /**
  * Tiling scale — number of texture tile repeats across the full WORLD_SIZE.
@@ -26,13 +27,14 @@ interface TerrainMeshProps {
  * Renders a 3D seafloor terrain mesh from a TerrainData grid.
  *
  * - Builds BufferGeometry via buildTerrainGeometry + depth-based zone weight attribute.
+ * - Adds a per-vertex `slope` attribute (degrees) for the highlight overlay.
  * - Uses a custom GLSL ShaderMaterial (terrainShader.ts) that blends four
  *   procedural tiling textures (sand/sediment/silt/basalt) by per-vertex
  *   zone weights, then tints with the depth colormap colour.
  * - When AI classification completes, the zone weights are upgraded in-place
  *   (70% AI + 30% depth) without rebuilding the full geometry.
  * - Fades in (opacity 0→1 over ~400 ms) whenever the terrain grid swaps.
- * - Updates a per-frame lamp-position uniform from the camera's world pos.
+ * - Updates per-frame uniforms: lamp position, zone overlay toggle, highlight mode.
  * - Disposes old geometry when the grid prop changes to prevent GPU leaks.
  * - Exposes a ref to the underlying THREE.Mesh for raycasting.
  */
@@ -49,10 +51,13 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
 
     // Geometry rebuild whenever the grid changes.
     // Initial zone weights are depth-based; they'll be upgraded by the zoneMap effect below.
+    // Slope attribute is computed once per grid and never changes.
     const geometry = useMemo(() => {
       const geo = buildTerrainGeometry(grid);
       const weights = computeZoneWeights(grid);
       geo.setAttribute("zoneWeight", new THREE.BufferAttribute(weights, 4));
+      const slopes = computeSlopeAttribute(grid);
+      geo.setAttribute("slope", new THREE.BufferAttribute(slopes, 1));
       return geo;
     }, [grid]);
 
@@ -92,6 +97,12 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       };
     }, [material]);
 
+    // Sync grid depth range into shader when grid changes.
+    useEffect(() => {
+      material.uniforms["uGridMinDepth"]!.value = grid.minDepth;
+      material.uniforms["uGridMaxDepth"]!.value = grid.maxDepth;
+    }, [grid, material]);
+
     // Trigger fade-in whenever the loaded grid changes.
     useEffect(() => {
       material.uniforms["uOpacity"]!.value = 0;
@@ -100,7 +111,7 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     }, [grid, material]);
 
     // Animate opacity 0→1 (~400 ms at 60 fps), keep lamp position in sync,
-    // and reflect zone overlay toggle via the uZoneOverlay uniform.
+    // and reflect zone overlay + highlight state from stores.
     useFrame((state, delta) => {
       const f = fadeRef.current;
       if (f.fading) {
@@ -114,6 +125,13 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       // Zone overlay toggle (read from store every frame for instant response)
       const overlayEnabled = useUiStore.getState().zoneOverlayEnabled;
       material.uniforms["uZoneOverlay"]!.value = overlayEnabled ? 1 : 0;
+
+      // Highlight overlay (query panel)
+      const { mode, params } = useHighlightStore.getState();
+      const modeMap: Record<string, number> = { none: 0, depthRange: 1, slope: 2, zone: 3 };
+      material.uniforms["uHighlightMode"]!.value = modeMap[mode] ?? 0;
+      material.uniforms["uHighlightMin"]!.value  = params.min;
+      material.uniforms["uHighlightMax"]!.value  = params.max;
     });
 
     return <mesh ref={ref} geometry={geometry} material={material} />;

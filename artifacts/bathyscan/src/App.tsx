@@ -20,9 +20,11 @@ import { TidePanel } from "@/components/TidePanel";
 import { MarkerForm } from "@/components/MarkerForm";
 import { OverviewMap } from "@/components/OverviewMap";
 import { ZoneOverlay } from "@/components/ZoneOverlay";
+import { QueryPanel } from "@/components/QueryPanel";
 import { useTidalData } from "@/hooks/useTidalData";
 import { useUiStore } from "@/lib/uiStore";
 import { useClassificationStore } from "@/lib/classificationStore";
+import { useHighlightStore } from "@/lib/highlightStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 
 const queryClient = new QueryClient();
@@ -149,6 +151,7 @@ function Main() {
   const [depthLayer, setDepthLayer] = useState<DepthLayer>("surface");
   const [scrubDatetime, setScrubDatetime] = useState<Date | null>(null);
   const [showResumeHint, setShowResumeHint] = useState(false);
+  const [queryOpen, setQueryOpen] = useState(false);
   const prevOverviewOpenRef = useRef(false);
 
   const centerLat = terrain
@@ -189,11 +192,25 @@ function Main() {
   }, [terrain]);
 
   // O key — toggle overview map
+  // Slash key — open query panel
+  // Escape — close query panel and clear highlights
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.code === "KeyO" && !e.repeat) {
         const store = useUiStore.getState();
         store.setOverviewOpen(!store.overviewOpen);
+      }
+      if (e.key === "/" && !e.repeat) {
+        // Don't steal the slash if user is typing in an input
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag !== "INPUT" && tag !== "TEXTAREA") {
+          e.preventDefault();
+          setQueryOpen(true);
+        }
+      }
+      if (e.key === "Escape" && !e.repeat) {
+        setQueryOpen(false);
+        useHighlightStore.getState().clearHighlight();
       }
     };
     window.addEventListener("keydown", handler);
@@ -325,6 +342,41 @@ function Main() {
         <div className="absolute bottom-4 left-4 z-20">
           <ControlsLegend />
         </div>
+
+        {/* Query panel — slides up from the bottom, z-50 */}
+        <QueryPanel
+          open={queryOpen}
+          onClose={() => { setQueryOpen(false); useHighlightStore.getState().clearHighlight(); }}
+          setDatasetId={setDatasetId}
+        />
+
+        {/* Query panel toggle hint — bottom-centre, visible when panel is closed */}
+        {!queryOpen && (
+          <button
+            data-testid="query-panel-trigger"
+            onClick={() => setQueryOpen(true)}
+            title='Open query panel (press "/")'
+            style={{
+              position: "absolute",
+              bottom: 16,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 20,
+              background: "rgba(0,229,255,0.06)",
+              border: "1px solid rgba(0,229,255,0.15)",
+              borderRadius: 4,
+              color: "#334155",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 9,
+              letterSpacing: "0.2em",
+              padding: "4px 14px",
+              cursor: "pointer",
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            / QUERY
+          </button>
+        )}
       </div>
     </div>
   );

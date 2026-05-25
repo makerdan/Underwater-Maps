@@ -31,20 +31,23 @@ export const ZONE_TINT_COLORS = [
 // ---------------------------------------------------------------------------
 
 const vertexShader = /* glsl */ `
-  attribute vec4 zoneWeight;
-  attribute vec3 color;
+  attribute vec4  zoneWeight;
+  attribute vec3  color;
+  attribute float slope;
 
   varying vec2  vUv;
   varying vec4  vZoneWeight;
   varying vec3  vColor;
   varying vec3  vNormal;
   varying vec3  vWorldPos;
+  varying float vSlope;
 
   void main() {
     vUv         = uv;
     vZoneWeight = zoneWeight;
     vColor      = color;
     vNormal     = normalize(normalMatrix * normal);
+    vSlope      = slope;
 
     vec4 worldPos = modelMatrix * vec4(position, 1.0);
     vWorldPos = worldPos.xyz;
@@ -76,11 +79,19 @@ const fragmentShader = /* glsl */ `
   uniform vec3  uZoneTint2;
   uniform vec3  uZoneTint3;
 
+  // Highlight overlay
+  uniform float uHighlightMode;   // 0=none 1=depthRange 2=slope 3=zone
+  uniform float uHighlightMin;    // depthRange: minMetres, slope: minDeg, zone: slot
+  uniform float uHighlightMax;    // depthRange: maxMetres, slope: maxDeg
+  uniform float uGridMinDepth;
+  uniform float uGridMaxDepth;
+
   varying vec2  vUv;
   varying vec4  vZoneWeight;
   varying vec3  vColor;
   varying vec3  vNormal;
   varying vec3  vWorldPos;
+  varying float vSlope;
 
   // Decode a normal-map sample from [0,1]^3 → [-1,1]^3
   vec3 decodeNrm(vec4 s) {
@@ -144,14 +155,42 @@ const fragmentShader = /* glsl */ `
     finalColor *= lighting;
 
     // ── Zone overlay tint ──────────────────────────────────────────────────
-    // Mix a pastel zone colour on top of the lit surface when overlay is on.
     if (uZoneOverlay > 0.0) {
       vec3 zoneTint = uZoneTint0 * vZoneWeight.x
                     + uZoneTint1 * vZoneWeight.y
                     + uZoneTint2 * vZoneWeight.z
                     + uZoneTint3 * vZoneWeight.w;
-      // Apply the same lighting to the tint so it doesn't look flat
       finalColor = mix(finalColor, zoneTint * lighting, uZoneOverlay * 0.50);
+    }
+
+    // ── Query highlight overlay ────────────────────────────────────────────
+    // Cells IN the highlighted range glow cyan; cells outside dim to 30%.
+    if (uHighlightMode > 0.5) {
+      bool inRange = false;
+
+      if (uHighlightMode < 1.5) {
+        // depthRange: reconstruct depth in metres from world Y
+        float t = clamp(-vWorldPos.y / 50.0, 0.0, 1.0);
+        float depthM = uGridMinDepth + t * (uGridMaxDepth - uGridMinDepth);
+        inRange = (depthM >= uHighlightMin && depthM <= uHighlightMax);
+      } else if (uHighlightMode < 2.5) {
+        // slope: vSlope is in degrees
+        inRange = (vSlope >= uHighlightMin && vSlope <= uHighlightMax);
+      } else {
+        // zone: dominant texture slot from vZoneWeight
+        float bestW = vZoneWeight.x;
+        float slot  = 0.0;
+        if (vZoneWeight.y > bestW) { bestW = vZoneWeight.y; slot = 1.0; }
+        if (vZoneWeight.z > bestW) { bestW = vZoneWeight.z; slot = 2.0; }
+        if (vZoneWeight.w > bestW) { slot = 3.0; }
+        inRange = (abs(slot - uHighlightMin) < 0.5);
+      }
+
+      if (inRange) {
+        finalColor = mix(finalColor, vec3(0.0, 0.9, 1.0) * lighting, 0.60);
+      } else {
+        finalColor *= 0.30;
+      }
     }
 
     gl_FragColor = vec4(finalColor, uOpacity);
@@ -197,6 +236,12 @@ export function createTerrainShaderMaterial(
       uZoneTint1:   { value: ZONE_TINT_COLORS[1] },
       uZoneTint2:   { value: ZONE_TINT_COLORS[2] },
       uZoneTint3:   { value: ZONE_TINT_COLORS[3] },
+      // Query highlight overlay
+      uHighlightMode:  { value: 0 },
+      uHighlightMin:   { value: 0 },
+      uHighlightMax:   { value: 0 },
+      uGridMinDepth:   { value: 0 },
+      uGridMaxDepth:   { value: 1000 },
     },
     transparent: true,
     side: THREE.DoubleSide,

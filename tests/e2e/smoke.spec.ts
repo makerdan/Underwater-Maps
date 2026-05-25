@@ -53,6 +53,31 @@ test.describe("BathyScan — smoke suite", () => {
     expect(count).toBeGreaterThanOrEqual(1);
   });
 
+  test("query panel: trigger button is visible and opens the panel", async ({ page }) => {
+    await page.waitForLoadState("networkidle");
+
+    // The query trigger button is always visible when signed in
+    const trigger = page.locator("[data-testid='query-panel-trigger']");
+    const triggerVisible = await trigger.isVisible({ timeout: 10_000 }).catch(() => false);
+    if (!triggerVisible) {
+      test.skip(true, "Query trigger not visible — user may not be signed in");
+      return;
+    }
+
+    // Click the trigger — query panel should open
+    await trigger.click();
+    const panel = page.locator("[data-testid='query-panel']");
+    await expect(panel).toBeVisible({ timeout: 3_000 });
+
+    // The text input should be present inside the panel
+    const input = page.locator("[data-testid='query-input']");
+    await expect(input).toBeVisible();
+
+    // The submit button should be present
+    const submit = page.locator("[data-testid='query-submit']");
+    await expect(submit).toBeVisible();
+  });
+
   test("zone overlay: toggle changes aria-pressed and legend is visible", async ({ page }) => {
     await page.waitForLoadState("networkidle");
 

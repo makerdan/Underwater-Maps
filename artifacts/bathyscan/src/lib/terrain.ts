@@ -232,6 +232,129 @@ export function worldXZToLonLat(
   return { lon, lat };
 }
 
+// ---------------------------------------------------------------------------
+// Slope attribute computation
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute per-vertex slope in degrees.
+ * Uses central finite differences (forward/backward at edges).
+ * Returns a Float32Array of length N×N, one slope per vertex.
+ */
+export function computeSlopeAttribute(grid: TerrainData): Float32Array {
+  const { resolution: N, depths, minDepth, maxDepth } = grid;
+  const depthRange = (maxDepth - minDepth) || 1;
+  const vertStep = WORLD_SIZE / Math.max(1, N - 1);
+  const slopes = new Float32Array(N * N);
+
+  const tOf = (r: number, c: number): number => {
+    const d = depths[Math.max(0, Math.min(N - 1, r)) * N + Math.max(0, Math.min(N - 1, c))] ?? 0;
+    return (d - minDepth) / depthRange;
+  };
+
+  for (let row = 0; row < N; row++) {
+    for (let col = 0; col < N; col++) {
+      const r0 = Math.max(0, row - 1);
+      const r1 = Math.min(N - 1, row + 1);
+      const c0 = Math.max(0, col - 1);
+      const c1 = Math.min(N - 1, col + 1);
+      const dHoriz = (col === 0 || col === N - 1 ? 1 : 2) * vertStep;
+      const dVert  = (row === 0 || row === N - 1 ? 1 : 2) * vertStep;
+      const dtX = (tOf(row, c1) - tOf(row, c0)) * MAX_DEPTH_WORLD;
+      const dtZ = (tOf(r1, col) - tOf(r0, col)) * MAX_DEPTH_WORLD;
+      const slopeX = Math.abs(dtX / dHoriz);
+      const slopeZ = Math.abs(dtZ / dVert);
+      slopes[row * N + col] = Math.atan(Math.sqrt(slopeX * slopeX + slopeZ * slopeZ)) * (180 / Math.PI);
+    }
+  }
+  return slopes;
+}
+
+// ---------------------------------------------------------------------------
+// Statistic computation
+// ---------------------------------------------------------------------------
+
+export type StatMetric =
+  | "mean_depth" | "max_depth" | "min_depth" | "depth_std_dev"
+  | "area_km2"   | "slope_mean"
+  | "deepest_coordinates" | "shallowest_coordinates";
+
+/**
+ * Compute a named statistic over the given terrain grid.
+ * Returns a number for scalar metrics or { lon, lat } for coordinate metrics.
+ */
+export function computeStatistic(
+  metric: StatMetric,
+  grid: TerrainData,
+): number | { lon: number; lat: number } {
+  const { depths, minLon, maxLon, minLat, maxLat, resolution: N } = grid;
+  const len = depths.length;
+
+  if (metric === "mean_depth") {
+    let sum = 0;
+    for (let i = 0; i < len; i++) sum += depths[i] ?? 0;
+    return sum / len;
+  }
+
+  if (metric === "max_depth") {
+    let mx = -Infinity;
+    for (let i = 0; i < len; i++) { const v = depths[i] ?? 0; if (v > mx) mx = v; }
+    return mx;
+  }
+
+  if (metric === "min_depth") {
+    let mn = Infinity;
+    for (let i = 0; i < len; i++) { const v = depths[i] ?? 0; if (v < mn) mn = v; }
+    return mn;
+  }
+
+  if (metric === "depth_std_dev") {
+    let sum = 0;
+    for (let i = 0; i < len; i++) sum += depths[i] ?? 0;
+    const mean = sum / len;
+    let variance = 0;
+    for (let i = 0; i < len; i++) variance += ((depths[i] ?? 0) - mean) ** 2;
+    return Math.sqrt(variance / len);
+  }
+
+  if (metric === "area_km2") {
+    const R = 6371;
+    const centerLatRad = ((minLat + maxLat) / 2) * (Math.PI / 180);
+    const dLon = (maxLon - minLon) * (Math.PI / 180);
+    const dLat = (maxLat - minLat) * (Math.PI / 180);
+    const widthKm  = R * dLon * Math.cos(centerLatRad);
+    const heightKm = R * dLat;
+    return Math.abs(widthKm * heightKm);
+  }
+
+  if (metric === "slope_mean") {
+    const slopes = computeSlopeAttribute(grid);
+    let sum = 0;
+    for (let i = 0; i < slopes.length; i++) sum += slopes[i] ?? 0;
+    return sum / slopes.length;
+  }
+
+  // Coordinate metrics
+  const lonRange = maxLon - minLon;
+  const latRange = maxLat - minLat;
+
+  if (metric === "deepest_coordinates") {
+    let maxVal = -Infinity; let maxIdx = 0;
+    for (let i = 0; i < len; i++) { const v = depths[i] ?? 0; if (v > maxVal) { maxVal = v; maxIdx = i; } }
+    const row = Math.floor(maxIdx / N); const col = maxIdx % N;
+    return { lon: minLon + (N > 1 ? (col / (N - 1)) : 0) * lonRange, lat: minLat + (N > 1 ? (row / (N - 1)) : 0) * latRange };
+  }
+
+  if (metric === "shallowest_coordinates") {
+    let minVal = Infinity; let minIdx = 0;
+    for (let i = 0; i < len; i++) { const v = depths[i] ?? 0; if (v < minVal) { minVal = v; minIdx = i; } }
+    const row = Math.floor(minIdx / N); const col = minIdx % N;
+    return { lon: minLon + (N > 1 ? (col / (N - 1)) : 0) * lonRange, lat: minLat + (N > 1 ? (row / (N - 1)) : 0) * latRange };
+  }
+
+  return 0;
+}
+
 /**
  * Convert geographic longitude/latitude to world-space XZ coordinates.
  */

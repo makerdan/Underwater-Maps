@@ -5,6 +5,7 @@ import datasetsRouter from "./datasets";
 import markersRouter from "./markers";
 import userDatasetsRouter from "./user-datasets";
 import tidalRouter from "./tidal";
+import queryRouter from "./query";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(datasetsRouter);
 router.use(markersRouter);
 router.use(userDatasetsRouter);
 router.use(tidalRouter);
+router.use(queryRouter);
 
 export default router;
