@@ -361,6 +361,49 @@ export const HabitatPanel: React.FC = () => {
             </div>
           )}
 
+          {/* Suitability legend — gradient matches the shader's amber tint */}
+          {showOverlay && (
+            <div
+              className="habitat-legend"
+              role="img"
+              aria-label="Habitat suitability legend: low to high"
+              style={{ marginBottom: 8 }}
+            >
+              <div
+                style={{
+                  fontSize: 10,
+                  color: "#cbd5e1",
+                  letterSpacing: "0.08em",
+                  marginBottom: 3,
+                }}
+              >
+                SUITABILITY
+              </div>
+              <div
+                style={{
+                  height: 8,
+                  borderRadius: 2,
+                  border: "1px solid rgba(251,146,60,0.35)",
+                  background:
+                    "linear-gradient(to right, rgba(255,153,25,0.00), rgba(255,153,25,0.40))",
+                }}
+              />
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 9,
+                  color: "#94a3b8",
+                  marginTop: 2,
+                  letterSpacing: "0.06em",
+                }}
+              >
+                <span>LOW</span>
+                <span>HIGH</span>
+              </div>
+            </div>
+          )}
+
           {/* Hotspot list */}
           {showOverlay && (
             <div className="hotspot-list">
