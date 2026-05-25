@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("three", () => {
   class Color {
@@ -35,6 +35,11 @@ vi.mock("three", () => {
 });
 
 import { depthToColor, getColormap } from "../lib/colormap";
+import {
+  usePaletteStore,
+  DEFAULT_SHALLOW,
+  DEFAULT_DEEP,
+} from "../lib/paletteStore";
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const n = parseInt(hex.replace("#", ""), 16);
@@ -203,5 +208,73 @@ describe("getColormap", () => {
     const c1 = fn(1);
     expect(cOver.r).toBeCloseTo(c1.r, 2);
     expect(cOver.g).toBeCloseTo(c1.g, 2);
+  });
+});
+
+describe("depthToColor / palette sync", () => {
+  beforeEach(() => {
+    usePaletteStore.getState().reset();
+  });
+  afterEach(() => {
+    usePaletteStore.getState().reset();
+  });
+
+  it("reflects an updated shallow colour from usePaletteStore at t=0", () => {
+    usePaletteStore.getState().setShallow("#ff0000");
+    const c = depthToColor(0);
+    const expected = hexToRgb("#ff0000");
+    expect(c.r).toBeCloseTo(expected.r, 2);
+    expect(c.g).toBeCloseTo(expected.g, 2);
+    expect(c.b).toBeCloseTo(expected.b, 2);
+  });
+
+  it("reflects an updated deep colour from usePaletteStore at t=1", () => {
+    usePaletteStore.getState().setDeep("#00ff00");
+    const c = depthToColor(1);
+    const expected = hexToRgb("#00ff00");
+    expect(c.r).toBeCloseTo(expected.r, 2);
+    expect(c.g).toBeCloseTo(expected.g, 2);
+    expect(c.b).toBeCloseTo(expected.b, 2);
+  });
+
+  it("getColormap('ocean') also reflects palette updates", () => {
+    usePaletteStore.getState().setShallow("#abcdef");
+    usePaletteStore.getState().setDeep("#123456");
+    const fn = getColormap("ocean");
+    const shallow = fn(0);
+    const deep = fn(1);
+    const expShallow = hexToRgb("#abcdef");
+    const expDeep = hexToRgb("#123456");
+    expect(shallow.r).toBeCloseTo(expShallow.r, 2);
+    expect(shallow.g).toBeCloseTo(expShallow.g, 2);
+    expect(shallow.b).toBeCloseTo(expShallow.b, 2);
+    expect(deep.r).toBeCloseTo(expDeep.r, 2);
+    expect(deep.g).toBeCloseTo(expDeep.g, 2);
+    expect(deep.b).toBeCloseTo(expDeep.b, 2);
+  });
+
+  it("reset() restores the default endpoints", () => {
+    usePaletteStore.getState().setShallow("#ff0000");
+    usePaletteStore.getState().setDeep("#00ff00");
+    usePaletteStore.getState().reset();
+    const c0 = depthToColor(0);
+    const c1 = depthToColor(1);
+    const expShallow = hexToRgb(DEFAULT_SHALLOW);
+    const expDeep = hexToRgb(DEFAULT_DEEP);
+    expect(c0.r).toBeCloseTo(expShallow.r, 2);
+    expect(c0.b).toBeCloseTo(expShallow.b, 2);
+    expect(c1.r).toBeCloseTo(expDeep.r, 2);
+    expect(c1.b).toBeCloseTo(expDeep.b, 2);
+  });
+
+  it("does not affect fixed (non-ocean) themes", () => {
+    usePaletteStore.getState().setShallow("#ff0000");
+    usePaletteStore.getState().setDeep("#00ff00");
+    const fn = getColormap("thermal");
+    const c0 = fn(0);
+    const expected = hexToRgb("#0d0221");
+    expect(c0.r).toBeCloseTo(expected.r, 2);
+    expect(c0.g).toBeCloseTo(expected.g, 2);
+    expect(c0.b).toBeCloseTo(expected.b, 2);
   });
 });
