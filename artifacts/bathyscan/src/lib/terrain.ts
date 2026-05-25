@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { TerrainData } from "@workspace/api-client-react";
 import { depthToColor } from "./colormap";
+import { SALTWATER_ZONE_TO_SLOT, FRESHWATER_ZONE_TO_SLOT } from "./zoneMap";
 
 /** Physical size of the terrain mesh in world units (X and Z axes). */
 export const WORLD_SIZE = 100;
@@ -59,6 +60,34 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
 }
 
 /**
+ * Blend depth-based texture weights with AI zone weights.
+ *
+ * Both inputs must be Float32Array of length 4 (one weight per texture slot).
+ * The result is a new Float32Array of length 4, normalised to sum=1.
+ *
+ * @param depthWeights — computed from terrain depth/slope
+ * @param aiWeights    — derived from AI zone classification (sparse: 1 at dominant slot)
+ * @param aiStrength   — blend factor (0 = pure depth, 1 = pure AI). Default: 0.70
+ */
+export function blendZoneWeights(
+  depthWeights: Float32Array,
+  aiWeights: Float32Array,
+  aiStrength: number,
+): Float32Array {
+  const result = new Float32Array(4);
+  let sum = 0;
+  for (let i = 0; i < 4; i++) {
+    const v = aiStrength * (aiWeights[i] ?? 0) + (1 - aiStrength) * (depthWeights[i] ?? 0);
+    result[i] = Math.max(0, v);
+    sum += result[i] ?? 0;
+  }
+  if (sum > 0) {
+    for (let i = 0; i < 4; i++) result[i] = (result[i] ?? 0) / sum;
+  }
+  return result;
+}
+
+/**
  * Compute per-vertex zone weights for the four seafloor texture zones:
  *   [0] sand     — shallow/shelf  (t < 0.20)
  *   [1] sediment — mid-slope      (t 0.20–0.55)
@@ -68,12 +97,23 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
  * Thresholds are relative to each grid's own minDepth/maxDepth so every
  * dataset shows the full texture progression.
  *
+ * If `zoneMap` is provided (Uint8Array, one zone index per vertex, same resolution
+ * as the terrain grid), AI zone weights are blended 70 % AI + 30 % depth.
+ *
  * Returns a Float32Array of length N×N×4 (four weights per vertex).
  */
-export function computeZoneWeights(grid: TerrainData): Float32Array {
+export function computeZoneWeights(
+  grid: TerrainData,
+  zoneMap?: Uint8Array,
+): Float32Array {
   const { resolution: N, depths, minDepth, maxDepth } = grid;
   const depthRange = (maxDepth - minDepth) || 1;
   const weights = new Float32Array(N * N * 4);
+
+  const hasZoneMap = !!zoneMap && zoneMap.length === N * N;
+  const zoneToSlot = grid.waterType === "freshwater"
+    ? FRESHWATER_ZONE_TO_SLOT
+    : SALTWATER_ZONE_TO_SLOT;
 
   const vertStep = WORLD_SIZE / Math.max(1, N - 1); // horizontal world units per grid step
   const SLOPE_THRESHOLD = 35 * (Math.PI / 180);
@@ -120,15 +160,42 @@ export function computeZoneWeights(grid: TerrainData): Float32Array {
         wSilt     *= (1 - slopeBlend);
       }
 
-      // Normalise so weights sum to 1
+      // Normalise depth weights
       const sum = wSand + wSediment + wSilt + wBasalt;
       const inv = sum > 0 ? 1 / sum : 1;
 
       const wi = idx * 4;
-      weights[wi]     = wSand     * inv;
-      weights[wi + 1] = wSediment * inv;
-      weights[wi + 2] = wSilt     * inv;
-      weights[wi + 3] = wBasalt   * inv;
+
+      if (hasZoneMap) {
+        // Blend 70 % AI + 30 % depth
+        const zoneIdx = zoneMap![idx] ?? 0;
+        const slot = zoneToSlot[zoneIdx] ?? 0;
+
+        // AI weight: 1.0 at the dominant slot, 0 elsewhere
+        const aiW0 = slot === 0 ? 1 : 0;
+        const aiW1 = slot === 1 ? 1 : 0;
+        const aiW2 = slot === 2 ? 1 : 0;
+        const aiW3 = slot === 3 ? 1 : 0;
+
+        // 0.7 * ai + 0.3 * depth — both sum to 1 so result also sums to 1
+        let b0 = 0.7 * aiW0 + 0.3 * (wSand     * inv);
+        let b1 = 0.7 * aiW1 + 0.3 * (wSediment * inv);
+        let b2 = 0.7 * aiW2 + 0.3 * (wSilt     * inv);
+        let b3 = 0.7 * aiW3 + 0.3 * (wBasalt   * inv);
+
+        // Renormalise for numerical safety
+        const bs = b0 + b1 + b2 + b3;
+        const bi = bs > 0 ? 1 / bs : 1;
+        weights[wi]     = b0 * bi;
+        weights[wi + 1] = b1 * bi;
+        weights[wi + 2] = b2 * bi;
+        weights[wi + 3] = b3 * bi;
+      } else {
+        weights[wi]     = wSand     * inv;
+        weights[wi + 1] = wSediment * inv;
+        weights[wi + 2] = wSilt     * inv;
+        weights[wi + 3] = wBasalt   * inv;
+      }
     }
   }
 

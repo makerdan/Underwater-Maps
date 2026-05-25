@@ -19,6 +19,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { TidePanel } from "@/components/TidePanel";
 import { MarkerForm } from "@/components/MarkerForm";
 import { OverviewMap } from "@/components/OverviewMap";
+import { ZoneOverlay } from "@/components/ZoneOverlay";
 import { useTidalData } from "@/hooks/useTidalData";
 import { useUiStore } from "@/lib/uiStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
@@ -218,8 +219,9 @@ function Main() {
         </div>
 
         {/* Dataset panel — top-left */}
-        <div className="absolute top-12 left-4 z-20">
+        <div className="absolute top-12 left-4 z-20 flex flex-col gap-2">
           <DatasetPanel />
+          <ZoneOverlay />
         </div>
 
         {/* Tidal toggle button — top-right of scene */}

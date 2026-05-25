@@ -6,9 +6,25 @@
  * The depth colormap colour (vertex attribute "color") is multiplied on top
  * so the depth colour scale is preserved.  Lighting uses Blinn-Phong with a
  * directional sun + a subtle point lamp at the camera position.
+ *
+ * Zone overlay: when uZoneOverlay > 0 the fragment is tinted with a pastel
+ * colour per texture slot, revealing the AI-classified zone map.
  */
 import * as THREE from "three";
 import type { TerrainTextures } from "./textures";
+
+// ---------------------------------------------------------------------------
+// Pastel zone tint colours (sRGB, normalised to [0,1])
+// These match the legend swatches in ZoneOverlay.tsx.
+// ---------------------------------------------------------------------------
+
+/** Texture-slot pastel tints: sand, sediment, silt, basalt */
+export const ZONE_TINT_COLORS = [
+  new THREE.Color(0xf5d58a), // sand      — warm yellow
+  new THREE.Color(0xc49a6c), // sediment  — earthy amber
+  new THREE.Color(0x8ab4d0), // silt      — cool blue-grey
+  new THREE.Color(0xb06060), // basalt    — muted terracotta
+] as const;
 
 // ---------------------------------------------------------------------------
 // GLSL source
@@ -52,6 +68,13 @@ const fragmentShader = /* glsl */ `
   uniform float uOpacity;
   uniform vec3  uSunDir;
   uniform vec3  uLampPos;
+
+  // Zone overlay
+  uniform float uZoneOverlay;
+  uniform vec3  uZoneTint0;
+  uniform vec3  uZoneTint1;
+  uniform vec3  uZoneTint2;
+  uniform vec3  uZoneTint3;
 
   varying vec2  vUv;
   varying vec4  vZoneWeight;
@@ -117,7 +140,19 @@ const fragmentShader = /* glsl */ `
     float lampAtt  = 1.0 / (1.0 + 0.015 * lampDist * lampDist);
     float lampDiff = max(0.0, dot(normal, lampDir)) * lampAtt * 0.55;
 
-    finalColor *= (ambient + diffuse + lampDiff);
+    float lighting = ambient + diffuse + lampDiff;
+    finalColor *= lighting;
+
+    // ── Zone overlay tint ──────────────────────────────────────────────────
+    // Mix a pastel zone colour on top of the lit surface when overlay is on.
+    if (uZoneOverlay > 0.0) {
+      vec3 zoneTint = uZoneTint0 * vZoneWeight.x
+                    + uZoneTint1 * vZoneWeight.y
+                    + uZoneTint2 * vZoneWeight.z
+                    + uZoneTint3 * vZoneWeight.w;
+      // Apply the same lighting to the tint so it doesn't look flat
+      finalColor = mix(finalColor, zoneTint * lighting, uZoneOverlay * 0.50);
+    }
 
     gl_FragColor = vec4(finalColor, uOpacity);
   }
@@ -156,6 +191,12 @@ export function createTerrainShaderMaterial(
       uOpacity:     { value: 0 },
       uSunDir:      { value: new THREE.Vector3(0.5, 1.0, 0.7).normalize() },
       uLampPos:     { value: new THREE.Vector3(0, 20, 40) },
+      // Zone overlay
+      uZoneOverlay: { value: 0 },
+      uZoneTint0:   { value: ZONE_TINT_COLORS[0] },
+      uZoneTint1:   { value: ZONE_TINT_COLORS[1] },
+      uZoneTint2:   { value: ZONE_TINT_COLORS[2] },
+      uZoneTint3:   { value: ZONE_TINT_COLORS[3] },
     },
     transparent: true,
     side: THREE.DoubleSide,

@@ -52,7 +52,21 @@ vi.mock("three", () => {
   return { Color, BufferAttribute, PlaneGeometry, BufferGeometry: class {} };
 });
 
-import { buildTerrainGeometry, computeZoneWeights, worldXZToLonLat, lonLatToWorldXZ, worldYToMetres, MAX_DEPTH_WORLD } from "../lib/terrain";
+// zoneMap module has no three.js dep — mock as passthrough
+vi.mock("../lib/zoneMap", () => ({
+  SALTWATER_ZONE_TO_SLOT: [0, 1, 2, 3, 3, 3, 1, 0],
+  FRESHWATER_ZONE_TO_SLOT: [0, 0, 3, 2, 1, 3, 1, 2],
+}));
+
+import {
+  buildTerrainGeometry,
+  computeZoneWeights,
+  blendZoneWeights,
+  worldXZToLonLat,
+  lonLatToWorldXZ,
+  worldYToMetres,
+  MAX_DEPTH_WORLD,
+} from "../lib/terrain";
 import type { TerrainData } from "@workspace/api-client-react";
 
 function makeGrid(N: number, overrides: Partial<TerrainData> = {}): TerrainData {
@@ -182,6 +196,78 @@ describe("computeZoneWeights", () => {
     const weights = computeZoneWeights(grid);
     for (let i = 0; i < weights.length; i++) {
       expect(weights[i]).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it("with zoneMap: blends 70% AI + 30% depth, maintains sum-to-1", () => {
+    const N = 4;
+    // Flat grid at mid-depth (sediment zone from depth alone)
+    const depths = new Array(N * N).fill(400) as number[];
+    const grid = makeGrid(N, { depths, minDepth: 0, maxDepth: 1000 });
+    // All vertices assigned zone 0 (sandy_shelf → slot 0 = sand)
+    const zoneMap = new Uint8Array(N * N).fill(0);
+    const blended = computeZoneWeights(grid, zoneMap);
+    // Every vertex should sum to 1
+    for (let i = 0; i < N * N; i++) {
+      const sum =
+        (blended[i * 4]     ?? 0) + (blended[i * 4 + 1] ?? 0) +
+        (blended[i * 4 + 2] ?? 0) + (blended[i * 4 + 3] ?? 0);
+      expect(sum).toBeCloseTo(1, 4);
+    }
+    // Sand (slot 0) should dominate (70% AI pushes it to sand)
+    const sand = blended[0] ?? 0;
+    expect(sand).toBeGreaterThan(0.5);
+  });
+});
+
+describe("blendZoneWeights", () => {
+  it("with aiStrength=0.7: 70% AI + 30% depth, normalised", () => {
+    // Depth: all sand [1, 0, 0, 0]
+    const depth = new Float32Array([1, 0, 0, 0]);
+    // AI: all basalt [0, 0, 0, 1]
+    const ai = new Float32Array([0, 0, 0, 1]);
+    const result = blendZoneWeights(depth, ai, 0.7);
+    // Expected: 0.7 * [0,0,0,1] + 0.3 * [1,0,0,0] = [0.3, 0, 0, 0.7] (already sums to 1)
+    expect(result[0]).toBeCloseTo(0.3, 4);
+    expect(result[1]).toBeCloseTo(0.0, 4);
+    expect(result[2]).toBeCloseTo(0.0, 4);
+    expect(result[3]).toBeCloseTo(0.7, 4);
+  });
+
+  it("result always sums to 1", () => {
+    const depth = new Float32Array([0.6, 0.2, 0.1, 0.1]);
+    const ai    = new Float32Array([0.0, 0.0, 0.5, 0.5]);
+    const result = blendZoneWeights(depth, ai, 0.7);
+    const sum = (result[0] ?? 0) + (result[1] ?? 0) + (result[2] ?? 0) + (result[3] ?? 0);
+    expect(sum).toBeCloseTo(1, 4);
+  });
+
+  it("aiStrength=0 returns depth weights unchanged", () => {
+    const depth = new Float32Array([0.5, 0.3, 0.2, 0.0]);
+    const ai    = new Float32Array([0.0, 0.0, 0.0, 1.0]);
+    const result = blendZoneWeights(depth, ai, 0.0);
+    expect(result[0]).toBeCloseTo(0.5, 4);
+    expect(result[1]).toBeCloseTo(0.3, 4);
+    expect(result[2]).toBeCloseTo(0.2, 4);
+    expect(result[3]).toBeCloseTo(0.0, 4);
+  });
+
+  it("aiStrength=1 returns AI weights unchanged", () => {
+    const depth = new Float32Array([0.5, 0.3, 0.2, 0.0]);
+    const ai    = new Float32Array([1.0, 0.0, 0.0, 0.0]);
+    const result = blendZoneWeights(depth, ai, 1.0);
+    expect(result[0]).toBeCloseTo(1.0, 4);
+    expect(result[1]).toBeCloseTo(0.0, 4);
+    expect(result[2]).toBeCloseTo(0.0, 4);
+    expect(result[3]).toBeCloseTo(0.0, 4);
+  });
+
+  it("all result weights are non-negative", () => {
+    const depth = new Float32Array([0.8, 0.1, 0.05, 0.05]);
+    const ai    = new Float32Array([0.0, 0.0, 0.0, 1.0]);
+    const result = blendZoneWeights(depth, ai, 0.7);
+    for (let i = 0; i < 4; i++) {
+      expect(result[i]).toBeGreaterThanOrEqual(0);
     }
   });
 });

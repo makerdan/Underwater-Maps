@@ -5,6 +5,8 @@ import type { TerrainData } from "@workspace/api-client-react";
 import { buildTerrainGeometry, computeZoneWeights, WORLD_SIZE } from "@/lib/terrain";
 import { getTerrainTextures } from "@/lib/textures";
 import { createTerrainShaderMaterial } from "@/lib/terrainShader";
+import { useClassificationStore } from "@/lib/classificationStore";
+import { useUiStore } from "@/lib/uiStore";
 
 /**
  * Tiling scale — number of texture tile repeats across the full WORLD_SIZE.
@@ -23,10 +25,12 @@ interface TerrainMeshProps {
 /**
  * Renders a 3D seafloor terrain mesh from a TerrainData grid.
  *
- * - Builds BufferGeometry via buildTerrainGeometry + zone weight attribute.
+ * - Builds BufferGeometry via buildTerrainGeometry + depth-based zone weight attribute.
  * - Uses a custom GLSL ShaderMaterial (terrainShader.ts) that blends four
  *   procedural tiling textures (sand/sediment/silt/basalt) by per-vertex
  *   zone weights, then tints with the depth colormap colour.
+ * - When AI classification completes, the zone weights are upgraded in-place
+ *   (70% AI + 30% depth) without rebuilding the full geometry.
  * - Fades in (opacity 0→1 over ~400 ms) whenever the terrain grid swaps.
  * - Updates a per-frame lamp-position uniform from the camera's world pos.
  * - Disposes old geometry when the grid prop changes to prevent GPU leaks.
@@ -37,10 +41,14 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     const prevGeometryRef = useRef<THREE.BufferGeometry | null>(null);
     const fadeRef = useRef({ opacity: 0, fading: false });
 
+    // Subscribe to AI zone map (updates when classification completes)
+    const zoneMap = useClassificationStore((s) => s.zoneMap);
+
     // Textures are a lazy singleton — computed once, shared forever.
     const textures = useMemo(() => getTerrainTextures(), []);
 
     // Geometry rebuild whenever the grid changes.
+    // Initial zone weights are depth-based; they'll be upgraded by the zoneMap effect below.
     const geometry = useMemo(() => {
       const geo = buildTerrainGeometry(grid);
       const weights = computeZoneWeights(grid);
@@ -52,6 +60,19 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     const material = useMemo(() => {
       return createTerrainShaderMaterial(textures, TILING_SCALE);
     }, [textures]);
+
+    // Upgrade zone weights in-place when AI classification arrives.
+    // This avoids a full geometry rebuild — only the attribute buffer is updated.
+    useEffect(() => {
+      if (!zoneMap || zoneMap.length !== grid.resolution * grid.resolution) return;
+
+      const blendedWeights = computeZoneWeights(grid, zoneMap);
+      const attr = geometry.getAttribute("zoneWeight") as THREE.BufferAttribute | undefined;
+      if (attr) {
+        (attr.array as Float32Array).set(blendedWeights);
+        attr.needsUpdate = true;
+      }
+    }, [zoneMap, grid, geometry]);
 
     // Dispose old geometry to free GPU memory.
     useEffect(() => {
@@ -78,7 +99,8 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       fadeRef.current.fading = true;
     }, [grid, material]);
 
-    // Animate opacity 0→1 (~400 ms at 60 fps) and keep lamp position in sync.
+    // Animate opacity 0→1 (~400 ms at 60 fps), keep lamp position in sync,
+    // and reflect zone overlay toggle via the uZoneOverlay uniform.
     useFrame((state, delta) => {
       const f = fadeRef.current;
       if (f.fading) {
@@ -88,6 +110,10 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       }
       // Lamp = camera (submersible viewpoint)
       material.uniforms["uLampPos"]!.value.copy(state.camera.position);
+
+      // Zone overlay toggle (read from store every frame for instant response)
+      const overlayEnabled = useUiStore.getState().zoneOverlayEnabled;
+      material.uniforms["uZoneOverlay"]!.value = overlayEnabled ? 1 : 0;
     });
 
     return <mesh ref={ref} geometry={geometry} material={material} />;

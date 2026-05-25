@@ -27,6 +27,7 @@ import { useTerrainStore } from "@/lib/terrainStore";
 import { useUiStore } from "@/lib/uiStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
 import { MARKER_COLOR, MARKER_ICON } from "@/lib/markerConstants";
+import { useClassificationStore } from "@/lib/classificationStore";
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
@@ -111,6 +112,8 @@ export const DatasetPanel: React.FC = () => {
     setTerrain(pendingTerrain);
     setActiveUserDatasetId(null);
     useTerrainStore.getState().setGrids({ activeGrid: pendingTerrain, overviewGrid: pendingOverview });
+    useClassificationStore.getState().clearZoneMap();
+    void useClassificationStore.getState().classify(pendingTerrain);
     setLoadingId(null);
     setPendingId(null);
   }, [pendingTerrain, pendingOverview, pendingId, setDatasetId, setTerrain]);
@@ -159,6 +162,8 @@ export const DatasetPanel: React.FC = () => {
       activeGrid: userPendingTerrain,
       overviewGrid: userPendingOverview,
     });
+    useClassificationStore.getState().clearZoneMap();
+    void useClassificationStore.getState().classify(userPendingTerrain);
     setLoadingId(null);
     setPendingUserDatasetId(null);
   }, [userPendingTerrain, userPendingOverview, pendingUserDatasetId, setTerrain, setDatasetId]);
@@ -267,6 +272,8 @@ export const DatasetPanel: React.FC = () => {
               activeGrid: data.terrain,
               overviewGrid: data.overview,
             });
+            useClassificationStore.getState().clearZoneMap();
+            void useClassificationStore.getState().classify(data.terrain);
             if (data.savedDatasetId) {
               setActiveUserDatasetId(data.savedDatasetId);
               void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });

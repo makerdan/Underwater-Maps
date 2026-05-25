@@ -13,6 +13,8 @@ interface UiStore {
   setOverviewOpen: (open: boolean) => void;
   markerFormOpen: boolean;
   setMarkerFormOpen: (open: boolean) => void;
+  zoneOverlayEnabled: boolean;
+  setZoneOverlayEnabled: (enabled: boolean) => void;
 }
 
 export const useUiStore = create<UiStore>((set) => ({
@@ -23,4 +25,6 @@ export const useUiStore = create<UiStore>((set) => ({
   setOverviewOpen: (open) => set({ overviewOpen: open }),
   markerFormOpen: false,
   setMarkerFormOpen: (open) => set({ markerFormOpen: open }),
+  zoneOverlayEnabled: false,
+  setZoneOverlayEnabled: (enabled) => set({ zoneOverlayEnabled: enabled }),
 }));
