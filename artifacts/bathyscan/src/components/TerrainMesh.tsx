@@ -225,6 +225,7 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     // Computed from the slope attribute already baked into the geometry + grid depths.
     const substrateColorMode = useUiStore((s) => s.substrateColorMode);
     const terrainExaggeration = useSettingsStore((s) => s.terrainExaggeration);
+    const habitatOverlayIntensity = useSettingsStore((s) => s.habitatOverlayIntensity);
     useEffect(() => {
       const colorAttr = geometry.getAttribute("color") as THREE.BufferAttribute | undefined;
       const slopeAttr = geometry.getAttribute("slope") as THREE.BufferAttribute | undefined;
@@ -365,6 +366,7 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
 
       // Habitat overlay
       material.uniforms["uShowHabitat"]!.value = activeSpecies ? 1 : 0;
+      material.uniforms["uHabitatIntensity"]!.value = habitatOverlayIntensity;
     });
 
     // Apply terrain vertical exaggeration via a group scale on Y. Wrapping

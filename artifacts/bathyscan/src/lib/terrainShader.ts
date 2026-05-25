@@ -87,8 +87,9 @@ const fragmentShader = /* glsl */ `
   uniform float uGridMaxDepth;
 
   // Habitat overlay
-  uniform sampler2D uHabitatTex;  // Red channel = habitat score [0,1]
-  uniform float     uShowHabitat; // 0=off 1=on
+  uniform sampler2D uHabitatTex;       // Red channel = habitat score [0,1]
+  uniform float     uShowHabitat;      // 0=off 1=on
+  uniform float     uHabitatIntensity; // Blend strength multiplier [0,1]
 
   varying vec2  vUv;
   varying vec4  vZoneWeight;
@@ -203,7 +204,7 @@ const fragmentShader = /* glsl */ `
       float score = texture2D(uHabitatTex, vUv).r;
       if (score > 0.0) {
         vec3 amber = vec3(1.0, 0.6, 0.1);
-        float alpha = score * 0.4;
+        float alpha = clamp(score * uHabitatIntensity, 0.0, 1.0);
         finalColor = mix(finalColor, amber * lighting, alpha);
       }
     }
@@ -258,8 +259,9 @@ export function createTerrainShaderMaterial(
       uGridMinDepth:   { value: 0 },
       uGridMaxDepth:   { value: 1000 },
       // Habitat suitability overlay — placeholder 1×1 texture until scores arrive
-      uHabitatTex:     { value: new THREE.DataTexture(new Float32Array([0]), 1, 1, THREE.RedFormat, THREE.FloatType) },
-      uShowHabitat:    { value: 0 },
+      uHabitatTex:       { value: new THREE.DataTexture(new Float32Array([0]), 1, 1, THREE.RedFormat, THREE.FloatType) },
+      uShowHabitat:      { value: 0 },
+      uHabitatIntensity: { value: 0.4 },
     },
     transparent: true,
     side: THREE.DoubleSide,

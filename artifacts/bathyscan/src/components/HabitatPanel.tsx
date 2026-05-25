@@ -179,6 +179,8 @@ export const HabitatPanel: React.FC = () => {
   const settingsWaterType = useSettingsStore((s) => s.waterType);
   const defaultHabitatSpecies = useSettingsStore((s) => s.defaultHabitatSpecies);
   const autoShowZoneOverlay = useSettingsStore((s) => s.autoShowZoneOverlay);
+  const habitatOverlayIntensity = useSettingsStore((s) => s.habitatOverlayIntensity);
+  const setHabitatOverlayIntensity = useSettingsStore((s) => s.setHabitatOverlayIntensity);
 
   const collapsed = usePanelCollapseStore((s) => s.collapsed.habitat);
   const togglePanel = usePanelCollapseStore((s) => s.toggle);
@@ -353,6 +355,43 @@ export const HabitatPanel: React.FC = () => {
               ))}
             </select>
           </div>
+
+          {/* Overlay intensity slider */}
+          {showOverlay && (
+            <div style={{ marginBottom: 8 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  fontSize: 10,
+                  color: "#cbd5e1",
+                  letterSpacing: "0.08em",
+                  marginBottom: 4,
+                }}
+              >
+                <span>OVERLAY INTENSITY</span>
+                <span style={{ ...AMBER, fontWeight: 600 }}>
+                  {Math.round(habitatOverlayIntensity * 100)}%
+                </span>
+              </div>
+              <input
+                className="habitat-overlay-intensity"
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={habitatOverlayIntensity}
+                onChange={(e) => setHabitatOverlayIntensity(parseFloat(e.target.value))}
+                aria-label="Habitat overlay intensity"
+                style={{
+                  width: "100%",
+                  accentColor: "#fb923c",
+                  cursor: "pointer",
+                }}
+              />
+            </div>
+          )}
 
           {/* Status */}
           {showOverlay && (
