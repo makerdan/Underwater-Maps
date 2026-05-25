@@ -9,6 +9,7 @@ import React from "react";
 import { MAX_DEPTH_WORLD } from "@/lib/terrain";
 import type { TerrainData } from "@workspace/api-client-react";
 import { DirectionArrowField } from "@/components/DirectionArrowField";
+import { useSettingsStore } from "@/lib/settingsStore";
 
 export type DepthLayer = "surface" | "mid" | "near-bottom";
 
@@ -19,6 +20,12 @@ interface TidalCurrentArrowsProps {
   depthLayer: DepthLayer;
   terrain: TerrainData;
 }
+
+const DENSITY_MAP: Record<string, number> = {
+  sparse: 4,
+  normal: 6,
+  dense: 10,
+};
 
 const LAYER_OFFSETS: Record<DepthLayer, number> = {
   surface: 0,
@@ -40,6 +47,8 @@ export const TidalCurrentArrows: React.FC<TidalCurrentArrowsProps> = ({
 }) => {
   const yOffset = LAYER_OFFSETS[depthLayer] ?? 0;
   const attenuate = LAYER_SPEED_ATTENUATE[depthLayer] ?? 1.0;
+  const arrowDensity = useSettingsStore((s) => s.currentArrowDensity);
+  const density = DENSITY_MAP[arrowDensity] ?? 6;
 
   return (
     <DirectionArrowField
@@ -48,7 +57,7 @@ export const TidalCurrentArrows: React.FC<TidalCurrentArrowsProps> = ({
       referenceMagnitude={1.0}
       color="#38bdf8"
       layerY={surfaceY + yOffset}
-      density={6}
+      density={density}
       baseScale={1.2}
       animate
       opacity={0.75}

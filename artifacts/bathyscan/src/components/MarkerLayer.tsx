@@ -23,6 +23,7 @@ export const MarkerLayer: React.FC = () => {
   const datasetId = terrain?.datasetId ?? "";
   const visibleMarkerTypes = useSettingsStore((s) => s.visibleMarkerTypes);
   const showMarkerLabels = useSettingsStore((s) => s.showMarkerLabels);
+  const clusterThreshold = useSettingsStore((s) => s.markerClusterThreshold);
 
   const { data: markers } = useGetMarkers(
     { datasetId },
@@ -35,9 +36,18 @@ export const MarkerLayer: React.FC = () => {
     (m) => m.type === "depth_pole" || visibleMarkerTypes.includes(m.type as typeof visibleMarkerTypes[number]),
   );
 
+  // When the count of visible markers exceeds the user's cluster threshold,
+  // subsample uniformly so the scene stays readable. Picks every Nth marker
+  // so the survivors remain spatially spread rather than head-biased.
+  let rendered = visibleMarkers;
+  if (clusterThreshold > 0 && visibleMarkers.length > clusterThreshold) {
+    const stride = Math.ceil(visibleMarkers.length / clusterThreshold);
+    rendered = visibleMarkers.filter((_, i) => i % stride === 0);
+  }
+
   return (
     <group ref={(g) => { markerGroupRef.current = g; }}>
-      {visibleMarkers.map((m) => (
+      {rendered.map((m) => (
         <MarkerSprite key={m.id} marker={m} terrain={terrain} showLabel={showMarkerLabels} />
       ))}
     </group>

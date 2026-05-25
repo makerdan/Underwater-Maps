@@ -83,6 +83,46 @@
 }
 
 /* ---------------------------------------------------------------------------
+   Accessibility preferences (toggled from settingsStore in App.tsx)
+   --------------------------------------------------------------------------- */
+
+/* Reduced motion: short-circuit CSS animations and transitions. WebGL
+   animations are gated separately in their components (Particles, Caustics,
+   CurrentsLayer auto-advance). */
+body.bs-reduced-motion *,
+body.bs-reduced-motion *::before,
+body.bs-reduced-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Larger HUD text — base font bump applies to anything using inherited
+   sizing; individual components (HUD, TidePanel, HabitatPanel) inflate
+   their inline font-size by reading `largeHudText` from settings. */
+body.bs-large-hud {
+  font-size: 17px;
+}
+
+/* High contrast HUD: brighter text + darker panel backgrounds. Components
+   read `highContrastHud` to switch inline accent colours too. */
+body.bs-high-contrast-hud .habitat-panel,
+body.bs-high-contrast-hud .dataset-panel,
+body.bs-high-contrast-hud .controls-legend,
+body.bs-high-contrast-hud .query-panel {
+  color: #ffffff !important;
+  text-shadow: 0 0 2px #000, 0 0 6px #000 !important;
+}
+
+/* Colour-blind safe palette: substitute the cyan accent (#00e5ff) used in
+   focus rings / borders with a deuteranopia-safe yellow (#fbbf24) where the
+   colour is provided via CSS. Inline-styled cyans are swapped in HUD.tsx. */
+body.bs-cb-palette {
+  --bs-accent: #fbbf24;
+}
+
+/* ---------------------------------------------------------------------------
    Mobile responsive overrides (< 768px)
    --------------------------------------------------------------------------- */
 @media (max-width: 768px) {

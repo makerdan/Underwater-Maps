@@ -171,6 +171,8 @@ export const HabitatPanel: React.FC = () => {
   const scores = useHabitatStore((s) => s.scores);
   const hotspots = useHabitatStore((s) => s.hotspots);
   const settingsWaterType = useSettingsStore((s) => s.waterType);
+  const defaultHabitatSpecies = useSettingsStore((s) => s.defaultHabitatSpecies);
+  const autoShowZoneOverlay = useSettingsStore((s) => s.autoShowZoneOverlay);
 
   const collapsed = usePanelCollapseStore((s) => s.collapsed.habitat);
   const togglePanel = usePanelCollapseStore((s) => s.toggle);
@@ -209,6 +211,27 @@ export const HabitatPanel: React.FC = () => {
       useHabitatStore.getState().compute(terrain, zoneMap);
     }
   }, [terrain, activeSpecies, zoneMap]);
+
+  // Apply user defaults once terrain is loaded — pre-select the user's
+  // preferred default species (if any & compatible with current water type)
+  // and auto-enable the substrate-zone overlay if they've asked for it.
+  useEffect(() => {
+    if (!terrain) return;
+    if (autoShowZoneOverlay && !useUiStore.getState().zoneOverlayEnabled) {
+      useUiStore.getState().setZoneOverlayEnabled(true);
+    }
+    if (
+      defaultHabitatSpecies &&
+      !activeSpecies &&
+      (speciesIds as readonly string[]).includes(defaultHabitatSpecies)
+    ) {
+      useHabitatStore
+        .getState()
+        .setSpecies(defaultHabitatSpecies as SpeciesId, terrain, zoneMap);
+    }
+  // Only run on terrain swap / water-type change — not every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [terrain?.datasetId, waterType]);
 
   const handleSpeciesChange = (id: SpeciesId | "") => {
     if (!id) {

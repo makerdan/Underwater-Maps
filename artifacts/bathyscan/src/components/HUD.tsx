@@ -16,12 +16,10 @@ import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 const EFH_DATASETS = new Set(["thorne-bay"]);
 
-const CYAN: React.CSSProperties = {
-  color: "#00e5ff",
-  textShadow: "0 0 8px rgba(0,229,255,0.6)",
-};
-
-const PANEL: React.CSSProperties = {
+// NOTE: legacy module-scope panel style. The component below derives
+// accessibility-aware overrides (`CYAN`, `PANEL`) from settings and uses
+// those locally instead of this base.
+const PANEL_BASE: React.CSSProperties = {
   background: "rgba(0,10,20,0.75)",
   border: "1px solid rgba(0,229,255,0.15)",
   borderRadius: 4,
@@ -44,11 +42,11 @@ function toDMS(decimal: number): string {
   return `${sign}${d}°${m}'${s}"`;
 }
 
-function SpeedDots({ index, total }: { index: number; total: number }) {
+function SpeedDots({ index, total, activeStyle }: { index: number; total: number; activeStyle: React.CSSProperties }) {
   return (
     <span>
       {Array.from({ length: total }).map((_, i) => (
-        <span key={i} style={i <= index ? CYAN : { color: "#1e3a5f" }}>
+        <span key={i} style={i <= index ? activeStyle : { color: "#1e3a5f" }}>
           {i <= index ? "●" : "○"}
         </span>
       ))}
@@ -77,6 +75,20 @@ export const HUD: React.FC = () => {
   const coordinateFormat = useSettingsStore((s) => s.coordinateFormat);
   const units = useSettingsStore((s) => s.units);
   const hudOpacity = useSettingsStore((s) => s.hudOpacity);
+  const largeHudText = useSettingsStore((s) => s.largeHudText);
+  const highContrastHud = useSettingsStore((s) => s.highContrastHud);
+  const colorBlindSafePalette = useSettingsStore((s) => s.colorBlindSafePalette);
+
+  // Resolve accent + base text colours from the accessibility prefs. The
+  // colour-blind safe palette swaps cyan for a deuteranopia-safe amber-yellow
+  // that remains distinguishable against the dark HUD background. High-contrast
+  // mode brightens secondary text and adds a darker text-shadow for legibility.
+  const accent = colorBlindSafePalette ? "#fbbf24" : "#00e5ff";
+  const accentGlow = colorBlindSafePalette
+    ? "0 0 8px rgba(251,191,36,0.65)"
+    : "0 0 8px rgba(0,229,255,0.6)";
+  const baseText = highContrastHud ? "#ffffff" : "#94a3b8";
+  const fontScale = largeHudText ? 1.35 : 1;
 
   const driftPlannerActive = useDriftStore((s) => s.driftPlannerActive);
   const driftMode = useDriftStore((s) => s.driftMode);
@@ -128,18 +140,31 @@ export const HUD: React.FC = () => {
     useUiStore.getState().setPendingDropIn({ worldX, worldZ });
   };
 
+  // Accessibility-aware local overrides for the module-scope CYAN_BASE /
+  // PANEL_BASE constants — these are what the JSX below actually consumes.
+  const CYAN: React.CSSProperties = {
+    color: accent,
+    textShadow: accentGlow,
+  };
+  const PANEL: React.CSSProperties = {
+    ...PANEL_BASE,
+    border: `1px solid ${colorBlindSafePalette ? "rgba(251,191,36,0.25)" : "rgba(0,229,255,0.15)"}`,
+    background: highContrastHud ? "rgba(0,4,12,0.92)" : PANEL_BASE.background,
+  };
+
   const HUD_STYLE: React.CSSProperties = {
     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-    color: "#94a3b8",
+    color: baseText,
     letterSpacing: "0.08em",
     pointerEvents: "none",
     opacity: hudOpacity,
+    textShadow: highContrastHud ? "0 0 2px #000, 0 0 6px #000" : undefined,
   };
 
   return (
     <div
       className="absolute inset-0 overflow-hidden"
-      style={{ ...HUD_STYLE, fontSize: 11, userSelect: "none" }}
+      style={{ ...HUD_STYLE, fontSize: Math.round(11 * fontScale), userSelect: "none" }}
     >
       {/* ── Offline indicator ── */}
       {!isOnline && (
@@ -558,7 +583,7 @@ export const HUD: React.FC = () => {
               </>
             ) : (
               <>
-                <SpeedDots index={speedIndex} total={SPEEDS.length} />
+                <SpeedDots index={speedIndex} total={SPEEDS.length} activeStyle={CYAN} />
                 <span style={{ color: "#475569", marginLeft: 4 }}>{speed.toFixed(2)} u/s</span>
               </>
             )}

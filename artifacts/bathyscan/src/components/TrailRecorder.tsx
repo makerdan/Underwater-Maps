@@ -93,12 +93,24 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
 
   const gpsRecordingInterval = useSettingsStore((s) => s.gpsRecordingInterval);
   const setGpsRecordingInterval = useSettingsStore((s) => s.setGpsRecordingInterval);
+  const defaultTrailColor = useSettingsStore((s) => s.defaultTrailColor);
 
   const [elapsed, setElapsed] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [trailName, setTrailName] = useState("");
-  const [trailColour, setTrailColour] = useState(TRAIL_COLOURS[0]!);
+  // Seed from the user's persisted default; fall back to the first palette
+  // colour so the swatch row still shows a selected dot.
+  const [trailColour, setTrailColour] = useState(
+    defaultTrailColor || TRAIL_COLOURS[0]!,
+  );
+
+  // When the user changes their default trail colour in Settings while the
+  // recorder is idle, reflect that change immediately. We deliberately do NOT
+  // overwrite the active selection mid-recording.
+  useEffect(() => {
+    if (!recording && defaultTrailColor) setTrailColour(defaultTrailColor);
+  }, [defaultTrailColor, recording]);
 
   // Elapsed timer
   useEffect(() => {

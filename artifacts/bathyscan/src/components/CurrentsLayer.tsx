@@ -324,6 +324,7 @@ export const CurrentsLayer: React.FC<CurrentsLayerProps> = ({ terrain, noaaAmbie
   const manualSpeed = useSettingsStore((s) => s.currentsManualSpeedKt);
   const tidePhase = useSettingsStore((s) => s.currentsTidePhase);
   const autoAdvance = useSettingsStore((s) => s.currentsAutoAdvance);
+  const reducedMotion = useSettingsStore((s) => s.reducedMotion);
   const setTidePhase = useSettingsStore((s) => s.setCurrentsTidePhase);
   const showParticles = useSettingsStore((s) => s.currentsShowParticles);
   const showArrows = useSettingsStore((s) => s.currentsShowArrows);
@@ -333,7 +334,7 @@ export const CurrentsLayer: React.FC<CurrentsLayerProps> = ({ terrain, noaaAmbie
   // Auto-advance the tide phase scrubber when the user has enabled it.
   // 1 cycle per ~30 wall-clock seconds (visual, not real-time).
   useFrame((_, delta) => {
-    if (!enabled || !autoAdvance) return;
+    if (!enabled || !autoAdvance || reducedMotion) return;
     const next = (tidePhase + delta / 30) % 1;
     if (Math.abs(next - tidePhase) > 0.001) setTidePhase(next);
   });

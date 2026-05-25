@@ -224,6 +224,7 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     // Substrate colour mode — overrides depth colormap with CMECS substrate class colours.
     // Computed from the slope attribute already baked into the geometry + grid depths.
     const substrateColorMode = useUiStore((s) => s.substrateColorMode);
+    const terrainExaggeration = useSettingsStore((s) => s.terrainExaggeration);
     useEffect(() => {
       const colorAttr = geometry.getAttribute("color") as THREE.BufferAttribute | undefined;
       const slopeAttr = geometry.getAttribute("slope") as THREE.BufferAttribute | undefined;
@@ -367,8 +368,14 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       material.uniforms["uShowHabitat"]!.value = activeSpecies ? 1 : 0;
     });
 
+    // Apply terrain vertical exaggeration via a group scale on Y. Wrapping
+    // both the textured surface and the skirt keeps them perfectly aligned.
+    // Markers / overlays that map depth→world-Y independently (e.g. fish pins)
+    // intentionally remain at their true Y so absolute fishing depths are
+    // unaffected by the user's visual exaggeration preference.
+    const yScale = Math.max(0.1, terrainExaggeration || 1);
     return (
-      <>
+      <group scale={[1, yScale, 1]}>
         <mesh
           ref={ref}
           geometry={geometry}
@@ -378,7 +385,7 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
           onPointerUp={paintMode ? onPointerUp : undefined}
         />
         <mesh geometry={skirtGeometry} material={skirtMaterial} raycast={() => null} />
-      </>
+      </group>
     );
   },
 );

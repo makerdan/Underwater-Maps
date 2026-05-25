@@ -17,6 +17,7 @@ export const Particles: React.FC = () => {
   const { camera } = useThree();
   const ref = useRef<THREE.Points>(null);
   const particleDensity = useSettingsStore((s) => s.particleDensity);
+  const reducedMotion = useSettingsStore((s) => s.reducedMotion);
 
   const count = DENSITY_COUNT[particleDensity] ?? 500;
 
@@ -48,6 +49,18 @@ export const Particles: React.FC = () => {
   useFrame((_, delta) => {
     if (!ref.current || count === 0) return;
     const pos = ref.current.geometry.attributes["position"]!.array as Float32Array;
+    // Honour the "reduced motion" accessibility preference — keep particles
+    // pinned to the camera (so they don't drift off into the world) but skip
+    // the per-frame drift integration so the field appears static.
+    if (reducedMotion) {
+      for (let i = 0; i < count; i++) {
+        pos[i * 3] = camera.position.x + r32(offsets, i * 3);
+        pos[i * 3 + 1] = camera.position.y + r32(offsets, i * 3 + 1);
+        pos[i * 3 + 2] = camera.position.z + r32(offsets, i * 3 + 2);
+      }
+      ref.current.geometry.attributes["position"]!.needsUpdate = true;
+      return;
+    }
 
     for (let i = 0; i < count; i++) {
       offsets[i * 3] = r32(offsets, i * 3) + r32(velocities, i * 3) * delta;

@@ -48,13 +48,14 @@ void main() {
 export const Caustics: React.FC = () => {
   const enabledFromEnv = import.meta.env.VITE_ENABLE_CAUSTICS === "true";
   const enabledFromSettings = useSettingsStore((s) => s.enableCaustics);
+  const reducedMotion = useSettingsStore((s) => s.reducedMotion);
   const enabled = enabledFromEnv || enabledFromSettings;
   const materialRef = useRef<THREE.ShaderMaterial>(null);
 
   const uniforms = useMemo(() => ({ uTime: { value: 0 } }), []);
 
   useFrame((_, delta) => {
-    if (materialRef.current) {
+    if (materialRef.current && !reducedMotion) {
       materialRef.current.uniforms["uTime"]!.value += delta;
     }
   });

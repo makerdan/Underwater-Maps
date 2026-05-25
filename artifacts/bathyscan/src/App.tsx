@@ -962,9 +962,30 @@ function ClerkProviderWithRoutes() {
   );
 }
 
+/**
+ * Always-mounted effect that mirrors a few accessibility preferences from
+ * settingsStore onto document.body as CSS classes so they apply immediately
+ * across every route (Home, Settings, Sign-in, etc.) — not just inside Main().
+ */
+function AccessibilityClassesEffect() {
+  const reducedMotion = useSettingsStore((st) => st.reducedMotion);
+  const largeHudText = useSettingsStore((st) => st.largeHudText);
+  const highContrastHud = useSettingsStore((st) => st.highContrastHud);
+  const colorBlindSafePalette = useSettingsStore((st) => st.colorBlindSafePalette);
+  useEffect(() => {
+    const b = document.body;
+    b.classList.toggle("bs-reduced-motion", reducedMotion);
+    b.classList.toggle("bs-large-hud", largeHudText);
+    b.classList.toggle("bs-high-contrast-hud", highContrastHud);
+    b.classList.toggle("bs-cb-palette", colorBlindSafePalette);
+  }, [reducedMotion, largeHudText, highContrastHud, colorBlindSafePalette]);
+  return null;
+}
+
 function App() {
   return (
     <WouterRouter base={basePath}>
+      <AccessibilityClassesEffect />
       <ClerkProviderWithRoutes />
     </WouterRouter>
   );

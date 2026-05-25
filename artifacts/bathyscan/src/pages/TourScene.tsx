@@ -46,6 +46,7 @@ const FlyControlsScene: React.FC<FlyControlsSceneProps> = ({ terrainMeshRef }) =
   const paintMode = useUiStore((s) => s.zonePaintMode);
   const { orbitTargetArr } = useFlyControls({ terrainMeshRef, lightRef });
   const lampIntensity = useSettingsStore((s) => s.lampIntensity);
+  const lampRange = useSettingsStore((s) => s.lampRange);
   const waterType = useSettingsStore((s) => s.waterType);
   const mouseZoomSensitivity = useSettingsStore((s) => s.mouseZoomSensitivity);
   const touchpadZoomSensitivity = useSettingsStore((s) => s.touchpadZoomSensitivity);
@@ -81,7 +82,7 @@ const FlyControlsScene: React.FC<FlyControlsSceneProps> = ({ terrainMeshRef }) =
         ref={lightRef}
         color={lampColor}
         intensity={lampIntensity}
-        distance={40}
+        distance={lampRange}
         decay={2}
       />
 
