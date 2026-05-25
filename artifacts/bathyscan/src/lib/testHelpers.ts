@@ -6,11 +6,13 @@
  * Gated on `import.meta.env.DEV` so this code is tree-shaken out of
  * production builds.
  */
+import type { TerrainData } from "@workspace/api-client-react";
 import { useContextMenuStore, type ContextMenuItem } from "./contextMenuStore";
 import { useMeasureStore } from "./measureStore";
 import { useMarkerDetailStore } from "./markerDetailStore";
 import { useUiStore } from "./uiStore";
 import { useCameraStore } from "./cameraStore";
+import { useClassificationStore } from "./classificationStore";
 import { haversineDistance } from "./geo";
 import { queryClient } from "./queryClient";
 import { runMarkerDelete, type DeleteMarkerMutation } from "./markerActions";
@@ -19,6 +21,14 @@ import {
   getGetMarkersQueryKey,
   type Marker,
 } from "@workspace/api-client-react";
+
+// AppContext-backed setter wired up by the in-tree <TestBridge/> component
+// mounted inside <AppProvider/>. Without this, helpers have no way to reach
+// React context state from a plain window-side call.
+let appSetTerrain: ((t: TerrainData | null) => void) | null = null;
+export function registerTestBridge(setTerrain: (t: TerrainData | null) => void): void {
+  appSetTerrain = setTerrain;
+}
 
 export interface BathyTestApi {
   showContextMenu: (x: number, y: number, items: ContextMenuItem[]) => void;
@@ -87,6 +97,33 @@ export interface BathyTestApi {
    * auth-gated route is exercised without a Clerk session in the browser.
    */
   setRequestHeaders: (headers: Record<string, string>) => void;
+  /**
+   * Zone classification helpers (paint mode coverage).
+   *
+   * The browser's WebGL stack in headless CI doesn't reliably support
+   * react-three-fiber raycasting, so e2e tests drive the underlying
+   * classification store directly instead of simulating a 3D pointer drag
+   * on the terrain canvas. The store action invoked here (`paintSlot`) is
+   * the same one TerrainMesh.tsx's pointer handlers call, so this faithfully
+   * exercises the paint-mode write path.
+   */
+  seedTerrain: (overrides?: Partial<TerrainData>) => boolean;
+  seedZoneMap: (resolution: number, fillZone?: number) => void;
+  paintZone: (
+    row: number,
+    col: number,
+    radius: number,
+    slot: 0 | 1 | 2 | 3,
+    waterType: "saltwater" | "freshwater",
+    resolution: number,
+  ) => void;
+  resetZonesToAi: () => void;
+  getZoneSnapshot: () => {
+    length: number;
+    hasEdits: boolean;
+    hash: string;
+    sample: number[];
+  } | null;
 }
 
 declare global {
@@ -237,5 +274,67 @@ export function installTestHelpers(): void {
     isOverviewOpen: () => useUiStore.getState().overviewOpen,
     getPendingDropIn: () => useUiStore.getState().pendingDropIn,
     clearPendingDropIn: () => useUiStore.getState().clearPendingDropIn(),
+    seedTerrain: (overrides) => {
+      if (!appSetTerrain) return false;
+      const resolution = overrides?.resolution ?? 64;
+      const N = resolution * resolution;
+      const depths = overrides?.depths ?? new Array(N).fill(10);
+      const base: TerrainData = {
+        datasetId: "e2e-test",
+        name: "E2E Test Dataset",
+        waterType: "saltwater",
+        resolution,
+        width: resolution,
+        height: resolution,
+        depths: depths as number[],
+        minDepth: 0,
+        maxDepth: 20,
+        minLon: -1,
+        maxLon: 1,
+        minLat: -1,
+        maxLat: 1,
+        centerLon: 0,
+        centerLat: 0,
+        ...overrides,
+      };
+      appSetTerrain(base);
+      return true;
+    },
+    seedZoneMap: (resolution, fillZone = 0) => {
+      const N = resolution * resolution;
+      const zoneMap = new Uint8Array(N);
+      if (fillZone !== 0) zoneMap.fill(fillZone);
+      useClassificationStore.setState({
+        zoneMap,
+        aiZoneMap: new Uint8Array(zoneMap),
+        hasEdits: false,
+        loading: false,
+        error: null,
+        currentGridHash: "e2etest0",
+      });
+    },
+    paintZone: (row, col, radius, slot, waterType, resolution) => {
+      useClassificationStore
+        .getState()
+        .paintSlot(row, col, radius, slot, waterType, resolution);
+    },
+    resetZonesToAi: () => {
+      useClassificationStore.getState().resetToAi();
+    },
+    getZoneSnapshot: () => {
+      const s = useClassificationStore.getState();
+      const zm = s.zoneMap;
+      if (!zm) return null;
+      let h = 0x811c9dc5;
+      for (let i = 0; i < zm.length; i++) {
+        h ^= zm[i] ?? 0;
+        h = (Math.imul(h, 0x01000193) >>> 0);
+      }
+      const hash = (h >>> 0).toString(16).padStart(8, "0");
+      const sample: number[] = [];
+      const step = Math.max(1, Math.floor(zm.length / 16));
+      for (let i = 0; i < zm.length; i += step) sample.push(zm[i] ?? 0);
+      return { length: zm.length, hasEdits: s.hasEdits, hash, sample };
+    },
   };
 }

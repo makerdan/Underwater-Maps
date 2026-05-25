@@ -9,6 +9,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useGetDatasets } from "@workspace/api-client-react";
 import { AppProvider, useAppState } from "@/lib/context";
+import { registerTestBridge } from "@/lib/testHelpers";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { TourScene } from "@/pages/TourScene";
 import { Settings } from "@/pages/Settings";
@@ -56,6 +57,15 @@ import { HelpWindow } from "@/components/help/HelpWindow";
 import "@/components/help/help.css";
 import { ConditionsLegend } from "@/components/ConditionsLegend";
 
+
+function TestBridge(): null {
+  const { setTerrain } = useAppState();
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    registerTestBridge(setTerrain);
+  }, [setTerrain]);
+  return null;
+}
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -883,6 +893,7 @@ function HomeRoute() {
           <SettingsHydrator />
           <TooltipProvider>
             <AppProvider>
+              <TestBridge />
               <Main />
             </AppProvider>
             <Toaster />
