@@ -50,6 +50,10 @@ export interface DriftWaypoint {
   driftContributionKnots?: number;
   /** Speed contribution (kt) from boat propulsion alone. Trolling mode only. */
   boatContributionKnots?: number;
+  /** Compass bearing (0=N) of the boat propulsion vector. Trolling mode only. */
+  boatHeadingDegSep?: number;
+  /** Compass bearing (0=N) of the wind+tide drift vector. */
+  driftHeadingDeg?: number;
 }
 
 /** User-placed turn point on the water surface for multi-leg trolling. */

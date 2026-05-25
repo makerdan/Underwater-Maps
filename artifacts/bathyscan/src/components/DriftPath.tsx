@@ -20,6 +20,12 @@ const RIBBON_COLOR = 0x22d3ee;
 const BUOY_COLOR = 0x0ea5e9;
 const BUOY_ACTIVE_COLOR = 0xfbbf24;
 const FISHING_LINE_COLOR = 0xfde68a;
+const BOAT_ARROW_COLOR = 0xfbbf24;
+const DRIFT_ARROW_COLOR = 0x22d3ee;
+const RESULTANT_ARROW_COLOR = 0xe2e8f0;
+/** World units per knot for the visual force arrows. */
+const ARROW_SCALE_PER_KT = 0.55;
+const ARROW_MIN_LEN = 0.25;
 
 function pathCurve(waypoints: { worldX: number; worldZ: number }[], surfaceY: number): THREE.CatmullRomCurve3 {
   const pts = waypoints.map((wp) => new THREE.Vector3(wp.worldX, surfaceY + 0.08, wp.worldZ));
@@ -29,6 +35,55 @@ function pathCurve(waypoints: { worldX: number; worldZ: number }[], surfaceY: nu
 interface DriftPathProps {
   surfaceY: number;
 }
+
+/**
+ * Flat arrow drawn on the water surface, oriented by compass bearing
+ * (0=N, 90=E). Length is in world units. Used for the force overlays so
+ * anglers can read boat vs drift directions at a glance.
+ */
+const ForceArrow: React.FC<{
+  position: [number, number, number];
+  headingDeg: number;
+  length: number;
+  color: number;
+  opacity?: number;
+}> = ({ position, headingDeg, length, color, opacity = 0.95 }) => {
+  const shaftLen = Math.max(0, length - 0.22);
+  const headLen = Math.min(0.22, Math.max(0.12, length * 0.35));
+  // Compass bearing: 0=N points along -Z, 90=E along +X. R3F default cylinder
+  // is along +Y; rotate it to point along +X then yaw by (90° - heading).
+  const yaw = ((90 - headingDeg) * Math.PI) / 180;
+  return (
+    <group position={position} rotation={[0, yaw, 0]}>
+      {/* Shaft along +X */}
+      {shaftLen > 0.01 && (
+        <mesh position={[shaftLen / 2, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
+          <cylinderGeometry args={[0.04, 0.04, shaftLen, 8]} />
+          <meshStandardMaterial
+            color={color}
+            emissive={color}
+            emissiveIntensity={0.7}
+            transparent
+            opacity={opacity}
+            depthTest={false}
+          />
+        </mesh>
+      )}
+      {/* Arrowhead at tip */}
+      <mesh position={[shaftLen + headLen / 2, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
+        <coneGeometry args={[0.11, headLen, 10]} />
+        <meshStandardMaterial
+          color={color}
+          emissive={color}
+          emissiveIntensity={0.85}
+          transparent
+          opacity={opacity}
+          depthTest={false}
+        />
+      </mesh>
+    </group>
+  );
+};
 
 export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
   const { driftPath, driftHour, lineLengthM, driftWaypoints, driftMode } = useDriftStore();
@@ -43,6 +98,34 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
   }, [terrain, driftMode, driftWaypoints]);
 
   const activeTarget = driftPath?.[driftHour]?.targetWaypointIndex;
+
+  const forceArrows = useMemo(() => {
+    if (driftMode !== "trolling" || !driftPath) return null;
+    const wp = driftPath[driftHour];
+    if (!wp) return null;
+    const boatKt = wp.boatContributionKnots ?? 0;
+    const driftKt = wp.driftContributionKnots ?? 0;
+    const boatHeading = wp.boatHeadingDegSep;
+    const driftHeading = wp.driftHeadingDeg;
+    const resultantHeading = wp.headingDeg;
+    const resultantKt = wp.driftSpeedKnots;
+    const y = surfaceY + 0.32;
+    return {
+      origin: [wp.worldX, y, wp.worldZ] as [number, number, number],
+      boat:
+        boatHeading !== undefined && boatKt > 0.05
+          ? { heading: boatHeading, length: Math.max(ARROW_MIN_LEN, boatKt * ARROW_SCALE_PER_KT) }
+          : null,
+      drift:
+        driftHeading !== undefined && driftKt > 0.05
+          ? { heading: driftHeading, length: Math.max(ARROW_MIN_LEN, driftKt * ARROW_SCALE_PER_KT) }
+          : null,
+      resultant:
+        resultantKt > 0.05
+          ? { heading: resultantHeading, length: Math.max(ARROW_MIN_LEN, resultantKt * ARROW_SCALE_PER_KT) }
+          : null,
+    };
+  }, [driftMode, driftPath, driftHour, surfaceY]);
 
   const curve = useMemo(() => {
     if (!driftPath || driftPath.length < 2) return null;
@@ -147,6 +230,38 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
             emissiveIntensity={0.7}
           />
         </mesh>
+      )}
+
+      {/* Force arrows at the active hour (trolling mode): amber = boat
+          propulsion, cyan = wind+tide drift, faint white = resultant. */}
+      {forceArrows && (
+        <group renderOrder={6}>
+          {forceArrows.resultant && (
+            <ForceArrow
+              position={forceArrows.origin}
+              headingDeg={forceArrows.resultant.heading}
+              length={forceArrows.resultant.length}
+              color={RESULTANT_ARROW_COLOR}
+              opacity={0.35}
+            />
+          )}
+          {forceArrows.drift && (
+            <ForceArrow
+              position={forceArrows.origin}
+              headingDeg={forceArrows.drift.heading}
+              length={forceArrows.drift.length}
+              color={DRIFT_ARROW_COLOR}
+            />
+          )}
+          {forceArrows.boat && (
+            <ForceArrow
+              position={forceArrows.origin}
+              headingDeg={forceArrows.boat.heading}
+              length={forceArrows.boat.length}
+              color={BOAT_ARROW_COLOR}
+            />
+          )}
+        </group>
       )}
 
       {/* User-placed trolling waypoints (cyan flags) */}

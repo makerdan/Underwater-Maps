@@ -188,6 +188,8 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
     const hourStartLon = curLon;
     let driftContributionKnots = 0;
     let boatContributionKnots: number | undefined;
+    let boatHeadingDegSep: number | undefined;
+    let driftHeadingDeg: number | undefined;
 
     if (useWaypoints) {
       // Sub-step the hour: travel toward the current leg target at boat speed,
@@ -196,6 +198,14 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
       let timeRemaining = 1; // hours
       const boatKmH = boatSpeedKnots * KM_PER_KNOT_HOUR;
       let boatKmTraveled = 0;
+      // Capture the boat's steering bearing at the start of this hour for the
+      // visual force arrow. It points toward the current leg target.
+      {
+        const tgt0 = circuit[legIndex % circuit.length]!;
+        if (distanceKm(hourStartLat, hourStartLon, tgt0.lat, tgt0.lon) > 1e-6) {
+          boatHeadingDegSep = bearing(hourStartLat, hourStartLon, tgt0.lat, tgt0.lon);
+        }
+      }
       // Bound iterations to avoid pathological loops (e.g. waypoints stacked).
       let guard = 0;
       while (timeRemaining > 1e-6 && guard < 50) {
@@ -239,6 +249,11 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
         (driftDLon * KM_PER_DEG_LAT * Math.cos(degToRad(hourStartLat))) ** 2,
       );
       driftContributionKnots = driftKmH / KM_PER_KNOT_HOUR;
+      if (driftKmH > 1e-9) {
+        const endLat = hourStartLat + driftDLat;
+        const endLon = hourStartLon + driftDLon;
+        driftHeadingDeg = bearing(hourStartLat, hourStartLon, endLat, endLon);
+      }
       // Boat contribution = actual distance traveled through water this hour,
       // accumulated across leg sub-steps so loops/turns don't collapse to
       // net displacement.
@@ -272,11 +287,18 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
       let resultantDLat = driftDLat;
       let resultantDLon = driftDLon;
 
+      if (driftKmH > 1e-9) {
+        const endLat = curLat + driftDLat;
+        const endLon = curLon + driftDLon;
+        driftHeadingDeg = bearing(curLat, curLon, endLat, endLon);
+      }
+
       if (mode === "trolling" && boatSpeedKnots > 0) {
         const boatVec = currentVector(boatSpeedKnots, boatHeadingDeg, curLat);
         resultantDLat += boatVec.dLat;
         resultantDLon += boatVec.dLon;
         boatContributionKnots = boatSpeedKnots;
+        boatHeadingDegSep = normalizeAngle(boatHeadingDeg);
       }
       curLat = curLat + resultantDLat;
       curLon = curLon + resultantDLon;
@@ -330,6 +352,8 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
       targetWaypointIndex,
       driftContributionKnots,
       boatContributionKnots,
+      boatHeadingDegSep,
+      driftHeadingDeg,
     });
   }
 
