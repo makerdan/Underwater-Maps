@@ -129,6 +129,70 @@ describe("POST /api/poe/classify", () => {
     expect(fakeCreate).toHaveBeenCalledTimes(1);
   });
 
+  it("falls back to depth-based heuristic when AI throws and depths32 is supplied", async () => {
+    fakeCreate.mockReset();
+    fakeCreate.mockRejectedValue(new Error("POE_API_KEY environment variable is not set"));
+
+    const depths32 = Array.from({ length: 1024 }, (_, i) => i);
+    const res = await request(app)
+      .post("/api/poe/classify")
+      .set("x-e2e-user-id", "user-heuristic")
+      .send({
+        gridBase64: GRID_BASE64,
+        waterType: "saltwater",
+        datasetId: "ds-heur",
+        depths32,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBe("heuristic");
+    expect(res.body.fromCache).toBe(false);
+    expect(res.body.zones).toHaveLength(1024);
+    // The heuristic must use the canonical four-band saltwater labels.
+    const unique = new Set(res.body.zones as string[]);
+    expect(unique.size).toBeGreaterThan(1);
+    for (const z of unique) {
+      expect([
+        "sandy_shelf",
+        "coarse_sediment",
+        "silt_plain",
+        "basalt_rock",
+      ]).toContain(z);
+    }
+  });
+
+  it("does not cache heuristic results — a later AI success can still be cached", async () => {
+    const body = {
+      gridBase64: GRID_BASE64,
+      waterType: "saltwater" as const,
+      datasetId: "ds-heur-then-ai",
+      depths32: Array.from({ length: 1024 }, (_, i) => i),
+    };
+
+    // First call: AI fails → heuristic.
+    fakeCreate.mockReset();
+    fakeCreate.mockRejectedValue(new Error("transient AI outage"));
+    const first = await request(app)
+      .post("/api/poe/classify")
+      .set("x-e2e-user-id", "user-heur-cache")
+      .send(body);
+    expect(first.status).toBe(200);
+    expect(first.body.source).toBe("heuristic");
+
+    // Second call: AI succeeds → should NOT be served from cache (heuristic
+    // was not persisted) and should report source="ai".
+    fakeCreate.mockReset();
+    fakeCreate.mockResolvedValue(buildOkResponse());
+    const second = await request(app)
+      .post("/api/poe/classify")
+      .set("x-e2e-user-id", "user-heur-cache")
+      .send(body);
+    expect(second.status).toBe(200);
+    expect(second.body.fromCache).toBe(false);
+    expect(second.body.source).toBe("ai");
+    expect(fakeCreate).toHaveBeenCalledTimes(1);
+  });
+
   it("returns 429 once the per-user rate limit (30 req/min) is exceeded", async () => {
     const userId = "user-ratelimit";
 

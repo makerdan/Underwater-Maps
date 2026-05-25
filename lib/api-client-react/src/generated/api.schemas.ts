@@ -28,13 +28,39 @@ export interface PoeClassifyRequest {
   waterType?: PoeClassifyRequestWaterType;
   /** Dataset identifier used for cache keying */
   datasetId?: string;
+  /** Client-computed FNV-1a 32-bit hash of the depth grid (8-char hex) */
+  gridHash?: string;
+  /** Optional 1024-length (32×32 row-major) downsample of the depth grid in metres.
+  Used by the server as input for the depth-based fallback classifier when the
+  AI call fails. Not used when the AI call succeeds.
+   */
+  depths32?: number[];
 }
+
+/**
+ * "ai" when the labels come from the Poe AI classifier (live or cached);
+"heuristic" when the AI was unavailable and labels were estimated from
+depth percentiles only.
+
+ */
+export type ClassifyResultSource = typeof ClassifyResultSource[keyof typeof ClassifyResultSource];
+
+
+export const ClassifyResultSource = {
+  ai: 'ai',
+  heuristic: 'heuristic',
+} as const;
 
 export interface ClassifyResult {
   /** 1024 zone labels in row-major order (32×32 coarse grid) */
   zones: string[];
   /** Whether the result was served from the in-memory cache */
   fromCache: boolean;
+  /** "ai" when the labels come from the Poe AI classifier (live or cached);
+  "heuristic" when the AI was unavailable and labels were estimated from
+  depth percentiles only.
+   */
+  source?: ClassifyResultSource;
 }
 
 export type ToolCallArgs = { [key: string]: unknown };

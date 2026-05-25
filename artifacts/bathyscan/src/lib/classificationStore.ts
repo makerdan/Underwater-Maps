@@ -23,6 +23,7 @@ import { create } from "zustand";
 import { poeClassify } from "@workspace/api-client-react";
 import type { TerrainData, PoeClassifyRequest } from "@workspace/api-client-react";
 import { gridToBase64Png } from "./gridToImage";
+import type { ClassifyResultSource } from "@workspace/api-client-react";
 import { parseAndUpsampleZones, zoneMapToStorage, zoneMapFromStorage } from "./zoneMap";
 
 // ---------------------------------------------------------------------------
@@ -101,6 +102,28 @@ export function categorizeClassificationError(err: unknown): ClassificationError
 // This is the primary content-addressable key used by both client + server.
 // ---------------------------------------------------------------------------
 
+/**
+ * Downsample a depth grid to a 1024-length (32×32 row-major) array using
+ * nearest-neighbour sampling. Sent to the server alongside the PNG so the
+ * server-side heuristic fallback has the raw numbers to band into zones when
+ * the AI call fails.
+ */
+export function downsampleDepths32(grid: TerrainData): number[] {
+  const SIZE = 32;
+  const out = new Array<number>(SIZE * SIZE);
+  const W = grid.width;
+  const H = grid.height;
+  const minDepth = grid.minDepth;
+  for (let row = 0; row < SIZE; row++) {
+    const srcRow = Math.round((row / (SIZE - 1)) * (H - 1));
+    for (let col = 0; col < SIZE; col++) {
+      const srcCol = Math.round((col / (SIZE - 1)) * (W - 1));
+      out[row * SIZE + col] = grid.depths[srcRow * W + srcCol] ?? minDepth;
+    }
+  }
+  return out;
+}
+
 export function hashGrid(depths: number[]): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < depths.length; i++) {
@@ -143,6 +166,13 @@ interface ClassificationState {
   error: ClassificationError | null;
   /** Hash of the grid currently being classified (or last successfully classified). */
   currentGridHash: string | null;
+  /**
+   * Provenance of the current zoneMap.
+   *  - "ai":        labels from the Poe AI classifier (live or cached).
+   *  - "heuristic": labels estimated from depth percentiles when AI was unavailable.
+   *  - null:        no zoneMap loaded yet.
+   */
+  source: "ai" | "heuristic" | null;
 
   classify: (grid: TerrainData) => Promise<void>;
   clearZoneMap: () => void;
@@ -170,9 +200,10 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
   loading: false,
   error: null,
   currentGridHash: null,
+  source: null,
 
   clearZoneMap: () =>
-    set({ zoneMap: null, aiZoneMap: null, hasEdits: false, error: null, currentGridHash: null }),
+    set({ zoneMap: null, aiZoneMap: null, hasEdits: false, error: null, currentGridHash: null, source: null }),
 
   paintSlot: (row, col, radius, slot, waterType, resolution) => {
     const { zoneMap, currentGridHash } = get();
@@ -244,7 +275,8 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
 
     // 1. sessionStorage — synchronous, keyed by content hash.
     //    The AI baseline is stored under a separate key so paint edits don't
-    //    overwrite it (enables Reset to AI even after reload).
+    //    overwrite it (enables Reset to AI even after reload). Cache hits are
+    //    always "ai" — heuristic results are never persisted.
     try {
       const stored = sessionStorage.getItem(sessionKey);
       const storedAi = sessionStorage.getItem(aiSessionKey);
@@ -252,7 +284,7 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
         const zoneMap = zoneMapFromStorage(stored);
         const ai = storedAi ? zoneMapFromStorage(storedAi) : new Uint8Array(zoneMap);
         const hasEdits = !!storedAi && !u8Equal(zoneMap, ai);
-        set({ zoneMap, aiZoneMap: ai, hasEdits, loading: false, error: null, currentGridHash: gridHash });
+        set({ zoneMap, aiZoneMap: ai, hasEdits, loading: false, error: null, currentGridHash: gridHash, source: "ai" });
         return Promise.resolve();
       }
     } catch {
@@ -263,28 +295,42 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
     const existing = inFlight.get(gridHash);
     if (existing) return existing;
 
-    set({ loading: true, error: null, zoneMap: null, aiZoneMap: null, hasEdits: false, currentGridHash: gridHash });
+    set({ loading: true, error: null, zoneMap: null, aiZoneMap: null, hasEdits: false, currentGridHash: gridHash, source: null });
 
-    const commitFresh = (zoneMap: Uint8Array) => {
-      try {
-        sessionStorage.setItem(sessionKey, zoneMapToStorage(zoneMap));
-        sessionStorage.setItem(aiSessionKey, zoneMapToStorage(zoneMap));
-      } catch {
-        // ignore
+    const commitFresh = (zoneMap: Uint8Array, source: ClassifyResultSource) => {
+      // Heuristic results are intentionally NOT persisted to sessionStorage so
+      // a later AI success on the same grid can take over without being masked
+      // by a stale cache entry.
+      if (source === "ai") {
+        try {
+          sessionStorage.setItem(sessionKey, zoneMapToStorage(zoneMap));
+          sessionStorage.setItem(aiSessionKey, zoneMapToStorage(zoneMap));
+        } catch {
+          // ignore
+        }
       }
-      set({ zoneMap, aiZoneMap: new Uint8Array(zoneMap), hasEdits: false, loading: false, error: null });
+      set({
+        zoneMap,
+        // Preserve aiZoneMap only for true AI results; heuristic shouldn't be
+        // treated as the "reset target" since it's a guess, not a baseline.
+        aiZoneMap: source === "ai" ? new Uint8Array(zoneMap) : null,
+        hasEdits: false,
+        loading: false,
+        error: null,
+        source,
+      });
     };
 
     const work = (async () => {
       try {
-        // 2. Server zone cache (memory + disk, keyed by gridHash)
+        // 2. Server zone cache (memory + disk, keyed by gridHash) — AI-only
         try {
           const url = `/api/datasets/${encodeURIComponent(datasetId)}/zones?h=${gridHash}`;
           const resp = await fetch(url, { credentials: "include" });
           if (resp.ok) {
-            const data = (await resp.json()) as { zones: string[]; waterType: string };
+            const data = (await resp.json()) as { zones: string[]; waterType: string; source?: ClassifyResultSource };
             if (get().currentGridHash !== gridHash) return;
-            commitFresh(parseAndUpsampleZones(data.zones, wt, targetN));
+            commitFresh(parseAndUpsampleZones(data.zones, wt, targetN), data.source ?? "ai");
             return;
           }
         } catch {
@@ -293,19 +339,22 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
 
         if (get().currentGridHash !== gridHash) return;
 
-        // 3. Poe AI — include gridHash so server can store by it
+        // 3. Poe AI — include gridHash and a 32×32 depth downsample so the
+        // server can fall back to a depth-based heuristic when the AI call
+        // fails (missing key, rate-limited, malformed response, …).
         const gridBase64 = gridToBase64Png(grid);
+        const depths32 = downsampleDepths32(grid);
         const result = await poeClassify(
-          { gridBase64, waterType: wt, datasetId, gridHash } as PoeClassifyRequest
+          { gridBase64, waterType: wt, datasetId, gridHash, depths32 } as PoeClassifyRequest
         );
 
         if (get().currentGridHash !== gridHash) return;
-        commitFresh(parseAndUpsampleZones(result.zones, wt, targetN));
+        commitFresh(parseAndUpsampleZones(result.zones, wt, targetN), result.source ?? "ai");
       } catch (err) {
         if (get().currentGridHash !== gridHash) return;
         const categorized = categorizeClassificationError(err);
         console.warn("[BathyScan] AI classification failed:", categorized.detail);
-        set({ loading: false, error: categorized, zoneMap: null, aiZoneMap: null, hasEdits: false });
+        set({ loading: false, error: categorized, zoneMap: null, aiZoneMap: null, hasEdits: false, source: null });
       }
     })();
 

@@ -206,6 +206,12 @@ interface CachedZones {
   zones: string[];
   waterType: "saltwater" | "freshwater";
   classifiedAt: number;
+  /**
+   * Provenance of the cached labels. The zone cache is AI-only — heuristic
+   * fallbacks are never persisted — so any entry served from this cache is
+   * "ai". Declared on the type so the field surfaces in GET /zones responses.
+   */
+  source?: "ai" | "heuristic";
 }
 
 /**
@@ -308,6 +314,86 @@ const FRESHWATER_ZONES = [
   "gravel_bed", "bedrock_shelf", "submerged_wood", "clay_flat",
 ] as const;
 
+// ---------------------------------------------------------------------------
+// Depth-based heuristic classifier (used when the AI call fails).
+//
+// Bands depths into four equal-count percentile buckets (shallow → deep) and
+// maps each bucket to one of four substrate labels per water type. Pure /
+// deterministic so it's easy to unit-test. The chosen labels intentionally
+// match the four representative texture slots used by the client shader so
+// the resulting overlay is consistent with paint mode.
+// ---------------------------------------------------------------------------
+
+/** Shallow → deep substrate labels for the heuristic classifier. */
+export const SALTWATER_HEURISTIC_BANDS = [
+  "sandy_shelf",      // shallowest 25%
+  "coarse_sediment",
+  "silt_plain",
+  "basalt_rock",      // deepest 25%
+] as const;
+
+export const FRESHWATER_HEURISTIC_BANDS = [
+  "aquatic_vegetation", // shallowest 25%
+  "gravel_bed",
+  "rocky_shoreline",
+  "silt_deep",          // deepest 25%
+] as const;
+
+/**
+ * Classify `depths` (length 1024, 32×32 row-major) into one of four substrate
+ * bands using percentile thresholds (quartiles of the supplied values).
+ *
+ * Always returns exactly 1024 labels — short inputs are right-padded with the
+ * shallowest label and long inputs are truncated. Non-finite values are
+ * treated as the minimum depth (shallowest band) so the result is always a
+ * valid 1024-string array.
+ */
+export function heuristicClassifyByDepth(
+  depths: number[],
+  waterType: "saltwater" | "freshwater",
+): string[] {
+  const bands = waterType === "freshwater"
+    ? FRESHWATER_HEURISTIC_BANDS
+    : SALTWATER_HEURISTIC_BANDS;
+
+  const N = 1024;
+  const out = new Array<string>(N);
+
+  // Normalize: take first N, replace NaN/Infinity with a finite minimum.
+  const cleaned = new Array<number>(N);
+  let minFinite = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < N; i++) {
+    const v = depths[i];
+    if (typeof v === "number" && Number.isFinite(v)) {
+      cleaned[i] = v;
+      if (v < minFinite) minFinite = v;
+    } else {
+      cleaned[i] = Number.NaN; // mark, fix in second pass
+    }
+  }
+  if (!Number.isFinite(minFinite)) {
+    // All inputs missing/non-finite — every cell becomes the shallowest band.
+    return out.fill(bands[0]);
+  }
+  for (let i = 0; i < N; i++) {
+    if (!Number.isFinite(cleaned[i] as number)) cleaned[i] = minFinite;
+  }
+
+  // Percentile thresholds via sorted copy. Using indices N*k/4 yields four
+  // approximately equal-count bands regardless of the input distribution.
+  const sorted = cleaned.slice().sort((a, b) => a - b);
+  const q1 = sorted[Math.floor(N * 0.25)] as number;
+  const q2 = sorted[Math.floor(N * 0.5)] as number;
+  const q3 = sorted[Math.floor(N * 0.75)] as number;
+
+  for (let i = 0; i < N; i++) {
+    const d = cleaned[i] as number;
+    const band = d <= q1 ? 0 : d <= q2 ? 1 : d <= q3 ? 2 : 3;
+    out[i] = bands[band] as string;
+  }
+  return out;
+}
+
 function buildClassifySystemPrompt(waterType: "saltwater" | "freshwater"): string {
   if (waterType === "freshwater") {
     return `You are an expert limnologist and freshwater bathymetric analyst. You will be shown a greyscale depth map of a lake or reservoir where darker pixels represent shallower depths and lighter pixels represent deeper depths. Classify each cell of the 32×32 grid into one of these freshwater substrate types: aquatic_vegetation, sandy_lake_bed, rocky_shoreline, silt_deep, gravel_bed, bedrock_shelf, submerged_wood, clay_flat. Return exactly 1024 labels in row-major order. Use limnological reasoning.`;
@@ -335,12 +421,14 @@ function buildClassifyZoneSchema(waterType: "saltwater" | "freshwater") {
 router.post("/classify", async (req, res) => {
   const userId = getAuthenticatedUserId(req);
 
-  const { gridBase64, waterType = "saltwater", datasetId, gridHash } = req.body as {
+  const { gridBase64, waterType = "saltwater", datasetId, gridHash, depths32 } = req.body as {
     gridBase64: string;
     waterType?: "saltwater" | "freshwater";
     datasetId?: string;
     /** Client-computed FNV-1a 32-bit hash of the depth grid (hex string). */
     gridHash?: string;
+    /** Optional 1024-length downsampled depth grid for the heuristic fallback. */
+    depths32?: number[];
   };
 
   if (!gridBase64) {
@@ -351,7 +439,7 @@ router.post("/classify", async (req, res) => {
   const cacheKey = hashCacheKey(datasetId ?? "unknown", waterType, gridBase64);
   const cached = globalPoeCache.get(cacheKey);
   if (cached) {
-    res.json({ zones: JSON.parse(cached), fromCache: true });
+    res.json({ zones: JSON.parse(cached), fromCache: true, source: "ai" });
     return;
   }
 
@@ -402,7 +490,7 @@ router.post("/classify", async (req, res) => {
     // Populate secondary zone cache keyed by gridHash (content-addressable).
     // This prevents "upload" datasetId collisions: different grids → different hashes.
     if (gridHash) {
-      const cached: CachedZones = { zones, waterType, classifiedAt: Date.now() };
+      const cached: CachedZones = { zones, waterType, classifiedAt: Date.now(), source: "ai" };
       datasetZonesCache.set(gridHash, cached);
       void writeZoneDisk(gridHash, cached);
     }
@@ -415,8 +503,22 @@ router.post("/classify", async (req, res) => {
       result.usage?.output_tokens ?? 0,
     );
 
-    res.json({ zones, fromCache: false });
+    res.json({ zones, fromCache: false, source: "ai" });
   } catch (err) {
+    // Depth-based fallback — if the client supplied a 1024-length depth grid
+    // we always return *some* overlay so uploads aren't left blank when the
+    // AI is unavailable (missing key, rate limit, network error, malformed
+    // JSON, etc.). Heuristic results are NEVER written to globalPoeCache /
+    // datasetZonesCache / disk so a later successful AI call can still take
+    // over and be cached normally.
+    if (Array.isArray(depths32) && depths32.length === 1024) {
+      console.warn(
+        `[poe/classify] AI unavailable (${(err as Error)?.message ?? "unknown"}) — returning depth-based heuristic`,
+      );
+      const zones = heuristicClassifyByDepth(depths32, waterType);
+      res.json({ zones, fromCache: false, source: "heuristic" });
+      return;
+    }
     handlePoeError(err, res);
   }
 });

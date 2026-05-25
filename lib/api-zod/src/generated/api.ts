@@ -878,12 +878,15 @@ export const poeClassifyBodyWaterTypeDefault = `saltwater`;
 export const PoeClassifyBody = zod.object({
   "gridBase64": zod.string().describe('Base64-encoded PNG data URL of the 256×256 depth grid'),
   "waterType": zod.enum(['saltwater', 'freshwater']).default(poeClassifyBodyWaterTypeDefault),
-  "datasetId": zod.string().optional().describe('Dataset identifier used for cache keying')
+  "datasetId": zod.string().optional().describe('Dataset identifier used for cache keying'),
+  "gridHash": zod.string().optional().describe('Client-computed FNV-1a 32-bit hash of the depth grid (8-char hex)'),
+  "depths32": zod.array(zod.number()).optional().describe('Optional 1024-length (32×32 row-major) downsample of the depth grid in metres.\nUsed by the server as input for the depth-based fallback classifier when the\nAI call fails. Not used when the AI call succeeds.\n')
 })
 
 export const PoeClassifyResponse = zod.object({
   "zones": zod.array(zod.string()).describe('1024 zone labels in row-major order (32×32 coarse grid)'),
-  "fromCache": zod.boolean().describe('Whether the result was served from the in-memory cache')
+  "fromCache": zod.boolean().describe('Whether the result was served from the in-memory cache'),
+  "source": zod.enum(['ai', 'heuristic']).optional().describe('\"ai\" when the labels come from the Poe AI classifier (live or cached);\n\"heuristic\" when the AI was unavailable and labels were estimated from\ndepth percentiles only.\n')
 })
 
 

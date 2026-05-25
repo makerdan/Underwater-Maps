@@ -1325,6 +1325,17 @@ components:
         datasetId:
           type: string
           description: Dataset identifier used for cache keying
+        gridHash:
+          type: string
+          description: Client-computed FNV-1a 32-bit hash of the depth grid (8-char hex)
+        depths32:
+          type: array
+          items:
+            type: number
+          description: |
+            Optional 1024-length (32×32 row-major) downsample of the depth grid in metres.
+            Used by the server as input for the depth-based fallback classifier when the
+            AI call fails. Not used when the AI call succeeds.
       required:
         - gridBase64
 
@@ -1339,6 +1350,13 @@ components:
         fromCache:
           type: boolean
           description: Whether the result was served from the in-memory cache
+        source:
+          type: string
+          enum: [ai, heuristic]
+          description: |
+            "ai" when the labels come from the Poe AI classifier (live or cached);
+            "heuristic" when the AI was unavailable and labels were estimated from
+            depth percentiles only.
       required:
         - zones
         - fromCache

@@ -155,16 +155,20 @@ router.get("/datasets/:id/zones", async (req, res): Promise<void> => {
   }
 
   // --- Cache lookup by gridHash ---
+  // The zone cache only ever stores AI results — heuristic fallbacks are not
+  // persisted — so every hit reports `source: "ai"`. We default the field on
+  // the response so older cached entries written before the field existed
+  // also surface the correct provenance.
   const inMemory = datasetZonesCache.get(gridHash);
   if (inMemory) {
-    res.json(inMemory);
+    res.json({ ...inMemory, source: inMemory.source ?? "ai" });
     return;
   }
 
   const onDisk = await readZoneDiskByHash(gridHash);
   if (onDisk) {
     datasetZonesCache.set(gridHash, onDisk);
-    res.json(onDisk);
+    res.json({ ...onDisk, source: onDisk.source ?? "ai" });
     return;
   }
 

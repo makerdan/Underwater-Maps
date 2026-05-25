@@ -54,6 +54,7 @@ export const ZoneOverlay: React.FC = () => {
   const loading = useClassificationStore((s) => s.loading);
   const zoneMap = useClassificationStore((s) => s.zoneMap);
   const error = useClassificationStore((s) => s.error);
+  const source = useClassificationStore((s) => s.source);
   const overlayEnabled = useUiStore((s) => s.zoneOverlayEnabled);
   const setOverlayEnabled = useUiStore((s) => s.setZoneOverlayEnabled);
   const paintMode = useUiStore((s) => s.zonePaintMode);
@@ -172,6 +173,22 @@ export const ZoneOverlay: React.FC = () => {
               Show zone colours
             </span>
           </button>
+        )}
+
+        {/* Heuristic provenance — shown when AI was unavailable */}
+        {hasZoneMap && !loading && source === "heuristic" && (
+          <div
+            data-testid="zone-source-heuristic"
+            style={{
+              fontSize: 10,
+              color: "#fbbf24",
+              marginBottom: 6,
+              letterSpacing: "0.04em",
+              lineHeight: 1.4,
+            }}
+          >
+            Estimated from depth (AI unavailable)
+          </div>
         )}
 
         {/* Zone legend — all 8 AI zone labels with their shader-slot colour */}
