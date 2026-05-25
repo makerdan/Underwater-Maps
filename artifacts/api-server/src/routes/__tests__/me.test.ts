@@ -189,6 +189,43 @@ describe("PUT /api/settings passthrough", () => {
     expect(persisted.accentColor).toBe("#ff00aa");
   });
 
+  it("partial PUT preserves previously stored fields not included in the body", async () => {
+    // User previously saved units: "imperial" + a few other customizations.
+    state.userSettings = [
+      {
+        userId: "user-test",
+        settings: {
+          units: "imperial",
+          depthUnit: "feet",
+          fogDensity: 0.02,
+          waterType: "saltwater",
+          fieldOfView: 75, // extra (non-spec) advanced field
+          __updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      },
+    ];
+
+    // Partial PUT — only waterType (mimics the HUD water-type toggle).
+    const res = await request(app)
+      .put("/api/settings")
+      .send({ waterType: "freshwater" });
+    expect(res.status).toBe(200);
+
+    const persisted = state.lastInsertedSettings?.["settings"] as Record<string, unknown>;
+    expect(persisted).toBeDefined();
+    // The field the client sent is updated.
+    expect(persisted.waterType).toBe("freshwater");
+    // Previously stored fields the client did NOT send must survive — this is
+    // the regression: before the fix the zod-default for `units` ("metric")
+    // would clobber the stored "imperial" value.
+    expect(persisted.units).toBe("imperial");
+    expect(persisted.depthUnit).toBe("feet");
+    expect(persisted.fogDensity).toBe(0.02);
+    expect(persisted.fieldOfView).toBe(75);
+    // Server is the source of truth for __updatedAt; it must advance.
+    expect(persisted.__updatedAt).not.toBe("2026-01-01T00:00:00.000Z");
+  });
+
   it("GET /api/settings returns merged extras alongside defaults", async () => {
     state.userSettings = [
       {

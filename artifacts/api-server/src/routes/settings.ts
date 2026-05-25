@@ -81,6 +81,19 @@ router.put("/settings", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  // PUT is a partial update: only the fields the client actually included in
+  // the request body should overwrite stored state. The generated zod schema
+  // has `.default(...)` on every field, so `parsed.data` always contains every
+  // known key — even ones the client didn't send. Use the raw body to decide
+  // which validated fields to apply, otherwise a partial PUT (e.g. the
+  // water-type toggle sending just `{ waterType }`) would silently reset every
+  // other setting (units, depthUnit, hudOpacity, …) back to its default.
+  const sentKeys = new Set(Object.keys(body));
+  const sentValidated: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(parsed.data as Record<string, unknown>)) {
+    if (sentKeys.has(k)) sentValidated[k] = v;
+  }
+
   // Preserve any extra (non-spec) fields so advanced settings persist server-side.
   const extras: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(body)) {
@@ -92,9 +105,18 @@ router.put("/settings", requireAuth, async (req, res): Promise<void> => {
   delete extras.__updatedAt;
   const updatedAt = new Date().toISOString();
 
+  // Merge over the previously stored row so unspecified fields keep their
+  // existing values (rather than being reset to DEFAULT_SETTINGS).
+  const [existing] = await db
+    .select()
+    .from(userSettingsTable)
+    .where(eq(userSettingsTable.userId, userId));
+  const stored = (existing?.settings ?? {}) as Record<string, unknown>;
+
   const merged = {
     ...DEFAULT_SETTINGS,
-    ...(parsed.data as Record<string, unknown>),
+    ...stored,
+    ...sentValidated,
     ...extras,
     __updatedAt: updatedAt,
   };
