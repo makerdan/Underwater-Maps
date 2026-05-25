@@ -286,12 +286,45 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
     const activePointers = new Map<number, { x: number; y: number }>();
     let lastPinchDist = 0;
 
+    // ─── Long-press → context menu for touch users ───
+    // Mirrors the desktop right-click menu: ~500ms hold with minimal movement
+    // opens the same menu against the touch point.
+    const LONG_PRESS_MS = 500;
+    const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
+    let longPressTimer: number | null = null;
+    let longPressStart: { x: number; y: number; pointerId: number } | null = null;
+    let longPressFired = false;
+
+    const cancelLongPress = () => {
+      if (longPressTimer !== null) {
+        window.clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+      longPressStart = null;
+    };
+
     const handlePointerDown = (e: PointerEvent) => {
       if (e.pointerType !== "touch") return;
       activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (activePointers.size === 2) {
         const pts = Array.from(activePointers.values());
         lastPinchDist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
+        // Second finger down → no longer a long-press candidate
+        cancelLongPress();
+        return;
+      }
+      // Single-finger touch: arm long-press timer. Works in fly or orbit mode.
+      if (activePointers.size === 1) {
+        longPressFired = false;
+        longPressStart = { x: e.clientX, y: e.clientY, pointerId: e.pointerId };
+        longPressTimer = window.setTimeout(() => {
+          longPressTimer = null;
+          if (!longPressStart) return;
+          const { x, y } = longPressStart;
+          longPressStart = null;
+          longPressFired = true;
+          showContextMenuAt(x, y);
+        }, LONG_PRESS_MS);
       }
     };
 
@@ -299,6 +332,14 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       if (e.pointerType !== "touch") return;
       if (!activePointers.has(e.pointerId)) return;
       activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      // Cancel long-press if finger moves too far before timer fires
+      if (longPressStart && e.pointerId === longPressStart.pointerId) {
+        const dx = e.clientX - longPressStart.x;
+        const dy = e.clientY - longPressStart.y;
+        if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_TOLERANCE_PX) {
+          cancelLongPress();
+        }
+      }
       if (activePointers.size === 2 && modeRef.current === "fly") {
         const pts = Array.from(activePointers.values());
         const dist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
@@ -314,6 +355,15 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       if (e.pointerType !== "touch") return;
       activePointers.delete(e.pointerId);
       lastPinchDist = 0;
+      if (longPressStart && e.pointerId === longPressStart.pointerId) {
+        cancelLongPress();
+      }
+      // If the long-press menu just fired, swallow the subsequent click so it
+      // doesn't immediately dismiss the menu or trigger marker interaction.
+      if (longPressFired) {
+        longPressFired = false;
+        e.preventDefault();
+      }
     };
 
     const buildTerrainMenuItems = (
@@ -452,24 +502,15 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       return markers?.find((m) => m.id === id);
     };
 
-    const handleContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-      if (modeRef.current !== "fly") return;
-
-      // Pointer locked → no menu (cursor not visible). Use crosshair GPS pin shortcut.
-      if (isLocked.current) {
-        const gps = useCameraStore.getState().crosshairGps;
-        if (gps) {
-          useCameraStore.getState().setLastClickedGps(gps);
-          useUiStore.getState().setMarkerFormOpen(true);
-        }
-        return;
-      }
+    // Shared menu-showing logic used by both the desktop right-click handler
+    // and the touch long-press timer. (x, y) are viewport coords.
+    const showContextMenuAt = (x: number, y: number) => {
+      if (modeRef.current !== "fly" && modeRef.current !== "orbit") return;
 
       // NDC at click position
       const rect = gl.domElement.getBoundingClientRect();
-      const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const ndcY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+      const ndcX = ((x - rect.left) / rect.width) * 2 - 1;
+      const ndcY = -(((y - rect.top) / rect.height) * 2 - 1);
       const ndc = new THREE.Vector2(ndcX, ndcY);
       raycaster.current.setFromCamera(ndc, camera);
 
@@ -486,7 +527,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
             if (marker) {
               useContextMenuStore
                 .getState()
-                .show(e.clientX, e.clientY, buildMarkerMenuItems(marker));
+                .show(x, y, buildMarkerMenuItems(marker));
               return;
             }
           }
@@ -504,13 +545,26 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
           const depth = worldYToMetres(pt.y, grid);
           useContextMenuStore
             .getState()
-            .show(
-              e.clientX,
-              e.clientY,
-              buildTerrainMenuItems(lon, lat, depth, grid.datasetId),
-            );
+            .show(x, y, buildTerrainMenuItems(lon, lat, depth, grid.datasetId));
         }
       }
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      if (modeRef.current !== "fly") return;
+
+      // Pointer locked → no menu (cursor not visible). Use crosshair GPS pin shortcut.
+      if (isLocked.current) {
+        const gps = useCameraStore.getState().crosshairGps;
+        if (gps) {
+          useCameraStore.getState().setLastClickedGps(gps);
+          useUiStore.getState().setMarkerFormOpen(true);
+        }
+        return;
+      }
+
+      showContextMenuAt(e.clientX, e.clientY);
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -533,6 +587,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       gl.domElement.removeEventListener("pointermove", handlePointerMove);
       gl.domElement.removeEventListener("pointerup", handlePointerUp);
       gl.domElement.removeEventListener("pointercancel", handlePointerUp);
+      cancelLongPress();
     };
   }, [camera, gl.domElement, setMode, setSpeedIndex, terrainMeshRef, queryClient]);
 
