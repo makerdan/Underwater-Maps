@@ -36,7 +36,8 @@ import type {
   PostDatasetsUploadBody,
   QueryResult,
   TerrainData,
-  UploadResult
+  UploadResult,
+  UserDatasetMeta
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -372,6 +373,308 @@ export const usePostDatasetsUpload = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getPostDatasetsUploadMutationOptions(options));
+    }
+
+export const getGetUserDatasetsUrl = () => {
+
+
+
+
+  return `/api/user/datasets`
+}
+
+/**
+ * Returns metadata for all terrain files the authenticated user has uploaded and saved
+ * @summary List the current user's saved custom terrain datasets
+ */
+export const getUserDatasets = async ( options?: RequestInit): Promise<UserDatasetMeta[]> => {
+
+  return customFetch<UserDatasetMeta[]>(getGetUserDatasetsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUserDatasetsQueryKey = () => {
+    return [
+    `/api/user/datasets`
+    ] as const;
+    }
+
+
+export const getGetUserDatasetsQueryOptions = <TData = Awaited<ReturnType<typeof getUserDatasets>>, TError = ErrorType<ApiError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserDatasets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUserDatasetsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUserDatasets>>> = ({ signal }) => getUserDatasets({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUserDatasets>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUserDatasetsQueryResult = NonNullable<Awaited<ReturnType<typeof getUserDatasets>>>
+export type GetUserDatasetsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List the current user's saved custom terrain datasets
+ */
+
+export function useGetUserDatasets<TData = Awaited<ReturnType<typeof getUserDatasets>>, TError = ErrorType<ApiError>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserDatasets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUserDatasetsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetUserDatasetsIdTerrainUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/datasets/${id}/terrain`
+}
+
+/**
+ * @summary Get full terrain grid for a saved user dataset
+ */
+export const getUserDatasetsIdTerrain = async (id: string, options?: RequestInit): Promise<TerrainData> => {
+
+  return customFetch<TerrainData>(getGetUserDatasetsIdTerrainUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUserDatasetsIdTerrainQueryKey = (id: string,) => {
+    return [
+    `/api/user/datasets/${id}/terrain`
+    ] as const;
+    }
+
+
+export const getGetUserDatasetsIdTerrainQueryOptions = <TData = Awaited<ReturnType<typeof getUserDatasetsIdTerrain>>, TError = ErrorType<ApiError>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserDatasetsIdTerrain>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUserDatasetsIdTerrainQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUserDatasetsIdTerrain>>> = ({ signal }) => getUserDatasetsIdTerrain(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUserDatasetsIdTerrain>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUserDatasetsIdTerrainQueryResult = NonNullable<Awaited<ReturnType<typeof getUserDatasetsIdTerrain>>>
+export type GetUserDatasetsIdTerrainQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get full terrain grid for a saved user dataset
+ */
+
+export function useGetUserDatasetsIdTerrain<TData = Awaited<ReturnType<typeof getUserDatasetsIdTerrain>>, TError = ErrorType<ApiError>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserDatasetsIdTerrain>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUserDatasetsIdTerrainQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetUserDatasetsIdOverviewUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/datasets/${id}/overview`
+}
+
+/**
+ * @summary Get low-resolution overview grid for a saved user dataset
+ */
+export const getUserDatasetsIdOverview = async (id: string, options?: RequestInit): Promise<TerrainData> => {
+
+  return customFetch<TerrainData>(getGetUserDatasetsIdOverviewUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUserDatasetsIdOverviewQueryKey = (id: string,) => {
+    return [
+    `/api/user/datasets/${id}/overview`
+    ] as const;
+    }
+
+
+export const getGetUserDatasetsIdOverviewQueryOptions = <TData = Awaited<ReturnType<typeof getUserDatasetsIdOverview>>, TError = ErrorType<ApiError>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserDatasetsIdOverview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUserDatasetsIdOverviewQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUserDatasetsIdOverview>>> = ({ signal }) => getUserDatasetsIdOverview(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUserDatasetsIdOverview>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUserDatasetsIdOverviewQueryResult = NonNullable<Awaited<ReturnType<typeof getUserDatasetsIdOverview>>>
+export type GetUserDatasetsIdOverviewQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get low-resolution overview grid for a saved user dataset
+ */
+
+export function useGetUserDatasetsIdOverview<TData = Awaited<ReturnType<typeof getUserDatasetsIdOverview>>, TError = ErrorType<ApiError>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserDatasetsIdOverview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUserDatasetsIdOverviewQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getDeleteUserDatasetsIdUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/datasets/${id}`
+}
+
+/**
+ * @summary Delete a saved user terrain dataset
+ */
+export const deleteUserDatasetsId = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteUserDatasetsIdUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteUserDatasetsIdMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUserDatasetsId>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteUserDatasetsId>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteUserDatasetsId'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteUserDatasetsId>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteUserDatasetsId(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteUserDatasetsIdMutationResult = NonNullable<Awaited<ReturnType<typeof deleteUserDatasetsId>>>
+
+    export type DeleteUserDatasetsIdMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Delete a saved user terrain dataset
+ */
+export const useDeleteUserDatasetsId = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUserDatasetsId>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteUserDatasetsId>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteUserDatasetsIdMutationOptions(options));
     }
 
 export const getGetMarkersUrl = (params: GetMarkersParams,) => {

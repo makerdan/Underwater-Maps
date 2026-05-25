@@ -188,11 +188,26 @@ export interface TerrainUploadInput {
 }
 
 /**
- * Full terrain and overview grids generated from an uploaded file
+ * Full terrain and overview grids generated from an uploaded file. When the user is authenticated the terrain is also persisted and savedDatasetId is returned.
  */
 export interface UploadResult {
   terrain: TerrainData;
   overview: TerrainData;
+  /** UUID of the saved custom dataset row (only present when the request was authenticated) */
+  savedDatasetId?: string;
+}
+
+/**
+ * Metadata for a user-saved custom terrain dataset
+ */
+export interface UserDatasetMeta {
+  /** UUID primary key */
+  id: string;
+  /** Dataset name derived from the uploaded filename */
+  name: string;
+  minDepth: number;
+  maxDepth: number;
+  createdAt: string;
 }
 
 export type MarkerType = typeof MarkerType[keyof typeof MarkerType];

@@ -1,5 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
+import { getAuth } from "@clerk/express";
+import { db, customDatasetsTable } from "@workspace/db";
 import {
   GetDatasetsResponse,
   GetDatasetsIdTerrainResponse,
@@ -103,7 +105,30 @@ router.post("/datasets/upload", upload.single("file"), async (req, res): Promise
   const terrain = gridPoints(points, resolution, "upload", datasetName);
   const overview = gridPoints(points, 64, "upload", datasetName);
 
-  res.json(PostDatasetsUploadResponse.parse({ terrain, overview }));
+  // Auto-save to the user's account when authenticated
+  let savedDatasetId: string | undefined;
+  const auth = getAuth(req);
+  const userId = auth?.userId ?? null;
+  if (userId) {
+    try {
+      const [saved] = await db
+        .insert(customDatasetsTable)
+        .values({
+          userId,
+          name: datasetName,
+          minDepth: terrain.minDepth,
+          maxDepth: terrain.maxDepth,
+          terrainJson: terrain as unknown as Record<string, unknown>,
+          overviewJson: overview as unknown as Record<string, unknown>,
+        })
+        .returning({ id: customDatasetsTable.id });
+      if (saved) savedDatasetId = saved.id;
+    } catch {
+      // Non-fatal: proceed without saving
+    }
+  }
+
+  res.json(PostDatasetsUploadResponse.parse({ terrain, overview, savedDatasetId }));
 });
 
 // Backward-compat alias: same multipart handling

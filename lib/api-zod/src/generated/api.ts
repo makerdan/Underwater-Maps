@@ -144,8 +144,83 @@ export const PostDatasetsUploadResponse = zod.object({
   "maxLat": zod.number(),
   "centerLon": zod.number(),
   "centerLat": zod.number()
+}),
+  "savedDatasetId": zod.string().optional().describe('UUID of the saved custom dataset row (only present when the request was authenticated)')
+}).describe('Full terrain and overview grids generated from an uploaded file. When the user is authenticated the terrain is also persisted and savedDatasetId is returned.')
+
+
+/**
+ * Returns metadata for all terrain files the authenticated user has uploaded and saved
+ * @summary List the current user's saved custom terrain datasets
+ */
+export const GetUserDatasetsResponseItem = zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "name": zod.string().describe('Dataset name derived from the uploaded filename'),
+  "minDepth": zod.number(),
+  "maxDepth": zod.number(),
+  "createdAt": zod.coerce.date()
+}).describe('Metadata for a user-saved custom terrain dataset')
+export const GetUserDatasetsResponse = zod.array(GetUserDatasetsResponseItem)
+
+
+/**
+ * @summary Get full terrain grid for a saved user dataset
+ */
+export const GetUserDatasetsIdTerrainParams = zod.object({
+  "id": zod.coerce.string()
 })
-}).describe('Full terrain and overview grids generated from an uploaded file')
+
+export const GetUserDatasetsIdTerrainResponse = zod.object({
+  "datasetId": zod.string(),
+  "name": zod.string(),
+  "waterType": zod.enum(['saltwater', 'freshwater']),
+  "resolution": zod.number().describe('Grid side length N (grid is NxN)'),
+  "width": zod.number(),
+  "height": zod.number(),
+  "depths": zod.array(zod.number()).describe('Row-major flat array of depth values (metres, positive = below surface)'),
+  "minDepth": zod.number(),
+  "maxDepth": zod.number(),
+  "minLon": zod.number(),
+  "maxLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLat": zod.number(),
+  "centerLon": zod.number(),
+  "centerLat": zod.number()
+})
+
+
+/**
+ * @summary Get low-resolution overview grid for a saved user dataset
+ */
+export const GetUserDatasetsIdOverviewParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetUserDatasetsIdOverviewResponse = zod.object({
+  "datasetId": zod.string(),
+  "name": zod.string(),
+  "waterType": zod.enum(['saltwater', 'freshwater']),
+  "resolution": zod.number().describe('Grid side length N (grid is NxN)'),
+  "width": zod.number(),
+  "height": zod.number(),
+  "depths": zod.array(zod.number()).describe('Row-major flat array of depth values (metres, positive = below surface)'),
+  "minDepth": zod.number(),
+  "maxDepth": zod.number(),
+  "minLon": zod.number(),
+  "maxLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLat": zod.number(),
+  "centerLon": zod.number(),
+  "centerLat": zod.number()
+})
+
+
+/**
+ * @summary Delete a saved user terrain dataset
+ */
+export const DeleteUserDatasetsIdParams = zod.object({
+  "id": zod.coerce.string()
+})
 
 
 /**

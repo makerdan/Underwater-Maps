@@ -16,6 +16,8 @@ tags:
     description: Bathymetric dataset operations
   - name: markers
     description: Persisted point-of-interest marker operations
+  - name: user-datasets
+    description: Authenticated user's saved custom terrain datasets
 paths:
   /datasets:
     get:
@@ -139,6 +141,125 @@ paths:
                 $ref: "#/components/schemas/UploadResult"
         "400":
           description: Unparseable file or insufficient valid points
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /user/datasets:
+    get:
+      operationId: getUserDatasets
+      tags: [user-datasets]
+      summary: List the current user's saved custom terrain datasets
+      description: Returns metadata for all terrain files the authenticated user has uploaded and saved
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: User dataset list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserDatasetMeta"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /user/datasets/{id}/terrain:
+    get:
+      operationId: getUserDatasetsIdTerrain
+      tags: [user-datasets]
+      summary: Get full terrain grid for a saved user dataset
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Terrain grid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TerrainData"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Dataset not found or does not belong to current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /user/datasets/{id}/overview:
+    get:
+      operationId: getUserDatasetsIdOverview
+      tags: [user-datasets]
+      summary: Get low-resolution overview grid for a saved user dataset
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Overview terrain grid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TerrainData"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Dataset not found or does not belong to current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /user/datasets/{id}:
+    delete:
+      operationId: deleteUserDatasetsId
+      tags: [user-datasets]
+      summary: Delete a saved user terrain dataset
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Dataset deleted
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Dataset not found or does not belong to current user
           content:
             application/json:
               schema:
@@ -615,15 +736,42 @@ components:
 
     UploadResult:
       type: object
-      description: Full terrain and overview grids generated from an uploaded file
+      description: Full terrain and overview grids generated from an uploaded file. When the user is authenticated the terrain is also persisted and savedDatasetId is returned.
       properties:
         terrain:
           $ref: "#/components/schemas/TerrainData"
         overview:
           $ref: "#/components/schemas/TerrainData"
+        savedDatasetId:
+          type: string
+          description: UUID of the saved custom dataset row (only present when the request was authenticated)
       required:
         - terrain
         - overview
+
+    UserDatasetMeta:
+      type: object
+      description: Metadata for a user-saved custom terrain dataset
+      properties:
+        id:
+          type: string
+          description: UUID primary key
+        name:
+          type: string
+          description: Dataset name derived from the uploaded filename
+        minDepth:
+          type: number
+        maxDepth:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - minDepth
+        - maxDepth
+        - createdAt
 
     Marker:
       type: object

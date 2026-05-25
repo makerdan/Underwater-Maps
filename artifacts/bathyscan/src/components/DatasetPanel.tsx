@@ -1,19 +1,28 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import type { FileRejection } from "react-dropzone";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@clerk/react";
 import {
   useGetDatasets,
   useGetDatasetsIdOverview,
   useGetDatasetsIdTerrain,
+  useGetUserDatasets,
+  useGetUserDatasetsIdTerrain,
+  useGetUserDatasetsIdOverview,
+  useDeleteUserDatasetsId,
   getGetDatasetsIdTerrainQueryKey,
   getGetDatasetsIdOverviewQueryKey,
+  getGetUserDatasetsQueryKey,
+  getGetUserDatasetsIdTerrainQueryKey,
+  getGetUserDatasetsIdOverviewQueryKey,
   usePostDatasetsUpload,
 } from "@workspace/api-client-react";
-import type { DatasetMeta } from "@workspace/api-client-react";
+import type { DatasetMeta, UserDatasetMeta } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { useTerrainStore } from "@/lib/terrainStore";
 
-const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50 MB
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 const PANEL: React.CSSProperties = {
   background: "rgba(0,10,20,0.82)",
@@ -34,39 +43,52 @@ const CYAN: React.CSSProperties = {
 
 export const DatasetPanel: React.FC = () => {
   const { datasetId, setDatasetId, setTerrain, terrain } = useAppState();
+  const { isSignedIn } = useAuth();
+  const qc = useQueryClient();
+
   const [collapsed, setCollapsed] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
-  // ID currently being fetched (triggers parallel queries)
+
+  // ─── Preset dataset pending fetch ─────────────────────────────────────────
   const [pendingId, setPendingId] = useState<string | null>(null);
-  // Simulated upload progress (0-100)
+
+  // ─── User dataset pending + active tracking ────────────────────────────────
+  const [pendingUserDatasetId, setPendingUserDatasetId] = useState<string | null>(null);
+  const [activeUserDatasetId, setActiveUserDatasetId] = useState<string | null>(null);
+
+  // ─── Upload progress (simulated) ──────────────────────────────────────────
   const [uploadProgress, setUploadProgress] = useState(0);
 
+  // ─── Fetch dataset lists ───────────────────────────────────────────────────
   const { data: datasets, isLoading: datasetsLoading } = useGetDatasets();
-
-  // ─── Parallel fetch for pending dataset ────────────────────────────────────
-  const {
-    data: pendingTerrain,
-    isError: terrainFetchError,
-  } = useGetDatasetsIdTerrain(pendingId ?? "", undefined, {
-    query: {
-      enabled: !!pendingId,
-      queryKey: getGetDatasetsIdTerrainQueryKey(pendingId ?? ""),
-    },
+  const { data: userDatasets, isLoading: userDatasetsLoading } = useGetUserDatasets({
+    query: { enabled: !!isSignedIn, queryKey: getGetUserDatasetsQueryKey() },
   });
 
-  const {
-    data: pendingOverview,
-    isError: overviewFetchError,
-  } = useGetDatasetsIdOverview(pendingId ?? "", {
-    query: {
-      enabled: !!pendingId,
-      queryKey: getGetDatasetsIdOverviewQueryKey(pendingId ?? ""),
+  // ─── Parallel fetch for pending PRESET dataset ─────────────────────────────
+  const { data: pendingTerrain, isError: terrainFetchError } = useGetDatasetsIdTerrain(
+    pendingId ?? "",
+    undefined,
+    {
+      query: {
+        enabled: !!pendingId,
+        queryKey: getGetDatasetsIdTerrainQueryKey(pendingId ?? ""),
+      },
     },
-  });
+  );
 
-  // Clear spinner/pending on fetch error so UI doesn't get stuck
+  const { data: pendingOverview, isError: overviewFetchError } = useGetDatasetsIdOverview(
+    pendingId ?? "",
+    {
+      query: {
+        enabled: !!pendingId,
+        queryKey: getGetDatasetsIdOverviewQueryKey(pendingId ?? ""),
+      },
+    },
+  );
+
   useEffect(() => {
     if (!pendingId) return;
     if (terrainFetchError || overviewFetchError) {
@@ -75,27 +97,67 @@ export const DatasetPanel: React.FC = () => {
     }
   }, [pendingId, terrainFetchError, overviewFetchError]);
 
-  // When BOTH terrain and overview for the pending ID arrive, commit atomically
   useEffect(() => {
     if (!pendingId || !pendingTerrain || !pendingOverview) return;
-    if (
-      pendingTerrain.datasetId !== pendingId ||
-      pendingOverview.datasetId !== pendingId
-    )
-      return;
+    if (pendingTerrain.datasetId !== pendingId || pendingOverview.datasetId !== pendingId) return;
 
-    // Commit to context and global store
     setDatasetId(pendingId);
     setTerrain(pendingTerrain);
-    useTerrainStore.getState().setGrids({
-      activeGrid: pendingTerrain,
-      overviewGrid: pendingOverview,
-    });
+    setActiveUserDatasetId(null);
+    useTerrainStore.getState().setGrids({ activeGrid: pendingTerrain, overviewGrid: pendingOverview });
     setLoadingId(null);
     setPendingId(null);
   }, [pendingTerrain, pendingOverview, pendingId, setDatasetId, setTerrain]);
 
-  // ─── Overview for the currently active dataset (initial / post-upload) ─────
+  // ─── Parallel fetch for pending USER dataset ──────────────────────────────
+  const { data: userPendingTerrain, isError: userTerrainError } = useGetUserDatasetsIdTerrain(
+    pendingUserDatasetId ?? "",
+    {
+      query: {
+        enabled: !!pendingUserDatasetId,
+        queryKey: getGetUserDatasetsIdTerrainQueryKey(pendingUserDatasetId ?? ""),
+      },
+    },
+  );
+
+  const { data: userPendingOverview, isError: userOverviewError } = useGetUserDatasetsIdOverview(
+    pendingUserDatasetId ?? "",
+    {
+      query: {
+        enabled: !!pendingUserDatasetId,
+        queryKey: getGetUserDatasetsIdOverviewQueryKey(pendingUserDatasetId ?? ""),
+      },
+    },
+  );
+
+  useEffect(() => {
+    if (!pendingUserDatasetId) return;
+    if (userTerrainError || userOverviewError) {
+      setLoadingId(null);
+      setPendingUserDatasetId(null);
+    }
+  }, [pendingUserDatasetId, userTerrainError, userOverviewError]);
+
+  useEffect(() => {
+    if (!pendingUserDatasetId || !userPendingTerrain || !userPendingOverview) return;
+    if (
+      userPendingTerrain.datasetId !== pendingUserDatasetId ||
+      userPendingOverview.datasetId !== pendingUserDatasetId
+    )
+      return;
+
+    setTerrain(userPendingTerrain);
+    setDatasetId(null);
+    setActiveUserDatasetId(pendingUserDatasetId);
+    useTerrainStore.getState().setGrids({
+      activeGrid: userPendingTerrain,
+      overviewGrid: userPendingOverview,
+    });
+    setLoadingId(null);
+    setPendingUserDatasetId(null);
+  }, [userPendingTerrain, userPendingOverview, pendingUserDatasetId, setTerrain, setDatasetId]);
+
+  // ─── Overview for the active dataset (initial / background) ───────────────
   const activeId = pendingId ? "" : (datasetId ?? "");
   const { data: activeOverviewData } = useGetDatasetsIdOverview(activeId, {
     query: {
@@ -106,29 +168,47 @@ export const DatasetPanel: React.FC = () => {
 
   const activeOverviewWrittenRef = useRef<string | null>(null);
   useEffect(() => {
-    if (
-      !activeOverviewData ||
-      !terrain ||
-      activeOverviewWrittenRef.current === activeId
-    )
-      return;
+    if (!activeOverviewData || !terrain || activeOverviewWrittenRef.current === activeId) return;
     activeOverviewWrittenRef.current = activeId;
-    useTerrainStore.getState().setGrids({
-      activeGrid: terrain,
-      overviewGrid: activeOverviewData,
-    });
+    useTerrainStore.getState().setGrids({ activeGrid: terrain, overviewGrid: activeOverviewData });
   }, [activeOverviewData, terrain, activeId]);
 
-  const handleSelect = (ds: DatasetMeta) => {
+  // ─── Dataset click handlers ────────────────────────────────────────────────
+  const handleSelectPreset = (ds: DatasetMeta) => {
     if (ds.id === datasetId && !pendingId) return;
     setLoadingId(ds.id);
-    setPendingId(ds.id); // triggers parallel terrain + overview fetch
+    setPendingId(ds.id);
+    setPendingUserDatasetId(null);
+  };
+
+  const handleSelectUserDataset = (ds: UserDatasetMeta) => {
+    if (ds.id === activeUserDatasetId && !pendingUserDatasetId) return;
+    setLoadingId(ds.id);
+    setPendingUserDatasetId(ds.id);
+    setPendingId(null);
+  };
+
+  // ─── Delete user dataset ───────────────────────────────────────────────────
+  const deleteMutation = useDeleteUserDatasetsId();
+
+  const handleDelete = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    deleteMutation.mutate(
+      { id },
+      {
+        onSuccess: () => {
+          void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+          if (activeUserDatasetId === id) {
+            setActiveUserDatasetId(null);
+          }
+        },
+      },
+    );
   };
 
   // ─── Upload ────────────────────────────────────────────────────────────────
   const postDatasetsUpload = usePostDatasetsUpload();
 
-  // Simulated progress bar
   const progressTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
     if (postDatasetsUpload.isPending) {
@@ -181,6 +261,12 @@ export const DatasetPanel: React.FC = () => {
               activeGrid: data.terrain,
               overviewGrid: data.overview,
             });
+            if (data.savedDatasetId) {
+              setActiveUserDatasetId(data.savedDatasetId);
+              void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+            } else {
+              setActiveUserDatasetId(null);
+            }
             setUploadOpen(false);
           },
           onError: (err) => {
@@ -189,7 +275,7 @@ export const DatasetPanel: React.FC = () => {
         },
       );
     },
-    [postDatasetsUpload, setDatasetId, setTerrain],
+    [postDatasetsUpload, setDatasetId, setTerrain, qc],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -200,6 +286,9 @@ export const DatasetPanel: React.FC = () => {
     disabled: postDatasetsUpload.isPending,
   });
 
+  // ─── Render ────────────────────────────────────────────────────────────────
+  const anyLoading = datasetsLoading || userDatasetsLoading;
+
   return (
     <div style={{ ...PANEL, pointerEvents: "auto" }} className="select-none">
       {/* Header */}
@@ -208,42 +297,33 @@ export const DatasetPanel: React.FC = () => {
         className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors rounded-t"
         style={{ cursor: "pointer" }}
       >
-        <span
-          className="uppercase tracking-widest"
-          style={{ fontSize: 10, ...CYAN, fontWeight: 700 }}
-        >
+        <span className="uppercase tracking-widest" style={{ fontSize: 10, ...CYAN, fontWeight: 700 }}>
           ▼ Datasets
         </span>
         <div className="flex items-center gap-2">
-          {datasetsLoading && (
-            <span className="animate-spin" style={{ fontSize: 10 }}>
-              ◌
-            </span>
+          {anyLoading && (
+            <span className="animate-spin" style={{ fontSize: 10 }}>◌</span>
           )}
-          <span style={{ color: "#475569", fontSize: 12 }}>
-            {collapsed ? "▸" : "▾"}
-          </span>
+          <span style={{ color: "#475569", fontSize: 12 }}>{collapsed ? "▸" : "▾"}</span>
         </div>
       </button>
 
       {!collapsed && (
         <div>
-          {/* Dataset list */}
+          {/* ── Built-in dataset list ── */}
           <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}>
             {(datasets ?? []).map((ds) => {
-              const active = ds.id === datasetId && !pendingId;
+              const active = ds.id === datasetId && !pendingId && !activeUserDatasetId;
               const loading = ds.id === loadingId;
               return (
                 <button
                   key={ds.id}
                   data-testid={`btn-dataset-${ds.id}`}
-                  onClick={() => handleSelect(ds)}
+                  onClick={() => handleSelectPreset(ds)}
                   className="w-full text-left px-3 py-2 transition-colors hover:bg-white/5"
                   style={{
                     background: active ? "rgba(0,229,255,0.07)" : "transparent",
-                    borderLeft: active
-                      ? "2px solid #00e5ff"
-                      : "2px solid transparent",
+                    borderLeft: active ? "2px solid #00e5ff" : "2px solid transparent",
                     cursor: "pointer",
                   }}
                 >
@@ -253,46 +333,24 @@ export const DatasetPanel: React.FC = () => {
                         fontSize: 11,
                         fontWeight: active ? 700 : 400,
                         color: active ? "#00e5ff" : "#cbd5e1",
-                        textShadow: active
-                          ? "0 0 6px rgba(0,229,255,0.4)"
-                          : "none",
+                        textShadow: active ? "0 0 6px rgba(0,229,255,0.4)" : "none",
                       }}
                     >
                       {ds.name}
                     </span>
                     <span style={{ fontSize: 9, color: "#334155" }}>
                       {loading ? (
-                        <span
-                          className="animate-pulse"
-                          style={{ color: "#00e5ff" }}
-                        >
-                          ◌
-                        </span>
-                      ) : ds.waterType === "saltwater" ? (
-                        "≋"
-                      ) : (
-                        "~"
-                      )}
+                        <span className="animate-pulse" style={{ color: "#00e5ff" }}>◌</span>
+                      ) : ds.waterType === "saltwater" ? "≋" : "~"}
                     </span>
                   </div>
-                  <div
-                    style={{
-                      fontSize: 9,
-                      color: "#475569",
-                      marginTop: 1,
-                      letterSpacing: "0.05em",
-                    }}
-                  >
+                  <div style={{ fontSize: 9, color: "#475569", marginTop: 1, letterSpacing: "0.05em" }}>
                     {ds.minDepth}m – {ds.maxDepth}m
                   </div>
                   <div
                     style={{
-                      fontSize: 9,
-                      color: "#334155",
-                      marginTop: 1,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
+                      fontSize: 9, color: "#334155", marginTop: 1,
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                     }}
                   >
                     {ds.description}
@@ -302,43 +360,121 @@ export const DatasetPanel: React.FC = () => {
             })}
           </div>
 
-          {/* Upload accordion */}
+          {/* ── My Uploads section (signed-in only) ── */}
+          {isSignedIn && (
+            <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}>
+              <div
+                className="px-3 py-1 flex items-center gap-2"
+                style={{ fontSize: 9, letterSpacing: "0.12em", color: "#334155" }}
+              >
+                <span>▲ MY UPLOADS</span>
+                {userDatasetsLoading && (
+                  <span className="animate-spin" style={{ fontSize: 9, color: "#475569" }}>◌</span>
+                )}
+              </div>
+
+              {(userDatasets ?? []).length === 0 && !userDatasetsLoading && (
+                <div style={{ fontSize: 9, color: "#334155", padding: "4px 12px 8px" }}>
+                  No saved terrains yet
+                </div>
+              )}
+
+              {(userDatasets ?? []).map((ds) => {
+                const active = ds.id === activeUserDatasetId && !pendingUserDatasetId;
+                const loading = ds.id === loadingId;
+                const deleting = deleteMutation.isPending && deleteMutation.variables?.id === ds.id;
+                const date = new Date(ds.createdAt).toLocaleDateString(undefined, {
+                  month: "short", day: "numeric",
+                });
+                return (
+                  <button
+                    key={ds.id}
+                    data-testid={`btn-user-dataset-${ds.id}`}
+                    onClick={() => handleSelectUserDataset(ds)}
+                    className="w-full text-left px-3 py-2 transition-colors hover:bg-white/5 group"
+                    style={{
+                      background: active ? "rgba(0,229,255,0.07)" : "transparent",
+                      borderLeft: active ? "2px solid rgba(0,229,255,0.6)" : "2px solid transparent",
+                      cursor: "pointer",
+                      opacity: deleting ? 0.4 : 1,
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span
+                        style={{
+                          fontSize: 11, fontWeight: active ? 700 : 400,
+                          color: active ? "#00e5ff" : "#94a3b8",
+                          textShadow: active ? "0 0 6px rgba(0,229,255,0.3)" : "none",
+                          flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {ds.name}
+                      </span>
+                      <div className="flex items-center gap-1 ml-1">
+                        {loading && (
+                          <span className="animate-pulse" style={{ fontSize: 9, color: "#00e5ff" }}>◌</span>
+                        )}
+                        {!loading && (
+                          <span
+                            data-testid={`btn-delete-user-dataset-${ds.id}`}
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => handleDelete(e, ds.id)}
+                            onKeyDown={(e) => e.key === "Enter" && handleDelete(e as unknown as React.MouseEvent, ds.id)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity"
+                            style={{
+                              fontSize: 10, color: "#475569", cursor: "pointer", lineHeight: 1,
+                              padding: "1px 3px", borderRadius: 2,
+                            }}
+                          >
+                            ×
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 9, color: "#334155", marginTop: 1, letterSpacing: "0.05em",
+                        display: "flex", justifyContent: "space-between",
+                      }}
+                    >
+                      <span>{ds.minDepth}m – {ds.maxDepth}m</span>
+                      <span style={{ color: "#1e293b" }}>{date}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── Upload accordion ── */}
           <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}>
             <button
               onClick={() => setUploadOpen((o) => !o)}
               className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
               style={{ cursor: "pointer" }}
             >
-              <span
-                style={{ fontSize: 9, letterSpacing: "0.15em", color: "#475569" }}
-              >
+              <span style={{ fontSize: 9, letterSpacing: "0.15em", color: "#475569" }}>
                 ▲ UPLOAD CUSTOM TERRAIN
               </span>
-              <span style={{ color: "#475569", fontSize: 10 }}>
-                {uploadOpen ? "−" : "+"}
-              </span>
+              <span style={{ color: "#475569", fontSize: 10 }}>{uploadOpen ? "−" : "+"}</span>
             </button>
 
             {uploadOpen && (
               <div className="px-2 pb-2">
-                {/* Progress bar (shown during upload) */}
                 {postDatasetsUpload.isPending && (
                   <div
                     style={{
-                      height: 3,
-                      background: "rgba(0,229,255,0.1)",
-                      borderRadius: 2,
-                      marginBottom: 6,
-                      overflow: "hidden",
+                      height: 3, background: "rgba(0,229,255,0.1)",
+                      borderRadius: 2, marginBottom: 6, overflow: "hidden",
                     }}
                   >
                     <div
                       style={{
-                        height: "100%",
-                        width: `${uploadProgress}%`,
+                        height: "100%", width: `${uploadProgress}%`,
                         background: "linear-gradient(90deg, #0d47a1, #00e5ff)",
-                        borderRadius: 2,
-                        transition: "width 0.1s linear",
+                        borderRadius: 2, transition: "width 0.1s linear",
                         boxShadow: "0 0 6px rgba(0,229,255,0.6)",
                       }}
                     />
@@ -351,9 +487,7 @@ export const DatasetPanel: React.FC = () => {
                   className="text-center cursor-pointer transition-colors rounded"
                   style={{
                     border: `1px dashed ${isDragActive ? "#00e5ff" : "rgba(0,229,255,0.2)"}`,
-                    background: isDragActive
-                      ? "rgba(0,229,255,0.06)"
-                      : "rgba(0,0,0,0.2)",
+                    background: isDragActive ? "rgba(0,229,255,0.06)" : "rgba(0,0,0,0.2)",
                     padding: "12px 8px",
                     opacity: postDatasetsUpload.isPending ? 0.6 : 1,
                   }}
@@ -361,32 +495,21 @@ export const DatasetPanel: React.FC = () => {
                   <input {...getInputProps()} />
                   {postDatasetsUpload.isPending ? (
                     <div>
-                      <div
-                        className="animate-pulse"
-                        style={{ ...CYAN, fontSize: 10, marginBottom: 2 }}
-                      >
+                      <div className="animate-pulse" style={{ ...CYAN, fontSize: 10, marginBottom: 2 }}>
                         ◌ Uploading &amp; parsing...
                       </div>
-                      <div style={{ fontSize: 9, color: "#334155" }}>
-                        {Math.round(uploadProgress)}%
-                      </div>
+                      <div style={{ fontSize: 9, color: "#334155" }}>{Math.round(uploadProgress)}%</div>
                     </div>
                   ) : (
                     <>
-                      <div
-                        style={{ fontSize: 10, color: "#64748b", marginBottom: 3 }}
-                      >
+                      <div style={{ fontSize: 10, color: "#64748b", marginBottom: 3 }}>
                         Drop .xyz or .csv here
                       </div>
                       <div style={{ fontSize: 9, color: "#334155" }}>
-                        up to 50 MB
+                        up to 50 MB{isSignedIn ? " · auto-saved to account" : ""}
                       </div>
                       {uploadError && (
-                        <div
-                          style={{ fontSize: 9, color: "#f87171", marginTop: 4 }}
-                        >
-                          ⚠ {uploadError}
-                        </div>
+                        <div style={{ fontSize: 9, color: "#f87171", marginTop: 4 }}>⚠ {uploadError}</div>
                       )}
                     </>
                   )}
