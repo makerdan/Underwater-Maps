@@ -318,10 +318,14 @@ const FRESHWATER_ZONES = [
 // Depth-based heuristic classifier (used when the AI call fails).
 //
 // Bands depths into four equal-count percentile buckets (shallow → deep) and
-// maps each bucket to one of four substrate labels per water type. Pure /
-// deterministic so it's easy to unit-test. The chosen labels intentionally
-// match the four representative texture slots used by the client shader so
-// the resulting overlay is consistent with paint mode.
+// maps each bucket to one of four substrate labels per water type. A second
+// pass uses local roughness (mean absolute depth difference to 8-neighbours)
+// to override the highest-roughness cells with the rocky/hard substrate label
+// for that water type — this breaks up the obvious horizontal quartile bands
+// you get from depth alone and surfaces ridges, scarps and isolated rocks.
+// Pure / deterministic so it's easy to unit-test. The chosen labels
+// intentionally match the representative texture slots used by the client
+// shader so the resulting overlay is consistent with paint mode.
 // ---------------------------------------------------------------------------
 
 /** Shallow → deep substrate labels for the heuristic classifier. */
@@ -339,9 +343,51 @@ export const FRESHWATER_HEURISTIC_BANDS = [
   "silt_deep",          // deepest 25%
 ] as const;
 
+/** Label used to mark high-roughness cells regardless of depth band. */
+export const SALTWATER_ROUGH_OVERRIDE = "basalt_rock";
+export const FRESHWATER_ROUGH_OVERRIDE = "rocky_shoreline";
+
+const HEURISTIC_GRID_W = 32;
+const HEURISTIC_GRID_H = 32;
+
 /**
- * Classify `depths` (length 1024, 32×32 row-major) into one of four substrate
- * bands using percentile thresholds (quartiles of the supplied values).
+ * Per-cell roughness = mean absolute depth difference to in-bounds 8-neighbours.
+ * Returns one value per cell (length GRID_W*GRID_H). Edge/corner cells average
+ * over fewer neighbours but use the same metric, so they're comparable to
+ * interior cells without an arbitrary edge weighting.
+ */
+function computeLocalRoughness(cleaned: number[]): number[] {
+  const N = HEURISTIC_GRID_W * HEURISTIC_GRID_H;
+  const out = new Array<number>(N);
+  for (let row = 0; row < HEURISTIC_GRID_H; row++) {
+    for (let col = 0; col < HEURISTIC_GRID_W; col++) {
+      const i = row * HEURISTIC_GRID_W + col;
+      const d = cleaned[i] as number;
+      let sum = 0;
+      let count = 0;
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          const nr = row + dr;
+          const nc = col + dc;
+          if (nr < 0 || nr >= HEURISTIC_GRID_H) continue;
+          if (nc < 0 || nc >= HEURISTIC_GRID_W) continue;
+          sum += Math.abs(d - (cleaned[nr * HEURISTIC_GRID_W + nc] as number));
+          count++;
+        }
+      }
+      out[i] = count > 0 ? sum / count : 0;
+    }
+  }
+  return out;
+}
+
+/**
+ * Classify `depths` (length 1024, 32×32 row-major) into substrate labels using
+ * depth quartiles plus a local-roughness override. Cells whose roughness sits
+ * above the 75th percentile (and is strictly positive) are relabeled to the
+ * rocky/hard substrate for the water type — so ridges, scarps and isolated
+ * hard features show through instead of being smoothed into pure depth bands.
  *
  * Always returns exactly 1024 labels — short inputs are right-padded with the
  * shallowest label and long inputs are truncated. Non-finite values are
@@ -355,8 +401,11 @@ export function heuristicClassifyByDepth(
   const bands = waterType === "freshwater"
     ? FRESHWATER_HEURISTIC_BANDS
     : SALTWATER_HEURISTIC_BANDS;
+  const roughOverride = waterType === "freshwater"
+    ? FRESHWATER_ROUGH_OVERRIDE
+    : SALTWATER_ROUGH_OVERRIDE;
 
-  const N = 1024;
+  const N = HEURISTIC_GRID_W * HEURISTIC_GRID_H;
   const out = new Array<string>(N);
 
   // Normalize: take first N, replace NaN/Infinity with a finite minimum.
@@ -379,15 +428,35 @@ export function heuristicClassifyByDepth(
     if (!Number.isFinite(cleaned[i] as number)) cleaned[i] = minFinite;
   }
 
-  // Percentile thresholds via sorted copy. Using indices N*k/4 yields four
-  // approximately equal-count bands regardless of the input distribution.
+  // Depth percentile thresholds via sorted copy.
   const sorted = cleaned.slice().sort((a, b) => a - b);
   const q1 = sorted[Math.floor(N * 0.25)] as number;
   const q2 = sorted[Math.floor(N * 0.5)] as number;
   const q3 = sorted[Math.floor(N * 0.75)] as number;
+  const depthRange = (sorted[N - 1] as number) - (sorted[0] as number);
+
+  // Roughness pass — promote cells with locally-steep gradients to the rocky
+  // override label. Threshold is the larger of:
+  //   * the 75th-percentile roughness (broadly-noisy fields then promote
+  //     roughly their top quartile, with ties on the threshold left alone),
+  //   * 5% of the overall depth range (so smooth fields like a global ramp
+  //     stay banded by depth — interior roughness equals q3 and isn't strictly
+  //     greater — while isolated spikes/ridges in an otherwise flat field
+  //     still get picked up because their per-cell roughness is large relative
+  //     to the depth range).
+  // Comparison is strict (`>`) and the threshold must be > 0, so a perfectly
+  // flat grid (roughness 0 everywhere) never triggers an override.
+  const roughness = computeLocalRoughness(cleaned);
+  const sortedRough = roughness.slice().sort((a, b) => a - b);
+  const roughQ3 = sortedRough[Math.floor(N * 0.75)] as number;
+  const roughThreshold = Math.max(roughQ3, depthRange * 0.05);
 
   for (let i = 0; i < N; i++) {
     const d = cleaned[i] as number;
+    if (roughThreshold > 0 && (roughness[i] as number) > roughThreshold) {
+      out[i] = roughOverride;
+      continue;
+    }
     const band = d <= q1 ? 0 : d <= q2 ? 1 : d <= q3 ? 2 : 3;
     out[i] = bands[band] as string;
   }
