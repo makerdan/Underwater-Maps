@@ -6,15 +6,13 @@ import {
 } from "@/lib/habitat";
 
 describe("freshwater species catalogue", () => {
-  it("includes the eight expected freshwater species", () => {
-    expect(FRESHWATER_SPECIES_IDS).toHaveLength(8);
+  it("includes the six expected freshwater species", () => {
+    expect(FRESHWATER_SPECIES_IDS).toHaveLength(6);
     expect(FRESHWATER_SPECIES_IDS).toEqual(
       expect.arrayContaining([
-        "lake_trout",
         "rainbow_trout",
         "walleye",
         "largemouth_bass",
-        "channel_catfish",
         "northern_pike",
         "yellow_perch",
         "crayfish",

@@ -353,6 +353,8 @@ export interface TerrainData {
   maxLat: number;
   centerLon: number;
   centerLat: number;
+  /** True when the grid was produced from the synthetic fbm fallback because the upstream bathymetry service was unreachable. */
+  synthetic?: boolean;
 }
 
 export interface TerrainUploadInput {

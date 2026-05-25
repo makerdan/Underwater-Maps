@@ -744,7 +744,7 @@ function OverviewSection() {
   );
 }
 
-const MARKER_TYPE_OPTIONS: { value: MarkerType; label: string }[] = [
+const SALTWATER_MARKER_TYPE_OPTIONS: { value: MarkerType; label: string }[] = [
   { value: "fish", label: "🐟 Fish" },
   { value: "shipwreck", label: "⚓ Shipwreck" },
   { value: "coral", label: "🪸 Coral" },
@@ -753,8 +753,27 @@ const MARKER_TYPE_OPTIONS: { value: MarkerType; label: string }[] = [
   { value: "depth_pole", label: "📏 Depth Pole" },
 ];
 
+const FRESHWATER_MARKER_TYPE_OPTIONS: { value: MarkerType; label: string }[] = [
+  { value: "fish", label: "🐟 Fish" },
+  { value: "bass", label: "🎣 Bass" },
+  { value: "trout", label: "🐠 Trout" },
+  { value: "pike", label: "🦈 Pike" },
+  { value: "walleye", label: "🐟 Walleye" },
+  { value: "crayfish", label: "🦞 Crayfish" },
+  { value: "vegetation", label: "🌿 Vegetation" },
+  { value: "log", label: "🪵 Submerged Log" },
+  { value: "sample", label: "🧪 Water Sample" },
+  { value: "shipwreck", label: "⚓ Shipwreck" },
+  { value: "custom", label: "📍 Custom" },
+  { value: "depth_pole", label: "📏 Depth Pole" },
+];
+
 function MarkersSection() {
   const s = useSettingsStore();
+  const MARKER_TYPE_OPTIONS =
+    s.waterType === "freshwater"
+      ? FRESHWATER_MARKER_TYPE_OPTIONS
+      : SALTWATER_MARKER_TYPE_OPTIONS;
 
   const toggleMarkerType = (type: MarkerType) => {
     const current = s.visibleMarkerTypes;

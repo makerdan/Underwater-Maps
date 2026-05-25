@@ -17,6 +17,14 @@ export interface TerrainGrid {
   maxLat: number;
   centerLon: number;
   centerLat: number;
+  /**
+   * True when the grid was generated from the synthetic fbm fallback
+   * because the upstream bathymetry service (e.g. GEBCO WCS) was
+   * unreachable or returned an unusable response. Clients can surface
+   * a "synthetic data" badge so users know the terrain is not a real
+   * survey.
+   */
+  synthetic?: boolean;
   version?: number;
 }
 
@@ -358,6 +366,7 @@ export async function buildTerrainGrid(
   let depths: number[];
   let minDepth: number;
   let maxDepth: number;
+  let synthetic = false;
 
   try {
     console.info(`[terrain] Fetching GEBCO WCS for ${datasetId} at ${N}×${N}…`);
@@ -374,6 +383,7 @@ export async function buildTerrainGrid(
     depths = synth.depths;
     minDepth = synth.minDepth;
     maxDepth = synth.maxDepth;
+    synthetic = true;
   }
 
   // Smooth spikes before finalising the grid (skipped when the user has
@@ -406,6 +416,7 @@ export async function buildTerrainGrid(
     maxLat: meta.bbox.maxLat,
     centerLon: meta.centerLon,
     centerLat: meta.centerLat,
+    synthetic,
   };
 
   memoryCache.set(cacheKey, grid);

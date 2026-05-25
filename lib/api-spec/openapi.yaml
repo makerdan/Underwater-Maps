@@ -1045,6 +1045,9 @@ components:
           type: number
         centerLat:
           type: number
+        synthetic:
+          type: boolean
+          description: True when the grid was produced from the synthetic fbm fallback because the upstream bathymetry service was unreachable.
       required:
         - datasetId
         - name

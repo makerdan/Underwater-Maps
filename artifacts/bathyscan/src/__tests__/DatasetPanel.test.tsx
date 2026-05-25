@@ -77,6 +77,7 @@ vi.mock("@/lib/offlineStore", () => ({
 vi.mock("@workspace/api-client-react", () => ({
   useGetDatasets: () => ({ data: datasets, isLoading: false }),
   useGetUserDatasets: () => ({ data: [], isLoading: false }),
+  usePutSettings: () => ({ mutate: vi.fn() }),
   useGetDatasetsIdOverview: () => ({ data: null, isError: false }),
   useGetDatasetsIdTerrain: () => ({ data: null, isError: false }),
   useGetUserDatasetsIdTerrain: () => ({ data: null, isError: false }),

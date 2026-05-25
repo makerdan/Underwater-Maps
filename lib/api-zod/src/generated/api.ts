@@ -68,7 +68,8 @@ export const GetDatasetsIdTerrainResponse = zod.object({
   "minLat": zod.number(),
   "maxLat": zod.number(),
   "centerLon": zod.number(),
-  "centerLat": zod.number()
+  "centerLat": zod.number(),
+  "synthetic": zod.boolean().optional().describe('True when the grid was produced from the synthetic fbm fallback because the upstream bathymetry service was unreachable.')
 })
 
 
@@ -95,7 +96,8 @@ export const GetDatasetsIdOverviewResponse = zod.object({
   "minLat": zod.number(),
   "maxLat": zod.number(),
   "centerLon": zod.number(),
-  "centerLat": zod.number()
+  "centerLat": zod.number(),
+  "synthetic": zod.boolean().optional().describe('True when the grid was produced from the synthetic fbm fallback because the upstream bathymetry service was unreachable.')
 })
 
 
@@ -130,7 +132,8 @@ export const PostDatasetsUploadResponse = zod.object({
   "minLat": zod.number(),
   "maxLat": zod.number(),
   "centerLon": zod.number(),
-  "centerLat": zod.number()
+  "centerLat": zod.number(),
+  "synthetic": zod.boolean().optional().describe('True when the grid was produced from the synthetic fbm fallback because the upstream bathymetry service was unreachable.')
 }),
   "overview": zod.object({
   "datasetId": zod.string(),
@@ -147,7 +150,8 @@ export const PostDatasetsUploadResponse = zod.object({
   "minLat": zod.number(),
   "maxLat": zod.number(),
   "centerLon": zod.number(),
-  "centerLat": zod.number()
+  "centerLat": zod.number(),
+  "synthetic": zod.boolean().optional().describe('True when the grid was produced from the synthetic fbm fallback because the upstream bathymetry service was unreachable.')
 }),
   "savedDatasetId": zod.string().optional().describe('UUID of the saved custom dataset row (only present when the request was authenticated)')
 }).describe('Full terrain and overview grids generated from an uploaded file. When the user is authenticated the terrain is also persisted and savedDatasetId is returned.')
@@ -189,7 +193,8 @@ export const GetUserDatasetsIdTerrainResponse = zod.object({
   "minLat": zod.number(),
   "maxLat": zod.number(),
   "centerLon": zod.number(),
-  "centerLat": zod.number()
+  "centerLat": zod.number(),
+  "synthetic": zod.boolean().optional().describe('True when the grid was produced from the synthetic fbm fallback because the upstream bathymetry service was unreachable.')
 })
 
 
@@ -215,7 +220,8 @@ export const GetUserDatasetsIdOverviewResponse = zod.object({
   "minLat": zod.number(),
   "maxLat": zod.number(),
   "centerLon": zod.number(),
-  "centerLat": zod.number()
+  "centerLat": zod.number(),
+  "synthetic": zod.boolean().optional().describe('True when the grid was produced from the synthetic fbm fallback because the upstream bathymetry service was unreachable.')
 })
 
 

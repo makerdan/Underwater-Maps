@@ -36,13 +36,17 @@ const FlyControlsScene: React.FC<FlyControlsSceneProps> = ({ terrainMeshRef }) =
   const paintMode = useUiStore((s) => s.zonePaintMode);
   const { orbitTargetArr } = useFlyControls({ terrainMeshRef, lightRef });
   const lampIntensity = useSettingsStore((s) => s.lampIntensity);
+  const waterType = useSettingsStore((s) => s.waterType);
+  // Freshwater lakes carry less particulate than the open ocean, so the
+  // submersible lamp reads cooler / less amber than the deep-sea default.
+  const lampColor = waterType === "freshwater" ? "#eaffff" : "#fff8e8";
 
   return (
     <>
-      {/* Submersible lamp — intensity driven by user setting */}
+      {/* Submersible lamp — colour + intensity driven by water type / user setting */}
       <pointLight
         ref={lightRef}
-        color="#fff8e8"
+        color={lampColor}
         intensity={lampIntensity}
         distance={40}
         decay={2}

@@ -386,11 +386,9 @@ export const SALTWATER_SPECIES_IDS: SaltwaterSpeciesId[] = [
 ];
 
 export const FRESHWATER_SPECIES_IDS: FreshwaterSpeciesId[] = [
-  "lake_trout",
   "rainbow_trout",
   "walleye",
   "largemouth_bass",
-  "channel_catfish",
   "northern_pike",
   "yellow_perch",
   "crayfish",

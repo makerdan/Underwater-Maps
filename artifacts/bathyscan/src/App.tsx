@@ -227,13 +227,28 @@ function Main() {
   // 1) Clear derived state computed for the previous environment
   //    (terrain grids, zone classifications, habitat cache).
   // 2) Auto-load the first preset of the new water type.
+  // 3) Auto-switch the depth colormap to the mode-appropriate default,
+  //    but only if the user hasn't manually picked a non-default theme.
   const prevWaterTypeRef = useRef(waterType);
   useEffect(() => {
     if (prevWaterTypeRef.current === waterType) return;
+    const prev = prevWaterTypeRef.current;
     prevWaterTypeRef.current = waterType;
     try { useTerrainStore.getState().setGrids({ activeGrid: null as never }); } catch {}
     try { useClassificationStore.getState().clearZoneMap?.(); } catch {}
     try { useHabitatStore.getState().clear?.(); } catch {}
+    // Colormap auto-switch: only swap when the current theme is the
+    // *previous* environment's default — otherwise respect the user's
+    // explicit choice (thermal/viridis/grayscale).
+    try {
+      const st = useSettingsStore.getState();
+      const currentTheme = st.colormapTheme;
+      const prevDefault = prev === "freshwater" ? "freshwater" : "ocean";
+      const nextDefault = waterType === "freshwater" ? "freshwater" : "ocean";
+      if (currentTheme === prevDefault && currentTheme !== nextDefault) {
+        st.setColormapTheme?.(nextDefault);
+      }
+    } catch {}
     const first = (datasets ?? []).find((d) => d.waterType === waterType);
     if (first?.id) setDatasetId(first.id);
     else setDatasetId(null);

@@ -5,6 +5,7 @@
 import React from "react";
 import { useSettingsStore } from "@/lib/settingsStore";
 import type { WaterType } from "@/lib/settingsStore";
+import { usePutSettings } from "@workspace/api-client-react";
 
 interface WaterTypeToggleProps {
   onChange?: (v: WaterType) => void;
@@ -18,6 +19,7 @@ const OPTIONS: { value: WaterType; label: string; icon: string; color: string }[
 export const WaterTypeToggle: React.FC<WaterTypeToggleProps> = ({ onChange }) => {
   const waterType = useSettingsStore((s) => s.waterType);
   const setWaterType = useSettingsStore((s) => s.setWaterType);
+  const putSettings = usePutSettings();
 
   const handleSelect = (v: WaterType) => {
     if (v === waterType) return;
@@ -25,6 +27,13 @@ export const WaterTypeToggle: React.FC<WaterTypeToggleProps> = ({ onChange }) =>
     // state (terrain/classification/habitat) and auto-loads the first
     // preset of the new water type.
     setWaterType(v);
+    // Persist immediately so the choice survives a reload even if the
+    // user never visits the Settings page (which also persists on save).
+    try {
+      putSettings.mutate({ data: { waterType: v } as never });
+    } catch {
+      /* best-effort; settings store still has the value locally */
+    }
     onChange?.(v);
   };
 
