@@ -469,7 +469,7 @@ export const HUD: React.FC = () => {
                           letterSpacing: "inherit",
                         }}
                       >
-                        <span style={{ color: "#475569" }}>🌡 TEMP </span>
+                        <span style={{ color: "#475569" }}>TEMP </span>
                         <span style={{ color: "#fb923c", textShadow: "0 0 6px rgba(251,146,60,0.4)" }}>
                           {formatTemperature(sample.celsius, { units }).toUpperCase()}
                         </span>
