@@ -9,7 +9,7 @@ const BINDINGS = [
   { key: "Tab", action: "Toggle orbit / fly mode" },
   { key: "G / R-click", action: "Drop GPS pin" },
   { key: "Esc", action: "Release mouse" },
-  { key: "O", action: "Overview map (coming soon)" },
+  { key: "O", action: "Toggle overview map" },
 ];
 
 export const ControlsLegend: React.FC = () => {
