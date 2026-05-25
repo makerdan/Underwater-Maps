@@ -221,55 +221,11 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       colorAttr.needsUpdate = true;
     }, [paletteShallow, paletteDeep, colormapTheme, grid, geometry]);
 
-    // Substrate colour mode — overrides depth colormap with CMECS substrate class colours.
-    // Computed from the slope attribute already baked into the geometry + grid depths.
-    const substrateColorMode = useUiStore((s) => s.substrateColorMode);
+    // Substrate colour mode no longer recolours the mesh from slope-derived
+    // heuristics. The real ShoreZone polygons are drawn as a draped overlay
+    // by <SubstrateLayer> instead; the terrain mesh keeps its depth colormap.
     const terrainExaggeration = useSettingsStore((s) => s.terrainExaggeration);
     const habitatOverlayIntensity = useSettingsStore((s) => s.habitatOverlayIntensity);
-    useEffect(() => {
-      const colorAttr = geometry.getAttribute("color") as THREE.BufferAttribute | undefined;
-      const slopeAttr = geometry.getAttribute("slope") as THREE.BufferAttribute | undefined;
-      if (!colorAttr) return;
-      const colors = colorAttr.array as Float32Array;
-      const { depths, minDepth, maxDepth, resolution: N } = grid;
-      const depthRange = (maxDepth - minDepth) || 1;
-
-      if (substrateColorMode && slopeAttr) {
-        // CMECS substrate colours (matches server /substrate route)
-        const SUBSTRATE_COLORS: Record<string, [number, number, number]> = {
-          bedrock: [0x6b / 255, 0x6b / 255, 0x6b / 255],
-          gravel:  [0xb0 / 255, 0x95 / 255, 0x6a / 255],
-          sand:    [0xe2 / 255, 0xd5 / 255, 0xa0 / 255],
-          mud:     [0x8b / 255, 0x73 / 255, 0x55 / 255],
-        };
-        const slopes = slopeAttr.array as Float32Array;
-        for (let i = 0; i < N * N; i++) {
-          const slope = slopes[i] ?? 0;
-          const depth = depths[i] ?? 0;
-          let key: string;
-          if (slope > 30) key = "bedrock";
-          else if (slope > 12 || (slope > 6 && depth < 40)) key = "gravel";
-          else if (depth <= 80) key = "sand";
-          else key = "mud";
-          const rgb = SUBSTRATE_COLORS[key]!;
-          colors[i * 3]     = rgb[0];
-          colors[i * 3 + 1] = rgb[1];
-          colors[i * 3 + 2] = rgb[2];
-        }
-      } else {
-        // Restore depth colormap
-        const toColor = getColormap(colormapTheme);
-        for (let i = 0; i < depths.length; i++) {
-          const depth = depths[i] ?? 0;
-          const t = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
-          const c = toColor(t);
-          colors[i * 3]     = c.r;
-          colors[i * 3 + 1] = c.g;
-          colors[i * 3 + 2] = c.b;
-        }
-      }
-      colorAttr.needsUpdate = true;
-    }, [substrateColorMode, grid, geometry, colormapTheme]);
 
     // Sync grid depth range into shader when grid changes.
     useEffect(() => {

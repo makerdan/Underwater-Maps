@@ -109,6 +109,8 @@ export const HUD: React.FC = () => {
 
   const substrateColorMode = useUiStore((s) => s.substrateColorMode);
   const setSubstrateColorMode = useUiStore((s) => s.setSubstrateColorMode);
+  const selectedSubstrate = useUiStore((s) => s.selectedSubstrate);
+  const setSelectedSubstrate = useUiStore((s) => s.setSelectedSubstrate);
   const efhOverlayEnabled = useUiStore((s) => s.efhOverlayEnabled);
   const setEfhOverlayEnabled = useUiStore((s) => s.setEfhOverlayEnabled);
   const windOverlayActive = useUiStore((s) => s.windOverlayActive);
@@ -736,6 +738,114 @@ export const HUD: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* ── Substrate detail card (shown when a ShoreZone polygon is clicked) ── */}
+      {selectedSubstrate && (
+        <div
+          data-testid="substrate-info-card"
+          style={{
+            ...PANEL,
+            position: "absolute",
+            top: "50%",
+            right: 16,
+            transform: "translateY(-50%)",
+            pointerEvents: "auto",
+            maxWidth: 280,
+            minWidth: 220,
+            fontSize: 10,
+            borderLeft: `3px solid ${selectedSubstrate.color}`,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 6,
+            }}
+          >
+            <span
+              style={{
+                color: "#475569",
+                fontSize: 9,
+                letterSpacing: "0.2em",
+              }}
+            >
+              SHOREZONE UNIT
+            </span>
+            <button
+              onClick={() => setSelectedSubstrate(null)}
+              aria-label="Close substrate info"
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "#64748b",
+                cursor: "pointer",
+                fontSize: 14,
+                lineHeight: 1,
+                padding: 0,
+              }}
+            >
+              ×
+            </button>
+          </div>
+          <div style={{ marginBottom: 4 }}>
+            <span style={{ color: "#475569" }}>CLASS </span>
+            <span style={{ ...CYAN, fontWeight: 700 }}>
+              {selectedSubstrate.shoreZoneClass}
+            </span>
+          </div>
+          <div style={{ marginBottom: 4 }}>
+            <span style={{ color: "#475569" }}>SUBSTRATE </span>
+            <span style={{ color: selectedSubstrate.color, fontWeight: 700 }}>
+              {selectedSubstrate.substrate.toUpperCase()}
+            </span>
+          </div>
+          <div style={{ marginBottom: 4 }}>
+            <span style={{ color: "#475569" }}>CMECS </span>
+            <span style={{ color: "#cbd5e1" }}>{selectedSubstrate.cmecsCode}</span>
+          </div>
+          <div style={{ marginBottom: 4 }}>
+            <span style={{ color: "#475569" }}>UNIT </span>
+            <span style={{ color: "#cbd5e1" }}>{selectedSubstrate.unitId}</span>
+          </div>
+          {(selectedSubstrate.szMaterial || selectedSubstrate.szForm) && (
+            <div style={{ marginBottom: 4, color: "#94a3b8", fontSize: 9 }}>
+              {selectedSubstrate.szMaterial ?? "—"}
+              {" · "}
+              {selectedSubstrate.szForm ?? "—"}
+            </div>
+          )}
+          {typeof selectedSubstrate.areaSqM === "number" && (
+            <div style={{ marginBottom: 4 }}>
+              <span style={{ color: "#475569" }}>AREA </span>
+              <span style={{ color: "#cbd5e1" }}>
+                {Math.round(selectedSubstrate.areaSqM).toLocaleString()} m²
+              </span>
+            </div>
+          )}
+          <div
+            style={{
+              marginTop: 8,
+              paddingTop: 6,
+              borderTop: "1px solid rgba(148,163,184,0.2)",
+              color: "#64748b",
+              fontSize: 9,
+              lineHeight: 1.4,
+            }}
+          >
+            <span>Credit: </span>
+            <a
+              href={selectedSubstrate.creditUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "#7dd3fc", textDecoration: "underline" }}
+            >
+              {selectedSubstrate.sourceName}
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

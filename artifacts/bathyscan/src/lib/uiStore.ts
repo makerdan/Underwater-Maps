@@ -8,6 +8,20 @@ export interface DropInTarget {
   worldZ: number;
 }
 
+export interface SelectedSubstrate {
+  unitId: string;
+  substrate: string;
+  shoreZoneClass: string;
+  cmecsCode: string;
+  color: string;
+  szMaterial: string | null;
+  szForm: string | null;
+  areaSqM: number | null;
+  /** Source / credit metadata from the FeatureCollection. */
+  sourceName: string;
+  creditUrl: string;
+}
+
 interface UiStore {
   pendingDropIn: DropInTarget | null;
   setPendingDropIn: (target: DropInTarget | null) => void;
@@ -23,9 +37,12 @@ interface UiStore {
   /** Which texture slot (0–3) the paint brush is currently set to. */
   zonePaintSlot: 0 | 1 | 2 | 3;
   setZonePaintSlot: (slot: 0 | 1 | 2 | 3) => void;
-  /** Show CMECS substrate colour mode on the terrain mesh (overrides depth colormap). */
+  /** Show real Alaska ShoreZone substrate polygons as a draped overlay. */
   substrateColorMode: boolean;
   setSubstrateColorMode: (enabled: boolean) => void;
+  /** Currently selected substrate polygon (set on click; null = closed card). */
+  selectedSubstrate: SelectedSubstrate | null;
+  setSelectedSubstrate: (s: SelectedSubstrate | null) => void;
   /** Show EFH zone polygon outlines in the 3D scene. */
   efhOverlayEnabled: boolean;
   setEfhOverlayEnabled: (enabled: boolean) => void;
@@ -101,7 +118,10 @@ export const useUiStore = create<UiStore>((set) => ({
   zonePaintSlot: 0,
   setZonePaintSlot: (slot) => set({ zonePaintSlot: slot }),
   substrateColorMode: false,
-  setSubstrateColorMode: (enabled) => set({ substrateColorMode: enabled }),
+  setSubstrateColorMode: (enabled) =>
+    set(enabled ? { substrateColorMode: true } : { substrateColorMode: false, selectedSubstrate: null }),
+  selectedSubstrate: null,
+  setSelectedSubstrate: (s) => set({ selectedSubstrate: s }),
   efhOverlayEnabled: false,
   setEfhOverlayEnabled: (enabled) => set({ efhOverlayEnabled: enabled }),
   findDataPanelOpen: false,
