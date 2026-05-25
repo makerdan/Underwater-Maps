@@ -12,7 +12,9 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export const SETTINGS_SCHEMA_VERSION = 4;
+export const SETTINGS_SCHEMA_VERSION = 5;
+
+export type LandmassStyle = "realistic" | "flat";
 
 /** Source for the ambient (depth-averaged) current vector. */
 export type CurrentsSource = "manual" | "noaa";
@@ -94,6 +96,8 @@ export interface SettingsState {
   showWaterSurface: boolean;
   /** Render above-water landmass meshing from the terrain topography array (default off). */
   showLandmass: boolean;
+  /** How the landmass is coloured: realistic elevation ramp or a single flat neutral colour. */
+  landmassStyle: LandmassStyle;
 
   // ── HUD & Layout ──────────────────────────────────────────────────────
   hudOpacity: number;
@@ -236,6 +240,7 @@ interface SettingsActions {
   setSmoothTerrainSpikes: (v: boolean) => void;
   setShowWaterSurface: (v: boolean) => void;
   setShowLandmass: (v: boolean) => void;
+  setLandmassStyle: (v: LandmassStyle) => void;
 
   // HUD
   setHudOpacity: (v: number) => void;
@@ -449,6 +454,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   smoothTerrainSpikes: true,
   showWaterSurface: true,
   showLandmass: false,
+  landmassStyle: "realistic",
 
   // HUD
   hudOpacity: 0.75,
@@ -542,7 +548,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "enableCaustics", "fogDensity", "fogColor", "ambientLightIntensity",
     "directionalLightIntensity", "lampIntensity", "lampRange", "antialiasing",
     "textureQuality", "colormapTheme", "smoothTerrainSpikes",
-    "showWaterSurface", "showLandmass",
+    "showWaterSurface", "showLandmass", "landmassStyle",
   ],
   hud: [
     "hudOpacity", "showCrosshairGps", "showCameraPosition", "showSpeedIndicator",
@@ -647,6 +653,7 @@ export const useSettingsStore = create<SettingsStore>()(
         setSmoothTerrainSpikes: setter("smoothTerrainSpikes"),
         setShowWaterSurface: setter("showWaterSurface"),
         setShowLandmass: setter("showLandmass"),
+        setLandmassStyle: setter("landmassStyle"),
 
         // HUD
         setHudOpacity: setter("hudOpacity"),

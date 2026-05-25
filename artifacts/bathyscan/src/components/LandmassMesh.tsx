@@ -1,11 +1,15 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { MAX_DEPTH_WORLD, WORLD_SIZE } from "@/lib/terrain";
+import { useSettingsStore } from "@/lib/settingsStore";
 import type { TerrainData } from "@workspace/api-client-react";
 
 interface LandmassMeshProps {
   grid: TerrainData;
 }
+
+/** Neutral mid-grey used when the user selects the "flat" landmass style. */
+const FLAT_LANDMASS_COLOR = "#9ca3a3";
 
 // Elevation-based colour ramp stops (in metres above sea level).
 // Below SAND_TOP we blend from wet sand to dry sand; above SNOW_LINE we are pure snow.
@@ -59,7 +63,11 @@ function elevationColor(elev: number, out: THREE.Color): THREE.Color {
  * snow). Vertices at or below sea level also receive a reduced alpha so the
  * land/water seam fades into a soft shoreline instead of a hard line.
  */
-function buildLandmassGeometry(grid: TerrainData, topography: number[]): THREE.BufferGeometry {
+function buildLandmassGeometry(
+  grid: TerrainData,
+  topography: number[],
+  style: "realistic" | "flat",
+): THREE.BufferGeometry {
   const N = grid.resolution;
   const depthRange = (grid.maxDepth - grid.minDepth) || 1;
   const geo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, N - 1, N - 1);
@@ -68,15 +76,22 @@ function buildLandmassGeometry(grid: TerrainData, topography: number[]): THREE.B
   const pos = geo.attributes["position"] as THREE.BufferAttribute;
   const arr = pos.array as Float32Array;
   const colors = new Float32Array(N * N * 4); // RGBA so we can fade the shoreline.
+  const flatColor = new THREE.Color(FLAT_LANDMASS_COLOR);
 
   for (let i = 0; i < N * N; i++) {
     const elev = topography[i] ?? 0;
     arr[i * 3 + 1] = (elev / depthRange) * MAX_DEPTH_WORLD;
 
-    elevationColor(elev, _tmp);
-    colors[i * 4 + 0] = _tmp.r;
-    colors[i * 4 + 1] = _tmp.g;
-    colors[i * 4 + 2] = _tmp.b;
+    if (style === "flat") {
+      colors[i * 4 + 0] = flatColor.r;
+      colors[i * 4 + 1] = flatColor.g;
+      colors[i * 4 + 2] = flatColor.b;
+    } else {
+      elevationColor(elev, _tmp);
+      colors[i * 4 + 0] = _tmp.r;
+      colors[i * 4 + 1] = _tmp.g;
+      colors[i * 4 + 2] = _tmp.b;
+    }
     // Fade the very edge of the coast (0..SHORE_BAND_M) so the seam against
     // the water plane reads as a softened shoreline rather than a clean cut.
     const a = elev <= 0 ? 0 : THREE.MathUtils.smoothstep(elev, 0, SHORE_BAND_M);
@@ -98,10 +113,11 @@ export const LandmassMesh: React.FC<LandmassMeshProps> = ({ grid }) => {
   const prevGeoRef = useRef<THREE.BufferGeometry | null>(null);
 
   const topography = grid.topography;
+  const landmassStyle = useSettingsStore((s) => s.landmassStyle);
   const geometry = useMemo(() => {
     if (!topography || topography.length !== grid.resolution * grid.resolution) return null;
-    return buildLandmassGeometry(grid, topography);
-  }, [grid, topography]);
+    return buildLandmassGeometry(grid, topography, landmassStyle);
+  }, [grid, topography, landmassStyle]);
 
   const material = useMemo(() => {
     return new THREE.MeshStandardMaterial({

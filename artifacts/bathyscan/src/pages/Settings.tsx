@@ -711,6 +711,16 @@ function VisualsSection() {
             onChange={s.setShowLandmass}
             sublabel="Render above-water terrain (islands, shorelines) when the dataset includes topography. No effect on open-ocean datasets."
           />
+          <SelectRow
+            label="Landmass style"
+            value={s.landmassStyle}
+            onChange={s.setLandmassStyle}
+            options={[
+              { value: "realistic", label: "Realistic (sand → grass → rock → snow)" },
+              { value: "flat", label: "Flat (neutral grey)" },
+            ]}
+            sublabel="Use flat shading when overlaying your own data so terrain colour doesn't compete for attention."
+          />
         </div>
       </AdvancedDisclosure>
     </>
