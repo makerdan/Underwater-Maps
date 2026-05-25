@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import type { TidalDataResult } from "@/hooks/useTidalData";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { formatDistance, formatDepth } from "@/lib/units";
 
 const PANEL: React.CSSProperties = {
@@ -20,8 +21,8 @@ const PANEL: React.CSSProperties = {
 };
 
 const CYAN: React.CSSProperties = { color: "#00e5ff", textShadow: "0 0 6px rgba(0,229,255,0.5)" };
-const DIM: React.CSSProperties = { color: "#94a3b8" };
-const LABEL: React.CSSProperties = { color: "#94a3b8", fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", fontWeight: 600 };
+const DIM: React.CSSProperties = { color: "#cbd5e1" };
+const LABEL: React.CSSProperties = { color: "#cbd5e1", fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", fontWeight: 600 };
 
 function compassLabel(deg: number): string {
   const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
@@ -67,7 +68,8 @@ export const TidePanel: React.FC<TidePanelProps> = ({
   scrubDatetime,
   onScrubChange,
 }) => {
-  const [collapsed, setCollapsed] = useState(false);
+  const collapsed = usePanelCollapseStore((s) => s.collapsed.tide);
+  const togglePanel = usePanelCollapseStore((s) => s.toggle);
   const units = useSettingsStore((s) => s.units);
 
   const today = useMemo(() => {
@@ -124,7 +126,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
       <div
         className="flex items-center justify-between px-2 py-1.5 cursor-pointer"
         style={{ borderBottom: collapsed ? "none" : "1px solid rgba(0,229,255,0.1)" }}
-        onClick={() => setCollapsed((c) => !c)}
+        onClick={() => togglePanel("tide")}
       >
         <span style={{ ...CYAN, fontSize: 10, letterSpacing: "0.2em" }}>
           ◉ TIDAL OVERLAY

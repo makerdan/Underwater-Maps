@@ -15,6 +15,7 @@ import { useClassificationStore } from "@/lib/classificationStore";
 import { useUiStore } from "@/lib/uiStore";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { useAppState } from "@/lib/context";
+import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import {
   SALTWATER_ZONES,
   FRESHWATER_ZONES,
@@ -35,7 +36,7 @@ const PANEL: React.CSSProperties = {
   border: "1px solid rgba(0,229,255,0.28)",
   borderRadius: 6,
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-  color: "#cbd5e1",
+  color: "#e2e8f0",
   fontSize: 12,
   backdropFilter: "blur(6px)",
   pointerEvents: "auto",
@@ -61,6 +62,8 @@ export const ZoneOverlay: React.FC = () => {
   const setPaintSlot = useUiStore((s) => s.setZonePaintSlot);
   const hasEdits = useClassificationStore((s) => s.hasEdits);
   const resetToAi = useClassificationStore((s) => s.resetToAi);
+  const collapsed = usePanelCollapseStore((s) => s.collapsed.zoneOverlay);
+  const togglePanel = usePanelCollapseStore((s) => s.toggle);
 
   // Only show this panel when there's a terrain loaded
   if (!terrain) return null;
@@ -73,9 +76,17 @@ export const ZoneOverlay: React.FC = () => {
   return (
     <div style={PANEL}>
       {/* Header */}
-      <div
-        className="px-3 py-2 flex items-center justify-between"
-        style={{ borderBottom: "1px solid rgba(0,229,255,0.08)" }}
+      <button
+        type="button"
+        onClick={() => togglePanel("zoneOverlay")}
+        aria-expanded={!collapsed}
+        className="w-full px-3 py-2 flex items-center justify-between hover:bg-white/5 transition-colors"
+        style={{
+          borderBottom: collapsed ? "none" : "1px solid rgba(0,229,255,0.08)",
+          background: "none",
+          cursor: "pointer",
+          textAlign: "left",
+        }}
       >
         <span
           className="uppercase tracking-widest"
@@ -83,15 +94,19 @@ export const ZoneOverlay: React.FC = () => {
         >
           ◈ Zone Analysis
         </span>
-        <HelpIcon articleId="zones-paint-mode" label="Zones and paint mode" />
-        {loading && (
-          <span className="animate-spin" style={{ fontSize: 10, color: "#00e5ff" }}>
-            ◌
-          </span>
-        )}
-      </div>
+        <div className="flex items-center gap-2">
+          {loading && (
+            <span className="animate-spin" style={{ fontSize: 10, color: "#00e5ff" }}>
+              ◌
+            </span>
+          )}
+          <HelpIcon articleId="zones-paint-mode" label="Zones and paint mode" />
+          <span style={{ fontSize: 12, color: "#cbd5e1" }}>{collapsed ? "▸" : "▾"}</span>
+        </div>
+      </button>
 
       {/* Body */}
+      {!collapsed && (
       <div className="px-3 py-2">
         {/* Loading state */}
         {loading && (
@@ -123,7 +138,7 @@ export const ZoneOverlay: React.FC = () => {
                 width: 12,
                 height: 12,
                 borderRadius: 2,
-                border: overlayEnabled ? "1.5px solid #00e5ff" : "1.5px solid #334155",
+                border: overlayEnabled ? "1.5px solid #00e5ff" : "1.5px solid #64748b",
                 background: overlayEnabled ? "rgba(0,229,255,0.2)" : "transparent",
                 flexShrink: 0,
                 transition: "all 0.15s",
@@ -216,7 +231,7 @@ export const ZoneOverlay: React.FC = () => {
                   width: 12,
                   height: 12,
                   borderRadius: 2,
-                  border: paintMode ? "1.5px solid #00e5ff" : "1.5px solid #334155",
+                  border: paintMode ? "1.5px solid #00e5ff" : "1.5px solid #64748b",
                   background: paintMode ? "rgba(0,229,255,0.2)" : "transparent",
                   flexShrink: 0,
                   textAlign: "center",
@@ -305,6 +320,7 @@ export const ZoneOverlay: React.FC = () => {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 };

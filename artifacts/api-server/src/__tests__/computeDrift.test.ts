@@ -6,7 +6,6 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { computeDrift } from "../../bathyscan/src/lib/computeDrift";
 
 // Not the right path - computeDrift is in the frontend. Use a relative import.
 // Since api-server vitest doesn't have access to bathyscan, we test computeDrift

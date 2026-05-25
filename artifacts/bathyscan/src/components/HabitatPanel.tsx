@@ -9,6 +9,7 @@
  * Rendered inside App.tsx alongside ZoneOverlay in the top-left column.
  */
 import React, { useState, useEffect } from "react";
+import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { useQueryClient } from "@tanstack/react-query";
 import { useHabitatStore } from "@/lib/habitatStore";
 import { useClassificationStore } from "@/lib/classificationStore";
@@ -38,7 +39,7 @@ const PANEL: React.CSSProperties = {
   border: "1px solid rgba(0,229,255,0.28)",
   borderRadius: 6,
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-  color: "#cbd5e1",
+  color: "#e2e8f0",
   fontSize: 12,
   backdropFilter: "blur(6px)",
   pointerEvents: "auto",
@@ -104,16 +105,16 @@ const HotspotCard: React.FC<HotspotCardProps> = ({
   >
     <div className="flex items-start justify-between gap-1">
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ color: "#e2e8f0", fontSize: 11, marginBottom: 1 }}>
-          <span style={{ color: "#94a3b8", fontSize: 10 }}>#{index + 1} </span>
+        <div style={{ color: "#f1f5f9", fontSize: 11, marginBottom: 1 }}>
+          <span style={{ color: "#cbd5e1", fontSize: 10 }}>#{index + 1} </span>
           <span style={{ color: "#fb923c", fontWeight: 600 }}>{Math.round(hotspot.score * 100)}%</span>
           <span style={{ color: "#94a3b8", fontSize: 10 }}> match</span>
         </div>
         <ScoreBar score={hotspot.score} />
         <div style={{ fontSize: 10, color: "#cbd5e1", marginTop: 3 }}>
           <span>{formatDepth(hotspot.depth, { units })}</span>
-          <span style={{ color: "#64748b", margin: "0 4px" }}>·</span>
-          <span style={{ color: "#94a3b8" }}>
+          <span style={{ color: "#94a3b8", margin: "0 4px" }}>·</span>
+          <span style={{ color: "#cbd5e1" }}>
             {hotspot.zoneLabel.replace(/_/g, " ")}
           </span>
         </div>
@@ -171,7 +172,8 @@ export const HabitatPanel: React.FC = () => {
   const hotspots = useHabitatStore((s) => s.hotspots);
   const settingsWaterType = useSettingsStore((s) => s.waterType);
 
-  const [collapsed, setCollapsed] = useState(false);
+  const collapsed = usePanelCollapseStore((s) => s.collapsed.habitat);
+  const togglePanel = usePanelCollapseStore((s) => s.toggle);
   const [droppingIdx, setDroppingIdx] = useState<number | null>(null);
 
   const qc = useQueryClient();
@@ -260,7 +262,7 @@ export const HabitatPanel: React.FC = () => {
     <div style={PANEL} className="habitat-panel">
       {/* Header */}
       <button
-        onClick={() => setCollapsed((c) => !c)}
+        onClick={() => togglePanel("habitat")}
         className="w-full flex items-center justify-between px-3 py-2"
         style={{
           cursor: "pointer",
@@ -282,7 +284,7 @@ export const HabitatPanel: React.FC = () => {
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <HelpIcon articleId="ai-assistant" label="Habitat layer" />
-          <span style={{ fontSize: 11, color: "#94a3b8" }}>
+          <span style={{ fontSize: 11, color: "#cbd5e1" }}>
             {collapsed ? "▶" : "▼"}
           </span>
         </span>
@@ -292,7 +294,7 @@ export const HabitatPanel: React.FC = () => {
         <div className="px-3 py-2">
           {/* Species selector */}
           <div style={{ marginBottom: 8 }}>
-            <div style={{ fontSize: 10, color: "#94a3b8", letterSpacing: "0.08em", marginBottom: 4 }}>
+            <div style={{ fontSize: 10, color: "#cbd5e1", letterSpacing: "0.08em", marginBottom: 4 }}>
               SPECIES ({waterType === "freshwater" ? "freshwater" : "marine"})
             </div>
             <select
@@ -337,7 +339,7 @@ export const HabitatPanel: React.FC = () => {
                 </div>
               ) : (
                 <>
-                  <div style={{ fontSize: 10, color: "#94a3b8", letterSpacing: "0.08em", marginBottom: 4 }}>
+                  <div style={{ fontSize: 10, color: "#cbd5e1", letterSpacing: "0.08em", marginBottom: 4 }}>
                     SUGGESTED HOTSPOTS ({hotspots.length})
                   </div>
                   {hotspots.map((h, i) => (

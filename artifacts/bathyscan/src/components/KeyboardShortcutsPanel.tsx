@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React from "react";
 import { HelpIcon } from "@/components/help/HelpButton";
+import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 
 const BINDINGS: { key: string; action: string }[] = [
   { key: "Click", action: "Lock mouse / enter fly mode" },
@@ -31,12 +32,13 @@ const CYAN: React.CSSProperties = {
 };
 
 export const KeyboardShortcutsPanel: React.FC = () => {
-  const [collapsed, setCollapsed] = useState(true);
+  const collapsed = usePanelCollapseStore((s) => s.collapsed.keyboardShortcuts);
+  const toggle = usePanelCollapseStore((s) => s.toggle);
 
   return (
     <div style={{ ...PANEL, pointerEvents: "auto" }} className="select-none">
       <button
-        onClick={() => setCollapsed((c) => !c)}
+        onClick={() => toggle("keyboardShortcuts")}
         className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors rounded-t"
         style={{ cursor: "pointer" }}
       >
@@ -48,7 +50,7 @@ export const KeyboardShortcutsPanel: React.FC = () => {
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <HelpIcon articleId="keyboard-shortcuts" label="Keyboard shortcuts" />
-          <span style={{ color: "#94a3b8", fontSize: 12 }}>
+          <span style={{ color: "#cbd5e1", fontSize: 12 }}>
             {collapsed ? "▸" : "▾"}
           </span>
         </span>

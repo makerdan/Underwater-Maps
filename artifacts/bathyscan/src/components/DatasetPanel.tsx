@@ -30,9 +30,9 @@ import { MARKER_COLOR, MARKER_ICON } from "@/lib/markerConstants";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { WaterTypeToggle } from "@/components/WaterTypeToggle";
-import { ProvenancePanel } from "@/components/ProvenancePanel";
-import { DatasetFolderTree } from "@/components/DatasetFolderTree";
+import { HelpIcon } from "@/components/help/HelpButton";
 
 const EFH_DATASETS = new Set(["thorne-bay"]);
 
@@ -84,7 +84,8 @@ export const DatasetPanel: React.FC = () => {
     })();
   }, [isOnline]);
 
-  const [collapsed, setCollapsed] = useState(false);
+  const collapsed = usePanelCollapseStore((s) => s.collapsed.datasets);
+  const togglePanel = usePanelCollapseStore((s) => s.toggle);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -401,7 +402,7 @@ export const DatasetPanel: React.FC = () => {
     <div style={{ ...PANEL, pointerEvents: "auto" }} className="dataset-panel select-none">
       {/* Header */}
       <button
-        onClick={() => setCollapsed((c) => !c)}
+        onClick={() => togglePanel("datasets")}
         className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors rounded-t"
         style={{ cursor: "pointer" }}
       >
@@ -412,7 +413,8 @@ export const DatasetPanel: React.FC = () => {
           {anyLoading && (
             <span className="animate-spin" style={{ fontSize: 10 }}>◌</span>
           )}
-          <span style={{ color: "#475569", fontSize: 12 }}>{collapsed ? "▸" : "▾"}</span>
+          <HelpIcon articleId="datasets-uploads" label="Datasets and uploads" />
+          <span style={{ color: "#cbd5e1", fontSize: 12 }}>{collapsed ? "▸" : "▾"}</span>
         </div>
       </button>
 
@@ -427,7 +429,7 @@ export const DatasetPanel: React.FC = () => {
             justifyContent: "space-between",
             gap: 8,
           }}>
-            <span style={{ fontSize: 8, letterSpacing: "0.12em", color: "#334155" }}>ENVIRONMENT</span>
+            <span style={{ fontSize: 10, letterSpacing: "0.12em", color: "#cbd5e1" }}>ENVIRONMENT</span>
             <WaterTypeToggle />
           </div>
           {/* ── Built-in dataset list ── */}
@@ -475,7 +477,7 @@ export const DatasetPanel: React.FC = () => {
                     }}
                     style={{
                       fontSize: 10,
-                      color: "#64748b",
+                      color: "#cbd5e1",
                       background: "transparent",
                       border: "none",
                       cursor: "pointer",
@@ -510,13 +512,13 @@ export const DatasetPanel: React.FC = () => {
                       style={{
                         fontSize: 11,
                         fontWeight: active ? 700 : 400,
-                        color: active ? "#00e5ff" : !isOnline && !cachedIds.has(ds.id) ? "#334155" : "#cbd5e1",
+                        color: active ? "#00e5ff" : !isOnline && !cachedIds.has(ds.id) ? "#64748b" : "#e2e8f0",
                         textShadow: active ? "0 0 6px rgba(0,229,255,0.4)" : "none",
                       }}
                     >
                       {ds.name}
                     </span>
-                    <span style={{ fontSize: 9, color: "#334155" }}>
+                    <span style={{ fontSize: 9, color: "#cbd5e1" }}>
                       {loading ? (
                         <span className="animate-pulse" style={{ color: "#00e5ff" }}>◌</span>
                       ) : !isOnline ? (
@@ -540,7 +542,7 @@ export const DatasetPanel: React.FC = () => {
                       ) : ds.waterType === "saltwater" ? "≋" : "~"}
                     </span>
                   </div>
-                  <div style={{ fontSize: 9, color: "#475569", marginTop: 1, letterSpacing: "0.05em" }}>
+                  <div style={{ fontSize: 10, color: "#cbd5e1", marginTop: 2, letterSpacing: "0.05em" }}>
                     {ds.minDepth}m – {ds.maxDepth}m
                   </div>
                   <div
@@ -567,15 +569,15 @@ export const DatasetPanel: React.FC = () => {
           {/* ── My Library (folders + uploads), signed-in only ── */}
           {isSignedIn && (
             <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}>
-              {userDatasetsLoading && (
-                <div
-                  className="px-3 py-1 flex items-center gap-2"
-                  style={{ fontSize: 9, letterSpacing: "0.12em", color: "#334155" }}
-                >
-                  <span className="animate-spin" style={{ fontSize: 9, color: "#475569" }}>◌</span>
-                  <span>LOADING…</span>
-                </div>
-              )}
+              <div
+                className="px-3 py-1 flex items-center gap-2"
+                style={{ fontSize: 10, letterSpacing: "0.12em", color: "#cbd5e1" }}
+              >
+                <span>▲ MY UPLOADS</span>
+                {userDatasetsLoading && (
+                  <span className="animate-spin" style={{ fontSize: 9, color: "#cbd5e1" }}>◌</span>
+                )}
+              </div>
 
               {userLoadError && (
                 <div
@@ -620,7 +622,7 @@ export const DatasetPanel: React.FC = () => {
                       }}
                       style={{
                         fontSize: 10,
-                        color: "#64748b",
+                        color: "#cbd5e1",
                         background: "transparent",
                         border: "none",
                         cursor: "pointer",
@@ -656,16 +658,16 @@ export const DatasetPanel: React.FC = () => {
                 className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
                 style={{ cursor: "pointer" }}
               >
-                <span style={{ fontSize: 9, letterSpacing: "0.12em", color: "#334155" }}>
+                <span style={{ fontSize: 10, letterSpacing: "0.12em", color: "#cbd5e1" }}>
                   ▼ MARKERS {markers?.length ? `(${markers.length})` : ""}
                 </span>
-                <span style={{ color: "#475569", fontSize: 10 }}>{markersOpen ? "−" : "+"}</span>
+                <span style={{ color: "#cbd5e1", fontSize: 11 }}>{markersOpen ? "−" : "+"}</span>
               </button>
 
               {markersOpen && (
                 <div style={{ paddingBottom: 4 }}>
                   {!markers?.length && (
-                    <div style={{ fontSize: 9, color: "#334155", padding: "4px 12px 6px" }}>
+                    <div style={{ fontSize: 10, color: "#cbd5e1", padding: "4px 12px 6px" }}>
                       No markers yet — press G or right-click to drop one
                     </div>
                   )}
@@ -713,7 +715,7 @@ export const DatasetPanel: React.FC = () => {
                             className="opacity-0 group-hover:opacity-100 transition-opacity"
                             style={{
                               fontSize: 11,
-                              color: "#475569",
+                              color: "#cbd5e1",
                               cursor: "pointer",
                               lineHeight: 1,
                               padding: "0 2px",
@@ -738,10 +740,10 @@ export const DatasetPanel: React.FC = () => {
               className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
               style={{ cursor: "pointer" }}
             >
-              <span style={{ fontSize: 9, letterSpacing: "0.15em", color: "#475569" }}>
+              <span style={{ fontSize: 10, letterSpacing: "0.15em", color: "#cbd5e1" }}>
                 ▲ UPLOAD CUSTOM TERRAIN
               </span>
-              <span style={{ color: "#475569", fontSize: 10 }}>{uploadOpen ? "−" : "+"}</span>
+              <span style={{ color: "#cbd5e1", fontSize: 11 }}>{uploadOpen ? "−" : "+"}</span>
             </button>
 
             {uploadOpen && (
@@ -799,14 +801,14 @@ export const DatasetPanel: React.FC = () => {
                           <div className="animate-pulse" style={{ ...CYAN, fontSize: 10, marginBottom: 2 }}>
                             ◌ Uploading &amp; parsing...
                           </div>
-                          <div style={{ fontSize: 9, color: "#334155" }}>{Math.round(uploadProgress)}%</div>
+                          <div style={{ fontSize: 10, color: "#cbd5e1" }}>{Math.round(uploadProgress)}%</div>
                         </div>
                       ) : (
                         <>
                           <div style={{ fontSize: 10, color: "#64748b", marginBottom: 3 }}>
                             Drop .xyz or .csv here
                           </div>
-                          <div style={{ fontSize: 9, color: "#334155" }}>
+                          <div style={{ fontSize: 10, color: "#cbd5e1" }}>
                             up to 50 MB{isSignedIn ? " · auto-saved to account" : ""}
                           </div>
                           {uploadError && (
