@@ -13,10 +13,13 @@ import { test, expect } from "@playwright/test";
  */
 
 test.describe("Settings page", () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto("/");
-    await page.waitForLoadState("networkidle");
-  });
+  // NOTE: Intentionally NO beforeEach that visits "/". The home route mounts
+  // the heavy Three.js scene, which under headless Chromium leaks WebGL
+  // contexts across many goto("/") calls during the full Playwright run and
+  // eventually crashes the renderer → ERR_CONNECTION_REFUSED on subsequent
+  // page loads. Settings-only specs navigate straight to /settings, which
+  // is a lightweight route with no canvas. The one keyboard-shortcut test
+  // below that genuinely needs the home page navigates to "/" itself.
 
   test("settings page is reachable via /settings route", async ({ page }) => {
     await page.goto("/settings");

@@ -15,6 +15,14 @@ import { test, expect, type Page } from "@playwright/test";
  * itself is plain DOM (no canvas dependency), so assertions are stable even
  * when headless WebGL isn't available — only the underlying CurrentsLayer
  * would need a live GL context, and it isn't asserted on here.
+ *
+ * NOTE (Task #249): The shared beforeEach intentionally does NOT visit "/".
+ * Only the tests that genuinely need the HUD currents panel navigate to the
+ * heavy 3D home route themselves (via openCurrentsHome). The settings-tab
+ * test goes straight to /settings. Avoiding redundant goto("/") calls keeps
+ * headless Chromium from piling up WebGL contexts during the full Playwright
+ * run, which was the root cause of intermittent ERR_CONNECTION_REFUSED on
+ * this and adjacent specs.
  */
 
 async function appIsSignedIn(page: Page): Promise<boolean> {
@@ -22,6 +30,11 @@ async function appIsSignedIn(page: Page): Promise<boolean> {
     .locator("[data-testid='currents-panel']")
     .isVisible({ timeout: 15_000 })
     .catch(() => false);
+}
+
+async function openCurrentsHome(page: Page): Promise<void> {
+  await page.goto("/");
+  await page.waitForLoadState("networkidle");
 }
 
 async function enableCurrents(page: Page): Promise<void> {
@@ -68,6 +81,7 @@ test.describe("Bathymetric currents — interaction coverage", () => {
     // Make /api/tidal deterministic so the NOAA path always has something
     // to surface in `currents-noaa-readout`. The schedule endpoint is fine
     // to leave to the real handler — this spec doesn't touch slack ticks.
+    // Intentionally no goto("/") here — see file header.
     await page.route(/\/api\/tidal(\?|$)/, async (route) => {
       await route.fulfill({
         status: 200,
@@ -75,14 +89,12 @@ test.describe("Bathymetric currents — interaction coverage", () => {
         body: JSON.stringify(buildMockTidal()),
       });
     });
-
-    await page.goto("/");
-    await page.waitForLoadState("networkidle");
   });
 
   test("source toggle round-trips Manual → NOAA → Manual and the UI tracks it", async ({
     page,
   }) => {
+    await openCurrentsHome(page);
     if (!(await appIsSignedIn(page))) {
       test.skip(true, "Currents panel not visible — landing page shown (e2e auth bypass inactive)");
       return;
@@ -123,6 +135,7 @@ test.describe("Bathymetric currents — interaction coverage", () => {
   test("tide-phase slider scrub updates the visible phase readout", async ({
     page,
   }) => {
+    await openCurrentsHome(page);
     if (!(await appIsSignedIn(page))) {
       test.skip(true, "Currents panel not visible — landing page shown (e2e auth bypass inactive)");
       return;
@@ -171,6 +184,7 @@ test.describe("Bathymetric currents — interaction coverage", () => {
   test("particles / arrows / streams toggles flip active state", async ({
     page,
   }) => {
+    await openCurrentsHome(page);
     if (!(await appIsSignedIn(page))) {
       test.skip(true, "Currents panel not visible — landing page shown (e2e auth bypass inactive)");
       return;
@@ -208,6 +222,7 @@ test.describe("Bathymetric currents — interaction coverage", () => {
   test("HUD currents panel mounts with all expected controls", async ({
     page,
   }) => {
+    await openCurrentsHome(page);
     if (!(await appIsSignedIn(page))) {
       test.skip(true, "Currents panel not visible — landing page shown (e2e auth bypass inactive)");
       return;
@@ -226,6 +241,7 @@ test.describe("Bathymetric currents — interaction coverage", () => {
   test("settings page has a Currents tab that opens the currents section", async ({
     page,
   }) => {
+    // Goes straight to /settings — no home-route warmup needed (task #249).
     await page.goto("/settings");
     await page.waitForLoadState("networkidle");
 
