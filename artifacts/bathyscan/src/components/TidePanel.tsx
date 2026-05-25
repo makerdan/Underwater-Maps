@@ -129,6 +129,36 @@ export const TidePanel: React.FC<TidePanelProps> = ({
     onScrubChange(isToday && h === nowHour ? null : d);
   }
 
+  // Sorted slack event center-times across the full loaded window, used for
+  // Prev/Next slack jump buttons.
+  const slackTimesMs = useMemo(() => {
+    if (!schedule) return [] as number[];
+    return schedule.events
+      .map((e) => new Date(e.time).getTime())
+      .filter((t) => Number.isFinite(t))
+      .sort((a, b) => a - b);
+  }, [schedule]);
+
+  const referenceMs = (scrubDatetime ?? new Date()).getTime();
+  const prevSlackMs = useMemo<number | null>(() => {
+    for (let i = slackTimesMs.length - 1; i >= 0; i--) {
+      const t = slackTimesMs[i];
+      if (t !== undefined && t < referenceMs) return t;
+    }
+    return null;
+  }, [slackTimesMs, referenceMs]);
+  const nextSlackMs = useMemo<number | null>(() => {
+    for (const t of slackTimesMs) {
+      if (t > referenceMs) return t;
+    }
+    return null;
+  }, [slackTimesMs, referenceMs]);
+
+  function jumpToSlack(ms: number | null) {
+    if (ms === null) return;
+    onScrubChange(new Date(ms));
+  }
+
   const selectedDayOffset = useMemo(() => {
     if (!scrubDay) return 0;
     return Math.round((scrubDay.getTime() - today.getTime()) / 86_400_000);
@@ -405,6 +435,74 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                   </ViewscreenTooltip>
                 );
               })}
+            </div>
+
+            {/* Slack jump buttons */}
+            <div className="flex items-center justify-between mt-1.5 gap-1">
+              <ViewscreenTooltip
+                label={
+                  prevSlackMs
+                    ? `Jump to previous slack (${new Date(prevSlackMs).toLocaleString("en-US", {
+                        weekday: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        timeZone: "UTC",
+                      })} UTC)`
+                    : "No earlier slack in loaded window"
+                }
+                side="bottom"
+              >
+                <button
+                  onClick={() => jumpToSlack(prevSlackMs)}
+                  disabled={prevSlackMs === null}
+                  data-testid="slack-prev"
+                  style={{
+                    fontSize: 10,
+                    padding: "2px 7px",
+                    borderRadius: 2,
+                    border: `1px solid ${prevSlackMs === null ? "rgba(168,85,247,0.15)" : "rgba(168,85,247,0.5)"}`,
+                    background: prevSlackMs === null ? "transparent" : "rgba(168,85,247,0.1)",
+                    color: prevSlackMs === null ? "#475569" : "#c084fc",
+                    cursor: prevSlackMs === null ? "not-allowed" : "pointer",
+                    letterSpacing: "0.1em",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  ◀ slack
+                </button>
+              </ViewscreenTooltip>
+              <ViewscreenTooltip
+                label={
+                  nextSlackMs
+                    ? `Jump to next slack (${new Date(nextSlackMs).toLocaleString("en-US", {
+                        weekday: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        timeZone: "UTC",
+                      })} UTC)`
+                    : "No upcoming slack in loaded window"
+                }
+                side="bottom"
+              >
+                <button
+                  onClick={() => jumpToSlack(nextSlackMs)}
+                  disabled={nextSlackMs === null}
+                  data-testid="slack-next"
+                  style={{
+                    fontSize: 10,
+                    padding: "2px 7px",
+                    borderRadius: 2,
+                    border: `1px solid ${nextSlackMs === null ? "rgba(168,85,247,0.15)" : "rgba(168,85,247,0.5)"}`,
+                    background: nextSlackMs === null ? "transparent" : "rgba(168,85,247,0.1)",
+                    color: nextSlackMs === null ? "#475569" : "#c084fc",
+                    cursor: nextSlackMs === null ? "not-allowed" : "pointer",
+                    letterSpacing: "0.1em",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  slack ▶
+                </button>
+              </ViewscreenTooltip>
             </div>
 
             {/* Hour slider */}
