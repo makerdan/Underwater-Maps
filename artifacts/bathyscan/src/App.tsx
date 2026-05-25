@@ -20,6 +20,8 @@ import { ControlsLegend } from "@/components/ControlsLegend";
 import { KeyboardShortcutsPanel } from "@/components/KeyboardShortcutsPanel";
 import { AppHeader } from "@/components/AppHeader";
 import { TidePanel } from "@/components/TidePanel";
+import { CurrentsPanel } from "@/components/CurrentsPanel";
+import { useCurrentsStore } from "@/lib/currentsStore";
 import { ThrottlePanel } from "@/components/ThrottlePanel";
 import { MarkerForm } from "@/components/MarkerForm";
 import { ContextMenu } from "@/components/ContextMenu";
@@ -222,6 +224,21 @@ function Main() {
     tidalOverlay ? centerLon : null,
     tidalOverlay ? scrubDatetime : null,
   );
+
+  // Publish NOAA-derived ambient current to the currents runtime store so
+  // the bathymetric currents simulation (Task #136) can use it as the
+  // ambient vector when the user picks `source: "noaa"`.
+  const setNoaaAmbient = useCurrentsStore((s) => s.setNoaaAmbient);
+  useEffect(() => {
+    if (tidalData && "available" in tidalData && tidalData.available) {
+      setNoaaAmbient({
+        directionDeg: tidalData.currentDirection,
+        speedKt: tidalData.currentSpeed,
+      });
+    } else {
+      setNoaaAmbient(null);
+    }
+  }, [tidalData, setNoaaAmbient]);
 
   const waterType = useSettingsStore((s) => s.waterType);
 
@@ -539,6 +556,7 @@ function Main() {
                 lon={centerLon}
               />
             )}
+            <CurrentsPanel />
           </div>
         )}
 

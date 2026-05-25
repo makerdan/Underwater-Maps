@@ -12,7 +12,10 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export const SETTINGS_SCHEMA_VERSION = 3;
+export const SETTINGS_SCHEMA_VERSION = 4;
+
+/** Source for the ambient (depth-averaged) current vector. */
+export type CurrentsSource = "manual" | "noaa";
 
 export interface DatasetHomePosition {
   lon: number;
@@ -49,7 +52,8 @@ export type SettingsSection =
   | "accessibility"
   | "account"
   | "overview"
-  | "environment";
+  | "environment"
+  | "currents";
 
 export interface SettingsState {
   schemaVersion: number;
@@ -129,6 +133,26 @@ export interface SettingsState {
   autoLoadTidal: boolean;
   defaultTidalDepthLayer: TidalDepthLayer;
   currentArrowDensity: CurrentArrowDensity;
+
+  // ── Bathymetric Currents Simulation (Task #136) ──────────────────────
+  /** Master enable for the bathymetry-shaped current simulation. */
+  currentsEnabled: boolean;
+  /** Where the ambient (depth-averaged) current vector comes from. */
+  currentsSource: CurrentsSource;
+  /** Manual ambient direction (degrees, compass "going-to"). */
+  currentsManualDirectionDeg: number;
+  /** Manual ambient speed in knots. */
+  currentsManualSpeedKt: number;
+  /** Tide-phase scrubber position in [0, 1) — 0 = flood peak, 0.5 = ebb peak. */
+  currentsTidePhase: number;
+  /** Animate the tide-phase scrubber automatically. */
+  currentsAutoAdvance: boolean;
+  /** Show the animated particle layer. */
+  currentsShowParticles: boolean;
+  /** Show the instanced speed-coloured arrow layer. */
+  currentsShowArrows: boolean;
+  /** Show the integrated streamline ribbons layer. */
+  currentsShowStreamlines: boolean;
 
   // ── Habitat & Zone Defaults ──────────────────────────────────────────
   autoShowZoneOverlay: boolean;
@@ -243,6 +267,17 @@ interface SettingsActions {
   setAutoLoadTidal: (v: boolean) => void;
   setDefaultTidalDepthLayer: (v: TidalDepthLayer) => void;
   setCurrentArrowDensity: (v: CurrentArrowDensity) => void;
+
+  // Currents (Task #136)
+  setCurrentsEnabled: (v: boolean) => void;
+  setCurrentsSource: (v: CurrentsSource) => void;
+  setCurrentsManualDirectionDeg: (v: number) => void;
+  setCurrentsManualSpeedKt: (v: number) => void;
+  setCurrentsTidePhase: (v: number) => void;
+  setCurrentsAutoAdvance: (v: boolean) => void;
+  setCurrentsShowParticles: (v: boolean) => void;
+  setCurrentsShowArrows: (v: boolean) => void;
+  setCurrentsShowStreamlines: (v: boolean) => void;
 
   // Habitat
   setAutoShowZoneOverlay: (v: boolean) => void;
@@ -442,6 +477,17 @@ export const DEFAULT_SETTINGS: SettingsState = {
   defaultTidalDepthLayer: "surface",
   currentArrowDensity: "normal",
 
+  // Currents (Task #136)
+  currentsEnabled: false,
+  currentsSource: "manual",
+  currentsManualDirectionDeg: 90,
+  currentsManualSpeedKt: 0.8,
+  currentsTidePhase: 0,
+  currentsAutoAdvance: false,
+  currentsShowParticles: true,
+  currentsShowArrows: true,
+  currentsShowStreamlines: false,
+
   // Habitat
   autoShowZoneOverlay: false,
   defaultHabitatSpecies: "",
@@ -498,6 +544,11 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "visibleMarkerTypes", "privateMarkers", "markerClusterThreshold",
   ],
   tidal: ["autoLoadTidal", "defaultTidalDepthLayer", "currentArrowDensity"],
+  currents: [
+    "currentsEnabled", "currentsSource", "currentsManualDirectionDeg",
+    "currentsManualSpeedKt", "currentsTidePhase", "currentsAutoAdvance",
+    "currentsShowParticles", "currentsShowArrows", "currentsShowStreamlines",
+  ],
   habitat: ["autoShowZoneOverlay", "defaultHabitatSpecies"],
   gps: [
     "autoStartTrailRecording", "defaultTrailColor", "gpsRecordingInterval", "trailRetention",
@@ -620,6 +671,17 @@ export const useSettingsStore = create<SettingsStore>()(
         setAutoLoadTidal: setter("autoLoadTidal"),
         setDefaultTidalDepthLayer: setter("defaultTidalDepthLayer"),
         setCurrentArrowDensity: setter("currentArrowDensity"),
+
+        // Currents (Task #136)
+        setCurrentsEnabled: setter("currentsEnabled"),
+        setCurrentsSource: setter("currentsSource"),
+        setCurrentsManualDirectionDeg: setter("currentsManualDirectionDeg"),
+        setCurrentsManualSpeedKt: setter("currentsManualSpeedKt"),
+        setCurrentsTidePhase: setter("currentsTidePhase"),
+        setCurrentsAutoAdvance: setter("currentsAutoAdvance"),
+        setCurrentsShowParticles: setter("currentsShowParticles"),
+        setCurrentsShowArrows: setter("currentsShowArrows"),
+        setCurrentsShowStreamlines: setter("currentsShowStreamlines"),
 
         // Habitat
         setAutoShowZoneOverlay: setter("autoShowZoneOverlay"),

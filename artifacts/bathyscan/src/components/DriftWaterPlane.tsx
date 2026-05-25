@@ -13,6 +13,9 @@ import { WORLD_SIZE } from "@/lib/terrain";
 import { worldXZToLonLat } from "@/lib/terrain";
 import { useDriftStore } from "@/lib/driftStore";
 import { computeDrift } from "@/lib/computeDrift";
+import { useSettingsStore } from "@/lib/settingsStore";
+import { sampleCurrentAt } from "@/lib/currentsStore";
+import { lonLatToWorldXZ } from "@/lib/terrain";
 import type { TerrainData } from "@workspace/api-client-react";
 
 const vertexShader = /* glsl */ `
@@ -116,6 +119,16 @@ export const DriftWaterPlane: React.FC<DriftWaterPlaneProps> = ({ surfaceY, terr
       const { lon, lat } = worldXZToLonLat(worldX, worldZ, terrain);
       setDriftStart(lat, lon);
       if (driftConditions) {
+        // When the bathymetric currents simulation is enabled, sample the
+        // flow field at the boat's current position so the drift path
+        // bends with bathymetry instead of using a single ambient vector.
+        const currentsEnabled = useSettingsStore.getState().currentsEnabled;
+        const sampleFlowAt = currentsEnabled
+          ? (lat: number, lon: number) => {
+              const { x, z } = lonLatToWorldXZ(lon, lat, terrain);
+              return sampleCurrentAt(x, z);
+            }
+          : undefined;
         const path = computeDrift({
           conditions: driftConditions,
           startLat: lat,
@@ -126,6 +139,7 @@ export const DriftWaterPlane: React.FC<DriftWaterPlaneProps> = ({ surfaceY, terr
           mode: driftMode,
           boatHeadingDeg,
           boatSpeedKnots,
+          sampleFlowAt,
         });
         setDriftPath(path);
       }

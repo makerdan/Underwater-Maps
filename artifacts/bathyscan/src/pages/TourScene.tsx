@@ -30,6 +30,8 @@ import { DriftWaterPlane } from "@/components/DriftWaterPlane";
 import { DriftBoat } from "@/components/DriftBoat";
 import { DriftPath } from "@/components/DriftPath";
 import { ConditionsOverlays } from "@/components/ConditionsOverlays";
+import { CurrentsLayer } from "@/components/CurrentsLayer";
+import { useCurrentsStore } from "@/lib/currentsStore";
 
 // ---------------------------------------------------------------------------
 // FlyControlsScene — lives inside <Canvas>, wires up controls + lamp
@@ -150,6 +152,15 @@ const TidalSceneContents: React.FC<TidalSceneContentsProps> = ({
 };
 
 // ---------------------------------------------------------------------------
+// Currents (Task #136) — reads runtime NOAA ambient via a hook so subscription
+// triggers re-renders when the value updates.
+// ---------------------------------------------------------------------------
+const CurrentsSceneContents: React.FC<{ terrain: TerrainData }> = ({ terrain }) => {
+  const noaaAmbient = useCurrentsStore((s) => s.noaaAmbient);
+  return <CurrentsLayer terrain={terrain} noaaAmbient={noaaAmbient} />;
+};
+
+// ---------------------------------------------------------------------------
 // Drift Planner 3D elements — lives inside <Canvas>
 // ---------------------------------------------------------------------------
 const DriftSceneContents: React.FC = () => {
@@ -233,6 +244,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
         terrain && showWaterSurface && <WaterSurfacePlane terrain={terrain} />
       )}
 
+      {terrain && <CurrentsSceneContents terrain={terrain} />}
       <MarkerLayer />
       <DepthPoleLayer />
       <GpsMarker />

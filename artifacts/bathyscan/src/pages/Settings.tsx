@@ -1064,6 +1064,77 @@ function TidalSection() {
   );
 }
 
+function CurrentsSection() {
+  const s = useSettingsStore();
+  return (
+    <>
+      <h2 style={S.sectionTitle}>◈ BATHYMETRIC CURRENTS</h2>
+      <SectionActionsRow section="currents" />
+      <div style={S.card}>
+        <div style={S.cardHeader}>SIMULATION</div>
+        <ToggleRow
+          label="Enable Currents Simulation"
+          value={s.currentsEnabled}
+          onChange={s.setCurrentsEnabled}
+          sublabel="Bathymetry-shaped flow field with particles, arrows, and streamlines"
+        />
+        <SelectRow
+          label="Ambient Source"
+          value={s.currentsSource}
+          onChange={s.setCurrentsSource}
+          options={[
+            { value: "manual", label: "Manual" },
+            { value: "noaa", label: "NOAA (live)" },
+          ]}
+          sublabel="Manual uses the values below; NOAA uses the active tidal station current"
+        />
+      </div>
+      <div style={S.card}>
+        <div style={S.cardHeader}>MANUAL AMBIENT</div>
+        <SliderRow
+          label="Direction (°)"
+          value={s.currentsManualDirectionDeg}
+          min={0} max={360} step={5}
+          onChange={s.setCurrentsManualDirectionDeg}
+          sublabel="Compass bearing the current flows toward (0 = south, 90 = east)"
+        />
+        <SliderRow
+          label="Speed (kt)"
+          value={s.currentsManualSpeedKt}
+          min={0} max={5} step={0.1}
+          onChange={s.setCurrentsManualSpeedKt}
+        />
+      </div>
+      <AdvancedDisclosure testId="currents-advanced">
+        <div style={S.card}>
+          <div style={S.cardHeader}>VISUALISATION LAYERS</div>
+          <ToggleRow
+            label="Animated Particles"
+            value={s.currentsShowParticles}
+            onChange={s.setCurrentsShowParticles}
+          />
+          <ToggleRow
+            label="Speed-Coloured Arrows"
+            value={s.currentsShowArrows}
+            onChange={s.setCurrentsShowArrows}
+          />
+          <ToggleRow
+            label="Streamlines"
+            value={s.currentsShowStreamlines}
+            onChange={s.setCurrentsShowStreamlines}
+          />
+          <ToggleRow
+            label="Auto-Advance Tide Phase"
+            value={s.currentsAutoAdvance}
+            onChange={s.setCurrentsAutoAdvance}
+            sublabel="Slowly cycle the tide-phase scrubber for visual demo"
+          />
+        </div>
+      </AdvancedDisclosure>
+    </>
+  );
+}
+
 function HabitatSection() {
   const s = useSettingsStore();
   return (
@@ -1759,7 +1830,7 @@ function AccountSection() {
 // ─── Nav tabs ─────────────────────────────────────────────────────────────────
 type Tab =
   | "visuals" | "navigation" | "hud" | "units" | "overview" | "markers"
-  | "tidal" | "habitat" | "gps" | "dataset" | "offline"
+  | "tidal" | "currents" | "habitat" | "gps" | "dataset" | "offline"
   | "accessibility" | "shortcuts" | "account" | "environment";
 
 const NAV_TABS: { id: Tab; label: string }[] = [
@@ -1770,6 +1841,7 @@ const NAV_TABS: { id: Tab; label: string }[] = [
   { id: "overview", label: "OVERVIEW MAP" },
   { id: "markers", label: "MARKERS" },
   { id: "tidal", label: "TIDAL" },
+  { id: "currents", label: "CURRENTS" },
   { id: "habitat", label: "HABITAT" },
   { id: "gps", label: "GPS & TRAIL" },
   { id: "dataset", label: "DATA & STORAGE" },
@@ -1945,6 +2017,7 @@ export function Settings() {
           {tab === "overview" && <OverviewSection />}
           {tab === "markers" && <MarkersSection />}
           {tab === "tidal" && <TidalSection />}
+          {tab === "currents" && <CurrentsSection />}
           {tab === "habitat" && <HabitatSection />}
           {tab === "gps" && <GpsSection />}
           {tab === "dataset" && <DatasetSection />}

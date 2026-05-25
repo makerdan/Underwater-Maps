@@ -96,6 +96,32 @@ describe("settingsStore", () => {
     expect(useSettingsStore.getState().hudOpacity).toBe(DEFAULT_SETTINGS.hudOpacity);
   });
 
+  it("currents section has all expected defaults and round-trips through resetSection", () => {
+    const s = useSettingsStore.getState();
+    expect(s.currentsEnabled).toBe(false);
+    expect(s.currentsSource).toBe("manual");
+    expect(s.currentsShowParticles).toBe(true);
+    expect(s.currentsShowArrows).toBe(true);
+    expect(s.currentsShowStreamlines).toBe(false);
+
+    s.setCurrentsEnabled(true);
+    s.setCurrentsSource("noaa");
+    s.setCurrentsManualSpeedKt(2.5);
+    s.setCurrentsTidePhase(0.42);
+    s.setCurrentsShowStreamlines(true);
+    expect(useSettingsStore.getState().currentsEnabled).toBe(true);
+    expect(useSettingsStore.getState().currentsManualSpeedKt).toBe(2.5);
+    expect(useSettingsStore.getState().currentsTidePhase).toBe(0.42);
+
+    s.resetSection("currents");
+    const after = useSettingsStore.getState();
+    expect(after.currentsEnabled).toBe(DEFAULT_SETTINGS.currentsEnabled);
+    expect(after.currentsSource).toBe(DEFAULT_SETTINGS.currentsSource);
+    expect(after.currentsManualSpeedKt).toBe(DEFAULT_SETTINGS.currentsManualSpeedKt);
+    expect(after.currentsTidePhase).toBe(DEFAULT_SETTINGS.currentsTidePhase);
+    expect(after.currentsShowStreamlines).toBe(DEFAULT_SETTINGS.currentsShowStreamlines);
+  });
+
   it("hydrateFromServer merges partial server state without clobbering unrelated fields", () => {
     const s = useSettingsStore.getState();
     s.setFieldOfView(72);

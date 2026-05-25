@@ -129,12 +129,22 @@ export interface ComputeDriftOptions {
   boatHeadingDeg?: number;
   /** Boat speed through water in knots. Used only when mode === "trolling". */
   boatSpeedKnots?: number;
+  /**
+   * Optional bathymetry-modified flow sampler (Task #136). When provided,
+   * the tidal component is sampled at the boat's current world-space
+   * position so flow accelerates over shallows and deflects around land,
+   * instead of using a single ambient value for the whole region. Returning
+   * null falls back to the per-hour ambient `tidalSpeedKnots/tidalDegrees`.
+   * The 70/30 tidal/wind blend is preserved either way.
+   */
+  sampleFlowAt?: (lat: number, lon: number) => { speedKt: number; directionDeg: number } | null;
 }
 
 export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
   const {
     conditions, startLat, startLon, lineLengthM, terrain,
     mode = "drift", boatHeadingDeg = 0, boatSpeedKnots = 0,
+    sampleFlowAt,
   } = opts;
 
   const waypoints: DriftWaypoint[] = [];
@@ -144,7 +154,18 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
   for (let h = 0; h < 24; h++) {
     const cond = conditions[h % conditions.length]!;
 
-    const tidalVec = currentVector(cond.tidalSpeedKnots, cond.tidalDegrees, curLat);
+    // Tidal component: prefer the bathymetry-shaped sampler when supplied
+    // (Task #136); otherwise fall back to the per-hour ambient.
+    let tidalSpeed = cond.tidalSpeedKnots;
+    let tidalDir = cond.tidalDegrees;
+    if (sampleFlowAt) {
+      const sampled = sampleFlowAt(curLat, curLon);
+      if (sampled) {
+        tidalSpeed = sampled.speedKt;
+        tidalDir = sampled.directionDeg;
+      }
+    }
+    const tidalVec = currentVector(tidalSpeed, tidalDir, curLat);
     const windLeewaySpeed = cond.windSpeedKnots * 0.03;
     const windVec = currentVector(windLeewaySpeed, cond.windDegrees, curLat);
 
