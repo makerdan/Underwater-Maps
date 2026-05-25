@@ -662,6 +662,18 @@ function VisualsSection() {
             onChange={s.setSmoothTerrainSpikes}
             sublabel="Server-side post-process that blends slopes steeper than 70°. Disable to inspect raw bathymetric artifacts."
           />
+          <ToggleRow
+            label="Show water surface"
+            value={s.showWaterSurface}
+            onChange={s.setShowWaterSurface}
+            sublabel="Translucent sea-level plane over the bathymetry. Colour tracks the active water type. Turn off for dry cross-section views."
+          />
+          <ToggleRow
+            label="Show landmass"
+            value={s.showLandmass}
+            onChange={s.setShowLandmass}
+            sublabel="Render above-water terrain (islands, shorelines) when the dataset includes topography. No effect on open-ocean datasets."
+          />
         </div>
       </AdvancedDisclosure>
     </>

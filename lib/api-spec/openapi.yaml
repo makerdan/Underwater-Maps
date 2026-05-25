@@ -1273,6 +1273,9 @@ components:
             maxLon: { type: number }
             maxLat: { type: number }
           required: [minLon, minLat, maxLon, maxLat]
+        hasTopography:
+          type: boolean
+          description: True when the dataset bbox includes above-water terrain (land/islands) suitable for landmass visualisation.
       required:
         - id
         - name
@@ -1322,6 +1325,14 @@ components:
           type: number
         centerLat:
           type: number
+        topography:
+          type: array
+          items:
+            type: number
+          description: Row-major flat array of above-water elevation values (metres above sea level, 0 for water cells). Same NxN shape as `depths`. Omitted when the dataset has no above-water terrain.
+        hasTopography:
+          type: boolean
+          description: True when this terrain grid includes a non-empty `topography` array. Clients can use this to enable/hide the landmass visualisation.
         synthetic:
           type: boolean
           description: "Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback."

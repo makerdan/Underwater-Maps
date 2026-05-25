@@ -26,6 +26,15 @@ export interface TerrainGrid {
   centerLon: number;
   centerLat: number;
   /**
+   * Row-major NxN array of above-water elevation values (metres above sea
+   * level, 0 for water cells). Present when the upstream source includes
+   * land coverage (GEBCO/NCEI) and the dataset bbox actually contains
+   * above-water terrain. Omitted for open-ocean datasets and synthetic grids.
+   */
+  topography?: number[];
+  /** True when this grid includes a non-empty `topography` array. */
+  hasTopography?: boolean;
+  /**
    * True when the grid was generated from the synthetic fbm fallback
    * because the upstream bathymetry service (e.g. GEBCO WCS) was
    * unreachable or returned an unusable response. Clients can surface
@@ -48,8 +57,9 @@ export interface TerrainGrid {
  * History:
  *   1 — initial cache format
  *   2 — Task #26: smoothSpikes pass added in buildTerrainGrid
+ *   3 — Task #115: topography array (above-water elevation) added
  */
-export const TERRAIN_CACHE_VERSION = 2;
+export const TERRAIN_CACHE_VERSION = 3;
 
 export interface DatasetMeta {
   id: string;
@@ -61,6 +71,11 @@ export interface DatasetMeta {
   centerLon: number;
   centerLat: number;
   bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number };
+  /**
+   * True when the dataset bbox includes above-water terrain (land/islands)
+   * suitable for landmass visualisation. Open-ocean datasets set this to false.
+   */
+  hasTopography?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -79,6 +94,7 @@ export const PRESET_DATASETS: DatasetMeta[] = [
     centerLon: -132.53,
     centerLat: 55.69,
     bbox: { minLon: -133.5, minLat: 55.0, maxLon: -131.5, maxLat: 56.5 },
+    hasTopography: true,
   },
   {
     id: "mariana-trench",
@@ -112,6 +128,7 @@ export const PRESET_DATASETS: DatasetMeta[] = [
     centerLon: 18.5,
     centerLat: 35.5,
     bbox: { minLon: 15.0, minLat: 33.0, maxLon: 22.0, maxLat: 38.0 },
+    hasTopography: true,
   },
   {
     id: "hawaii-seamount",
@@ -123,6 +140,7 @@ export const PRESET_DATASETS: DatasetMeta[] = [
     centerLon: -155.5,
     centerLat: 18.9,
     bbox: { minLon: -157.5, minLat: 17.5, maxLon: -153.5, maxLat: 20.3 },
+    hasTopography: true,
   },
   {
     id: "weddell-sea",
@@ -134,6 +152,7 @@ export const PRESET_DATASETS: DatasetMeta[] = [
     centerLon: -40.0,
     centerLat: -72.0,
     bbox: { minLon: -60.0, minLat: -78.0, maxLon: -20.0, maxLat: -66.0 },
+    hasTopography: true,
   },
 ];
 
@@ -148,6 +167,7 @@ export const FRESHWATER_PRESET_DATASETS: DatasetMeta[] = [
     centerLon: -87.0,
     centerLat: 47.5,
     bbox: { minLon: -92.1, minLat: 46.4, maxLon: -84.3, maxLat: 49.0 },
+    hasTopography: true,
   },
   {
     id: "lake-baikal",
@@ -159,6 +179,7 @@ export const FRESHWATER_PRESET_DATASETS: DatasetMeta[] = [
     centerLon: 107.7,
     centerLat: 53.5,
     bbox: { minLon: 103.7, minLat: 51.5, maxLon: 109.9, maxLat: 55.8 },
+    hasTopography: true,
   },
   {
     id: "crater-lake",
@@ -170,6 +191,7 @@ export const FRESHWATER_PRESET_DATASETS: DatasetMeta[] = [
     centerLon: -122.1,
     centerLat: 42.94,
     bbox: { minLon: -122.25, minLat: 42.84, maxLon: -121.95, maxLat: 43.04 },
+    hasTopography: true,
   },
   {
     id: "lake-michigan",
@@ -181,6 +203,7 @@ export const FRESHWATER_PRESET_DATASETS: DatasetMeta[] = [
     centerLon: -87.0,
     centerLat: 43.5,
     bbox: { minLon: -88.0, minLat: 41.6, maxLon: -85.0, maxLat: 46.1 },
+    hasTopography: true,
   },
   {
     id: "lake-geneva",
@@ -192,6 +215,7 @@ export const FRESHWATER_PRESET_DATASETS: DatasetMeta[] = [
     centerLon: 6.5,
     centerLat: 46.45,
     bbox: { minLon: 6.15, minLat: 46.35, maxLon: 6.87, maxLat: 46.52 },
+    hasTopography: true,
   },
 ];
 
@@ -226,7 +250,7 @@ const NCEI_PREFERRED_DATASETS = new Set(["thorne-bay"]);
 async function fetchNceiGrid(
   bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number },
   resolution: number
-): Promise<{ depths: number[]; minDepth: number; maxDepth: number }> {
+): Promise<{ depths: number[]; minDepth: number; maxDepth: number; topography: number[]; hasTopography: boolean }> {
   const { minLon, minLat, maxLon, maxLat } = bbox;
   const params = new URLSearchParams({
     SERVICE: "WCS",
@@ -265,9 +289,12 @@ async function fetchNceiGrid(
 
   // NCEI elevation is negative for ocean depth; convert to positive depth.
   // No-data cells (no coverage) are set to 0 (sea surface).
+  // Positive elevation cells are land — captured in the topography array.
   const depths: number[] = new Array(resolution * resolution).fill(0);
+  const topography: number[] = new Array(resolution * resolution).fill(0);
   let minDepth = Infinity;
   let maxDepth = -Infinity;
+  let landCellCount = 0;
 
   for (let row = 0; row < resolution; row++) {
     for (let col = 0; col < resolution; col++) {
@@ -276,11 +303,17 @@ async function fetchNceiGrid(
       const elev = values[srcRow * ncols + srcCol];
 
       let depth = 0;
-      if (elev !== undefined && elev !== nodata && elev < 0) {
-        depth = -elev;
+      let elevation = 0;
+      if (elev !== undefined && elev !== nodata) {
+        if (elev < 0) depth = -elev;
+        else if (elev > 0) {
+          elevation = elev;
+          landCellCount++;
+        }
       }
 
       depths[row * resolution + col] = depth;
+      topography[row * resolution + col] = elevation;
       if (depth < minDepth) minDepth = depth;
       if (depth > maxDepth) maxDepth = depth;
     }
@@ -294,7 +327,10 @@ async function fetchNceiGrid(
     throw new Error(`NCEI WCS returned near-flat grid (range ${maxDepth - minDepth} m) — likely no coverage`);
   }
 
-  return { depths, minDepth, maxDepth };
+  // Require at least ~0.5% land cells to consider topography meaningful
+  const hasTopography = landCellCount > resolution * resolution * 0.005;
+
+  return { depths, minDepth, maxDepth, topography, hasTopography };
 }
 
 // ---------------------------------------------------------------------------
@@ -355,7 +391,7 @@ function parseAsciiGrid(text: string): {
 async function fetchGebcoGrid(
   bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number },
   resolution: number
-): Promise<{ depths: number[]; minDepth: number; maxDepth: number }> {
+): Promise<{ depths: number[]; minDepth: number; maxDepth: number; topography: number[]; hasTopography: boolean }> {
   const { minLon, minLat, maxLon, maxLat } = bbox;
   const params = new URLSearchParams({
     service: "WCS",
@@ -389,10 +425,14 @@ async function fetchGebcoGrid(
   }
 
   // GEBCO uses row-major, top-to-bottom, left-to-right
-  // Convert elevation (negative = ocean) to positive depth
+  // Convert elevation (negative = ocean) to positive depth.
+  // Positive elevations (land) are captured in the topography array so the
+  // client can render landmass meshes that meet the bathymetry seamlessly.
   const depths: number[] = new Array(resolution * resolution).fill(0);
+  const topography: number[] = new Array(resolution * resolution).fill(0);
   let minDepth = Infinity;
   let maxDepth = -Infinity;
+  let landCellCount = 0;
 
   for (let row = 0; row < resolution; row++) {
     for (let col = 0; col < resolution; col++) {
@@ -402,11 +442,18 @@ async function fetchGebcoGrid(
       const elev = values[srcRow * ncols + srcCol];
 
       let depth = 0;
-      if (elev !== undefined && elev !== nodata && elev < 0) {
-        depth = -elev; // positive depth below sea level
+      let elevation = 0;
+      if (elev !== undefined && elev !== nodata) {
+        if (elev < 0) {
+          depth = -elev; // positive depth below sea level
+        } else if (elev > 0) {
+          elevation = elev; // metres above sea level (land)
+          landCellCount++;
+        }
       }
 
       depths[row * resolution + col] = depth;
+      topography[row * resolution + col] = elevation;
       if (depth < minDepth) minDepth = depth;
       if (depth > maxDepth) maxDepth = depth;
     }
@@ -415,7 +462,10 @@ async function fetchGebcoGrid(
   if (!isFinite(minDepth)) minDepth = 0;
   if (!isFinite(maxDepth)) maxDepth = 0;
 
-  return { depths, minDepth, maxDepth };
+  // Require at least ~0.5% land cells to consider topography meaningful
+  const hasTopography = landCellCount > resolution * resolution * 0.005;
+
+  return { depths, minDepth, maxDepth, topography, hasTopography };
 }
 
 // ---------------------------------------------------------------------------
@@ -487,6 +537,8 @@ export async function buildTerrainGrid(
   let depths: number[];
   let minDepth: number;
   let maxDepth: number;
+  let topography: number[] | undefined;
+  let hasTopography = false;
   let synthetic = false;
   let dataSource: TerrainDataSource = "gebco";
 
@@ -498,6 +550,8 @@ export async function buildTerrainGrid(
       depths = ncei.depths;
       minDepth = ncei.minDepth;
       maxDepth = ncei.maxDepth;
+      topography = ncei.topography;
+      hasTopography = ncei.hasTopography;
       dataSource = "ncei";
       console.info(`[terrain] NCEI data fetched successfully for ${datasetId}`);
     } catch (nceiErr) {
@@ -511,6 +565,8 @@ export async function buildTerrainGrid(
         depths = gebco.depths;
         minDepth = gebco.minDepth;
         maxDepth = gebco.maxDepth;
+        topography = gebco.topography;
+        hasTopography = gebco.hasTopography;
         dataSource = "gebco";
       } catch (gebcoErr) {
         console.warn(
@@ -531,6 +587,8 @@ export async function buildTerrainGrid(
       depths = gebco.depths;
       minDepth = gebco.minDepth;
       maxDepth = gebco.maxDepth;
+      topography = gebco.topography;
+      hasTopography = gebco.hasTopography;
       dataSource = "gebco";
     } catch (err) {
       // Fallback to synthetic data if GEBCO is unreachable (dev / offline)
@@ -578,6 +636,7 @@ export async function buildTerrainGrid(
     centerLat: meta.centerLat,
     synthetic,
     dataSource,
+    ...(hasTopography && topography ? { topography, hasTopography: true } : {}),
   };
 
   memoryCache.set(cacheKey, grid);

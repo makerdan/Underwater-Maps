@@ -124,6 +124,29 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
           </span>
         )}
 
+        {terrain.hasTopography && (
+          <span
+            data-testid="topo-badge"
+            title="Includes above-water terrain (topography). Enable 'Show landmass' in Settings to render it."
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 3,
+              background: "rgba(245,158,11,0.12)",
+              border: "1px solid rgba(245,158,11,0.4)",
+              borderRadius: 3,
+              padding: "1px 6px",
+              fontSize: 9,
+              color: "#f59e0b",
+              fontWeight: 700,
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+            }}
+          >
+            TOPO
+          </span>
+        )}
+
         <span
           style={{
             marginLeft: "auto",
@@ -165,6 +188,55 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
               {Math.abs(terrain.maxLat - terrain.minLat).toFixed(2)}°
             </span>
           </div>
+
+          {terrain.hasTopography && terrain.topography && (
+            <button
+              type="button"
+              data-testid="btn-download-topography"
+              onClick={(e) => {
+                e.stopPropagation();
+                const payload = {
+                  datasetId: terrain.datasetId,
+                  name: terrain.name,
+                  resolution: terrain.resolution,
+                  bbox: {
+                    minLon: terrain.minLon,
+                    minLat: terrain.minLat,
+                    maxLon: terrain.maxLon,
+                    maxLat: terrain.maxLat,
+                  },
+                  units: "metres above sea level",
+                  topography: terrain.topography,
+                };
+                const blob = new Blob([JSON.stringify(payload)], {
+                  type: "application/json",
+                });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${terrain.datasetId}-topography.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              }}
+              style={{
+                display: "block",
+                marginTop: 4,
+                background: "transparent",
+                border: "1px solid rgba(245,158,11,0.5)",
+                color: "#f59e0b",
+                fontSize: 9,
+                padding: "2px 8px",
+                borderRadius: 3,
+                cursor: "pointer",
+                letterSpacing: "0.05em",
+                textTransform: "uppercase",
+              }}
+            >
+              ↓ Download topography (JSON)
+            </button>
+          )}
 
           {src.creditUrl && (
             <a

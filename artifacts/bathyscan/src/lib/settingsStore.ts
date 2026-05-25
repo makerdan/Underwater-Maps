@@ -86,6 +86,10 @@ export interface SettingsState {
   textureQuality: TextureQuality;
   colormapTheme: ColormapTheme;
   smoothTerrainSpikes: boolean;
+  /** Render the sea-level water surface plane over the bathymetry (default on). */
+  showWaterSurface: boolean;
+  /** Render above-water landmass meshing from the terrain topography array (default off). */
+  showLandmass: boolean;
 
   // ── HUD & Layout ──────────────────────────────────────────────────────
   hudOpacity: number;
@@ -194,6 +198,8 @@ interface SettingsActions {
   setTextureQuality: (v: TextureQuality) => void;
   setColormapTheme: (v: ColormapTheme) => void;
   setSmoothTerrainSpikes: (v: boolean) => void;
+  setShowWaterSurface: (v: boolean) => void;
+  setShowLandmass: (v: boolean) => void;
 
   // HUD
   setHudOpacity: (v: number) => void;
@@ -389,6 +395,8 @@ export const DEFAULT_SETTINGS: SettingsState = {
   textureQuality: "high",
   colormapTheme: "ocean",
   smoothTerrainSpikes: true,
+  showWaterSurface: true,
+  showLandmass: false,
 
   // HUD
   hudOpacity: 0.75,
@@ -467,6 +475,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "enableCaustics", "fogDensity", "fogColor", "ambientLightIntensity",
     "directionalLightIntensity", "lampIntensity", "lampRange", "antialiasing",
     "textureQuality", "colormapTheme", "smoothTerrainSpikes",
+    "showWaterSurface", "showLandmass",
   ],
   hud: [
     "hudOpacity", "showCrosshairGps", "showCameraPosition", "showSpeedIndicator",
@@ -563,6 +572,8 @@ export const useSettingsStore = create<SettingsStore>()(
         setTextureQuality: (v) => set({ textureQuality: v, qualityPreset: "custom" }),
         setColormapTheme: setter("colormapTheme"),
         setSmoothTerrainSpikes: setter("smoothTerrainSpikes"),
+        setShowWaterSurface: setter("showWaterSurface"),
+        setShowLandmass: setter("showLandmass"),
 
         // HUD
         setHudOpacity: setter("hudOpacity"),

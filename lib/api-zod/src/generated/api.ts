@@ -30,7 +30,8 @@ export const GetDatasetsResponseItem = zod.object({
   "minLat": zod.number(),
   "maxLon": zod.number(),
   "maxLat": zod.number()
-}).describe('Bounding box [minLon, minLat, maxLon, maxLat]')
+}).describe('Bounding box [minLon, minLat, maxLon, maxLat]'),
+  "hasTopography": zod.boolean().optional().describe('True when the dataset bbox includes above-water terrain (land\/islands) suitable for landmass visualisation.')
 })
 export const GetDatasetsResponse = zod.array(GetDatasetsResponseItem)
 
@@ -69,6 +70,8 @@ export const GetDatasetsIdTerrainResponse = zod.object({
   "maxLat": zod.number(),
   "centerLon": zod.number(),
   "centerLat": zod.number(),
+  "topography": zod.array(zod.number()).optional().describe('Row-major flat array of above-water elevation values (metres above sea level, 0 for water cells). Same NxN shape as `depths`. Omitted when the dataset has no above-water terrain.'),
+  "hasTopography": zod.boolean().optional().describe('True when this terrain grid includes a non-empty `topography` array. Clients can use this to enable\/hide the landmass visualisation.'),
   "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
   "dataSource": zod.enum(['ncei', 'gebco', 'synthetic']).optional().describe('Which upstream data service produced this grid.\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\n')
 })
@@ -98,6 +101,8 @@ export const GetDatasetsIdOverviewResponse = zod.object({
   "maxLat": zod.number(),
   "centerLon": zod.number(),
   "centerLat": zod.number(),
+  "topography": zod.array(zod.number()).optional().describe('Row-major flat array of above-water elevation values (metres above sea level, 0 for water cells). Same NxN shape as `depths`. Omitted when the dataset has no above-water terrain.'),
+  "hasTopography": zod.boolean().optional().describe('True when this terrain grid includes a non-empty `topography` array. Clients can use this to enable\/hide the landmass visualisation.'),
   "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
   "dataSource": zod.enum(['ncei', 'gebco', 'synthetic']).optional().describe('Which upstream data service produced this grid.\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\n')
 })
@@ -135,6 +140,8 @@ export const PostDatasetsUploadResponse = zod.object({
   "maxLat": zod.number(),
   "centerLon": zod.number(),
   "centerLat": zod.number(),
+  "topography": zod.array(zod.number()).optional().describe('Row-major flat array of above-water elevation values (metres above sea level, 0 for water cells). Same NxN shape as `depths`. Omitted when the dataset has no above-water terrain.'),
+  "hasTopography": zod.boolean().optional().describe('True when this terrain grid includes a non-empty `topography` array. Clients can use this to enable\/hide the landmass visualisation.'),
   "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
   "dataSource": zod.enum(['ncei', 'gebco', 'synthetic']).optional().describe('Which upstream data service produced this grid.\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\n')
 }),
@@ -154,6 +161,8 @@ export const PostDatasetsUploadResponse = zod.object({
   "maxLat": zod.number(),
   "centerLon": zod.number(),
   "centerLat": zod.number(),
+  "topography": zod.array(zod.number()).optional().describe('Row-major flat array of above-water elevation values (metres above sea level, 0 for water cells). Same NxN shape as `depths`. Omitted when the dataset has no above-water terrain.'),
+  "hasTopography": zod.boolean().optional().describe('True when this terrain grid includes a non-empty `topography` array. Clients can use this to enable\/hide the landmass visualisation.'),
   "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
   "dataSource": zod.enum(['ncei', 'gebco', 'synthetic']).optional().describe('Which upstream data service produced this grid.\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\n')
 }),
@@ -206,6 +215,8 @@ export const GetUserDatasetsIdTerrainResponse = zod.object({
   "maxLat": zod.number(),
   "centerLon": zod.number(),
   "centerLat": zod.number(),
+  "topography": zod.array(zod.number()).optional().describe('Row-major flat array of above-water elevation values (metres above sea level, 0 for water cells). Same NxN shape as `depths`. Omitted when the dataset has no above-water terrain.'),
+  "hasTopography": zod.boolean().optional().describe('True when this terrain grid includes a non-empty `topography` array. Clients can use this to enable\/hide the landmass visualisation.'),
   "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
   "dataSource": zod.enum(['ncei', 'gebco', 'synthetic']).optional().describe('Which upstream data service produced this grid.\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\n')
 })
@@ -234,6 +245,8 @@ export const GetUserDatasetsIdOverviewResponse = zod.object({
   "maxLat": zod.number(),
   "centerLon": zod.number(),
   "centerLat": zod.number(),
+  "topography": zod.array(zod.number()).optional().describe('Row-major flat array of above-water elevation values (metres above sea level, 0 for water cells). Same NxN shape as `depths`. Omitted when the dataset has no above-water terrain.'),
+  "hasTopography": zod.boolean().optional().describe('True when this terrain grid includes a non-empty `topography` array. Clients can use this to enable\/hide the landmass visualisation.'),
   "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
   "dataSource": zod.enum(['ncei', 'gebco', 'synthetic']).optional().describe('Which upstream data service produced this grid.\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\n')
 })

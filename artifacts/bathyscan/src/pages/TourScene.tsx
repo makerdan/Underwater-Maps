@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { MapControls } from "@react-three/drei";
 import * as THREE from "three";
 import {
@@ -20,7 +20,9 @@ import { DepthPoleLayer, DepthPoleDomLabels } from "@/components/DepthPoleLayer"
 import { GpsMarker } from "@/components/GpsMarker";
 import { DepthProfileLine } from "@/components/DepthProfileLine";
 import type { TidalDataResult } from "@/hooks/useTidalData";
-import { MAX_DEPTH_WORLD, WORLD_SIZE } from "@/lib/terrain";
+import { MAX_DEPTH_WORLD } from "@/lib/terrain";
+import { WaterSurfacePlane } from "@/components/WaterSurfacePlane";
+import { LandmassMesh } from "@/components/LandmassMesh";
 import type { TerrainData } from "@workspace/api-client-react";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useDriftStore } from "@/lib/driftStore";
@@ -106,45 +108,25 @@ function seaSurfaceY(terrain: TerrainData): number {
 }
 
 // ---------------------------------------------------------------------------
-// Ocean surface transparency plane — anchors depth poles visually
-// ---------------------------------------------------------------------------
-const OceanSurfacePlane: React.FC = () => {
-  const meshRef = React.useRef<THREE.Mesh>(null);
-  const { camera } = useThree();
-
-  useFrame(() => {
-    if (meshRef.current) {
-      meshRef.current.visible = camera.position.y < 0;
-    }
-  });
-
-  return (
-    <mesh ref={meshRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-      <planeGeometry args={[WORLD_SIZE, WORLD_SIZE]} />
-      <meshStandardMaterial
-        color="#aaddff"
-        transparent
-        opacity={0.08}
-        depthWrite={false}
-        side={THREE.DoubleSide}
-      />
-    </mesh>
-  );
-};
-
-// ---------------------------------------------------------------------------
-// Tidal 3D contents — lives inside <Canvas>
+// Tidal 3D contents — lives inside <Canvas>.
+//
+// When tidal overlay is on we substitute TidalWaterPlane for the static
+// WaterSurfacePlane so the surface visibly rises/falls with the tide.
+// Both are gated on `showWaterSurface` so disabling the toggle hides any
+// water plane (useful for cross-sections / dry-bathymetry views).
 // ---------------------------------------------------------------------------
 interface TidalSceneContentsProps {
   tidalData: TidalDataResult | null;
   depthLayer: DepthLayer;
   terrain: TerrainData;
+  showWaterSurface: boolean;
 }
 
 const TidalSceneContents: React.FC<TidalSceneContentsProps> = ({
   tidalData,
   depthLayer,
   terrain,
+  showWaterSurface,
 }) => {
   if (!tidalData?.available) return null;
 
@@ -152,7 +134,9 @@ const TidalSceneContents: React.FC<TidalSceneContentsProps> = ({
 
   return (
     <>
-      <TidalWaterPlane tideHeight={tidalData.tideHeight} terrain={terrain} />
+      {showWaterSurface && (
+        <TidalWaterPlane tideHeight={tidalData.tideHeight} terrain={terrain} />
+      )}
       <TidalCurrentArrows
         currentDirection={tidalData.currentDirection}
         currentSpeed={tidalData.currentSpeed}
@@ -209,6 +193,8 @@ const SceneContents: React.FC<SceneContentsProps> = ({
   const ambientIntensity = useSettingsStore((s) => s.ambientLightIntensity);
   const directionalIntensity = useSettingsStore((s) => s.directionalLightIntensity);
   const waterType = useSettingsStore((s) => s.waterType);
+  const showWaterSurface = useSettingsStore((s) => s.showWaterSurface);
+  const showLandmass = useSettingsStore((s) => s.showLandmass);
 
   // Freshwater environments are clearer and brighter than the open ocean —
   // shift the background/fog hue toward green-teal, thin the fog, and warm
@@ -231,18 +217,21 @@ const SceneContents: React.FC<SceneContentsProps> = ({
 
       <Particles />
       {terrain && <TerrainMesh ref={terrainMeshRef} grid={terrain} />}
+      {terrain && showLandmass && <LandmassMesh grid={terrain} />}
       <EfhZoneLayer />
       <Caustics />
 
-      {tidalOverlay && terrain && (
+      {tidalOverlay && terrain ? (
         <TidalSceneContents
           tidalData={tidalData}
           depthLayer={depthLayer}
           terrain={terrain}
+          showWaterSurface={showWaterSurface}
         />
+      ) : (
+        terrain && showWaterSurface && <WaterSurfacePlane terrain={terrain} />
       )}
 
-      <OceanSurfacePlane />
       <MarkerLayer />
       <DepthPoleLayer />
       <GpsMarker />

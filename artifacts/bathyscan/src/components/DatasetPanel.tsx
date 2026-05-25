@@ -101,6 +101,7 @@ export const DatasetPanel: React.FC = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const waterType = useSettingsStore((s) => s.waterType);
+  const showLandmass = useSettingsStore((s) => s.showLandmass);
 
   // ─── Fetch dataset lists ───────────────────────────────────────────────────
   const { data: datasets, isLoading: datasetsLoading } = useGetDatasets();
@@ -583,12 +584,47 @@ export const DatasetPanel: React.FC = () => {
                   >
                     {ds.description}
                   </div>
+                  {ds.hasTopography && (
+                    <span
+                      data-testid={`topo-badge-${ds.id}`}
+                      title="Includes above-water terrain"
+                      style={{
+                        display: "inline-block",
+                        marginTop: 2,
+                        fontSize: 8,
+                        color: "#f59e0b",
+                        border: "1px solid rgba(245,158,11,0.35)",
+                        borderRadius: 3,
+                        padding: "0 4px",
+                        letterSpacing: "0.08em",
+                      }}
+                    >
+                      TOPO
+                    </span>
+                  )}
                   {active && terrain && terrain.datasetId === ds.id && (
                     <div onClick={(e) => e.stopPropagation()}>
                       <ProvenancePanel
                         terrain={terrain}
                         hasEfh={EFH_DATASETS.has(ds.id)}
                       />
+                      {showLandmass && !terrain.hasTopography && (
+                        <div
+                          data-testid="landmass-no-topo-hint"
+                          style={{
+                            marginTop: 4,
+                            fontSize: 9,
+                            color: "#f59e0b",
+                            lineHeight: 1.4,
+                            padding: "3px 6px",
+                            background: "rgba(245,158,11,0.06)",
+                            border: "1px solid rgba(245,158,11,0.25)",
+                            borderRadius: 3,
+                          }}
+                        >
+                          Landmass toggle is on, but this dataset doesn't include topography. Pick a coastal dataset (TOPO badge) to see land.
+                        </div>
+                      )}
                     </div>
                   )}
                 </button>

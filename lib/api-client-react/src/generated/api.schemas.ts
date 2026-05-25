@@ -325,6 +325,8 @@ export interface DatasetMeta {
   centerLat: number;
   /** Bounding box [minLon, minLat, maxLon, maxLat] */
   bbox: DatasetMetaBbox;
+  /** True when the dataset bbox includes above-water terrain (land/islands) suitable for landmass visualisation. */
+  hasTopography?: boolean;
 }
 
 export type TerrainDataWaterType = typeof TerrainDataWaterType[keyof typeof TerrainDataWaterType];
@@ -369,6 +371,10 @@ export interface TerrainData {
   maxLat: number;
   centerLon: number;
   centerLat: number;
+  /** Row-major flat array of above-water elevation values (metres above sea level, 0 for water cells). Same NxN shape as `depths`. Omitted when the dataset has no above-water terrain. */
+  topography?: number[];
+  /** True when this terrain grid includes a non-empty `topography` array. Clients can use this to enable/hide the landmass visualisation. */
+  hasTopography?: boolean;
   /** Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback. */
   synthetic?: boolean;
   /** Which upstream data service produced this grid.
