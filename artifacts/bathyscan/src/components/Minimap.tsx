@@ -2,8 +2,11 @@ import React, { useEffect, useRef } from "react";
 import { useAppState } from "@/lib/context";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
+import { useGetMarkers, getGetMarkersQueryKey } from "@workspace/api-client-react";
+import type { Marker } from "@workspace/api-client-react";
 import { depthToColor } from "@/lib/colormap";
 import { WORLD_SIZE } from "@/lib/terrain";
+import { MARKER_COLOR } from "@/lib/markerConstants";
 
 const W = 180;
 const H = 180;
@@ -66,11 +69,51 @@ function drawArrow(
   ctx.restore();
 }
 
+function drawMarkerDots(
+  ctx: CanvasRenderingContext2D,
+  markers: Marker[],
+  minLon: number,
+  maxLon: number,
+  minLat: number,
+  maxLat: number,
+) {
+  const lonRange = maxLon - minLon || 1;
+  const latRange = maxLat - minLat || 1;
+
+  for (const m of markers) {
+    const px = ((m.lon - minLon) / lonRange) * W;
+    const py = ((m.lat - minLat) / latRange) * H;
+    if (px < 0 || px > W || py < 0 || py > H) continue;
+
+    const color = MARKER_COLOR[m.type] ?? "#e2e8f0";
+
+    ctx.beginPath();
+    ctx.arc(px, py, 3, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 5;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+}
+
 export const Minimap: React.FC = () => {
   const { terrain } = useAppState();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const heatmapRef = useRef<ImageData | null>(null);
+  const markersRef = useRef<Marker[]>([]);
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
+
+  const datasetId = terrain?.datasetId ?? "";
+  const { data: markers } = useGetMarkers(
+    { datasetId },
+    { query: { enabled: !!datasetId, queryKey: getGetMarkersQueryKey({ datasetId }) } },
+  );
+
+  // Keep markers ref in sync
+  useEffect(() => {
+    markersRef.current = markers ?? [];
+  }, [markers]);
 
   // Draw heatmap when terrain changes
   useEffect(() => {
@@ -90,11 +133,11 @@ export const Minimap: React.FC = () => {
     heatmapRef.current = ctx.getImageData(0, 0, W, H);
   }, [terrain]);
 
-  // Subscribe to cameraStore and update arrow overlay imperatively
+  // Subscribe to cameraStore and update arrow + marker dots imperatively
   useEffect(() => {
     const unsub = useCameraStore.subscribe((state) => {
       const canvas = canvasRef.current;
-      if (!canvas) return;
+      if (!canvas || !terrain) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
@@ -103,8 +146,18 @@ export const Minimap: React.FC = () => {
         ctx.putImageData(heatmapRef.current, 0, 0);
       }
 
+      // Draw marker dots
+      drawMarkerDots(
+        ctx,
+        markersRef.current,
+        terrain.minLon,
+        terrain.maxLon,
+        terrain.minLat,
+        terrain.maxLat,
+      );
+
       // Draw camera arrow if position is known
-      if (state.cameraLon !== null && state.cameraLat !== null && terrain) {
+      if (state.cameraLon !== null && state.cameraLat !== null) {
         const px = ((state.cameraLon - terrain.minLon) / (terrain.maxLon - terrain.minLon)) * W;
         const py = ((state.cameraLat - terrain.minLat) / (terrain.maxLat - terrain.minLat)) * H;
         if (px >= 0 && px <= W && py >= 0 && py <= H) {
@@ -115,6 +168,34 @@ export const Minimap: React.FC = () => {
 
     return () => { unsub(); };
   }, [terrain]);
+
+  // Force a canvas redraw whenever markers change (camera may not have moved)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !terrain) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    if (heatmapRef.current) ctx.putImageData(heatmapRef.current, 0, 0);
+
+    drawMarkerDots(
+      ctx,
+      markersRef.current,
+      terrain.minLon,
+      terrain.maxLon,
+      terrain.minLat,
+      terrain.maxLat,
+    );
+
+    const camState = useCameraStore.getState();
+    if (camState.cameraLon !== null && camState.cameraLat !== null) {
+      const px = ((camState.cameraLon - terrain.minLon) / (terrain.maxLon - terrain.minLon)) * W;
+      const py = ((camState.cameraLat - terrain.minLat) / (terrain.maxLat - terrain.minLat)) * H;
+      if (px >= 0 && px <= W && py >= 0 && py <= H) {
+        drawArrow(ctx, px, py, camState.heading);
+      }
+    }
+  }, [markers, terrain]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();

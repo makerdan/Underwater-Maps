@@ -137,10 +137,13 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         return;
       }
 
-      // G: pin GPS
+      // G: pin GPS and open marker form
       if (e.code === "KeyG") {
         const gps = useCameraStore.getState().crosshairGps;
-        if (gps) useCameraStore.getState().setLastClickedGps(gps);
+        if (gps) {
+          useCameraStore.getState().setLastClickedGps(gps);
+          useUiStore.getState().setMarkerFormOpen(true);
+        }
       }
     };
 
@@ -174,7 +177,10 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       e.preventDefault();
       if (modeRef.current !== "fly") return;
       const gps = useCameraStore.getState().crosshairGps;
-      if (gps) useCameraStore.getState().setLastClickedGps(gps);
+      if (gps) {
+        useCameraStore.getState().setLastClickedGps(gps);
+        useUiStore.getState().setMarkerFormOpen(true);
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);

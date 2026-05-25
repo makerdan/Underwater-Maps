@@ -11,16 +11,22 @@ import {
   useGetUserDatasetsIdTerrain,
   useGetUserDatasetsIdOverview,
   useDeleteUserDatasetsId,
+  useGetMarkers,
+  useDeleteMarkersId,
   getGetDatasetsIdTerrainQueryKey,
   getGetDatasetsIdOverviewQueryKey,
   getGetUserDatasetsQueryKey,
   getGetUserDatasetsIdTerrainQueryKey,
   getGetUserDatasetsIdOverviewQueryKey,
+  getGetMarkersQueryKey,
   usePostDatasetsUpload,
 } from "@workspace/api-client-react";
 import type { DatasetMeta, UserDatasetMeta } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { useTerrainStore } from "@/lib/terrainStore";
+import { useUiStore } from "@/lib/uiStore";
+import { lonLatToWorldXZ } from "@/lib/terrain";
+import { MARKER_COLOR, MARKER_ICON } from "@/lib/markerConstants";
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
@@ -286,6 +292,35 @@ export const DatasetPanel: React.FC = () => {
     disabled: postDatasetsUpload.isPending,
   });
 
+  // ─── Markers ──────────────────────────────────────────────────────────────
+  const [markersOpen, setMarkersOpen] = useState(false);
+  const markerDatasetId = terrain?.datasetId ?? "";
+  const { data: markers } = useGetMarkers(
+    { datasetId: markerDatasetId },
+    { query: { enabled: !!markerDatasetId, queryKey: getGetMarkersQueryKey({ datasetId: markerDatasetId }) } },
+  );
+  const deleteMarkerMutation = useDeleteMarkersId();
+
+  const handleDeleteMarker = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    deleteMarkerMutation.mutate(
+      { id },
+      {
+        onSuccess: () => {
+          void qc.invalidateQueries({
+            queryKey: getGetMarkersQueryKey({ datasetId: markerDatasetId }),
+          });
+        },
+      },
+    );
+  };
+
+  const handleTeleportToMarker = (lon: number, lat: number) => {
+    if (!terrain) return;
+    const { x, z } = lonLatToWorldXZ(lon, lat, terrain);
+    useUiStore.getState().setPendingDropIn({ worldX: x, worldZ: z });
+  };
+
   // ─── Render ────────────────────────────────────────────────────────────────
   const anyLoading = datasetsLoading || userDatasetsLoading;
 
@@ -445,6 +480,89 @@ export const DatasetPanel: React.FC = () => {
                   </button>
                 );
               })}
+            </div>
+          )}
+
+          {/* ── Markers section ── */}
+          {markerDatasetId && (
+            <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}>
+              <button
+                onClick={() => setMarkersOpen((o) => !o)}
+                className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
+                style={{ cursor: "pointer" }}
+              >
+                <span style={{ fontSize: 9, letterSpacing: "0.12em", color: "#334155" }}>
+                  ▼ MARKERS {markers?.length ? `(${markers.length})` : ""}
+                </span>
+                <span style={{ color: "#475569", fontSize: 10 }}>{markersOpen ? "−" : "+"}</span>
+              </button>
+
+              {markersOpen && (
+                <div style={{ paddingBottom: 4 }}>
+                  {!markers?.length && (
+                    <div style={{ fontSize: 9, color: "#334155", padding: "4px 12px 6px" }}>
+                      No markers yet — press G or right-click to drop one
+                    </div>
+                  )}
+                  {(markers ?? []).map((m) => {
+                    const color = MARKER_COLOR[m.type] ?? "#e2e8f0";
+                    const icon = MARKER_ICON[m.type] ?? "●";
+                    const deleting =
+                      deleteMarkerMutation.isPending &&
+                      (deleteMarkerMutation.variables as { id: string } | undefined)?.id === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        onClick={() => handleTeleportToMarker(m.lon, m.lat)}
+                        className="w-full text-left px-3 py-1.5 hover:bg-white/5 transition-colors group"
+                        style={{
+                          opacity: deleting ? 0.4 : 1,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <span style={{ color, fontSize: 10, flexShrink: 0 }}>{icon}</span>
+                          <span
+                            style={{
+                              flex: 1,
+                              fontSize: 10,
+                              color: "#cbd5e1",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {m.label}
+                          </span>
+                          <span style={{ fontSize: 9, color: "#334155", flexShrink: 0 }}>
+                            {Math.round(m.depth)}m
+                          </span>
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => handleDeleteMarker(e, m.id)}
+                            onKeyDown={(e) =>
+                              e.key === "Enter" &&
+                              handleDeleteMarker(e as unknown as React.MouseEvent, m.id)
+                            }
+                            className="opacity-0 group-hover:opacity-100 transition-opacity"
+                            style={{
+                              fontSize: 11,
+                              color: "#475569",
+                              cursor: "pointer",
+                              lineHeight: 1,
+                              padding: "0 2px",
+                              flexShrink: 0,
+                            }}
+                          >
+                            ×
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 

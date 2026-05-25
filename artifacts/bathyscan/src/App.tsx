@@ -17,7 +17,9 @@ import { Minimap } from "@/components/Minimap";
 import { ControlsLegend } from "@/components/ControlsLegend";
 import { AppHeader } from "@/components/AppHeader";
 import { TidePanel } from "@/components/TidePanel";
+import { MarkerForm } from "@/components/MarkerForm";
 import { useTidalData } from "@/hooks/useTidalData";
+import { useUiStore } from "@/lib/uiStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 
 const queryClient = new QueryClient();
@@ -139,6 +141,7 @@ function ClerkQueryClientCacheInvalidator() {
 function Main() {
   const { data: datasets } = useGetDatasets();
   const { datasetId, setDatasetId, terrain, tidalOverlay, setTidalOverlay } = useAppState();
+  const markerFormOpen = useUiStore((s) => s.markerFormOpen);
   const [depthLayer, setDepthLayer] = useState<DepthLayer>("surface");
   const [scrubDatetime, setScrubDatetime] = useState<Date | null>(null);
 
@@ -229,6 +232,15 @@ function Main() {
               scrubDatetime={scrubDatetime}
               onScrubChange={setScrubDatetime}
             />
+          </div>
+        )}
+
+        {/* Marker form overlay — centred, z-30 */}
+        {markerFormOpen && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+            <div style={{ pointerEvents: "auto" }}>
+              <MarkerForm />
+            </div>
           </div>
         )}
 

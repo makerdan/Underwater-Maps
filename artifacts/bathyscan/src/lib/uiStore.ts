@@ -11,6 +11,8 @@ interface UiStore {
   clearPendingDropIn: () => void;
   overviewOpen: boolean;
   setOverviewOpen: (open: boolean) => void;
+  markerFormOpen: boolean;
+  setMarkerFormOpen: (open: boolean) => void;
 }
 
 export const useUiStore = create<UiStore>((set) => ({
@@ -19,4 +21,6 @@ export const useUiStore = create<UiStore>((set) => ({
   clearPendingDropIn: () => set({ pendingDropIn: null }),
   overviewOpen: false,
   setOverviewOpen: (open) => set({ overviewOpen: open }),
+  markerFormOpen: false,
+  setMarkerFormOpen: (open) => set({ markerFormOpen: open }),
 }));

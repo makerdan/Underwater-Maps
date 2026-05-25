@@ -13,6 +13,7 @@ import { Caustics } from "@/components/Caustics";
 import { useFlyControls } from "@/hooks/useFlyControls";
 import { TidalWaterPlane } from "@/components/TidalWaterPlane";
 import { TidalCurrentArrows, type DepthLayer } from "@/components/TidalCurrentArrows";
+import { MarkerLayer } from "@/components/MarkerLayer";
 import type { TidalDataResult } from "@/hooks/useTidalData";
 import { MAX_DEPTH_WORLD } from "@/lib/terrain";
 import type { TerrainData } from "@workspace/api-client-react";
@@ -133,6 +134,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
         />
       )}
 
+      <MarkerLayer />
       <FlyControlsScene terrainMeshRef={terrainMeshRef} />
     </>
   );
