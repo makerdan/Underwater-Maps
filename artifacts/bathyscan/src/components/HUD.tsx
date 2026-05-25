@@ -85,6 +85,7 @@ export const HUD: React.FC = () => {
   const largeHudText = useSettingsStore((s) => s.largeHudText);
   const highContrastHud = useSettingsStore((s) => s.highContrastHud);
   const colorBlindSafePalette = useSettingsStore((s) => s.colorBlindSafePalette);
+  const smoothTerrainSpikes = useSettingsStore((s) => s.smoothTerrainSpikes);
 
   // Resolve accent + base text colours from the accessibility prefs. The
   // colour-blind safe palette swaps cyan for a deuteranopia-safe amber-yellow
@@ -278,6 +279,32 @@ export const HUD: React.FC = () => {
               }}
             >
               ⚠ SIMULATED DATA
+            </div>
+          </ViewscreenTooltip>
+        )}
+
+        {/* Raw bathymetry badge — shown when terrain smoothing is disabled
+            so users can tell at a glance that on-screen noise is the real
+            sounder data, not a rendering bug. */}
+        {!smoothTerrainSpikes && (
+          <ViewscreenTooltip
+            label="Terrain smoothing is off. You're viewing the raw sounder grid — spikes and dropouts are real data, not rendering glitches."
+            side="bottom"
+          >
+            <div
+              data-testid="raw-bathymetry-badge"
+              style={{
+                ...PANEL,
+                fontSize: 10,
+                border: "1px solid rgba(148,163,184,0.5)",
+                background: "rgba(148,163,184,0.10)",
+                color: "#cbd5e1",
+                letterSpacing: "0.18em",
+                fontWeight: 700,
+                textShadow: highContrastHud ? "0 0 2px #000, 0 0 6px #000" : "0 0 6px rgba(148,163,184,0.4)",
+              }}
+            >
+              ◆ RAW BATHYMETRY
             </div>
           </ViewscreenTooltip>
         )}
