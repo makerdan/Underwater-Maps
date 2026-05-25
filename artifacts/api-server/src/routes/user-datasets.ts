@@ -161,8 +161,7 @@ router.get("/user/datasets/:id/terrain", requireAuth, async (req, res): Promise<
     return;
   }
 
-  const terrainJson = { ...(row.terrainJson as Record<string, unknown>), datasetId: id };
-  res.json(GetUserDatasetsIdTerrainResponse.parse(terrainJson));
+  res.json(GetUserDatasetsIdTerrainResponse.parse(row.terrainJson));
 });
 
 // ── GET /user/datasets/:id/overview ────────────────────────────────────────
@@ -180,8 +179,7 @@ router.get("/user/datasets/:id/overview", requireAuth, async (req, res): Promise
     return;
   }
 
-  const overviewJson = { ...(row.overviewJson as Record<string, unknown>), datasetId: id };
-  res.json(GetUserDatasetsIdOverviewResponse.parse(overviewJson));
+  res.json(GetUserDatasetsIdOverviewResponse.parse(row.overviewJson));
 });
 
 // ── DELETE /user/datasets/:id ───────────────────────────────────────────────
