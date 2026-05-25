@@ -204,6 +204,30 @@ export const HUD: React.FC = () => {
           <HelpIcon articleId="interface-tour" label="Help: HUD overlay" />
         </div>
 
+        {/* Synthetic / simulated data warning badge */}
+        {terrain?.synthetic && (
+          <ViewscreenTooltip
+            label="Real bathymetry sources were unreachable. Depths shown are procedurally generated, not actual sonar measurements."
+            side="bottom"
+          >
+            <div
+              data-testid="synthetic-data-badge"
+              style={{
+                ...PANEL,
+                fontSize: 10,
+                border: "1px solid rgba(245,158,11,0.5)",
+                background: "rgba(245,158,11,0.10)",
+                color: "#f59e0b",
+                letterSpacing: "0.18em",
+                fontWeight: 700,
+                textShadow: "0 0 6px rgba(245,158,11,0.4)",
+              }}
+            >
+              ⚠ SIMULATED DATA
+            </div>
+          </ViewscreenTooltip>
+        )}
+
         {/* Drift / Trolling mode badge */}
         {driftPlannerActive && (
           <div
