@@ -336,6 +336,8 @@ function Main() {
       if (e.key === "Escape" && !e.repeat) {
         setQueryOpen(false);
         useHighlightStore.getState().clearHighlight();
+        const store = useUiStore.getState();
+        if (store.overviewOpen) store.setOverviewOpen(false);
       }
     };
     window.addEventListener("keydown", handler);
