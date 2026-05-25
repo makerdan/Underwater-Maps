@@ -5,6 +5,8 @@
 import React, { useEffect } from "react";
 import { useMarkerDetailStore } from "@/lib/markerDetailStore";
 import { MARKER_COLOR, MARKER_ICON } from "@/lib/markerConstants";
+import { useSettingsStore } from "@/lib/settingsStore";
+import { formatDepth } from "@/lib/units";
 
 const MONO: React.CSSProperties = {
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
@@ -13,6 +15,7 @@ const MONO: React.CSSProperties = {
 export const MarkerDetailCard: React.FC = () => {
   const marker = useMarkerDetailStore((s) => s.marker);
   const hide = useMarkerDetailStore((s) => s.hide);
+  const units = useSettingsStore((s) => s.units);
 
   useEffect(() => {
     if (!marker) return;
@@ -79,7 +82,7 @@ export const MarkerDetailCard: React.FC = () => {
         <span style={{ color: "#475569" }}>LAT</span>
         <span style={{ color: "#00e5ff" }}>{marker.lat.toFixed(5)}°</span>
         <span style={{ color: "#475569" }}>DEPTH</span>
-        <span style={{ color: "#fb923c" }}>{Math.round(marker.depth)} m</span>
+        <span style={{ color: "#fb923c" }}>{formatDepth(marker.depth, { units })}</span>
         {createdAt && (
           <>
             <span style={{ color: "#475569" }}>CREATED</span>

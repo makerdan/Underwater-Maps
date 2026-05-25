@@ -8,6 +8,8 @@
  */
 import React, { useEffect } from "react";
 import { useMeasureStore } from "@/lib/measureStore";
+import { useSettingsStore } from "@/lib/settingsStore";
+import { formatDistance, formatDepth } from "@/lib/units";
 
 const AUTO_DISMISS_MS = 8000;
 
@@ -15,6 +17,7 @@ export const MeasurementBanner: React.FC = () => {
   const anchorGps = useMeasureStore((s) => s.anchorGps);
   const result = useMeasureStore((s) => s.result);
   const clearResult = useMeasureStore((s) => s.clearResult);
+  const units = useSettingsStore((s) => s.units);
 
   useEffect(() => {
     if (!result) return;
@@ -55,9 +58,7 @@ export const MeasurementBanner: React.FC = () => {
         <>
           <span>📏 DIST </span>
           <span style={{ color: "#00e5ff", fontWeight: 600 }}>
-            {result.distanceKm < 1
-              ? `${Math.round(result.distanceKm * 1000)} m`
-              : `${result.distanceKm.toFixed(2)} km`}
+            {formatDistance(result.distanceKm * 1000, { units })}
           </span>
           <span style={{ color: "#475569" }}>{"   ·   "}</span>
           <span>Δ DEPTH </span>
@@ -68,7 +69,7 @@ export const MeasurementBanner: React.FC = () => {
             }}
           >
             {result.depthDeltaM >= 0 ? "+" : ""}
-            {Math.round(result.depthDeltaM)} m
+            {formatDepth(result.depthDeltaM, { units })}
           </span>
         </>
       )}

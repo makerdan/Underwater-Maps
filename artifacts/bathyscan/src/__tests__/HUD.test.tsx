@@ -35,6 +35,7 @@ vi.mock("@/lib/settingsStore", () => ({
       showHeading: boolean;
       coordinateFormat: "decimal";
       depthUnit: "metres";
+      units: "metric";
       hudOpacity: number;
     }) => unknown,
   ) =>
@@ -45,6 +46,7 @@ vi.mock("@/lib/settingsStore", () => ({
       showHeading: true,
       coordinateFormat: "decimal",
       depthUnit: "metres",
+      units: "metric",
       hudOpacity: 1,
     }),
 }));

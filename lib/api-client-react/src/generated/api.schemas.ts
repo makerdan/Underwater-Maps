@@ -156,6 +156,17 @@ export const UserSettingsDepthUnit = {
   feet: 'feet',
 } as const;
 
+/**
+ * Global units system applied to depths, distances, speeds and temperatures throughout the app.
+ */
+export type UserSettingsUnits = typeof UserSettingsUnits[keyof typeof UserSettingsUnits];
+
+
+export const UserSettingsUnits = {
+  metric: 'metric',
+  imperial: 'imperial',
+} as const;
+
 export type UserSettingsVisibleMarkerTypesItem = typeof UserSettingsVisibleMarkerTypesItem[keyof typeof UserSettingsVisibleMarkerTypesItem];
 
 
@@ -220,6 +231,8 @@ export interface UserSettings {
   showHeading?: boolean;
   coordinateFormat?: UserSettingsCoordinateFormat;
   depthUnit?: UserSettingsDepthUnit;
+  /** Global units system applied to depths, distances, speeds and temperatures throughout the app. */
+  units?: UserSettingsUnits;
   /**
      * @minimum 0.3
      * @maximum 1

@@ -399,6 +399,7 @@ export const getSettingsResponseShowSpeedIndicatorDefault = true;
 export const getSettingsResponseShowHeadingDefault = true;
 export const getSettingsResponseCoordinateFormatDefault = `decimal`;
 export const getSettingsResponseDepthUnitDefault = `metres`;
+export const getSettingsResponseUnitsDefault = `metric`;
 export const getSettingsResponseHudOpacityDefault = 0.75;
 export const getSettingsResponseHudOpacityMin = 0.3;
 export const getSettingsResponseHudOpacityMax = 1;
@@ -438,6 +439,7 @@ export const GetSettingsResponse = zod.object({
   "showHeading": zod.boolean().default(getSettingsResponseShowHeadingDefault),
   "coordinateFormat": zod.enum(['decimal', 'dms']).default(getSettingsResponseCoordinateFormatDefault),
   "depthUnit": zod.enum(['metres', 'feet']).default(getSettingsResponseDepthUnitDefault),
+  "units": zod.enum(['metric', 'imperial']).default(getSettingsResponseUnitsDefault).describe('Global units system applied to depths, distances, speeds and temperatures throughout the app.'),
   "hudOpacity": zod.number().min(getSettingsResponseHudOpacityMin).max(getSettingsResponseHudOpacityMax).default(getSettingsResponseHudOpacityDefault),
   "overviewDefaultZoom": zod.number().min(getSettingsResponseOverviewDefaultZoomMin).max(getSettingsResponseOverviewDefaultZoomMax).default(getSettingsResponseOverviewDefaultZoomDefault),
   "overviewShowGrid": zod.boolean().default(getSettingsResponseOverviewShowGridDefault),
@@ -485,6 +487,7 @@ export const putSettingsBodyShowSpeedIndicatorDefault = true;
 export const putSettingsBodyShowHeadingDefault = true;
 export const putSettingsBodyCoordinateFormatDefault = `decimal`;
 export const putSettingsBodyDepthUnitDefault = `metres`;
+export const putSettingsBodyUnitsDefault = `metric`;
 export const putSettingsBodyHudOpacityDefault = 0.75;
 export const putSettingsBodyHudOpacityMin = 0.3;
 export const putSettingsBodyHudOpacityMax = 1;
@@ -524,6 +527,7 @@ export const PutSettingsBody = zod.object({
   "showHeading": zod.boolean().default(putSettingsBodyShowHeadingDefault),
   "coordinateFormat": zod.enum(['decimal', 'dms']).default(putSettingsBodyCoordinateFormatDefault),
   "depthUnit": zod.enum(['metres', 'feet']).default(putSettingsBodyDepthUnitDefault),
+  "units": zod.enum(['metric', 'imperial']).default(putSettingsBodyUnitsDefault).describe('Global units system applied to depths, distances, speeds and temperatures throughout the app.'),
   "hudOpacity": zod.number().min(putSettingsBodyHudOpacityMin).max(putSettingsBodyHudOpacityMax).default(putSettingsBodyHudOpacityDefault),
   "overviewDefaultZoom": zod.number().min(putSettingsBodyOverviewDefaultZoomMin).max(putSettingsBodyOverviewDefaultZoomMax).default(putSettingsBodyOverviewDefaultZoomDefault),
   "overviewShowGrid": zod.boolean().default(putSettingsBodyOverviewShowGridDefault),
@@ -566,6 +570,7 @@ export const putSettingsResponseShowSpeedIndicatorDefault = true;
 export const putSettingsResponseShowHeadingDefault = true;
 export const putSettingsResponseCoordinateFormatDefault = `decimal`;
 export const putSettingsResponseDepthUnitDefault = `metres`;
+export const putSettingsResponseUnitsDefault = `metric`;
 export const putSettingsResponseHudOpacityDefault = 0.75;
 export const putSettingsResponseHudOpacityMin = 0.3;
 export const putSettingsResponseHudOpacityMax = 1;
@@ -605,6 +610,7 @@ export const PutSettingsResponse = zod.object({
   "showHeading": zod.boolean().default(putSettingsResponseShowHeadingDefault),
   "coordinateFormat": zod.enum(['decimal', 'dms']).default(putSettingsResponseCoordinateFormatDefault),
   "depthUnit": zod.enum(['metres', 'feet']).default(putSettingsResponseDepthUnitDefault),
+  "units": zod.enum(['metric', 'imperial']).default(putSettingsResponseUnitsDefault).describe('Global units system applied to depths, distances, speeds and temperatures throughout the app.'),
   "hudOpacity": zod.number().min(putSettingsResponseHudOpacityMin).max(putSettingsResponseHudOpacityMax).default(putSettingsResponseHudOpacityDefault),
   "overviewDefaultZoom": zod.number().min(putSettingsResponseOverviewDefaultZoomMin).max(putSettingsResponseOverviewDefaultZoomMax).default(putSettingsResponseOverviewDefaultZoomDefault),
   "overviewShowGrid": zod.boolean().default(putSettingsResponseOverviewShowGridDefault),

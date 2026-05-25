@@ -26,6 +26,8 @@ import {
   usePostMarkers,
   getGetMarkersQueryKey,
 } from "@workspace/api-client-react";
+import { useSettingsStore } from "@/lib/settingsStore";
+import { formatDepth } from "@/lib/units";
 
 // ---------------------------------------------------------------------------
 // Style constants (match ZoneOverlay.tsx)
@@ -90,7 +92,9 @@ const HotspotCard: React.FC<HotspotCardProps> = ({
   onFly,
   onDrop,
   dropping,
-}) => (
+}) => {
+  const units = useSettingsStore((s) => s.units);
+  return (
   <div
     style={{
       borderTop: "1px solid rgba(0,229,255,0.06)",
@@ -107,7 +111,7 @@ const HotspotCard: React.FC<HotspotCardProps> = ({
         </div>
         <ScoreBar score={hotspot.score} />
         <div style={{ fontSize: 9, color: "#64748b", marginTop: 3 }}>
-          <span>{Math.round(hotspot.depth)} m</span>
+          <span>{formatDepth(hotspot.depth, { units })}</span>
           <span style={{ color: "#1e293b", margin: "0 4px" }}>·</span>
           <span style={{ color: "#475569" }}>
             {hotspot.zoneLabel.replace(/_/g, " ")}
@@ -153,7 +157,8 @@ const HotspotCard: React.FC<HotspotCardProps> = ({
       </button>
     </div>
   </div>
-);
+  );
+};
 
 // ---------------------------------------------------------------------------
 // HabitatPanel
@@ -230,7 +235,7 @@ export const HabitatPanel: React.FC = () => {
           datasetId: terrain.datasetId,
           type: markerType as "fish",
           label: `${speciesLabel} Hotspot #${index + 1}`,
-          notes: `Score ${Math.round(h.score * 100)}% · ${Math.round(h.depth)} m · ${h.zoneLabel.replace(/_/g, " ")}`,
+          notes: `Score ${Math.round(h.score * 100)}% · ${formatDepth(h.depth, { units: "metric" })} · ${h.zoneLabel.replace(/_/g, " ")}`,
           lon: h.lon,
           lat: h.lat,
           depth: h.depth,

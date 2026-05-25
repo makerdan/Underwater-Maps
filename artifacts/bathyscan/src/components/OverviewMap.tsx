@@ -36,6 +36,7 @@ import { useGpsStore } from "@/lib/gpsStore";
 import { useTrailStore } from "@/lib/trailStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
+import { formatDepth, formatDistance } from "@/lib/units";
 
 interface TooltipState {
   visible: boolean;
@@ -54,6 +55,7 @@ export const OverviewMap: React.FC = () => {
   const gpsError = useGpsStore((s) => s.error);
   const startWatching = useGpsStore((s) => s.startWatching);
   const overviewGrid = useTerrainStore((s) => s.overviewGrid);
+  const unitsForUi = useSettingsStore((s) => s.units);
   const queryClient = useQueryClient();
 
   const datasetId = overviewGrid?.datasetId ?? "";
@@ -207,7 +209,7 @@ export const OverviewMap: React.FC = () => {
       renderHeatmap(ctx, bitmap, grid, t);
 
       // Lat/lon grid (gated by user setting; renderGridLines also checks scale ≥ 2 internally)
-      const { overviewShowGrid, overviewShowMarkers } = useSettingsStore.getState();
+      const { overviewShowGrid, overviewShowMarkers, units } = useSettingsStore.getState();
       if (overviewShowGrid) {
         renderGridLines(ctx, grid, t, cW, cH);
       }
@@ -222,7 +224,7 @@ export const OverviewMap: React.FC = () => {
         renderMarkers(ctx, markersRef.current, grid, t, cW, cH);
 
         // Depth poles (drawn above markers so labels are visible)
-        renderDepthPoles(ctx, markersRef.current, grid, t);
+        renderDepthPoles(ctx, markersRef.current, grid, t, units);
       }
 
       // Camera arrow — read from Zustand store directly (no React re-render)
@@ -259,11 +261,12 @@ export const OverviewMap: React.FC = () => {
           cW,
           cH,
           pulse,
+          units,
         );
       }
 
       // Scale bar
-      renderScaleBar(ctx, grid, t, cH);
+      renderScaleBar(ctx, grid, t, cH, units);
 
       // Subtle border
       ctx.strokeStyle = "rgba(0,229,255,0.12)";
@@ -445,7 +448,7 @@ export const OverviewMap: React.FC = () => {
           label: "Copy coordinates",
           icon: "📋",
           onClick: () => {
-            const text = `lat: ${lat.toFixed(5)}, lon: ${lon.toFixed(5)}, depth: ${Math.round(depth)}m`;
+            const text = `lat: ${lat.toFixed(5)}, lon: ${lon.toFixed(5)}, depth: ${formatDepth(depth, { units: useSettingsStore.getState().units })}`;
             if (typeof navigator !== "undefined" && navigator.clipboard) {
               navigator.clipboard.writeText(text).catch(() => {});
             }
@@ -679,7 +682,7 @@ export const OverviewMap: React.FC = () => {
           <div style={{ color: "#00e5ff", marginBottom: 1 }}>
             {tooltip.lon.toFixed(4)}° &nbsp;{tooltip.lat.toFixed(4)}°
           </div>
-          <div style={{ color: "#64748b" }}>{Math.round(tooltip.depth)} m depth</div>
+          <div style={{ color: "#64748b" }}>{formatDepth(tooltip.depth, { units: unitsForUi })} depth</div>
         </div>
       )}
     </div>
@@ -716,6 +719,7 @@ interface TrailListPanelProps {
 
 const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef, onDelete, onClose }) => {
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const unitsForUi = useSettingsStore((s) => s.units);
 
   const MONO: React.CSSProperties = {
     fontFamily: "'JetBrains Mono', monospace",
@@ -828,7 +832,7 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef,
                 value: (() => {
                   const km = computeDistanceKm(selectedCanvas);
                   if (km === null) return "—";
-                  return km >= 1 ? `${km.toFixed(2)} km` : `${Math.round(km * 1000)} m`;
+                  return formatDistance(km * 1000, { units: unitsForUi });
                 })(),
               },
               {
@@ -926,7 +930,7 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef,
                   {trail.pointCount} pts
                   {durationMin > 0 ? ` · ${durationMin} min` : ""}
                   {distKm !== null
-                    ? ` · ${distKm >= 1 ? `${distKm.toFixed(1)} km` : `${Math.round(distKm * 1000)} m`}`
+                    ? ` · ${formatDistance(distKm * 1000, { units: unitsForUi })}`
                     : ""}
                 </div>
               </div>

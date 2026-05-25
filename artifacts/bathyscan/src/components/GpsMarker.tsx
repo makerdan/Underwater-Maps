@@ -11,10 +11,13 @@ import * as THREE from "three";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useAppState } from "@/lib/context";
 import { lonLatToWorldXZ, getTerrainSurfaceY } from "@/lib/terrain";
+import { useSettingsStore } from "@/lib/settingsStore";
+import { formatDepth } from "@/lib/units";
 
 export const GpsMarker: React.FC = () => {
   const { position, active } = useGpsStore();
   const { terrain } = useAppState();
+  const units = useSettingsStore((s) => s.units);
   const ringRef = useRef<THREE.Mesh>(null);
 
   useFrame(({ clock }) => {
@@ -88,7 +91,7 @@ export const GpsMarker: React.FC = () => {
           anchorY="middle"
           position={[0, -0.65, 0]}
         >
-          {`\u2212${depthM} m below`}
+          {`\u2212${formatDepth(depthM, { units })} below`}
         </Text>
       </Billboard>
     </group>

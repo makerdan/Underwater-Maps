@@ -9,6 +9,8 @@
  */
 import React from "react";
 import { useDepthProfileStore } from "@/lib/depthProfileStore";
+import { useSettingsStore } from "@/lib/settingsStore";
+import { formatDistance, formatDepth } from "@/lib/units";
 
 // Representative colours for the four terrain texture slots. Mirrors the
 // dominant RGB used by lib/textures.ts so users can tie the strip back to
@@ -37,14 +39,11 @@ const STRIP_HEIGHT = 8;
 const PLOT_W = WIDTH - PAD_LEFT - PAD_RIGHT;
 const PLOT_H = HEIGHT - PAD_TOP - PAD_BOTTOM - STRIP_HEIGHT;
 
-function formatDistance(m: number): string {
-  if (m >= 1000) return `${(m / 1000).toFixed(2)} km`;
-  return `${m.toFixed(0)} m`;
-}
 
 export const DepthProfilePanel: React.FC = () => {
   const profile = useDepthProfileStore((s) => s.profile);
   const clearProfile = useDepthProfileStore((s) => s.clearProfile);
+  const units = useSettingsStore((s) => s.units);
 
   if (!profile) return null;
 
@@ -154,10 +153,10 @@ export const DepthProfilePanel: React.FC = () => {
 
       {/* Stats row */}
       <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 6, display: "flex", gap: 14, flexWrap: "wrap" }}>
-        <span>LEN <span style={{ color: "#e2e8f0" }}>{formatDistance(totalDistanceM)}</span></span>
-        <span>MIN <span style={{ color: "#e2e8f0" }}>{minDepthM.toFixed(1)} m</span></span>
-        <span>MAX <span style={{ color: "#e2e8f0" }}>{maxDepthM.toFixed(1)} m</span></span>
-        <span>Δ <span style={{ color: "#e2e8f0" }}>{(maxDepthM - minDepthM).toFixed(1)} m</span></span>
+        <span>LEN <span style={{ color: "#e2e8f0" }}>{formatDistance(totalDistanceM, { units })}</span></span>
+        <span>MIN <span style={{ color: "#e2e8f0" }}>{formatDepth(minDepthM, { units, decimals: 1 })}</span></span>
+        <span>MAX <span style={{ color: "#e2e8f0" }}>{formatDepth(maxDepthM, { units, decimals: 1 })}</span></span>
+        <span>Δ <span style={{ color: "#e2e8f0" }}>{formatDepth(maxDepthM - minDepthM, { units, decimals: 1 })}</span></span>
       </div>
 
       {/* Chart */}
@@ -192,7 +191,7 @@ export const DepthProfilePanel: React.FC = () => {
                 textAnchor="end"
                 fontFamily="'JetBrains Mono', monospace"
               >
-                {d.toFixed(0)}m
+                {formatDepth(d, { units, localize: false })}
               </text>
             </g>
           );

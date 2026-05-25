@@ -10,6 +10,8 @@ import { useGetMarkers, getGetMarkersQueryKey } from "@workspace/api-client-reac
 import { useAppState } from "@/lib/context";
 import { DepthPole } from "./DepthPole";
 import { DEPTH_POLE_DEFAULT_COLOUR } from "@/lib/markerConstants";
+import { useSettingsStore } from "@/lib/settingsStore";
+import { formatDepth } from "@/lib/units";
 
 // ---------------------------------------------------------------------------
 // R3F component — lives inside <Canvas>
@@ -41,6 +43,7 @@ export const DepthPoleLayer: React.FC = () => {
 // Renders hidden spans so .depth-pole-label is queryable in E2E tests.
 // ---------------------------------------------------------------------------
 export const DepthPoleDomLabels: React.FC = () => {
+  const units = useSettingsStore((s) => s.units);
   const { terrain } = useAppState();
   const datasetId = terrain?.datasetId ?? "";
 
@@ -55,7 +58,7 @@ export const DepthPoleDomLabels: React.FC = () => {
   return (
     <div aria-hidden style={{ position: "absolute", width: 0, height: 0, overflow: "hidden" }}>
       {poles.map((m) => {
-        const depthStr = `\u2212${Math.abs(Math.round(m.depth)).toLocaleString()} m`;
+        const depthStr = `\u2212${formatDepth(Math.abs(m.depth), { units })}`;
         let colour = DEPTH_POLE_DEFAULT_COLOUR;
         try {
           const parsed = JSON.parse(m.notes ?? "{}") as Record<string, unknown>;

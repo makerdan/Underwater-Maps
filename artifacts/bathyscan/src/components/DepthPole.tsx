@@ -15,6 +15,8 @@ import * as THREE from "three";
 import type { Marker, TerrainData } from "@workspace/api-client-react";
 import { lonLatToWorldXZ, getTerrainSurfaceY } from "@/lib/terrain";
 import { DEPTH_POLE_DEFAULT_COLOUR } from "@/lib/markerConstants";
+import { useSettingsStore } from "@/lib/settingsStore";
+import { formatDepth } from "@/lib/units";
 
 interface Props {
   marker: Marker;
@@ -32,6 +34,7 @@ function extractColour(marker: Marker): string {
 }
 
 export const DepthPole: React.FC<Props> = ({ marker, terrain }) => {
+  const units = useSettingsStore((s) => s.units);
   const { x, z } = lonLatToWorldXZ(marker.lon, marker.lat, terrain);
   const bottomY = getTerrainSurfaceY(terrain, x, z);
   const colour = extractColour(marker);
@@ -50,7 +53,7 @@ export const DepthPole: React.FC<Props> = ({ marker, terrain }) => {
 
   if (poleHeight < 0.05) return null;
 
-  const depthLabel = `\u2212${Math.abs(Math.round(marker.depth)).toLocaleString()} m`;
+  const depthLabel = `\u2212${formatDepth(Math.abs(marker.depth), { units })}`;
 
   return (
     <group>

@@ -23,6 +23,7 @@ const DEFAULT_SETTINGS = {
   showHeading: true,
   coordinateFormat: "decimal",
   depthUnit: "metres",
+  units: "metric",
   hudOpacity: 0.75,
   overviewDefaultZoom: 1.0,
   overviewShowGrid: true,

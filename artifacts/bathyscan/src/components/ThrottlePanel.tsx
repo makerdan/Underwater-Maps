@@ -6,6 +6,8 @@ import {
   mphToKnots,
 } from "@/lib/boatSpeed";
 import { useAppState } from "@/lib/context";
+import { useSettingsStore } from "@/lib/settingsStore";
+import { formatSpeed } from "@/lib/units";
 
 const LEVER_TRACK_H = 160;
 const LEVER_THUMB_H = 28;
@@ -49,6 +51,7 @@ interface ThrottlePanelProps {
 
 export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
   const { boatSpeedMph, setBoatSpeedMph } = useAppState();
+  const units = useSettingsStore((s) => s.units);
   const [minimized, setMinimized] = useState(false);
   const [inputVal, setInputVal] = useState<string>(String(Math.round(boatSpeedMph)));
   const [dragging, setDragging] = useState(false);
@@ -141,7 +144,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
         title="Expand throttle panel"
       >
         <span style={{ color: "#22d3ee", fontSize: 13 }}>⛵</span>
-        <span style={CYAN}>{boatSpeedMph % 1 === 0 ? boatSpeedMph : boatSpeedMph.toFixed(1)} MPH</span>
+        <span style={CYAN}>{formatSpeed(boatSpeedMph, { units }).toUpperCase()}</span>
         <span style={{ color: "#475569" }}>/</span>
         <span style={{ color: "#7dd3fc" }}>{knots.toFixed(1)} KT</span>
         <span style={{ color: "#1e3a5f", fontSize: 10 }}>▲</span>
@@ -200,7 +203,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "10px 0 4px" }}>
         <div style={{ textAlign: "center" }}>
           <div style={{ ...CYAN, fontSize: 15, fontWeight: 700, letterSpacing: "0.05em" }}>
-            {boatSpeedMph % 1 === 0 ? boatSpeedMph : boatSpeedMph.toFixed(1)} MPH
+            {formatSpeed(boatSpeedMph, { units }).toUpperCase()}
           </div>
           <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.15em", marginTop: 1 }}>
             {knots.toFixed(1)} KT
@@ -325,7 +328,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
             outline: "none",
           }}
         />
-        <span style={{ fontSize: 9, color: "#475569", whiteSpace: "nowrap" }}>MPH</span>
+        <span style={{ fontSize: 9, color: "#475569", whiteSpace: "nowrap" }}>{units === "imperial" ? "MPH" : "MPH→KM/H"}</span>
       </div>
     </div>
   );

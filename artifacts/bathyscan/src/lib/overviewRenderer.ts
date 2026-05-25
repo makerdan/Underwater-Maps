@@ -337,6 +337,7 @@ export function renderDepthPoles(
   markers: Marker[],
   grid: TerrainData,
   t: OverviewTransform,
+  units: "metric" | "imperial" = "metric",
 ): void {
   const poles = markers.filter((m) => m.type === "depth_pole");
   if (!poles.length) return;
@@ -372,7 +373,11 @@ export function renderDepthPoles(
     ctx.fillStyle = colour;
     ctx.font = "8px 'JetBrains Mono', monospace";
     ctx.textBaseline = "middle";
-    ctx.fillText(`\u2212${Math.abs(Math.round(m.depth))}m`, cx + 5, cy - 14);
+    const depthM = Math.abs(Math.round(m.depth));
+    const depthTxt = units === "imperial"
+      ? `${Math.round(depthM * 3.28084)}ft`
+      : `${depthM}m`;
+    ctx.fillText(`\u2212${depthTxt}`, cx + 5, cy - 14);
   }
   ctx.restore();
 }
@@ -396,6 +401,7 @@ export function renderGpsPosition(
   canvasW: number,
   canvasH: number,
   pulse: number,
+  units: "metric" | "imperial" = "metric",
 ): void {
   const inBounds =
     lon >= grid.minLon && lon <= grid.maxLon &&
@@ -477,7 +483,13 @@ export function renderGpsPosition(
     ctx.font = "8px 'JetBrains Mono', monospace";
     ctx.textBaseline = "middle";
     ctx.rotate(-angle);
-    const distLabel = distKm >= 10 ? `${Math.round(distKm)} km` : `${distKm.toFixed(1)} km`;
+    let distLabel: string;
+    if (units === "imperial") {
+      const mi = distKm * 0.621371;
+      distLabel = mi >= 10 ? `${Math.round(mi)} mi` : `${mi.toFixed(1)} mi`;
+    } else {
+      distLabel = distKm >= 10 ? `${Math.round(distKm)} km` : `${distKm.toFixed(1)} km`;
+    }
     ctx.fillText(distLabel, 14, 0);
 
     ctx.restore();
@@ -588,6 +600,7 @@ export function renderScaleBar(
   grid: TerrainData,
   t: OverviewTransform,
   canvasH: number,
+  units: "metric" | "imperial" = "metric",
 ): void {
   const latCenter = (grid.minLat + grid.maxLat) / 2;
   const kmPerDeg = 111.32 * Math.cos((latCenter * Math.PI) / 180);
@@ -611,9 +624,20 @@ export function renderScaleBar(
   ctx.lineTo(barX + barW, barY - 4);
   ctx.stroke();
 
-  const label = kmPer100px >= 10
-    ? `${Math.round(kmPer100px)} km`
-    : `${kmPer100px.toFixed(1)} km`;
+  let label: string;
+  if (units === "imperial") {
+    const miPer100px = kmPer100px * 0.621371;
+    if (miPer100px >= 1) {
+      label = miPer100px >= 10 ? `${Math.round(miPer100px)} mi` : `${miPer100px.toFixed(1)} mi`;
+    } else {
+      const ftPer100px = kmPer100px * 1000 * 3.28084;
+      label = `${Math.round(ftPer100px)} ft`;
+    }
+  } else {
+    label = kmPer100px >= 10
+      ? `${Math.round(kmPer100px)} km`
+      : `${kmPer100px.toFixed(1)} km`;
+  }
   ctx.textBaseline = "bottom";
   ctx.fillText(label, barX + barW / 2 - 16, barY - 6);
 

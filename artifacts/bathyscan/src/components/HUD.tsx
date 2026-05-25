@@ -8,6 +8,7 @@ import { useOfflineStore } from "@/lib/offlineStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
 import { mphToKnots } from "@/lib/boatSpeed";
+import { formatDepth, formatSpeed } from "@/lib/units";
 
 const CYAN: React.CSSProperties = {
   color: "#00e5ff",
@@ -68,7 +69,7 @@ export const HUD: React.FC = () => {
   const showSpeedIndicator = useSettingsStore((s) => s.showSpeedIndicator);
   const showHeading = useSettingsStore((s) => s.showHeading);
   const coordinateFormat = useSettingsStore((s) => s.coordinateFormat);
-  const depthUnit = useSettingsStore((s) => s.depthUnit);
+  const units = useSettingsStore((s) => s.units);
   const hudOpacity = useSettingsStore((s) => s.hudOpacity);
 
   const speed = SPEEDS[speedIndex] ?? 0.15;
@@ -81,8 +82,7 @@ export const HUD: React.FC = () => {
 
   const fmtDepth = (metres: number | null): string => {
     if (metres === null) return "—";
-    if (depthUnit === "feet") return `${Math.round(metres * 3.28084).toLocaleString()} FT`;
-    return `${Math.round(metres).toLocaleString()} M`;
+    return formatDepth(metres, { units }).toUpperCase();
   };
 
   const gpsInBounds = gpsActive && gpsPosition && overviewGrid &&
@@ -295,7 +295,7 @@ export const HUD: React.FC = () => {
             <span style={{ color: "#475569" }}>SPD </span>
             {realisticMode ? (
               <>
-                <span style={CYAN}>{boatSpeedMph % 1 === 0 ? boatSpeedMph : boatSpeedMph.toFixed(1)} MPH</span>
+                <span style={CYAN}>{formatSpeed(boatSpeedMph, { units }).toUpperCase()}</span>
                 <span style={{ color: "#475569" }}>/</span>
                 <span style={{ color: "#7dd3fc" }}>{mphToKnots(boatSpeedMph).toFixed(1)} KT</span>
                 <span

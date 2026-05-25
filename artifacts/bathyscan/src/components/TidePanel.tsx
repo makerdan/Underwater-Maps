@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from "react";
 import type { TidalDataResult } from "@/hooks/useTidalData";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
+import { useSettingsStore } from "@/lib/settingsStore";
+import { formatDistance, formatDepth } from "@/lib/units";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(0,10,20,0.88)",
@@ -66,6 +68,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
   onScrubChange,
 }) => {
   const [collapsed, setCollapsed] = useState(false);
+  const units = useSettingsStore((s) => s.units);
 
   const today = useMemo(() => {
     const d = new Date();
@@ -137,7 +140,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
 
           {!data.available && !loading && (
             <div style={{ color: "#64748b", fontSize: 10 }}>
-              No tidal station within 100 km of this area.
+              No tidal station within {formatDistance(100_000, { units })} of this area.
             </div>
           )}
 
@@ -155,7 +158,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                   <div style={LABEL}>Tide height</div>
                   <span style={{ ...CYAN, fontSize: 15, fontWeight: 700 }}>
                     {data.tideHeight >= 0 ? "+" : ""}
-                    {data.tideHeight.toFixed(2)} m
+                    {formatDepth(data.tideHeight, { units, decimals: 2 })}
                   </span>
                   <span style={{ ...DIM, fontSize: 9, marginLeft: 4 }}>MLLW</span>
                   {data.isPredicted && (
@@ -206,7 +209,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                     {data.isPredicted ? " (predicted)" : ""}
                   </div>
                   <div style={{ color: "#f0abfc", fontSize: 10 }}>
-                    {data.nextEvent.height.toFixed(2)} m — in{" "}
+                    {formatDepth(data.nextEvent.height, { units, decimals: 2 })} — in{" "}
                     {timeToNext(data.nextEvent.time, referenceTime)}
                   </div>
                 </div>

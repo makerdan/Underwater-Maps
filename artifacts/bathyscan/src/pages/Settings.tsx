@@ -497,12 +497,6 @@ function HUDSection() {
           onChange={s.setCoordinateFormat}
           options={[{ value: "decimal", label: "Decimal (12.3456°)" }, { value: "dms", label: "DMS (12°20′44″)" }]}
         />
-        <SelectRow
-          label="Depth Unit"
-          value={s.depthUnit}
-          onChange={s.setDepthUnit}
-          options={[{ value: "metres", label: "Metres (m)" }, { value: "feet", label: "Feet (ft)" }]}
-        />
         <SliderRow
           label="HUD Opacity"
           value={s.hudOpacity}
@@ -510,6 +504,88 @@ function HUDSection() {
           format={(v) => `${Math.round(v * 100)}%`}
           onChange={s.setHudOpacity}
         />
+      </div>
+    </>
+  );
+}
+
+function UnitsSection() {
+  const units = useSettingsStore((s) => s.units);
+  const setUnits = useSettingsStore((s) => s.setUnits);
+
+  const segBtn = (active: boolean): React.CSSProperties => ({
+    flex: 1,
+    padding: "8px 12px",
+    background: active ? "rgba(0,229,255,0.12)" : "transparent",
+    border: `1px solid ${active ? "rgba(0,229,255,0.5)" : "rgba(0,229,255,0.15)"}`,
+    color: active ? "#00e5ff" : "#64748b",
+    cursor: "pointer",
+    fontFamily: FONT,
+    fontSize: 10,
+    letterSpacing: "0.15em",
+    fontWeight: 700,
+    textShadow: active ? "0 0 6px rgba(0,229,255,0.5)" : "none",
+    transition: "all 0.12s",
+  });
+
+  return (
+    <>
+      <h2 style={S.sectionTitle}>◈ UNITS</h2>
+      <div style={S.card}>
+        <div style={S.cardHeader}>MEASUREMENT SYSTEM</div>
+        <div style={{ padding: "12px 16px" }}>
+          <div style={{ ...S.sublabel, marginBottom: 10, marginTop: 0 }}>
+            Applied app-wide to depths, distances, speeds and temperatures.
+          </div>
+          <div
+            role="radiogroup"
+            aria-label="Units system"
+            style={{ display: "flex", gap: 8 }}
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={units === "metric"}
+              data-testid="units-metric-btn"
+              onClick={() => setUnits("metric")}
+              style={segBtn(units === "metric")}
+            >
+              METRIC
+              <div
+                style={{
+                  fontSize: 8,
+                  marginTop: 4,
+                  letterSpacing: "0.1em",
+                  color: "#475569",
+                  fontWeight: 400,
+                }}
+              >
+                m · km · km/h · °C
+              </div>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={units === "imperial"}
+              data-testid="units-imperial-btn"
+              onClick={() => setUnits("imperial")}
+              style={segBtn(units === "imperial")}
+            >
+              IMPERIAL
+              <div
+                style={{
+                  fontSize: 8,
+                  marginTop: 4,
+                  letterSpacing: "0.1em",
+                  color: "#475569",
+                  fontWeight: 400,
+                }}
+              >
+                ft · mi · mph · °F
+              </div>
+            </button>
+          </div>
+        </div>
       </div>
     </>
   );
@@ -906,12 +982,13 @@ function AccountSection() {
 }
 
 // ─── Nav tabs ─────────────────────────────────────────────────────────────────
-type Tab = "visuals" | "navigation" | "hud" | "overview" | "markers" | "dataset" | "offline" | "account" | "environment";
+type Tab = "visuals" | "navigation" | "hud" | "units" | "overview" | "markers" | "dataset" | "offline" | "account" | "environment";
 
 const NAV_TABS: { id: Tab; label: string }[] = [
   { id: "visuals", label: "VISUALS" },
   { id: "navigation", label: "NAVIGATION" },
   { id: "hud", label: "HUD" },
+  { id: "units", label: "UNITS" },
   { id: "overview", label: "OVERVIEW MAP" },
   { id: "markers", label: "MARKERS" },
   { id: "dataset", label: "DATASET" },
@@ -972,6 +1049,7 @@ export function Settings() {
             showHeading: state.showHeading,
             coordinateFormat: state.coordinateFormat,
             depthUnit: state.depthUnit,
+            units: state.units,
             hudOpacity: state.hudOpacity,
             overviewDefaultZoom: state.overviewDefaultZoom,
             overviewShowGrid: state.overviewShowGrid,
@@ -1064,6 +1142,7 @@ export function Settings() {
           {tab === "visuals" && <VisualsSection />}
           {tab === "navigation" && <NavigationSection />}
           {tab === "hud" && <HUDSection />}
+          {tab === "units" && <UnitsSection />}
           {tab === "overview" && <OverviewSection />}
           {tab === "markers" && <MarkersSection />}
           {tab === "dataset" && <DatasetSection />}

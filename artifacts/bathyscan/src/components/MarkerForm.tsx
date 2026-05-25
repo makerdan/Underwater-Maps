@@ -13,6 +13,7 @@ import { useUiStore } from "@/lib/uiStore";
 import { useAppState } from "@/lib/context";
 import { useOfflineStore } from "@/lib/offlineStore";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { formatDepth } from "@/lib/units";
 import {
   usePostMarkers,
   getGetMarkersQueryKey,
@@ -40,6 +41,7 @@ const PANEL: React.CSSProperties = {
 export const MarkerForm: React.FC = () => {
   const gps = useCameraStore((s) => s.lastClickedGps);
   const setMarkerFormOpen = useUiStore((s) => s.setMarkerFormOpen);
+  const units = useSettingsStore((s) => s.units);
   const { terrain } = useAppState();
   const qc = useQueryClient();
   const settingsWaterType = useSettingsStore((s) => s.waterType);
@@ -233,7 +235,7 @@ export const MarkerForm: React.FC = () => {
         {[
           { key: "lon",   val: gps.lon.toFixed(4) },
           { key: "lat",   val: gps.lat.toFixed(4) },
-          { key: "depth", val: `${Math.round(gps.depth)}m` },
+          { key: "depth", val: formatDepth(gps.depth, { units }) },
         ].map(({ key, val }) => (
           <div key={key}>
             <div style={{ fontSize: 8, letterSpacing: "0.12em", color: "#334155", marginBottom: 1 }}>

@@ -3,11 +3,13 @@ import { useAppState } from "@/lib/context";
 import { colormapCanvas } from "@/lib/colormap";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
+import { formatDepth } from "@/lib/units";
 
 export const DepthScaleBar: React.FC = () => {
   const { terrain } = useAppState();
   const imgRef = useRef<HTMLImageElement>(null);
   const colormapTheme = useSettingsStore((s) => s.colormapTheme);
+  const units = useSettingsStore((s) => s.units);
   const shallow = usePaletteStore((s) => s.shallow);
   const deep = usePaletteStore((s) => s.deep);
 
@@ -26,9 +28,9 @@ export const DepthScaleBar: React.FC = () => {
     >
       <div className="flex flex-col justify-between items-end py-0 text-[10px] font-mono leading-none"
         style={{ color: "#00e5ff", textShadow: "0 0 6px #00e5ff88" }}>
-        <span>{terrain.minDepth}m</span>
-        <span>{Math.round((terrain.minDepth + terrain.maxDepth) / 2)}m</span>
-        <span>{terrain.maxDepth}m</span>
+        <span>{formatDepth(terrain.minDepth, { units })}</span>
+        <span>{formatDepth((terrain.minDepth + terrain.maxDepth) / 2, { units })}</span>
+        <span>{formatDepth(terrain.maxDepth, { units })}</span>
       </div>
       <div className="flex flex-col justify-between items-center">
         <img

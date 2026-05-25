@@ -21,6 +21,7 @@ export type TextureQuality = "off" | "low" | "high";
 export type ColormapTheme = "ocean" | "thermal" | "grayscale" | "viridis" | "freshwater";
 export type CoordinateFormat = "decimal" | "dms";
 export type DepthUnit = "metres" | "feet";
+export type UnitsSystem = "metric" | "imperial";
 export type CameraSpawnBehaviour = "deepest" | "home" | "last";
 export type MarkerType = "fish" | "shipwreck" | "coral" | "vent" | "custom" | "log" | "vegetation" | "sample";
 
@@ -46,6 +47,7 @@ export interface SettingsState {
   showHeading: boolean;
   coordinateFormat: CoordinateFormat;
   depthUnit: DepthUnit;
+  units: UnitsSystem;
   hudOpacity: number;
 
   // ── Overview Map ─────────────────────────────────────────────────────
@@ -95,6 +97,7 @@ interface SettingsActions {
   setShowHeading: (v: boolean) => void;
   setCoordinateFormat: (v: CoordinateFormat) => void;
   setDepthUnit: (v: DepthUnit) => void;
+  setUnits: (v: UnitsSystem) => void;
   setHudOpacity: (v: number) => void;
 
   setOverviewDefaultZoom: (v: number) => void;
@@ -142,6 +145,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   showHeading: true,
   coordinateFormat: "decimal",
   depthUnit: "metres",
+  units: "metric",
   hudOpacity: 0.75,
 
   overviewDefaultZoom: 1.0,
@@ -187,6 +191,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setShowHeading: (v) => set({ showHeading: v }),
       setCoordinateFormat: (v) => set({ coordinateFormat: v }),
       setDepthUnit: (v) => set({ depthUnit: v }),
+      setUnits: (v) => set({ units: v, depthUnit: v === "imperial" ? "feet" : "metres" }),
       setHudOpacity: (v) => set({ hudOpacity: v }),
 
       setOverviewDefaultZoom: (v) => set({ overviewDefaultZoom: v }),

@@ -883,6 +883,11 @@ components:
           type: string
           enum: [metres, feet]
           default: metres
+        units:
+          type: string
+          enum: [metric, imperial]
+          default: metric
+          description: Global units system applied to depths, distances, speeds and temperatures throughout the app.
         hudOpacity:
           type: number
           minimum: 0.3
