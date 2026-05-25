@@ -219,6 +219,7 @@ export const MarkerType = {
   coral: 'coral',
   vent: 'vent',
   custom: 'custom',
+  depth_pole: 'depth_pole',
 } as const;
 
 export interface Marker {
@@ -245,6 +246,7 @@ export const MarkerInputType = {
   coral: 'coral',
   vent: 'vent',
   custom: 'custom',
+  depth_pole: 'depth_pole',
 } as const;
 
 export interface MarkerInput {

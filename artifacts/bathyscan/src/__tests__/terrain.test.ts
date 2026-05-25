@@ -271,3 +271,74 @@ describe("blendZoneWeights", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// getTerrainSurfaceY
+// ---------------------------------------------------------------------------
+
+import { getTerrainSurfaceY, WORLD_SIZE, MAX_DEPTH_WORLD } from "../lib/terrain";
+
+function makeDepthGrid(
+  depths: number[],
+  resolution: number,
+  minDepth: number,
+  maxDepth: number,
+): TerrainData {
+  return {
+    datasetId: "test",
+    resolution,
+    minLon: -1,
+    maxLon: 1,
+    minLat: -1,
+    maxLat: 1,
+    minDepth,
+    maxDepth,
+    depths: new Float32Array(depths),
+  };
+}
+
+describe("getTerrainSurfaceY", () => {
+  it("returns 0 for a flat grid at minDepth (shallowest → t=0)", () => {
+    const grid = makeDepthGrid(new Array(16).fill(0), 4, 0, 100);
+    expect(getTerrainSurfaceY(grid, 0, 0)).toBeCloseTo(0, 5);
+  });
+
+  it("returns -MAX_DEPTH_WORLD for a flat grid at maxDepth (deepest → t=1)", () => {
+    const grid = makeDepthGrid(new Array(16).fill(100), 4, 0, 100);
+    expect(getTerrainSurfaceY(grid, 0, 0)).toBeCloseTo(-MAX_DEPTH_WORLD, 5);
+  });
+
+  it("returns -MAX_DEPTH_WORLD/2 for a flat grid at mid-range depth", () => {
+    const grid = makeDepthGrid(new Array(16).fill(50), 4, 0, 100);
+    expect(getTerrainSurfaceY(grid, 0, 0)).toBeCloseTo(-MAX_DEPTH_WORLD / 2, 4);
+  });
+
+  it("clamps out-of-bounds worldX/Z to the edge value", () => {
+    const grid = makeDepthGrid(new Array(16).fill(75), 4, 0, 100);
+    const yInside = getTerrainSurfaceY(grid, 0, 0);
+    const yOutside = getTerrainSurfaceY(grid, WORLD_SIZE * 10, WORLD_SIZE * 10);
+    expect(yOutside).toBeCloseTo(yInside, 5);
+  });
+
+  it("bilinearly interpolates at centre of a 2×2 corner grid", () => {
+    // corners: tl=0, tr=200, bl=200, br=400
+    // at centre (fracCol=0.5, fracRow=0.5):
+    //   d = 0*0.25 + 200*0.25 + 200*0.25 + 400*0.25 = 200
+    //   t = (200-0)/(400-0) = 0.5 → worldY = -MAX_DEPTH_WORLD*0.5
+    const grid = makeDepthGrid([0, 200, 200, 400], 2, 0, 400);
+    expect(getTerrainSurfaceY(grid, 0, 0)).toBeCloseTo(-MAX_DEPTH_WORLD * 0.5, 3);
+  });
+
+  it("always returns a non-positive value (world Y is zero or below surface)", () => {
+    const grid = makeDepthGrid(
+      Array.from({ length: 64 }, (_, i) => 100 + i * 45),
+      8,
+      100,
+      3285,
+    );
+    const testXZ: Array<[number, number]> = [[-40, -40], [-20, 10], [0, 0], [30, -30], [49, 49]];
+    for (const [wx, wz] of testXZ) {
+      expect(getTerrainSurfaceY(grid, wx, wz)).toBeLessThanOrEqual(0);
+    }
+  });
+});

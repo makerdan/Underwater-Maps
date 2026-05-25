@@ -791,7 +791,7 @@ components:
           description: Depth in metres (positive = below surface)
         type:
           type: string
-          enum: [fish, shipwreck, coral, vent, custom]
+          enum: [fish, shipwreck, coral, vent, custom, depth_pole]
         label:
           type: string
         notes:
@@ -823,7 +823,7 @@ components:
           type: number
         type:
           type: string
-          enum: [fish, shipwreck, coral, vent, custom]
+          enum: [fish, shipwreck, coral, vent, custom, depth_pole]
           default: custom
         label:
           type: string

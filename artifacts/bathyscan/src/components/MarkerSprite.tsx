@@ -32,6 +32,9 @@ function terrainWorldY(lon: number, lat: number, grid: TerrainData): number {
 }
 
 export const MarkerSprite: React.FC<Props> = ({ marker, terrain }) => {
+  // Depth poles are rendered by DepthPoleLayer, not as sprites
+  if (marker.type === "depth_pole") return null;
+
   const { x, z } = lonLatToWorldXZ(marker.lon, marker.lat, terrain);
   const y = terrainWorldY(marker.lon, marker.lat, terrain);
   const color = MARKER_COLOR[marker.type] ?? "#e2e8f0";

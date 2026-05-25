@@ -2,7 +2,7 @@ import { pgTable, text, real, timestamp, uuid } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const MARKER_TYPES = ["fish", "shipwreck", "coral", "vent", "custom"] as const;
+export const MARKER_TYPES = ["fish", "shipwreck", "coral", "vent", "custom", "depth_pole"] as const;
 export type MarkerType = (typeof MARKER_TYPES)[number];
 
 export const markersTable = pgTable("markers", {

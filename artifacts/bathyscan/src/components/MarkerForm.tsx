@@ -17,6 +17,7 @@ import {
 } from "@workspace/api-client-react";
 import {
   MARKER_TYPES,
+  DEPTH_POLE_DEFAULT_COLOUR,
   type MarkerTypeValue,
 } from "@/lib/markerConstants";
 
@@ -42,6 +43,7 @@ export const MarkerForm: React.FC = () => {
   const [label, setLabel] = useState("");
   const [notes, setNotes] = useState("");
   const [labelError, setLabelError] = useState("");
+  const [poleColour, setPoleColour] = useState(DEPTH_POLE_DEFAULT_COLOUR);
 
   // Reset form whenever it opens (gps changes)
   useEffect(() => {
@@ -49,6 +51,7 @@ export const MarkerForm: React.FC = () => {
     setNotes("");
     setLabelError("");
     setMarkerType("custom");
+    setPoleColour(DEPTH_POLE_DEFAULT_COLOUR);
   }, [gps]);
 
   const postMarkers = usePostMarkers();
@@ -61,6 +64,10 @@ export const MarkerForm: React.FC = () => {
     }
     if (!gps || !terrain) return;
 
+    const notesValue = markerType === "depth_pole"
+      ? JSON.stringify({ colour: poleColour })
+      : notes.trim().slice(0, 500) || null;
+
     postMarkers.mutate(
       {
         data: {
@@ -70,7 +77,7 @@ export const MarkerForm: React.FC = () => {
           depth: gps.depth,
           type: markerType,
           label: label.trim().slice(0, 60),
-          notes: notes.trim().slice(0, 500) || null,
+          notes: notesValue,
         },
       },
       {
@@ -225,35 +232,65 @@ export const MarkerForm: React.FC = () => {
           </div>
         </div>
 
-        {/* Notes */}
-        <div style={{ padding: "4px 14px 8px" }}>
-          <label
-            style={{ display: "block", fontSize: 8, letterSpacing: "0.12em", color: "#334155", marginBottom: 4 }}
-          >
-            NOTES (optional)
-          </label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value.slice(0, 500))}
-            placeholder="Additional observations..."
-            maxLength={500}
-            rows={3}
-            style={{
-              width: "100%",
-              background: "rgba(0,229,255,0.04)",
-              border: "1px solid rgba(0,229,255,0.12)",
-              borderRadius: 3,
-              color: "#e2e8f0",
-              fontSize: 11,
-              padding: "5px 8px",
-              fontFamily: "inherit",
-              resize: "none",
-              boxSizing: "border-box",
-              outline: "none",
-            }}
-          />
-          <div style={{ fontSize: 8, color: "#1e293b", textAlign: "right" }}>{notes.length}/500</div>
-        </div>
+        {/* Depth Pole colour picker (only for depth_pole type) */}
+        {markerType === "depth_pole" && (
+          <div style={{ padding: "4px 14px 8px" }}>
+            <label
+              style={{ display: "block", fontSize: 8, letterSpacing: "0.12em", color: "#334155", marginBottom: 6 }}
+            >
+              POLE COLOUR
+            </label>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <input
+                type="color"
+                value={poleColour}
+                onChange={(e) => setPoleColour(e.target.value)}
+                style={{
+                  width: 36,
+                  height: 28,
+                  padding: 0,
+                  border: "1px solid rgba(0,229,255,0.25)",
+                  borderRadius: 3,
+                  cursor: "pointer",
+                  background: "none",
+                }}
+              />
+              <span style={{ fontSize: 10, color: "#64748b", fontFamily: "monospace" }}>{poleColour}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Notes (hidden for depth_pole since colour is stored there) */}
+        {markerType !== "depth_pole" && (
+          <div style={{ padding: "4px 14px 8px" }}>
+            <label
+              style={{ display: "block", fontSize: 8, letterSpacing: "0.12em", color: "#334155", marginBottom: 4 }}
+            >
+              NOTES (optional)
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value.slice(0, 500))}
+              placeholder="Additional observations..."
+              maxLength={500}
+              rows={3}
+              style={{
+                width: "100%",
+                background: "rgba(0,229,255,0.04)",
+                border: "1px solid rgba(0,229,255,0.12)",
+                borderRadius: 3,
+                color: "#e2e8f0",
+                fontSize: 11,
+                padding: "5px 8px",
+                fontFamily: "inherit",
+                resize: "none",
+                boxSizing: "border-box",
+                outline: "none",
+              }}
+            />
+            <div style={{ fontSize: 8, color: "#1e293b", textAlign: "right" }}>{notes.length}/500</div>
+          </div>
+        )}
 
         {/* Actions */}
         <div

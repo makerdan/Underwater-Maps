@@ -13,6 +13,7 @@ import {
   renderHeatmap,
   renderGridLines,
   renderMarkers,
+  renderDepthPoles,
   renderCameraArrow,
   renderScaleBar,
   renderHabitatOverlay,
@@ -116,6 +117,9 @@ export const OverviewMap: React.FC = () => {
 
       // Markers
       renderMarkers(ctx, markersRef.current, grid, t, cW, cH);
+
+      // Depth poles (drawn above markers so labels are visible)
+      renderDepthPoles(ctx, markersRef.current, grid, t);
 
       // Camera arrow — read from Zustand store directly (no React re-render)
       const cam = useCameraStore.getState();

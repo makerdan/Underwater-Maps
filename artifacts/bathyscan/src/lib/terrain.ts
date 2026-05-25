@@ -356,6 +356,45 @@ export function computeStatistic(
 }
 
 /**
+ * Get the world-space Y position of the terrain surface at a given world XZ.
+ *
+ * Uses bilinear interpolation across the four nearest grid cells.
+ * Returns a negative value (deeper = more negative).
+ */
+export function getTerrainSurfaceY(
+  grid: TerrainData,
+  worldX: number,
+  worldZ: number,
+): number {
+  const { resolution: N, depths, minDepth, maxDepth } = grid;
+  const depthRange = (maxDepth - minDepth) || 1;
+
+  // Convert world XZ → fractional grid column/row
+  const fracCol = ((worldX + WORLD_SIZE / 2) / WORLD_SIZE) * (N - 1);
+  const fracRow = ((worldZ + WORLD_SIZE / 2) / WORLD_SIZE) * (N - 1);
+
+  const col0 = Math.max(0, Math.min(N - 2, Math.floor(fracCol)));
+  const row0 = Math.max(0, Math.min(N - 2, Math.floor(fracRow)));
+  const col1 = col0 + 1;
+  const row1 = row0 + 1;
+  const tx = fracCol - col0;
+  const tz = fracRow - row0;
+
+  const d00 = depths[row0 * N + col0] ?? minDepth;
+  const d10 = depths[row0 * N + col1] ?? minDepth;
+  const d01 = depths[row1 * N + col0] ?? minDepth;
+  const d11 = depths[row1 * N + col1] ?? minDepth;
+
+  const depth = d00 * (1 - tx) * (1 - tz)
+    + d10 * tx * (1 - tz)
+    + d01 * (1 - tx) * tz
+    + d11 * tx * tz;
+
+  const t = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
+  return -t * MAX_DEPTH_WORLD;
+}
+
+/**
  * Convert geographic longitude/latitude to world-space XZ coordinates.
  */
 export function lonLatToWorldXZ(

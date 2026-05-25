@@ -1,12 +1,15 @@
 import { MarkerInputType } from "@workspace/api-client-react";
 
 export const MARKER_TYPES = [
-  { value: "fish",      label: "Fish",             color: "#22c55e", icon: "◈" },
-  { value: "shipwreck", label: "Shipwreck",         color: "#f97316", icon: "⚓" },
-  { value: "coral",     label: "Coral",             color: "#f472b6", icon: "❊" },
-  { value: "vent",      label: "Hydrothermal Vent", color: "#ef4444", icon: "♨" },
-  { value: "custom",    label: "Custom",            color: "#e2e8f0", icon: "●" },
+  { value: "fish",       label: "Fish",             color: "#22c55e", icon: "◈" },
+  { value: "shipwreck",  label: "Shipwreck",         color: "#f97316", icon: "⚓" },
+  { value: "coral",      label: "Coral",             color: "#f472b6", icon: "❊" },
+  { value: "vent",       label: "Hydrothermal Vent", color: "#ef4444", icon: "♨" },
+  { value: "custom",     label: "Custom",            color: "#e2e8f0", icon: "●" },
+  { value: "depth_pole", label: "Depth Pole",        color: "#00ffee", icon: "📡" },
 ] as const;
+
+export const DEPTH_POLE_DEFAULT_COLOUR = "#00ffee";
 
 export type MarkerTypeValue = typeof MarkerInputType[keyof typeof MarkerInputType];
 

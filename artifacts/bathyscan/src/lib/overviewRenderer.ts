@@ -326,6 +326,57 @@ export function renderHabitatOverlay(
   ctx.restore();
 }
 
+/**
+ * Draw depth poles as vertical lines + disc circles on the 2D overview.
+ *
+ * Each pole is rendered as a vertical line (from centre of canvas up by ~12 px)
+ * topped with a pulsing circle, using the colour stored in marker.notes.
+ */
+export function renderDepthPoles(
+  ctx: CanvasRenderingContext2D,
+  markers: Marker[],
+  grid: TerrainData,
+  t: OverviewTransform,
+): void {
+  const poles = markers.filter((m) => m.type === "depth_pole");
+  if (!poles.length) return;
+
+  ctx.save();
+  for (const m of poles) {
+    let colour = "#00ffee";
+    try {
+      const parsed = JSON.parse(m.notes ?? "{}") as Record<string, unknown>;
+      if (typeof parsed["colour"] === "string") colour = parsed["colour"];
+    } catch { /* ignored */ }
+
+    const [cx, cy] = lonLatToCanvas(m.lon, m.lat, grid, t);
+
+    // Vertical pole line
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx, cy - 14);
+    ctx.stroke();
+
+    // Disc at top
+    ctx.fillStyle = colour;
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy - 14, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Label beside pole
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = colour;
+    ctx.font = "8px 'JetBrains Mono', monospace";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`\u2212${Math.abs(Math.round(m.depth))}m`, cx + 5, cy - 14);
+  }
+  ctx.restore();
+}
+
 /** Draw a "100 px = X km" scale bar in the bottom-left corner. */
 export function renderScaleBar(
   ctx: CanvasRenderingContext2D,

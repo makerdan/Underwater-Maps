@@ -236,7 +236,7 @@ export const GetMarkersResponseItem = zod.object({
   "lon": zod.number(),
   "lat": zod.number(),
   "depth": zod.number().describe('Depth in metres (positive = below surface)'),
-  "type": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom']),
+  "type": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'depth_pole']),
   "label": zod.string(),
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date()
@@ -254,7 +254,7 @@ export const PostMarkersBody = zod.object({
   "lon": zod.number(),
   "lat": zod.number(),
   "depth": zod.number(),
-  "type": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom']).default(postMarkersBodyTypeDefault),
+  "type": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'depth_pole']).default(postMarkersBodyTypeDefault),
   "label": zod.string(),
   "notes": zod.string().nullish()
 })

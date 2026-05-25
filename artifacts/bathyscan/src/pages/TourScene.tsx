@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { MapControls } from "@react-three/drei";
 import * as THREE from "three";
 import {
@@ -14,8 +14,9 @@ import { useFlyControls } from "@/hooks/useFlyControls";
 import { TidalWaterPlane } from "@/components/TidalWaterPlane";
 import { TidalCurrentArrows, type DepthLayer } from "@/components/TidalCurrentArrows";
 import { MarkerLayer } from "@/components/MarkerLayer";
+import { DepthPoleLayer, DepthPoleDomLabels } from "@/components/DepthPoleLayer";
 import type { TidalDataResult } from "@/hooks/useTidalData";
-import { MAX_DEPTH_WORLD } from "@/lib/terrain";
+import { MAX_DEPTH_WORLD, WORLD_SIZE } from "@/lib/terrain";
 import type { TerrainData } from "@workspace/api-client-react";
 
 // ---------------------------------------------------------------------------
@@ -61,6 +62,33 @@ function seaSurfaceY(terrain: TerrainData): number {
   const depthRange = (terrain.maxDepth - terrain.minDepth) || 1;
   return (terrain.minDepth / depthRange) * MAX_DEPTH_WORLD;
 }
+
+// ---------------------------------------------------------------------------
+// Ocean surface transparency plane — anchors depth poles visually
+// ---------------------------------------------------------------------------
+const OceanSurfacePlane: React.FC = () => {
+  const meshRef = React.useRef<THREE.Mesh>(null);
+  const { camera } = useThree();
+
+  useFrame(() => {
+    if (meshRef.current) {
+      meshRef.current.visible = camera.position.y < 0;
+    }
+  });
+
+  return (
+    <mesh ref={meshRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+      <planeGeometry args={[WORLD_SIZE, WORLD_SIZE]} />
+      <meshStandardMaterial
+        color="#aaddff"
+        transparent
+        opacity={0.08}
+        depthWrite={false}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
+};
 
 // ---------------------------------------------------------------------------
 // Tidal 3D contents — lives inside <Canvas>
@@ -134,7 +162,9 @@ const SceneContents: React.FC<SceneContentsProps> = ({
         />
       )}
 
+      <OceanSurfacePlane />
       <MarkerLayer />
+      <DepthPoleLayer />
       <FlyControlsScene terrainMeshRef={terrainMeshRef} />
     </>
   );
@@ -233,6 +263,9 @@ export const TourScene: React.FC<TourSceneProps> = ({
           onRetry={() => void refetch()}
         />
       )}
+
+      {/* Hidden DOM labels for depth-pole markers (E2E testing + accessibility) */}
+      <DepthPoleDomLabels />
     </div>
   );
 };
