@@ -160,6 +160,50 @@ test.describe("Settings page", () => {
     await expect(colormapSelect).toHaveValue("ocean");
   });
 
+  test("colormap selection survives a full page reload", async ({ page }) => {
+    await page.goto("/settings");
+    await page.waitForLoadState("networkidle");
+
+    const colormapSelect = page.locator("select").filter({ hasText: "Ocean (blue)" }).first();
+    await expect(colormapSelect).toBeVisible({ timeout: 5_000 });
+    await expect(colormapSelect).toHaveValue("ocean");
+
+    // Change to a non-default value.
+    await colormapSelect.selectOption("viridis");
+    await expect(colormapSelect).toHaveValue("viridis");
+
+    // Wait for the persist middleware to write to localStorage.
+    await expect
+      .poll(async () =>
+        page.evaluate(() => {
+          const raw = window.localStorage.getItem("bathyscan:settings");
+          if (!raw) return null;
+          try {
+            return JSON.parse(raw)?.state?.colormapTheme ?? null;
+          } catch {
+            return null;
+          }
+        }),
+        { timeout: 5_000 },
+      )
+      .toBe("viridis");
+
+    // Full page reload.
+    await page.reload();
+    await page.waitForLoadState("networkidle");
+
+    // The select should still reflect the previously chosen value.
+    const reloadedSelect = page.locator("select").filter({ hasText: "Viridis" }).first();
+    await expect(reloadedSelect).toBeVisible({ timeout: 10_000 });
+    await expect(reloadedSelect).toHaveValue("viridis");
+
+    // Cleanup: reset to defaults via the global reset (two-step confirm).
+    await page.locator("[data-testid='reset-all-btn']").click();
+    await page.locator("[data-testid='confirm-reset-all-btn']").click();
+    const resetSelect = page.locator("select").filter({ hasText: "Ocean (blue)" }).first();
+    await expect(resetSelect).toHaveValue("ocean");
+  });
+
   test("comma keyboard shortcut navigates to /settings from the main page", async ({ page }) => {
     await page.goto("/");
     await page.waitForLoadState("networkidle");
