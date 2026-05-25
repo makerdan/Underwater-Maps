@@ -338,6 +338,20 @@ export const DatasetPanel: React.FC = () => {
             }
             if (data.savedDatasetId) {
               setActiveUserDatasetId(data.savedDatasetId);
+              // Optimistically insert the freshly-saved row into the
+              // MY UPLOADS cache so it appears immediately, without
+              // waiting for a refetch round-trip (Task #133).
+              if (data.savedDatasetMeta) {
+                const meta = data.savedDatasetMeta;
+                qc.setQueryData<UserDatasetMeta[]>(
+                  getGetUserDatasetsQueryKey(),
+                  (prev) => {
+                    const list = prev ?? [];
+                    if (list.some((r) => r.id === meta.id)) return list;
+                    return [meta, ...list];
+                  },
+                );
+              }
               void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
               setSaveError(null);
               setLastUploadedFile(null);

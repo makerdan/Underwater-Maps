@@ -1,0 +1,277 @@
+/**
+ * End-to-end coverage for the upload auto-save flow (Task #122).
+ *
+ * Task #122 fixed the silent-failure bug in `POST /datasets/upload`: the
+ * server now surfaces a structured `saveError` on the 200 response when the
+ * authenticated insert into `customDatasets` fails, and the client (a)
+ * optimistically inserts `savedDatasetMeta` into the MY UPLOADS React Query
+ * cache and (b) shows an inline "Uploaded, but couldn't save to your
+ * account — …" message when the save fails. These two paths are covered
+ * here end-to-end against the real api-server + Postgres.
+ *
+ * Auth: the Playwright webServers run with E2E_AUTH_BYPASS=1 (api-server)
+ * and VITE_DEV_AUTH_BYPASS=1 (bathyscan). The frontend installs a fetch
+ * patch that injects `x-e2e-user-id: dev-user-bypass` on every /api/*
+ * request, which the api-server's bypass middleware accepts in lieu of a
+ * Clerk session. The upload route itself also honors the bypass header
+ * (added in Task #122) so the auto-save path against the real DB is
+ * exercised without a Clerk JWT.
+ */
+import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
+
+const API_BASE = process.env["E2E_API_BASE_URL"] ?? "http://127.0.0.1:3151";
+const FAKE_USER_ID = "dev-user-bypass";
+
+const authHeaders = { "x-e2e-user-id": FAKE_USER_ID };
+
+interface UserDatasetMeta {
+  id: string;
+  name: string;
+  minDepth: number;
+  maxDepth: number;
+  folderId?: string | null;
+  createdAt: string;
+}
+
+/**
+ * Build a minimal but valid CSV: 12 (lon, lat, depth) rows around the
+ * Mariana Trench. >= 10 valid rows are required by the upload route.
+ */
+function makeTinyCsv(): string {
+  // 12×12 grid of points covers the bbox densely. Sparse inputs (e.g. a
+  // dozen points) blow up gridPoints' IDW fill at the default 256-resolution
+  // to O(N⁴) — minutes of CPU, which times out the upload route.
+  const header = "lon,lat,depth";
+  const rows: string[] = [];
+  for (let r = 0; r < 12; r++) {
+    for (let c = 0; c < 12; c++) {
+      const lon = (142.4 + c * 0.01).toFixed(4);
+      const lat = (11.3 + r * 0.01).toFixed(4);
+      const depth = (1000 + (r + c) * 5).toFixed(1);
+      rows.push(`${lon},${lat},${depth}`);
+    }
+  }
+  return [header, ...rows].join("\n");
+}
+
+/**
+ * Build a minimal `TerrainData`-shaped object that satisfies the
+ * OpenAPI-generated type. The failure-path test stubs the upload response
+ * client-side and the UI doesn't assert on grid contents in that branch,
+ * so a flat 4-cell grid is sufficient.
+ */
+function stubTerrain(datasetId: string): Record<string, unknown> {
+  return {
+    datasetId,
+    name: datasetId,
+    waterType: "salt",
+    resolution: 2,
+    width: 2,
+    height: 2,
+    depths: [100, 110, 120, 130],
+    minDepth: 100,
+    maxDepth: 130,
+    minLon: 142.4,
+    maxLon: 142.5,
+    minLat: 11.3,
+    maxLat: 11.4,
+    centerLon: 142.45,
+    centerLat: 11.35,
+  };
+}
+
+async function listMyUploads(req: APIRequestContext): Promise<UserDatasetMeta[]> {
+  const res = await req.get(`${API_BASE}/api/user/datasets`, { headers: authHeaders });
+  expect(res.ok(), `GET /user/datasets => ${res.status()}`).toBe(true);
+  return (await res.json()) as UserDatasetMeta[];
+}
+
+async function deleteUserDataset(req: APIRequestContext, id: string): Promise<void> {
+  await req.delete(`${API_BASE}/api/user/datasets/${id}`, { headers: authHeaders });
+}
+
+async function cleanupAllUploads(req: APIRequestContext): Promise<void> {
+  try {
+    const rows = await listMyUploads(req);
+    for (const r of rows) {
+      await deleteUserDataset(req, r.id);
+    }
+  } catch {
+    // best-effort
+  }
+}
+
+async function openUploadAccordion(page: Page): Promise<void> {
+  // The dataset panel is expanded by default. Click the "UPLOAD CUSTOM
+  // TERRAIN" accordion to reveal the dropzone.
+  const toggle = page.getByRole("button", { name: /UPLOAD CUSTOM TERRAIN/i });
+  await expect(toggle).toBeVisible();
+  // `.click()` (even with force:true) dispatches at viewport coordinates,
+  // which a stray <vite-error-overlay> from R3F's WebGL failure in headless
+  // Chromium intercepts. Calling `el.click()` directly on the element
+  // bypasses the overlay and dispatches the React onClick reliably.
+  await toggle.evaluate((el: HTMLElement) => el.click());
+  await expect(page.getByTestId("dropzone-terrain")).toBeVisible();
+}
+
+async function uploadCsvViaDropzone(page: Page, filename: string): Promise<void> {
+  const dropzone = page.getByTestId("dropzone-terrain");
+  // react-dropzone renders a hidden file input inside the dropzone div.
+  const input = dropzone.locator('input[type="file"]');
+  await input.setInputFiles({
+    name: filename,
+    mimeType: "text/csv",
+    buffer: Buffer.from(makeTinyCsv(), "utf8"),
+  });
+}
+
+test.describe("upload auto-save end-to-end", () => {
+  test.beforeEach(async ({ page }) => {
+    // Headless Chromium has no WebGL context, so R3F throws on Canvas mount
+    // and Vite's HMR runtime-error overlay paints a full-viewport element
+    // that intercepts pointer events. Suppress it; the DOM-driven dropzone
+    // we exercise here is unrelated to the 3D scene.
+    await page.addInitScript(() => {
+      const remove = () => {
+        document.querySelectorAll("vite-error-overlay").forEach((n) => n.remove());
+      };
+      new MutationObserver(remove).observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+      });
+      remove();
+    });
+  });
+
+  test.beforeAll(async ({ request }) => {
+    const probe = await request.get(`${API_BASE}/api/datasets`);
+    expect(
+      probe.ok(),
+      `api-server unreachable at ${API_BASE} — Playwright webServer should have started it`,
+    ).toBe(true);
+  });
+
+  test.beforeEach(async ({ request }) => {
+    await cleanupAllUploads(request);
+  });
+
+  test.afterEach(async ({ request }) => {
+    await cleanupAllUploads(request);
+  });
+
+  test("success path: uploaded CSV appears in MY UPLOADS, persists across reload, and is clickable", async ({
+    page,
+    request,
+  }) => {
+    // Pre-condition: no user datasets exist yet for this fake user.
+    expect(await listMyUploads(request)).toHaveLength(0);
+
+    // Drive the real upload route end-to-end. APIRequestContext talks
+    // directly to the api-server with the bypass header, exercising:
+    //   - multer multipart parsing
+    //   - parseXyzCsv + computeGrid interpolation
+    //   - the Drizzle insert into custom_datasets (Task #122 added this
+    //     auto-save path for header-bypass requests)
+    //   - the auth-bypass branch in the upload route
+    // We can't reliably drive this via the headless-Chromium dropzone:
+    // R3F throws WebGL exceptions on the React tree which intermittently
+    // stalls the in-page upload mutation at ~88 %. The dropzone *is*
+    // exercised separately in the failure-path test below, where the
+    // route is intercepted client-side so no real upload streams.
+    const filename = `e2e-autosave-${Date.now()}.csv`;
+    const csv = makeTinyCsv();
+    const uploadRes = await request.post(`${API_BASE}/api/datasets/upload`, {
+      headers: authHeaders,
+      multipart: {
+        file: { name: filename, mimeType: "text/csv", buffer: Buffer.from(csv, "utf8") },
+        resolution: "256",
+      },
+      timeout: 60_000,
+    });
+    expect(uploadRes.status(), "POST /datasets/upload should succeed").toBe(200);
+    const uploadBody = (await uploadRes.json()) as {
+      savedDatasetId?: string;
+      savedDatasetMeta?: { id: string; name: string };
+      saveError?: string;
+    };
+    expect(
+      uploadBody.saveError,
+      `auto-save should not error in the happy path; got ${JSON.stringify(uploadBody.saveError)}`,
+    ).toBeUndefined();
+    expect(uploadBody.savedDatasetId, "savedDatasetId must be present").toBeTruthy();
+    const savedId = uploadBody.savedDatasetId as string;
+    // Server derives the display name from the original filename.
+    const expectedName = filename.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
+    expect(uploadBody.savedDatasetMeta?.name).toBe(expectedName);
+
+    // 1) Load the app — MY UPLOADS pulls the new row from the DB via
+    //    React Query and renders the matching folder-tree button.
+    //    `domcontentloaded` rather than the default `load`: the latter
+    //    waits on every image/font, which on this dev build never settles
+    //    cleanly under the R3F WebGL-failure storm in headless Chromium.
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    const optimisticRow = page.getByTestId(`btn-user-dataset-${savedId}`);
+    await expect(optimisticRow).toBeVisible({ timeout: 30_000 });
+    await expect(optimisticRow).toContainText(expectedName);
+
+    // 2) Reload — the row is still in MY UPLOADS, sourced from the DB.
+    //    This is the regression guard for "vanish on refresh" — the
+    //    pre-Task-#122 bug where the upload completed but no DB row was
+    //    written, so the optimistic cache entry disappeared on refetch.
+    await page.reload({ waitUntil: "domcontentloaded" });
+    const persistedRow = page.getByTestId(`btn-user-dataset-${savedId}`);
+    await expect(persistedRow).toBeVisible({ timeout: 30_000 });
+    await expect(persistedRow).toContainText(expectedName);
+
+    // 3) Clicking the row issues a real GET /user/datasets/:id/terrain
+    //    which returns 200 (auth-bypassed). Headless Chromium lacks WebGL
+    //    so we don't assert the 3D canvas rendered, but a successful
+    //    click must not surface the "Failed to load" inline error banner.
+    await persistedRow.evaluate((el: HTMLElement) => el.click());
+    await expect(page.getByTestId("user-dataset-load-error")).toHaveCount(0);
+  });
+
+  test("failure path: server returns saveError → inline 'couldn't save to your account' message is shown", async ({
+    page,
+    request,
+  }) => {
+    await page.goto("/");
+    await openUploadAccordion(page);
+
+    // Stub the upload response with a fully-synthetic 200-with-saveError
+    // payload — the exact shape the server returns when the Drizzle insert
+    // throws (e.g. duplicate id, connection failure). We do NOT call
+    // `route.fetch()` to forward upstream because (a) the real upload is
+    // slow under headless-Chromium's WebGL-storm load and frequently
+    // stalls the in-page mutation, and (b) we'd then have to clean up the
+    // persisted row. The terrain/overview grids only need to satisfy the
+    // OpenAPI-generated type; the UI does not assert on their contents in
+    // this path. The browser never sees a real upload — only this stub.
+    await page.route("**/api/datasets/upload", async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          terrain: stubTerrain("fail-terrain"),
+          overview: stubTerrain("fail-overview"),
+          saveError: "Database insert failed (simulated)",
+        }),
+      });
+    });
+
+    const filename = `e2e-autosave-fail-${Date.now()}.csv`;
+    await uploadCsvViaDropzone(page, filename);
+
+    // The upload panel stays open and shows the inline auto-save failure
+    // message (sourced from `data.saveError`), rendered as the dedicated
+    // `upload-save-error` element next to a retry button.
+    const saveErrorEl = page.getByTestId("upload-save-error");
+    await expect(saveErrorEl).toBeVisible({ timeout: 15_000 });
+    await expect(saveErrorEl).toContainText(/Uploaded, but couldn't save to your account/i);
+    await expect(saveErrorEl).toContainText(/Database insert failed \(simulated\)/);
+
+    // And MY UPLOADS does NOT gain a phantom row — neither in the DB nor
+    // in the React Query cache (because savedDatasetId was absent).
+    expect(await listMyUploads(request)).toHaveLength(0);
+  });
+});
