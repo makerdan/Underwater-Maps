@@ -154,6 +154,12 @@ export function __clearHighLowEventsCacheForTests(): void {
   highLowEventsCache.clear();
 }
 
+/** Exposed for tests so they can reset cached NOAA station lists. */
+export function __clearStationCachesForTests(): void {
+  heightsStationsCache = null;
+  currentsStationsCache = null;
+}
+
 /**
  * Fetch high/low tide events covering [refTime - beforeDays, refTime + afterDays].
  */
