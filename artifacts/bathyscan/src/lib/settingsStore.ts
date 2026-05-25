@@ -12,7 +12,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export const SETTINGS_SCHEMA_VERSION = 5;
+export const SETTINGS_SCHEMA_VERSION = 6;
 
 export type LandmassStyle = "realistic" | "flat";
 
@@ -42,6 +42,9 @@ export type CurrentArrowDensity = "sparse" | "normal" | "dense";
 export type TidalDepthLayer = "surface" | "mid" | "near-bottom";
 export type TrailRetention = "7" | "30" | "90" | "all";
 export type ConditionsOverlayStyle = "arrows" | "particles";
+export type WindOverlayStyle = ConditionsOverlayStyle;
+export type TideOverlayStyle = ConditionsOverlayStyle;
+export type CurrentOverlayStyle = ConditionsOverlayStyle;
 
 export type SettingsSection =
   | "camera"
@@ -139,11 +142,15 @@ export interface SettingsState {
   defaultTidalDepthLayer: TidalDepthLayer;
   currentArrowDensity: CurrentArrowDensity;
   /**
-   * Visual style for the always-on Wind / Tide / Current overlays. "arrows"
-   * (default) keeps the directional arrow field; "particles" replaces it
-   * with a streaming particle flow that emphasises eddies and shear.
+   * Per-overlay visual style for the always-on Wind / Tide / Current
+   * overlays. "arrows" (default) keeps the directional arrow field;
+   * "particles" replaces it with a streaming particle flow that emphasises
+   * eddies and shear. Choices are independent so users can, e.g., use
+   * particles for fast-moving wind but arrows for directional tide.
    */
-  conditionsOverlayStyle: ConditionsOverlayStyle;
+  windOverlayStyle: WindOverlayStyle;
+  tideOverlayStyle: TideOverlayStyle;
+  currentOverlayStyle: CurrentOverlayStyle;
 
   // ── Bathymetric Currents Simulation (Task #136) ──────────────────────
   /** Master enable for the bathymetry-shaped current simulation. */
@@ -287,7 +294,9 @@ interface SettingsActions {
   setAutoLoadTidal: (v: boolean) => void;
   setDefaultTidalDepthLayer: (v: TidalDepthLayer) => void;
   setCurrentArrowDensity: (v: CurrentArrowDensity) => void;
-  setConditionsOverlayStyle: (v: ConditionsOverlayStyle) => void;
+  setWindOverlayStyle: (v: WindOverlayStyle) => void;
+  setTideOverlayStyle: (v: TideOverlayStyle) => void;
+  setCurrentOverlayStyle: (v: CurrentOverlayStyle) => void;
 
   // Currents (Task #136)
   setCurrentsEnabled: (v: boolean) => void;
@@ -502,7 +511,9 @@ export const DEFAULT_SETTINGS: SettingsState = {
   autoLoadTidal: true,
   defaultTidalDepthLayer: "surface",
   currentArrowDensity: "normal",
-  conditionsOverlayStyle: "arrows",
+  windOverlayStyle: "arrows",
+  tideOverlayStyle: "arrows",
+  currentOverlayStyle: "arrows",
 
   // Currents (Task #136)
   currentsEnabled: false,
@@ -572,7 +583,10 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "defaultMarkerType", "defaultDepthPoleColor", "showMarkerLabels",
     "visibleMarkerTypes", "privateMarkers", "markerClusterThreshold",
   ],
-  tidal: ["autoLoadTidal", "defaultTidalDepthLayer", "currentArrowDensity", "conditionsOverlayStyle"],
+  tidal: [
+    "autoLoadTidal", "defaultTidalDepthLayer", "currentArrowDensity",
+    "windOverlayStyle", "tideOverlayStyle", "currentOverlayStyle",
+  ],
   currents: [
     "currentsEnabled", "currentsSource", "currentsManualDirectionDeg",
     "currentsManualSpeedKt", "currentsTidePhase", "currentsAutoAdvance",
@@ -702,7 +716,9 @@ export const useSettingsStore = create<SettingsStore>()(
         setAutoLoadTidal: setter("autoLoadTidal"),
         setDefaultTidalDepthLayer: setter("defaultTidalDepthLayer"),
         setCurrentArrowDensity: setter("currentArrowDensity"),
-        setConditionsOverlayStyle: setter("conditionsOverlayStyle"),
+        setWindOverlayStyle: setter("windOverlayStyle"),
+        setTideOverlayStyle: setter("tideOverlayStyle"),
+        setCurrentOverlayStyle: setter("currentOverlayStyle"),
 
         // Currents (Task #136)
         setCurrentsEnabled: setter("currentsEnabled"),
@@ -839,9 +855,28 @@ export const useSettingsStore = create<SettingsStore>()(
         // fields are present without losing user preferences.
         if (!persisted || typeof persisted !== "object") return DEFAULT_SETTINGS;
         if (version < SETTINGS_SCHEMA_VERSION) {
+          const prev = persisted as Partial<SettingsState> & {
+            conditionsOverlayStyle?: ConditionsOverlayStyle;
+          };
+          // v5 → v6: split the single `conditionsOverlayStyle` into three
+          // independent per-overlay keys, preserving the user's previous
+          // choice across all three so the visual stays identical.
+          const legacyStyle = prev.conditionsOverlayStyle;
+          const split: Partial<SettingsState> =
+            legacyStyle === "arrows" || legacyStyle === "particles"
+              ? {
+                  windOverlayStyle: legacyStyle,
+                  tideOverlayStyle: legacyStyle,
+                  currentOverlayStyle: legacyStyle,
+                }
+              : {};
+          // Drop the obsolete key so it doesn't linger in persisted state.
+          const { conditionsOverlayStyle: _drop, ...rest } = prev;
+          void _drop;
           return {
             ...DEFAULT_SETTINGS,
-            ...(persisted as Partial<SettingsState>),
+            ...rest,
+            ...split,
             schemaVersion: SETTINGS_SCHEMA_VERSION,
           };
         }

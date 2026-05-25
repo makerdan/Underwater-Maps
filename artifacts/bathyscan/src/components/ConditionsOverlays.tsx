@@ -74,7 +74,7 @@ export function windColor(knots: number): string {
 export const WindOverlay: React.FC = () => {
   const { terrain } = useAppState();
   const active = useUiStore((s) => s.windOverlayActive);
-  const style = useSettingsStore((s) => s.conditionsOverlayStyle);
+  const style = useSettingsStore((s) => s.windOverlayStyle);
   const { snapshot, estimated, fallback } = useSurfaceConditions(active);
 
   if (!active || !terrain) return null;
@@ -126,7 +126,7 @@ export const WindOverlay: React.FC = () => {
 export const TideOverlay: React.FC = () => {
   const { terrain } = useAppState();
   const active = useUiStore((s) => s.tideOverlayActive);
-  const style = useSettingsStore((s) => s.conditionsOverlayStyle);
+  const style = useSettingsStore((s) => s.tideOverlayStyle);
   const { snapshot, estimated, fallback } = useSurfaceConditions(active);
 
   // Constrain tide arrows to the shallow/shoreline band — tides drive flow
@@ -185,7 +185,7 @@ export const CurrentOverlay: React.FC = () => {
   const { terrain } = useAppState();
   const active = useUiStore((s) => s.currentOverlayActive);
   const layers = useUiStore((s) => s.currentDepthLayers);
-  const style = useSettingsStore((s) => s.conditionsOverlayStyle);
+  const style = useSettingsStore((s) => s.currentOverlayStyle);
   const { snapshot, estimated, fallback } = useSurfaceConditions(active);
 
   if (!active || !terrain || layers.length === 0) return null;

@@ -8,7 +8,7 @@
  * jitter, giving the impression of an infinite flow without ever popping.
  *
  * Used as the alternative visual style for the Wind / Tide / Current
- * overlays (settings.conditionsOverlayStyle === "particles"). The component
+ * overlays when their per-overlay style setting is "particles". The component
  * mirrors the props of {@link DirectionArrowField} as closely as possible so
  * the two layers are interchangeable from the call site.
  */
