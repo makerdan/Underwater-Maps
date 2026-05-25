@@ -25,6 +25,8 @@ import { useMarkerDetailStore } from "./markerDetailStore";
 import { useUiStore } from "./uiStore";
 import { useCameraStore } from "./cameraStore";
 import { useClassificationStore } from "./classificationStore";
+import { useHabitatStore } from "./habitatStore";
+import type { SpeciesId } from "./habitat";
 import { haversineDistance } from "./geo";
 import { queryClient } from "./queryClient";
 import { runMarkerDelete, type DeleteMarkerMutation } from "./markerActions";
@@ -227,6 +229,26 @@ export interface BathyTestApi {
     hash: string;
     sample: number[];
   } | null;
+  /**
+   * Habitat overlay helpers — drive HabitatPanel's species selector through
+   * the same store action it calls, without depending on the headless-WebGL
+   * raycaster. The Habitat overlay e2e spec uses this to flip species while
+   * a real terrain mesh is mounted and to read back the resulting scores.
+   */
+  setHabitatSpecies: (id: SpeciesId | null) => void;
+  /**
+   * Snapshot of the habitat store: which species (if any) is active, how
+   * many score cells are non-zero, the peak score, and how many hotspots
+   * passed the 75% threshold. Tests assert non-zero values to prove the
+   * scoring pipeline ran end-to-end after a species change.
+   */
+  getHabitatSummary: () => {
+    activeSpecies: SpeciesId | null;
+    scoreCount: number;
+    nonZeroCount: number;
+    maxScore: number;
+    hotspotCount: number;
+  };
   showDepthProfileTerrainMenu: (
     x: number,
     y: number,
@@ -620,6 +642,41 @@ export function installTestHelpers(): void {
       if (result.newSpeedIndex !== null) {
         camStore.setSpeedIndex(result.newSpeedIndex);
       }
+    },
+    setHabitatSpecies: (id) => {
+      const terrain = appGetTerrainRef.current;
+      const zoneMap = useClassificationStore.getState().zoneMap;
+      if (id === null) {
+        useHabitatStore.getState().setSpecies(null);
+        return;
+      }
+      useHabitatStore.getState().setSpecies(id, terrain ?? undefined, zoneMap);
+    },
+    getHabitatSummary: () => {
+      const s = useHabitatStore.getState();
+      if (!s.scores) {
+        return {
+          activeSpecies: s.activeSpecies,
+          scoreCount: 0,
+          nonZeroCount: 0,
+          maxScore: 0,
+          hotspotCount: s.hotspots.length,
+        };
+      }
+      let nz = 0;
+      let max = 0;
+      for (let i = 0; i < s.scores.length; i++) {
+        const v = s.scores[i] ?? 0;
+        if (v > 0) nz++;
+        if (v > max) max = v;
+      }
+      return {
+        activeSpecies: s.activeSpecies,
+        scoreCount: s.scores.length,
+        nonZeroCount: nz,
+        maxScore: max,
+        hotspotCount: s.hotspots.length,
+      };
     },
     showDepthProfileTerrainMenu: (x, y, point) =>
       useContextMenuStore

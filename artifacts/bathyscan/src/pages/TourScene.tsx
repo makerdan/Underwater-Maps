@@ -353,7 +353,16 @@ export const TourScene: React.FC<TourSceneProps> = ({
     <div className="relative w-full h-full">
       <Canvas
         camera={{ position: [0, 20, 40], fov, far: renderDistance }}
-        gl={{ antialias }}
+        gl={{
+          antialias,
+          // E2E-only: keep the WebGL drawing buffer so Playwright can read
+          // the actual rendered frame via canvas.toDataURL() instead of a
+          // cleared/blank buffer. Gated on a dev-only env flag set by
+          // playwright.config.ts; has no effect in production builds.
+          preserveDrawingBuffer:
+            import.meta.env.DEV &&
+            import.meta.env["VITE_E2E_PRESERVE_BUFFER"] === "1",
+        }}
         style={{ width: "100%", height: "100%" }}
       >
         <SceneContents

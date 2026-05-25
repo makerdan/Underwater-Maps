@@ -67,7 +67,7 @@ export default defineConfig({
       // gps-trail, smoke, currents) render the authenticated UI and assert
       // instead of skipping on "canvas not visible".
       command:
-        "PORT=3150 BASE_PATH=/ VITE_DEV_AUTH_BYPASS=1 E2E_API_SERVER_URL=http://127.0.0.1:3151 pnpm --filter @workspace/bathyscan run dev",
+        "PORT=3150 BASE_PATH=/ VITE_DEV_AUTH_BYPASS=1 VITE_E2E_PRESERVE_BUFFER=1 E2E_API_SERVER_URL=http://127.0.0.1:3151 pnpm --filter @workspace/bathyscan run dev",
       url: "http://localhost:3150",
       reuseExistingServer: !process.env["CI"],
       timeout: 60_000,
