@@ -29,6 +29,7 @@ import { useDriftStore } from "@/lib/driftStore";
 import { DriftWaterPlane } from "@/components/DriftWaterPlane";
 import { DriftBoat } from "@/components/DriftBoat";
 import { DriftPath } from "@/components/DriftPath";
+import { ConditionsOverlays } from "@/components/ConditionsOverlays";
 
 // ---------------------------------------------------------------------------
 // FlyControlsScene — lives inside <Canvas>, wires up controls + lamp
@@ -238,6 +239,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
       <DepthProfileLine />
       <FlyControlsScene terrainMeshRef={terrainMeshRef} />
       <DriftSceneContents />
+      <ConditionsOverlays />
     </>
   );
 };

@@ -29,6 +29,29 @@ interface UiStore {
   /** Controls visibility of the Find Data slide-in panel. */
   findDataPanelOpen: boolean;
   setFindDataPanelOpen: (open: boolean) => void;
+  /** Always-on Wind arrow overlay. */
+  windOverlayActive: boolean;
+  setWindOverlayActive: (b: boolean) => void;
+  /** Always-on Tide arrow overlay. */
+  tideOverlayActive: boolean;
+  setTideOverlayActive: (b: boolean) => void;
+  /** Always-on Current arrow overlay. */
+  currentOverlayActive: boolean;
+  setCurrentOverlayActive: (b: boolean) => void;
+}
+
+function readLocalBool(key: string, fallback: boolean): boolean {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
+    return raw === "true";
+  } catch {
+    return fallback;
+  }
+}
+
+function writeLocalBool(key: string, value: boolean): void {
+  try { localStorage.setItem(key, String(value)); } catch {}
 }
 
 export const useUiStore = create<UiStore>((set) => ({
@@ -52,4 +75,19 @@ export const useUiStore = create<UiStore>((set) => ({
   setEfhOverlayEnabled: (enabled) => set({ efhOverlayEnabled: enabled }),
   findDataPanelOpen: false,
   setFindDataPanelOpen: (open) => set({ findDataPanelOpen: open }),
+  windOverlayActive: readLocalBool("bathyscan:windOverlayActive", false),
+  setWindOverlayActive: (b) => {
+    writeLocalBool("bathyscan:windOverlayActive", b);
+    set({ windOverlayActive: b });
+  },
+  tideOverlayActive: readLocalBool("bathyscan:tideOverlayActive", false),
+  setTideOverlayActive: (b) => {
+    writeLocalBool("bathyscan:tideOverlayActive", b);
+    set({ tideOverlayActive: b });
+  },
+  currentOverlayActive: readLocalBool("bathyscan:currentOverlayActive", false),
+  setCurrentOverlayActive: (b) => {
+    writeLocalBool("bathyscan:currentOverlayActive", b);
+    set({ currentOverlayActive: b });
+  },
 }));

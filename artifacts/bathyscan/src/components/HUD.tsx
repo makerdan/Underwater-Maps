@@ -86,6 +86,12 @@ export const HUD: React.FC = () => {
   const setSubstrateColorMode = useUiStore((s) => s.setSubstrateColorMode);
   const efhOverlayEnabled = useUiStore((s) => s.efhOverlayEnabled);
   const setEfhOverlayEnabled = useUiStore((s) => s.setEfhOverlayEnabled);
+  const windOverlayActive = useUiStore((s) => s.windOverlayActive);
+  const setWindOverlayActive = useUiStore((s) => s.setWindOverlayActive);
+  const tideOverlayActive = useUiStore((s) => s.tideOverlayActive);
+  const setTideOverlayActive = useUiStore((s) => s.setTideOverlayActive);
+  const currentOverlayActive = useUiStore((s) => s.currentOverlayActive);
+  const setCurrentOverlayActive = useUiStore((s) => s.setCurrentOverlayActive);
   const { terrain } = useAppState();
   const hasEfh = EFH_DATASETS.has(terrain?.datasetId ?? "");
 
@@ -347,6 +353,7 @@ export const HUD: React.FC = () => {
               🔍 FIND DATA
             </button>
           </ViewscreenTooltip>
+
           {/* Substrate colour toggle */}
           <ViewscreenTooltip label="Tint seafloor by substrate type (sand, mud, rock)" side="left">
             <button
@@ -366,6 +373,76 @@ export const HUD: React.FC = () => {
               }}
             >
               ◼ SUBSTRATE
+            </button>
+          </ViewscreenTooltip>
+
+          {/* Always-on Wind / Tide / Current overlay toggles */}
+          <ViewscreenTooltip label="Toggle wind direction arrows overlay" side="left">
+            <button
+              data-testid="overlay-toggle-wind"
+              aria-pressed={windOverlayActive}
+              onClick={() => setWindOverlayActive(!windOverlayActive)}
+              style={{
+                background: windOverlayActive ? "rgba(0,229,255,0.10)" : "rgba(0,10,20,0.75)",
+                border: `1px solid ${windOverlayActive ? "rgba(125,211,252,0.5)" : "rgba(0,229,255,0.15)"}`,
+                borderRadius: 4,
+                color: windOverlayActive ? "#7dd3fc" : "#475569",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9,
+                padding: "3px 10px",
+                cursor: "pointer",
+                letterSpacing: "0.1em",
+                backdropFilter: "blur(4px)",
+                textShadow: windOverlayActive ? "0 0 6px rgba(125,211,252,0.5)" : "none",
+              }}
+            >
+              💨 WIND
+            </button>
+          </ViewscreenTooltip>
+
+          <ViewscreenTooltip label="Toggle tidal flow arrows overlay" side="left">
+            <button
+              data-testid="overlay-toggle-tide"
+              aria-pressed={tideOverlayActive}
+              onClick={() => setTideOverlayActive(!tideOverlayActive)}
+              style={{
+                background: tideOverlayActive ? "rgba(0,229,255,0.10)" : "rgba(0,10,20,0.75)",
+                border: `1px solid ${tideOverlayActive ? "rgba(52,211,153,0.5)" : "rgba(0,229,255,0.15)"}`,
+                borderRadius: 4,
+                color: tideOverlayActive ? "#34d399" : "#475569",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9,
+                padding: "3px 10px",
+                cursor: "pointer",
+                letterSpacing: "0.1em",
+                backdropFilter: "blur(4px)",
+                textShadow: tideOverlayActive ? "0 0 6px rgba(52,211,153,0.5)" : "none",
+              }}
+            >
+              🌊 TIDE
+            </button>
+          </ViewscreenTooltip>
+
+          <ViewscreenTooltip label="Toggle sub-surface current arrows overlay" side="left">
+            <button
+              data-testid="overlay-toggle-current"
+              aria-pressed={currentOverlayActive}
+              onClick={() => setCurrentOverlayActive(!currentOverlayActive)}
+              style={{
+                background: currentOverlayActive ? "rgba(0,229,255,0.10)" : "rgba(0,10,20,0.75)",
+                border: `1px solid ${currentOverlayActive ? "rgba(34,211,238,0.5)" : "rgba(0,229,255,0.15)"}`,
+                borderRadius: 4,
+                color: currentOverlayActive ? "#22d3ee" : "#475569",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9,
+                padding: "3px 10px",
+                cursor: "pointer",
+                letterSpacing: "0.1em",
+                backdropFilter: "blur(4px)",
+                textShadow: currentOverlayActive ? "0 0 6px rgba(34,211,238,0.5)" : "none",
+              }}
+            >
+              ↬ CURRENT
             </button>
           </ViewscreenTooltip>
 

@@ -8,10 +8,10 @@
  */
 
 import React, { useEffect, useCallback } from "react";
-import { useGetSurfaceConditions, getGetSurfaceConditionsQueryKey } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { useDriftStore, TROLL_MAX_KNOTS } from "@/lib/driftStore";
 import { computeDrift } from "@/lib/computeDrift";
+import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
 
 interface CompassProps {
   degrees: number;
@@ -124,29 +124,24 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
   const centerLat = terrain ? (terrain.minLat + terrain.maxLat) / 2 : 0;
   const centerLon = terrain ? (terrain.minLon + terrain.maxLon) / 2 : 0;
 
-  const { data, isLoading, isError, refetch } = useGetSurfaceConditions(
-    { lat: centerLat, lon: centerLon },
-    {
-      query: {
-        queryKey: getGetSurfaceConditionsQueryKey({ lat: centerLat, lon: centerLon }),
-        enabled: !!terrain,
-        staleTime: 30 * 60 * 1000,
-        retry: 1,
-      },
-    },
-  );
+  // Shared surface-conditions hook — same query key as the always-on overlays,
+  // so React Query dedupes and Drift Planner stays in sync with WIND/TIDE/CURRENT.
+  const { data, hours: sharedHours, loading: isLoading, error: isError, estimated, refetch } =
+    useSurfaceConditions(!!terrain);
 
   useEffect(() => {
-    if (!data?.hours || !terrain) return;
-    setDriftConditions(data.hours as import("@/lib/driftStore").HourlySurfaceCondition[]);
-    setEstimatedConditions(data.estimatedConditions ?? false);
+    if (!sharedHours.length || !terrain) return;
+    const hoursForStore = sharedHours.map(({ tideRising: _r, ...rest }) => rest) as
+      import("@/lib/driftStore").HourlySurfaceCondition[];
+    setDriftConditions(hoursForStore);
+    setEstimatedConditions(estimated);
 
     const startLat = driftStartLat ?? centerLat;
     const startLon = driftStartLon ?? centerLon;
     if (driftStartLat === null) setDriftStart(centerLat, centerLon);
 
     const path = computeDrift({
-      conditions: data.hours as import("@/lib/driftStore").HourlySurfaceCondition[],
+      conditions: hoursForStore,
       startLat,
       startLon,
       lineLengthM,
@@ -157,7 +152,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
       boatSpeedKnots,
     });
     setDriftPath(path);
-  }, [data, terrain, driftMode, boatHeadingDeg, boatSpeedKnots]);
+  }, [sharedHours, estimated, terrain, driftMode, boatHeadingDeg, boatSpeedKnots]);
 
   const recomputeWithManual = useCallback(() => {
     if (!terrain) return;

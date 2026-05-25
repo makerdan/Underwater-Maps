@@ -51,6 +51,7 @@ import { DriftTimeline } from "@/components/DriftTimeline";
 import { HelpButton } from "@/components/help/HelpButton";
 import { HelpWindow } from "@/components/help/HelpWindow";
 import "@/components/help/help.css";
+import { ConditionsLegend } from "@/components/ConditionsLegend";
 
 const queryClient = new QueryClient();
 
@@ -438,9 +439,22 @@ function Main() {
         />
 
         {/* HUD + depth scale — pointer-events:none overlay */}
-        <div className="absolute inset-0 pointer-events-none z-10">
-          <HUD />
+        <div
+          className="absolute inset-0 pointer-events-none z-10"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            padding: "80px 16px 16px 16px",
+          }}
+        >
+          <div className="flex-1 relative">
+            <HUD />
+          </div>
           {showDepthScaleBar && <DepthScaleBar />}
+          <div className="relative" style={{ zIndex: 10 }}>
+            <ConditionsLegend />
+          </div>
         </div>
 
         {/* Help launch button — upper-left of main interactive area */}
@@ -637,6 +651,11 @@ function Main() {
           <WeatherPanel onClose={() => setDriftPlannerActive(false)} />
         )}
         {driftPlannerActive && <DriftTimeline />}
+
+        {/* Always-on Wind / Tide / Current legend — bottom-left, above HUD speed panel */}
+        <div className="absolute z-20" style={{ bottom: 80, left: 16 }}>
+          <ConditionsLegend />
+        </div>
 
         {/*
           NOTE: <ContextMenu />, <MeasurementBanner /> and <MarkerDetailCard />
