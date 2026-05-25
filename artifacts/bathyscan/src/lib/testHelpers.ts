@@ -18,6 +18,7 @@ import { runMarkerDelete, type DeleteMarkerMutation } from "./markerActions";
 import {
   deleteMarkersId,
   getGetMarkersQueryKey,
+  getGetDatasetsIdTerrainQueryKey,
   type Marker,
   type TerrainData,
 } from "@workspace/api-client-react";
@@ -60,8 +61,16 @@ function syntheticTestGrid(): TerrainData {
 // mounted inside <AppProvider/>. Without this, helpers have no way to reach
 // React context state from a plain window-side call.
 let appSetTerrain: ((t: TerrainData | null) => void) | null = null;
-export function registerTestBridge(setTerrain: (t: TerrainData | null) => void): void {
+let appSetDatasetId: ((id: string | null) => void) | null = null;
+let appGetTerrainRef: { current: TerrainData | null } = { current: null };
+export function registerTestBridge(
+  setTerrain: (t: TerrainData | null) => void,
+  setDatasetId?: (id: string | null) => void,
+  terrainRef?: { current: TerrainData | null },
+): void {
   appSetTerrain = setTerrain;
+  if (setDatasetId) appSetDatasetId = setDatasetId;
+  if (terrainRef) appGetTerrainRef = terrainRef;
 }
 
 // Camera position is mutated each frame inside the Three.js render loop and
@@ -165,6 +174,10 @@ export interface BathyTestApi {
    * exercises the paint-mode write path.
    */
   seedTerrain: (overrides?: Partial<TerrainData>) => boolean;
+  /** Snapshot of the React-bound active terrain (datasetId + hasTopography). */
+  getTerrainSummary: () =>
+    | { datasetId: string | null | undefined; hasTopography: boolean | undefined }
+    | null;
   seedZoneMap: (resolution: number, fillZone?: number) => void;
   paintZone: (
     row: number,
@@ -429,8 +442,27 @@ export function installTestHelpers(): void {
         centerLat: 0,
         ...overrides,
       };
+      // Pre-seed the React Query cache for the same datasetId so that
+      // TourScene's `useGetDatasetsIdTerrain(datasetId)` query (which calls
+      // setTerrain(data) on settle) hands back OUR seeded terrain instead of
+      // re-fetching from the API and overwriting our seed.
+      if (base.datasetId) {
+        queryClient.setQueryData(
+          getGetDatasetsIdTerrainQueryKey(base.datasetId),
+          base,
+        );
+      }
       appSetTerrain(base);
+      if (appSetDatasetId) appSetDatasetId(base.datasetId);
       return true;
+    },
+    getTerrainSummary: () => {
+      const t = appGetTerrainRef.current;
+      if (!t) return null;
+      return {
+        datasetId: t.datasetId,
+        hasTopography: (t as unknown as { hasTopography?: boolean }).hasTopography,
+      };
     },
     seedZoneMap: (resolution, fillZone = 0) => {
       const N = resolution * resolution;

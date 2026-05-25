@@ -59,14 +59,16 @@ import { ConditionsLegend } from "@/components/ConditionsLegend";
 
 
 function TestBridge(): null {
-  const { setTerrain, cameraPos } = useAppState();
+  const { setTerrain, setDatasetId, terrain, cameraPos } = useAppState();
   const cameraPosRef = useRef<[number, number, number]>(cameraPos);
   cameraPosRef.current = cameraPos;
+  const terrainRef = useRef(terrain);
+  terrainRef.current = terrain;
   useEffect(() => {
     if (!import.meta.env.DEV) return;
-    registerTestBridge(setTerrain);
+    registerTestBridge(setTerrain, setDatasetId, terrainRef);
     registerTestCameraPosRef(cameraPosRef);
-  }, [setTerrain]);
+  }, [setTerrain, setDatasetId]);
   return null;
 }
 
