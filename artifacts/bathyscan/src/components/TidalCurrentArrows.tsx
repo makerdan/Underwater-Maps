@@ -27,16 +27,29 @@ const DENSITY_MAP: Record<string, number> = {
   dense: 10,
 };
 
-const LAYER_OFFSETS: Record<DepthLayer, number> = {
+export const LAYER_OFFSETS: Record<DepthLayer, number> = {
   surface: 0,
   mid: -MAX_DEPTH_WORLD * 0.4,
   "near-bottom": -MAX_DEPTH_WORLD * 0.8,
 };
 
-const LAYER_SPEED_ATTENUATE: Record<DepthLayer, number> = {
+export const LAYER_SPEED_ATTENUATE: Record<DepthLayer, number> = {
   surface: 1.0,
   mid: 0.6,
   "near-bottom": 0.25,
+};
+
+/** Distinguishable per-layer colours for the always-on Current overlay. */
+export const LAYER_COLORS: Record<DepthLayer, string> = {
+  surface: "#22d3ee",      // cyan — surface drift
+  mid: "#38bdf8",          // sky blue — mid-water
+  "near-bottom": "#818cf8", // indigo — near-bottom
+};
+
+export const LAYER_LABEL: Record<DepthLayer, string> = {
+  surface: "Surface",
+  mid: "Mid",
+  "near-bottom": "Near-bottom",
 };
 
 export const TidalCurrentArrows: React.FC<TidalCurrentArrowsProps> = ({

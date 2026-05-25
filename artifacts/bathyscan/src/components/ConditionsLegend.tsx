@@ -7,10 +7,15 @@
  * the Drift Planner's fallback values via `useDriftStore`.
  */
 import React from "react";
-import { useUiStore } from "@/lib/uiStore";
+import { useUiStore, CURRENT_DEPTH_LAYERS } from "@/lib/uiStore";
 import { useDriftStore } from "@/lib/driftStore";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
 import { windColor } from "@/components/ConditionsOverlays";
+import {
+  LAYER_COLORS,
+  LAYER_LABEL,
+  LAYER_SPEED_ATTENUATE,
+} from "@/components/TidalCurrentArrows";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(0,10,20,0.88)",
@@ -81,6 +86,8 @@ export const ConditionsLegend: React.FC = () => {
   const wind = useUiStore((s) => s.windOverlayActive);
   const tide = useUiStore((s) => s.tideOverlayActive);
   const cur = useUiStore((s) => s.currentOverlayActive);
+  const currentLayers = useUiStore((s) => s.currentDepthLayers);
+  const toggleCurrentLayer = useUiStore((s) => s.toggleCurrentDepthLayer);
 
   const anyActive = wind || tide || cur;
   const { snapshot, estimated, timestamp, fallback } = useSurfaceConditions(anyActive);
@@ -143,12 +150,59 @@ export const ConditionsLegend: React.FC = () => {
         />
       )}
       {cur && (
-        <Row
-          swatch="#22d3ee"
-          label="Current"
-          value={`${tidSpd.toFixed(2)} kn ${cardinal(tidDeg)}`}
-          detail={`${Math.round(tidDeg)}°`}
-        />
+        <div style={{ marginTop: 4 }}>
+          {currentLayers.map((layer) => {
+            const atten = LAYER_SPEED_ATTENUATE[layer] ?? 1.0;
+            const layerSpd = tidSpd * atten;
+            return (
+              <Row
+                key={layer}
+                swatch={LAYER_COLORS[layer]}
+                label={`Current · ${LAYER_LABEL[layer]}`}
+                value={`${layerSpd.toFixed(2)} kn ${cardinal(tidDeg)}`}
+                detail={`${Math.round(atten * 100)}%`}
+              />
+            );
+          })}
+          <div
+            role="group"
+            aria-label="Current depth layers"
+            data-testid="current-depth-layers"
+            style={{
+              display: "flex", gap: 4, marginTop: 6,
+              paddingLeft: 18,
+            }}
+          >
+            {CURRENT_DEPTH_LAYERS.map((layer) => {
+              const selected = currentLayers.includes(layer);
+              return (
+                <button
+                  key={layer}
+                  type="button"
+                  aria-pressed={selected}
+                  data-testid={`current-layer-${layer}`}
+                  onClick={() => toggleCurrentLayer(layer)}
+                  style={{
+                    flex: 1,
+                    cursor: "pointer",
+                    padding: "3px 4px",
+                    fontSize: 8,
+                    letterSpacing: "0.15em",
+                    textTransform: "uppercase",
+                    fontFamily: "inherit",
+                    color: selected ? "#0b1220" : "#94a3b8",
+                    background: selected ? LAYER_COLORS[layer] : "transparent",
+                    border: `1px solid ${selected ? LAYER_COLORS[layer] : "rgba(148,163,184,0.35)"}`,
+                    borderRadius: 2,
+                    boxShadow: selected ? `0 0 6px ${LAYER_COLORS[layer]}55` : "none",
+                  }}
+                >
+                  {LAYER_LABEL[layer]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       <div style={{ marginTop: 6, paddingTop: 4, borderTop: "1px solid rgba(0,229,255,0.1)" }}>

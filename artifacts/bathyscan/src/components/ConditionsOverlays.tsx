@@ -12,6 +12,11 @@ import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
 import { MAX_DEPTH_WORLD, WORLD_SIZE } from "@/lib/terrain";
 import type { TerrainData } from "@workspace/api-client-react";
 import { DirectionArrowField } from "@/components/DirectionArrowField";
+import {
+  LAYER_OFFSETS,
+  LAYER_SPEED_ATTENUATE,
+  LAYER_COLORS,
+} from "@/components/TidalCurrentArrows";
 
 /**
  * Build a sparse set of (worldX, worldZ) positions sampled from the shoreline
@@ -138,29 +143,37 @@ export const TideOverlay: React.FC = () => {
 export const CurrentOverlay: React.FC = () => {
   const { terrain } = useAppState();
   const active = useUiStore((s) => s.currentOverlayActive);
+  const layers = useUiStore((s) => s.currentDepthLayers);
   const { snapshot, estimated, fallback } = useSurfaceConditions(active);
 
-  if (!active || !terrain) return null;
+  if (!active || !terrain || layers.length === 0) return null;
 
   const speed = snapshot?.tidalSpeedKnots ?? fallback.tidalSpeedKnots;
   const dir = snapshot?.tidalDegrees ?? fallback.tidalDegrees;
-
-  // Current arrows live in mid-water so they read as sub-surface flow.
-  const surfY = seaSurfaceY(terrain) - MAX_DEPTH_WORLD * 0.35;
+  const surfY = seaSurfaceY(terrain);
 
   return (
-    <DirectionArrowField
-      directionDeg={dir}
-      magnitude={Math.max(0.3, speed)}
-      referenceMagnitude={1.0}
-      color="#22d3ee"
-      layerY={surfY}
-      density={6}
-      baseScale={1.3}
-      animate
-      opacity={estimated ? 0.5 : 0.75}
-      renderOrder={2}
-    />
+    <>
+      {layers.map((layer, idx) => {
+        const attenuate = LAYER_SPEED_ATTENUATE[layer] ?? 1.0;
+        const yOffset = LAYER_OFFSETS[layer] ?? 0;
+        return (
+          <DirectionArrowField
+            key={layer}
+            directionDeg={dir}
+            magnitude={Math.max(0.3, speed * attenuate)}
+            referenceMagnitude={1.0}
+            color={LAYER_COLORS[layer]}
+            layerY={surfY + yOffset}
+            density={6}
+            baseScale={1.3}
+            animate
+            opacity={estimated ? 0.5 : 0.75}
+            renderOrder={2 + idx}
+          />
+        );
+      })}
+    </>
   );
 };
 

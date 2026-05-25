@@ -1,4 +1,7 @@
 import { create } from "zustand";
+import type { DepthLayer } from "@/components/TidalCurrentArrows";
+
+export const CURRENT_DEPTH_LAYERS: DepthLayer[] = ["surface", "mid", "near-bottom"];
 
 export interface DropInTarget {
   worldX: number;
@@ -38,6 +41,10 @@ interface UiStore {
   /** Always-on Current arrow overlay. */
   currentOverlayActive: boolean;
   setCurrentOverlayActive: (b: boolean) => void;
+  /** Which depth layers the Current overlay renders (multi-select). */
+  currentDepthLayers: DepthLayer[];
+  setCurrentDepthLayers: (layers: DepthLayer[]) => void;
+  toggleCurrentDepthLayer: (layer: DepthLayer) => void;
 }
 
 function readLocalBool(key: string, fallback: boolean): boolean {
@@ -52,6 +59,27 @@ function readLocalBool(key: string, fallback: boolean): boolean {
 
 function writeLocalBool(key: string, value: boolean): void {
   try { localStorage.setItem(key, String(value)); } catch {}
+}
+
+const CURRENT_DEPTH_LAYERS_KEY = "bathyscan:currentDepthLayers";
+
+function readDepthLayers(fallback: DepthLayer[]): DepthLayer[] {
+  try {
+    const raw = localStorage.getItem(CURRENT_DEPTH_LAYERS_KEY);
+    if (!raw) return fallback;
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return fallback;
+    const valid = parsed.filter(
+      (v): v is DepthLayer => CURRENT_DEPTH_LAYERS.includes(v as DepthLayer),
+    );
+    return valid.length ? valid : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeDepthLayers(layers: DepthLayer[]): void {
+  try { localStorage.setItem(CURRENT_DEPTH_LAYERS_KEY, JSON.stringify(layers)); } catch {}
 }
 
 export const useUiStore = create<UiStore>((set) => ({
@@ -90,4 +118,21 @@ export const useUiStore = create<UiStore>((set) => ({
     writeLocalBool("bathyscan:currentOverlayActive", b);
     set({ currentOverlayActive: b });
   },
+  currentDepthLayers: readDepthLayers(["mid"]),
+  setCurrentDepthLayers: (layers) => {
+    const ordered = CURRENT_DEPTH_LAYERS.filter((l) => layers.includes(l));
+    writeDepthLayers(ordered);
+    set({ currentDepthLayers: ordered });
+  },
+  toggleCurrentDepthLayer: (layer) => set((state) => {
+    const has = state.currentDepthLayers.includes(layer);
+    let next = has
+      ? state.currentDepthLayers.filter((l) => l !== layer)
+      : [...state.currentDepthLayers, layer];
+    // Keep at least one layer selected so the overlay still has something to render.
+    if (next.length === 0) next = [layer];
+    const ordered = CURRENT_DEPTH_LAYERS.filter((l) => next.includes(l));
+    writeDepthLayers(ordered);
+    return { currentDepthLayers: ordered };
+  }),
 }));
