@@ -55,6 +55,7 @@ export const ZoneOverlay: React.FC = () => {
   const zoneMap = useClassificationStore((s) => s.zoneMap);
   const error = useClassificationStore((s) => s.error);
   const source = useClassificationStore((s) => s.source);
+  const classify = useClassificationStore((s) => s.classify);
   const overlayEnabled = useUiStore((s) => s.zoneOverlayEnabled);
   const setOverlayEnabled = useUiStore((s) => s.setZoneOverlayEnabled);
   const paintMode = useUiStore((s) => s.zonePaintMode);
@@ -99,6 +100,33 @@ export const ZoneOverlay: React.FC = () => {
           {loading && (
             <span className="animate-spin" style={{ fontSize: 10, color: "#00e5ff" }}>
               ◌
+            </span>
+          )}
+          {hasZoneMap && !loading && source && (
+            <span
+              data-testid={`zone-source-badge-${source}`}
+              title={
+                source === "ai"
+                  ? "Zones classified by AI"
+                  : "Zones estimated from depth (AI unavailable)"
+              }
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                padding: "1px 5px",
+                borderRadius: 3,
+                textTransform: "uppercase",
+                color: source === "ai" ? "#00e5ff" : "#fbbf24",
+                background:
+                  source === "ai" ? "rgba(0,229,255,0.12)" : "rgba(251,191,36,0.12)",
+                border:
+                  source === "ai"
+                    ? "1px solid rgba(0,229,255,0.45)"
+                    : "1px solid rgba(251,191,36,0.45)",
+              }}
+            >
+              {source === "ai" ? "AI" : "EST"}
             </span>
           )}
           <HelpIcon articleId="zones-paint-mode" label="Zones and paint mode" />
@@ -180,14 +208,44 @@ export const ZoneOverlay: React.FC = () => {
           <div
             data-testid="zone-source-heuristic"
             style={{
-              fontSize: 10,
-              color: "#fbbf24",
               marginBottom: 6,
-              letterSpacing: "0.04em",
-              lineHeight: 1.4,
+              padding: "4px 6px",
+              border: "1px solid rgba(251,191,36,0.35)",
+              borderRadius: 3,
+              background: "rgba(251,191,36,0.06)",
             }}
           >
-            Estimated from depth (AI unavailable)
+            <div
+              style={{
+                fontSize: 10,
+                color: "#fbbf24",
+                letterSpacing: "0.04em",
+                lineHeight: 1.4,
+              }}
+            >
+              Estimated from depth (AI unavailable). These zones are a depth-based guess, not an AI classification.
+            </div>
+            <button
+              type="button"
+              data-testid="zone-retry-ai"
+              onClick={() => {
+                if (terrain) void classify(terrain);
+              }}
+              style={{
+                marginTop: 5,
+                fontSize: 10,
+                color: "#fbbf24",
+                background: "transparent",
+                border: "1px solid rgba(251,191,36,0.5)",
+                borderRadius: 3,
+                padding: "2px 8px",
+                cursor: "pointer",
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+              }}
+            >
+              ↻ Retry AI classification
+            </button>
           </div>
         )}
 

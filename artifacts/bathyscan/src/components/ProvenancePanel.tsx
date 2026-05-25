@@ -10,6 +10,7 @@
 import React, { useState } from "react";
 import type { TerrainData } from "@workspace/api-client-react";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
+import { useClassificationStore } from "@/lib/classificationStore";
 
 interface ProvenancePanelProps {
   terrain: TerrainData;
@@ -48,6 +49,7 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
   hasEfh,
 }) => {
   const [expanded, setExpanded] = useState(false);
+  const zoneSource = useClassificationStore((s) => s.source);
 
   const sourceKey: DataSource =
     (terrain.dataSource as DataSource | undefined) ??
@@ -126,6 +128,43 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
           </span>
         )}
 
+        {zoneSource && (
+          <ViewscreenTooltip
+            label={
+              zoneSource === "ai"
+                ? "Seafloor zones classified by AI"
+                : "Seafloor zones estimated from depth (AI was unavailable)"
+            }
+            side="top"
+          >
+          <span
+            data-testid={`provenance-zone-source-${zoneSource}`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 3,
+              background:
+                zoneSource === "ai"
+                  ? "rgba(0,229,255,0.12)"
+                  : "rgba(251,191,36,0.12)",
+              border:
+                zoneSource === "ai"
+                  ? "1px solid rgba(0,229,255,0.45)"
+                  : "1px solid rgba(251,191,36,0.45)",
+              borderRadius: 3,
+              padding: "1px 6px",
+              fontSize: 9,
+              color: zoneSource === "ai" ? "#00e5ff" : "#fbbf24",
+              fontWeight: 700,
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+            }}
+          >
+            {zoneSource === "ai" ? "AI ZONES" : "EST ZONES"}
+          </span>
+          </ViewscreenTooltip>
+        )}
+
         {terrain.hasTopography && (
           <ViewscreenTooltip
             label="Has above-water terrain — enable Show landmass in Settings"
@@ -194,6 +233,17 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
               {Math.abs(terrain.maxLon - terrain.minLon).toFixed(2)}° ×{" "}
               {Math.abs(terrain.maxLat - terrain.minLat).toFixed(2)}°
             </span>
+
+            {zoneSource && (
+              <>
+                <span style={{ color: "#64748b" }}>Zones:</span>
+                <span style={{ color: zoneSource === "ai" ? "#cbd5e1" : "#fbbf24" }}>
+                  {zoneSource === "ai"
+                    ? "AI-classified from depth grid"
+                    : "Estimated from depth (AI unavailable)"}
+                </span>
+              </>
+            )}
           </div>
 
           {terrain.hasTopography && terrain.topography && (
