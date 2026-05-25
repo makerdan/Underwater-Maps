@@ -14,7 +14,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { queryLLM } from "@/lib/queryLLM";
 import { executeTool } from "@/lib/queryTools";
-import { useHighlightStore } from "@/lib/highlightStore";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useClassificationStore } from "@/lib/classificationStore";
@@ -63,8 +62,6 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
       setTimeout(() => inputRef.current?.focus(), 80);
     }
   }, [open]);
-
-  const clearHighlight = useHighlightStore((s) => s.clearHighlight);
 
   const buildContext = useCallback((): QueryContext => {
     const grid = useTerrainStore.getState().activeGrid;

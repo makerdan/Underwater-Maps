@@ -6,6 +6,7 @@ import { useAppState, SPEEDS } from "@/lib/context";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
 import { worldXZToLonLat, worldYToMetres, lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
+import { useJoystickStore } from "@/components/VirtualJoystick";
 
 interface FlyControlsOptions {
   terrainMeshRef: React.RefObject<THREE.Mesh | null>;
@@ -237,6 +238,23 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       if (keys.current["Space"]) camera.position.y += scaledSpeed;
       if (keys.current["ShiftLeft"] || keys.current["ShiftRight"]) {
         camera.position.y -= scaledSpeed;
+      }
+
+      // 2b. Virtual joystick (touch devices)
+      const joy = useJoystickStore.getState();
+      const DEAD = 0.05;
+      if (Math.abs(joy.moveX) > DEAD || Math.abs(joy.moveY) > DEAD) {
+        camera.position.addScaledVector(rightDir.current, joy.moveX * scaledSpeed);
+        camera.position.addScaledVector(moveDir.current, -joy.moveY * scaledSpeed);
+      }
+      if (Math.abs(joy.lookX) > DEAD || Math.abs(joy.lookY) > DEAD) {
+        euler.current.setFromQuaternion(camera.quaternion);
+        euler.current.y -= joy.lookX * 0.03;
+        euler.current.x = Math.max(
+          -Math.PI / 2,
+          Math.min(Math.PI / 2, euler.current.x - joy.lookY * 0.03),
+        );
+        camera.quaternion.setFromEuler(euler.current);
       }
     }
 

@@ -184,7 +184,13 @@ router.get("/trails/:id/points", requireAuth, async (req, res): Promise<void> =>
     .offset((page - 1) * pageSize);
 
   res.json({
-    points,
+    points: points.map((p) => ({
+      lon: p.lon,
+      lat: p.lat,
+      accuracy: p.accuracy,
+      timestamp: p.recordedAt.getTime(),
+      seq: p.seq,
+    })),
     total: trail.pointCount,
     page,
     pageSize,

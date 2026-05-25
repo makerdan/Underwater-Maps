@@ -1,6 +1,14 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { useGetMarkers, getGetMarkersQueryKey } from "@workspace/api-client-react";
-import type { Marker } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useGetMarkers,
+  getGetMarkersQueryKey,
+  useGetTrails,
+  getGetTrailsQueryKey,
+  useDeleteTrailsId,
+  getTrailsIdPoints,
+} from "@workspace/api-client-react";
+import type { Marker, GpsTrail } from "@workspace/api-client-react";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
@@ -19,8 +27,9 @@ import {
   renderHabitatOverlay,
   renderGpsPosition,
   renderLiveTrail,
+  renderSavedTrails,
 } from "@/lib/overviewRenderer";
-import type { OverviewTransform } from "@/lib/overviewRenderer";
+import type { OverviewTransform, CanvasSavedTrail } from "@/lib/overviewRenderer";
 import { useHabitatStore } from "@/lib/habitatStore";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useTrailStore } from "@/lib/trailStore";
@@ -42,12 +51,30 @@ export const OverviewMap: React.FC = () => {
   const gpsError = useGpsStore((s) => s.error);
   const startWatching = useGpsStore((s) => s.startWatching);
   const overviewGrid = useTerrainStore((s) => s.overviewGrid);
+  const queryClient = useQueryClient();
 
   const datasetId = overviewGrid?.datasetId ?? "";
   const { data: markerData } = useGetMarkers(
     { datasetId },
     { query: { enabled: !!datasetId, queryKey: getGetMarkersQueryKey({ datasetId }) } },
   );
+
+  const { data: trailsData, refetch: refetchTrails } = useGetTrails(
+    { datasetId },
+    { query: { enabled: !!datasetId, queryKey: getGetTrailsQueryKey({ datasetId }) } },
+  );
+
+  const deleteTrail = useDeleteTrailsId({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetTrailsQueryKey({ datasetId }) });
+        void refetchTrails();
+      },
+    },
+  });
+
+  // --- Panel state ---
+  const [showTrailList, setShowTrailList] = useState(false);
 
   // --- Canvas ref ---
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -56,6 +83,7 @@ export const OverviewMap: React.FC = () => {
   const bitmapRef = useRef<HTMLCanvasElement | null>(null);
   const transformRef = useRef<OverviewTransform | null>(null);
   const markersRef = useRef<Marker[]>([]);
+  const savedTrailsRef = useRef<CanvasSavedTrail[]>([]);
   const rafRef = useRef<number>(0);
 
   // Drag tracking
@@ -78,6 +106,42 @@ export const OverviewMap: React.FC = () => {
   useEffect(() => {
     markersRef.current = markerData ?? [];
   }, [markerData]);
+
+  // Fetch trail points when trails list changes; update savedTrailsRef for rAF
+  useEffect(() => {
+    if (!trailsData || trailsData.length === 0) {
+      savedTrailsRef.current = [];
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchAll = async () => {
+      const results: CanvasSavedTrail[] = [];
+      await Promise.all(
+        trailsData.map(async (trail) => {
+          try {
+            const page = await getTrailsIdPoints({ id: trail.id, pageSize: 500 });
+            if (!cancelled) {
+              results.push({
+                id: trail.id,
+                colour: trail.colour,
+                points: page.points.map((p) => ({ lon: p.lon, lat: p.lat })),
+              });
+            }
+          } catch {
+            // skip trail if points fetch fails
+          }
+        }),
+      );
+      if (!cancelled) {
+        savedTrailsRef.current = results;
+      }
+    };
+
+    void fetchAll();
+    return () => { cancelled = true; };
+  }, [trailsData]);
 
   // Build offscreen bitmap whenever overviewGrid changes
   useEffect(() => {
@@ -126,6 +190,11 @@ export const OverviewMap: React.FC = () => {
 
       // Lat/lon grid (only at scale ≥ 2)
       renderGridLines(ctx, grid, t, cW, cH);
+
+      // Saved trails (completed)
+      if (savedTrailsRef.current.length > 0) {
+        renderSavedTrails(ctx, savedTrailsRef.current, grid, t);
+      }
 
       // Markers
       renderMarkers(ctx, markersRef.current, grid, t, cW, cH);
@@ -345,6 +414,7 @@ export const OverviewMap: React.FC = () => {
 
       {/* Header bar */}
       <div
+        className="overview-map-header"
         style={{
           position: "absolute",
           top: 0,
@@ -429,6 +499,28 @@ export const OverviewMap: React.FC = () => {
             );
           })()}
 
+          {/* Trail list toggle */}
+          {trailsData && trailsData.length > 0 && (
+            <button
+              onClick={() => setShowTrailList((v) => !v)}
+              style={{
+                background: showTrailList ? "rgba(251,146,60,0.15)" : "rgba(0,10,20,0.75)",
+                border: `1px solid ${showTrailList ? "rgba(251,146,60,0.5)" : "rgba(0,229,255,0.2)"}`,
+                borderRadius: 3,
+                color: showTrailList ? "#fb923c" : "#475569",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9,
+                padding: "2px 10px",
+                cursor: "pointer",
+                letterSpacing: "0.1em",
+                lineHeight: "20px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              🗺 TRAILS ({trailsData.length})
+            </button>
+          )}
+
           <button
             onClick={() => startWatching()}
             style={{
@@ -469,6 +561,15 @@ export const OverviewMap: React.FC = () => {
         </div>
       </div>
 
+      {/* Trail list panel */}
+      {showTrailList && trailsData && trailsData.length > 0 && (
+        <TrailListPanel
+          trails={trailsData}
+          onDelete={(id) => deleteTrail.mutate({ id })}
+          onClose={() => setShowTrailList(false)}
+        />
+      )}
+
       {/* Depth tooltip */}
       {tooltip.visible && (
         <div
@@ -493,6 +594,144 @@ export const OverviewMap: React.FC = () => {
           <div style={{ color: "#64748b" }}>{Math.round(tooltip.depth)} m depth</div>
         </div>
       )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// TrailListPanel — shows saved trails with delete buttons
+// ---------------------------------------------------------------------------
+interface TrailListPanelProps {
+  trails: GpsTrail[];
+  onDelete: (id: string) => void;
+  onClose: () => void;
+}
+
+const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, onDelete, onClose }) => {
+  const MONO: React.CSSProperties = {
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: 10,
+  };
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 44,
+        right: 16,
+        width: 280,
+        maxHeight: "60vh",
+        overflowY: "auto",
+        background: "rgba(2,8,24,0.92)",
+        border: "1px solid rgba(0,229,255,0.15)",
+        borderRadius: 6,
+        zIndex: 43,
+        backdropFilter: "blur(8px)",
+      }}
+    >
+      {/* Panel header */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "8px 12px",
+          borderBottom: "1px solid rgba(0,229,255,0.1)",
+        }}
+      >
+        <span style={{ ...MONO, letterSpacing: "0.15em", color: "#fb923c" }}>SAVED TRAILS</span>
+        <button
+          onClick={onClose}
+          style={{
+            background: "none",
+            border: "none",
+            color: "#475569",
+            cursor: "pointer",
+            fontSize: 13,
+            lineHeight: 1,
+            padding: "0 2px",
+          }}
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Trail rows */}
+      {trails.map((trail) => {
+        const start = new Date(trail.startedAt).toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+        });
+        const durationMs =
+          new Date(trail.endedAt).getTime() - new Date(trail.startedAt).getTime();
+        const durationMin = Math.round(durationMs / 60_000);
+
+        return (
+          <div
+            key={trail.id}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "7px 12px",
+              borderBottom: "1px solid rgba(255,255,255,0.04)",
+            }}
+          >
+            {/* Colour swatch */}
+            <div
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+                background: trail.colour,
+                flexShrink: 0,
+              }}
+            />
+
+            {/* Info */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  ...MONO,
+                  color: "#e2e8f0",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {trail.name}
+              </div>
+              <div style={{ ...MONO, fontSize: 9, color: "#475569", marginTop: 2 }}>
+                {start} · {trail.pointCount} pts
+                {durationMin > 0 ? ` · ${durationMin} min` : ""}
+              </div>
+            </div>
+
+            {/* Delete */}
+            <button
+              onClick={() => {
+                if (confirm(`Delete trail "${trail.name}"?`)) {
+                  onDelete(trail.id);
+                }
+              }}
+              title="Delete trail"
+              style={{
+                background: "none",
+                border: "1px solid rgba(239,68,68,0.3)",
+                borderRadius: 3,
+                color: "#ef4444",
+                cursor: "pointer",
+                fontSize: 10,
+                padding: "1px 6px",
+                lineHeight: "16px",
+                flexShrink: 0,
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 };
