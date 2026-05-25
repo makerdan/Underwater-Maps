@@ -141,7 +141,7 @@ export const ZoneOverlay: React.FC = () => {
 
         {/* Zone legend — always shown once map is ready, overlay-toggle independent */}
         {hasZoneMap && !loading && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <div className="zone-legend" style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             {SWATCH_COLORS.map((color, i) => (
               <div key={i} className="flex items-center gap-2">
                 <span

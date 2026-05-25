@@ -22,6 +22,7 @@ import { OverviewMap } from "@/components/OverviewMap";
 import { ZoneOverlay } from "@/components/ZoneOverlay";
 import { useTidalData } from "@/hooks/useTidalData";
 import { useUiStore } from "@/lib/uiStore";
+import { useClassificationStore } from "@/lib/classificationStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 
 const queryClient = new QueryClient();
@@ -175,6 +176,15 @@ function Main() {
   useEffect(() => {
     if (terrain) {
       useTerrainStore.getState().setGrids({ activeGrid: terrain });
+    }
+  }, [terrain]);
+
+  // Catch-all: trigger classification whenever terrain changes, regardless of
+  // which code path loaded it (DatasetPanel, auto-select, background refetch, etc.).
+  // classify() is idempotent — it returns immediately on sessionStorage/server cache hit.
+  useEffect(() => {
+    if (terrain) {
+      void useClassificationStore.getState().classify(terrain);
     }
   }, [terrain]);
 

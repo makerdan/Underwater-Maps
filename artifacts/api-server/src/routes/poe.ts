@@ -145,6 +145,31 @@ function handlePoeError(err: unknown, res: Response): void {
 }
 
 // ---------------------------------------------------------------------------
+// Dataset zones cache (secondary index — keyed by datasetId for fast GET)
+// The primary globalPoeCache is keyed by content hash (datasetId+waterType+gridHash).
+// This secondary cache allows a cheap GET /zones/:id lookup without the full PNG.
+// ---------------------------------------------------------------------------
+
+interface CachedZones {
+  zones: string[];
+  waterType: "saltwater" | "freshwater";
+  classifiedAt: number;
+}
+
+const datasetZonesCache = new Map<string, CachedZones>();
+
+// GET /zones/:datasetId — return cached classification if available
+router.get("/zones/:datasetId", async (req, res) => {
+  const { datasetId } = req.params as { datasetId: string };
+  const cached = datasetZonesCache.get(datasetId);
+  if (cached) {
+    res.json(cached);
+    return;
+  }
+  res.status(404).json({ error: "not_found", message: "No cached classification for this dataset" });
+});
+
+// ---------------------------------------------------------------------------
 // Classify
 // ---------------------------------------------------------------------------
 
@@ -251,6 +276,11 @@ router.post("/classify", async (req, res) => {
     const zones = parsed.zones;
 
     globalPoeCache.set(cacheKey, JSON.stringify(zones));
+
+    // Populate secondary dataset-level cache so GET /zones/:id works
+    if (datasetId) {
+      datasetZonesCache.set(datasetId, { zones, waterType, classifiedAt: Date.now() });
+    }
 
     await logUsage(
       userId,
