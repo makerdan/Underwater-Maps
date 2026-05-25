@@ -13,6 +13,11 @@ export interface SlackBlock {
   nextReversalAt: string;
 }
 
+export interface StationRef {
+  id: string;
+  name: string;
+}
+
 export type TidalDataResult =
   | { available: false }
   | {
@@ -25,6 +30,14 @@ export type TidalDataResult =
       stationId?: string;
       isPredicted: boolean;
       source?: "noaa" | "estimated";
+      /** Source of the peak-current data (drives whether NOAA currents are real). */
+      currentsSource?: "noaa" | "estimated";
+      /** Source of the tide-height series. */
+      heightsSource?: "noaa" | "estimated";
+      /** NOAA currents-predictions station, when one was in range. */
+      currentsStation?: StationRef;
+      /** NOAA water-levels station, when one was in range. */
+      heightsStation?: StationRef;
       slack?: SlackBlock;
     };
 

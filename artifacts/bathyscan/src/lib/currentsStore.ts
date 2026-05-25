@@ -15,6 +15,10 @@ export interface NoaaAmbient {
   directionDeg: number;
   /** Speed in knots. */
   speedKt: number;
+  /** NOAA CO-OPS currents-predictions station id, when one was found in range. */
+  stationId?: string;
+  /** Human-readable station name (e.g. "Snow Passage, Alaska Current"). */
+  stationName?: string;
 }
 
 interface CurrentsRuntimeStore {

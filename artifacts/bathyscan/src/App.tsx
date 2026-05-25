@@ -247,10 +247,23 @@ function Main() {
   // ambient vector when the user picks `source: "noaa"`.
   const setNoaaAmbient = useCurrentsStore((s) => s.setNoaaAmbient);
   useEffect(() => {
-    if (tidalData && "available" in tidalData && tidalData.available) {
+    // Only treat the ambient as "NOAA" when the server actually got real
+    // currents predictions from a nearby CO-OPS station. The /api/tidal
+    // response always carries `currentDirection`/`currentSpeed` (estimated
+    // when no station is in range), but the CurrentsPanel NOAA pill and
+    // the source="noaa" branch in CurrentsLayer should only kick in for
+    // truly station-backed data, so users aren't misled.
+    if (
+      tidalData &&
+      "available" in tidalData &&
+      tidalData.available &&
+      tidalData.currentsSource === "noaa"
+    ) {
       setNoaaAmbient({
         directionDeg: tidalData.currentDirection,
         speedKt: tidalData.currentSpeed,
+        stationId: tidalData.currentsStation?.id,
+        stationName: tidalData.currentsStation?.name,
       });
     } else {
       setNoaaAmbient(null);

@@ -154,7 +154,11 @@ export const CurrentsPanel: React.FC = () => {
           data-testid="currents-source-noaa"
           style={toggleBtn(s.currentsSource === "noaa")}
           onClick={() => s.setCurrentsSource("noaa")}
-          title={noaaAmbient ? "NOAA tidal currents" : "Enable Tidal overlay to fetch NOAA data"}
+          title={
+            noaaAmbient
+              ? `NOAA tidal currents${noaaAmbient.stationName ? ` — ${noaaAmbient.stationName}` : ""}`
+              : "No NOAA currents station in range — enable Tidal overlay to retry"
+          }
         >
           NOAA
         </button>
@@ -190,11 +194,28 @@ export const CurrentsPanel: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div style={{ marginBottom: 8, fontSize: 10, color: "#94a3b8" }}>
+        <div style={{ marginBottom: 8, fontSize: 10, color: "#94a3b8" }} data-testid="currents-noaa-readout">
           {noaaAmbient ? (
-            <>NOAA: {noaaAmbient.directionDeg.toFixed(0)}° @ {noaaAmbient.speedKt.toFixed(2)} kt</>
+            <>
+              <div>
+                NOAA: {noaaAmbient.directionDeg.toFixed(0)}° @{" "}
+                {noaaAmbient.speedKt.toFixed(2)} kt
+              </div>
+              {(noaaAmbient.stationName || noaaAmbient.stationId) && (
+                <div
+                  style={{ fontSize: 9, color: "#64748b", marginTop: 2 }}
+                  data-testid="currents-noaa-station"
+                >
+                  Station:{" "}
+                  {noaaAmbient.stationName ?? "—"}
+                  {noaaAmbient.stationId ? ` (${noaaAmbient.stationId})` : ""}
+                </div>
+              )}
+            </>
           ) : (
-            <span style={{ color: "#fbbf24" }}>NOAA unavailable — enable Tidal overlay.</span>
+            <span style={{ color: "#fbbf24" }}>
+              No NOAA currents station in range — using tide-derived estimate.
+            </span>
           )}
         </div>
       )}
