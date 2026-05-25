@@ -96,6 +96,34 @@ export function getColormap(theme: ColormapTheme): (t: number) => THREE.Color {
 }
 
 /**
+ * Build a CSS `linear-gradient(...)` string for a colormap theme.
+ * Samples the theme at `samples` evenly-spaced points so the gradient
+ * approximates the same curve used by the renderer.
+ *
+ * @param theme   Colormap theme to sample.
+ * @param direction CSS direction (e.g. "to right", "to bottom"). Defaults to "to right".
+ * @param samples Number of colour stops; clamped to >= 2. Defaults to 12.
+ */
+export function colormapCssGradient(
+  theme: ColormapTheme,
+  direction: string = "to right",
+  samples: number = 12,
+): string {
+  const n = Math.max(2, samples);
+  const toColor = getColormap(theme);
+  const stops: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const c = toColor(t);
+    const r = Math.round(c.r * 255);
+    const g = Math.round(c.g * 255);
+    const b = Math.round(c.b * 255);
+    stops.push(`rgb(${r},${g},${b}) ${(t * 100).toFixed(2)}%`);
+  }
+  return `linear-gradient(${direction}, ${stops.join(", ")})`;
+}
+
+/**
  * Render the depth-to-colour gradient into an HTMLCanvasElement.
  * Used by the HUD scale bar.
  */

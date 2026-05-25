@@ -144,36 +144,38 @@ test.describe("Settings page", () => {
     await page.goto("/settings");
     await page.waitForLoadState("networkidle");
 
-    // Visuals tab is active by default. Find the Depth Colormap select.
-    const colormapSelect = page.locator("select").filter({ hasText: "Ocean (blue)" }).first();
+    // Visuals tab is active by default. Find the Depth Colormap picker.
+    const colormapSelect = page.locator('[data-testid="depth-colormap-select"]');
     await expect(colormapSelect).toBeVisible({ timeout: 5_000 });
 
     // Sanity: starts on 'ocean'.
-    await expect(colormapSelect).toHaveValue("ocean");
+    await expect(colormapSelect).toHaveAttribute("data-value", "ocean");
 
-    // Change to 'viridis' and confirm the value flips.
-    await colormapSelect.selectOption("viridis");
-    await expect(colormapSelect).toHaveValue("viridis");
+    // Open the picker and choose 'viridis'.
+    await colormapSelect.click();
+    await page.locator('[role="option"]', { hasText: "Viridis" }).click();
+    await expect(colormapSelect).toHaveAttribute("data-value", "viridis");
 
     // Trigger the global reset (two-step confirm).
     await page.locator("[data-testid='reset-all-btn']").click();
     await page.locator("[data-testid='confirm-reset-all-btn']").click();
 
     // Colormap should return to its default.
-    await expect(colormapSelect).toHaveValue("ocean");
+    await expect(colormapSelect).toHaveAttribute("data-value", "ocean");
   });
 
   test("colormap selection survives a full page reload", async ({ page }) => {
     await page.goto("/settings");
     await page.waitForLoadState("networkidle");
 
-    const colormapSelect = page.locator("select").filter({ hasText: "Ocean (blue)" }).first();
+    const colormapSelect = page.locator('[data-testid="depth-colormap-select"]');
     await expect(colormapSelect).toBeVisible({ timeout: 5_000 });
-    await expect(colormapSelect).toHaveValue("ocean");
+    await expect(colormapSelect).toHaveAttribute("data-value", "ocean");
 
-    // Change to a non-default value.
-    await colormapSelect.selectOption("viridis");
-    await expect(colormapSelect).toHaveValue("viridis");
+    // Change to a non-default value via the custom picker popover.
+    await colormapSelect.click();
+    await page.locator('[role="option"]', { hasText: "Viridis" }).click();
+    await expect(colormapSelect).toHaveAttribute("data-value", "viridis");
 
     // Wait for the persist middleware to write to localStorage.
     await expect
@@ -195,16 +197,15 @@ test.describe("Settings page", () => {
     await page.reload();
     await page.waitForLoadState("networkidle");
 
-    // The select should still reflect the previously chosen value.
-    const reloadedSelect = page.locator("select").filter({ hasText: "Viridis" }).first();
+    // The picker should still reflect the previously chosen value.
+    const reloadedSelect = page.locator('[data-testid="depth-colormap-select"]');
     await expect(reloadedSelect).toBeVisible({ timeout: 10_000 });
-    await expect(reloadedSelect).toHaveValue("viridis");
+    await expect(reloadedSelect).toHaveAttribute("data-value", "viridis");
 
     // Cleanup: reset to defaults via the global reset (two-step confirm).
     await page.locator("[data-testid='reset-all-btn']").click();
     await page.locator("[data-testid='confirm-reset-all-btn']").click();
-    const resetSelect = page.locator("select").filter({ hasText: "Ocean (blue)" }).first();
-    await expect(resetSelect).toHaveValue("ocean");
+    await expect(reloadedSelect).toHaveAttribute("data-value", "ocean");
   });
 
   test("comma keyboard shortcut navigates to /settings from the main page", async ({ page }) => {

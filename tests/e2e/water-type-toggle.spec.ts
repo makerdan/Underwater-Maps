@@ -88,9 +88,10 @@ test.describe("Water-type toggle", () => {
 
     // Confirm the default colormap is "ocean" by visiting Settings.
     await page.goto("/settings");
-    const colormapSelect = page.locator("select").filter({ hasText: "Ocean (blue)" }).first();
+    const colormapSelect = page.locator('[data-testid="depth-colormap-select"]');
     await expect(colormapSelect).toBeVisible({ timeout: 15_000 });
-    await expect(colormapSelect).toHaveValue("ocean");
+    await expect(colormapSelect).toHaveAttribute("data-value", "ocean");
+    await expect(colormapSelect).toContainText("Ocean (blue)");
 
     // ---- Switch to freshwater ---------------------------------------------
     await page.goto("/");
@@ -121,15 +122,13 @@ test.describe("Water-type toggle", () => {
     await expect(page.locator(`[data-testid="${SALTWATER_DATASET}"]`)).toHaveCount(0);
 
     // Scene-hue proxy: the colormap auto-switched from "ocean" → "freshwater".
-    // The Depth Colormap <select> now exposes a "Freshwater (green)" option,
-    // so we can verify the auto-switch directly from the Settings UI.
+    // The Depth Colormap picker exposes its current value via data-value, so
+    // we can verify the auto-switch directly from the Settings UI.
     await page.goto("/settings");
-    const colormapSelectFresh = page
-      .locator("select")
-      .filter({ hasText: "Freshwater (green)" })
-      .first();
+    const colormapSelectFresh = page.locator('[data-testid="depth-colormap-select"]');
     await expect(colormapSelectFresh).toBeVisible({ timeout: 15_000 });
-    await expect(colormapSelectFresh).toHaveValue("freshwater");
+    await expect(colormapSelectFresh).toHaveAttribute("data-value", "freshwater");
+    await expect(colormapSelectFresh).toContainText("Freshwater (green)");
 
     // ---- Switch back to saltwater -----------------------------------------
     await page.goto("/");
@@ -142,11 +141,9 @@ test.describe("Water-type toggle", () => {
 
     // Colormap restored to "ocean", verified directly from the Settings UI.
     await page.goto("/settings");
-    const colormapSelectOceanAgain = page
-      .locator("select")
-      .filter({ hasText: "Ocean (blue)" })
-      .first();
+    const colormapSelectOceanAgain = page.locator('[data-testid="depth-colormap-select"]');
     await expect(colormapSelectOceanAgain).toBeVisible({ timeout: 15_000 });
-    await expect(colormapSelectOceanAgain).toHaveValue("ocean");
+    await expect(colormapSelectOceanAgain).toHaveAttribute("data-value", "ocean");
+    await expect(colormapSelectOceanAgain).toContainText("Ocean (blue)");
   });
 });
