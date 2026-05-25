@@ -1,0 +1,15 @@
+[plugin:vite:import-analysis] Failed to resolve import "./generated/api" from "../../lib/api-client-react/src/index.ts". Does the file exist?
+/home/runner/workspace/lib/api-client-react/src/index.ts:1:14
+1  |  export * from "./generated/api";
+   |                 ^
+2  |  export * from "./generated/api.schemas";
+3  |  export { setBaseUrl, setAuthTokenGetter } from "./custom-fetch";
+    at TransformPluginContext._formatLog (file:///home/runner/workspace/node_modules/.pnpm/vite@7.3.3_@types+node@25.6.2_jiti@2.7.0_lightningcss@1.32.0_terser@5.48.0_tsx@4.21.0_yaml@2.8.4/node_modules/vite/dist/node/chunks/config.js:29019:43)
+    at TransformPluginContext.error (file:///home/runner/workspace/node_modules/.pnpm/vite@7.3.3_@types+node@25.6.2_jiti@2.7.0_lightningcss@1.32.0_terser@5.48.0_tsx@4.21.0_yaml@2.8.4/node_modules/vite/dist/node/chunks/config.js:29016:14)
+    at normalizeUrl (file:///home/runner/workspace/node_modules/.pnpm/vite@7.3.3_@types+node@25.6.2_jiti@2.7.0_lightningcss@1.32.0_terser@5.48.0_tsx@4.21.0_yaml@2.8.4/node_modules/vite/dist/node/chunks/config.js:27139:18)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async file:///home/runner/workspace/node_modules/.pnpm/vite@7.3.3_@types+node@25.6.2_jiti@2.7.0_lightningcss@1.32.0_terser@5.48.0_tsx@4.21.0_yaml@2.8.4/node_modules/vite/dist/node/chunks/config.js:27197:32
+    at async Promise.all (index 0)
+    at async TransformPluginContext.transform (file:///home/runner/workspace/node_modules/.pnpm/vite@7.3.3_@types+node@25.6.2_jiti@2.7.0_lightningcss@1.32.0_terser@5.48.0_tsx@4.21.0_yaml@2.8.4/node_modules/vite/dist/node/chunks/config.js:27165:4)
+    at async EnvironmentPluginContainer.transform (file:///home/runner/workspace/node_modules/.pnpm/vite@7.3.3_@types+node@25.6.2_jiti@2.7.0_lightningcss@1.32.0_terser@5.48.0_tsx@4.21.0_yaml@2.8.4/node_modules/vite/dist/node/chunks/config.js:28817:14)
+    at async loadAndTransform (file:///home/runner/workspace/node_modules/.pnpm/vite@7.3.3_@types+node@25.6.2_jiti@2.7.0_lightningcss@1.32.0_terser@5.48.0_tsx@4.21.0_yaml@2.8.4/node_modules/vite/dist/node/chunks/config.js:22686:26)
