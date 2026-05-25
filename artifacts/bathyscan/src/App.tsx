@@ -33,6 +33,7 @@ import { HabitatPanel } from "@/components/HabitatPanel";
 import { QueryPanel } from "@/components/QueryPanel";
 import { TrailRecorder } from "@/components/TrailRecorder";
 import { VirtualJoystick } from "@/components/VirtualJoystick";
+import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useTidalData } from "@/hooks/useTidalData";
 import { useUiStore } from "@/lib/uiStore";
 import { useClassificationStore } from "@/lib/classificationStore";
@@ -453,27 +454,28 @@ function Main() {
             pinned to the left side. Can also be collapsed horizontally to
             give the user a full view of the scene. */}
         {sidePaneCollapsed ? (
-          <button
-            onClick={() => setSidePaneCollapsed(false)}
-            title="Show side pane"
-            aria-label="Show side pane"
-            className="absolute top-12 left-4 z-20"
-            style={{
-              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-              fontSize: 12,
-              padding: "6px 8px",
-              borderRadius: 4,
-              border: "1px solid rgba(0,229,255,0.35)",
-              background: "rgba(2,8,18,0.94)",
-              color: "#00e5ff",
-              cursor: "pointer",
-              backdropFilter: "blur(6px)",
-              textShadow: "0 0 6px rgba(0,229,255,0.5)",
-              letterSpacing: "0.1em",
-            }}
-          >
-            ▸
-          </button>
+          <ViewscreenTooltip label="Show side pane (datasets, habitat, tides)" side="right">
+            <button
+              onClick={() => setSidePaneCollapsed(false)}
+              aria-label="Show side pane"
+              className="absolute top-12 left-4 z-20"
+              style={{
+                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                fontSize: 12,
+                padding: "6px 8px",
+                borderRadius: 4,
+                border: "1px solid rgba(0,229,255,0.35)",
+                background: "rgba(2,8,18,0.94)",
+                color: "#00e5ff",
+                cursor: "pointer",
+                backdropFilter: "blur(6px)",
+                textShadow: "0 0 6px rgba(0,229,255,0.5)",
+                letterSpacing: "0.1em",
+              }}
+            >
+              ▸
+            </button>
+          </ViewscreenTooltip>
         ) : (
           <div
             className="absolute top-12 left-4 z-20 flex flex-col gap-2 overflow-y-auto overscroll-contain"
@@ -485,25 +487,26 @@ function Main() {
             }}
           >
             <div className="flex justify-end" style={{ minWidth: 220, maxWidth: 260 }}>
-              <button
-                onClick={() => setSidePaneCollapsed(true)}
-                title="Hide side pane"
-                aria-label="Hide side pane"
-                style={{
-                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                  fontSize: 11,
-                  padding: "2px 8px",
-                  borderRadius: 4,
-                  border: "1px solid rgba(0,229,255,0.35)",
-                  background: "rgba(2,8,18,0.94)",
-                  color: "#00e5ff",
-                  cursor: "pointer",
-                  backdropFilter: "blur(6px)",
-                  letterSpacing: "0.1em",
-                }}
-              >
-                ◂ HIDE
-              </button>
+              <ViewscreenTooltip label="Hide side pane to free up screen space" side="right">
+                <button
+                  onClick={() => setSidePaneCollapsed(true)}
+                  aria-label="Hide side pane"
+                  style={{
+                    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                    fontSize: 11,
+                    padding: "2px 8px",
+                    borderRadius: 4,
+                    border: "1px solid rgba(0,229,255,0.35)",
+                    background: "rgba(2,8,18,0.94)",
+                    color: "#00e5ff",
+                    cursor: "pointer",
+                    backdropFilter: "blur(6px)",
+                    letterSpacing: "0.1em",
+                  }}
+                >
+                  ◂ HIDE
+                </button>
+              </ViewscreenTooltip>
             </div>
             {showDatasetPanel && <DatasetPanel />}
             <ZoneOverlay />
@@ -525,9 +528,12 @@ function Main() {
 
         {/* Tidal + Realistic toggle buttons — top-right of scene */}
         <div className="absolute top-3 right-16 z-20 flex gap-2">
+          <ViewscreenTooltip
+            label={realisticMode ? "Disable realistic boat throttle mode" : "Enable realistic boat throttle mode"}
+            side="bottom"
+          >
           <button
             onClick={() => setRealisticMode(!realisticMode)}
-            title={realisticMode ? "Disable Realistic Mode" : "Enable Realistic Mode (boat throttle)"}
             style={{
               fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
               fontSize: 10,
@@ -546,9 +552,13 @@ function Main() {
           >
             {realisticMode ? "◉" : "○"} REALISTIC
           </button>
+          </ViewscreenTooltip>
+          <ViewscreenTooltip
+            label={tidalOverlay ? "Hide tidal currents and water-level overlay" : "Show tidal currents and water-level overlay"}
+            side="bottom"
+          >
           <button
             onClick={() => setTidalOverlay(!tidalOverlay)}
-            title={tidalOverlay ? "Disable Tidal Overlay" : "Enable Tidal Overlay"}
             style={{
               fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
               fontSize: 10,
@@ -567,9 +577,13 @@ function Main() {
           >
             {tidalOverlay ? "◉" : "○"} TIDAL
           </button>
+          </ViewscreenTooltip>
+          <ViewscreenTooltip
+            label={driftPlannerActive ? "Disable Drift Planner" : "Enable Drift Planner — boat drift, line angle, tidal path"}
+            side="bottom"
+          >
           <button
             onClick={() => setDriftPlannerActive(!driftPlannerActive)}
-            title={driftPlannerActive ? "Disable Drift Planner" : "Enable Drift Planner — visualise boat drift, fishing line angle and tidal path"}
             style={{
               fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
               fontSize: 10,
@@ -588,6 +602,7 @@ function Main() {
           >
             {driftPlannerActive ? "◉" : "○"} DRIFT
           </button>
+          </ViewscreenTooltip>
         </div>
 
         {/* Throttle panel — bottom-right above minimap, visible when realistic mode is on */}
@@ -748,10 +763,10 @@ function Main() {
 
         {/* Query panel toggle hint — bottom-centre, visible when panel is closed */}
         {!queryOpen && (
+          <ViewscreenTooltip label='Open natural-language query panel (press "/")' side="top">
           <button
             data-testid="query-panel-trigger"
             onClick={() => setQueryOpen(true)}
-            title='Open query panel (press "/")'
             style={{
               position: "absolute",
               bottom: 16,
@@ -772,6 +787,7 @@ function Main() {
           >
             / QUERY
           </button>
+          </ViewscreenTooltip>
         )}
       </div>
     </div>

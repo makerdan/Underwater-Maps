@@ -10,6 +10,7 @@ import { lonLatToWorldXZ } from "@/lib/terrain";
 import { mphToKnots } from "@/lib/boatSpeed";
 import { formatDepth, formatSpeed } from "@/lib/units";
 import { HelpIcon } from "@/components/help/HelpButton";
+import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 const EFH_DATASETS = new Set(["thorne-bay"]);
 
@@ -193,24 +194,26 @@ export const HUD: React.FC = () => {
 
         {/* GPS dive button in HUD */}
         {gpsInBounds && (
-          <button
-            onClick={handleDiveToGps}
-            style={{
-              ...PANEL,
-              pointerEvents: "auto",
-              background: "rgba(59,130,246,0.12)",
-              border: "1px solid rgba(59,130,246,0.4)",
-              color: "#60a5fa",
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 10,
-              padding: "4px 10px",
-              borderRadius: 4,
-              cursor: "pointer",
-              letterSpacing: "0.1em",
-            }}
-          >
-            📍 DIVE TO GPS
-          </button>
+          <ViewscreenTooltip label="Jump the camera to your current GPS position" side="bottom">
+            <button
+              onClick={handleDiveToGps}
+              style={{
+                ...PANEL,
+                pointerEvents: "auto",
+                background: "rgba(59,130,246,0.12)",
+                border: "1px solid rgba(59,130,246,0.4)",
+                color: "#60a5fa",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10,
+                padding: "4px 10px",
+                borderRadius: 4,
+                cursor: "pointer",
+                letterSpacing: "0.1em",
+              }}
+            >
+              📍 DIVE TO GPS
+            </button>
+          </ViewscreenTooltip>
         )}
       </div>
 
@@ -296,57 +299,39 @@ export const HUD: React.FC = () => {
           style={{ pointerEvents: "auto" }}
         >
           {/* Find Data panel toggle */}
-          <button
-            onClick={() => {
-              const { findDataPanelOpen, setFindDataPanelOpen } = useUiStore.getState();
-              setFindDataPanelOpen(!findDataPanelOpen);
-            }}
-            style={{
-              background: "rgba(0,10,20,0.75)",
-              border: "1px solid rgba(0,229,255,0.2)",
-              borderRadius: 4,
-              color: "#00e5ff",
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 9,
-              padding: "3px 10px",
-              cursor: "pointer",
-              letterSpacing: "0.1em",
-              backdropFilter: "blur(4px)",
-              textShadow: "0 0 6px rgba(0,229,255,0.4)",
-            }}
-          >
-            🔍 FIND DATA
-          </button>
-          {/* Substrate colour toggle */}
-          <button
-            aria-pressed={substrateColorMode}
-            onClick={() => setSubstrateColorMode(!substrateColorMode)}
-            style={{
-              background: substrateColorMode ? "rgba(226,213,160,0.15)" : "rgba(0,10,20,0.75)",
-              border: `1px solid ${substrateColorMode ? "rgba(226,213,160,0.5)" : "rgba(0,229,255,0.15)"}`,
-              borderRadius: 4,
-              color: substrateColorMode ? "#e2d5a0" : "#475569",
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 9,
-              padding: "3px 10px",
-              cursor: "pointer",
-              letterSpacing: "0.1em",
-              backdropFilter: "blur(4px)",
-            }}
-          >
-            ◼ SUBSTRATE
-          </button>
-
-          {/* EFH zone toggle — only for datasets with bundled EFH data */}
-          {hasEfh && (
+          <ViewscreenTooltip label="Browse datasets, markers and habitats" side="left">
             <button
-              aria-pressed={efhOverlayEnabled}
-              onClick={() => setEfhOverlayEnabled(!efhOverlayEnabled)}
+              onClick={() => {
+                const { findDataPanelOpen, setFindDataPanelOpen } = useUiStore.getState();
+                setFindDataPanelOpen(!findDataPanelOpen);
+              }}
               style={{
-                background: efhOverlayEnabled ? "rgba(34,197,94,0.15)" : "rgba(0,10,20,0.75)",
-                border: `1px solid ${efhOverlayEnabled ? "rgba(34,197,94,0.5)" : "rgba(0,229,255,0.15)"}`,
+                background: "rgba(0,10,20,0.75)",
+                border: "1px solid rgba(0,229,255,0.2)",
                 borderRadius: 4,
-                color: efhOverlayEnabled ? "#4ade80" : "#475569",
+                color: "#00e5ff",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9,
+                padding: "3px 10px",
+                cursor: "pointer",
+                letterSpacing: "0.1em",
+                backdropFilter: "blur(4px)",
+                textShadow: "0 0 6px rgba(0,229,255,0.4)",
+              }}
+            >
+              🔍 FIND DATA
+            </button>
+          </ViewscreenTooltip>
+          {/* Substrate colour toggle */}
+          <ViewscreenTooltip label="Tint seafloor by substrate type (sand, mud, rock)" side="left">
+            <button
+              aria-pressed={substrateColorMode}
+              onClick={() => setSubstrateColorMode(!substrateColorMode)}
+              style={{
+                background: substrateColorMode ? "rgba(226,213,160,0.15)" : "rgba(0,10,20,0.75)",
+                border: `1px solid ${substrateColorMode ? "rgba(226,213,160,0.5)" : "rgba(0,229,255,0.15)"}`,
+                borderRadius: 4,
+                color: substrateColorMode ? "#e2d5a0" : "#475569",
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: 9,
                 padding: "3px 10px",
@@ -355,8 +340,32 @@ export const HUD: React.FC = () => {
                 backdropFilter: "blur(4px)",
               }}
             >
-              🐟 EFH ZONES
+              ◼ SUBSTRATE
             </button>
+          </ViewscreenTooltip>
+
+          {/* EFH zone toggle — only for datasets with bundled EFH data */}
+          {hasEfh && (
+            <ViewscreenTooltip label="Show Essential Fish Habitat zones overlay" side="left">
+              <button
+                aria-pressed={efhOverlayEnabled}
+                onClick={() => setEfhOverlayEnabled(!efhOverlayEnabled)}
+                style={{
+                  background: efhOverlayEnabled ? "rgba(34,197,94,0.15)" : "rgba(0,10,20,0.75)",
+                  border: `1px solid ${efhOverlayEnabled ? "rgba(34,197,94,0.5)" : "rgba(0,229,255,0.15)"}`,
+                  borderRadius: 4,
+                  color: efhOverlayEnabled ? "#4ade80" : "#475569",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9,
+                  padding: "3px 10px",
+                  cursor: "pointer",
+                  letterSpacing: "0.1em",
+                  backdropFilter: "blur(4px)",
+                }}
+              >
+                🐟 EFH ZONES
+              </button>
+            </ViewscreenTooltip>
           )}
         </div>
       )}

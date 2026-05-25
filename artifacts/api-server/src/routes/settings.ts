@@ -37,6 +37,7 @@ const DEFAULT_SETTINGS = {
   defaultRegion: "mariana-trench",
   gpsRecordingInterval: 10000,
   waterType: "saltwater",
+  showUiTooltips: true,
 };
 
 /**

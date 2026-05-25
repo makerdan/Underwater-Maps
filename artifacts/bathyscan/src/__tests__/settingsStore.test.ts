@@ -78,6 +78,24 @@ describe("settingsStore", () => {
     expect(useSettingsStore.getState().datasetHomePositions["ds-x"]).toBeUndefined();
   });
 
+  it("showUiTooltips defaults to true and toggles via its setter", () => {
+    expect(useSettingsStore.getState().showUiTooltips).toBe(true);
+    useSettingsStore.getState().setShowUiTooltips(false);
+    expect(useSettingsStore.getState().showUiTooltips).toBe(false);
+    useSettingsStore.getState().setShowUiTooltips(true);
+    expect(useSettingsStore.getState().showUiTooltips).toBe(true);
+  });
+
+  it("resetSection('hud') restores showUiTooltips along with other HUD fields", () => {
+    const s = useSettingsStore.getState();
+    s.setShowUiTooltips(false);
+    s.setHudOpacity(0.4);
+    expect(useSettingsStore.getState().showUiTooltips).toBe(false);
+    s.resetSection("hud");
+    expect(useSettingsStore.getState().showUiTooltips).toBe(DEFAULT_SETTINGS.showUiTooltips);
+    expect(useSettingsStore.getState().hudOpacity).toBe(DEFAULT_SETTINGS.hudOpacity);
+  });
+
   it("hydrateFromServer merges partial server state without clobbering unrelated fields", () => {
     const s = useSettingsStore.getState();
     s.setFieldOfView(72);

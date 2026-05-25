@@ -1225,6 +1225,10 @@ components:
           enum: [saltwater, freshwater]
           default: saltwater
           description: Active water body type; controls colormap, species lists, marker types, and dataset filter
+        showUiTooltips:
+          type: boolean
+          default: true
+          description: Show hover/focus tooltips on viewscreen controls and HUD readouts.
 
     ApiError:
       type: object

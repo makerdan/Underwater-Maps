@@ -105,6 +105,7 @@ export interface SettingsState {
   showHabitatPanel: boolean;
   showDatasetPanel: boolean;
   showQueryPanel: boolean;
+  showUiTooltips: boolean;
   timeFormat: TimeFormat;
   coordinateFormat: CoordinateFormat;
   depthUnit: DepthUnit;
@@ -215,6 +216,7 @@ interface SettingsActions {
   setShowHabitatPanel: (v: boolean) => void;
   setShowDatasetPanel: (v: boolean) => void;
   setShowQueryPanel: (v: boolean) => void;
+  setShowUiTooltips: (v: boolean) => void;
   setTimeFormat: (v: TimeFormat) => void;
   setCoordinateFormat: (v: CoordinateFormat) => void;
   setDepthUnit: (v: DepthUnit) => void;
@@ -412,6 +414,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   showHabitatPanel: true,
   showDatasetPanel: true,
   showQueryPanel: true,
+  showUiTooltips: true,
   timeFormat: "local",
   coordinateFormat: "decimal",
   depthUnit: "metres",
@@ -481,7 +484,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "hudOpacity", "showCrosshairGps", "showCameraPosition", "showSpeedIndicator",
     "showHeading", "showDepthLegend", "showDepthScaleBar", "showCompassMinimap",
     "showControlsLegend", "showTidePanel", "showHabitatPanel", "showDatasetPanel",
-    "showQueryPanel", "timeFormat", "coordinateFormat", "depthUnit", "units",
+    "showQueryPanel", "showUiTooltips", "timeFormat", "coordinateFormat", "depthUnit", "units",
   ],
   overview: [
     "overviewDefaultZoom", "overviewShowGrid", "overviewShowMarkers", "overviewOpenOnLoad",
@@ -589,6 +592,7 @@ export const useSettingsStore = create<SettingsStore>()(
         setShowHabitatPanel: setter("showHabitatPanel"),
         setShowDatasetPanel: setter("showDatasetPanel"),
         setShowQueryPanel: setter("showQueryPanel"),
+        setShowUiTooltips: setter("showUiTooltips"),
         setTimeFormat: setter("timeFormat"),
         setCoordinateFormat: setter("coordinateFormat"),
         setDepthUnit: setter("depthUnit"),

@@ -458,6 +458,7 @@ export const getSettingsResponseGpsRecordingIntervalMin = 1000;
 export const getSettingsResponseGpsRecordingIntervalMax = 60000;
 
 export const getSettingsResponseWaterTypeDefault = `saltwater`;
+export const getSettingsResponseShowUiTooltipsDefault = true;
 
 export const GetSettingsResponse = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(getSettingsResponseTextureQualityDefault),
@@ -489,7 +490,8 @@ export const GetSettingsResponse = zod.object({
   "defaultMarkerType": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'log', 'vegetation', 'sample', 'bass', 'trout', 'pike', 'walleye', 'crayfish']).default(getSettingsResponseDefaultMarkerTypeDefault),
   "defaultRegion": zod.string().default(getSettingsResponseDefaultRegionDefault),
   "gpsRecordingInterval": zod.number().min(getSettingsResponseGpsRecordingIntervalMin).max(getSettingsResponseGpsRecordingIntervalMax).default(getSettingsResponseGpsRecordingIntervalDefault),
-  "waterType": zod.enum(['saltwater', 'freshwater']).default(getSettingsResponseWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter')
+  "waterType": zod.enum(['saltwater', 'freshwater']).default(getSettingsResponseWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter'),
+  "showUiTooltips": zod.boolean().default(getSettingsResponseShowUiTooltipsDefault).describe('Show hover\/focus tooltips on viewscreen controls and HUD readouts.')
 }).describe('Per-user application settings with sensible defaults')
 
 
@@ -547,6 +549,7 @@ export const putSettingsBodyGpsRecordingIntervalMin = 1000;
 export const putSettingsBodyGpsRecordingIntervalMax = 60000;
 
 export const putSettingsBodyWaterTypeDefault = `saltwater`;
+export const putSettingsBodyShowUiTooltipsDefault = true;
 
 export const PutSettingsBody = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsBodyTextureQualityDefault),
@@ -578,7 +581,8 @@ export const PutSettingsBody = zod.object({
   "defaultMarkerType": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'log', 'vegetation', 'sample', 'bass', 'trout', 'pike', 'walleye', 'crayfish']).default(putSettingsBodyDefaultMarkerTypeDefault),
   "defaultRegion": zod.string().default(putSettingsBodyDefaultRegionDefault),
   "gpsRecordingInterval": zod.number().min(putSettingsBodyGpsRecordingIntervalMin).max(putSettingsBodyGpsRecordingIntervalMax).default(putSettingsBodyGpsRecordingIntervalDefault),
-  "waterType": zod.enum(['saltwater', 'freshwater']).default(putSettingsBodyWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter')
+  "waterType": zod.enum(['saltwater', 'freshwater']).default(putSettingsBodyWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter'),
+  "showUiTooltips": zod.boolean().default(putSettingsBodyShowUiTooltipsDefault).describe('Show hover\/focus tooltips on viewscreen controls and HUD readouts.')
 }).describe('Per-user application settings with sensible defaults')
 
 export const putSettingsResponseTextureQualityDefault = `high`;
@@ -631,6 +635,7 @@ export const putSettingsResponseGpsRecordingIntervalMin = 1000;
 export const putSettingsResponseGpsRecordingIntervalMax = 60000;
 
 export const putSettingsResponseWaterTypeDefault = `saltwater`;
+export const putSettingsResponseShowUiTooltipsDefault = true;
 
 export const PutSettingsResponse = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsResponseTextureQualityDefault),
@@ -662,7 +667,8 @@ export const PutSettingsResponse = zod.object({
   "defaultMarkerType": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'log', 'vegetation', 'sample', 'bass', 'trout', 'pike', 'walleye', 'crayfish']).default(putSettingsResponseDefaultMarkerTypeDefault),
   "defaultRegion": zod.string().default(putSettingsResponseDefaultRegionDefault),
   "gpsRecordingInterval": zod.number().min(putSettingsResponseGpsRecordingIntervalMin).max(putSettingsResponseGpsRecordingIntervalMax).default(putSettingsResponseGpsRecordingIntervalDefault),
-  "waterType": zod.enum(['saltwater', 'freshwater']).default(putSettingsResponseWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter')
+  "waterType": zod.enum(['saltwater', 'freshwater']).default(putSettingsResponseWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter'),
+  "showUiTooltips": zod.boolean().default(putSettingsResponseShowUiTooltipsDefault).describe('Show hover\/focus tooltips on viewscreen controls and HUD readouts.')
 }).describe('Per-user application settings with sensible defaults')
 
 

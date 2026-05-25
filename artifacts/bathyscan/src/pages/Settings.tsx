@@ -853,6 +853,12 @@ function HUDSection() {
           <ToggleRow label="Habitat Panel" value={s.showHabitatPanel} onChange={s.setShowHabitatPanel} />
           <ToggleRow label="Dataset Selector" value={s.showDatasetPanel} onChange={s.setShowDatasetPanel} />
           <ToggleRow label="Natural-Language Query" value={s.showQueryPanel} onChange={s.setShowQueryPanel} />
+          <ToggleRow
+            label="Show UI tooltips"
+            value={s.showUiTooltips}
+            onChange={s.setShowUiTooltips}
+            sublabel="Hover hints on viewscreen buttons and HUD elements"
+          />
         </div>
         <div style={S.card}>
           <div style={S.cardHeader}>TIME FORMAT</div>

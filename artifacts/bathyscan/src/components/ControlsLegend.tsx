@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 const BINDINGS = [
   { key: "Click", action: "Lock mouse / enter fly mode" },
@@ -52,19 +53,21 @@ export const ControlsLegend: React.FC = () => {
         </div>
       )}
 
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-mono font-bold transition-colors"
-        style={{
-          background: open ? "rgba(0,229,255,0.15)" : "rgba(0,10,20,0.80)",
-          border: "1px solid rgba(0,229,255,0.3)",
-          color: open ? "#00e5ff" : "#475569",
-          boxShadow: open ? "0 0 8px rgba(0,229,255,0.2)" : "none",
-        }}
-        title="Controls"
-      >
-        ?
-      </button>
+      <ViewscreenTooltip label="Show keyboard and mouse controls" side="right">
+        <button
+          onClick={() => setOpen((o) => !o)}
+          aria-label="Toggle controls help"
+          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-mono font-bold transition-colors"
+          style={{
+            background: open ? "rgba(0,229,255,0.15)" : "rgba(0,10,20,0.80)",
+            border: "1px solid rgba(0,229,255,0.3)",
+            color: open ? "#00e5ff" : "#475569",
+            boxShadow: open ? "0 0 8px rgba(0,229,255,0.2)" : "none",
+          }}
+        >
+          ?
+        </button>
+      </ViewscreenTooltip>
     </div>
   );
 };

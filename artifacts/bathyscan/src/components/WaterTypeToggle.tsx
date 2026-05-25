@@ -6,6 +6,7 @@ import React from "react";
 import { useSettingsStore } from "@/lib/settingsStore";
 import type { WaterType } from "@/lib/settingsStore";
 import { usePutSettings } from "@workspace/api-client-react";
+import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 interface WaterTypeToggleProps {
   onChange?: (v: WaterType) => void;
@@ -50,12 +51,14 @@ export const WaterTypeToggle: React.FC<WaterTypeToggleProps> = ({ onChange }) =>
     >
       {OPTIONS.map((opt) => {
         const active = waterType === opt.value;
+        const tip = opt.value === "saltwater"
+          ? "Ocean / sea exploration mode"
+          : "Lake / river exploration mode";
         return (
+          <ViewscreenTooltip key={opt.value} label={tip} side="bottom">
           <button
-            key={opt.value}
             data-testid={`water-type-${opt.value}`}
             onClick={() => handleSelect(opt.value)}
-            title={opt.value === "saltwater" ? "Ocean / Sea exploration" : "Lake / River exploration"}
             style={{
               flex: 1,
               fontSize: 8,
@@ -77,6 +80,7 @@ export const WaterTypeToggle: React.FC<WaterTypeToggleProps> = ({ onChange }) =>
             <span style={{ fontSize: 10 }}>{opt.icon}</span>
             <span>{opt.label}</span>
           </button>
+          </ViewscreenTooltip>
         );
       })}
     </div>

@@ -109,6 +109,22 @@ describe("Settings page", () => {
     expect(screen.getByText(/LIGHTING/)).toBeInTheDocument();
   });
 
+  it("HUD section exposes the Show UI tooltips toggle (default ON)", () => {
+    render(<Settings />);
+    fireEvent.click(screen.getByText("HUD & LAYOUT"));
+    // Toggle lives inside the HUD AdvancedDisclosure (collapsed by default).
+    const disclosure = screen.getByTestId("hud-advanced");
+    fireEvent.click(within(disclosure).getByRole("button"));
+    const label = screen.getByText("Show UI tooltips");
+    expect(label).toBeInTheDocument();
+    // ToggleRow: <row><labelWrap><label/><sublabel/></labelWrap><Toggle/></row>
+    const row = label.parentElement?.parentElement as HTMLElement;
+    const sw = within(row).getByRole("switch");
+    expect(sw.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(sw);
+    expect(useSettingsStore.getState().showUiTooltips).toBe(false);
+  });
+
   it("renders the global Reset ALL Settings footer", () => {
     render(<Settings />);
     expect(screen.getByTestId("reset-all-btn")).toBeInTheDocument();

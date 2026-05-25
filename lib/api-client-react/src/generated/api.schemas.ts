@@ -282,6 +282,8 @@ export interface UserSettings {
   gpsRecordingInterval?: number;
   /** Active water body type; controls colormap, species lists, marker types, and dataset filter */
   waterType?: UserSettingsWaterType;
+  /** Show hover/focus tooltips on viewscreen controls and HUD readouts. */
+  showUiTooltips?: boolean;
 }
 
 export interface ApiError {
