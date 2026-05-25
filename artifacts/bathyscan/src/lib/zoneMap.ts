@@ -101,7 +101,13 @@ const FRESHWATER_LABEL_TO_INDEX = new Map<string, number>(
 
 /**
  * Parse an array of 1024 zone label strings (32×32 coarse grid) into a Uint8Array
- * of zone indices, then upsample to `targetN × targetN` via nearest-neighbour.
+ * of zone indices, then upsample to `targetN × targetN` via bilinear interpolation.
+ *
+ * Bilinear interpolation is used so zone boundaries blend smoothly rather than
+ * showing hard nearest-neighbour block edges. Because zone indices are discrete
+ * categorical values, the weighted sum is rounded to the nearest integer — this
+ * keeps boundary pixels snapped to a real zone label while still producing
+ * smoother transitions than nearest-neighbour.
  *
  * @param labels    — 1024 zone label strings from the AI response
  * @param waterType — "saltwater" | "freshwater"
@@ -123,13 +129,35 @@ export function parseAndUpsampleZones(
     coarse[i] = labelToIndex.get(labels[i] ?? "") ?? 0;
   }
 
-  // Upsample to targetN × targetN via nearest-neighbour
+  // Upsample to targetN × targetN via bilinear interpolation
   const out = new Uint8Array(targetN * targetN);
+  const norm = targetN > 1 ? (COARSE - 1) / (targetN - 1) : 0;
+
   for (let row = 0; row < targetN; row++) {
     for (let col = 0; col < targetN; col++) {
-      const srcRow = Math.round((row / (targetN - 1)) * (COARSE - 1));
-      const srcCol = Math.round((col / (targetN - 1)) * (COARSE - 1));
-      out[row * targetN + col] = coarse[srcRow * COARSE + srcCol] ?? 0;
+      const srcRow = row * norm;
+      const srcCol = col * norm;
+
+      const r0 = Math.floor(srcRow);
+      const r1 = Math.min(r0 + 1, COARSE - 1);
+      const c0 = Math.floor(srcCol);
+      const c1 = Math.min(c0 + 1, COARSE - 1);
+
+      const dr = srcRow - r0;
+      const dc = srcCol - c0;
+
+      const v00 = coarse[r0 * COARSE + c0] ?? 0;
+      const v01 = coarse[r0 * COARSE + c1] ?? 0;
+      const v10 = coarse[r1 * COARSE + c0] ?? 0;
+      const v11 = coarse[r1 * COARSE + c1] ?? 0;
+
+      const value =
+        v00 * (1 - dr) * (1 - dc) +
+        v01 * (1 - dr) * dc +
+        v10 * dr * (1 - dc) +
+        v11 * dr * dc;
+
+      out[row * targetN + col] = Math.round(value);
     }
   }
   return out;

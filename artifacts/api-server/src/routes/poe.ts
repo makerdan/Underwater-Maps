@@ -158,25 +158,29 @@ interface CachedZones {
   classifiedAt: number;
 }
 
+/**
+ * Secondary zone cache — keyed by gridHash (FNV-1a 32-bit of the depth grid).
+ *
+ * Using gridHash instead of datasetId prevents collisions when multiple unrelated
+ * uploads share the synthetic id "upload". Different grid content → different hash
+ * → separate, correct cache entries.
+ */
 const datasetZonesCache = new Map<string, CachedZones>();
 
 /** Exported so the /datasets/:id/zones endpoint (datasets.ts) can read it. */
 export { datasetZonesCache };
 
 // ---------------------------------------------------------------------------
-// Disk persistence for zone cache — survives process restarts
-// Stored alongside terrain cache at /tmp/zone-cache/<datasetId>.json
+// Disk persistence — survives process restarts
+// Files stored at /tmp/zone-cache/<gridHash>.json (hex filename, always safe)
 // ---------------------------------------------------------------------------
 
 const ZONE_CACHE_DIR = "/tmp/zone-cache";
 
-export async function readZoneDiskForDataset(datasetId: string): Promise<CachedZones | null> {
-  return readZoneDisk(datasetId);
-}
-
-async function readZoneDisk(datasetId: string): Promise<CachedZones | null> {
+/** Read a single zone cache entry by gridHash from disk. */
+export async function readZoneDiskByHash(gridHash: string): Promise<CachedZones | null> {
   try {
-    const file = path.join(ZONE_CACHE_DIR, `${datasetId}.json`);
+    const file = path.join(ZONE_CACHE_DIR, `${gridHash}.json`);
     const raw = await fsPromises.readFile(file, "utf8");
     return JSON.parse(raw) as CachedZones;
   } catch {
@@ -184,13 +188,13 @@ async function readZoneDisk(datasetId: string): Promise<CachedZones | null> {
   }
 }
 
-async function writeZoneDisk(datasetId: string, data: CachedZones): Promise<void> {
+async function writeZoneDisk(gridHash: string, data: CachedZones): Promise<void> {
   try {
     await fsPromises.mkdir(ZONE_CACHE_DIR, { recursive: true });
-    const file = path.join(ZONE_CACHE_DIR, `${datasetId}.json`);
+    const file = path.join(ZONE_CACHE_DIR, `${gridHash}.json`);
     await fsPromises.writeFile(file, JSON.stringify(data), "utf8");
   } catch (err) {
-    console.warn(`[zones] Failed to write disk cache for ${datasetId}: ${(err as Error).message}`);
+    console.warn(`[zones] Failed to write disk cache for ${gridHash}: ${(err as Error).message}`);
   }
 }
 
@@ -203,10 +207,10 @@ async function hydrateCacheFromDisk(): Promise<void> {
       files
         .filter((f) => f.endsWith(".json"))
         .map(async (f) => {
-          const id = f.slice(0, -5);
-          const data = await readZoneDisk(id);
-          if (data && !datasetZonesCache.has(id)) {
-            datasetZonesCache.set(id, data);
+          const hash = f.slice(0, -5);
+          const data = await readZoneDiskByHash(hash);
+          if (data && !datasetZonesCache.has(hash)) {
+            datasetZonesCache.set(hash, data);
           }
         }),
     );
@@ -264,10 +268,12 @@ router.post("/classify", async (req, res) => {
     return;
   }
 
-  const { gridBase64, waterType = "saltwater", datasetId } = req.body as {
+  const { gridBase64, waterType = "saltwater", datasetId, gridHash } = req.body as {
     gridBase64: string;
     waterType?: "saltwater" | "freshwater";
     datasetId?: string;
+    /** Client-computed FNV-1a 32-bit hash of the depth grid (hex string). */
+    gridHash?: string;
   };
 
   if (!gridBase64) {
@@ -326,11 +332,12 @@ router.post("/classify", async (req, res) => {
 
     globalPoeCache.set(cacheKey, JSON.stringify(zones));
 
-    // Populate secondary dataset-level cache (memory + disk) for GET /datasets/:id/zones
-    if (datasetId) {
+    // Populate secondary zone cache keyed by gridHash (content-addressable).
+    // This prevents "upload" datasetId collisions: different grids → different hashes.
+    if (gridHash) {
       const cached: CachedZones = { zones, waterType, classifiedAt: Date.now() };
-      datasetZonesCache.set(datasetId, cached);
-      void writeZoneDisk(datasetId, cached);
+      datasetZonesCache.set(gridHash, cached);
+      void writeZoneDisk(gridHash, cached);
     }
 
     await logUsage(

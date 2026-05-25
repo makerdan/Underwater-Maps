@@ -1,5 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
+import { eq, and } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { db, customDatasetsTable } from "@workspace/db";
 import {
@@ -14,7 +15,7 @@ import {
   parseXyzCsv,
   gridPoints,
 } from "../lib/terrain.js";
-import { datasetZonesCache, readZoneDiskForDataset } from "./poe.js";
+import { datasetZonesCache, readZoneDiskByHash } from "./poe.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
@@ -72,45 +73,71 @@ router.get("/datasets/:id/overview", async (req, res): Promise<void> => {
   }
 });
 
-// ── GET /datasets/:id/zones ────────────────────────────────────────────────────
-// Returns the most-recent AI classification for this dataset.
-// Checks memory cache first, then disk cache (survives restarts).
-// Preset dataset results are public; user-dataset results require auth.
+// ── GET /datasets/:id/zones?h=<gridHash> ──────────────────────────────────────
+// Returns the cached AI classification identified by gridHash (content hash of
+// the depth grid). The :id path segment is used only for auth/ownership checks.
+//
+// Cache is keyed by gridHash, NOT by datasetId, which prevents collisions when
+// multiple uploads share the synthetic datasetId "upload".
+//
+// Auth rules:
+//  - Preset dataset IDs → public (no auth required)
+//  - UUID-format IDs (user-saved datasets) → require auth + ownership check
+//  - Other IDs ("upload", etc.) → require auth (no DB row to verify ownership)
 router.get("/datasets/:id/zones", async (req, res): Promise<void> => {
   const { id } = req.params as { id: string };
+  const gridHash = (req.query["h"] as string | undefined) ?? "";
 
-  // Auth gate for user-uploaded datasets (preset IDs are public knowledge)
+  if (!gridHash) {
+    res.status(400).json({ error: "missing_param", message: "?h=<gridHash> is required" });
+    return;
+  }
+
+  // --- Auth / ownership gate ---
   const isPreset = PRESET_DATASETS.some((d) => d.id === id);
   if (!isPreset) {
     const auth = getAuth(req);
-    const userId = auth?.userId ?? null;
-    // In dev, allow bypass via header
-    const devUserId =
-      process.env["NODE_ENV"] !== "production"
+    const callerId = auth?.userId
+      ?? (process.env["NODE_ENV"] !== "production"
         ? ((req.headers["x-dev-user-id"] as string | undefined) ?? null)
-        : null;
-    if (!userId && !devUserId) {
+        : null);
+
+    if (!callerId) {
       res.status(401).json({ error: "unauthenticated", message: "Authentication required" });
       return;
     }
+
+    // For UUID-format dataset IDs, verify ownership against the database.
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (UUID_RE.test(id)) {
+      const rows = await db
+        .select({ userId: customDatasetsTable.userId })
+        .from(customDatasetsTable)
+        .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, callerId)));
+      if (rows.length === 0) {
+        // Either dataset doesn't exist or belongs to a different user
+        res.status(403).json({ error: "forbidden", message: "Access denied" });
+        return;
+      }
+    }
+    // For non-UUID, non-preset IDs (e.g. "upload") auth is sufficient; no DB row exists.
   }
 
-  // 1. Memory cache
-  const inMemory = datasetZonesCache.get(id);
+  // --- Cache lookup by gridHash ---
+  const inMemory = datasetZonesCache.get(gridHash);
   if (inMemory) {
     res.json(inMemory);
     return;
   }
 
-  // 2. Disk cache (hydrated on startup but may lag for just-written entries)
-  const onDisk = await readZoneDiskForDataset(id);
+  const onDisk = await readZoneDiskByHash(gridHash);
   if (onDisk) {
-    datasetZonesCache.set(id, onDisk); // warm the memory cache
+    datasetZonesCache.set(gridHash, onDisk);
     res.json(onDisk);
     return;
   }
 
-  res.status(404).json({ error: "not_found", message: "No cached classification for this dataset" });
+  res.status(404).json({ error: "not_found", message: "No cached classification for this grid" });
 });
 
 // ── POST /datasets/upload (multipart/form-data via multer) ───────────────────

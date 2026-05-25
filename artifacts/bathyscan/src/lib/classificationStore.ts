@@ -2,74 +2,55 @@
  * classificationStore.ts — Zustand store for AI seafloor zone classification.
  *
  * Check order (fastest → most expensive):
- *   1. sessionStorage cache (keyed by grid content hash — instant)
- *   2. Server in-memory cache via GET /api/datasets/:id/zones (fast, no AI cost)
+ *   1. sessionStorage cache (keyed by gridHash — instant)
+ *   2. Server zone cache via GET /api/datasets/:id/zones?h=<gridHash> (fast, no AI cost)
  *   3. Poe AI classify endpoint (3–8 s)
  *
+ * The gridHash (FNV-1a 32-bit of depths[]) is the primary cache key everywhere.
+ * This prevents collisions when datasetId is reused (e.g. all anonymous uploads
+ * share the synthetic id "upload"). Different grid content → different hash →
+ * separate cache entries, both in sessionStorage and on the server.
+ *
  * Single-flight deduplication:
- *   A module-level Map<gridHash, Promise<void>> ensures that even if classify()
- *   is called twice for the same grid (DatasetPanel + App.tsx catch-all), only
- *   one AI call fires. Both callers await the same in-flight promise.
+ *   inFlight: Map<gridHash, Promise<void>> ensures parallel callers
+ *   (DatasetPanel + App.tsx catch-all) share one fetch and one AI call.
  *
  * Dataset guard:
- *   `currentDatasetId` is set at classify() entry. Every async checkpoint
- *   re-checks it before writing state, so stale responses from a prior dataset
- *   silently drop.
+ *   currentDatasetId tracks the in-progress dataset. Every async checkpoint
+ *   re-checks it before writing state so stale responses silently drop.
  */
 import { create } from "zustand";
 import { poeClassify } from "@workspace/api-client-react";
-import type { TerrainData } from "@workspace/api-client-react";
+import type { TerrainData, PoeClassifyRequest } from "@workspace/api-client-react";
 import { gridToBase64Png } from "./gridToImage";
 import { parseAndUpsampleZones, zoneMapToStorage, zoneMapFromStorage } from "./zoneMap";
 
 // ---------------------------------------------------------------------------
-// Grid hash — FNV-1a 32-bit over the depths float array
-// Produces a hex string that changes whenever the depth values change,
-// even when the datasetId stays the same (e.g. upload flows).
+// Grid hash — FNV-1a 32-bit over the depths float array.
+// This is the primary content-addressable key used by both client + server.
 // ---------------------------------------------------------------------------
 
-function hashGrid(depths: number[]): string {
+export function hashGrid(depths: number[]): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < depths.length; i++) {
-    const v = depths[i] ?? 0;
-    // Spread the float's bits over 4 bytes via bit-manipulation
-    const bits = Math.round(v * 1000) & 0xffffffff;
-    h ^= (bits & 0xff);
-    h = (Math.imul(h, 0x01000193) >>> 0);
-    h ^= ((bits >>> 8) & 0xff);
-    h = (Math.imul(h, 0x01000193) >>> 0);
-    h ^= ((bits >>> 16) & 0xff);
-    h = (Math.imul(h, 0x01000193) >>> 0);
-    h ^= ((bits >>> 24) & 0xff);
-    h = (Math.imul(h, 0x01000193) >>> 0);
+    const bits = Math.round((depths[i] ?? 0) * 1000) & 0xffffffff;
+    h ^= (bits & 0xff);               h = (Math.imul(h, 0x01000193) >>> 0);
+    h ^= ((bits >>> 8) & 0xff);       h = (Math.imul(h, 0x01000193) >>> 0);
+    h ^= ((bits >>> 16) & 0xff);      h = (Math.imul(h, 0x01000193) >>> 0);
+    h ^= ((bits >>> 24) & 0xff);      h = (Math.imul(h, 0x01000193) >>> 0);
   }
   return (h >>> 0).toString(16).padStart(8, "0");
 }
 
 const SESSION_KEY_PREFIX = "bszone-";
 
-/** Build a sessionStorage key that is unique to the grid's content (hash). */
-function sessionKey(gridHash: string): string {
-  return `${SESSION_KEY_PREFIX}${gridHash}`;
-}
-
-// ---------------------------------------------------------------------------
-// Single-flight deduplication — prevents duplicate AI calls when two callers
-// (DatasetPanel + App.tsx catch-all) both invoke classify() before the first
-// resolves.
-// ---------------------------------------------------------------------------
-
+// Module-level single-flight map — keyed by gridHash
 const inFlight = new Map<string, Promise<void>>();
-
-// ---------------------------------------------------------------------------
-// Store
-// ---------------------------------------------------------------------------
 
 interface ClassificationState {
   zoneMap: Uint8Array | null;
   loading: boolean;
   error: string | null;
-  /** datasetId of the in-flight or last-completed classification — used as a guard. */
   currentDatasetId: string | null;
 
   classify: (grid: TerrainData) => Promise<void>;
@@ -89,60 +70,56 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
     const targetN = grid.resolution ?? grid.width ?? 256;
     const wt = waterType as "saltwater" | "freshwater";
     const gridHash = hashGrid(grid.depths);
-    const cacheKey = sessionKey(gridHash);
+    const sessionKey = `${SESSION_KEY_PREFIX}${gridHash}`;
 
-    // 1. sessionStorage — synchronous, no spinner, no dedup needed
+    // 1. sessionStorage — synchronous, keyed by content hash
     try {
-      const stored = sessionStorage.getItem(cacheKey);
+      const stored = sessionStorage.getItem(sessionKey);
       if (stored) {
         const zoneMap = zoneMapFromStorage(stored);
         set({ zoneMap, loading: false, error: null, currentDatasetId: datasetId });
         return Promise.resolve();
       }
     } catch {
-      // sessionStorage unavailable (strict incognito, etc.)
+      // sessionStorage unavailable
     }
 
-    // 2+3. Async path — deduplicate by gridHash so both callers share one fetch
-    const existing = inFlight.get(cacheKey);
+    // 2+3. Async path — deduplicate by gridHash
+    const existing = inFlight.get(gridHash);
     if (existing) return existing;
 
-    // Mark this dataset as in-progress BEFORE the async work starts
     set({ loading: true, error: null, zoneMap: null, currentDatasetId: datasetId });
 
     const work = (async () => {
       try {
-        // 2. Server in-memory cache — cheap, no AI cost
+        // 2. Server zone cache (memory + disk, keyed by gridHash)
         try {
-          const resp = await fetch(`/api/datasets/${encodeURIComponent(datasetId)}/zones`, {
-            credentials: "include",
-          });
+          const url = `/api/datasets/${encodeURIComponent(datasetId)}/zones?h=${gridHash}`;
+          const resp = await fetch(url, { credentials: "include" });
           if (resp.ok) {
             const data = (await resp.json()) as { zones: string[]; waterType: string };
-            // Guard: user switched dataset while we were fetching
             if (get().currentDatasetId !== datasetId) return;
-
             const zoneMap = parseAndUpsampleZones(data.zones, wt, targetN);
-            try { sessionStorage.setItem(cacheKey, zoneMapToStorage(zoneMap)); } catch {}
+            try { sessionStorage.setItem(sessionKey, zoneMapToStorage(zoneMap)); } catch {}
             set({ zoneMap, loading: false, error: null });
             return;
           }
         } catch {
-          // Server cache miss or network error — fall through to AI
+          // Server cache miss — fall through to AI
         }
 
-        // Guard before kicking off the expensive AI call
         if (get().currentDatasetId !== datasetId) return;
 
-        // 3. Poe AI classification
+        // 3. Poe AI — include gridHash so server can store by it
         const gridBase64 = gridToBase64Png(grid);
-        const result = await poeClassify({ gridBase64, waterType: wt, datasetId });
+        const result = await poeClassify(
+          { gridBase64, waterType: wt, datasetId, gridHash } as PoeClassifyRequest
+        );
 
-        // Guard: user switched dataset during the AI call
         if (get().currentDatasetId !== datasetId) return;
 
         const zoneMap = parseAndUpsampleZones(result.zones, wt, targetN);
-        try { sessionStorage.setItem(cacheKey, zoneMapToStorage(zoneMap)); } catch {}
+        try { sessionStorage.setItem(sessionKey, zoneMapToStorage(zoneMap)); } catch {}
         set({ zoneMap, loading: false, error: null });
       } catch (err) {
         if (get().currentDatasetId !== datasetId) return;
@@ -152,10 +129,8 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
       }
     })();
 
-    // Register the promise so parallel callers join it; clean up when done
-    inFlight.set(cacheKey, work);
-    void work.finally(() => inFlight.delete(cacheKey));
-
+    inFlight.set(gridHash, work);
+    void work.finally(() => inFlight.delete(gridHash));
     return work;
   },
 }));
