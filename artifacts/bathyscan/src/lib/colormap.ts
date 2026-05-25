@@ -8,8 +8,8 @@ interface ColorStop {
 const STOPS: ColorStop[] = [
   { t: 0.00, color: new THREE.Color("#00e5ff") },
   { t: 0.30, color: new THREE.Color("#0d47a1") },
-  { t: 0.65, color: new THREE.Color("#1a0050") },
-  { t: 1.00, color: new THREE.Color("#0a0015") },
+  { t: 0.65, color: new THREE.Color("#1a237e") },
+  { t: 1.00, color: new THREE.Color("#283593") },
 ];
 
 /**
