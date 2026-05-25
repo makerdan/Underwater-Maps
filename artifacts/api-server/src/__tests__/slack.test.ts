@@ -104,6 +104,80 @@ describe("/api/tidal slack block", () => {
   });
 });
 
+describe("/api/tidal NOAA currents-station path", () => {
+  it("derives currentSpeed and flood bearing from currents_predictions", async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const url = String(input);
+
+      const ok = (body: unknown) => ({
+        ok: true,
+        status: 200,
+        json: async () => body,
+      });
+
+      if (url.includes("/mdapi/prod/webapi/stations.json") && url.includes("type=waterlevels")) {
+        // No nearby tide-height station → route falls back to synthetic heights.
+        return ok({ stations: [] });
+      }
+      if (
+        url.includes("/mdapi/prod/webapi/stations.json") &&
+        url.includes("type=currentpredictions")
+      ) {
+        return ok({
+          stations: [
+            {
+              id: "PCT0101",
+              name: "Test Narrows",
+              lat: 55.61,
+              lng: -132.51,
+            },
+          ],
+        });
+      }
+      if (url.includes("product=currents_predictions") && url.includes("station=PCT0101")) {
+        return ok({
+          current_predictions: {
+            cp: [
+              { Time: "2026-01-01 18:00", Type: "slack", Speed: 0, Direction: 0 },
+              { Time: "2026-01-01 21:00", Type: "flood", Speed: 4.0, Direction: 120, meanFloodDir: 120 },
+              { Time: "2026-01-02 00:00", Type: "slack", Speed: 0, Direction: 0 },
+              { Time: "2026-01-02 03:00", Type: "ebb", Speed: 3.5, Direction: 300 },
+            ],
+          },
+        });
+      }
+      throw new Error(`Unexpected fetch in test: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { default: app } = await import("../app");
+    // Pick a datetime aligned with the mid-point of the synthetic
+    // semi-diurnal cycle for lon=-132.5 so |sin(π·t)| ≈ 1 and the
+    // returned speed matches the stubbed peak (4.0 kt).
+    const res = await request(app).get(
+      "/api/tidal?lat=55.6&lon=-132.5&datetime=2026-01-01T23:56:15Z",
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.available).toBe(true);
+    expect(res.body.source).toBe("noaa");
+    expect(res.body.heightsSource).toBe("estimated");
+    expect(res.body.currentsSource).toBe("noaa");
+    expect(res.body.currentsStation).toEqual({ id: "PCT0101", name: "Test Narrows" });
+    expect(res.body.heightsStation).toBeUndefined();
+    // The stubbed peak speed is 4.0 kt; the fallback estimator clamps to
+    // ≤ 3.0 kt, so a value above that proves we used NOAA's Speed rather
+    // than the tide-range heuristic.
+    expect(res.body.currentSpeed).toBeGreaterThan(3.0);
+    expect(res.body.currentSpeed).toBeCloseTo(4.0, 1);
+    // Flood bearing came from meanFloodDir = 120. The chosen datetime
+    // lands on the high→low (ebbing) half of the synthetic cycle, so the
+    // reported direction equals the ebb bearing (flood + 180 = 300°).
+    expect(res.body.currentDirection).toBeCloseTo(300, 5);
+
+    vi.unstubAllGlobals();
+  });
+});
+
 describe("/api/tidal/schedule", () => {
   it("returns slack events with windows for the next N days", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => {
