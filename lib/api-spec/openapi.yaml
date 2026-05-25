@@ -1797,6 +1797,19 @@ components:
           type: number
         dataSource:
           type: string
+        tidalDataSource:
+          type: string
+          enum: [noaa-coops, sinusoidal]
+          description: Source of tidal current data — real NOAA CO-OPS station predictions or sinusoidal M2 approximation
+        tidalStationId:
+          type: string
+          description: NOAA CO-OPS station id used when tidalDataSource is noaa-coops
+        tidalStationName:
+          type: string
+          description: Human-readable name of the NOAA CO-OPS station
+        tidalStationDistanceKm:
+          type: number
+          description: Distance in kilometers from the requested point to the NOAA station
         estimatedConditions:
           type: boolean
           description: True when actual data was unavailable and defaults were substituted

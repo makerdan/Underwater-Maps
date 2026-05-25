@@ -672,6 +672,17 @@ export interface TrailPointsPage {
   pageSize: number;
 }
 
+/**
+ * Source of tidal current data — real NOAA CO-OPS station predictions or sinusoidal M2 approximation
+ */
+export type SurfaceConditionsTidalDataSource = typeof SurfaceConditionsTidalDataSource[keyof typeof SurfaceConditionsTidalDataSource];
+
+
+export const SurfaceConditionsTidalDataSource = {
+  'noaa-coops': 'noaa-coops',
+  sinusoidal: 'sinusoidal',
+} as const;
+
 export interface HourlySurfaceCondition {
   /**
      * @minimum 0
@@ -690,6 +701,14 @@ export interface SurfaceConditions {
   lat: number;
   lon: number;
   dataSource?: string;
+  /** Source of tidal current data — real NOAA CO-OPS station predictions or sinusoidal M2 approximation */
+  tidalDataSource?: SurfaceConditionsTidalDataSource;
+  /** NOAA CO-OPS station id used when tidalDataSource is noaa-coops */
+  tidalStationId?: string;
+  /** Human-readable name of the NOAA CO-OPS station */
+  tidalStationName?: string;
+  /** Distance in kilometers from the requested point to the NOAA station */
+  tidalStationDistanceKm?: number;
   /** True when actual data was unavailable and defaults were substituted */
   estimatedConditions?: boolean;
   hours: HourlySurfaceCondition[];

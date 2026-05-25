@@ -937,6 +937,10 @@ export const GetSurfaceConditionsResponse = zod.object({
   "lat": zod.number(),
   "lon": zod.number(),
   "dataSource": zod.string().optional(),
+  "tidalDataSource": zod.enum(['noaa-coops', 'sinusoidal']).optional().describe('Source of tidal current data — real NOAA CO-OPS station predictions or sinusoidal M2 approximation'),
+  "tidalStationId": zod.string().optional().describe('NOAA CO-OPS station id used when tidalDataSource is noaa-coops'),
+  "tidalStationName": zod.string().optional().describe('Human-readable name of the NOAA CO-OPS station'),
+  "tidalStationDistanceKm": zod.number().optional().describe('Distance in kilometers from the requested point to the NOAA station'),
   "estimatedConditions": zod.boolean().optional().describe('True when actual data was unavailable and defaults were substituted'),
   "hours": zod.array(zod.object({
   "hour": zod.number().min(getSurfaceConditionsResponseHoursItemHourMin).max(getSurfaceConditionsResponseHoursItemHourMax),
