@@ -226,6 +226,11 @@ test.describe("Offline network-abort scenario", () => {
   test("Settings page is accessible and shows cache management UI", async ({ page }) => {
     await page.goto(`${BASE}/settings`, { waitUntil: "domcontentloaded" });
 
+    // Navigate to the Offline tab (cache management lives there in the tabbed layout)
+    const offlineTab = page.locator('button:has-text("OFFLINE")').first();
+    await expect(offlineTab).toBeVisible({ timeout: 5000 });
+    await offlineTab.click();
+
     const clearBtn = page.locator('[data-testid="clear-all-cache-btn"]');
     await expect(clearBtn).toBeVisible({ timeout: 5000 });
     await expect(clearBtn).toContainText("CLEAR ALL");

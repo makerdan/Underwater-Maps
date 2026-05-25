@@ -154,6 +154,7 @@ function ClerkQueryClientCacheInvalidator() {
 }
 
 function Main() {
+  const [, setLocation] = useLocation();
   const { data: datasets } = useGetDatasets();
   const {
     datasetId, setDatasetId, terrain, tidalOverlay, setTidalOverlay,
@@ -308,6 +309,7 @@ function Main() {
 
   // O key — toggle overview map
   // Slash key — open query panel
+  // Comma key — open settings
   // Escape — close query panel and clear highlights
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -316,11 +318,16 @@ function Main() {
         store.setOverviewOpen(!store.overviewOpen);
       }
       if (e.key === "/" && !e.repeat) {
-        // Don't steal the slash if user is typing in an input
         const tag = (e.target as HTMLElement)?.tagName;
         if (tag !== "INPUT" && tag !== "TEXTAREA") {
           e.preventDefault();
           setQueryOpen(true);
+        }
+      }
+      if (e.key === "," && !e.repeat && !e.ctrlKey && !e.metaKey) {
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") {
+          setLocation(basePath + "/settings");
         }
       }
       if (e.key === "Escape" && !e.repeat) {
@@ -330,7 +337,7 @@ function Main() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [setLocation]);
 
   // Show "click to resume" hint when overview closes
   useEffect(() => {
@@ -653,6 +660,14 @@ function HomeRoute() {
   );
 }
 
+function SettingsRoute() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <Settings />
+    </QueryClientProvider>
+  );
+}
+
 function ClerkProviderWithRoutes() {
   const [, setLocation] = useLocation();
 
@@ -685,7 +700,7 @@ function ClerkProviderWithRoutes() {
       </QueryClientProvider>
       <Switch>
         <Route path="/" component={HomeRoute} />
-        <Route path="/settings" component={Settings} />
+        <Route path="/settings" component={SettingsRoute} />
         <Route path="/sign-in/*?" component={SignInPage} />
         <Route path="/sign-up/*?" component={SignUpPage} />
       </Switch>

@@ -1,9 +1,14 @@
 import React, { useRef, useMemo } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
+import { useSettingsStore } from "@/lib/settingsStore";
 
-const PARTICLE_COUNT = 2000;
 const SPHERE_RADIUS = 30;
+const DENSITY_COUNT: Record<string, number> = {
+  off: 0,
+  sparse: 500,
+  dense: 2000,
+};
 
 /** Safe typed-array read — noUncheckedIndexedAccess compatible. */
 const r32 = (arr: Float32Array, i: number): number => arr[i] ?? 0;
@@ -11,13 +16,16 @@ const r32 = (arr: Float32Array, i: number): number => arr[i] ?? 0;
 export const Particles: React.FC = () => {
   const { camera } = useThree();
   const ref = useRef<THREE.Points>(null);
+  const particleDensity = useSettingsStore((s) => s.particleDensity);
+
+  const count = DENSITY_COUNT[particleDensity] ?? 500;
 
   const { positions, offsets, velocities } = useMemo(() => {
-    const positions = new Float32Array(PARTICLE_COUNT * 3);
-    const offsets = new Float32Array(PARTICLE_COUNT * 3);
-    const velocities = new Float32Array(PARTICLE_COUNT * 3);
+    const positions = new Float32Array(count * 3);
+    const offsets = new Float32Array(count * 3);
+    const velocities = new Float32Array(count * 3);
 
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
+    for (let i = 0; i < count; i++) {
       const rr = SPHERE_RADIUS * Math.cbrt(Math.random());
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
@@ -25,7 +33,6 @@ export const Particles: React.FC = () => {
       offsets[i * 3 + 1] = rr * Math.sin(phi) * Math.sin(theta);
       offsets[i * 3 + 2] = rr * Math.cos(phi);
 
-      // Marine snow: mostly downward drift
       velocities[i * 3] = (Math.random() - 0.5) * 0.3;
       velocities[i * 3 + 1] = -(0.3 + Math.random() * 0.8);
       velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.3;
@@ -36,13 +43,13 @@ export const Particles: React.FC = () => {
     }
 
     return { positions, offsets, velocities };
-  }, []);
+  }, [count]);
 
   useFrame((_, delta) => {
-    if (!ref.current) return;
+    if (!ref.current || count === 0) return;
     const pos = ref.current.geometry.attributes["position"]!.array as Float32Array;
 
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
+    for (let i = 0; i < count; i++) {
       offsets[i * 3] = r32(offsets, i * 3) + r32(velocities, i * 3) * delta;
       offsets[i * 3 + 1] = r32(offsets, i * 3 + 1) + r32(velocities, i * 3 + 1) * delta;
       offsets[i * 3 + 2] = r32(offsets, i * 3 + 2) + r32(velocities, i * 3 + 2) * delta;
@@ -53,7 +60,6 @@ export const Particles: React.FC = () => {
       const dist2 = ox * ox + oy * oy + oz * oz;
 
       if (dist2 > SPHERE_RADIUS * SPHERE_RADIUS) {
-        // Wrap to opposite side with slight randomisation
         const inv = -SPHERE_RADIUS / Math.sqrt(dist2);
         offsets[i * 3] = ox * inv * (0.7 + Math.random() * 0.6);
         offsets[i * 3 + 1] = oy * inv * (0.7 + Math.random() * 0.6);
@@ -67,6 +73,8 @@ export const Particles: React.FC = () => {
 
     ref.current.geometry.attributes["position"]!.needsUpdate = true;
   });
+
+  if (count === 0) return null;
 
   return (
     <points ref={ref}>

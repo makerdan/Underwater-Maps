@@ -23,6 +23,7 @@ import type {
   ApiError,
   ClassifyResult,
   DatasetMeta,
+  DeleteMarkersMine200,
   GetDatasetsIdTerrainParams,
   GetMarkersParams,
   GetTrailsIdPointsParams,
@@ -42,7 +43,8 @@ import type {
   TerrainData,
   TrailPointsPage,
   UploadResult,
-  UserDatasetMeta
+  UserDatasetMeta,
+  UserSettings
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -837,6 +839,77 @@ export const usePostMarkers = <TError = ErrorType<ApiError>,
       return useMutation(getPostMarkersMutationOptions(options));
     }
 
+export const getDeleteMarkersMineUrl = () => {
+
+
+
+
+  return `/api/markers/mine`
+}
+
+/**
+ * Permanently deletes every marker where userId matches the Clerk user. Requires authentication.
+ * @summary Delete all markers created by the authenticated user
+ */
+export const deleteMarkersMine = async ( options?: RequestInit): Promise<DeleteMarkersMine200> => {
+
+  return customFetch<DeleteMarkersMine200>(getDeleteMarkersMineUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteMarkersMineMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMarkersMine>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteMarkersMine>>, TError,void, TContext> => {
+
+const mutationKey = ['deleteMarkersMine'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteMarkersMine>>, void> = () => {
+
+
+          return  deleteMarkersMine(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteMarkersMineMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMarkersMine>>>
+
+    export type DeleteMarkersMineMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Delete all markers created by the authenticated user
+ */
+export const useDeleteMarkersMine = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMarkersMine>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteMarkersMine>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDeleteMarkersMineMutationOptions(options));
+    }
+
 export const getDeleteMarkersIdUrl = (id: string,) => {
 
 
@@ -905,6 +978,470 @@ export const useDeleteMarkersId = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getDeleteMarkersIdMutationOptions(options));
+    }
+
+export const getGetTrailsUrl = (params: GetTrailsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/trails?${stringifiedParams}` : `/api/trails`
+}
+
+/**
+ * @summary List GPS trails for a dataset
+ */
+export const getTrails = async (params: GetTrailsParams, options?: RequestInit): Promise<GpsTrail[]> => {
+
+  return customFetch<GpsTrail[]>(getGetTrailsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTrailsQueryKey = (params?: GetTrailsParams,) => {
+    return [
+    `/api/trails`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetTrailsQueryOptions = <TData = Awaited<ReturnType<typeof getTrails>>, TError = ErrorType<ApiError>>(params: GetTrailsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTrails>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTrailsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTrails>>> = ({ signal }) => getTrails(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTrails>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTrailsQueryResult = NonNullable<Awaited<ReturnType<typeof getTrails>>>
+export type GetTrailsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List GPS trails for a dataset
+ */
+
+export function useGetTrails<TData = Awaited<ReturnType<typeof getTrails>>, TError = ErrorType<ApiError>>(
+ params: GetTrailsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTrails>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTrailsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPostTrailsUrl = () => {
+
+
+
+
+  return `/api/trails`
+}
+
+/**
+ * @summary Create a new GPS trail
+ */
+export const postTrails = async (gpsTrailInput: GpsTrailInput, options?: RequestInit): Promise<GpsTrail> => {
+
+  return customFetch<GpsTrail>(getPostTrailsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      gpsTrailInput,)
+  }
+);}
+
+
+
+
+export const getPostTrailsMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postTrails>>, TError,{data: BodyType<GpsTrailInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postTrails>>, TError,{data: BodyType<GpsTrailInput>}, TContext> => {
+
+const mutationKey = ['postTrails'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postTrails>>, {data: BodyType<GpsTrailInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  postTrails(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostTrailsMutationResult = NonNullable<Awaited<ReturnType<typeof postTrails>>>
+    export type PostTrailsMutationBody = BodyType<GpsTrailInput>
+    export type PostTrailsMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Create a new GPS trail
+ */
+export const usePostTrails = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postTrails>>, TError,{data: BodyType<GpsTrailInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postTrails>>,
+        TError,
+        {data: BodyType<GpsTrailInput>},
+        TContext
+      > => {
+      return useMutation(getPostTrailsMutationOptions(options));
+    }
+
+export const getDeleteTrailsIdUrl = (id: string,) => {
+
+
+
+
+  return `/api/trails/${id}`
+}
+
+/**
+ * @summary Delete a GPS trail
+ */
+export const deleteTrailsId = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteTrailsIdUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteTrailsIdMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTrailsId>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTrailsId>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteTrailsId'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTrailsId>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteTrailsId(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTrailsIdMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTrailsId>>>
+
+    export type DeleteTrailsIdMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Delete a GPS trail
+ */
+export const useDeleteTrailsId = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTrailsId>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTrailsId>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteTrailsIdMutationOptions(options));
+    }
+
+export const getGetTrailsIdPointsUrl = (id: string,
+    params?: GetTrailsIdPointsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/trails/${id}/points?${stringifiedParams}` : `/api/trails/${id}/points`
+}
+
+/**
+ * @summary Get paginated trail points
+ */
+export const getTrailsIdPoints = async (id: string,
+    params?: GetTrailsIdPointsParams, options?: RequestInit): Promise<TrailPointsPage> => {
+
+  return customFetch<TrailPointsPage>(getGetTrailsIdPointsUrl(id,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTrailsIdPointsQueryKey = (id: string,
+    params?: GetTrailsIdPointsParams,) => {
+    return [
+    `/api/trails/${id}/points`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetTrailsIdPointsQueryOptions = <TData = Awaited<ReturnType<typeof getTrailsIdPoints>>, TError = ErrorType<ApiError>>(id: string,
+    params?: GetTrailsIdPointsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTrailsIdPoints>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTrailsIdPointsQueryKey(id,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTrailsIdPoints>>> = ({ signal }) => getTrailsIdPoints(id,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTrailsIdPoints>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTrailsIdPointsQueryResult = NonNullable<Awaited<ReturnType<typeof getTrailsIdPoints>>>
+export type GetTrailsIdPointsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get paginated trail points
+ */
+
+export function useGetTrailsIdPoints<TData = Awaited<ReturnType<typeof getTrailsIdPoints>>, TError = ErrorType<ApiError>>(
+ id: string,
+    params?: GetTrailsIdPointsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTrailsIdPoints>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTrailsIdPointsQueryOptions(id,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetSettingsUrl = () => {
+
+
+
+
+  return `/api/settings`
+}
+
+/**
+ * Returns stored settings or the default settings object if none are saved yet. Requires authentication.
+ * @summary Get the current user's settings
+ */
+export const getSettings = async ( options?: RequestInit): Promise<UserSettings> => {
+
+  return customFetch<UserSettings>(getGetSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSettingsQueryKey = () => {
+    return [
+    `/api/settings`
+    ] as const;
+    }
+
+
+export const getGetSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getSettings>>, TError = ErrorType<ApiError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSettings>>> = ({ signal }) => getSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getSettings>>>
+export type GetSettingsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get the current user's settings
+ */
+
+export function useGetSettings<TData = Awaited<ReturnType<typeof getSettings>>, TError = ErrorType<ApiError>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPutSettingsUrl = () => {
+
+
+
+
+  return `/api/settings`
+}
+
+/**
+ * Stores the full settings object for the authenticated user.
+ * @summary Upsert the current user's settings
+ */
+export const putSettings = async (userSettings: UserSettings, options?: RequestInit): Promise<UserSettings> => {
+
+  return customFetch<UserSettings>(getPutSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      userSettings,)
+  }
+);}
+
+
+
+
+export const getPutSettingsMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putSettings>>, TError,{data: BodyType<UserSettings>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof putSettings>>, TError,{data: BodyType<UserSettings>}, TContext> => {
+
+const mutationKey = ['putSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof putSettings>>, {data: BodyType<UserSettings>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  putSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PutSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof putSettings>>>
+    export type PutSettingsMutationBody = BodyType<UserSettings>
+    export type PutSettingsMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Upsert the current user's settings
+ */
+export const usePutSettings = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putSettings>>, TError,{data: BodyType<UserSettings>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof putSettings>>,
+        TError,
+        {data: BodyType<UserSettings>},
+        TContext
+      > => {
+      return useMutation(getPutSettingsMutationOptions(options));
     }
 
 export const getHealthCheckUrl = () => {
@@ -1270,156 +1807,6 @@ export function useGetPoeModels<TData = Awaited<ReturnType<typeof getPoeModels>>
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-// =============================================================================
-// Trail API
-// =============================================================================
-
-/**
- * @summary List GPS trails for a dataset
- */
-export const getTrails = async (params: GetTrailsParams, options?: RequestInit): Promise<GpsTrail[]> => {
-  const qs = new URLSearchParams(params as unknown as Record<string, string>).toString();
-  return customFetch<GpsTrail[]>(`/api/trails?${qs}`, {
-    ...options,
-    method: 'GET',
-  });
-};
-
-export const getGetTrailsQueryKey = (params: GetTrailsParams) => {
-  return [`/api/trails`, ...(params ? [params] : [])] as const;
-};
-
-export const getGetTrailsQueryOptions = <TData = Awaited<ReturnType<typeof getTrails>>, TError = ErrorType<ApiError>>(
-  params: GetTrailsParams,
-  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof getTrails>>, TError, TData>; request?: SecondParameter<typeof customFetch> },
-) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey = queryOptions?.queryKey ?? getGetTrailsQueryKey(params);
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof getTrails>>> = ({ signal }) =>
-    getTrails(params, { signal, ...requestOptions });
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getTrails>>, TError, TData> & { queryKey: QueryKey };
-};
-
-export type GetTrailsQueryResult = NonNullable<Awaited<ReturnType<typeof getTrails>>>;
-export type GetTrailsQueryError = ErrorType<ApiError>;
-
-export function useGetTrails<TData = Awaited<ReturnType<typeof getTrails>>, TError = ErrorType<ApiError>>(
-  params: GetTrailsParams,
-  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof getTrails>>, TError, TData>; request?: SecondParameter<typeof customFetch> },
-): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetTrailsQueryOptions(params, options);
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-/**
- * @summary Save a new GPS trail
- */
-export const postTrails = async (gpsTrailInput: GpsTrailInput, options?: RequestInit): Promise<GpsTrail> => {
-  return customFetch<GpsTrail>('/api/trails', {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(options?.headers as Record<string, string>) },
-    body: JSON.stringify(gpsTrailInput),
-  });
-};
-
-export const getPostTrailsMutationOptions = <TError = ErrorType<ApiError>, TContext = unknown>(
-  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof postTrails>>, TError, { data: GpsTrailInput }, TContext>; request?: SecondParameter<typeof customFetch> },
-): UseMutationOptions<Awaited<ReturnType<typeof postTrails>>, TError, { data: GpsTrailInput }, TContext> => {
-  const { mutation: mutationOptions, request: requestOptions } = options ?? {};
-  const mutationFn: MutationFunction<Awaited<ReturnType<typeof postTrails>>, { data: GpsTrailInput }> = (props) => {
-    const { data } = props ?? {};
-    return postTrails(data, requestOptions);
-  };
-  return { mutationFn, ...mutationOptions };
-};
-
-export type PostTrailsMutationResult = NonNullable<Awaited<ReturnType<typeof postTrails>>>;
-export type PostTrailsMutationBody = GpsTrailInput;
-export type PostTrailsMutationError = ErrorType<ApiError>;
-
-export const usePostTrails = <TError = ErrorType<ApiError>, TContext = unknown>(
-  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof postTrails>>, TError, { data: GpsTrailInput }, TContext>; request?: SecondParameter<typeof customFetch> },
-): UseMutationResult<Awaited<ReturnType<typeof postTrails>>, TError, { data: GpsTrailInput }, TContext> => {
-  return useMutation(getPostTrailsMutationOptions(options));
-};
-
-/**
- * @summary Delete a GPS trail
- */
-export const deleteTrailsId = async (id: string, options?: RequestInit): Promise<void> => {
-  return customFetch<void>(`/api/trails/${id}`, {
-    ...options,
-    method: 'DELETE',
-  });
-};
-
-export const getDeleteTrailsIdMutationOptions = <TError = ErrorType<ApiError>, TContext = unknown>(
-  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteTrailsId>>, TError, { id: string }, TContext>; request?: SecondParameter<typeof customFetch> },
-): UseMutationOptions<Awaited<ReturnType<typeof deleteTrailsId>>, TError, { id: string }, TContext> => {
-  const { mutation: mutationOptions, request: requestOptions } = options ?? {};
-  const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTrailsId>>, { id: string }> = (props) => {
-    const { id } = props ?? {};
-    return deleteTrailsId(id, requestOptions);
-  };
-  return { mutationFn, ...mutationOptions };
-};
-
-export type DeleteTrailsIdMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTrailsId>>>;
-export type DeleteTrailsIdMutationError = ErrorType<ApiError>;
-
-export const useDeleteTrailsId = <TError = ErrorType<ApiError>, TContext = unknown>(
-  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteTrailsId>>, TError, { id: string }, TContext>; request?: SecondParameter<typeof customFetch> },
-): UseMutationResult<Awaited<ReturnType<typeof deleteTrailsId>>, TError, { id: string }, TContext> => {
-  return useMutation(getDeleteTrailsIdMutationOptions(options));
-};
-
-/**
- * @summary Get paginated points for a trail
- */
-export const getTrailsIdPoints = async (
-  { id, page, pageSize }: GetTrailsIdPointsParams,
-  options?: RequestInit,
-): Promise<TrailPointsPage> => {
-  const searchParams = new URLSearchParams();
-  if (page != null) searchParams.set('page', String(page));
-  if (pageSize != null) searchParams.set('pageSize', String(pageSize));
-  const qs = searchParams.toString();
-  return customFetch<TrailPointsPage>(`/api/trails/${id}/points${qs ? `?${qs}` : ''}`, {
-    ...options,
-    method: 'GET',
-  });
-};
-
-export const getGetTrailsIdPointsQueryKey = (params: GetTrailsIdPointsParams) => {
-  const { id, ...rest } = params;
-  return [`/api/trails/${id}/points`, ...(Object.keys(rest).length ? [rest] : [])] as const;
-};
-
-export const getGetTrailsIdPointsQueryOptions = <TData = Awaited<ReturnType<typeof getTrailsIdPoints>>, TError = ErrorType<ApiError>>(
-  params: GetTrailsIdPointsParams,
-  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof getTrailsIdPoints>>, TError, TData>; request?: SecondParameter<typeof customFetch> },
-) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey = queryOptions?.queryKey ?? getGetTrailsIdPointsQueryKey(params);
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof getTrailsIdPoints>>> = ({ signal }) =>
-    getTrailsIdPoints(params, { signal, ...requestOptions });
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getTrailsIdPoints>>, TError, TData> & { queryKey: QueryKey };
-};
-
-export type GetTrailsIdPointsQueryResult = NonNullable<Awaited<ReturnType<typeof getTrailsIdPoints>>>;
-export type GetTrailsIdPointsQueryError = ErrorType<ApiError>;
-
-export function useGetTrailsIdPoints<TData = Awaited<ReturnType<typeof getTrailsIdPoints>>, TError = ErrorType<ApiError>>(
-  params: GetTrailsIdPointsParams,
-  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof getTrailsIdPoints>>, TError, TData>; request?: SecondParameter<typeof customFetch> },
-): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetTrailsIdPointsQueryOptions(params, options);
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
   return { ...query, queryKey: queryOptions.queryKey };
 }
 

@@ -226,66 +226,6 @@ export const DeleteUserDatasetsIdParams = zod.object({
 /**
  * @summary List persisted markers for a dataset
  */
-// ---------------------------------------------------------------------------
-// GPS Trails
-// ---------------------------------------------------------------------------
-export const GpsPointSchema = zod.object({
-  "lon": zod.number(),
-  "lat": zod.number(),
-  "accuracy": zod.number().optional(),
-  "timestamp": zod.number().describe('Unix ms timestamp'),
-  "seq": zod.number().int().optional(),
-})
-
-export const GpsTrailSchema = zod.object({
-  "id": zod.string().describe('UUID primary key'),
-  "userId": zod.string(),
-  "datasetId": zod.string(),
-  "name": zod.string(),
-  "colour": zod.string(),
-  "startedAt": zod.coerce.date(),
-  "endedAt": zod.coerce.date(),
-  "pointCount": zod.number().int(),
-  "createdAt": zod.coerce.date(),
-})
-export const GetTrailsResponse = zod.array(GpsTrailSchema)
-
-export const GetTrailsQueryParams = zod.object({
-  "datasetId": zod.string(),
-})
-
-export const postTrailsColourDefault = "#ff6600";
-export const PostTrailsBody = zod.object({
-  "datasetId": zod.string(),
-  "name": zod.string(),
-  "colour": zod.string().default(postTrailsColourDefault),
-  "startedAt": zod.string().datetime(),
-  "endedAt": zod.string().datetime(),
-  "points": zod.array(GpsPointSchema),
-})
-
-export const DeleteTrailsIdParams = zod.object({
-  "id": zod.string().uuid(),
-})
-
-export const GetTrailsIdPointsParams = zod.object({
-  "id": zod.string(),
-})
-
-export const getTrailsIdPointsQueryPageDefault = 1;
-export const getTrailsIdPointsQueryPageSizeDefault = 200;
-export const GetTrailsIdPointsQueryParams = zod.object({
-  "page": zod.coerce.number().int().min(1).default(getTrailsIdPointsQueryPageDefault),
-  "pageSize": zod.coerce.number().int().min(1).max(1000).default(getTrailsIdPointsQueryPageSizeDefault),
-})
-
-export const GetTrailsIdPointsResponse = zod.object({
-  "points": zod.array(GpsPointSchema),
-  "total": zod.number().int(),
-  "page": zod.number().int(),
-  "pageSize": zod.number().int(),
-})
-
 export const GetMarkersQueryParams = zod.object({
   "datasetId": zod.coerce.string().describe('Dataset slug to filter markers by')
 })
@@ -321,11 +261,357 @@ export const PostMarkersBody = zod.object({
 
 
 /**
+ * Permanently deletes every marker where userId matches the Clerk user. Requires authentication.
+ * @summary Delete all markers created by the authenticated user
+ */
+export const DeleteMarkersMineResponse = zod.object({
+  "deleted": zod.number()
+})
+
+
+/**
  * @summary Delete a marker by ID
  */
 export const DeleteMarkersIdParams = zod.object({
   "id": zod.coerce.string()
 })
+
+
+/**
+ * @summary List GPS trails for a dataset
+ */
+export const GetTrailsQueryParams = zod.object({
+  "datasetId": zod.coerce.string()
+})
+
+export const getTrailsResponseColourDefault = `#ff6600`;
+
+export const GetTrailsResponseItem = zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "userId": zod.string(),
+  "datasetId": zod.string(),
+  "name": zod.string(),
+  "colour": zod.string().default(getTrailsResponseColourDefault),
+  "startedAt": zod.coerce.date(),
+  "endedAt": zod.coerce.date(),
+  "pointCount": zod.number(),
+  "createdAt": zod.coerce.date()
+})
+export const GetTrailsResponse = zod.array(GetTrailsResponseItem)
+
+
+/**
+ * @summary Create a new GPS trail
+ */
+export const postTrailsBodyColourDefault = `#ff6600`;
+export const postTrailsBodyPointsItemAccuracyDefault = 0;
+export const postTrailsBodyPointsItemSeqDefault = 0;
+
+export const PostTrailsBody = zod.object({
+  "datasetId": zod.string(),
+  "name": zod.string(),
+  "colour": zod.string().default(postTrailsBodyColourDefault),
+  "startedAt": zod.coerce.date(),
+  "endedAt": zod.coerce.date(),
+  "points": zod.array(zod.object({
+  "lon": zod.number(),
+  "lat": zod.number(),
+  "accuracy": zod.number().default(postTrailsBodyPointsItemAccuracyDefault),
+  "timestamp": zod.number().describe('Unix ms timestamp'),
+  "seq": zod.number().default(postTrailsBodyPointsItemSeqDefault)
+}))
+})
+
+
+/**
+ * @summary Delete a GPS trail
+ */
+export const DeleteTrailsIdParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+
+/**
+ * @summary Get paginated trail points
+ */
+export const GetTrailsIdPointsParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const getTrailsIdPointsQueryPageDefault = 1;
+
+export const getTrailsIdPointsQueryPageSizeDefault = 200;
+export const getTrailsIdPointsQueryPageSizeMax = 1000;
+
+
+
+export const GetTrailsIdPointsQueryParams = zod.object({
+  "page": zod.coerce.number().min(1).default(getTrailsIdPointsQueryPageDefault),
+  "pageSize": zod.coerce.number().min(1).max(getTrailsIdPointsQueryPageSizeMax).default(getTrailsIdPointsQueryPageSizeDefault)
+})
+
+export const getTrailsIdPointsResponsePointsItemAccuracyDefault = 0;
+export const getTrailsIdPointsResponsePointsItemSeqDefault = 0;
+
+export const GetTrailsIdPointsResponse = zod.object({
+  "points": zod.array(zod.object({
+  "lon": zod.number(),
+  "lat": zod.number(),
+  "accuracy": zod.number().default(getTrailsIdPointsResponsePointsItemAccuracyDefault),
+  "timestamp": zod.number().describe('Unix ms timestamp'),
+  "seq": zod.number().default(getTrailsIdPointsResponsePointsItemSeqDefault)
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "pageSize": zod.number()
+})
+
+
+/**
+ * Returns stored settings or the default settings object if none are saved yet. Requires authentication.
+ * @summary Get the current user's settings
+ */
+export const getSettingsResponseTextureQualityDefault = `high`;
+export const getSettingsResponseEnableCausticsDefault = false;
+export const getSettingsResponseParticleDensityDefault = `sparse`;
+export const getSettingsResponseFogDensityDefault = 0.012;
+export const getSettingsResponseFogDensityMin = 0.004;
+export const getSettingsResponseFogDensityMax = 0.03;
+
+export const getSettingsResponseColormapThemeDefault = `ocean`;
+export const getSettingsResponseLampIntensityDefault = 2;
+export const getSettingsResponseLampIntensityMin = 0;
+export const getSettingsResponseLampIntensityMax = 5;
+
+export const getSettingsResponseDefaultSpeedTierDefault = 2;
+export const getSettingsResponseDefaultSpeedTierMin = 0;
+export const getSettingsResponseDefaultSpeedTierMax = 4;
+
+export const getSettingsResponseInvertMouseYDefault = false;
+export const getSettingsResponseMouseSensitivityDefault = 1;
+export const getSettingsResponseMouseSensitivityMin = 0.1;
+export const getSettingsResponseMouseSensitivityMax = 3;
+
+export const getSettingsResponseCameraSpawnBehaviourDefault = `deepest`;
+export const getSettingsResponseShowCrosshairGpsDefault = true;
+export const getSettingsResponseShowCameraPositionDefault = true;
+export const getSettingsResponseShowSpeedIndicatorDefault = true;
+export const getSettingsResponseShowHeadingDefault = true;
+export const getSettingsResponseCoordinateFormatDefault = `decimal`;
+export const getSettingsResponseDepthUnitDefault = `metres`;
+export const getSettingsResponseHudOpacityDefault = 0.75;
+export const getSettingsResponseHudOpacityMin = 0.3;
+export const getSettingsResponseHudOpacityMax = 1;
+
+export const getSettingsResponseOverviewDefaultZoomDefault = 1;
+export const getSettingsResponseOverviewDefaultZoomMin = 0.5;
+export const getSettingsResponseOverviewDefaultZoomMax = 5;
+
+export const getSettingsResponseOverviewShowGridDefault = true;
+export const getSettingsResponseOverviewShowMarkersDefault = true;
+export const getSettingsResponseOverviewOpenOnLoadDefault = false;
+export const getSettingsResponseShowMarkerLabelsDefault = true;
+export const getSettingsResponsePrivateMarkersDefault = false;
+export const getSettingsResponseDefaultMarkerTypeDefault = `fish`;
+export const getSettingsResponseDefaultRegionDefault = `mariana-trench`;
+export const getSettingsResponseGpsRecordingIntervalDefault = 10000;
+export const getSettingsResponseGpsRecordingIntervalMin = 1000;
+export const getSettingsResponseGpsRecordingIntervalMax = 60000;
+
+
+
+export const GetSettingsResponse = zod.object({
+  "textureQuality": zod.enum(['off', 'low', 'high']).default(getSettingsResponseTextureQualityDefault),
+  "enableCaustics": zod.boolean().default(getSettingsResponseEnableCausticsDefault),
+  "particleDensity": zod.enum(['off', 'sparse', 'dense']).default(getSettingsResponseParticleDensityDefault),
+  "fogDensity": zod.number().min(getSettingsResponseFogDensityMin).max(getSettingsResponseFogDensityMax).default(getSettingsResponseFogDensityDefault),
+  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis']).default(getSettingsResponseColormapThemeDefault),
+  "lampIntensity": zod.number().min(getSettingsResponseLampIntensityMin).max(getSettingsResponseLampIntensityMax).default(getSettingsResponseLampIntensityDefault),
+  "defaultSpeedTier": zod.number().min(getSettingsResponseDefaultSpeedTierMin).max(getSettingsResponseDefaultSpeedTierMax).default(getSettingsResponseDefaultSpeedTierDefault),
+  "invertMouseY": zod.boolean().default(getSettingsResponseInvertMouseYDefault),
+  "mouseSensitivity": zod.number().min(getSettingsResponseMouseSensitivityMin).max(getSettingsResponseMouseSensitivityMax).default(getSettingsResponseMouseSensitivityDefault),
+  "cameraSpawnBehaviour": zod.enum(['deepest', 'home', 'last']).default(getSettingsResponseCameraSpawnBehaviourDefault),
+  "showCrosshairGps": zod.boolean().default(getSettingsResponseShowCrosshairGpsDefault),
+  "showCameraPosition": zod.boolean().default(getSettingsResponseShowCameraPositionDefault),
+  "showSpeedIndicator": zod.boolean().default(getSettingsResponseShowSpeedIndicatorDefault),
+  "showHeading": zod.boolean().default(getSettingsResponseShowHeadingDefault),
+  "coordinateFormat": zod.enum(['decimal', 'dms']).default(getSettingsResponseCoordinateFormatDefault),
+  "depthUnit": zod.enum(['metres', 'feet']).default(getSettingsResponseDepthUnitDefault),
+  "hudOpacity": zod.number().min(getSettingsResponseHudOpacityMin).max(getSettingsResponseHudOpacityMax).default(getSettingsResponseHudOpacityDefault),
+  "overviewDefaultZoom": zod.number().min(getSettingsResponseOverviewDefaultZoomMin).max(getSettingsResponseOverviewDefaultZoomMax).default(getSettingsResponseOverviewDefaultZoomDefault),
+  "overviewShowGrid": zod.boolean().default(getSettingsResponseOverviewShowGridDefault),
+  "overviewShowMarkers": zod.boolean().default(getSettingsResponseOverviewShowMarkersDefault),
+  "overviewOpenOnLoad": zod.boolean().default(getSettingsResponseOverviewOpenOnLoadDefault),
+  "visibleMarkerTypes": zod.array(zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom'])).default([`fish`, `shipwreck`, `coral`, `vent`, `custom`]),
+  "showMarkerLabels": zod.boolean().default(getSettingsResponseShowMarkerLabelsDefault),
+  "privateMarkers": zod.boolean().default(getSettingsResponsePrivateMarkersDefault),
+  "defaultMarkerType": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom']).default(getSettingsResponseDefaultMarkerTypeDefault),
+  "defaultRegion": zod.string().default(getSettingsResponseDefaultRegionDefault),
+  "gpsRecordingInterval": zod.number().min(getSettingsResponseGpsRecordingIntervalMin).max(getSettingsResponseGpsRecordingIntervalMax).default(getSettingsResponseGpsRecordingIntervalDefault)
+}).describe('Per-user application settings with sensible defaults')
+
+
+/**
+ * Stores the full settings object for the authenticated user.
+ * @summary Upsert the current user's settings
+ */
+export const putSettingsBodyTextureQualityDefault = `high`;
+export const putSettingsBodyEnableCausticsDefault = false;
+export const putSettingsBodyParticleDensityDefault = `sparse`;
+export const putSettingsBodyFogDensityDefault = 0.012;
+export const putSettingsBodyFogDensityMin = 0.004;
+export const putSettingsBodyFogDensityMax = 0.03;
+
+export const putSettingsBodyColormapThemeDefault = `ocean`;
+export const putSettingsBodyLampIntensityDefault = 2;
+export const putSettingsBodyLampIntensityMin = 0;
+export const putSettingsBodyLampIntensityMax = 5;
+
+export const putSettingsBodyDefaultSpeedTierDefault = 2;
+export const putSettingsBodyDefaultSpeedTierMin = 0;
+export const putSettingsBodyDefaultSpeedTierMax = 4;
+
+export const putSettingsBodyInvertMouseYDefault = false;
+export const putSettingsBodyMouseSensitivityDefault = 1;
+export const putSettingsBodyMouseSensitivityMin = 0.1;
+export const putSettingsBodyMouseSensitivityMax = 3;
+
+export const putSettingsBodyCameraSpawnBehaviourDefault = `deepest`;
+export const putSettingsBodyShowCrosshairGpsDefault = true;
+export const putSettingsBodyShowCameraPositionDefault = true;
+export const putSettingsBodyShowSpeedIndicatorDefault = true;
+export const putSettingsBodyShowHeadingDefault = true;
+export const putSettingsBodyCoordinateFormatDefault = `decimal`;
+export const putSettingsBodyDepthUnitDefault = `metres`;
+export const putSettingsBodyHudOpacityDefault = 0.75;
+export const putSettingsBodyHudOpacityMin = 0.3;
+export const putSettingsBodyHudOpacityMax = 1;
+
+export const putSettingsBodyOverviewDefaultZoomDefault = 1;
+export const putSettingsBodyOverviewDefaultZoomMin = 0.5;
+export const putSettingsBodyOverviewDefaultZoomMax = 5;
+
+export const putSettingsBodyOverviewShowGridDefault = true;
+export const putSettingsBodyOverviewShowMarkersDefault = true;
+export const putSettingsBodyOverviewOpenOnLoadDefault = false;
+export const putSettingsBodyShowMarkerLabelsDefault = true;
+export const putSettingsBodyPrivateMarkersDefault = false;
+export const putSettingsBodyDefaultMarkerTypeDefault = `fish`;
+export const putSettingsBodyDefaultRegionDefault = `mariana-trench`;
+export const putSettingsBodyGpsRecordingIntervalDefault = 10000;
+export const putSettingsBodyGpsRecordingIntervalMin = 1000;
+export const putSettingsBodyGpsRecordingIntervalMax = 60000;
+
+
+
+export const PutSettingsBody = zod.object({
+  "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsBodyTextureQualityDefault),
+  "enableCaustics": zod.boolean().default(putSettingsBodyEnableCausticsDefault),
+  "particleDensity": zod.enum(['off', 'sparse', 'dense']).default(putSettingsBodyParticleDensityDefault),
+  "fogDensity": zod.number().min(putSettingsBodyFogDensityMin).max(putSettingsBodyFogDensityMax).default(putSettingsBodyFogDensityDefault),
+  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis']).default(putSettingsBodyColormapThemeDefault),
+  "lampIntensity": zod.number().min(putSettingsBodyLampIntensityMin).max(putSettingsBodyLampIntensityMax).default(putSettingsBodyLampIntensityDefault),
+  "defaultSpeedTier": zod.number().min(putSettingsBodyDefaultSpeedTierMin).max(putSettingsBodyDefaultSpeedTierMax).default(putSettingsBodyDefaultSpeedTierDefault),
+  "invertMouseY": zod.boolean().default(putSettingsBodyInvertMouseYDefault),
+  "mouseSensitivity": zod.number().min(putSettingsBodyMouseSensitivityMin).max(putSettingsBodyMouseSensitivityMax).default(putSettingsBodyMouseSensitivityDefault),
+  "cameraSpawnBehaviour": zod.enum(['deepest', 'home', 'last']).default(putSettingsBodyCameraSpawnBehaviourDefault),
+  "showCrosshairGps": zod.boolean().default(putSettingsBodyShowCrosshairGpsDefault),
+  "showCameraPosition": zod.boolean().default(putSettingsBodyShowCameraPositionDefault),
+  "showSpeedIndicator": zod.boolean().default(putSettingsBodyShowSpeedIndicatorDefault),
+  "showHeading": zod.boolean().default(putSettingsBodyShowHeadingDefault),
+  "coordinateFormat": zod.enum(['decimal', 'dms']).default(putSettingsBodyCoordinateFormatDefault),
+  "depthUnit": zod.enum(['metres', 'feet']).default(putSettingsBodyDepthUnitDefault),
+  "hudOpacity": zod.number().min(putSettingsBodyHudOpacityMin).max(putSettingsBodyHudOpacityMax).default(putSettingsBodyHudOpacityDefault),
+  "overviewDefaultZoom": zod.number().min(putSettingsBodyOverviewDefaultZoomMin).max(putSettingsBodyOverviewDefaultZoomMax).default(putSettingsBodyOverviewDefaultZoomDefault),
+  "overviewShowGrid": zod.boolean().default(putSettingsBodyOverviewShowGridDefault),
+  "overviewShowMarkers": zod.boolean().default(putSettingsBodyOverviewShowMarkersDefault),
+  "overviewOpenOnLoad": zod.boolean().default(putSettingsBodyOverviewOpenOnLoadDefault),
+  "visibleMarkerTypes": zod.array(zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom'])).default([`fish`, `shipwreck`, `coral`, `vent`, `custom`]),
+  "showMarkerLabels": zod.boolean().default(putSettingsBodyShowMarkerLabelsDefault),
+  "privateMarkers": zod.boolean().default(putSettingsBodyPrivateMarkersDefault),
+  "defaultMarkerType": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom']).default(putSettingsBodyDefaultMarkerTypeDefault),
+  "defaultRegion": zod.string().default(putSettingsBodyDefaultRegionDefault),
+  "gpsRecordingInterval": zod.number().min(putSettingsBodyGpsRecordingIntervalMin).max(putSettingsBodyGpsRecordingIntervalMax).default(putSettingsBodyGpsRecordingIntervalDefault)
+}).describe('Per-user application settings with sensible defaults')
+
+export const putSettingsResponseTextureQualityDefault = `high`;
+export const putSettingsResponseEnableCausticsDefault = false;
+export const putSettingsResponseParticleDensityDefault = `sparse`;
+export const putSettingsResponseFogDensityDefault = 0.012;
+export const putSettingsResponseFogDensityMin = 0.004;
+export const putSettingsResponseFogDensityMax = 0.03;
+
+export const putSettingsResponseColormapThemeDefault = `ocean`;
+export const putSettingsResponseLampIntensityDefault = 2;
+export const putSettingsResponseLampIntensityMin = 0;
+export const putSettingsResponseLampIntensityMax = 5;
+
+export const putSettingsResponseDefaultSpeedTierDefault = 2;
+export const putSettingsResponseDefaultSpeedTierMin = 0;
+export const putSettingsResponseDefaultSpeedTierMax = 4;
+
+export const putSettingsResponseInvertMouseYDefault = false;
+export const putSettingsResponseMouseSensitivityDefault = 1;
+export const putSettingsResponseMouseSensitivityMin = 0.1;
+export const putSettingsResponseMouseSensitivityMax = 3;
+
+export const putSettingsResponseCameraSpawnBehaviourDefault = `deepest`;
+export const putSettingsResponseShowCrosshairGpsDefault = true;
+export const putSettingsResponseShowCameraPositionDefault = true;
+export const putSettingsResponseShowSpeedIndicatorDefault = true;
+export const putSettingsResponseShowHeadingDefault = true;
+export const putSettingsResponseCoordinateFormatDefault = `decimal`;
+export const putSettingsResponseDepthUnitDefault = `metres`;
+export const putSettingsResponseHudOpacityDefault = 0.75;
+export const putSettingsResponseHudOpacityMin = 0.3;
+export const putSettingsResponseHudOpacityMax = 1;
+
+export const putSettingsResponseOverviewDefaultZoomDefault = 1;
+export const putSettingsResponseOverviewDefaultZoomMin = 0.5;
+export const putSettingsResponseOverviewDefaultZoomMax = 5;
+
+export const putSettingsResponseOverviewShowGridDefault = true;
+export const putSettingsResponseOverviewShowMarkersDefault = true;
+export const putSettingsResponseOverviewOpenOnLoadDefault = false;
+export const putSettingsResponseShowMarkerLabelsDefault = true;
+export const putSettingsResponsePrivateMarkersDefault = false;
+export const putSettingsResponseDefaultMarkerTypeDefault = `fish`;
+export const putSettingsResponseDefaultRegionDefault = `mariana-trench`;
+export const putSettingsResponseGpsRecordingIntervalDefault = 10000;
+export const putSettingsResponseGpsRecordingIntervalMin = 1000;
+export const putSettingsResponseGpsRecordingIntervalMax = 60000;
+
+
+
+export const PutSettingsResponse = zod.object({
+  "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsResponseTextureQualityDefault),
+  "enableCaustics": zod.boolean().default(putSettingsResponseEnableCausticsDefault),
+  "particleDensity": zod.enum(['off', 'sparse', 'dense']).default(putSettingsResponseParticleDensityDefault),
+  "fogDensity": zod.number().min(putSettingsResponseFogDensityMin).max(putSettingsResponseFogDensityMax).default(putSettingsResponseFogDensityDefault),
+  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis']).default(putSettingsResponseColormapThemeDefault),
+  "lampIntensity": zod.number().min(putSettingsResponseLampIntensityMin).max(putSettingsResponseLampIntensityMax).default(putSettingsResponseLampIntensityDefault),
+  "defaultSpeedTier": zod.number().min(putSettingsResponseDefaultSpeedTierMin).max(putSettingsResponseDefaultSpeedTierMax).default(putSettingsResponseDefaultSpeedTierDefault),
+  "invertMouseY": zod.boolean().default(putSettingsResponseInvertMouseYDefault),
+  "mouseSensitivity": zod.number().min(putSettingsResponseMouseSensitivityMin).max(putSettingsResponseMouseSensitivityMax).default(putSettingsResponseMouseSensitivityDefault),
+  "cameraSpawnBehaviour": zod.enum(['deepest', 'home', 'last']).default(putSettingsResponseCameraSpawnBehaviourDefault),
+  "showCrosshairGps": zod.boolean().default(putSettingsResponseShowCrosshairGpsDefault),
+  "showCameraPosition": zod.boolean().default(putSettingsResponseShowCameraPositionDefault),
+  "showSpeedIndicator": zod.boolean().default(putSettingsResponseShowSpeedIndicatorDefault),
+  "showHeading": zod.boolean().default(putSettingsResponseShowHeadingDefault),
+  "coordinateFormat": zod.enum(['decimal', 'dms']).default(putSettingsResponseCoordinateFormatDefault),
+  "depthUnit": zod.enum(['metres', 'feet']).default(putSettingsResponseDepthUnitDefault),
+  "hudOpacity": zod.number().min(putSettingsResponseHudOpacityMin).max(putSettingsResponseHudOpacityMax).default(putSettingsResponseHudOpacityDefault),
+  "overviewDefaultZoom": zod.number().min(putSettingsResponseOverviewDefaultZoomMin).max(putSettingsResponseOverviewDefaultZoomMax).default(putSettingsResponseOverviewDefaultZoomDefault),
+  "overviewShowGrid": zod.boolean().default(putSettingsResponseOverviewShowGridDefault),
+  "overviewShowMarkers": zod.boolean().default(putSettingsResponseOverviewShowMarkersDefault),
+  "overviewOpenOnLoad": zod.boolean().default(putSettingsResponseOverviewOpenOnLoadDefault),
+  "visibleMarkerTypes": zod.array(zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom'])).default([`fish`, `shipwreck`, `coral`, `vent`, `custom`]),
+  "showMarkerLabels": zod.boolean().default(putSettingsResponseShowMarkerLabelsDefault),
+  "privateMarkers": zod.boolean().default(putSettingsResponsePrivateMarkersDefault),
+  "defaultMarkerType": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom']).default(putSettingsResponseDefaultMarkerTypeDefault),
+  "defaultRegion": zod.string().default(putSettingsResponseDefaultRegionDefault),
+  "gpsRecordingInterval": zod.number().min(putSettingsResponseGpsRecordingIntervalMin).max(putSettingsResponseGpsRecordingIntervalMax).default(putSettingsResponseGpsRecordingIntervalDefault)
+}).describe('Per-user application settings with sensible defaults')
 
 
 /**

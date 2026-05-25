@@ -2,6 +2,7 @@ import React, { useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { WORLD_SIZE } from "@/lib/terrain";
+import { useSettingsStore } from "@/lib/settingsStore";
 
 const vertexShader = /* glsl */ `
 varying vec2 vUv;
@@ -45,7 +46,9 @@ void main() {
 `;
 
 export const Caustics: React.FC = () => {
-  const enabled = import.meta.env.VITE_ENABLE_CAUSTICS === "true";
+  const enabledFromEnv = import.meta.env.VITE_ENABLE_CAUSTICS === "true";
+  const enabledFromSettings = useSettingsStore((s) => s.enableCaustics);
+  const enabled = enabledFromEnv || enabledFromSettings;
   const materialRef = useRef<THREE.ShaderMaterial>(null);
 
   const uniforms = useMemo(() => ({ uTime: { value: 0 } }), []);

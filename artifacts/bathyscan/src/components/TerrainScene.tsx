@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useAppState } from "@/lib/context";
 import { FlyControls } from "./FlyControls";
+import { useSettingsStore } from "@/lib/settingsStore";
 
 const TerrainMesh = () => {
   const { terrain } = useAppState();
@@ -101,6 +102,8 @@ const Particles = () => {
 const LightsAndFog = () => {
   const { camera } = useThree();
   const pointLightRef = useRef<THREE.PointLight>(null);
+  const fogDensity = useSettingsStore((s) => s.fogDensity);
+  const lampIntensity = useSettingsStore((s) => s.lampIntensity);
 
   useFrame(() => {
     if (pointLightRef.current) {
@@ -110,10 +113,10 @@ const LightsAndFog = () => {
 
   return (
     <>
-      <fogExp2 args={["#060c1a", 0.3]} />
+      <fogExp2 args={["#060c1a", fogDensity]} />
       <ambientLight intensity={0.05} />
       <directionalLight position={[-1, 1, 1]} intensity={0.2} color="#8ecaff" />
-      <pointLight ref={pointLightRef} distance={80} intensity={2.5} color="#ffeedd" />
+      <pointLight ref={pointLightRef} distance={80} intensity={lampIntensity} color="#ffeedd" />
     </>
   );
 };

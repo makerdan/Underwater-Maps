@@ -48,6 +48,14 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   const deleteMarkerRef = useRef(deleteMarker);
   useEffect(() => { deleteMarkerRef.current = deleteMarker; }, [deleteMarker]);
 
+  // Settings: sensitivity and invert-Y for mouse look
+  const mouseSensitivity = useSettingsStore((s) => s.mouseSensitivity);
+  const invertMouseY = useSettingsStore((s) => s.invertMouseY);
+  const sensitivityRef = useRef(mouseSensitivity);
+  const invertMouseYRef = useRef(invertMouseY);
+  useEffect(() => { sensitivityRef.current = mouseSensitivity; }, [mouseSensitivity]);
+  useEffect(() => { invertMouseYRef.current = invertMouseY; }, [invertMouseY]);
+
   // Refs for event-listener / useFrame closures to stay current
   const modeRef = useRef(mode);
   const speedIndexRef = useRef(speedIndex);
@@ -208,11 +216,13 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       if (!isLocked.current || modeRef.current !== "fly") return;
       const dx = e.movementX ?? 0;
       const dy = e.movementY ?? 0;
+      const sens = sensitivityRef.current * 0.002;
+      const dyScaled = invertMouseYRef.current ? -dy : dy;
       euler.current.setFromQuaternion(camera.quaternion);
-      euler.current.y -= dx * 0.002;
+      euler.current.y -= dx * sens;
       euler.current.x = Math.max(
         -Math.PI * 0.472,
-        Math.min(Math.PI * 0.472, euler.current.x - dy * 0.002),
+        Math.min(Math.PI * 0.472, euler.current.x - dyScaled * sens),
       );
       camera.quaternion.setFromEuler(euler.current);
     };

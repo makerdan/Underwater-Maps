@@ -9,6 +9,7 @@ import * as THREE from "three";
 import { useGetMarkers, getGetMarkersQueryKey } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { MarkerSprite } from "./MarkerSprite";
+import { useSettingsStore } from "@/lib/settingsStore";
 
 /**
  * Module-level mutable ref to the marker group, consumed by useFlyControls
@@ -20,6 +21,8 @@ export const markerGroupRef: { current: THREE.Group | null } = { current: null }
 export const MarkerLayer: React.FC = () => {
   const { terrain } = useAppState();
   const datasetId = terrain?.datasetId ?? "";
+  const visibleMarkerTypes = useSettingsStore((s) => s.visibleMarkerTypes);
+  const showMarkerLabels = useSettingsStore((s) => s.showMarkerLabels);
 
   const { data: markers } = useGetMarkers(
     { datasetId },
@@ -28,10 +31,14 @@ export const MarkerLayer: React.FC = () => {
 
   if (!terrain || !markers?.length) return null;
 
+  const visibleMarkers = markers.filter(
+    (m) => m.type === "depth_pole" || visibleMarkerTypes.includes(m.type as typeof visibleMarkerTypes[number]),
+  );
+
   return (
     <group ref={(g) => { markerGroupRef.current = g; }}>
-      {markers.map((m) => (
-        <MarkerSprite key={m.id} marker={m} terrain={terrain} />
+      {visibleMarkers.map((m) => (
+        <MarkerSprite key={m.id} marker={m} terrain={terrain} showLabel={showMarkerLabels} />
       ))}
     </group>
   );

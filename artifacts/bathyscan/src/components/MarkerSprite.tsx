@@ -14,6 +14,7 @@ import { MARKER_COLOR, MARKER_ICON } from "@/lib/markerConstants";
 interface Props {
   marker: Marker;
   terrain: TerrainData;
+  showLabel?: boolean;
 }
 
 /** Look up the terrain Y world position for a lon/lat pair. */
@@ -31,7 +32,7 @@ function terrainWorldY(lon: number, lat: number, grid: TerrainData): number {
   return -t * MAX_DEPTH_WORLD + 1.5; // float 1.5 units above surface
 }
 
-export const MarkerSprite: React.FC<Props> = ({ marker, terrain }) => {
+export const MarkerSprite: React.FC<Props> = ({ marker, terrain, showLabel = true }) => {
   // Depth poles are rendered by DepthPoleLayer, not as sprites
   if (marker.type === "depth_pole") return null;
 
@@ -64,18 +65,20 @@ export const MarkerSprite: React.FC<Props> = ({ marker, terrain }) => {
         {icon}
       </Text>
       {/* Label */}
-      <Text
-        position={[0, -0.65, 0]}
-        fontSize={0.28}
-        color={color}
-        outlineColor="#000000"
-        outlineWidth={0.04}
-        anchorX="center"
-        anchorY="top"
-        maxWidth={5}
-      >
-        {marker.label}
-      </Text>
+      {showLabel && (
+        <Text
+          position={[0, -0.65, 0]}
+          fontSize={0.28}
+          color={color}
+          outlineColor="#000000"
+          outlineWidth={0.04}
+          anchorX="center"
+          anchorY="top"
+          maxWidth={5}
+        >
+          {marker.label}
+        </Text>
+      )}
       </group>
     </Billboard>
   );

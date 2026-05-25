@@ -16,6 +16,8 @@ tags:
     description: Bathymetric dataset operations
   - name: markers
     description: Persisted point-of-interest marker operations
+  - name: settings
+    description: Per-user application settings
   - name: user-datasets
     description: Authenticated user's saved custom terrain datasets
   - name: trails
@@ -312,6 +314,32 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /markers/mine:
+    delete:
+      operationId: deleteMarkersMine
+      tags: [markers]
+      summary: Delete all markers created by the authenticated user
+      description: Permanently deletes every marker where userId matches the Clerk user. Requires authentication.
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Number of markers deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: integer
+                required: [deleted]
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /markers/{id}:
     delete:
       operationId: deleteMarkersId
@@ -465,6 +493,54 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "404":
           description: Trail not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get the current user's settings
+      description: Returns stored settings or the default settings object if none are saved yet. Requires authentication.
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: User settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSettings"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    put:
+      operationId: putSettings
+      tags: [settings]
+      summary: Upsert the current user's settings
+      description: Stores the full settings object for the authenticated user.
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserSettings"
+      responses:
+        "200":
+          description: Saved settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSettings"
+        "401":
+          description: Unauthenticated
           content:
             application/json:
               schema:
@@ -740,6 +816,116 @@ components:
               - id
               - object
               - owned_by
+
+    UserSettings:
+      type: object
+      description: Per-user application settings with sensible defaults
+      properties:
+        textureQuality:
+          type: string
+          enum: [off, low, high]
+          default: high
+        enableCaustics:
+          type: boolean
+          default: false
+        particleDensity:
+          type: string
+          enum: [off, sparse, dense]
+          default: sparse
+        fogDensity:
+          type: number
+          minimum: 0.004
+          maximum: 0.030
+          default: 0.012
+        colormapTheme:
+          type: string
+          enum: [ocean, thermal, grayscale, viridis]
+          default: ocean
+        lampIntensity:
+          type: number
+          minimum: 0
+          maximum: 5
+          default: 2
+        defaultSpeedTier:
+          type: integer
+          minimum: 0
+          maximum: 4
+          default: 2
+        invertMouseY:
+          type: boolean
+          default: false
+        mouseSensitivity:
+          type: number
+          minimum: 0.1
+          maximum: 3.0
+          default: 1.0
+        cameraSpawnBehaviour:
+          type: string
+          enum: [deepest, home, last]
+          default: deepest
+        showCrosshairGps:
+          type: boolean
+          default: true
+        showCameraPosition:
+          type: boolean
+          default: true
+        showSpeedIndicator:
+          type: boolean
+          default: true
+        showHeading:
+          type: boolean
+          default: true
+        coordinateFormat:
+          type: string
+          enum: [decimal, dms]
+          default: decimal
+        depthUnit:
+          type: string
+          enum: [metres, feet]
+          default: metres
+        hudOpacity:
+          type: number
+          minimum: 0.3
+          maximum: 1.0
+          default: 0.75
+        overviewDefaultZoom:
+          type: number
+          minimum: 0.5
+          maximum: 5.0
+          default: 1.0
+        overviewShowGrid:
+          type: boolean
+          default: true
+        overviewShowMarkers:
+          type: boolean
+          default: true
+        overviewOpenOnLoad:
+          type: boolean
+          default: false
+        visibleMarkerTypes:
+          type: array
+          items:
+            type: string
+            enum: [fish, shipwreck, coral, vent, custom]
+          default: [fish, shipwreck, coral, vent, custom]
+        showMarkerLabels:
+          type: boolean
+          default: true
+        privateMarkers:
+          type: boolean
+          default: false
+        defaultMarkerType:
+          type: string
+          enum: [fish, shipwreck, coral, vent, custom]
+          default: fish
+        defaultRegion:
+          type: string
+          default: mariana-trench
+        gpsRecordingInterval:
+          type: integer
+          minimum: 1000
+          maximum: 60000
+          default: 10000
 
     ApiError:
       type: object

@@ -130,7 +130,7 @@ export const OverviewMap: React.FC = () => {
             let hasMore = true;
 
             while (hasMore && currentPage <= MAX_PAGES && !cancelled) {
-              const page = await getTrailsIdPoints({ id: trail.id, page: currentPage, pageSize: PAGE_SIZE });
+              const page = await getTrailsIdPoints(trail.id, { page: currentPage, pageSize: PAGE_SIZE });
               allPoints.push(...page.points.map((p) => ({ lon: p.lon, lat: p.lat })));
               hasMore = currentPage * PAGE_SIZE < page.total;
               currentPage++;

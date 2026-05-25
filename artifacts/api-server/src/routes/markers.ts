@@ -4,6 +4,7 @@ import { db, markersTable } from "@workspace/db";
 import { PostMarkersBody, DeleteMarkersIdParams, GetMarkersQueryParams } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 
+
 const router = Router();
 
 router.get("/markers", async (req, res): Promise<void> => {
@@ -39,6 +40,16 @@ router.post("/markers", requireAuth, async (req, res): Promise<void> => {
     .returning();
 
   res.status(201).json(created);
+});
+
+router.delete("/markers/mine", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthenticatedRequest).clerkUserId;
+  const deleted = await db
+    .delete(markersTable)
+    .where(eq(markersTable.userId, userId))
+    .returning({ id: markersTable.id });
+
+  res.json({ deleted: deleted.length });
 });
 
 router.delete("/markers/:id", requireAuth, async (req, res): Promise<void> => {

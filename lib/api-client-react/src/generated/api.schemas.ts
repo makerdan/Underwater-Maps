@@ -103,6 +103,142 @@ export interface PoeModelList {
   data?: PoeModelListDataItem[];
 }
 
+export type UserSettingsTextureQuality = typeof UserSettingsTextureQuality[keyof typeof UserSettingsTextureQuality];
+
+
+export const UserSettingsTextureQuality = {
+  off: 'off',
+  low: 'low',
+  high: 'high',
+} as const;
+
+export type UserSettingsParticleDensity = typeof UserSettingsParticleDensity[keyof typeof UserSettingsParticleDensity];
+
+
+export const UserSettingsParticleDensity = {
+  off: 'off',
+  sparse: 'sparse',
+  dense: 'dense',
+} as const;
+
+export type UserSettingsColormapTheme = typeof UserSettingsColormapTheme[keyof typeof UserSettingsColormapTheme];
+
+
+export const UserSettingsColormapTheme = {
+  ocean: 'ocean',
+  thermal: 'thermal',
+  grayscale: 'grayscale',
+  viridis: 'viridis',
+} as const;
+
+export type UserSettingsCameraSpawnBehaviour = typeof UserSettingsCameraSpawnBehaviour[keyof typeof UserSettingsCameraSpawnBehaviour];
+
+
+export const UserSettingsCameraSpawnBehaviour = {
+  deepest: 'deepest',
+  home: 'home',
+  last: 'last',
+} as const;
+
+export type UserSettingsCoordinateFormat = typeof UserSettingsCoordinateFormat[keyof typeof UserSettingsCoordinateFormat];
+
+
+export const UserSettingsCoordinateFormat = {
+  decimal: 'decimal',
+  dms: 'dms',
+} as const;
+
+export type UserSettingsDepthUnit = typeof UserSettingsDepthUnit[keyof typeof UserSettingsDepthUnit];
+
+
+export const UserSettingsDepthUnit = {
+  metres: 'metres',
+  feet: 'feet',
+} as const;
+
+export type UserSettingsVisibleMarkerTypesItem = typeof UserSettingsVisibleMarkerTypesItem[keyof typeof UserSettingsVisibleMarkerTypesItem];
+
+
+export const UserSettingsVisibleMarkerTypesItem = {
+  fish: 'fish',
+  shipwreck: 'shipwreck',
+  coral: 'coral',
+  vent: 'vent',
+  custom: 'custom',
+} as const;
+
+export type UserSettingsDefaultMarkerType = typeof UserSettingsDefaultMarkerType[keyof typeof UserSettingsDefaultMarkerType];
+
+
+export const UserSettingsDefaultMarkerType = {
+  fish: 'fish',
+  shipwreck: 'shipwreck',
+  coral: 'coral',
+  vent: 'vent',
+  custom: 'custom',
+} as const;
+
+/**
+ * Per-user application settings with sensible defaults
+ */
+export interface UserSettings {
+  textureQuality?: UserSettingsTextureQuality;
+  enableCaustics?: boolean;
+  particleDensity?: UserSettingsParticleDensity;
+  /**
+     * @minimum 0.004
+     * @maximum 0.03
+     */
+  fogDensity?: number;
+  colormapTheme?: UserSettingsColormapTheme;
+  /**
+     * @minimum 0
+     * @maximum 5
+     */
+  lampIntensity?: number;
+  /**
+     * @minimum 0
+     * @maximum 4
+     */
+  defaultSpeedTier?: number;
+  invertMouseY?: boolean;
+  /**
+     * @minimum 0.1
+     * @maximum 3
+     */
+  mouseSensitivity?: number;
+  cameraSpawnBehaviour?: UserSettingsCameraSpawnBehaviour;
+  showCrosshairGps?: boolean;
+  showCameraPosition?: boolean;
+  showSpeedIndicator?: boolean;
+  showHeading?: boolean;
+  coordinateFormat?: UserSettingsCoordinateFormat;
+  depthUnit?: UserSettingsDepthUnit;
+  /**
+     * @minimum 0.3
+     * @maximum 1
+     */
+  hudOpacity?: number;
+  /**
+     * @minimum 0.5
+     * @maximum 5
+     */
+  overviewDefaultZoom?: number;
+  overviewShowGrid?: boolean;
+  overviewShowMarkers?: boolean;
+  overviewOpenOnLoad?: boolean;
+  visibleMarkerTypes?: UserSettingsVisibleMarkerTypesItem[];
+  showMarkerLabels?: boolean;
+  privateMarkers?: boolean;
+  defaultMarkerType?: UserSettingsDefaultMarkerType;
+  defaultRegion?: string;
+  /**
+     * @minimum 1000
+     * @maximum 60000
+     */
+  gpsRecordingInterval?: number;
+}
+
 export interface ApiError {
   /** Machine-readable error code */
   error: string;
@@ -237,18 +373,6 @@ export interface Marker {
   createdAt: string;
 }
 
-export type MarkerInputType = typeof MarkerInputType[keyof typeof MarkerInputType];
-
-
-export const MarkerInputType = {
-  fish: 'fish',
-  shipwreck: 'shipwreck',
-  coral: 'coral',
-  vent: 'vent',
-  custom: 'custom',
-  depth_pole: 'depth_pole',
-} as const;
-
 export interface GpsPoint {
   lon: number;
   lat: number;
@@ -265,10 +389,10 @@ export interface GpsTrail {
   datasetId: string;
   name: string;
   colour: string;
-  startedAt: Date;
-  endedAt: Date;
+  startedAt: string;
+  endedAt: string;
   pointCount: number;
-  createdAt: Date;
+  createdAt: string;
 }
 
 export interface GpsTrailInput {
@@ -287,15 +411,17 @@ export interface TrailPointsPage {
   pageSize: number;
 }
 
-export interface GetTrailsParams {
-  datasetId: string;
-}
+export type MarkerInputType = typeof MarkerInputType[keyof typeof MarkerInputType];
 
-export interface GetTrailsIdPointsParams {
-  id: string;
-  page?: number;
-  pageSize?: number;
-}
+
+export const MarkerInputType = {
+  fish: 'fish',
+  shipwreck: 'shipwreck',
+  coral: 'coral',
+  vent: 'vent',
+  custom: 'custom',
+  depth_pole: 'depth_pole',
+} as const;
 
 export interface MarkerInput {
   datasetId: string;
@@ -331,5 +457,25 @@ export type GetMarkersParams = {
  * Dataset slug to filter markers by
  */
 datasetId: string;
+};
+
+export type DeleteMarkersMine200 = {
+  deleted: number;
+};
+
+export type GetTrailsParams = {
+datasetId: string;
+};
+
+export type GetTrailsIdPointsParams = {
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 1000
+ */
+pageSize?: number;
 };
 

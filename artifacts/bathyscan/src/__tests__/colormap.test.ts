@@ -34,7 +34,7 @@ vi.mock("three", () => {
   return { Color };
 });
 
-import { depthToColor } from "../lib/colormap";
+import { depthToColor, getColormap } from "../lib/colormap";
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const n = parseInt(hex.replace("#", ""), 16);
@@ -93,5 +93,101 @@ describe("depthToColor", () => {
     const c1 = depthToColor(1);
     expect(cOver.r).toBeCloseTo(c1.r, 2);
     expect(cOver.b).toBeCloseTo(c1.b, 2);
+  });
+});
+
+describe("getColormap", () => {
+  it("returns a function for every supported theme", () => {
+    const themes = ["ocean", "thermal", "grayscale", "viridis"] as const;
+    for (const theme of themes) {
+      const fn = getColormap(theme);
+      expect(typeof fn).toBe("function");
+    }
+  });
+
+  it("thermal t=0 → darkest stop (#0d0221)", () => {
+    const fn = getColormap("thermal");
+    const c = fn(0);
+    const expected = hexToRgb("#0d0221");
+    expect(c.r).toBeCloseTo(expected.r, 2);
+    expect(c.g).toBeCloseTo(expected.g, 2);
+    expect(c.b).toBeCloseTo(expected.b, 2);
+  });
+
+  it("thermal t=1 → lightest stop (white #ffffff)", () => {
+    const fn = getColormap("thermal");
+    const c = fn(1);
+    expect(c.r).toBeCloseTo(1, 2);
+    expect(c.g).toBeCloseTo(1, 2);
+    expect(c.b).toBeCloseTo(1, 2);
+  });
+
+  it("thermal t=0.25 → mid stop (#7b2d8b)", () => {
+    const fn = getColormap("thermal");
+    const c = fn(0.25);
+    const expected = hexToRgb("#7b2d8b");
+    expect(c.r).toBeCloseTo(expected.r, 2);
+    expect(c.g).toBeCloseTo(expected.g, 2);
+    expect(c.b).toBeCloseTo(expected.b, 2);
+  });
+
+  it("grayscale t=0 → near black (#050505)", () => {
+    const fn = getColormap("grayscale");
+    const c = fn(0);
+    const expected = hexToRgb("#050505");
+    expect(c.r).toBeCloseTo(expected.r, 2);
+  });
+
+  it("grayscale t=1 → near white (#e0e0e0)", () => {
+    const fn = getColormap("grayscale");
+    const c = fn(1);
+    const expected = hexToRgb("#e0e0e0");
+    expect(c.r).toBeCloseTo(expected.r, 2);
+  });
+
+  it("viridis t=0 → deep purple (#440154)", () => {
+    const fn = getColormap("viridis");
+    const c = fn(0);
+    const expected = hexToRgb("#440154");
+    expect(c.r).toBeCloseTo(expected.r, 2);
+    expect(c.g).toBeCloseTo(expected.g, 2);
+    expect(c.b).toBeCloseTo(expected.b, 2);
+  });
+
+  it("viridis t=1 → bright yellow (#fde725)", () => {
+    const fn = getColormap("viridis");
+    const c = fn(1);
+    const expected = hexToRgb("#fde725");
+    expect(c.r).toBeCloseTo(expected.r, 2);
+    expect(c.g).toBeCloseTo(expected.g, 2);
+    expect(c.b).toBeCloseTo(expected.b, 2);
+  });
+
+  it("ocean theme matches depthToColor at all boundary stops", () => {
+    const fn = getColormap("ocean");
+    const stops = [0, 0.3, 0.65, 1.0];
+    for (const t of stops) {
+      const a = fn(t);
+      const b = depthToColor(t);
+      expect(a.r).toBeCloseTo(b.r, 3);
+      expect(a.g).toBeCloseTo(b.g, 3);
+      expect(a.b).toBeCloseTo(b.b, 3);
+    }
+  });
+
+  it("returned function clamps below 0", () => {
+    const fn = getColormap("thermal");
+    const cNeg = fn(-1);
+    const c0 = fn(0);
+    expect(cNeg.r).toBeCloseTo(c0.r, 2);
+    expect(cNeg.g).toBeCloseTo(c0.g, 2);
+  });
+
+  it("returned function clamps above 1", () => {
+    const fn = getColormap("viridis");
+    const cOver = fn(99);
+    const c1 = fn(1);
+    expect(cOver.r).toBeCloseTo(c1.r, 2);
+    expect(cOver.g).toBeCloseTo(c1.g, 2);
   });
 });
