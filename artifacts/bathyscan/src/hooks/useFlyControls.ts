@@ -25,6 +25,10 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   useEffect(() => { speedIndexRef.current = speedIndex; }, [speedIndex]);
   useEffect(() => { terrainRef.current = terrain; }, [terrain]);
 
+  // Sync mode and speedIndex to cameraStore for HUD reads
+  useEffect(() => { useCameraStore.getState().setMode(mode); }, [mode]);
+  useEffect(() => { useCameraStore.getState().setSpeedIndex(speedIndex); }, [speedIndex]);
+
   const keys = useRef<Record<string, boolean>>({});
   const isLocked = useRef(false);
   const euler = useRef(new THREE.Euler(0, 0, 0, "YXZ"));
@@ -37,6 +41,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   const rightDir = useRef(new THREE.Vector3());
   const lightPos = useRef(new THREE.Vector3());
   const orbitTargetArr = useRef<[number, number, number]>([0, -10, 0]);
+
   // ---------------------------------------------------------------------------
   // Camera initialisation: place 10 units above deepest terrain point
   // ---------------------------------------------------------------------------
@@ -105,7 +110,6 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       if (e.code === "Tab") {
         e.preventDefault();
         if (modeRef.current === "fly") {
-          // Compute orbit centre by raycasting terrain; fall back to 20u ahead
           camera.getWorldDirection(lookDir.current);
           const mesh = terrainMeshRef.current;
           let hit = false;
@@ -150,7 +154,6 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       const dy = e.movementY ?? 0;
       euler.current.setFromQuaternion(camera.quaternion);
       euler.current.y -= dx * 0.002;
-      // Clamp pitch to ±85°
       euler.current.x = Math.max(
         -Math.PI * 0.472,
         Math.min(Math.PI * 0.472, euler.current.x - dy * 0.002),
@@ -169,7 +172,6 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
 
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
-      // Only pin GPS while in fly mode
       if (modeRef.current !== "fly") return;
       const gps = useCameraStore.getState().crosshairGps;
       if (gps) useCameraStore.getState().setLastClickedGps(gps);
@@ -248,6 +250,20 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       }
     }
 
+    // 3b. Camera geographic position + heading → cameraStore
+    if (grid) {
+      camera.getWorldDirection(lookDir.current);
+      const { lon: camLon, lat: camLat } = worldXZToLonLat(
+        camera.position.x,
+        camera.position.z,
+        grid,
+      );
+      const camDepth = worldYToMetres(camera.position.y, grid);
+      const heading =
+        (Math.atan2(lookDir.current.x, -lookDir.current.z) * 180 / Math.PI + 360) % 360;
+      useCameraStore.getState().setCameraGeo({ lon: camLon, lat: camLat, depth: camDepth, heading });
+    }
+
     // 4. Submersible lamp follows camera
     if (lightRef.current) {
       camera.getWorldDirection(lightPos.current);
@@ -256,7 +272,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         .addScaledVector(lightPos.current, 2);
     }
 
-    // 5. Sync camera position to context for legacy HUD reads
+    // 5. Sync camera position to context for legacy reads
     setCameraPos([camera.position.x, camera.position.y, camera.position.z]);
   });
 

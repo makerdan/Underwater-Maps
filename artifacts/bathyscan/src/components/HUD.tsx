@@ -1,77 +1,196 @@
 import React from "react";
-import { useAppState, SPEEDS } from "@/lib/context";
+import { SPEEDS } from "@/lib/context";
 import { useCameraStore } from "@/lib/cameraStore";
 
-export const HUD = () => {
-  const { mode, terrain, speedIndex } = useAppState();
+const HUD_STYLE: React.CSSProperties = {
+  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+  color: "#94a3b8",
+  letterSpacing: "0.08em",
+  pointerEvents: "none",
+};
+
+const CYAN: React.CSSProperties = {
+  color: "#00e5ff",
+  textShadow: "0 0 8px rgba(0,229,255,0.6)",
+};
+
+const PANEL: React.CSSProperties = {
+  background: "rgba(0,10,20,0.75)",
+  border: "1px solid rgba(0,229,255,0.15)",
+  borderRadius: 4,
+  padding: "6px 10px",
+  backdropFilter: "blur(4px)",
+};
+
+function fmt(n: number | null, decimals = 4): string {
+  if (n === null) return "—";
+  return n.toFixed(decimals);
+}
+
+function SpeedDots({ index, total }: { index: number; total: number }) {
+  return (
+    <span>
+      {Array.from({ length: total }).map((_, i) => (
+        <span key={i} style={i <= index ? CYAN : { color: "#1e3a5f" }}>
+          {i <= index ? "●" : "○"}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+export const HUD: React.FC = () => {
   const crosshairGps = useCameraStore((s) => s.crosshairGps);
   const lastClickedGps = useCameraStore((s) => s.lastClickedGps);
+  const cameraLon = useCameraStore((s) => s.cameraLon);
+  const cameraLat = useCameraStore((s) => s.cameraLat);
+  const cameraDepth = useCameraStore((s) => s.cameraDepth);
+  const heading = useCameraStore((s) => s.heading);
+  const mode = useCameraStore((s) => s.mode);
+  const speedIndex = useCameraStore((s) => s.speedIndex);
 
   const speed = SPEEDS[speedIndex] ?? 0.15;
-
-  const lonStr = crosshairGps ? crosshairGps.lon.toFixed(4) : "—";
-  const latStr = crosshairGps ? crosshairGps.lat.toFixed(4) : "—";
-  const depthStr = crosshairGps
-    ? `▼ ${Math.round(crosshairGps.depth).toLocaleString()} M`
-    : "▼ — M";
+  const isFly = mode === "fly";
 
   return (
-    <div className="w-full h-full flex flex-col justify-between p-6 uppercase tracking-wider font-mono text-sm pointer-events-none">
-      {/* ── Top bar ── */}
-      <div className="flex justify-between items-start">
-        <div className="space-y-1">
-          <div className="font-bold text-primary flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-            {terrain ? terrain.name : "NO DATA"}
-          </div>
-          <div className="text-muted-foreground text-xs">
-            LON: <span className="text-foreground">{lonStr}</span>
-            <br />
-            LAT: <span className="text-foreground">{latStr}</span>
-          </div>
-          {lastClickedGps && (
-            <div className="text-[10px] text-cyan-600 mt-1">
-              PIN {lastClickedGps.lon.toFixed(4)}, {lastClickedGps.lat.toFixed(4)}
-            </div>
-          )}
+    <div
+      className="absolute inset-0 overflow-hidden"
+      style={{ ...HUD_STYLE, fontSize: 11, userSelect: "none" }}
+    >
+      {/* ── Top-left: mode + heading ── */}
+      <div className="absolute top-3 left-3 flex items-center gap-2">
+        <div
+          style={{
+            ...PANEL,
+            ...CYAN,
+            fontWeight: 700,
+            fontSize: 12,
+            letterSpacing: "0.2em",
+            padding: "4px 10px",
+            border: `1px solid ${isFly ? "rgba(0,229,255,0.4)" : "rgba(100,116,139,0.4)"}`,
+            background: isFly ? "rgba(0,229,255,0.08)" : "rgba(0,10,20,0.75)",
+            color: isFly ? "#00e5ff" : "#64748b",
+            textShadow: isFly ? "0 0 8px rgba(0,229,255,0.6)" : "none",
+          }}
+        >
+          {isFly ? "● FLY" : "◎ ORBIT"}
         </div>
-
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <div className="text-xs text-muted-foreground">SPD</div>
-            <div className="font-bold">{speed.toFixed(2)} u/s</div>
-          </div>
-          <div
-            className={`px-3 py-1 text-xs font-bold rounded-sm border ${
-              mode === "fly"
-                ? "border-primary text-primary bg-primary/10"
-                : "border-border text-muted-foreground bg-muted"
-            }`}
-          >
-            {mode === "fly" ? "FLY" : "ORBIT"}
-          </div>
+        <div style={{ ...PANEL, fontSize: 11 }}>
+          <span style={{ color: "#475569" }}>HDG </span>
+          <span style={CYAN}>{Math.round(heading).toString().padStart(3, "0")}°</span>
         </div>
       </div>
 
-      {/* ── Centre reticle (fly mode only) ── */}
-      {mode === "fly" && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-30">
-          <div className="w-8 h-[1px] bg-primary" />
-          <div className="w-[1px] h-8 bg-primary absolute" />
-          <div className="w-16 h-16 rounded-full border border-primary/50 absolute" />
+      {/* ── Centre: crosshair + GPS ── */}
+      <div
+        className="absolute"
+        style={{
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        {/* Reticle */}
+        <div style={{ position: "relative", width: 40, height: 40 }}>
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: 0,
+              right: 0,
+              height: 1,
+              background: "rgba(0,229,255,0.5)",
+              transform: "translateY(-50%)",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: 0,
+              bottom: 0,
+              width: 1,
+              background: "rgba(0,229,255,0.5)",
+              transform: "translateX(-50%)",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              border: "1px solid rgba(0,229,255,0.25)",
+              borderRadius: "50%",
+            }}
+          />
         </div>
-      )}
 
-      {/* ── Bottom bar ── */}
-      <div className="flex justify-between items-end">
-        <div className="text-2xl font-bold text-primary drop-shadow-md">
-          {depthStr}
+        {/* Crosshair GPS */}
+        <div style={{ ...PANEL, textAlign: "center", minWidth: 160 }}>
+          <div style={{ color: "#475569", fontSize: 9, letterSpacing: "0.2em", marginBottom: 2 }}>
+            CROSSHAIR TARGET
+          </div>
+          {crosshairGps ? (
+            <>
+              <div>
+                <span style={{ color: "#475569" }}>LON </span>
+                <span style={CYAN}>{fmt(crosshairGps.lon)}</span>
+                <span style={{ color: "#475569" }}> LAT </span>
+                <span style={CYAN}>{fmt(crosshairGps.lat)}</span>
+              </div>
+              <div style={{ marginTop: 2 }}>
+                <span style={{ color: "#475569" }}>▼ </span>
+                <span style={{ ...CYAN, fontSize: 13, fontWeight: 700 }}>
+                  {Math.round(crosshairGps.depth).toLocaleString()} M
+                </span>
+              </div>
+            </>
+          ) : (
+            <div style={{ color: "#1e3a5f" }}>— NO TERRAIN —</div>
+          )}
         </div>
-        <div className="text-[10px] text-muted-foreground flex flex-col items-end gap-1">
-          <span>CLICK: POINTER LOCK &nbsp; ESC: RELEASE</span>
-          <span>WASD: FLY &nbsp; SPACE/SHIFT: UP/DOWN &nbsp; SCROLL: SPEED</span>
-          <span>TAB: ORBIT MODE &nbsp; G / RIGHT-CLICK: PIN GPS</span>
+      </div>
+
+      {/* ── Bottom-left: camera position + speed ── */}
+      <div className="absolute bottom-3 left-3 space-y-1">
+        <div style={{ ...PANEL, minWidth: 200 }}>
+          <div style={{ color: "#475569", fontSize: 9, letterSpacing: "0.2em", marginBottom: 3 }}>
+            CAMERA POSITION
+          </div>
+          <div>
+            <span style={{ color: "#475569" }}>LON </span>
+            <span style={CYAN}>{fmt(cameraLon)}</span>
+          </div>
+          <div>
+            <span style={{ color: "#475569" }}>LAT </span>
+            <span style={CYAN}>{fmt(cameraLat)}</span>
+          </div>
+          <div>
+            <span style={{ color: "#475569" }}>DEPTH </span>
+            <span style={CYAN}>
+              {cameraDepth !== null ? Math.round(cameraDepth).toLocaleString() : "—"} M
+            </span>
+          </div>
         </div>
+
+        <div style={{ ...PANEL, display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ color: "#475569" }}>SPD </span>
+          <SpeedDots index={speedIndex} total={SPEEDS.length} />
+          <span style={{ color: "#475569", marginLeft: 4 }}>{speed.toFixed(2)} u/s</span>
+        </div>
+
+        {lastClickedGps && (
+          <div style={{ ...PANEL, fontSize: 10 }}>
+            <span style={{ color: "#475569" }}>PIN </span>
+            <span style={{ color: "#22d3ee" }}>
+              {fmt(lastClickedGps.lon)}, {fmt(lastClickedGps.lat)}
+            </span>
+            <span style={{ color: "#475569" }}> ▼ {Math.round(lastClickedGps.depth)}M</span>
+          </div>
+        )}
       </div>
     </div>
   );

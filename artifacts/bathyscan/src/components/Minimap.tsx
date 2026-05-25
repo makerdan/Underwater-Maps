@@ -1,0 +1,193 @@
+import React, { useEffect, useRef } from "react";
+import { useAppState } from "@/lib/context";
+import { useCameraStore } from "@/lib/cameraStore";
+import { useUiStore } from "@/lib/uiStore";
+import { depthToColor } from "@/lib/colormap";
+import { WORLD_SIZE } from "@/lib/terrain";
+
+const W = 180;
+const H = 180;
+
+function drawHeatmap(
+  ctx: CanvasRenderingContext2D,
+  depths: number[],
+  width: number,
+  height: number,
+  minDepth: number,
+  maxDepth: number,
+) {
+  const depthRange = maxDepth - minDepth || 1;
+  const imageData = ctx.createImageData(W, H);
+
+  for (let py = 0; py < H; py++) {
+    for (let px = 0; px < W; px++) {
+      const gx = Math.min(width - 1, Math.floor((px / W) * width));
+      const gy = Math.min(height - 1, Math.floor((py / H) * height));
+      const idx = gy * width + gx;
+      const depth = depths[idx] ?? minDepth;
+      const t = (depth - minDepth) / depthRange;
+      const c = depthToColor(t);
+      const i = (py * W + px) * 4;
+      imageData.data[i] = Math.round(c.r * 255);
+      imageData.data[i + 1] = Math.round(c.g * 255);
+      imageData.data[i + 2] = Math.round(c.b * 255);
+      imageData.data[i + 3] = 255;
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+}
+
+function drawArrow(
+  ctx: CanvasRenderingContext2D,
+  px: number,
+  py: number,
+  heading: number,
+) {
+  const rad = (heading - 90) * (Math.PI / 180);
+  const size = 7;
+
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(rad);
+
+  ctx.beginPath();
+  ctx.moveTo(0, -size);
+  ctx.lineTo(size * 0.6, size * 0.6);
+  ctx.lineTo(0, 0);
+  ctx.lineTo(-size * 0.6, size * 0.6);
+  ctx.closePath();
+
+  ctx.fillStyle = "#00e5ff";
+  ctx.shadowColor = "#00e5ff";
+  ctx.shadowBlur = 6;
+  ctx.fill();
+
+  ctx.restore();
+}
+
+export const Minimap: React.FC = () => {
+  const { terrain } = useAppState();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const heatmapRef = useRef<ImageData | null>(null);
+  const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
+
+  // Draw heatmap when terrain changes
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !terrain) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    drawHeatmap(
+      ctx,
+      terrain.depths,
+      terrain.width,
+      terrain.height,
+      terrain.minDepth,
+      terrain.maxDepth,
+    );
+    heatmapRef.current = ctx.getImageData(0, 0, W, H);
+  }, [terrain]);
+
+  // Subscribe to cameraStore and update arrow overlay imperatively
+  useEffect(() => {
+    const unsub = useCameraStore.subscribe((state) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      // Restore heatmap
+      if (heatmapRef.current) {
+        ctx.putImageData(heatmapRef.current, 0, 0);
+      }
+
+      // Draw camera arrow if position is known
+      if (state.cameraLon !== null && state.cameraLat !== null && terrain) {
+        const px = ((state.cameraLon - terrain.minLon) / (terrain.maxLon - terrain.minLon)) * W;
+        const py = ((state.cameraLat - terrain.minLat) / (terrain.maxLat - terrain.minLat)) * H;
+        if (px >= 0 && px <= W && py >= 0 && py <= H) {
+          drawArrow(ctx, px, py, state.heading);
+        }
+      }
+    });
+
+    return () => { unsub(); };
+  }, [terrain]);
+
+  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const worldX = (px / W) * WORLD_SIZE - WORLD_SIZE / 2;
+    const worldZ = (py / H) * WORLD_SIZE - WORLD_SIZE / 2;
+    useUiStore.getState().setPendingDropIn({ worldX, worldZ });
+  };
+
+  if (!terrain) return null;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        gap: 4,
+        pointerEvents: "auto",
+      }}
+    >
+      <button
+        onClick={() => setOverviewOpen(true)}
+        style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 9,
+          letterSpacing: "0.15em",
+          color: "#475569",
+          background: "rgba(0,10,20,0.75)",
+          border: "1px solid rgba(0,229,255,0.15)",
+          borderRadius: 3,
+          padding: "3px 8px",
+          cursor: "pointer",
+        }}
+        className="hover:text-cyan-400 transition-colors"
+      >
+        ▲ OVERVIEW
+      </button>
+
+      <div
+        style={{
+          position: "relative",
+          border: "1px solid rgba(0,229,255,0.25)",
+          borderRadius: 4,
+          overflow: "hidden",
+          boxShadow: "0 0 12px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,229,255,0.1)",
+        }}
+      >
+        <canvas
+          ref={canvasRef}
+          width={W}
+          height={H}
+          onClick={handleClick}
+          style={{ display: "block", cursor: "crosshair" }}
+          title="Click to teleport here"
+        />
+        {/* Corner label */}
+        <div
+          style={{
+            position: "absolute",
+            top: 3,
+            left: 5,
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 8,
+            color: "rgba(0,229,255,0.4)",
+            letterSpacing: "0.1em",
+            pointerEvents: "none",
+          }}
+        >
+          MINIMAP
+        </div>
+      </div>
+    </div>
+  );
+};

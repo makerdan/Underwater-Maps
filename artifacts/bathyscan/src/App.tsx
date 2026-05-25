@@ -8,11 +8,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useGetDatasets } from "@workspace/api-client-react";
 import { AppProvider, useAppState } from "@/lib/context";
+import { useTerrainStore } from "@/lib/terrainStore";
 import { TourScene } from "@/pages/TourScene";
 import { HUD } from "@/components/HUD";
-import { DatasetPicker } from "@/components/DatasetPicker";
-import { FileUpload } from "@/components/FileUpload";
-import { DepthLegend } from "@/components/DepthLegend";
+import { DepthScaleBar } from "@/components/DepthScaleBar";
+import { DatasetPanel } from "@/components/DatasetPanel";
+import { Minimap } from "@/components/Minimap";
+import { ControlsLegend } from "@/components/ControlsLegend";
 import { AppHeader } from "@/components/AppHeader";
 
 const queryClient = new QueryClient();
@@ -132,29 +134,49 @@ function ClerkQueryClientCacheInvalidator() {
 }
 
 function Main() {
-  const { data: datasets, isLoading: datasetsLoading } = useGetDatasets();
+  const { data: datasets } = useGetDatasets();
   const { datasetId, setDatasetId, terrain } = useAppState();
 
+  // Auto-select first dataset on load
   useEffect(() => {
     if (datasets?.length && !datasetId) {
       setDatasetId(datasets[0]?.id ?? null);
     }
   }, [datasets, datasetId, setDatasetId]);
 
+  // Sync active terrain to terrainStore so Minimap/DepthScaleBar can read it
+  useEffect(() => {
+    if (terrain) {
+      useTerrainStore.getState().setGrids({ activeGrid: terrain });
+    }
+  }, [terrain]);
+
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#040810] flex flex-col">
       <AppHeader />
-      <div className="relative flex-1 overflow-hidden" style={{ marginTop: 0 }}>
+
+      <div className="relative flex-1 overflow-hidden">
+        {/* 3D Scene — fills everything */}
         <TourScene />
 
+        {/* HUD + depth scale — pointer-events:none overlay */}
         <div className="absolute inset-0 pointer-events-none z-10">
           <HUD />
-          {terrain && <DepthLegend />}
+          <DepthScaleBar />
         </div>
 
-        <div className="absolute top-4 right-4 z-20 w-80 space-y-4">
-          <DatasetPicker datasets={datasets ?? []} isLoading={datasetsLoading} />
-          <FileUpload />
+        {/* Dataset panel — top-left */}
+        <div className="absolute top-12 left-4 z-20">
+          <DatasetPanel />
+        </div>
+
+        {/* Minimap + controls legend — bottom-right and bottom-left */}
+        <div className="absolute bottom-4 right-4 z-20">
+          <Minimap />
+        </div>
+
+        <div className="absolute bottom-4 left-4 z-20">
+          <ControlsLegend />
         </div>
       </div>
     </div>
