@@ -56,19 +56,28 @@ export interface DepthProfileResult {
 interface DepthProfileStore {
   anchor: { lon: number; lat: number; depth: number } | null;
   profile: DepthProfileResult | null;
+  /**
+   * Index of the sample currently being hovered (by chart or 3D scene).
+   * null when nothing is hovered. Shared between DepthProfilePanel and
+   * DepthProfileLine to keep their highlights in sync.
+   */
+  hoverIndex: number | null;
   setAnchor: (p: { lon: number; lat: number; depth: number }) => void;
   clearAnchor: () => void;
   setProfile: (r: DepthProfileResult) => void;
   clearProfile: () => void;
+  setHoverIndex: (i: number | null) => void;
 }
 
 export const useDepthProfileStore = create<DepthProfileStore>((set) => ({
   anchor: null,
   profile: null,
-  setAnchor: (p) => set({ anchor: p, profile: null }),
+  hoverIndex: null,
+  setAnchor: (p) => set({ anchor: p, profile: null, hoverIndex: null }),
   clearAnchor: () => set({ anchor: null }),
-  setProfile: (r) => set({ profile: r, anchor: null }),
-  clearProfile: () => set({ profile: null }),
+  setProfile: (r) => set({ profile: r, anchor: null, hoverIndex: null }),
+  clearProfile: () => set({ profile: null, hoverIndex: null }),
+  setHoverIndex: (i) => set({ hoverIndex: i }),
 }));
 
 /** Number of samples taken along the transect. */

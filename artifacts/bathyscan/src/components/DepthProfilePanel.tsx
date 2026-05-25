@@ -13,6 +13,9 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { formatDistance, formatDepth } from "@/lib/units";
 import { HelpIcon } from "@/components/help/HelpButton";
 
+// Friendly zone labels for the hover tooltip — matches SLOT_NAMES.
+const ZONE_LABEL = ["Sand", "Sediment", "Silt", "Basalt"] as const;
+
 // Representative colours for the four terrain texture slots. Mirrors the
 // dominant RGB used by lib/textures.ts so users can tie the strip back to
 // what they see on the seafloor.
@@ -44,6 +47,8 @@ const PLOT_H = HEIGHT - PAD_TOP - PAD_BOTTOM - STRIP_HEIGHT;
 export const DepthProfilePanel: React.FC = () => {
   const profile = useDepthProfileStore((s) => s.profile);
   const clearProfile = useDepthProfileStore((s) => s.clearProfile);
+  const hoverIndex = useDepthProfileStore((s) => s.hoverIndex);
+  const setHoverIndex = useDepthProfileStore((s) => s.setHoverIndex);
   const units = useSettingsStore((s) => s.units);
 
   if (!profile) return null;
@@ -162,7 +167,25 @@ export const DepthProfilePanel: React.FC = () => {
       </div>
 
       {/* Chart */}
-      <svg width={WIDTH} height={HEIGHT} role="img" aria-label="Depth cross-section">
+      <svg
+        width={WIDTH}
+        height={HEIGHT}
+        role="img"
+        aria-label="Depth cross-section"
+        style={{ display: "block" }}
+        onMouseMove={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const localX = ((e.clientX - rect.left) * WIDTH) / rect.width;
+          // Map cursor X to fractional distance, then to nearest sample idx.
+          const t = Math.max(0, Math.min(1, (localX - PAD_LEFT) / PLOT_W));
+          const idx = Math.max(
+            0,
+            Math.min(points.length - 1, Math.round(t * (points.length - 1))),
+          );
+          if (idx !== hoverIndex) setHoverIndex(idx);
+        }}
+        onMouseLeave={() => setHoverIndex(null)}
+      >
         {/* Plot background */}
         <rect
           x={PAD_LEFT}
@@ -214,6 +237,59 @@ export const DepthProfilePanel: React.FC = () => {
 
         {/* Zone strip beneath the chart */}
         {stripRects}
+
+        {/* Hover indicator — vertical guide + dot + tooltip */}
+        {hoverIndex !== null && points[hoverIndex] ? (() => {
+          const hp = points[hoverIndex]!;
+          const hx = xOf(hp.distanceM);
+          const hy = yOf(hp.depthM);
+          const zoneName = hp.slot !== null ? (ZONE_LABEL[hp.slot] ?? "Zone") : "—";
+          // Keep the tooltip inside the plot horizontally.
+          const tipW = 132;
+          const tipH = 46;
+          let tipX = hx + 8;
+          if (tipX + tipW > PAD_LEFT + PLOT_W) tipX = hx - tipW - 8;
+          const tipY = Math.max(PAD_TOP + 2, hy - tipH - 6);
+          return (
+            <g pointerEvents="none" data-testid="depth-profile-hover">
+              <line
+                x1={hx}
+                x2={hx}
+                y1={PAD_TOP}
+                y2={PAD_TOP + PLOT_H}
+                stroke="rgba(0,229,255,0.6)"
+                strokeDasharray="3 3"
+                strokeWidth={1}
+              />
+              <circle
+                cx={hx}
+                cy={hy}
+                r={4}
+                fill="#00e5ff"
+                stroke="#001018"
+                strokeWidth={1}
+              />
+              <g transform={`translate(${tipX.toFixed(1)},${tipY.toFixed(1)})`}>
+                <rect
+                  width={tipW}
+                  height={tipH}
+                  rx={3}
+                  fill="rgba(0,15,25,0.96)"
+                  stroke="rgba(0,229,255,0.45)"
+                />
+                <text x={6} y={13} fontSize={9} fill="#94a3b8" fontFamily="'JetBrains Mono', monospace">
+                  D <tspan fill="#e2e8f0">{formatDistance(hp.distanceM, { units })}</tspan>
+                </text>
+                <text x={6} y={25} fontSize={9} fill="#94a3b8" fontFamily="'JetBrains Mono', monospace">
+                  Z <tspan fill="#e2e8f0">{formatDepth(hp.depthM, { units, decimals: 1 })}</tspan>
+                </text>
+                <text x={6} y={37} fontSize={9} fill="#94a3b8" fontFamily="'JetBrains Mono', monospace">
+                  ZN <tspan fill="#e2e8f0">{zoneName}</tspan>
+                </text>
+              </g>
+            </g>
+          );
+        })() : null}
 
         {/* X-axis labels: 0 and total distance */}
         <text
