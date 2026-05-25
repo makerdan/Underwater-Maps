@@ -946,12 +946,18 @@ export const GetPoeModelsResponse = zod.object({
 
 /**
  * Returns a GeoJSON FeatureCollection of substrate polygons sourced from the
-ShoreZone Coastal Habitat Mapping Program (NOAA AKR / ADF&G — public domain,
-https://alaskafisheries.noaa.gov/shorezone/). Each polygon is a ShoreZone
-inter-tidal zone (ITZ) unit with its `Mat_Desc` and `Form_Desc` attributes
-classified into a CMECS broad substrate class (bedrock / gravel / sand / mud).
-The bundled dataset is refreshed offline via the
-`pnpm --filter @workspace/scripts run build-shorezone` script.
+Alaska ShoreZone Coastal Habitat Mapping Program (NOAA AKR / ADF&G — public
+domain, https://alaskafisheries.noaa.gov/shorezone/). Each polygon is a
+ShoreZone intertidal-zone (ITZ) unit from the `AK_SZ_ITZ_Polygons` layer
+whose `Mat_Desc` and `Form_Desc` attributes have been classified into a
+CMECS broad substrate class (bedrock / gravel / sand / mud).
+
+The server bundles a regional Alaska ShoreZone collection (refreshed
+offline via `pnpm --filter @workspace/scripts run build-shorezone`) and
+filters it to the dataset's AOI bbox at request time. Datasets whose AOI
+does not overlap published ShoreZone polygon coverage receive an empty
+FeatureCollection together with a `nearestCoverage` block in `metadata`
+describing where real ShoreZone coverage actually exists.
 
  * @summary Real Alaska ShoreZone substrate polygons
  */
