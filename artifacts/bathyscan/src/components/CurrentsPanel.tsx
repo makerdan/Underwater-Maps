@@ -156,8 +156,10 @@ export const CurrentsPanel: React.FC = () => {
           onClick={() => s.setCurrentsSource("noaa")}
           title={
             noaaAmbient
-              ? `NOAA tidal currents${noaaAmbient.stationName ? ` — ${noaaAmbient.stationName}` : ""}`
-              : "No NOAA currents station in range — enable Tidal overlay to retry"
+              ? noaaAmbient.source === "noaa"
+                ? `NOAA tidal currents${noaaAmbient.stationName ? ` — ${noaaAmbient.stationName}` : ""}`
+                : "Tide-derived estimate (no NOAA station in range)"
+              : "Enable Tidal overlay to fetch NOAA data"
           }
         >
           NOAA
@@ -198,10 +200,12 @@ export const CurrentsPanel: React.FC = () => {
           {noaaAmbient ? (
             <>
               <div>
-                NOAA: {noaaAmbient.directionDeg.toFixed(0)}° @{" "}
+                {noaaAmbient.source === "noaa" ? "NOAA" : "Estimated"}:{" "}
+                {noaaAmbient.directionDeg.toFixed(0)}° @{" "}
                 {noaaAmbient.speedKt.toFixed(2)} kt
               </div>
-              {(noaaAmbient.stationName || noaaAmbient.stationId) && (
+              {noaaAmbient.source === "noaa" &&
+              (noaaAmbient.stationName || noaaAmbient.stationId) ? (
                 <div
                   style={{ fontSize: 9, color: "#64748b", marginTop: 2 }}
                   data-testid="currents-noaa-station"
@@ -210,11 +214,18 @@ export const CurrentsPanel: React.FC = () => {
                   {noaaAmbient.stationName ?? "—"}
                   {noaaAmbient.stationId ? ` (${noaaAmbient.stationId})` : ""}
                 </div>
-              )}
+              ) : noaaAmbient.source === "estimated" ? (
+                <div
+                  style={{ fontSize: 9, color: "#fbbf24", marginTop: 2 }}
+                  data-testid="currents-noaa-estimated"
+                >
+                  No NOAA station in range — using tide-derived estimate.
+                </div>
+              ) : null}
             </>
           ) : (
             <span style={{ color: "#fbbf24" }}>
-              No NOAA currents station in range — using tide-derived estimate.
+              NOAA unavailable — enable Tidal overlay.
             </span>
           )}
         </div>

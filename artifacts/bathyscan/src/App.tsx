@@ -187,6 +187,7 @@ function ClerkQueryClientCacheInvalidator() {
 function Main() {
   const [, setLocation] = useLocation();
   const waterTypeForDatasets = useSettingsStore((s) => s.waterType);
+  void waterTypeForDatasets;
   const { data: datasets } = useGetDatasets(
     { waterType: waterTypeForDatasets },
     { query: { queryKey: getGetDatasetsQueryKey({ waterType: waterTypeForDatasets }) } },
@@ -247,30 +248,25 @@ function Main() {
   // ambient vector when the user picks `source: "noaa"`.
   const setNoaaAmbient = useCurrentsStore((s) => s.setNoaaAmbient);
   useEffect(() => {
-    // Only treat the ambient as "NOAA" when the server actually got real
-    // currents predictions from a nearby CO-OPS station. The /api/tidal
-    // response always carries `currentDirection`/`currentSpeed` (estimated
-    // when no station is in range), but the CurrentsPanel NOAA pill and
-    // the source="noaa" branch in CurrentsLayer should only kick in for
-    // truly station-backed data, so users aren't misled.
-    if (
-      tidalData &&
-      "available" in tidalData &&
-      tidalData.available &&
-      tidalData.currentsSource === "noaa"
-    ) {
+    // Always publish the ambient when /api/tidal returns a usable current,
+    // so the CurrentsLayer NOAA simulation mode keeps a real flow field
+    // even when no CO-OPS station was in range. The `source` flag carries
+    // through whether the value came from a real station or the
+    // tide-derived sinusoidal estimate so the panel can label it honestly
+    // and only surface the station id/name when it's actually NOAA-backed.
+    if (tidalData && "available" in tidalData && tidalData.available) {
+      const isStation = tidalData.currentsSource === "noaa";
       setNoaaAmbient({
         directionDeg: tidalData.currentDirection,
         speedKt: tidalData.currentSpeed,
-        stationId: tidalData.currentsStation?.id,
-        stationName: tidalData.currentsStation?.name,
+        source: isStation ? "noaa" : "estimated",
+        stationId: isStation ? tidalData.currentsStation?.id : undefined,
+        stationName: isStation ? tidalData.currentsStation?.name : undefined,
       });
     } else {
       setNoaaAmbient(null);
     }
   }, [tidalData, setNoaaAmbient]);
-
-  const waterType = waterTypeForDatasets;
 
   const hasAutoSelectedRef = useRef(false);
   useEffect(() => {

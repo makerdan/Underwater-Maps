@@ -1,17 +1,20 @@
 /**
  * Verifies the NOAA-currents-station wiring added for Task #167:
- *   - useCurrentsStore.noaaAmbient is only set when the /api/tidal response
- *     carries currentsSource === "noaa" (real CO-OPS station predictions).
- *   - When it is set, it includes the station id + name so the CurrentsPanel
- *     can surface them.
- *   - The CurrentsPanel renders the station id and name to the user when
- *     source = NOAA and an ambient is available, and shows a fallback hint
- *     when no station is in range.
+ *   - useCurrentsStore.noaaAmbient stays populated whenever /api/tidal has a
+ *     usable current (so the NOAA simulation mode keeps flowing), but
+ *     carries a `source` flag distinguishing real station data from the
+ *     tide-derived estimate.
+ *   - CurrentsPanel labels the readout honestly ("NOAA" vs "Estimated") and
+ *     surfaces station id + name only when source === "noaa".
+ *   - The CurrentsLayer ambient-selection memo prefers the noaaAmbient
+ *     vector over manual settings whenever it's present, regardless of
+ *     source — so we don't silently switch to the manual slider when no
+ *     station is in range.
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { act } from "react";
-import { useCurrentsStore } from "@/lib/currentsStore";
+import { useCurrentsStore, type NoaaAmbient } from "@/lib/currentsStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { CurrentsPanel } from "@/components/CurrentsPanel";
 
@@ -37,46 +40,100 @@ describe("CurrentsPanel — NOAA station readout (Task #167)", () => {
     resetStores();
   });
 
-  it("shows station name + id when an in-range NOAA station is available", () => {
+  it("shows station name + id when source is NOAA", () => {
     act(() => {
       useCurrentsStore.getState().setNoaaAmbient({
         directionDeg: 132,
         speedKt: 0.74,
+        source: "noaa",
         stationId: "PCT3026",
         stationName: "Snow Passage",
       });
     });
     render(<CurrentsPanel />);
+    const readout = screen.getByTestId("currents-noaa-readout");
+    expect(readout.textContent).toContain("NOAA:");
+    expect(readout.textContent).toContain("132° @ 0.74 kt");
     const station = screen.getByTestId("currents-noaa-station");
     expect(station.textContent).toContain("Snow Passage");
     expect(station.textContent).toContain("PCT3026");
-    expect(
-      screen.getByTestId("currents-noaa-readout").textContent,
-    ).toContain("132° @ 0.74 kt");
+    expect(screen.queryByTestId("currents-noaa-estimated")).toBeNull();
   });
 
-  it("falls back to a tide-derived-estimate hint when no station is in range", () => {
-    // noaaAmbient stays null — simulates the App.tsx effect refusing to set
-    // it when the server responded with currentsSource === "estimated".
-    render(<CurrentsPanel />);
-    expect(
-      screen.getByTestId("currents-noaa-readout").textContent,
-    ).toContain("No NOAA currents station in range");
-    expect(screen.queryByTestId("currents-noaa-station")).toBeNull();
-  });
-
-  it("renders without a station block when the ambient lacks station info", () => {
-    // Older callers (or a server response that omits currentsStation) should
-    // still render the speed/direction line but skip the station row.
+  it("labels the readout 'Estimated' and shows the fallback hint when no station is in range", () => {
     act(() => {
-      useCurrentsStore
-        .getState()
-        .setNoaaAmbient({ directionDeg: 90, speedKt: 0.3 });
+      useCurrentsStore.getState().setNoaaAmbient({
+        directionDeg: 90,
+        speedKt: 0.3,
+        source: "estimated",
+      });
     });
     render(<CurrentsPanel />);
+    const readout = screen.getByTestId("currents-noaa-readout");
+    expect(readout.textContent).toContain("Estimated:");
+    expect(readout.textContent).toContain("90° @ 0.30 kt");
+    expect(
+      screen.getByTestId("currents-noaa-estimated").textContent,
+    ).toContain("No NOAA station in range");
+    expect(screen.queryByTestId("currents-noaa-station")).toBeNull();
+  });
+
+  it("shows the 'NOAA unavailable' hint when no ambient has been published at all", () => {
+    render(<CurrentsPanel />);
     expect(
       screen.getByTestId("currents-noaa-readout").textContent,
-    ).toContain("90° @ 0.30 kt");
-    expect(screen.queryByTestId("currents-noaa-station")).toBeNull();
+    ).toContain("NOAA unavailable");
+  });
+});
+
+describe("CurrentsLayer ambient selection (Task #167 fallback)", () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  // Mirrors the memo in CurrentsLayer.tsx lines 343-346. Kept here as a
+  // pure unit so we don't have to render an R3F canvas just to assert the
+  // selection rule — the rule is what matters for the regression code
+  // review flagged.
+  function selectBaseAmbient(
+    source: "noaa" | "manual",
+    noaaAmbient: NoaaAmbient | null,
+    manual: { speedKt: number; directionDeg: number },
+  ) {
+    if (source === "noaa" && noaaAmbient) {
+      return { speedKt: noaaAmbient.speedKt, directionDeg: noaaAmbient.directionDeg };
+    }
+    return manual;
+  }
+
+  it("uses the NOAA-station ambient when source=noaa and a station was in range", () => {
+    const picked = selectBaseAmbient(
+      "noaa",
+      { directionDeg: 200, speedKt: 1.1, source: "noaa", stationId: "x" },
+      { speedKt: 0.5, directionDeg: 0 },
+    );
+    expect(picked).toEqual({ speedKt: 1.1, directionDeg: 200 });
+  });
+
+  it("still uses the tide-derived ambient (not manual) when source=noaa but no station is in range", () => {
+    // The bug we are guarding against: previously nulling noaaAmbient made
+    // CurrentsLayer fall back to manual settings while the panel claimed
+    // "tide-derived estimate". The fix is to keep publishing the ambient
+    // with source: "estimated".
+    const picked = selectBaseAmbient(
+      "noaa",
+      { directionDeg: 90, speedKt: 0.3, source: "estimated" },
+      { speedKt: 0.5, directionDeg: 0 },
+    );
+    expect(picked).toEqual({ speedKt: 0.3, directionDeg: 90 });
+  });
+
+  it("uses the manual ambient when source=manual, regardless of NOAA availability", () => {
+    const picked = selectBaseAmbient(
+      "manual",
+      { directionDeg: 90, speedKt: 0.3, source: "noaa", stationId: "x" },
+      { speedKt: 0.5, directionDeg: 45 },
+    );
+    expect(picked).toEqual({ speedKt: 0.5, directionDeg: 45 });
   });
 });

@@ -15,7 +15,18 @@ export interface NoaaAmbient {
   directionDeg: number;
   /** Speed in knots. */
   speedKt: number;
-  /** NOAA CO-OPS currents-predictions station id, when one was found in range. */
+  /**
+   * Provenance of this ambient vector:
+   * - "noaa": real NOAA CO-OPS currents-predictions station data
+   * - "estimated": tide-derived sinusoidal estimate (no station in range)
+   *
+   * The CurrentsLayer simulation uses this ambient regardless of source so
+   * the NOAA mode keeps producing a flow field even when no station is
+   * nearby; the panel uses this flag to label what the user is actually
+   * seeing.
+   */
+  source?: "noaa" | "estimated";
+  /** NOAA CO-OPS currents-predictions station id, when source === "noaa". */
   stationId?: string;
   /** Human-readable station name (e.g. "Snow Passage, Alaska Current"). */
   stationName?: string;
