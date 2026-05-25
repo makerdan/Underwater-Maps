@@ -10,6 +10,7 @@
 import React from "react";
 import { useDepthProfileStore } from "@/lib/depthProfileStore";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { useAppState } from "@/lib/context";
 import { formatDistance, formatDepth } from "@/lib/units";
 import { HelpIcon } from "@/components/help/HelpButton";
 
@@ -44,12 +45,39 @@ const PLOT_W = WIDTH - PAD_LEFT - PAD_RIGHT;
 const PLOT_H = HEIGHT - PAD_TOP - PAD_BOTTOM - STRIP_HEIGHT;
 
 
+function timestampForFilename(at: number): string {
+  const d = new Date(at);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}` +
+    `-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
+  );
+}
+
+function sanitizeForFilename(s: string): string {
+  return s.replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 64) || "dataset";
+}
+
+function triggerDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Revoke on next tick to give the browser time to start the download.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export const DepthProfilePanel: React.FC = () => {
   const profile = useDepthProfileStore((s) => s.profile);
   const clearProfile = useDepthProfileStore((s) => s.clearProfile);
   const hoverIndex = useDepthProfileStore((s) => s.hoverIndex);
   const setHoverIndex = useDepthProfileStore((s) => s.setHoverIndex);
   const units = useSettingsStore((s) => s.units);
+  const { datasetId } = useAppState();
+  const svgRef = React.useRef<SVGSVGElement | null>(null);
 
   if (!profile) return null;
 
@@ -114,6 +142,76 @@ export const DepthProfilePanel: React.FC = () => {
     new Set(points.map((p) => p.slot).filter((s): s is number => s !== null)),
   ).sort();
 
+  const filenameBase = `bathyscan-profile_${sanitizeForFilename(
+    datasetId ?? "dataset",
+  )}_${timestampForFilename(profile.at)}`;
+
+  const exportCsv = () => {
+    const header = "distance_m,depth_m,slot,lon,lat";
+    const dx = end.lon - start.lon;
+    const dy = end.lat - start.lat;
+    const lines = points.map((p) => {
+      const t = totalDistanceM > 0 ? p.distanceM / totalDistanceM : 0;
+      const lon = start.lon + dx * t;
+      const lat = start.lat + dy * t;
+      const slot = p.slot === null ? "" : String(p.slot);
+      return `${p.distanceM.toFixed(3)},${p.depthM.toFixed(4)},${slot},${lon.toFixed(7)},${lat.toFixed(7)}`;
+    });
+    const csv = [header, ...lines].join("\n") + "\n";
+    triggerDownload(
+      new Blob([csv], { type: "text/csv;charset=utf-8" }),
+      `${filenameBase}.csv`,
+    );
+  };
+
+  const exportPng = () => {
+    const svgEl = svgRef.current;
+    if (!svgEl) return;
+    const clone = svgEl.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.setAttribute("width", String(WIDTH));
+    clone.setAttribute("height", String(HEIGHT));
+    const xml = new XMLSerializer().serializeToString(clone);
+    const svgBlob = new Blob(
+      ['<?xml version="1.0" standalone="no"?>\n', xml],
+      { type: "image/svg+xml;charset=utf-8" },
+    );
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = () => {
+      const scale = 2;
+      const canvas = document.createElement("canvas");
+      canvas.width = WIDTH * scale;
+      canvas.height = HEIGHT * scale;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        URL.revokeObjectURL(url);
+        return;
+      }
+      ctx.fillStyle = "#000a14";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((blob) => {
+        if (blob) triggerDownload(blob, `${filenameBase}.png`);
+      }, "image/png");
+    };
+    img.onerror = () => URL.revokeObjectURL(url);
+    img.src = url;
+  };
+
+  const exportBtnStyle: React.CSSProperties = {
+    background: "rgba(0,229,255,0.08)",
+    border: "1px solid rgba(0,229,255,0.35)",
+    color: "#cbd5e1",
+    cursor: "pointer",
+    fontSize: 9,
+    letterSpacing: "0.12em",
+    padding: "3px 8px",
+    borderRadius: 3,
+    fontFamily: "inherit",
+  };
+
   return (
     <div
       data-testid="depth-profile-panel"
@@ -141,21 +239,39 @@ export const DepthProfilePanel: React.FC = () => {
           ▼ DEPTH PROFILE
           <HelpIcon articleId="depth-profile" label="Depth profile" />
         </div>
-        <button
-          aria-label="Close depth profile"
-          onClick={clearProfile}
-          style={{
-            background: "transparent",
-            border: "none",
-            color: "#94a3b8",
-            cursor: "pointer",
-            fontSize: 16,
-            lineHeight: 1,
-            padding: "0 4px",
-          }}
-        >
-          ×
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <button
+            data-testid="depth-profile-export-csv"
+            aria-label="Download depth profile as CSV"
+            onClick={exportCsv}
+            style={exportBtnStyle}
+          >
+            CSV
+          </button>
+          <button
+            data-testid="depth-profile-export-png"
+            aria-label="Download depth profile as PNG"
+            onClick={exportPng}
+            style={exportBtnStyle}
+          >
+            PNG
+          </button>
+          <button
+            aria-label="Close depth profile"
+            onClick={clearProfile}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "#94a3b8",
+              cursor: "pointer",
+              fontSize: 16,
+              lineHeight: 1,
+              padding: "0 4px",
+            }}
+          >
+            ×
+          </button>
+        </div>
       </div>
 
       {/* Stats row */}
@@ -168,6 +284,7 @@ export const DepthProfilePanel: React.FC = () => {
 
       {/* Chart */}
       <svg
+        ref={svgRef}
         width={WIDTH}
         height={HEIGHT}
         role="img"
