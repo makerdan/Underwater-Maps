@@ -94,6 +94,11 @@ export const DatasetPanel: React.FC = () => {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lastUploadedFile, setLastUploadedFile] = useState<File | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [savingToAccount, setSavingToAccount] = useState(false);
+  const autoRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (autoRetryTimer.current) clearTimeout(autoRetryTimer.current);
+  }, []);
 
   // ─── Preset dataset pending fetch ─────────────────────────────────────────
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -319,13 +324,19 @@ export const DatasetPanel: React.FC = () => {
     };
   }, [postDatasetsUpload.isPending, postDatasetsUpload.isSuccess]);
 
+  const AUTO_RETRY_DELAYS_MS = [500, 1500];
+
   const uploadFile = useCallback(
-    (file: File, { isRetry }: { isRetry?: boolean } = {}) => {
+    (
+      file: File,
+      { isRetry, autoAttempt = 0 }: { isRetry?: boolean; autoAttempt?: number } = {},
+    ) => {
       postDatasetsUpload.mutate(
         { data: { file, resolution: 256 } },
         {
           onSuccess: (data) => {
-            if (!isRetry) {
+            const isFirstTry = !isRetry && autoAttempt === 0;
+            if (isFirstTry) {
               setDatasetId(null);
               setTerrain(data.terrain);
               useTerrainStore.getState().setGrids({
@@ -354,19 +365,37 @@ export const DatasetPanel: React.FC = () => {
               void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
               setSaveError(null);
               setLastUploadedFile(null);
-              if (!isRetry) setUploadOpen(false);
+              setSavingToAccount(false);
+              if (isFirstTry) setUploadOpen(false);
             } else if (data.saveError) {
-              setSaveError(data.saveError);
-              setLastUploadedFile(file);
-              if (!isRetry) setActiveUserDatasetId(null);
+              // Transparent retry-with-backoff before showing the warning.
+              if (autoAttempt < AUTO_RETRY_DELAYS_MS.length) {
+                if (isFirstTry) setActiveUserDatasetId(null);
+                setSavingToAccount(true);
+                setSaveError(null);
+                setLastUploadedFile(file);
+                const delay = AUTO_RETRY_DELAYS_MS[autoAttempt]!;
+                if (autoRetryTimer.current) clearTimeout(autoRetryTimer.current);
+                autoRetryTimer.current = setTimeout(() => {
+                  autoRetryTimer.current = null;
+                  uploadFile(file, { isRetry: true, autoAttempt: autoAttempt + 1 });
+                }, delay);
+              } else {
+                setSavingToAccount(false);
+                setSaveError(data.saveError);
+                setLastUploadedFile(file);
+                if (isFirstTry) setActiveUserDatasetId(null);
+              }
             } else {
-              if (!isRetry) setActiveUserDatasetId(null);
+              if (isFirstTry) setActiveUserDatasetId(null);
               setSaveError(null);
               setLastUploadedFile(null);
-              if (!isRetry) setUploadOpen(false);
+              setSavingToAccount(false);
+              if (isFirstTry) setUploadOpen(false);
             }
           },
           onError: (err) => {
+            setSavingToAccount(false);
             if (isRetry) {
               setSaveError(err instanceof Error ? err.message : "Retry failed");
             } else {
@@ -396,6 +425,11 @@ export const DatasetPanel: React.FC = () => {
       }
       const file = accepted[0];
       if (!file) return;
+      if (autoRetryTimer.current) {
+        clearTimeout(autoRetryTimer.current);
+        autoRetryTimer.current = null;
+      }
+      setSavingToAccount(false);
       uploadFile(file);
     },
     [uploadFile],
@@ -872,6 +906,26 @@ export const DatasetPanel: React.FC = () => {
                         </>
                       )}
                     </div>
+                    {savingToAccount && !saveError && (
+                      <div
+                        data-testid="upload-saving-to-account"
+                        style={{
+                          marginTop: 6,
+                          padding: "6px 8px",
+                          border: "1px solid rgba(0,229,255,0.25)",
+                          background: "rgba(0,229,255,0.05)",
+                          borderRadius: 4,
+                          fontSize: 10,
+                          color: "#7dd3fc",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        <span className="animate-pulse">◌</span>
+                        <span>Saving to account…</span>
+                      </div>
+                    )}
                     {saveError && lastUploadedFile && (
                       <div
                         data-testid="upload-save-error"
