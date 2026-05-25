@@ -18,6 +18,7 @@ import { ControlsLegend } from "@/components/ControlsLegend";
 import { AppHeader } from "@/components/AppHeader";
 import { TidePanel } from "@/components/TidePanel";
 import { MarkerForm } from "@/components/MarkerForm";
+import { OverviewMap } from "@/components/OverviewMap";
 import { useTidalData } from "@/hooks/useTidalData";
 import { useUiStore } from "@/lib/uiStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
@@ -142,8 +143,11 @@ function Main() {
   const { data: datasets } = useGetDatasets();
   const { datasetId, setDatasetId, terrain, tidalOverlay, setTidalOverlay } = useAppState();
   const markerFormOpen = useUiStore((s) => s.markerFormOpen);
+  const overviewOpen = useUiStore((s) => s.overviewOpen);
   const [depthLayer, setDepthLayer] = useState<DepthLayer>("surface");
   const [scrubDatetime, setScrubDatetime] = useState<Date | null>(null);
+  const [showResumeHint, setShowResumeHint] = useState(false);
+  const prevOverviewOpenRef = useRef(false);
 
   const centerLat = terrain
     ? (terrain.minLat + terrain.maxLat) / 2
@@ -172,6 +176,28 @@ function Main() {
       useTerrainStore.getState().setGrids({ activeGrid: terrain });
     }
   }, [terrain]);
+
+  // O key — toggle overview map
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.code === "KeyO" && !e.repeat) {
+        const store = useUiStore.getState();
+        store.setOverviewOpen(!store.overviewOpen);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // Show "click to resume" hint when overview closes
+  useEffect(() => {
+    const wasOpen = prevOverviewOpenRef.current;
+    prevOverviewOpenRef.current = overviewOpen;
+    if (!wasOpen || overviewOpen) return;
+    setShowResumeHint(true);
+    const t = setTimeout(() => setShowResumeHint(false), 3000);
+    return () => clearTimeout(t);
+  }, [overviewOpen]);
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#040810] flex flex-col">
@@ -240,6 +266,41 @@ function Main() {
           <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
             <div style={{ pointerEvents: "auto" }}>
               <MarkerForm />
+            </div>
+          </div>
+        )}
+
+        {/* Full-screen overview map — z-40, rendered above all HUD elements */}
+        {overviewOpen && <OverviewMap />}
+
+        {/* "Click to resume" hint — appears briefly after closing overview */}
+        {showResumeHint && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 35,
+              pointerEvents: "none",
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 11,
+                letterSpacing: "0.25em",
+                color: "#00e5ff",
+                textShadow: "0 0 12px rgba(0,229,255,0.6)",
+                background: "rgba(2,8,24,0.75)",
+                border: "1px solid rgba(0,229,255,0.2)",
+                borderRadius: 4,
+                padding: "8px 20px",
+                backdropFilter: "blur(6px)",
+              }}
+            >
+              CLICK TO RESUME FLY MODE
             </div>
           </div>
         )}
