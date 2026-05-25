@@ -12,6 +12,7 @@
     "lint": "eslint artifacts/bathyscan/src artifacts/api-server/src",
     "test:unit": "pnpm -r --if-present run test:unit",
     "test:e2e": "playwright test",
+    "capture:help-screenshots": "node scripts/capture-help-screenshots.mjs",
     "test-all": "pnpm run typecheck && pnpm run lint && pnpm run test:unit"
   },
   "private": true,
