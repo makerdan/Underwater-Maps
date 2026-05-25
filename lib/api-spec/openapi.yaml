@@ -22,6 +22,8 @@ tags:
     description: Authenticated user's saved custom terrain datasets
   - name: trails
     description: GPS trail recording operations
+  - name: drift-planner
+    description: Surface conditions for drift planning
 paths:
   /datasets:
     get:
@@ -876,6 +878,43 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "404":
           description: Save record not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /surface-conditions:
+    get:
+      operationId: getSurfaceConditions
+      tags: [drift-planner]
+      summary: Fetch hourly surface weather and tidal conditions for drift planning
+      description: |
+        Returns 24 hours of hourly wind, tidal current, and wave data for a given
+        lat/lon from Open-Meteo. Tidal current is approximated via a sinusoidal
+        model when live data is unavailable. Returns estimatedConditions=true when
+        Open-Meteo is unreachable and default values are substituted.
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+          description: Latitude of query point
+        - name: lon
+          in: query
+          required: true
+          schema:
+            type: number
+          description: Longitude of query point
+      responses:
+        "200":
+          description: 24-hour surface conditions array
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SurfaceConditions"
+        "400":
+          description: Missing or invalid lat/lon
           content:
             application/json:
               schema:
@@ -1746,6 +1785,55 @@ components:
         - total
         - page
         - pageSize
+
+    SurfaceConditions:
+      type: object
+      properties:
+        available:
+          type: boolean
+        lat:
+          type: number
+        lon:
+          type: number
+        dataSource:
+          type: string
+        estimatedConditions:
+          type: boolean
+          description: True when actual data was unavailable and defaults were substituted
+        hours:
+          type: array
+          items:
+            $ref: "#/components/schemas/HourlySurfaceCondition"
+      required:
+        - available
+        - lat
+        - lon
+        - hours
+
+    HourlySurfaceCondition:
+      type: object
+      properties:
+        hour:
+          type: integer
+          minimum: 0
+          maximum: 23
+        windSpeedKnots:
+          type: number
+        windDegrees:
+          type: number
+        tidalSpeedKnots:
+          type: number
+        tidalDegrees:
+          type: number
+        waveHeightM:
+          type: number
+      required:
+        - hour
+        - windSpeedKnots
+        - windDegrees
+        - tidalSpeedKnots
+        - tidalDegrees
+        - waveHeightM
 
     MarkerInput:
       type: object

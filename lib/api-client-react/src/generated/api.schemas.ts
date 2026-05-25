@@ -672,6 +672,29 @@ export interface TrailPointsPage {
   pageSize: number;
 }
 
+export interface HourlySurfaceCondition {
+  /**
+     * @minimum 0
+     * @maximum 23
+     */
+  hour: number;
+  windSpeedKnots: number;
+  windDegrees: number;
+  tidalSpeedKnots: number;
+  tidalDegrees: number;
+  waveHeightM: number;
+}
+
+export interface SurfaceConditions {
+  available: boolean;
+  lat: number;
+  lon: number;
+  dataSource?: string;
+  /** True when actual data was unavailable and defaults were substituted */
+  estimatedConditions?: boolean;
+  hours: HourlySurfaceCondition[];
+}
+
 export type MarkerInputType = typeof MarkerInputType[keyof typeof MarkerInputType];
 
 
@@ -818,6 +841,17 @@ export const GetDatasetsCatalogSearchWaterType = {
   saltwater: 'saltwater',
   freshwater: 'freshwater',
 } as const;
+
+export type GetSurfaceConditionsParams = {
+/**
+ * Latitude of query point
+ */
+lat: number;
+/**
+ * Longitude of query point
+ */
+lon: number;
+};
 
 export type GetEfhParams = {
 /**

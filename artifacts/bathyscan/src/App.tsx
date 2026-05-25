@@ -44,6 +44,9 @@ import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { waterLabels } from "@/lib/waterLabels";
 import { useGetSettings, getGetSettingsQueryKey } from "@workspace/api-client-react";
+import { useDriftStore } from "@/lib/driftStore";
+import { WeatherPanel } from "@/components/WeatherPanel";
+import { DriftTimeline } from "@/components/DriftTimeline";
 
 const queryClient = new QueryClient();
 
@@ -172,6 +175,7 @@ function Main() {
   const overviewOpen = useUiStore((s) => s.overviewOpen);
   const findDataPanelOpen = useUiStore((s) => s.findDataPanelOpen);
   const setFindDataPanelOpen = useUiStore((s) => s.setFindDataPanelOpen);
+  const { driftPlannerActive, setDriftPlannerActive } = useDriftStore();
   const gpsActive = useGpsStore((s) => s.active);
   // Settings-driven UI visibility + tidal defaults
   const autoLoadTidal = useSettingsStore((st) => st.autoLoadTidal);
@@ -554,6 +558,27 @@ function Main() {
           >
             {tidalOverlay ? "◉" : "○"} TIDAL
           </button>
+          <button
+            onClick={() => setDriftPlannerActive(!driftPlannerActive)}
+            title={driftPlannerActive ? "Disable Drift Planner" : "Enable Drift Planner — visualise boat drift, fishing line angle and tidal path"}
+            style={{
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              fontSize: 10,
+              letterSpacing: "0.18em",
+              padding: "4px 10px",
+              borderRadius: 3,
+              border: `1px solid ${driftPlannerActive ? "rgba(251,191,36,0.5)" : "rgba(0,229,255,0.15)"}`,
+              background: driftPlannerActive ? "rgba(251,191,36,0.1)" : "rgba(0,10,20,0.75)",
+              color: driftPlannerActive ? "#fbbf24" : "#475569",
+              textShadow: driftPlannerActive ? "0 0 8px rgba(251,191,36,0.5)" : "none",
+              cursor: "pointer",
+              userSelect: "none",
+              backdropFilter: "blur(4px)",
+              transition: "all 0.15s ease",
+            }}
+          >
+            {driftPlannerActive ? "◉" : "○"} DRIFT
+          </button>
         </div>
 
         {/* Throttle panel — bottom-right above minimap, visible when realistic mode is on */}
@@ -582,6 +607,12 @@ function Main() {
         {findDataPanelOpen && (
           <FindDataPanel onClose={() => setFindDataPanelOpen(false)} />
         )}
+
+        {/* Drift Planner overlays — weather panel (top-right) + timeline (bottom-centre) */}
+        {driftPlannerActive && (
+          <WeatherPanel onClose={() => setDriftPlannerActive(false)} />
+        )}
+        {driftPlannerActive && <DriftTimeline />}
 
         {/*
           NOTE: <ContextMenu />, <MeasurementBanner /> and <MarkerDetailCard />

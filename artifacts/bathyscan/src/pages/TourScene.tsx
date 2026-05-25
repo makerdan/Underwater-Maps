@@ -23,6 +23,10 @@ import type { TidalDataResult } from "@/hooks/useTidalData";
 import { MAX_DEPTH_WORLD, WORLD_SIZE } from "@/lib/terrain";
 import type { TerrainData } from "@workspace/api-client-react";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { useDriftStore } from "@/lib/driftStore";
+import { DriftWaterPlane } from "@/components/DriftWaterPlane";
+import { DriftBoat } from "@/components/DriftBoat";
+import { DriftPath } from "@/components/DriftPath";
 
 // ---------------------------------------------------------------------------
 // FlyControlsScene — lives inside <Canvas>, wires up controls + lamp
@@ -136,6 +140,29 @@ const TidalSceneContents: React.FC<TidalSceneContentsProps> = ({
 };
 
 // ---------------------------------------------------------------------------
+// Drift Planner 3D elements — lives inside <Canvas>
+// ---------------------------------------------------------------------------
+const DriftSceneContents: React.FC = () => {
+  const { terrain } = useAppState();
+  const { driftPlannerActive, driftPath } = useDriftStore();
+
+  if (!driftPlannerActive || !terrain) return null;
+
+  const surfaceY = seaSurfaceY(terrain);
+  return (
+    <>
+      <DriftWaterPlane surfaceY={surfaceY} terrain={terrain} />
+      {driftPath && driftPath.length > 0 && (
+        <>
+          <DriftBoat surfaceY={surfaceY} />
+          <DriftPath surfaceY={surfaceY} />
+        </>
+      )}
+    </>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Inner scene — lives inside <Canvas>
 // ---------------------------------------------------------------------------
 interface SceneContentsProps {
@@ -196,6 +223,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
       <GpsMarker />
       <DepthProfileLine />
       <FlyControlsScene terrainMeshRef={terrainMeshRef} />
+      <DriftSceneContents />
     </>
   );
 };

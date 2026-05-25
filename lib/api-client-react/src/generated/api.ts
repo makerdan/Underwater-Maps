@@ -33,6 +33,7 @@ import type {
   GetDatasetsParams,
   GetEfhParams,
   GetMarkersParams,
+  GetSurfaceConditionsParams,
   GetTrailsIdPointsParams,
   GetTrailsParams,
   GpsTrail,
@@ -48,6 +49,7 @@ import type {
   PostDatasetsUploadBody,
   QueryResult,
   SubstrateFeatureCollection,
+  SurfaceConditions,
   TerrainData,
   TrailPointsPage,
   UploadResult,
@@ -2299,6 +2301,95 @@ export function useGetDatasetsMySavesIdStatus<TData = Awaited<ReturnType<typeof 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDatasetsMySavesIdStatusQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetSurfaceConditionsUrl = (params: GetSurfaceConditionsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/surface-conditions?${stringifiedParams}` : `/api/surface-conditions`
+}
+
+/**
+ * Returns 24 hours of hourly wind, tidal current, and wave data for a given
+lat/lon from Open-Meteo. Tidal current is approximated via a sinusoidal
+model when live data is unavailable. Returns estimatedConditions=true when
+Open-Meteo is unreachable and default values are substituted.
+
+ * @summary Fetch hourly surface weather and tidal conditions for drift planning
+ */
+export const getSurfaceConditions = async (params: GetSurfaceConditionsParams, options?: RequestInit): Promise<SurfaceConditions> => {
+
+  return customFetch<SurfaceConditions>(getGetSurfaceConditionsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSurfaceConditionsQueryKey = (params?: GetSurfaceConditionsParams,) => {
+    return [
+    `/api/surface-conditions`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetSurfaceConditionsQueryOptions = <TData = Awaited<ReturnType<typeof getSurfaceConditions>>, TError = ErrorType<ApiError>>(params: GetSurfaceConditionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSurfaceConditions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSurfaceConditionsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSurfaceConditions>>> = ({ signal }) => getSurfaceConditions(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSurfaceConditions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSurfaceConditionsQueryResult = NonNullable<Awaited<ReturnType<typeof getSurfaceConditions>>>
+export type GetSurfaceConditionsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Fetch hourly surface weather and tidal conditions for drift planning
+ */
+
+export function useGetSurfaceConditions<TData = Awaited<ReturnType<typeof getSurfaceConditions>>, TError = ErrorType<ApiError>>(
+ params: GetSurfaceConditionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSurfaceConditions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSurfaceConditionsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

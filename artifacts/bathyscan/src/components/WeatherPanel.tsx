@@ -1,0 +1,278 @@
+/**
+ * WeatherPanel — HTML overlay for Drift Planner showing wind, tidal, and wave
+ * conditions. Fetches 24 h of surface conditions from /api/surface-conditions
+ * using the terrain centre as the query point.
+ *
+ * When conditions are unavailable (estimatedConditions=true) it shows manual
+ * override sliders so the user can still plan a drift.
+ */
+
+import React, { useEffect, useCallback } from "react";
+import { useGetSurfaceConditions, getGetSurfaceConditionsQueryKey } from "@workspace/api-client-react";
+import { useAppState } from "@/lib/context";
+import { useDriftStore } from "@/lib/driftStore";
+import { computeDrift } from "@/lib/computeDrift";
+
+interface CompassProps {
+  degrees: number;
+  size?: number;
+  color?: string;
+}
+
+const Compass: React.FC<CompassProps> = ({ degrees, size = 40, color = "#00e5ff" }) => {
+  const rad = ((degrees - 90) * Math.PI) / 180;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = size * 0.35;
+  const tipX = cx + r * Math.cos(rad);
+  const tipY = cy + r * Math.sin(rad);
+  const tailX = cx - r * 0.55 * Math.cos(rad);
+  const tailY = cy - r * 0.55 * Math.sin(rad);
+  const perpX = -Math.sin(rad) * r * 0.18;
+  const perpY = Math.cos(rad) * r * 0.18;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0 }}>
+      <circle cx={cx} cy={cy} r={size * 0.44} stroke="rgba(0,229,255,0.15)" strokeWidth={1} fill="none" />
+      {[0, 90, 180, 270].map((a, i) => {
+        const ar = ((a - 90) * Math.PI) / 180;
+        const label = ["N", "E", "S", "W"][i];
+        return (
+          <text
+            key={a}
+            x={cx + (size * 0.38) * Math.cos(ar)}
+            y={cy + (size * 0.38) * Math.sin(ar) + 3}
+            textAnchor="middle"
+            fontSize={size * 0.14}
+            fill="rgba(0,229,255,0.4)"
+          >{label}</text>
+        );
+      })}
+      <polygon
+        points={`${tipX},${tipY} ${tailX + perpX},${tailY + perpY} ${tailX - perpX},${tailY - perpY}`}
+        fill={color}
+        opacity={0.9}
+      />
+    </svg>
+  );
+};
+
+function degToCardinal(deg: number): string {
+  const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+  return dirs[Math.round(deg / 22.5) % 16]!;
+}
+
+const PANEL_STYLE: React.CSSProperties = {
+  position: "absolute",
+  top: 56,
+  right: 16,
+  zIndex: 50,
+  background: "rgba(0,8,20,0.92)",
+  border: "1px solid rgba(0,229,255,0.2)",
+  borderRadius: 8,
+  padding: "12px 14px",
+  fontFamily: "'JetBrains Mono', monospace",
+  fontSize: 10,
+  color: "#94a3b8",
+  letterSpacing: "0.06em",
+  backdropFilter: "blur(8px)",
+  minWidth: 220,
+  maxWidth: 260,
+  pointerEvents: "auto",
+};
+
+const LABEL: React.CSSProperties = { color: "#475569", fontSize: 9, letterSpacing: "0.18em" };
+const VALUE: React.CSSProperties = { color: "#00e5ff", fontWeight: 700 };
+const DIVIDER: React.CSSProperties = { borderTop: "1px solid rgba(0,229,255,0.1)", margin: "8px 0" };
+
+interface WeatherPanelProps {
+  onClose: () => void;
+}
+
+export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
+  const { terrain } = useAppState();
+  const {
+    driftConditions,
+    setDriftConditions,
+    setDriftPath,
+    setEstimatedConditions,
+    estimatedConditions,
+    driftHour,
+    driftStartLat,
+    driftStartLon,
+    setDriftStart,
+    lineLengthM,
+    setLineLengthM,
+    lineWeightG,
+    manualWindSpeedKnots,
+    setManualWindSpeedKnots,
+    manualWindDegrees,
+    setManualWindDegrees,
+    manualTidalSpeedKnots,
+    setManualTidalSpeedKnots,
+    manualTidalDegrees,
+    setManualTidalDegrees,
+  } = useDriftStore();
+
+  const centerLat = terrain ? (terrain.minLat + terrain.maxLat) / 2 : 0;
+  const centerLon = terrain ? (terrain.minLon + terrain.maxLon) / 2 : 0;
+
+  const { data, isLoading, isError, refetch } = useGetSurfaceConditions(
+    { lat: centerLat, lon: centerLon },
+    {
+      query: {
+        queryKey: getGetSurfaceConditionsQueryKey({ lat: centerLat, lon: centerLon }),
+        enabled: !!terrain,
+        staleTime: 30 * 60 * 1000,
+        retry: 1,
+      },
+    },
+  );
+
+  useEffect(() => {
+    if (!data?.hours || !terrain) return;
+    setDriftConditions(data.hours as import("@/lib/driftStore").HourlySurfaceCondition[]);
+    setEstimatedConditions(data.estimatedConditions ?? false);
+
+    const startLat = driftStartLat ?? centerLat;
+    const startLon = driftStartLon ?? centerLon;
+    if (driftStartLat === null) setDriftStart(centerLat, centerLon);
+
+    const path = computeDrift({
+      conditions: data.hours as import("@/lib/driftStore").HourlySurfaceCondition[],
+      startLat,
+      startLon,
+      lineLengthM,
+      lineWeightG: 500,
+      terrain,
+    });
+    setDriftPath(path);
+  }, [data, terrain]);
+
+  const recomputeWithManual = useCallback(() => {
+    if (!terrain) return;
+    const manualConditions = Array.from({ length: 24 }, (_, h) => ({
+      hour: h,
+      windSpeedKnots: manualWindSpeedKnots,
+      windDegrees: manualWindDegrees,
+      tidalSpeedKnots: manualTidalSpeedKnots,
+      tidalDegrees: manualTidalDegrees,
+      waveHeightM: 0.3,
+    }));
+    setDriftConditions(manualConditions);
+    const startLat = driftStartLat ?? centerLat;
+    const startLon = driftStartLon ?? centerLon;
+    const path = computeDrift({
+      conditions: manualConditions,
+      startLat,
+      startLon,
+      lineLengthM,
+      lineWeightG: 500,
+      terrain,
+    });
+    setDriftPath(path);
+  }, [terrain, manualWindSpeedKnots, manualWindDegrees, manualTidalSpeedKnots, manualTidalDegrees, driftStartLat, driftStartLon, lineLengthM, centerLat, centerLon]);
+
+  const cond = driftConditions?.[driftHour];
+
+  const sliderStyle: React.CSSProperties = {
+    width: "100%",
+    accentColor: "#00e5ff",
+    cursor: "pointer",
+  };
+
+  return (
+    <div style={PANEL_STYLE}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ ...VALUE, fontSize: 11, letterSpacing: "0.15em" }}>⛵ DRIFT PLANNER</span>
+        <button
+          onClick={onClose}
+          style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 14, padding: "0 2px" }}
+        >×</button>
+      </div>
+
+      {isLoading && (
+        <div style={{ color: "#22d3ee", fontSize: 9, letterSpacing: "0.12em", marginBottom: 8 }}>
+          ↻ Fetching conditions…
+        </div>
+      )}
+
+      {(isError || estimatedConditions) && (
+        <div style={{ color: "#fbbf24", fontSize: 9, letterSpacing: "0.1em", marginBottom: 8, padding: "4px 6px", background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)", borderRadius: 4 }}>
+          ⚠ Using estimated conditions
+        </div>
+      )}
+
+      {cond && !estimatedConditions && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Compass degrees={cond.windDegrees} size={42} color="#7dd3fc" />
+            <div>
+              <div style={LABEL}>WIND</div>
+              <div style={{ ...VALUE, color: "#7dd3fc" }}>{cond.windSpeedKnots.toFixed(1)} kt</div>
+              <div style={{ fontSize: 9, color: "#475569" }}>{degToCardinal(cond.windDegrees)} {Math.round(cond.windDegrees)}°</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Compass degrees={cond.tidalDegrees} size={42} color="#34d399" />
+            <div>
+              <div style={LABEL}>TIDAL CURRENT</div>
+              <div style={{ ...VALUE, color: "#34d399" }}>{cond.tidalSpeedKnots.toFixed(1)} kt</div>
+              <div style={{ fontSize: 9, color: "#475569" }}>{degToCardinal(cond.tidalDegrees)} {Math.round(cond.tidalDegrees)}°</div>
+            </div>
+          </div>
+          <div>
+            <span style={LABEL}>WAVE HEIGHT </span>
+            <span style={{ ...VALUE, color: "#60a5fa" }}>{cond.waveHeightM.toFixed(2)} m</span>
+          </div>
+        </div>
+      )}
+
+      <div style={DIVIDER} />
+
+      <div style={{ marginBottom: 6 }}>
+        <span style={LABEL}>LINE LENGTH </span>
+        <input
+          type="number"
+          min={10}
+          max={1000}
+          step={10}
+          value={lineLengthM}
+          onChange={(e) => setLineLengthM(Number(e.target.value))}
+          style={{ width: 60, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 10, padding: "2px 4px", borderRadius: 3, marginLeft: 4 }}
+        />
+        <span style={{ ...LABEL, marginLeft: 3 }}>m</span>
+      </div>
+
+      {(isError || estimatedConditions) && (
+        <div style={{ marginTop: 6 }}>
+          <div style={{ ...LABEL, marginBottom: 4 }}>MANUAL OVERRIDE</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <div>
+              <div style={LABEL}>WIND {manualWindSpeedKnots} kt @ {manualWindDegrees}°</div>
+              <input type="range" min={0} max={40} value={manualWindSpeedKnots} onChange={(e) => setManualWindSpeedKnots(Number(e.target.value))} style={sliderStyle} />
+              <input type="range" min={0} max={359} value={manualWindDegrees} onChange={(e) => setManualWindDegrees(Number(e.target.value))} style={sliderStyle} />
+            </div>
+            <div>
+              <div style={LABEL}>TIDAL {manualTidalSpeedKnots} kt @ {manualTidalDegrees}°</div>
+              <input type="range" min={0} max={6} step={0.1} value={manualTidalSpeedKnots} onChange={(e) => setManualTidalSpeedKnots(Number(e.target.value))} style={sliderStyle} />
+              <input type="range" min={0} max={359} value={manualTidalDegrees} onChange={(e) => setManualTidalDegrees(Number(e.target.value))} style={sliderStyle} />
+            </div>
+            <button
+              onClick={recomputeWithManual}
+              style={{ background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", color: "#00e5ff", fontFamily: "inherit", fontSize: 9, padding: "4px 10px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.15em" }}
+            >COMPUTE DRIFT</button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ ...DIVIDER, marginTop: 8 }} />
+      <div style={{ display: "flex", gap: 6 }}>
+        <button
+          onClick={() => void refetch()}
+          style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 9, padding: "4px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.15em" }}
+        >⟳ REFRESH</button>
+        <div style={{ fontSize: 9, color: "#1e3a5f", alignSelf: "center" }}>Open-Meteo</div>
+      </div>
+    </div>
+  );
+};

@@ -12,6 +12,7 @@ import meRouter from "./me";
 import substrateRouter from "./substrate";
 import efhRouter from "./efh";
 import catalogSavesRouter from "./catalog-saves";
+import surfaceConditionsRouter from "./surface-conditions";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(meRouter);
 router.use(substrateRouter);
 router.use(efhRouter);
 router.use(catalogSavesRouter);
+router.use(surfaceConditionsRouter);
 
 export default router;

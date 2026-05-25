@@ -915,6 +915,41 @@ export const GetDatasetsMySavesIdStatusResponse = zod.object({
 
 
 /**
+ * Returns 24 hours of hourly wind, tidal current, and wave data for a given
+lat/lon from Open-Meteo. Tidal current is approximated via a sinusoidal
+model when live data is unavailable. Returns estimatedConditions=true when
+Open-Meteo is unreachable and default values are substituted.
+
+ * @summary Fetch hourly surface weather and tidal conditions for drift planning
+ */
+export const GetSurfaceConditionsQueryParams = zod.object({
+  "lat": zod.coerce.number().describe('Latitude of query point'),
+  "lon": zod.coerce.number().describe('Longitude of query point')
+})
+
+export const getSurfaceConditionsResponseHoursItemHourMin = 0;
+export const getSurfaceConditionsResponseHoursItemHourMax = 23;
+
+
+
+export const GetSurfaceConditionsResponse = zod.object({
+  "available": zod.boolean(),
+  "lat": zod.number(),
+  "lon": zod.number(),
+  "dataSource": zod.string().optional(),
+  "estimatedConditions": zod.boolean().optional().describe('True when actual data was unavailable and defaults were substituted'),
+  "hours": zod.array(zod.object({
+  "hour": zod.number().min(getSurfaceConditionsResponseHoursItemHourMin).max(getSurfaceConditionsResponseHoursItemHourMax),
+  "windSpeedKnots": zod.number(),
+  "windDegrees": zod.number(),
+  "tidalSpeedKnots": zod.number(),
+  "tidalDegrees": zod.number(),
+  "waveHeightM": zod.number()
+}))
+})
+
+
+/**
  * Returns GeoJSON EFH zone polygons for the requested area.
 Currently covers the Thorne Bay / Clarence Strait / SE Alaska region.
 Data credit: NOAA Fisheries / NMFS Alaska Region.
