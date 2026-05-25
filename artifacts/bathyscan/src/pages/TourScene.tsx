@@ -13,6 +13,7 @@ import { EfhZoneLayer } from "@/components/EfhZoneLayer";
 import { Particles } from "@/components/Particles";
 import { Caustics } from "@/components/Caustics";
 import { useFlyControls } from "@/hooks/useFlyControls";
+import { registerTestThreeCamera } from "@/lib/testHelpers";
 import { TidalWaterPlane } from "@/components/TidalWaterPlane";
 import { TidalCurrentArrows, type DepthLayer } from "@/components/TidalCurrentArrows";
 import { MarkerLayer } from "@/components/MarkerLayer";
@@ -194,6 +195,19 @@ interface SceneContentsProps {
   depthLayer: DepthLayer;
 }
 
+// Dev-only: hand the live THREE.PerspectiveCamera to testHelpers so e2e
+// tests can read camera.position synchronously after dispatching wheel
+// events. Renders nothing in production builds.
+const TestCameraBridge: React.FC = () => {
+  const { camera } = useThree();
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    registerTestThreeCamera(camera);
+    return () => registerTestThreeCamera(null);
+  }, [camera]);
+  return null;
+};
+
 const SceneContents: React.FC<SceneContentsProps> = ({
   terrainMeshRef,
   tidalData,
@@ -228,6 +242,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
       {/* Distant key light */}
       <directionalLight position={[10, 30, 20]} intensity={directionalIntensity} color={directionalHue} />
 
+      <TestCameraBridge />
       <Particles />
       {terrain && <TerrainMesh ref={terrainMeshRef} grid={terrain} />}
       {terrain && showLandmass && <LandmassMesh grid={terrain} />}

@@ -9,7 +9,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useGetDatasets, getGetDatasetsQueryKey } from "@workspace/api-client-react";
 import { AppProvider, useAppState } from "@/lib/context";
-import { registerTestBridge } from "@/lib/testHelpers";
+import { registerTestBridge, registerTestCameraPosRef } from "@/lib/testHelpers";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { TourScene } from "@/pages/TourScene";
 import { Settings } from "@/pages/Settings";
@@ -59,10 +59,13 @@ import { ConditionsLegend } from "@/components/ConditionsLegend";
 
 
 function TestBridge(): null {
-  const { setTerrain } = useAppState();
+  const { setTerrain, cameraPos } = useAppState();
+  const cameraPosRef = useRef<[number, number, number]>(cameraPos);
+  cameraPosRef.current = cameraPos;
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     registerTestBridge(setTerrain);
+    registerTestCameraPosRef(cameraPosRef);
   }, [setTerrain]);
   return null;
 }

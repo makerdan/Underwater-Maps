@@ -22,7 +22,8 @@ import { useClassificationStore } from "@/lib/classificationStore";
 import { useMarkerDetailStore } from "@/lib/markerDetailStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { haversineDistance } from "@/lib/geo";
-import { computeWheelDolly, computePinchDolly } from "@/lib/zoomMath";
+import { computePinchDolly } from "@/lib/zoomMath";
+import { processFlyWheel } from "@/lib/flyWheel";
 
 function copyToClipboard(text: string): void {
   if (typeof navigator === "undefined" || !navigator.clipboard) return;
@@ -261,25 +262,14 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       // processing it.
       if (modeRef.current !== "fly") return;
       e.preventDefault();
-      // Shift+wheel → step speed tier (fly mode, non-realistic only)
-      if (e.shiftKey) {
-        if (realisticModeRef.current) return;
-        if (e.deltaY > 0) {
-          setSpeedIndex(Math.min(SPEEDS.length - 1, speedIndexRef.current + 1));
-        } else {
-          setSpeedIndex(Math.max(0, speedIndexRef.current - 1));
-        }
-        return;
+      const result = processFlyWheel(camera, e, speedIndexRef.current, {
+        mouseZoomSensitivity: mouseZoomSensRef.current,
+        touchpadZoomSensitivity: touchpadZoomSensRef.current,
+        realisticMode: realisticModeRef.current,
+      });
+      if (result.newSpeedIndex !== null) {
+        setSpeedIndex(result.newSpeedIndex);
       }
-      // Plain wheel → dolly camera along view direction.
-      const dolly = computeWheelDolly(
-        e.deltaY,
-        e.deltaMode,
-        mouseZoomSensRef.current,
-        touchpadZoomSensRef.current,
-      );
-      camera.getWorldDirection(lookDir.current);
-      camera.position.addScaledVector(lookDir.current, dolly);
     };
 
     // ─── Pinch-to-zoom (fly mode only; orbit MapControls handles its own) ───

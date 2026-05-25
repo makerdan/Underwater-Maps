@@ -22,6 +22,9 @@ import {
   type TerrainData,
 } from "@workspace/api-client-react";
 import { useDepthProfileStore, buildProfile } from "./depthProfileStore";
+import { useSettingsStore } from "./settingsStore";
+import { processFlyWheel } from "./flyWheel";
+import * as THREE from "three";
 
 /** Small synthetic terrain grid used by e2e tests when no real dataset is
  *  loaded (no signed-in user). Depth ramps west→east 0→1000m so the profile
@@ -59,6 +62,29 @@ function syntheticTestGrid(): TerrainData {
 let appSetTerrain: ((t: TerrainData | null) => void) | null = null;
 export function registerTestBridge(setTerrain: (t: TerrainData | null) => void): void {
   appSetTerrain = setTerrain;
+}
+
+// Camera position is mutated each frame inside the Three.js render loop and
+// pushed into AppContext via `setCameraPos`. The TestBridge component below
+// hands us a ref that always points at the latest value so e2e tests can
+// assert on camera movement without poking into React internals.
+let cameraPosRef: { current: [number, number, number] } = { current: [0, 0, 0] };
+export function registerTestCameraPosRef(
+  ref: { current: [number, number, number] },
+): void {
+  cameraPosRef = ref;
+}
+
+// Direct handle on the THREE.PerspectiveCamera inside the <Canvas>. Used by
+// e2e tests so we can observe wheel-dolly position changes synchronously,
+// without waiting for the React useFrame → setCameraPos round-trip (which
+// can lag behind dispatched events in headless test runs).
+interface CameraLike {
+  position: { x: number; y: number; z: number };
+}
+let threeCameraRef: CameraLike | null = null;
+export function registerTestThreeCamera(camera: CameraLike | null): void {
+  threeCameraRef = camera;
 }
 
 export interface BathyTestApi {
@@ -164,6 +190,33 @@ export interface BathyTestApi {
   getDepthProfileSummary: () =>
     | { points: number; totalDistanceM: number; minDepthM: number; maxDepthM: number }
     | null;
+  /**
+   * Scroll-to-zoom helpers. Tests use these to assert that wheel events
+   * actually move the camera, that Shift+wheel steps the speed tier, and
+   * that the Mouse Wheel Zoom Sensitivity setting scales the dolly.
+   */
+  getCameraPos: () => [number, number, number];
+  getSpeedIndex: () => number;
+  setSpeedIndex: (n: number) => void;
+  getMouseZoomSensitivity: () => number;
+  setMouseZoomSensitivity: (v: number) => void;
+  /**
+   * Install a synthetic fly-mode test rig. Creates a THREE.PerspectiveCamera
+   * at the given position pointing along `lookAt`, registers it so
+   * `getCameraPos` returns its live position, and returns true on success.
+   * Used by the scroll-zoom e2e test because the real Canvas can't initialise
+   * WebGL in headless Playwright runs.
+   */
+  initFlyWheelTestRig: (
+    pos: [number, number, number],
+    lookAt: [number, number, number],
+  ) => boolean;
+  /**
+   * Drive the production `processFlyWheel` logic against the test camera with
+   * a synthesised WheelEvent shape. Applies any speed-tier change back to the
+   * production cameraStore (the same store the HUD SpeedDots subscribe to).
+   */
+  simulateFlyWheel: (deltaY: number, shiftKey: boolean) => void;
 }
 
 declare global {
@@ -414,6 +467,56 @@ export function installTestHelpers(): void {
       const step = Math.max(1, Math.floor(zm.length / 16));
       for (let i = 0; i < zm.length; i += step) sample.push(zm[i] ?? 0);
       return { length: zm.length, hasEdits: s.hasEdits, hash, sample };
+    },
+    getCameraPos: () => {
+      // Prefer the live THREE camera (mutated synchronously by the wheel
+      // handler) so tests don't have to wait for the useFrame → setCameraPos
+      // round-trip. Fall back to the AppContext-synced value when the
+      // Canvas isn't mounted (e.g. signed-out page).
+      if (threeCameraRef) {
+        const p = threeCameraRef.position;
+        return [p.x, p.y, p.z];
+      }
+      return [
+        cameraPosRef.current[0],
+        cameraPosRef.current[1],
+        cameraPosRef.current[2],
+      ];
+    },
+    getSpeedIndex: () => useCameraStore.getState().speedIndex,
+    setSpeedIndex: (n) => useCameraStore.getState().setSpeedIndex(n),
+    getMouseZoomSensitivity: () => useSettingsStore.getState().mouseZoomSensitivity,
+    setMouseZoomSensitivity: (v) =>
+      useSettingsStore.getState().setMouseZoomSensitivity(v),
+    initFlyWheelTestRig: (pos, lookAt) => {
+      const cam = new THREE.PerspectiveCamera(60, 1, 0.1, 10000);
+      cam.position.set(pos[0], pos[1], pos[2]);
+      cam.lookAt(lookAt[0], lookAt[1], lookAt[2]);
+      cam.updateMatrixWorld();
+      registerTestThreeCamera(cam);
+      return true;
+    },
+    simulateFlyWheel: (deltaY, shiftKey) => {
+      const cam = threeCameraRef as THREE.Camera | null;
+      if (!cam) return;
+      const settings = useSettingsStore.getState();
+      const camStore = useCameraStore.getState();
+      const result = processFlyWheel(
+        cam,
+        { deltaY, deltaMode: 0, shiftKey },
+        camStore.speedIndex,
+        {
+          mouseZoomSensitivity: settings.mouseZoomSensitivity,
+          touchpadZoomSensitivity: settings.touchpadZoomSensitivity,
+          // realisticMode lives in AppContext, not the settings store, and the
+          // scroll-zoom e2e doesn't exercise the realistic (boat-MPH) path —
+          // tests assume the default "fly" mode where shift-wheel steps speed.
+          realisticMode: false,
+        },
+      );
+      if (result.newSpeedIndex !== null) {
+        camStore.setSpeedIndex(result.newSpeedIndex);
+      }
     },
     showDepthProfileTerrainMenu: (x, y, point) =>
       useContextMenuStore
