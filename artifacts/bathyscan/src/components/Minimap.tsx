@@ -5,6 +5,7 @@ import { useUiStore } from "@/lib/uiStore";
 import { useGetMarkers, getGetMarkersQueryKey } from "@workspace/api-client-react";
 import type { Marker } from "@workspace/api-client-react";
 import { depthToColor } from "@/lib/colormap";
+import { usePaletteStore } from "@/lib/paletteStore";
 import { WORLD_SIZE } from "@/lib/terrain";
 import { MARKER_COLOR } from "@/lib/markerConstants";
 
@@ -103,6 +104,8 @@ export const Minimap: React.FC = () => {
   const heatmapRef = useRef<ImageData | null>(null);
   const markersRef = useRef<Marker[]>([]);
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
+  const shallow = usePaletteStore((s) => s.shallow);
+  const deep = usePaletteStore((s) => s.deep);
 
   const datasetId = terrain?.datasetId ?? "";
   const { data: markers } = useGetMarkers(
@@ -131,7 +134,7 @@ export const Minimap: React.FC = () => {
       terrain.maxDepth,
     );
     heatmapRef.current = ctx.getImageData(0, 0, W, H);
-  }, [terrain]);
+  }, [terrain, shallow, deep]);
 
   // Subscribe to cameraStore and update arrow + marker dots imperatively
   useEffect(() => {

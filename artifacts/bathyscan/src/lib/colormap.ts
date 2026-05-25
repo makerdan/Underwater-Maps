@@ -1,18 +1,28 @@
 import * as THREE from "three";
 import type { ColormapTheme } from "./settingsStore";
+import { usePaletteStore, MID1_HEX, MID2_HEX } from "./paletteStore";
 
 interface ColorStop {
   t: number;
   color: THREE.Color;
 }
 
-const THEME_STOPS: Record<ColormapTheme, ColorStop[]> = {
-  ocean: [
-    { t: 0.00, color: new THREE.Color("#00e5ff") },
-    { t: 0.30, color: new THREE.Color("#0d47a1") },
-    { t: 0.65, color: new THREE.Color("#1a237e") },
-    { t: 1.00, color: new THREE.Color("#283593") },
-  ],
+/**
+ * Build the ocean theme stops using the user-customised shallow and deep
+ * endpoints from paletteStore. The two interior stops are fixed so the
+ * gradient keeps its characteristic shape.
+ */
+function getOceanStops(): ColorStop[] {
+  const { shallow, deep } = usePaletteStore.getState();
+  return [
+    { t: 0.00, color: new THREE.Color(shallow) },
+    { t: 0.30, color: new THREE.Color(MID1_HEX) },
+    { t: 0.65, color: new THREE.Color(MID2_HEX) },
+    { t: 1.00, color: new THREE.Color(deep) },
+  ];
+}
+
+const FIXED_THEME_STOPS: Record<Exclude<ColormapTheme, "ocean">, ColorStop[]> = {
   thermal: [
     { t: 0.00, color: new THREE.Color("#0d0221") },
     { t: 0.25, color: new THREE.Color("#7b2d8b") },
@@ -33,6 +43,10 @@ const THEME_STOPS: Record<ColormapTheme, ColorStop[]> = {
   ],
 };
 
+function stopsForTheme(theme: ColormapTheme): ColorStop[] {
+  return theme === "ocean" ? getOceanStops() : FIXED_THEME_STOPS[theme];
+}
+
 function interpolateStops(stops: ColorStop[], t: number): THREE.Color {
   const clamped = Math.max(0, Math.min(1, t));
   for (let i = 0; i < stops.length - 1; i++) {
@@ -48,24 +62,29 @@ function interpolateStops(stops: ColorStop[], t: number): THREE.Color {
 }
 
 /**
- * Map a normalised depth t ∈ [0, 1] to a THREE.Color using the ocean theme.
+ * Map a normalised depth t ∈ [0, 1] to a THREE.Color using the ocean theme
+ * with the user's current shallow/deep palette overrides.
  * t = 0 → shallowest, t = 1 → deepest.
+ *
  * @deprecated Prefer getColormap(theme)(t) for theme-aware colouring.
  */
 export function depthToColor(t: number): THREE.Color {
-  return interpolateStops(THEME_STOPS.ocean, t);
+  return interpolateStops(getOceanStops(), t);
 }
 
 /**
  * Returns a colour function for the given colormap theme.
  * The returned function maps t ∈ [0, 1] to a THREE.Color.
  *
+ * The "ocean" theme reflects the user's customised shallow/deep palette
+ * (paletteStore); other themes are fixed presets.
+ *
  * @example
  *   const toColor = getColormap('thermal');
  *   mesh.material.color = toColor(normalizedDepth);
  */
 export function getColormap(theme: ColormapTheme): (t: number) => THREE.Color {
-  const stops = THEME_STOPS[theme];
+  const stops = stopsForTheme(theme);
   return (t: number) => interpolateStops(stops, t);
 }
 

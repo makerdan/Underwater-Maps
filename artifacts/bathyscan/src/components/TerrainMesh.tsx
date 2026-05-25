@@ -10,6 +10,8 @@ import { useUiStore } from "@/lib/uiStore";
 import { useHighlightStore } from "@/lib/highlightStore";
 import { useHabitatStore } from "@/lib/habitatStore";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { usePaletteStore } from "@/lib/paletteStore";
+import { getColormap } from "@/lib/colormap";
 
 /**
  * Tiling scale — number of texture tile repeats across the full WORLD_SIZE.
@@ -195,6 +197,29 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
         skirtMaterial.dispose();
       };
     }, [skirtMaterial]);
+
+    // Live-update vertex colours when the user customises the depth palette
+    // (only meaningful for the "ocean" theme; other themes have fixed stops,
+    // but re-running for them is harmless and keeps the code simple).
+    const paletteShallow = usePaletteStore((s) => s.shallow);
+    const paletteDeep = usePaletteStore((s) => s.deep);
+    useEffect(() => {
+      const { depths, minDepth, maxDepth } = grid;
+      const depthRange = (maxDepth - minDepth) || 1;
+      const colorAttr = geometry.getAttribute("color") as THREE.BufferAttribute | undefined;
+      if (!colorAttr) return;
+      const toColor = getColormap(colormapTheme);
+      const colors = colorAttr.array as Float32Array;
+      for (let i = 0; i < depths.length; i++) {
+        const depth = depths[i] ?? 0;
+        const t = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
+        const c = toColor(t);
+        colors[i * 3]     = c.r;
+        colors[i * 3 + 1] = c.g;
+        colors[i * 3 + 2] = c.b;
+      }
+      colorAttr.needsUpdate = true;
+    }, [paletteShallow, paletteDeep, colormapTheme, grid, geometry]);
 
     // Sync grid depth range into shader when grid changes.
     useEffect(() => {

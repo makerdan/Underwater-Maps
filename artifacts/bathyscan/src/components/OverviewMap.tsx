@@ -35,6 +35,7 @@ import { useHabitatStore } from "@/lib/habitatStore";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useTrailStore } from "@/lib/trailStore";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { usePaletteStore } from "@/lib/paletteStore";
 
 interface TooltipState {
   visible: boolean;
@@ -158,11 +159,13 @@ export const OverviewMap: React.FC = () => {
     return () => { cancelled = true; };
   }, [trailsData]);
 
-  // Build offscreen bitmap whenever overviewGrid changes
+  // Build offscreen bitmap whenever overviewGrid or palette changes
+  const paletteShallow = usePaletteStore((s) => s.shallow);
+  const paletteDeep = usePaletteStore((s) => s.deep);
   useEffect(() => {
     if (!overviewGrid) return;
     bitmapRef.current = buildHeatmapBitmap(overviewGrid);
-  }, [overviewGrid]);
+  }, [overviewGrid, paletteShallow, paletteDeep]);
 
   // Compute initial transform whenever the grid or canvas is ready
   const initTransform = useCallback(() => {

@@ -19,6 +19,8 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMarkersQueryKey } from "@workspace/api-client-react";
 import { useTerrainStore } from "@/lib/terrainStore";
+import { usePaletteStore, DEFAULT_SHALLOW, DEFAULT_DEEP } from "@/lib/paletteStore";
+import { colormapCanvas } from "@/lib/colormap";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -385,6 +387,7 @@ function VisualsSection() {
           sublabel="Terrain surface colour gradient"
         />
       </div>
+      <PalettePickerCard />
       <div style={S.card}>
         <div style={S.cardHeader}>LIGHTING &amp; FOG</div>
         <SliderRow
@@ -984,6 +987,174 @@ export function Settings() {
           {tab === "offline" && <OfflineSection />}
           {tab === "account" && <AccountSection />}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Depth Color Palette card — lets the user customise the shallow and deep
+ * endpoints of the depth colormap. Changes apply live to the 3D terrain,
+ * minimap heatmap, overview map heatmap, and HUD depth scale bar, and are
+ * persisted to localStorage under "bathyscan:palette".
+ */
+function PalettePickerCard() {
+  const shallow = usePaletteStore((s) => s.shallow);
+  const deep = usePaletteStore((s) => s.deep);
+  const setShallow = usePaletteStore((s) => s.setShallow);
+  const setDeep = usePaletteStore((s) => s.setDeep);
+  const reset = usePaletteStore((s) => s.reset);
+
+  const previewRef = React.useRef<HTMLImageElement>(null);
+  React.useEffect(() => {
+    if (!previewRef.current) return;
+    // colormapCanvas paints top→bottom; rotate -90° so shallow is on the left.
+    const vert = colormapCanvas(14, 240);
+    const horiz = document.createElement("canvas");
+    horiz.width = 240;
+    horiz.height = 14;
+    const hctx = horiz.getContext("2d")!;
+    hctx.save();
+    hctx.translate(0, 14);
+    hctx.rotate(-Math.PI / 2);
+    hctx.drawImage(vert, 0, 0, 14, 240);
+    hctx.restore();
+    previewRef.current.src = horiz.toDataURL();
+  }, [shallow, deep]);
+
+  const isDefault = shallow.toLowerCase() === DEFAULT_SHALLOW.toLowerCase()
+    && deep.toLowerCase() === DEFAULT_DEEP.toLowerCase();
+
+  const swatchRow: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "10px 16px",
+    fontSize: 11,
+    borderBottom: "1px solid rgba(0,229,255,0.06)",
+  };
+  const labelStyle: React.CSSProperties = {
+    fontSize: 9,
+    letterSpacing: "0.15em",
+    color: "#475569",
+  };
+  const colorInputStyle: React.CSSProperties = {
+    width: 36,
+    height: 24,
+    border: "1px solid rgba(0,229,255,0.2)",
+    borderRadius: 3,
+    background: "transparent",
+    cursor: "pointer",
+    padding: 0,
+  };
+  const hexStyle: React.CSSProperties = {
+    fontFamily: "inherit",
+    fontSize: 10,
+    color: "#64748b",
+    background: "rgba(0,0,0,0.3)",
+    border: "1px solid rgba(0,229,255,0.12)",
+    borderRadius: 3,
+    padding: "3px 6px",
+    width: 80,
+    textAlign: "center",
+  };
+
+  return (
+    <div style={S.card}>
+      <div style={S.cardHeader}>◈ DEPTH COLOR PALETTE</div>
+
+      {/* Preview gradient */}
+      <div style={{ padding: "12px 16px 6px" }}>
+        <div style={{ ...labelStyle, marginBottom: 6 }}>PREVIEW (SHALLOW → DEEP)</div>
+        <img
+          ref={previewRef}
+          alt="depth palette preview"
+          data-testid="palette-preview"
+          style={{
+            width: "100%",
+            height: 14,
+            display: "block",
+            border: "1px solid rgba(0,229,255,0.2)",
+            borderRadius: 2,
+          }}
+        />
+      </div>
+
+      {/* Shallow picker */}
+      <div style={swatchRow}>
+        <span style={labelStyle}>SHALLOW</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <input
+            type="text"
+            data-testid="palette-shallow-hex"
+            value={shallow}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (/^#[0-9a-fA-F]{6}$/.test(v)) setShallow(v);
+              else if (/^#[0-9a-fA-F]{0,6}$/.test(v)) {
+                // allow typing intermediate values without committing
+                const el = e.target;
+                el.value = v;
+              }
+            }}
+            style={hexStyle}
+          />
+          <input
+            type="color"
+            data-testid="palette-shallow-input"
+            value={shallow}
+            onChange={(e) => setShallow(e.target.value)}
+            style={colorInputStyle}
+            aria-label="Shallow water color"
+          />
+        </div>
+      </div>
+
+      {/* Deep picker */}
+      <div style={swatchRow}>
+        <span style={labelStyle}>DEEP</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <input
+            type="text"
+            data-testid="palette-deep-hex"
+            value={deep}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (/^#[0-9a-fA-F]{6}$/.test(v)) setDeep(v);
+            }}
+            style={hexStyle}
+          />
+          <input
+            type="color"
+            data-testid="palette-deep-input"
+            value={deep}
+            onChange={(e) => setDeep(e.target.value)}
+            style={colorInputStyle}
+            aria-label="Deep water color"
+          />
+        </div>
+      </div>
+
+      {/* Reset */}
+      <div style={{ padding: "10px 16px 14px", display: "flex", justifyContent: "flex-end" }}>
+        <button
+          data-testid="palette-reset-btn"
+          onClick={reset}
+          disabled={isDefault}
+          style={{
+            background: "rgba(0,229,255,0.06)",
+            border: "1px solid rgba(0,229,255,0.25)",
+            borderRadius: 3,
+            color: isDefault ? "#334155" : "#67e8f9",
+            fontSize: 9,
+            letterSpacing: "0.15em",
+            padding: "4px 12px",
+            cursor: isDefault ? "not-allowed" : "pointer",
+            fontFamily: "inherit",
+          }}
+        >
+          RESET TO DEFAULTS
+        </button>
       </div>
     </div>
   );
