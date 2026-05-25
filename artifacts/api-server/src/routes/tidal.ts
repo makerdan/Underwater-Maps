@@ -174,19 +174,40 @@ async function getHighLowEvents(
 }
 
 /**
+ * In-memory cache of recent getCurrentsPeak results. NOAA's currents
+ * predictions only change a few times per day, so a short TTL keeps the
+ * tidal panel snappy and hides their occasional HTTP 400s on cold loads.
+ */
+type CurrentsPeakResult = { peakSpeedKnots: number; floodBearingDeg: number } | null;
+const currentsPeakCache = new Map<string, { result: CurrentsPeakResult; ts: number }>();
+const CURRENTS_PEAK_TTL_MS = 30 * 60 * 1000;
+
+/** Exposed for tests so they can reset state between cases. */
+export function __clearCurrentsPeakCacheForTests(): void {
+  currentsPeakCache.clear();
+}
+
+/**
  * Fetch max-flood / max-ebb / slack predictions from a NOAA currents station
  * and derive peak current speed (knots) and the mean flood bearing.
  *
  * Returns null on any failure or if the response contains no usable flood
  * direction — callers should fall back to the heuristic estimator in that case.
  */
-async function getCurrentsPeak(
+export async function getCurrentsPeak(
   stationId: string,
   refTime: Date,
-): Promise<{ peakSpeedKnots: number; floodBearingDeg: number } | null> {
+): Promise<CurrentsPeakResult> {
+  const start = new Date(refTime.getTime() - 24 * 3600 * 1000);
+  const end = new Date(refTime.getTime() + 48 * 3600 * 1000);
+  const cacheKey = `${stationId}|${toNoaaDateStr(start)}|${toNoaaDateStr(end)}`;
+  const now = Date.now();
+  const cached = currentsPeakCache.get(cacheKey);
+  if (cached && now - cached.ts < CURRENTS_PEAK_TTL_MS) {
+    return cached.result;
+  }
+
   try {
-    const start = new Date(refTime.getTime() - 24 * 3600 * 1000);
-    const end = new Date(refTime.getTime() + 48 * 3600 * 1000);
     // vel_type=speed_dir asks NOAA for unsigned Speed (knots) + Direction (deg).
     const url =
       `${NOAA_BASE}/api/prod/datagetter?station=${stationId}&product=currents_predictions` +
@@ -205,36 +226,40 @@ async function getCurrentsPeak(
       };
     }>(url);
     const cps = resp.current_predictions?.cp ?? [];
-    if (cps.length === 0) return null;
-
-    let maxSpeed = 0;
-    let floodDir: number | null = null;
-    for (const cp of cps) {
-      const rawSpeed =
-        cp.Speed != null ? cp.Speed : cp.Velocity_Major != null ? cp.Velocity_Major : null;
-      if (rawSpeed != null) {
-        const sp = Math.abs(parseFloat(String(rawSpeed)));
-        if (Number.isFinite(sp) && sp > maxSpeed) maxSpeed = sp;
-      }
-      if (floodDir == null) {
-        const meanFd = cp.meanFloodDir != null ? parseFloat(String(cp.meanFloodDir)) : NaN;
-        if (Number.isFinite(meanFd)) {
-          floodDir = meanFd;
-        } else if (
-          String(cp.Type ?? "").toLowerCase() === "flood" &&
-          cp.Direction != null
-        ) {
-          const d = parseFloat(String(cp.Direction));
-          if (Number.isFinite(d)) floodDir = d;
+    let result: CurrentsPeakResult = null;
+    if (cps.length > 0) {
+      let maxSpeed = 0;
+      let floodDir: number | null = null;
+      for (const cp of cps) {
+        const rawSpeed =
+          cp.Speed != null ? cp.Speed : cp.Velocity_Major != null ? cp.Velocity_Major : null;
+        if (rawSpeed != null) {
+          const sp = Math.abs(parseFloat(String(rawSpeed)));
+          if (Number.isFinite(sp) && sp > maxSpeed) maxSpeed = sp;
+        }
+        if (floodDir == null) {
+          const meanFd = cp.meanFloodDir != null ? parseFloat(String(cp.meanFloodDir)) : NaN;
+          if (Number.isFinite(meanFd)) {
+            floodDir = meanFd;
+          } else if (
+            String(cp.Type ?? "").toLowerCase() === "flood" &&
+            cp.Direction != null
+          ) {
+            const d = parseFloat(String(cp.Direction));
+            if (Number.isFinite(d)) floodDir = d;
+          }
         }
       }
-    }
 
-    if (maxSpeed <= 0 || floodDir == null) return null;
-    return {
-      peakSpeedKnots: Math.max(0.1, Math.min(8.0, maxSpeed)),
-      floodBearingDeg: ((floodDir % 360) + 360) % 360,
-    };
+      if (maxSpeed > 0 && floodDir != null) {
+        result = {
+          peakSpeedKnots: Math.max(0.1, Math.min(8.0, maxSpeed)),
+          floodBearingDeg: ((floodDir % 360) + 360) % 360,
+        };
+      }
+    }
+    currentsPeakCache.set(cacheKey, { result, ts: now });
+    return result;
   } catch (err) {
     logger.warn({ err, stationId }, "Failed to fetch NOAA currents predictions");
     return null;
