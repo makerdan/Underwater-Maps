@@ -110,26 +110,35 @@ describe("GET /substrate/:id", () => {
     expect(res.body.error).toBe("not_found");
   });
 
-  it("returns an empty FeatureCollection for thorne-bay (no ShoreZone overlap) with honest metadata", async () => {
+  it("returns real NOAA ENC substrate polygons for thorne-bay", async () => {
     const res = await request(app).get("/api/substrate/thorne-bay");
     expect(res.status).toBe(200);
     expect(res.body.type).toBe("FeatureCollection");
-    expect(res.body.features).toHaveLength(0);
-    expect(res.body.metadata.source).toBe("alaska-shorezone");
-    expect(res.body.metadata.sourceLayer).toBe("AK_SZ_ITZ_Polygons");
-    expect(res.body.metadata.nearestCoverage).toBeDefined();
-    expect(typeof res.body.metadata.nearestCoverage.distanceKm).toBe("number");
-    expect(res.body.metadata.nearestCoverage.distanceKm).toBeGreaterThan(0);
-    expect(typeof res.body.metadata.note).toBe("string");
-    expect(res.body.metadata.note).toMatch(/Nearest real ShoreZone coverage/);
+    expect(res.body.features.length).toBeGreaterThan(0);
+    // ShoreZone has no Thorne Bay coverage, so all features should come
+    // from NOAA ENC.
+    for (const f of res.body.features) {
+      expect(f.properties.source).toBe("noaa-enc-coastal");
+    }
+    expect(res.body.metadata.region).toMatch(/Thorne Bay/i);
+    expect(res.body.metadata.coverageBbox).not.toBeNull();
+    const encSrc = res.body.metadata.sources.find(
+      (s: { source: string }) => s.source === "noaa-enc-coastal",
+    );
+    expect(encSrc).toBeDefined();
+    expect(encSrc.featureCount).toBeGreaterThan(0);
+    expect(encSrc.creditUrl).toContain("nauticalcharts.noaa.gov");
   });
 
-  it("returns empty collection for datasets without ShoreZone coverage", async () => {
+  it("returns empty collection with honest nearest-coverage metadata for AOIs outside SE Alaska", async () => {
     const res = await request(app).get("/api/substrate/mariana-trench");
     expect(res.status).toBe(200);
     expect(res.body.type).toBe("FeatureCollection");
     expect(res.body.features).toHaveLength(0);
     expect(res.body.metadata.source).toBe("alaska-shorezone");
+    expect(res.body.metadata.nearestCoverage).toBeDefined();
+    expect(res.body.metadata.nearestCoverage.distanceKm).toBeGreaterThan(0);
+    expect(res.body.metadata.note).toMatch(/No published substrate polygons/);
   });
 
   // ---- The remaining tests exercise the "features returned" code path
@@ -245,6 +254,112 @@ describe("GET /substrate/:id", () => {
   it("returns a realistic bundled feature count from the upstream ShoreZone export", async () => {
     const { ALASKA_SHOREZONE } = await import("../lib/shoreZoneData.js");
     expect(ALASKA_SHOREZONE.features.length).toBeGreaterThanOrEqual(500);
+  });
+
+  // ---- Per-dataset coverage (task #205) ----
+  // Every SE Alaska preset (glacier-bay, icy-strait, sitka-sound,
+  // juneau-approaches, ketchikan, thorne-bay) is covered by at least one
+  // bundled substrate source (Alaska ShoreZone and/or NOAA ENC seabed).
+
+  it("returns real merged substrate features for the glacier-bay preset", async () => {
+    const res = await request(app).get("/api/substrate/glacier-bay");
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe("FeatureCollection");
+    expect(res.body.features.length).toBeGreaterThan(100);
+    expect(res.body.metadata.region).toMatch(/Glacier Bay/i);
+    expect(res.body.metadata.coverageBbox).not.toBeNull();
+    expect(res.body.metadata.coverageBbox).toHaveLength(4);
+    // Glacier Bay overlaps the Alaska ShoreZone bundle, so we expect
+    // at least one ShoreZone feature.
+    const szSrc = res.body.metadata.sources.find(
+      (s: { source: string }) => s.source === "alaska-shorezone",
+    );
+    expect(szSrc).toBeDefined();
+    expect(szSrc.featureCount).toBeGreaterThan(0);
+  });
+
+  it("returns real substrate features for the icy-strait preset", async () => {
+    const res = await request(app).get("/api/substrate/icy-strait");
+    expect(res.status).toBe(200);
+    expect(res.body.features.length).toBeGreaterThan(0);
+    expect(res.body.metadata.region).toMatch(/Icy Strait/i);
+  });
+
+  it("returns real NOAA ENC substrate polygons for the sitka-sound preset", async () => {
+    const res = await request(app).get("/api/substrate/sitka-sound");
+    expect(res.status).toBe(200);
+    expect(res.body.features.length).toBeGreaterThan(0);
+    expect(res.body.metadata.region).toMatch(/Sitka/i);
+    expect(res.body.metadata.coverageBbox).not.toBeNull();
+    for (const f of res.body.features) {
+      expect(f.properties.source).toBe("noaa-enc-coastal");
+    }
+  });
+
+  it("returns real NOAA ENC substrate polygons for the juneau-approaches preset", async () => {
+    const res = await request(app).get("/api/substrate/juneau-approaches");
+    expect(res.status).toBe(200);
+    expect(res.body.features.length).toBeGreaterThan(0);
+    expect(res.body.metadata.region).toMatch(/Juneau/i);
+    expect(res.body.metadata.coverageBbox).not.toBeNull();
+  });
+
+  it("returns real NOAA ENC substrate polygons for the ketchikan preset", async () => {
+    const res = await request(app).get("/api/substrate/ketchikan");
+    expect(res.status).toBe(200);
+    expect(res.body.features.length).toBeGreaterThan(0);
+    expect(res.body.metadata.region).toMatch(/Ketchikan/i);
+    expect(res.body.metadata.coverageBbox).not.toBeNull();
+    for (const f of res.body.features) {
+      expect(f.properties.source).toBe("noaa-enc-coastal");
+    }
+  });
+
+  it("getSubstrateForDataset returns merged coverage metadata for a covered dataset", async () => {
+    const { getSubstrateForDataset } = await import("../lib/shoreZoneData.js");
+    const slice = getSubstrateForDataset("glacier-bay", {
+      minLon: -137.1, minLat: 58.4, maxLon: -135.8, maxLat: 59.15,
+    });
+    expect(slice.hasCoverage).toBe(true);
+    expect(slice.features.length).toBeGreaterThan(0);
+    expect(slice.nearestCoverageKm).toBe(0);
+    expect(slice.coverageBbox).not.toBeNull();
+    expect(slice.region).toMatch(/Glacier Bay/i);
+    expect(slice.sources.some((s) => s.source === "alaska-shorezone" && s.featureCount > 0)).toBe(true);
+  });
+
+  it("getSubstrateForDataset returns ENC-only coverage for Sitka", async () => {
+    const { getSubstrateForDataset } = await import("../lib/shoreZoneData.js");
+    const slice = getSubstrateForDataset("sitka-sound", {
+      minLon: -136.0, minLat: 56.7, maxLon: -135.0, maxLat: 57.25,
+    });
+    expect(slice.hasCoverage).toBe(true);
+    expect(slice.features.length).toBeGreaterThan(0);
+    const sz = slice.sources.find((s) => s.source === "alaska-shorezone")!;
+    const enc = slice.sources.find((s) => s.source === "noaa-enc-coastal")!;
+    expect(sz.featureCount).toBe(0);
+    expect(enc.featureCount).toBeGreaterThan(0);
+  });
+
+  it("getSubstrateForDataset returns honest empty for an AOI outside SE Alaska", async () => {
+    const { getSubstrateForDataset } = await import("../lib/shoreZoneData.js");
+    const slice = getSubstrateForDataset("mariana-trench", {
+      minLon: 141.0, minLat: 10.5, maxLon: 143.5, maxLat: 12.2,
+    });
+    expect(slice.hasCoverage).toBe(false);
+    expect(slice.features).toHaveLength(0);
+    expect(slice.coverageBbox).toBeNull();
+    expect(slice.nearestCoverageKm).toBeGreaterThan(0);
+  });
+
+  it("ENC_SE_ALASKA_SUBSTRATE bundle metadata declares NOAA ENC provenance", async () => {
+    const { ENC_SE_ALASKA_SUBSTRATE } = await import("../lib/shoreZoneData.js");
+    const md = ENC_SE_ALASKA_SUBSTRATE.metadata;
+    expect(md.source).toBe("noaa-enc-coastal");
+    expect(md.sourceLayer).toBe("Coastal.Seabed_Area");
+    expect(md.sourceService).toContain("charttools.noaa.gov");
+    expect(md.creditUrl).toContain("nauticalcharts.noaa.gov");
+    expect(ENC_SE_ALASKA_SUBSTRATE.features.length).toBeGreaterThan(500);
   });
 
   it("every bundled feature has coordinates inside the declared ShoreZone region bbox", async () => {

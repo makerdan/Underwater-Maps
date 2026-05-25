@@ -7,6 +7,7 @@
     "hello": "tsx ./src/hello.ts",
     "seed-thorne-bay": "tsx ./src/seed-thorne-bay.ts",
     "build-shorezone": "tsx ./src/build-shorezone-data.ts",
+    "build-enc-substrate": "tsx ./src/build-enc-substrate.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

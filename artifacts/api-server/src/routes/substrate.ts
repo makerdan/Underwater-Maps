@@ -1,49 +1,82 @@
 /**
- * /substrate/:id — real Alaska ShoreZone substrate polygons.
+ * /substrate/:id — real SE Alaska substrate polygons (ShoreZone + NOAA ENC).
  *
- * Returns a GeoJSON FeatureCollection of substrate polygons sourced from the
- * Alaska ShoreZone Coastal Habitat Mapping Program (NOAA AKR / ADF&G,
- * https://alaskafisheries.noaa.gov/shorezone/). The bundled regional dataset
- * is filtered to each preset dataset's AOI bbox at request time, so the
- * features returned for `/api/substrate/:id` are guaranteed to lie within
- * the dataset's bbox.
+ * Returns a GeoJSON FeatureCollection of substrate polygons sourced from two
+ * complementary authoritative datasets that together cover the entire SE
+ * Alaska Inside Passage:
  *
- * For datasets whose AOI does not overlap published ShoreZone polygon
- * coverage (e.g. Thorne Bay / Prince of Wales Island), the response is an
- * honest empty FeatureCollection together with metadata describing the
- * nearest real ShoreZone coverage area and great-circle distance.
+ *   1) Alaska ShoreZone Coastal Habitat Mapping Program (NOAA AKR / ADF&G,
+ *      https://alaskafisheries.noaa.gov/shorezone/) — high-resolution
+ *      intertidal-zone polygons for Glacier Bay / Icy Strait.
+ *   2) NOAA Electronic Navigational Charts — Coastal.Seabed_Area (S-57
+ *      SBDARE polygons, https://nauticalcharts.noaa.gov/charts/noaa-enc.html)
+ *      — chart-derived seabed type polygons covering all US navigable
+ *      waters, used to fill in the rest of SE Alaska (Sitka, Juneau,
+ *      Ketchikan, Thorne Bay / Prince of Wales Island).
  *
- * Each returned feature carries:
+ * The bundled regional datasets are filtered to each preset's AOI bbox at
+ * request time, so all returned features lie within the dataset bbox. Each
+ * feature carries `properties.source` (`alaska-shorezone` |
+ * `noaa-enc-coastal`) so clients can render per-feature attribution, and
+ * the response's `metadata.sources` array lists per-source feature counts.
+ *
+ * For the rare AOI that overlaps no published substrate polygons in either
+ * source, the response is an honest empty FeatureCollection with the
+ * nearest real coverage area and great-circle distance.
+ *
+ * Each returned feature includes:
  *   • substrate      — CMECS broad category (bedrock / gravel / sand / mud)
- *   • shoreZoneClass — original ShoreZone descriptive class
+ *   • shoreZoneClass — original descriptive class (ShoreZone class or ENC NATSUR)
  *   • cmecsCode      — CMECS classification code
- *   • color          — rendering hint (same palette as the client expects)
- *   • unitId         — ShoreZone PHY_IDENT
- *   • szMaterial / szForm — raw ShoreZone Mat_Desc / Form_Desc
- *   • areaSqM        — polygon area (m²)
+ *   • color          — rendering hint
+ *   • unitId         — stable per-feature id
+ *   • source         — provenance ("alaska-shorezone" | "noaa-enc-coastal")
+ *   • szMaterial / szForm / areaSqM — ShoreZone-only attributes
+ *   • natsur / natqua / encChart    — ENC-only attributes
  *
- * The response includes `source: "alaska-shorezone"` so clients can attribute
- * the data correctly.
- *
- * Credit: Alaska ShoreZone (NOAA Alaska Regional Office / ADF&G) — public domain.
+ * Credit: Alaska ShoreZone (NOAA AKR / ADF&G), NOAA Office of Coast Survey
+ * ENC — both public domain.
  */
 
 import { Router } from "express";
 import { ALL_PRESET_DATASETS } from "../lib/terrain.js";
 import {
   ALASKA_SHOREZONE,
-  getShoreZoneIntersectingBbox,
-  nearestCoverageKm,
+  ENC_SE_ALASKA_SUBSTRATE,
+  getSubstrateForDataset,
 } from "../lib/shoreZoneData.js";
 
 const router = Router();
 
+/** Per-source provenance descriptor stamped into the response metadata. */
+const SOURCE_PROVENANCE = {
+  "alaska-shorezone": {
+    sourceName:    ALASKA_SHOREZONE.metadata.sourceName,
+    sourceLayer:   ALASKA_SHOREZONE.metadata.sourceLayer,
+    sourceService: ALASKA_SHOREZONE.metadata.sourceService,
+    sourceRegion:  ALASKA_SHOREZONE.metadata.region,
+    sourceBbox:    ALASKA_SHOREZONE.metadata.bbox,
+    creditUrl:     ALASKA_SHOREZONE.metadata.creditUrl,
+    fetchedAt:     ALASKA_SHOREZONE.metadata.fetchedAt,
+    credit:        "Alaska ShoreZone (NOAA AKR / ADF&G) — public domain",
+  },
+  "noaa-enc-coastal": {
+    sourceName:    ENC_SE_ALASKA_SUBSTRATE.metadata.sourceName,
+    sourceLayer:   ENC_SE_ALASKA_SUBSTRATE.metadata.sourceLayer,
+    sourceService: ENC_SE_ALASKA_SUBSTRATE.metadata.sourceService,
+    sourceRegion:  ENC_SE_ALASKA_SUBSTRATE.metadata.region,
+    sourceBbox:    ENC_SE_ALASKA_SUBSTRATE.metadata.bbox,
+    creditUrl:     ENC_SE_ALASKA_SUBSTRATE.metadata.creditUrl,
+    fetchedAt:     ENC_SE_ALASKA_SUBSTRATE.metadata.fetchedAt,
+    credit:        "NOAA Office of Coast Survey — Electronic Navigational Charts (public domain)",
+  },
+} as const;
+
 /**
  * GET /substrate/:id
  *
- * Returns the ShoreZone substrate FeatureCollection for the dataset.
- * Responds 404 if the dataset id is unknown, or 200 with an empty
- * collection if no published ShoreZone polygons overlap the dataset bbox.
+ * Responds 404 for unknown dataset ids, otherwise 200 with a merged
+ * ShoreZone + ENC substrate FeatureCollection clipped to the dataset bbox.
  */
 router.get("/substrate/:id", (req, res) => {
   const datasetId = req.params["id"]!;
@@ -53,46 +86,74 @@ router.get("/substrate/:id", (req, res) => {
     return;
   }
 
-  const features = getShoreZoneIntersectingBbox(meta.bbox);
+  const slice = getSubstrateForDataset(datasetId, meta.bbox);
+  // Per-source provenance for the sources that actually contributed
+  // features to this slice (priority order preserved).
+  const sources = slice.sources
+    .filter((s) => s.featureCount > 0)
+    .map((s) => ({ ...SOURCE_PROVENANCE[s.source], source: s.source, featureCount: s.featureCount }));
+
+  // Back-compat: keep top-level `source`/`sourceLayer`/etc. pointing at the
+  // ShoreZone bundle (the original source for this route). Existing clients
+  // that read those scalar fields continue to work; new clients should
+  // read `metadata.sources` for per-feature provenance.
   const baseMetadata = {
     datasetId,
     datasetBbox: meta.bbox,
-    source: "alaska-shorezone" as const,
-    sourceName: ALASKA_SHOREZONE.metadata.sourceName,
-    sourceLayer: ALASKA_SHOREZONE.metadata.sourceLayer,
+    source:        "alaska-shorezone" as const,
+    sourceName:    ALASKA_SHOREZONE.metadata.sourceName,
+    sourceLayer:   ALASKA_SHOREZONE.metadata.sourceLayer,
     sourceService: ALASKA_SHOREZONE.metadata.sourceService,
-    sourceRegion: ALASKA_SHOREZONE.metadata.region,
-    sourceBbox: ALASKA_SHOREZONE.metadata.bbox,
-    creditUrl: ALASKA_SHOREZONE.metadata.creditUrl,
-    fetchedAt: ALASKA_SHOREZONE.metadata.fetchedAt,
-    featureCount: features.length,
-    totalFeatures: features.length,
+    sourceRegion:  ALASKA_SHOREZONE.metadata.region,
+    sourceBbox:    ALASKA_SHOREZONE.metadata.bbox,
+    creditUrl:     ALASKA_SHOREZONE.metadata.creditUrl,
+    fetchedAt:     ALASKA_SHOREZONE.metadata.fetchedAt,
+    featureCount:  slice.features.length,
+    totalFeatures: slice.features.length,
+    /** Per-dataset region label describing what the slice represents. */
+    region:        slice.region,
+    /** Tight bbox of the returned slice, or null when empty. */
+    coverageBbox:  slice.coverageBbox,
+    /** Per-source counts + provenance for sources that contributed features. */
+    sources,
     methodology:
-      "Substrate polygons from the Alaska ShoreZone coastal mapping " +
-      "AK_SZ_ITZ_Polygons layer (NOAA AKR / ADF&G). Each feature is a " +
-      "ShoreZone intertidal-zone unit classified into CMECS broad substrate " +
-      "categories (bedrock / gravel / sand / mud) via its Mat_Desc + " +
-      "Form_Desc attributes. The regional bundle is filtered to the dataset " +
-      "AOI bbox at request time.",
-    credit: "Alaska ShoreZone (NOAA AKR / ADF&G) — public domain",
+      "Substrate polygons merged from two authoritative sources: " +
+      "(1) Alaska ShoreZone AK_SZ_ITZ_Polygons (NOAA AKR / ADF&G) — " +
+      "intertidal-zone polygons classified into CMECS broad substrate " +
+      "categories (bedrock / gravel / sand / mud) via Mat_Desc + Form_Desc; " +
+      "(2) NOAA ENC Coastal.Seabed_Area (S-57 SBDARE) — chart-derived " +
+      "seabed polygons classified via the NATSUR attribute. Both regional " +
+      "bundles are clipped to the dataset AOI bbox at request time, and " +
+      "each feature carries `properties.source` for per-feature attribution.",
+    credit:
+      "Alaska ShoreZone (NOAA AKR / ADF&G) and NOAA Office of Coast Survey " +
+      "Electronic Navigational Charts — both public domain.",
   };
 
-  if (features.length === 0) {
-    const distanceKm = nearestCoverageKm(meta.bbox);
+  if (!slice.hasCoverage) {
+    const distanceKm = Math.round(slice.nearestCoverageKm);
+    // Attribute the "nearest coverage" hint to whichever bundle actually
+    // contains the nearest polygon, rather than always pointing at the
+    // ShoreZone bundle.
+    const nearestBundle =
+      slice.nearestSource === "noaa-enc-coastal"
+        ? ENC_SE_ALASKA_SUBSTRATE
+        : ALASKA_SHOREZONE;
     res.json({
       type: "FeatureCollection",
       features: [],
       metadata: {
         ...baseMetadata,
         nearestCoverage: {
-          region: ALASKA_SHOREZONE.metadata.region,
-          bbox: ALASKA_SHOREZONE.metadata.bbox,
-          distanceKm: Math.round(distanceKm),
+          source:     nearestBundle.metadata.source,
+          region:     nearestBundle.metadata.region,
+          bbox:       nearestBundle.metadata.bbox,
+          distanceKm,
         },
         note:
-          `No published Alaska ShoreZone polygons intersect the '${datasetId}' AOI bbox. ` +
-          `Nearest real ShoreZone coverage is the ${ALASKA_SHOREZONE.metadata.region}, ` +
-          `~${Math.round(distanceKm)} km from this dataset's centre.`,
+          `No published substrate polygons (ShoreZone or ENC) intersect the ` +
+          `'${datasetId}' AOI bbox. Nearest real coverage is the ` +
+          `${nearestBundle.metadata.region}, ~${distanceKm} km away.`,
       },
     });
     return;
@@ -100,7 +161,7 @@ router.get("/substrate/:id", (req, res) => {
 
   res.json({
     type: "FeatureCollection",
-    features,
+    features: slice.features,
     metadata: baseMetadata,
   });
 });

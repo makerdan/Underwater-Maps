@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { rm } from "node:fs/promises";
+import { rm, mkdir, copyFile, readdir } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
@@ -106,6 +106,11 @@ async function buildAll() {
       // pino relies on workers to handle logging, instead of externalizing it we use a plugin to handle it
       esbuildPluginPino({ transports: ["pino-pretty"] })
     ],
+    // Generated substrate JSON bundles are loaded at runtime via
+    // fs.readFileSync (see src/lib/shoreZoneData.ts). They live in
+    // src/lib/ and must be copied to dist/ so the bundled server can find
+    // them.
+    // (Asset copy happens after esbuild completes; see below.)
     // Make sure packages that are cjs only (e.g. express) but are bundled continue to work in our esm output file
     banner: {
       js: `import { createRequire as __bannerCrReq } from 'node:module';
@@ -118,6 +123,20 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     `,
     },
   });
+
+  // Copy runtime JSON assets next to the bundled entrypoint so
+  // `fs.readFileSync(resolve(__dirname, '...gen.json'))` works in the
+  // production build. __dirname in dist/index.mjs resolves to `dist/`,
+  // so the files must live there.
+  const libDir = path.resolve(artifactDir, "src/lib");
+  const libFiles = await readdir(libDir);
+  await mkdir(distDir, { recursive: true });
+  for (const name of libFiles) {
+    if (name.endsWith(".gen.json")) {
+      await copyFile(path.join(libDir, name), path.join(distDir, name));
+      console.log(`  copied runtime asset: ${name}`);
+    }
+  }
 }
 
 buildAll().catch((err) => {
