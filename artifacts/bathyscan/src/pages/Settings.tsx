@@ -1223,6 +1223,16 @@ function HabitatSection() {
           onChange={s.setAutoShowZoneOverlay}
           sublabel="Display habitat zones automatically on load"
         />
+        <SliderRow
+          label="Overlay Intensity"
+          value={s.habitatOverlayIntensity}
+          min={0}
+          max={1}
+          step={0.05}
+          format={(v) => `${Math.round(v * 100)}%`}
+          onChange={s.setHabitatOverlayIntensity}
+          sublabel="Default strength of the amber habitat tint on terrain"
+        />
       </div>
       <AdvancedDisclosure testId="habitat-advanced">
         <div style={S.card}>
