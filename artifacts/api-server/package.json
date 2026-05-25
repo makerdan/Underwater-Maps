@@ -15,8 +15,8 @@
     "@clerk/shared": "^4.13.1",
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
-    "@workspace/poe": "workspace:*",
     "@workspace/integrations-openai-ai-server": "workspace:*",
+    "@workspace/poe": "workspace:*",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "drizzle-orm": "catalog:",
@@ -24,7 +24,8 @@
     "http-proxy-middleware": "^4.0.0",
     "multer": "^2.1.1",
     "pino": "^9.14.0",
-    "pino-http": "^10.5.0"
+    "pino-http": "^10.5.0",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

@@ -249,6 +249,54 @@ export const MarkerInputType = {
   depth_pole: 'depth_pole',
 } as const;
 
+export interface GpsPoint {
+  lon: number;
+  lat: number;
+  accuracy?: number;
+  /** Unix ms timestamp */
+  timestamp: number;
+  seq?: number;
+}
+
+export interface GpsTrail {
+  /** UUID primary key */
+  id: string;
+  userId: string;
+  datasetId: string;
+  name: string;
+  colour: string;
+  startedAt: Date;
+  endedAt: Date;
+  pointCount: number;
+  createdAt: Date;
+}
+
+export interface GpsTrailInput {
+  datasetId: string;
+  name: string;
+  colour?: string;
+  startedAt: string;
+  endedAt: string;
+  points: GpsPoint[];
+}
+
+export interface TrailPointsPage {
+  points: GpsPoint[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface GetTrailsParams {
+  datasetId: string;
+}
+
+export interface GetTrailsIdPointsParams {
+  id: string;
+  page?: number;
+  pageSize?: number;
+}
+
 export interface MarkerInput {
   datasetId: string;
   lon: number;

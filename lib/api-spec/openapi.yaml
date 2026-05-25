@@ -18,6 +18,8 @@ tags:
     description: Persisted point-of-interest marker operations
   - name: user-datasets
     description: Authenticated user's saved custom terrain datasets
+  - name: trails
+    description: GPS trail recording operations
 paths:
   /datasets:
     get:
@@ -326,6 +328,143 @@ paths:
           description: Marker deleted
         "404":
           description: Marker not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /trails:
+    get:
+      operationId: getTrails
+      tags: [trails]
+      summary: List GPS trails for a dataset
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: query
+          name: datasetId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Trail list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GpsTrail"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    post:
+      operationId: postTrails
+      tags: [trails]
+      summary: Create a new GPS trail
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GpsTrailInput"
+      responses:
+        "201":
+          description: Created trail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GpsTrail"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /trails/{id}:
+    delete:
+      operationId: deleteTrailsId
+      tags: [trails]
+      summary: Delete a GPS trail
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Trail deleted
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Trail not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /trails/{id}/points:
+    get:
+      operationId: getTrailsIdPoints
+      tags: [trails]
+      summary: Get paginated trail points
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - in: query
+          name: pageSize
+          required: false
+          schema:
+            type: integer
+            default: 200
+            minimum: 1
+            maximum: 1000
+      responses:
+        "200":
+          description: Paginated trail points
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrailPointsPage"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Trail not found
           content:
             application/json:
               schema:
@@ -809,6 +948,110 @@ components:
         - type
         - label
         - createdAt
+
+    GpsPoint:
+      type: object
+      properties:
+        lon:
+          type: number
+        lat:
+          type: number
+        accuracy:
+          type: number
+          default: 0
+        timestamp:
+          type: number
+          description: Unix ms timestamp
+        seq:
+          type: integer
+          default: 0
+      required:
+        - lon
+        - lat
+        - timestamp
+
+    GpsTrail:
+      type: object
+      properties:
+        id:
+          type: string
+          description: UUID primary key
+        userId:
+          type: string
+        datasetId:
+          type: string
+        name:
+          type: string
+        colour:
+          type: string
+          default: "#ff6600"
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        pointCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - datasetId
+        - name
+        - colour
+        - startedAt
+        - endedAt
+        - pointCount
+        - createdAt
+
+    GpsTrailInput:
+      type: object
+      properties:
+        datasetId:
+          type: string
+        name:
+          type: string
+        colour:
+          type: string
+          default: "#ff6600"
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/GpsPoint"
+      required:
+        - datasetId
+        - name
+        - startedAt
+        - endedAt
+        - points
+
+    TrailPointsPage:
+      type: object
+      properties:
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/GpsPoint"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+      required:
+        - points
+        - total
+        - page
+        - pageSize
 
     MarkerInput:
       type: object

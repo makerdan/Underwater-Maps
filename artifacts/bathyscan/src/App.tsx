@@ -22,10 +22,13 @@ import { OverviewMap } from "@/components/OverviewMap";
 import { ZoneOverlay } from "@/components/ZoneOverlay";
 import { HabitatPanel } from "@/components/HabitatPanel";
 import { QueryPanel } from "@/components/QueryPanel";
+import { TrailRecorder } from "@/components/TrailRecorder";
+import { VirtualJoystick } from "@/components/VirtualJoystick";
 import { useTidalData } from "@/hooks/useTidalData";
 import { useUiStore } from "@/lib/uiStore";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useHighlightStore } from "@/lib/highlightStore";
+import { useGpsStore } from "@/lib/gpsStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 
 const queryClient = new QueryClient();
@@ -149,6 +152,7 @@ function Main() {
   const { datasetId, setDatasetId, terrain, tidalOverlay, setTidalOverlay } = useAppState();
   const markerFormOpen = useUiStore((s) => s.markerFormOpen);
   const overviewOpen = useUiStore((s) => s.overviewOpen);
+  const gpsActive = useGpsStore((s) => s.active);
   const [depthLayer, setDepthLayer] = useState<DepthLayer>("surface");
   const [scrubDatetime, setScrubDatetime] = useState<Date | null>(null);
   const [showResumeHint, setShowResumeHint] = useState(false);
@@ -191,6 +195,49 @@ function Main() {
       void useClassificationStore.getState().classify(terrain);
     }
   }, [terrain]);
+
+  // Flush offline-buffered trails when connection is restored
+  useEffect(() => {
+    const flushPendingTrails = async () => {
+      const keys: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k?.startsWith("pending-trail-")) keys.push(k);
+      }
+      if (!keys.length) return;
+
+      const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+      for (const key of keys) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) continue;
+          const payload = JSON.parse(raw) as {
+            datasetId: string; name: string;
+            startedAt: number; endedAt: number;
+            points: { lon: number; lat: number; accuracy: number; timestamp: number; seq: number }[];
+          };
+          const res = await fetch(`${apiBase}/api/trails`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              datasetId: payload.datasetId,
+              name: payload.name,
+              startedAt: new Date(payload.startedAt).toISOString(),
+              endedAt: new Date(payload.endedAt).toISOString(),
+              points: payload.points,
+            }),
+          });
+          if (res.ok) localStorage.removeItem(key);
+        } catch {
+          // leave key for next retry
+        }
+      }
+    };
+
+    window.addEventListener("online", () => void flushPendingTrails());
+    void flushPendingTrails();
+    return () => window.removeEventListener("online", () => void flushPendingTrails());
+  }, []);
 
   // O key — toggle overview map
   // Slash key — open query panel
@@ -336,6 +383,13 @@ function Main() {
           </div>
         )}
 
+        {/* GPS Trail Recorder — bottom-right above minimap */}
+        {gpsActive && (
+          <div className="absolute z-20" style={{ bottom: 60, right: 16 }}>
+            <TrailRecorder />
+          </div>
+        )}
+
         {/* Minimap + controls legend — bottom-right and bottom-left */}
         <div className="absolute bottom-4 right-4 z-20">
           <Minimap />
@@ -343,6 +397,13 @@ function Main() {
 
         <div className="absolute bottom-4 left-4 z-20">
           <ControlsLegend />
+        </div>
+
+        {/* Virtual joystick — touch devices only, z-30 */}
+        <div className="absolute inset-0 z-30 pointer-events-none">
+          <div style={{ pointerEvents: "none", width: "100%", height: "100%", position: "relative" }}>
+            <VirtualJoystick />
+          </div>
         </div>
 
         {/* Query panel — slides up from the bottom, z-50 */}

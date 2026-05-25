@@ -17,9 +17,13 @@ import {
   renderCameraArrow,
   renderScaleBar,
   renderHabitatOverlay,
+  renderGpsPosition,
+  renderLiveTrail,
 } from "@/lib/overviewRenderer";
 import type { OverviewTransform } from "@/lib/overviewRenderer";
 import { useHabitatStore } from "@/lib/habitatStore";
+import { useGpsStore } from "@/lib/gpsStore";
+import { useTrailStore } from "@/lib/trailStore";
 
 interface TooltipState {
   visible: boolean;
@@ -32,6 +36,11 @@ interface TooltipState {
 
 export const OverviewMap: React.FC = () => {
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
+  const setPendingDropIn = useUiStore((s) => s.setPendingDropIn);
+  const gpsActive = useGpsStore((s) => s.active);
+  const gpsPosition = useGpsStore((s) => s.position);
+  const gpsError = useGpsStore((s) => s.error);
+  const startWatching = useGpsStore((s) => s.startWatching);
   const overviewGrid = useTerrainStore((s) => s.overviewGrid);
 
   const datasetId = overviewGrid?.datasetId ?? "";
@@ -61,6 +70,9 @@ export const OverviewMap: React.FC = () => {
   const [tooltip, setTooltip] = useState<TooltipState>({
     visible: false, x: 0, y: 0, lon: 0, lat: 0, depth: 0,
   });
+
+  // GPS & trail state (read directly from stores in rAF — no React re-render)
+  const pulseRef = useRef(0);
 
   // Keep markers ref in sync without causing rAF re-registration
   useEffect(() => {
@@ -132,6 +144,30 @@ export const OverviewMap: React.FC = () => {
       const habitatActive = useHabitatStore.getState().activeSpecies !== null;
       if (habitatActive && habitatScores) {
         renderHabitatOverlay(ctx, habitatScores, grid, t);
+      }
+
+      // GPS position + live trail
+      const gps = useGpsStore.getState();
+      const trail = useTrailStore.getState();
+      pulseRef.current = (pulseRef.current + 0.02) % 1;
+      const pulse = Math.abs(Math.sin(pulseRef.current * Math.PI));
+
+      if (trail.recording && trail.currentPoints.length > 0) {
+        renderLiveTrail(ctx, trail.currentPoints, grid, t, pulse);
+      }
+
+      if (gps.active && gps.position) {
+        renderGpsPosition(
+          ctx,
+          gps.position.longitude,
+          gps.position.latitude,
+          gps.position.accuracy,
+          grid,
+          t,
+          cW,
+          cH,
+          pulse,
+        );
       }
 
       // Scale bar
@@ -347,24 +383,90 @@ export const OverviewMap: React.FC = () => {
         >
           SCROLL TO ZOOM · DRAG TO PAN · CLICK TO DROP IN · [O] CLOSE
         </span>
-        <button
-          onClick={() => setOverviewOpen(false)}
-          style={{
-            pointerEvents: "auto",
-            background: "none",
-            border: "1px solid rgba(0,229,255,0.2)",
-            color: "#475569",
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 11,
-            padding: "1px 10px",
-            borderRadius: 3,
-            cursor: "pointer",
-            letterSpacing: "0.1em",
-            lineHeight: "20px",
-          }}
-        >
-          ✕ CLOSE
-        </button>
+
+        {/* GPS controls */}
+        <div style={{ display: "flex", gap: 6, alignItems: "center", pointerEvents: "auto" }}>
+          {gpsError && (
+            <span style={{ color: "#ef4444", fontSize: 9, fontFamily: "'JetBrains Mono', monospace", maxWidth: 180 }}>
+              ⚠ {gpsError}
+            </span>
+          )}
+
+          {gpsActive && gpsPosition && overviewGrid && (() => {
+            const inBounds =
+              gpsPosition.latitude >= overviewGrid.minLat &&
+              gpsPosition.latitude <= overviewGrid.maxLat &&
+              gpsPosition.longitude >= overviewGrid.minLon &&
+              gpsPosition.longitude <= overviewGrid.maxLon;
+            if (!inBounds) return null;
+            return (
+              <button
+                onClick={() => {
+                  const { x: worldX, z: worldZ } = lonLatToWorldXZ(
+                    gpsPosition.longitude,
+                    gpsPosition.latitude,
+                    overviewGrid,
+                  );
+                  setPendingDropIn({ worldX, worldZ });
+                  setOverviewOpen(false);
+                }}
+                style={{
+                  background: "rgba(59,130,246,0.15)",
+                  border: "1px solid rgba(59,130,246,0.5)",
+                  borderRadius: 3,
+                  color: "#60a5fa",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9,
+                  padding: "2px 8px",
+                  cursor: "pointer",
+                  letterSpacing: "0.1em",
+                  lineHeight: "20px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                ↓ DIVE HERE
+              </button>
+            );
+          })()}
+
+          <button
+            onClick={() => startWatching()}
+            style={{
+              background: gpsActive ? "rgba(59,130,246,0.15)" : "rgba(0,10,20,0.75)",
+              border: `1px solid ${gpsActive ? "rgba(59,130,246,0.5)" : "rgba(0,229,255,0.2)"}`,
+              borderRadius: 3,
+              color: gpsActive ? "#60a5fa" : "#475569",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 9,
+              padding: "2px 10px",
+              cursor: "pointer",
+              letterSpacing: "0.1em",
+              lineHeight: "20px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {gpsActive ? "📍 GPS ACTIVE" : "📍 MY LOCATION"}
+          </button>
+
+          <button
+            onClick={() => setOverviewOpen(false)}
+            style={{
+              pointerEvents: "auto",
+              background: "none",
+              border: "1px solid rgba(0,229,255,0.2)",
+              color: "#475569",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 11,
+              padding: "1px 10px",
+              borderRadius: 3,
+              cursor: "pointer",
+              letterSpacing: "0.1em",
+              lineHeight: "20px",
+            }}
+          >
+            ✕ CLOSE
+          </button>
+        </div>
       </div>
 
       {/* Depth tooltip */}

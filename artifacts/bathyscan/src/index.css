@@ -81,3 +81,58 @@
     @apply font-mono antialiased bg-background text-foreground;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Mobile responsive overrides (< 768px)
+   --------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  /* Larger tap targets for all HUD buttons */
+  button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Dataset panel: slide up from bottom as a sheet */
+  .dataset-panel {
+    position: fixed !important;
+    top: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    max-height: 60vh;
+    overflow-y: auto;
+    border-radius: 12px 12px 0 0 !important;
+    z-index: 25;
+  }
+
+  /* HUD elements: stack vertically, larger font */
+  .hud-top-left,
+  .hud-top-right {
+    font-size: 13px !important;
+  }
+
+  /* Overview map: fill screen, allow scrolling header */
+  .overview-map-header {
+    flex-wrap: wrap;
+    height: auto !important;
+    padding: 8px 12px !important;
+    gap: 6px;
+  }
+
+  /* Query panel: full width keyboard-friendly */
+  .query-panel {
+    width: 100% !important;
+    left: 0 !important;
+    border-radius: 12px 12px 0 0 !important;
+  }
+
+  /* Hide controls legend on mobile — replaced by joystick */
+  .controls-legend {
+    display: none !important;
+  }
+
+  /* Overview map footer hint: hide verbose text */
+  .overview-map-hint {
+    display: none;
+  }
+}

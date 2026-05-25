@@ -226,6 +226,66 @@ export const DeleteUserDatasetsIdParams = zod.object({
 /**
  * @summary List persisted markers for a dataset
  */
+// ---------------------------------------------------------------------------
+// GPS Trails
+// ---------------------------------------------------------------------------
+export const GpsPointSchema = zod.object({
+  "lon": zod.number(),
+  "lat": zod.number(),
+  "accuracy": zod.number().optional(),
+  "timestamp": zod.number().describe('Unix ms timestamp'),
+  "seq": zod.number().int().optional(),
+})
+
+export const GpsTrailSchema = zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "userId": zod.string(),
+  "datasetId": zod.string(),
+  "name": zod.string(),
+  "colour": zod.string(),
+  "startedAt": zod.coerce.date(),
+  "endedAt": zod.coerce.date(),
+  "pointCount": zod.number().int(),
+  "createdAt": zod.coerce.date(),
+})
+export const GetTrailsResponse = zod.array(GpsTrailSchema)
+
+export const GetTrailsQueryParams = zod.object({
+  "datasetId": zod.string(),
+})
+
+export const postTrailsColourDefault = "#ff6600";
+export const PostTrailsBody = zod.object({
+  "datasetId": zod.string(),
+  "name": zod.string(),
+  "colour": zod.string().default(postTrailsColourDefault),
+  "startedAt": zod.string().datetime(),
+  "endedAt": zod.string().datetime(),
+  "points": zod.array(GpsPointSchema),
+})
+
+export const DeleteTrailsIdParams = zod.object({
+  "id": zod.string().uuid(),
+})
+
+export const GetTrailsIdPointsParams = zod.object({
+  "id": zod.string(),
+})
+
+export const getTrailsIdPointsQueryPageDefault = 1;
+export const getTrailsIdPointsQueryPageSizeDefault = 200;
+export const GetTrailsIdPointsQueryParams = zod.object({
+  "page": zod.coerce.number().int().min(1).default(getTrailsIdPointsQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(1000).default(getTrailsIdPointsQueryPageSizeDefault),
+})
+
+export const GetTrailsIdPointsResponse = zod.object({
+  "points": zod.array(GpsPointSchema),
+  "total": zod.number().int(),
+  "page": zod.number().int(),
+  "pageSize": zod.number().int(),
+})
+
 export const GetMarkersQueryParams = zod.object({
   "datasetId": zod.coerce.string().describe('Dataset slug to filter markers by')
 })

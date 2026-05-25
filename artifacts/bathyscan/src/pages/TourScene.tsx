@@ -15,6 +15,7 @@ import { TidalWaterPlane } from "@/components/TidalWaterPlane";
 import { TidalCurrentArrows, type DepthLayer } from "@/components/TidalCurrentArrows";
 import { MarkerLayer } from "@/components/MarkerLayer";
 import { DepthPoleLayer, DepthPoleDomLabels } from "@/components/DepthPoleLayer";
+import { GpsMarker } from "@/components/GpsMarker";
 import type { TidalDataResult } from "@/hooks/useTidalData";
 import { MAX_DEPTH_WORLD, WORLD_SIZE } from "@/lib/terrain";
 import type { TerrainData } from "@workspace/api-client-react";
@@ -165,6 +166,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
       <OceanSurfacePlane />
       <MarkerLayer />
       <DepthPoleLayer />
+      <GpsMarker />
       <FlyControlsScene terrainMeshRef={terrainMeshRef} />
     </>
   );

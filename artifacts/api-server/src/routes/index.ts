@@ -6,6 +6,7 @@ import markersRouter from "./markers";
 import userDatasetsRouter from "./user-datasets";
 import tidalRouter from "./tidal";
 import queryRouter from "./query";
+import trailsRouter from "./trails";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(markersRouter);
 router.use(userDatasetsRouter);
 router.use(tidalRouter);
 router.use(queryRouter);
+router.use(trailsRouter);
 
 export default router;

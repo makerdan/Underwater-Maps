@@ -377,6 +377,211 @@ export function renderDepthPoles(
   ctx.restore();
 }
 
+// ---------------------------------------------------------------------------
+// GPS Position dot
+// ---------------------------------------------------------------------------
+
+/**
+ * Draw the user's real GPS position on the overview map.
+ * Shows a pulsing blue dot, a dashed accuracy ring, and an edge arrow if
+ * the position is outside the terrain's bounding box.
+ */
+export function renderGpsPosition(
+  ctx: CanvasRenderingContext2D,
+  lon: number,
+  lat: number,
+  accuracy: number,
+  grid: TerrainData,
+  t: OverviewTransform,
+  canvasW: number,
+  canvasH: number,
+  pulse: number,
+): void {
+  const inBounds =
+    lon >= grid.minLon && lon <= grid.maxLon &&
+    lat >= grid.minLat && lat <= grid.maxLat;
+
+  const [cx, cy] = lonLatToCanvas(lon, lat, grid, t);
+
+  if (inBounds) {
+    // Accuracy ring (dashed)
+    const lonRange = grid.maxLon - grid.minLon || 1;
+    const terrainW = t.pxPerDeg * lonRange * t.scale;
+    const mPerPx = ((lonRange * 111_320) / terrainW);
+    const accuracyR = accuracy / mPerPx;
+
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = "rgba(59,130,246,0.45)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.max(6, accuracyR), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Pulsing outer ring
+    const outerR = 10 + 6 * pulse;
+    ctx.strokeStyle = `rgba(59,130,246,${0.5 - 0.4 * pulse})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Solid inner dot
+    ctx.fillStyle = "#3b82f6";
+    ctx.shadowColor = "#3b82f6";
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // "GPS" label
+    ctx.fillStyle = "#93c5fd";
+    ctx.font = "9px 'JetBrains Mono', monospace";
+    ctx.textBaseline = "bottom";
+    ctx.fillText("GPS", cx + 8, cy - 2);
+    ctx.restore();
+  } else {
+    // Out-of-bounds: draw edge arrow pointing toward the position
+    const centerX = canvasW / 2;
+    const centerY = canvasH / 2;
+    const angle = Math.atan2(cy - centerY, cx - centerX);
+    const MARGIN = 18;
+    const edgeX = Math.max(MARGIN, Math.min(canvasW - MARGIN, canvasW / 2 + Math.cos(angle) * (canvasW / 2 - MARGIN)));
+    const edgeY = Math.max(MARGIN, Math.min(canvasH - MARGIN, canvasH / 2 + Math.sin(angle) * (canvasH / 2 - MARGIN)));
+
+    // Distance in km
+    const latCenter = (grid.minLat + grid.maxLat) / 2;
+    const kmPerDegLon = 111.32 * Math.cos((latCenter * Math.PI) / 180);
+    const dLon = (lon - (grid.minLon + grid.maxLon) / 2) * kmPerDegLon;
+    const dLat = (lat - (grid.minLat + grid.maxLat) / 2) * 110.57;
+    const distKm = Math.sqrt(dLon * dLon + dLat * dLat);
+
+    ctx.save();
+    ctx.fillStyle = "#3b82f6";
+    ctx.strokeStyle = "#3b82f6";
+    ctx.lineWidth = 1.5;
+
+    // Arrowhead
+    ctx.translate(edgeX, edgeY);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.moveTo(10, 0);
+    ctx.lineTo(-4, 5);
+    ctx.lineTo(-4, -5);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#93c5fd";
+    ctx.font = "8px 'JetBrains Mono', monospace";
+    ctx.textBaseline = "middle";
+    ctx.rotate(-angle);
+    const distLabel = distKm >= 10 ? `${Math.round(distKm)} km` : `${distKm.toFixed(1)} km`;
+    ctx.fillText(distLabel, 14, 0);
+
+    ctx.restore();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Trail rendering
+// ---------------------------------------------------------------------------
+
+export interface CanvasTrailPoint { lon: number; lat: number; }
+export interface CanvasSavedTrail { points: CanvasTrailPoint[]; colour: string; id: string; }
+
+/**
+ * Draw the live-recording trail polyline in orange.
+ */
+export function renderLiveTrail(
+  ctx: CanvasRenderingContext2D,
+  points: CanvasTrailPoint[],
+  grid: TerrainData,
+  t: OverviewTransform,
+  pulse: number,
+): void {
+  if (points.length < 2) return;
+
+  ctx.save();
+  ctx.strokeStyle = "#f97316";
+  ctx.lineWidth = 2;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.shadowColor = "#f97316";
+  ctx.shadowBlur = 3;
+
+  ctx.beginPath();
+  const [x0, y0] = lonLatToCanvas(points[0]!.lon, points[0]!.lat, grid, t);
+  ctx.moveTo(x0, y0);
+  for (let i = 1; i < points.length; i++) {
+    const [x, y] = lonLatToCanvas(points[i]!.lon, points[i]!.lat, grid, t);
+    ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // Pulsing tip dot
+  const last = points[points.length - 1]!;
+  const [lx, ly] = lonLatToCanvas(last.lon, last.lat, grid, t);
+  const r = 4 + 3 * pulse;
+  ctx.beginPath();
+  ctx.fillStyle = `rgba(249,115,22,${0.7 - 0.5 * pulse})`;
+  ctx.arc(lx, ly, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#f97316";
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  ctx.arc(lx, ly, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/**
+ * Draw completed saved trails as thin coloured polylines.
+ */
+export function renderSavedTrails(
+  ctx: CanvasRenderingContext2D,
+  trails: CanvasSavedTrail[],
+  grid: TerrainData,
+  t: OverviewTransform,
+): void {
+  for (const trail of trails) {
+    if (trail.points.length < 2) continue;
+
+    ctx.save();
+    ctx.strokeStyle = trail.colour;
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = "round";
+    ctx.globalAlpha = 0.7;
+
+    ctx.beginPath();
+    const [x0, y0] = lonLatToCanvas(trail.points[0]!.lon, trail.points[0]!.lat, grid, t);
+    ctx.moveTo(x0, y0);
+    for (let i = 1; i < trail.points.length; i++) {
+      const [x, y] = lonLatToCanvas(trail.points[i]!.lon, trail.points[i]!.lat, grid, t);
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Start/end dots
+    const [ex, ey] = lonLatToCanvas(
+      trail.points[trail.points.length - 1]!.lon,
+      trail.points[trail.points.length - 1]!.lat,
+      grid,
+      t,
+    );
+    ctx.fillStyle = trail.colour;
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    ctx.arc(ex, ey, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+}
+
 /** Draw a "100 px = X km" scale bar in the bottom-left corner. */
 export function renderScaleBar(
   ctx: CanvasRenderingContext2D,
