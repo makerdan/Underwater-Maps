@@ -75,6 +75,22 @@ async function flipAndReload(page: Page, label: string) {
   await page.waitForTimeout(200);
 }
 
+/**
+ * Audit note (Task #303): this file is deliberately split into two describes
+ * so the cheap settings-only assertions never pay for a home-route warmup:
+ *
+ *   - "Water surface & landmass toggles — Settings" has NO `beforeEach goto`.
+ *     Its tests use `openAdvancedTerrainSection`, which goes straight to
+ *     /settings, expands the Advanced disclosure, and flips a toggle. No
+ *     home-route mount is needed for these assertions.
+ *
+ *   - "TOPO badge & download — ProvenancePanel" DOES have a `beforeEach
+ *     goto("/")` because every test in it calls `__bathyTest.seedTerrain()`,
+ *     which only exists on the home route (the dev test helpers are mounted
+ *     by components inside the home scene). The home warmup is necessary.
+ *
+ * No further home-route warmups to retire in this file.
+ */
 test.describe("Water surface & landmass toggles — Settings", () => {
   test("Show water surface toggle persists across reload", async ({ page }) => {
     await flipAndReload(page, "Show water surface");

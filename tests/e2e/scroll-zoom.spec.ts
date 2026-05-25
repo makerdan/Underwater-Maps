@@ -51,6 +51,15 @@ function distance(
   return Math.hypot(dx, dy, dz);
 }
 
+/**
+ * Audit note (Task #303): the `beforeEach` `goto("/")` below is required by
+ * every test in this describe — they all drive `initRig()` which depends on
+ * `__bathyTest.initFlyWheelTestRig()` and the underlying `TestCameraBridge`,
+ * both of which are only mounted on the home route. The Settings-slider test
+ * explicitly re-`goto("/")` + `initRig()` after editing /settings because
+ * navigating away to /settings unmounts the camera bridge (see the inline
+ * comment inside that test). No home-route warmups to retire here.
+ */
 test.describe("BathyScan — scroll-to-zoom controls", () => {
   test.beforeEach(async ({ page }) => {
     // Defensive stubs: prevent DatasetPanel / folder tree from crashing on

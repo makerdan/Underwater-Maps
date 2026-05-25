@@ -25,24 +25,28 @@ import { test, expect, type Page, type Locator } from "@playwright/test";
 const HUD_BUTTON = 'button:has-text("FIND DATA")';
 const TOOLTIP_LABEL = "Browse datasets, markers and habitats";
 
-async function ensureSignedIn(page: Page) {
-  await page.goto("/");
-  await page.waitForLoadState("networkidle");
-  const canvas = page.locator("canvas").first();
-  const visible = await canvas.isVisible({ timeout: 15_000 }).catch(() => false);
-  if (!visible) {
-    test.skip(true, "Canvas not visible — E2E auth bypass not active in this environment");
-  }
-}
-
 /**
  * Force `showUiTooltips` to the desired value by walking the real Settings UI.
  * We expand the HUD "Advanced Settings" disclosure (whose toggle lives there)
  * by clicking its inner expander button by aria-expanded, then flip the row.
+ *
+ * When `returnHome` is true (default) we navigate to "/" afterwards so the
+ * caller can interact with the HUD button under test, and we use that visit
+ * to perform the canvas-visible sign-in check (skipping the test if the dev
+ * auth bypass is inactive). This replaces the previous pattern of a separate
+ * `ensureSignedIn()` helper that did its own throwaway `goto("/")` before
+ * `setTooltipsViaSettings` immediately navigated away to `/settings`.
  */
-async function setTooltipsViaSettings(page: Page, enabled: boolean) {
+async function setTooltipsViaSettings(
+  page: Page,
+  enabled: boolean,
+  options: { returnHome?: boolean } = {},
+) {
+  const returnHome = options.returnHome ?? true;
   await page.goto("/settings");
-  await page.waitForLoadState("networkidle");
+  // No networkidle wait here — the explicit `expect(expander).toBeVisible`
+  // below auto-waits for the DOM we actually depend on, and /settings still
+  // streams several background fetches.
   await page.locator('button:has-text("HUD & LAYOUT")').first().click();
 
   // AdvancedDisclosure renders a <div data-testid="hud-advanced"> containing
@@ -66,8 +70,18 @@ async function setTooltipsViaSettings(page: Page, enabled: boolean) {
     await expect(sw).toHaveAttribute("aria-checked", enabled ? "true" : "false");
   }
 
+  if (!returnHome) return;
+
   await page.goto("/");
-  await page.waitForLoadState("networkidle");
+  // Sign-in/auth-bypass check: piggy-back on the home visit we already need
+  // for the HUD assertions instead of warming up "/" a second time. The
+  // canvas-visibility poll below has its own 15s budget, so a separate
+  // `waitForLoadState("networkidle")` on the heavy 3D route is redundant.
+  const canvas = page.locator("canvas").first();
+  const visible = await canvas.isVisible({ timeout: 15_000 }).catch(() => false);
+  if (!visible) {
+    test.skip(true, "Canvas not visible — E2E auth bypass not active in this environment");
+  }
 }
 
 /**
@@ -93,7 +107,6 @@ async function mouseHover(locator: Locator) {
 
 test.describe("Viewscreen tooltips — live HUD behaviour", () => {
   test("hover on FIND DATA shows the tooltip", async ({ page }) => {
-    await ensureSignedIn(page);
     await setTooltipsViaSettings(page, true);
 
     const btn = page.locator(HUD_BUTTON).first();
@@ -106,7 +119,6 @@ test.describe("Viewscreen tooltips — live HUD behaviour", () => {
   });
 
   test("keyboard focus on FIND DATA shows the tooltip", async ({ page }) => {
-    await ensureSignedIn(page);
     await setTooltipsViaSettings(page, true);
 
     const btn = page.locator(HUD_BUTTON).first();
@@ -119,7 +131,6 @@ test.describe("Viewscreen tooltips — live HUD behaviour", () => {
   });
 
   test('disabling Settings → HUD → "Show UI tooltips" suppresses the tooltip', async ({ page }) => {
-    await ensureSignedIn(page);
     await setTooltipsViaSettings(page, false);
 
     const btn = page.locator(HUD_BUTTON).first();
@@ -134,11 +145,11 @@ test.describe("Viewscreen tooltips — live HUD behaviour", () => {
     await expect(page.getByRole("tooltip", { name: TOOLTIP_LABEL })).toHaveCount(0);
 
     // Restore the default so other specs aren't affected by persisted state.
-    await setTooltipsViaSettings(page, true);
+    // No need to return to "/" — the test is over.
+    await setTooltipsViaSettings(page, true, { returnHome: false });
   });
 
   test("tooltips do not swallow pointer events from the 3D canvas", async ({ page }) => {
-    await ensureSignedIn(page);
     await setTooltipsViaSettings(page, true);
 
     const btn = page.locator(HUD_BUTTON).first();

@@ -52,13 +52,24 @@ async function mockOkSurfaceConditions(page: Page): Promise<void> {
   });
 }
 
+/**
+ * Audit note (Task #303): every test in this file genuinely needs the home
+ * route — all assertions target HUD overlay toggles (wind/tide/current) and
+ * the Conditions Legend, both of which only mount on "/". The goto stays in
+ * each test (no `beforeEach` goto to retire). What we DID retire is the
+ * post-goto `waitForLoadState("networkidle")`: the heavy 3D home route runs
+ * background terrain/datasets/tidal requests that rarely settle inside
+ * Playwright's 30s network-idle window, and every test already waits on the
+ * specific HUD element it asserts against (`expect(...).toBeVisible(...)`).
+ * Dropping the redundant idle-wait shaves several seconds per test without
+ * weakening any assertion.
+ */
 test.describe("Wind / Tide / Current overlays", () => {
   test("each HUD toggle reveals the Conditions Legend with the right row", async ({
     page,
   }) => {
     await mockOkSurfaceConditions(page);
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
 
     if (!(await appIsSignedIn(page))) {
       test.skip(true, "Canvas not visible — landing page shown (auth bypass inactive)");
@@ -105,7 +116,6 @@ test.describe("Wind / Tide / Current overlays", () => {
   test("overlay toggle state persists across a page reload", async ({ page }) => {
     await mockOkSurfaceConditions(page);
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
 
     if (!(await appIsSignedIn(page))) {
       test.skip(true, "Canvas not visible — landing page shown");
@@ -138,7 +148,9 @@ test.describe("Wind / Tide / Current overlays", () => {
     expect(stored.cur === null || stored.cur === "false").toBe(true);
 
     await page.reload();
-    await page.waitForLoadState("networkidle");
+    // No networkidle wait — the explicit `expect(windBtn2).toBeVisible`
+    // below auto-waits on the specific HUD element we assert against, and
+    // the 3D home route rarely reaches idle inside Playwright's budget.
 
     const windBtn2 = page.locator("[data-testid='overlay-toggle-wind']");
     const tideBtn2 = page.locator("[data-testid='overlay-toggle-tide']");
@@ -159,7 +171,6 @@ test.describe("Wind / Tide / Current overlays", () => {
   }) => {
     await failSurfaceConditions(page);
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
 
     if (!(await appIsSignedIn(page))) {
       test.skip(true, "Canvas not visible — landing page shown");
