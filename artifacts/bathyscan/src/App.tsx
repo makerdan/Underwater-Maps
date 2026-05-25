@@ -891,19 +891,22 @@ function SettingsHydrator() {
 }
 
 function HomeRoute() {
+  // QueryClientProvider wraps everything (including the global UI surfaces
+  // below) so components like MarkerDetailCard — which intentionally mount
+  // outside AppProvider so they keep working on the signed-out landing page
+  // and in e2e — can still use React Query hooks (e.g. useSurfaceTemperature
+  // to fetch live SST for the marker's coords).
   return (
-    <>
+    <QueryClientProvider client={queryClient}>
       <Show when="signed-in">
-        <QueryClientProvider client={queryClient}>
-          <SettingsHydrator />
-          <TooltipProvider>
-            <AppProvider>
-              <TestBridge />
-              <Main />
-            </AppProvider>
-            <Toaster />
-          </TooltipProvider>
-        </QueryClientProvider>
+        <SettingsHydrator />
+        <TooltipProvider>
+          <AppProvider>
+            <TestBridge />
+            <Main />
+          </AppProvider>
+          <Toaster />
+        </TooltipProvider>
       </Show>
       <Show when="signed-out">
         <LandingPage />
@@ -919,7 +922,7 @@ function HomeRoute() {
       <ContextMenu />
       <MeasurementBanner />
       <MarkerDetailCard />
-    </>
+    </QueryClientProvider>
   );
 }
 

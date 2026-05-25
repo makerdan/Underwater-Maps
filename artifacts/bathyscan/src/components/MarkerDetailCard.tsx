@@ -18,7 +18,15 @@ export const MarkerDetailCard: React.FC = () => {
   const marker = useMarkerDetailStore((s) => s.marker);
   const hide = useMarkerDetailStore((s) => s.hide);
   const units = useSettingsStore((s) => s.units);
-  const { anchor: sstAnchor } = useSurfaceTemperature(!!marker);
+  // The marker itself carries the location we want SST for — far more
+  // accurate than the dataset centre when markers are spread out, and it
+  // means we don't need to reach into AppProvider (this component is
+  // mounted globally outside it so signed-out / e2e flows keep working).
+  const { anchor: sstAnchor } = useSurfaceTemperature(
+    marker?.lat ?? null,
+    marker?.lon ?? null,
+    !!marker,
+  );
 
   useEffect(() => {
     if (!marker) return;

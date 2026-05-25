@@ -11,7 +11,6 @@ import {
   useGetWaterTemperature,
   getGetWaterTemperatureQueryKey,
 } from "@workspace/api-client-react";
-import { useAppState } from "@/lib/context";
 import type { SurfaceAnchor } from "@/lib/waterTemp";
 
 export interface SurfaceTemperatureResult {
@@ -20,17 +19,26 @@ export interface SurfaceTemperatureResult {
   error: boolean;
 }
 
-export function useSurfaceTemperature(enabled = true): SurfaceTemperatureResult {
-  const { terrain } = useAppState();
-  const centerLat = terrain ? (terrain.minLat + terrain.maxLat) / 2 : null;
-  const centerLon = terrain ? (terrain.minLon + terrain.maxLon) / 2 : null;
-
-  const params = { lat: centerLat ?? 0, lon: centerLon ?? 0 };
+/**
+ * @param lat  Latitude to sample (null disables the fetch).
+ * @param lon  Longitude to sample.
+ * @param enabled Caller-controlled gate (e.g. only fetch when a marker is open).
+ *
+ * The caller passes coordinates explicitly so the hook can be used outside
+ * of `AppProvider` (e.g. by `MarkerDetailCard`, which is mounted globally so
+ * it works on the signed-out landing page and in e2e tests).
+ */
+export function useSurfaceTemperature(
+  lat: number | null,
+  lon: number | null,
+  enabled = true,
+): SurfaceTemperatureResult {
+  const params = { lat: lat ?? 0, lon: lon ?? 0 };
 
   const { data, isLoading, isError } = useGetWaterTemperature(params, {
     query: {
       queryKey: getGetWaterTemperatureQueryKey(params),
-      enabled: enabled && centerLat !== null && centerLon !== null,
+      enabled: enabled && lat !== null && lon !== null,
       // SST evolves very slowly; once per session is plenty.
       staleTime: 60 * 60 * 1000,
       retry: 1,

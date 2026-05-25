@@ -114,7 +114,13 @@ export const HUD: React.FC = () => {
 
   // Live sea-surface temperature for the dataset centre — used as the
   // surface anchor of the thermocline model below.
-  const { anchor: sstAnchor } = useSurfaceTemperature(!!terrain);
+  const hudCenterLat = terrain ? (terrain.minLat + terrain.maxLat) / 2 : null;
+  const hudCenterLon = terrain ? (terrain.minLon + terrain.maxLon) / 2 : null;
+  const { anchor: sstAnchor } = useSurfaceTemperature(
+    hudCenterLat,
+    hudCenterLon,
+    !!terrain,
+  );
 
   const speed = SPEEDS[speedIndex] ?? 0.15;
   const isFly = mode === "fly";
