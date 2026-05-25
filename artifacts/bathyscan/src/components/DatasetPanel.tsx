@@ -38,12 +38,12 @@ const EFH_DATASETS = new Set(["thorne-bay"]);
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 const PANEL: React.CSSProperties = {
-  background: "rgba(0,10,20,0.82)",
-  border: "1px solid rgba(0,229,255,0.18)",
+  background: "rgba(2,8,18,0.94)",
+  border: "1px solid rgba(0,229,255,0.28)",
   borderRadius: 6,
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-  color: "#94a3b8",
-  fontSize: 11,
+  color: "#cbd5e1",
+  fontSize: 12,
   minWidth: 220,
   maxWidth: 260,
   backdropFilter: "blur(6px)",
@@ -408,7 +408,7 @@ export const DatasetPanel: React.FC = () => {
         className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors rounded-t"
         style={{ cursor: "pointer" }}
       >
-        <span className="uppercase tracking-widest" style={{ fontSize: 10, ...CYAN, fontWeight: 700 }}>
+        <span className="uppercase tracking-widest" style={{ fontSize: 11, ...CYAN, fontWeight: 700 }}>
           ▼ Datasets
         </span>
         <div className="flex items-center gap-2">
@@ -430,7 +430,7 @@ export const DatasetPanel: React.FC = () => {
             justifyContent: "space-between",
             gap: 8,
           }}>
-            <span style={{ fontSize: 8, letterSpacing: "0.12em", color: "#334155" }}>ENVIRONMENT</span>
+            <span style={{ fontSize: 10, letterSpacing: "0.12em", color: "#94a3b8" }}>ENVIRONMENT</span>
             <WaterTypeToggle />
           </div>
           {/* ── Built-in dataset list ── */}
@@ -543,12 +543,12 @@ export const DatasetPanel: React.FC = () => {
                       ) : ds.waterType === "saltwater" ? "≋" : "~"}
                     </span>
                   </div>
-                  <div style={{ fontSize: 9, color: "#475569", marginTop: 1, letterSpacing: "0.05em" }}>
+                  <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2, letterSpacing: "0.05em" }}>
                     {ds.minDepth}m – {ds.maxDepth}m
                   </div>
                   <div
                     style={{
-                      fontSize: 9, color: "#334155", marginTop: 1,
+                      fontSize: 10, color: "#94a3b8", marginTop: 1,
                       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                     }}
                   >
@@ -572,7 +572,7 @@ export const DatasetPanel: React.FC = () => {
             <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}>
               <div
                 className="px-3 py-1 flex items-center gap-2"
-                style={{ fontSize: 9, letterSpacing: "0.12em", color: "#334155" }}
+                style={{ fontSize: 10, letterSpacing: "0.12em", color: "#94a3b8" }}
               >
                 <span>▲ MY UPLOADS</span>
                 {userDatasetsLoading && (
@@ -581,7 +581,7 @@ export const DatasetPanel: React.FC = () => {
               </div>
 
               {(userDatasets ?? []).length === 0 && !userDatasetsLoading && (
-                <div style={{ fontSize: 9, color: "#334155", padding: "4px 12px 8px" }}>
+                <div style={{ fontSize: 10, color: "#94a3b8", padding: "4px 12px 8px" }}>
                   No saved terrains yet
                 </div>
               )}
@@ -699,12 +699,12 @@ export const DatasetPanel: React.FC = () => {
                     </div>
                     <div
                       style={{
-                        fontSize: 9, color: "#334155", marginTop: 1, letterSpacing: "0.05em",
+                        fontSize: 10, color: "#94a3b8", marginTop: 2, letterSpacing: "0.05em",
                         display: "flex", justifyContent: "space-between",
                       }}
                     >
                       <span>{ds.minDepth}m – {ds.maxDepth}m</span>
-                      <span style={{ color: "#1e293b" }}>{date}</span>
+                      <span style={{ color: "#64748b" }}>{date}</span>
                     </div>
                   </button>
                 );
@@ -720,16 +720,16 @@ export const DatasetPanel: React.FC = () => {
                 className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
                 style={{ cursor: "pointer" }}
               >
-                <span style={{ fontSize: 9, letterSpacing: "0.12em", color: "#334155" }}>
+                <span style={{ fontSize: 10, letterSpacing: "0.12em", color: "#94a3b8" }}>
                   ▼ MARKERS {markers?.length ? `(${markers.length})` : ""}
                 </span>
-                <span style={{ color: "#475569", fontSize: 10 }}>{markersOpen ? "−" : "+"}</span>
+                <span style={{ color: "#94a3b8", fontSize: 11 }}>{markersOpen ? "−" : "+"}</span>
               </button>
 
               {markersOpen && (
                 <div style={{ paddingBottom: 4 }}>
                   {!markers?.length && (
-                    <div style={{ fontSize: 9, color: "#334155", padding: "4px 12px 6px" }}>
+                    <div style={{ fontSize: 10, color: "#94a3b8", padding: "4px 12px 6px" }}>
                       No markers yet — press G or right-click to drop one
                     </div>
                   )}
@@ -754,8 +754,8 @@ export const DatasetPanel: React.FC = () => {
                           <span
                             style={{
                               flex: 1,
-                              fontSize: 10,
-                              color: "#cbd5e1",
+                              fontSize: 11,
+                              color: "#e2e8f0",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
@@ -763,7 +763,7 @@ export const DatasetPanel: React.FC = () => {
                           >
                             {m.label}
                           </span>
-                          <span style={{ fontSize: 9, color: "#334155", flexShrink: 0 }}>
+                          <span style={{ fontSize: 10, color: "#94a3b8", flexShrink: 0 }}>
                             {Math.round(m.depth)}m
                           </span>
                           <span
@@ -802,10 +802,10 @@ export const DatasetPanel: React.FC = () => {
               className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
               style={{ cursor: "pointer" }}
             >
-              <span style={{ fontSize: 9, letterSpacing: "0.15em", color: "#475569" }}>
+              <span style={{ fontSize: 10, letterSpacing: "0.15em", color: "#94a3b8" }}>
                 ▲ UPLOAD CUSTOM TERRAIN
               </span>
-              <span style={{ color: "#475569", fontSize: 10 }}>{uploadOpen ? "−" : "+"}</span>
+              <span style={{ color: "#94a3b8", fontSize: 11 }}>{uploadOpen ? "−" : "+"}</span>
             </button>
 
             {uploadOpen && (
@@ -814,13 +814,13 @@ export const DatasetPanel: React.FC = () => {
                   <div
                     data-testid="upload-offline-notice"
                     style={{
-                      border: "1px dashed rgba(239,68,68,0.25)",
-                      background: "rgba(239,68,68,0.04)",
+                      border: "1px dashed rgba(239,68,68,0.35)",
+                      background: "rgba(239,68,68,0.06)",
                       borderRadius: 4,
                       padding: "12px 8px",
                       textAlign: "center",
-                      fontSize: 9,
-                      color: "#f87171",
+                      fontSize: 10,
+                      color: "#fca5a5",
                       letterSpacing: "0.1em",
                     }}
                   >
@@ -860,21 +860,21 @@ export const DatasetPanel: React.FC = () => {
                       <input {...getInputProps()} />
                       {postDatasetsUpload.isPending ? (
                         <div>
-                          <div className="animate-pulse" style={{ ...CYAN, fontSize: 10, marginBottom: 2 }}>
+                          <div className="animate-pulse" style={{ ...CYAN, fontSize: 11, marginBottom: 2 }}>
                             ◌ Uploading &amp; parsing...
                           </div>
-                          <div style={{ fontSize: 9, color: "#334155" }}>{Math.round(uploadProgress)}%</div>
+                          <div style={{ fontSize: 10, color: "#94a3b8" }}>{Math.round(uploadProgress)}%</div>
                         </div>
                       ) : (
                         <>
-                          <div style={{ fontSize: 10, color: "#64748b", marginBottom: 3 }}>
+                          <div style={{ fontSize: 11, color: "#cbd5e1", marginBottom: 3 }}>
                             Drop .xyz or .csv here
                           </div>
-                          <div style={{ fontSize: 9, color: "#334155" }}>
+                          <div style={{ fontSize: 10, color: "#94a3b8" }}>
                             up to 50 MB{isSignedIn ? " · auto-saved to account" : ""}
                           </div>
                           {uploadError && (
-                            <div style={{ fontSize: 9, color: "#f87171", marginTop: 4 }}>⚠ {uploadError}</div>
+                            <div style={{ fontSize: 10, color: "#f87171", marginTop: 4 }}>⚠ {uploadError}</div>
                           )}
                         </>
                       )}

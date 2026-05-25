@@ -33,16 +33,16 @@ import { formatDepth } from "@/lib/units";
 // ---------------------------------------------------------------------------
 
 const PANEL: React.CSSProperties = {
-  background: "rgba(0,10,20,0.82)",
-  border: "1px solid rgba(0,229,255,0.18)",
+  background: "rgba(2,8,18,0.94)",
+  border: "1px solid rgba(0,229,255,0.28)",
   borderRadius: 6,
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-  color: "#94a3b8",
-  fontSize: 11,
+  color: "#cbd5e1",
+  fontSize: 12,
   backdropFilter: "blur(6px)",
   pointerEvents: "auto",
-  minWidth: 172,
-  maxWidth: 240,
+  minWidth: 200,
+  maxWidth: 250,
 };
 
 const AMBER: React.CSSProperties = {
@@ -103,16 +103,16 @@ const HotspotCard: React.FC<HotspotCardProps> = ({
   >
     <div className="flex items-start justify-between gap-1">
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ color: "#e2e8f0", fontSize: 10, marginBottom: 1 }}>
-          <span style={{ color: "#475569", fontSize: 9 }}>#{index + 1} </span>
-          <span style={{ color: "#fb923c" }}>{Math.round(hotspot.score * 100)}%</span>
-          <span style={{ color: "#334155", fontSize: 9 }}> match</span>
+        <div style={{ color: "#e2e8f0", fontSize: 11, marginBottom: 1 }}>
+          <span style={{ color: "#94a3b8", fontSize: 10 }}>#{index + 1} </span>
+          <span style={{ color: "#fb923c", fontWeight: 600 }}>{Math.round(hotspot.score * 100)}%</span>
+          <span style={{ color: "#94a3b8", fontSize: 10 }}> match</span>
         </div>
         <ScoreBar score={hotspot.score} />
-        <div style={{ fontSize: 9, color: "#64748b", marginTop: 3 }}>
+        <div style={{ fontSize: 10, color: "#cbd5e1", marginTop: 3 }}>
           <span>{formatDepth(hotspot.depth, { units })}</span>
-          <span style={{ color: "#1e293b", margin: "0 4px" }}>·</span>
-          <span style={{ color: "#475569" }}>
+          <span style={{ color: "#64748b", margin: "0 4px" }}>·</span>
+          <span style={{ color: "#94a3b8" }}>
             {hotspot.zoneLabel.replace(/_/g, " ")}
           </span>
         </div>
@@ -123,10 +123,10 @@ const HotspotCard: React.FC<HotspotCardProps> = ({
         onClick={() => onFly(hotspot)}
         style={{
           flex: 1,
-          fontSize: 8,
+          fontSize: 10,
           letterSpacing: "0.1em",
-          padding: "3px 0",
-          border: "1px solid rgba(0,229,255,0.2)",
+          padding: "4px 0",
+          border: "1px solid rgba(0,229,255,0.35)",
           borderRadius: 3,
           background: "transparent",
           color: "#00e5ff",
@@ -141,13 +141,13 @@ const HotspotCard: React.FC<HotspotCardProps> = ({
         disabled={dropping}
         style={{
           flex: 1,
-          fontSize: 8,
+          fontSize: 10,
           letterSpacing: "0.1em",
-          padding: "3px 0",
-          border: "1px solid rgba(251,146,60,0.25)",
+          padding: "4px 0",
+          border: "1px solid rgba(251,146,60,0.4)",
           borderRadius: 3,
           background: "transparent",
-          color: dropping ? "#475569" : "#fb923c",
+          color: dropping ? "#94a3b8" : "#fb923c",
           cursor: dropping ? "default" : "pointer",
           fontFamily: "inherit",
         }}
@@ -275,11 +275,11 @@ export const HabitatPanel: React.FC = () => {
       >
         <span
           className="uppercase tracking-widest"
-          style={{ fontSize: 10, ...AMBER, fontWeight: 700 }}
+          style={{ fontSize: 11, ...AMBER, fontWeight: 700 }}
         >
           ◈ Habitat Layer
         </span>
-        <span style={{ fontSize: 9, color: "#334155" }}>
+        <span style={{ fontSize: 11, color: "#94a3b8" }}>
           {collapsed ? "▶" : "▼"}
         </span>
       </button>
@@ -288,7 +288,7 @@ export const HabitatPanel: React.FC = () => {
         <div className="px-3 py-2">
           {/* Species selector */}
           <div style={{ marginBottom: 8 }}>
-            <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.08em", marginBottom: 4 }}>
+            <div style={{ fontSize: 10, color: "#94a3b8", letterSpacing: "0.08em", marginBottom: 4 }}>
               SPECIES ({waterType === "freshwater" ? "freshwater" : "marine"})
             </div>
             <select
@@ -297,13 +297,13 @@ export const HabitatPanel: React.FC = () => {
               onChange={(e) => handleSpeciesChange(e.target.value as SpeciesId | "")}
               style={{
                 width: "100%",
-                background: "rgba(0,10,30,0.85)",
-                border: `1px solid ${showOverlay ? "rgba(251,146,60,0.45)" : "rgba(0,229,255,0.15)"}`,
+                background: "rgba(0,10,30,0.9)",
+                border: `1px solid ${showOverlay ? "rgba(251,146,60,0.55)" : "rgba(0,229,255,0.3)"}`,
                 borderRadius: 3,
-                color: showOverlay ? "#fb923c" : "#64748b",
+                color: showOverlay ? "#fb923c" : "#cbd5e1",
                 fontFamily: "inherit",
-                fontSize: 10,
-                padding: "4px 6px",
+                fontSize: 11,
+                padding: "5px 6px",
                 cursor: "pointer",
                 outline: "none",
               }}
@@ -319,7 +319,7 @@ export const HabitatPanel: React.FC = () => {
 
           {/* Status */}
           {showOverlay && (
-            <div style={{ fontSize: 9, color: "#475569", marginBottom: 6, letterSpacing: "0.04em" }}>
+            <div style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 6, letterSpacing: "0.04em" }}>
               Amber overlay active on terrain
             </div>
           )}
@@ -328,12 +328,12 @@ export const HabitatPanel: React.FC = () => {
           {showOverlay && (
             <div className="hotspot-list">
               {hotspots.length === 0 ? (
-                <div style={{ fontSize: 9, color: "#1e293b" }}>
+                <div style={{ fontSize: 11, color: "#94a3b8" }}>
                   No hotspots above 75% threshold
                 </div>
               ) : (
                 <>
-                  <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.08em", marginBottom: 4 }}>
+                  <div style={{ fontSize: 10, color: "#94a3b8", letterSpacing: "0.08em", marginBottom: 4 }}>
                     SUGGESTED HOTSPOTS ({hotspots.length})
                   </div>
                   {hotspots.map((h, i) => (
@@ -352,7 +352,7 @@ export const HabitatPanel: React.FC = () => {
           )}
 
           {!activeSpecies && (
-            <div style={{ fontSize: 9, color: "#1e293b", letterSpacing: "0.05em" }}>
+            <div style={{ fontSize: 11, color: "#94a3b8", letterSpacing: "0.05em" }}>
               Select a species to score habitat
             </div>
           )}

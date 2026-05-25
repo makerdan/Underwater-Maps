@@ -13,12 +13,12 @@ const BINDINGS: { key: string; action: string }[] = [
 ];
 
 const PANEL: React.CSSProperties = {
-  background: "rgba(0,10,20,0.82)",
-  border: "1px solid rgba(0,229,255,0.18)",
+  background: "rgba(2,8,18,0.94)",
+  border: "1px solid rgba(0,229,255,0.28)",
   borderRadius: 6,
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-  color: "#94a3b8",
-  fontSize: 11,
+  color: "#cbd5e1",
+  fontSize: 12,
   minWidth: 220,
   maxWidth: 260,
   backdropFilter: "blur(6px)",
@@ -41,11 +41,11 @@ export const KeyboardShortcutsPanel: React.FC = () => {
       >
         <span
           className="uppercase tracking-widest"
-          style={{ fontSize: 10, ...CYAN, fontWeight: 700 }}
+          style={{ fontSize: 11, ...CYAN, fontWeight: 700 }}
         >
           ▼ Keyboard
         </span>
-        <span style={{ color: "#475569", fontSize: 12 }}>
+        <span style={{ color: "#94a3b8", fontSize: 12 }}>
           {collapsed ? "▸" : "▾"}
         </span>
       </button>
@@ -60,17 +60,18 @@ export const KeyboardShortcutsPanel: React.FC = () => {
               <span
                 className="shrink-0 rounded px-1 py-0.5 uppercase tracking-wider"
                 style={{
-                  background: "rgba(0,229,255,0.08)",
-                  border: "1px solid rgba(0,229,255,0.2)",
+                  background: "rgba(0,229,255,0.12)",
+                  border: "1px solid rgba(0,229,255,0.35)",
                   color: "#00e5ff",
-                  minWidth: 60,
-                  fontSize: 9,
+                  minWidth: 64,
+                  fontSize: 10,
                   textAlign: "center",
+                  fontWeight: 600,
                 }}
               >
                 {key}
               </span>
-              <span style={{ fontSize: 10, lineHeight: 1.3 }}>{action}</span>
+              <span style={{ fontSize: 11, lineHeight: 1.4, color: "#cbd5e1" }}>{action}</span>
             </div>
           ))}
         </div>

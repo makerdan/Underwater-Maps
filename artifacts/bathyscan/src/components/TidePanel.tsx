@@ -5,13 +5,13 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { formatDistance, formatDepth } from "@/lib/units";
 
 const PANEL: React.CSSProperties = {
-  background: "rgba(0,10,20,0.88)",
-  border: "1px solid rgba(0,229,255,0.2)",
+  background: "rgba(2,8,18,0.94)",
+  border: "1px solid rgba(0,229,255,0.3)",
   borderRadius: 4,
   backdropFilter: "blur(6px)",
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-  fontSize: 11,
-  color: "#94a3b8",
+  fontSize: 12,
+  color: "#cbd5e1",
   letterSpacing: "0.07em",
   userSelect: "none",
   pointerEvents: "auto",
@@ -20,8 +20,8 @@ const PANEL: React.CSSProperties = {
 };
 
 const CYAN: React.CSSProperties = { color: "#00e5ff", textShadow: "0 0 6px rgba(0,229,255,0.5)" };
-const DIM: React.CSSProperties = { color: "#475569" };
-const LABEL: React.CSSProperties = { color: "#475569", fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase" };
+const DIM: React.CSSProperties = { color: "#94a3b8" };
+const LABEL: React.CSSProperties = { color: "#94a3b8", fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", fontWeight: 600 };
 
 function compassLabel(deg: number): string {
   const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
@@ -135,11 +135,11 @@ export const TidePanel: React.FC<TidePanelProps> = ({
       {!collapsed && (
         <div className="px-2 py-2 space-y-2">
           {loading && !data.available && (
-            <div style={{ ...DIM, fontSize: 10 }}>Fetching tidal data…</div>
+            <div style={{ ...DIM, fontSize: 11 }}>Fetching tidal data…</div>
           )}
 
           {!data.available && !loading && (
-            <div style={{ color: "#64748b", fontSize: 10 }}>
+            <div style={{ color: "#cbd5e1", fontSize: 11 }}>
               No tidal station within {formatDistance(100_000, { units })} of this area.
             </div>
           )}
@@ -149,7 +149,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
               {/* Station */}
               <div>
                 <div style={LABEL}>Station</div>
-                <div style={{ color: "#7dd3fc", fontSize: 10 }}>{data.stationName}</div>
+                <div style={{ color: "#7dd3fc", fontSize: 11 }}>{data.stationName}</div>
               </div>
 
               {/* Tide height */}
@@ -160,15 +160,15 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                     {data.tideHeight >= 0 ? "+" : ""}
                     {formatDepth(data.tideHeight, { units, decimals: 2 })}
                   </span>
-                  <span style={{ ...DIM, fontSize: 9, marginLeft: 4 }}>MLLW</span>
+                  <span style={{ ...DIM, fontSize: 10, marginLeft: 4 }}>MLLW</span>
                   {data.isPredicted && (
                     <span
                       style={{
                         marginLeft: 5,
-                        fontSize: 8,
-                        background: "rgba(251,191,36,0.15)",
-                        border: "1px solid rgba(251,191,36,0.4)",
-                        color: "#fbbf24",
+                        fontSize: 9,
+                        background: "rgba(251,191,36,0.18)",
+                        border: "1px solid rgba(251,191,36,0.5)",
+                        color: "#fcd34d",
                         borderRadius: 2,
                         padding: "0 3px",
                         letterSpacing: "0.15em",
@@ -208,7 +208,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                     Next {data.nextEvent.type === "high" ? "High" : "Low"}
                     {data.isPredicted ? " (predicted)" : ""}
                   </div>
-                  <div style={{ color: "#f0abfc", fontSize: 10 }}>
+                  <div style={{ color: "#f0abfc", fontSize: 11 }}>
                     {formatDepth(data.nextEvent.height, { units, decimals: 2 })} — in{" "}
                     {timeToNext(data.nextEvent.time, referenceTime)}
                   </div>
@@ -224,12 +224,12 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                       key={l}
                       onClick={() => onDepthLayerChange(l)}
                       style={{
-                        fontSize: 9,
-                        padding: "2px 6px",
+                        fontSize: 10,
+                        padding: "3px 7px",
                         borderRadius: 2,
-                        border: `1px solid ${l === depthLayer ? "rgba(0,229,255,0.5)" : "rgba(0,229,255,0.15)"}`,
-                        background: l === depthLayer ? "rgba(0,229,255,0.12)" : "transparent",
-                        color: l === depthLayer ? "#00e5ff" : "#475569",
+                        border: `1px solid ${l === depthLayer ? "rgba(0,229,255,0.6)" : "rgba(0,229,255,0.3)"}`,
+                        background: l === depthLayer ? "rgba(0,229,255,0.15)" : "transparent",
+                        color: l === depthLayer ? "#00e5ff" : "#cbd5e1",
                         cursor: "pointer",
                         letterSpacing: "0.1em",
                       }}
@@ -263,15 +263,15 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                     key={offset}
                     onClick={() => setDay(offset)}
                     style={{
-                      fontSize: 8,
-                      padding: "1px 5px",
+                      fontSize: 10,
+                      padding: "2px 6px",
                       borderRadius: 2,
-                      border: `1px solid ${offset === selectedDayOffset ? "rgba(56,189,248,0.5)" : "rgba(0,229,255,0.12)"}`,
+                      border: `1px solid ${offset === selectedDayOffset ? "rgba(56,189,248,0.6)" : "rgba(0,229,255,0.25)"}`,
                       background:
                         offset === selectedDayOffset
-                          ? "rgba(56,189,248,0.12)"
+                          ? "rgba(56,189,248,0.15)"
                           : "transparent",
-                      color: offset === selectedDayOffset ? "#38bdf8" : "#475569",
+                      color: offset === selectedDayOffset ? "#38bdf8" : "#cbd5e1",
                       cursor: "pointer",
                       whiteSpace: "nowrap",
                     }}
@@ -285,7 +285,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
             {/* Hour slider */}
             <div className="mt-1.5">
               <div className="flex items-center gap-2">
-                <span style={{ ...DIM, fontSize: 9, minWidth: 20 }}>00</span>
+                <span style={{ ...DIM, fontSize: 10, minWidth: 20 }}>00</span>
                 <input
                   type="range"
                   min={0}
@@ -294,7 +294,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                   onChange={(e) => setHour(parseInt(e.target.value, 10))}
                   style={{ flex: 1, accentColor: "#00e5ff", height: 4 }}
                 />
-                <span style={{ ...DIM, fontSize: 9, minWidth: 20 }}>23</span>
+                <span style={{ ...DIM, fontSize: 10, minWidth: 20 }}>23</span>
               </div>
               <div style={{ textAlign: "center", ...CYAN, fontSize: 10, marginTop: 2 }}>
                 {String(scrubHour).padStart(2, "0")}:00 UTC

@@ -8,14 +8,14 @@ const CYAN: React.CSSProperties = {
 };
 
 const PANEL: React.CSSProperties = {
-  background: "rgba(0,10,20,0.82)",
-  border: "1px solid rgba(0,229,255,0.25)",
+  background: "rgba(2,8,18,0.94)",
+  border: "1px solid rgba(0,229,255,0.3)",
   borderRadius: 6,
   padding: "8px 12px",
   backdropFilter: "blur(6px)",
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-  fontSize: 11,
-  color: "#94a3b8",
+  fontSize: 12,
+  color: "#cbd5e1",
   letterSpacing: "0.08em",
   minWidth: 220,
   maxWidth: 260,
@@ -54,20 +54,21 @@ export const CameraCoordsReadout: React.FC = () => {
     <div style={{ ...PANEL, opacity: hudOpacity, userSelect: "none" }}>
       <div
         style={{
-          color: "#475569",
-          fontSize: 9,
+          color: "#94a3b8",
+          fontSize: 10,
           letterSpacing: "0.2em",
           marginBottom: 4,
+          fontWeight: 600,
         }}
       >
         CAMERA POSITION
       </div>
       <div>
-        <span style={{ color: "#475569" }}>LON </span>
+        <span style={{ color: "#94a3b8" }}>LON </span>
         <span style={CYAN}>{fmtCoord(cameraLon)}</span>
       </div>
       <div>
-        <span style={{ color: "#475569" }}>LAT </span>
+        <span style={{ color: "#94a3b8" }}>LAT </span>
         <span style={CYAN}>{fmtCoord(cameraLat)}</span>
       </div>
     </div>

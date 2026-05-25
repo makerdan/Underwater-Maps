@@ -30,16 +30,16 @@ function formatZoneLabel(key: string): string {
 }
 
 const PANEL: React.CSSProperties = {
-  background: "rgba(0,10,20,0.82)",
-  border: "1px solid rgba(0,229,255,0.18)",
+  background: "rgba(2,8,18,0.94)",
+  border: "1px solid rgba(0,229,255,0.28)",
   borderRadius: 6,
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-  color: "#94a3b8",
-  fontSize: 11,
+  color: "#cbd5e1",
+  fontSize: 12,
   backdropFilter: "blur(6px)",
   pointerEvents: "auto",
-  minWidth: 172,
-  maxWidth: 224,
+  minWidth: 200,
+  maxWidth: 240,
 };
 
 const CYAN: React.CSSProperties = {
@@ -78,7 +78,7 @@ export const ZoneOverlay: React.FC = () => {
       >
         <span
           className="uppercase tracking-widest"
-          style={{ fontSize: 10, ...CYAN, fontWeight: 700 }}
+          style={{ fontSize: 11, ...CYAN, fontWeight: 700 }}
         >
           ◈ Zone Analysis
         </span>
@@ -93,15 +93,15 @@ export const ZoneOverlay: React.FC = () => {
       <div className="px-3 py-2">
         {/* Loading state */}
         {loading && (
-          <div style={{ fontSize: 10, color: "#64748b", marginBottom: 6 }}>
+          <div style={{ fontSize: 11, color: "#cbd5e1", marginBottom: 6 }}>
             <span className="animate-pulse">Analysing terrain</span>
-            <span style={{ color: "#334155" }}> (3–8 s)</span>
+            <span style={{ color: "#94a3b8" }}> (3–8 s)</span>
           </div>
         )}
 
         {/* Error state */}
         {!loading && error && (
-          <div style={{ fontSize: 10, color: "#f87171", marginBottom: 6 }}>
+          <div style={{ fontSize: 11, color: "#fca5a5", marginBottom: 6 }}>
             Classification unavailable
           </div>
         )}
@@ -143,8 +143,8 @@ export const ZoneOverlay: React.FC = () => {
             </span>
             <span
               style={{
-                fontSize: 10,
-                color: overlayEnabled ? "#00e5ff" : "#475569",
+                fontSize: 11,
+                color: overlayEnabled ? "#00e5ff" : "#cbd5e1",
                 transition: "color 0.15s",
               }}
             >
@@ -175,8 +175,8 @@ export const ZoneOverlay: React.FC = () => {
                   />
                   <span
                     style={{
-                      fontSize: 9,
-                      color: overlayEnabled ? "#94a3b8" : "#334155",
+                      fontSize: 11,
+                      color: overlayEnabled ? "#e2e8f0" : "#94a3b8",
                       letterSpacing: "0.04em",
                       transition: "color 0.15s",
                     }}
@@ -227,8 +227,8 @@ export const ZoneOverlay: React.FC = () => {
               </span>
               <span
                 style={{
-                  fontSize: 10,
-                  color: paintMode ? "#00e5ff" : "#475569",
+                  fontSize: 11,
+                  color: paintMode ? "#00e5ff" : "#cbd5e1",
                   transition: "color 0.15s",
                 }}
               >
@@ -238,7 +238,7 @@ export const ZoneOverlay: React.FC = () => {
 
             {paintMode && (
               <>
-                <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.05em" }}>
+                <div style={{ fontSize: 10, color: "#cbd5e1", letterSpacing: "0.05em" }}>
                   Click &amp; drag on the terrain to repaint
                 </div>
                 <div
@@ -279,12 +279,12 @@ export const ZoneOverlay: React.FC = () => {
                 data-testid="zone-reset-ai"
                 onClick={() => resetToAi()}
                 style={{
-                  fontSize: 10,
-                  color: "#94a3b8",
+                  fontSize: 11,
+                  color: "#cbd5e1",
                   background: "transparent",
-                  border: "1px solid rgba(0,229,255,0.18)",
+                  border: "1px solid rgba(0,229,255,0.28)",
                   borderRadius: 3,
-                  padding: "3px 6px",
+                  padding: "4px 6px",
                   cursor: "pointer",
                   letterSpacing: "0.04em",
                   textAlign: "left",
@@ -298,7 +298,7 @@ export const ZoneOverlay: React.FC = () => {
 
         {/* Waiting state */}
         {!hasZoneMap && !loading && !error && (
-          <div style={{ fontSize: 9, color: "#1e293b", letterSpacing: "0.05em" }}>
+          <div style={{ fontSize: 11, color: "#94a3b8", letterSpacing: "0.05em" }}>
             Load a dataset to classify
           </div>
         )}
