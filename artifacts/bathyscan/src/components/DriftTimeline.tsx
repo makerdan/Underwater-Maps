@@ -143,8 +143,21 @@ export const DriftTimeline: React.FC = () => {
       {wp && (
         <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
           <div>
-            <div style={{ color: "#475569", fontSize: 8, letterSpacing: "0.18em" }}>DRIFT SPEED</div>
+            <div style={{ color: "#475569", fontSize: 8, letterSpacing: "0.18em" }}>
+              {isTrolling ? "TOTAL SPEED" : "DRIFT SPEED"}
+            </div>
             <div data-testid="drift-speed-value" style={{ color: "#00e5ff", fontWeight: 700 }}>{wp.driftSpeedKnots.toFixed(1)} kt</div>
+            {isTrolling && typeof wp.boatContributionKnots === "number" && typeof wp.driftContributionKnots === "number" && (
+              <div
+                data-testid="drift-breakdown"
+                title="Boat propulsion and wind+tide drift are vectors; the total combines their directions, so it may be less than the sum."
+                style={{ fontSize: 8, color: "#94a3b8", marginTop: 2, letterSpacing: "0.04em", cursor: "help" }}
+              >
+                <span style={{ color: "#fbbf24" }}>boat: {wp.boatContributionKnots.toFixed(1)} kt</span>
+                <span style={{ color: "#475569" }}> + </span>
+                <span style={{ color: "#7dd3fc" }}>drift: {wp.driftContributionKnots.toFixed(1)} kt</span>
+              </div>
+            )}
           </div>
           <div>
             <div style={{ color: "#475569", fontSize: 8, letterSpacing: "0.18em" }}>LINE ANGLE</div>

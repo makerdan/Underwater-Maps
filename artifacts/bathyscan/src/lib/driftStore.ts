@@ -46,6 +46,10 @@ export interface DriftWaypoint {
   legRemainingKm?: number;
   /** Index of the user waypoint being chased at the END of this hour. */
   targetWaypointIndex?: number;
+  /** Speed contribution (kt) from wind+tidal drift alone (vector magnitude of 0.7*tidal + 0.3*wind). */
+  driftContributionKnots?: number;
+  /** Speed contribution (kt) from boat propulsion alone. Trolling mode only. */
+  boatContributionKnots?: number;
 }
 
 /** User-placed turn point on the water surface for multi-leg trolling. */

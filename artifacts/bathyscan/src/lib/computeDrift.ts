@@ -186,6 +186,8 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
     const cond = conditions[h % conditions.length]!;
     const hourStartLat = curLat;
     const hourStartLon = curLon;
+    let driftContributionKnots = 0;
+    let boatContributionKnots: number | undefined;
 
     if (useWaypoints) {
       // Sub-step the hour: travel toward the current leg target at boat speed,
@@ -193,6 +195,7 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
       // drift is applied uniformly across the full hour at the end.
       let timeRemaining = 1; // hours
       const boatKmH = boatSpeedKnots * KM_PER_KNOT_HOUR;
+      let boatKmTraveled = 0;
       // Bound iterations to avoid pathological loops (e.g. waypoints stacked).
       let guard = 0;
       while (timeRemaining > 1e-6 && guard < 50) {
@@ -208,6 +211,7 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
         const frac = t / timeToTarget; // 0..1 along the leg this sub-step
         curLat = curLat + (tgt.lat - curLat) * frac;
         curLon = curLon + (tgt.lon - curLon) * frac;
+        boatKmTraveled += boatKmH * t;
         timeRemaining -= t;
         if (frac >= 1 - 1e-6) {
           legIndex = (legIndex + 1) % circuit.length;
@@ -228,8 +232,19 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
       const tidalVec = currentVector(tidalSpeed, tidalDir, hourStartLat);
       const windLeewaySpeed = cond.windSpeedKnots * 0.03;
       const windVec = currentVector(windLeewaySpeed, cond.windDegrees, hourStartLat);
-      curLat += 0.7 * tidalVec.dLat + 0.3 * windVec.dLat;
-      curLon += 0.7 * tidalVec.dLon + 0.3 * windVec.dLon;
+      const driftDLat = 0.7 * tidalVec.dLat + 0.3 * windVec.dLat;
+      const driftDLon = 0.7 * tidalVec.dLon + 0.3 * windVec.dLon;
+      const driftKmH = Math.sqrt(
+        (driftDLat * KM_PER_DEG_LAT) ** 2 +
+        (driftDLon * KM_PER_DEG_LAT * Math.cos(degToRad(hourStartLat))) ** 2,
+      );
+      driftContributionKnots = driftKmH / KM_PER_KNOT_HOUR;
+      // Boat contribution = actual distance traveled through water this hour,
+      // accumulated across leg sub-steps so loops/turns don't collapse to
+      // net displacement.
+      boatContributionKnots = boatKmTraveled / KM_PER_KNOT_HOUR;
+      curLat += driftDLat;
+      curLon += driftDLon;
     } else {
       // Tidal component: prefer the bathymetry-shaped sampler when supplied
       // (Task #136); otherwise fall back to the per-hour ambient.
@@ -246,13 +261,22 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
       const windLeewaySpeed = cond.windSpeedKnots * 0.03;
       const windVec = currentVector(windLeewaySpeed, cond.windDegrees, curLat);
 
-      let resultantDLat = 0.7 * tidalVec.dLat + 0.3 * windVec.dLat;
-      let resultantDLon = 0.7 * tidalVec.dLon + 0.3 * windVec.dLon;
+      const driftDLat = 0.7 * tidalVec.dLat + 0.3 * windVec.dLat;
+      const driftDLon = 0.7 * tidalVec.dLon + 0.3 * windVec.dLon;
+      const driftKmH = Math.sqrt(
+        (driftDLat * KM_PER_DEG_LAT) ** 2 +
+        (driftDLon * KM_PER_DEG_LAT * Math.cos(degToRad(curLat))) ** 2,
+      );
+      driftContributionKnots = driftKmH / KM_PER_KNOT_HOUR;
+
+      let resultantDLat = driftDLat;
+      let resultantDLon = driftDLon;
 
       if (mode === "trolling" && boatSpeedKnots > 0) {
         const boatVec = currentVector(boatSpeedKnots, boatHeadingDeg, curLat);
         resultantDLat += boatVec.dLat;
         resultantDLon += boatVec.dLon;
+        boatContributionKnots = boatSpeedKnots;
       }
       curLat = curLat + resultantDLat;
       curLon = curLon + resultantDLon;
@@ -304,6 +328,8 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
       activeLegIndex,
       legRemainingKm,
       targetWaypointIndex,
+      driftContributionKnots,
+      boatContributionKnots,
     });
   }
 
