@@ -2199,7 +2199,12 @@ export function Settings() {
             </span>
           </label>
           {savedMsg && (
-            <span style={{ color: "#4ade80", letterSpacing: "0.15em" }}>✓ SAVED</span>
+            <span
+              data-testid="topbar-saved-indicator"
+              style={{ color: "#4ade80", letterSpacing: "0.15em" }}
+            >
+              ✓ SAVED
+            </span>
           )}
           {isSignedIn && !savedMsg && (
             <span style={{ color: "#334155", letterSpacing: "0.1em" }}>synced to cloud</span>
