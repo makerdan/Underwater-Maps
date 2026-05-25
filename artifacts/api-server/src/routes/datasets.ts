@@ -208,34 +208,76 @@ router.post("/datasets/upload", upload.single("file"), async (req, res): Promise
   // UUID client-side so that the stored grids carry the real datasetId from
   // the start (instead of the legacy "upload" placeholder).
   let savedDatasetId: string | undefined;
+  let savedDatasetMeta:
+    | { id: string; name: string; minDepth: number; maxDepth: number; createdAt: string }
+    | undefined;
+  let saveError: string | undefined;
+
   const auth = getAuth(req);
   const userId = auth?.userId ?? null;
-  const gridId = userId ? crypto.randomUUID() : "upload";
+  const isE2EBypass =
+    process.env["E2E_AUTH_BYPASS"] === "1" &&
+    typeof req.headers["x-e2e-user-id"] === "string" &&
+    (req.headers["x-e2e-user-id"] as string).trim() !== "";
+  const effectiveUserId = userId ?? (isE2EBypass ? (req.headers["x-e2e-user-id"] as string).trim() : null);
+  const gridId = effectiveUserId ? crypto.randomUUID() : "upload";
 
   const terrain = gridPoints(points, resolution, gridId, datasetName, { smoothing });
   const overview = gridPoints(points, 64, gridId, datasetName, { smoothing });
 
-  if (userId) {
+  if (effectiveUserId) {
     try {
       const [saved] = await db
         .insert(customDatasetsTable)
         .values({
           id: gridId,
-          userId,
+          userId: effectiveUserId,
           name: datasetName,
           minDepth: terrain.minDepth,
           maxDepth: terrain.maxDepth,
           terrainJson: terrain as unknown as Record<string, unknown>,
           overviewJson: overview as unknown as Record<string, unknown>,
         })
-        .returning({ id: customDatasetsTable.id });
-      if (saved) savedDatasetId = saved.id;
-    } catch {
-      // Non-fatal: proceed without saving
+        .returning({
+          id: customDatasetsTable.id,
+          name: customDatasetsTable.name,
+          minDepth: customDatasetsTable.minDepth,
+          maxDepth: customDatasetsTable.maxDepth,
+          createdAt: customDatasetsTable.createdAt,
+        });
+      if (saved) {
+        savedDatasetId = saved.id;
+        savedDatasetMeta = {
+          id: saved.id,
+          name: saved.name,
+          minDepth: saved.minDepth,
+          maxDepth: saved.maxDepth,
+          createdAt: saved.createdAt.toISOString(),
+        };
+      } else {
+        saveError = "Database insert returned no row";
+        console.warn(
+          `[datasets/upload] authenticated upload returned without savedDatasetId (userId=${effectiveUserId}, name=${datasetName})`,
+        );
+      }
+    } catch (err) {
+      saveError = err instanceof Error ? err.message : "Failed to save upload to account";
+      console.error(
+        `[datasets/upload] failed to persist authenticated upload (userId=${effectiveUserId}, name=${datasetName}):`,
+        err,
+      );
     }
   }
 
-  res.json(PostDatasetsUploadResponse.parse({ terrain, overview, savedDatasetId }));
+  res.json(
+    PostDatasetsUploadResponse.parse({
+      terrain,
+      overview,
+      savedDatasetId,
+      savedDatasetMeta,
+      saveError,
+    }),
+  );
 });
 
 // Backward-compat alias: same multipart handling

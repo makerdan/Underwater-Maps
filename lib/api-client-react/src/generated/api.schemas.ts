@@ -393,16 +393,6 @@ export interface TerrainUploadInput {
 }
 
 /**
- * Full terrain and overview grids generated from an uploaded file. When the user is authenticated the terrain is also persisted and savedDatasetId is returned.
- */
-export interface UploadResult {
-  terrain: TerrainData;
-  overview: TerrainData;
-  /** UUID of the saved custom dataset row (only present when the request was authenticated) */
-  savedDatasetId?: string;
-}
-
-/**
  * Metadata for a user-saved custom terrain dataset
  */
 export interface UserDatasetMeta {
@@ -413,6 +403,20 @@ export interface UserDatasetMeta {
   minDepth: number;
   maxDepth: number;
   createdAt: string;
+}
+
+/**
+ * Full terrain and overview grids generated from an uploaded file. When the user is authenticated the terrain is also persisted and savedDatasetId is returned.
+ */
+export interface UploadResult {
+  terrain: TerrainData;
+  overview: TerrainData;
+  /** UUID of the saved custom dataset row (only present when the request was authenticated AND the row was persisted successfully) */
+  savedDatasetId?: string;
+  /** Metadata for the freshly-saved row, suitable for optimistically inserting into the "My Uploads" list without a refetch */
+  savedDatasetMeta?: UserDatasetMeta;
+  /** Human-readable error string returned when the request was authenticated but the auto-save to the user's account failed. The terrain itself is still returned so the session is usable. */
+  saveError?: string;
 }
 
 export type MarkerType = typeof MarkerType[keyof typeof MarkerType];

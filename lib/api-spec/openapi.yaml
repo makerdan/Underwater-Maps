@@ -1379,7 +1379,13 @@ components:
           $ref: "#/components/schemas/TerrainData"
         savedDatasetId:
           type: string
-          description: UUID of the saved custom dataset row (only present when the request was authenticated)
+          description: UUID of the saved custom dataset row (only present when the request was authenticated AND the row was persisted successfully)
+        savedDatasetMeta:
+          $ref: "#/components/schemas/UserDatasetMeta"
+          description: Metadata for the freshly-saved row, suitable for optimistically inserting into the "My Uploads" list without a refetch
+        saveError:
+          type: string
+          description: Human-readable error string returned when the request was authenticated but the auto-save to the user's account failed. The terrain itself is still returned so the session is usable.
       required:
         - terrain
         - overview

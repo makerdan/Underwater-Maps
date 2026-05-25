@@ -344,11 +344,40 @@ export const DatasetPanel: React.FC = () => {
             void useClassificationStore.getState().classify(data.terrain);
             if (data.savedDatasetId) {
               setActiveUserDatasetId(data.savedDatasetId);
+              // Optimistically insert the new row into the MY UPLOADS cache so
+              // the panel updates instantly without waiting for the refetch.
+              const meta: UserDatasetMeta = data.savedDatasetMeta ?? {
+                id: data.savedDatasetId,
+                name: file.name.replace(/\.[^.]+$/, "").replace(/[_-]/g, " "),
+                minDepth: data.terrain.minDepth,
+                maxDepth: data.terrain.maxDepth,
+                createdAt: new Date().toISOString(),
+              };
+              qc.setQueryData<UserDatasetMeta[]>(
+                getGetUserDatasetsQueryKey(),
+                (prev) => {
+                  const existing = prev ?? [];
+                  if (existing.some((d) => d.id === meta.id)) return existing;
+                  return [meta, ...existing];
+                },
+              );
               void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+              setUploadOpen(false);
             } else {
               setActiveUserDatasetId(null);
+              if (isSignedIn) {
+                // Authenticated user but server didn't (or couldn't) save.
+                // Keep the upload panel open and surface a clear error so the
+                // user knows the terrain won't be there after refresh.
+                setUploadError(
+                  data.saveError
+                    ? `Uploaded, but couldn't save to your account — ${data.saveError}`
+                    : "Uploaded, but couldn't save to your account — try again",
+                );
+              } else {
+                setUploadOpen(false);
+              }
             }
-            setUploadOpen(false);
           },
           onError: (err) => {
             setUploadError(err instanceof Error ? err.message : "Parse failed");
@@ -356,7 +385,7 @@ export const DatasetPanel: React.FC = () => {
         },
       );
     },
-    [postDatasetsUpload, setDatasetId, setTerrain, qc],
+    [postDatasetsUpload, setDatasetId, setTerrain, qc, isSignedIn],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({

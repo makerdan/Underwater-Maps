@@ -157,7 +157,15 @@ export const PostDatasetsUploadResponse = zod.object({
   "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
   "dataSource": zod.enum(['ncei', 'gebco', 'synthetic']).optional().describe('Which upstream data service produced this grid.\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\n')
 }),
-  "savedDatasetId": zod.string().optional().describe('UUID of the saved custom dataset row (only present when the request was authenticated)')
+  "savedDatasetId": zod.string().optional().describe('UUID of the saved custom dataset row (only present when the request was authenticated AND the row was persisted successfully)'),
+  "savedDatasetMeta": zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "name": zod.string().describe('Dataset name derived from the uploaded filename'),
+  "minDepth": zod.number(),
+  "maxDepth": zod.number(),
+  "createdAt": zod.coerce.date()
+}).optional().describe('Metadata for the freshly-saved row, suitable for optimistically inserting into the \"My Uploads\" list without a refetch'),
+  "saveError": zod.string().optional().describe('Human-readable error string returned when the request was authenticated but the auto-save to the user\'s account failed. The terrain itself is still returned so the session is usable.')
 }).describe('Full terrain and overview grids generated from an uploaded file. When the user is authenticated the terrain is also persisted and savedDatasetId is returned.')
 
 
