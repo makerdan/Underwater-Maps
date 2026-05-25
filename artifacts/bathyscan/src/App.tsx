@@ -22,6 +22,7 @@ import { ThrottlePanel } from "@/components/ThrottlePanel";
 import { MarkerForm } from "@/components/MarkerForm";
 import { ContextMenu } from "@/components/ContextMenu";
 import { MeasurementBanner } from "@/components/MeasurementBanner";
+import { DepthProfilePanel } from "@/components/DepthProfilePanel";
 import { MarkerDetailCard } from "@/components/MarkerDetailCard";
 import { OverviewMap } from "@/components/OverviewMap";
 import { ZoneOverlay } from "@/components/ZoneOverlay";
@@ -462,6 +463,9 @@ function Main() {
 
         {/* Measurement banner — z-25, below crosshair */}
         <MeasurementBanner />
+
+        {/* Depth-profile chart — bottom-centre, z-36 */}
+        <DepthProfilePanel />
 
         {/* Marker detail card — z-35, right side */}
         <MarkerDetailCard />

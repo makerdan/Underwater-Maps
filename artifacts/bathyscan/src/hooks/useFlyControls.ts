@@ -16,6 +16,8 @@ import { computeMetersPerWorldUnit, boatMphToWorldUnitsPerSecond } from "@/lib/b
 import { markerGroupRef } from "@/components/MarkerLayer";
 import { useContextMenuStore, type ContextMenuItem } from "@/lib/contextMenuStore";
 import { useMeasureStore } from "@/lib/measureStore";
+import { useDepthProfileStore, buildProfile } from "@/lib/depthProfileStore";
+import { useClassificationStore } from "@/lib/classificationStore";
 import { useMarkerDetailStore } from "@/lib/markerDetailStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { haversineDistance } from "@/lib/geo";
@@ -244,6 +246,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       datasetId: string,
     ): ContextMenuItem[] => {
       const measureAnchor = useMeasureStore.getState().anchorGps;
+      const profileAnchor = useDepthProfileStore.getState().anchor;
       const items: ContextMenuItem[] = [
         {
           label: "Drop GPS pin here",
@@ -282,6 +285,33 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
           },
           disabled: !datasetId,
         },
+        {
+          label: profileAnchor ? "End depth profile here" : "Start depth profile here",
+          icon: "📈",
+          onClick: () => {
+            const store = useDepthProfileStore.getState();
+            const grid = terrainRef.current;
+            if (store.anchor && grid) {
+              const zoneMap = useClassificationStore.getState().zoneMap;
+              const result = buildProfile(
+                grid,
+                store.anchor,
+                { lon, lat, depth },
+                zoneMap,
+              );
+              store.setProfile(result);
+            } else {
+              store.setAnchor({ lon, lat, depth });
+            }
+          },
+        },
+        ...(profileAnchor
+          ? [{
+              label: "Cancel depth profile",
+              icon: "✖",
+              onClick: () => useDepthProfileStore.getState().clearAnchor(),
+            } as ContextMenuItem]
+          : []),
         { label: "", onClick: () => {}, separator: true },
         {
           label: "Copy coordinates",
