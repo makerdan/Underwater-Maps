@@ -10,7 +10,7 @@
 import React, { useEffect, useCallback } from "react";
 import { useGetSurfaceConditions, getGetSurfaceConditionsQueryKey } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
-import { useDriftStore } from "@/lib/driftStore";
+import { useDriftStore, TROLL_MAX_KNOTS } from "@/lib/driftStore";
 import { computeDrift } from "@/lib/computeDrift";
 
 interface CompassProps {
@@ -113,6 +113,12 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     setManualTidalDegrees,
     manualSlackNow,
     setManualSlackNow,
+    driftMode,
+    setDriftMode,
+    boatHeadingDeg,
+    setBoatHeadingDeg,
+    boatSpeedKnots,
+    setBoatSpeedKnots,
   } = useDriftStore();
 
   const centerLat = terrain ? (terrain.minLat + terrain.maxLat) / 2 : 0;
@@ -146,9 +152,12 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
       lineLengthM,
       lineWeightG: 500,
       terrain,
+      mode: driftMode,
+      boatHeadingDeg,
+      boatSpeedKnots,
     });
     setDriftPath(path);
-  }, [data, terrain]);
+  }, [data, terrain, driftMode, boatHeadingDeg, boatSpeedKnots]);
 
   const recomputeWithManual = useCallback(() => {
     if (!terrain) return;
@@ -173,9 +182,12 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
       lineLengthM,
       lineWeightG: 500,
       terrain,
+      mode: driftMode,
+      boatHeadingDeg,
+      boatSpeedKnots,
     });
     setDriftPath(path);
-  }, [terrain, manualWindSpeedKnots, manualWindDegrees, manualTidalSpeedKnots, manualTidalDegrees, driftStartLat, driftStartLon, lineLengthM, centerLat, centerLon]);
+  }, [terrain, manualWindSpeedKnots, manualWindDegrees, manualTidalSpeedKnots, manualTidalDegrees, driftStartLat, driftStartLon, lineLengthM, centerLat, centerLon, driftMode, boatHeadingDeg, boatSpeedKnots]);
 
   const cond = driftConditions?.[driftHour];
 
@@ -252,6 +264,84 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
       )}
 
       <div style={DIVIDER} />
+
+      {/* Mode toggle: Drift vs Trolling */}
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ ...LABEL, marginBottom: 4 }}>MODE</div>
+        <div style={{ display: "flex", gap: 4 }}>
+          {(["drift", "trolling"] as const).map((m) => {
+            const active = driftMode === m;
+            return (
+              <button
+                key={m}
+                onClick={() => setDriftMode(m)}
+                style={{
+                  flex: 1,
+                  background: active ? "rgba(0,229,255,0.15)" : "rgba(0,10,20,0.8)",
+                  border: `1px solid ${active ? "rgba(0,229,255,0.5)" : "rgba(0,229,255,0.15)"}`,
+                  color: active ? "#00e5ff" : "#475569",
+                  fontFamily: "inherit",
+                  fontSize: 9,
+                  padding: "4px",
+                  borderRadius: 3,
+                  cursor: "pointer",
+                  letterSpacing: "0.18em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {m === "drift" ? "⛵ DRIFT" : "🎣 TROLLING"}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {driftMode === "trolling" && (
+        <div style={{ marginBottom: 8, padding: "6px 8px", background: "rgba(0,229,255,0.04)", border: "1px solid rgba(0,229,255,0.15)", borderRadius: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+            <Compass degrees={boatHeadingDeg} size={42} color="#fbbf24" />
+            <div style={{ flex: 1 }}>
+              <div style={LABEL}>BOAT HEADING</div>
+              <div style={{ ...VALUE, color: "#fbbf24" }}>{degToCardinal(boatHeadingDeg)} {Math.round(boatHeadingDeg)}°</div>
+              <input
+                type="range"
+                min={0}
+                max={359}
+                value={boatHeadingDeg}
+                onChange={(e) => setBoatHeadingDeg(Number(e.target.value))}
+                style={sliderStyle}
+              />
+            </div>
+          </div>
+          <div>
+            <div style={LABEL}>BOAT SPEED THROUGH WATER</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <input
+                type="number"
+                min={0}
+                max={TROLL_MAX_KNOTS}
+                step={0.1}
+                value={boatSpeedKnots}
+                onChange={(e) => setBoatSpeedKnots(Number(e.target.value))}
+                style={{ width: 56, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 10, padding: "2px 4px", borderRadius: 3 }}
+              />
+              <span style={{ ...LABEL }}>kt</span>
+              <input
+                type="range"
+                min={0}
+                max={TROLL_MAX_KNOTS}
+                step={0.1}
+                value={boatSpeedKnots}
+                onChange={(e) => setBoatSpeedKnots(Number(e.target.value))}
+                style={{ ...sliderStyle, flex: 1 }}
+              />
+            </div>
+            <div style={{ fontSize: 8, color: "#475569", marginTop: 2 }}>
+              Max {TROLL_MAX_KNOTS} kt · 0 kt falls back to pure drift
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ marginBottom: 6 }}>
         <span style={LABEL}>LINE LENGTH </span>

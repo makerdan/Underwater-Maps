@@ -48,15 +48,37 @@ function formatHour(h: number): string {
 }
 
 export const DriftTimeline: React.FC = () => {
-  const { driftPath, driftHour, setDriftHour, driftConditions, lineLengthM } = useDriftStore();
+  const { driftPath, driftHour, setDriftHour, driftConditions, lineLengthM, driftMode, boatHeadingDeg, boatSpeedKnots } = useDriftStore();
 
   if (!driftPath || driftPath.length === 0) return null;
 
   const wp = driftPath[driftHour];
   const cond = driftConditions?.[driftHour];
 
+  const isTrolling = driftMode === "trolling";
+
   return (
     <div style={PANEL_STYLE}>
+      {/* Mode banner */}
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
+        <span
+          style={{
+            fontSize: 9,
+            letterSpacing: "0.2em",
+            padding: "2px 8px",
+            borderRadius: 3,
+            border: `1px solid ${isTrolling ? "rgba(251,191,36,0.5)" : "rgba(0,229,255,0.4)"}`,
+            background: isTrolling ? "rgba(251,191,36,0.1)" : "rgba(0,229,255,0.08)",
+            color: isTrolling ? "#fbbf24" : "#00e5ff",
+            fontWeight: 700,
+          }}
+        >
+          {isTrolling
+            ? `🎣 TROLLING · ${Math.round(boatHeadingDeg)}° @ ${boatSpeedKnots.toFixed(1)} KT`
+            : "⛵ DRIFT"}
+        </span>
+      </div>
+
       {/* Hour chips */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: 8, justifyContent: "center" }}>
         {driftPath.map((w, h) => {

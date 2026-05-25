@@ -79,7 +79,16 @@ interface DriftStore {
   setManualTidalDegrees: (v: number) => void;
   manualSlackNow: boolean;
   setManualSlackNow: (b: boolean) => void;
+
+  driftMode: "drift" | "trolling";
+  setDriftMode: (m: "drift" | "trolling") => void;
+  boatHeadingDeg: number;
+  setBoatHeadingDeg: (v: number) => void;
+  boatSpeedKnots: number;
+  setBoatSpeedKnots: (v: number) => void;
 }
+
+export const TROLL_MAX_KNOTS = 10;
 
 function readLocalBool(key: string, fallback: boolean): boolean {
   try {
@@ -131,4 +140,11 @@ export const useDriftStore = create<DriftStore>((set) => ({
   setManualTidalDegrees: (v) => set({ manualTidalDegrees: v }),
   manualSlackNow: false,
   setManualSlackNow: (b) => set({ manualSlackNow: b }),
+
+  driftMode: "drift",
+  setDriftMode: (m) => set({ driftMode: m }),
+  boatHeadingDeg: 0,
+  setBoatHeadingDeg: (v) => set({ boatHeadingDeg: ((v % 360) + 360) % 360 }),
+  boatSpeedKnots: 2.5,
+  setBoatSpeedKnots: (v) => set({ boatSpeedKnots: Math.max(0, Math.min(TROLL_MAX_KNOTS, v)) }),
 }));

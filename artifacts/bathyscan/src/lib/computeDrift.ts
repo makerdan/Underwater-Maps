@@ -123,10 +123,19 @@ export interface ComputeDriftOptions {
   lineLengthM: number;
   lineWeightG: number;
   terrain: TerrainData;
+  /** When "trolling", a boat propulsion vector is added to the wind+tide drift. */
+  mode?: "drift" | "trolling";
+  /** Boat heading in degrees (0=N, 90=E). Used only when mode === "trolling". */
+  boatHeadingDeg?: number;
+  /** Boat speed through water in knots. Used only when mode === "trolling". */
+  boatSpeedKnots?: number;
 }
 
 export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
-  const { conditions, startLat, startLon, lineLengthM, terrain } = opts;
+  const {
+    conditions, startLat, startLon, lineLengthM, terrain,
+    mode = "drift", boatHeadingDeg = 0, boatSpeedKnots = 0,
+  } = opts;
 
   const waypoints: DriftWaypoint[] = [];
   let curLat = startLat;
@@ -139,8 +148,14 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
     const windLeewaySpeed = cond.windSpeedKnots * 0.03;
     const windVec = currentVector(windLeewaySpeed, cond.windDegrees, curLat);
 
-    const resultantDLat = 0.7 * tidalVec.dLat + 0.3 * windVec.dLat;
-    const resultantDLon = 0.7 * tidalVec.dLon + 0.3 * windVec.dLon;
+    let resultantDLat = 0.7 * tidalVec.dLat + 0.3 * windVec.dLat;
+    let resultantDLon = 0.7 * tidalVec.dLon + 0.3 * windVec.dLon;
+
+    if (mode === "trolling" && boatSpeedKnots > 0) {
+      const boatVec = currentVector(boatSpeedKnots, boatHeadingDeg, curLat);
+      resultantDLat += boatVec.dLat;
+      resultantDLon += boatVec.dLon;
+    }
 
     const resultantKmH = Math.sqrt(
       (resultantDLat * KM_PER_DEG_LAT) ** 2 +

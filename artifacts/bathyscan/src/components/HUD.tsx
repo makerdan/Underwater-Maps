@@ -6,6 +6,7 @@ import { useUiStore } from "@/lib/uiStore";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { useDriftStore } from "@/lib/driftStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
 import { mphToKnots } from "@/lib/boatSpeed";
 import { formatDepth, formatSpeed } from "@/lib/units";
@@ -75,6 +76,11 @@ export const HUD: React.FC = () => {
   const coordinateFormat = useSettingsStore((s) => s.coordinateFormat);
   const units = useSettingsStore((s) => s.units);
   const hudOpacity = useSettingsStore((s) => s.hudOpacity);
+
+  const driftPlannerActive = useDriftStore((s) => s.driftPlannerActive);
+  const driftMode = useDriftStore((s) => s.driftMode);
+  const boatHeadingDeg = useDriftStore((s) => s.boatHeadingDeg);
+  const boatSpeedKnots = useDriftStore((s) => s.boatSpeedKnots);
 
   const substrateColorMode = useUiStore((s) => s.substrateColorMode);
   const setSubstrateColorMode = useUiStore((s) => s.setSubstrateColorMode);
@@ -191,6 +197,25 @@ export const HUD: React.FC = () => {
         <div style={{ pointerEvents: "auto" }}>
           <HelpIcon articleId="interface-tour" label="Help: HUD overlay" />
         </div>
+
+        {/* Drift / Trolling mode badge */}
+        {driftPlannerActive && (
+          <div
+            style={{
+              ...PANEL,
+              fontSize: 10,
+              border: `1px solid ${driftMode === "trolling" ? "rgba(251,191,36,0.5)" : "rgba(0,229,255,0.3)"}`,
+              background: driftMode === "trolling" ? "rgba(251,191,36,0.08)" : "rgba(0,229,255,0.06)",
+              color: driftMode === "trolling" ? "#fbbf24" : "#00e5ff",
+              letterSpacing: "0.18em",
+              fontWeight: 700,
+            }}
+          >
+            {driftMode === "trolling"
+              ? `🎣 TROLL ${Math.round(boatHeadingDeg).toString().padStart(3, "0")}° / ${boatSpeedKnots.toFixed(1)} KT`
+              : "⛵ DRIFT"}
+          </div>
+        )}
 
         {/* GPS dive button in HUD */}
         {gpsInBounds && (

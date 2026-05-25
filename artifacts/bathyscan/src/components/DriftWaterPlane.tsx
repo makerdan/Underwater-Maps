@@ -67,7 +67,7 @@ interface DriftWaterPlaneProps {
 export const DriftWaterPlane: React.FC<DriftWaterPlaneProps> = ({ surfaceY, terrain }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const timeRef = useRef(0);
-  const { driftConditions, driftHour, lineLengthM, lineWeightG, setDriftStart, setDriftPath } = useDriftStore();
+  const { driftConditions, driftHour, lineLengthM, lineWeightG, setDriftStart, setDriftPath, driftMode, boatHeadingDeg, boatSpeedKnots } = useDriftStore();
 
   const material = useMemo(() => {
     return new THREE.ShaderMaterial({
@@ -123,11 +123,14 @@ export const DriftWaterPlane: React.FC<DriftWaterPlaneProps> = ({ surfaceY, terr
           lineLengthM,
           lineWeightG,
           terrain,
+          mode: driftMode,
+          boatHeadingDeg,
+          boatSpeedKnots,
         });
         setDriftPath(path);
       }
     },
-    [terrain, driftConditions, lineLengthM, lineWeightG, setDriftStart, setDriftPath],
+    [terrain, driftConditions, lineLengthM, lineWeightG, setDriftStart, setDriftPath, driftMode, boatHeadingDeg, boatSpeedKnots],
   );
 
   return (
