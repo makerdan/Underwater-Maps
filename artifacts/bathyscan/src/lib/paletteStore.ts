@@ -18,6 +18,24 @@ export const DEFAULT_DEEP = "#283593";
 export const MID1_HEX = "#0d47a1";
 export const MID2_HEX = "#1a237e";
 
+/**
+ * Curated preset palettes for one-click selection. Each preset defines a
+ * shallow and deep endpoint; the fixed interior stops keep the gradient
+ * cohesive with the rest of the app.
+ */
+export interface PalettePreset {
+  id: string;
+  label: string;
+  shallow: string;
+  deep: string;
+}
+
+export const PALETTE_PRESETS: PalettePreset[] = [
+  { id: "default", label: "Default Ocean", shallow: DEFAULT_SHALLOW, deep: DEFAULT_DEEP },
+  { id: "high-contrast", label: "High-Contrast", shallow: "#ffeb3b", deep: "#000000" },
+  { id: "warm", label: "Warm Shallows", shallow: "#ffd54f", deep: "#4a148c" },
+];
+
 interface PaletteStore {
   shallow: string;
   deep: string;

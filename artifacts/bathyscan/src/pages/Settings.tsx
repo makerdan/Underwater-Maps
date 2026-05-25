@@ -26,7 +26,7 @@ import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMarkersQueryKey } from "@workspace/api-client-react";
 import { useTerrainStore } from "@/lib/terrainStore";
-import { usePaletteStore, DEFAULT_SHALLOW, DEFAULT_DEEP } from "@/lib/paletteStore";
+import { usePaletteStore, DEFAULT_SHALLOW, DEFAULT_DEEP, PALETTE_PRESETS, MID1_HEX, MID2_HEX } from "@/lib/paletteStore";
 import { colormapCanvas } from "@/lib/colormap";
 import { HelpIcon } from "@/components/help/HelpButton";
 
@@ -2374,6 +2374,12 @@ function PalettePickerCard() {
   const isDefault = shallow.toLowerCase() === DEFAULT_SHALLOW.toLowerCase()
     && deep.toLowerCase() === DEFAULT_DEEP.toLowerCase();
 
+  const activePresetId = PALETTE_PRESETS.find(
+    (p) =>
+      p.shallow.toLowerCase() === shallow.toLowerCase() &&
+      p.deep.toLowerCase() === deep.toLowerCase(),
+  )?.id;
+
   const swatchRow: React.CSSProperties = {
     display: "flex",
     alignItems: "center",
@@ -2411,6 +2417,64 @@ function PalettePickerCard() {
   return (
     <div style={S.card}>
       <div style={S.cardHeader}>◈ DEPTH COLOR PALETTE</div>
+
+      {/* Preset palettes */}
+      <div style={{ padding: "12px 16px 4px" }}>
+        <div style={{ ...labelStyle, marginBottom: 6 }}>PRESETS</div>
+        <div
+          data-testid="palette-presets"
+          style={{ display: "flex", flexWrap: "wrap", gap: 8 }}
+        >
+          {PALETTE_PRESETS.map((preset) => {
+            const isActive = activePresetId === preset.id;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                data-testid={`palette-preset-${preset.id}`}
+                aria-pressed={isActive}
+                title={preset.label}
+                onClick={() => {
+                  setShallow(preset.shallow);
+                  setDeep(preset.deep);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "4px 8px 4px 4px",
+                  background: isActive
+                    ? "rgba(0,229,255,0.12)"
+                    : "rgba(0,0,0,0.3)",
+                  border: isActive
+                    ? "1px solid rgba(0,229,255,0.55)"
+                    : "1px solid rgba(0,229,255,0.18)",
+                  borderRadius: 3,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  color: isActive ? "#67e8f9" : "#94a3b8",
+                  fontSize: 9,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                }}
+              >
+                <span
+                  aria-hidden
+                  style={{
+                    display: "inline-block",
+                    width: 28,
+                    height: 14,
+                    borderRadius: 2,
+                    border: "1px solid rgba(0,0,0,0.4)",
+                    background: `linear-gradient(90deg, ${preset.shallow} 0%, ${MID1_HEX} 33%, ${MID2_HEX} 66%, ${preset.deep} 100%)`,
+                  }}
+                />
+                {preset.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Preview gradient */}
       <div style={{ padding: "12px 16px 6px" }}>
