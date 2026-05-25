@@ -287,37 +287,16 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     // Track the last DataTexture we uploaded so we can dispose it when it changes.
     const habitatTexRef = useRef<THREE.DataTexture | null>(null);
 
-    // Upload a new DataTexture whenever habitat scores change.
-    useEffect(() => {
-      const scores = useHabitatStore.getState().scores;
-      const N = grid.resolution;
-
-      // Dispose previous texture
-      if (habitatTexRef.current) {
-        habitatTexRef.current.dispose();
-        habitatTexRef.current = null;
-      }
-
-      if (scores && scores.length === N * N) {
-        const tex = new THREE.DataTexture(
-          scores,
-          N,
-          N,
-          THREE.RedFormat,
-          THREE.FloatType,
-        );
-        tex.needsUpdate = true;
-        material.uniforms["uHabitatTex"]!.value = tex;
-        habitatTexRef.current = tex;
-      }
-    // We deliberately subscribe to scores via useHabitatStore state below in useFrame.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    // Subscribe to habitat scores and re-run texture upload on change.
+    // Subscribe to habitat scores so the upload effect re-runs whenever the
+    // active species changes or compute() finishes. Both freshwater and
+    // saltwater species feed the same store.scores → same pipeline.
     const habitatScores = useHabitatStore((s) => s.scores);
     const activeSpecies = useHabitatStore((s) => s.activeSpecies);
 
+    // Upload an N×N R8 DataTexture (Red channel = score) whenever the per-vertex
+    // habitat scores change. We quantise the [0,1] Float32 scores to UnsignedByte
+    // so the texture is linearly-filterable on all WebGL2 GPUs without requiring
+    // the OES_texture_float_linear extension (R32F is not filterable by default).
     useEffect(() => {
       const N = grid.resolution;
 
@@ -327,18 +306,38 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       }
 
       if (habitatScores && habitatScores.length === N * N) {
+        const bytes = new Uint8Array(N * N);
+        for (let i = 0; i < bytes.length; i++) {
+          const s = habitatScores[i] ?? 0;
+          const clamped = s < 0 ? 0 : s > 1 ? 1 : s;
+          bytes[i] = Math.round(clamped * 255);
+        }
         const tex = new THREE.DataTexture(
-          habitatScores,
+          bytes,
           N,
           N,
           THREE.RedFormat,
-          THREE.FloatType,
+          THREE.UnsignedByteType,
         );
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.wrapS = THREE.ClampToEdgeWrapping;
+        tex.wrapT = THREE.ClampToEdgeWrapping;
         tex.needsUpdate = true;
         material.uniforms["uHabitatTex"]!.value = tex;
         habitatTexRef.current = tex;
       }
     }, [habitatScores, grid, material]);
+
+    // Dispose the habitat texture on unmount to free GPU memory.
+    useEffect(() => {
+      return () => {
+        if (habitatTexRef.current) {
+          habitatTexRef.current.dispose();
+          habitatTexRef.current = null;
+        }
+      };
+    }, []);
 
     // Animate opacity 0→1 (~400 ms at 60 fps), keep lamp position in sync,
     // and reflect zone overlay + highlight + habitat state from stores.
