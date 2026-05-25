@@ -25,6 +25,7 @@ import type {
   DatasetMeta,
   DeleteMarkersMine200,
   GetDatasetsIdTerrainParams,
+  GetDatasetsParams,
   GetMarkersParams,
   GetTrailsIdPointsParams,
   GetTrailsParams,
@@ -59,21 +60,28 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
-export const getGetDatasetsUrl = () => {
+export const getGetDatasetsUrl = (params?: GetDatasetsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/datasets`
+  return stringifiedParams.length > 0 ? `/api/datasets?${stringifiedParams}` : `/api/datasets`
 }
 
 /**
  * Returns metadata for all built-in GEBCO and demo datasets
  * @summary List available pre-loaded bathymetric regions
  */
-export const getDatasets = async ( options?: RequestInit): Promise<DatasetMeta[]> => {
+export const getDatasets = async (params?: GetDatasetsParams, options?: RequestInit): Promise<DatasetMeta[]> => {
 
-  return customFetch<DatasetMeta[]>(getGetDatasetsUrl(),
+  return customFetch<DatasetMeta[]>(getGetDatasetsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -86,23 +94,23 @@ export const getDatasets = async ( options?: RequestInit): Promise<DatasetMeta[]
 
 
 
-export const getGetDatasetsQueryKey = () => {
+export const getGetDatasetsQueryKey = (params?: GetDatasetsParams,) => {
     return [
-    `/api/datasets`
+    `/api/datasets`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetDatasetsQueryOptions = <TData = Awaited<ReturnType<typeof getDatasets>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetDatasetsQueryOptions = <TData = Awaited<ReturnType<typeof getDatasets>>, TError = ErrorType<unknown>>(params?: GetDatasetsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetDatasetsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetDatasetsQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDatasets>>> = ({ signal }) => getDatasets({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDatasets>>> = ({ signal }) => getDatasets(params, { signal, ...requestOptions });
 
 
 
@@ -120,11 +128,11 @@ export type GetDatasetsQueryError = ErrorType<unknown>
  */
 
 export function useGetDatasets<TData = Awaited<ReturnType<typeof getDatasets>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: GetDatasetsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetDatasetsQueryOptions(options)
+  const queryOptions = getGetDatasetsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

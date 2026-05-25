@@ -29,6 +29,14 @@ paths:
       tags: [datasets]
       summary: List available pre-loaded bathymetric regions
       description: Returns metadata for all built-in GEBCO and demo datasets
+      parameters:
+        - in: query
+          name: waterType
+          required: false
+          description: Filter datasets by water body type
+          schema:
+            type: string
+            enum: [saltwater, freshwater]
       responses:
         "200":
           description: Dataset list
@@ -839,7 +847,7 @@ components:
           default: 0.012
         colormapTheme:
           type: string
-          enum: [ocean, thermal, grayscale, viridis]
+          enum: [ocean, thermal, grayscale, viridis, freshwater]
           default: ocean
         lampIntensity:
           type: number
@@ -935,6 +943,11 @@ components:
           minimum: 1000
           maximum: 60000
           default: 10000
+        waterType:
+          type: string
+          enum: [saltwater, freshwater]
+          default: saltwater
+          description: Active water body type; controls colormap, species lists, marker types, and dataset filter
 
     ApiError:
       type: object

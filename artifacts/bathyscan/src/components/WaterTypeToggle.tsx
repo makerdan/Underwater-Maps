@@ -20,6 +20,10 @@ export const WaterTypeToggle: React.FC<WaterTypeToggleProps> = ({ onChange }) =>
   const setWaterType = useSettingsStore((s) => s.setWaterType);
 
   const handleSelect = (v: WaterType) => {
+    if (v === waterType) return;
+    // Store update triggers App.tsx subscription which clears derived
+    // state (terrain/classification/habitat) and auto-loads the first
+    // preset of the new water type.
     setWaterType(v);
     onChange?.(v);
   };

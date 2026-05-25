@@ -85,6 +85,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
 
     return {
       datasetName: grid?.name ?? grid?.datasetId ?? "Unknown",
+      waterType:   grid?.waterType,
       minDepth:    grid?.minDepth ?? 0,
       maxDepth:    grid?.maxDepth ?? 1000,
       cameraLon:   cam.cameraLon,

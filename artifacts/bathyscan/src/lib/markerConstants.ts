@@ -12,6 +12,7 @@ export const FRESHWATER_MARKER_TYPES = [
   { value: "vegetation", label: "Vegetation",        color: "#86efac", icon: "❋", waterType: "freshwater" as const },
   { value: "log",        label: "Submerged Log",     color: "#a16207", icon: "⁂", waterType: "freshwater" as const },
   { value: "sample",     label: "Water Sample",      color: "#7dd3fc", icon: "◉", waterType: "freshwater" as const },
+  { value: "shipwreck",  label: "Shipwreck",         color: "#f97316", icon: "⚓", waterType: "freshwater" as const },
   { value: "custom",     label: "Custom",            color: "#e2e8f0", icon: "●", waterType: "freshwater" as const },
   { value: "depth_pole", label: "Depth Pole",        color: "#00ffee", icon: "📡", waterType: "freshwater" as const },
 ] as const;

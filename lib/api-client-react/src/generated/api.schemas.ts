@@ -129,6 +129,7 @@ export const UserSettingsColormapTheme = {
   thermal: 'thermal',
   grayscale: 'grayscale',
   viridis: 'viridis',
+  freshwater: 'freshwater',
 } as const;
 
 export type UserSettingsCameraSpawnBehaviour = typeof UserSettingsCameraSpawnBehaviour[keyof typeof UserSettingsCameraSpawnBehaviour];
@@ -196,6 +197,17 @@ export const UserSettingsDefaultMarkerType = {
 } as const;
 
 /**
+ * Active water body type; controls colormap, species lists, marker types, and dataset filter
+ */
+export type UserSettingsWaterType = typeof UserSettingsWaterType[keyof typeof UserSettingsWaterType];
+
+
+export const UserSettingsWaterType = {
+  saltwater: 'saltwater',
+  freshwater: 'freshwater',
+} as const;
+
+/**
  * Per-user application settings with sensible defaults
  */
 export interface UserSettings {
@@ -258,6 +270,8 @@ export interface UserSettings {
      * @maximum 60000
      */
   gpsRecordingInterval?: number;
+  /** Active water body type; controls colormap, species lists, marker types, and dataset filter */
+  waterType?: UserSettingsWaterType;
 }
 
 export interface ApiError {
@@ -459,6 +473,21 @@ export interface MarkerInput {
   label: string;
   notes?: string | null;
 }
+
+export type GetDatasetsParams = {
+/**
+ * Filter datasets by water body type
+ */
+waterType?: GetDatasetsWaterType;
+};
+
+export type GetDatasetsWaterType = typeof GetDatasetsWaterType[keyof typeof GetDatasetsWaterType];
+
+
+export const GetDatasetsWaterType = {
+  saltwater: 'saltwater',
+  freshwater: 'freshwater',
+} as const;
 
 export type GetDatasetsIdTerrainParams = {
 /**

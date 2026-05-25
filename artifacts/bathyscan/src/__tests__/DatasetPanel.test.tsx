@@ -64,6 +64,11 @@ vi.mock("@/lib/classificationStore", () => ({
   },
 }));
 
+vi.mock("@/lib/settingsStore", () => ({
+  useSettingsStore: (sel: (s: { waterType: "saltwater" | "freshwater" }) => unknown) =>
+    sel({ waterType: "saltwater" }),
+}));
+
 vi.mock("@/lib/offlineStore", () => ({
   useOfflineStore: (sel: (s: { isOnline: boolean }) => unknown) =>
     sel({ isOnline: true }),

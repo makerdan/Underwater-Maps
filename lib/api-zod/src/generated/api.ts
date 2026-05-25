@@ -12,6 +12,10 @@ import * as zod from 'zod';
  * Returns metadata for all built-in GEBCO and demo datasets
  * @summary List available pre-loaded bathymetric regions
  */
+export const GetDatasetsQueryParams = zod.object({
+  "waterType": zod.enum(['saltwater', 'freshwater']).optional().describe('Filter datasets by water body type')
+})
+
 export const GetDatasetsResponseItem = zod.object({
   "id": zod.string().describe('Stable slug used in API paths'),
   "name": zod.string().describe('Human-readable region name'),
@@ -420,14 +424,14 @@ export const getSettingsResponseGpsRecordingIntervalDefault = 10000;
 export const getSettingsResponseGpsRecordingIntervalMin = 1000;
 export const getSettingsResponseGpsRecordingIntervalMax = 60000;
 
-
+export const getSettingsResponseWaterTypeDefault = `saltwater`;
 
 export const GetSettingsResponse = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(getSettingsResponseTextureQualityDefault),
   "enableCaustics": zod.boolean().default(getSettingsResponseEnableCausticsDefault),
   "particleDensity": zod.enum(['off', 'sparse', 'dense']).default(getSettingsResponseParticleDensityDefault),
   "fogDensity": zod.number().min(getSettingsResponseFogDensityMin).max(getSettingsResponseFogDensityMax).default(getSettingsResponseFogDensityDefault),
-  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis']).default(getSettingsResponseColormapThemeDefault),
+  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis', 'freshwater']).default(getSettingsResponseColormapThemeDefault),
   "lampIntensity": zod.number().min(getSettingsResponseLampIntensityMin).max(getSettingsResponseLampIntensityMax).default(getSettingsResponseLampIntensityDefault),
   "defaultSpeedTier": zod.number().min(getSettingsResponseDefaultSpeedTierMin).max(getSettingsResponseDefaultSpeedTierMax).default(getSettingsResponseDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(getSettingsResponseInvertMouseYDefault),
@@ -451,7 +455,8 @@ export const GetSettingsResponse = zod.object({
   "privateMarkers": zod.boolean().default(getSettingsResponsePrivateMarkersDefault),
   "defaultMarkerType": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'log', 'vegetation', 'sample']).default(getSettingsResponseDefaultMarkerTypeDefault),
   "defaultRegion": zod.string().default(getSettingsResponseDefaultRegionDefault),
-  "gpsRecordingInterval": zod.number().min(getSettingsResponseGpsRecordingIntervalMin).max(getSettingsResponseGpsRecordingIntervalMax).default(getSettingsResponseGpsRecordingIntervalDefault)
+  "gpsRecordingInterval": zod.number().min(getSettingsResponseGpsRecordingIntervalMin).max(getSettingsResponseGpsRecordingIntervalMax).default(getSettingsResponseGpsRecordingIntervalDefault),
+  "waterType": zod.enum(['saltwater', 'freshwater']).default(getSettingsResponseWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter')
 }).describe('Per-user application settings with sensible defaults')
 
 
@@ -508,14 +513,14 @@ export const putSettingsBodyGpsRecordingIntervalDefault = 10000;
 export const putSettingsBodyGpsRecordingIntervalMin = 1000;
 export const putSettingsBodyGpsRecordingIntervalMax = 60000;
 
-
+export const putSettingsBodyWaterTypeDefault = `saltwater`;
 
 export const PutSettingsBody = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsBodyTextureQualityDefault),
   "enableCaustics": zod.boolean().default(putSettingsBodyEnableCausticsDefault),
   "particleDensity": zod.enum(['off', 'sparse', 'dense']).default(putSettingsBodyParticleDensityDefault),
   "fogDensity": zod.number().min(putSettingsBodyFogDensityMin).max(putSettingsBodyFogDensityMax).default(putSettingsBodyFogDensityDefault),
-  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis']).default(putSettingsBodyColormapThemeDefault),
+  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis', 'freshwater']).default(putSettingsBodyColormapThemeDefault),
   "lampIntensity": zod.number().min(putSettingsBodyLampIntensityMin).max(putSettingsBodyLampIntensityMax).default(putSettingsBodyLampIntensityDefault),
   "defaultSpeedTier": zod.number().min(putSettingsBodyDefaultSpeedTierMin).max(putSettingsBodyDefaultSpeedTierMax).default(putSettingsBodyDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(putSettingsBodyInvertMouseYDefault),
@@ -539,7 +544,8 @@ export const PutSettingsBody = zod.object({
   "privateMarkers": zod.boolean().default(putSettingsBodyPrivateMarkersDefault),
   "defaultMarkerType": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'log', 'vegetation', 'sample']).default(putSettingsBodyDefaultMarkerTypeDefault),
   "defaultRegion": zod.string().default(putSettingsBodyDefaultRegionDefault),
-  "gpsRecordingInterval": zod.number().min(putSettingsBodyGpsRecordingIntervalMin).max(putSettingsBodyGpsRecordingIntervalMax).default(putSettingsBodyGpsRecordingIntervalDefault)
+  "gpsRecordingInterval": zod.number().min(putSettingsBodyGpsRecordingIntervalMin).max(putSettingsBodyGpsRecordingIntervalMax).default(putSettingsBodyGpsRecordingIntervalDefault),
+  "waterType": zod.enum(['saltwater', 'freshwater']).default(putSettingsBodyWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter')
 }).describe('Per-user application settings with sensible defaults')
 
 export const putSettingsResponseTextureQualityDefault = `high`;
@@ -591,14 +597,14 @@ export const putSettingsResponseGpsRecordingIntervalDefault = 10000;
 export const putSettingsResponseGpsRecordingIntervalMin = 1000;
 export const putSettingsResponseGpsRecordingIntervalMax = 60000;
 
-
+export const putSettingsResponseWaterTypeDefault = `saltwater`;
 
 export const PutSettingsResponse = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsResponseTextureQualityDefault),
   "enableCaustics": zod.boolean().default(putSettingsResponseEnableCausticsDefault),
   "particleDensity": zod.enum(['off', 'sparse', 'dense']).default(putSettingsResponseParticleDensityDefault),
   "fogDensity": zod.number().min(putSettingsResponseFogDensityMin).max(putSettingsResponseFogDensityMax).default(putSettingsResponseFogDensityDefault),
-  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis']).default(putSettingsResponseColormapThemeDefault),
+  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis', 'freshwater']).default(putSettingsResponseColormapThemeDefault),
   "lampIntensity": zod.number().min(putSettingsResponseLampIntensityMin).max(putSettingsResponseLampIntensityMax).default(putSettingsResponseLampIntensityDefault),
   "defaultSpeedTier": zod.number().min(putSettingsResponseDefaultSpeedTierMin).max(putSettingsResponseDefaultSpeedTierMax).default(putSettingsResponseDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(putSettingsResponseInvertMouseYDefault),
@@ -622,7 +628,8 @@ export const PutSettingsResponse = zod.object({
   "privateMarkers": zod.boolean().default(putSettingsResponsePrivateMarkersDefault),
   "defaultMarkerType": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'log', 'vegetation', 'sample']).default(putSettingsResponseDefaultMarkerTypeDefault),
   "defaultRegion": zod.string().default(putSettingsResponseDefaultRegionDefault),
-  "gpsRecordingInterval": zod.number().min(putSettingsResponseGpsRecordingIntervalMin).max(putSettingsResponseGpsRecordingIntervalMax).default(putSettingsResponseGpsRecordingIntervalDefault)
+  "gpsRecordingInterval": zod.number().min(putSettingsResponseGpsRecordingIntervalMin).max(putSettingsResponseGpsRecordingIntervalMax).default(putSettingsResponseGpsRecordingIntervalDefault),
+  "waterType": zod.enum(['saltwater', 'freshwater']).default(putSettingsResponseWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter')
 }).describe('Per-user application settings with sensible defaults')
 
 

@@ -35,6 +35,7 @@ import { VirtualJoystick } from "@/components/VirtualJoystick";
 import { useTidalData } from "@/hooks/useTidalData";
 import { useUiStore } from "@/lib/uiStore";
 import { useClassificationStore } from "@/lib/classificationStore";
+import { useHabitatStore } from "@/lib/habitatStore";
 import { useHighlightStore } from "@/lib/highlightStore";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useOfflineStore } from "@/lib/offlineStore";
@@ -209,14 +210,34 @@ function Main() {
     tidalOverlay ? scrubDatetime : null,
   );
 
+  const waterType = useSettingsStore((s) => s.waterType);
+
   const hasAutoSelectedRef = useRef(false);
   useEffect(() => {
     if (hasAutoSelectedRef.current) return;
     if (datasets?.length && !datasetId) {
       hasAutoSelectedRef.current = true;
-      setDatasetId(datasets[0]?.id ?? null);
+      const first = datasets.find((d) => d.waterType === waterType) ?? datasets[0];
+      setDatasetId(first?.id ?? null);
     }
-  }, [datasets, datasetId, setDatasetId]);
+  }, [datasets, datasetId, setDatasetId, waterType]);
+
+  // Side-effects on water-type switch:
+  // 1) Clear derived state computed for the previous environment
+  //    (terrain grids, zone classifications, habitat cache).
+  // 2) Auto-load the first preset of the new water type.
+  const prevWaterTypeRef = useRef(waterType);
+  useEffect(() => {
+    if (prevWaterTypeRef.current === waterType) return;
+    prevWaterTypeRef.current = waterType;
+    try { useTerrainStore.getState().setGrids({ activeGrid: null as never }); } catch {}
+    try { useClassificationStore.getState().clearZoneMap?.(); } catch {}
+    try { useHabitatStore.getState().clear?.(); } catch {}
+    const first = (datasets ?? []).find((d) => d.waterType === waterType);
+    if (first?.id) setDatasetId(first.id);
+    else setDatasetId(null);
+    hasAutoSelectedRef.current = false;
+  }, [waterType, datasets, setDatasetId]);
 
   useEffect(() => {
     if (terrain) {

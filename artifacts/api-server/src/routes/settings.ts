@@ -36,6 +36,7 @@ const DEFAULT_SETTINGS = {
   defaultMarkerType: "fish",
   defaultRegion: "mariana-trench",
   gpsRecordingInterval: 10000,
+  waterType: "saltwater",
 };
 
 /**
