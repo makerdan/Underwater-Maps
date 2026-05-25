@@ -537,38 +537,6 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                       />
                     ))}
                   </div>
-                  {/* Slack center ticks (hoverable) */}
-                  {slackBandsForSelectedDay.map((b, i) => (
-                    <div
-                      key={`tick-${i}`}
-                      onMouseEnter={() => setHoveredEvent(b.event)}
-                      onMouseLeave={() =>
-                        setHoveredEvent((cur) => (cur === b.event ? null : cur))
-                      }
-                      style={{
-                        position: "absolute",
-                        left: `calc(${b.centerPct}% - 4px)`,
-                        top: 1,
-                        width: 8,
-                        height: 16,
-                        cursor: "pointer",
-                      }}
-                    >
-                      <div
-                        style={{
-                          position: "absolute",
-                          left: 3,
-                          top: 0,
-                          width: 2,
-                          height: "100%",
-                          background:
-                            b.event.type === "high" ? "#c084fc" : "#f0abfc",
-                          boxShadow: "0 0 4px rgba(192,132,252,0.7)",
-                          borderRadius: 1,
-                        }}
-                      />
-                    </div>
-                  ))}
                   <input
                     type="range"
                     min={0}
@@ -584,8 +552,56 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                       accentColor: "#00e5ff",
                       height: 18,
                       background: "transparent",
+                      zIndex: 1,
                     }}
                   />
+                  {/* Slack center ticks (hoverable). Rendered AFTER the
+                      range input and with a higher z-index so the tick's
+                      8px hit-target sits on top of the input track and
+                      actually receives mouseenter/leave from real pointers.
+                      The thumb still drags everywhere else along the track.
+                      Clicking a tick snaps the scrubber to that slack hour. */}
+                  {slackBandsForSelectedDay.map((b, i) => {
+                    const tickHour = new Date(b.event.time).getUTCHours();
+                    return (
+                      <div
+                        key={`tick-${i}`}
+                        onMouseEnter={() => setHoveredEvent(b.event)}
+                        onMouseLeave={() =>
+                          setHoveredEvent((cur) => (cur === b.event ? null : cur))
+                        }
+                        onPointerDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setHour(tickHour);
+                        }}
+                        style={{
+                          position: "absolute",
+                          left: `calc(${b.centerPct}% - 4px)`,
+                          top: 1,
+                          width: 8,
+                          height: 16,
+                          cursor: "pointer",
+                          zIndex: 2,
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: 3,
+                            top: 0,
+                            width: 2,
+                            height: "100%",
+                            background:
+                              b.event.type === "high" ? "#c084fc" : "#f0abfc",
+                            boxShadow: "0 0 4px rgba(192,132,252,0.7)",
+                            borderRadius: 1,
+                            pointerEvents: "none",
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
                 <span style={{ ...DIM, fontSize: 10, minWidth: 20 }}>23</span>
               </div>

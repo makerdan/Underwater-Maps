@@ -176,15 +176,14 @@ test.describe("Tide HUD scrubber slack visuals", () => {
     // 3. Hover a slack tick and assert the tooltip with a high/low label and
     //    a compass direction appears. Ticks use the same purple shadow color
     //    (boxShadow rgba(192,132,252,...)) and live inside the slider track.
+    // The ticks are rendered on top of the range input (higher z-index and
+    // later in DOM order) so a real mouse hover lands on them, matching what
+    // a user experiences.
     const ticks = sliderTrack.locator("div[style*='cursor: pointer']");
     const tickCount = await ticks.count();
     expect(tickCount).toBeGreaterThan(0);
-    // The range input is positioned on top of the ticks and captures real
-    // pointer events, so dispatch the synthetic events React listens for
-    // (`onMouseEnter` + `onMouseOver`) directly on the tick.
     const firstTick = ticks.first();
-    await firstTick.dispatchEvent("mouseover");
-    await firstTick.dispatchEvent("mouseenter");
+    await firstTick.hover();
 
     // Tooltip copy: "Slack ↑ High" or "Slack ↓ Low" + a "Reverses to ebb/flood
     // → <COMPASS> (<deg>°)" line.
