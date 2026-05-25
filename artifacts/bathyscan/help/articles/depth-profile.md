@@ -21,7 +21,7 @@ A panel slides in along the bottom centre showing:
 - A thin coloured strip under the chart that shows the AI zone classification at each sample.
 - Coordinates of both endpoints.
 
-![Screenshot placeholder: depth profile panel](placeholder)
+![Depth profile panel](/help/depth-profile.png)
 
 ## Reading the chart
 

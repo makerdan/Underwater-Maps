@@ -19,7 +19,7 @@ A quick map of every visible part of the BathyScan screen.
 
 The middle of the screen is the live 3D terrain. A reticle and crosshair sit in the centre to show what you are pointing at.
 
-![Screenshot placeholder: full screen with HUD overlays](placeholder)
+![Full screen with HUD overlays](/help/full-screen.png)
 
 ## HUD overlays
 

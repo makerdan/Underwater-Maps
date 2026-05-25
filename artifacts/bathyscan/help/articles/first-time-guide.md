@@ -19,7 +19,7 @@ On the left side of the screen you will see the **Datasets** panel. It is split 
 - **Environment toggle** — switch between **Saltwater** and **Freshwater**. The list of datasets and the AI's vocabulary change to match.
 - **Built-in datasets** — public regions such as Thorne Bay, Monterey Bay, and several lakes. Click one to load it.
 
-![Screenshot placeholder: Datasets panel with built-in regions](placeholder)
+![Datasets panel with built-in regions](/help/datasets-panel.png)
 
 The first time you load a dataset it will fetch a depth grid and an overview tile. You will see a small spinner while it works.
 

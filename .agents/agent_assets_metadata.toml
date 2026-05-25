@@ -1,0 +1,26 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "5KawU5F-Ir0U60wTuDUI-"
+uri = "file://artifacts/bathyscan/public/help/datasets-panel.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "yOS5zu-yQaJeSQezJ4uWB"
+uri = "file://artifacts/bathyscan/public/help/full-screen.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "ptcXlzv-Y_kPAG8xHWFX0"
+uri = "file://artifacts/bathyscan/public/help/upload-dropzone.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "Xmr-w-COEkyqjtPC9_x5k"
+uri = "file://artifacts/bathyscan/public/help/depth-profile.png"
+type = "image"
+title = "generated_image"

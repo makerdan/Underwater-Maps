@@ -28,7 +28,7 @@ Click **Upload** at the bottom of the Datasets panel and drop in a `.xyz` or `.c
 
 After upload the app builds a terrain mesh, runs zone classification, and saves it under **Your saved datasets** so you can come back to it later.
 
-![Screenshot placeholder: upload drop-zone](placeholder)
+![Upload drop-zone](/help/upload-dropzone.png)
 
 ## My saved datasets
 

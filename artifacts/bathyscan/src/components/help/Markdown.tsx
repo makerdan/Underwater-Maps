@@ -195,7 +195,11 @@ export const Markdown: React.FC<MarkdownProps> = ({ source, highlight }) => {
             const m = /^!\[([^\]]*)\]\(([^)]+)\)$/.exec(b.content!);
             const alt = m?.[1] ?? "";
             const src = m?.[2] ?? "";
-            if (src === "placeholder" || !src.startsWith("http")) {
+            const isAllowed =
+              src.startsWith("http://") ||
+              src.startsWith("https://") ||
+              src.startsWith("/");
+            if (src === "placeholder" || !isAllowed) {
               return (
                 <div key={idx} className="hm-image-placeholder">
                   <span className="hm-image-icon">🖼</span>
@@ -203,7 +207,10 @@ export const Markdown: React.FC<MarkdownProps> = ({ source, highlight }) => {
                 </div>
               );
             }
-            return <img key={idx} src={src} alt={alt} className="hm-image" />;
+            const resolvedSrc = src.startsWith("/")
+              ? `${import.meta.env.BASE_URL.replace(/\/$/, "")}${src}`
+              : src;
+            return <img key={idx} src={resolvedSrc} alt={alt} className="hm-image" />;
           }
           case "hr":
             return <hr key={idx} className="hm-hr" />;
