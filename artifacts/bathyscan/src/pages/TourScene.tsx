@@ -1,86 +1,76 @@
 import React, { useEffect, useRef } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { Canvas } from "@react-three/fiber";
+import { MapControls } from "@react-three/drei";
 import * as THREE from "three";
-import { useGetDatasetsIdTerrain, getGetDatasetsIdTerrainQueryKey } from "@workspace/api-client-react";
+import {
+  useGetDatasetsIdTerrain,
+  getGetDatasetsIdTerrainQueryKey,
+} from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { TerrainMesh } from "@/components/TerrainMesh";
+import { Particles } from "@/components/Particles";
+import { Caustics } from "@/components/Caustics";
+import { useFlyControls } from "@/hooks/useFlyControls";
 
 // ---------------------------------------------------------------------------
-// Marine-snow particle system
+// FlyControlsScene — lives inside <Canvas>, wires up controls + lamp
 // ---------------------------------------------------------------------------
-const PARTICLE_COUNT = 400;
+interface FlyControlsSceneProps {
+  terrainMeshRef: React.RefObject<THREE.Mesh | null>;
+}
 
-const Particles: React.FC = () => {
-  const ref = useRef<THREE.Points>(null);
-  const positions = React.useMemo(() => {
-    const arr = new Float32Array(PARTICLE_COUNT * 3);
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      arr[i * 3]     = (Math.random() - 0.5) * 120;
-      arr[i * 3 + 1] = (Math.random() - 0.5) * 60;
-      arr[i * 3 + 2] = (Math.random() - 0.5) * 120;
-    }
-    return arr;
-  }, []);
-
-  useFrame((_, delta) => {
-    if (ref.current) {
-      ref.current.position.y -= delta * 0.4;
-      if (ref.current.position.y < -30) ref.current.position.y = 20;
-    }
-  });
+const FlyControlsScene: React.FC<FlyControlsSceneProps> = ({ terrainMeshRef }) => {
+  const lightRef = useRef<THREE.PointLight>(null);
+  const { mode } = useAppState();
+  const { orbitTargetArr } = useFlyControls({ terrainMeshRef, lightRef });
 
   return (
-    <points ref={ref}>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-      </bufferGeometry>
-      <pointsMaterial size={0.12} color="#c8e8ff" transparent opacity={0.25} sizeAttenuation />
-    </points>
+    <>
+      {/* Submersible lamp — warm white, follows camera forward */}
+      <pointLight
+        ref={lightRef}
+        color="#fff8e8"
+        intensity={2}
+        distance={40}
+        decay={2}
+      />
+
+      {/* Orbit mode: MapControls replaces fly movement */}
+      {mode === "orbit" && (
+        <MapControls
+          target={orbitTargetArr.current}
+          enableDamping
+          dampingFactor={0.08}
+          screenSpacePanning={false}
+        />
+      )}
+    </>
   );
-};
-
-// ---------------------------------------------------------------------------
-// Tracks camera world position into app context each frame
-// ---------------------------------------------------------------------------
-const CameraTracker: React.FC = () => {
-  const { camera } = useThree();
-  const { setCameraPos } = useAppState();
-
-  useFrame(() => {
-    setCameraPos([camera.position.x, camera.position.y, camera.position.z]);
-  });
-
-  return null;
 };
 
 // ---------------------------------------------------------------------------
 // Inner scene — lives inside <Canvas>
 // ---------------------------------------------------------------------------
-const SceneContents: React.FC = () => {
+const SceneContents: React.FC<{ terrainMeshRef: React.RefObject<THREE.Mesh | null> }> = ({
+  terrainMeshRef,
+}) => {
   const { terrain } = useAppState();
 
   return (
     <>
-      <color attach="background" args={["#040810"]} />
-      <fogExp2 args={["#060c1a", 0.015]} />
+      <color attach="background" args={["#020818"]} />
+      <fogExp2 args={["#020818", 0.012]} />
 
-      {/* Dim blue-tinted ambient */}
-      <ambientLight intensity={0.06} color="#8ab4d4" />
-      {/* Key light above-forward */}
-      <directionalLight position={[10, 30, 20]} intensity={0.5} color="#ffffff" />
+      {/* Ambient fill */}
+      <ambientLight intensity={0.05} color="#7aa8c8" />
+      {/* Distant key light */}
+      <directionalLight position={[10, 30, 20]} intensity={0.35} color="#d0eeff" />
 
       <Particles />
-      {terrain && <TerrainMesh grid={terrain} />}
+      {terrain && <TerrainMesh ref={terrainMeshRef} grid={terrain} />}
+      <Caustics />
 
-      <OrbitControls
-        enableDamping
-        dampingFactor={0.08}
-        minPolarAngle={0}
-        maxPolarAngle={Math.PI / 2}
-        target={[0, -10, 0]}
-      />
-      <CameraTracker />
+      <FlyControlsScene terrainMeshRef={terrainMeshRef} />
     </>
   );
 };
@@ -89,7 +79,7 @@ const SceneContents: React.FC = () => {
 // Loading overlay
 // ---------------------------------------------------------------------------
 const LoadingOverlay: React.FC = () => (
-  <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#040810]">
+  <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#020818]">
     <div className="font-mono text-cyan-400 text-lg tracking-[0.3em] uppercase animate-pulse">
       ▼ Descending...
     </div>
@@ -108,7 +98,7 @@ interface ErrorOverlayProps {
 }
 
 const ErrorOverlay: React.FC<ErrorOverlayProps> = ({ message, onRetry }) => (
-  <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#040810]">
+  <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#020818]">
     <div className="font-mono text-red-400 text-lg tracking-[0.3em] uppercase mb-2">
       ⚠ Signal Lost
     </div>
@@ -130,11 +120,17 @@ const ErrorOverlay: React.FC<ErrorOverlayProps> = ({ message, onRetry }) => (
 export const TourScene: React.FC = () => {
   const { datasetId, setTerrain } = useAppState();
   const effectiveId = datasetId ?? "mariana-trench";
+  const terrainMeshRef = useRef<THREE.Mesh>(null);
 
   const { data, isLoading, isError, error, refetch } = useGetDatasetsIdTerrain(
     effectiveId,
     undefined,
-    { query: { enabled: !!effectiveId, queryKey: getGetDatasetsIdTerrainQueryKey(effectiveId) } },
+    {
+      query: {
+        enabled: !!effectiveId,
+        queryKey: getGetDatasetsIdTerrainQueryKey(effectiveId),
+      },
+    },
   );
 
   useEffect(() => {
@@ -143,13 +139,12 @@ export const TourScene: React.FC = () => {
 
   return (
     <div className="relative w-full h-full">
-      {/* Always-present Canvas so fog/background renders immediately */}
       <Canvas
-        camera={{ position: [0, 45, 75], fov: 50 }}
+        camera={{ position: [0, 20, 40], fov: 60 }}
         gl={{ antialias: true }}
         style={{ width: "100%", height: "100%" }}
       >
-        <SceneContents />
+        <SceneContents terrainMeshRef={terrainMeshRef} />
       </Canvas>
 
       {isLoading && !data && <LoadingOverlay />}

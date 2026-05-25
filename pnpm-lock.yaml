@@ -284,6 +284,9 @@ importers:
       three:
         specifier: ^0.184.0
         version: 0.184.0
+      zustand:
+        specifier: ^5.0.13
+        version: 5.0.13(@types/react@19.2.14)(react@19.1.0)(use-sync-external-store@1.6.0(react@19.1.0))
     devDependencies:
       '@hookform/resolvers':
         specifier: ^3.10.0

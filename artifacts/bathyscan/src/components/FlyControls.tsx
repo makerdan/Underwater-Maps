@@ -1,32 +1,26 @@
 import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { useAppState } from "@/lib/context";
+import { useAppState, SPEEDS } from "@/lib/context";
 
-const KEYS = {
-  W: "KeyW",
-  A: "KeyA",
-  S: "KeyS",
-  D: "KeyD",
-  Q: "KeyQ",
-  E: "KeyE",
-  SPACE: "Space"
-};
-
+/**
+ * Legacy fly-control component used by TerrainScene.
+ * The main app scene (TourScene) uses useFlyControls hook instead.
+ */
 export const FlyControls = () => {
-  const { mode, setMode, speed, setSpeed, setCameraPos } = useAppState();
+  const { mode, setMode, speedIndex, setSpeedIndex, setCameraPos } = useAppState();
   const { camera, gl } = useThree();
 
-  const keys = useRef<{ [key: string]: boolean }>({});
+  const keys = useRef<Record<string, boolean>>({});
   const isPointerLocked = useRef(false);
   const euler = useRef(new THREE.Euler(0, 0, 0, "YXZ"));
-  const overviewAngle = useRef(0);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       keys.current[e.code] = true;
-      if (e.code === KEYS.SPACE) {
-        setMode(mode === "FLY" ? "OVERVIEW" : "FLY");
+      if (e.code === "Tab") {
+        e.preventDefault();
+        setMode(mode === "fly" ? "orbit" : "fly");
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
@@ -34,26 +28,31 @@ export const FlyControls = () => {
     };
 
     const onMouseDown = () => {
-      if (mode === "FLY") isPointerLocked.current = true;
+      if (mode === "fly") isPointerLocked.current = true;
     };
     const onMouseUp = () => {
       isPointerLocked.current = false;
     };
 
     const onMouseMove = (e: MouseEvent) => {
-      if (!isPointerLocked.current || mode !== "FLY") return;
-      const movementX = e.movementX || 0;
-      const movementY = e.movementY || 0;
-
+      if (!isPointerLocked.current || mode !== "fly") return;
+      const movementX = e.movementX ?? 0;
+      const movementY = e.movementY ?? 0;
       euler.current.setFromQuaternion(camera.quaternion);
       euler.current.y -= movementX * 0.002;
-      euler.current.x -= movementY * 0.002;
-      euler.current.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.current.x));
+      euler.current.x = Math.max(
+        -Math.PI / 2,
+        Math.min(Math.PI / 2, euler.current.x - movementY * 0.002),
+      );
       camera.quaternion.setFromEuler(euler.current);
     };
 
     const onWheel = (e: WheelEvent) => {
-      setSpeed(Math.max(0.0005, Math.min(0.05, speed - e.deltaY * 0.00005)));
+      if (e.deltaY > 0) {
+        setSpeedIndex(Math.min(SPEEDS.length - 1, speedIndex + 1));
+      } else {
+        setSpeedIndex(Math.max(0, speedIndex - 1));
+      }
     };
 
     window.addEventListener("keydown", onKeyDown);
@@ -71,29 +70,23 @@ export const FlyControls = () => {
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("wheel", onWheel);
     };
-  }, [camera, gl.domElement, mode, setMode, speed, setSpeed]);
+  }, [camera, gl.domElement, mode, setMode, setSpeedIndex]);
 
-  useFrame((_state: unknown, delta: number) => {
-    if (mode === "FLY") {
+  useFrame((_state, delta: number) => {
+    const speed = SPEEDS[speedIndex] ?? 0.15;
+    const scaledSpeed = speed * delta * 60;
+
+    if (mode === "fly") {
       const direction = new THREE.Vector3();
       camera.getWorldDirection(direction);
       const right = new THREE.Vector3().crossVectors(camera.up, direction).normalize();
 
-      if (keys.current[KEYS.W]) camera.position.addScaledVector(direction, speed);
-      if (keys.current[KEYS.S]) camera.position.addScaledVector(direction, -speed);
-      if (keys.current[KEYS.D]) camera.position.addScaledVector(right, -speed);
-      if (keys.current[KEYS.A]) camera.position.addScaledVector(right, speed);
-      if (keys.current[KEYS.E]) camera.position.y += speed;
-      if (keys.current[KEYS.Q]) camera.position.y -= speed;
-    } else {
-      overviewAngle.current += delta * 0.1;
-      const radius = 1.5;
-      camera.position.set(
-        Math.cos(overviewAngle.current) * radius,
-        1.5,
-        Math.sin(overviewAngle.current) * radius
-      );
-      camera.lookAt(0, 0, 0);
+      if (keys.current["KeyW"]) camera.position.addScaledVector(direction, scaledSpeed);
+      if (keys.current["KeyS"]) camera.position.addScaledVector(direction, -scaledSpeed);
+      if (keys.current["KeyD"]) camera.position.addScaledVector(right, -scaledSpeed);
+      if (keys.current["KeyA"]) camera.position.addScaledVector(right, scaledSpeed);
+      if (keys.current["Space"]) camera.position.y += scaledSpeed;
+      if (keys.current["ShiftLeft"]) camera.position.y -= scaledSpeed;
     }
 
     setCameraPos([camera.position.x, camera.position.y, camera.position.z]);

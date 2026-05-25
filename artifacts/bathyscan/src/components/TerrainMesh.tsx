@@ -14,33 +14,38 @@ interface TerrainMeshProps {
  * - Uses MeshStandardMaterial with vertexColors and low roughness for a
  *   slightly wet look.
  * - Disposes old geometry when the grid prop changes to prevent GPU leaks.
+ * - Exposes a ref to the underlying THREE.Mesh so callers can use it for
+ *   raycasting (e.g. GPS crosshair).
  */
-export const TerrainMesh: React.FC<TerrainMeshProps> = ({ grid }) => {
-  const prevGeometryRef = useRef<THREE.BufferGeometry | null>(null);
+export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
+  ({ grid }, ref) => {
+    const prevGeometryRef = useRef<THREE.BufferGeometry | null>(null);
 
-  const geometry = useMemo(() => {
-    return buildTerrainGeometry(grid);
-  }, [grid]);
+    const geometry = useMemo(() => {
+      return buildTerrainGeometry(grid);
+    }, [grid]);
 
-  useEffect(() => {
-    const prev = prevGeometryRef.current;
-    if (prev && prev !== geometry) {
-      prev.dispose();
-    }
-    prevGeometryRef.current = geometry;
-    return () => {
-      geometry.dispose();
-    };
-  }, [geometry]);
+    useEffect(() => {
+      const prev = prevGeometryRef.current;
+      if (prev && prev !== geometry) {
+        prev.dispose();
+      }
+      prevGeometryRef.current = geometry;
+      return () => {
+        geometry.dispose();
+      };
+    }, [geometry]);
 
-  return (
-    <mesh geometry={geometry}>
-      <meshStandardMaterial
-        vertexColors
-        roughness={0.25}
-        metalness={0.05}
-        side={THREE.DoubleSide}
-      />
-    </mesh>
-  );
-};
+    return (
+      <mesh ref={ref} geometry={geometry}>
+        <meshStandardMaterial
+          vertexColors
+          roughness={0.25}
+          metalness={0.05}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+    );
+  },
+);
+TerrainMesh.displayName = "TerrainMesh";
