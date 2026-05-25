@@ -898,6 +898,16 @@ function UnitsSection() {
           ]}
           sublabel="Switching also updates the depth unit"
         />
+        <SelectRow
+          label="Depth Unit"
+          value={s.depthUnit}
+          onChange={s.setDepthUnit}
+          options={[
+            { value: "metres", label: "Metres" },
+            { value: "feet", label: "Feet" },
+          ]}
+          sublabel="Override depth display unit independently of the global units system"
+        />
       </div>
     </>
   );
