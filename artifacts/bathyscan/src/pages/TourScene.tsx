@@ -11,6 +11,11 @@ import { TerrainMesh } from "@/components/TerrainMesh";
 import { Particles } from "@/components/Particles";
 import { Caustics } from "@/components/Caustics";
 import { useFlyControls } from "@/hooks/useFlyControls";
+import { TidalWaterPlane } from "@/components/TidalWaterPlane";
+import { TidalCurrentArrows, type DepthLayer } from "@/components/TidalCurrentArrows";
+import type { TidalDataResult } from "@/hooks/useTidalData";
+import { MAX_DEPTH_WORLD } from "@/lib/terrain";
+import type { TerrainData } from "@workspace/api-client-react";
 
 // ---------------------------------------------------------------------------
 // FlyControlsScene — lives inside <Canvas>, wires up controls + lamp
@@ -49,10 +54,60 @@ const FlyControlsScene: React.FC<FlyControlsSceneProps> = ({ terrainMeshRef }) =
 };
 
 // ---------------------------------------------------------------------------
+// Helper: compute sea surface Y for a given terrain
+// ---------------------------------------------------------------------------
+function seaSurfaceY(terrain: TerrainData): number {
+  const depthRange = (terrain.maxDepth - terrain.minDepth) || 1;
+  return (terrain.minDepth / depthRange) * MAX_DEPTH_WORLD;
+}
+
+// ---------------------------------------------------------------------------
+// Tidal 3D contents — lives inside <Canvas>
+// ---------------------------------------------------------------------------
+interface TidalSceneContentsProps {
+  tidalData: TidalDataResult | null;
+  depthLayer: DepthLayer;
+  terrain: TerrainData;
+}
+
+const TidalSceneContents: React.FC<TidalSceneContentsProps> = ({
+  tidalData,
+  depthLayer,
+  terrain,
+}) => {
+  if (!tidalData?.available) return null;
+
+  const surfY = seaSurfaceY(terrain);
+
+  return (
+    <>
+      <TidalWaterPlane tideHeight={tidalData.tideHeight} terrain={terrain} />
+      <TidalCurrentArrows
+        currentDirection={tidalData.currentDirection}
+        currentSpeed={tidalData.currentSpeed}
+        surfaceY={surfY + (tidalData.tideHeight / ((terrain.maxDepth - terrain.minDepth) || 1)) * MAX_DEPTH_WORLD}
+        depthLayer={depthLayer}
+        terrain={terrain}
+      />
+    </>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Inner scene — lives inside <Canvas>
 // ---------------------------------------------------------------------------
-const SceneContents: React.FC<{ terrainMeshRef: React.RefObject<THREE.Mesh | null> }> = ({
+interface SceneContentsProps {
+  terrainMeshRef: React.RefObject<THREE.Mesh | null>;
+  tidalData: TidalDataResult | null;
+  tidalOverlay: boolean;
+  depthLayer: DepthLayer;
+}
+
+const SceneContents: React.FC<SceneContentsProps> = ({
   terrainMeshRef,
+  tidalData,
+  tidalOverlay,
+  depthLayer,
 }) => {
   const { terrain } = useAppState();
 
@@ -69,6 +124,14 @@ const SceneContents: React.FC<{ terrainMeshRef: React.RefObject<THREE.Mesh | nul
       <Particles />
       {terrain && <TerrainMesh ref={terrainMeshRef} grid={terrain} />}
       <Caustics />
+
+      {tidalOverlay && terrain && (
+        <TidalSceneContents
+          tidalData={tidalData}
+          depthLayer={depthLayer}
+          terrain={terrain}
+        />
+      )}
 
       <FlyControlsScene terrainMeshRef={terrainMeshRef} />
     </>
@@ -117,13 +180,20 @@ const ErrorOverlay: React.FC<ErrorOverlayProps> = ({ message, onRetry }) => (
 // ---------------------------------------------------------------------------
 // TourScene — the main page
 // ---------------------------------------------------------------------------
-export const TourScene: React.FC = () => {
+interface TourSceneProps {
+  tidalData?: TidalDataResult | null;
+  tidalOverlay?: boolean;
+  depthLayer?: DepthLayer;
+}
+
+export const TourScene: React.FC<TourSceneProps> = ({
+  tidalData = null,
+  tidalOverlay = false,
+  depthLayer = "surface",
+}) => {
   const { datasetId, setTerrain } = useAppState();
   const terrainMeshRef = useRef<THREE.Mesh>(null);
 
-  // Only fetch when a built-in dataset is selected.
-  // When datasetId is null the terrain has been supplied by a custom upload
-  // (DatasetPanel.onDrop) so we must not fetch and overwrite it.
   const { data, isLoading, isError, error, refetch } = useGetDatasetsIdTerrain(
     datasetId ?? "",
     undefined,
@@ -146,7 +216,12 @@ export const TourScene: React.FC = () => {
         gl={{ antialias: true }}
         style={{ width: "100%", height: "100%" }}
       >
-        <SceneContents terrainMeshRef={terrainMeshRef} />
+        <SceneContents
+          terrainMeshRef={terrainMeshRef}
+          tidalData={tidalData}
+          tidalOverlay={tidalOverlay}
+          depthLayer={depthLayer}
+        />
       </Canvas>
 
       {isLoading && !data && <LoadingOverlay />}

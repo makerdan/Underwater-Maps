@@ -16,9 +16,21 @@ interface AppState {
   setSpeedIndex: (s: number) => void;
   cameraPos: [number, number, number];
   setCameraPos: (p: [number, number, number]) => void;
+  tidalOverlay: boolean;
+  setTidalOverlay: (b: boolean) => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
+
+function readLocalBool(key: string, fallback: boolean): boolean {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
+    return raw === "true";
+  } catch {
+    return fallback;
+  }
+}
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [mode, setMode] = useState<AppMode>("fly");
@@ -26,6 +38,16 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [terrain, setTerrain] = useState<TerrainData | null>(null);
   const [speedIndex, setSpeedIndex] = useState<number>(1);
   const [cameraPos, setCameraPos] = useState<[number, number, number]>([0, 0, 0]);
+  const [tidalOverlay, setTidalOverlayRaw] = useState<boolean>(() =>
+    readLocalBool("bathyscan:tidalOverlay", false),
+  );
+
+  function setTidalOverlay(b: boolean) {
+    setTidalOverlayRaw(b);
+    try {
+      localStorage.setItem("bathyscan:tidalOverlay", String(b));
+    } catch {}
+  }
 
   return (
     <AppContext.Provider
@@ -40,6 +62,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setSpeedIndex,
         cameraPos,
         setCameraPos,
+        tidalOverlay,
+        setTidalOverlay,
       }}
     >
       {children}

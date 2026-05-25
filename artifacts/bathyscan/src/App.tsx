@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
@@ -16,6 +16,9 @@ import { DatasetPanel } from "@/components/DatasetPanel";
 import { Minimap } from "@/components/Minimap";
 import { ControlsLegend } from "@/components/ControlsLegend";
 import { AppHeader } from "@/components/AppHeader";
+import { TidePanel } from "@/components/TidePanel";
+import { useTidalData } from "@/hooks/useTidalData";
+import type { DepthLayer } from "@/components/TidalCurrentArrows";
 
 const queryClient = new QueryClient();
 
@@ -135,11 +138,23 @@ function ClerkQueryClientCacheInvalidator() {
 
 function Main() {
   const { data: datasets } = useGetDatasets();
-  const { datasetId, setDatasetId, terrain } = useAppState();
+  const { datasetId, setDatasetId, terrain, tidalOverlay, setTidalOverlay } = useAppState();
+  const [depthLayer, setDepthLayer] = useState<DepthLayer>("surface");
+  const [scrubDatetime, setScrubDatetime] = useState<Date | null>(null);
 
-  // Auto-select first dataset on initial load only.
-  // Using a ref ensures this never re-fires after a successful custom upload
-  // (which sets datasetId=null to disable TourScene's built-in terrain fetch).
+  const centerLat = terrain
+    ? (terrain.minLat + terrain.maxLat) / 2
+    : null;
+  const centerLon = terrain
+    ? (terrain.minLon + terrain.maxLon) / 2
+    : null;
+
+  const { data: tidalData, loading: tidalLoading } = useTidalData(
+    tidalOverlay ? centerLat : null,
+    tidalOverlay ? centerLon : null,
+    tidalOverlay ? scrubDatetime : null,
+  );
+
   const hasAutoSelectedRef = useRef(false);
   useEffect(() => {
     if (hasAutoSelectedRef.current) return;
@@ -149,7 +164,6 @@ function Main() {
     }
   }, [datasets, datasetId, setDatasetId]);
 
-  // Sync active terrain to terrainStore so Minimap/DepthScaleBar can read it
   useEffect(() => {
     if (terrain) {
       useTerrainStore.getState().setGrids({ activeGrid: terrain });
@@ -162,7 +176,11 @@ function Main() {
 
       <div className="relative flex-1 overflow-hidden">
         {/* 3D Scene — fills everything */}
-        <TourScene />
+        <TourScene
+          tidalData={tidalData}
+          tidalOverlay={tidalOverlay}
+          depthLayer={depthLayer}
+        />
 
         {/* HUD + depth scale — pointer-events:none overlay */}
         <div className="absolute inset-0 pointer-events-none z-10">
@@ -174,6 +192,45 @@ function Main() {
         <div className="absolute top-12 left-4 z-20">
           <DatasetPanel />
         </div>
+
+        {/* Tidal toggle button — top-right of scene */}
+        <div className="absolute top-3 right-16 z-20">
+          <button
+            onClick={() => setTidalOverlay(!tidalOverlay)}
+            title={tidalOverlay ? "Disable Tidal Overlay" : "Enable Tidal Overlay"}
+            style={{
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              fontSize: 10,
+              letterSpacing: "0.18em",
+              padding: "4px 10px",
+              borderRadius: 3,
+              border: `1px solid ${tidalOverlay ? "rgba(0,229,255,0.45)" : "rgba(0,229,255,0.15)"}`,
+              background: tidalOverlay ? "rgba(0,229,255,0.1)" : "rgba(0,10,20,0.75)",
+              color: tidalOverlay ? "#00e5ff" : "#475569",
+              textShadow: tidalOverlay ? "0 0 8px rgba(0,229,255,0.5)" : "none",
+              cursor: "pointer",
+              userSelect: "none",
+              backdropFilter: "blur(4px)",
+              transition: "all 0.15s ease",
+            }}
+          >
+            {tidalOverlay ? "◉" : "○"} TIDAL
+          </button>
+        </div>
+
+        {/* Tide HUD panel — bottom-left, above controls legend */}
+        {tidalOverlay && tidalData !== null && (
+          <div className="absolute z-20" style={{ bottom: 52, left: 16 }}>
+            <TidePanel
+              data={tidalData}
+              loading={tidalLoading}
+              depthLayer={depthLayer}
+              onDepthLayerChange={setDepthLayer}
+              scrubDatetime={scrubDatetime}
+              onScrubChange={setScrubDatetime}
+            />
+          </div>
+        )}
 
         {/* Minimap + controls legend — bottom-right and bottom-left */}
         <div className="absolute bottom-4 right-4 z-20">
