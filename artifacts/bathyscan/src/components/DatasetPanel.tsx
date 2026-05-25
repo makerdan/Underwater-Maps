@@ -48,7 +48,7 @@ const CYAN: React.CSSProperties = {
 };
 
 export const DatasetPanel: React.FC = () => {
-  const { datasetId, setDatasetId, setTerrain, terrain } = useAppState();
+  const { datasetId, setDatasetId, setTerrain, terrain, mode } = useAppState();
   const { isSignedIn } = useAuth();
   const qc = useQueryClient();
 
@@ -317,6 +317,7 @@ export const DatasetPanel: React.FC = () => {
 
   const handleTeleportToMarker = (lon: number, lat: number) => {
     if (!terrain) return;
+    if (mode !== "fly") return;
     const { x, z } = lonLatToWorldXZ(lon, lat, terrain);
     useUiStore.getState().setPendingDropIn({ worldX: x, worldZ: z });
   };

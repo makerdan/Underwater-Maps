@@ -17,7 +17,6 @@ import {
 } from "@workspace/api-client-react";
 import {
   MARKER_TYPES,
-  MARKER_COLOR,
   type MarkerTypeValue,
 } from "@/lib/markerConstants";
 
