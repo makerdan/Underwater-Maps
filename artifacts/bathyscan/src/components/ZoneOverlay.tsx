@@ -4,7 +4,7 @@
  * Shows:
  *  • A pulsing "Analysing terrain…" indicator while classification is running.
  *  • A toggle button to enable/disable the zone colour overlay on the mesh.
- *  • A compact legend listing zone names with their pastel colour swatches.
+ *  • A compact legend listing ALL 8 AI zone labels with their shader-slot colours.
  *
  * Rendered as a DOM overlay (pointer-events: auto) positioned in the HUD.
  * The actual shader tinting is driven by uiStore.zoneOverlayEnabled which
@@ -14,10 +14,20 @@ import React from "react";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useAppState } from "@/lib/context";
-import { SLOT_NAMES_SALTWATER, SLOT_NAMES_FRESHWATER } from "@/lib/zoneMap";
+import {
+  SALTWATER_ZONES,
+  FRESHWATER_ZONES,
+  SALTWATER_ZONE_TO_SLOT,
+  FRESHWATER_ZONE_TO_SLOT,
+} from "@/lib/zoneMap";
 
-// Pastel hex colours matching terrainShader.ts ZONE_TINT_COLORS
-const SWATCH_COLORS = ["#f5d58a", "#c49a6c", "#8ab4d0", "#b06060"] as const;
+// Pastel hex colours matching terrainShader.ts ZONE_TINT_COLORS (indexed by slot 0–3)
+const SLOT_COLORS = ["#f5d58a", "#c49a6c", "#8ab4d0", "#b06060"] as const;
+
+/** Human-readable label for a raw zone key. */
+function formatZoneLabel(key: string): string {
+  return key.replace(/_/g, " ");
+}
 
 const PANEL: React.CSSProperties = {
   background: "rgba(0,10,20,0.82)",
@@ -28,8 +38,8 @@ const PANEL: React.CSSProperties = {
   fontSize: 11,
   backdropFilter: "blur(6px)",
   pointerEvents: "auto",
-  minWidth: 168,
-  maxWidth: 220,
+  minWidth: 172,
+  maxWidth: 224,
 };
 
 const CYAN: React.CSSProperties = {
@@ -49,7 +59,8 @@ export const ZoneOverlay: React.FC = () => {
   if (!terrain) return null;
 
   const waterType = terrain.waterType as "saltwater" | "freshwater";
-  const slotNames = waterType === "freshwater" ? SLOT_NAMES_FRESHWATER : SLOT_NAMES_SALTWATER;
+  const zones = waterType === "freshwater" ? FRESHWATER_ZONES : SALTWATER_ZONES;
+  const zoneToSlot = waterType === "freshwater" ? FRESHWATER_ZONE_TO_SLOT : SALTWATER_ZONE_TO_SLOT;
   const hasZoneMap = !!zoneMap;
 
   return (
@@ -66,10 +77,7 @@ export const ZoneOverlay: React.FC = () => {
           ◈ Zone Analysis
         </span>
         {loading && (
-          <span
-            className="animate-spin"
-            style={{ fontSize: 10, color: "#00e5ff" }}
-          >
+          <span className="animate-spin" style={{ fontSize: 10, color: "#00e5ff" }}>
             ◌
           </span>
         )}
@@ -105,9 +113,7 @@ export const ZoneOverlay: React.FC = () => {
                 width: 12,
                 height: 12,
                 borderRadius: 2,
-                border: overlayEnabled
-                  ? "1.5px solid #00e5ff"
-                  : "1.5px solid #334155",
+                border: overlayEnabled ? "1.5px solid #00e5ff" : "1.5px solid #334155",
                 background: overlayEnabled ? "rgba(0,229,255,0.2)" : "transparent",
                 flexShrink: 0,
                 transition: "all 0.15s",
@@ -139,39 +145,43 @@ export const ZoneOverlay: React.FC = () => {
           </button>
         )}
 
-        {/* Zone legend — always shown once map is ready, overlay-toggle independent */}
+        {/* Zone legend — all 8 AI zone labels with their shader-slot colour */}
         {hasZoneMap && !loading && (
           <div className="zone-legend" style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-            {SWATCH_COLORS.map((color, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <span
-                  style={{
-                    display: "inline-block",
-                    width: 10,
-                    height: 10,
-                    borderRadius: 2,
-                    background: color,
-                    flexShrink: 0,
-                    opacity: overlayEnabled ? 1 : 0.45,
-                    transition: "opacity 0.15s",
-                  }}
-                />
-                <span
-                  style={{
-                    fontSize: 9,
-                    color: overlayEnabled ? "#94a3b8" : "#334155",
-                    letterSpacing: "0.04em",
-                    transition: "color 0.15s",
-                  }}
-                >
-                  {slotNames[i]}
-                </span>
-              </div>
-            ))}
+            {zones.map((zone, i) => {
+              const slot = zoneToSlot[i] ?? 0;
+              const color = SLOT_COLORS[slot] ?? SLOT_COLORS[0];
+              return (
+                <div key={zone} className="flex items-center gap-2">
+                  <span
+                    style={{
+                      display: "inline-block",
+                      width: 10,
+                      height: 10,
+                      borderRadius: 2,
+                      background: color,
+                      flexShrink: 0,
+                      opacity: overlayEnabled ? 1 : 0.45,
+                      transition: "opacity 0.15s",
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontSize: 9,
+                      color: overlayEnabled ? "#94a3b8" : "#334155",
+                      letterSpacing: "0.04em",
+                      transition: "color 0.15s",
+                    }}
+                  >
+                    {formatZoneLabel(zone)}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
 
-        {/* Waiting state (no error, no map, not loading = waiting for first dataset) */}
+        {/* Waiting state */}
         {!hasZoneMap && !loading && !error && (
           <div style={{ fontSize: 9, color: "#1e293b", letterSpacing: "0.05em" }}>
             Load a dataset to classify

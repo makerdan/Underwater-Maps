@@ -14,6 +14,7 @@ import {
   parseXyzCsv,
   gridPoints,
 } from "../lib/terrain.js";
+import { datasetZonesCache } from "./poe.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
@@ -69,6 +70,19 @@ router.get("/datasets/:id/overview", async (req, res): Promise<void> => {
     const msg = err instanceof Error ? err.message : "Upstream fetch failed";
     res.status(502).json({ error: "upstream_error", details: msg });
   }
+});
+
+// ── GET /datasets/:id/zones ────────────────────────────────────────────────────
+// Returns the most-recent AI classification for this dataset from the in-memory
+// cache populated by POST /poe/classify.  404 when not yet classified.
+router.get("/datasets/:id/zones", (req, res): void => {
+  const { id } = req.params as { id: string };
+  const cached = datasetZonesCache.get(id);
+  if (cached) {
+    res.json(cached);
+    return;
+  }
+  res.status(404).json({ error: "not_found", message: "No cached classification for this dataset" });
 });
 
 // ── POST /datasets/upload (multipart/form-data via multer) ───────────────────

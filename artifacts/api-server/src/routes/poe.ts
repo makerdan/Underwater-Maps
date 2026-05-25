@@ -158,16 +158,8 @@ interface CachedZones {
 
 const datasetZonesCache = new Map<string, CachedZones>();
 
-// GET /zones/:datasetId — return cached classification if available
-router.get("/zones/:datasetId", async (req, res) => {
-  const { datasetId } = req.params as { datasetId: string };
-  const cached = datasetZonesCache.get(datasetId);
-  if (cached) {
-    res.json(cached);
-    return;
-  }
-  res.status(404).json({ error: "not_found", message: "No cached classification for this dataset" });
-});
+/** Exported so the /datasets/:id/zones endpoint (datasets.ts) can read it. */
+export { datasetZonesCache };
 
 // ---------------------------------------------------------------------------
 // Classify
