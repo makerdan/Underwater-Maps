@@ -89,6 +89,8 @@ export const DatasetPanel: React.FC = () => {
   // ─── User dataset pending + active tracking ────────────────────────────────
   const [pendingUserDatasetId, setPendingUserDatasetId] = useState<string | null>(null);
   const [activeUserDatasetId, setActiveUserDatasetId] = useState<string | null>(null);
+  const [userLoadError, setUserLoadError] = useState<{ id: string; name: string } | null>(null);
+  const [presetLoadError, setPresetLoadError] = useState<{ id: string; name: string } | null>(null);
 
   // ─── Upload progress (simulated) ──────────────────────────────────────────
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -124,10 +126,13 @@ export const DatasetPanel: React.FC = () => {
   useEffect(() => {
     if (!pendingId) return;
     if (terrainFetchError || overviewFetchError) {
+      const failedId = pendingId;
+      const name = datasets?.find((d) => d.id === failedId)?.name ?? failedId;
+      setPresetLoadError({ id: failedId, name });
       setLoadingId(null);
       setPendingId(null);
     }
-  }, [pendingId, terrainFetchError, overviewFetchError]);
+  }, [pendingId, terrainFetchError, overviewFetchError, datasets]);
 
   useEffect(() => {
     if (!pendingId || !pendingTerrain || !pendingOverview) return;
@@ -167,10 +172,13 @@ export const DatasetPanel: React.FC = () => {
   useEffect(() => {
     if (!pendingUserDatasetId) return;
     if (userTerrainError || userOverviewError) {
+      const failedId = pendingUserDatasetId;
+      const name = userDatasets?.find((d) => d.id === failedId)?.name ?? failedId;
+      setUserLoadError({ id: failedId, name });
       setLoadingId(null);
       setPendingUserDatasetId(null);
     }
-  }, [pendingUserDatasetId, userTerrainError, userOverviewError]);
+  }, [pendingUserDatasetId, userTerrainError, userOverviewError, userDatasets]);
 
   useEffect(() => {
     if (!pendingUserDatasetId || !userPendingTerrain || !userPendingOverview) return;
@@ -212,6 +220,8 @@ export const DatasetPanel: React.FC = () => {
   // ─── Dataset click handlers ────────────────────────────────────────────────
   const handleSelectPreset = (ds: DatasetMeta) => {
     if (ds.id === datasetId && !pendingId) return;
+    setPresetLoadError(null);
+    setUserLoadError(null);
     setLoadingId(ds.id);
     setPendingId(ds.id);
     setPendingUserDatasetId(null);
@@ -219,9 +229,35 @@ export const DatasetPanel: React.FC = () => {
 
   const handleSelectUserDataset = (ds: UserDatasetMeta) => {
     if (ds.id === activeUserDatasetId && !pendingUserDatasetId) return;
+    setUserLoadError(null);
+    setPresetLoadError(null);
     setLoadingId(ds.id);
     setPendingUserDatasetId(ds.id);
     setPendingId(null);
+  };
+
+  const handleRetryUserDataset = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!userLoadError) return;
+    const id = userLoadError.id;
+    void qc.invalidateQueries({ queryKey: getGetUserDatasetsIdTerrainQueryKey(id) });
+    void qc.invalidateQueries({ queryKey: getGetUserDatasetsIdOverviewQueryKey(id) });
+    setUserLoadError(null);
+    setLoadingId(id);
+    setPendingUserDatasetId(id);
+    setPendingId(null);
+  };
+
+  const handleRetryPreset = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!presetLoadError) return;
+    const id = presetLoadError.id;
+    void qc.invalidateQueries({ queryKey: getGetDatasetsIdTerrainQueryKey(id) });
+    void qc.invalidateQueries({ queryKey: getGetDatasetsIdOverviewQueryKey(id) });
+    setPresetLoadError(null);
+    setLoadingId(id);
+    setPendingId(id);
+    setPendingUserDatasetId(null);
   };
 
   // ─── Delete user dataset ───────────────────────────────────────────────────
@@ -380,6 +416,62 @@ export const DatasetPanel: React.FC = () => {
         <div>
           {/* ── Built-in dataset list ── */}
           <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}>
+            {presetLoadError && (
+              <div
+                data-testid="preset-dataset-load-error"
+                style={{
+                  margin: "4px 8px",
+                  padding: "6px 8px",
+                  background: "rgba(239,68,68,0.08)",
+                  border: "1px solid rgba(239,68,68,0.35)",
+                  borderRadius: 4,
+                  fontSize: 10,
+                  color: "#fca5a5",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                }}
+              >
+                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+                  Failed to load "{presetLoadError.name}"
+                </span>
+                <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
+                  <button
+                    data-testid="btn-retry-preset"
+                    onClick={handleRetryPreset}
+                    style={{
+                      fontSize: 10,
+                      color: "#00e5ff",
+                      background: "transparent",
+                      border: "1px solid rgba(0,229,255,0.35)",
+                      borderRadius: 3,
+                      padding: "1px 6px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Retry
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPresetLoadError(null);
+                    }}
+                    style={{
+                      fontSize: 10,
+                      color: "#64748b",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: "1px 4px",
+                    }}
+                    aria-label="Dismiss error"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            )}
             {(datasets ?? []).map((ds) => {
               const active = ds.id === datasetId && !pendingId && !activeUserDatasetId;
               const loading = ds.id === loadingId;
@@ -464,6 +556,63 @@ export const DatasetPanel: React.FC = () => {
               {(userDatasets ?? []).length === 0 && !userDatasetsLoading && (
                 <div style={{ fontSize: 9, color: "#334155", padding: "4px 12px 8px" }}>
                   No saved terrains yet
+                </div>
+              )}
+
+              {userLoadError && (
+                <div
+                  data-testid="user-dataset-load-error"
+                  style={{
+                    margin: "4px 8px 8px",
+                    padding: "6px 8px",
+                    background: "rgba(239,68,68,0.08)",
+                    border: "1px solid rgba(239,68,68,0.35)",
+                    borderRadius: 4,
+                    fontSize: 10,
+                    color: "#fca5a5",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                  }}
+                >
+                  <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+                    Failed to load "{userLoadError.name}"
+                  </span>
+                  <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
+                    <button
+                      data-testid="btn-retry-user-dataset"
+                      onClick={handleRetryUserDataset}
+                      style={{
+                        fontSize: 10,
+                        color: "#00e5ff",
+                        background: "transparent",
+                        border: "1px solid rgba(0,229,255,0.35)",
+                        borderRadius: 3,
+                        padding: "1px 6px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Retry
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setUserLoadError(null);
+                      }}
+                      style={{
+                        fontSize: 10,
+                        color: "#64748b",
+                        background: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: "1px 4px",
+                      }}
+                      aria-label="Dismiss error"
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
               )}
 
