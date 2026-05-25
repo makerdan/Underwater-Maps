@@ -131,10 +131,7 @@ router.get("/datasets/:id/zones", async (req, res): Promise<void> => {
   const isPreset = ALL_PRESET_DATASETS.some((d) => d.id === id);
   if (!isPreset) {
     const auth = getAuth(req);
-    const callerId = auth?.userId
-      ?? (process.env["NODE_ENV"] !== "production"
-        ? ((req.headers["x-dev-user-id"] as string | undefined) ?? null)
-        : null);
+    const callerId = auth?.userId ?? null;
 
     if (!callerId) {
       res.status(401).json({ error: "unauthenticated", message: "Authentication required" });

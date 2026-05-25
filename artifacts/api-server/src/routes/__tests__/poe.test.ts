@@ -28,8 +28,9 @@ vi.mock("@workspace/db", () => ({
 }));
 
 // Mock Clerk + proxy middlewares so the app boots without a live tenant.
-// The poe routes use their own requireAuth middleware that falls back to
-// the X-Dev-User-Id header in non-production environments.
+// Auth in tests goes through the shared `requireAuth` middleware
+// (`src/middlewares/requireAuth.ts`), which honors `x-e2e-user-id` when
+// `E2E_AUTH_BYPASS=1` is set in the environment (see beforeEach below).
 vi.mock("@clerk/express", () => ({
   clerkMiddleware: vi.fn(
     () => (_req: unknown, _res: unknown, next: () => void) => next(),
@@ -65,6 +66,10 @@ function buildOkResponse() {
 }
 
 beforeEach(() => {
+  // Turn on the env-gated e2e bypass so requests carrying `x-e2e-user-id`
+  // authenticate as that user without contacting Clerk. The bypass is
+  // hard-gated on this env var and is never honored in production.
+  vi.stubEnv("E2E_AUTH_BYPASS", "1");
   globalPoeCache.clear();
   fakeCreate.mockReset();
   fakeCreate.mockResolvedValue(buildOkResponse());
@@ -74,7 +79,7 @@ describe("POST /api/poe/classify", () => {
   it("returns 400 when gridBase64 is missing", async () => {
     const res = await request(app)
       .post("/api/poe/classify")
-      .set("x-dev-user-id", "user-missing-grid")
+      .set("x-e2e-user-id", "user-missing-grid")
       .send({ waterType: "saltwater" });
 
     expect(res.status).toBe(400);
@@ -85,7 +90,7 @@ describe("POST /api/poe/classify", () => {
   it("returns a 1024-element zones array on a valid request", async () => {
     const res = await request(app)
       .post("/api/poe/classify")
-      .set("x-dev-user-id", "user-valid")
+      .set("x-e2e-user-id", "user-valid")
       .send({
         gridBase64: GRID_BASE64,
         waterType: "saltwater",
@@ -108,14 +113,14 @@ describe("POST /api/poe/classify", () => {
 
     const first = await request(app)
       .post("/api/poe/classify")
-      .set("x-dev-user-id", "user-cache")
+      .set("x-e2e-user-id", "user-cache")
       .send(body);
     expect(first.status).toBe(200);
     expect(first.body.fromCache).toBe(false);
 
     const second = await request(app)
       .post("/api/poe/classify")
-      .set("x-dev-user-id", "user-cache")
+      .set("x-e2e-user-id", "user-cache")
       .send(body);
     expect(second.status).toBe(200);
     expect(second.body.fromCache).toBe(true);
@@ -132,7 +137,7 @@ describe("POST /api/poe/classify", () => {
     for (let i = 0; i < 30; i++) {
       const res = await request(app)
         .post("/api/poe/classify")
-        .set("x-dev-user-id", userId)
+        .set("x-e2e-user-id", userId)
         .send({
           gridBase64: GRID_BASE64,
           waterType: "saltwater",
@@ -143,7 +148,7 @@ describe("POST /api/poe/classify", () => {
 
     const limited = await request(app)
       .post("/api/poe/classify")
-      .set("x-dev-user-id", userId)
+      .set("x-e2e-user-id", userId)
       .send({
         gridBase64: GRID_BASE64,
         waterType: "saltwater",

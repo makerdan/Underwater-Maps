@@ -1,6 +1,7 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { promises as fsPromises } from "fs";
 import path from "path";
+import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { getPoeClient } from "@workspace/poe";
 import { withRetry } from "@workspace/poe";
 import { PoeCreditsError, PoeRateLimitError, PoeAuthError } from "@workspace/poe";
@@ -53,7 +54,10 @@ function setRateLimitHeaders(res: Response, state: RateLimitState): void {
  * every response (including 429s). Must run AFTER requireAuth so userId is real.
  */
 function rateLimitMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const userId = (req as unknown as { auth?: { userId?: string } }).auth?.userId;
+  // requireAuth runs first and writes `clerkUserId` onto the request — see
+  // `../middlewares/requireAuth.ts`. All Poe routes must go through that
+  // shared middleware; do NOT re-implement auth here.
+  const userId = (req as AuthenticatedRequest).clerkUserId;
   if (!userId) {
     res.status(401).json({ error: "unauthenticated", message: "Authentication required" });
     return;
@@ -74,31 +78,34 @@ function rateLimitMiddleware(req: Request, res: Response, next: NextFunction): v
 
 // ---------------------------------------------------------------------------
 // Auth middleware — applied to ALL Poe routes (including /models)
-// Unauthenticated callers receive 401 before touching the Poe API.
+//
+// We use the SHARED `requireAuth` middleware from `../middlewares/requireAuth.ts`
+// so that auth behavior (Clerk session + env-gated `x-e2e-user-id` bypass for
+// tests) lives in exactly one place. Do NOT re-implement auth per router — a
+// previous copy here drifted out of sync with the shared middleware and broke
+// the unit tests. If you need to wrap auth with extra behavior (e.g. emitting
+// rate-limit headers on 401), wrap the shared middleware rather than forking it.
 // ---------------------------------------------------------------------------
 
-function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  const userId = (req as unknown as { auth?: { userId?: string } }).auth?.userId;
-  if (userId) {
-    next();
-    return;
-  }
-
-  // Emit baseline rate-limit headers on unauthenticated 401s so every Poe
-  // response carries them, per task acceptance criteria. We do NOT consume a
-  // bucket entry here (there is no userId to key on).
+function requireAuthWithRateLimitHeaders(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  // Pre-stamp baseline X-RateLimit-* headers BEFORE delegating to the shared
+  // requireAuth. If auth fails, requireAuth sends the 401 response with these
+  // headers already on it (per task acceptance criteria: every Poe response
+  // carries rate-limit headers). If auth succeeds, the downstream
+  // rateLimitMiddleware overwrites them with the real per-user values.
   setRateLimitHeaders(res, {
     allowed: true,
     remaining: RATE_LIMIT_MAX,
     resetAt: Date.now() + RATE_LIMIT_WINDOW_MS,
   });
-  res.status(401).json({
-    error: "unauthenticated",
-    message: "Authentication required to use AI features",
-  });
+  requireAuth(req, res, next);
 }
 
-router.use(requireAuth);
+router.use(requireAuthWithRateLimitHeaders);
 router.use(rateLimitMiddleware);
 
 // ---------------------------------------------------------------------------
@@ -148,7 +155,10 @@ function estimatePoints(model: string, totalTokens: number): number {
 }
 
 function getAuthenticatedUserId(req: Request): string {
-  return (req as unknown as { auth: { userId: string } }).auth.userId;
+  // Populated by the shared `requireAuth` middleware in
+  // `../middlewares/requireAuth.ts`. Always non-empty by the time a handler
+  // runs because requireAuth short-circuits unauthenticated requests with 401.
+  return (req as AuthenticatedRequest).clerkUserId;
 }
 
 async function logUsage(
