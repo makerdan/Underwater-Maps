@@ -12,6 +12,7 @@ import type { Marker, GpsTrail } from "@workspace/api-client-react";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
+import { useContextMenuStore, type ContextMenuItem } from "@/lib/contextMenuStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
 import {
   buildHeatmapBitmap,
@@ -386,12 +387,73 @@ export const OverviewMap: React.FC = () => {
       useUiStore.getState().setOverviewOpen(false);
     };
 
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      const t = transformRef.current;
+      if (!t || !overviewGrid) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      const { lon, lat } = canvasToLonLat(mx, my, overviewGrid, t);
+      const { x: worldX, z: worldZ } = lonLatToWorldXZ(lon, lat, overviewGrid);
+
+      // Approximate depth at this lon/lat from the overview grid.
+      const N = overviewGrid.resolution;
+      const lonRange = overviewGrid.maxLon - overviewGrid.minLon || 1;
+      const latRange = overviewGrid.maxLat - overviewGrid.minLat || 1;
+      const col = Math.max(
+        0,
+        Math.min(N - 1, Math.round(((lon - overviewGrid.minLon) / lonRange) * (N - 1))),
+      );
+      const row = Math.max(
+        0,
+        Math.min(N - 1, Math.round(((lat - overviewGrid.minLat) / latRange) * (N - 1))),
+      );
+      const depth = overviewGrid.depths[row * N + col] ?? overviewGrid.minDepth;
+
+      const items: ContextMenuItem[] = [
+        {
+          label: "Drop in here",
+          icon: "✈️",
+          onClick: () => {
+            useUiStore.getState().setPendingDropIn({ worldX, worldZ });
+            useUiStore.getState().setOverviewOpen(false);
+          },
+        },
+        {
+          label: "Place marker here",
+          icon: "📍",
+          onClick: () => {
+            useCameraStore.getState().setLastClickedGps({ lon, lat, depth });
+            useUiStore.getState().setOverviewOpen(false);
+            useUiStore.getState().setMarkerFormOpen(true);
+          },
+        },
+        { label: "", onClick: () => {}, separator: true },
+        {
+          label: "Copy coordinates",
+          icon: "📋",
+          onClick: () => {
+            const text = `lat: ${lat.toFixed(5)}, lon: ${lon.toFixed(5)}, depth: ${Math.round(depth)}m`;
+            if (typeof navigator !== "undefined" && navigator.clipboard) {
+              navigator.clipboard.writeText(text).catch(() => {});
+            }
+          },
+        },
+      ];
+
+      useContextMenuStore.getState().show(e.clientX, e.clientY, items);
+    };
+
     canvas.addEventListener("mousedown", handleMouseDown);
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
     canvas.addEventListener("mouseleave", handleMouseLeave);
     canvas.addEventListener("wheel", handleWheel, { passive: false });
     canvas.addEventListener("click", handleClick);
+    canvas.addEventListener("contextmenu", handleContextMenu);
 
     return () => {
       canvas.removeEventListener("mousedown", handleMouseDown);
@@ -400,6 +462,7 @@ export const OverviewMap: React.FC = () => {
       canvas.removeEventListener("mouseleave", handleMouseLeave);
       canvas.removeEventListener("wheel", handleWheel);
       canvas.removeEventListener("click", handleClick);
+      canvas.removeEventListener("contextmenu", handleContextMenu);
     };
   }, [overviewGrid]);
 

@@ -42,6 +42,7 @@ export const MarkerSprite: React.FC<Props> = ({ marker, terrain }) => {
 
   return (
     <Billboard position={[x, y, z]}>
+      <group userData={{ markerId: marker.id }}>
       {/* Glowing disc */}
       <mesh>
         <circleGeometry args={[0.4, 20]} />
@@ -75,6 +76,7 @@ export const MarkerSprite: React.FC<Props> = ({ marker, terrain }) => {
       >
         {marker.label}
       </Text>
+      </group>
     </Billboard>
   );
 };

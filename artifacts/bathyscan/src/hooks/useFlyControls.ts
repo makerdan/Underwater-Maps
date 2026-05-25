@@ -1,13 +1,35 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
+import { useQueryClient } from "@tanstack/react-query";
 import * as THREE from "three";
-import type { TerrainData } from "@workspace/api-client-react";
+import type { Marker, TerrainData } from "@workspace/api-client-react";
+import {
+  useDeleteMarkersId,
+  getGetMarkersQueryKey,
+} from "@workspace/api-client-react";
 import { useAppState, SPEEDS } from "@/lib/context";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
 import { worldXZToLonLat, worldYToMetres, lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
 import { useJoystickStore } from "@/components/VirtualJoystick";
 import { computeMetersPerWorldUnit, boatMphToWorldUnitsPerSecond } from "@/lib/boatSpeed";
+import { markerGroupRef } from "@/components/MarkerLayer";
+import { useContextMenuStore, type ContextMenuItem } from "@/lib/contextMenuStore";
+import { useMeasureStore } from "@/lib/measureStore";
+import { useMarkerDetailStore } from "@/lib/markerDetailStore";
+import { useSettingsStore } from "@/lib/settingsStore";
+import { haversineDistance } from "@/lib/geo";
+
+function copyToClipboard(text: string): void {
+  if (typeof navigator === "undefined" || !navigator.clipboard) return;
+  navigator.clipboard.writeText(text).catch(() => {
+    // Best-effort; clipboard may be blocked by permissions
+  });
+}
+
+function formatCoords(lon: number, lat: number, depth: number): string {
+  return `lat: ${lat.toFixed(5)}, lon: ${lon.toFixed(5)}, depth: ${Math.round(depth)}m`;
+}
 
 interface FlyControlsOptions {
   terrainMeshRef: React.RefObject<THREE.Mesh | null>;
@@ -20,6 +42,11 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
     mode, setMode, speedIndex, setSpeedIndex, terrain, setCameraPos,
     realisticMode, boatSpeedMph,
   } = useAppState();
+
+  const queryClient = useQueryClient();
+  const deleteMarker = useDeleteMarkersId();
+  const deleteMarkerRef = useRef(deleteMarker);
+  useEffect(() => { deleteMarkerRef.current = deleteMarker; }, [deleteMarker]);
 
   // Refs for event-listener / useFrame closures to stay current
   const modeRef = useRef(mode);
@@ -59,6 +86,19 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
     if (!grid) return;
     const { resolution: N, depths, minDepth, maxDepth } = grid;
     const depthRange = maxDepth - minDepth || 1;
+
+    // If user has set a "home position" for this dataset via the context menu,
+    // spawn there instead of at the deepest point.
+    const home = useSettingsStore.getState().datasetHomePositions[grid.datasetId];
+    if (home) {
+      const { x, z } = lonLatToWorldXZ(home.lon, home.lat, grid);
+      const t = (home.depth - minDepth) / depthRange;
+      const surfaceY = -Math.max(0, Math.min(1, t)) * MAX_DEPTH_WORLD;
+      camera.position.set(x, surfaceY + 10, z);
+      euler.current.set(-0.25, 0, 0);
+      camera.quaternion.setFromEuler(euler.current);
+      return;
+    }
 
     let maxIdx = 0;
     for (let i = 1; i < depths.length; i++) {
@@ -187,13 +227,178 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       }
     };
 
+    const buildTerrainMenuItems = (
+      lon: number,
+      lat: number,
+      depth: number,
+      datasetId: string,
+    ): ContextMenuItem[] => {
+      const measureAnchor = useMeasureStore.getState().anchorGps;
+      const items: ContextMenuItem[] = [
+        {
+          label: "Drop GPS pin here",
+          icon: "📍",
+          onClick: () => {
+            useCameraStore.getState().setLastClickedGps({ lon, lat, depth });
+            useUiStore.getState().setMarkerFormOpen(true);
+          },
+        },
+        {
+          label: measureAnchor ? "Measure to here" : "Measure from here",
+          icon: "📏",
+          onClick: () => {
+            const ms = useMeasureStore.getState();
+            if (ms.anchorGps) {
+              const distanceKm = haversineDistance(
+                { lon: ms.anchorGps.lon, lat: ms.anchorGps.lat },
+                { lon, lat },
+              );
+              const depthDeltaM = depth - ms.anchorGps.depth;
+              ms.setResult(distanceKm, depthDeltaM);
+            } else {
+              ms.setAnchor({ lon, lat, depth });
+            }
+          },
+        },
+        {
+          label: "Set as home position",
+          icon: "🏠",
+          onClick: () => {
+            if (datasetId) {
+              useSettingsStore
+                .getState()
+                .setDatasetHome(datasetId, { lon, lat, depth });
+            }
+          },
+          disabled: !datasetId,
+        },
+        { label: "", onClick: () => {}, separator: true },
+        {
+          label: "Copy coordinates",
+          icon: "📋",
+          onClick: () => copyToClipboard(formatCoords(lon, lat, depth)),
+        },
+      ];
+      return items;
+    };
+
+    const buildMarkerMenuItems = (marker: Marker): ContextMenuItem[] => {
+      const grid = terrainRef.current;
+      const items: ContextMenuItem[] = [
+        {
+          label: "Fly to marker",
+          icon: "✈️",
+          onClick: () => {
+            if (!grid) return;
+            const { x, z } = lonLatToWorldXZ(marker.lon, marker.lat, grid);
+            useUiStore.getState().setPendingDropIn({ worldX: x, worldZ: z });
+          },
+          disabled: !grid,
+        },
+        {
+          label: "View details",
+          icon: "ℹ️",
+          onClick: () => useMarkerDetailStore.getState().show(marker),
+        },
+        {
+          label: "Copy coordinates",
+          icon: "📋",
+          onClick: () =>
+            copyToClipboard(formatCoords(marker.lon, marker.lat, marker.depth)),
+        },
+        { label: "", onClick: () => {}, separator: true },
+        {
+          label: "Delete marker",
+          icon: "🗑️",
+          onClick: () => {
+            // Capture datasetId at action time so a mid-flight dataset switch
+            // doesn't cause us to invalidate the wrong query key.
+            const datasetId = terrainRef.current?.datasetId ?? "";
+            deleteMarkerRef.current.mutate(
+              { id: marker.id },
+              {
+                onSuccess: () => {
+                  if (datasetId) {
+                    queryClient.invalidateQueries({
+                      queryKey: getGetMarkersQueryKey({ datasetId }),
+                    });
+                  }
+                },
+              },
+            );
+          },
+        },
+      ];
+      return items;
+    };
+
+    const findMarkerById = (id: string): Marker | undefined => {
+      const datasetId = terrainRef.current?.datasetId ?? "";
+      if (!datasetId) return undefined;
+      const markers = queryClient.getQueryData<Marker[]>(
+        getGetMarkersQueryKey({ datasetId }),
+      );
+      return markers?.find((m) => m.id === id);
+    };
+
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
       if (modeRef.current !== "fly") return;
-      const gps = useCameraStore.getState().crosshairGps;
-      if (gps) {
-        useCameraStore.getState().setLastClickedGps(gps);
-        useUiStore.getState().setMarkerFormOpen(true);
+
+      // Pointer locked → no menu (cursor not visible). Use crosshair GPS pin shortcut.
+      if (isLocked.current) {
+        const gps = useCameraStore.getState().crosshairGps;
+        if (gps) {
+          useCameraStore.getState().setLastClickedGps(gps);
+          useUiStore.getState().setMarkerFormOpen(true);
+        }
+        return;
+      }
+
+      // NDC at click position
+      const rect = gl.domElement.getBoundingClientRect();
+      const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const ndcY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+      const ndc = new THREE.Vector2(ndcX, ndcY);
+      raycaster.current.setFromCamera(ndc, camera);
+
+      // 1. Raycast against marker sprites first
+      const markerGroup = markerGroupRef.current;
+      if (markerGroup) {
+        const markerHits = raycaster.current.intersectObject(markerGroup, true);
+        if (markerHits[0]) {
+          let node: THREE.Object3D | null = markerHits[0].object;
+          while (node && node.userData["markerId"] === undefined) node = node.parent;
+          const markerId = node?.userData["markerId"] as string | undefined;
+          if (markerId) {
+            const marker = findMarkerById(markerId);
+            if (marker) {
+              useContextMenuStore
+                .getState()
+                .show(e.clientX, e.clientY, buildMarkerMenuItems(marker));
+              return;
+            }
+          }
+        }
+      }
+
+      // 2. Fall through to terrain raycast
+      const mesh = terrainMeshRef.current;
+      const grid = terrainRef.current;
+      if (mesh && grid) {
+        const hits = raycaster.current.intersectObject(mesh, false);
+        if (hits[0]) {
+          const pt = hits[0].point;
+          const { lon, lat } = worldXZToLonLat(pt.x, pt.z, grid);
+          const depth = worldYToMetres(pt.y, grid);
+          useContextMenuStore
+            .getState()
+            .show(
+              e.clientX,
+              e.clientY,
+              buildTerrainMenuItems(lon, lat, depth, grid.datasetId),
+            );
+        }
       }
     };
 
@@ -210,7 +415,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       gl.domElement.removeEventListener("wheel", handleWheel);
       gl.domElement.removeEventListener("contextmenu", handleContextMenu);
     };
-  }, [camera, gl.domElement, setMode, setSpeedIndex, terrainMeshRef]);
+  }, [camera, gl.domElement, setMode, setSpeedIndex, terrainMeshRef, queryClient]);
 
   // ---------------------------------------------------------------------------
   // Frame loop

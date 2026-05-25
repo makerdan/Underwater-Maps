@@ -20,6 +20,9 @@ import { AppHeader } from "@/components/AppHeader";
 import { TidePanel } from "@/components/TidePanel";
 import { ThrottlePanel } from "@/components/ThrottlePanel";
 import { MarkerForm } from "@/components/MarkerForm";
+import { ContextMenu } from "@/components/ContextMenu";
+import { MeasurementBanner } from "@/components/MeasurementBanner";
+import { MarkerDetailCard } from "@/components/MarkerDetailCard";
 import { OverviewMap } from "@/components/OverviewMap";
 import { ZoneOverlay } from "@/components/ZoneOverlay";
 import { HabitatPanel } from "@/components/HabitatPanel";
@@ -448,8 +451,17 @@ function Main() {
           </div>
         )}
 
+        {/* Measurement banner — z-25, below crosshair */}
+        <MeasurementBanner />
+
+        {/* Marker detail card — z-35, right side */}
+        <MarkerDetailCard />
+
         {/* Full-screen overview map — z-40, rendered above all HUD elements */}
         {overviewOpen && <OverviewMap />}
+
+        {/* Global right-click context menu — rendered into document.body via portal */}
+        <ContextMenu />
 
         {/* iOS "Add to Home Screen" install hint */}
         {showIosInstallHint && (
