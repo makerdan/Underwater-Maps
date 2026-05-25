@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { MapControls } from "@react-three/drei";
 import * as THREE from "three";
@@ -34,6 +34,8 @@ import { DriftPath } from "@/components/DriftPath";
 import { ConditionsOverlays } from "@/components/ConditionsOverlays";
 import { CurrentsLayer } from "@/components/CurrentsLayer";
 import { useCurrentsStore } from "@/lib/currentsStore";
+import { useWebglContextStore } from "@/lib/webglContextStore";
+import { WebglContextLostOverlay } from "@/components/WebglContextLostOverlay";
 
 // ---------------------------------------------------------------------------
 // FlyControlsScene — lives inside <Canvas>, wires up controls + lamp
@@ -349,6 +351,46 @@ export const TourScene: React.FC<TourSceneProps> = ({
   const renderDistance = useSettingsStore((s) => s.renderDistance);
   const antialias = useSettingsStore((s) => s.antialiasing);
 
+  const recoveryKey = useWebglContextStore((s) => s.recoveryKey);
+
+  // Track the canvas element + cleanup so the WebGL context lifecycle
+  // listeners are removed on Canvas unmount (HMR / route changes) and don't
+  // accumulate across remounts.
+  const contextCleanupRef = useRef<(() => void) | null>(null);
+  const handleCanvasCreated = useCallback(
+    (state: { gl: THREE.WebGLRenderer }) => {
+      const canvas = state.gl.domElement;
+      const onLost = (e: Event) => {
+        // Prevent default so the browser is willing to restore the context.
+        e.preventDefault();
+        useWebglContextStore.getState().markLost();
+      };
+      const onRestored = () => {
+        // Bumps recoveryKey so SceneContents remounts and all useMemo'd
+        // GPU resources (terrain mesh material/uniforms, marker layer
+        // geometry, particle/arrow/streamline buffers, drift path, water
+        // plane) re-upload from their CPU-side sources without a page
+        // reload.
+        useWebglContextStore.getState().markRestored();
+      };
+      canvas.addEventListener("webglcontextlost", onLost, false);
+      canvas.addEventListener("webglcontextrestored", onRestored, false);
+      // Replace any prior cleanup (defensive against double onCreated).
+      contextCleanupRef.current?.();
+      contextCleanupRef.current = () => {
+        canvas.removeEventListener("webglcontextlost", onLost, false);
+        canvas.removeEventListener("webglcontextrestored", onRestored, false);
+      };
+    },
+    [],
+  );
+  useEffect(() => {
+    return () => {
+      contextCleanupRef.current?.();
+      contextCleanupRef.current = null;
+    };
+  }, []);
+
   // E2E-only escape hatch: when running under the dev auth-bypass mode AND
   // the URL carries `?noCanvas=1`, skip mounting the R3F Canvas entirely.
   // Headless Chromium on this host cannot create a WebGL context (the GPU
@@ -390,14 +432,18 @@ export const TourScene: React.FC<TourSceneProps> = ({
             import.meta.env["VITE_E2E_PRESERVE_BUFFER"] === "1",
         }}
         style={{ width: "100%", height: "100%" }}
+        onCreated={handleCanvasCreated}
       >
         <SceneContents
+          key={recoveryKey}
           terrainMeshRef={terrainMeshRef}
           tidalData={tidalData}
           tidalOverlay={tidalOverlay}
           depthLayer={depthLayer}
         />
       </Canvas>
+
+      <WebglContextLostOverlay />
 
       {isLoading && !data && <LoadingOverlay />}
       {isError && (
