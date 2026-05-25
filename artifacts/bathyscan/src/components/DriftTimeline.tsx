@@ -48,7 +48,7 @@ function formatHour(h: number): string {
 }
 
 export const DriftTimeline: React.FC = () => {
-  const { driftPath, driftHour, setDriftHour, driftConditions, lineLengthM, driftMode, boatHeadingDeg, boatSpeedKnots } = useDriftStore();
+  const { driftPath, driftHour, setDriftHour, driftConditions, lineLengthM, driftMode, boatHeadingDeg, boatSpeedKnots, driftWaypoints } = useDriftStore();
 
   if (!driftPath || driftPath.length === 0) return null;
 
@@ -56,6 +56,11 @@ export const DriftTimeline: React.FC = () => {
   const cond = driftConditions?.[driftHour];
 
   const isTrolling = driftMode === "trolling";
+  const usingWaypoints = isTrolling && driftWaypoints.length > 0;
+  const activeLegIdx = wp?.activeLegIndex;
+  const targetIdx = wp?.targetWaypointIndex;
+  const legRemaining = wp?.legRemainingKm;
+  const legLabel = targetIdx === -1 ? "→ START" : typeof targetIdx === "number" ? `→ WP${targetIdx + 1}` : "";
 
   return (
     <div style={PANEL_STYLE}>
@@ -75,9 +80,30 @@ export const DriftTimeline: React.FC = () => {
           }}
         >
           {isTrolling
-            ? `🎣 TROLLING · ${Math.round(boatHeadingDeg)}° @ ${boatSpeedKnots.toFixed(1)} KT`
+            ? usingWaypoints
+              ? `🎣 TROLLING · ${driftWaypoints.length}-WP COURSE @ ${boatSpeedKnots.toFixed(1)} KT`
+              : `🎣 TROLLING · ${Math.round(boatHeadingDeg)}° @ ${boatSpeedKnots.toFixed(1)} KT`
             : "⛵ DRIFT"}
         </span>
+        {usingWaypoints && typeof activeLegIdx === "number" && (
+          <span
+            data-testid="active-leg"
+            style={{
+              marginLeft: 8,
+              fontSize: 9,
+              letterSpacing: "0.18em",
+              padding: "2px 8px",
+              borderRadius: 3,
+              border: "1px solid rgba(34,211,238,0.4)",
+              background: "rgba(34,211,238,0.08)",
+              color: "#22d3ee",
+              fontWeight: 700,
+            }}
+          >
+            LEG {activeLegIdx + 1} {legLabel}
+            {typeof legRemaining === "number" ? ` · ${legRemaining.toFixed(2)} km left` : ""}
+          </span>
+        )}
       </div>
 
       {/* Hour chips */}

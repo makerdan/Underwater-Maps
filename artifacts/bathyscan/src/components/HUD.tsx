@@ -82,6 +82,9 @@ export const HUD: React.FC = () => {
   const driftMode = useDriftStore((s) => s.driftMode);
   const boatHeadingDeg = useDriftStore((s) => s.boatHeadingDeg);
   const boatSpeedKnots = useDriftStore((s) => s.boatSpeedKnots);
+  const driftWaypoints = useDriftStore((s) => s.driftWaypoints);
+  const driftPath = useDriftStore((s) => s.driftPath);
+  const driftHour = useDriftStore((s) => s.driftHour);
 
   const substrateColorMode = useUiStore((s) => s.substrateColorMode);
   const setSubstrateColorMode = useUiStore((s) => s.setSubstrateColorMode);
@@ -244,7 +247,16 @@ export const HUD: React.FC = () => {
             }}
           >
             {driftMode === "trolling"
-              ? `🎣 TROLL ${Math.round(boatHeadingDeg).toString().padStart(3, "0")}° / ${boatSpeedKnots.toFixed(1)} KT`
+              ? (() => {
+                  if (driftWaypoints.length > 0) {
+                    const wp = driftPath?.[driftHour];
+                    const target = wp?.targetWaypointIndex;
+                    const targetLabel = target === -1 ? "START" : typeof target === "number" ? `WP${target + 1}` : "—";
+                    const remaining = wp?.legRemainingKm;
+                    return `🎣 TROLL → ${targetLabel}${typeof remaining === "number" ? ` · ${remaining.toFixed(2)} km` : ""}`;
+                  }
+                  return `🎣 TROLL ${Math.round(boatHeadingDeg).toString().padStart(3, "0")}° / ${boatSpeedKnots.toFixed(1)} KT`;
+                })()
               : "⛵ DRIFT"}
           </div>
         )}

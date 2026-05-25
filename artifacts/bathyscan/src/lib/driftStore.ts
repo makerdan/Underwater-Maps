@@ -40,6 +40,18 @@ export interface DriftWaypoint {
   headingDeg: number;
   isSlack: boolean;
   phase?: TidePhase;
+  /** Index of the leg the boat is on at the END of this hour (trolling+waypoints only). */
+  activeLegIndex?: number;
+  /** Distance in km remaining on the active leg at the END of this hour. */
+  legRemainingKm?: number;
+  /** Index of the user waypoint being chased at the END of this hour. */
+  targetWaypointIndex?: number;
+}
+
+/** User-placed turn point on the water surface for multi-leg trolling. */
+export interface TrollWaypoint {
+  lat: number;
+  lon: number;
 }
 
 interface DriftStore {
@@ -86,6 +98,13 @@ interface DriftStore {
   setBoatHeadingDeg: (v: number) => void;
   boatSpeedKnots: number;
   setBoatSpeedKnots: (v: number) => void;
+
+  /** Ordered turn points for multi-leg trolling courses. */
+  driftWaypoints: TrollWaypoint[];
+  addDriftWaypoint: (wp: TrollWaypoint) => void;
+  removeDriftWaypoint: (index: number) => void;
+  moveDriftWaypoint: (index: number, direction: -1 | 1) => void;
+  clearDriftWaypoints: () => void;
 }
 
 export const TROLL_MAX_KNOTS = 10;
@@ -147,4 +166,19 @@ export const useDriftStore = create<DriftStore>((set) => ({
   setBoatHeadingDeg: (v) => set({ boatHeadingDeg: ((v % 360) + 360) % 360 }),
   boatSpeedKnots: 2.5,
   setBoatSpeedKnots: (v) => set({ boatSpeedKnots: Math.max(0, Math.min(TROLL_MAX_KNOTS, v)) }),
+
+  driftWaypoints: [],
+  addDriftWaypoint: (wp) =>
+    set((s) => ({ driftWaypoints: [...s.driftWaypoints, wp] })),
+  removeDriftWaypoint: (index) =>
+    set((s) => ({ driftWaypoints: s.driftWaypoints.filter((_, i) => i !== index) })),
+  moveDriftWaypoint: (index, direction) =>
+    set((s) => {
+      const next = [...s.driftWaypoints];
+      const j = index + direction;
+      if (index < 0 || index >= next.length || j < 0 || j >= next.length) return s;
+      [next[index], next[j]] = [next[j]!, next[index]!];
+      return { driftWaypoints: next };
+    }),
+  clearDriftWaypoints: () => set({ driftWaypoints: [] }),
 }));

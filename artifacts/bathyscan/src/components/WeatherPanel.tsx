@@ -109,7 +109,6 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     setDriftStart,
     lineLengthM,
     setLineLengthM,
-    lineWeightG,
     manualWindSpeedKnots,
     setManualWindSpeedKnots,
     manualWindDegrees,
@@ -126,6 +125,10 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     setBoatHeadingDeg,
     boatSpeedKnots,
     setBoatSpeedKnots,
+    driftWaypoints,
+    removeDriftWaypoint,
+    moveDriftWaypoint,
+    clearDriftWaypoints,
   } = useDriftStore();
 
   const queryClient = useQueryClient();
@@ -211,9 +214,10 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
       mode: driftMode,
       boatHeadingDeg,
       boatSpeedKnots,
+      trollWaypoints: driftWaypoints,
     });
     setDriftPath(path);
-  }, [sharedHours, estimated, terrain, driftMode, boatHeadingDeg, boatSpeedKnots]);
+  }, [sharedHours, data, estimated, terrain, driftMode, boatHeadingDeg, boatSpeedKnots, driftWaypoints]);
 
   const recomputeWithManual = useCallback(() => {
     if (!terrain) return;
@@ -241,9 +245,10 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
       mode: driftMode,
       boatHeadingDeg,
       boatSpeedKnots,
+      trollWaypoints: driftWaypoints,
     });
     setDriftPath(path);
-  }, [terrain, manualWindSpeedKnots, manualWindDegrees, manualTidalSpeedKnots, manualTidalDegrees, driftStartLat, driftStartLon, lineLengthM, centerLat, centerLon, driftMode, boatHeadingDeg, boatSpeedKnots]);
+  }, [terrain, manualWindSpeedKnots, manualWindDegrees, manualTidalSpeedKnots, manualTidalDegrees, driftStartLat, driftStartLon, lineLengthM, centerLat, centerLon, driftMode, boatHeadingDeg, boatSpeedKnots, driftWaypoints]);
 
   const cond = driftConditions?.[driftHour];
 
@@ -354,22 +359,29 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
 
       {driftMode === "trolling" && (
         <div style={{ marginBottom: 8, padding: "6px 8px", background: "rgba(0,229,255,0.04)", border: "1px solid rgba(0,229,255,0.15)", borderRadius: 4 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-            <Compass degrees={boatHeadingDeg} size={42} color="#fbbf24" />
-            <div style={{ flex: 1 }}>
-              <div style={LABEL}>BOAT HEADING</div>
-              <div style={{ ...VALUE, color: "#fbbf24" }}>{degToCardinal(boatHeadingDeg)} {Math.round(boatHeadingDeg)}°</div>
-              <input
-                data-testid="boat-heading-slider"
-                type="range"
-                min={0}
-                max={359}
-                value={boatHeadingDeg}
-                onChange={(e) => setBoatHeadingDeg(Number(e.target.value))}
-                style={sliderStyle}
-              />
+          {driftWaypoints.length === 0 ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+              <Compass degrees={boatHeadingDeg} size={42} color="#fbbf24" />
+              <div style={{ flex: 1 }}>
+                <div style={LABEL}>BOAT HEADING</div>
+                <div style={{ ...VALUE, color: "#fbbf24" }}>{degToCardinal(boatHeadingDeg)} {Math.round(boatHeadingDeg)}°</div>
+                <input
+                  data-testid="boat-heading-slider"
+                  type="range"
+                  min={0}
+                  max={359}
+                  value={boatHeadingDeg}
+                  onChange={(e) => setBoatHeadingDeg(Number(e.target.value))}
+                  style={sliderStyle}
+                />
+              </div>
             </div>
-          </div>
+          ) : (
+            <div style={{ fontSize: 9, color: "#fbbf24", marginBottom: 6, letterSpacing: "0.1em" }}>
+              ⇢ Heading auto-steered to waypoints
+            </div>
+          )}
+
           <div style={{ marginBottom: 6 }}>
             <div style={LABEL}>PRESETS</div>
             {trollingPresets && trollingPresets.length > 0 ? (
@@ -487,6 +499,101 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
             <div style={{ fontSize: 8, color: "#475569", marginTop: 2 }}>
               Max {TROLL_MAX_KNOTS} kt · 0 kt falls back to pure drift
             </div>
+          </div>
+
+          {/* Multi-leg waypoint list */}
+          <div style={{ marginTop: 8, borderTop: "1px solid rgba(0,229,255,0.1)", paddingTop: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <span style={LABEL}>WAYPOINTS ({driftWaypoints.length})</span>
+              {driftWaypoints.length > 0 && (
+                <button
+                  onClick={clearDriftWaypoints}
+                  data-testid="clear-waypoints"
+                  style={{
+                    background: "rgba(239,68,68,0.1)",
+                    border: "1px solid rgba(239,68,68,0.3)",
+                    color: "#f87171",
+                    fontFamily: "inherit",
+                    fontSize: 8,
+                    padding: "2px 6px",
+                    borderRadius: 3,
+                    cursor: "pointer",
+                    letterSpacing: "0.12em",
+                  }}
+                >CLEAR ALL</button>
+              )}
+            </div>
+            {driftWaypoints.length === 0 ? (
+              <div style={{ fontSize: 9, color: "#475569", fontStyle: "italic" }}>
+                Click the water to drop turn points. Boat loops Start → WP1 → … → Start.
+              </div>
+            ) : (
+              <div data-testid="waypoint-list" style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                {driftWaypoints.map((wp, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      background: "rgba(0,10,20,0.7)",
+                      border: "1px solid rgba(0,229,255,0.12)",
+                      borderRadius: 3,
+                      padding: "2px 4px",
+                      fontSize: 9,
+                    }}
+                  >
+                    <span style={{ color: "#fbbf24", fontWeight: 700, minWidth: 24 }}>
+                      WP{i + 1}
+                    </span>
+                    <span style={{ color: "#94a3b8", flex: 1, fontVariantNumeric: "tabular-nums" }}>
+                      {wp.lat.toFixed(4)}, {wp.lon.toFixed(4)}
+                    </span>
+                    <button
+                      title="Move up"
+                      disabled={i === 0}
+                      onClick={() => moveDriftWaypoint(i, -1)}
+                      style={{
+                        background: "none",
+                        border: "1px solid rgba(0,229,255,0.2)",
+                        color: i === 0 ? "#334155" : "#00e5ff",
+                        cursor: i === 0 ? "default" : "pointer",
+                        fontSize: 9,
+                        padding: "0 4px",
+                        borderRadius: 2,
+                      }}
+                    >▲</button>
+                    <button
+                      title="Move down"
+                      disabled={i === driftWaypoints.length - 1}
+                      onClick={() => moveDriftWaypoint(i, 1)}
+                      style={{
+                        background: "none",
+                        border: "1px solid rgba(0,229,255,0.2)",
+                        color: i === driftWaypoints.length - 1 ? "#334155" : "#00e5ff",
+                        cursor: i === driftWaypoints.length - 1 ? "default" : "pointer",
+                        fontSize: 9,
+                        padding: "0 4px",
+                        borderRadius: 2,
+                      }}
+                    >▼</button>
+                    <button
+                      title="Remove waypoint"
+                      onClick={() => removeDriftWaypoint(i)}
+                      style={{
+                        background: "none",
+                        border: "1px solid rgba(239,68,68,0.3)",
+                        color: "#f87171",
+                        cursor: "pointer",
+                        fontSize: 9,
+                        padding: "0 4px",
+                        borderRadius: 2,
+                      }}
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

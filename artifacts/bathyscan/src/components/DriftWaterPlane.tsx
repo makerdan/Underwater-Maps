@@ -70,7 +70,11 @@ interface DriftWaterPlaneProps {
 export const DriftWaterPlane: React.FC<DriftWaterPlaneProps> = ({ surfaceY, terrain }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const timeRef = useRef(0);
-  const { driftConditions, driftHour, lineLengthM, lineWeightG, setDriftStart, setDriftPath, driftMode, boatHeadingDeg, boatSpeedKnots } = useDriftStore();
+  const {
+    driftConditions, driftHour, lineLengthM, lineWeightG,
+    setDriftStart, setDriftPath, driftMode, boatHeadingDeg, boatSpeedKnots,
+    driftStartLat, driftStartLon, driftWaypoints, addDriftWaypoint,
+  } = useDriftStore();
 
   const material = useMemo(() => {
     return new THREE.ShaderMaterial({
@@ -117,8 +121,26 @@ export const DriftWaterPlane: React.FC<DriftWaterPlaneProps> = ({ surfaceY, terr
       e.stopPropagation();
       const { x: worldX, z: worldZ } = e.point;
       const { lon, lat } = worldXZToLonLat(worldX, worldZ, terrain);
-      setDriftStart(lat, lon);
-      if (driftConditions) {
+
+      // In trolling mode, clicks add ordered turn-point waypoints (provided a
+      // start point already exists). The first click in trolling mode without
+      // a start still sets the start so users aren't blocked.
+      const inTrolling = driftMode === "trolling";
+      const hasStart = driftStartLat !== null && driftStartLon !== null;
+      let nextStartLat = driftStartLat;
+      let nextStartLon = driftStartLon;
+      let nextWaypoints = driftWaypoints;
+
+      if (inTrolling && hasStart) {
+        addDriftWaypoint({ lat, lon });
+        nextWaypoints = [...driftWaypoints, { lat, lon }];
+      } else {
+        setDriftStart(lat, lon);
+        nextStartLat = lat;
+        nextStartLon = lon;
+      }
+
+      if (driftConditions && nextStartLat !== null && nextStartLon !== null) {
         // When the bathymetric currents simulation is enabled, sample the
         // flow field at the boat's current position so the drift path
         // bends with bathymetry instead of using a single ambient vector.
@@ -131,8 +153,8 @@ export const DriftWaterPlane: React.FC<DriftWaterPlaneProps> = ({ surfaceY, terr
           : undefined;
         const path = computeDrift({
           conditions: driftConditions,
-          startLat: lat,
-          startLon: lon,
+          startLat: nextStartLat,
+          startLon: nextStartLon,
           lineLengthM,
           lineWeightG,
           terrain,
@@ -140,11 +162,16 @@ export const DriftWaterPlane: React.FC<DriftWaterPlaneProps> = ({ surfaceY, terr
           boatHeadingDeg,
           boatSpeedKnots,
           sampleFlowAt,
+          trollWaypoints: nextWaypoints,
         });
         setDriftPath(path);
       }
     },
-    [terrain, driftConditions, lineLengthM, lineWeightG, setDriftStart, setDriftPath, driftMode, boatHeadingDeg, boatSpeedKnots],
+    [
+      terrain, driftConditions, lineLengthM, lineWeightG, setDriftStart, setDriftPath,
+      driftMode, boatHeadingDeg, boatSpeedKnots,
+      driftStartLat, driftStartLon, driftWaypoints, addDriftWaypoint,
+    ],
   );
 
   return (

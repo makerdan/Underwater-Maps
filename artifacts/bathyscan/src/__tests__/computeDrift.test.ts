@@ -219,6 +219,84 @@ describe("computeDrift", () => {
     expect(path[1]!.lon).toBeCloseTo(path[0]!.lon, 6);
   });
 
+  it("trolling with waypoints follows the leg toward the first waypoint", () => {
+    // Calm water, no wind/tide — boat motion is purely from troll vector.
+    const cond = Array.from({ length: 24 }, (_, h) => makeCondition(0, 0, 0, 0, 0.2, h));
+    const startLat = 55.05;
+    const startLon = -130.95;
+    // Waypoint due north of start, ~20 km away (well beyond 1 h of travel at 3 kt).
+    const wpLat = startLat + 20 / 111;
+    const wpLon = startLon;
+    const path = computeDrift({
+      conditions: cond,
+      startLat,
+      startLon,
+      lineLengthM: 200,
+      lineWeightG: 500,
+      terrain,
+      mode: "trolling",
+      boatSpeedKnots: 3,
+      trollWaypoints: [{ lat: wpLat, lon: wpLon }],
+    });
+    // First leg should be northward
+    expect(path[1]!.lat).toBeGreaterThan(path[0]!.lat);
+    expect(path[1]!.lon).toBeCloseTo(path[0]!.lon, 3);
+    // Heading during hour 0 should be close to 0° (north)
+    expect(path[0]!.headingDeg).toBeLessThan(5);
+    // Leg metadata is populated
+    expect(path[0]!.activeLegIndex).toBeDefined();
+    expect(path[0]!.targetWaypointIndex).toBe(0);
+    expect(typeof path[0]!.legRemainingKm).toBe("number");
+  });
+
+  it("trolling with waypoints turns at the waypoint and loops back to start", () => {
+    // Boat fast enough to do multiple legs within 24h on a tight course.
+    const cond = Array.from({ length: 24 }, (_, h) => makeCondition(0, 0, 0, 0, 0.2, h));
+    const startLat = 55.05;
+    const startLon = -130.95;
+    // Waypoint 1 km north — at 5 kt boat travels ~9.26 km/h, so each leg = ~6.5 min.
+    const wpLat = startLat + 1 / 111;
+    const path = computeDrift({
+      conditions: cond,
+      startLat,
+      startLon,
+      lineLengthM: 200,
+      lineWeightG: 500,
+      terrain,
+      mode: "trolling",
+      boatSpeedKnots: 5,
+      trollWaypoints: [{ lat: wpLat, lon: startLon }],
+    });
+    // Over 24 hours the target index should cycle between 0 (WP1) and -1 (start).
+    const targets = new Set(path.map((p) => p.targetWaypointIndex));
+    expect(targets.has(0)).toBe(true);
+    expect(targets.has(-1)).toBe(true);
+    // Boat should never drift far from the line (stays near start lon)
+    for (const wp of path) {
+      expect(Math.abs(wp.lon - startLon)).toBeLessThan(0.01);
+    }
+  });
+
+  it("trolling with empty waypoints uses constant heading (back-compat)", () => {
+    const cond = Array.from({ length: 24 }, (_, h) => makeCondition(0, 0, 0, 0, 0.2, h));
+    const path = computeDrift({
+      conditions: cond,
+      startLat: 55.05,
+      startLon: -130.95,
+      lineLengthM: 200,
+      lineWeightG: 500,
+      terrain,
+      mode: "trolling",
+      boatHeadingDeg: 90,
+      boatSpeedKnots: 3,
+      trollWaypoints: [],
+    });
+    // Constant east heading → lon increases, lat unchanged
+    expect(path[1]!.lon).toBeGreaterThan(path[0]!.lon);
+    expect(path[1]!.lat).toBeCloseTo(path[0]!.lat, 3);
+    expect(path[0]!.activeLegIndex).toBeUndefined();
+  });
+
   it("wind leeway at 3% contributes to resultant current", () => {
     // Only wind, no tidal
     const cond = Array.from({ length: 24 }, (_, h) => makeCondition(10, 0, 0, 0, 0.2, h));

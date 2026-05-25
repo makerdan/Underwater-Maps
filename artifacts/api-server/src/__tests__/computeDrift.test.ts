@@ -7,10 +7,9 @@
 
 import { describe, it, expect } from "vitest";
 
-// Not the right path - computeDrift is in the frontend. Use a relative import.
-// Since api-server vitest doesn't have access to bathyscan, we test computeDrift
-// via its own test file. This file should be in bathyscan tests instead.
-// Placeholder: just export a note that tests are in bathyscan.
+// computeDrift lives in the bathyscan frontend package and is exercised by
+// the bathyscan vitest suite. This placeholder keeps the api-server suite
+// stable without importing across packages.
 
 describe("computeDrift placeholder", () => {
   it("is documented in bathyscan tests", () => {

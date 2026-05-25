@@ -13,6 +13,8 @@ import React, { useMemo } from "react";
 import { Line } from "@react-three/drei";
 import * as THREE from "three";
 import { useDriftStore } from "@/lib/driftStore";
+import { lonLatToWorldXZ } from "@/lib/terrain";
+import { useAppState } from "@/lib/context";
 
 const RIBBON_COLOR = 0x22d3ee;
 const BUOY_COLOR = 0x0ea5e9;
@@ -29,7 +31,18 @@ interface DriftPathProps {
 }
 
 export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
-  const { driftPath, driftHour, lineLengthM } = useDriftStore();
+  const { driftPath, driftHour, lineLengthM, driftWaypoints, driftMode } = useDriftStore();
+  const { terrain } = useAppState();
+
+  const waypointMarkers = useMemo(() => {
+    if (!terrain || driftMode !== "trolling" || driftWaypoints.length === 0) return null;
+    return driftWaypoints.map((wp, i) => {
+      const { x, z } = lonLatToWorldXZ(wp.lon, wp.lat, terrain);
+      return { x, z, index: i };
+    });
+  }, [terrain, driftMode, driftWaypoints]);
+
+  const activeTarget = driftPath?.[driftHour]?.targetWaypointIndex;
 
   const curve = useMemo(() => {
     if (!driftPath || driftPath.length < 2) return null;
@@ -135,6 +148,31 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
           />
         </mesh>
       )}
+
+      {/* User-placed trolling waypoints (cyan flags) */}
+      {waypointMarkers && waypointMarkers.map((m) => {
+        const isActive = activeTarget === m.index;
+        const color = isActive ? 0xfbbf24 : 0x22d3ee;
+        return (
+          <group key={`wp-${m.index}`} position={[m.x, surfaceY + 0.05, m.z]}>
+            {/* Flag pole */}
+            <mesh position={[0, 0.5, 0]}>
+              <cylinderGeometry args={[0.04, 0.04, 1.0, 6]} />
+              <meshStandardMaterial color={0xeeeeee} />
+            </mesh>
+            {/* Flag */}
+            <mesh position={[0.2, 0.85, 0]}>
+              <boxGeometry args={[0.4, 0.22, 0.02]} />
+              <meshStandardMaterial color={color} emissive={color} emissiveIntensity={isActive ? 0.8 : 0.4} />
+            </mesh>
+            {/* Base ring on water */}
+            <mesh rotation={[-Math.PI / 2, 0, 0]}>
+              <torusGeometry args={[0.32, 0.06, 6, 16]} />
+              <meshStandardMaterial color={color} emissive={color} emissiveIntensity={isActive ? 0.9 : 0.35} />
+            </mesh>
+          </group>
+        );
+      })}
     </group>
   );
 };
