@@ -46,23 +46,34 @@ export const DatasetPanel: React.FC = () => {
   const { data: datasets, isLoading: datasetsLoading } = useGetDatasets();
 
   // ─── Parallel fetch for pending dataset ────────────────────────────────────
-  const { data: pendingTerrain } = useGetDatasetsIdTerrain(
-    pendingId ?? "",
-    undefined,
-    {
-      query: {
-        enabled: !!pendingId,
-        queryKey: getGetDatasetsIdTerrainQueryKey(pendingId ?? ""),
-      },
+  const {
+    data: pendingTerrain,
+    isError: terrainFetchError,
+  } = useGetDatasetsIdTerrain(pendingId ?? "", undefined, {
+    query: {
+      enabled: !!pendingId,
+      queryKey: getGetDatasetsIdTerrainQueryKey(pendingId ?? ""),
     },
-  );
+  });
 
-  const { data: pendingOverview } = useGetDatasetsIdOverview(pendingId ?? "", {
+  const {
+    data: pendingOverview,
+    isError: overviewFetchError,
+  } = useGetDatasetsIdOverview(pendingId ?? "", {
     query: {
       enabled: !!pendingId,
       queryKey: getGetDatasetsIdOverviewQueryKey(pendingId ?? ""),
     },
   });
+
+  // Clear spinner/pending on fetch error so UI doesn't get stuck
+  useEffect(() => {
+    if (!pendingId) return;
+    if (terrainFetchError || overviewFetchError) {
+      setLoadingId(null);
+      setPendingId(null);
+    }
+  }, [pendingId, terrainFetchError, overviewFetchError]);
 
   // When BOTH terrain and overview for the pending ID arrive, commit atomically
   useEffect(() => {

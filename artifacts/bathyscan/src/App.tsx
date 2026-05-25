@@ -137,9 +137,14 @@ function Main() {
   const { data: datasets } = useGetDatasets();
   const { datasetId, setDatasetId, terrain } = useAppState();
 
-  // Auto-select first dataset on load
+  // Auto-select first dataset on initial load only.
+  // Using a ref ensures this never re-fires after a successful custom upload
+  // (which sets datasetId=null to disable TourScene's built-in terrain fetch).
+  const hasAutoSelectedRef = useRef(false);
   useEffect(() => {
+    if (hasAutoSelectedRef.current) return;
     if (datasets?.length && !datasetId) {
+      hasAutoSelectedRef.current = true;
       setDatasetId(datasets[0]?.id ?? null);
     }
   }, [datasets, datasetId, setDatasetId]);

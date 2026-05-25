@@ -119,16 +119,18 @@ const ErrorOverlay: React.FC<ErrorOverlayProps> = ({ message, onRetry }) => (
 // ---------------------------------------------------------------------------
 export const TourScene: React.FC = () => {
   const { datasetId, setTerrain } = useAppState();
-  const effectiveId = datasetId ?? "mariana-trench";
   const terrainMeshRef = useRef<THREE.Mesh>(null);
 
+  // Only fetch when a built-in dataset is selected.
+  // When datasetId is null the terrain has been supplied by a custom upload
+  // (DatasetPanel.onDrop) so we must not fetch and overwrite it.
   const { data, isLoading, isError, error, refetch } = useGetDatasetsIdTerrain(
-    effectiveId,
+    datasetId ?? "",
     undefined,
     {
       query: {
-        enabled: !!effectiveId,
-        queryKey: getGetDatasetsIdTerrainQueryKey(effectiveId),
+        enabled: !!datasetId,
+        queryKey: getGetDatasetsIdTerrainQueryKey(datasetId ?? ""),
       },
     },
   );
