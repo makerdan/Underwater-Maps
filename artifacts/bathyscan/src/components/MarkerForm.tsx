@@ -12,13 +12,15 @@ import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useAppState } from "@/lib/context";
 import { useOfflineStore } from "@/lib/offlineStore";
+import { useSettingsStore } from "@/lib/settingsStore";
 import {
   usePostMarkers,
   getGetMarkersQueryKey,
   MarkerInputType,
 } from "@workspace/api-client-react";
 import {
-  MARKER_TYPES,
+  SALTWATER_MARKER_TYPES,
+  FRESHWATER_MARKER_TYPES,
   DEPTH_POLE_DEFAULT_COLOUR,
   type MarkerTypeValue,
 } from "@/lib/markerConstants";
@@ -40,6 +42,9 @@ export const MarkerForm: React.FC = () => {
   const setMarkerFormOpen = useUiStore((s) => s.setMarkerFormOpen);
   const { terrain } = useAppState();
   const qc = useQueryClient();
+  const settingsWaterType = useSettingsStore((s) => s.waterType);
+  const waterType = (terrain?.waterType as "saltwater" | "freshwater" | undefined) ?? settingsWaterType;
+  const visibleMarkerTypes = waterType === "freshwater" ? FRESHWATER_MARKER_TYPES : SALTWATER_MARKER_TYPES;
 
   const [markerType, setMarkerType] = useState<MarkerTypeValue>(MarkerInputType.custom);
   const [label, setLabel] = useState("");
@@ -141,7 +146,7 @@ export const MarkerForm: React.FC = () => {
 
   if (!gps || !terrain) return null;
 
-  const selectedType = MARKER_TYPES.find((t) => t.value === markerType);
+  const selectedType = visibleMarkerTypes.find((t) => t.value === markerType);
 
   return (
     <div style={PANEL}>
@@ -246,7 +251,7 @@ export const MarkerForm: React.FC = () => {
             TYPE
           </div>
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-            {MARKER_TYPES.map((t) => {
+            {visibleMarkerTypes.map((t) => {
               const active = markerType === t.value;
               return (
                 <button

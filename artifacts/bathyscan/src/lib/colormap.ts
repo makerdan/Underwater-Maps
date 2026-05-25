@@ -41,6 +41,13 @@ const FIXED_THEME_STOPS: Record<Exclude<ColormapTheme, "ocean">, ColorStop[]> = 
     { t: 0.75, color: new THREE.Color("#90d743") },
     { t: 1.00, color: new THREE.Color("#fde725") },
   ],
+  freshwater: [
+    { t: 0.00, color: new THREE.Color("#e8f5e9") },
+    { t: 0.20, color: new THREE.Color("#80cbc4") },
+    { t: 0.50, color: new THREE.Color("#26a69a") },
+    { t: 0.75, color: new THREE.Color("#00695c") },
+    { t: 1.00, color: new THREE.Color("#1a2f2b") },
+  ],
 };
 
 function stopsForTheme(theme: ColormapTheme): ColorStop[] {

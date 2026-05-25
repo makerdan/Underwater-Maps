@@ -7,6 +7,7 @@
 
 export interface QueryContext {
   datasetName: string;
+  waterType?: "saltwater" | "freshwater";
   minDepth: number;
   maxDepth: number;
   cameraLon: number | null;

@@ -17,15 +17,26 @@ import { SALTWATER_ZONES, FRESHWATER_ZONES } from "./zoneMap";
 // Species configuration types
 // ---------------------------------------------------------------------------
 
-export type SpeciesId =
+export type SaltwaterSpeciesId =
   | "dungeness_crab"
   | "demersal_fish"
   | "rockfish"
   | "halibut"
   | "salmon_resting";
 
+export type FreshwaterSpeciesId =
+  | "lake_trout"
+  | "walleye"
+  | "largemouth_bass"
+  | "channel_catfish"
+  | "northern_pike"
+  | "yellow_perch";
+
+export type SpeciesId = SaltwaterSpeciesId | FreshwaterSpeciesId;
+
 export interface SpeciesConfig {
   label: string;
+  waterType: "saltwater" | "freshwater";
   depthOptimal: [number, number];
   depthTolerance: [number, number];
   substratePreferences: Partial<Record<string, number>>;
@@ -46,8 +57,10 @@ export interface SpeciesConfig {
 // ---------------------------------------------------------------------------
 
 export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
+  // ── Saltwater ──────────────────────────────────────────────────────────────
   dungeness_crab: {
     label: "Dungeness Crab",
+    waterType: "saltwater",
     depthOptimal: [10, 120],
     depthTolerance: [5, 180],
     substratePreferences: {
@@ -76,6 +89,7 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
 
   demersal_fish: {
     label: "Demersal Fish (General)",
+    waterType: "saltwater",
     depthOptimal: [30, 300],
     depthTolerance: [10, 600],
     substratePreferences: {
@@ -104,6 +118,7 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
 
   rockfish: {
     label: "Rockfish",
+    waterType: "saltwater",
     depthOptimal: [50, 400],
     depthTolerance: [20, 800],
     substratePreferences: {
@@ -132,6 +147,7 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
 
   halibut: {
     label: "Halibut",
+    waterType: "saltwater",
     depthOptimal: [20, 200],
     depthTolerance: [5, 400],
     substratePreferences: {
@@ -160,6 +176,7 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
 
   salmon_resting: {
     label: "Salmon (Resting)",
+    waterType: "saltwater",
     depthOptimal: [5, 50],
     depthTolerance: [0, 100],
     substratePreferences: {
@@ -185,9 +202,153 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
     edgeWeight: 0.35,
     weights: { depth: 0.35, substrate: 0.25, slope: 0.15, complexity: 0.10, edge: 0.15 },
   },
+
+  // ── Freshwater ────────────────────────────────────────────────────────────
+  lake_trout: {
+    label: "Lake Trout",
+    waterType: "freshwater",
+    depthOptimal: [30, 100],
+    depthTolerance: [10, 200],
+    substratePreferences: {
+      aquatic_vegetation: 0.3,
+      sandy_lake_bed: 0.5,
+      rocky_shoreline: 0.9,
+      silt_deep: 0.4,
+      gravel_bed: 0.8,
+      bedrock_shelf: 1.0,
+      submerged_wood: 0.6,
+      clay_flat: 0.2,
+    },
+    slopePreference: "steep",
+    complexityWeight: 0.4,
+    edgeWeight: 0.3,
+    weights: { depth: 0.30, substrate: 0.30, slope: 0.18, complexity: 0.12, edge: 0.10 },
+  },
+
+  walleye: {
+    label: "Walleye",
+    waterType: "freshwater",
+    depthOptimal: [5, 40],
+    depthTolerance: [2, 80],
+    substratePreferences: {
+      aquatic_vegetation: 0.5,
+      sandy_lake_bed: 0.8,
+      rocky_shoreline: 0.7,
+      silt_deep: 0.5,
+      gravel_bed: 0.9,
+      bedrock_shelf: 0.6,
+      submerged_wood: 0.7,
+      clay_flat: 0.4,
+    },
+    slopePreference: "gentle",
+    complexityWeight: 0.25,
+    edgeWeight: 0.45,
+    weights: { depth: 0.30, substrate: 0.28, slope: 0.12, complexity: 0.12, edge: 0.18 },
+  },
+
+  largemouth_bass: {
+    label: "Largemouth Bass",
+    waterType: "freshwater",
+    depthOptimal: [1, 8],
+    depthTolerance: [0, 18],
+    substratePreferences: {
+      aquatic_vegetation: 1.0,
+      sandy_lake_bed: 0.5,
+      rocky_shoreline: 0.6,
+      silt_deep: 0.3,
+      gravel_bed: 0.6,
+      bedrock_shelf: 0.4,
+      submerged_wood: 1.0,
+      clay_flat: 0.3,
+    },
+    slopePreference: "gentle",
+    complexityWeight: 0.35,
+    edgeWeight: 0.4,
+    weights: { depth: 0.30, substrate: 0.30, slope: 0.10, complexity: 0.15, edge: 0.15 },
+  },
+
+  channel_catfish: {
+    label: "Channel Catfish",
+    waterType: "freshwater",
+    depthOptimal: [3, 25],
+    depthTolerance: [1, 50],
+    substratePreferences: {
+      aquatic_vegetation: 0.4,
+      sandy_lake_bed: 0.7,
+      rocky_shoreline: 0.4,
+      silt_deep: 1.0,
+      gravel_bed: 0.6,
+      bedrock_shelf: 0.3,
+      submerged_wood: 0.8,
+      clay_flat: 1.0,
+    },
+    slopePreference: "gentle",
+    complexityWeight: 0.2,
+    edgeWeight: 0.3,
+    weights: { depth: 0.30, substrate: 0.35, slope: 0.10, complexity: 0.10, edge: 0.15 },
+  },
+
+  northern_pike: {
+    label: "Northern Pike",
+    waterType: "freshwater",
+    depthOptimal: [1, 6],
+    depthTolerance: [0, 15],
+    substratePreferences: {
+      aquatic_vegetation: 1.0,
+      sandy_lake_bed: 0.4,
+      rocky_shoreline: 0.5,
+      silt_deep: 0.2,
+      gravel_bed: 0.5,
+      bedrock_shelf: 0.3,
+      submerged_wood: 0.9,
+      clay_flat: 0.2,
+    },
+    slopePreference: "gentle",
+    complexityWeight: 0.3,
+    edgeWeight: 0.4,
+    weights: { depth: 0.30, substrate: 0.30, slope: 0.10, complexity: 0.15, edge: 0.15 },
+  },
+
+  yellow_perch: {
+    label: "Yellow Perch",
+    waterType: "freshwater",
+    depthOptimal: [3, 20],
+    depthTolerance: [1, 40],
+    substratePreferences: {
+      aquatic_vegetation: 0.7,
+      sandy_lake_bed: 0.9,
+      rocky_shoreline: 0.6,
+      silt_deep: 0.5,
+      gravel_bed: 0.8,
+      bedrock_shelf: 0.5,
+      submerged_wood: 0.7,
+      clay_flat: 0.5,
+    },
+    slopePreference: "any",
+    complexityWeight: 0.25,
+    edgeWeight: 0.4,
+    weights: { depth: 0.28, substrate: 0.28, slope: 0.12, complexity: 0.14, edge: 0.18 },
+  },
 };
 
 export const SPECIES_IDS = Object.keys(SPECIES_CONFIGS) as SpeciesId[];
+
+export const SALTWATER_SPECIES_IDS: SaltwaterSpeciesId[] = [
+  "dungeness_crab",
+  "demersal_fish",
+  "rockfish",
+  "halibut",
+  "salmon_resting",
+];
+
+export const FRESHWATER_SPECIES_IDS: FreshwaterSpeciesId[] = [
+  "lake_trout",
+  "walleye",
+  "largemouth_bass",
+  "channel_catfish",
+  "northern_pike",
+  "yellow_perch",
+];
 
 // ---------------------------------------------------------------------------
 // Scoring functions
@@ -329,8 +490,8 @@ function precomputeSlopes(grid: TerrainData): Float32Array {
 
 /** Fallback substrate score when no zoneMap is available (uses normalised depth). */
 function depthZoneHeuristic(t: number, config: SpeciesConfig): number {
-  const shallow = config.substratePreferences["sandy_shelf"] ?? 0.5;
-  const deep = config.substratePreferences["silt_plain"] ?? 0.5;
+  const shallow = config.substratePreferences["sandy_shelf"] ?? config.substratePreferences["sandy_lake_bed"] ?? 0.5;
+  const deep = config.substratePreferences["silt_plain"] ?? config.substratePreferences["silt_deep"] ?? 0.5;
   return Math.max(0, Math.min(1, shallow * (1 - t) + deep * t));
 }
 

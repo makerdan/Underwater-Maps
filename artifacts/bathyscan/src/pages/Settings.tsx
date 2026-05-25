@@ -624,6 +624,79 @@ function DatasetSection() {
   );
 }
 
+function EnvironmentSection() {
+  const s = useSettingsStore();
+  return (
+    <>
+      <h2 style={S.sectionTitle}>≈ ENVIRONMENT</h2>
+      <div style={S.card}>
+        <div style={S.cardHeader}>WATER TYPE</div>
+        <div style={S.row}>
+          <div>
+            <div style={S.label}>Exploration Mode</div>
+            <div style={S.sublabel}>
+              Switches datasets, species, marker types, and AI guidance
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {(["saltwater", "freshwater"] as const).map((wt) => {
+              const active = s.waterType === wt;
+              const color = wt === "freshwater" ? "#4ade80" : "#00e5ff";
+              return (
+                <button
+                  key={wt}
+                  data-testid={`settings-water-type-${wt}`}
+                  onClick={() => s.setWaterType(wt)}
+                  style={{
+                    fontSize: 9,
+                    letterSpacing: "0.15em",
+                    padding: "4px 12px",
+                    borderRadius: 4,
+                    border: `1px solid ${active ? color : "rgba(0,229,255,0.18)"}`,
+                    background: active ? `${color}14` : "transparent",
+                    color: active ? color : "#475569",
+                    cursor: "pointer",
+                    fontFamily: FONT,
+                    transition: "all 0.12s",
+                  }}
+                >
+                  {wt === "saltwater" ? "≈ SALTWATER" : "~ FRESHWATER"}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      <div style={S.card}>
+        <div style={S.cardHeader}>CURRENT MODE</div>
+        <div style={{ padding: "12px 16px", fontSize: 10, color: "#64748b", lineHeight: 1.7 }}>
+          {s.waterType === "freshwater" ? (
+            <>
+              <div style={{ color: "#4ade80", fontWeight: 700, marginBottom: 6, fontSize: 9, letterSpacing: "0.1em" }}>
+                ~ FRESHWATER MODE
+              </div>
+              <div>Freshwater datasets (lakes, reservoirs) are shown in the dataset list.</div>
+              <div>Habitat panel shows freshwater species (Lake Trout, Walleye, Bass…).</div>
+              <div>Marker types include vegetation and submerged log options.</div>
+              <div>AI assistant uses freshwater limnology context.</div>
+            </>
+          ) : (
+            <>
+              <div style={{ color: "#00e5ff", fontWeight: 700, marginBottom: 6, fontSize: 9, letterSpacing: "0.1em" }}>
+                ≈ SALTWATER MODE
+              </div>
+              <div>Ocean datasets (trenches, ridges, basins) are shown in the dataset list.</div>
+              <div>Habitat panel shows marine species (Dungeness Crab, Rockfish…).</div>
+              <div>Marker types include coral, hydrothermal vent, and shipwreck options.</div>
+              <div>AI assistant uses marine geology context.</div>
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function OfflineSection() {
   const [cached, setCached] = useState<CachedDataset[]>([]);
   const [pending, setPending] = useState({ markers: 0, trails: 0 });
@@ -833,7 +906,7 @@ function AccountSection() {
 }
 
 // ─── Nav tabs ─────────────────────────────────────────────────────────────────
-type Tab = "visuals" | "navigation" | "hud" | "overview" | "markers" | "dataset" | "offline" | "account";
+type Tab = "visuals" | "navigation" | "hud" | "overview" | "markers" | "dataset" | "offline" | "account" | "environment";
 
 const NAV_TABS: { id: Tab; label: string }[] = [
   { id: "visuals", label: "VISUALS" },
@@ -842,6 +915,7 @@ const NAV_TABS: { id: Tab; label: string }[] = [
   { id: "overview", label: "OVERVIEW MAP" },
   { id: "markers", label: "MARKERS" },
   { id: "dataset", label: "DATASET" },
+  { id: "environment", label: "ENVIRONMENT" },
   { id: "offline", label: "OFFLINE" },
   { id: "account", label: "ACCOUNT" },
 ];
@@ -886,7 +960,7 @@ export function Settings() {
             enableCaustics: state.enableCaustics,
             particleDensity: state.particleDensity,
             fogDensity: state.fogDensity,
-            colormapTheme: state.colormapTheme,
+            colormapTheme: state.colormapTheme === "freshwater" ? undefined : state.colormapTheme,
             lampIntensity: state.lampIntensity,
             defaultSpeedTier: state.defaultSpeedTier,
             invertMouseY: state.invertMouseY,
@@ -993,6 +1067,7 @@ export function Settings() {
           {tab === "overview" && <OverviewSection />}
           {tab === "markers" && <MarkersSection />}
           {tab === "dataset" && <DatasetSection />}
+          {tab === "environment" && <EnvironmentSection />}
           {tab === "offline" && <OfflineSection />}
           {tab === "account" && <AccountSection />}
         </div>

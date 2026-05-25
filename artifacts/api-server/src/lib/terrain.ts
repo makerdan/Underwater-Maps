@@ -106,6 +106,69 @@ export const PRESET_DATASETS: DatasetMeta[] = [
   },
 ];
 
+export const FRESHWATER_PRESET_DATASETS: DatasetMeta[] = [
+  {
+    id: "lake-superior",
+    name: "Lake Superior",
+    description: "World's largest freshwater lake by surface area — max depth 406 m, rocky basalt floor",
+    waterType: "freshwater",
+    minDepth: 5,
+    maxDepth: 406,
+    centerLon: -87.0,
+    centerLat: 47.5,
+    bbox: { minLon: -92.1, minLat: 46.4, maxLon: -84.3, maxLat: 49.0 },
+  },
+  {
+    id: "lake-baikal",
+    name: "Lake Baikal",
+    description: "World's deepest lake at 1,642 m — ancient rift lake, Russia, with unique endemic species",
+    waterType: "freshwater",
+    minDepth: 20,
+    maxDepth: 1642,
+    centerLon: 107.7,
+    centerLat: 53.5,
+    bbox: { minLon: 103.7, minLat: 51.5, maxLon: 109.9, maxLat: 55.8 },
+  },
+  {
+    id: "crater-lake",
+    name: "Crater Lake",
+    description: "Volcanic caldera lake in Oregon — remarkable clarity, max depth 594 m",
+    waterType: "freshwater",
+    minDepth: 30,
+    maxDepth: 594,
+    centerLon: -122.1,
+    centerLat: 42.94,
+    bbox: { minLon: -122.25, minLat: 42.84, maxLon: -121.95, maxLat: 43.04 },
+  },
+  {
+    id: "lake-tahoe",
+    name: "Lake Tahoe",
+    description: "High-altitude clear-water alpine lake straddling California and Nevada — max depth 501 m",
+    waterType: "freshwater",
+    minDepth: 10,
+    maxDepth: 501,
+    centerLon: -120.05,
+    centerLat: 39.09,
+    bbox: { minLon: -120.17, minLat: 38.94, maxLon: -119.93, maxLat: 39.24 },
+  },
+  {
+    id: "lake-victoria",
+    name: "Lake Victoria",
+    description: "Africa's largest lake — shallow (max 83 m) but vast, rich in cichlid species diversity",
+    waterType: "freshwater",
+    minDepth: 5,
+    maxDepth: 83,
+    centerLon: 33.0,
+    centerLat: -1.0,
+    bbox: { minLon: 31.6, minLat: -3.0, maxLon: 34.9, maxLat: 0.5 },
+  },
+];
+
+export const ALL_PRESET_DATASETS: DatasetMeta[] = [
+  ...PRESET_DATASETS,
+  ...FRESHWATER_PRESET_DATASETS,
+];
+
 // ---------------------------------------------------------------------------
 // GEBCO WCS fetch
 // ---------------------------------------------------------------------------
@@ -278,7 +341,7 @@ export async function buildTerrainGrid(
   const mem = memoryCache.get(cacheKey);
   if (mem) return mem;
 
-  const meta = PRESET_DATASETS.find((d) => d.id === datasetId);
+  const meta = ALL_PRESET_DATASETS.find((d) => d.id === datasetId);
   if (!meta) return null;
 
   const N = Math.max(32, Math.min(512, resolution));
@@ -411,6 +474,36 @@ function buildSyntheticGrid(
   meta: DatasetMeta
 ): { depths: number[]; minDepth: number; maxDepth: number } {
   const depthFns: Record<string, (nx: number, ny: number) => number> = {
+    "lake-superior": (nx, ny) => {
+      const noise = fbm(nx * 9 + 3, ny * 9 + 3, 5, 0.5, 2.0);
+      const edgeDist = Math.min(nx, 1 - nx, ny, 1 - ny) * 4;
+      const shelf = Math.pow(Math.max(0, edgeDist - 0.15), 1.5);
+      return 5 + (406 - 5) * (shelf * 0.75 + noise * 0.25);
+    },
+    "lake-baikal": (nx, ny) => {
+      const noise = fbm(nx * 7 + 11, ny * 7 + 11, 6, 0.5, 2.1);
+      const riftFactor = Math.pow(Math.max(0, 1 - Math.abs(nx - 0.5) * 3.5), 2.0);
+      return 20 + (1642 - 20) * (riftFactor * 0.8 + noise * 0.2);
+    },
+    "crater-lake": (nx, ny) => {
+      const noise = fbm(nx * 11 + 5, ny * 11 + 5, 5, 0.45, 2.0);
+      const cx = nx - 0.5;
+      const cy = ny - 0.5;
+      const r = Math.sqrt(cx * cx + cy * cy);
+      const bowl = Math.pow(Math.max(0, 1 - r * 2.2), 1.8);
+      return 30 + (594 - 30) * (bowl * 0.82 + noise * 0.18);
+    },
+    "lake-tahoe": (nx, ny) => {
+      const noise = fbm(nx * 10 + 7, ny * 10 + 7, 5, 0.5, 2.0);
+      const edgeDist = Math.min(nx, 1 - nx, ny, 1 - ny) * 4.5;
+      const basin = Math.pow(Math.max(0, edgeDist - 0.1), 1.6);
+      return 10 + (501 - 10) * (basin * 0.78 + noise * 0.22);
+    },
+    "lake-victoria": (nx, ny) => {
+      const noise = fbm(nx * 8 + 2, ny * 8 + 2, 4, 0.55, 2.0);
+      const shallows = 0.3 + 0.7 * Math.pow(Math.min(1, Math.min(nx, 1 - nx, ny, 1 - ny) * 5), 1.2);
+      return 5 + (83 - 5) * (shallows * 0.65 + noise * 0.35);
+    },
     "mariana-trench": (nx, ny) => {
       const noise = fbm(nx * 8 + 10, ny * 8 + 10, 6, 0.5, 2.1);
       const trenchFactor = Math.pow(Math.max(0, 1 - Math.abs(ny - 0.5) * 3.5), 2.5);

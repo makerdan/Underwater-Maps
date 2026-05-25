@@ -15,13 +15,14 @@ export interface DatasetHomePosition {
   depth: number;
 }
 
+export type WaterType = "saltwater" | "freshwater";
 export type ParticleDensity = "off" | "sparse" | "dense";
 export type TextureQuality = "off" | "low" | "high";
-export type ColormapTheme = "ocean" | "thermal" | "grayscale" | "viridis";
+export type ColormapTheme = "ocean" | "thermal" | "grayscale" | "viridis" | "freshwater";
 export type CoordinateFormat = "decimal" | "dms";
 export type DepthUnit = "metres" | "feet";
 export type CameraSpawnBehaviour = "deepest" | "home" | "last";
-export type MarkerType = "fish" | "shipwreck" | "coral" | "vent" | "custom";
+export type MarkerType = "fish" | "shipwreck" | "coral" | "vent" | "custom" | "log" | "vegetation" | "sample";
 
 export interface SettingsState {
   // ── Visuals ──────────────────────────────────────────────────────────
@@ -70,6 +71,9 @@ export interface SettingsState {
 
   /** Per-dataset saved camera spawn positions (set via "Set as home" context menu). */
   datasetHomePositions: Record<string, DatasetHomePosition>;
+
+  // ── Environment ───────────────────────────────────────────────────────
+  waterType: WaterType;
 }
 
 interface SettingsActions {
@@ -110,6 +114,8 @@ interface SettingsActions {
 
   setDatasetHome: (datasetId: string, pos: DatasetHomePosition) => void;
   clearDatasetHome: (datasetId: string) => void;
+
+  setWaterType: (v: WaterType) => void;
 
   /** Hydrate the entire settings state from the server response. */
   hydrateFromServer: (partial: Partial<SettingsState>) => void;
@@ -154,6 +160,8 @@ export const DEFAULT_SETTINGS: SettingsState = {
   gpsRecordingInterval: 10_000,
 
   datasetHomePositions: {},
+
+  waterType: "saltwater",
 };
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -209,6 +217,8 @@ export const useSettingsStore = create<SettingsStore>()(
           delete next[datasetId];
           return { datasetHomePositions: next };
         }),
+
+      setWaterType: (v) => set({ waterType: v }),
 
       hydrateFromServer: (partial) =>
         set((state) => ({ ...state, ...partial })),

@@ -236,7 +236,7 @@ export const GetMarkersResponseItem = zod.object({
   "lon": zod.number(),
   "lat": zod.number(),
   "depth": zod.number().describe('Depth in metres (positive = below surface)'),
-  "type": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'depth_pole']),
+  "type": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'depth_pole', 'log', 'vegetation', 'sample']),
   "label": zod.string(),
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date()
@@ -254,7 +254,7 @@ export const PostMarkersBody = zod.object({
   "lon": zod.number(),
   "lat": zod.number(),
   "depth": zod.number(),
-  "type": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'depth_pole']).default(postMarkersBodyTypeDefault),
+  "type": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'depth_pole', 'log', 'vegetation', 'sample']).default(postMarkersBodyTypeDefault),
   "label": zod.string(),
   "notes": zod.string().nullish()
 })
@@ -443,11 +443,11 @@ export const GetSettingsResponse = zod.object({
   "overviewShowGrid": zod.boolean().default(getSettingsResponseOverviewShowGridDefault),
   "overviewShowMarkers": zod.boolean().default(getSettingsResponseOverviewShowMarkersDefault),
   "overviewOpenOnLoad": zod.boolean().default(getSettingsResponseOverviewOpenOnLoadDefault),
-  "visibleMarkerTypes": zod.array(zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom'])).default([`fish`, `shipwreck`, `coral`, `vent`, `custom`]),
+  "visibleMarkerTypes": zod.array(zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'log', 'vegetation', 'sample'])).default([`fish`, `shipwreck`, `coral`, `vent`, `custom`]),
   "showMarkerLabels": zod.boolean().default(getSettingsResponseShowMarkerLabelsDefault),
   "smoothTerrainSpikes": zod.boolean().default(getSettingsResponseSmoothTerrainSpikesDefault).describe('When true, the server applies an angle-based spike smoothing pass to terrain grids. Disable to inspect raw bathymetric artifacts for scientific use.'),
   "privateMarkers": zod.boolean().default(getSettingsResponsePrivateMarkersDefault),
-  "defaultMarkerType": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom']).default(getSettingsResponseDefaultMarkerTypeDefault),
+  "defaultMarkerType": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'log', 'vegetation', 'sample']).default(getSettingsResponseDefaultMarkerTypeDefault),
   "defaultRegion": zod.string().default(getSettingsResponseDefaultRegionDefault),
   "gpsRecordingInterval": zod.number().min(getSettingsResponseGpsRecordingIntervalMin).max(getSettingsResponseGpsRecordingIntervalMax).default(getSettingsResponseGpsRecordingIntervalDefault)
 }).describe('Per-user application settings with sensible defaults')
@@ -529,11 +529,11 @@ export const PutSettingsBody = zod.object({
   "overviewShowGrid": zod.boolean().default(putSettingsBodyOverviewShowGridDefault),
   "overviewShowMarkers": zod.boolean().default(putSettingsBodyOverviewShowMarkersDefault),
   "overviewOpenOnLoad": zod.boolean().default(putSettingsBodyOverviewOpenOnLoadDefault),
-  "visibleMarkerTypes": zod.array(zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom'])).default([`fish`, `shipwreck`, `coral`, `vent`, `custom`]),
+  "visibleMarkerTypes": zod.array(zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'log', 'vegetation', 'sample'])).default([`fish`, `shipwreck`, `coral`, `vent`, `custom`]),
   "showMarkerLabels": zod.boolean().default(putSettingsBodyShowMarkerLabelsDefault),
   "smoothTerrainSpikes": zod.boolean().default(putSettingsBodySmoothTerrainSpikesDefault).describe('When true, the server applies an angle-based spike smoothing pass to terrain grids. Disable to inspect raw bathymetric artifacts for scientific use.'),
   "privateMarkers": zod.boolean().default(putSettingsBodyPrivateMarkersDefault),
-  "defaultMarkerType": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom']).default(putSettingsBodyDefaultMarkerTypeDefault),
+  "defaultMarkerType": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'log', 'vegetation', 'sample']).default(putSettingsBodyDefaultMarkerTypeDefault),
   "defaultRegion": zod.string().default(putSettingsBodyDefaultRegionDefault),
   "gpsRecordingInterval": zod.number().min(putSettingsBodyGpsRecordingIntervalMin).max(putSettingsBodyGpsRecordingIntervalMax).default(putSettingsBodyGpsRecordingIntervalDefault)
 }).describe('Per-user application settings with sensible defaults')
@@ -610,11 +610,11 @@ export const PutSettingsResponse = zod.object({
   "overviewShowGrid": zod.boolean().default(putSettingsResponseOverviewShowGridDefault),
   "overviewShowMarkers": zod.boolean().default(putSettingsResponseOverviewShowMarkersDefault),
   "overviewOpenOnLoad": zod.boolean().default(putSettingsResponseOverviewOpenOnLoadDefault),
-  "visibleMarkerTypes": zod.array(zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom'])).default([`fish`, `shipwreck`, `coral`, `vent`, `custom`]),
+  "visibleMarkerTypes": zod.array(zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'log', 'vegetation', 'sample'])).default([`fish`, `shipwreck`, `coral`, `vent`, `custom`]),
   "showMarkerLabels": zod.boolean().default(putSettingsResponseShowMarkerLabelsDefault),
   "smoothTerrainSpikes": zod.boolean().default(putSettingsResponseSmoothTerrainSpikesDefault).describe('When true, the server applies an angle-based spike smoothing pass to terrain grids. Disable to inspect raw bathymetric artifacts for scientific use.'),
   "privateMarkers": zod.boolean().default(putSettingsResponsePrivateMarkersDefault),
-  "defaultMarkerType": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom']).default(putSettingsResponseDefaultMarkerTypeDefault),
+  "defaultMarkerType": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'log', 'vegetation', 'sample']).default(putSettingsResponseDefaultMarkerTypeDefault),
   "defaultRegion": zod.string().default(putSettingsResponseDefaultRegionDefault),
   "gpsRecordingInterval": zod.number().min(putSettingsResponseGpsRecordingIntervalMin).max(putSettingsResponseGpsRecordingIntervalMax).default(putSettingsResponseGpsRecordingIntervalDefault)
 }).describe('Per-user application settings with sensible defaults')

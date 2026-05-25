@@ -906,7 +906,7 @@ components:
           type: array
           items:
             type: string
-            enum: [fish, shipwreck, coral, vent, custom]
+            enum: [fish, shipwreck, coral, vent, custom, log, vegetation, sample]
           default: [fish, shipwreck, coral, vent, custom]
         showMarkerLabels:
           type: boolean
@@ -920,7 +920,7 @@ components:
           default: false
         defaultMarkerType:
           type: string
-          enum: [fish, shipwreck, coral, vent, custom]
+          enum: [fish, shipwreck, coral, vent, custom, log, vegetation, sample]
           default: fish
         defaultRegion:
           type: string
@@ -1120,7 +1120,7 @@ components:
           description: Depth in metres (positive = below surface)
         type:
           type: string
-          enum: [fish, shipwreck, coral, vent, custom, depth_pole]
+          enum: [fish, shipwreck, coral, vent, custom, depth_pole, log, vegetation, sample]
         label:
           type: string
         notes:
@@ -1256,7 +1256,7 @@ components:
           type: number
         type:
           type: string
-          enum: [fish, shipwreck, coral, vent, custom, depth_pole]
+          enum: [fish, shipwreck, coral, vent, custom, depth_pole, log, vegetation, sample]
           default: custom
         label:
           type: string

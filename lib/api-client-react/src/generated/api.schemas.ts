@@ -165,6 +165,9 @@ export const UserSettingsVisibleMarkerTypesItem = {
   coral: 'coral',
   vent: 'vent',
   custom: 'custom',
+  log: 'log',
+  vegetation: 'vegetation',
+  sample: 'sample',
 } as const;
 
 export type UserSettingsDefaultMarkerType = typeof UserSettingsDefaultMarkerType[keyof typeof UserSettingsDefaultMarkerType];
@@ -176,6 +179,9 @@ export const UserSettingsDefaultMarkerType = {
   coral: 'coral',
   vent: 'vent',
   custom: 'custom',
+  log: 'log',
+  vegetation: 'vegetation',
+  sample: 'sample',
 } as const;
 
 /**
@@ -358,6 +364,9 @@ export const MarkerType = {
   vent: 'vent',
   custom: 'custom',
   depth_pole: 'depth_pole',
+  log: 'log',
+  vegetation: 'vegetation',
+  sample: 'sample',
 } as const;
 
 export interface Marker {
@@ -423,6 +432,9 @@ export const MarkerInputType = {
   vent: 'vent',
   custom: 'custom',
   depth_pole: 'depth_pole',
+  log: 'log',
+  vegetation: 'vegetation',
+  sample: 'sample',
 } as const;
 
 export interface MarkerInput {

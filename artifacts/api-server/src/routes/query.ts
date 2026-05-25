@@ -168,6 +168,7 @@ router.post("/query", async (req, res): Promise<void> => {
     query?: string;
     context?: {
       datasetName?: string;
+      waterType?: string;
       minDepth?: number;
       maxDepth?: number;
       cameraLon?: number | null;
@@ -185,6 +186,7 @@ router.post("/query", async (req, res): Promise<void> => {
 
   const ctx = body.context ?? {};
   const datasetName = ctx.datasetName ?? "unknown dataset";
+  const waterType = ctx.waterType === "freshwater" ? "freshwater" : "saltwater";
   const minDepth = ctx.minDepth ?? 0;
   const maxDepth = ctx.maxDepth ?? 1000;
   const cameraLon = ctx.cameraLon ?? null;
@@ -192,9 +194,16 @@ router.post("/query", async (req, res): Promise<void> => {
   const cameraDepth = ctx.cameraDepth ?? null;
   const topZones = ctx.topZones ?? [];
 
+  const persona = waterType === "freshwater"
+    ? "expert freshwater limnologist and lake bathymetric guide"
+    : "expert marine geologist and bathymetric guide";
+
+  const envLabel = waterType === "freshwater" ? "lake bed" : "seafloor";
+
   const systemPrompt = [
-    "You are an expert marine geologist and bathymetric guide for BathyScan, a 3D seafloor exploration app.",
-    `Current dataset: "${datasetName}" (depth range: ${minDepth.toFixed(0)} m – ${maxDepth.toFixed(0)} m).`,
+    `You are an ${persona} for BathyScan, a 3D underwater exploration app.`,
+    `Environment: ${waterType === "freshwater" ? "Freshwater (lake/reservoir)" : "Saltwater (ocean/sea)"}.`,
+    `Current dataset: "${datasetName}" (depth range: ${minDepth.toFixed(0)} m – ${maxDepth.toFixed(0)} m, ${envLabel}).`,
     cameraLon != null && cameraLat != null
       ? `Camera is at lon=${cameraLon.toFixed(4)}, lat=${cameraLat.toFixed(4)}, depth=${cameraDepth?.toFixed(0) ?? "?"} m.`
       : "Camera position unknown.",

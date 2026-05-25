@@ -29,6 +29,8 @@ import { lonLatToWorldXZ } from "@/lib/terrain";
 import { MARKER_COLOR, MARKER_ICON } from "@/lib/markerConstants";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useOfflineStore } from "@/lib/offlineStore";
+import { useSettingsStore } from "@/lib/settingsStore";
+import { WaterTypeToggle } from "@/components/WaterTypeToggle";
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
@@ -94,6 +96,8 @@ export const DatasetPanel: React.FC = () => {
 
   // ─── Upload progress (simulated) ──────────────────────────────────────────
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  const waterType = useSettingsStore((s) => s.waterType);
 
   // ─── Fetch dataset lists ───────────────────────────────────────────────────
   const { data: datasets, isLoading: datasetsLoading } = useGetDatasets();
@@ -414,6 +418,18 @@ export const DatasetPanel: React.FC = () => {
 
       {!collapsed && (
         <div>
+          {/* ── Water type toggle ── */}
+          <div style={{
+            padding: "6px 10px",
+            borderTop: "1px solid rgba(0,229,255,0.08)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+          }}>
+            <span style={{ fontSize: 8, letterSpacing: "0.12em", color: "#334155" }}>ENVIRONMENT</span>
+            <WaterTypeToggle />
+          </div>
           {/* ── Built-in dataset list ── */}
           <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}>
             {presetLoadError && (
@@ -472,7 +488,7 @@ export const DatasetPanel: React.FC = () => {
                 </div>
               </div>
             )}
-            {(datasets ?? []).map((ds) => {
+            {(datasets ?? []).filter((ds) => ds.waterType === waterType).map((ds) => {
               const active = ds.id === datasetId && !pendingId && !activeUserDatasetId;
               const loading = ds.id === loadingId;
               return (

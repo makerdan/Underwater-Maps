@@ -10,7 +10,7 @@ import {
   PostDatasetsUploadResponse,
 } from "@workspace/api-zod";
 import {
-  PRESET_DATASETS,
+  ALL_PRESET_DATASETS,
   buildTerrainGrid,
   parseXyzCsv,
   gridPoints,
@@ -43,8 +43,18 @@ async function getSmoothingPreference(req: import("express").Request): Promise<b
 }
 
 // ── GET /datasets ─────────────────────────────────────────────────────────────
-router.get("/datasets", async (_req, res): Promise<void> => {
-  const list = PRESET_DATASETS.map((d) => ({
+router.get("/datasets", async (req, res): Promise<void> => {
+  const rawWaterType = req.query["waterType"];
+  const waterTypeFilter =
+    rawWaterType === "freshwater" || rawWaterType === "saltwater"
+      ? rawWaterType
+      : null;
+
+  const source = waterTypeFilter
+    ? ALL_PRESET_DATASETS.filter((d) => d.waterType === waterTypeFilter)
+    : ALL_PRESET_DATASETS;
+
+  const list = source.map((d) => ({
     id: d.id,
     name: d.name,
     description: d.description,
@@ -118,7 +128,7 @@ router.get("/datasets/:id/zones", async (req, res): Promise<void> => {
   }
 
   // --- Auth / ownership gate ---
-  const isPreset = PRESET_DATASETS.some((d) => d.id === id);
+  const isPreset = ALL_PRESET_DATASETS.some((d) => d.id === id);
   if (!isPreset) {
     const auth = getAuth(req);
     const callerId = auth?.userId

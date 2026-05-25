@@ -2,7 +2,7 @@
  * HabitatPanel — collapsible HUD panel for habitat suitability scoring.
  *
  * Features:
- *  • Species selector dropdown (Dungeness Crab, Demersal Fish, Rockfish, Halibut, Salmon)
+ *  • Species selector dropdown (filtered by current waterType)
  *  • Enable/disable toggle that drives the terrain shader + overview map overlay
  *  • Suggested Hotspots list: score bar, depth, substrate, "Fly there" / "Drop pin" buttons
  *
@@ -14,12 +14,14 @@ import { useHabitatStore } from "@/lib/habitatStore";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useAppState } from "@/lib/context";
+import { useSettingsStore } from "@/lib/settingsStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
 import {
   SPECIES_CONFIGS,
-  SPECIES_IDS,
+  SALTWATER_SPECIES_IDS,
+  FRESHWATER_SPECIES_IDS,
 } from "@/lib/habitat";
-import type { SpeciesId, HotspotCandidate } from "@/lib/habitat";
+import type { SpeciesId, FreshwaterSpeciesId, SaltwaterSpeciesId, HotspotCandidate } from "@/lib/habitat";
 import {
   usePostMarkers,
   getGetMarkersQueryKey,
@@ -162,12 +164,19 @@ export const HabitatPanel: React.FC = () => {
   const activeSpecies = useHabitatStore((s) => s.activeSpecies);
   const scores = useHabitatStore((s) => s.scores);
   const hotspots = useHabitatStore((s) => s.hotspots);
+  const settingsWaterType = useSettingsStore((s) => s.waterType);
 
   const [collapsed, setCollapsed] = useState(false);
   const [droppingIdx, setDroppingIdx] = useState<number | null>(null);
 
   const qc = useQueryClient();
   const postMarkers = usePostMarkers();
+
+  // Determine active water type from terrain (authoritative) or settings fallback
+  const waterType = (terrain?.waterType as "saltwater" | "freshwater" | undefined) ?? settingsWaterType;
+  const speciesIds: SpeciesId[] = waterType === "freshwater"
+    ? (FRESHWATER_SPECIES_IDS as unknown as FreshwaterSpeciesId[])
+    : (SALTWATER_SPECIES_IDS as unknown as SaltwaterSpeciesId[]);
 
   // Recompute whenever terrain or zoneMap changes
   useEffect(() => {
@@ -181,6 +190,11 @@ export const HabitatPanel: React.FC = () => {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terrain?.datasetId]);
+
+  // Clear species selection when waterType changes so stale overlays don't persist
+  useEffect(() => {
+    useHabitatStore.getState().clear();
+  }, [waterType]);
 
   // Recompute when species or zoneMap changes
   useEffect(() => {
@@ -207,14 +221,14 @@ export const HabitatPanel: React.FC = () => {
     if (!terrain || droppingIdx !== null) return;
 
     const speciesLabel = activeSpecies ? (SPECIES_CONFIGS[activeSpecies]?.label ?? "Hotspot") : "Hotspot";
-    const markerType = (activeSpecies === "dungeness_crab") ? "custom" : "fish";
+    const markerType = "fish";
 
     setDroppingIdx(index);
     postMarkers.mutate(
       {
         data: {
           datasetId: terrain.datasetId,
-          type: markerType as "fish" | "custom",
+          type: markerType as "fish",
           label: `${speciesLabel} Hotspot #${index + 1}`,
           notes: `Score ${Math.round(h.score * 100)}% · ${Math.round(h.depth)} m · ${h.zoneLabel.replace(/_/g, " ")}`,
           lon: h.lon,
@@ -271,7 +285,7 @@ export const HabitatPanel: React.FC = () => {
           {/* Species selector */}
           <div style={{ marginBottom: 8 }}>
             <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.08em", marginBottom: 4 }}>
-              SPECIES
+              SPECIES ({waterType === "freshwater" ? "freshwater" : "marine"})
             </div>
             <select
               className="habitat-overlay-toggle"
@@ -291,7 +305,7 @@ export const HabitatPanel: React.FC = () => {
               }}
             >
               <option value="">— disabled —</option>
-              {SPECIES_IDS.map((id) => (
+              {speciesIds.map((id) => (
                 <option key={id} value={id}>
                   {SPECIES_CONFIGS[id]?.label ?? id}
                 </option>
