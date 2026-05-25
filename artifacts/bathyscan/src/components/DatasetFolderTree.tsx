@@ -39,9 +39,11 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { useContextMenuStore } from "@/lib/contextMenuStore";
 import {
   buildLibraryTree,
+  descendantFolderIds,
   isDescendantOf,
   suggestUniqueName,
   type FolderNode,
+  type LibraryTree,
 } from "@/lib/datasetLibrary";
 
 interface Props {
@@ -111,6 +113,17 @@ export const DatasetFolderTree: React.FC<Props> = ({
     | null
   >(null);
 
+  // ─── Move-to dialog state ────────────────────────────────────────────────
+  const [moveTarget, setMoveTarget] = useState<
+    | {
+        kind: "folder" | "dataset";
+        id: string;
+        name: string;
+        currentParentId: string | null;
+      }
+    | null
+  >(null);
+
   // ─── Drag state ──────────────────────────────────────────────────────────
   const [dragging, setDragging] = useState<DragData | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
@@ -131,6 +144,39 @@ export const DatasetFolderTree: React.FC<Props> = ({
   const toggleExpand = useCallback(
     (id: string) => setExpand(id, !(expanded[id] ?? false)),
     [expanded, setExpand],
+  );
+
+  const handleMoveConfirm = useCallback(
+    (targetFolderId: string | null) => {
+      if (!moveTarget) return;
+      if (moveTarget.kind === "folder") {
+        moveFolder.mutate(
+          { id: moveTarget.id, data: { parentId: targetFolderId } },
+          {
+            onSuccess: () => {
+              if (targetFolderId) setExpand(targetFolderId, true);
+              invalidateAll();
+            },
+            onError: (err) =>
+              setError(err instanceof Error ? err.message : "Move failed"),
+          },
+        );
+      } else {
+        moveDataset.mutate(
+          { id: moveTarget.id, data: { folderId: targetFolderId } },
+          {
+            onSuccess: () => {
+              if (targetFolderId) setExpand(targetFolderId, true);
+              invalidateAll();
+            },
+            onError: (err) =>
+              setError(err instanceof Error ? err.message : "Move failed"),
+          },
+        );
+      }
+      setMoveTarget(null);
+    },
+    [moveTarget, moveFolder, moveDataset, setExpand, invalidateAll],
   );
 
   const beginRename = (kind: "folder" | "dataset", id: string, current: string) => {
@@ -267,6 +313,17 @@ export const DatasetFolderTree: React.FC<Props> = ({
         icon: "⎘",
         onClick: () => handleDuplicateFolder(node.folder.id),
       },
+      {
+        label: "Move to…",
+        icon: "→",
+        onClick: () =>
+          setMoveTarget({
+            kind: "folder",
+            id: node.folder.id,
+            name: node.folder.name,
+            currentParentId: node.folder.parentId ?? null,
+          }),
+      },
       { label: "", separator: true, onClick: () => {} },
       {
         label: "Delete folder…",
@@ -297,6 +354,17 @@ export const DatasetFolderTree: React.FC<Props> = ({
         label: "Duplicate",
         icon: "⎘",
         onClick: () => handleDuplicateDataset(ds.id),
+      },
+      {
+        label: "Move to…",
+        icon: "→",
+        onClick: () =>
+          setMoveTarget({
+            kind: "dataset",
+            id: ds.id,
+            name: ds.name,
+            currentParentId: ds.folderId ?? null,
+          }),
       },
       { label: "", separator: true, onClick: () => {} },
       {
@@ -519,6 +587,16 @@ export const DatasetFolderTree: React.FC<Props> = ({
           <div style={{ fontSize: 9, color: "#334155", padding: "4px 12px 8px" }}>
             No saved terrains yet
           </div>
+        )}
+
+        {/* Move-to dialog */}
+        {moveTarget && (
+          <MoveToDialog
+            tree={tree}
+            target={moveTarget}
+            onCancel={() => setMoveTarget(null)}
+            onConfirm={handleMoveConfirm}
+          />
         )}
 
         {/* Confirm delete dialog */}
@@ -781,6 +859,262 @@ const RootDropZone: React.FC<{ enabled: boolean }> = ({ enabled }) => {
       }}
     >
       Drop here to move to top level
+    </div>
+  );
+};
+
+interface MoveOption {
+  /** null = library root */
+  id: string | null;
+  label: string;
+  depth: number;
+  disabled: boolean;
+  disabledReason?: string;
+}
+
+function buildMoveOptions(
+  tree: LibraryTree,
+  target: { kind: "folder" | "dataset"; id: string; currentParentId: string | null },
+): MoveOption[] {
+  const blocked =
+    target.kind === "folder"
+      ? descendantFolderIds(tree.byId, target.id)
+      : new Set<string>();
+  const opts: MoveOption[] = [];
+  opts.push({
+    id: null,
+    label: "Library root",
+    depth: 0,
+    disabled: target.currentParentId === null,
+    disabledReason:
+      target.currentParentId === null ? "Already here" : undefined,
+  });
+  const walk = (nodes: FolderNode[], depth: number) => {
+    for (const n of nodes) {
+      const isSelf = target.kind === "folder" && n.folder.id === target.id;
+      const isDescendant = blocked.has(n.folder.id);
+      const isCurrent = n.folder.id === target.currentParentId;
+      const disabled = isSelf || isDescendant || isCurrent;
+      let reason: string | undefined;
+      if (isCurrent) reason = "Already here";
+      else if (isSelf) reason = "Cannot move into itself";
+      else if (isDescendant) reason = "Cannot move into a subfolder";
+      opts.push({
+        id: n.folder.id,
+        label: n.folder.name,
+        depth: depth + 1,
+        disabled,
+        disabledReason: reason,
+      });
+      walk(n.children, depth + 1);
+    }
+  };
+  walk(tree.roots, 0);
+  return opts;
+}
+
+const MoveToDialog: React.FC<{
+  tree: LibraryTree;
+  target: {
+    kind: "folder" | "dataset";
+    id: string;
+    name: string;
+    currentParentId: string | null;
+  };
+  onCancel: () => void;
+  onConfirm: (targetFolderId: string | null) => void;
+}> = ({ tree, target, onCancel, onConfirm }) => {
+  const options = useMemo(() => buildMoveOptions(tree, target), [tree, target]);
+  const firstEnabledIdx = options.findIndex((o) => !o.disabled);
+  const [selectedIdx, setSelectedIdx] = useState<number>(
+    firstEnabledIdx >= 0 ? firstEnabledIdx : 0,
+  );
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    // Focus the listbox so arrow keys work immediately.
+    listRef.current?.focus();
+  }, []);
+
+  const moveSelection = (dir: 1 | -1) => {
+    if (options.length === 0) return;
+    let i = selectedIdx;
+    for (let step = 0; step < options.length; step++) {
+      i = (i + dir + options.length) % options.length;
+      if (!options[i]!.disabled) {
+        setSelectedIdx(i);
+        return;
+      }
+    }
+  };
+
+  const selected = options[selectedIdx];
+  const canConfirm = !!selected && !selected.disabled;
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      moveSelection(1);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      moveSelection(-1);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (canConfirm) onConfirm(selected!.id);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      onCancel();
+    }
+  };
+
+  return (
+    <div
+      data-testid="move-to-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Move ${target.name}`}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.55)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 10000,
+      }}
+      onClick={onCancel}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "rgba(0,10,20,0.95)",
+          border: "1px solid rgba(0,229,255,0.35)",
+          borderRadius: 6,
+          padding: 18,
+          width: 360,
+          maxWidth: "90vw",
+          color: "#cbd5e1",
+          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+          fontSize: 12,
+        }}
+      >
+        <div style={{ fontWeight: 700, marginBottom: 4, color: "#00e5ff" }}>
+          Move "{target.name}" to…
+        </div>
+        <div style={{ fontSize: 10, color: "#64748b", marginBottom: 10 }}>
+          Choose a destination folder
+        </div>
+        <div
+          ref={listRef}
+          tabIndex={0}
+          role="listbox"
+          aria-activedescendant={
+            selected ? `move-opt-${selected.id ?? "__root__"}` : undefined
+          }
+          onKeyDown={onKeyDown}
+          style={{
+            maxHeight: 260,
+            overflowY: "auto",
+            border: "1px solid rgba(148,163,184,0.18)",
+            borderRadius: 3,
+            background: "rgba(0,0,0,0.25)",
+            outline: "none",
+            marginBottom: 12,
+          }}
+        >
+          {options.map((opt, idx) => {
+            const sel = idx === selectedIdx;
+            return (
+              <div
+                key={opt.id ?? "__root__"}
+                id={`move-opt-${opt.id ?? "__root__"}`}
+                role="option"
+                aria-selected={sel}
+                aria-disabled={opt.disabled}
+                data-testid={`move-opt-${opt.id ?? "__root__"}`}
+                onClick={() => {
+                  if (opt.disabled) return;
+                  setSelectedIdx(idx);
+                }}
+                onDoubleClick={() => {
+                  if (!opt.disabled) onConfirm(opt.id);
+                }}
+                title={opt.disabledReason}
+                style={{
+                  padding: `4px ${8 + opt.depth * 12}px`,
+                  fontSize: 11,
+                  cursor: opt.disabled ? "not-allowed" : "pointer",
+                  color: opt.disabled
+                    ? "#475569"
+                    : sel
+                      ? "#00e5ff"
+                      : "#cbd5e1",
+                  background: sel
+                    ? "rgba(0,229,255,0.10)"
+                    : "transparent",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <span style={{ color: opt.disabled ? "#334155" : "#64748b" }}>
+                  {opt.id === null ? "/" : "▣"}
+                </span>
+                <span
+                  style={{
+                    flex: 1,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {opt.label}
+                </span>
+                {opt.disabled && opt.disabledReason && (
+                  <span style={{ fontSize: 9, color: "#475569" }}>
+                    {opt.disabledReason}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button
+            onClick={onCancel}
+            data-testid="move-to-cancel"
+            style={{
+              background: "transparent",
+              border: "1px solid rgba(148,163,184,0.4)",
+              color: "#94a3b8",
+              padding: "4px 12px",
+              borderRadius: 3,
+              cursor: "pointer",
+              fontSize: 11,
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => canConfirm && onConfirm(selected!.id)}
+            disabled={!canConfirm}
+            data-testid="move-to-confirm"
+            style={{
+              background: canConfirm
+                ? "rgba(0,229,255,0.18)"
+                : "rgba(100,116,139,0.12)",
+              border: `1px solid ${canConfirm ? "rgba(0,229,255,0.55)" : "rgba(100,116,139,0.3)"}`,
+              color: canConfirm ? "#00e5ff" : "#475569",
+              padding: "4px 12px",
+              borderRadius: 3,
+              cursor: canConfirm ? "pointer" : "not-allowed",
+              fontSize: 11,
+            }}
+          >
+            Move
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
