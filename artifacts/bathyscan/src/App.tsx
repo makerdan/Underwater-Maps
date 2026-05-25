@@ -47,6 +47,7 @@ import { useOfflineStore } from "@/lib/offlineStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useWaterTypeSideEffects } from "@/lib/useWaterTypeSideEffects";
+import { useActiveDatasetSync } from "@/lib/useActiveDatasetSync";
 import { waterLabels } from "@/lib/waterLabels";
 import { useGetSettings, getGetSettingsQueryKey } from "@workspace/api-client-react";
 import { useDriftStore } from "@/lib/driftStore";
@@ -293,6 +294,12 @@ function Main() {
   useWaterTypeSideEffects(datasets, setDatasetId, () => {
     hasAutoSelectedRef.current = false;
   });
+
+  // Always-mounted orchestrator that owns terrain + overview fetches for the
+  // active preset dataset and commits them atomically. Keeps overviewGrid in
+  // sync even when DatasetPanel is hidden (e.g. when the user picks a dataset
+  // from FindDataPanel while the side pane is collapsed).
+  useActiveDatasetSync();
 
   useEffect(() => {
     if (terrain) {

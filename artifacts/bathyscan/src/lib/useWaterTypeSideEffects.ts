@@ -32,7 +32,10 @@ export function useWaterTypeSideEffects(
     const prev = prevWaterTypeRef.current;
     prevWaterTypeRef.current = waterType;
 
-    try { useTerrainStore.getState().setGrids({ activeGrid: null as never }); } catch { /* noop */ }
+    // Clear both active and overview grids in a single store update so the UI
+    // never sees a half-updated state where one grid still references the
+    // previous water type's dataset.
+    try { useTerrainStore.getState().setGrids({ activeGrid: null, overviewGrid: null }); } catch { /* noop */ }
     try { useClassificationStore.getState().clearZoneMap?.(); } catch { /* noop */ }
     try { useHabitatStore.getState().clear?.(); } catch { /* noop */ }
 

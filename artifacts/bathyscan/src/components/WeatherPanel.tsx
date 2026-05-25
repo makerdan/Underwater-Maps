@@ -200,7 +200,12 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
   const { data, hours: sharedHours, loading: isLoading, error: isError, estimated, refetch } =
     useSurfaceConditions(!!terrain);
 
-  useEffect(() => {
+  // Single source of truth for the auto-drift recompute. Every input that
+  // feeds computeDrift is captured in the dependency list so moving the
+  // start point, changing line length, or any other driver retriggers the
+  // calculation immediately — the timeline and "bottom in reach" readout
+  // never trail the inputs.
+  const recomputeAutoDrift = useCallback(() => {
     if (!sharedHours.length || !terrain) return;
     const hoursForStore = sharedHours.map(({ tideRising: _r, ...rest }) => rest) as
       import("@/lib/driftStore").HourlySurfaceCondition[];
@@ -224,7 +229,16 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
       trollWaypoints: driftWaypoints,
     });
     setDriftPath(path);
-  }, [sharedHours, data, estimated, terrain, driftMode, boatHeadingDeg, boatSpeedKnots, driftWaypoints]);
+  }, [
+    sharedHours, estimated, terrain,
+    driftStartLat, driftStartLon, centerLat, centerLon,
+    lineLengthM, driftMode, boatHeadingDeg, boatSpeedKnots, driftWaypoints,
+    setDriftConditions, setEstimatedConditions, setDriftStart, setDriftPath,
+  ]);
+
+  useEffect(() => {
+    recomputeAutoDrift();
+  }, [recomputeAutoDrift]);
 
   const recomputeWithManual = useCallback(() => {
     if (!terrain) return;
