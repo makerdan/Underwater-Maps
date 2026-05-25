@@ -17,6 +17,7 @@ import { DatasetPanel } from "@/components/DatasetPanel";
 import { CameraCoordsReadout } from "@/components/CameraCoordsReadout";
 import { Minimap } from "@/components/Minimap";
 import { ControlsLegend } from "@/components/ControlsLegend";
+import { KeyboardShortcutsPanel } from "@/components/KeyboardShortcutsPanel";
 import { AppHeader } from "@/components/AppHeader";
 import { TidePanel } from "@/components/TidePanel";
 import { ThrottlePanel } from "@/components/ThrottlePanel";
@@ -192,6 +193,7 @@ function Main() {
   const [showResumeHint, setShowResumeHint] = useState(false);
   const [showIosInstallHint, setShowIosInstallHint] = useState(false);
   const [queryOpen, setQueryOpen] = useState(false);
+  const [sidePaneCollapsed, setSidePaneCollapsed] = useState(false);
   const prevOverviewOpenRef = useRef(false);
 
   const centerLat = terrain
@@ -393,30 +395,80 @@ function Main() {
           {showDepthScaleBar && <DepthScaleBar />}
         </div>
 
-        {/* Dataset panel — top-left, vertically scrollable when content overflows.
-            Lat/long readout is pinned to the bottom so it isn't covered by the
-            scrolling panels above. */}
-        <div
-          className="absolute top-12 left-4 z-20 flex flex-col gap-2"
-          style={{ maxHeight: "calc(100vh - 7rem)" }}
-        >
-          <div
-            className="flex flex-col gap-2 overflow-y-auto overscroll-contain min-h-0"
+        {/* Combined side pane — Datasets, Camera Position, Keyboard, and
+            Tidal Overlay all live inside one vertically-scrollable container
+            pinned to the left side. Can also be collapsed horizontally to
+            give the user a full view of the scene. */}
+        {sidePaneCollapsed ? (
+          <button
+            onClick={() => setSidePaneCollapsed(false)}
+            title="Show side pane"
+            aria-label="Show side pane"
+            className="absolute top-12 left-4 z-20"
             style={{
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              fontSize: 12,
+              padding: "6px 8px",
+              borderRadius: 4,
+              border: "1px solid rgba(0,229,255,0.25)",
+              background: "rgba(0,10,20,0.82)",
+              color: "#00e5ff",
+              cursor: "pointer",
+              backdropFilter: "blur(6px)",
+              textShadow: "0 0 6px rgba(0,229,255,0.5)",
+              letterSpacing: "0.1em",
+            }}
+          >
+            ▸
+          </button>
+        ) : (
+          <div
+            className="absolute top-12 left-4 z-20 flex flex-col gap-2 overflow-y-auto overscroll-contain"
+            style={{
+              maxHeight: "calc(100vh - 7rem)",
               paddingRight: 4,
               scrollbarWidth: "thin",
               scrollbarColor: "rgba(0,229,255,0.35) transparent",
-              flex: "1 1 auto",
             }}
           >
+            <div className="flex justify-end" style={{ minWidth: 220, maxWidth: 260 }}>
+              <button
+                onClick={() => setSidePaneCollapsed(true)}
+                title="Hide side pane"
+                aria-label="Hide side pane"
+                style={{
+                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                  fontSize: 11,
+                  padding: "2px 8px",
+                  borderRadius: 4,
+                  border: "1px solid rgba(0,229,255,0.2)",
+                  background: "rgba(0,10,20,0.82)",
+                  color: "#00e5ff",
+                  cursor: "pointer",
+                  backdropFilter: "blur(6px)",
+                  letterSpacing: "0.1em",
+                }}
+              >
+                ◂ HIDE
+              </button>
+            </div>
             {showDatasetPanel && <DatasetPanel />}
             <ZoneOverlay />
             {showHabitatPanel && <HabitatPanel />}
-          </div>
-          <div style={{ flex: "0 0 auto" }}>
             <CameraCoordsReadout />
+            <KeyboardShortcutsPanel />
+            {showTidePanel && tidalOverlay && tidalData !== null && (
+              <TidePanel
+                data={tidalData}
+                loading={tidalLoading}
+                depthLayer={depthLayer}
+                onDepthLayerChange={setDepthLayer}
+                scrubDatetime={scrubDatetime}
+                onScrubChange={setScrubDatetime}
+              />
+            )}
           </div>
-        </div>
+        )}
 
         {/* Tidal + Realistic toggle buttons — top-right of scene */}
         <div className="absolute top-3 right-16 z-20 flex gap-2">
@@ -463,20 +515,6 @@ function Main() {
             {tidalOverlay ? "◉" : "○"} TIDAL
           </button>
         </div>
-
-        {/* Tide HUD panel — bottom-left, above controls legend */}
-        {showTidePanel && tidalOverlay && tidalData !== null && (
-          <div className="absolute z-20" style={{ bottom: 52, left: 16 }}>
-            <TidePanel
-              data={tidalData}
-              loading={tidalLoading}
-              depthLayer={depthLayer}
-              onDepthLayerChange={setDepthLayer}
-              scrubDatetime={scrubDatetime}
-              onScrubChange={setScrubDatetime}
-            />
-          </div>
-        )}
 
         {/* Throttle panel — bottom-right above minimap, visible when realistic mode is on */}
         {realisticMode && (
