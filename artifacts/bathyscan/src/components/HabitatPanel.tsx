@@ -30,6 +30,7 @@ import {
 } from "@workspace/api-client-react";
 import { formatDepth } from "@/lib/units";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
+import { ShoreZoneCredit } from "@/components/ShoreZoneCredit";
 
 // ---------------------------------------------------------------------------
 // Style constants (match ZoneOverlay.tsx)
@@ -390,6 +391,14 @@ export const HabitatPanel: React.FC = () => {
           {!activeSpecies && (
             <div style={{ fontSize: 11, color: "#94a3b8", letterSpacing: "0.05em" }}>
               Select a species to score habitat
+            </div>
+          )}
+
+          {/* Attribution for the ShoreZone substrate dataset feeding the
+              habitat scoring. Only shown when substrate zone data is loaded. */}
+          {zoneMap && (
+            <div style={{ marginTop: 8, paddingTop: 6, borderTop: "1px solid rgba(0,229,255,0.08)" }}>
+              <ShoreZoneCredit />
             </div>
           )}
         </div>

@@ -19,6 +19,7 @@ import { useTemperatureProfile } from "@/hooks/useTemperatureProfile";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { TemperatureProfileChart } from "@/components/TemperatureProfileChart";
+import { ShoreZoneCredit } from "@/components/ShoreZoneCredit";
 
 const EFH_DATASETS = new Set(["thorne-bay"]);
 
@@ -575,6 +576,13 @@ export const HUD: React.FC = () => {
               ◼ SUBSTRATE
             </button>
           </ViewscreenTooltip>
+
+          {/* Attribution for the ShoreZone substrate dataset — required for
+              public-domain reuse. Only shown while the substrate tint overlay
+              is active. */}
+          {substrateColorMode && (
+            <ShoreZoneCredit style={{ textAlign: "right", maxWidth: 260 }} />
+          )}
 
           {/* Always-on Wind / Tide / Current overlay toggles */}
           <ViewscreenTooltip label="Toggle wind direction arrows overlay" side="left">
