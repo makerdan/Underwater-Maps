@@ -1,4 +1,4 @@
-import React, { useRef, useMemo } from "react";
+import React, { useRef, useMemo, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { WORLD_SIZE } from "@/lib/terrain";
@@ -59,6 +59,19 @@ export const Caustics: React.FC = () => {
       materialRef.current.uniforms["uTime"]!.value += delta;
     }
   });
+
+  // Dispose the shader material when the component unmounts or `enabled`
+  // flips off — Three.js holds GPU resources that React's reconciler does
+  // not free automatically.
+  useEffect(() => {
+    return () => {
+      const mat = materialRef.current;
+      if (mat) {
+        mat.dispose();
+        materialRef.current = null;
+      }
+    };
+  }, [enabled]);
 
   if (!enabled) return null;
 

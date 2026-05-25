@@ -54,9 +54,13 @@ export function useTidalData(
     if (lat === null || lon === null) return;
 
     let cancelled = false;
+    let activeController: AbortController | null = null;
 
     async function fetchTidal() {
       if (lat === null || lon === null) return;
+      if (activeController) activeController.abort();
+      const controller = new AbortController();
+      activeController = controller;
       setLoading(true);
       try {
         const base = API_BASE.endsWith("/") ? API_BASE : `${API_BASE}/`;
@@ -64,14 +68,16 @@ export function useTidalData(
         if (scrubDatetime) {
           url += `&datetime=${encodeURIComponent(scrubDatetime.toISOString())}`;
         }
-        const res = await fetch(url);
+        const res = await fetch(url, { signal: controller.signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as TidalDataResult;
-        if (!cancelled) setData(json);
-      } catch {
+        if (!cancelled && !controller.signal.aborted) setData(json);
+      } catch (err) {
+        if (controller.signal.aborted) return;
         if (!cancelled) setData({ available: false });
+        void err;
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && !controller.signal.aborted) setLoading(false);
       }
     }
 
@@ -83,6 +89,7 @@ export function useTidalData(
 
     return () => {
       cancelled = true;
+      if (activeController) activeController.abort();
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;

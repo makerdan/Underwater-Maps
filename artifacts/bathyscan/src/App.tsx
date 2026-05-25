@@ -229,7 +229,8 @@ function Main() {
   const [showResumeHint, setShowResumeHint] = useState(false);
   const [showIosInstallHint, setShowIosInstallHint] = useState(false);
   const [queryOpen, setQueryOpen] = useState(false);
-  const [sidePaneCollapsed, setSidePaneCollapsed] = useState(false);
+  const sidePaneCollapsed = useUiStore((s) => s.sidePaneCollapsed);
+  const setSidePaneCollapsed = useUiStore((s) => s.setSidePaneCollapsed);
   const prevOverviewOpenRef = useRef(false);
 
   const centerLat = terrain

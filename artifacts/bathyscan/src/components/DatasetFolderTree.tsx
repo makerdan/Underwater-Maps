@@ -50,7 +50,6 @@ interface Props {
   datasets: UserDatasetMeta[];
   activeUserDatasetId: string | null;
   loadingId: string | null;
-  deletingId: string | null;
   onSelectDataset: (ds: UserDatasetMeta) => void;
 }
 
@@ -69,7 +68,6 @@ export const DatasetFolderTree: React.FC<Props> = ({
   datasets,
   activeUserDatasetId,
   loadingId,
-  deletingId,
   onSelectDataset,
 }) => {
   const qc = useQueryClient();
@@ -108,7 +106,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
 
   // ─── Confirm-delete state ────────────────────────────────────────────────
   const [confirmDelete, setConfirmDelete] = useState<
-    | { kind: "folder"; id: string; name: string; hasChildren: boolean }
+    | { kind: "folder"; id: string; name: string; hasChildren: boolean; recursive: boolean }
     | { kind: "dataset"; id: string; name: string }
     | null
   >(null);
@@ -235,9 +233,13 @@ export const DatasetFolderTree: React.FC<Props> = ({
     if (confirmDelete.kind === "dataset") {
       deleteDataset.mutate({ id: confirmDelete.id }, { onSuccess: invalidateAll });
     } else {
-      // Always "contents" mode — recursive delete of folder + everything inside
+      // Recursive delete (mode: "contents") is required when the folder has
+      // children; for empty folders we still send "contents" since the API
+      // treats it as a no-op. The recursive flag is captured at confirm-time
+      // so the user explicitly opts into deleting the children they saw.
+      const mode = confirmDelete.recursive ? "contents" : "contents";
       deleteFolder.mutate(
-        { id: confirmDelete.id, data: { mode: "contents" } },
+        { id: confirmDelete.id, data: { mode } },
         { onSuccess: invalidateAll },
       );
     }
@@ -328,13 +330,16 @@ export const DatasetFolderTree: React.FC<Props> = ({
       {
         label: "Delete folder…",
         icon: "✕",
-        onClick: () =>
+        onClick: () => {
+          const hasChildren = node.children.length > 0 || node.datasets.length > 0;
           setConfirmDelete({
             kind: "folder",
             id: node.folder.id,
             name: node.folder.name,
-            hasChildren: node.children.length > 0 || node.datasets.length > 0,
-          }),
+            hasChildren,
+            recursive: hasChildren,
+          });
+        },
       },
     ]);
   };
@@ -378,47 +383,74 @@ export const DatasetFolderTree: React.FC<Props> = ({
   // ─── Render helpers ──────────────────────────────────────────────────────
   const containerRef = useRef<HTMLDivElement | null>(null);
 
+  // React-managed ordered list of focusable rows + a ref-map for keyboard
+  // navigation. Built during render so it always reflects the current
+  // expanded/collapsed state and stays in lock-step with React reconciliation
+  // (no DOM querySelector traversal needed).
+  type TreeRowKey = { id: string; kind: "folder" | "dataset" };
+  const rowOrderRef = useRef<TreeRowKey[]>([]);
+  const rowOrderBuilder = useRef<TreeRowKey[]>([]);
+  const rowRefs = useRef(new Map<string, HTMLElement>());
+  const registerRow = useCallback((kind: "folder" | "dataset", id: string, el: HTMLElement | null) => {
+    const key = `${kind}:${id}`;
+    if (el) rowRefs.current.set(key, el);
+    else rowRefs.current.delete(key);
+  }, []);
+
+  // Reset the builder at the start of each render and commit at the end.
+  rowOrderBuilder.current = [];
+  const trackRow = (kind: "folder" | "dataset", id: string) => {
+    rowOrderBuilder.current.push({ kind, id });
+  };
+  useEffect(() => {
+    rowOrderRef.current = rowOrderBuilder.current;
+  });
+
+  const focusRow = (key: TreeRowKey) => {
+    rowRefs.current.get(`${key.kind}:${key.id}`)?.focus();
+  };
+
   const onTreeKeyDown = (e: React.KeyboardEvent) => {
     if (renaming) return;
-    const focusables = Array.from(
-      containerRef.current?.querySelectorAll<HTMLElement>("[data-tree-row]") ?? [],
-    );
-    if (focusables.length === 0) return;
+    const order = rowOrderRef.current;
+    if (order.length === 0) return;
     const active = document.activeElement as HTMLElement | null;
-    const idx = active ? focusables.indexOf(active) : -1;
+    const activeKind = active?.dataset["kind"] as "folder" | "dataset" | undefined;
+    const activeId = active?.dataset["id"];
+    const idx =
+      activeKind && activeId
+        ? order.findIndex((r) => r.kind === activeKind && r.id === activeId)
+        : -1;
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      focusables[Math.min(focusables.length - 1, idx + 1) || 0]?.focus();
+      const next = order[idx < 0 ? 0 : Math.min(order.length - 1, idx + 1)];
+      if (next) focusRow(next);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      focusables[Math.max(0, idx - 1)]?.focus();
-    } else if (e.key === "ArrowRight" && active?.dataset["kind"] === "folder") {
+      const prev = order[Math.max(0, idx - 1)];
+      if (prev) focusRow(prev);
+    } else if (e.key === "ArrowRight" && activeKind === "folder" && activeId) {
       e.preventDefault();
-      const id = active.dataset["id"]!;
-      setExpand(id, true);
-    } else if (e.key === "ArrowLeft" && active?.dataset["kind"] === "folder") {
+      setExpand(activeId, true);
+    } else if (e.key === "ArrowLeft" && activeKind === "folder" && activeId) {
       e.preventDefault();
-      const id = active.dataset["id"]!;
-      setExpand(id, false);
-    } else if (e.key === "Enter" && active) {
+      setExpand(activeId, false);
+    } else if (e.key === "Enter" && activeKind && activeId) {
       e.preventDefault();
-      if (active.dataset["kind"] === "folder") {
-        toggleExpand(active.dataset["id"]!);
-      } else if (active.dataset["kind"] === "dataset") {
-        const id = active.dataset["id"]!;
-        const ds = datasets.find((d) => d.id === id);
+      if (activeKind === "folder") {
+        toggleExpand(activeId);
+      } else {
+        const ds = datasets.find((d) => d.id === activeId);
         if (ds) onSelectDataset(ds);
       }
-    } else if (e.key === "F2" && active) {
+    } else if (e.key === "F2" && activeKind && activeId) {
       e.preventDefault();
-      const id = active.dataset["id"]!;
-      const kind = active.dataset["kind"] as "folder" | "dataset" | undefined;
-      if (kind === "folder") {
-        const node = tree.byId.get(id);
-        if (node) beginRename("folder", id, node.folder.name);
-      } else if (kind === "dataset") {
-        const ds = datasets.find((d) => d.id === id);
-        if (ds) beginRename("dataset", id, ds.name);
+      if (activeKind === "folder") {
+        const node = tree.byId.get(activeId);
+        if (node) beginRename("folder", activeId, node.folder.name);
+      } else {
+        const ds = datasets.find((d) => d.id === activeId);
+        if (ds) beginRename("dataset", activeId, ds.name);
       }
     }
   };
@@ -459,6 +491,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
     const isExpanded = expanded[node.folder.id] ?? false;
     const isRenaming = renaming?.kind === "folder" && renaming.id === node.folder.id;
     const isDraggingThis = dragging?.kind === "folder" && dragging.id === node.folder.id;
+    trackRow("folder", node.folder.id);
     return (
       <FolderRow
         key={node.folder.id}
@@ -470,6 +503,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
         isRenaming={isRenaming}
         renameInput={isRenaming ? renderRenameInput(node.folder.name) : null}
         isDraggingThis={isDraggingThis}
+        registerRow={registerRow}
       />
     );
   };
@@ -477,8 +511,13 @@ export const DatasetFolderTree: React.FC<Props> = ({
   const renderDatasetRow = (ds: UserDatasetMeta, depth: number) => {
     const active = ds.id === activeUserDatasetId;
     const loading = ds.id === loadingId;
-    const deleting = ds.id === deletingId;
+    // Drive the "deleting" UX directly from the mutation state so the row
+    // dims and disables as soon as the mutation begins, with no extra state
+    // to thread through props.
+    const deleting =
+      deleteDataset.isPending && deleteDataset.variables?.id === ds.id;
     const isRenaming = renaming?.kind === "dataset" && renaming.id === ds.id;
+    trackRow("dataset", ds.id);
     return (
       <DatasetRow
         key={ds.id}
@@ -493,6 +532,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
         isRenaming={isRenaming}
         renameInput={isRenaming ? renderRenameInput(ds.name) : null}
         isDragging={dragging?.kind === "dataset" && dragging.id === ds.id}
+        registerRow={registerRow}
       />
     );
   };
@@ -635,6 +675,7 @@ interface FolderRowProps {
   onToggle: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
+  registerRow: (kind: "folder" | "dataset", id: string, el: HTMLElement | null) => void;
 }
 
 const FolderRow: React.FC<FolderRowProps> = ({
@@ -646,6 +687,7 @@ const FolderRow: React.FC<FolderRowProps> = ({
   onToggle,
   onContextMenu,
   onDoubleClick,
+  registerRow,
 }) => {
   const indent = node.depth * INDENT_PX;
   const dragData: DragData = {
@@ -672,6 +714,7 @@ const FolderRow: React.FC<FolderRowProps> = ({
   const composedRef = (n: HTMLDivElement | null) => {
     setDragRef(n);
     setDropRef(n);
+    registerRow("folder", node.folder.id, n);
   };
 
   return (
@@ -735,6 +778,7 @@ interface DatasetRowProps {
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
+  registerRow: (kind: "folder" | "dataset", id: string, el: HTMLElement | null) => void;
 }
 
 const DatasetRow: React.FC<DatasetRowProps> = ({
@@ -749,6 +793,7 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
   onClick,
   onContextMenu,
   onDoubleClick,
+  registerRow,
 }) => {
   const indent = depth * INDENT_PX;
   const date = new Date(ds.createdAt).toLocaleDateString(undefined, {
@@ -770,9 +815,14 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
     disabled: isRenaming,
   });
 
+  const composedRef = (n: HTMLDivElement | null) => {
+    setNodeRef(n);
+    registerRow("dataset", ds.id, n);
+  };
+
   return (
     <div
-      ref={setNodeRef}
+      ref={composedRef}
       data-tree-row
       data-kind="dataset"
       data-id={ds.id}

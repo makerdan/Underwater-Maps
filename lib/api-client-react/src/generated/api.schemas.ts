@@ -357,6 +357,8 @@ export interface DatasetMeta {
   bbox: DatasetMetaBbox;
   /** True when the dataset bbox includes above-water terrain (land/islands) suitable for landmass visualisation. */
   hasTopography?: boolean;
+  /** True when the dataset has bundled Essential Fish Habitat (EFH) zone data available via /efh. */
+  hasEfh?: boolean;
 }
 
 export type TerrainDataWaterType = typeof TerrainDataWaterType[keyof typeof TerrainDataWaterType];

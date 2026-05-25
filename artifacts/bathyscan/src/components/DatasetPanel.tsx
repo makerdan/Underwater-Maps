@@ -38,8 +38,6 @@ import { WaterTypeToggle } from "@/components/WaterTypeToggle";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
-const EFH_DATASETS = new Set(["thorne-bay"]);
-
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 const PANEL: React.CSSProperties = {
@@ -611,7 +609,7 @@ export const DatasetPanel: React.FC = () => {
                     <div onClick={(e) => e.stopPropagation()}>
                       <ProvenancePanel
                         terrain={terrain}
-                        hasEfh={EFH_DATASETS.has(ds.id)}
+                        hasEfh={ds.hasEfh ?? false}
                       />
                     </div>
                   )}
@@ -695,11 +693,6 @@ export const DatasetPanel: React.FC = () => {
                 datasets={userDatasets ?? []}
                 activeUserDatasetId={pendingUserDatasetId ? null : activeUserDatasetId}
                 loadingId={loadingId}
-                deletingId={
-                  deleteMutation.isPending && typeof deleteMutation.variables?.id === "string"
-                    ? deleteMutation.variables.id
-                    : null
-                }
                 onSelectDataset={handleSelectUserDataset}
               />
             </div>

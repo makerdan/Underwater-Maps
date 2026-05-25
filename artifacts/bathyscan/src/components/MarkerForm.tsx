@@ -27,6 +27,7 @@ import {
   type MarkerTypeValue,
 } from "@/lib/markerConstants";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
+import { markerLabelSchema, markerNotesSchema } from "@/lib/markerFormSchema";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(2,8,24,0.92)",
@@ -54,6 +55,7 @@ export const MarkerForm: React.FC = () => {
   const [label, setLabel] = useState("");
   const [notes, setNotes] = useState("");
   const [labelError, setLabelError] = useState("");
+  const [notesError, setNotesError] = useState("");
   const [poleColour, setPoleColour] = useState(DEPTH_POLE_DEFAULT_COLOUR);
 
   // Reset form whenever it opens (gps changes)
@@ -61,6 +63,7 @@ export const MarkerForm: React.FC = () => {
     setLabel("");
     setNotes("");
     setLabelError("");
+    setNotesError("");
     setMarkerType("custom");
     setPoleColour(DEPTH_POLE_DEFAULT_COLOUR);
   }, [gps]);
@@ -71,15 +74,27 @@ export const MarkerForm: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!label.trim()) {
-      setLabelError("Label is required");
-      return;
-    }
     if (!gps || !terrain) return;
 
-    const notesValue = markerType === "depth_pole"
-      ? JSON.stringify({ colour: poleColour })
-      : notes.trim().slice(0, 500) || null;
+    const labelResult = markerLabelSchema.safeParse(label);
+    if (!labelResult.success) {
+      setLabelError(labelResult.error.issues[0]?.message ?? "Invalid label");
+      return;
+    }
+    setLabelError("");
+
+    let notesForBody: string | null = null;
+    if (markerType === "depth_pole") {
+      notesForBody = JSON.stringify({ colour: poleColour });
+    } else {
+      const notesResult = markerNotesSchema.safeParse(notes);
+      if (!notesResult.success) {
+        setNotesError(notesResult.error.issues[0]?.message ?? "Invalid notes");
+        return;
+      }
+      setNotesError("");
+      notesForBody = notesResult.data.length > 0 ? notesResult.data : null;
+    }
 
     const markerBody = {
       datasetId: terrain.datasetId,
@@ -87,8 +102,8 @@ export const MarkerForm: React.FC = () => {
       lat: gps.lat,
       depth: gps.depth,
       type: markerType as MarkerInputType,
-      label: label.trim().slice(0, 60),
-      notes: notesValue,
+      label: labelResult.data,
+      notes: notesForBody,
     };
 
     if (!isOnline) {
@@ -361,14 +376,17 @@ export const MarkerForm: React.FC = () => {
             </label>
             <textarea
               value={notes}
-              onChange={(e) => setNotes(e.target.value.slice(0, 500))}
+              onChange={(e) => {
+                setNotes(e.target.value.slice(0, 500));
+                if (notesError) setNotesError("");
+              }}
               placeholder="Additional observations..."
               maxLength={500}
               rows={3}
               style={{
                 width: "100%",
                 background: "rgba(0,229,255,0.04)",
-                border: "1px solid rgba(0,229,255,0.12)",
+                border: `1px solid ${notesError ? "#ef4444" : "rgba(0,229,255,0.12)"}`,
                 borderRadius: 3,
                 color: "#e2e8f0",
                 fontSize: 11,
@@ -379,6 +397,9 @@ export const MarkerForm: React.FC = () => {
                 outline: "none",
               }}
             />
+            {notesError && (
+              <div style={{ fontSize: 9, color: "#ef4444", marginTop: 3 }}>⚠ {notesError}</div>
+            )}
             <div style={{ fontSize: 8, color: "#1e293b", textAlign: "right" }}>{notes.length}/500</div>
           </div>
         )}

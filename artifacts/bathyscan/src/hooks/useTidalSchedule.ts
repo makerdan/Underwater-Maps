@@ -32,6 +32,7 @@ export function useTidalSchedule(
   useEffect(() => {
     if (lat === null || lon === null) return;
     let cancelled = false;
+    const controller = new AbortController();
 
     async function run() {
       if (lat === null || lon === null) return;
@@ -39,20 +40,23 @@ export function useTidalSchedule(
       try {
         const base = API_BASE.endsWith("/") ? API_BASE : `${API_BASE}/`;
         const url = `${base}api/tidal/schedule?lat=${lat}&lon=${lon}&days=${days}`;
-        const res = await fetch(url);
+        const res = await fetch(url, { signal: controller.signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as TidalSchedule;
-        if (!cancelled) setSchedule(json);
-      } catch {
+        if (!cancelled && !controller.signal.aborted) setSchedule(json);
+      } catch (err) {
+        if (controller.signal.aborted) return;
         if (!cancelled) setSchedule(null);
+        void err;
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && !controller.signal.aborted) setLoading(false);
       }
     }
 
     void run();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [lat, lon, days]);
 

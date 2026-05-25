@@ -76,6 +76,11 @@ export interface DatasetMeta {
    * suitable for landmass visualisation. Open-ocean datasets set this to false.
    */
   hasTopography?: boolean;
+  /**
+   * True when the dataset has bundled Essential Fish Habitat (EFH) zone data
+   * available via the /efh endpoint.
+   */
+  hasEfh?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -95,6 +100,7 @@ export const PRESET_DATASETS: DatasetMeta[] = [
     centerLat: 55.69,
     bbox: { minLon: -133.5, minLat: 55.0, maxLon: -131.5, maxLat: 56.5 },
     hasTopography: true,
+    hasEfh: true,
   },
   {
     id: "mariana-trench",

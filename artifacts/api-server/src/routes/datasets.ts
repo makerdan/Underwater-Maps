@@ -64,6 +64,8 @@ router.get("/datasets", async (req, res): Promise<void> => {
     centerLon: d.centerLon,
     centerLat: d.centerLat,
     bbox: d.bbox,
+    ...(d.hasTopography === true ? { hasTopography: true as const } : {}),
+    ...(d.hasEfh === true ? { hasEfh: true as const } : {}),
   }));
   res.json(GetDatasetsResponse.parse(list));
 });

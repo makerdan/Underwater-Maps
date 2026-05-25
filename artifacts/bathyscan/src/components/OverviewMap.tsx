@@ -7,6 +7,8 @@ import {
   getGetTrailsQueryKey,
   useDeleteTrailsId,
   getTrailsIdPoints,
+  useGetDatasets,
+  getGetDatasetsQueryKey,
 } from "@workspace/api-client-react";
 import type { Marker, GpsTrail } from "@workspace/api-client-react";
 import { useTerrainStore } from "@/lib/terrainStore";
@@ -83,8 +85,8 @@ export const OverviewMap: React.FC = () => {
     },
   });
 
-  // Datasets that have bundled EFH data
-  const EFH_DATASETS = new Set(["thorne-bay"]);
+  // EFH availability is now derived from dataset metadata (hasEfh flag from
+  // /api/datasets), so this list does not need to be hardcoded here.
 
   // --- Panel state ---
   const [showTrailList, setShowTrailList] = useState(false);
@@ -125,7 +127,13 @@ export const OverviewMap: React.FC = () => {
   }, [markerData]);
 
   // EFH data — only fetch for datasets that have bundled EFH zones
-  const hasEfh = EFH_DATASETS.has(datasetId);
+  // (declared via the `hasEfh` flag in the dataset metadata).
+  const waterTypeForDatasets = useSettingsStore((s) => s.waterType);
+  const { data: allDatasets } = useGetDatasets(
+    { waterType: waterTypeForDatasets },
+    { query: { queryKey: getGetDatasetsQueryKey({ waterType: waterTypeForDatasets }) } },
+  );
+  const hasEfh = !!allDatasets?.find((d) => d.id === datasetId)?.hasEfh;
   const { data: efhData } = useGetEfh(
     { datasetId },
     { query: { enabled: hasEfh, staleTime: 60_000, queryKey: getGetEfhQueryKey({ datasetId }) } },
@@ -147,6 +155,7 @@ export const OverviewMap: React.FC = () => {
     }
 
     let cancelled = false;
+    const controller = new AbortController();
 
     const fetchAll = async () => {
       const results: CanvasSavedTrail[] = [];
@@ -160,32 +169,41 @@ export const OverviewMap: React.FC = () => {
             let currentPage = 1;
             let hasMore = true;
 
-            while (hasMore && currentPage <= MAX_PAGES && !cancelled) {
-              const page = await getTrailsIdPoints(trail.id, { page: currentPage, pageSize: PAGE_SIZE });
+            while (hasMore && currentPage <= MAX_PAGES && !cancelled && !controller.signal.aborted) {
+              const page = await getTrailsIdPoints(
+                trail.id,
+                { page: currentPage, pageSize: PAGE_SIZE },
+                { signal: controller.signal },
+              );
               allPoints.push(...page.points.map((p) => ({ lon: p.lon, lat: p.lat })));
               hasMore = currentPage * PAGE_SIZE < page.total;
               currentPage++;
             }
 
-            if (!cancelled) {
+            if (!cancelled && !controller.signal.aborted) {
               results.push({
                 id: trail.id,
                 colour: trail.colour,
                 points: allPoints,
               });
             }
-          } catch {
+          } catch (err) {
+            if (controller.signal.aborted) return;
             // skip trail if points fetch fails
+            void err;
           }
         }),
       );
-      if (!cancelled) {
+      if (!cancelled && !controller.signal.aborted) {
         savedTrailsRef.current = results;
       }
     };
 
     void fetchAll();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [trailsData]);
 
   // Build offscreen bitmap whenever overviewGrid or palette changes

@@ -45,6 +45,9 @@ interface UiStore {
   currentDepthLayers: DepthLayer[];
   setCurrentDepthLayers: (layers: DepthLayer[]) => void;
   toggleCurrentDepthLayer: (layer: DepthLayer) => void;
+  /** Whether the left side pane (datasets, habitat, tides…) is collapsed. */
+  sidePaneCollapsed: boolean;
+  setSidePaneCollapsed: (collapsed: boolean) => void;
 }
 
 function readLocalBool(key: string, fallback: boolean): boolean {
@@ -123,6 +126,11 @@ export const useUiStore = create<UiStore>((set) => ({
     const ordered = CURRENT_DEPTH_LAYERS.filter((l) => layers.includes(l));
     writeDepthLayers(ordered);
     set({ currentDepthLayers: ordered });
+  },
+  sidePaneCollapsed: readLocalBool("bathyscan:sidePaneCollapsed", false),
+  setSidePaneCollapsed: (collapsed) => {
+    writeLocalBool("bathyscan:sidePaneCollapsed", collapsed);
+    set({ sidePaneCollapsed: collapsed });
   },
   toggleCurrentDepthLayer: (layer) => set((state) => {
     const has = state.currentDepthLayers.includes(layer);

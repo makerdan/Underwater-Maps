@@ -1686,6 +1686,9 @@ components:
         hasTopography:
           type: boolean
           description: True when the dataset bbox includes above-water terrain (land/islands) suitable for landmass visualisation.
+        hasEfh:
+          type: boolean
+          description: True when the dataset has bundled Essential Fish Habitat (EFH) zone data available via /efh.
       required:
         - id
         - name

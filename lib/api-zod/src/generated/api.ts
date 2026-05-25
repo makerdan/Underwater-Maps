@@ -31,7 +31,8 @@ export const GetDatasetsResponseItem = zod.object({
   "maxLon": zod.number(),
   "maxLat": zod.number()
 }).describe('Bounding box [minLon, minLat, maxLon, maxLat]'),
-  "hasTopography": zod.boolean().optional().describe('True when the dataset bbox includes above-water terrain (land\/islands) suitable for landmass visualisation.')
+  "hasTopography": zod.boolean().optional().describe('True when the dataset bbox includes above-water terrain (land\/islands) suitable for landmass visualisation.'),
+  "hasEfh": zod.boolean().optional().describe('True when the dataset has bundled Essential Fish Habitat (EFH) zone data available via \/efh.')
 })
 export const GetDatasetsResponse = zod.array(GetDatasetsResponseItem)
 
