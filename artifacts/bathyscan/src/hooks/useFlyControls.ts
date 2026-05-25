@@ -15,6 +15,7 @@ import { useJoystickStore } from "@/components/VirtualJoystick";
 import { computeMetersPerWorldUnit, boatMphToWorldUnitsPerSecond } from "@/lib/boatSpeed";
 import { markerGroupRef } from "@/components/MarkerLayer";
 import { useContextMenuStore, type ContextMenuItem } from "@/lib/contextMenuStore";
+import { runMarkerDelete } from "@/lib/markerActions";
 import { useMeasureStore } from "@/lib/measureStore";
 import { useDepthProfileStore, buildProfile } from "@/lib/depthProfileStore";
 import { useClassificationStore } from "@/lib/classificationStore";
@@ -430,18 +431,12 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
             // Capture datasetId at action time so a mid-flight dataset switch
             // doesn't cause us to invalidate the wrong query key.
             const datasetId = terrainRef.current?.datasetId ?? "";
-            deleteMarkerRef.current.mutate(
-              { id: marker.id },
-              {
-                onSuccess: () => {
-                  if (datasetId) {
-                    queryClient.invalidateQueries({
-                      queryKey: getGetMarkersQueryKey({ datasetId }),
-                    });
-                  }
-                },
-              },
-            );
+            runMarkerDelete({
+              marker,
+              datasetId,
+              queryClient,
+              mutation: deleteMarkerRef.current,
+            });
           },
         },
       ];

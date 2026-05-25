@@ -3,7 +3,8 @@ import { ClerkProvider, SignIn, SignUp, Show, useClerk } from "@/lib/clerkCompat
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 import { Switch, Route, useLocation, Router as WouterRouter } from "wouter";
-import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useGetDatasets } from "@workspace/api-client-react";
@@ -55,7 +56,6 @@ import { HelpWindow } from "@/components/help/HelpWindow";
 import "@/components/help/help.css";
 import { ConditionsLegend } from "@/components/ConditionsLegend";
 
-const queryClient = new QueryClient();
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
