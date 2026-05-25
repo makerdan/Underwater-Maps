@@ -286,42 +286,4 @@ router.post("/datasets/upload", upload.single("file"), async (req, res): Promise
   );
 });
 
-// Backward-compat alias: same multipart handling
-router.post("/upload", upload.single("file"), async (req, res): Promise<void> => {
-  const file = req.file;
-  if (!file) {
-    res.status(400).json({ error: "missing_file", details: "No file uploaded. Send the XYZ/CSV as the 'file' field in a multipart/form-data request." });
-    return;
-  }
-
-  const fileContent = file.buffer.toString("utf8");
-  const fileName = file.originalname;
-  const rawRes = req.body["resolution"];
-  const resolution = rawRes ? Math.max(32, Math.min(512, parseInt(String(rawRes), 10))) : 256;
-
-  let points;
-  try {
-    points = parseXyzCsv(fileContent, fileName);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Parse error";
-    res.status(400).json({ error: "parse_error", details: msg });
-    return;
-  }
-
-  if (points.length < 10) {
-    res.status(400).json({
-      error: "insufficient_data",
-      details: "File must contain at least 10 valid (lon, lat, depth) rows",
-    });
-    return;
-  }
-
-  const datasetName = fileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
-  const smoothing = await getSmoothingPreference(req);
-  const terrain = gridPoints(points, resolution, "upload", datasetName, { smoothing });
-  const overview = gridPoints(points, 64, "upload", datasetName, { smoothing });
-
-  res.json(PostDatasetsUploadResponse.parse({ terrain, overview }));
-});
-
 export default router;
