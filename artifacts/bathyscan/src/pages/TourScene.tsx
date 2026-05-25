@@ -349,6 +349,32 @@ export const TourScene: React.FC<TourSceneProps> = ({
   const renderDistance = useSettingsStore((s) => s.renderDistance);
   const antialias = useSettingsStore((s) => s.antialiasing);
 
+  // E2E-only escape hatch: when running under the dev auth-bypass mode AND
+  // the URL carries `?noCanvas=1`, skip mounting the R3F Canvas entirely.
+  // Headless Chromium on this host cannot create a WebGL context (the GPU
+  // process crashes before SwiftShader attaches — see playwright.config.ts),
+  // so three.js throws on every Canvas mount and the resulting error storm
+  // starves React-Query mutations of microtasks. Tests that exercise pure
+  // DOM/HUD surfaces (e.g. the dataset-upload dropzone) opt out of the 3D
+  // scene with this flag so the upload mutation can complete reliably.
+  //
+  // Gated to import.meta.env.DEV + VITE_DEV_AUTH_BYPASS so it can never
+  // ship: in a production build, both guards collapse to false and Vite's
+  // dead-code elimination drops the entire branch.
+  if (
+    import.meta.env.DEV &&
+    import.meta.env.VITE_DEV_AUTH_BYPASS === "1" &&
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("noCanvas") === "1"
+  ) {
+    return (
+      <div
+        className="relative w-full h-full"
+        data-testid="tour-scene-canvas-disabled"
+      />
+    );
+  }
+
   return (
     <div className="relative w-full h-full">
       <Canvas

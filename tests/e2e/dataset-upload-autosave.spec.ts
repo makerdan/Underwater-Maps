@@ -231,6 +231,67 @@ test.describe("upload auto-save end-to-end", () => {
     await expect(page.getByTestId("user-dataset-load-error")).toHaveCount(0);
   });
 
+  test("UI path: dropping a CSV onto the dropzone uploads it for real and inserts the new row into MY UPLOADS", async ({
+    page,
+    request,
+  }) => {
+    // Pre-condition: no user datasets exist yet for this fake user.
+    expect(await listMyUploads(request)).toHaveLength(0);
+
+    // `?noCanvas=1` is a dev-only escape hatch in TourScene that skips the
+    // R3F Canvas mount. Without it, headless Chromium's missing WebGL
+    // context makes three.js throw on every Canvas mount and the resulting
+    // error storm starves the React-Query mutation of microtasks (the
+    // upload progress bar hangs at ~88 % until the test times out). The
+    // flag is gated on import.meta.env.DEV + VITE_DEV_AUTH_BYPASS so it
+    // can never ship to production. See artifacts/bathyscan/src/pages/TourScene.tsx.
+    await page.goto("/?noCanvas=1", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("tour-scene-canvas-disabled")).toBeVisible();
+
+    await openUploadAccordion(page);
+
+    const filename = `e2e-ui-upload-${Date.now()}.csv`;
+    const expectedName = filename.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
+
+    // Real upload: no `page.route()` interception, so the multipart POST
+    // streams to the api-server, runs through multer + parseXyzCsv +
+    // gridPoints, and inserts the new row into the custom_datasets table
+    // via the auth-bypass branch added in Task #122.
+    await uploadCsvViaDropzone(page, filename);
+
+    // The progress UI appears (the regression guard for "stalls at 88 %"):
+    // the dropzone swaps to the "Uploading & parsing..." copy while the
+    // mutation is in flight, and the optimistic MY UPLOADS row appears
+    // once the response lands. We assert on the optimistic row directly
+    // (with a generous timeout) rather than on the transient progress
+    // text, because the parse + grid step can be quick enough on small
+    // inputs that the progress UI flips to the completed state before
+    // Playwright can latch onto it.
+    const newRow = page
+      .getByTestId(/^btn-user-dataset-/)
+      .filter({ hasText: expectedName });
+    await expect(newRow).toBeVisible({ timeout: 60_000 });
+
+    // The optimistic cache insert should match what the server actually
+    // persisted — the row must still be there after a hard reload, which
+    // forces React Query to refetch /user/datasets from the DB.
+    await page.reload({ waitUntil: "domcontentloaded" });
+    const persistedRow = page
+      .getByTestId(/^btn-user-dataset-/)
+      .filter({ hasText: expectedName });
+    await expect(persistedRow).toBeVisible({ timeout: 30_000 });
+
+    // And the auto-save failure banner must NOT have appeared — this was
+    // a happy-path upload, so `saveError` should be undefined and the
+    // inline "couldn't save to your account" element absent.
+    await expect(page.getByTestId("upload-save-error")).toHaveCount(0);
+
+    // Confirm the row really exists in the DB (not just in the React
+    // Query cache).
+    const uploads = await listMyUploads(request);
+    expect(uploads.some((u) => u.name === expectedName)).toBe(true);
+  });
+
   test("failure path: server returns saveError → inline 'couldn't save to your account' message is shown", async ({
     page,
     request,
