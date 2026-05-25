@@ -114,6 +114,7 @@ export const PRESET_DATASETS: DatasetMeta[] = [
     centerLat: 58.75,
     bbox: { minLon: -137.1, minLat: 58.4, maxLon: -135.8, maxLat: 59.15 },
     hasTopography: true,
+    hasEfh: true,
   },
   {
     id: "icy-strait",
@@ -127,6 +128,7 @@ export const PRESET_DATASETS: DatasetMeta[] = [
     centerLat: 58.3,
     bbox: { minLon: -136.6, minLat: 58.0, maxLon: -135.4, maxLat: 58.55 },
     hasTopography: true,
+    hasEfh: true,
   },
   {
     id: "sitka-sound",
@@ -140,6 +142,7 @@ export const PRESET_DATASETS: DatasetMeta[] = [
     centerLat: 57.0,
     bbox: { minLon: -136.0, minLat: 56.7, maxLon: -135.0, maxLat: 57.25 },
     hasTopography: true,
+    hasEfh: true,
   },
   {
     id: "juneau-approaches",
@@ -153,6 +156,7 @@ export const PRESET_DATASETS: DatasetMeta[] = [
     centerLat: 58.3,
     bbox: { minLon: -135.2, minLat: 57.9, maxLon: -133.8, maxLat: 58.7 },
     hasTopography: true,
+    hasEfh: true,
   },
   {
     id: "ketchikan",
@@ -166,6 +170,7 @@ export const PRESET_DATASETS: DatasetMeta[] = [
     centerLat: 55.35,
     bbox: { minLon: -132.3, minLat: 55.0, maxLon: -131.0, maxLat: 55.7 },
     hasTopography: true,
+    hasEfh: true,
   },
   {
     id: "mariana-trench",
@@ -287,6 +292,48 @@ export const FRESHWATER_PRESET_DATASETS: DatasetMeta[] = [
     centerLat: 46.45,
     bbox: { minLon: 6.15, minLat: 46.35, maxLon: 6.87, maxLat: 46.52 },
     hasTopography: true,
+  },
+  {
+    id: "lake-fork",
+    name: "Lake Fork Reservoir — East Texas",
+    description:
+      "TPWD-managed trophy largemouth bass reservoir on the Sabine River — shallow timber flats, hydrilla mats, and abundant crappie brushpiles",
+    waterType: "freshwater",
+    minDepth: 1,
+    maxDepth: 21,
+    centerLon: -95.535,
+    centerLat: 32.865,
+    bbox: { minLon: -95.65, minLat: 32.78, maxLon: -95.42, maxLat: 32.95 },
+    hasTopography: true,
+    hasEfh: true,
+  },
+  {
+    id: "sam-rayburn",
+    name: "Sam Rayburn Reservoir — East Texas",
+    description:
+      "Largest lake wholly in Texas, on the Angelina River — premier largemouth, white bass, crappie, and blue catfish fishery",
+    waterType: "freshwater",
+    minDepth: 1,
+    maxDepth: 24,
+    centerLon: -94.125,
+    centerLat: 31.325,
+    bbox: { minLon: -94.30, minLat: 31.05, maxLon: -93.95, maxLat: 31.60 },
+    hasTopography: true,
+    hasEfh: true,
+  },
+  {
+    id: "toledo-bend",
+    name: "Toledo Bend Reservoir — Texas / Louisiana",
+    description:
+      "Sabine River reservoir on the Texas/Louisiana border — Top-10 nationally ranked largemouth fishery with cypress timber and a stocked hybrid striper population",
+    waterType: "freshwater",
+    minDepth: 1,
+    maxDepth: 33,
+    centerLon: -93.75,
+    centerLat: 31.675,
+    bbox: { minLon: -93.95, minLat: 31.15, maxLon: -93.55, maxLat: 32.20 },
+    hasTopography: true,
+    hasEfh: true,
   },
 ];
 

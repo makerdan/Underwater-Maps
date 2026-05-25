@@ -3,6 +3,11 @@ import { render, screen } from "@testing-library/react";
 import { HUD } from "@/components/HUD";
 import { useCameraStore } from "@/lib/cameraStore";
 
+vi.mock("@workspace/api-client-react", () => ({
+  useGetDatasets: () => ({ data: [] }),
+  getGetDatasetsQueryKey: () => ["datasets"],
+}));
+
 vi.mock("@/lib/context", () => ({
   SPEEDS: [0.05, 0.15, 0.5, 1.5, 5.0],
   useAppState: () => ({

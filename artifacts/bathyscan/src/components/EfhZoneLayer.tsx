@@ -22,10 +22,14 @@ import * as THREE from "three";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
 import { WORLD_SIZE } from "@/lib/terrain";
-import { useGetEfh, getGetEfhQueryKey } from "@workspace/api-client-react";
+import {
+  useGetEfh,
+  getGetEfhQueryKey,
+  useGetDatasets,
+  getGetDatasetsQueryKey,
+} from "@workspace/api-client-react";
 import type { EfhFeature } from "@workspace/api-client-react";
-
-const EFH_DATASETS = new Set(["thorne-bay"]);
+import { useSettingsStore } from "@/lib/settingsStore";
 /** Y elevation for EFH filled polygons — just above ocean surface (Y=0). */
 const EFH_FILL_Y = 1.0;
 /** Y elevation for EFH outlines — slightly above the fill so they are not z-fought. */
@@ -137,7 +141,12 @@ export const EfhZoneLayer: React.FC = () => {
   const efhOverlayEnabled = useUiStore((s) => s.efhOverlayEnabled);
 
   const datasetId = terrain?.datasetId ?? "";
-  const hasEfh = EFH_DATASETS.has(datasetId);
+  const waterTypeForDatasets = useSettingsStore((s) => s.waterType);
+  const { data: allDatasets } = useGetDatasets(
+    { waterType: waterTypeForDatasets },
+    { query: { queryKey: getGetDatasetsQueryKey({ waterType: waterTypeForDatasets }) } },
+  );
+  const hasEfh = !!allDatasets?.find((d) => d.id === datasetId)?.hasEfh;
 
   const { data: efhData } = useGetEfh(
     { datasetId },

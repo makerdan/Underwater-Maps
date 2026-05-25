@@ -6,6 +6,15 @@ import { useCameraStore } from "@/lib/cameraStore";
 
 let mockTerrain: TerrainData | null = null;
 
+vi.mock("@workspace/api-client-react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@workspace/api-client-react")>();
+  return {
+    ...actual,
+    useGetDatasets: () => ({ data: [] }),
+    getGetDatasetsQueryKey: () => ["datasets"],
+  };
+});
+
 vi.mock("@/hooks/useSurfaceTemperature", () => ({
   useSurfaceTemperature: () => ({ anchor: null, loading: false, error: false }),
 }));

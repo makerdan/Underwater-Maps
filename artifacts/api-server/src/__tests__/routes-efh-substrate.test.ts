@@ -32,7 +32,77 @@ describe("GET /efh", () => {
     expect(res.status).toBe(200);
     expect(res.body.type).toBe("FeatureCollection");
     expect(res.body.features).toHaveLength(0);
-    expect(res.body.metadata?.note).toContain("thorne-bay");
+    expect(res.body.metadata?.note).toContain("mariana-trench");
+  });
+
+  // --- Multi-dataset coverage (task #314) ----------------------------------
+  const EFH_COVERED_DATASETS: { id: string; bbox: [number, number, number, number]; sourcePrefix: "NOAA" | "TPWD" | "IPHC" | "ADF&G" }[] = [
+    { id: "glacier-bay",        bbox: [-137.1, 58.4, -135.8, 59.15], sourcePrefix: "NOAA" },
+    { id: "icy-strait",         bbox: [-136.6, 58.0, -135.4, 58.55], sourcePrefix: "NOAA" },
+    { id: "sitka-sound",        bbox: [-136.0, 56.7, -135.0, 57.25], sourcePrefix: "NOAA" },
+    { id: "juneau-approaches",  bbox: [-135.2, 57.9, -133.8, 58.7],  sourcePrefix: "NOAA" },
+    { id: "ketchikan",          bbox: [-132.3, 55.0, -131.0, 55.7],  sourcePrefix: "NOAA" },
+    { id: "lake-fork",          bbox: [-95.65, 32.78, -95.42, 32.95], sourcePrefix: "TPWD" },
+    { id: "sam-rayburn",        bbox: [-94.30, 31.05, -93.95, 31.60], sourcePrefix: "TPWD" },
+    { id: "toledo-bend",        bbox: [-93.95, 31.15, -93.55, 32.20], sourcePrefix: "TPWD" },
+  ];
+
+  for (const { id, bbox, sourcePrefix } of EFH_COVERED_DATASETS) {
+    it(`returns ≥1 EFH feature with valid properties + bbox-clipped geometry for ${id}`, async () => {
+      const res = await request(app).get(`/api/efh?datasetId=${id}`);
+      expect(res.status).toBe(200);
+      expect(res.body.type).toBe("FeatureCollection");
+      expect(res.body.features.length).toBeGreaterThanOrEqual(1);
+
+      const [minLon, minLat, maxLon, maxLat] = bbox;
+      for (const f of res.body.features) {
+        const p = f.properties;
+        expect(typeof p.species).toBe("string");
+        expect(p.species.length).toBeGreaterThan(0);
+        expect(typeof p.commonName).toBe("string");
+        expect(p.commonName.length).toBeGreaterThan(0);
+        expect(typeof p.fmp).toBe("string");
+        expect(Array.isArray(p.depthRangeM)).toBe(true);
+        expect(p.depthRangeM.length).toBe(2);
+        expect(typeof p.habitatDescription).toBe("string");
+        expect(p.habitatDescription.length).toBeGreaterThan(0);
+        expect(typeof p.source).toBe("string");
+        expect(typeof p.creditUrl).toBe("string");
+        expect(p.creditUrl).toMatch(/^https?:\/\//);
+        expect(p.color).toMatch(/^#[0-9a-fA-F]{6}$/);
+
+        if (sourcePrefix === "TPWD") {
+          expect(p.source.startsWith("TPWD")).toBe(true);
+          expect(p.source.startsWith("NOAA")).toBe(false);
+        } else {
+          expect(p.source.startsWith("TPWD")).toBe(false);
+        }
+
+        expect(f.geometry.type).toBe("Polygon");
+        const ring: number[][] = f.geometry.coordinates[0];
+        expect(ring.length).toBeGreaterThanOrEqual(4);
+        expect(ring[0]).toEqual(ring[ring.length - 1]);
+
+        for (const [lon, lat] of ring as [number, number][]) {
+          expect(lon).toBeGreaterThanOrEqual(minLon - 1e-9);
+          expect(lon).toBeLessThanOrEqual(maxLon + 1e-9);
+          expect(lat).toBeGreaterThanOrEqual(minLat - 1e-9);
+          expect(lat).toBeLessThanOrEqual(maxLat + 1e-9);
+        }
+      }
+    });
+  }
+
+  it("Texas TPWD features never carry a NOAA-prefixed source string", async () => {
+    for (const id of ["lake-fork", "sam-rayburn", "toledo-bend"]) {
+      const res = await request(app).get(`/api/efh?datasetId=${id}`);
+      expect(res.status).toBe(200);
+      expect(res.body.features.length).toBeGreaterThan(0);
+      for (const f of res.body.features) {
+        expect(f.properties.source.startsWith("NOAA")).toBe(false);
+        expect(f.properties.source.startsWith("TPWD")).toBe(true);
+      }
+    }
   });
 
   it("includes all five expected species", async () => {

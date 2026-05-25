@@ -914,6 +914,18 @@ const EfhDetailPanel: React.FC<{
           SOURCE
         </div>
         <div style={{ fontSize: 9, color: "#94a3b8", marginBottom: 4 }}>{p.source}</div>
+        {p.source?.startsWith("TPWD") && (
+          <div
+            style={{
+              fontSize: 9,
+              color: "#fb923c",
+              marginBottom: 4,
+              fontStyle: "italic",
+            }}
+          >
+            Texas Parks &amp; Wildlife — priority habitat; not federal EFH.
+          </div>
+        )}
         {p.creditUrl && (
           <a
             href={p.creditUrl}
@@ -926,7 +938,7 @@ const EfhDetailPanel: React.FC<{
               wordBreak: "break-all",
             }}
           >
-            ↗ NOAA EFH shapefiles
+            {p.source?.startsWith("TPWD") ? "↗ TPWD lake page" : "↗ NOAA EFH shapefiles"}
           </a>
         )}
       </div>

@@ -17,11 +17,14 @@ import {
 import { useSurfaceTemperature } from "@/hooks/useSurfaceTemperature";
 import { useTemperatureProfile } from "@/hooks/useTemperatureProfile";
 import { HelpIcon } from "@/components/help/HelpButton";
+import {
+  useGetDatasets,
+  getGetDatasetsQueryKey,
+} from "@workspace/api-client-react";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { TemperatureProfileChart } from "@/components/TemperatureProfileChart";
 import { ShoreZoneCredit } from "@/components/ShoreZoneCredit";
 
-const EFH_DATASETS = new Set(["thorne-bay"]);
 
 // NOTE: legacy module-scope panel style. The component below derives
 // accessibility-aware overrides (`CYAN`, `PANEL`) from settings and uses
@@ -119,7 +122,12 @@ export const HUD: React.FC = () => {
   const currentOverlayActive = useUiStore((s) => s.currentOverlayActive);
   const setCurrentOverlayActive = useUiStore((s) => s.setCurrentOverlayActive);
   const { terrain } = useAppState();
-  const hasEfh = EFH_DATASETS.has(terrain?.datasetId ?? "");
+  const waterTypeForEfh = useSettingsStore((s) => s.waterType);
+  const { data: hudDatasets } = useGetDatasets(
+    { waterType: waterTypeForEfh },
+    { query: { queryKey: getGetDatasetsQueryKey({ waterType: waterTypeForEfh }) } },
+  );
+  const hasEfh = !!hudDatasets?.find((d) => d.id === (terrain?.datasetId ?? ""))?.hasEfh;
 
   // Live sea-surface temperature for the dataset centre — used as the
   // surface anchor of the thermocline model below.
