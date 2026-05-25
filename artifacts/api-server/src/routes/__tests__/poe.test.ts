@@ -3,7 +3,10 @@ import request from "supertest";
 
 // vi.hoisted lets us share the fake Poe client `create` mock with the
 // vi.mock factory (which is itself hoisted above all imports).
-const { fakeCreate } = vi.hoisted(() => ({ fakeCreate: vi.fn() }));
+const { fakeCreate, fakeChatCreate } = vi.hoisted(() => ({
+  fakeCreate: vi.fn(),
+  fakeChatCreate: vi.fn(),
+}));
 
 // Partially mock @workspace/poe — keep real cache / retry / hashing helpers
 // but stub out getPoeClient so no network call is made.
@@ -13,7 +16,10 @@ vi.mock("@workspace/poe", async () => {
   );
   return {
     ...actual,
-    getPoeClient: vi.fn(() => ({ responses: { create: fakeCreate } })),
+    getPoeClient: vi.fn(() => ({
+      responses: { create: fakeCreate },
+      chat: { completions: { create: fakeChatCreate } },
+    })),
   };
 });
 
@@ -24,6 +30,7 @@ vi.mock("@workspace/db", () => ({
       values: vi.fn().mockResolvedValue([]),
     }),
   },
+  pool: { query: vi.fn() },
   poeUsageLogTable: {},
 }));
 
@@ -50,6 +57,7 @@ vi.mock("@clerk/shared/keys", () => ({
 
 import app from "../../app.js";
 import { globalPoeCache } from "@workspace/poe";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 const GRID_BASE64 = Buffer.from("fake-grid-bytes-for-testing").toString(
   "base64",
@@ -70,6 +78,10 @@ beforeEach(() => {
   // authenticate as that user without contacting Clerk. The bypass is
   // hard-gated on this env var and is never honored in production.
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
+  // Use the in-memory rate-limit backend so tests don't need a live Postgres
+  // pool. The default backend is Postgres; see middlewares/rateLimit.ts.
+  vi.stubEnv("RATE_LIMIT_BACKEND", "memory");
+  __resetRateLimitMemory();
   globalPoeCache.clear();
   fakeCreate.mockReset();
   fakeCreate.mockResolvedValue(buildOkResponse());
@@ -221,5 +233,94 @@ describe("POST /api/poe/classify", () => {
 
     expect(limited.status).toBe(429);
     expect(limited.body).toMatchObject({ error: "rate_limit" });
+  });
+});
+
+describe("POST /api/poe/describe — client disconnect", () => {
+  it("aborts the upstream stream when the client closes the connection mid-stream", async () => {
+    // Capture the AbortSignal the route passes to the streaming SDK call.
+    let receivedSignal: AbortSignal | undefined;
+    let upstreamAborted = false;
+
+    fakeChatCreate.mockReset();
+    fakeChatCreate.mockImplementation(
+      async (
+        _body: unknown,
+        opts?: { signal?: AbortSignal },
+      ): Promise<AsyncIterable<{ choices: Array<{ delta: { content?: string } }> }>> => {
+        receivedSignal = opts?.signal;
+        receivedSignal?.addEventListener("abort", () => {
+          upstreamAborted = true;
+        });
+        async function* gen() {
+          // Stream indefinitely until aborted.
+          for (let i = 0; i < 1000; i++) {
+            if (receivedSignal?.aborted) {
+              throw Object.assign(new Error("aborted"), { name: "AbortError" });
+            }
+            yield { choices: [{ delta: { content: "x" } }] };
+            await new Promise((r) => setTimeout(r, 20));
+          }
+        }
+        return gen();
+      },
+    );
+
+    const server = app.listen(0);
+    try {
+      const addr = server.address();
+      if (!addr || typeof addr === "string") throw new Error("no address");
+      const port = addr.port;
+
+      // Fire a request with the http module so we can destroy mid-flight.
+      const http = await import("node:http");
+      await new Promise<void>((resolve, reject) => {
+        const req = http.request(
+          {
+            hostname: "127.0.0.1",
+            port,
+            path: "/api/poe/describe",
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-e2e-user-id": "user-describe-abort",
+            },
+          },
+          (res) => {
+            let received = 0;
+            res.on("data", () => {
+              received++;
+              // Tear down after we've seen a couple of chunks so we know the
+              // stream is genuinely flowing.
+              if (received >= 2) req.destroy();
+            });
+            res.on("close", () => resolve());
+            res.on("error", () => resolve());
+          },
+        );
+        req.on("error", () => resolve());
+        req.write(
+          JSON.stringify({
+            lon: 0,
+            lat: 0,
+            depth: 100,
+            zoneName: "sandy_shelf",
+            datasetName: "ds",
+            waterType: "saltwater",
+          }),
+        );
+        req.end();
+
+        setTimeout(() => reject(new Error("test timed out")), 8000);
+      });
+
+      // Give the server a moment to wire the close → abort propagation.
+      await new Promise((r) => setTimeout(r, 100));
+      expect(receivedSignal).toBeDefined();
+      expect(receivedSignal?.aborted).toBe(true);
+      expect(upstreamAborted).toBe(true);
+    } finally {
+      await new Promise<void>((r) => server.close(() => r()));
+    }
   });
 });

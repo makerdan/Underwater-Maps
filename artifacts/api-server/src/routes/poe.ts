@@ -1,7 +1,8 @@
-import { Router, type Request, type Response, type NextFunction } from "express";
+import { Router, type Request, type Response } from "express";
 import { promises as fsPromises } from "fs";
 import path from "path";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
+import { createRateLimit, stampBaselineRateLimitHeaders } from "../middlewares/rateLimit.js";
 import { getPoeClient } from "@workspace/poe";
 import { withRetry } from "@workspace/poe";
 import { PoeCreditsError, PoeRateLimitError, PoeAuthError } from "@workspace/poe";
@@ -15,98 +16,39 @@ import type { PoeToolSchema } from "@workspace/poe";
 const router = Router();
 
 // ---------------------------------------------------------------------------
-// Rate limiter
+// Auth + rate limit
+//
+// Every Poe route is gated by:
+//   1. baseline `X-RateLimit-*` header stamping (so 401s still carry headers)
+//   2. shared `requireAuth` (Clerk session or env-gated e2e bypass)
+//   3. durable sliding-window rate limiter (Postgres-backed via
+//      `middlewares/rateLimit.ts`) keyed per-user
+//
+// The limiter previously lived in an in-process `Map` here, which reset on
+// every restart and was bypassed by horizontal scaling. The new limiter
+// shares quota across processes via the `rate_limit_events` table.
 // ---------------------------------------------------------------------------
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 30;
-const userRequestCounts = new Map<string, { count: number; resetAt: number }>();
 
-interface RateLimitState {
-  allowed: boolean;
-  remaining: number;
-  resetAt: number;
-}
+router.use(stampBaselineRateLimitHeaders(RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS));
+router.use(requireAuth);
+router.use(
+  createRateLimit({
+    route: "poe",
+    windowMs: RATE_LIMIT_WINDOW_MS,
+    max: RATE_LIMIT_MAX,
+    mode: "user",
+  }),
+);
 
-function consumeRateLimit(userId: string): RateLimitState {
-  const now = Date.now();
-  const entry = userRequestCounts.get(userId);
-  if (!entry || now > entry.resetAt) {
-    const resetAt = now + RATE_LIMIT_WINDOW_MS;
-    userRequestCounts.set(userId, { count: 1, resetAt });
-    return { allowed: true, remaining: RATE_LIMIT_MAX - 1, resetAt };
-  }
-  if (entry.count >= RATE_LIMIT_MAX) {
-    return { allowed: false, remaining: 0, resetAt: entry.resetAt };
-  }
-  entry.count++;
-  return { allowed: true, remaining: RATE_LIMIT_MAX - entry.count, resetAt: entry.resetAt };
-}
-
-function setRateLimitHeaders(res: Response, state: RateLimitState): void {
-  res.setHeader("X-RateLimit-Limit", String(RATE_LIMIT_MAX));
-  res.setHeader("X-RateLimit-Remaining", String(Math.max(0, state.remaining)));
-  res.setHeader("X-RateLimit-Reset", String(Math.ceil(state.resetAt / 1000)));
-}
-
-/**
- * Middleware: enforces per-user rate limit and sets X-RateLimit-* headers on
- * every response (including 429s). Must run AFTER requireAuth so userId is real.
- */
-function rateLimitMiddleware(req: Request, res: Response, next: NextFunction): void {
-  // requireAuth runs first and writes `clerkUserId` onto the request — see
-  // `../middlewares/requireAuth.ts`. All Poe routes must go through that
-  // shared middleware; do NOT re-implement auth here.
-  const userId = (req as AuthenticatedRequest).clerkUserId;
-  if (!userId) {
-    res.status(401).json({ error: "unauthenticated", message: "Authentication required" });
-    return;
-  }
-  const state = consumeRateLimit(userId);
-  setRateLimitHeaders(res, state);
-  if (!state.allowed) {
-    const retryAfter = Math.max(1, Math.ceil((state.resetAt - Date.now()) / 1000));
-    res.setHeader("Retry-After", String(retryAfter));
-    res.status(429).json({
-      error: "rate_limit",
-      message: "Too many AI requests — please wait a moment",
-    });
-    return;
-  }
-  next();
-}
-
-// ---------------------------------------------------------------------------
-// Auth middleware — applied to ALL Poe routes (including /models)
-//
-// We use the SHARED `requireAuth` middleware from `../middlewares/requireAuth.ts`
-// so that auth behavior (Clerk session + env-gated `x-e2e-user-id` bypass for
-// tests) lives in exactly one place. Do NOT re-implement auth per router — a
-// previous copy here drifted out of sync with the shared middleware and broke
-// the unit tests. If you need to wrap auth with extra behavior (e.g. emitting
-// rate-limit headers on 401), wrap the shared middleware rather than forking it.
-// ---------------------------------------------------------------------------
-
-function requireAuthWithRateLimitHeaders(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): void {
-  // Pre-stamp baseline X-RateLimit-* headers BEFORE delegating to the shared
-  // requireAuth. If auth fails, requireAuth sends the 401 response with these
-  // headers already on it (per task acceptance criteria: every Poe response
-  // carries rate-limit headers). If auth succeeds, the downstream
-  // rateLimitMiddleware overwrites them with the real per-user values.
-  setRateLimitHeaders(res, {
-    allowed: true,
-    remaining: RATE_LIMIT_MAX,
-    resetAt: Date.now() + RATE_LIMIT_WINDOW_MS,
-  });
-  requireAuth(req, res, next);
-}
-
-router.use(requireAuthWithRateLimitHeaders);
-router.use(rateLimitMiddleware);
+/** Per-route upstream timeouts (ms) — sized to the expected upstream work. */
+const POE_MODELS_TIMEOUT_MS = 10_000;
+const POE_CLASSIFY_TIMEOUT_MS = 45_000;
+const POE_QUERY_TIMEOUT_MS = 30_000;
+const POE_DESCRIBE_TIMEOUT_MS = 60_000;
+const POE_HELP_TIMEOUT_MS = 30_000;
 
 // ---------------------------------------------------------------------------
 // GET /models — Clerk-gated and rate-limited like the other Poe routes
@@ -123,6 +65,9 @@ router.get("/models", async (_req, res) => {
   try {
     const response = await fetch("https://api.poe.com/v1/models", {
       headers: { Authorization: `Bearer ${process.env["POE_API_KEY"] ?? ""}` },
+      // Hard upstream timeout — without this a hung Poe `/models` request
+      // would block the worker indefinitely.
+      signal: AbortSignal.timeout(POE_MODELS_TIMEOUT_MS),
     });
     const data = await response.json();
     modelsCache = { data, expiresAt: Date.now() + 60 * 60 * 1000 };
@@ -522,31 +467,37 @@ router.post("/classify", async (req, res) => {
 
       const response = await (client as unknown as {
         responses: {
-          create: (b: Record<string, unknown>) => Promise<{
+          create: (
+            b: Record<string, unknown>,
+            opts?: { signal?: AbortSignal },
+          ) => Promise<{
             id: string;
             output_text: string;
             usage?: { input_tokens?: number; output_tokens?: number };
           }>;
         };
-      }).responses.create({
-        model: POE_MODELS.CLASSIFY,
-        input,
-        instructions: buildClassifySystemPrompt(waterType),
-        text: {
-          format: {
-            type: "json_schema",
-            json_schema: {
-              name: "zone_classification",
-              schema: buildClassifyZoneSchema(waterType),
-              strict: true,
+      }).responses.create(
+        {
+          model: POE_MODELS.CLASSIFY,
+          input,
+          instructions: buildClassifySystemPrompt(waterType),
+          text: {
+            format: {
+              type: "json_schema",
+              json_schema: {
+                name: "zone_classification",
+                schema: buildClassifyZoneSchema(waterType),
+                strict: true,
+              },
             },
           },
+          max_output_tokens: 8192,
+          temperature: 0.1,
+          truncation: "auto",
+          metadata: { datasetId: datasetId ?? "unknown", waterType },
         },
-        max_output_tokens: 8192,
-        temperature: 0.1,
-        truncation: "auto",
-        metadata: { datasetId: datasetId ?? "unknown", waterType },
-      });
+        { signal: AbortSignal.timeout(POE_CLASSIFY_TIMEOUT_MS) },
+      );
 
       return response;
     }, 3);
@@ -815,14 +766,19 @@ router.post("/query", async (req, res) => {
       () =>
         (client as unknown as {
           responses: {
-            create: (b: Record<string, unknown>) => Promise<{
+            create: (
+              b: Record<string, unknown>,
+              opts?: { signal?: AbortSignal },
+            ) => Promise<{
               id: string;
               output_text: string;
               output?: ResponsesOutputItem[];
               usage?: { input_tokens?: number; output_tokens?: number };
             }>;
           };
-        }).responses.create(body),
+        }).responses.create(body, {
+          signal: AbortSignal.timeout(POE_QUERY_TIMEOUT_MS),
+        }),
       3,
     );
 
@@ -883,25 +839,44 @@ router.post("/describe", async (req, res) => {
   res.setHeader("Connection", "keep-alive");
   res.setHeader("Transfer-Encoding", "chunked");
 
+  // Abort the upstream stream as soon as the client disconnects so we don't
+  // keep paying for tokens (and pinning a worker) for a response nobody is
+  // reading. The controller is also tripped by a hard upstream timeout via
+  // AbortSignal.any so a hung upstream can't outlive the worker either.
+  const clientAbort = new AbortController();
+  const upstreamSignal = AbortSignal.any([
+    clientAbort.signal,
+    AbortSignal.timeout(POE_DESCRIBE_TIMEOUT_MS),
+  ]);
+  const onClientClose = (): void => {
+    if (!clientAbort.signal.aborted) clientAbort.abort();
+  };
+  req.on("close", onClientClose);
+  res.on("close", onClientClose);
+
   try {
     const client = getPoeClient();
     const stream = await withRetry(
       () =>
-        client.chat.completions.create({
-          model: POE_MODELS.DESCRIBE_QUICK,
-          messages: [
-            { role: "system", content: systemMsg },
-            { role: "user", content: userMsg },
-          ],
-          max_tokens: 300,
-          temperature: 0.5,
-          stream: true,
-        }),
+        client.chat.completions.create(
+          {
+            model: POE_MODELS.DESCRIBE_QUICK,
+            messages: [
+              { role: "system", content: systemMsg },
+              { role: "user", content: userMsg },
+            ],
+            max_tokens: 300,
+            temperature: 0.5,
+            stream: true,
+          },
+          { signal: upstreamSignal },
+        ),
       3,
     );
 
     let outputChars = 0;
     for await (const chunk of stream) {
+      if (clientAbort.signal.aborted) break;
       const delta = chunk.choices[0]?.delta?.content;
       if (delta) {
         outputChars += delta.length;
@@ -909,8 +884,10 @@ router.post("/describe", async (req, res) => {
       }
     }
 
-    res.write("data: [DONE]\n\n");
-    res.end();
+    if (!clientAbort.signal.aborted) {
+      res.write("data: [DONE]\n\n");
+      res.end();
+    }
 
     const inputTokens = Math.ceil((systemMsg.length + userMsg.length) / 4);
     const outputTokens = Math.ceil(outputChars / 4);
@@ -1023,17 +1000,20 @@ router.post("/help", async (req, res) => {
     }));
     const completion = await withRetry(
       () =>
-        client.chat.completions.create({
-          model: POE_MODELS.DESCRIBE_QUICK,
-          messages: [
-            { role: "system" as const, content: systemPrompt },
-            ...typedHistory,
-            { role: "user" as const, content: question.trim() },
-          ],
-          max_tokens: 400,
-          temperature: 0.3,
-          stream: false,
-        }),
+        client.chat.completions.create(
+          {
+            model: POE_MODELS.DESCRIBE_QUICK,
+            messages: [
+              { role: "system" as const, content: systemPrompt },
+              ...typedHistory,
+              { role: "user" as const, content: question.trim() },
+            ],
+            max_tokens: 400,
+            temperature: 0.3,
+            stream: false,
+          },
+          { signal: AbortSignal.timeout(POE_HELP_TIMEOUT_MS) },
+        ),
       2,
     );
 

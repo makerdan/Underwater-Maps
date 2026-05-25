@@ -46,6 +46,7 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../../app.js";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 function buildOkChat(answer = "Click the marker tool in the toolbar.") {
   return {
@@ -57,6 +58,8 @@ function buildOkChat(answer = "Click the marker tool in the toolbar.") {
 
 beforeEach(() => {
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
+  vi.stubEnv("RATE_LIMIT_BACKEND", "memory");
+  __resetRateLimitMemory();
   fakeChatCreate.mockReset();
   fakeChatCreate.mockResolvedValue(buildOkChat());
 });

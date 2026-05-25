@@ -8,8 +8,32 @@
  */
 import { Router } from "express";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { requireAuth } from "../middlewares/requireAuth.js";
+import { createRateLimit, stampBaselineRateLimitHeaders } from "../middlewares/rateLimit.js";
 
 const router = Router();
+
+// ---------------------------------------------------------------------------
+// Auth + rate limit
+//
+// `/query` calls the paid OpenAI API on every request, so we gate it behind
+// Clerk auth and a two-layer sliding-window limiter:
+//   * per-user  — protects an individual account from runaway loops
+//   * per-IP    — protects against burst abuse before auth is even attempted
+//
+// Both limiters share the durable Postgres-backed `rate_limit_events` table
+// so quota survives restarts and is enforced across processes/instances.
+// The baseline headers stamper guarantees `X-RateLimit-*` is present even on
+// the 401 returned by `requireAuth` for unauthenticated callers.
+// ---------------------------------------------------------------------------
+
+const QUERY_USER_WINDOW_MS = 60_000;
+const QUERY_USER_MAX = 20;
+const QUERY_IP_WINDOW_MS = 60_000;
+const QUERY_IP_MAX = 60;
+
+/** Hard ceiling on a single OpenAI call. Long enough for tool-calling rounds, short enough to free workers. */
+const QUERY_UPSTREAM_TIMEOUT_MS = 30_000;
 
 // ---------------------------------------------------------------------------
 // Tool schema
@@ -163,7 +187,13 @@ const TERRAIN_TOOLS: TerrainTool[] = [
 // Route
 // ---------------------------------------------------------------------------
 
-router.post("/query", async (req, res): Promise<void> => {
+router.post(
+  "/query",
+  stampBaselineRateLimitHeaders(QUERY_USER_MAX, QUERY_USER_WINDOW_MS),
+  requireAuth,
+  createRateLimit({ route: "query", windowMs: QUERY_USER_WINDOW_MS, max: QUERY_USER_MAX, mode: "user" }),
+  createRateLimit({ route: "query", windowMs: QUERY_IP_WINDOW_MS, max: QUERY_IP_MAX, mode: "ip" }),
+  async (req, res): Promise<void> => {
   const body = req.body as {
     query?: string;
     context?: {
@@ -222,15 +252,20 @@ router.post("/query", async (req, res): Promise<void> => {
   ];
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-5.1",
-      max_completion_tokens: 512,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      messages: messages as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tools: TERRAIN_TOOLS as any,
-      tool_choice: "auto",
-    });
+    const response = await openai.chat.completions.create(
+      {
+        model: "gpt-5.1",
+        max_completion_tokens: 512,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        messages: messages as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        tools: TERRAIN_TOOLS as any,
+        tool_choice: "auto",
+      },
+      // Hard upstream timeout so a stuck OpenAI request cannot pin a worker
+      // indefinitely. The SDK accepts an AbortSignal as the second-arg option.
+      { signal: AbortSignal.timeout(QUERY_UPSTREAM_TIMEOUT_MS) },
+    );
 
     const choice = response.choices[0];
     if (!choice) {
@@ -256,6 +291,7 @@ router.post("/query", async (req, res): Promise<void> => {
     console.error("[query] OpenAI error:", msg);
     res.status(502).json({ error: "llm_error", message: msg });
   }
-});
+},
+);
 
 export default router;
