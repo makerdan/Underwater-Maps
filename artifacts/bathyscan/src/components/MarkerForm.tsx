@@ -94,6 +94,27 @@ export const MarkerForm: React.FC = () => {
       return;
     }
 
+    const queueOffline = async () => {
+      const pendingKey = `pending-marker-${crypto.randomUUID()}`;
+      await idbSet(pendingKey, markerBody);
+      // Best-effort Background Sync registration
+      if ("serviceWorker" in navigator) {
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          if ("sync" in reg) {
+            await (reg as ServiceWorkerRegistration & { sync: { register: (tag: string) => Promise<void> } }).sync.register("sync-markers");
+          }
+        } catch {
+          // Background Sync not supported; online handler will retry
+        }
+      }
+      setSavedOffline(true);
+      setTimeout(() => {
+        setSavedOffline(false);
+        setMarkerFormOpen(false);
+      }, 1800);
+    };
+
     postMarkers.mutate(
       { data: markerBody },
       {
@@ -102,6 +123,15 @@ export const MarkerForm: React.FC = () => {
             queryKey: getGetMarkersQueryKey({ datasetId: terrain.datasetId }),
           });
           setMarkerFormOpen(false);
+        },
+        onError: (err) => {
+          // Queue to IndexedDB on any network-level failure
+          const isNetworkErr =
+            err instanceof TypeError ||
+            (err instanceof Error && /network|fetch|failed to fetch/i.test(err.message));
+          if (isNetworkErr) {
+            void queueOffline();
+          }
         },
       },
     );

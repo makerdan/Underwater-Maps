@@ -10,6 +10,7 @@ import { useGetDatasets } from "@workspace/api-client-react";
 import { AppProvider, useAppState } from "@/lib/context";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { TourScene } from "@/pages/TourScene";
+import { Settings } from "@/pages/Settings";
 import { HUD } from "@/components/HUD";
 import { DepthScaleBar } from "@/components/DepthScaleBar";
 import { DatasetPanel } from "@/components/DatasetPanel";
@@ -632,6 +633,7 @@ function ClerkProviderWithRoutes() {
       </QueryClientProvider>
       <Switch>
         <Route path="/" component={HomeRoute} />
+        <Route path="/settings" component={Settings} />
         <Route path="/sign-in/*?" component={SignInPage} />
         <Route path="/sign-up/*?" component={SignUpPage} />
       </Switch>

@@ -1,9 +1,13 @@
 import React from "react";
 import { useUser, useClerk } from "@clerk/react";
+import { useLocation } from "wouter";
+
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export function AppHeader() {
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
+  const [, setLocation] = useLocation();
 
   return (
     <header
@@ -19,6 +23,13 @@ export function AppHeader() {
           <span className="font-mono text-[#94a3b8] text-xs hidden sm:block">
             {user.primaryEmailAddress?.emailAddress ?? user.username ?? ""}
           </span>
+          <button
+            data-testid="settings-link"
+            onClick={() => setLocation(basePath + "/settings")}
+            className="font-mono text-[#475569] hover:text-[#94a3b8] text-xs tracking-wider uppercase transition-colors"
+          >
+            Settings
+          </button>
           <button
             onClick={() => signOut()}
             className="font-mono text-[#475569] hover:text-[#94a3b8] text-xs tracking-wider uppercase transition-colors"

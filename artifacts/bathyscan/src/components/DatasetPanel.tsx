@@ -55,6 +55,29 @@ export const DatasetPanel: React.FC = () => {
   const qc = useQueryClient();
   const isOnline = useOfflineStore((s) => s.isOnline);
 
+  // Track which dataset IDs are available in the service-worker cache
+  const [cachedIds, setCachedIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (isOnline || !("caches" in window)) return;
+    void (async () => {
+      const ids = new Set<string>();
+      try {
+        const names = await caches.keys();
+        for (const name of names) {
+          const cache = await caches.open(name);
+          const keys = await cache.keys();
+          for (const req of keys) {
+            const m = /\/datasets\/([^/]+)\/(terrain|overview)/.exec(req.url);
+            if (m?.[1]) ids.add(m[1]);
+          }
+        }
+      } catch {
+        // Cache Storage not available
+      }
+      setCachedIds(ids);
+    })();
+  }, [isOnline]);
+
   const [collapsed, setCollapsed] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -377,7 +400,7 @@ export const DatasetPanel: React.FC = () => {
                       style={{
                         fontSize: 11,
                         fontWeight: active ? 700 : 400,
-                        color: active ? "#00e5ff" : "#cbd5e1",
+                        color: active ? "#00e5ff" : !isOnline && !cachedIds.has(ds.id) ? "#334155" : "#cbd5e1",
                         textShadow: active ? "0 0 6px rgba(0,229,255,0.4)" : "none",
                       }}
                     >
@@ -386,6 +409,24 @@ export const DatasetPanel: React.FC = () => {
                     <span style={{ fontSize: 9, color: "#334155" }}>
                       {loading ? (
                         <span className="animate-pulse" style={{ color: "#00e5ff" }}>◌</span>
+                      ) : !isOnline ? (
+                        cachedIds.has(ds.id) ? (
+                          <span
+                            data-testid={`cache-badge-${ds.id}`}
+                            style={{ color: "#4ade80", letterSpacing: "0.1em" }}
+                            title="Available offline"
+                          >
+                            ✓
+                          </span>
+                        ) : (
+                          <span
+                            data-testid={`unavailable-badge-${ds.id}`}
+                            style={{ color: "#ef4444", letterSpacing: "0.1em" }}
+                            title="Not available offline"
+                          >
+                            ✗
+                          </span>
+                        )
                       ) : ds.waterType === "saltwater" ? "≋" : "~"}
                     </span>
                   </div>

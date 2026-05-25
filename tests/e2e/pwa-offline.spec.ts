@@ -15,7 +15,7 @@ import { test, expect } from "@playwright/test";
 const BASE = process.env.BASE_URL ?? "http://localhost:3150";
 
 test.describe("PWA manifest & meta tags", () => {
-  test("manifest.json is served", async ({ page }) => {
+  test("manifest.json is served with correct fields", async ({ page }) => {
     const res = await page.goto(`${BASE}/manifest.json`, { waitUntil: "domcontentloaded" });
     expect(res?.status()).toBe(200);
     const json = (await res?.json()) as Record<string, unknown>;
@@ -23,26 +23,35 @@ test.describe("PWA manifest & meta tags", () => {
     expect(json.display).toBe("standalone");
     expect(json.theme_color).toBe("#020818");
     expect(Array.isArray(json.icons)).toBe(true);
+    const icons = json.icons as Array<Record<string, unknown>>;
+    const sizes = icons.map((i) => i.sizes as string);
+    expect(sizes.some((s) => s.includes("192"))).toBe(true);
+    expect(sizes.some((s) => s.includes("512"))).toBe(true);
   });
 
-  test("index.html has manifest link and apple-mobile-web-app meta", async ({ page }) => {
+  test("index.html has manifest link, theme-color, and apple-mobile-web-app meta", async ({ page }) => {
     await page.goto(BASE, { waitUntil: "domcontentloaded" });
-    const manifestLink = await page.$('link[rel="manifest"]');
-    expect(manifestLink).not.toBeNull();
+    const manifestHref = await page.$eval('link[rel="manifest"]', (el) => el.getAttribute("href")).catch(() => null);
+    expect(manifestHref).not.toBeNull();
+
+    const themeColor = await page.$eval('meta[name="theme-color"]', (el) => el.getAttribute("content")).catch(() => null);
+    expect(themeColor).toBe("#020818");
+
     const appleCapable = await page.$('meta[name="apple-mobile-web-app-capable"]');
     expect(appleCapable).not.toBeNull();
-    const themeColor = await page.$('meta[name="theme-color"]');
-    expect(themeColor).not.toBeNull();
+
+    const appleTitle = await page.$('meta[name="apple-mobile-web-app-title"]');
+    expect(appleTitle).not.toBeNull();
   });
 
-  test("icon-192.png is served", async ({ page }) => {
+  test("icon-192.png is served as image/png", async ({ page }) => {
     const res = await page.goto(`${BASE}/icon-192.png`, { waitUntil: "domcontentloaded" });
     expect(res?.status()).toBe(200);
     const ct = res?.headers()["content-type"] ?? "";
     expect(ct).toMatch(/image\/png/);
   });
 
-  test("icon-512.png is served", async ({ page }) => {
+  test("icon-512.png is served as image/png", async ({ page }) => {
     const res = await page.goto(`${BASE}/icon-512.png`, { waitUntil: "domcontentloaded" });
     expect(res?.status()).toBe(200);
     const ct = res?.headers()["content-type"] ?? "";
@@ -51,7 +60,7 @@ test.describe("PWA manifest & meta tags", () => {
 });
 
 test.describe("Offline indicator & query panel", () => {
-  test("offline badge appears when navigator.onLine is forced offline", async ({ page }) => {
+  test("offline badge appears when offline event is dispatched", async ({ page }) => {
     await page.goto(BASE, { waitUntil: "domcontentloaded" });
 
     const canvas = await page.$("canvas");
@@ -60,13 +69,12 @@ test.describe("Offline indicator & query panel", () => {
       return;
     }
 
-    // Simulate going offline via the browser online/offline events
+    // Simulate going offline via browser events
     await page.evaluate(() => {
       Object.defineProperty(navigator, "onLine", { get: () => false, configurable: true });
       window.dispatchEvent(new Event("offline"));
     });
 
-    // Wait for the offline badge to appear in the HUD
     const badge = page.locator('[data-testid="offline-badge"]');
     await expect(badge).toBeVisible({ timeout: 3000 });
     await expect(badge).toContainText("OFFLINE");
@@ -89,13 +97,11 @@ test.describe("Offline indicator & query panel", () => {
       return;
     }
 
-    // Force offline
     await page.evaluate(() => {
       Object.defineProperty(navigator, "onLine", { get: () => false, configurable: true });
       window.dispatchEvent(new Event("offline"));
     });
 
-    // Open query panel
     const trigger = page.locator('[data-testid="query-panel-trigger"]');
     if (await trigger.isVisible()) {
       await trigger.click();
@@ -113,5 +119,42 @@ test.describe("Offline indicator & query panel", () => {
 
     const submitBtn = page.locator('[data-testid="query-submit"]');
     await expect(submitBtn).toBeDisabled();
+  });
+});
+
+test.describe("Offline network-abort scenario", () => {
+  test("offline badge appears when all API routes are blocked", async ({ page }) => {
+    // Let the page load first (without blocking)
+    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+
+    const canvas = await page.$("canvas");
+    if (!canvas) {
+      test.skip();
+      return;
+    }
+
+    // Block all API requests to simulate offline
+    await page.route("**/api/**", (route) => route.abort("failed"));
+
+    // Dispatch offline event to drive the store
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "onLine", { get: () => false, configurable: true });
+      window.dispatchEvent(new Event("offline"));
+    });
+
+    const badge = page.locator('[data-testid="offline-badge"]');
+    await expect(badge).toBeVisible({ timeout: 4000 });
+    await expect(badge).toContainText("OFFLINE");
+  });
+
+  test("Settings page is accessible and shows cache management UI", async ({ page }) => {
+    await page.goto(`${BASE}/settings`, { waitUntil: "domcontentloaded" });
+    // Settings page should render without crashing
+    const clearBtn = page.locator('[data-testid="clear-all-cache-btn"]');
+    await expect(clearBtn).toBeVisible({ timeout: 5000 });
+    await expect(clearBtn).toContainText("CLEAR ALL");
+    // Pending markers count is shown
+    const pendingCount = page.locator('[data-testid="pending-markers-count"]');
+    await expect(pendingCount).toBeVisible();
   });
 });
