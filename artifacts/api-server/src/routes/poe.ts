@@ -21,20 +21,88 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 30;
 const userRequestCounts = new Map<string, { count: number; resetAt: number }>();
 
-function checkRateLimit(userId: string): boolean {
+interface RateLimitState {
+  allowed: boolean;
+  remaining: number;
+  resetAt: number;
+}
+
+function consumeRateLimit(userId: string): RateLimitState {
   const now = Date.now();
   const entry = userRequestCounts.get(userId);
   if (!entry || now > entry.resetAt) {
-    userRequestCounts.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true;
+    const resetAt = now + RATE_LIMIT_WINDOW_MS;
+    userRequestCounts.set(userId, { count: 1, resetAt });
+    return { allowed: true, remaining: RATE_LIMIT_MAX - 1, resetAt };
   }
-  if (entry.count >= RATE_LIMIT_MAX) return false;
+  if (entry.count >= RATE_LIMIT_MAX) {
+    return { allowed: false, remaining: 0, resetAt: entry.resetAt };
+  }
   entry.count++;
-  return true;
+  return { allowed: true, remaining: RATE_LIMIT_MAX - entry.count, resetAt: entry.resetAt };
+}
+
+function setRateLimitHeaders(res: Response, state: RateLimitState): void {
+  res.setHeader("X-RateLimit-Limit", String(RATE_LIMIT_MAX));
+  res.setHeader("X-RateLimit-Remaining", String(Math.max(0, state.remaining)));
+  res.setHeader("X-RateLimit-Reset", String(Math.ceil(state.resetAt / 1000)));
+}
+
+/**
+ * Middleware: enforces per-user rate limit and sets X-RateLimit-* headers on
+ * every response (including 429s). Must run AFTER requireAuth so userId is real.
+ */
+function rateLimitMiddleware(req: Request, res: Response, next: NextFunction): void {
+  const userId = (req as unknown as { auth?: { userId?: string } }).auth?.userId;
+  if (!userId) {
+    res.status(401).json({ error: "unauthenticated", message: "Authentication required" });
+    return;
+  }
+  const state = consumeRateLimit(userId);
+  setRateLimitHeaders(res, state);
+  if (!state.allowed) {
+    const retryAfter = Math.max(1, Math.ceil((state.resetAt - Date.now()) / 1000));
+    res.setHeader("Retry-After", String(retryAfter));
+    res.status(429).json({
+      error: "rate_limit",
+      message: "Too many AI requests — please wait a moment",
+    });
+    return;
+  }
+  next();
 }
 
 // ---------------------------------------------------------------------------
-// Public: GET /models (no auth required)
+// Auth middleware — applied to ALL Poe routes (including /models)
+// Unauthenticated callers receive 401 before touching the Poe API.
+// ---------------------------------------------------------------------------
+
+function requireAuth(req: Request, res: Response, next: NextFunction): void {
+  const userId = (req as unknown as { auth?: { userId?: string } }).auth?.userId;
+  if (userId) {
+    next();
+    return;
+  }
+
+  // Emit baseline rate-limit headers on unauthenticated 401s so every Poe
+  // response carries them, per task acceptance criteria. We do NOT consume a
+  // bucket entry here (there is no userId to key on).
+  setRateLimitHeaders(res, {
+    allowed: true,
+    remaining: RATE_LIMIT_MAX,
+    resetAt: Date.now() + RATE_LIMIT_WINDOW_MS,
+  });
+  res.status(401).json({
+    error: "unauthenticated",
+    message: "Authentication required to use AI features",
+  });
+}
+
+router.use(requireAuth);
+router.use(rateLimitMiddleware);
+
+// ---------------------------------------------------------------------------
+// GET /models — Clerk-gated and rate-limited like the other Poe routes
 // ---------------------------------------------------------------------------
 
 let modelsCache: { data: unknown; expiresAt: number } | null = null;
@@ -56,34 +124,6 @@ router.get("/models", async (_req, res) => {
     res.status(502).json({ error: "models_unavailable", message: "Could not fetch Poe models list" });
   }
 });
-
-// ---------------------------------------------------------------------------
-// Auth middleware — applied to all routes below this point
-// ---------------------------------------------------------------------------
-
-function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  const userId = (req as unknown as { auth?: { userId?: string } }).auth?.userId;
-  if (userId) {
-    next();
-    return;
-  }
-
-  // In development, allow bypass via X-Dev-User-Id header (for testing before
-  // Clerk is installed). This header is ignored in production.
-  if (process.env["NODE_ENV"] !== "production") {
-    const devUserId = (req.headers["x-dev-user-id"] as string | undefined) ?? "dev-anonymous";
-    (req as unknown as { auth: { userId: string } }).auth = { userId: devUserId };
-    next();
-    return;
-  }
-
-  res.status(401).json({
-    error: "unauthenticated",
-    message: "Authentication required to use AI features",
-  });
-}
-
-router.use(requireAuth);
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -284,11 +324,6 @@ function buildClassifyZoneSchema(waterType: "saltwater" | "freshwater") {
 
 router.post("/classify", async (req, res) => {
   const userId = getAuthenticatedUserId(req);
-
-  if (!checkRateLimit(userId)) {
-    res.status(429).json({ error: "rate_limit", message: "Too many AI requests — please wait a moment" });
-    return;
-  }
 
   const { gridBase64, waterType = "saltwater", datasetId, gridHash } = req.body as {
     gridBase64: string;
@@ -523,11 +558,6 @@ type ResponsesOutputItem = {
 router.post("/query", async (req, res) => {
   const userId = getAuthenticatedUserId(req);
 
-  if (!checkRateLimit(userId)) {
-    res.status(429).json({ error: "rate_limit", message: "Too many AI requests" });
-    return;
-  }
-
   const { userMessage, context, history = [], previousResponseId, includeTools = true } = req.body as {
     userMessage: string;
     context?: Record<string, unknown>;
@@ -624,11 +654,6 @@ router.post("/query", async (req, res) => {
 
 router.post("/describe", async (req, res) => {
   const userId = getAuthenticatedUserId(req);
-
-  if (!checkRateLimit(userId)) {
-    res.status(429).json({ error: "rate_limit", message: "Too many AI requests" });
-    return;
-  }
 
   const { lon, lat, depth, zoneName, datasetName, waterType = "saltwater" } = req.body as {
     lon?: number;
