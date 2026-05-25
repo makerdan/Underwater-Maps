@@ -121,12 +121,25 @@ export const OverviewMap: React.FC = () => {
       await Promise.all(
         trailsData.map(async (trail) => {
           try {
-            const page = await getTrailsIdPoints({ id: trail.id, pageSize: 500 });
+            // Paginate through all points (up to 1000 per trail for map rendering)
+            const PAGE_SIZE = 500;
+            const MAX_PAGES = 2; // cap at 1000 points for overview rendering
+            const allPoints: { lon: number; lat: number }[] = [];
+            let currentPage = 1;
+            let hasMore = true;
+
+            while (hasMore && currentPage <= MAX_PAGES && !cancelled) {
+              const page = await getTrailsIdPoints({ id: trail.id, page: currentPage, pageSize: PAGE_SIZE });
+              allPoints.push(...page.points.map((p) => ({ lon: p.lon, lat: p.lat })));
+              hasMore = currentPage * PAGE_SIZE < page.total;
+              currentPage++;
+            }
+
             if (!cancelled) {
               results.push({
                 id: trail.id,
                 colour: trail.colour,
-                points: page.points.map((p) => ({ lon: p.lon, lat: p.lat })),
+                points: allPoints,
               });
             }
           } catch {
@@ -565,6 +578,7 @@ export const OverviewMap: React.FC = () => {
       {showTrailList && trailsData && trailsData.length > 0 && (
         <TrailListPanel
           trails={trailsData}
+          savedTrailsRef={savedTrailsRef}
           onDelete={(id) => deleteTrail.mutate({ id })}
           onClose={() => setShowTrailList(false)}
         />
@@ -599,18 +613,56 @@ export const OverviewMap: React.FC = () => {
 };
 
 // ---------------------------------------------------------------------------
-// TrailListPanel — shows saved trails with delete buttons
+// Haversine distance helper (km)
+// ---------------------------------------------------------------------------
+function haversineKm(
+  lat1: number, lon1: number,
+  lat2: number, lon2: number,
+): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ---------------------------------------------------------------------------
+// TrailListPanel — shows saved trails with Haversine distance + delete
 // ---------------------------------------------------------------------------
 interface TrailListPanelProps {
   trails: GpsTrail[];
+  savedTrailsRef: React.RefObject<CanvasSavedTrail[]>;
   onDelete: (id: string) => void;
   onClose: () => void;
 }
 
-const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, onDelete, onClose }) => {
+const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef, onDelete, onClose }) => {
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+
   const MONO: React.CSSProperties = {
     fontFamily: "'JetBrains Mono', monospace",
     fontSize: 10,
+  };
+
+  const selectedTrail = selectedId ? trails.find((t) => t.id === selectedId) : null;
+  const selectedCanvas = selectedId
+    ? savedTrailsRef.current.find((t) => t.id === selectedId)
+    : undefined;
+
+  // Compute Haversine distance for a trail
+  const computeDistanceKm = (canvasTrail: CanvasSavedTrail | undefined): number | null => {
+    if (!canvasTrail || canvasTrail.points.length < 2) return null;
+    let dist = 0;
+    for (let i = 1; i < canvasTrail.points.length; i++) {
+      const prev = canvasTrail.points[i - 1]!;
+      const curr = canvasTrail.points[i]!;
+      dist += haversineKm(prev.lat, prev.lon, curr.lat, curr.lon);
+    }
+    return dist;
   };
 
   return (
@@ -619,8 +671,8 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, onDelete, onClo
         position: "absolute",
         top: 44,
         right: 16,
-        width: 280,
-        maxHeight: "60vh",
+        width: 300,
+        maxHeight: "65vh",
         overflowY: "auto",
         background: "rgba(2,8,24,0.92)",
         border: "1px solid rgba(0,229,255,0.15)",
@@ -639,7 +691,19 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, onDelete, onClo
           borderBottom: "1px solid rgba(0,229,255,0.1)",
         }}
       >
-        <span style={{ ...MONO, letterSpacing: "0.15em", color: "#fb923c" }}>SAVED TRAILS</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {selectedTrail && (
+            <button
+              onClick={() => setSelectedId(null)}
+              style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 12, padding: 0 }}
+            >
+              ←
+            </button>
+          )}
+          <span style={{ ...MONO, letterSpacing: "0.15em", color: "#fb923c" }}>
+            {selectedTrail ? selectedTrail.name.toUpperCase().slice(0, 22) : "SAVED TRAILS"}
+          </span>
+        </div>
         <button
           onClick={onClose}
           style={{
@@ -656,82 +720,149 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, onDelete, onClo
         </button>
       </div>
 
-      {/* Trail rows */}
-      {trails.map((trail) => {
-        const start = new Date(trail.startedAt).toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-        });
-        const durationMs =
-          new Date(trail.endedAt).getTime() - new Date(trail.startedAt).getTime();
-        const durationMin = Math.round(durationMs / 60_000);
+      {/* Detail view */}
+      {selectedTrail ? (
+        <div style={{ padding: "10px 12px" }}>
+          <div style={{ ...MONO, color: "#e2e8f0", marginBottom: 8 }}>{selectedTrail.name}</div>
 
-        return (
-          <div
-            key={trail.id}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 12px" }}>
+            {[
+              {
+                label: "START",
+                value: new Date(selectedTrail.startedAt).toLocaleString(undefined, {
+                  month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+                }),
+              },
+              {
+                label: "END",
+                value: new Date(selectedTrail.endedAt).toLocaleString(undefined, {
+                  month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+                }),
+              },
+              {
+                label: "DURATION",
+                value: (() => {
+                  const ms = new Date(selectedTrail.endedAt).getTime() - new Date(selectedTrail.startedAt).getTime();
+                  const m = Math.floor(ms / 60_000);
+                  const h = Math.floor(m / 60);
+                  return h > 0 ? `${h}h ${m % 60}m` : `${m} min`;
+                })(),
+              },
+              { label: "POINTS", value: String(selectedTrail.pointCount) },
+              {
+                label: "DISTANCE",
+                value: (() => {
+                  const km = computeDistanceKm(selectedCanvas);
+                  if (km === null) return "—";
+                  return km >= 1 ? `${km.toFixed(2)} km` : `${Math.round(km * 1000)} m`;
+                })(),
+              },
+              {
+                label: "COLOUR",
+                value: (
+                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: selectedTrail.colour, display: "inline-block" }} />
+                    {selectedTrail.colour}
+                  </span>
+                ),
+              },
+            ].map(({ label, value }) => (
+              <div key={label}>
+                <div style={{ ...MONO, fontSize: 9, color: "#475569", marginBottom: 1 }}>{label}</div>
+                <div style={{ ...MONO, color: "#94a3b8" }}>{value as React.ReactNode}</div>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={() => {
+              if (confirm(`Delete trail "${selectedTrail.name}"?`)) {
+                onDelete(selectedTrail.id);
+                setSelectedId(null);
+              }
+            }}
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "7px 12px",
-              borderBottom: "1px solid rgba(255,255,255,0.04)",
+              marginTop: 12,
+              width: "100%",
+              background: "rgba(239,68,68,0.1)",
+              border: "1px solid rgba(239,68,68,0.3)",
+              borderRadius: 3,
+              color: "#ef4444",
+              cursor: "pointer",
+              fontSize: 10,
+              padding: "5px 10px",
+              fontFamily: "'JetBrains Mono', monospace",
+              letterSpacing: "0.1em",
             }}
           >
-            {/* Colour swatch */}
-            <div
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: "50%",
-                background: trail.colour,
-                flexShrink: 0,
-              }}
-            />
+            ✕ DELETE TRAIL
+          </button>
+        </div>
+      ) : (
+        /* Trail list */
+        trails.map((trail) => {
+          const canvasTrail = savedTrailsRef.current.find((t) => t.id === trail.id);
+          const durationMs =
+            new Date(trail.endedAt).getTime() - new Date(trail.startedAt).getTime();
+          const durationMin = Math.round(durationMs / 60_000);
+          const distKm = computeDistanceKm(canvasTrail);
 
-            {/* Info */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div
-                style={{
-                  ...MONO,
-                  color: "#e2e8f0",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {trail.name}
-              </div>
-              <div style={{ ...MONO, fontSize: 9, color: "#475569", marginTop: 2 }}>
-                {start} · {trail.pointCount} pts
-                {durationMin > 0 ? ` · ${durationMin} min` : ""}
-              </div>
-            </div>
-
-            {/* Delete */}
+          return (
             <button
-              onClick={() => {
-                if (confirm(`Delete trail "${trail.name}"?`)) {
-                  onDelete(trail.id);
-                }
-              }}
-              title="Delete trail"
+              key={trail.id}
+              onClick={() => setSelectedId(trail.id)}
               style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "7px 12px",
+                width: "100%",
                 background: "none",
-                border: "1px solid rgba(239,68,68,0.3)",
-                borderRadius: 3,
-                color: "#ef4444",
+                border: "none",
+                borderBottom: "1px solid rgba(255,255,255,0.04)",
                 cursor: "pointer",
-                fontSize: 10,
-                padding: "1px 6px",
-                lineHeight: "16px",
-                flexShrink: 0,
+                textAlign: "left",
               }}
             >
-              ✕
+              {/* Colour swatch */}
+              <div
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: "50%",
+                  background: trail.colour,
+                  flexShrink: 0,
+                }}
+              />
+
+              {/* Info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    ...MONO,
+                    color: "#e2e8f0",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {trail.name}
+                </div>
+                <div style={{ ...MONO, fontSize: 9, color: "#475569", marginTop: 2 }}>
+                  {trail.pointCount} pts
+                  {durationMin > 0 ? ` · ${durationMin} min` : ""}
+                  {distKm !== null
+                    ? ` · ${distKm >= 1 ? `${distKm.toFixed(1)} km` : `${Math.round(distKm * 1000)} m`}`
+                    : ""}
+                </div>
+              </div>
+
+              {/* Arrow */}
+              <span style={{ color: "#334155", fontSize: 11 }}>›</span>
             </button>
-          </div>
-        );
-      })}
+          );
+        })
+      )}
     </div>
   );
 };

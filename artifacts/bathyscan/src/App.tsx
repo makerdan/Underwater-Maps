@@ -234,9 +234,10 @@ function Main() {
       }
     };
 
-    window.addEventListener("online", () => void flushPendingTrails());
+    const onlineHandler = () => void flushPendingTrails();
+    window.addEventListener("online", onlineHandler);
     void flushPendingTrails();
-    return () => window.removeEventListener("online", () => void flushPendingTrails());
+    return () => window.removeEventListener("online", onlineHandler);
   }, []);
 
   // O key — toggle overview map

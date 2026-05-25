@@ -1,6 +1,10 @@
 import React from "react";
 import { SPEEDS } from "@/lib/context";
 import { useCameraStore } from "@/lib/cameraStore";
+import { useGpsStore } from "@/lib/gpsStore";
+import { useUiStore } from "@/lib/uiStore";
+import { useTerrainStore } from "@/lib/terrainStore";
+import { lonLatToWorldXZ } from "@/lib/terrain";
 
 const HUD_STYLE: React.CSSProperties = {
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
@@ -49,8 +53,29 @@ export const HUD: React.FC = () => {
   const mode = useCameraStore((s) => s.mode);
   const speedIndex = useCameraStore((s) => s.speedIndex);
 
+  const gpsActive = useGpsStore((s) => s.active);
+  const gpsPosition = useGpsStore((s) => s.position);
+  const overviewGrid = useTerrainStore((s) => s.overviewGrid);
+
   const speed = SPEEDS[speedIndex] ?? 0.15;
   const isFly = mode === "fly";
+
+  // Check if GPS position is within the current terrain grid
+  const gpsInBounds = gpsActive && gpsPosition && overviewGrid &&
+    gpsPosition.latitude >= overviewGrid.minLat &&
+    gpsPosition.latitude <= overviewGrid.maxLat &&
+    gpsPosition.longitude >= overviewGrid.minLon &&
+    gpsPosition.longitude <= overviewGrid.maxLon;
+
+  const handleDiveToGps = () => {
+    if (!gpsPosition || !overviewGrid) return;
+    const { x: worldX, z: worldZ } = lonLatToWorldXZ(
+      gpsPosition.longitude,
+      gpsPosition.latitude,
+      overviewGrid,
+    );
+    useUiStore.getState().setPendingDropIn({ worldX, worldZ });
+  };
 
   return (
     <div
@@ -58,7 +83,7 @@ export const HUD: React.FC = () => {
       style={{ ...HUD_STYLE, fontSize: 11, userSelect: "none" }}
     >
       {/* ── Top-left: mode + heading ── */}
-      <div className="absolute top-3 left-3 flex items-center gap-2">
+      <div className="hud-top-left absolute top-3 left-3 flex items-center gap-2">
         <div
           style={{
             ...PANEL,
@@ -79,6 +104,28 @@ export const HUD: React.FC = () => {
           <span style={{ color: "#475569" }}>HDG </span>
           <span style={CYAN}>{Math.round(heading).toString().padStart(3, "0")}°</span>
         </div>
+
+        {/* GPS dive button in HUD */}
+        {gpsInBounds && (
+          <button
+            onClick={handleDiveToGps}
+            style={{
+              ...PANEL,
+              pointerEvents: "auto",
+              background: "rgba(59,130,246,0.12)",
+              border: "1px solid rgba(59,130,246,0.4)",
+              color: "#60a5fa",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10,
+              padding: "4px 10px",
+              borderRadius: 4,
+              cursor: "pointer",
+              letterSpacing: "0.1em",
+            }}
+          >
+            📍 DIVE TO GPS
+          </button>
+        )}
       </div>
 
       {/* ── Centre: crosshair + GPS ── */}

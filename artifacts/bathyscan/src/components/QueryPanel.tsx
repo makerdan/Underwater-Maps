@@ -143,6 +143,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
   return (
     <div
       data-testid="query-panel"
+      className="query-panel"
       style={{
         position: "absolute",
         bottom: 0,

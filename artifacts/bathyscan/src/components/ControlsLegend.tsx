@@ -16,7 +16,7 @@ export const ControlsLegend: React.FC = () => {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="relative pointer-events-auto select-none">
+    <div className="controls-legend relative pointer-events-auto select-none">
       {open && (
         <div
           className="absolute bottom-10 left-0 w-64 rounded border text-xs font-mono z-30 p-3 space-y-1.5"

@@ -2,6 +2,7 @@
  * TrailRecorder — floating UI for recording GPS trails.
  *
  * Shows: record/stop button, elapsed time, point count, offline notice.
+ * Sampling interval is user-configurable (5 s – 60 s).
  * On stop: saves trail to server (or buffers to localStorage if offline).
  */
 import React, { useEffect, useState } from "react";
@@ -16,6 +17,14 @@ const FONT: React.CSSProperties = {
 };
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+// Configurable sampling intervals (ms)
+const INTERVALS = [
+  { label: "5 s", ms: 5_000 },
+  { label: "10 s", ms: 10_000 },
+  { label: "30 s", ms: 30_000 },
+  { label: "60 s", ms: 60_000 },
+];
 
 async function saveTrailToServer(
   datasetId: string,
@@ -71,6 +80,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [trailName, setTrailName] = useState("");
+  const [intervalIdx, setIntervalIdx] = useState(1); // default 10 s
 
   // Elapsed timer
   useEffect(() => {
@@ -118,8 +128,10 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
     borderRadius: 4,
     padding: "8px 12px",
     backdropFilter: "blur(6px)",
-    minWidth: 180,
+    minWidth: 190,
   };
+
+  const selectedInterval = INTERVALS[intervalIdx] ?? INTERVALS[1]!;
 
   return (
     <div style={{ ...FONT, ...PANEL }}>
@@ -148,8 +160,34 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
               marginBottom: 6,
             }}
           />
+
+          {/* Sampling interval selector */}
+          <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
+            <span style={{ color: "#475569", fontSize: 9 }}>INTERVAL</span>
+            <div style={{ display: "flex", gap: 3, marginLeft: 4 }}>
+              {INTERVALS.map((iv, i) => (
+                <button
+                  key={iv.ms}
+                  onClick={() => setIntervalIdx(i)}
+                  style={{
+                    background: intervalIdx === i ? "rgba(0,229,255,0.15)" : "none",
+                    border: `1px solid ${intervalIdx === i ? "rgba(0,229,255,0.5)" : "rgba(0,229,255,0.1)"}`,
+                    borderRadius: 2,
+                    color: intervalIdx === i ? "#00e5ff" : "#475569",
+                    fontSize: 9,
+                    padding: "1px 5px",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  {iv.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <button
-            onClick={() => startRecording(10_000)}
+            onClick={() => startRecording(selectedInterval.ms)}
             style={{
               background: "rgba(239,68,68,0.15)",
               border: "1px solid rgba(239,68,68,0.5)",
@@ -168,9 +206,12 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
         </>
       ) : (
         <>
-          <div style={{ display: "flex", gap: 16, marginBottom: 6, color: "#94a3b8" }}>
+          <div style={{ display: "flex", gap: 16, marginBottom: 2, color: "#94a3b8" }}>
             <span><span style={{ color: "#ef4444" }}>⏺ </span>{fmtElapsed(elapsed)}</span>
             <span>{currentPoints.length} pts</span>
+          </div>
+          <div style={{ fontSize: 9, color: "#475569", marginBottom: 6 }}>
+            every {selectedInterval.label}
           </div>
           <button
             onClick={() => void handleStop()}

@@ -76,9 +76,13 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   }, [terrain, resetCamera]);
 
   // ---------------------------------------------------------------------------
-  // Pointer lock
+  // Pointer lock (desktop only — touch devices use VirtualJoystick instead)
   // ---------------------------------------------------------------------------
+  const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+
   useEffect(() => {
+    if (isTouchDevice) return; // no pointer lock on mobile
+
     const canvas = gl.domElement;
 
     const handleClick = () => {
@@ -98,7 +102,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       canvas.removeEventListener("click", handleClick);
       document.removeEventListener("pointerlockchange", handlePointerLockChange);
     };
-  }, [gl.domElement]);
+  }, [gl.domElement, isTouchDevice]);
 
   // ---------------------------------------------------------------------------
   // Keyboard / mouse / wheel listeners

@@ -333,7 +333,7 @@ export const DatasetPanel: React.FC = () => {
   const anyLoading = datasetsLoading || userDatasetsLoading;
 
   return (
-    <div style={{ ...PANEL, pointerEvents: "auto" }} className="select-none">
+    <div style={{ ...PANEL, pointerEvents: "auto" }} className="dataset-panel select-none">
       {/* Header */}
       <button
         onClick={() => setCollapsed((c) => !c)}
