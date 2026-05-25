@@ -113,4 +113,30 @@ describe("Settings page", () => {
     render(<Settings />);
     expect(screen.getByTestId("reset-all-btn")).toBeInTheDocument();
   });
+
+  it("exposes mouse / touchpad / pinch zoom sensitivity sliders defaulting to 1×", () => {
+    render(<Settings />);
+    fireEvent.click(screen.getByText("CAMERA & CTRL"));
+    expect(screen.getByText("Mouse Wheel Zoom Sensitivity")).toBeInTheDocument();
+    expect(screen.getByText("Touchpad Zoom Sensitivity")).toBeInTheDocument();
+    expect(screen.getByText("Mobile Pinch Zoom Sensitivity")).toBeInTheDocument();
+    const s = useSettingsStore.getState();
+    expect(s.mouseZoomSensitivity).toBe(1.0);
+    expect(s.touchpadZoomSensitivity).toBe(1.0);
+    expect(s.pinchZoomSensitivity).toBe(1.0);
+  });
+
+  it("setters and resetSection('camera') update / restore zoom sensitivities", () => {
+    const s = useSettingsStore.getState();
+    s.setMouseZoomSensitivity(2.5);
+    s.setTouchpadZoomSensitivity(0.3);
+    s.setPinchZoomSensitivity(1.8);
+    expect(useSettingsStore.getState().mouseZoomSensitivity).toBe(2.5);
+    expect(useSettingsStore.getState().touchpadZoomSensitivity).toBe(0.3);
+    expect(useSettingsStore.getState().pinchZoomSensitivity).toBe(1.8);
+    useSettingsStore.getState().resetSection("camera");
+    expect(useSettingsStore.getState().mouseZoomSensitivity).toBe(1.0);
+    expect(useSettingsStore.getState().touchpadZoomSensitivity).toBe(1.0);
+    expect(useSettingsStore.getState().pinchZoomSensitivity).toBe(1.0);
+  });
 });

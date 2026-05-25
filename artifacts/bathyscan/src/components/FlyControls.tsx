@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useAppState, SPEEDS } from "@/lib/context";
+import { useSettingsStore } from "@/lib/settingsStore";
+import { computeWheelDolly, computePinchDolly } from "@/lib/zoomMath";
 
 /**
  * Legacy fly-control component used by TerrainScene.
@@ -14,8 +16,19 @@ export const FlyControls = () => {
   const keys = useRef<Record<string, boolean>>({});
   const isPointerLocked = useRef(false);
   const euler = useRef(new THREE.Euler(0, 0, 0, "YXZ"));
+  const lookDir = useRef(new THREE.Vector3());
   const speedIndexRef = useRef(speedIndex);
   useEffect(() => { speedIndexRef.current = speedIndex; }, [speedIndex]);
+
+  const mouseZoomSensitivity = useSettingsStore((s) => s.mouseZoomSensitivity);
+  const touchpadZoomSensitivity = useSettingsStore((s) => s.touchpadZoomSensitivity);
+  const pinchZoomSensitivity = useSettingsStore((s) => s.pinchZoomSensitivity);
+  const mouseZoomSensRef = useRef(mouseZoomSensitivity);
+  const touchpadZoomSensRef = useRef(touchpadZoomSensitivity);
+  const pinchZoomSensRef = useRef(pinchZoomSensitivity);
+  useEffect(() => { mouseZoomSensRef.current = mouseZoomSensitivity; }, [mouseZoomSensitivity]);
+  useEffect(() => { touchpadZoomSensRef.current = touchpadZoomSensitivity; }, [touchpadZoomSensitivity]);
+  useEffect(() => { pinchZoomSensRef.current = pinchZoomSensitivity; }, [pinchZoomSensitivity]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -23,6 +36,19 @@ export const FlyControls = () => {
       if (e.code === "Tab") {
         e.preventDefault();
         setMode(mode === "fly" ? "orbit" : "fly");
+        return;
+      }
+      if (mode === "fly") {
+        if (e.code === "Equal" || e.code === "NumpadAdd") {
+          e.preventDefault();
+          setSpeedIndex(Math.min(SPEEDS.length - 1, speedIndexRef.current + 1));
+          return;
+        }
+        if (e.code === "Minus" || e.code === "NumpadSubtract") {
+          e.preventDefault();
+          setSpeedIndex(Math.max(0, speedIndexRef.current - 1));
+          return;
+        }
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
@@ -50,11 +76,52 @@ export const FlyControls = () => {
     };
 
     const onWheel = (e: WheelEvent) => {
-      if (e.deltaY > 0) {
-        setSpeedIndex(Math.min(SPEEDS.length - 1, speedIndexRef.current + 1));
-      } else {
-        setSpeedIndex(Math.max(0, speedIndexRef.current - 1));
+      if (mode !== "fly") return;
+      if (e.shiftKey) {
+        if (e.deltaY > 0) {
+          setSpeedIndex(Math.min(SPEEDS.length - 1, speedIndexRef.current + 1));
+        } else {
+          setSpeedIndex(Math.max(0, speedIndexRef.current - 1));
+        }
+        return;
       }
+      const dolly = computeWheelDolly(
+        e.deltaY,
+        e.deltaMode,
+        mouseZoomSensRef.current,
+        touchpadZoomSensRef.current,
+      );
+      camera.getWorldDirection(lookDir.current);
+      camera.position.addScaledVector(lookDir.current, dolly);
+    };
+
+    const activePointers = new Map<number, { x: number; y: number }>();
+    let lastPinchDist = 0;
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") return;
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (activePointers.size === 2) {
+        const pts = Array.from(activePointers.values());
+        lastPinchDist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
+      }
+    };
+    const onPointerMove2 = (e: PointerEvent) => {
+      if (e.pointerType !== "touch" || !activePointers.has(e.pointerId)) return;
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (activePointers.size === 2 && mode === "fly") {
+        const pts = Array.from(activePointers.values());
+        const dist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
+        const delta = dist - lastPinchDist;
+        lastPinchDist = dist;
+        const dolly = computePinchDolly(delta, pinchZoomSensRef.current);
+        camera.getWorldDirection(lookDir.current);
+        camera.position.addScaledVector(lookDir.current, dolly);
+      }
+    };
+    const onPointerUp2 = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") return;
+      activePointers.delete(e.pointerId);
+      lastPinchDist = 0;
     };
 
     window.addEventListener("keydown", onKeyDown);
@@ -63,6 +130,10 @@ export const FlyControls = () => {
     window.addEventListener("mouseup", onMouseUp);
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("wheel", onWheel);
+    gl.domElement.addEventListener("pointerdown", onPointerDown);
+    gl.domElement.addEventListener("pointermove", onPointerMove2);
+    gl.domElement.addEventListener("pointerup", onPointerUp2);
+    gl.domElement.addEventListener("pointercancel", onPointerUp2);
 
     return () => {
       window.removeEventListener("keydown", onKeyDown);
@@ -71,6 +142,10 @@ export const FlyControls = () => {
       window.removeEventListener("mouseup", onMouseUp);
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("wheel", onWheel);
+      gl.domElement.removeEventListener("pointerdown", onPointerDown);
+      gl.domElement.removeEventListener("pointermove", onPointerMove2);
+      gl.domElement.removeEventListener("pointerup", onPointerUp2);
+      gl.domElement.removeEventListener("pointercancel", onPointerUp2);
     };
   }, [camera, gl.domElement, mode, setMode, setSpeedIndex]);
 

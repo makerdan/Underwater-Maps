@@ -21,6 +21,7 @@ import { useClassificationStore } from "@/lib/classificationStore";
 import { useMarkerDetailStore } from "@/lib/markerDetailStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { haversineDistance } from "@/lib/geo";
+import { computeWheelDolly, computePinchDolly } from "@/lib/zoomMath";
 
 function copyToClipboard(text: string): void {
   if (typeof navigator === "undefined" || !navigator.clipboard) return;
@@ -53,10 +54,19 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   // Settings: sensitivity and invert-Y for mouse look
   const mouseSensitivity = useSettingsStore((s) => s.mouseSensitivity);
   const invertMouseY = useSettingsStore((s) => s.invertMouseY);
+  const mouseZoomSensitivity = useSettingsStore((s) => s.mouseZoomSensitivity);
+  const touchpadZoomSensitivity = useSettingsStore((s) => s.touchpadZoomSensitivity);
+  const pinchZoomSensitivity = useSettingsStore((s) => s.pinchZoomSensitivity);
   const sensitivityRef = useRef(mouseSensitivity);
   const invertMouseYRef = useRef(invertMouseY);
+  const mouseZoomSensRef = useRef(mouseZoomSensitivity);
+  const touchpadZoomSensRef = useRef(touchpadZoomSensitivity);
+  const pinchZoomSensRef = useRef(pinchZoomSensitivity);
   useEffect(() => { sensitivityRef.current = mouseSensitivity; }, [mouseSensitivity]);
   useEffect(() => { invertMouseYRef.current = invertMouseY; }, [invertMouseY]);
+  useEffect(() => { mouseZoomSensRef.current = mouseZoomSensitivity; }, [mouseZoomSensitivity]);
+  useEffect(() => { touchpadZoomSensRef.current = touchpadZoomSensitivity; }, [touchpadZoomSensitivity]);
+  useEffect(() => { pinchZoomSensRef.current = pinchZoomSensitivity; }, [pinchZoomSensitivity]);
 
   // Refs for event-listener / useFrame closures to stay current
   const modeRef = useRef(mode);
@@ -200,6 +210,20 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         return;
       }
 
+      // +/= : speed tier up, -/_ : speed tier down (fly mode, not realistic)
+      if (modeRef.current === "fly" && !realisticModeRef.current) {
+        if (e.code === "Equal" || e.code === "NumpadAdd") {
+          e.preventDefault();
+          setSpeedIndex(Math.min(SPEEDS.length - 1, speedIndexRef.current + 1));
+          return;
+        }
+        if (e.code === "Minus" || e.code === "NumpadSubtract") {
+          e.preventDefault();
+          setSpeedIndex(Math.max(0, speedIndexRef.current - 1));
+          return;
+        }
+      }
+
       // G: pin GPS and open marker form
       if (e.code === "KeyG") {
         const gps = useCameraStore.getState().crosshairGps;
@@ -230,13 +254,65 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
     };
 
     const handleWheel = (e: WheelEvent) => {
+      // Only handle wheel in fly mode; orbit mode is owned by MapControls
+      // (which has its own internal wheel handler). Touching the event in
+      // orbit mode would cause double-zoom and prevent MapControls from
+      // processing it.
+      if (modeRef.current !== "fly") return;
       e.preventDefault();
-      if (realisticModeRef.current) return;
-      if (e.deltaY > 0) {
-        setSpeedIndex(Math.min(SPEEDS.length - 1, speedIndexRef.current + 1));
-      } else {
-        setSpeedIndex(Math.max(0, speedIndexRef.current - 1));
+      // Shift+wheel → step speed tier (fly mode, non-realistic only)
+      if (e.shiftKey) {
+        if (realisticModeRef.current) return;
+        if (e.deltaY > 0) {
+          setSpeedIndex(Math.min(SPEEDS.length - 1, speedIndexRef.current + 1));
+        } else {
+          setSpeedIndex(Math.max(0, speedIndexRef.current - 1));
+        }
+        return;
       }
+      // Plain wheel → dolly camera along view direction.
+      const dolly = computeWheelDolly(
+        e.deltaY,
+        e.deltaMode,
+        mouseZoomSensRef.current,
+        touchpadZoomSensRef.current,
+      );
+      camera.getWorldDirection(lookDir.current);
+      camera.position.addScaledVector(lookDir.current, dolly);
+    };
+
+    // ─── Pinch-to-zoom (fly mode only; orbit MapControls handles its own) ───
+    const activePointers = new Map<number, { x: number; y: number }>();
+    let lastPinchDist = 0;
+
+    const handlePointerDown = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") return;
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (activePointers.size === 2) {
+        const pts = Array.from(activePointers.values());
+        lastPinchDist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
+      }
+    };
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") return;
+      if (!activePointers.has(e.pointerId)) return;
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (activePointers.size === 2 && modeRef.current === "fly") {
+        const pts = Array.from(activePointers.values());
+        const dist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
+        const delta = dist - lastPinchDist;
+        lastPinchDist = dist;
+        const dolly = computePinchDolly(delta, pinchZoomSensRef.current);
+        camera.getWorldDirection(lookDir.current);
+        camera.position.addScaledVector(lookDir.current, dolly);
+      }
+    };
+
+    const handlePointerUp = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") return;
+      activePointers.delete(e.pointerId);
+      lastPinchDist = 0;
     };
 
     const buildTerrainMenuItems = (
@@ -447,6 +523,10 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
     document.addEventListener("mousemove", handleMouseMove);
     gl.domElement.addEventListener("wheel", handleWheel, { passive: false });
     gl.domElement.addEventListener("contextmenu", handleContextMenu);
+    gl.domElement.addEventListener("pointerdown", handlePointerDown);
+    gl.domElement.addEventListener("pointermove", handlePointerMove);
+    gl.domElement.addEventListener("pointerup", handlePointerUp);
+    gl.domElement.addEventListener("pointercancel", handlePointerUp);
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
@@ -454,6 +534,10 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       document.removeEventListener("mousemove", handleMouseMove);
       gl.domElement.removeEventListener("wheel", handleWheel);
       gl.domElement.removeEventListener("contextmenu", handleContextMenu);
+      gl.domElement.removeEventListener("pointerdown", handlePointerDown);
+      gl.domElement.removeEventListener("pointermove", handlePointerMove);
+      gl.domElement.removeEventListener("pointerup", handlePointerUp);
+      gl.domElement.removeEventListener("pointercancel", handlePointerUp);
     };
   }, [camera, gl.domElement, setMode, setSpeedIndex, terrainMeshRef, queryClient]);
 

@@ -12,7 +12,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export const SETTINGS_SCHEMA_VERSION = 2;
+export const SETTINGS_SCHEMA_VERSION = 3;
 
 export interface DatasetHomePosition {
   lon: number;
@@ -62,6 +62,9 @@ export interface SettingsState {
   defaultSpeedTier: number;
   mouseSensitivity: number;
   invertMouseY: boolean;
+  mouseZoomSensitivity: number;
+  touchpadZoomSensitivity: number;
+  pinchZoomSensitivity: number;
   joystickMode: JoystickMode;
   fieldOfView: number;
   renderDistance: number;
@@ -158,6 +161,9 @@ interface SettingsActions {
   setDefaultSpeedTier: (v: number) => void;
   setMouseSensitivity: (v: number) => void;
   setInvertMouseY: (v: boolean) => void;
+  setMouseZoomSensitivity: (v: number) => void;
+  setTouchpadZoomSensitivity: (v: number) => void;
+  setPinchZoomSensitivity: (v: number) => void;
   setJoystickMode: (v: JoystickMode) => void;
   setFieldOfView: (v: number) => void;
   setRenderDistance: (v: number) => void;
@@ -348,6 +354,9 @@ export const DEFAULT_SETTINGS: SettingsState = {
   defaultSpeedTier: 2,
   mouseSensitivity: 1.0,
   invertMouseY: false,
+  mouseZoomSensitivity: 1.0,
+  touchpadZoomSensitivity: 1.0,
+  pinchZoomSensitivity: 1.0,
   joystickMode: "auto",
   fieldOfView: 45,
   renderDistance: 400,
@@ -439,6 +448,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
 const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   camera: [
     "defaultNavMode", "defaultSpeedTier", "mouseSensitivity", "invertMouseY",
+    "mouseZoomSensitivity", "touchpadZoomSensitivity", "pinchZoomSensitivity",
     "joystickMode", "fieldOfView", "renderDistance", "cameraSpawnBehaviour",
   ],
   visuals: [
@@ -487,6 +497,9 @@ export const useSettingsStore = create<SettingsStore>()(
         setDefaultSpeedTier: setter("defaultSpeedTier"),
         setMouseSensitivity: setter("mouseSensitivity"),
         setInvertMouseY: setter("invertMouseY"),
+        setMouseZoomSensitivity: setter("mouseZoomSensitivity"),
+        setTouchpadZoomSensitivity: setter("touchpadZoomSensitivity"),
+        setPinchZoomSensitivity: setter("pinchZoomSensitivity"),
         setJoystickMode: setter("joystickMode"),
         setFieldOfView: setter("fieldOfView"),
         setRenderDistance: setter("renderDistance"),

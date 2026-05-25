@@ -42,6 +42,29 @@ const FlyControlsScene: React.FC<FlyControlsSceneProps> = ({ terrainMeshRef }) =
   const { orbitTargetArr } = useFlyControls({ terrainMeshRef, lightRef });
   const lampIntensity = useSettingsStore((s) => s.lampIntensity);
   const waterType = useSettingsStore((s) => s.waterType);
+  const mouseZoomSensitivity = useSettingsStore((s) => s.mouseZoomSensitivity);
+  const touchpadZoomSensitivity = useSettingsStore((s) => s.touchpadZoomSensitivity);
+  const orbitControlsRef = useRef<{ zoomSpeed: number } | null>(null);
+  const { gl } = useThree();
+
+  // Orbit mode: classify each wheel event (mouse notch vs trackpad swipe) and
+  // mutate the live MapControls.zoomSpeed BEFORE MapControls' own wheel handler
+  // runs, so touchpad and mouse can be tuned independently. We use the capture
+  // phase so we win the race against MapControls' bubble-phase listener.
+  useEffect(() => {
+    if (mode !== "orbit") return;
+    const el = gl.domElement;
+    const onWheel = (e: WheelEvent) => {
+      const ctrl = orbitControlsRef.current;
+      if (!ctrl) return;
+      const isTouchpad = e.deltaMode === 0 && Math.abs(e.deltaY) < 50;
+      ctrl.zoomSpeed = isTouchpad ? touchpadZoomSensitivity : mouseZoomSensitivity;
+    };
+    el.addEventListener("wheel", onWheel, { capture: true, passive: true });
+    return () => {
+      el.removeEventListener("wheel", onWheel, { capture: true } as EventListenerOptions);
+    };
+  }, [mode, gl.domElement, mouseZoomSensitivity, touchpadZoomSensitivity]);
   // Freshwater lakes carry less particulate than the open ocean, so the
   // submersible lamp reads cooler / less amber than the deep-sea default.
   const lampColor = waterType === "freshwater" ? "#eaffff" : "#fff8e8";
@@ -61,11 +84,13 @@ const FlyControlsScene: React.FC<FlyControlsSceneProps> = ({ terrainMeshRef }) =
           Disabled while painting so drag-strokes don't also orbit the camera. */}
       {mode === "orbit" && (
         <MapControls
+          ref={orbitControlsRef as unknown as React.Ref<never>}
           target={orbitTargetArr.current}
           enableDamping
           dampingFactor={0.08}
           screenSpacePanning={false}
           enabled={!paintMode}
+          zoomSpeed={mouseZoomSensitivity}
         />
       )}
     </>

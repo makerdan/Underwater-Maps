@@ -590,6 +590,30 @@ function NavigationSection() {
           onChange={s.setInvertMouseY}
           sublabel="Flip vertical look direction"
         />
+        <SliderRow
+          label="Mouse Wheel Zoom Sensitivity"
+          value={s.mouseZoomSensitivity}
+          min={0.1} max={3.0} step={0.1}
+          format={(v) => `${v.toFixed(1)}×`}
+          onChange={s.setMouseZoomSensitivity}
+          sublabel="How fast the wheel zooms (mouse notches)"
+        />
+        <SliderRow
+          label="Touchpad Zoom Sensitivity"
+          value={s.touchpadZoomSensitivity}
+          min={0.1} max={3.0} step={0.1}
+          format={(v) => `${v.toFixed(1)}×`}
+          onChange={s.setTouchpadZoomSensitivity}
+          sublabel="How fast two-finger scroll zooms the camera"
+        />
+        <SliderRow
+          label="Mobile Pinch Zoom Sensitivity"
+          value={s.pinchZoomSensitivity}
+          min={0.1} max={3.0} step={0.1}
+          format={(v) => `${v.toFixed(1)}×`}
+          onChange={s.setPinchZoomSensitivity}
+          sublabel="How fast pinch gestures zoom on touch devices"
+        />
       </div>
       <AdvancedDisclosure testId="camera-advanced">
         <div style={S.card}>
