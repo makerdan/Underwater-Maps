@@ -34,8 +34,11 @@ import {
   deleteMarkersId,
   getGetMarkersQueryKey,
   getGetDatasetsIdTerrainQueryKey,
+  getGetEfhQueryKey,
   type Marker,
   type TerrainData,
+  type EfhFeatureCollection,
+  type EfhSpeciesProperties,
 } from "@workspace/api-client-react";
 import { useDepthProfileStore, buildProfile } from "./depthProfileStore";
 import { useSettingsStore } from "./settingsStore";
@@ -92,6 +95,18 @@ export function registerTestBridge(
   if (terrainRef) appGetTerrainRef = terrainRef;
   if (setRealisticMode) appSetRealisticMode = setRealisticMode;
   if (realisticModeRef) appRealisticModeRef = realisticModeRef;
+}
+
+// OverviewMap's species detail panel (`efhDetail`) is local React state, not
+// a Zustand store. The map component registers its setter here at mount so
+// the test-only `openEfhDetailForFeature` helper can open the same panel a
+// user opens by clicking an EFH polygon — without the spec having to
+// reverse-engineer the canvas projection to click an exact pixel.
+let overviewEfhDetailSetter: ((p: EfhSpeciesProperties | null) => void) | null = null;
+export function registerOverviewEfhDetailSetter(
+  setter: ((p: EfhSpeciesProperties | null) => void) | null,
+): void {
+  overviewEfhDetailSetter = setter;
 }
 
 // Camera position is mutated each frame inside the Three.js render loop and
@@ -293,6 +308,34 @@ export interface BathyTestApi {
    * production cameraStore (the same store the HUD SpeedDots subscribe to).
    */
   simulateFlyWheel: (deltaY: number, shiftKey: boolean) => void;
+  /**
+   * EFH overlay helpers (Task #319).
+   *
+   * Drive dataset selection and the OverviewMap species detail panel through
+   * the same store actions / React state setters the user interacts with so
+   * the expanded EFH coverage (5 SE Alaska + 3 Texas reservoirs) can be
+   * locked down end-to-end without depending on headless WebGL or on
+   * reverse-engineering the OverviewMap's canvas projection to click an
+   * exact polygon pixel.
+   */
+  setActiveDatasetId: (id: string | null) => boolean;
+  setWaterType: (wt: "saltwater" | "freshwater") => void;
+  /**
+   * Toggle the EFH overlay on/off (same uiStore slice the HUD's 🐟 EFH
+   * button and OverviewMap's overlay button mutate). Tests must enable this
+   * before asserting on EFH rendering because EfhZoneLayer's React Query
+   * fetch is gated on `efhOverlayEnabled && hasEfh` and OverviewMap's
+   * `renderEfhOverlay` early-returns when the flag is false.
+   */
+  setEfhOverlayEnabled: (enabled: boolean) => void;
+  isEfhOverlayEnabled: () => boolean;
+  getEfhFeatureCount: (datasetId: string) => number;
+  getEfhFeatureProperties: (
+    datasetId: string,
+    index: number,
+  ) => EfhSpeciesProperties | null;
+  openEfhDetailForFeature: (datasetId: string, index: number) => boolean;
+  closeEfhDetail: () => void;
 }
 
 declare global {
@@ -677,6 +720,42 @@ export function installTestHelpers(): void {
         maxScore: max,
         hotspotCount: s.hotspots.length,
       };
+    },
+    setActiveDatasetId: (id) => {
+      if (!appSetDatasetId) return false;
+      appSetDatasetId(id);
+      return true;
+    },
+    setWaterType: (wt) => useSettingsStore.getState().setWaterType(wt),
+    setEfhOverlayEnabled: (enabled) =>
+      useUiStore.getState().setEfhOverlayEnabled(enabled),
+    isEfhOverlayEnabled: () => useUiStore.getState().efhOverlayEnabled,
+    getEfhFeatureCount: (datasetId) => {
+      if (!datasetId) return 0;
+      const data = queryClient.getQueryData<EfhFeatureCollection>(
+        getGetEfhQueryKey({ datasetId }),
+      );
+      return data?.features?.length ?? 0;
+    },
+    getEfhFeatureProperties: (datasetId, index) => {
+      if (!datasetId) return null;
+      const data = queryClient.getQueryData<EfhFeatureCollection>(
+        getGetEfhQueryKey({ datasetId }),
+      );
+      return data?.features?.[index]?.properties ?? null;
+    },
+    openEfhDetailForFeature: (datasetId, index) => {
+      if (!overviewEfhDetailSetter) return false;
+      const data = queryClient.getQueryData<EfhFeatureCollection>(
+        getGetEfhQueryKey({ datasetId }),
+      );
+      const props = data?.features?.[index]?.properties;
+      if (!props) return false;
+      overviewEfhDetailSetter(props);
+      return true;
+    },
+    closeEfhDetail: () => {
+      overviewEfhDetailSetter?.(null);
     },
     showDepthProfileTerrainMenu: (x, y, point) =>
       useContextMenuStore

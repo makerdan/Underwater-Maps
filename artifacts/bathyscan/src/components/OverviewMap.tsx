@@ -45,6 +45,7 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { formatDepth, formatDistance } from "@/lib/units";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
+import { registerOverviewEfhDetailSetter } from "@/lib/testHelpers";
 
 interface TooltipState {
   visible: boolean;
@@ -122,6 +123,14 @@ export const OverviewMap: React.FC = () => {
   // EFH detail panel — populated when the user clicks an EFH polygon while
   // the overlay is visible.
   const [efhDetail, setEfhDetail] = useState<EfhSpeciesProperties | null>(null);
+
+  // Expose the setter to e2e tests (Task #319) so they can open the same
+  // panel a click would, without reverse-engineering the canvas projection.
+  // The registry no-ops in production builds where testHelpers is tree-shaken.
+  useEffect(() => {
+    registerOverviewEfhDetailSetter(setEfhDetail);
+    return () => registerOverviewEfhDetailSetter(null);
+  }, []);
 
   // GPS & trail state (read directly from stores in rAF — no React re-render)
   const pulseRef = useRef(0);
