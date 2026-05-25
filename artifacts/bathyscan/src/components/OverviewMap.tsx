@@ -26,11 +26,15 @@ import {
   renderCameraArrow,
   renderScaleBar,
   renderHabitatOverlay,
+  renderEfhOverlay,
+  renderEfhLegend,
   renderGpsPosition,
   renderLiveTrail,
   renderSavedTrails,
 } from "@/lib/overviewRenderer";
 import type { OverviewTransform, CanvasSavedTrail } from "@/lib/overviewRenderer";
+import { useGetEfh, getGetEfhQueryKey } from "@workspace/api-client-react";
+import type { EfhFeature } from "@workspace/api-client-react";
 import { useHabitatStore } from "@/lib/habitatStore";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useTrailStore } from "@/lib/trailStore";
@@ -78,8 +82,13 @@ export const OverviewMap: React.FC = () => {
     },
   });
 
+  // Datasets that have bundled EFH data
+  const EFH_DATASETS = new Set(["thorne-bay"]);
+
   // --- Panel state ---
   const [showTrailList, setShowTrailList] = useState(false);
+  const [showEfh, setShowEfh] = useState(false);
+  const showEfhRef = useRef(false);
 
   // --- Canvas ref ---
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -90,6 +99,7 @@ export const OverviewMap: React.FC = () => {
   const markersRef = useRef<Marker[]>([]);
   const savedTrailsRef = useRef<CanvasSavedTrail[]>([]);
   const rafRef = useRef<number>(0);
+  const efhFeaturesRef = useRef<EfhFeature[]>([]);
 
   // Drag tracking
   const isDraggingRef = useRef(false);
@@ -111,6 +121,21 @@ export const OverviewMap: React.FC = () => {
   useEffect(() => {
     markersRef.current = markerData ?? [];
   }, [markerData]);
+
+  // EFH data — only fetch for datasets that have bundled EFH zones
+  const hasEfh = EFH_DATASETS.has(datasetId);
+  const { data: efhData } = useGetEfh(
+    { datasetId },
+    { query: { enabled: hasEfh, staleTime: 60_000, queryKey: getGetEfhQueryKey({ datasetId }) } },
+  );
+  useEffect(() => {
+    efhFeaturesRef.current = efhData?.features ?? [];
+  }, [efhData]);
+
+  // Keep showEfhRef in sync so the rAF loop can read it without a dep-array entry
+  useEffect(() => {
+    showEfhRef.current = showEfh;
+  }, [showEfh]);
 
   // Fetch trail points when trails list changes; update savedTrailsRef for rAF
   useEffect(() => {
@@ -238,6 +263,12 @@ export const OverviewMap: React.FC = () => {
       const habitatActive = useHabitatStore.getState().activeSpecies !== null;
       if (habitatActive && habitatScores) {
         renderHabitatOverlay(ctx, habitatScores, grid, t);
+      }
+
+      // EFH overlay (dashed species polygon outlines + legend)
+      if (showEfhRef.current && efhFeaturesRef.current.length > 0) {
+        renderEfhOverlay(ctx, efhFeaturesRef.current, grid, t);
+        renderEfhLegend(ctx, efhFeaturesRef.current, cW, cH);
       }
 
       // GPS position + live trail
@@ -586,6 +617,29 @@ export const OverviewMap: React.FC = () => {
               </button>
             );
           })()}
+
+          {/* EFH overlay toggle — only shown for datasets with bundled EFH zones */}
+          {hasEfh && (
+            <button
+              onClick={() => setShowEfh((v) => !v)}
+              aria-pressed={showEfh}
+              style={{
+                background: showEfh ? "rgba(34,197,94,0.15)" : "rgba(0,10,20,0.75)",
+                border: `1px solid ${showEfh ? "rgba(34,197,94,0.5)" : "rgba(0,229,255,0.2)"}`,
+                borderRadius: 3,
+                color: showEfh ? "#4ade80" : "#475569",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9,
+                padding: "2px 10px",
+                cursor: "pointer",
+                letterSpacing: "0.1em",
+                lineHeight: "20px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              🐟 EFH
+            </button>
+          )}
 
           {/* Trail list toggle */}
           {trailsData && trailsData.length > 0 && (

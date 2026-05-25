@@ -4,10 +4,21 @@
  * No React dependencies. All functions accept a 2D canvas context plus
  * data params and draw directly. Called every rAF frame.
  */
-import type { TerrainData } from "@workspace/api-client-react";
+import type { TerrainData, EfhFeature } from "@workspace/api-client-react";
 import type { Marker } from "@workspace/api-client-react";
 import { depthToColor } from "./colormap";
 import { MARKER_COLOR } from "./markerConstants";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
 
 // ---------------------------------------------------------------------------
 // Transform
@@ -323,6 +334,107 @@ export function renderHabitatOverlay(
   ctx.save();
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(offscreen, t.offsetX, t.offsetY, terrainW, terrainH);
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// EFH overlay
+// ---------------------------------------------------------------------------
+
+/**
+ * Draw EFH polygon outlines and semi-transparent fills on the overview canvas.
+ * Each feature is stroked + filled using its species `color` property.
+ */
+export function renderEfhOverlay(
+  ctx: CanvasRenderingContext2D,
+  features: EfhFeature[],
+  grid: TerrainData,
+  t: OverviewTransform,
+): void {
+  if (!features.length) return;
+
+  ctx.save();
+
+  for (const feature of features) {
+    const geom = feature.geometry as { type?: string; coordinates?: number[][][] };
+    if (geom.type !== "Polygon" || !geom.coordinates?.[0]) continue;
+
+    const ring = geom.coordinates[0];
+    const color = feature.properties.color ?? "#00e5ff";
+
+    ctx.beginPath();
+    for (let i = 0; i < ring.length; i++) {
+      const pt = ring[i]!;
+      const lon = pt[0] ?? 0;
+      const lat = pt[1] ?? 0;
+      const [cx, cy] = lonLatToCanvas(lon, lat, grid, t);
+      if (i === 0) ctx.moveTo(cx, cy);
+      else ctx.lineTo(cx, cy);
+    }
+    ctx.closePath();
+
+    ctx.fillStyle = hexToRgba(color, 0.07);
+    ctx.fill();
+    ctx.strokeStyle = hexToRgba(color, 0.7);
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// EFH legend
+// ---------------------------------------------------------------------------
+
+/**
+ * Draw a compact species legend in the bottom-right corner of the canvas.
+ * Only call when the EFH overlay is active and features are non-empty.
+ */
+export function renderEfhLegend(
+  ctx: CanvasRenderingContext2D,
+  features: EfhFeature[],
+  cW: number,
+  cH: number,
+): void {
+  if (!features.length) return;
+
+  const FONT = "'JetBrains Mono', monospace";
+  const SWATCH = 8;
+  const ROW_H = 14;
+  const PAD = 6;
+  const FONT_SIZE = 8;
+
+  ctx.save();
+  ctx.font = `${FONT_SIZE}px ${FONT}`;
+
+  const labels = features.map((f) => f.properties.commonName ?? f.properties.species ?? "");
+  const maxW = labels.reduce((m, l) => Math.max(m, ctx.measureText(l).width), 0);
+  const boxW = PAD * 2 + SWATCH + 4 + maxW;
+  const boxH = PAD * 2 + labels.length * ROW_H;
+  const x = cW - boxW - 8;
+  const y = cH - boxH - 30;
+
+  ctx.fillStyle = "rgba(2,8,24,0.80)";
+  ctx.beginPath();
+  ctx.roundRect(x, y, boxW, boxH, 3);
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(0,229,255,0.15)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  labels.forEach((label, i) => {
+    const color = features[i]?.properties.color ?? "#00e5ff";
+    const row = y + PAD + i * ROW_H;
+    ctx.fillStyle = color;
+    ctx.fillRect(x + PAD, row + 1, SWATCH, SWATCH);
+    ctx.fillStyle = "#94a3b8";
+    ctx.fillText(label, x + PAD + SWATCH + 4, row + FONT_SIZE);
+  });
+
   ctx.restore();
 }
 

@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { buildTerrainGrid } from "./lib/terrain.js";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +23,12 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  // Pre-warm Thorne Bay terrain cache in background so the first user
+  // request is fast. Non-blocking — a failure here does not affect startup.
+  void buildTerrainGrid("thorne-bay", 64).then(() => {
+    logger.info({ datasetId: "thorne-bay", resolution: 64 }, "Terrain cache warmed");
+  }).catch((warmErr: unknown) => {
+    logger.warn({ err: warmErr }, "Terrain pre-warm failed (non-critical)");
+  });
 });
