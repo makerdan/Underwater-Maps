@@ -88,9 +88,9 @@ test.describe("Water-type toggle", () => {
 
     // Confirm the default colormap is "ocean" by visiting Settings.
     await page.goto("/settings");
-    const colormapSelectOcean = page.locator("select").filter({ hasText: "Ocean (blue)" }).first();
-    await expect(colormapSelectOcean).toBeVisible({ timeout: 15_000 });
-    await expect(colormapSelectOcean).toHaveValue("ocean");
+    const colormapSelect = page.locator("select").filter({ hasText: "Ocean (blue)" }).first();
+    await expect(colormapSelect).toBeVisible({ timeout: 15_000 });
+    await expect(colormapSelect).toHaveValue("ocean");
 
     // ---- Switch to freshwater ---------------------------------------------
     await page.goto("/");
@@ -121,25 +121,15 @@ test.describe("Water-type toggle", () => {
     await expect(page.locator(`[data-testid="${SALTWATER_DATASET}"]`)).toHaveCount(0);
 
     // Scene-hue proxy: the colormap auto-switched from "ocean" → "freshwater".
-    // The Depth Colormap <select> doesn't render a "freshwater" option (it
-    // only lists ocean/thermal/grayscale/viridis), so we read the persisted
-    // store value from localStorage instead.
-    await expect
-      .poll(
-        async () =>
-          page.evaluate(() => {
-            try {
-              const raw = window.localStorage.getItem("bathyscan:settings");
-              if (!raw) return null;
-              const parsed = JSON.parse(raw) as { state?: { colormapTheme?: string } };
-              return parsed?.state?.colormapTheme ?? null;
-            } catch {
-              return null;
-            }
-          }),
-        { timeout: 10_000 },
-      )
-      .toBe("freshwater");
+    // The Depth Colormap <select> now exposes a "Freshwater (green)" option,
+    // so we can verify the auto-switch directly from the Settings UI.
+    await page.goto("/settings");
+    const colormapSelectFresh = page
+      .locator("select")
+      .filter({ hasText: "Freshwater (green)" })
+      .first();
+    await expect(colormapSelectFresh).toBeVisible({ timeout: 15_000 });
+    await expect(colormapSelectFresh).toHaveValue("freshwater");
 
     // ---- Switch back to saltwater -----------------------------------------
     await page.goto("/");
@@ -150,22 +140,13 @@ test.describe("Water-type toggle", () => {
     await expect(page.locator(`[data-testid="${SALTWATER_DATASET}"]`)).toBeVisible({ timeout: 10_000 });
     await expect(page.locator(`[data-testid="${FRESHWATER_DATASET}"]`)).toHaveCount(0);
 
-    // Colormap restored to "ocean".
-    await expect
-      .poll(
-        async () =>
-          page.evaluate(() => {
-            try {
-              const raw = window.localStorage.getItem("bathyscan:settings");
-              if (!raw) return null;
-              const parsed = JSON.parse(raw) as { state?: { colormapTheme?: string } };
-              return parsed?.state?.colormapTheme ?? null;
-            } catch {
-              return null;
-            }
-          }),
-        { timeout: 10_000 },
-      )
-      .toBe("ocean");
+    // Colormap restored to "ocean", verified directly from the Settings UI.
+    await page.goto("/settings");
+    const colormapSelectOceanAgain = page
+      .locator("select")
+      .filter({ hasText: "Ocean (blue)" })
+      .first();
+    await expect(colormapSelectOceanAgain).toBeVisible({ timeout: 15_000 });
+    await expect(colormapSelectOceanAgain).toHaveValue("ocean");
   });
 });
