@@ -5,9 +5,14 @@
  * All settings are optional and fall back to sensible defaults.
  * On sign-in, GET /api/settings hydrates this store from the server.
  * On change, a 300 ms debounced PUT /api/settings persists to the server.
+ *
+ * Settings are grouped into named "sections" so the UI can offer
+ * per-section reset and so future migrations have a stable namespace.
  */
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+
+export const SETTINGS_SCHEMA_VERSION = 2;
 
 export interface DatasetHomePosition {
   lon: number;
@@ -23,53 +28,122 @@ export type CoordinateFormat = "decimal" | "dms";
 export type DepthUnit = "metres" | "feet";
 export type UnitsSystem = "metric" | "imperial";
 export type CameraSpawnBehaviour = "deepest" | "home" | "last";
-export type MarkerType = "fish" | "shipwreck" | "coral" | "vent" | "custom" | "log" | "vegetation" | "sample";
+export type MarkerType = "fish" | "shipwreck" | "coral" | "vent" | "custom" | "depth_pole" | "log" | "vegetation" | "sample";
+export type NavMode = "fly" | "orbit";
+export type JoystickMode = "auto" | "always" | "off";
+export type QualityPreset = "low" | "medium" | "high" | "ultra" | "custom";
+export type TimeFormat = "utc" | "local" | "12h" | "24h";
+export type CurrentArrowDensity = "sparse" | "normal" | "dense";
+export type TidalDepthLayer = "surface" | "mid" | "near-bottom";
+export type TrailRetention = "7" | "30" | "90" | "all";
+
+export type SettingsSection =
+  | "camera"
+  | "visuals"
+  | "hud"
+  | "markers"
+  | "tidal"
+  | "habitat"
+  | "gps"
+  | "data"
+  | "accessibility"
+  | "account"
+  | "overview"
+  | "environment";
 
 export interface SettingsState {
-  // ── Visuals ──────────────────────────────────────────────────────────
-  textureQuality: TextureQuality;
-  enableCaustics: boolean;
-  particleDensity: ParticleDensity;
-  fogDensity: number;
-  colormapTheme: ColormapTheme;
-  lampIntensity: number;
+  schemaVersion: number;
 
-  // ── Navigation ───────────────────────────────────────────────────────
+  // ── Page-level ───────────────────────────────────────────────────────
+  showAdvancedEverywhere: boolean;
+
+  // ── Camera & Controls ─────────────────────────────────────────────────
+  defaultNavMode: NavMode;
   defaultSpeedTier: number;
-  invertMouseY: boolean;
   mouseSensitivity: number;
+  invertMouseY: boolean;
+  joystickMode: JoystickMode;
+  fieldOfView: number;
+  renderDistance: number;
   cameraSpawnBehaviour: CameraSpawnBehaviour;
 
-  // ── HUD ──────────────────────────────────────────────────────────────
+  // ── Visuals & Performance ─────────────────────────────────────────────
+  qualityPreset: QualityPreset;
+  terrainExaggeration: number;
+  enableMarineSnow: boolean;
+  particleDensity: ParticleDensity;
+  enableCaustics: boolean;
+  fogDensity: number;
+  fogColor: string;
+  ambientLightIntensity: number;
+  directionalLightIntensity: number;
+  lampIntensity: number;
+  lampRange: number;
+  antialiasing: boolean;
+  textureQuality: TextureQuality;
+  colormapTheme: ColormapTheme;
+  smoothTerrainSpikes: boolean;
+
+  // ── HUD & Layout ──────────────────────────────────────────────────────
+  hudOpacity: number;
   showCrosshairGps: boolean;
   showCameraPosition: boolean;
   showSpeedIndicator: boolean;
   showHeading: boolean;
+  showDepthLegend: boolean;
+  showDepthScaleBar: boolean;
+  showCompassMinimap: boolean;
+  showControlsLegend: boolean;
+  showTidePanel: boolean;
+  showHabitatPanel: boolean;
+  showDatasetPanel: boolean;
+  showQueryPanel: boolean;
+  timeFormat: TimeFormat;
   coordinateFormat: CoordinateFormat;
   depthUnit: DepthUnit;
   units: UnitsSystem;
-  hudOpacity: number;
 
-  // ── Overview Map ─────────────────────────────────────────────────────
+  // ── Overview Map ──────────────────────────────────────────────────────
   overviewDefaultZoom: number;
   overviewShowGrid: boolean;
   overviewShowMarkers: boolean;
   overviewOpenOnLoad: boolean;
 
   // ── Markers ──────────────────────────────────────────────────────────
-  visibleMarkerTypes: MarkerType[];
-  showMarkerLabels: boolean;
-  privateMarkers: boolean;
   defaultMarkerType: MarkerType;
+  defaultDepthPoleColor: string;
+  showMarkerLabels: boolean;
+  visibleMarkerTypes: MarkerType[];
+  privateMarkers: boolean;
+  markerClusterThreshold: number;
 
-  // ── Terrain rendering ────────────────────────────────────────────────
-  smoothTerrainSpikes: boolean;
+  // ── Tidal Defaults ───────────────────────────────────────────────────
+  autoLoadTidal: boolean;
+  defaultTidalDepthLayer: TidalDepthLayer;
+  currentArrowDensity: CurrentArrowDensity;
 
-  // ── Dataset ───────────────────────────────────────────────────────────
-  defaultRegion: string;
+  // ── Habitat & Zone Defaults ──────────────────────────────────────────
+  autoShowZoneOverlay: boolean;
+  defaultHabitatSpecies: string;
 
-  // ── GPS recording ─────────────────────────────────────────────────────
+  // ── GPS & Trail ──────────────────────────────────────────────────────
+  autoStartTrailRecording: boolean;
+  defaultTrailColor: string;
   gpsRecordingInterval: number;
+  trailRetention: TrailRetention;
+
+  // ── Data & Storage ───────────────────────────────────────────────────
+  defaultRegion: string;
+  autoLoadLastDataset: boolean;
+
+  // ── Accessibility ────────────────────────────────────────────────────
+  reducedMotion: boolean;
+  colorBlindSafePalette: boolean;
+  largeHudText: boolean;
+  highContrastHud: boolean;
+
+  // ── Account & Privacy ────────────────────────────────────────────────
+  telemetryOptIn: boolean;
 
   /** Per-dataset saved camera spawn positions (set via "Set as home" context menu). */
   datasetHomePositions: Record<string, DatasetHomePosition>;
@@ -79,42 +153,99 @@ export interface SettingsState {
 }
 
 interface SettingsActions {
-  setTextureQuality: (v: TextureQuality) => void;
-  setEnableCaustics: (v: boolean) => void;
-  setParticleDensity: (v: ParticleDensity) => void;
-  setFogDensity: (v: number) => void;
-  setColormapTheme: (v: ColormapTheme) => void;
-  setLampIntensity: (v: number) => void;
-
+  // Camera & Controls
+  setDefaultNavMode: (v: NavMode) => void;
   setDefaultSpeedTier: (v: number) => void;
-  setInvertMouseY: (v: boolean) => void;
   setMouseSensitivity: (v: number) => void;
+  setInvertMouseY: (v: boolean) => void;
+  setJoystickMode: (v: JoystickMode) => void;
+  setFieldOfView: (v: number) => void;
+  setRenderDistance: (v: number) => void;
   setCameraSpawnBehaviour: (v: CameraSpawnBehaviour) => void;
 
+  // Visuals
+  setQualityPreset: (v: QualityPreset) => void;
+  applyQualityPreset: (v: Exclude<QualityPreset, "custom">) => void;
+  setTerrainExaggeration: (v: number) => void;
+  setEnableMarineSnow: (v: boolean) => void;
+  setParticleDensity: (v: ParticleDensity) => void;
+  setEnableCaustics: (v: boolean) => void;
+  setFogDensity: (v: number) => void;
+  setFogColor: (v: string) => void;
+  setAmbientLightIntensity: (v: number) => void;
+  setDirectionalLightIntensity: (v: number) => void;
+  setLampIntensity: (v: number) => void;
+  setLampRange: (v: number) => void;
+  setAntialiasing: (v: boolean) => void;
+  setTextureQuality: (v: TextureQuality) => void;
+  setColormapTheme: (v: ColormapTheme) => void;
+  setSmoothTerrainSpikes: (v: boolean) => void;
+
+  // HUD
+  setHudOpacity: (v: number) => void;
   setShowCrosshairGps: (v: boolean) => void;
   setShowCameraPosition: (v: boolean) => void;
   setShowSpeedIndicator: (v: boolean) => void;
   setShowHeading: (v: boolean) => void;
+  setShowDepthLegend: (v: boolean) => void;
+  setShowDepthScaleBar: (v: boolean) => void;
+  setShowCompassMinimap: (v: boolean) => void;
+  setShowControlsLegend: (v: boolean) => void;
+  setShowTidePanel: (v: boolean) => void;
+  setShowHabitatPanel: (v: boolean) => void;
+  setShowDatasetPanel: (v: boolean) => void;
+  setShowQueryPanel: (v: boolean) => void;
+  setTimeFormat: (v: TimeFormat) => void;
   setCoordinateFormat: (v: CoordinateFormat) => void;
   setDepthUnit: (v: DepthUnit) => void;
   setUnits: (v: UnitsSystem) => void;
-  setHudOpacity: (v: number) => void;
 
+  // Overview Map
   setOverviewDefaultZoom: (v: number) => void;
   setOverviewShowGrid: (v: boolean) => void;
   setOverviewShowMarkers: (v: boolean) => void;
   setOverviewOpenOnLoad: (v: boolean) => void;
 
-  setVisibleMarkerTypes: (v: MarkerType[]) => void;
-  setShowMarkerLabels: (v: boolean) => void;
-  setPrivateMarkers: (v: boolean) => void;
+  // Markers
   setDefaultMarkerType: (v: MarkerType) => void;
+  setDefaultDepthPoleColor: (v: string) => void;
+  setShowMarkerLabels: (v: boolean) => void;
+  setVisibleMarkerTypes: (v: MarkerType[]) => void;
+  setPrivateMarkers: (v: boolean) => void;
+  setMarkerClusterThreshold: (v: number) => void;
 
-  setSmoothTerrainSpikes: (v: boolean) => void;
+  // Tidal
+  setAutoLoadTidal: (v: boolean) => void;
+  setDefaultTidalDepthLayer: (v: TidalDepthLayer) => void;
+  setCurrentArrowDensity: (v: CurrentArrowDensity) => void;
 
-  setDefaultRegion: (v: string) => void;
+  // Habitat
+  setAutoShowZoneOverlay: (v: boolean) => void;
+  setDefaultHabitatSpecies: (v: string) => void;
+
+  // GPS / Trail
+  setAutoStartTrailRecording: (v: boolean) => void;
+  setDefaultTrailColor: (v: string) => void;
   setGpsRecordingInterval: (ms: number) => void;
+  setTrailRetention: (v: TrailRetention) => void;
 
+  // Data
+  setDefaultRegion: (v: string) => void;
+  setAutoLoadLastDataset: (v: boolean) => void;
+
+  // Accessibility
+  setReducedMotion: (v: boolean) => void;
+  setColorBlindSafePalette: (v: boolean) => void;
+  setLargeHudText: (v: boolean) => void;
+  setHighContrastHud: (v: boolean) => void;
+
+  // Account
+  setTelemetryOptIn: (v: boolean) => void;
+
+  // Page-level
+  setShowAdvancedEverywhere: (v: boolean) => void;
+
+  // Dataset home positions
   setDatasetHome: (datasetId: string, pos: DatasetHomePosition) => void;
   clearDatasetHome: (datasetId: string) => void;
 
@@ -122,112 +253,381 @@ interface SettingsActions {
 
   /** Hydrate the entire settings state from the server response. */
   hydrateFromServer: (partial: Partial<SettingsState>) => void;
+
+  /** Reset every setting in the given section back to defaults. */
+  resetSection: (section: SettingsSection) => void;
+
+  /** Reset every setting back to defaults (preserves datasetHomePositions). */
+  resetAll: () => void;
 }
 
 export type SettingsStore = SettingsState & SettingsActions;
 
-export const DEFAULT_SETTINGS: SettingsState = {
-  textureQuality: "high",
-  enableCaustics: false,
-  particleDensity: "sparse",
-  fogDensity: 0.012,
-  colormapTheme: "ocean",
-  lampIntensity: 2,
+/**
+ * Quality preset value tables. Applying a preset overwrites the visuals
+ * advanced knobs to a known-good combination.
+ */
+export const QUALITY_PRESETS: Record<
+  Exclude<QualityPreset, "custom">,
+  Pick<
+    SettingsState,
+    | "particleDensity"
+    | "enableMarineSnow"
+    | "enableCaustics"
+    | "antialiasing"
+    | "textureQuality"
+    | "fogDensity"
+    | "ambientLightIntensity"
+    | "directionalLightIntensity"
+    | "lampIntensity"
+    | "lampRange"
+    | "renderDistance"
+  >
+> = {
+  low: {
+    particleDensity: "off",
+    enableMarineSnow: false,
+    enableCaustics: false,
+    antialiasing: false,
+    textureQuality: "low",
+    fogDensity: 0.018,
+    ambientLightIntensity: 0.05,
+    directionalLightIntensity: 0.25,
+    lampIntensity: 1.5,
+    lampRange: 30,
+    renderDistance: 200,
+  },
+  medium: {
+    particleDensity: "sparse",
+    enableMarineSnow: true,
+    enableCaustics: false,
+    antialiasing: true,
+    textureQuality: "high",
+    fogDensity: 0.012,
+    ambientLightIntensity: 0.05,
+    directionalLightIntensity: 0.35,
+    lampIntensity: 2,
+    lampRange: 40,
+    renderDistance: 400,
+  },
+  high: {
+    particleDensity: "sparse",
+    enableMarineSnow: true,
+    enableCaustics: true,
+    antialiasing: true,
+    textureQuality: "high",
+    fogDensity: 0.010,
+    ambientLightIntensity: 0.08,
+    directionalLightIntensity: 0.45,
+    lampIntensity: 2.5,
+    lampRange: 50,
+    renderDistance: 600,
+  },
+  ultra: {
+    particleDensity: "dense",
+    enableMarineSnow: true,
+    enableCaustics: true,
+    antialiasing: true,
+    textureQuality: "high",
+    fogDensity: 0.008,
+    ambientLightIntensity: 0.10,
+    directionalLightIntensity: 0.55,
+    lampIntensity: 3,
+    lampRange: 70,
+    renderDistance: 1000,
+  },
+};
 
+export const DEFAULT_SETTINGS: SettingsState = {
+  schemaVersion: SETTINGS_SCHEMA_VERSION,
+
+  showAdvancedEverywhere: false,
+
+  // Camera
+  defaultNavMode: "fly",
   defaultSpeedTier: 2,
-  invertMouseY: false,
   mouseSensitivity: 1.0,
+  invertMouseY: false,
+  joystickMode: "auto",
+  fieldOfView: 45,
+  renderDistance: 400,
   cameraSpawnBehaviour: "deepest",
 
+  // Visuals
+  qualityPreset: "medium",
+  terrainExaggeration: 0.8,
+  enableMarineSnow: true,
+  particleDensity: "sparse",
+  enableCaustics: false,
+  fogDensity: 0.012,
+  fogColor: "#020818",
+  ambientLightIntensity: 0.05,
+  directionalLightIntensity: 0.35,
+  lampIntensity: 2,
+  lampRange: 40,
+  antialiasing: true,
+  textureQuality: "high",
+  colormapTheme: "ocean",
+  smoothTerrainSpikes: true,
+
+  // HUD
+  hudOpacity: 0.75,
   showCrosshairGps: true,
   showCameraPosition: true,
   showSpeedIndicator: true,
   showHeading: true,
+  showDepthLegend: true,
+  showDepthScaleBar: true,
+  showCompassMinimap: true,
+  showControlsLegend: true,
+  showTidePanel: true,
+  showHabitatPanel: true,
+  showDatasetPanel: true,
+  showQueryPanel: true,
+  timeFormat: "local",
   coordinateFormat: "decimal",
   depthUnit: "metres",
   units: "metric",
-  hudOpacity: 0.75,
 
+  // Overview
   overviewDefaultZoom: 1.0,
   overviewShowGrid: true,
   overviewShowMarkers: true,
   overviewOpenOnLoad: false,
 
-  visibleMarkerTypes: ["fish", "shipwreck", "coral", "vent", "custom"],
-  showMarkerLabels: true,
-  privateMarkers: false,
+  // Markers
   defaultMarkerType: "fish",
+  defaultDepthPoleColor: "#22d3ee",
+  showMarkerLabels: true,
+  visibleMarkerTypes: ["fish", "shipwreck", "coral", "vent", "custom", "depth_pole"],
+  privateMarkers: false,
+  markerClusterThreshold: 25,
 
-  smoothTerrainSpikes: true,
+  // Tidal
+  autoLoadTidal: true,
+  defaultTidalDepthLayer: "surface",
+  currentArrowDensity: "normal",
 
+  // Habitat
+  autoShowZoneOverlay: false,
+  defaultHabitatSpecies: "",
+
+  // GPS / Trail
+  autoStartTrailRecording: false,
+  defaultTrailColor: "#ff6600",
+  gpsRecordingInterval: 1000,
+  trailRetention: "30",
+
+  // Data
   defaultRegion: "mariana-trench",
-  gpsRecordingInterval: 10_000,
+  autoLoadLastDataset: true,
+
+  // Accessibility
+  reducedMotion: false,
+  colorBlindSafePalette: false,
+  largeHudText: false,
+  highContrastHud: false,
+
+  // Account
+  telemetryOptIn: false,
 
   datasetHomePositions: {},
 
   waterType: "saltwater",
 };
 
+const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
+  camera: [
+    "defaultNavMode", "defaultSpeedTier", "mouseSensitivity", "invertMouseY",
+    "joystickMode", "fieldOfView", "renderDistance", "cameraSpawnBehaviour",
+  ],
+  visuals: [
+    "qualityPreset", "terrainExaggeration", "enableMarineSnow", "particleDensity",
+    "enableCaustics", "fogDensity", "fogColor", "ambientLightIntensity",
+    "directionalLightIntensity", "lampIntensity", "lampRange", "antialiasing",
+    "textureQuality", "colormapTheme", "smoothTerrainSpikes",
+  ],
+  hud: [
+    "hudOpacity", "showCrosshairGps", "showCameraPosition", "showSpeedIndicator",
+    "showHeading", "showDepthLegend", "showDepthScaleBar", "showCompassMinimap",
+    "showControlsLegend", "showTidePanel", "showHabitatPanel", "showDatasetPanel",
+    "showQueryPanel", "timeFormat", "coordinateFormat", "depthUnit", "units",
+  ],
+  overview: [
+    "overviewDefaultZoom", "overviewShowGrid", "overviewShowMarkers", "overviewOpenOnLoad",
+  ],
+  markers: [
+    "defaultMarkerType", "defaultDepthPoleColor", "showMarkerLabels",
+    "visibleMarkerTypes", "privateMarkers", "markerClusterThreshold",
+  ],
+  tidal: ["autoLoadTidal", "defaultTidalDepthLayer", "currentArrowDensity"],
+  habitat: ["autoShowZoneOverlay", "defaultHabitatSpecies"],
+  gps: [
+    "autoStartTrailRecording", "defaultTrailColor", "gpsRecordingInterval", "trailRetention",
+  ],
+  data: ["defaultRegion", "autoLoadLastDataset"],
+  accessibility: [
+    "reducedMotion", "colorBlindSafePalette", "largeHudText", "highContrastHud",
+  ],
+  account: ["telemetryOptIn"],
+  environment: ["waterType"],
+};
+
 export const useSettingsStore = create<SettingsStore>()(
   persist(
-    (set) => ({
-      ...DEFAULT_SETTINGS,
+    (set, get) => {
+      const setter = <K extends keyof SettingsState>(key: K) =>
+        (v: SettingsState[K]) => set({ [key]: v } as unknown as Partial<SettingsState>);
 
-      setTextureQuality: (v) => set({ textureQuality: v }),
-      setEnableCaustics: (v) => set({ enableCaustics: v }),
-      setParticleDensity: (v) => set({ particleDensity: v }),
-      setFogDensity: (v) => set({ fogDensity: v }),
-      setColormapTheme: (v) => set({ colormapTheme: v }),
-      setLampIntensity: (v) => set({ lampIntensity: v }),
+      return {
+        ...DEFAULT_SETTINGS,
 
-      setDefaultSpeedTier: (v) => set({ defaultSpeedTier: v }),
-      setInvertMouseY: (v) => set({ invertMouseY: v }),
-      setMouseSensitivity: (v) => set({ mouseSensitivity: v }),
-      setCameraSpawnBehaviour: (v) => set({ cameraSpawnBehaviour: v }),
+        // Camera
+        setDefaultNavMode: setter("defaultNavMode"),
+        setDefaultSpeedTier: setter("defaultSpeedTier"),
+        setMouseSensitivity: setter("mouseSensitivity"),
+        setInvertMouseY: setter("invertMouseY"),
+        setJoystickMode: setter("joystickMode"),
+        setFieldOfView: setter("fieldOfView"),
+        setRenderDistance: setter("renderDistance"),
+        setCameraSpawnBehaviour: setter("cameraSpawnBehaviour"),
 
-      setShowCrosshairGps: (v) => set({ showCrosshairGps: v }),
-      setShowCameraPosition: (v) => set({ showCameraPosition: v }),
-      setShowSpeedIndicator: (v) => set({ showSpeedIndicator: v }),
-      setShowHeading: (v) => set({ showHeading: v }),
-      setCoordinateFormat: (v) => set({ coordinateFormat: v }),
-      setDepthUnit: (v) => set({ depthUnit: v }),
-      setUnits: (v) => set({ units: v, depthUnit: v === "imperial" ? "feet" : "metres" }),
-      setHudOpacity: (v) => set({ hudOpacity: v }),
+        // Visuals
+        setQualityPreset: setter("qualityPreset"),
+        applyQualityPreset: (v) => {
+          const preset = QUALITY_PRESETS[v];
+          set({ ...preset, qualityPreset: v });
+        },
+        setTerrainExaggeration: setter("terrainExaggeration"),
+        setEnableMarineSnow: setter("enableMarineSnow"),
+        setParticleDensity: (v) => set({ particleDensity: v, qualityPreset: "custom" }),
+        setEnableCaustics: (v) => set({ enableCaustics: v, qualityPreset: "custom" }),
+        setFogDensity: (v) => set({ fogDensity: v, qualityPreset: "custom" }),
+        setFogColor: setter("fogColor"),
+        setAmbientLightIntensity: (v) => set({ ambientLightIntensity: v, qualityPreset: "custom" }),
+        setDirectionalLightIntensity: (v) => set({ directionalLightIntensity: v, qualityPreset: "custom" }),
+        setLampIntensity: (v) => set({ lampIntensity: v, qualityPreset: "custom" }),
+        setLampRange: (v) => set({ lampRange: v, qualityPreset: "custom" }),
+        setAntialiasing: (v) => set({ antialiasing: v, qualityPreset: "custom" }),
+        setTextureQuality: (v) => set({ textureQuality: v, qualityPreset: "custom" }),
+        setColormapTheme: setter("colormapTheme"),
+        setSmoothTerrainSpikes: setter("smoothTerrainSpikes"),
 
-      setOverviewDefaultZoom: (v) => set({ overviewDefaultZoom: v }),
-      setOverviewShowGrid: (v) => set({ overviewShowGrid: v }),
-      setOverviewShowMarkers: (v) => set({ overviewShowMarkers: v }),
-      setOverviewOpenOnLoad: (v) => set({ overviewOpenOnLoad: v }),
+        // HUD
+        setHudOpacity: setter("hudOpacity"),
+        setShowCrosshairGps: setter("showCrosshairGps"),
+        setShowCameraPosition: setter("showCameraPosition"),
+        setShowSpeedIndicator: setter("showSpeedIndicator"),
+        setShowHeading: setter("showHeading"),
+        setShowDepthLegend: setter("showDepthLegend"),
+        setShowDepthScaleBar: setter("showDepthScaleBar"),
+        setShowCompassMinimap: setter("showCompassMinimap"),
+        setShowControlsLegend: setter("showControlsLegend"),
+        setShowTidePanel: setter("showTidePanel"),
+        setShowHabitatPanel: setter("showHabitatPanel"),
+        setShowDatasetPanel: setter("showDatasetPanel"),
+        setShowQueryPanel: setter("showQueryPanel"),
+        setTimeFormat: setter("timeFormat"),
+        setCoordinateFormat: setter("coordinateFormat"),
+        setDepthUnit: setter("depthUnit"),
+        setUnits: (v) => set({ units: v, depthUnit: v === "imperial" ? "feet" : "metres" }),
 
-      setVisibleMarkerTypes: (v) => set({ visibleMarkerTypes: v }),
-      setShowMarkerLabels: (v) => set({ showMarkerLabels: v }),
-      setPrivateMarkers: (v) => set({ privateMarkers: v }),
-      setDefaultMarkerType: (v) => set({ defaultMarkerType: v }),
+        // Overview
+        setOverviewDefaultZoom: setter("overviewDefaultZoom"),
+        setOverviewShowGrid: setter("overviewShowGrid"),
+        setOverviewShowMarkers: setter("overviewShowMarkers"),
+        setOverviewOpenOnLoad: setter("overviewOpenOnLoad"),
 
-      setSmoothTerrainSpikes: (v) => set({ smoothTerrainSpikes: v }),
+        // Markers
+        setDefaultMarkerType: setter("defaultMarkerType"),
+        setDefaultDepthPoleColor: setter("defaultDepthPoleColor"),
+        setShowMarkerLabels: setter("showMarkerLabels"),
+        setVisibleMarkerTypes: setter("visibleMarkerTypes"),
+        setPrivateMarkers: setter("privateMarkers"),
+        setMarkerClusterThreshold: setter("markerClusterThreshold"),
 
-      setDefaultRegion: (v) => set({ defaultRegion: v }),
-      setGpsRecordingInterval: (ms) => set({ gpsRecordingInterval: ms }),
+        // Tidal
+        setAutoLoadTidal: setter("autoLoadTidal"),
+        setDefaultTidalDepthLayer: setter("defaultTidalDepthLayer"),
+        setCurrentArrowDensity: setter("currentArrowDensity"),
 
-      setDatasetHome: (datasetId, pos) =>
-        set((state) => ({
-          datasetHomePositions: {
-            ...state.datasetHomePositions,
-            [datasetId]: pos,
-          },
-        })),
-      clearDatasetHome: (datasetId) =>
-        set((state) => {
-          const next = { ...state.datasetHomePositions };
-          delete next[datasetId];
-          return { datasetHomePositions: next };
-        }),
+        // Habitat
+        setAutoShowZoneOverlay: setter("autoShowZoneOverlay"),
+        setDefaultHabitatSpecies: setter("defaultHabitatSpecies"),
 
-      setWaterType: (v) => set({ waterType: v }),
+        // GPS / Trail
+        setAutoStartTrailRecording: setter("autoStartTrailRecording"),
+        setDefaultTrailColor: setter("defaultTrailColor"),
+        setGpsRecordingInterval: setter("gpsRecordingInterval"),
+        setTrailRetention: setter("trailRetention"),
 
-      hydrateFromServer: (partial) =>
-        set((state) => ({ ...state, ...partial })),
-    }),
-    { name: "bathyscan:settings" },
+        // Data
+        setDefaultRegion: setter("defaultRegion"),
+        setAutoLoadLastDataset: setter("autoLoadLastDataset"),
+
+        // Accessibility
+        setReducedMotion: setter("reducedMotion"),
+        setColorBlindSafePalette: setter("colorBlindSafePalette"),
+        setLargeHudText: setter("largeHudText"),
+        setHighContrastHud: setter("highContrastHud"),
+
+        // Account
+        setTelemetryOptIn: setter("telemetryOptIn"),
+
+        // Page-level
+        setShowAdvancedEverywhere: setter("showAdvancedEverywhere"),
+
+        // Dataset home positions
+        setDatasetHome: (datasetId, pos) =>
+          set((state) => ({
+            datasetHomePositions: { ...state.datasetHomePositions, [datasetId]: pos },
+          })),
+        clearDatasetHome: (datasetId) =>
+          set((state) => {
+            const next = { ...state.datasetHomePositions };
+            delete next[datasetId];
+            return { datasetHomePositions: next };
+          }),
+
+        setWaterType: setter("waterType"),
+
+        hydrateFromServer: (partial) => set((state) => ({ ...state, ...partial })),
+
+        resetSection: (section) => {
+          const keys = SECTION_KEYS[section];
+          const patch: Partial<SettingsState> = {};
+          for (const k of keys) {
+            (patch as Record<string, unknown>)[k] = DEFAULT_SETTINGS[k];
+          }
+          set(patch);
+        },
+
+        resetAll: () => {
+          const current = get();
+          set({
+            ...DEFAULT_SETTINGS,
+            // Preserve per-dataset home positions across "Reset all"
+            datasetHomePositions: current.datasetHomePositions,
+          });
+        },
+      };
+    },
+    {
+      name: "bathyscan:settings",
+      version: SETTINGS_SCHEMA_VERSION,
+      migrate: (persisted, version) => {
+        // For pre-v2 stored states, merge with defaults so newly added
+        // fields are present without losing user preferences.
+        if (!persisted || typeof persisted !== "object") return DEFAULT_SETTINGS;
+        if (version < SETTINGS_SCHEMA_VERSION) {
+          return {
+            ...DEFAULT_SETTINGS,
+            ...(persisted as Partial<SettingsState>),
+            schemaVersion: SETTINGS_SCHEMA_VERSION,
+          };
+        }
+        return persisted as SettingsState;
+      },
+    },
   ),
 );

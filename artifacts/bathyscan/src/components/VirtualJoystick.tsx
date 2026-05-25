@@ -41,8 +41,10 @@ interface TouchState {
 
 const RADIUS = 50;
 
-export const VirtualJoystick: React.FC = () => {
-  const isTouchDevice = typeof window !== "undefined" && "ontouchstart" in window;
+export const VirtualJoystick: React.FC<{ forceVisible?: boolean }> = ({ forceVisible = false }) => {
+  const isTouchDevice =
+    forceVisible ||
+    (typeof window !== "undefined" && "ontouchstart" in window);
   const leftRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
   const touches = useRef<Map<number, TouchState>>(new Map());

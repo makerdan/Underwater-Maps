@@ -148,16 +148,19 @@ const SceneContents: React.FC<SceneContentsProps> = ({
 }) => {
   const { terrain } = useAppState();
   const fogDensity = useSettingsStore((s) => s.fogDensity);
+  const fogColor = useSettingsStore((s) => s.fogColor);
+  const ambientIntensity = useSettingsStore((s) => s.ambientLightIntensity);
+  const directionalIntensity = useSettingsStore((s) => s.directionalLightIntensity);
 
   return (
     <>
-      <color attach="background" args={["#020818"]} />
-      <fogExp2 args={["#020818", fogDensity]} />
+      <color attach="background" args={[fogColor]} />
+      <fogExp2 args={[fogColor, fogDensity]} />
 
       {/* Ambient fill */}
-      <ambientLight intensity={0.05} color="#7aa8c8" />
+      <ambientLight intensity={ambientIntensity} color="#7aa8c8" />
       {/* Distant key light */}
-      <directionalLight position={[10, 30, 20]} intensity={0.35} color="#d0eeff" />
+      <directionalLight position={[10, 30, 20]} intensity={directionalIntensity} color="#d0eeff" />
 
       <Particles />
       {terrain && <TerrainMesh ref={terrainMeshRef} grid={terrain} />}
@@ -252,11 +255,15 @@ export const TourScene: React.FC<TourSceneProps> = ({
     if (data) setTerrain(data);
   }, [data, setTerrain]);
 
+  const fov = useSettingsStore((s) => s.fieldOfView);
+  const renderDistance = useSettingsStore((s) => s.renderDistance);
+  const antialias = useSettingsStore((s) => s.antialiasing);
+
   return (
     <div className="relative w-full h-full">
       <Canvas
-        camera={{ position: [0, 20, 40], fov: 60 }}
-        gl={{ antialias: true }}
+        camera={{ position: [0, 20, 40], fov, far: renderDistance }}
+        gl={{ antialias }}
         style={{ width: "100%", height: "100%" }}
       >
         <SceneContents

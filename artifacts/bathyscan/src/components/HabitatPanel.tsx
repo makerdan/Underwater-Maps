@@ -26,7 +26,6 @@ import {
   usePostMarkers,
   getGetMarkersQueryKey,
 } from "@workspace/api-client-react";
-import { useSettingsStore } from "@/lib/settingsStore";
 import { formatDepth } from "@/lib/units";
 
 // ---------------------------------------------------------------------------

@@ -38,6 +38,24 @@ const DEFAULT_SETTINGS = {
   gpsRecordingInterval: 10000,
 };
 
+/**
+ * Stored settings may include extra fields (advanced sections, accessibility,
+ * etc.) that aren't in the strict zod schema. We merge stored extras with the
+ * validated known fields when responding.
+ */
+function mergeForResponse(
+  stored: Record<string, unknown> | null | undefined,
+  validated: Record<string, unknown>,
+): Record<string, unknown> {
+  const extras: Record<string, unknown> = {};
+  if (stored) {
+    for (const [k, v] of Object.entries(stored)) {
+      if (!(k in DEFAULT_SETTINGS)) extras[k] = v;
+    }
+  }
+  return { ...validated, ...extras };
+}
+
 router.get("/settings", requireAuth, async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
@@ -46,19 +64,32 @@ router.get("/settings", requireAuth, async (req, res): Promise<void> => {
     .from(userSettingsTable)
     .where(eq(userSettingsTable.userId, userId));
 
-  const merged = { ...DEFAULT_SETTINGS, ...(row?.settings ?? {}) };
-  res.json(GetSettingsResponse.parse(merged));
+  const stored = (row?.settings ?? {}) as Record<string, unknown>;
+  const merged = { ...DEFAULT_SETTINGS, ...stored };
+  const validated = GetSettingsResponse.parse(merged) as Record<string, unknown>;
+  res.json(mergeForResponse(stored, validated));
 });
 
 router.put("/settings", requireAuth, async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
-  const parsed = PutSettingsBody.safeParse(req.body ?? {});
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const parsed = PutSettingsBody.safeParse(body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: parsed.error.message });
     return;
   }
 
-  const merged = { ...DEFAULT_SETTINGS, ...(parsed.data as Record<string, unknown>) };
+  // Preserve any extra (non-spec) fields so advanced settings persist server-side.
+  const extras: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(body)) {
+    if (!(k in DEFAULT_SETTINGS)) extras[k] = v;
+  }
+
+  const merged = {
+    ...DEFAULT_SETTINGS,
+    ...(parsed.data as Record<string, unknown>),
+    ...extras,
+  };
 
   await db
     .insert(userSettingsTable)

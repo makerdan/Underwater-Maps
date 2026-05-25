@@ -84,7 +84,7 @@ export const MarkerForm: React.FC = () => {
       lon: gps.lon,
       lat: gps.lat,
       depth: gps.depth,
-      type: markerType,
+      type: markerType as MarkerInputType,
       label: label.trim().slice(0, 60),
       notes: notesValue,
     };

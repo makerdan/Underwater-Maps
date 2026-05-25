@@ -13,9 +13,11 @@ import { keys as idbKeys, clear as idbClear } from "idb-keyval";
 import { useGetSettings, usePutSettings, useDeleteMarkersMine, getGetSettingsQueryKey } from "@workspace/api-client-react";
 import {
   useSettingsStore,
-  DEFAULT_SETTINGS,
+  SETTINGS_SCHEMA_VERSION,
   type MarkerType,
+  type SettingsSection,
 } from "@/lib/settingsStore";
+import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMarkersQueryKey } from "@workspace/api-client-react";
 import { useTerrainStore } from "@/lib/terrainStore";
@@ -302,6 +304,59 @@ function SelectRow<T extends string>({
   );
 }
 
+function ColorRow({
+  label, value, onChange, sublabel,
+}: { label: string; value: string; onChange: (v: string) => void; sublabel?: string }) {
+  return (
+    <div style={S.row}>
+      <div>
+        <div style={S.label}>{label}</div>
+        {sublabel && <div style={S.sublabel}>{sublabel}</div>}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <input
+          type="color"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={{
+            width: 36, height: 24, border: "1px solid rgba(0,229,255,0.2)",
+            borderRadius: 3, background: "transparent", cursor: "pointer", padding: 0,
+          }}
+          aria-label={label}
+        />
+        <span style={{ color: "#64748b", fontSize: 10, minWidth: 64, textAlign: "right" }}>
+          {value.toUpperCase()}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function SectionResetRow({ section }: { section: SettingsSection }) {
+  const resetSection = useSettingsStore((s) => s.resetSection);
+  return (
+    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+      <button
+        onClick={() => resetSection(section)}
+        data-testid={`reset-section-${section}-btn`}
+        style={{
+          background: "none",
+          border: "1px solid rgba(0,229,255,0.15)",
+          borderRadius: 3,
+          color: "#64748b",
+          fontSize: 9,
+          letterSpacing: "0.15em",
+          padding: "3px 10px",
+          cursor: "pointer",
+          fontFamily: FONT,
+        }}
+      >
+        RESET SECTION
+      </button>
+    </div>
+  );
+}
+
 // ─── Offline / Storage helpers ────────────────────────────────────────────────
 interface CachedDataset { url: string; label: string; sizeKb: number | null }
 
@@ -351,28 +406,45 @@ function VisualsSection() {
   const s = useSettingsStore();
   return (
     <>
-      <h2 style={S.sectionTitle}>◈ VISUALS</h2>
+      <h2 style={S.sectionTitle}>◈ VISUALS &amp; PERFORMANCE</h2>
+      <SectionResetRow section="visuals" />
       <div style={S.card}>
-        <div style={S.cardHeader}>SCENE APPEARANCE</div>
+        <div style={S.cardHeader}>QUALITY PRESET</div>
         <SelectRow
-          label="Texture Quality"
-          value={s.textureQuality}
-          onChange={s.setTextureQuality}
-          options={[{ value: "off", label: "Off" }, { value: "low", label: "Low" }, { value: "high", label: "High" }]}
-          sublabel="Affects mesh detail quality"
+          label="Preset"
+          value={s.qualityPreset}
+          onChange={(v) => {
+            if (v === "custom") s.setQualityPreset("custom");
+            else s.applyQualityPreset(v);
+          }}
+          options={[
+            { value: "low", label: "Low" },
+            { value: "medium", label: "Medium" },
+            { value: "high", label: "High" },
+            { value: "ultra", label: "Ultra" },
+            { value: "custom", label: "Custom" },
+          ]}
+          sublabel="Applies a bundle of visual settings. Tweaking individual knobs switches to Custom."
+        />
+        <SliderRow
+          label="Terrain Exaggeration"
+          value={s.terrainExaggeration}
+          min={0.25} max={3.0} step={0.05}
+          format={(v) => `${v.toFixed(2)}×`}
+          onChange={s.setTerrainExaggeration}
+          sublabel="Vertical stretch applied to terrain"
+        />
+        <ToggleRow
+          label="Marine Snow Effect"
+          value={s.enableMarineSnow}
+          onChange={s.setEnableMarineSnow}
+          sublabel="Floating particles around the camera"
         />
         <ToggleRow
           label="Caustics Effect"
           value={s.enableCaustics}
           onChange={s.setEnableCaustics}
           sublabel="Light refraction pattern overlay"
-        />
-        <SelectRow
-          label="Marine Snow"
-          value={s.particleDensity}
-          onChange={s.setParticleDensity}
-          options={[{ value: "off", label: "Off" }, { value: "sparse", label: "Sparse (500)" }, { value: "dense", label: "Dense (2000)" }]}
-          sublabel="Floating particle density"
         />
         <SelectRow
           label="Depth Colormap"
@@ -388,59 +460,105 @@ function VisualsSection() {
         />
       </div>
       <PalettePickerCard />
-      <div style={S.card}>
-        <div style={S.cardHeader}>LIGHTING &amp; FOG</div>
-        <SliderRow
-          label="Fog Density"
-          value={s.fogDensity}
-          min={0.004} max={0.030} step={0.001}
-          format={(v) => v.toFixed(3)}
-          onChange={s.setFogDensity}
-          sublabel="Exponential underwater haze"
-        />
-        <SliderRow
-          label="Lamp Intensity"
-          value={s.lampIntensity}
-          min={0} max={5} step={0.1}
-          format={(v) => v.toFixed(1)}
-          onChange={s.setLampIntensity}
-          sublabel="Camera-attached point light"
-        />
-      </div>
-      <div style={S.card}>
-        <div style={S.cardHeader}>TERRAIN RENDERING</div>
-        <ToggleRow
-          label="Smooth terrain spikes"
-          value={s.smoothTerrainSpikes}
-          onChange={s.setSmoothTerrainSpikes}
-          sublabel="Server-side post-process that blends slopes steeper than 70°. Disable to inspect raw bathymetric artifacts."
-        />
-      </div>
+      <AdvancedDisclosure testId="visuals-advanced">
+        <div style={S.card}>
+          <div style={S.cardHeader}>PARTICLES &amp; TEXTURES</div>
+          <SelectRow
+            label="Marine Snow Density"
+            value={s.particleDensity}
+            onChange={s.setParticleDensity}
+            options={[{ value: "off", label: "Off" }, { value: "sparse", label: "Sparse (500)" }, { value: "dense", label: "Dense (2000)" }]}
+          />
+          <SelectRow
+            label="Texture Quality"
+            value={s.textureQuality}
+            onChange={s.setTextureQuality}
+            options={[{ value: "off", label: "Off" }, { value: "low", label: "Low" }, { value: "high", label: "High" }]}
+          />
+          <ToggleRow
+            label="Antialiasing"
+            value={s.antialiasing}
+            onChange={s.setAntialiasing}
+            sublabel="MSAA edge smoothing (page reload to apply)"
+          />
+        </div>
+        <div style={S.card}>
+          <div style={S.cardHeader}>LIGHTING &amp; FOG</div>
+          <SliderRow
+            label="Fog Density"
+            value={s.fogDensity}
+            min={0.004} max={0.030} step={0.001}
+            format={(v) => v.toFixed(3)}
+            onChange={s.setFogDensity}
+            sublabel="Exponential underwater haze"
+          />
+          <ColorRow
+            label="Fog Color"
+            value={s.fogColor}
+            onChange={s.setFogColor}
+            sublabel="Background tint of the underwater scene"
+          />
+          <SliderRow
+            label="Ambient Light Intensity"
+            value={s.ambientLightIntensity}
+            min={0} max={1} step={0.01}
+            format={(v) => v.toFixed(2)}
+            onChange={s.setAmbientLightIntensity}
+          />
+          <SliderRow
+            label="Directional Light Intensity"
+            value={s.directionalLightIntensity}
+            min={0} max={1.5} step={0.01}
+            format={(v) => v.toFixed(2)}
+            onChange={s.setDirectionalLightIntensity}
+          />
+          <SliderRow
+            label="Lamp Intensity"
+            value={s.lampIntensity}
+            min={0} max={5} step={0.1}
+            format={(v) => v.toFixed(1)}
+            onChange={s.setLampIntensity}
+            sublabel="Camera-attached point light"
+          />
+          <SliderRow
+            label="Lamp Range"
+            value={s.lampRange}
+            min={10} max={150} step={5}
+            format={(v) => `${v} m`}
+            onChange={s.setLampRange}
+          />
+        </div>
+        <div style={S.card}>
+          <div style={S.cardHeader}>TERRAIN RENDERING</div>
+          <ToggleRow
+            label="Smooth terrain spikes"
+            value={s.smoothTerrainSpikes}
+            onChange={s.setSmoothTerrainSpikes}
+            sublabel="Server-side post-process that blends slopes steeper than 70°. Disable to inspect raw bathymetric artifacts."
+          />
+        </div>
+      </AdvancedDisclosure>
     </>
   );
 }
 
 function NavigationSection() {
   const s = useSettingsStore();
-  const { setDefaultSpeedTier, setInvertMouseY, setMouseSensitivity, setCameraSpawnBehaviour } = s;
   return (
     <>
-      <h2 style={S.sectionTitle}>◈ NAVIGATION</h2>
+      <h2 style={S.sectionTitle}>◈ CAMERA &amp; CONTROLS</h2>
+      <SectionResetRow section="camera" />
       <div style={S.card}>
-        <div style={S.cardHeader}>FLY MODE</div>
-        <SliderRow
-          label="Mouse Sensitivity"
-          value={s.mouseSensitivity}
-          min={0.1} max={3.0} step={0.1}
-          format={(v) => `${v.toFixed(1)}×`}
-          onChange={setMouseSensitivity}
-          sublabel="Multiplier applied to look rotation"
-        />
-        <ToggleRow
-          label="Invert Mouse Y"
-          value={s.invertMouseY}
-          onChange={setInvertMouseY}
-          sublabel="Flip vertical look direction"
+        <div style={S.cardHeader}>BASICS</div>
+        <SelectRow
+          label="Default Navigation Mode"
+          value={s.defaultNavMode}
+          onChange={s.setDefaultNavMode}
+          options={[
+            { value: "fly", label: "Fly (free 6DoF)" },
+            { value: "orbit", label: "Orbit (around target)" },
+          ]}
+          sublabel="Mode entered when a dataset loads"
         />
         <div style={S.row}>
           <div>
@@ -450,7 +568,7 @@ function NavigationSection() {
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input
               type="range" min={0} max={4} step={1} value={s.defaultSpeedTier}
-              onChange={(e) => setDefaultSpeedTier(Number(e.target.value))}
+              onChange={(e) => s.setDefaultSpeedTier(Number(e.target.value))}
               style={S.slider}
             />
             <span style={{ color: "#00e5ff", fontSize: 10, minWidth: 24, textAlign: "center" }}>
@@ -458,21 +576,64 @@ function NavigationSection() {
             </span>
           </div>
         </div>
-      </div>
-      <div style={S.card}>
-        <div style={S.cardHeader}>CAMERA SPAWN</div>
-        <SelectRow
-          label="Spawn Position"
-          value={s.cameraSpawnBehaviour}
-          onChange={setCameraSpawnBehaviour}
-          options={[
-            { value: "deepest", label: "Deepest point" },
-            { value: "home", label: "Saved home position" },
-            { value: "last", label: "Last position" },
-          ]}
-          sublabel="Where to place camera when loading a dataset"
+        <SliderRow
+          label="Mouse Sensitivity"
+          value={s.mouseSensitivity}
+          min={0.1} max={3.0} step={0.1}
+          format={(v) => `${v.toFixed(1)}×`}
+          onChange={s.setMouseSensitivity}
+          sublabel="Multiplier applied to look rotation"
+        />
+        <ToggleRow
+          label="Invert Mouse Y"
+          value={s.invertMouseY}
+          onChange={s.setInvertMouseY}
+          sublabel="Flip vertical look direction"
         />
       </div>
+      <AdvancedDisclosure testId="camera-advanced">
+        <div style={S.card}>
+          <div style={S.cardHeader}>CAMERA ADVANCED</div>
+          <SliderRow
+            label="Field of View"
+            value={s.fieldOfView}
+            min={30} max={90} step={1}
+            format={(v) => `${v}°`}
+            onChange={s.setFieldOfView}
+            sublabel="Perspective FOV in degrees"
+          />
+          <SliderRow
+            label="Render Distance"
+            value={s.renderDistance}
+            min={100} max={2000} step={50}
+            format={(v) => `${v} m`}
+            onChange={s.setRenderDistance}
+            sublabel="Camera far clip plane"
+          />
+          <SelectRow
+            label="Spawn Position"
+            value={s.cameraSpawnBehaviour}
+            onChange={s.setCameraSpawnBehaviour}
+            options={[
+              { value: "deepest", label: "Deepest point" },
+              { value: "home", label: "Saved home position" },
+              { value: "last", label: "Last position" },
+            ]}
+            sublabel="Where to place camera when loading a dataset"
+          />
+          <SelectRow
+            label="On-Screen Joystick (touch)"
+            value={s.joystickMode}
+            onChange={s.setJoystickMode}
+            options={[
+              { value: "auto", label: "Auto (touch only)" },
+              { value: "always", label: "Always on" },
+              { value: "off", label: "Off" },
+            ]}
+            sublabel="Virtual joystick visibility"
+          />
+        </div>
+      </AdvancedDisclosure>
     </>
   );
 }
@@ -481,7 +642,8 @@ function HUDSection() {
   const s = useSettingsStore();
   return (
     <>
-      <h2 style={S.sectionTitle}>◈ HUD</h2>
+      <h2 style={S.sectionTitle}>◈ HUD &amp; LAYOUT</h2>
+      <SectionResetRow section="hud" />
       <div style={S.card}>
         <div style={S.cardHeader}>VISIBILITY</div>
         <ToggleRow label="Crosshair GPS" value={s.showCrosshairGps} onChange={s.setShowCrosshairGps} sublabel="Centre-screen target coordinates" />
@@ -505,87 +667,56 @@ function HUDSection() {
           onChange={s.setHudOpacity}
         />
       </div>
+      <AdvancedDisclosure testId="hud-advanced">
+        <div style={S.card}>
+          <div style={S.cardHeader}>PANELS</div>
+          <ToggleRow label="Depth Legend" value={s.showDepthLegend} onChange={s.setShowDepthLegend} sublabel="Floating depth/altitude legend" />
+          <ToggleRow label="Depth Scale Bar" value={s.showDepthScaleBar} onChange={s.setShowDepthScaleBar} sublabel="Vertical gradient bar" />
+          <ToggleRow label="Compass / Minimap" value={s.showCompassMinimap} onChange={s.setShowCompassMinimap} />
+          <ToggleRow label="Controls Legend" value={s.showControlsLegend} onChange={s.setShowControlsLegend} sublabel="Keyboard/mouse cheat sheet overlay" />
+          <ToggleRow label="Tide &amp; Currents Panel" value={s.showTidePanel} onChange={s.setShowTidePanel} />
+          <ToggleRow label="Habitat Panel" value={s.showHabitatPanel} onChange={s.setShowHabitatPanel} />
+          <ToggleRow label="Dataset Selector" value={s.showDatasetPanel} onChange={s.setShowDatasetPanel} />
+          <ToggleRow label="Natural-Language Query" value={s.showQueryPanel} onChange={s.setShowQueryPanel} />
+        </div>
+        <div style={S.card}>
+          <div style={S.cardHeader}>TIME FORMAT</div>
+          <SelectRow
+            label="Time Display"
+            value={s.timeFormat}
+            onChange={s.setTimeFormat}
+            options={[
+              { value: "local", label: "Local time" },
+              { value: "utc", label: "UTC" },
+              { value: "12h", label: "12-hour" },
+              { value: "24h", label: "24-hour" },
+            ]}
+          />
+        </div>
+      </AdvancedDisclosure>
     </>
   );
 }
 
 function UnitsSection() {
-  const units = useSettingsStore((s) => s.units);
-  const setUnits = useSettingsStore((s) => s.setUnits);
-
-  const segBtn = (active: boolean): React.CSSProperties => ({
-    flex: 1,
-    padding: "8px 12px",
-    background: active ? "rgba(0,229,255,0.12)" : "transparent",
-    border: `1px solid ${active ? "rgba(0,229,255,0.5)" : "rgba(0,229,255,0.15)"}`,
-    color: active ? "#00e5ff" : "#64748b",
-    cursor: "pointer",
-    fontFamily: FONT,
-    fontSize: 10,
-    letterSpacing: "0.15em",
-    fontWeight: 700,
-    textShadow: active ? "0 0 6px rgba(0,229,255,0.5)" : "none",
-    transition: "all 0.12s",
-  });
+  const s = useSettingsStore();
 
   return (
     <>
       <h2 style={S.sectionTitle}>◈ UNITS</h2>
+      <SectionResetRow section="hud" />
       <div style={S.card}>
         <div style={S.cardHeader}>MEASUREMENT SYSTEM</div>
-        <div style={{ padding: "12px 16px" }}>
-          <div style={{ ...S.sublabel, marginBottom: 10, marginTop: 0 }}>
-            Applied app-wide to depths, distances, speeds and temperatures.
-          </div>
-          <div
-            role="radiogroup"
-            aria-label="Units system"
-            style={{ display: "flex", gap: 8 }}
-          >
-            <button
-              type="button"
-              role="radio"
-              aria-checked={units === "metric"}
-              data-testid="units-metric-btn"
-              onClick={() => setUnits("metric")}
-              style={segBtn(units === "metric")}
-            >
-              METRIC
-              <div
-                style={{
-                  fontSize: 8,
-                  marginTop: 4,
-                  letterSpacing: "0.1em",
-                  color: "#475569",
-                  fontWeight: 400,
-                }}
-              >
-                m · km · km/h · °C
-              </div>
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={units === "imperial"}
-              data-testid="units-imperial-btn"
-              onClick={() => setUnits("imperial")}
-              style={segBtn(units === "imperial")}
-            >
-              IMPERIAL
-              <div
-                style={{
-                  fontSize: 8,
-                  marginTop: 4,
-                  letterSpacing: "0.1em",
-                  color: "#475569",
-                  fontWeight: 400,
-                }}
-              >
-                ft · mi · mph · °F
-              </div>
-            </button>
-          </div>
-        </div>
+        <SelectRow
+          label="Units"
+          value={s.units}
+          onChange={s.setUnits}
+          options={[
+            { value: "metric", label: "Metric (m, m/s, °C)" },
+            { value: "imperial", label: "Imperial (ft, kn, °F)" },
+          ]}
+          sublabel="Switching also updates the depth unit"
+        />
       </div>
     </>
   );
@@ -619,6 +750,7 @@ const MARKER_TYPE_OPTIONS: { value: MarkerType; label: string }[] = [
   { value: "coral", label: "🪸 Coral" },
   { value: "vent", label: "🌋 Vent" },
   { value: "custom", label: "📍 Custom" },
+  { value: "depth_pole", label: "📏 Depth Pole" },
 ];
 
 function MarkersSection() {
@@ -636,6 +768,7 @@ function MarkersSection() {
   return (
     <>
       <h2 style={S.sectionTitle}>◈ MARKERS</h2>
+      <SectionResetRow section="markers" />
       <div style={S.card}>
         <div style={S.cardHeader}>VISIBILITY</div>
         <ToggleRow label="Show Marker Labels" value={s.showMarkerLabels} onChange={s.setShowMarkerLabels} sublabel="Name text below marker sprites" />
@@ -662,6 +795,326 @@ function MarkersSection() {
           sublabel="Pre-selected when opening the marker form"
         />
       </div>
+      <AdvancedDisclosure testId="markers-advanced">
+        <div style={S.card}>
+          <div style={S.cardHeader}>MARKER ADVANCED</div>
+          <ColorRow
+            label="Default Depth Pole Color"
+            value={s.defaultDepthPoleColor}
+            onChange={s.setDefaultDepthPoleColor}
+            sublabel="Used when creating a new depth-pole marker"
+          />
+          <SliderRow
+            label="Cluster Threshold"
+            value={s.markerClusterThreshold}
+            min={0} max={200} step={5}
+            format={(v) => v === 0 ? "Off" : `${v}`}
+            onChange={s.setMarkerClusterThreshold}
+            sublabel="Markers within this pixel distance are grouped. 0 disables clustering."
+          />
+        </div>
+      </AdvancedDisclosure>
+    </>
+  );
+}
+
+function TidalSection() {
+  const s = useSettingsStore();
+  return (
+    <>
+      <h2 style={S.sectionTitle}>◈ TIDAL DEFAULTS</h2>
+      <SectionResetRow section="tidal" />
+      <div style={S.card}>
+        <div style={S.cardHeader}>BEHAVIOUR</div>
+        <ToggleRow
+          label="Auto-Load Tidal Data"
+          value={s.autoLoadTidal}
+          onChange={s.setAutoLoadTidal}
+          sublabel="Fetch tide &amp; current data when a dataset opens"
+        />
+        <SelectRow
+          label="Default Depth Layer"
+          value={s.defaultTidalDepthLayer}
+          onChange={s.setDefaultTidalDepthLayer}
+          options={[
+            { value: "surface", label: "Surface" },
+            { value: "mid", label: "Mid-water" },
+            { value: "near-bottom", label: "Near-bottom" },
+          ]}
+          sublabel="Which current layer is shown by default"
+        />
+      </div>
+      <AdvancedDisclosure testId="tidal-advanced">
+        <div style={S.card}>
+          <div style={S.cardHeader}>VISUALISATION</div>
+          <SelectRow
+            label="Current Arrow Density"
+            value={s.currentArrowDensity}
+            onChange={s.setCurrentArrowDensity}
+            options={[
+              { value: "sparse", label: "Sparse" },
+              { value: "normal", label: "Normal" },
+              { value: "dense", label: "Dense" },
+            ]}
+          />
+        </div>
+      </AdvancedDisclosure>
+    </>
+  );
+}
+
+function HabitatSection() {
+  const s = useSettingsStore();
+  return (
+    <>
+      <h2 style={S.sectionTitle}>◈ HABITAT DEFAULTS</h2>
+      <SectionResetRow section="habitat" />
+      <div style={S.card}>
+        <div style={S.cardHeader}>BEHAVIOUR</div>
+        <ToggleRow
+          label="Auto-Show Zone Overlay"
+          value={s.autoShowZoneOverlay}
+          onChange={s.setAutoShowZoneOverlay}
+          sublabel="Display habitat zones automatically on load"
+        />
+      </div>
+      <AdvancedDisclosure testId="habitat-advanced">
+        <div style={S.card}>
+          <div style={S.cardHeader}>DEFAULTS</div>
+          <div style={S.row}>
+            <div>
+              <div style={S.label}>Default Species</div>
+              <div style={S.sublabel}>Pre-fills the habitat species filter</div>
+            </div>
+            <input
+              type="text"
+              value={s.defaultHabitatSpecies}
+              onChange={(e) => s.setDefaultHabitatSpecies(e.target.value)}
+              placeholder="(none)"
+              style={{
+                ...S.select, width: 160, fontFamily: FONT, fontSize: 10,
+              }}
+            />
+          </div>
+        </div>
+      </AdvancedDisclosure>
+    </>
+  );
+}
+
+function GpsSection() {
+  const s = useSettingsStore();
+  return (
+    <>
+      <h2 style={S.sectionTitle}>◈ GPS &amp; TRAIL</h2>
+      <SectionResetRow section="gps" />
+      <div style={S.card}>
+        <div style={S.cardHeader}>RECORDING</div>
+        <ToggleRow
+          label="Auto-Start Trail Recording"
+          value={s.autoStartTrailRecording}
+          onChange={s.setAutoStartTrailRecording}
+          sublabel="Begin recording the moment a dataset loads"
+        />
+        <ColorRow
+          label="Default Trail Color"
+          value={s.defaultTrailColor}
+          onChange={s.setDefaultTrailColor}
+        />
+        <SelectRow
+          label="Sample Rate"
+          value={String(s.gpsRecordingInterval) as "1000" | "2000" | "10000"}
+          onChange={(v) => s.setGpsRecordingInterval(Number(v))}
+          options={[
+            { value: "1000", label: "1 Hz (1 / sec)" },
+            { value: "2000", label: "0.5 Hz (every 2s)" },
+            { value: "10000", label: "0.1 Hz (every 10s)" },
+          ]}
+          sublabel="How often GPS track points are recorded"
+        />
+      </div>
+      <AdvancedDisclosure testId="gps-advanced">
+        <div style={S.card}>
+          <div style={S.cardHeader}>RETENTION</div>
+          <SelectRow
+            label="Keep Trails For"
+            value={s.trailRetention}
+            onChange={s.setTrailRetention}
+            options={[
+              { value: "7", label: "7 days" },
+              { value: "30", label: "30 days" },
+              { value: "90", label: "90 days" },
+              { value: "all", label: "Forever" },
+            ]}
+            sublabel="Older trails are auto-purged on next sign-in"
+          />
+        </div>
+      </AdvancedDisclosure>
+    </>
+  );
+}
+
+function AccessibilitySection() {
+  const s = useSettingsStore();
+  return (
+    <>
+      <h2 style={S.sectionTitle}>◈ ACCESSIBILITY</h2>
+      <SectionResetRow section="accessibility" />
+      <div style={S.card}>
+        <div style={S.cardHeader}>DISPLAY</div>
+        <ToggleRow
+          label="Reduce Motion"
+          value={s.reducedMotion}
+          onChange={s.setReducedMotion}
+          sublabel="Disable non-essential animations &amp; particles"
+        />
+        <ToggleRow
+          label="Color-Blind Safe Palette"
+          value={s.colorBlindSafePalette}
+          onChange={s.setColorBlindSafePalette}
+          sublabel="Switch markers to a high-contrast palette"
+        />
+        <ToggleRow
+          label="Large HUD Text"
+          value={s.largeHudText}
+          onChange={s.setLargeHudText}
+          sublabel="Increase HUD font size"
+        />
+        <ToggleRow
+          label="High-Contrast HUD"
+          value={s.highContrastHud}
+          onChange={s.setHighContrastHud}
+          sublabel="Stronger text/background contrast"
+        />
+      </div>
+    </>
+  );
+}
+
+const SHORTCUTS: { keys: string; desc: string }[] = [
+  { keys: "W A S D", desc: "Move (fly mode)" },
+  { keys: "Space / Shift", desc: "Move up / down" },
+  { keys: "Mouse drag", desc: "Look around" },
+  { keys: "1 – 5", desc: "Speed tier 0 – 4" },
+  { keys: "M", desc: "Toggle overview map" },
+  { keys: "P", desc: "Drop marker at crosshair" },
+  { keys: "T", desc: "Start / stop GPS trail" },
+  { keys: "H", desc: "Toggle HUD" },
+  { keys: "F", desc: "Reset camera to home" },
+  { keys: ",", desc: "Open settings" },
+  { keys: "Esc", desc: "Close panels / release pointer" },
+];
+
+function GlobalResetFooter() {
+  const [confirm, setConfirm] = useState(false);
+  const resetAll = useSettingsStore((s) => s.resetAll);
+
+  return (
+    <div style={{ marginTop: 32, paddingTop: 20, borderTop: "1px solid rgba(239,68,68,0.15)" }}>
+      <div style={{ fontSize: 9, color: "#64748b", letterSpacing: "0.15em", marginBottom: 8 }}>
+        GLOBAL RESET
+      </div>
+      <div style={{ fontSize: 10, color: "#475569", marginBottom: 12 }}>
+        Restore every setting on this page to its default value. Your saved
+        dataset home positions and marker data are not affected.
+      </div>
+      {!confirm ? (
+        <button
+          onClick={() => setConfirm(true)}
+          data-testid="reset-all-btn"
+          style={{
+            background: "rgba(239,68,68,0.06)",
+            border: "1px solid rgba(239,68,68,0.3)",
+            borderRadius: 4,
+            color: "#f87171",
+            fontSize: 9,
+            letterSpacing: "0.15em",
+            padding: "6px 14px",
+            cursor: "pointer",
+            fontFamily: FONT,
+          }}
+        >
+          RESET ALL SETTINGS
+        </button>
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontSize: 10, color: "#f87171" }}>Reset every setting?</span>
+          <button
+            onClick={() => { resetAll(); setConfirm(false); }}
+            data-testid="confirm-reset-all-btn"
+            style={{
+              background: "rgba(239,68,68,0.15)",
+              border: "1px solid rgba(239,68,68,0.4)",
+              borderRadius: 4,
+              color: "#f87171",
+              fontSize: 9,
+              letterSpacing: "0.15em",
+              padding: "6px 14px",
+              cursor: "pointer",
+              fontFamily: FONT,
+            }}
+          >
+            YES, RESET EVERYTHING
+          </button>
+          <button
+            onClick={() => setConfirm(false)}
+            style={{
+              background: "none",
+              border: "1px solid rgba(100,116,139,0.3)",
+              borderRadius: 4,
+              color: "#64748b",
+              fontSize: 9,
+              letterSpacing: "0.15em",
+              padding: "6px 14px",
+              cursor: "pointer",
+              fontFamily: FONT,
+            }}
+          >
+            CANCEL
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ShortcutsSection() {
+  return (
+    <>
+      <h2 style={S.sectionTitle}>◈ KEYBOARD SHORTCUTS</h2>
+      <div style={S.card}>
+        <div style={S.cardHeader}>REFERENCE</div>
+        <div style={{ padding: "8px 16px" }}>
+          {SHORTCUTS.map((sh) => (
+            <div
+              key={sh.keys}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "6px 0",
+                borderBottom: "1px solid rgba(0,229,255,0.05)",
+                fontSize: 11,
+              }}
+            >
+              <span style={{ color: "#94a3b8" }}>{sh.desc}</span>
+              <kbd
+                style={{
+                  background: "rgba(0,229,255,0.08)",
+                  border: "1px solid rgba(0,229,255,0.25)",
+                  borderRadius: 3,
+                  padding: "2px 8px",
+                  fontFamily: FONT,
+                  fontSize: 10,
+                  color: "#67e8f9",
+                }}
+              >
+                {sh.keys}
+              </kbd>
+            </div>
+          ))}
+        </div>
+      </div>
     </>
   );
 }
@@ -670,7 +1123,8 @@ function DatasetSection() {
   const s = useSettingsStore();
   return (
     <>
-      <h2 style={S.sectionTitle}>◈ DATASET</h2>
+      <h2 style={S.sectionTitle}>◈ DATA &amp; STORAGE</h2>
+      <SectionResetRow section="data" />
       <div style={S.card}>
         <div style={S.cardHeader}>DEFAULTS</div>
         <SelectRow
@@ -684,16 +1138,11 @@ function DatasetSection() {
           ]}
           sublabel="Dataset loaded when the app starts"
         />
-      </div>
-      <div style={S.card}>
-        <div style={S.cardHeader}>GPS RECORDING</div>
-        <SliderRow
-          label="Recording Interval"
-          value={s.gpsRecordingInterval / 1000}
-          min={1} max={60} step={1}
-          format={(v) => `${v}s`}
-          onChange={(v) => s.setGpsRecordingInterval(v * 1000)}
-          sublabel="Time between GPS track points"
+        <ToggleRow
+          label="Auto-Load Last Dataset"
+          value={s.autoLoadLastDataset}
+          onChange={s.setAutoLoadLastDataset}
+          sublabel="Reopen the dataset you used last session"
         />
       </div>
     </>
@@ -888,6 +1337,7 @@ function AccountSection() {
   const { user } = useUser();
   const qc = useQueryClient();
   const activeGrid = useTerrainStore((s) => s.activeGrid);
+  const s = useSettingsStore();
   const deleteAllMarkers = useDeleteMarkersMine({
     mutation: {
       onSuccess: (data) => {
@@ -902,11 +1352,57 @@ function AccountSection() {
   });
   const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [accountMsg, setAccountMsg] = useState<string | null>(null);
   const { signOut } = useClerk();
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+      const resp = await fetch(`${apiBase}/api/me/export`, { credentials: "include" });
+      if (!resp.ok) throw new Error(`Export failed: ${resp.status}`);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `bathyscan-export-${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setAccountMsg("✓ Export downloaded");
+      setTimeout(() => setAccountMsg(null), 3000);
+    } catch (err) {
+      setAccountMsg(`✗ ${(err as Error).message}`);
+      setTimeout(() => setAccountMsg(null), 4000);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+    const resp = await fetch(`${apiBase}/api/me`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (resp.ok) {
+      // Clear all client-side persisted state and sign out.
+      try { localStorage.clear(); } catch { /* ignore */ }
+      try { sessionStorage.clear(); } catch { /* ignore */ }
+      await signOut();
+    } else {
+      setAccountMsg(`✗ Delete failed: ${resp.status}`);
+      setTimeout(() => setAccountMsg(null), 4000);
+    }
+  };
 
   return (
     <>
-      <h2 style={S.sectionTitle}>◈ ACCOUNT</h2>
+      <h2 style={S.sectionTitle}>◈ ACCOUNT &amp; PRIVACY</h2>
+      <SectionResetRow section="account" />
       {user && (
         <div style={S.card}>
           <div style={S.cardHeader}>SIGNED IN AS</div>
@@ -931,6 +1427,46 @@ function AccountSection() {
           </div>
         </div>
       )}
+      <div style={S.card}>
+        <div style={S.cardHeader}>PRIVACY</div>
+        <ToggleRow
+          label="Anonymous Telemetry"
+          value={s.telemetryOptIn}
+          onChange={s.setTelemetryOptIn}
+          sublabel="Help improve BathyScan by sharing anonymised usage events"
+        />
+      </div>
+      <div style={S.card}>
+        <div style={S.cardHeader}>YOUR DATA</div>
+        <div style={{ padding: "14px 16px" }}>
+          <div style={{ fontSize: 10, color: "#64748b", marginBottom: 12 }}>
+            Export a copy of all your settings, markers, custom datasets, and GPS trails as JSON.
+          </div>
+          {accountMsg && (
+            <div style={{ fontSize: 9, color: accountMsg.startsWith("✓") ? "#4ade80" : "#f87171", letterSpacing: "0.12em", marginBottom: 8 }}>
+              {accountMsg}
+            </div>
+          )}
+          <button
+            onClick={() => void handleExport()}
+            disabled={exporting}
+            data-testid="export-data-btn"
+            style={{
+              background: "rgba(0,229,255,0.06)",
+              border: "1px solid rgba(0,229,255,0.25)",
+              borderRadius: 3,
+              color: "#67e8f9",
+              fontSize: 9,
+              letterSpacing: "0.15em",
+              padding: "6px 14px",
+              cursor: "pointer",
+              fontFamily: FONT,
+            }}
+          >
+            {exporting ? "EXPORTING…" : "EXPORT MY DATA"}
+          </button>
+        </div>
+      </div>
       <div style={S.dangerCard}>
         <div style={S.dangerHeader}>⚠ DANGER ZONE</div>
         <div style={{ padding: "14px 16px" }}>
@@ -976,25 +1512,70 @@ function AccountSection() {
             </div>
           )}
         </div>
+        <div style={{ padding: "14px 16px", borderTop: "1px solid rgba(239,68,68,0.12)" }}>
+          <div style={{ fontSize: 10, color: "#64748b", marginBottom: 12 }}>
+            Permanently delete <strong style={{ color: "#f87171" }}>all</strong> of your data
+            — settings, markers, custom datasets, GPS trails. This cannot be undone.
+          </div>
+          {!confirmDeleteAccount ? (
+            <button
+              onClick={() => setConfirmDeleteAccount(true)}
+              data-testid="delete-account-btn"
+              style={S.dangerBtn}
+            >
+              DELETE MY ACCOUNT DATA
+            </button>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: 10, color: "#f87171" }}>Permanently delete everything?</span>
+              <button
+                onClick={() => { void handleDeleteAccount(); setConfirmDeleteAccount(false); }}
+                data-testid="confirm-delete-account-btn"
+                style={{ ...S.dangerBtn, background: "rgba(239,68,68,0.15)" }}
+              >
+                YES, DELETE EVERYTHING
+              </button>
+              <button
+                onClick={() => setConfirmDeleteAccount(false)}
+                style={{
+                  ...S.dangerBtn,
+                  color: "#64748b",
+                  border: "1px solid rgba(100,116,139,0.3)",
+                  background: "none",
+                }}
+              >
+                CANCEL
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </>
   );
 }
 
 // ─── Nav tabs ─────────────────────────────────────────────────────────────────
-type Tab = "visuals" | "navigation" | "hud" | "units" | "overview" | "markers" | "dataset" | "offline" | "account" | "environment";
+type Tab =
+  | "visuals" | "navigation" | "hud" | "units" | "overview" | "markers"
+  | "tidal" | "habitat" | "gps" | "dataset" | "offline"
+  | "accessibility" | "shortcuts" | "account" | "environment";
 
 const NAV_TABS: { id: Tab; label: string }[] = [
-  { id: "visuals", label: "VISUALS" },
-  { id: "navigation", label: "NAVIGATION" },
-  { id: "hud", label: "HUD" },
+  { id: "visuals", label: "VISUALS & PERF" },
+  { id: "navigation", label: "CAMERA & CTRL" },
+  { id: "hud", label: "HUD & LAYOUT" },
   { id: "units", label: "UNITS" },
   { id: "overview", label: "OVERVIEW MAP" },
   { id: "markers", label: "MARKERS" },
-  { id: "dataset", label: "DATASET" },
+  { id: "tidal", label: "TIDAL" },
+  { id: "habitat", label: "HABITAT" },
+  { id: "gps", label: "GPS & TRAIL" },
+  { id: "dataset", label: "DATA & STORAGE" },
   { id: "environment", label: "ENVIRONMENT" },
-  { id: "offline", label: "OFFLINE" },
-  { id: "account", label: "ACCOUNT" },
+  { id: "offline", label: "OFFLINE CACHE" },
+  { id: "accessibility", label: "ACCESSIBILITY" },
+  { id: "shortcuts", label: "SHORTCUTS" },
+  { id: "account", label: "ACCOUNT & PRIVACY" },
 ];
 
 // ─── Main export ──────────────────────────────────────────────────────────────
@@ -1029,40 +1610,18 @@ export function Settings() {
     if (!isSignedIn) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const state = useSettingsStore.getState();
+      const { hydrateFromServer: _h, resetSection: _rs, resetAll: _ra,
+        setDatasetHome: _sd, clearDatasetHome: _cd, datasetHomePositions: _dhp,
+        ...rest } = useSettingsStore.getState();
+      // Strip every function-typed field; keep only data.
+      const dataOnly: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(rest)) {
+        if (typeof v !== "function") dataOnly[k] = v;
+      }
       saveSettings(
-        {
-          data: {
-            textureQuality: state.textureQuality,
-            enableCaustics: state.enableCaustics,
-            particleDensity: state.particleDensity,
-            fogDensity: state.fogDensity,
-            colormapTheme: state.colormapTheme === "freshwater" ? undefined : state.colormapTheme,
-            lampIntensity: state.lampIntensity,
-            defaultSpeedTier: state.defaultSpeedTier,
-            invertMouseY: state.invertMouseY,
-            mouseSensitivity: state.mouseSensitivity,
-            cameraSpawnBehaviour: state.cameraSpawnBehaviour,
-            showCrosshairGps: state.showCrosshairGps,
-            showCameraPosition: state.showCameraPosition,
-            showSpeedIndicator: state.showSpeedIndicator,
-            showHeading: state.showHeading,
-            coordinateFormat: state.coordinateFormat,
-            depthUnit: state.depthUnit,
-            units: state.units,
-            hudOpacity: state.hudOpacity,
-            overviewDefaultZoom: state.overviewDefaultZoom,
-            overviewShowGrid: state.overviewShowGrid,
-            overviewShowMarkers: state.overviewShowMarkers,
-            overviewOpenOnLoad: state.overviewOpenOnLoad,
-            visibleMarkerTypes: state.visibleMarkerTypes,
-            showMarkerLabels: state.showMarkerLabels,
-            privateMarkers: state.privateMarkers,
-            defaultMarkerType: state.defaultMarkerType,
-            defaultRegion: state.defaultRegion,
-            gpsRecordingInterval: state.gpsRecordingInterval,
-          },
-        },
+        // Cast: server passes through unknown fields; spec-known fields
+        // are validated by zod, extras are stored as JSON.
+        { data: dataOnly as Parameters<typeof saveSettings>[0]["data"] },
         {
           onSuccess: () => {
             setSavedMsg(true);
@@ -1084,14 +1643,8 @@ export function Settings() {
     };
   }, [scheduleSync]);
 
-  const handleReset = () => {
-    const { hydrateFromServer: _, datasetHomePositions: _h, ...defaults } = {
-      ...DEFAULT_SETTINGS,
-      hydrateFromServer: null,
-    };
-    useSettingsStore.getState().hydrateFromServer(defaults as Partial<typeof DEFAULT_SETTINGS>);
-    scheduleSync();
-  };
+  const showAdvancedEverywhere = useSettingsStore((s) => s.showAdvancedEverywhere);
+  const setShowAdvancedEverywhere = useSettingsStore((s) => s.setShowAdvancedEverywhere);
 
   return (
     <div style={S.page}>
@@ -1106,19 +1659,22 @@ export function Settings() {
         <span style={{ fontSize: 10, letterSpacing: "0.3em", color: "#00e5ff", fontWeight: 700, textShadow: "0 0 8px rgba(0,229,255,0.5)", flex: 1 }}>
           SETTINGS
         </span>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 9 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 9 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#64748b", letterSpacing: "0.1em", cursor: "pointer" }}>
+            <span>SHOW ADVANCED</span>
+            <span data-testid="show-advanced-toggle">
+              <Toggle value={showAdvancedEverywhere} onChange={setShowAdvancedEverywhere} />
+            </span>
+          </label>
           {savedMsg && (
             <span style={{ color: "#4ade80", letterSpacing: "0.15em" }}>✓ SAVED</span>
           )}
           {isSignedIn && !savedMsg && (
             <span style={{ color: "#334155", letterSpacing: "0.1em" }}>synced to cloud</span>
           )}
-          <button
-            onClick={handleReset}
-            style={{ background: "none", border: "1px solid rgba(0,229,255,0.15)", borderRadius: 3, color: "#475569", cursor: "pointer", fontSize: 9, letterSpacing: "0.15em", padding: "3px 10px", fontFamily: FONT }}
-          >
-            RESET DEFAULTS
-          </button>
+          <span style={{ color: "#334155", letterSpacing: "0.1em" }} title={`schema v${SETTINGS_SCHEMA_VERSION}`}>
+            v{SETTINGS_SCHEMA_VERSION}
+          </span>
         </div>
       </div>
 
@@ -1145,10 +1701,18 @@ export function Settings() {
           {tab === "units" && <UnitsSection />}
           {tab === "overview" && <OverviewSection />}
           {tab === "markers" && <MarkersSection />}
+          {tab === "tidal" && <TidalSection />}
+          {tab === "habitat" && <HabitatSection />}
+          {tab === "gps" && <GpsSection />}
           {tab === "dataset" && <DatasetSection />}
           {tab === "environment" && <EnvironmentSection />}
           {tab === "offline" && <OfflineSection />}
+          {tab === "accessibility" && <AccessibilitySection />}
+          {tab === "shortcuts" && <ShortcutsSection />}
           {tab === "account" && <AccountSection />}
+
+          {/* Footer: global reset */}
+          <GlobalResetFooter />
         </div>
       </div>
     </div>

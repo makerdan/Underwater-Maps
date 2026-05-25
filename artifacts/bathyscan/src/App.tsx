@@ -167,7 +167,27 @@ function Main() {
   const markerFormOpen = useUiStore((s) => s.markerFormOpen);
   const overviewOpen = useUiStore((s) => s.overviewOpen);
   const gpsActive = useGpsStore((s) => s.active);
-  const [depthLayer, setDepthLayer] = useState<DepthLayer>("surface");
+  // Settings-driven UI visibility + tidal defaults
+  const autoLoadTidal = useSettingsStore((st) => st.autoLoadTidal);
+  const defaultTidalDepthLayer = useSettingsStore((st) => st.defaultTidalDepthLayer);
+  const showDepthScaleBar = useSettingsStore((st) => st.showDepthScaleBar);
+  const showCompassMinimap = useSettingsStore((st) => st.showCompassMinimap);
+  const showControlsLegend = useSettingsStore((st) => st.showControlsLegend);
+  const showTidePanel = useSettingsStore((st) => st.showTidePanel);
+  const showHabitatPanel = useSettingsStore((st) => st.showHabitatPanel);
+  const showDatasetPanel = useSettingsStore((st) => st.showDatasetPanel);
+  const showQueryPanel = useSettingsStore((st) => st.showQueryPanel);
+  const joystickMode = useSettingsStore((st) => st.joystickMode);
+
+  const [depthLayer, setDepthLayer] = useState<DepthLayer>(defaultTidalDepthLayer as DepthLayer);
+
+  // Apply "auto-load tidal overlay" preference once on mount.
+  const didAutoLoadTidalRef = useRef(false);
+  useEffect(() => {
+    if (didAutoLoadTidalRef.current) return;
+    didAutoLoadTidalRef.current = true;
+    if (autoLoadTidal && !tidalOverlay) setTidalOverlay(true);
+  }, [autoLoadTidal, tidalOverlay, setTidalOverlay]);
   const [scrubDatetime, setScrubDatetime] = useState<Date | null>(null);
   const [showResumeHint, setShowResumeHint] = useState(false);
   const [showIosInstallHint, setShowIosInstallHint] = useState(false);
@@ -370,7 +390,7 @@ function Main() {
         {/* HUD + depth scale — pointer-events:none overlay */}
         <div className="absolute inset-0 pointer-events-none z-10">
           <HUD />
-          <DepthScaleBar />
+          {showDepthScaleBar && <DepthScaleBar />}
         </div>
 
         {/* Dataset panel — top-left, vertically scrollable when content overflows.
@@ -389,9 +409,9 @@ function Main() {
               flex: "1 1 auto",
             }}
           >
-            <DatasetPanel />
+            {showDatasetPanel && <DatasetPanel />}
             <ZoneOverlay />
-            <HabitatPanel />
+            {showHabitatPanel && <HabitatPanel />}
           </div>
           <div style={{ flex: "0 0 auto" }}>
             <CameraCoordsReadout />
@@ -445,7 +465,7 @@ function Main() {
         </div>
 
         {/* Tide HUD panel — bottom-left, above controls legend */}
-        {tidalOverlay && tidalData !== null && (
+        {showTidePanel && tidalOverlay && tidalData !== null && (
           <div className="absolute z-20" style={{ bottom: 52, left: 16 }}>
             <TidePanel
               data={tidalData}
@@ -573,27 +593,35 @@ function Main() {
         )}
 
         {/* Minimap + controls legend — bottom-right and bottom-left */}
-        <div className="absolute bottom-4 right-4 z-20">
-          <Minimap />
-        </div>
-
-        <div className="absolute bottom-4 left-4 z-20">
-          <ControlsLegend />
-        </div>
-
-        {/* Virtual joystick — touch devices only, z-30 */}
-        <div className="absolute inset-0 z-30 pointer-events-none">
-          <div style={{ pointerEvents: "none", width: "100%", height: "100%", position: "relative" }}>
-            <VirtualJoystick />
+        {showCompassMinimap && (
+          <div className="absolute bottom-4 right-4 z-20">
+            <Minimap />
           </div>
-        </div>
+        )}
+
+        {showControlsLegend && (
+          <div className="absolute bottom-4 left-4 z-20">
+            <ControlsLegend />
+          </div>
+        )}
+
+        {/* Virtual joystick — gated by settings (auto/always/off), z-30 */}
+        {joystickMode !== "off" && (
+          <div className="absolute inset-0 z-30 pointer-events-none">
+            <div style={{ pointerEvents: "none", width: "100%", height: "100%", position: "relative" }}>
+              <VirtualJoystick forceVisible={joystickMode === "always"} />
+            </div>
+          </div>
+        )}
 
         {/* Query panel — slides up from the bottom, z-50 */}
-        <QueryPanel
-          open={queryOpen}
-          onClose={() => { setQueryOpen(false); useHighlightStore.getState().clearHighlight(); }}
-          setDatasetId={setDatasetId}
-        />
+        {showQueryPanel && (
+          <QueryPanel
+            open={queryOpen}
+            onClose={() => { setQueryOpen(false); useHighlightStore.getState().clearHighlight(); }}
+            setDatasetId={setDatasetId}
+          />
+        )}
 
         {/* Query panel toggle hint — bottom-centre, visible when panel is closed */}
         {!queryOpen && (

@@ -8,6 +8,7 @@ import userDatasetsRouter from "./user-datasets";
 import tidalRouter from "./tidal";
 import queryRouter from "./query";
 import trailsRouter from "./trails";
+import meRouter from "./me";
 
 const router: IRouter = Router();
 
@@ -20,6 +21,6 @@ router.use(userDatasetsRouter);
 router.use(tidalRouter);
 router.use(queryRouter);
 router.use(trailsRouter);
-router.use(settingsRouter);
+router.use(meRouter);
 
 export default router;

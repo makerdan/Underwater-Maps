@@ -1,0 +1,207 @@
+/**
+ * Smoke tests for /api/me/export, DELETE /api/me, and the /api/settings
+ * passthrough of extra (non-spec) fields. Uses the same Clerk/proxy mock
+ * pattern as poe.test.ts and stubs out the DB to keep tests hermetic.
+ */
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import request from "supertest";
+
+// --- DB mock -----------------------------------------------------------------
+// Per-table query state. We use shallow proxies that respond to the chained
+// drizzle-style API used by the routes under test.
+type Row = Record<string, unknown>;
+const state: {
+  userSettings: Row[];
+  markers: Row[];
+  customDatasets: Row[];
+  gpsTrails: Row[];
+  gpsTrailPoints: Row[];
+  lastInsertedSettings: Row | null;
+  deletes: string[];
+} = {
+  userSettings: [],
+  markers: [],
+  customDatasets: [],
+  gpsTrails: [],
+  gpsTrailPoints: [],
+  lastInsertedSettings: null,
+  deletes: [],
+};
+
+vi.mock("@workspace/db", () => {
+  type TableName =
+    | "userSettings" | "markers" | "customDatasets"
+    | "gpsTrails" | "gpsTrailPoints" | "poeUsageLog";
+  const tag = (name: TableName) => ({ __tableName: name });
+
+  const userSettingsTable = tag("userSettings");
+  const markersTable = tag("markers");
+  const customDatasetsTable = tag("customDatasets");
+  const gpsTrailsTable = tag("gpsTrails");
+  const gpsTrailPointsTable = tag("gpsTrailPoints");
+  const poeUsageLogTable = tag("poeUsageLog");
+
+  const rowsFor = (t: TableName): Row[] => {
+    switch (t) {
+      case "userSettings": return state.userSettings;
+      case "markers": return state.markers;
+      case "customDatasets": return state.customDatasets;
+      case "gpsTrails": return state.gpsTrails;
+      case "gpsTrailPoints": return state.gpsTrailPoints;
+      default: return [];
+    }
+  };
+
+  const select = () => ({
+    from: (table: { __tableName: TableName }) => ({
+      where: () => Promise.resolve(rowsFor(table.__tableName)),
+    }),
+  });
+
+  const insert = (table: { __tableName: TableName }) => ({
+    values: (row: Row) => {
+      const chain = {
+        onConflictDoUpdate: ({ set }: { set: Row }) => {
+          if (table.__tableName === "userSettings") {
+            state.userSettings = [{ ...row, ...set }];
+            state.lastInsertedSettings = { ...row, ...set };
+          }
+          return Promise.resolve([]);
+        },
+        then: (resolve: (v: unknown) => void) => { resolve([]); },
+      };
+      return chain;
+    },
+  });
+
+  const del = (table: { __tableName: TableName }) => ({
+    where: () => {
+      state.deletes.push(table.__tableName);
+      if (table.__tableName === "userSettings") state.userSettings = [];
+      if (table.__tableName === "markers") state.markers = [];
+      if (table.__tableName === "customDatasets") state.customDatasets = [];
+      if (table.__tableName === "gpsTrails") state.gpsTrails = [];
+      if (table.__tableName === "gpsTrailPoints") state.gpsTrailPoints = [];
+      return Promise.resolve([]);
+    },
+  });
+
+  return {
+    db: { select, insert, delete: del },
+    userSettingsTable,
+    markersTable,
+    customDatasetsTable,
+    gpsTrailsTable,
+    gpsTrailPointsTable,
+    poeUsageLogTable,
+  };
+});
+
+vi.mock("@workspace/db/schema", () => ({ poeUsageLogTable: { __tableName: "poeUsageLog" } }));
+
+// Mock Clerk + proxy middlewares so the app boots without a live tenant.
+vi.mock("@clerk/express", () => ({
+  clerkMiddleware: vi.fn(
+    () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  ),
+  getAuth: vi.fn(() => ({ userId: "user-test" })),
+}));
+
+vi.mock("http-proxy-middleware", () => ({
+  createProxyMiddleware: vi.fn(
+    () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  ),
+}));
+
+vi.mock("@clerk/shared/keys", () => ({
+  publishableKeyFromHost: vi.fn(() => "pk_test_mock"),
+}));
+
+import app from "../../app.js";
+
+beforeEach(() => {
+  state.userSettings = [];
+  state.markers = [];
+  state.customDatasets = [];
+  state.gpsTrails = [];
+  state.gpsTrailPoints = [];
+  state.lastInsertedSettings = null;
+  state.deletes = [];
+});
+
+describe("GET /api/me/export", () => {
+  it("returns a JSON payload containing the user's data envelope", async () => {
+    state.userSettings = [
+      { userId: "user-test", settings: { fogDensity: 0.02, customAdvanced: "yes" } },
+    ];
+    state.markers = [{ id: "m1", userId: "user-test", type: "fish" }];
+    state.customDatasets = [
+      { id: "d1", userId: "user-test", name: "ds", minDepth: 0, maxDepth: 10, createdAt: new Date() },
+    ];
+
+    const res = await request(app).get("/api/me/export");
+    expect(res.status).toBe(200);
+    expect(res.headers["content-disposition"]).toMatch(/attachment;.*bathyscan-export/);
+    expect(res.body.userId).toBe("user-test");
+    expect(res.body.settings).toEqual({ fogDensity: 0.02, customAdvanced: "yes" });
+    expect(res.body.markers).toHaveLength(1);
+    expect(res.body.customDatasets[0].id).toBe("d1");
+    expect(res.body.trails).toEqual([]);
+  });
+});
+
+describe("DELETE /api/me", () => {
+  it("deletes the user's settings, markers, datasets and trails", async () => {
+    const res = await request(app).delete("/api/me");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    // All four user-owned tables were targeted for deletion.
+    expect(state.deletes).toEqual(
+      expect.arrayContaining([
+        "gpsTrails",
+        "markers",
+        "customDatasets",
+        "userSettings",
+      ]),
+    );
+  });
+});
+
+describe("PUT /api/settings passthrough", () => {
+  it("persists unknown advanced fields alongside zod-validated fields", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .send({
+        // Known (spec) field
+        fogDensity: 0.015,
+        // Unknown advanced fields — must survive the round-trip
+        fieldOfView: 75,
+        showAdvancedEverywhere: true,
+        accentColor: "#ff00aa",
+      });
+
+    expect(res.status).toBe(200);
+    const persisted = state.lastInsertedSettings?.["settings"] as Record<string, unknown>;
+    expect(persisted).toBeDefined();
+    expect(persisted.fogDensity).toBe(0.015);
+    expect(persisted.fieldOfView).toBe(75);
+    expect(persisted.showAdvancedEverywhere).toBe(true);
+    expect(persisted.accentColor).toBe("#ff00aa");
+  });
+
+  it("GET /api/settings returns merged extras alongside defaults", async () => {
+    state.userSettings = [
+      {
+        userId: "user-test",
+        settings: { fogDensity: 0.02, fieldOfView: 90, customField: "abc" },
+      },
+    ];
+    const res = await request(app).get("/api/settings");
+    expect(res.status).toBe(200);
+    expect(res.body.fogDensity).toBe(0.02);
+    expect(res.body.fieldOfView).toBe(90);
+    expect(res.body.customField).toBe("abc");
+    // A default-only field should still be present.
+    expect(res.body.depthUnit).toBe("metres");
+  });
+});

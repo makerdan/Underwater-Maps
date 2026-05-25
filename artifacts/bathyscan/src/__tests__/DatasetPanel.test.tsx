@@ -102,13 +102,13 @@ describe("DatasetPanel", () => {
     setTerrainMock.mockClear();
   });
 
-  it("renders each dataset as a clickable item", () => {
+  it("renders datasets matching the current waterType setting (default saltwater)", () => {
     render(<DatasetPanel />);
     expect(screen.getByText("Alaska Fjord")).toBeInTheDocument();
-    expect(screen.getByText("Lake Tahoe")).toBeInTheDocument();
     expect(screen.getByText("Deep saltwater fjord")).toBeInTheDocument();
     expect(screen.getByTestId("btn-dataset-alaska-fjord")).toBeInTheDocument();
-    expect(screen.getByTestId("btn-dataset-lake-tahoe")).toBeInTheDocument();
+    // Freshwater dataset is filtered out under the default saltwater setting.
+    expect(screen.queryByText("Lake Tahoe")).not.toBeInTheDocument();
   });
 
   it("clicking a dataset triggers loading state (pending fetch)", () => {
