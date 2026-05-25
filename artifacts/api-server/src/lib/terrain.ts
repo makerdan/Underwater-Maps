@@ -287,6 +287,19 @@ export async function buildTerrainGrid(
     maxDepth = synth.maxDepth;
   }
 
+  // Smooth spikes before finalising the grid.
+  // To disable for scientific/raw-data use, wrap this in a preference check:
+  //   if (enableSmoothing) smoothSpikes(depths, N, maxDepth - minDepth);
+  smoothSpikes(depths, N, maxDepth - minDepth);
+
+  // Recompute min/max after smoothing (values may have shifted)
+  minDepth = Infinity;
+  maxDepth = -Infinity;
+  for (let i = 0; i < depths.length; i++) {
+    if (depths[i]! < minDepth) minDepth = depths[i]!;
+    if (depths[i]! > maxDepth) maxDepth = depths[i]!;
+  }
+
   const grid: TerrainGrid = {
     datasetId,
     name: meta.name,
@@ -425,6 +438,88 @@ function buildSyntheticGrid(
 }
 
 // ---------------------------------------------------------------------------
+// Spike smoothing — 70° angle threshold
+// ---------------------------------------------------------------------------
+
+const SPIKE_ANGLE_THRESHOLD = 70 * (Math.PI / 180);
+const MAX_SMOOTH_ITERATIONS = 20;
+
+/**
+ * Smooth terrain spikes in-place by iteratively blending any vertex whose
+ * slope angle to a 4-connected neighbour exceeds 70°.
+ *
+ * Angles are computed in normalised space so the threshold is
+ * resolution-independent:
+ *   - horizontal step  = 1 / (N − 1)   (fraction of full grid width)
+ *   - vertical step    = |heightDiff| / depthRange   (fraction of full range)
+ *
+ * Marked cells are replaced with the average of their valid neighbours.
+ * The process repeats until no new cells are marked (capped at
+ * MAX_SMOOTH_ITERATIONS for safety).
+ *
+ * Designed so callers only need a single conditional to disable the pass:
+ *   if (enableSmoothing) smoothSpikes(depths, N, depthRange);
+ *
+ * @param depths     - flat row-major depth array (mutated in place)
+ * @param N          - grid width/height (square grid)
+ * @param depthRange - (maxDepth − minDepth) of the unsmoothed grid
+ */
+export function smoothSpikes(depths: number[], N: number, depthRange: number): void {
+  if (N < 3 || depthRange <= 0) return;
+
+  const cellSpacing = 1 / (N - 1);   // normalised horizontal step
+  const invRange    = 1 / depthRange; // scale height diffs to [0,1]
+
+  for (let iter = 0; iter < MAX_SMOOTH_ITERATIONS; iter++) {
+    const toSmooth = new Uint8Array(N * N); // 0 = keep, 1 = blend
+    let anyMarked = false;
+
+    for (let row = 0; row < N; row++) {
+      for (let col = 0; col < N; col++) {
+        const idx   = row * N + col;
+        const depth = depths[idx]!;
+
+        // 4-connected neighbour indices (-1 = out of bounds)
+        const up    = row > 0       ? (row - 1) * N + col : -1;
+        const down  = row < N - 1   ? (row + 1) * N + col : -1;
+        const left  = col > 0       ? row * N + (col - 1) : -1;
+        const right = col < N - 1   ? row * N + (col + 1) : -1;
+
+        const nbrs = [up, down, left, right];
+        for (const nIdx of nbrs) {
+          if (nIdx < 0) continue;
+          const normDiff = Math.abs(depth - depths[nIdx]!) * invRange;
+          if (Math.atan2(normDiff, cellSpacing) > SPIKE_ANGLE_THRESHOLD) {
+            toSmooth[idx] = 1;
+            anyMarked = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!anyMarked) break;
+
+    // Replace marked cells with the average of their valid neighbours
+    for (let row = 0; row < N; row++) {
+      for (let col = 0; col < N; col++) {
+        const idx = row * N + col;
+        if (!toSmooth[idx]) continue;
+
+        let sum   = 0;
+        let count = 0;
+        if (row > 0)     { sum += depths[(row - 1) * N + col]!; count++; }
+        if (row < N - 1) { sum += depths[(row + 1) * N + col]!; count++; }
+        if (col > 0)     { sum += depths[row * N + (col - 1)]!; count++; }
+        if (col < N - 1) { sum += depths[row * N + (col + 1)]!; count++; }
+
+        if (count > 0) depths[idx] = sum / count;
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // CSV / XYZ parser and gridder
 // ---------------------------------------------------------------------------
 
@@ -553,7 +648,20 @@ export function gridPoints(
     }
   }
 
-  // Step 4: compute min/max after fill
+  // Step 4: smooth spikes before computing final min/max.
+  // To disable for scientific/raw-data use, wrap this in a preference check:
+  //   if (enableSmoothing) smoothSpikes(depths, N, roughDepthRange);
+  {
+    let roughMin = Infinity;
+    let roughMax = -Infinity;
+    for (let i = 0; i < N * N; i++) {
+      if (depths[i]! < roughMin) roughMin = depths[i]!;
+      if (depths[i]! > roughMax) roughMax = depths[i]!;
+    }
+    smoothSpikes(depths, N, roughMax - roughMin);
+  }
+
+  // Step 5: compute min/max after fill and smoothing
   let minDepth = Infinity;
   let maxDepth = -Infinity;
   for (let i = 0; i < N * N; i++) {

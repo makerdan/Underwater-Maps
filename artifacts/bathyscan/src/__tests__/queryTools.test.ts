@@ -115,8 +115,6 @@ describe("computeStatistic", () => {
   it("returns depth_std_dev correctly for known values", () => {
     // [2, 4, 4, 4, 5, 5, 7, 9] → stddev = 2
     const d = [2, 4, 4, 4, 5, 5, 7, 9];
-    const _grid = { ...makeGrid(d, 8), resolution: 8, width: 8, height: 8 };
-    void _grid;
     // Provide a flat 8×1 grid (1 row × 8 cols)
     const g8 = makeGrid(d, 8);
     const result = computeStatistic("depth_std_dev", g8);
