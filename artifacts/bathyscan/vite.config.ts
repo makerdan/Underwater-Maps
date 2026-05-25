@@ -122,6 +122,16 @@ export default defineConfig({
     fs: {
       strict: true,
     },
+    // Vite's built-in HMR error overlay (`<vite-error-overlay>`) is a separate
+    // element from the Replit runtime-error modal plugin above. It intercepts
+    // pointer events whenever a transient runtime error (e.g. a benign WebGL
+    // "Error creating WebGL context" warning in headless Chromium) fires, even
+    // after the app has rendered successfully. Disable it under the e2e
+    // auth-bypass build so Playwright clicks reach the HUD directly.
+    hmr:
+      process.env.VITE_DEV_AUTH_BYPASS === "1"
+        ? { overlay: false }
+        : undefined,
     // In e2e mode, the api-server is started on a separate port by Playwright
     // and the frontend's relative `/api/*` requests must be proxied to it.
     ...(process.env.E2E_API_SERVER_URL

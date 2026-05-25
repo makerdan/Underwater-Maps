@@ -18,41 +18,6 @@ async function appIsSignedIn(page: Page): Promise<boolean> {
     .catch(() => false);
 }
 
-/**
- * Strip Vite's HMR error overlay if it's been left in the DOM. Some non-fatal
- * runtime warnings inject a `<vite-error-overlay>` that intercepts pointer
- * events even though the app rendered successfully. Removing it lets clicks
- * reach the HUD buttons.
- */
-async function clearViteOverlay(page: Page): Promise<void> {
-  // Install a MutationObserver that strips the overlay on every reinjection
-  // (HMR can re-add it on follow-up updates).
-  await page.evaluate(() => {
-    const strip = () =>
-      document
-        .querySelectorAll("vite-error-overlay")
-        .forEach((el) => el.remove());
-    strip();
-    const obs = new MutationObserver(strip);
-    obs.observe(document.documentElement, { childList: true, subtree: true });
-    (window as unknown as { __viteOverlayObs?: MutationObserver }).__viteOverlayObs = obs;
-  });
-}
-
-/**
- * Click a button by data-testid via a synthetic DOM event. This sidesteps
- * the `vite-error-overlay` element, which Vite mounts on transient HMR
- * warnings and which intercepts real mouse pointer events even after we
- * try to remove it from the DOM.
- */
-async function clickTestId(page: Page, testid: string): Promise<void> {
-  await page.evaluate((sel) => {
-    const el = document.querySelector(sel) as HTMLElement | null;
-    if (!el) throw new Error(`No element matching ${sel}`);
-    el.click();
-  }, `[data-testid='${testid}']`);
-}
-
 async function failSurfaceConditions(page: Page): Promise<void> {
   await page.route("**/api/surface-conditions*", (route) =>
     route.fulfill({
@@ -99,7 +64,6 @@ test.describe("Wind / Tide / Current overlays", () => {
       test.skip(true, "Canvas not visible — landing page shown (auth bypass inactive)");
       return;
     }
-    await clearViteOverlay(page);
 
     // App.tsx mounts exactly one <ConditionsLegend />, bottom-left above the
     // HUD speed panel.
@@ -114,25 +78,25 @@ test.describe("Wind / Tide / Current overlays", () => {
     ).toHaveCount(0);
 
     // Wind on → legend with Wind row.
-    await clickTestId(page, "overlay-toggle-wind");
+    await page.locator("[data-testid='overlay-toggle-wind']").click();
     await expect(windBtn).toHaveAttribute("aria-pressed", "true");
     await expect(legend).toBeVisible({ timeout: 10_000 });
     await expect(legend.locator("text=Wind")).toBeVisible();
 
     // Tide on → Tide row joins.
-    await clickTestId(page, "overlay-toggle-tide");
+    await page.locator("[data-testid='overlay-toggle-tide']").click();
     await expect(tideBtn).toHaveAttribute("aria-pressed", "true");
     await expect(legend.locator("text=Tide")).toBeVisible();
 
     // Current on → Current row joins.
-    await clickTestId(page, "overlay-toggle-current");
+    await page.locator("[data-testid='overlay-toggle-current']").click();
     await expect(curBtn).toHaveAttribute("aria-pressed", "true");
     await expect(legend.locator("text=Current")).toBeVisible();
 
     // Turning everything off hides the legend.
-    await clickTestId(page, "overlay-toggle-wind");
-    await clickTestId(page, "overlay-toggle-tide");
-    await clickTestId(page, "overlay-toggle-current");
+    await page.locator("[data-testid='overlay-toggle-wind']").click();
+    await page.locator("[data-testid='overlay-toggle-tide']").click();
+    await page.locator("[data-testid='overlay-toggle-current']").click();
     await expect(
       page.locator("[data-testid='conditions-legend']"),
     ).toHaveCount(0);
@@ -147,15 +111,14 @@ test.describe("Wind / Tide / Current overlays", () => {
       test.skip(true, "Canvas not visible — landing page shown");
       return;
     }
-    await clearViteOverlay(page);
 
     const windBtn = page.locator("[data-testid='overlay-toggle-wind']");
     const tideBtn = page.locator("[data-testid='overlay-toggle-tide']");
     const curBtn = page.locator("[data-testid='overlay-toggle-current']");
 
     await expect(windBtn).toBeVisible({ timeout: 10_000 });
-    await clickTestId(page, "overlay-toggle-wind");
-    await clickTestId(page, "overlay-toggle-tide");
+    await page.locator("[data-testid='overlay-toggle-wind']").click();
+    await page.locator("[data-testid='overlay-toggle-tide']").click();
     // Leave current off so we can verify mixed state survives the reload.
 
     await expect(windBtn).toHaveAttribute("aria-pressed", "true");
@@ -202,15 +165,14 @@ test.describe("Wind / Tide / Current overlays", () => {
       test.skip(true, "Canvas not visible — landing page shown");
       return;
     }
-    await clearViteOverlay(page);
 
     const windBtn = page.locator("[data-testid='overlay-toggle-wind']");
     const tideBtn = page.locator("[data-testid='overlay-toggle-tide']");
     await expect(windBtn).toBeVisible({ timeout: 10_000 });
 
     // Turn on Wind and Tide so both manual-override sections render.
-    await clickTestId(page, "overlay-toggle-wind");
-    await clickTestId(page, "overlay-toggle-tide");
+    await page.locator("[data-testid='overlay-toggle-wind']").click();
+    await page.locator("[data-testid='overlay-toggle-tide']").click();
 
     const legend = page.locator("[data-testid='conditions-legend']");
     await expect(legend).toBeVisible({ timeout: 10_000 });

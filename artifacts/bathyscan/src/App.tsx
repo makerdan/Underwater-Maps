@@ -465,9 +465,13 @@ function Main() {
           depthLayer={depthLayer}
         />
 
-        {/* HUD + depth scale — pointer-events:none overlay */}
+        {/* HUD + depth scale — pointer-events:none overlay.
+            z-30 so the HUD's interactive button clusters sit above the
+            Minimap (z-20). The container itself is pointer-events:none,
+            so the minimap underneath stays clickable wherever no HUD
+            child is overlapping. */}
         <div
-          className="absolute inset-0 pointer-events-none z-10"
+          className="absolute inset-0 pointer-events-none z-30"
           style={{
             display: "flex",
             flexDirection: "column",
