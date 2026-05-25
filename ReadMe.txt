@@ -200,7 +200,7 @@ Inside artifacts/api-server/src/routes/:
 GETTING STARTED ON REPLIT
 =========================
 
-The project is configured to run as three long-lived workflows. They start automatically inside Replit:
+Each artifact under artifacts/* registers itself with the Replit artifacts system (via its own artifact.toml) and gets a long-lived dev process managed by the workspace. In a fresh session they typically appear as:
 
   Workflow                                              Command
   ----------------------------------------------------  -------------------------------------------------------
@@ -208,7 +208,9 @@ The project is configured to run as three long-lived workflows. They start autom
   artifacts/bathyscan: web                              pnpm --filter @workspace/bathyscan run dev
   artifacts/mockup-sandbox: Component Preview Server    pnpm --filter @workspace/mockup-sandbox run dev
 
-Each artifact binds to the PORT environment variable assigned by Replit and is exposed through the path-based preview proxy. Pick which artifact to view from the dropdown in the preview pane.
+If a dev process isn't running, you can start it manually with the command above. Each artifact binds to the PORT environment variable assigned by Replit and is exposed through the path-based preview proxy - pick which artifact to view from the dropdown in the preview pane.
+
+The checked-in .replit file additionally declares a set of validation workflows (typecheck, lint, test-unit, test-e2e, test-all, and a parallel "Project" runner that fans out to all of them). These are on-demand checks rather than long-running services.
 
 First-time setup checklist:
 1. Make sure the Postgres database is provisioned (Replit creates one automatically; DATABASE_URL will be set).
