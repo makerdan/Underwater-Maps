@@ -2,7 +2,7 @@ import React, { useMemo, useEffect, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { TerrainData } from "@workspace/api-client-react";
-import { buildTerrainGeometry, computeZoneWeights, computeSlopeAttribute, WORLD_SIZE } from "@/lib/terrain";
+import { buildTerrainGeometry, buildTerrainSkirtGeometry, computeZoneWeights, computeSlopeAttribute, WORLD_SIZE } from "@/lib/terrain";
 import { getTerrainTextures } from "@/lib/textures";
 import { createTerrainShaderMaterial } from "@/lib/terrainShader";
 import { useClassificationStore } from "@/lib/classificationStore";
@@ -42,6 +42,7 @@ interface TerrainMeshProps {
 export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
   ({ grid }, ref) => {
     const prevGeometryRef = useRef<THREE.BufferGeometry | null>(null);
+    const prevSkirtGeometryRef = useRef<THREE.BufferGeometry | null>(null);
     const fadeRef = useRef({ opacity: 0, fading: false });
 
     // Subscribe to AI zone map (updates when classification completes)
@@ -67,6 +68,23 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       return createTerrainShaderMaterial(textures, TILING_SCALE);
     }, [textures]);
 
+    // Skirt (side walls + flat floor) geometry — rebuilt when grid changes so
+    // its top edge exactly tracks the terrain's edge vertices.
+    const skirtGeometry = useMemo(() => buildTerrainSkirtGeometry(grid), [grid]);
+
+    // Skirt material — opaque dark "rock", visually distinct from the textured
+    // top surface. Transparent so we can drive its opacity from the same fade.
+    const skirtMaterial = useMemo(() => {
+      return new THREE.MeshStandardMaterial({
+        color: 0x2a2622,
+        roughness: 0.95,
+        metalness: 0.0,
+        side: THREE.FrontSide,
+        transparent: true,
+        opacity: 0,
+      });
+    }, []);
+
     // Upgrade zone weights in-place when AI classification arrives.
     // This avoids a full geometry rebuild — only the attribute buffer is updated.
     useEffect(() => {
@@ -90,6 +108,16 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       };
     }, [geometry]);
 
+    // Dispose old skirt geometry on grid change / unmount.
+    useEffect(() => {
+      const prev = prevSkirtGeometryRef.current;
+      if (prev && prev !== skirtGeometry) prev.dispose();
+      prevSkirtGeometryRef.current = skirtGeometry;
+      return () => {
+        skirtGeometry.dispose();
+      };
+    }, [skirtGeometry]);
+
     // Dispose material when it changes (only happens if textures change, which
     // currently never happens — but guard for future correctness).
     useEffect(() => {
@@ -97,6 +125,13 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
         material.dispose();
       };
     }, [material]);
+
+    // Dispose skirt material on unmount.
+    useEffect(() => {
+      return () => {
+        skirtMaterial.dispose();
+      };
+    }, [skirtMaterial]);
 
     // Sync grid depth range into shader when grid changes.
     useEffect(() => {
@@ -107,9 +142,10 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     // Trigger fade-in whenever the loaded grid changes.
     useEffect(() => {
       material.uniforms["uOpacity"]!.value = 0;
+      skirtMaterial.opacity = 0;
       fadeRef.current.opacity = 0;
       fadeRef.current.fading = true;
-    }, [grid, material]);
+    }, [grid, material, skirtMaterial]);
 
     // Track the last DataTexture we uploaded so we can dispose it when it changes.
     const habitatTexRef = useRef<THREE.DataTexture | null>(null);
@@ -174,6 +210,7 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       if (f.fading) {
         f.opacity = Math.min(1, f.opacity + delta * 2.5);
         material.uniforms["uOpacity"]!.value = f.opacity;
+        skirtMaterial.opacity = f.opacity;
         if (f.opacity >= 1) f.fading = false;
       }
       // Lamp = camera (submersible viewpoint)
@@ -194,7 +231,12 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       material.uniforms["uShowHabitat"]!.value = activeSpecies ? 1 : 0;
     });
 
-    return <mesh ref={ref} geometry={geometry} material={material} />;
+    return (
+      <>
+        <mesh ref={ref} geometry={geometry} material={material} />
+        <mesh geometry={skirtGeometry} material={skirtMaterial} raycast={() => null} />
+      </>
+    );
   },
 );
 TerrainMesh.displayName = "TerrainMesh";

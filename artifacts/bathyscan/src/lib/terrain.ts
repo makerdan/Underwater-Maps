@@ -50,6 +50,132 @@ export function buildTerrainGeometry(grid: TerrainData): THREE.BufferGeometry {
 }
 
 // ---------------------------------------------------------------------------
+// Solid-bottom "skirt + floor" geometry
+// ---------------------------------------------------------------------------
+
+/** Extra world units below the deepest point at which the closing floor sits. */
+export const FLOOR_DEPTH_EXTRA = 4;
+
+/** World-Y position of the flat floor plane that closes the bottom geometry. */
+export const FLOOR_Y = -MAX_DEPTH_WORLD - FLOOR_DEPTH_EXTRA;
+
+/**
+ * Build the closed "skirt + floor" geometry for the given terrain grid.
+ *
+ * Produces:
+ *  - Four side walls along the N/S/E/W terrain edges, each a strip whose top
+ *    vertices exactly match the terrain's edge vertices (same X/Z and the same
+ *    depth-normalised Y as buildTerrainGeometry) and whose bottom vertices sit
+ *    at FLOOR_Y.
+ *  - A flat floor plane at FLOOR_Y spanning the full WORLD_SIZE footprint.
+ *
+ * The wall vertices are duplicated so each wall can carry its own outward
+ * normal, and the floor uses a downward normal. The returned BufferGeometry
+ * is indexed and ready to render with any standard lit material.
+ */
+export function buildTerrainSkirtGeometry(grid: TerrainData): THREE.BufferGeometry {
+  const { resolution: N, depths, minDepth, maxDepth } = grid;
+  const depthRange = (maxDepth - minDepth) || 1;
+  const half = WORLD_SIZE / 2;
+  const step = WORLD_SIZE / Math.max(1, N - 1);
+
+  const topY = (depth: number): number => {
+    const t = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
+    return -t * MAX_DEPTH_WORLD;
+  };
+
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const indices: number[] = [];
+
+  type Sample = { x: number; z: number; y: number };
+
+  const addWall = (samples: Sample[], normal: [number, number, number], flipWinding: boolean): void => {
+    const base = positions.length / 3;
+    for (const s of samples) {
+      positions.push(s.x, s.y, s.z);
+      normals.push(normal[0], normal[1], normal[2]);
+      positions.push(s.x, FLOOR_Y, s.z);
+      normals.push(normal[0], normal[1], normal[2]);
+    }
+    for (let i = 0; i < samples.length - 1; i++) {
+      const t0 = base + i * 2;
+      const b0 = t0 + 1;
+      const t1 = base + (i + 1) * 2;
+      const b1 = t1 + 1;
+      if (flipWinding) {
+        indices.push(t0, t1, b0);
+        indices.push(t1, b1, b0);
+      } else {
+        indices.push(t0, b0, t1);
+        indices.push(t1, b0, b1);
+      }
+    }
+  };
+
+  // North edge: row=0 → z=-half, outward normal -Z
+  const north: Sample[] = [];
+  for (let col = 0; col < N; col++) {
+    north.push({
+      x: -half + col * step,
+      z: -half,
+      y: topY(depths[col] ?? 0),
+    });
+  }
+  addWall(north, [0, 0, -1], true);
+
+  // South edge: row=N-1 → z=+half, outward normal +Z
+  const south: Sample[] = [];
+  for (let col = 0; col < N; col++) {
+    south.push({
+      x: -half + col * step,
+      z: half,
+      y: topY(depths[(N - 1) * N + col] ?? 0),
+    });
+  }
+  addWall(south, [0, 0, 1], false);
+
+  // West edge: col=0 → x=-half, outward normal -X
+  const west: Sample[] = [];
+  for (let row = 0; row < N; row++) {
+    west.push({
+      x: -half,
+      z: -half + row * step,
+      y: topY(depths[row * N] ?? 0),
+    });
+  }
+  addWall(west, [-1, 0, 0], false);
+
+  // East edge: col=N-1 → x=+half, outward normal +X
+  const east: Sample[] = [];
+  for (let row = 0; row < N; row++) {
+    east.push({
+      x: half,
+      z: -half + row * step,
+      y: topY(depths[row * N + (N - 1)] ?? 0),
+    });
+  }
+  addWall(east, [1, 0, 0], true);
+
+  // Flat floor plane at FLOOR_Y, downward normal
+  {
+    const base = positions.length / 3;
+    positions.push(-half, FLOOR_Y, -half); normals.push(0, -1, 0);
+    positions.push( half, FLOOR_Y, -half); normals.push(0, -1, 0);
+    positions.push( half, FLOOR_Y,  half); normals.push(0, -1, 0);
+    positions.push(-half, FLOOR_Y,  half); normals.push(0, -1, 0);
+    indices.push(base, base + 2, base + 1);
+    indices.push(base, base + 3, base + 2);
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+  geo.setIndex(indices);
+  return geo;
+}
+
+// ---------------------------------------------------------------------------
 // Zone weight computation for bottom texture system
 // ---------------------------------------------------------------------------
 
