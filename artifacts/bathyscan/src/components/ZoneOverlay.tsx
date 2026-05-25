@@ -118,8 +118,12 @@ export const ZoneOverlay: React.FC = () => {
 
         {/* Error state */}
         {!loading && error && (
-          <div style={{ fontSize: 11, color: "#fca5a5", marginBottom: 6 }}>
-            Classification unavailable
+          <div
+            data-testid="zone-error"
+            data-error-category={error.category}
+            style={{ fontSize: 11, color: "#fca5a5", marginBottom: 6, lineHeight: 1.4 }}
+          >
+            {error.reason}
           </div>
         )}
 

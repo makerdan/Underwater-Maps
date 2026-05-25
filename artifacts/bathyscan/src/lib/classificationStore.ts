@@ -26,6 +26,77 @@ import { gridToBase64Png } from "./gridToImage";
 import { parseAndUpsampleZones, zoneMapToStorage, zoneMapFromStorage } from "./zoneMap";
 
 // ---------------------------------------------------------------------------
+// Error categorisation
+// ---------------------------------------------------------------------------
+
+/** Coarse category for a failed AI-classification call. */
+export type ClassificationErrorCategory =
+  | "missing_key"
+  | "unauthorized"
+  | "rate_limited"
+  | "other";
+
+/** Structured error surfaced to the UI in place of a single string. */
+export interface ClassificationError {
+  category: ClassificationErrorCategory;
+  /** Short, single-line copy ready to render in the panel. */
+  reason: string;
+  /** Original message from the thrown error, kept for console/debug. */
+  detail: string;
+}
+
+/**
+ * Map a thrown error from the AI classification call into a small set of
+ * categories with user-friendly copy. Looks at common shapes:
+ *   • ApiError from the generated client (has `.status` and `.data.message`)
+ *   • Plain Error whose `.message` contains "POE_API_KEY environment variable"
+ *
+ * Pure / sync / no DOM access so it can be unit-tested directly.
+ */
+export function categorizeClassificationError(err: unknown): ClassificationError {
+  const e = err as { status?: number; data?: { message?: string; error?: string }; message?: string };
+  const status = typeof e?.status === "number" ? e.status : undefined;
+  const serverMessage =
+    (typeof e?.data?.message === "string" && e.data.message) ||
+    (typeof e?.message === "string" && e.message) ||
+    "Classification failed";
+
+  // missing_key — server's getPoeClient() throws when POE_API_KEY is unset,
+  // which handlePoeError wraps as 500 { error: "poe_error", message: "POE_API_KEY environment variable is not set. ..." }
+  if (/POE_API_KEY/i.test(serverMessage) || /api[_ ]key/i.test(serverMessage) && /not set|missing/i.test(serverMessage)) {
+    return {
+      category: "missing_key",
+      reason: "AI classifier not configured. Add `POE_API_KEY` in Secrets and restart the API.",
+      detail: serverMessage,
+    };
+  }
+
+  if (status === 401 || e?.data?.error === "auth_error") {
+    return {
+      category: "unauthorized",
+      reason: "AI classifier unauthorized — check `POE_API_KEY`.",
+      detail: serverMessage,
+    };
+  }
+
+  if (status === 429 || e?.data?.error === "rate_limit") {
+    return {
+      category: "rate_limited",
+      reason: "AI classifier rate-limited — try again in a moment.",
+      detail: serverMessage,
+    };
+  }
+
+  // Generic fallback — truncate to one line.
+  const short = serverMessage.split(/\r?\n/)[0]?.slice(0, 140) ?? "Classification failed";
+  return {
+    category: "other",
+    reason: `Classification unavailable — ${short}`,
+    detail: serverMessage,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Grid hash — FNV-1a 32-bit over the depths float array.
 // This is the primary content-addressable key used by both client + server.
 // ---------------------------------------------------------------------------
@@ -69,7 +140,7 @@ interface ClassificationState {
   /** True when the current zoneMap contains manual paint edits. */
   hasEdits: boolean;
   loading: boolean;
-  error: string | null;
+  error: ClassificationError | null;
   /** Hash of the grid currently being classified (or last successfully classified). */
   currentGridHash: string | null;
 
@@ -232,9 +303,9 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
         commitFresh(parseAndUpsampleZones(result.zones, wt, targetN));
       } catch (err) {
         if (get().currentGridHash !== gridHash) return;
-        const message = err instanceof Error ? err.message : "Classification failed";
-        console.warn("[BathyScan] AI classification failed:", message);
-        set({ loading: false, error: message, zoneMap: null, aiZoneMap: null, hasEdits: false });
+        const categorized = categorizeClassificationError(err);
+        console.warn("[BathyScan] AI classification failed:", categorized.detail);
+        set({ loading: false, error: categorized, zoneMap: null, aiZoneMap: null, hasEdits: false });
       }
     })();
 
