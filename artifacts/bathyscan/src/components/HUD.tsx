@@ -67,7 +67,6 @@ export const HUD: React.FC = () => {
   const lastClickedGps = useCameraStore((s) => s.lastClickedGps);
   const cameraDepth = useCameraStore((s) => s.cameraDepth);
   const heading = useCameraStore((s) => s.heading);
-  const mode = useCameraStore((s) => s.mode);
   const speedIndex = useCameraStore((s) => s.speedIndex);
   const { realisticMode, boatSpeedMph } = useAppState();
 
@@ -141,7 +140,6 @@ export const HUD: React.FC = () => {
   );
 
   const speed = SPEEDS[speedIndex] ?? 0.15;
-  const isFly = mode === "fly";
 
   const fmtCoord = (n: number | null): string => {
     if (n === null) return "—";
@@ -234,24 +232,8 @@ export const HUD: React.FC = () => {
         </div>
       )}
 
-      {/* ── Top-left: mode + heading ── */}
+      {/* ── Top-left: heading ── */}
       <div className="hud-top-left absolute top-3 left-3 flex items-center gap-2">
-        <div
-          style={{
-            ...PANEL,
-            ...CYAN,
-            fontWeight: 700,
-            fontSize: 12,
-            letterSpacing: "0.2em",
-            padding: "4px 10px",
-            border: `1px solid ${isFly ? "rgba(0,229,255,0.4)" : "rgba(100,116,139,0.4)"}`,
-            background: isFly ? "rgba(0,229,255,0.08)" : "rgba(0,10,20,0.75)",
-            color: isFly ? "#00e5ff" : "#64748b",
-            textShadow: isFly ? "0 0 8px rgba(0,229,255,0.6)" : "none",
-          }}
-        >
-          {isFly ? "● FLY" : "◎ ORBIT"}
-        </div>
         {showHeading && (
           <div style={{ ...PANEL, fontSize: 11 }}>
             <span style={{ color: "#475569" }}>HDG </span>

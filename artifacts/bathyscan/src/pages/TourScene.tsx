@@ -1,13 +1,11 @@
 import React, { useCallback, useEffect, useRef } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { MapControls } from "@react-three/drei";
 import * as THREE from "three";
 import {
   useGetDatasetsIdTerrain,
   getGetDatasetsIdTerrainQueryKey,
 } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
-import { useUiStore } from "@/lib/uiStore";
 import { TerrainMesh } from "@/components/TerrainMesh";
 import { EfhZoneLayer } from "@/components/EfhZoneLayer";
 import { SubstrateLayer } from "@/components/SubstrateLayer";
@@ -46,35 +44,10 @@ interface FlyControlsSceneProps {
 
 const FlyControlsScene: React.FC<FlyControlsSceneProps> = ({ terrainMeshRef }) => {
   const lightRef = useRef<THREE.PointLight>(null);
-  const { mode } = useAppState();
-  const paintMode = useUiStore((s) => s.zonePaintMode);
-  const { orbitTargetArr } = useFlyControls({ terrainMeshRef, lightRef });
+  useFlyControls({ terrainMeshRef, lightRef });
   const lampIntensity = useSettingsStore((s) => s.lampIntensity);
   const lampRange = useSettingsStore((s) => s.lampRange);
   const waterType = useSettingsStore((s) => s.waterType);
-  const mouseZoomSensitivity = useSettingsStore((s) => s.mouseZoomSensitivity);
-  const touchpadZoomSensitivity = useSettingsStore((s) => s.touchpadZoomSensitivity);
-  const orbitControlsRef = useRef<{ zoomSpeed: number } | null>(null);
-  const { gl } = useThree();
-
-  // Orbit mode: classify each wheel event (mouse notch vs trackpad swipe) and
-  // mutate the live MapControls.zoomSpeed BEFORE MapControls' own wheel handler
-  // runs, so touchpad and mouse can be tuned independently. We use the capture
-  // phase so we win the race against MapControls' bubble-phase listener.
-  useEffect(() => {
-    if (mode !== "orbit") return;
-    const el = gl.domElement;
-    const onWheel = (e: WheelEvent) => {
-      const ctrl = orbitControlsRef.current;
-      if (!ctrl) return;
-      const isTouchpad = e.deltaMode === 0 && Math.abs(e.deltaY) < 50;
-      ctrl.zoomSpeed = isTouchpad ? touchpadZoomSensitivity : mouseZoomSensitivity;
-    };
-    el.addEventListener("wheel", onWheel, { capture: true, passive: true });
-    return () => {
-      el.removeEventListener("wheel", onWheel, { capture: true } as EventListenerOptions);
-    };
-  }, [mode, gl.domElement, mouseZoomSensitivity, touchpadZoomSensitivity]);
   // Freshwater lakes carry less particulate than the open ocean, so the
   // submersible lamp reads cooler / less amber than the deep-sea default.
   const lampColor = waterType === "freshwater" ? "#eaffff" : "#fff8e8";
@@ -89,20 +62,8 @@ const FlyControlsScene: React.FC<FlyControlsSceneProps> = ({ terrainMeshRef }) =
         distance={lampRange}
         decay={2}
       />
-
-      {/* Orbit mode: MapControls replaces fly movement.
-          Disabled while painting so drag-strokes don't also orbit the camera. */}
-      {mode === "orbit" && (
-        <MapControls
-          ref={orbitControlsRef as unknown as React.Ref<never>}
-          target={orbitTargetArr.current}
-          enableDamping
-          dampingFactor={0.08}
-          screenSpacePanning={false}
-          enabled={!paintMode}
-          zoomSpeed={mouseZoomSensitivity}
-        />
-      )}
+      {/* Orbit is now a transient right-drag gesture handled inside
+          useFlyControls — no MapControls instance is mounted. */}
     </>
   );
 };

@@ -30,7 +30,8 @@ describe("ControlsLegend", () => {
     fireEvent.click(btn);
     expect(screen.getByText(/W A S D/)).toBeInTheDocument();
     expect(screen.getByText(/Move forward \/ strafe/)).toBeInTheDocument();
-    expect(screen.getByText(/Toggle orbit \/ fly mode/)).toBeInTheDocument();
+    expect(screen.getByText(/Orbit around point under cursor/)).toBeInTheDocument();
+    expect(screen.queryByText(/Toggle orbit \/ fly mode/)).not.toBeInTheDocument();
 
     fireEvent.click(btn);
     expect(screen.queryByText(/W A S D/)).not.toBeInTheDocument();

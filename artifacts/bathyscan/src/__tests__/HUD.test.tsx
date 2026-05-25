@@ -74,18 +74,11 @@ describe("HUD", () => {
     });
   });
 
-  it("shows FLY badge when mode is fly", () => {
+  it("no longer renders the FLY / ORBIT mode badge", () => {
     useCameraStore.setState({ mode: "fly" });
     render(<HUD />);
-    expect(screen.getByText(/● FLY/)).toBeInTheDocument();
-    expect(screen.queryByText(/◎ ORBIT/)).not.toBeInTheDocument();
-  });
-
-  it("shows ORBIT badge when mode is orbit", () => {
-    useCameraStore.setState({ mode: "orbit" });
-    render(<HUD />);
-    expect(screen.getByText(/◎ ORBIT/)).toBeInTheDocument();
     expect(screen.queryByText(/● FLY/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/◎ ORBIT/)).not.toBeInTheDocument();
   });
 
   it("renders SpeedDots with the correct filled count for speedIndex", () => {

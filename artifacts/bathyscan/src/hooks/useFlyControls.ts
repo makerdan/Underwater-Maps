@@ -22,8 +22,13 @@ import { useClassificationStore } from "@/lib/classificationStore";
 import { useMarkerDetailStore } from "@/lib/markerDetailStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { haversineDistance } from "@/lib/geo";
-import { computePinchDolly } from "@/lib/zoomMath";
+import { computePinchDolly, computeWheelDolly } from "@/lib/zoomMath";
 import { processFlyWheel } from "@/lib/flyWheel";
+import {
+  applyOrbitDrag,
+  applyOrbitDolly,
+  ORBIT_CLICK_VS_DRAG_PX,
+} from "@/lib/orbitMath";
 
 function copyToClipboard(text: string): void {
   if (typeof navigator === "undefined" || !navigator.clipboard) return;
@@ -100,6 +105,24 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   const lightPos = useRef(new THREE.Vector3());
   const orbitTargetArr = useRef<[number, number, number]>([0, -10, 0]);
 
+  // Transient right-drag / Ctrl-left-drag orbit gesture. Independent of the
+  // app-state `mode` field (which now stays at "fly" forever). While
+  // `active` is true, WASD movement, mouse-look, and wheel-along-view are
+  // suspended in favour of orbiting around `target`.
+  const orbitState = useRef({
+    active: false,
+    candidate: false,
+    button: 0,
+    totalDist: 0,
+    target: new THREE.Vector3(),
+  });
+  // Right-button releases that *did* orbit should not pop the context menu
+  // (which fires as a follow-up `contextmenu` event). Same for the click
+  // event that would otherwise re-enter pointer lock after a Ctrl-left
+  // orbit gesture.
+  const suppressNextContextMenu = useRef(false);
+  const suppressNextClick = useRef(false);
+
   // ---------------------------------------------------------------------------
   // Camera initialisation: place 10 units above deepest terrain point
   // ---------------------------------------------------------------------------
@@ -156,6 +179,13 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
     const canvas = gl.domElement;
 
     const handleClick = () => {
+      // Don't re-enter pointer lock immediately after an orbit gesture —
+      // the click event fires after mouseup, and we want the cursor to
+      // stay visible so the user knows the gesture ended.
+      if (suppressNextClick.current) {
+        suppressNextClick.current = false;
+        return;
+      }
       if (modeRef.current === "fly" && !isLocked.current) {
         canvas.requestPointerLock();
       }
@@ -180,37 +210,6 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       keys.current[e.code] = true;
-
-      // Tab: toggle orbit / fly
-      if (e.code === "Tab") {
-        e.preventDefault();
-        if (modeRef.current === "fly") {
-          camera.getWorldDirection(lookDir.current);
-          const mesh = terrainMeshRef.current;
-          let hit = false;
-          if (mesh) {
-            raycaster.current.set(camera.position, lookDir.current);
-            const hits = raycaster.current.intersectObject(mesh, false);
-            if (hits[0]) {
-              const pt = hits[0].point;
-              orbitTargetArr.current = [pt.x, pt.y, pt.z];
-              hit = true;
-            }
-          }
-          if (!hit) {
-            orbitTargetArr.current = [
-              camera.position.x + lookDir.current.x * 20,
-              camera.position.y + lookDir.current.y * 20,
-              camera.position.z + lookDir.current.z * 20,
-            ];
-          }
-          if (isLocked.current) document.exitPointerLock();
-          setMode("orbit");
-        } else {
-          setMode("fly");
-        }
-        return;
-      }
 
       // +/= : speed tier up, -/_ : speed tier down (fly mode, not realistic)
       if (modeRef.current === "fly" && !realisticModeRef.current) {
@@ -240,7 +239,83 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       keys.current[e.code] = false;
     };
 
+    // ─── Right-drag / Ctrl-left-drag orbit gesture ───────────────────────
+    // Raycast a viewport point against the terrain; fall back to a point
+    // along the view direction if the ray misses (lets the gesture work
+    // even when aimed at the sky).
+    const computeOrbitTargetAt = (clientX: number, clientY: number): THREE.Vector3 => {
+      const rect = gl.domElement.getBoundingClientRect();
+      const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
+      const ndcY = -(((clientY - rect.top) / rect.height) * 2 - 1);
+      raycaster.current.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
+      const mesh = terrainMeshRef.current;
+      if (mesh) {
+        const hits = raycaster.current.intersectObject(mesh, false);
+        if (hits[0]) return hits[0].point.clone();
+      }
+      // Fallback: 20 units along the view direction
+      camera.getWorldDirection(lookDir.current);
+      return new THREE.Vector3()
+        .copy(camera.position)
+        .addScaledVector(lookDir.current, 20);
+    };
+
+    const handleMouseDown = (e: MouseEvent) => {
+      const isOrbitButton = e.button === 2 || (e.button === 0 && e.ctrlKey);
+      if (!isOrbitButton) return;
+      // Begin orbit candidate. Don't commit until movement exceeds threshold —
+      // that way a quick right-click without drag still pops the context menu.
+      orbitState.current.candidate = true;
+      orbitState.current.active = false;
+      orbitState.current.button = e.button;
+      orbitState.current.totalDist = 0;
+      orbitState.current.target.copy(
+        computeOrbitTargetAt(e.clientX, e.clientY),
+      );
+      orbitTargetArr.current = [
+        orbitState.current.target.x,
+        orbitState.current.target.y,
+        orbitState.current.target.z,
+      ];
+      // Release pointer lock so the cursor reappears for the drag.
+      if (isLocked.current) document.exitPointerLock();
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (!orbitState.current.candidate && !orbitState.current.active) return;
+      if (e.button !== orbitState.current.button) return;
+      const wasActive = orbitState.current.active;
+      orbitState.current.candidate = false;
+      orbitState.current.active = false;
+      orbitState.current.totalDist = 0;
+      if (wasActive) {
+        // Drag committed → swallow the follow-up contextmenu / click event
+        // so we don't pop the menu or re-enter pointer lock by accident.
+        if (e.button === 2) suppressNextContextMenu.current = true;
+        if (e.button === 0) suppressNextClick.current = true;
+      }
+    };
+
     const handleMouseMove = (e: MouseEvent) => {
+      // Orbit drag has priority over fly-mode look.
+      if (orbitState.current.candidate || orbitState.current.active) {
+        const dx = e.movementX ?? 0;
+        const dy = e.movementY ?? 0;
+        orbitState.current.totalDist += Math.abs(dx) + Math.abs(dy);
+        if (
+          !orbitState.current.active &&
+          orbitState.current.totalDist > ORBIT_CLICK_VS_DRAG_PX
+        ) {
+          orbitState.current.active = true;
+        }
+        if (orbitState.current.active) {
+          applyOrbitDrag(camera, orbitState.current.target, dx, dy, {
+            sensitivity: sensitivityRef.current,
+            invertY: invertMouseYRef.current,
+          });
+        }
+        return;
+      }
       if (!isLocked.current || modeRef.current !== "fly") return;
       const dx = e.movementX ?? 0;
       const dy = e.movementY ?? 0;
@@ -256,10 +331,28 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
     };
 
     const handleWheel = (e: WheelEvent) => {
-      // Only handle wheel in fly mode; orbit mode is owned by MapControls
-      // (which has its own internal wheel handler). Touching the event in
-      // orbit mode would cause double-zoom and prevent MapControls from
-      // processing it.
+      // While orbiting, wheel dollies toward/away from the orbit target,
+      // not along the view direction.
+      if (orbitState.current.active) {
+        e.preventDefault();
+        const dolly = computeWheelDolly(
+          e.deltaY,
+          e.deltaMode,
+          mouseZoomSensRef.current,
+          touchpadZoomSensRef.current,
+        );
+        // computeWheelDolly returns world-units; convert to a fractional
+        // dolly relative to current distance so the gesture feels right
+        // at any scale. ~2 units / scroll notch at a distance of 20 units
+        // ≈ 10% closer per notch.
+        const offset = new THREE.Vector3().subVectors(
+          camera.position,
+          orbitState.current.target,
+        );
+        const dist = offset.length() || 1;
+        applyOrbitDolly(camera, orbitState.current.target, dolly / dist);
+        return;
+      }
       if (modeRef.current !== "fly") return;
       e.preventDefault();
       const result = processFlyWheel(camera, e, speedIndexRef.current, {
@@ -272,9 +365,14 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       }
     };
 
-    // ─── Pinch-to-zoom (fly mode only; orbit MapControls handles its own) ───
+    // ─── Two-finger pinch-zoom + orbit (touch) ───
     const activePointers = new Map<number, { x: number; y: number }>();
     let lastPinchDist = 0;
+    // Midpoint of the two fingers at the previous move event. Used as the
+    // baseline for the two-finger orbit gesture.
+    let lastPinchMid: { x: number; y: number } | null = null;
+    const touchOrbitTarget = new THREE.Vector3();
+    let touchOrbitActive = false;
 
     // ─── Long-press → context menu for touch users ───
     // Mirrors the desktop right-click menu: ~500ms hold with minimal movement
@@ -299,6 +397,11 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       if (activePointers.size === 2) {
         const pts = Array.from(activePointers.values());
         lastPinchDist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
+        const midX = (pts[0]!.x + pts[1]!.x) / 2;
+        const midY = (pts[0]!.y + pts[1]!.y) / 2;
+        lastPinchMid = { x: midX, y: midY };
+        touchOrbitTarget.copy(computeOrbitTargetAt(midX, midY));
+        touchOrbitActive = true;
         // Second finger down → no longer a long-press candidate
         cancelLongPress();
         return;
@@ -333,11 +436,38 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       if (activePointers.size === 2 && modeRef.current === "fly") {
         const pts = Array.from(activePointers.values());
         const dist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
-        const delta = dist - lastPinchDist;
+        const midX = (pts[0]!.x + pts[1]!.x) / 2;
+        const midY = (pts[0]!.y + pts[1]!.y) / 2;
+
+        // Pinch dolly toward/away from the orbit target.
+        const pinchDelta = dist - lastPinchDist;
         lastPinchDist = dist;
-        const dolly = computePinchDolly(delta, pinchZoomSensRef.current);
-        camera.getWorldDirection(lookDir.current);
-        camera.position.addScaledVector(lookDir.current, dolly);
+        if (touchOrbitActive) {
+          const dolly = computePinchDolly(pinchDelta, pinchZoomSensRef.current);
+          const offset = new THREE.Vector3().subVectors(
+            camera.position,
+            touchOrbitTarget,
+          );
+          const distToTarget = offset.length() || 1;
+          applyOrbitDolly(camera, touchOrbitTarget, dolly / distToTarget);
+        } else {
+          const dolly = computePinchDolly(pinchDelta, pinchZoomSensRef.current);
+          camera.getWorldDirection(lookDir.current);
+          camera.position.addScaledVector(lookDir.current, dolly);
+        }
+
+        // Midpoint drag → orbit around the touch target.
+        if (touchOrbitActive && lastPinchMid) {
+          const dxMid = midX - lastPinchMid.x;
+          const dyMid = midY - lastPinchMid.y;
+          if (dxMid !== 0 || dyMid !== 0) {
+            applyOrbitDrag(camera, touchOrbitTarget, dxMid, dyMid, {
+              sensitivity: sensitivityRef.current,
+              invertY: invertMouseYRef.current,
+            });
+          }
+        }
+        lastPinchMid = { x: midX, y: midY };
       }
     };
 
@@ -345,6 +475,10 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       if (e.pointerType !== "touch") return;
       activePointers.delete(e.pointerId);
       lastPinchDist = 0;
+      if (activePointers.size < 2) {
+        touchOrbitActive = false;
+        lastPinchMid = null;
+      }
       if (longPressStart && e.pointerId === longPressStart.pointerId) {
         cancelLongPress();
       }
@@ -542,6 +676,12 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
 
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
+      // Right-drag orbit just ended → swallow the menu so it doesn't pop
+      // up over where the user was orbiting.
+      if (suppressNextContextMenu.current) {
+        suppressNextContextMenu.current = false;
+        return;
+      }
       if (modeRef.current !== "fly") return;
 
       // Pointer locked → no menu (cursor not visible). Use crosshair GPS pin shortcut.
@@ -560,6 +700,8 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
     document.addEventListener("mousemove", handleMouseMove);
+    gl.domElement.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("mouseup", handleMouseUp);
     gl.domElement.addEventListener("wheel", handleWheel, { passive: false });
     gl.domElement.addEventListener("contextmenu", handleContextMenu);
     gl.domElement.addEventListener("pointerdown", handlePointerDown);
@@ -571,6 +713,8 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       document.removeEventListener("mousemove", handleMouseMove);
+      gl.domElement.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("mouseup", handleMouseUp);
       gl.domElement.removeEventListener("wheel", handleWheel);
       gl.domElement.removeEventListener("contextmenu", handleContextMenu);
       gl.domElement.removeEventListener("pointerdown", handlePointerDown);
@@ -605,8 +749,8 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       useUiStore.getState().clearPendingDropIn();
     }
 
-    // 2. WASD movement (fly mode only)
-    if (modeRef.current === "fly") {
+    // 2. WASD movement (fly mode only, suspended during an active orbit gesture)
+    if (modeRef.current === "fly" && !orbitState.current.active) {
       let scaledSpeed: number;
       if (realisticModeRef.current && terrainRef.current) {
         const mpu = computeMetersPerWorldUnit(terrainRef.current);

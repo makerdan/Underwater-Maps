@@ -10,8 +10,10 @@ const BINDINGS = [
   { key: "Shift + Scroll", action: "Change speed tier" },
   { key: "+ / −", action: "Change speed tier" },
   { key: "Pinch", action: "Zoom in / out (touch)" },
-  { key: "Tab", action: "Toggle orbit / fly mode" },
-  { key: "G / R-click", action: "Drop GPS pin" },
+  { key: "R-drag / Ctrl-drag", action: "Orbit around point under cursor" },
+  { key: "2-finger drag", action: "Orbit around midpoint (touch)" },
+  { key: "G", action: "Drop GPS pin at crosshair" },
+  { key: "R-click", action: "Context menu (pin, measure, …)" },
   { key: "Esc", action: "Release mouse" },
   { key: "O", action: "Toggle overview map" },
 ];

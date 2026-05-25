@@ -9,8 +9,9 @@ const BINDINGS: { key: string; action: string }[] = [
   { key: "Space", action: "Ascend" },
   { key: "Shift", action: "Descend" },
   { key: "Scroll", action: "Change speed tier" },
-  { key: "Tab", action: "Toggle orbit / fly mode" },
-  { key: "G / R-click", action: "Drop GPS pin" },
+  { key: "R-drag / Ctrl-drag", action: "Orbit around point" },
+  { key: "G", action: "Drop GPS pin at crosshair" },
+  { key: "R-click", action: "Context menu (pin, measure, …)" },
   { key: "Esc", action: "Release mouse" },
   { key: "O", action: "Toggle overview map" },
 ];
