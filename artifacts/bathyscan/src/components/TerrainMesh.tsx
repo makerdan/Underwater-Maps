@@ -1,5 +1,5 @@
-import React, { useMemo, useEffect, useRef } from "react";
-import { useFrame } from "@react-three/fiber";
+import React, { useMemo, useEffect, useRef, useCallback } from "react";
+import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import type { TerrainData } from "@workspace/api-client-react";
 import { buildTerrainGeometry, buildTerrainSkirtGeometry, computeZoneWeights, computeSlopeAttribute, WORLD_SIZE } from "@/lib/terrain";
@@ -49,6 +49,67 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     // Subscribe to AI zone map (updates when classification completes)
     const zoneMap = useClassificationStore((s) => s.zoneMap);
     const colormapTheme = useSettingsStore((s) => s.colormapTheme);
+    const paintMode = useUiStore((s) => s.zonePaintMode);
+
+    // Brush radius in grid cells. Scales gently with resolution so it feels
+    // consistent across 128×128 and 512×512 grids.
+    const brushRadius = Math.max(2, Math.round(grid.resolution / 64));
+
+    /**
+     * Convert an R3F world-space hit point on the terrain into a (row, col)
+     * grid coordinate, then dispatch a paint stroke into the classification
+     * store. Used by onPointerDown / onPointerMove below.
+     */
+    const paintAtEvent = useCallback(
+      (e: ThreeEvent<PointerEvent>) => {
+        const { point } = e;
+        const N = grid.resolution;
+        // Plane spans [-WORLD_SIZE/2, +WORLD_SIZE/2] on X and Z; row = +Z, col = +X
+        const u = (point.x + WORLD_SIZE / 2) / WORLD_SIZE;
+        const v = (point.z + WORLD_SIZE / 2) / WORLD_SIZE;
+        if (u < 0 || u > 1 || v < 0 || v > 1) return;
+        const col = Math.round(u * (N - 1));
+        const row = Math.round(v * (N - 1));
+        const { zonePaintSlot } = useUiStore.getState();
+        useClassificationStore.getState().paintSlot(
+          row,
+          col,
+          brushRadius,
+          zonePaintSlot,
+          grid.waterType as "saltwater" | "freshwater",
+          N,
+        );
+      },
+      [grid, brushRadius],
+    );
+
+    const onPointerDown = useCallback(
+      (e: ThreeEvent<PointerEvent>) => {
+        if (!useUiStore.getState().zonePaintMode) return;
+        e.stopPropagation();
+        // Capture so subsequent moves/up are delivered even if the cursor
+        // briefly leaves the mesh's intersected face.
+        (e.target as Element | undefined)?.setPointerCapture?.(e.pointerId);
+        paintAtEvent(e);
+      },
+      [paintAtEvent],
+    );
+
+    const onPointerMove = useCallback(
+      (e: ThreeEvent<PointerEvent>) => {
+        if (!useUiStore.getState().zonePaintMode) return;
+        // Only paint while a button is held (left = bit 1)
+        if ((e.buttons & 1) === 0) return;
+        e.stopPropagation();
+        paintAtEvent(e);
+      },
+      [paintAtEvent],
+    );
+
+    const onPointerUp = useCallback((e: ThreeEvent<PointerEvent>) => {
+      if (!useUiStore.getState().zonePaintMode) return;
+      (e.target as Element | undefined)?.releasePointerCapture?.(e.pointerId);
+    }, []);
 
     // Textures are a lazy singleton — computed once, shared forever.
     const textures = useMemo(() => getTerrainTextures(), []);
@@ -235,7 +296,14 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
 
     return (
       <>
-        <mesh ref={ref} geometry={geometry} material={material} />
+        <mesh
+          ref={ref}
+          geometry={geometry}
+          material={material}
+          onPointerDown={paintMode ? onPointerDown : undefined}
+          onPointerMove={paintMode ? onPointerMove : undefined}
+          onPointerUp={paintMode ? onPointerUp : undefined}
+        />
         <mesh geometry={skirtGeometry} material={skirtMaterial} raycast={() => null} />
       </>
     );

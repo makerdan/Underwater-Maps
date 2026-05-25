@@ -43,12 +43,31 @@ export function hashGrid(depths: number[]): string {
 }
 
 const SESSION_KEY_PREFIX = "bszone-";
+const SESSION_AI_KEY_PREFIX = "bszone-ai-";
+
+/**
+ * Representative zone index for each texture slot (0–3).
+ * When the user paints a slot, the zoneMap pixel is set to this zone index so
+ * the shader's zoneToSlot lookup re-derives the same slot consistently.
+ */
+const SLOT_TO_ZONE_SALTWATER: readonly number[] = [0, 1, 2, 3]; // sandy_shelf, coarse_sediment, silt_plain, basalt_rock
+const SLOT_TO_ZONE_FRESHWATER: readonly number[] = [0, 4, 3, 2]; // aquatic_vegetation, gravel_bed, silt_deep, rocky_shoreline
 
 // Module-level single-flight map — keyed by gridHash
 const inFlight = new Map<string, Promise<void>>();
 
+function u8Equal(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 interface ClassificationState {
   zoneMap: Uint8Array | null;
+  /** Unedited AI baseline — preserved so Reset to AI works after painting. */
+  aiZoneMap: Uint8Array | null;
+  /** True when the current zoneMap contains manual paint edits. */
+  hasEdits: boolean;
   loading: boolean;
   error: string | null;
   /** Hash of the grid currently being classified (or last successfully classified). */
@@ -56,15 +75,93 @@ interface ClassificationState {
 
   classify: (grid: TerrainData) => Promise<void>;
   clearZoneMap: () => void;
+  /**
+   * Paint a circular brush of `slot` (0–3) centred at terrain grid cell
+   * (row, col) with the given pixel radius. The current waterType determines
+   * which representative zone index is stored. Persists to sessionStorage.
+   */
+  paintSlot: (
+    row: number,
+    col: number,
+    radius: number,
+    slot: 0 | 1 | 2 | 3,
+    waterType: "saltwater" | "freshwater",
+    resolution: number,
+  ) => void;
+  /** Revert zoneMap to the AI baseline and clear the edited sessionStorage entry. */
+  resetToAi: () => void;
 }
 
 export const useClassificationStore = create<ClassificationState>((set, get) => ({
   zoneMap: null,
+  aiZoneMap: null,
+  hasEdits: false,
   loading: false,
   error: null,
   currentGridHash: null,
 
-  clearZoneMap: () => set({ zoneMap: null, error: null, currentGridHash: null }),
+  clearZoneMap: () =>
+    set({ zoneMap: null, aiZoneMap: null, hasEdits: false, error: null, currentGridHash: null }),
+
+  paintSlot: (row, col, radius, slot, waterType, resolution) => {
+    const { zoneMap, currentGridHash } = get();
+    if (!zoneMap || zoneMap.length !== resolution * resolution) return;
+
+    const slotToZone =
+      waterType === "freshwater" ? SLOT_TO_ZONE_FRESHWATER : SLOT_TO_ZONE_SALTWATER;
+    const zoneIndex = slotToZone[slot] ?? 0;
+
+    // Copy so the React-attached reference changes (forces TerrainMesh useEffect)
+    const next = new Uint8Array(zoneMap);
+    const r2 = radius * radius;
+    const rMin = Math.max(0, row - radius);
+    const rMax = Math.min(resolution - 1, row + radius);
+    const cMin = Math.max(0, col - radius);
+    const cMax = Math.min(resolution - 1, col + radius);
+    let changed = false;
+    for (let r = rMin; r <= rMax; r++) {
+      const dr = r - row;
+      for (let c = cMin; c <= cMax; c++) {
+        const dc = c - col;
+        if (dr * dr + dc * dc > r2) continue;
+        const idx = r * resolution + c;
+        if (next[idx] !== zoneIndex) {
+          next[idx] = zoneIndex;
+          changed = true;
+        }
+      }
+    }
+    if (!changed) return;
+
+    if (currentGridHash) {
+      try {
+        sessionStorage.setItem(
+          `${SESSION_KEY_PREFIX}${currentGridHash}`,
+          zoneMapToStorage(next),
+        );
+      } catch {
+        // sessionStorage unavailable / quota exceeded — keep in-memory edits anyway
+      }
+    }
+    set({ zoneMap: next, hasEdits: true });
+  },
+
+  resetToAi: () => {
+    const { aiZoneMap, currentGridHash } = get();
+    if (!aiZoneMap) return;
+    const restored = new Uint8Array(aiZoneMap);
+    if (currentGridHash) {
+      try {
+        sessionStorage.setItem(
+          `${SESSION_KEY_PREFIX}${currentGridHash}`,
+          zoneMapToStorage(restored),
+        );
+      } catch {
+        // ignore
+      }
+    }
+    set({ zoneMap: restored, hasEdits: false });
+  },
 
   classify: (grid: TerrainData): Promise<void> => {
     const { datasetId, waterType } = grid;
@@ -72,13 +169,19 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
     const wt = waterType as "saltwater" | "freshwater";
     const gridHash = hashGrid(grid.depths);
     const sessionKey = `${SESSION_KEY_PREFIX}${gridHash}`;
+    const aiSessionKey = `${SESSION_AI_KEY_PREFIX}${gridHash}`;
 
-    // 1. sessionStorage — synchronous, keyed by content hash
+    // 1. sessionStorage — synchronous, keyed by content hash.
+    //    The AI baseline is stored under a separate key so paint edits don't
+    //    overwrite it (enables Reset to AI even after reload).
     try {
       const stored = sessionStorage.getItem(sessionKey);
+      const storedAi = sessionStorage.getItem(aiSessionKey);
       if (stored) {
         const zoneMap = zoneMapFromStorage(stored);
-        set({ zoneMap, loading: false, error: null, currentGridHash: gridHash });
+        const ai = storedAi ? zoneMapFromStorage(storedAi) : new Uint8Array(zoneMap);
+        const hasEdits = !!storedAi && !u8Equal(zoneMap, ai);
+        set({ zoneMap, aiZoneMap: ai, hasEdits, loading: false, error: null, currentGridHash: gridHash });
         return Promise.resolve();
       }
     } catch {
@@ -89,7 +192,17 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
     const existing = inFlight.get(gridHash);
     if (existing) return existing;
 
-    set({ loading: true, error: null, zoneMap: null, currentGridHash: gridHash });
+    set({ loading: true, error: null, zoneMap: null, aiZoneMap: null, hasEdits: false, currentGridHash: gridHash });
+
+    const commitFresh = (zoneMap: Uint8Array) => {
+      try {
+        sessionStorage.setItem(sessionKey, zoneMapToStorage(zoneMap));
+        sessionStorage.setItem(aiSessionKey, zoneMapToStorage(zoneMap));
+      } catch {
+        // ignore
+      }
+      set({ zoneMap, aiZoneMap: new Uint8Array(zoneMap), hasEdits: false, loading: false, error: null });
+    };
 
     const work = (async () => {
       try {
@@ -99,11 +212,8 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
           const resp = await fetch(url, { credentials: "include" });
           if (resp.ok) {
             const data = (await resp.json()) as { zones: string[]; waterType: string };
-            // Guard: only commit if this is still the active grid
             if (get().currentGridHash !== gridHash) return;
-            const zoneMap = parseAndUpsampleZones(data.zones, wt, targetN);
-            try { sessionStorage.setItem(sessionKey, zoneMapToStorage(zoneMap)); } catch {}
-            set({ zoneMap, loading: false, error: null });
+            commitFresh(parseAndUpsampleZones(data.zones, wt, targetN));
             return;
           }
         } catch {
@@ -119,15 +229,12 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
         );
 
         if (get().currentGridHash !== gridHash) return;
-
-        const zoneMap = parseAndUpsampleZones(result.zones, wt, targetN);
-        try { sessionStorage.setItem(sessionKey, zoneMapToStorage(zoneMap)); } catch {}
-        set({ zoneMap, loading: false, error: null });
+        commitFresh(parseAndUpsampleZones(result.zones, wt, targetN));
       } catch (err) {
         if (get().currentGridHash !== gridHash) return;
         const message = err instanceof Error ? err.message : "Classification failed";
         console.warn("[BathyScan] AI classification failed:", message);
-        set({ loading: false, error: message, zoneMap: null });
+        set({ loading: false, error: message, zoneMap: null, aiZoneMap: null, hasEdits: false });
       }
     })();
 

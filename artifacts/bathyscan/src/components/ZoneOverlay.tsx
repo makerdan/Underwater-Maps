@@ -54,6 +54,12 @@ export const ZoneOverlay: React.FC = () => {
   const error = useClassificationStore((s) => s.error);
   const overlayEnabled = useUiStore((s) => s.zoneOverlayEnabled);
   const setOverlayEnabled = useUiStore((s) => s.setZoneOverlayEnabled);
+  const paintMode = useUiStore((s) => s.zonePaintMode);
+  const setPaintMode = useUiStore((s) => s.setZonePaintMode);
+  const paintSlot = useUiStore((s) => s.zonePaintSlot);
+  const setPaintSlot = useUiStore((s) => s.setZonePaintSlot);
+  const hasEdits = useClassificationStore((s) => s.hasEdits);
+  const resetToAi = useClassificationStore((s) => s.resetToAi);
 
   // Only show this panel when there's a terrain loaded
   if (!terrain) return null;
@@ -180,6 +186,113 @@ export const ZoneOverlay: React.FC = () => {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Paint mode controls — only meaningful when overlay is on */}
+        {hasZoneMap && !loading && overlayEnabled && (
+          <div
+            style={{
+              marginTop: 8,
+              paddingTop: 8,
+              borderTop: "1px solid rgba(0,229,255,0.08)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+            }}
+          >
+            <button
+              data-testid="zone-paint-toggle"
+              aria-pressed={paintMode}
+              onClick={() => setPaintMode(!paintMode)}
+              className="w-full text-left flex items-center gap-2 hover:bg-white/5 rounded transition-colors"
+              style={{ cursor: "pointer", padding: "3px 0" }}
+            >
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 12,
+                  height: 12,
+                  borderRadius: 2,
+                  border: paintMode ? "1.5px solid #00e5ff" : "1.5px solid #334155",
+                  background: paintMode ? "rgba(0,229,255,0.2)" : "transparent",
+                  flexShrink: 0,
+                  textAlign: "center",
+                  lineHeight: "10px",
+                  fontSize: 8,
+                  color: "#00e5ff",
+                }}
+              >
+                {paintMode ? "✎" : ""}
+              </span>
+              <span
+                style={{
+                  fontSize: 10,
+                  color: paintMode ? "#00e5ff" : "#475569",
+                  transition: "color 0.15s",
+                }}
+              >
+                Paint mode
+              </span>
+            </button>
+
+            {paintMode && (
+              <>
+                <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.05em" }}>
+                  Click &amp; drag on the terrain to repaint
+                </div>
+                <div
+                  data-testid="zone-paint-swatches"
+                  style={{ display: "flex", gap: 6, flexWrap: "wrap" }}
+                >
+                  {SLOT_COLORS.map((color, i) => {
+                    const active = paintSlot === i;
+                    return (
+                      <button
+                        key={i}
+                        data-testid={`zone-paint-swatch-${i}`}
+                        aria-label={`Paint slot ${i}`}
+                        aria-pressed={active}
+                        onClick={() => setPaintSlot(i as 0 | 1 | 2 | 3)}
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: 4,
+                          background: color,
+                          cursor: "pointer",
+                          border: active
+                            ? "2px solid #00e5ff"
+                            : "2px solid rgba(255,255,255,0.08)",
+                          boxShadow: active ? "0 0 6px rgba(0,229,255,0.6)" : "none",
+                          transition: "all 0.12s",
+                          padding: 0,
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {hasEdits && (
+              <button
+                data-testid="zone-reset-ai"
+                onClick={() => resetToAi()}
+                style={{
+                  fontSize: 10,
+                  color: "#94a3b8",
+                  background: "transparent",
+                  border: "1px solid rgba(0,229,255,0.18)",
+                  borderRadius: 3,
+                  padding: "3px 6px",
+                  cursor: "pointer",
+                  letterSpacing: "0.04em",
+                  textAlign: "left",
+                }}
+              >
+                ↺ Reset to AI
+              </button>
+            )}
           </div>
         )}
 

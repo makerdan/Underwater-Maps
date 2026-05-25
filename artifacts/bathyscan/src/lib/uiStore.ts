@@ -15,6 +15,11 @@ interface UiStore {
   setMarkerFormOpen: (open: boolean) => void;
   zoneOverlayEnabled: boolean;
   setZoneOverlayEnabled: (enabled: boolean) => void;
+  zonePaintMode: boolean;
+  setZonePaintMode: (enabled: boolean) => void;
+  /** Which texture slot (0–3) the paint brush is currently set to. */
+  zonePaintSlot: 0 | 1 | 2 | 3;
+  setZonePaintSlot: (slot: 0 | 1 | 2 | 3) => void;
 }
 
 export const useUiStore = create<UiStore>((set) => ({
@@ -26,5 +31,10 @@ export const useUiStore = create<UiStore>((set) => ({
   markerFormOpen: false,
   setMarkerFormOpen: (open) => set({ markerFormOpen: open }),
   zoneOverlayEnabled: false,
-  setZoneOverlayEnabled: (enabled) => set({ zoneOverlayEnabled: enabled }),
+  setZoneOverlayEnabled: (enabled) =>
+    set(enabled ? { zoneOverlayEnabled: true } : { zoneOverlayEnabled: false, zonePaintMode: false }),
+  zonePaintMode: false,
+  setZonePaintMode: (enabled) => set({ zonePaintMode: enabled }),
+  zonePaintSlot: 0,
+  setZonePaintSlot: (slot) => set({ zonePaintSlot: slot }),
 }));

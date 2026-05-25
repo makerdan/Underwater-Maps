@@ -7,6 +7,7 @@ import {
   getGetDatasetsIdTerrainQueryKey,
 } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
+import { useUiStore } from "@/lib/uiStore";
 import { TerrainMesh } from "@/components/TerrainMesh";
 import { Particles } from "@/components/Particles";
 import { Caustics } from "@/components/Caustics";
@@ -32,6 +33,7 @@ interface FlyControlsSceneProps {
 const FlyControlsScene: React.FC<FlyControlsSceneProps> = ({ terrainMeshRef }) => {
   const lightRef = useRef<THREE.PointLight>(null);
   const { mode } = useAppState();
+  const paintMode = useUiStore((s) => s.zonePaintMode);
   const { orbitTargetArr } = useFlyControls({ terrainMeshRef, lightRef });
   const lampIntensity = useSettingsStore((s) => s.lampIntensity);
 
@@ -46,13 +48,15 @@ const FlyControlsScene: React.FC<FlyControlsSceneProps> = ({ terrainMeshRef }) =
         decay={2}
       />
 
-      {/* Orbit mode: MapControls replaces fly movement */}
+      {/* Orbit mode: MapControls replaces fly movement.
+          Disabled while painting so drag-strokes don't also orbit the camera. */}
       {mode === "orbit" && (
         <MapControls
           target={orbitTargetArr.current}
           enableDamping
           dampingFactor={0.08}
           screenSpacePanning={false}
+          enabled={!paintMode}
         />
       )}
     </>
