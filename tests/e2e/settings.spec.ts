@@ -1,5 +1,17 @@
 import { test, expect } from "@playwright/test";
 
+/**
+ * Settings page end-to-end tests
+ *
+ * Updated to match the real sidebar labels and headings in
+ * artifacts/bathyscan/src/pages/Settings.tsx (see NAV_TABS).
+ *
+ * These tests assume the e2e auth bypass is active (set on the bathyscan
+ * webServer entry in playwright.config.ts via VITE_DEV_AUTH_BYPASS=1).
+ * Without it the /settings route still mounts the Settings component
+ * (it isn't auth-gated), so the assertions below run regardless.
+ */
+
 test.describe("Settings page", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
@@ -10,9 +22,7 @@ test.describe("Settings page", () => {
     await page.goto("/settings");
     await page.waitForLoadState("networkidle");
 
-    // Header should say SETTINGS
-    await expect(page.locator("text=SETTINGS")).toBeVisible({ timeout: 5_000 });
-    // Back button should be present
+    await expect(page.locator("text=SETTINGS").first()).toBeVisible({ timeout: 10_000 });
     await expect(page.locator("text=← BACK")).toBeVisible();
   });
 
@@ -20,9 +30,20 @@ test.describe("Settings page", () => {
     await page.goto("/settings");
     await page.waitForLoadState("networkidle");
 
-    const expectedTabs = ["VISUALS", "NAVIGATION", "HUD", "OVERVIEW MAP", "MARKERS", "DATASET", "OFFLINE", "ACCOUNT"];
+    // Match the NAV_TABS array in Settings.tsx. Each entry below is a
+    // substring that uniquely identifies its sidebar button.
+    const expectedTabs = [
+      "VISUALS",         // "VISUALS & PERF"
+      "CAMERA & CTRL",
+      "HUD & LAYOUT",
+      "OVERVIEW MAP",
+      "MARKERS",
+      "DATA & STORAGE",
+      "OFFLINE CACHE",
+      "ACCOUNT & PRIVACY",
+    ];
     for (const label of expectedTabs) {
-      await expect(page.locator(`button:has-text("${label}")`).first()).toBeVisible({ timeout: 5_000 });
+      await expect(page.locator(`button:has-text("${label}")`).first()).toBeVisible({ timeout: 10_000 });
     }
   });
 
@@ -30,58 +51,59 @@ test.describe("Settings page", () => {
     await page.goto("/settings");
     await page.waitForLoadState("networkidle");
 
-    // Click Navigation tab
-    await page.locator('button:has-text("NAVIGATION")').first().click();
-    await expect(page.locator("text=◈ NAVIGATION")).toBeVisible({ timeout: 3_000 });
+    await page.locator('button:has-text("CAMERA & CTRL")').first().click();
+    await expect(page.locator("text=◈ CAMERA").first()).toBeVisible({ timeout: 5_000 });
 
-    // Click HUD tab
-    await page.locator('button:has-text("HUD")').first().click();
-    await expect(page.locator("text=◈ HUD")).toBeVisible({ timeout: 3_000 });
+    await page.locator('button:has-text("HUD & LAYOUT")').first().click();
+    await expect(page.locator("text=◈ HUD").first()).toBeVisible({ timeout: 5_000 });
 
-    // Click Markers tab
     await page.locator('button:has-text("MARKERS")').first().click();
-    await expect(page.locator("text=◈ MARKERS")).toBeVisible({ timeout: 3_000 });
+    await expect(page.locator("text=◈ MARKERS").first()).toBeVisible({ timeout: 5_000 });
 
-    // Click Offline tab
-    await page.locator('button:has-text("OFFLINE")').first().click();
-    await expect(page.locator("text=◈ OFFLINE")).toBeVisible({ timeout: 3_000 });
+    await page.locator('button:has-text("OFFLINE CACHE")').first().click();
+    await expect(page.locator("text=◈ OFFLINE").first()).toBeVisible({ timeout: 5_000 });
   });
 
   test("caustics toggle changes checked state in the Visuals tab", async ({ page }) => {
     await page.goto("/settings");
-    // Visuals tab is active by default; find the caustics toggle
-    const toggle = page.locator('[role="switch"][aria-label*="austics"], button:has-text("ENABLE CAUSTICS")').first();
-    // If there's no aria-label, find it by proximity to the label
-    const causticsSwitch = page.locator('button[role="switch"]').filter({ hasText: "" }).nth(1);
-    const initialChecked = await causticsSwitch.getAttribute("aria-checked");
+    await page.waitForLoadState("networkidle");
+
+    // ToggleRow renders the label and a Radix Switch in the same row.
+    // Find the row by the "Caustics Effect" label, then the switch inside it.
+    const causticsRow = page.locator("div").filter({
+      has: page.locator("text=Caustics Effect"),
+    }).filter({
+      has: page.locator('[role="switch"]'),
+    }).last();
+    const causticsSwitch = causticsRow.locator('[role="switch"]').first();
+
+    await expect(causticsSwitch).toBeVisible({ timeout: 5_000 });
+    const initial = await causticsSwitch.getAttribute("aria-checked");
     await causticsSwitch.click();
-    const newChecked = await causticsSwitch.getAttribute("aria-checked");
-    expect(newChecked).not.toBe(initialChecked);
+    const after = await causticsSwitch.getAttribute("aria-checked");
+    expect(after).not.toBe(initial);
   });
 
   test("Visuals tab is active by default and shows colormap selector", async ({ page }) => {
     await page.goto("/settings");
     await page.waitForLoadState("networkidle");
 
-    // Default section heading
-    await expect(page.locator("text=◈ VISUALS")).toBeVisible({ timeout: 5_000 });
-
-    // Colormap selector is present
-    await expect(page.locator("text=Depth Colormap")).toBeVisible();
+    await expect(page.locator("text=◈ VISUALS").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("text=Depth Colormap").first()).toBeVisible();
   });
 
-  test("RESET DEFAULTS button is visible in the top bar", async ({ page }) => {
+  test("RESET ALL SETTINGS button is present", async ({ page }) => {
     await page.goto("/settings");
     await page.waitForLoadState("networkidle");
 
-    await expect(page.locator("text=RESET DEFAULTS")).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator("text=RESET ALL SETTINGS")).toBeVisible({ timeout: 10_000 });
   });
 
   test("Offline tab shows pending markers count", async ({ page }) => {
     await page.goto("/settings");
     await page.waitForLoadState("networkidle");
 
-    await page.locator('button:has-text("OFFLINE")').first().click();
+    await page.locator('button:has-text("OFFLINE CACHE")').first().click();
     const count = page.locator("[data-testid='pending-markers-count']");
     await expect(count).toBeVisible({ timeout: 5_000 });
   });
@@ -91,7 +113,6 @@ test.describe("Settings page", () => {
     await page.waitForLoadState("networkidle");
 
     await page.locator("text=← BACK").click();
-    // Should navigate away from /settings
     await page.waitForURL((url) => !url.pathname.endsWith("/settings"), { timeout: 5_000 });
   });
 
@@ -99,7 +120,7 @@ test.describe("Settings page", () => {
     await page.goto("/settings");
     await page.waitForLoadState("networkidle");
 
-    await page.locator('button:has-text("ACCOUNT")').first().click();
+    await page.locator('button:has-text("ACCOUNT & PRIVACY")').first().click();
     await expect(page.locator("text=DANGER ZONE")).toBeVisible({ timeout: 5_000 });
     await expect(page.locator("text=DELETE ALL MY MARKERS")).toBeVisible();
   });
@@ -108,11 +129,10 @@ test.describe("Settings page", () => {
     await page.goto("/settings");
     await page.waitForLoadState("networkidle");
 
-    await page.locator('button:has-text("ACCOUNT")').first().click();
+    await page.locator('button:has-text("ACCOUNT & PRIVACY")').first().click();
     await page.locator("text=DELETE ALL MY MARKERS").click();
 
-    // Confirmation step should appear
-    await expect(page.locator("text=Are you sure?")).toBeVisible({ timeout: 3_000 });
+    await expect(page.locator("text=Are you sure?")).toBeVisible({ timeout: 5_000 });
     await expect(page.locator("text=YES, DELETE ALL")).toBeVisible();
     await expect(page.locator("text=CANCEL")).toBeVisible();
   });
@@ -130,6 +150,6 @@ test.describe("Settings page", () => {
 
     await page.keyboard.press(",");
     await page.waitForURL((url) => url.pathname.includes("settings"), { timeout: 5_000 });
-    await expect(page.locator("text=SETTINGS")).toBeVisible();
+    await expect(page.locator("text=SETTINGS").first()).toBeVisible();
   });
 });
