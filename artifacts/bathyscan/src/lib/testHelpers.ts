@@ -76,14 +76,20 @@ function syntheticTestGrid(): TerrainData {
 let appSetTerrain: ((t: TerrainData | null) => void) | null = null;
 let appSetDatasetId: ((id: string | null) => void) | null = null;
 let appGetTerrainRef: { current: TerrainData | null } = { current: null };
+let appSetRealisticMode: ((b: boolean) => void) | null = null;
+let appRealisticModeRef: { current: boolean } = { current: false };
 export function registerTestBridge(
   setTerrain: (t: TerrainData | null) => void,
   setDatasetId?: (id: string | null) => void,
   terrainRef?: { current: TerrainData | null },
+  setRealisticMode?: (b: boolean) => void,
+  realisticModeRef?: { current: boolean },
 ): void {
   appSetTerrain = setTerrain;
   if (setDatasetId) appSetDatasetId = setDatasetId;
   if (terrainRef) appGetTerrainRef = terrainRef;
+  if (setRealisticMode) appSetRealisticMode = setRealisticMode;
+  if (realisticModeRef) appRealisticModeRef = realisticModeRef;
 }
 
 // Camera position is mutated each frame inside the Three.js render loop and
@@ -240,6 +246,14 @@ export interface BathyTestApi {
   setSpeedIndex: (n: number) => void;
   getMouseZoomSensitivity: () => number;
   setMouseZoomSensitivity: (v: number) => void;
+  /**
+   * Realistic (boat-MPH throttle) mode lives in AppContext, not the settings
+   * store, so it has to be reached through the TestBridge component. When ON,
+   * `processFlyWheel` short-circuits Shift+wheel (the boat-MPH throttle owns
+   * speed) — tests use these to cover that branch.
+   */
+  getRealisticMode: () => boolean;
+  setRealisticMode: (b: boolean) => boolean;
   /**
    * Install a synthetic fly-mode test rig. Creates a THREE.PerspectiveCamera
    * at the given position pointing along `lookAt`, registers it so
@@ -570,6 +584,12 @@ export function installTestHelpers(): void {
     getMouseZoomSensitivity: () => useSettingsStore.getState().mouseZoomSensitivity,
     setMouseZoomSensitivity: (v) =>
       useSettingsStore.getState().setMouseZoomSensitivity(v),
+    getRealisticMode: () => appRealisticModeRef.current,
+    setRealisticMode: (b) => {
+      if (!appSetRealisticMode) return false;
+      appSetRealisticMode(b);
+      return true;
+    },
     initFlyWheelTestRig: (pos, lookAt) => {
       const cam = new THREE.PerspectiveCamera(60, 1, 0.1, 10000);
       cam.position.set(pos[0], pos[1], pos[2]);
@@ -590,10 +610,11 @@ export function installTestHelpers(): void {
         {
           mouseZoomSensitivity: settings.mouseZoomSensitivity,
           touchpadZoomSensitivity: settings.touchpadZoomSensitivity,
-          // realisticMode lives in AppContext, not the settings store, and the
-          // scroll-zoom e2e doesn't exercise the realistic (boat-MPH) path —
-          // tests assume the default "fly" mode where shift-wheel steps speed.
-          realisticMode: false,
+          // realisticMode lives in AppContext (not the settings store) and is
+          // mirrored into appRealisticModeRef by <TestBridge/>. When ON, the
+          // boat-MPH throttle owns speed and processFlyWheel short-circuits
+          // Shift+wheel — the realistic-mode e2e case relies on this wiring.
+          realisticMode: appRealisticModeRef.current,
         },
       );
       if (result.newSpeedIndex !== null) {

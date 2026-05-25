@@ -132,6 +132,49 @@ test.describe("BathyScan — scroll-to-zoom controls", () => {
     expect(distance(beforePos, afterPos)).toBeLessThan(1e-6);
   });
 
+  test("Shift+wheel is a no-op when realistic (boat-MPH) mode is on", async ({ page }) => {
+    await initRig(page);
+
+    // Enable realistic mode through the TestBridge-backed AppContext setter.
+    const enabled = await page.evaluate(() =>
+      window.__bathyTest!.setRealisticMode(true),
+    );
+    expect(enabled).toBe(true);
+    expect(
+      await page.evaluate(() => window.__bathyTest!.getRealisticMode()),
+    ).toBe(true);
+
+    // Pin speed tier so we can detect a change (or lack thereof).
+    await page.evaluate(() => window.__bathyTest!.setSpeedIndex(2));
+    const beforeIdx = await page.evaluate(() =>
+      window.__bathyTest!.getSpeedIndex(),
+    );
+    expect(beforeIdx).toBe(2);
+    const beforePos = await getCameraPos(page);
+
+    // Shift+wheel in realistic mode → processFlyWheel short-circuits, so
+    // speed tier should NOT change and camera should NOT dolly (the boat-MPH
+    // throttle owns speed in realistic mode).
+    await page.evaluate(() =>
+      window.__bathyTest!.simulateFlyWheel(120, true),
+    );
+    expect(
+      await page.evaluate(() => window.__bathyTest!.getSpeedIndex()),
+    ).toBe(beforeIdx);
+    await page.evaluate(() =>
+      window.__bathyTest!.simulateFlyWheel(-120, true),
+    );
+    expect(
+      await page.evaluate(() => window.__bathyTest!.getSpeedIndex()),
+    ).toBe(beforeIdx);
+
+    const afterPos = await getCameraPos(page);
+    expect(distance(beforePos, afterPos)).toBeLessThan(1e-6);
+
+    // Reset for any subsequent tests sharing the page context.
+    await page.evaluate(() => window.__bathyTest!.setRealisticMode(false));
+  });
+
   test("Mouse Wheel Zoom Sensitivity slider scales the next wheel dolly", async ({ page }) => {
     await initRig(page);
 
