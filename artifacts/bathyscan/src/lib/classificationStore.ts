@@ -51,7 +51,8 @@ interface ClassificationState {
   zoneMap: Uint8Array | null;
   loading: boolean;
   error: string | null;
-  currentDatasetId: string | null;
+  /** Hash of the grid currently being classified (or last successfully classified). */
+  currentGridHash: string | null;
 
   classify: (grid: TerrainData) => Promise<void>;
   clearZoneMap: () => void;
@@ -61,9 +62,9 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
   zoneMap: null,
   loading: false,
   error: null,
-  currentDatasetId: null,
+  currentGridHash: null,
 
-  clearZoneMap: () => set({ zoneMap: null, error: null, currentDatasetId: null }),
+  clearZoneMap: () => set({ zoneMap: null, error: null, currentGridHash: null }),
 
   classify: (grid: TerrainData): Promise<void> => {
     const { datasetId, waterType } = grid;
@@ -77,7 +78,7 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
       const stored = sessionStorage.getItem(sessionKey);
       if (stored) {
         const zoneMap = zoneMapFromStorage(stored);
-        set({ zoneMap, loading: false, error: null, currentDatasetId: datasetId });
+        set({ zoneMap, loading: false, error: null, currentGridHash: gridHash });
         return Promise.resolve();
       }
     } catch {
@@ -88,7 +89,7 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
     const existing = inFlight.get(gridHash);
     if (existing) return existing;
 
-    set({ loading: true, error: null, zoneMap: null, currentDatasetId: datasetId });
+    set({ loading: true, error: null, zoneMap: null, currentGridHash: gridHash });
 
     const work = (async () => {
       try {
@@ -98,7 +99,8 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
           const resp = await fetch(url, { credentials: "include" });
           if (resp.ok) {
             const data = (await resp.json()) as { zones: string[]; waterType: string };
-            if (get().currentDatasetId !== datasetId) return;
+            // Guard: only commit if this is still the active grid
+            if (get().currentGridHash !== gridHash) return;
             const zoneMap = parseAndUpsampleZones(data.zones, wt, targetN);
             try { sessionStorage.setItem(sessionKey, zoneMapToStorage(zoneMap)); } catch {}
             set({ zoneMap, loading: false, error: null });
@@ -108,7 +110,7 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
           // Server cache miss — fall through to AI
         }
 
-        if (get().currentDatasetId !== datasetId) return;
+        if (get().currentGridHash !== gridHash) return;
 
         // 3. Poe AI — include gridHash so server can store by it
         const gridBase64 = gridToBase64Png(grid);
@@ -116,13 +118,13 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
           { gridBase64, waterType: wt, datasetId, gridHash } as PoeClassifyRequest
         );
 
-        if (get().currentDatasetId !== datasetId) return;
+        if (get().currentGridHash !== gridHash) return;
 
         const zoneMap = parseAndUpsampleZones(result.zones, wt, targetN);
         try { sessionStorage.setItem(sessionKey, zoneMapToStorage(zoneMap)); } catch {}
         set({ zoneMap, loading: false, error: null });
       } catch (err) {
-        if (get().currentDatasetId !== datasetId) return;
+        if (get().currentGridHash !== gridHash) return;
         const message = err instanceof Error ? err.message : "Classification failed";
         console.warn("[BathyScan] AI classification failed:", message);
         set({ loading: false, error: message, zoneMap: null });

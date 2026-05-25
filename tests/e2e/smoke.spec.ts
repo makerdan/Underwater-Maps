@@ -53,33 +53,35 @@ test.describe("BathyScan — smoke suite", () => {
     expect(count).toBeGreaterThanOrEqual(1);
   });
 
-  test("zone overlay panel is present and legend is discoverable after classification", async ({ page }) => {
+  test("zone overlay: toggle changes aria-pressed and legend is visible", async ({ page }) => {
     await page.waitForLoadState("networkidle");
 
     // Zone Analysis panel only renders once terrain is loaded from the API.
-    // In environments where the API is reachable, wait for the panel header.
     const zonePanel = page.locator("text=Zone Analysis");
     const panelVisible = await zonePanel.isVisible({ timeout: 10_000 }).catch(() => false);
-
     if (!panelVisible) {
-      // API not reachable in this environment (e.g. missing native libs) — skip rest.
+      test.skip(true, "Zone Analysis panel not visible — API unreachable in this environment");
       return;
     }
 
     // Wait for the loading spinner to disappear (classification complete or error).
     await page.waitForFunction(() => !document.querySelector(".animate-spin"), { timeout: 30_000 });
 
-    // If classification succeeded, .zone-legend should be in the DOM.
+    // Zone legend must be present and visible when classification succeeds.
     const legend = page.locator(".zone-legend");
-    const legendCount = await legend.count();
-    if (legendCount > 0) {
-      await expect(legend.first()).toBeVisible();
+    await expect(legend.first()).toBeVisible({ timeout: 5_000 });
 
-      // Toggle the overlay on/off via the "Show zone colours" button.
-      const toggleBtn = page.locator("text=Show zone colours");
-      await toggleBtn.click();
-      // After toggling, the button is still present.
-      await expect(toggleBtn).toBeVisible();
-    }
+    // The toggle button must carry aria-pressed="true" by default (overlay on).
+    const toggleBtn = page.locator("[data-testid='zone-toggle']");
+    await expect(toggleBtn).toBeVisible();
+    await expect(toggleBtn).toHaveAttribute("aria-pressed", "true");
+
+    // Click once → overlay off → aria-pressed flips to "false".
+    await toggleBtn.click();
+    await expect(toggleBtn).toHaveAttribute("aria-pressed", "false");
+
+    // Click again → overlay on → aria-pressed returns to "true".
+    await toggleBtn.click();
+    await expect(toggleBtn).toHaveAttribute("aria-pressed", "true");
   });
 });

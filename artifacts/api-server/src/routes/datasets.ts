@@ -88,8 +88,9 @@ router.get("/datasets/:id/zones", async (req, res): Promise<void> => {
   const { id } = req.params as { id: string };
   const gridHash = (req.query["h"] as string | undefined) ?? "";
 
-  if (!gridHash) {
-    res.status(400).json({ error: "missing_param", message: "?h=<gridHash> is required" });
+  const GRID_HASH_RE = /^[a-f0-9]{8}$/;
+  if (!gridHash || !GRID_HASH_RE.test(gridHash)) {
+    res.status(400).json({ error: "invalid_param", message: "?h= must be an 8-char lowercase hex string" });
     return;
   }
 

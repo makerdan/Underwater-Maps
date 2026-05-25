@@ -103,6 +103,8 @@ export const ZoneOverlay: React.FC = () => {
         {/* Overlay toggle — only visible when zone map is ready */}
         {hasZoneMap && !loading && (
           <button
+            data-testid="zone-toggle"
+            aria-pressed={overlayEnabled}
             onClick={() => setOverlayEnabled(!overlayEnabled)}
             className="w-full text-left flex items-center gap-2 mb-2 hover:bg-white/5 rounded transition-colors"
             style={{ cursor: "pointer", padding: "3px 0" }}

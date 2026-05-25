@@ -177,11 +177,26 @@ export { datasetZonesCache };
 
 const ZONE_CACHE_DIR = "/tmp/zone-cache";
 
+/**
+ * Strict allow-list for gridHash filenames: exactly 8 lowercase hex chars.
+ * Anything else is rejected before any filesystem access to prevent path traversal.
+ */
+const GRID_HASH_RE = /^[a-f0-9]{8}$/;
+
+/** Returns true only when `hash` is a safe, well-formed FNV-1a 32-bit hex string. */
+function isValidGridHash(hash: string): boolean {
+  return GRID_HASH_RE.test(hash);
+}
+
 /** Read a single zone cache entry by gridHash from disk. */
 export async function readZoneDiskByHash(gridHash: string): Promise<CachedZones | null> {
+  if (!isValidGridHash(gridHash)) return null; // reject path traversal attempts
   try {
     const file = path.join(ZONE_CACHE_DIR, `${gridHash}.json`);
-    const raw = await fsPromises.readFile(file, "utf8");
+    // Resolve and verify the path stays inside ZONE_CACHE_DIR
+    const resolved = path.resolve(file);
+    if (!resolved.startsWith(path.resolve(ZONE_CACHE_DIR) + path.sep)) return null;
+    const raw = await fsPromises.readFile(resolved, "utf8");
     return JSON.parse(raw) as CachedZones;
   } catch {
     return null;
@@ -189,10 +204,16 @@ export async function readZoneDiskByHash(gridHash: string): Promise<CachedZones 
 }
 
 async function writeZoneDisk(gridHash: string, data: CachedZones): Promise<void> {
+  if (!isValidGridHash(gridHash)) {
+    console.warn(`[zones] Rejected write for invalid gridHash: ${JSON.stringify(gridHash)}`);
+    return;
+  }
   try {
     await fsPromises.mkdir(ZONE_CACHE_DIR, { recursive: true });
     const file = path.join(ZONE_CACHE_DIR, `${gridHash}.json`);
-    await fsPromises.writeFile(file, JSON.stringify(data), "utf8");
+    const resolved = path.resolve(file);
+    if (!resolved.startsWith(path.resolve(ZONE_CACHE_DIR) + path.sep)) return;
+    await fsPromises.writeFile(resolved, JSON.stringify(data), "utf8");
   } catch (err) {
     console.warn(`[zones] Failed to write disk cache for ${gridHash}: ${(err as Error).message}`);
   }
@@ -205,7 +226,8 @@ async function hydrateCacheFromDisk(): Promise<void> {
     const files = await fsPromises.readdir(ZONE_CACHE_DIR);
     await Promise.all(
       files
-        .filter((f) => f.endsWith(".json"))
+        // Only load files whose names are valid 8-char hex hashes — skip anything else
+        .filter((f) => f.endsWith(".json") && isValidGridHash(f.slice(0, -5)))
         .map(async (f) => {
           const hash = f.slice(0, -5);
           const data = await readZoneDiskByHash(hash);
