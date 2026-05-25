@@ -7,7 +7,14 @@
  * override sliders so the user can still plan a drift.
  */
 
-import React, { useEffect, useCallback } from "react";
+import React, { useEffect, useCallback, useState } from "react";
+import {
+  useGetTrollingPresets,
+  usePostTrollingPresets,
+  useDeleteTrollingPresetsId,
+  getGetTrollingPresetsQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAppState } from "@/lib/context";
 import { useDriftStore, TROLL_MAX_KNOTS } from "@/lib/driftStore";
 import { computeDrift } from "@/lib/computeDrift";
@@ -120,6 +127,60 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     boatSpeedKnots,
     setBoatSpeedKnots,
   } = useDriftStore();
+
+  const queryClient = useQueryClient();
+  const presetsQueryKey = getGetTrollingPresetsQueryKey();
+  const { data: trollingPresets } = useGetTrollingPresets({
+    query: { queryKey: presetsQueryKey, staleTime: 60 * 1000 },
+  });
+  const postPresetMutation = usePostTrollingPresets();
+  const deletePresetMutation = useDeleteTrollingPresetsId();
+  const [presetName, setPresetName] = useState("");
+  const [presetError, setPresetError] = useState<string | null>(null);
+
+  const handleSavePreset = useCallback(async () => {
+    const trimmed = presetName.trim();
+    if (!trimmed) {
+      setPresetError("Name required");
+      return;
+    }
+    setPresetError(null);
+    try {
+      await postPresetMutation.mutateAsync({
+        data: {
+          name: trimmed,
+          headingDeg: Math.round(boatHeadingDeg),
+          speedKnots: Math.max(0, Math.min(TROLL_MAX_KNOTS, boatSpeedKnots)),
+          startLat: driftStartLat,
+          startLon: driftStartLon,
+        },
+      });
+      setPresetName("");
+      await queryClient.invalidateQueries({ queryKey: presetsQueryKey });
+    } catch (err) {
+      setPresetError(err instanceof Error ? err.message : "Save failed");
+    }
+  }, [presetName, postPresetMutation, boatHeadingDeg, boatSpeedKnots, driftStartLat, driftStartLon, queryClient, presetsQueryKey]);
+
+  const handleLoadPreset = useCallback((presetId: string) => {
+    const preset = trollingPresets?.find((p) => p.id === presetId);
+    if (!preset) return;
+    setBoatHeadingDeg(preset.headingDeg);
+    setBoatSpeedKnots(preset.speedKnots);
+    if (preset.startLat != null && preset.startLon != null) {
+      setDriftStart(preset.startLat, preset.startLon);
+    }
+    setDriftMode("trolling");
+  }, [trollingPresets, setBoatHeadingDeg, setBoatSpeedKnots, setDriftStart, setDriftMode]);
+
+  const handleDeletePreset = useCallback(async (presetId: string) => {
+    try {
+      await deletePresetMutation.mutateAsync({ id: presetId });
+      await queryClient.invalidateQueries({ queryKey: presetsQueryKey });
+    } catch {
+      // no-op; query will refetch on next visit
+    }
+  }, [deletePresetMutation, queryClient, presetsQueryKey]);
 
   const centerLat = terrain ? (terrain.minLat + terrain.maxLat) / 2 : 0;
   const centerLon = terrain ? (terrain.minLon + terrain.maxLon) / 2 : 0;
@@ -308,6 +369,96 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
               />
             </div>
           </div>
+          <div style={{ marginBottom: 6 }}>
+            <div style={LABEL}>PRESETS</div>
+            {trollingPresets && trollingPresets.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 3 }}>
+                {trollingPresets.map((p) => (
+                  <div key={p.id} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                    <button
+                      onClick={() => handleLoadPreset(p.id)}
+                      title={`Load ${p.name}: ${Math.round(p.headingDeg)}° @ ${p.speedKnots}kt`}
+                      style={{
+                        flex: 1,
+                        textAlign: "left",
+                        background: "rgba(0,10,20,0.8)",
+                        border: "1px solid rgba(0,229,255,0.2)",
+                        color: "#00e5ff",
+                        fontFamily: "inherit",
+                        fontSize: 9,
+                        padding: "3px 6px",
+                        borderRadius: 3,
+                        cursor: "pointer",
+                        letterSpacing: "0.1em",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {p.name} · {Math.round(p.headingDeg)}° @ {p.speedKnots}kt
+                    </button>
+                    <button
+                      onClick={() => void handleDeletePreset(p.id)}
+                      aria-label={`Delete preset ${p.name}`}
+                      title="Delete preset"
+                      style={{
+                        background: "rgba(0,10,20,0.8)",
+                        border: "1px solid rgba(248,113,113,0.3)",
+                        color: "#f87171",
+                        fontFamily: "inherit",
+                        fontSize: 9,
+                        padding: "3px 6px",
+                        borderRadius: 3,
+                        cursor: "pointer",
+                      }}
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 8, color: "#475569", marginTop: 2 }}>
+                No saved presets yet
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+              <input
+                type="text"
+                placeholder="Name this pass"
+                value={presetName}
+                maxLength={80}
+                onChange={(e) => setPresetName(e.target.value)}
+                style={{
+                  flex: 1,
+                  background: "rgba(0,10,20,0.8)",
+                  border: "1px solid rgba(0,229,255,0.2)",
+                  color: "#00e5ff",
+                  fontFamily: "inherit",
+                  fontSize: 10,
+                  padding: "2px 6px",
+                  borderRadius: 3,
+                }}
+              />
+              <button
+                onClick={() => void handleSavePreset()}
+                disabled={postPresetMutation.isPending}
+                style={{
+                  background: "rgba(0,229,255,0.1)",
+                  border: "1px solid rgba(0,229,255,0.3)",
+                  color: "#00e5ff",
+                  fontFamily: "inherit",
+                  fontSize: 9,
+                  padding: "2px 8px",
+                  borderRadius: 3,
+                  cursor: postPresetMutation.isPending ? "wait" : "pointer",
+                  letterSpacing: "0.15em",
+                }}
+              >SAVE</button>
+            </div>
+            {presetError && (
+              <div style={{ fontSize: 8, color: "#f87171", marginTop: 2 }}>{presetError}</div>
+            )}
+          </div>
+
           <div>
             <div style={LABEL}>BOAT SPEED THROUGH WATER</div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

@@ -811,6 +811,46 @@ export interface SlackBlock {
   nextReversalAt: string;
 }
 
+export interface TrollingPreset {
+  /** UUID primary key */
+  id: string;
+  userId: string;
+  name: string;
+  /**
+     * @minimum 0
+     * @maximum 360
+     */
+  headingDeg: number;
+  /**
+     * @minimum 0
+     * @maximum 10
+     */
+  speedKnots: number;
+  startLat?: number | null;
+  startLon?: number | null;
+  createdAt: string;
+}
+
+export interface TrollingPresetInput {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name: string;
+  /**
+     * @minimum 0
+     * @maximum 360
+     */
+  headingDeg: number;
+  /**
+     * @minimum 0
+     * @maximum 10
+     */
+  speedKnots: number;
+  startLat?: number | null;
+  startLon?: number | null;
+}
+
 export type MarkerInputType = typeof MarkerInputType[keyof typeof MarkerInputType];
 
 

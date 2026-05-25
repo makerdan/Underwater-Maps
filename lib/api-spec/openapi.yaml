@@ -24,6 +24,8 @@ tags:
     description: GPS trail recording operations
   - name: drift-planner
     description: Surface conditions for drift planning
+  - name: trolling-presets
+    description: Saved trolling heading/speed presets
 paths:
   /datasets:
     get:
@@ -808,6 +810,89 @@ paths:
                 $ref: "#/components/schemas/UserSettings"
         "401":
           description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /trolling-presets:
+    get:
+      operationId: getTrollingPresets
+      tags: [trolling-presets]
+      summary: List the authenticated user's trolling presets
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Preset list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrollingPreset"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    post:
+      operationId: postTrollingPresets
+      tags: [trolling-presets]
+      summary: Save a new trolling preset
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrollingPresetInput"
+      responses:
+        "201":
+          description: Created preset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrollingPreset"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /trolling-presets/{id}:
+    delete:
+      operationId: deleteTrollingPresetsId
+      tags: [trolling-presets]
+      summary: Delete a trolling preset by ID
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Preset deleted
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Preset not found
           content:
             application/json:
               schema:
@@ -2229,6 +2314,67 @@ components:
         - minutesToSlack
         - minutesSinceSlack
         - nextReversalAt
+
+    TrollingPreset:
+      type: object
+      properties:
+        id:
+          type: string
+          description: UUID primary key
+        userId:
+          type: string
+        name:
+          type: string
+        headingDeg:
+          type: number
+          minimum: 0
+          maximum: 360
+        speedKnots:
+          type: number
+          minimum: 0
+          maximum: 10
+        startLat:
+          type: number
+          nullable: true
+        startLon:
+          type: number
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - name
+        - headingDeg
+        - speedKnots
+        - createdAt
+
+    TrollingPresetInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        headingDeg:
+          type: number
+          minimum: 0
+          maximum: 360
+        speedKnots:
+          type: number
+          minimum: 0
+          maximum: 10
+        startLat:
+          type: number
+          nullable: true
+        startLon:
+          type: number
+          nullable: true
+      required:
+        - name
+        - headingDeg
+        - speedKnots
 
     MarkerInput:
       type: object

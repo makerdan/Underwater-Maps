@@ -14,6 +14,7 @@ import substrateRouter from "./substrate";
 import efhRouter from "./efh";
 import catalogSavesRouter from "./catalog-saves";
 import surfaceConditionsRouter from "./surface-conditions";
+import trollingPresetsRouter from "./trolling-presets";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(substrateRouter);
 router.use(efhRouter);
 router.use(catalogSavesRouter);
 router.use(surfaceConditionsRouter);
+router.use(trollingPresetsRouter);
 
 export default router;

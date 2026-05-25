@@ -807,6 +807,60 @@ export const PutSettingsResponse = zod.object({
 
 
 /**
+ * @summary List the authenticated user's trolling presets
+ */
+export const getTrollingPresetsResponseHeadingDegMin = 0;
+export const getTrollingPresetsResponseHeadingDegMax = 360;
+
+export const getTrollingPresetsResponseSpeedKnotsMin = 0;
+export const getTrollingPresetsResponseSpeedKnotsMax = 10;
+
+
+
+export const GetTrollingPresetsResponseItem = zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "userId": zod.string(),
+  "name": zod.string(),
+  "headingDeg": zod.number().min(getTrollingPresetsResponseHeadingDegMin).max(getTrollingPresetsResponseHeadingDegMax),
+  "speedKnots": zod.number().min(getTrollingPresetsResponseSpeedKnotsMin).max(getTrollingPresetsResponseSpeedKnotsMax),
+  "startLat": zod.number().nullish(),
+  "startLon": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const GetTrollingPresetsResponse = zod.array(GetTrollingPresetsResponseItem)
+
+
+/**
+ * @summary Save a new trolling preset
+ */
+export const postTrollingPresetsBodyNameMax = 80;
+
+export const postTrollingPresetsBodyHeadingDegMin = 0;
+export const postTrollingPresetsBodyHeadingDegMax = 360;
+
+export const postTrollingPresetsBodySpeedKnotsMin = 0;
+export const postTrollingPresetsBodySpeedKnotsMax = 10;
+
+
+
+export const PostTrollingPresetsBody = zod.object({
+  "name": zod.string().min(1).max(postTrollingPresetsBodyNameMax),
+  "headingDeg": zod.number().min(postTrollingPresetsBodyHeadingDegMin).max(postTrollingPresetsBodyHeadingDegMax),
+  "speedKnots": zod.number().min(postTrollingPresetsBodySpeedKnotsMin).max(postTrollingPresetsBodySpeedKnotsMax),
+  "startLat": zod.number().nullish(),
+  "startLon": zod.number().nullish()
+})
+
+
+/**
+ * @summary Delete a trolling preset by ID
+ */
+export const DeleteTrollingPresetsIdParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+
+/**
  * Returns server health status
  * @summary Health check
  */

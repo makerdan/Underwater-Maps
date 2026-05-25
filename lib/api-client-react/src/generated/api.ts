@@ -58,6 +58,8 @@ import type {
   SurfaceConditions,
   TerrainData,
   TrailPointsPage,
+  TrollingPreset,
+  TrollingPresetInput,
   UploadResult,
   UserCatalogSave,
   UserDatasetMeta,
@@ -2114,6 +2116,224 @@ export const usePutSettings = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getPutSettingsMutationOptions(options));
+    }
+
+export const getGetTrollingPresetsUrl = () => {
+
+
+
+
+  return `/api/trolling-presets`
+}
+
+/**
+ * @summary List the authenticated user's trolling presets
+ */
+export const getTrollingPresets = async ( options?: RequestInit): Promise<TrollingPreset[]> => {
+
+  return customFetch<TrollingPreset[]>(getGetTrollingPresetsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTrollingPresetsQueryKey = () => {
+    return [
+    `/api/trolling-presets`
+    ] as const;
+    }
+
+
+export const getGetTrollingPresetsQueryOptions = <TData = Awaited<ReturnType<typeof getTrollingPresets>>, TError = ErrorType<ApiError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTrollingPresets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTrollingPresetsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTrollingPresets>>> = ({ signal }) => getTrollingPresets({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTrollingPresets>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTrollingPresetsQueryResult = NonNullable<Awaited<ReturnType<typeof getTrollingPresets>>>
+export type GetTrollingPresetsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List the authenticated user's trolling presets
+ */
+
+export function useGetTrollingPresets<TData = Awaited<ReturnType<typeof getTrollingPresets>>, TError = ErrorType<ApiError>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTrollingPresets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTrollingPresetsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPostTrollingPresetsUrl = () => {
+
+
+
+
+  return `/api/trolling-presets`
+}
+
+/**
+ * @summary Save a new trolling preset
+ */
+export const postTrollingPresets = async (trollingPresetInput: TrollingPresetInput, options?: RequestInit): Promise<TrollingPreset> => {
+
+  return customFetch<TrollingPreset>(getPostTrollingPresetsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      trollingPresetInput,)
+  }
+);}
+
+
+
+
+export const getPostTrollingPresetsMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postTrollingPresets>>, TError,{data: BodyType<TrollingPresetInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postTrollingPresets>>, TError,{data: BodyType<TrollingPresetInput>}, TContext> => {
+
+const mutationKey = ['postTrollingPresets'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postTrollingPresets>>, {data: BodyType<TrollingPresetInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  postTrollingPresets(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostTrollingPresetsMutationResult = NonNullable<Awaited<ReturnType<typeof postTrollingPresets>>>
+    export type PostTrollingPresetsMutationBody = BodyType<TrollingPresetInput>
+    export type PostTrollingPresetsMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Save a new trolling preset
+ */
+export const usePostTrollingPresets = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postTrollingPresets>>, TError,{data: BodyType<TrollingPresetInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postTrollingPresets>>,
+        TError,
+        {data: BodyType<TrollingPresetInput>},
+        TContext
+      > => {
+      return useMutation(getPostTrollingPresetsMutationOptions(options));
+    }
+
+export const getDeleteTrollingPresetsIdUrl = (id: string,) => {
+
+
+
+
+  return `/api/trolling-presets/${id}`
+}
+
+/**
+ * @summary Delete a trolling preset by ID
+ */
+export const deleteTrollingPresetsId = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteTrollingPresetsIdUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteTrollingPresetsIdMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTrollingPresetsId>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTrollingPresetsId>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteTrollingPresetsId'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTrollingPresetsId>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteTrollingPresetsId(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTrollingPresetsIdMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTrollingPresetsId>>>
+
+    export type DeleteTrollingPresetsIdMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Delete a trolling preset by ID
+ */
+export const useDeleteTrollingPresetsId = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTrollingPresetsId>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTrollingPresetsId>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteTrollingPresetsIdMutationOptions(options));
     }
 
 export const getHealthCheckUrl = () => {
