@@ -26,7 +26,7 @@ export function buildTerrainGeometry(grid: TerrainData): THREE.BufferGeometry {
   const geometry = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, N - 1, N - 1);
   geometry.rotateX(-Math.PI / 2);
 
-  const positions = geometry.attributes.position.array as Float32Array;
+  const positions = geometry.attributes["position"]!.array as Float32Array;
   const colors = new Float32Array(positions.length);
 
   for (let i = 0; i < depths.length; i++) {

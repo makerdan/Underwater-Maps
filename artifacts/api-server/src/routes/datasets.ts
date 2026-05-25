@@ -5,7 +5,7 @@ import {
   GetDatasetsIdTerrainResponse,
   GetDatasetsIdOverviewResponse,
   PostDatasetsUploadResponse,
-} from "@workspace/api-zod"; // eslint-disable-line @typescript-eslint/no-unused-vars
+} from "@workspace/api-zod";
 import {
   PRESET_DATASETS,
   buildTerrainGrid,

@@ -19,7 +19,7 @@ function Main() {
   // Set the initial dataset to the first available one
   useEffect(() => {
     if (datasets?.length && !datasetId) {
-      setDatasetId(datasets[0].id);
+      setDatasetId(datasets[0]?.id ?? null);
     }
   }, [datasets, datasetId, setDatasetId]);
 

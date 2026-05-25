@@ -17,7 +17,7 @@ const TerrainMesh = () => {
     // Rotate to lie flat
     geometry.rotateX(-Math.PI / 2);
 
-    const positions = geometry.attributes.position.array as Float32Array;
+    const positions = geometry.attributes["position"]!.array as Float32Array;
     const colors = new Float32Array(positions.length);
     const color = new THREE.Color();
     const scaleZ = 0.8;
@@ -27,7 +27,7 @@ const TerrainMesh = () => {
     const deepColor = new THREE.Color("#050a14");
 
     for (let i = 0; i < depths.length; i++) {
-      const depth = depths[i];
+      const depth = depths[i] ?? 0;
       const normalizedDepth = (depth - minDepth) / (maxDepth - minDepth || 1);
       
       // Update Y instead of Z because we rotated X by -90deg
