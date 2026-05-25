@@ -205,6 +205,59 @@ describe("POST /api/poe/classify", () => {
     expect(fakeCreate).toHaveBeenCalledTimes(1);
   });
 
+  it("does not return a saltwater cache entry for a freshwater request with the same gridHash", async () => {
+    // Same datasetId + same gridHash but different waterType. The
+    // namespaced cache key (sha256 of gridHash + waterType) must keep the
+    // two entries fully separate so a saltwater hit cannot satisfy a
+    // freshwater lookup. The content of the responses is what proves
+    // isolation: if the freshwater call returned the saltwater zones we'd
+    // see "sandy_shelf" instead of "aquatic_vegetation".
+    fakeCreate.mockReset();
+    fakeCreate.mockImplementation(async (body: Record<string, unknown>) => {
+      const wt =
+        (body["metadata"] as { waterType?: string } | undefined)?.waterType ??
+        "saltwater";
+      const label = wt === "freshwater" ? "aquatic_vegetation" : "sandy_shelf";
+      return {
+        id: `resp_${wt}`,
+        output_text: JSON.stringify({ zones: Array(1024).fill(label) }),
+        usage: { input_tokens: 10, output_tokens: 20 },
+      };
+    });
+
+    // Use a uniquely-named base64 + dataset id to ensure no prior test's
+    // cache entry contaminates this scenario.
+    const uniqueGrid = Buffer.from("wt-isolation-test-grid").toString("base64");
+    const uniqueDsId = "ds-wt-isolation";
+    const uniqueHash = "f00dface";
+
+    const saltRes = await request(app)
+      .post("/api/poe/classify")
+      .set("x-e2e-user-id", "user-wt-collision")
+      .send({
+        gridBase64: uniqueGrid,
+        waterType: "saltwater",
+        datasetId: uniqueDsId,
+        gridHash: uniqueHash,
+      });
+    expect(saltRes.status).toBe(200);
+    expect(saltRes.body.zones[0]).toBe("sandy_shelf");
+
+    const freshRes = await request(app)
+      .post("/api/poe/classify")
+      .set("x-e2e-user-id", "user-wt-collision")
+      .send({
+        gridBase64: uniqueGrid,
+        waterType: "freshwater",
+        datasetId: uniqueDsId,
+        gridHash: uniqueHash,
+      });
+    expect(freshRes.status).toBe(200);
+    // Critical assertion: the freshwater lookup must not be served from the
+    // saltwater cache entry, even though gridHash and gridBase64 are identical.
+    expect(freshRes.body.zones[0]).toBe("aquatic_vegetation");
+  });
+
   it("returns 429 once the per-user rate limit (30 req/min) is exceeded", async () => {
     const userId = "user-ratelimit";
 

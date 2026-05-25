@@ -124,16 +124,30 @@ export function downsampleDepths32(grid: TerrainData): number[] {
   return out;
 }
 
-export function hashGrid(depths: number[]): string {
-  let h = 0x811c9dc5;
+/**
+ * Strong, collision-resistant fingerprint of a depth grid.
+ *
+ * Uses SHA-256 via SubtleCrypto over a canonical byte representation of the
+ * depths (rounded to mm precision, little-endian Int32). The previous
+ * implementation was a 32-bit FNV-1a, whose 8-char hex collisions could let
+ * the server-side zone cache return another grid's labels — see task #307
+ * for the threat model. Returning the full 64-char sha256 hex makes the
+ * (gridHash, waterType) key effectively unique even before the server's
+ * own sha256 namespacing layer.
+ */
+export async function hashGrid(depths: number[]): Promise<string> {
+  const buf = new ArrayBuffer(depths.length * 4);
+  const view = new DataView(buf);
   for (let i = 0; i < depths.length; i++) {
-    const bits = Math.round((depths[i] ?? 0) * 1000) & 0xffffffff;
-    h ^= (bits & 0xff);               h = (Math.imul(h, 0x01000193) >>> 0);
-    h ^= ((bits >>> 8) & 0xff);       h = (Math.imul(h, 0x01000193) >>> 0);
-    h ^= ((bits >>> 16) & 0xff);      h = (Math.imul(h, 0x01000193) >>> 0);
-    h ^= ((bits >>> 24) & 0xff);      h = (Math.imul(h, 0x01000193) >>> 0);
+    view.setInt32(i * 4, Math.round((depths[i] ?? 0) * 1000) | 0, true);
   }
-  return (h >>> 0).toString(16).padStart(8, "0");
+  const digest = await crypto.subtle.digest("SHA-256", buf);
+  const bytes = new Uint8Array(digest);
+  let out = "";
+  for (let i = 0; i < bytes.length; i++) {
+    out += bytes[i]!.toString(16).padStart(2, "0");
+  }
+  return out;
 }
 
 const SESSION_KEY_PREFIX = "bszone-";
@@ -265,11 +279,11 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
     set({ zoneMap: restored, hasEdits: false });
   },
 
-  classify: (grid: TerrainData): Promise<void> => {
+  classify: async (grid: TerrainData): Promise<void> => {
     const { datasetId, waterType } = grid;
     const targetN = grid.resolution ?? grid.width ?? 256;
     const wt = waterType as "saltwater" | "freshwater";
-    const gridHash = hashGrid(grid.depths);
+    const gridHash = await hashGrid(grid.depths);
     const sessionKey = `${SESSION_KEY_PREFIX}${gridHash}`;
     const aiSessionKey = `${SESSION_AI_KEY_PREFIX}${gridHash}`;
 
@@ -325,7 +339,10 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
       try {
         // 2. Server zone cache (memory + disk, keyed by gridHash) — AI-only
         try {
-          const url = `/api/datasets/${encodeURIComponent(datasetId)}/zones?h=${gridHash}`;
+          // Namespace the lookup by waterType — the server keys its zone
+          // cache by (gridHash, waterType) so a saltwater entry can never
+          // satisfy a freshwater request (and vice versa).
+          const url = `/api/datasets/${encodeURIComponent(datasetId)}/zones?h=${gridHash}&w=${encodeURIComponent(wt)}`;
           const resp = await fetch(url, { credentials: "include" });
           if (resp.ok) {
             const data = (await resp.json()) as { zones: string[]; waterType: string; source?: ClassifyResultSource };

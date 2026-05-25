@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { promises as fsPromises } from "fs";
 import path from "path";
+import { createHash } from "crypto";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { createRateLimit, stampBaselineRateLimitHeaders } from "../middlewares/rateLimit.js";
 import { getPoeClient } from "@workspace/poe";
@@ -157,43 +158,63 @@ interface CachedZones {
    * "ai". Declared on the type so the field surfaces in GET /zones responses.
    */
   source?: "ai" | "heuristic";
+  /**
+   * Strong content fingerprint of the depth grid (sha256 of gridBase64).
+   * Stored so a same-bucket FNV-1a 32-bit collision between two different
+   * depth payloads is detected and treated as a miss instead of returning
+   * the wrong labels.
+   */
+  contentHash?: string;
 }
 
 /**
- * Secondary zone cache — keyed by gridHash (FNV-1a 32-bit of the depth grid).
+ * Secondary zone cache — keyed by `sha256(gridHash + "|" + waterType)`.
  *
- * Using gridHash instead of datasetId prevents collisions when multiple unrelated
- * uploads share the synthetic id "upload". Different grid content → different hash
- * → separate, correct cache entries.
+ * Namespacing the cache key by waterType makes cross-waterType collisions
+ * impossible (freshwater/saltwater for the same gridHash now occupy two
+ * separate entries). The sha256 derivation also gives us a uniform 64-char
+ * hex key that's safe as a filename. Different grid content → different
+ * gridHash → different cache key, so the synthetic "upload" datasetId can
+ * never alias two unrelated uploads either.
  */
 const datasetZonesCache = new Map<string, CachedZones>();
 
 /** Exported so the /datasets/:id/zones endpoint (datasets.ts) can read it. */
 export { datasetZonesCache };
 
+/**
+ * Derive the namespaced cache key from a client-supplied gridHash and the
+ * water type the grid was classified under. The output is a 64-char lowercase
+ * hex sha256 string, safe to use as both an in-memory map key and a filename.
+ */
+export function zoneCacheKey(gridHash: string, waterType: "saltwater" | "freshwater"): string {
+  return createHash("sha256").update(`${gridHash}|${waterType}`).digest("hex");
+}
+
 // ---------------------------------------------------------------------------
 // Disk persistence — survives process restarts
-// Files stored at /tmp/zone-cache/<gridHash>.json (hex filename, always safe)
+// Files stored at /tmp/zone-cache/<sha256>.json (hex filename, always safe)
 // ---------------------------------------------------------------------------
 
 const ZONE_CACHE_DIR = "/tmp/zone-cache";
 
 /**
- * Strict allow-list for gridHash filenames: exactly 8 lowercase hex chars.
- * Anything else is rejected before any filesystem access to prevent path traversal.
+ * Strict allow-list for zone-cache filenames: exactly 64 lowercase hex chars
+ * (the sha256-derived namespaced key). Anything else is rejected before any
+ * filesystem access to prevent path traversal.
  */
-const GRID_HASH_RE = /^[a-f0-9]{8}$/;
+const ZONE_CACHE_KEY_RE = /^[a-f0-9]{64}$/;
 
-/** Returns true only when `hash` is a safe, well-formed FNV-1a 32-bit hex string. */
-function isValidGridHash(hash: string): boolean {
-  return GRID_HASH_RE.test(hash);
+/** Returns true only when `key` is a safe, well-formed sha256 hex string. */
+function isValidZoneCacheKey(key: string): boolean {
+  return ZONE_CACHE_KEY_RE.test(key);
 }
 
-/** Read a single zone cache entry by gridHash from disk. */
-export async function readZoneDiskByHash(gridHash: string): Promise<CachedZones | null> {
-  if (!isValidGridHash(gridHash)) return null; // reject path traversal attempts
+/** Read a single zone cache entry by namespaced cache key from disk. */
+export async function readZoneDiskByKey(cacheKey: string): Promise<CachedZones | null> {
+  if (!isValidZoneCacheKey(cacheKey)) return null; // reject path traversal attempts
   try {
-    const file = path.join(ZONE_CACHE_DIR, `${gridHash}.json`);
+    const file = path.join(ZONE_CACHE_DIR, `${cacheKey}.json`);
     // Resolve and verify the path stays inside ZONE_CACHE_DIR
     const resolved = path.resolve(file);
     if (!resolved.startsWith(path.resolve(ZONE_CACHE_DIR) + path.sep)) return null;
@@ -204,38 +225,68 @@ export async function readZoneDiskByHash(gridHash: string): Promise<CachedZones 
   }
 }
 
-async function writeZoneDisk(gridHash: string, data: CachedZones): Promise<void> {
-  if (!isValidGridHash(gridHash)) {
-    console.warn(`[zones] Rejected write for invalid gridHash: ${JSON.stringify(gridHash)}`);
+/**
+ * Compatibility helper for callers that still hold a (gridHash, waterType)
+ * pair. Derives the namespaced sha256 cache key and delegates to
+ * `readZoneDiskByKey`. Returned entries are also waterType-validated to
+ * guard against on-disk tampering or stale-format files.
+ */
+export async function readZoneDiskByHash(
+  gridHash: string,
+  waterType: "saltwater" | "freshwater",
+): Promise<CachedZones | null> {
+  const entry = await readZoneDiskByKey(zoneCacheKey(gridHash, waterType));
+  if (!entry) return null;
+  if (entry.waterType !== waterType) return null;
+  return entry;
+}
+
+async function writeZoneDisk(cacheKey: string, data: CachedZones): Promise<void> {
+  if (!isValidZoneCacheKey(cacheKey)) {
+    console.warn(`[zones] Rejected write for invalid cacheKey: ${JSON.stringify(cacheKey)}`);
     return;
   }
   try {
     await fsPromises.mkdir(ZONE_CACHE_DIR, { recursive: true });
-    const file = path.join(ZONE_CACHE_DIR, `${gridHash}.json`);
+    const file = path.join(ZONE_CACHE_DIR, `${cacheKey}.json`);
     const resolved = path.resolve(file);
     if (!resolved.startsWith(path.resolve(ZONE_CACHE_DIR) + path.sep)) return;
     await fsPromises.writeFile(resolved, JSON.stringify(data), "utf8");
   } catch (err) {
-    console.warn(`[zones] Failed to write disk cache for ${gridHash}: ${(err as Error).message}`);
+    console.warn(`[zones] Failed to write disk cache for ${cacheKey}: ${(err as Error).message}`);
   }
 }
 
-/** Hydrate in-memory cache from disk on startup (non-blocking). */
+/**
+ * Hydrate in-memory cache from disk on startup (non-blocking). Legacy 8-char
+ * gridHash files written before the cache-key change are silently deleted —
+ * the cache is intentionally lossy on format change (one-off cleanup, not a
+ * migration) since AI re-classification is the only way to know the correct
+ * (key, waterType) pairing.
+ */
 async function hydrateCacheFromDisk(): Promise<void> {
   try {
     await fsPromises.mkdir(ZONE_CACHE_DIR, { recursive: true });
     const files = await fsPromises.readdir(ZONE_CACHE_DIR);
     await Promise.all(
-      files
-        // Only load files whose names are valid 8-char hex hashes — skip anything else
-        .filter((f) => f.endsWith(".json") && isValidGridHash(f.slice(0, -5)))
-        .map(async (f) => {
-          const hash = f.slice(0, -5);
-          const data = await readZoneDiskByHash(hash);
-          if (data && !datasetZonesCache.has(hash)) {
-            datasetZonesCache.set(hash, data);
+      files.map(async (f) => {
+        if (!f.endsWith(".json")) return;
+        const key = f.slice(0, -5);
+        if (!isValidZoneCacheKey(key)) {
+          // Stale legacy entry — drop it. We can't deduce the right new key
+          // without the original waterType, so the cache pays a one-time miss.
+          try {
+            await fsPromises.unlink(path.join(ZONE_CACHE_DIR, f));
+          } catch {
+            // best-effort
           }
-        }),
+          return;
+        }
+        const data = await readZoneDiskByKey(key);
+        if (data && !datasetZonesCache.has(key)) {
+          datasetZonesCache.set(key, data);
+        }
+      }),
     );
   } catch {
     // Non-fatal — cache simply starts empty
@@ -457,6 +508,26 @@ router.post("/classify", async (req, res) => {
     return;
   }
 
+  // Strong content fingerprint of the actual depth payload — used to detect
+  // FNV-1a 32-bit collisions on the secondary (gridHash, waterType) cache
+  // before serving a cached entry from a different grid.
+  const contentHash = createHash("sha256").update(gridBase64).digest("hex");
+  if (gridHash) {
+    const secondaryKey = zoneCacheKey(gridHash, waterType);
+    const inMemoryHit = datasetZonesCache.get(secondaryKey);
+    const diskHit = inMemoryHit ?? (await readZoneDiskByKey(secondaryKey));
+    if (
+      diskHit &&
+      diskHit.waterType === waterType &&
+      (diskHit.contentHash === undefined || diskHit.contentHash === contentHash)
+    ) {
+      // Hydrate in-memory cache from a disk hit so subsequent reads skip I/O.
+      if (!inMemoryHit) datasetZonesCache.set(secondaryKey, diskHit);
+      res.json({ zones: diskHit.zones, fromCache: true, source: diskHit.source ?? "ai" });
+      return;
+    }
+  }
+
   try {
     const result = await withRetry(async () => {
       const client = getPoeClient();
@@ -507,12 +578,21 @@ router.post("/classify", async (req, res) => {
 
     globalPoeCache.set(cacheKey, JSON.stringify(zones));
 
-    // Populate secondary zone cache keyed by gridHash (content-addressable).
-    // This prevents "upload" datasetId collisions: different grids → different hashes.
+    // Populate secondary zone cache keyed by sha256(gridHash + "|" + waterType).
+    // The waterType-namespaced key prevents cross-waterType collisions, and
+    // the stored contentHash lets future reads detect FNV-1a 32-bit collisions
+    // between two unrelated depth payloads before serving stale labels.
     if (gridHash) {
-      const cached: CachedZones = { zones, waterType, classifiedAt: Date.now(), source: "ai" };
-      datasetZonesCache.set(gridHash, cached);
-      void writeZoneDisk(gridHash, cached);
+      const secondaryKey = zoneCacheKey(gridHash, waterType);
+      const cached: CachedZones = {
+        zones,
+        waterType,
+        classifiedAt: Date.now(),
+        source: "ai",
+        contentHash,
+      };
+      datasetZonesCache.set(secondaryKey, cached);
+      void writeZoneDisk(secondaryKey, cached);
     }
 
     await logUsage(

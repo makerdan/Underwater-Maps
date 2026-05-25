@@ -242,61 +242,67 @@ router.post("/user/folders/:id/duplicate", requireAuth, async (req, res): Promis
     if (n > 100) break;
   }
 
-  // BFS-clone tree
+  // BFS-clone tree — wrapped in a single transaction so a mid-walk failure
+  // leaves no partial tree or orphaned dataset copies behind.
   const descendantIds = collectDescendantIds(rows, source.id);
-  const rowById = new Map(rows.map((r) => [r.id, r] as const));
-  const newIdByOld = new Map<string, string>();
 
-  const [newRoot] = await db
-    .insert(datasetFoldersTable)
-    .values({ userId, name: copyName, parentId: source.parentId })
-    .returning();
-  if (!newRoot) {
-    res.status(500).json({ error: "db_error", details: "Could not duplicate folder" });
-    return;
-  }
-  newIdByOld.set(source.id, newRoot.id);
+  try {
+    const newRoot = await db.transaction(async (tx) => {
+      const newIdByOld = new Map<string, string>();
 
-  // Insert children level by level
-  const queue: string[] = [source.id];
-  while (queue.length) {
-    const oldParentId = queue.shift()!;
-    const children = rows.filter((r) => r.parentId === oldParentId && descendantIds.has(r.id));
-    for (const child of children) {
-      const newParent = newIdByOld.get(oldParentId)!;
-      const [inserted] = await db
+      const [rootRow] = await tx
         .insert(datasetFoldersTable)
-        .values({ userId, name: child.name, parentId: newParent })
+        .values({ userId, name: copyName, parentId: source.parentId })
         .returning();
-      if (inserted) {
-        newIdByOld.set(child.id, inserted.id);
-        queue.push(child.id);
+      if (!rootRow) throw new Error("insert_root_failed");
+      newIdByOld.set(source.id, rootRow.id);
+
+      // Insert children level by level
+      const queue: string[] = [source.id];
+      while (queue.length) {
+        const oldParentId = queue.shift()!;
+        const children = rows.filter(
+          (r) => r.parentId === oldParentId && descendantIds.has(r.id),
+        );
+        for (const child of children) {
+          const newParent = newIdByOld.get(oldParentId)!;
+          const [inserted] = await tx
+            .insert(datasetFoldersTable)
+            .values({ userId, name: child.name, parentId: newParent })
+            .returning();
+          if (!inserted) throw new Error("insert_child_failed");
+          newIdByOld.set(child.id, inserted.id);
+          queue.push(child.id);
+        }
       }
-    }
-  }
 
-  // Deep copy the datasets inside the duplicated tree
-  const datasetsInside = await db
-    .select()
-    .from(customDatasetsTable)
-    .where(eq(customDatasetsTable.userId, userId));
-  for (const ds of datasetsInside) {
-    if (ds.folderId && newIdByOld.has(ds.folderId)) {
-      await db.insert(customDatasetsTable).values({
-        userId,
-        name: ds.name,
-        minDepth: ds.minDepth,
-        maxDepth: ds.maxDepth,
-        terrainJson: ds.terrainJson as Record<string, unknown>,
-        overviewJson: ds.overviewJson as Record<string, unknown>,
-        folderId: newIdByOld.get(ds.folderId) ?? null,
-      });
-    }
-  }
+      // Deep copy the datasets inside the duplicated tree
+      const datasetsInside = await tx
+        .select()
+        .from(customDatasetsTable)
+        .where(eq(customDatasetsTable.userId, userId));
+      for (const ds of datasetsInside) {
+        if (ds.folderId && newIdByOld.has(ds.folderId)) {
+          await tx.insert(customDatasetsTable).values({
+            userId,
+            name: ds.name,
+            minDepth: ds.minDepth,
+            maxDepth: ds.maxDepth,
+            terrainJson: ds.terrainJson as Record<string, unknown>,
+            overviewJson: ds.overviewJson as Record<string, unknown>,
+            folderId: newIdByOld.get(ds.folderId) ?? null,
+          });
+        }
+      }
 
-  // Suppress unused warning when zod schema isn't referenced
-  void rowById;
-  res.status(201).json(folderToJson(newRoot));
+      return rootRow;
+    });
+
+    res.status(201).json(folderToJson(newRoot));
+  } catch (err) {
+    console.error(`[folders] duplicate failed for ${id}:`, err);
+    res.status(500).json({ error: "db_error", details: "Could not duplicate folder" });
+  }
 });
 
 // ── DELETE /user/folders/:id ───────────────────────────────────────────────
@@ -317,40 +323,69 @@ router.delete("/user/folders/:id", requireAuth, async (req, res): Promise<void> 
     return;
   }
 
-  if (mode === "promote") {
-    // Re-parent children + datasets to the target's parent, then delete only this folder.
-    await db
-      .update(datasetFoldersTable)
-      .set({ parentId: target.parentId, updatedAt: new Date() })
-      .where(and(eq(datasetFoldersTable.parentId, id), eq(datasetFoldersTable.userId, userId)));
-    await db
-      .update(customDatasetsTable)
-      .set({ folderId: target.parentId })
-      .where(and(eq(customDatasetsTable.folderId, id), eq(customDatasetsTable.userId, userId)));
-    await db
-      .update(userCatalogSavesTable)
-      .set({ folderId: target.parentId })
-      .where(and(eq(userCatalogSavesTable.folderId, id), eq(userCatalogSavesTable.userId, userId)));
-    await db
-      .delete(datasetFoldersTable)
-      .where(and(eq(datasetFoldersTable.id, id), eq(datasetFoldersTable.userId, userId)));
-  } else {
-    // "contents" — cascade-delete folder subtree + delete datasets inside.
-    const descendants = collectDescendantIds(rows, id);
-    const idsArr = Array.from(descendants);
-    // Delete custom datasets that live in any descendant folder
-    for (const fid of idsArr) {
-      await db
-        .delete(customDatasetsTable)
-        .where(and(eq(customDatasetsTable.folderId, fid), eq(customDatasetsTable.userId, userId)));
-      await db
-        .delete(userCatalogSavesTable)
-        .where(and(eq(userCatalogSavesTable.folderId, fid), eq(userCatalogSavesTable.userId, userId)));
+  // Both delete modes touch multiple rows across multiple tables — wrap each
+  // in a single transaction so a mid-walk failure rolls back to a consistent
+  // state instead of leaving orphaned datasets or half-promoted children.
+  try {
+    if (mode === "promote") {
+      await db.transaction(async (tx) => {
+        // Re-parent children + datasets to the target's parent, then delete only this folder.
+        await tx
+          .update(datasetFoldersTable)
+          .set({ parentId: target.parentId, updatedAt: new Date() })
+          .where(
+            and(eq(datasetFoldersTable.parentId, id), eq(datasetFoldersTable.userId, userId)),
+          );
+        await tx
+          .update(customDatasetsTable)
+          .set({ folderId: target.parentId })
+          .where(
+            and(eq(customDatasetsTable.folderId, id), eq(customDatasetsTable.userId, userId)),
+          );
+        await tx
+          .update(userCatalogSavesTable)
+          .set({ folderId: target.parentId })
+          .where(
+            and(eq(userCatalogSavesTable.folderId, id), eq(userCatalogSavesTable.userId, userId)),
+          );
+        await tx
+          .delete(datasetFoldersTable)
+          .where(and(eq(datasetFoldersTable.id, id), eq(datasetFoldersTable.userId, userId)));
+      });
+    } else {
+      // "contents" — cascade-delete folder subtree + delete datasets inside.
+      const descendants = collectDescendantIds(rows, id);
+      const idsArr = Array.from(descendants);
+      await db.transaction(async (tx) => {
+        // Delete custom datasets that live in any descendant folder
+        for (const fid of idsArr) {
+          await tx
+            .delete(customDatasetsTable)
+            .where(
+              and(
+                eq(customDatasetsTable.folderId, fid),
+                eq(customDatasetsTable.userId, userId),
+              ),
+            );
+          await tx
+            .delete(userCatalogSavesTable)
+            .where(
+              and(
+                eq(userCatalogSavesTable.folderId, fid),
+                eq(userCatalogSavesTable.userId, userId),
+              ),
+            );
+        }
+        // Cascade FK deletes the descendant folders when we delete the root
+        await tx
+          .delete(datasetFoldersTable)
+          .where(and(eq(datasetFoldersTable.id, id), eq(datasetFoldersTable.userId, userId)));
+      });
     }
-    // Cascade FK deletes the descendant folders when we delete the root
-    await db
-      .delete(datasetFoldersTable)
-      .where(and(eq(datasetFoldersTable.id, id), eq(datasetFoldersTable.userId, userId)));
+  } catch (err) {
+    console.error(`[folders] delete (${mode}) failed for ${id}:`, err);
+    res.status(500).json({ error: "db_error", details: "Could not delete folder" });
+    return;
   }
 
   res.status(204).send();
