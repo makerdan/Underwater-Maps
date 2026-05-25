@@ -75,12 +75,28 @@ async function fetchJson<T>(url: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-let heightsStationsCache: { data: NoaaStation[]; ts: number } | null = null;
-let currentsStationsCache: { data: NoaaStation[]; ts: number } | null = null;
+type StationListType = "waterlevels" | "currentpredictions";
 
-async function loadStations(
-  type: "waterlevels" | "currentpredictions",
-): Promise<NoaaStation[] | null> {
+/**
+ * In-memory cache of NOAA station lists, keyed by station-list type
+ * (heights vs. currents). Uses the same structured TTL pattern as
+ * highLowEventsCache / currentsPeakCache.
+ *
+ * Non-empty results are cached for STATION_LISTS_TTL_MS (24h — the
+ * station catalogue rarely changes). Empty results are cached for
+ * STATION_LISTS_EMPTY_TTL_MS (5 min) so a transient NOAA hiccup that
+ * returned an empty or partial station list doesn't pin every nearby
+ * caller to "no nearby station" estimates for a full day.
+ */
+const stationListsCache = new Map<StationListType, { data: NoaaStation[]; ts: number }>();
+const STATION_LISTS_TTL_MS = 24 * 60 * 60 * 1000;
+const STATION_LISTS_EMPTY_TTL_MS = 5 * 60 * 1000;
+
+function stationListTtlMs(data: NoaaStation[]): number {
+  return data.length === 0 ? STATION_LISTS_EMPTY_TTL_MS : STATION_LISTS_TTL_MS;
+}
+
+async function loadStations(type: StationListType): Promise<NoaaStation[] | null> {
   try {
     const resp = await fetchJson<{
       stations: Array<{ id: string; name: string; lat: number; lng: number }>;
@@ -95,6 +111,18 @@ async function loadStations(
     logger.warn({ err, type }, "Failed to fetch NOAA station list");
     return null;
   }
+}
+
+async function getStationList(type: StationListType): Promise<NoaaStation[] | null> {
+  const now = Date.now();
+  const cached = stationListsCache.get(type);
+  if (cached && now - cached.ts < stationListTtlMs(cached.data)) {
+    return cached.data;
+  }
+  const data = await loadStations(type);
+  if (!data) return null;
+  stationListsCache.set(type, { data, ts: now });
+  return data;
 }
 
 function pickNearest(
@@ -116,24 +144,16 @@ function pickNearest(
 }
 
 async function getNearestHeightsStation(lat: number, lon: number): Promise<NoaaStation | null> {
-  const now = Date.now();
-  if (!heightsStationsCache || now - heightsStationsCache.ts > 24 * 60 * 60 * 1000) {
-    const data = await loadStations("waterlevels");
-    if (!data) return null;
-    heightsStationsCache = { data, ts: now };
-  }
-  return pickNearest(heightsStationsCache.data, lat, lon, 100);
+  const data = await getStationList("waterlevels");
+  if (!data) return null;
+  return pickNearest(data, lat, lon, 100);
 }
 
 async function getNearestCurrentsStation(lat: number, lon: number): Promise<NoaaStation | null> {
-  const now = Date.now();
-  if (!currentsStationsCache || now - currentsStationsCache.ts > 24 * 60 * 60 * 1000) {
-    const data = await loadStations("currentpredictions");
-    if (!data) return null;
-    currentsStationsCache = { data, ts: now };
-  }
+  const data = await getStationList("currentpredictions");
+  if (!data) return null;
   // Currents fields are much more localized than heights, so restrict to 50 km.
-  return pickNearest(currentsStationsCache.data, lat, lon, 50);
+  return pickNearest(data, lat, lon, 50);
 }
 
 function toNoaaDateStr(d: Date): string {
@@ -156,8 +176,7 @@ export function __clearHighLowEventsCacheForTests(): void {
 
 /** Exposed for tests so they can reset cached NOAA station lists. */
 export function __clearStationCachesForTests(): void {
-  heightsStationsCache = null;
-  currentsStationsCache = null;
+  stationListsCache.clear();
 }
 
 /**
@@ -348,6 +367,37 @@ function nextEventFrom(events: TideEvent[], refMs: number):
   }
   return undefined;
 }
+
+/**
+ * POST /tidal/admin/refresh-stations
+ *
+ * Forces a refresh of the cached NOAA station lists (heights and currents)
+ * without restarting the server. Useful when NOAA briefly returned an
+ * empty/partial station list and the 24h TTL would otherwise pin every
+ * nearby caller to "no nearby station" estimates.
+ *
+ * Auth: requires header `x-admin-token` matching the `TIDAL_ADMIN_TOKEN`
+ * environment variable. If the env var is unset the endpoint returns 503
+ * so it can never be hit unauthenticated by accident.
+ */
+router.post("/tidal/admin/refresh-stations", (req, res): void => {
+  const expected = process.env["TIDAL_ADMIN_TOKEN"];
+  if (!expected) {
+    res.status(503).json({
+      error: "Admin refresh disabled: set TIDAL_ADMIN_TOKEN to enable.",
+    });
+    return;
+  }
+  const provided = req.header("x-admin-token");
+  if (provided !== expected) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const cleared = stationListsCache.size;
+  stationListsCache.clear();
+  logger.info({ cleared }, "NOAA station caches cleared via admin endpoint");
+  res.json({ ok: true, cleared });
+});
 
 // GET /tidal?lat=&lon=&datetime=
 router.get("/tidal", async (req, res): Promise<void> => {

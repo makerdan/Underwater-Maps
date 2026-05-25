@@ -143,6 +143,79 @@ describe("GET /tidal", () => {
     expect(res.body.slack).toBeDefined();
   });
 
+  it("recovers from a transient empty NOAA station list via the admin refresh endpoint", async () => {
+    const station = {
+      id: "9450460",
+      name: "Ketchikan",
+      lat: 55.33,
+      lng: -131.63,
+    };
+    process.env["TIDAL_ADMIN_TOKEN"] = "test-token";
+
+    try {
+      // First request: NOAA returns empty station lists for both networks
+      // (simulating a transient outage / partial response).
+      fetchSpy
+        .mockResolvedValueOnce(jsonResponse({ stations: [] }))
+        .mockResolvedValueOnce(jsonResponse({ stations: [] }));
+
+      const app = makeApp();
+      const first = await request(app).get(
+        `/tidal?lat=${station.lat}&lon=${station.lng}&datetime=2026-05-25T03:00:00Z`,
+      );
+      expect(first.status).toBe(200);
+      expect(first.body.source).toBe("estimated");
+      expect(first.body.heightsStation).toBeUndefined();
+
+      // Admin endpoint requires the configured token.
+      const unauth = await request(app).post("/tidal/admin/refresh-stations");
+      expect(unauth.status).toBe(401);
+
+      // With the right token it clears the cache and reports what it cleared.
+      const refresh = await request(app)
+        .post("/tidal/admin/refresh-stations")
+        .set("x-admin-token", "test-token");
+      expect(refresh.status).toBe(200);
+      expect(refresh.body.ok).toBe(true);
+      expect(refresh.body.cleared).toBe(2);
+
+      // Subsequent request re-hits NOAA, which is now healthy, and we get
+      // the real station instead of being pinned to "estimated" all day.
+      fetchSpy
+        .mockResolvedValueOnce(jsonResponse({ stations: [station] }))
+        .mockResolvedValueOnce(jsonResponse({ stations: [] }))
+        .mockResolvedValueOnce(
+          jsonResponse({
+            predictions: [
+              { t: "2026-05-25 00:00", v: "2.0", type: "H" },
+              { t: "2026-05-25 06:00", v: "0.2", type: "L" },
+              { t: "2026-05-25 12:00", v: "2.1", type: "H" },
+              { t: "2026-05-25 18:00", v: "0.1", type: "L" },
+            ],
+          }),
+        )
+        .mockResolvedValue(jsonResponse({ current_predictions: { cp: [] } }));
+
+      const second = await request(app).get(
+        `/tidal?lat=${station.lat}&lon=${station.lng}&datetime=2026-05-25T03:00:00Z`,
+      );
+      expect(second.status).toBe(200);
+      expect(second.body.heightsSource).toBe("noaa");
+      expect(second.body.heightsStation).toEqual({ id: station.id, name: station.name });
+    } finally {
+      delete process.env["TIDAL_ADMIN_TOKEN"];
+    }
+  });
+
+  it("returns 503 from the admin refresh endpoint when TIDAL_ADMIN_TOKEN is unset", async () => {
+    delete process.env["TIDAL_ADMIN_TOKEN"];
+    const res = await request(makeApp())
+      .post("/tidal/admin/refresh-stations")
+      .set("x-admin-token", "anything");
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/TIDAL_ADMIN_TOKEN/);
+  });
+
   it("populates legacy stationName/stationId from the NOAA heights station when available", async () => {
     const station = {
       id: "9450460",
