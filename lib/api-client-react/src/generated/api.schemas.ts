@@ -180,6 +180,11 @@ export const UserSettingsVisibleMarkerTypesItem = {
   log: 'log',
   vegetation: 'vegetation',
   sample: 'sample',
+  bass: 'bass',
+  trout: 'trout',
+  pike: 'pike',
+  walleye: 'walleye',
+  crayfish: 'crayfish',
 } as const;
 
 export type UserSettingsDefaultMarkerType = typeof UserSettingsDefaultMarkerType[keyof typeof UserSettingsDefaultMarkerType];
@@ -194,6 +199,11 @@ export const UserSettingsDefaultMarkerType = {
   log: 'log',
   vegetation: 'vegetation',
   sample: 'sample',
+  bass: 'bass',
+  trout: 'trout',
+  pike: 'pike',
+  walleye: 'walleye',
+  crayfish: 'crayfish',
 } as const;
 
 /**
@@ -394,6 +404,11 @@ export const MarkerType = {
   log: 'log',
   vegetation: 'vegetation',
   sample: 'sample',
+  bass: 'bass',
+  trout: 'trout',
+  pike: 'pike',
+  walleye: 'walleye',
+  crayfish: 'crayfish',
 } as const;
 
 export interface Marker {
@@ -462,6 +477,11 @@ export const MarkerInputType = {
   log: 'log',
   vegetation: 'vegetation',
   sample: 'sample',
+  bass: 'bass',
+  trout: 'trout',
+  pike: 'pike',
+  walleye: 'walleye',
+  crayfish: 'crayfish',
 } as const;
 
 export interface MarkerInput {

@@ -8,7 +8,12 @@ export const SALTWATER_MARKER_TYPES = [
 ] as const;
 
 export const FRESHWATER_MARKER_TYPES = [
-  { value: "fish",       label: "Fish",             color: "#4ade80", icon: "◈", waterType: "freshwater" as const },
+  { value: "fish",       label: "Fish",              color: "#4ade80", icon: "◈", waterType: "freshwater" as const },
+  { value: "bass",       label: "Bass",              color: "#65a30d", icon: "◈", waterType: "freshwater" as const },
+  { value: "trout",      label: "Trout",             color: "#22d3ee", icon: "◈", waterType: "freshwater" as const },
+  { value: "pike",       label: "Pike",              color: "#15803d", icon: "◈", waterType: "freshwater" as const },
+  { value: "walleye",    label: "Walleye",           color: "#facc15", icon: "◈", waterType: "freshwater" as const },
+  { value: "crayfish",   label: "Crayfish",          color: "#dc2626", icon: "◈", waterType: "freshwater" as const },
   { value: "vegetation", label: "Vegetation",        color: "#86efac", icon: "❋", waterType: "freshwater" as const },
   { value: "log",        label: "Submerged Log",     color: "#a16207", icon: "⁂", waterType: "freshwater" as const },
   { value: "sample",     label: "Water Sample",      color: "#7dd3fc", icon: "◉", waterType: "freshwater" as const },

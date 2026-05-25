@@ -41,6 +41,7 @@ import { useGpsStore } from "@/lib/gpsStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { waterLabels } from "@/lib/waterLabels";
 import { useGetSettings, getGetSettingsQueryKey } from "@workspace/api-client-react";
 
 const queryClient = new QueryClient();
@@ -803,6 +804,8 @@ function SettingsRoute() {
 
 function ClerkProviderWithRoutes() {
   const [, setLocation] = useLocation();
+  const waterType = useSettingsStore((s) => s.waterType);
+  const labels = waterLabels(waterType);
 
   return (
     <ClerkProvider
@@ -815,7 +818,7 @@ function ClerkProviderWithRoutes() {
         signIn: {
           start: {
             title: "Welcome back",
-            subtitle: "Sign in to explore the seafloor",
+            subtitle: `Sign in to explore the ${labels.floor}`,
           },
         },
         signUp: {

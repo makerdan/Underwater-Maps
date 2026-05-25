@@ -26,11 +26,13 @@ export type SaltwaterSpeciesId =
 
 export type FreshwaterSpeciesId =
   | "lake_trout"
+  | "rainbow_trout"
   | "walleye"
   | "largemouth_bass"
   | "channel_catfish"
   | "northern_pike"
-  | "yellow_perch";
+  | "yellow_perch"
+  | "crayfish";
 
 export type SpeciesId = SaltwaterSpeciesId | FreshwaterSpeciesId;
 
@@ -329,6 +331,48 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
     edgeWeight: 0.4,
     weights: { depth: 0.28, substrate: 0.28, slope: 0.12, complexity: 0.14, edge: 0.18 },
   },
+
+  rainbow_trout: {
+    label: "Rainbow Trout",
+    waterType: "freshwater",
+    depthOptimal: [2, 25],
+    depthTolerance: [0, 60],
+    substratePreferences: {
+      aquatic_vegetation: 0.5,
+      sandy_lake_bed: 0.6,
+      rocky_shoreline: 0.9,
+      silt_deep: 0.3,
+      gravel_bed: 1.0,
+      bedrock_shelf: 0.7,
+      submerged_wood: 0.6,
+      clay_flat: 0.2,
+    },
+    slopePreference: "any",
+    complexityWeight: 0.3,
+    edgeWeight: 0.35,
+    weights: { depth: 0.28, substrate: 0.30, slope: 0.14, complexity: 0.14, edge: 0.14 },
+  },
+
+  crayfish: {
+    label: "Crayfish",
+    waterType: "freshwater",
+    depthOptimal: [0.5, 5],
+    depthTolerance: [0, 15],
+    substratePreferences: {
+      aquatic_vegetation: 0.7,
+      sandy_lake_bed: 0.6,
+      rocky_shoreline: 1.0,
+      silt_deep: 0.3,
+      gravel_bed: 0.9,
+      bedrock_shelf: 0.7,
+      submerged_wood: 0.9,
+      clay_flat: 0.5,
+    },
+    slopePreference: "gentle",
+    complexityWeight: 0.4,
+    edgeWeight: 0.35,
+    weights: { depth: 0.25, substrate: 0.35, slope: 0.10, complexity: 0.20, edge: 0.10 },
+  },
 };
 
 export const SPECIES_IDS = Object.keys(SPECIES_CONFIGS) as SpeciesId[];
@@ -343,11 +387,13 @@ export const SALTWATER_SPECIES_IDS: SaltwaterSpeciesId[] = [
 
 export const FRESHWATER_SPECIES_IDS: FreshwaterSpeciesId[] = [
   "lake_trout",
+  "rainbow_trout",
   "walleye",
   "largemouth_bass",
   "channel_catfish",
   "northern_pike",
   "yellow_perch",
+  "crayfish",
 ];
 
 // ---------------------------------------------------------------------------

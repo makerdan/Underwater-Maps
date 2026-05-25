@@ -151,16 +151,26 @@ const SceneContents: React.FC<SceneContentsProps> = ({
   const fogColor = useSettingsStore((s) => s.fogColor);
   const ambientIntensity = useSettingsStore((s) => s.ambientLightIntensity);
   const directionalIntensity = useSettingsStore((s) => s.directionalLightIntensity);
+  const waterType = useSettingsStore((s) => s.waterType);
+
+  // Freshwater environments are clearer and brighter than the open ocean —
+  // shift the background/fog hue toward green-teal, thin the fog, and warm
+  // the ambient/key lights so lakes don't render with deep-sea twilight.
+  const isFresh = waterType === "freshwater";
+  const effectiveFogColor = isFresh ? "#0b3a35" : fogColor;
+  const effectiveFogDensity = isFresh ? fogDensity * 0.55 : fogDensity;
+  const ambientHue = isFresh ? "#a8d8c8" : "#7aa8c8";
+  const directionalHue = isFresh ? "#dfffe8" : "#d0eeff";
 
   return (
     <>
-      <color attach="background" args={[fogColor]} />
-      <fogExp2 args={[fogColor, fogDensity]} />
+      <color attach="background" args={[effectiveFogColor]} />
+      <fogExp2 args={[effectiveFogColor, effectiveFogDensity]} />
 
-      {/* Ambient fill */}
-      <ambientLight intensity={ambientIntensity} color="#7aa8c8" />
+      {/* Ambient fill — hue tracks water type */}
+      <ambientLight intensity={ambientIntensity} color={ambientHue} />
       {/* Distant key light */}
-      <directionalLight position={[10, 30, 20]} intensity={directionalIntensity} color="#d0eeff" />
+      <directionalLight position={[10, 30, 20]} intensity={directionalIntensity} color={directionalHue} />
 
       <Particles />
       {terrain && <TerrainMesh ref={terrainMeshRef} grid={terrain} />}

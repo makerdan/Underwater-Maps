@@ -15,11 +15,11 @@ const datasets = [
     waterType: "saltwater",
   },
   {
-    id: "lake-tahoe",
-    name: "Lake Tahoe",
-    description: "Freshwater lake",
+    id: "lake-michigan",
+    name: "Lake Michigan",
+    description: "Freshwater Great Lake",
     minDepth: 0,
-    maxDepth: 500,
+    maxDepth: 281,
     waterType: "freshwater",
   },
 ];

@@ -1201,7 +1201,7 @@ function EnvironmentSection() {
                 ~ FRESHWATER MODE
               </div>
               <div>Freshwater datasets (lakes, reservoirs) are shown in the dataset list.</div>
-              <div>Habitat panel shows freshwater species (Lake Trout, Walleye, Bass…).</div>
+              <div>Habitat panel shows freshwater species (Rainbow Trout, Walleye, Bass, Crayfish…).</div>
               <div>Marker types include vegetation and submerged log options.</div>
               <div>AI assistant uses freshwater limnology context.</div>
             </>

@@ -141,26 +141,26 @@ export const FRESHWATER_PRESET_DATASETS: DatasetMeta[] = [
     bbox: { minLon: -122.25, minLat: 42.84, maxLon: -121.95, maxLat: 43.04 },
   },
   {
-    id: "lake-tahoe",
-    name: "Lake Tahoe",
-    description: "High-altitude clear-water alpine lake straddling California and Nevada — max depth 501 m",
-    waterType: "freshwater",
-    minDepth: 10,
-    maxDepth: 501,
-    centerLon: -120.05,
-    centerLat: 39.09,
-    bbox: { minLon: -120.17, minLat: 38.94, maxLon: -119.93, maxLat: 39.24 },
-  },
-  {
-    id: "lake-victoria",
-    name: "Lake Victoria",
-    description: "Africa's largest lake — shallow (max 83 m) but vast, rich in cichlid species diversity",
+    id: "lake-michigan",
+    name: "Lake Michigan",
+    description: "Third-largest Great Lake — max depth 281 m, gently sloping sandy and silty basin",
     waterType: "freshwater",
     minDepth: 5,
-    maxDepth: 83,
-    centerLon: 33.0,
-    centerLat: -1.0,
-    bbox: { minLon: 31.6, minLat: -3.0, maxLon: 34.9, maxLat: 0.5 },
+    maxDepth: 281,
+    centerLon: -87.0,
+    centerLat: 43.5,
+    bbox: { minLon: -88.0, minLat: 41.6, maxLon: -85.0, maxLat: 46.1 },
+  },
+  {
+    id: "lake-geneva",
+    name: "Lake Geneva",
+    description: "Crescent-shaped alpine lake between Switzerland and France — max depth 310 m",
+    waterType: "freshwater",
+    minDepth: 5,
+    maxDepth: 310,
+    centerLon: 6.5,
+    centerLat: 46.45,
+    bbox: { minLon: 6.15, minLat: 46.35, maxLon: 6.87, maxLat: 46.52 },
   },
 ];
 
@@ -493,16 +493,21 @@ function buildSyntheticGrid(
       const bowl = Math.pow(Math.max(0, 1 - r * 2.2), 1.8);
       return 30 + (594 - 30) * (bowl * 0.82 + noise * 0.18);
     },
-    "lake-tahoe": (nx, ny) => {
-      const noise = fbm(nx * 10 + 7, ny * 10 + 7, 5, 0.5, 2.0);
-      const edgeDist = Math.min(nx, 1 - nx, ny, 1 - ny) * 4.5;
-      const basin = Math.pow(Math.max(0, edgeDist - 0.1), 1.6);
-      return 10 + (501 - 10) * (basin * 0.78 + noise * 0.22);
+    "lake-michigan": (nx, ny) => {
+      const noise = fbm(nx * 9 + 4, ny * 9 + 4, 5, 0.5, 2.0);
+      // Elongated basin: deeper in the middle along the long N–S axis
+      const longAxis = 1 - Math.abs(ny - 0.5) * 1.8;
+      const shortAxis = Math.pow(Math.max(0, 1 - Math.abs(nx - 0.5) * 2.2), 1.3);
+      const basin = Math.max(0, longAxis) * shortAxis;
+      return 5 + (281 - 5) * (basin * 0.75 + noise * 0.25);
     },
-    "lake-victoria": (nx, ny) => {
-      const noise = fbm(nx * 8 + 2, ny * 8 + 2, 4, 0.55, 2.0);
-      const shallows = 0.3 + 0.7 * Math.pow(Math.min(1, Math.min(nx, 1 - nx, ny, 1 - ny) * 5), 1.2);
-      return 5 + (83 - 5) * (shallows * 0.65 + noise * 0.35);
+    "lake-geneva": (nx, ny) => {
+      const noise = fbm(nx * 11 + 9, ny * 11 + 9, 5, 0.5, 2.0);
+      // Crescent-shaped: deepest band shifted slightly south
+      const cy = ny - 0.55;
+      const cx = nx - 0.5;
+      const trough = Math.pow(Math.max(0, 1 - (cx * cx * 2.0 + cy * cy * 4.0)), 1.4);
+      return 5 + (310 - 5) * (trough * 0.78 + noise * 0.22);
     },
     "mariana-trench": (nx, ny) => {
       const noise = fbm(nx * 8 + 10, ny * 8 + 10, 6, 0.5, 2.1);
