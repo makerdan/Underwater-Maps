@@ -28,6 +28,7 @@ import { useUiStore } from "@/lib/uiStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
 import { MARKER_COLOR, MARKER_ICON } from "@/lib/markerConstants";
 import { useClassificationStore } from "@/lib/classificationStore";
+import { useOfflineStore } from "@/lib/offlineStore";
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
@@ -52,6 +53,7 @@ export const DatasetPanel: React.FC = () => {
   const { datasetId, setDatasetId, setTerrain, terrain, mode } = useAppState();
   const { isSignedIn } = useAuth();
   const qc = useQueryClient();
+  const isOnline = useOfflineStore((s) => s.isOnline);
 
   const [collapsed, setCollapsed] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -589,57 +591,77 @@ export const DatasetPanel: React.FC = () => {
 
             {uploadOpen && (
               <div className="px-2 pb-2">
-                {postDatasetsUpload.isPending && (
+                {!isOnline ? (
                   <div
+                    data-testid="upload-offline-notice"
                     style={{
-                      height: 3, background: "rgba(0,229,255,0.1)",
-                      borderRadius: 2, marginBottom: 6, overflow: "hidden",
+                      border: "1px dashed rgba(239,68,68,0.25)",
+                      background: "rgba(239,68,68,0.04)",
+                      borderRadius: 4,
+                      padding: "12px 8px",
+                      textAlign: "center",
+                      fontSize: 9,
+                      color: "#f87171",
+                      letterSpacing: "0.1em",
                     }}
                   >
-                    <div
-                      style={{
-                        height: "100%", width: `${uploadProgress}%`,
-                        background: "linear-gradient(90deg, #0d47a1, #00e5ff)",
-                        borderRadius: 2, transition: "width 0.1s linear",
-                        boxShadow: "0 0 6px rgba(0,229,255,0.6)",
-                      }}
-                    />
+                    Upload unavailable offline
                   </div>
-                )}
+                ) : (
+                  <>
+                    {postDatasetsUpload.isPending && (
+                      <div
+                        style={{
+                          height: 3, background: "rgba(0,229,255,0.1)",
+                          borderRadius: 2, marginBottom: 6, overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: "100%", width: `${uploadProgress}%`,
+                            background: "linear-gradient(90deg, #0d47a1, #00e5ff)",
+                            borderRadius: 2, transition: "width 0.1s linear",
+                            boxShadow: "0 0 6px rgba(0,229,255,0.6)",
+                          }}
+                        />
+                      </div>
+                    )}
 
-                <div
-                  {...getRootProps()}
-                  data-testid="dropzone-terrain"
-                  className="text-center cursor-pointer transition-colors rounded"
-                  style={{
-                    border: `1px dashed ${isDragActive ? "#00e5ff" : "rgba(0,229,255,0.2)"}`,
-                    background: isDragActive ? "rgba(0,229,255,0.06)" : "rgba(0,0,0,0.2)",
-                    padding: "12px 8px",
-                    opacity: postDatasetsUpload.isPending ? 0.6 : 1,
-                  }}
-                >
-                  <input {...getInputProps()} />
-                  {postDatasetsUpload.isPending ? (
-                    <div>
-                      <div className="animate-pulse" style={{ ...CYAN, fontSize: 10, marginBottom: 2 }}>
-                        ◌ Uploading &amp; parsing...
-                      </div>
-                      <div style={{ fontSize: 9, color: "#334155" }}>{Math.round(uploadProgress)}%</div>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ fontSize: 10, color: "#64748b", marginBottom: 3 }}>
-                        Drop .xyz or .csv here
-                      </div>
-                      <div style={{ fontSize: 9, color: "#334155" }}>
-                        up to 50 MB{isSignedIn ? " · auto-saved to account" : ""}
-                      </div>
-                      {uploadError && (
-                        <div style={{ fontSize: 9, color: "#f87171", marginTop: 4 }}>⚠ {uploadError}</div>
+                    <div
+                      {...getRootProps()}
+                      data-testid="dropzone-terrain"
+                      className="text-center cursor-pointer transition-colors rounded"
+                      style={{
+                        border: `1px dashed ${isDragActive ? "#00e5ff" : "rgba(0,229,255,0.2)"}`,
+                        background: isDragActive ? "rgba(0,229,255,0.06)" : "rgba(0,0,0,0.2)",
+                        padding: "12px 8px",
+                        opacity: postDatasetsUpload.isPending ? 0.6 : 1,
+                      }}
+                    >
+                      <input {...getInputProps()} />
+                      {postDatasetsUpload.isPending ? (
+                        <div>
+                          <div className="animate-pulse" style={{ ...CYAN, fontSize: 10, marginBottom: 2 }}>
+                            ◌ Uploading &amp; parsing...
+                          </div>
+                          <div style={{ fontSize: 9, color: "#334155" }}>{Math.round(uploadProgress)}%</div>
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: 10, color: "#64748b", marginBottom: 3 }}>
+                            Drop .xyz or .csv here
+                          </div>
+                          <div style={{ fontSize: 9, color: "#334155" }}>
+                            up to 50 MB{isSignedIn ? " · auto-saved to account" : ""}
+                          </div>
+                          {uploadError && (
+                            <div style={{ fontSize: 9, color: "#f87171", marginTop: 4 }}>⚠ {uploadError}</div>
+                          )}
+                        </>
                       )}
-                    </>
-                  )}
-                </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>

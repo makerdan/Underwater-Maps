@@ -17,6 +17,7 @@ import { executeTool } from "@/lib/queryTools";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useClassificationStore } from "@/lib/classificationStore";
+import { useOfflineStore } from "@/lib/offlineStore";
 import { SALTWATER_ZONES, FRESHWATER_ZONES } from "@/lib/zoneMap";
 import type { QueryContext } from "@/lib/queryLLM";
 import type { ToolOptions } from "@/lib/queryTools";
@@ -55,6 +56,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
   const [statBanner, setStatBanner] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>(loadHistory);
   const inputRef = useRef<HTMLInputElement>(null);
+  const isOnline = useOfflineStore((s) => s.isOnline);
 
   // Focus input when panel opens
   useEffect(() => {
@@ -173,6 +175,25 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
         </button>
       </div>
 
+      {/* Offline notice */}
+      {!isOnline && (
+        <div
+          data-testid="query-offline-notice"
+          style={{
+            background: "rgba(239,68,68,0.08)",
+            border: "1px solid rgba(239,68,68,0.25)",
+            borderRadius: 4,
+            padding: "7px 10px",
+            color: "#f87171",
+            fontSize: 10,
+            letterSpacing: "0.12em",
+            marginBottom: 10,
+          }}
+        >
+          No connection — natural language queries unavailable
+        </div>
+      )}
+
       {/* Input row */}
       <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
         <input
@@ -181,32 +202,34 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask anything about the terrain…"
+          disabled={!isOnline}
+          placeholder={isOnline ? "Ask anything about the terrain…" : "Offline — queries unavailable"}
           style={{
             flex: 1,
-            background: "rgba(255,255,255,0.05)",
-            border: "1px solid rgba(0,229,255,0.2)",
+            background: isOnline ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.02)",
+            border: `1px solid ${isOnline ? "rgba(0,229,255,0.2)" : "rgba(239,68,68,0.2)"}`,
             borderRadius: 4,
-            color: "#e2e8f0",
+            color: isOnline ? "#e2e8f0" : "#475569",
             fontSize: 12,
             padding: "7px 10px",
             outline: "none",
             fontFamily: "inherit",
+            cursor: isOnline ? undefined : "not-allowed",
           }}
         />
         <button
           data-testid="query-submit"
           onClick={() => void handleSubmit(query)}
-          disabled={loading || !query.trim()}
+          disabled={loading || !query.trim() || !isOnline}
           style={{
-            background: loading ? "rgba(0,229,255,0.05)" : "rgba(0,229,255,0.12)",
+            background: (loading || !isOnline) ? "rgba(0,229,255,0.05)" : "rgba(0,229,255,0.12)",
             border: "1px solid rgba(0,229,255,0.3)",
             borderRadius: 4,
-            color: loading ? "#475569" : "#00e5ff",
+            color: (loading || !isOnline) ? "#475569" : "#00e5ff",
             fontSize: 10,
             letterSpacing: "0.18em",
             padding: "7px 14px",
-            cursor: loading ? "not-allowed" : "pointer",
+            cursor: (loading || !isOnline) ? "not-allowed" : "pointer",
             fontFamily: "inherit",
             transition: "all 0.15s",
           }}

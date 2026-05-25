@@ -7,9 +7,11 @@
  */
 import React, { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { set as idbSet } from "idb-keyval";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useAppState } from "@/lib/context";
+import { useOfflineStore } from "@/lib/offlineStore";
 import {
   usePostMarkers,
   getGetMarkersQueryKey,
@@ -55,6 +57,8 @@ export const MarkerForm: React.FC = () => {
   }, [gps]);
 
   const postMarkers = usePostMarkers();
+  const isOnline = useOfflineStore((s) => s.isOnline);
+  const [savedOffline, setSavedOffline] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,18 +72,30 @@ export const MarkerForm: React.FC = () => {
       ? JSON.stringify({ colour: poleColour })
       : notes.trim().slice(0, 500) || null;
 
+    const markerBody = {
+      datasetId: terrain.datasetId,
+      lon: gps.lon,
+      lat: gps.lat,
+      depth: gps.depth,
+      type: markerType,
+      label: label.trim().slice(0, 60),
+      notes: notesValue,
+    };
+
+    if (!isOnline) {
+      const pendingKey = `pending-marker-${crypto.randomUUID()}`;
+      void idbSet(pendingKey, markerBody).then(() => {
+        setSavedOffline(true);
+        setTimeout(() => {
+          setSavedOffline(false);
+          setMarkerFormOpen(false);
+        }, 1800);
+      });
+      return;
+    }
+
     postMarkers.mutate(
-      {
-        data: {
-          datasetId: terrain.datasetId,
-          lon: gps.lon,
-          lat: gps.lat,
-          depth: gps.depth,
-          type: markerType,
-          label: label.trim().slice(0, 60),
-          notes: notesValue,
-        },
-      },
+      { data: markerBody },
       {
         onSuccess: () => {
           void qc.invalidateQueries({
@@ -136,6 +152,38 @@ export const MarkerForm: React.FC = () => {
           ×
         </button>
       </div>
+
+      {/* Offline save feedback */}
+      {savedOffline && (
+        <div
+          style={{
+            padding: "8px 14px",
+            background: "rgba(234,179,8,0.08)",
+            borderBottom: "1px solid rgba(234,179,8,0.2)",
+            fontSize: 9,
+            color: "#fbbf24",
+            letterSpacing: "0.12em",
+          }}
+        >
+          ⚡ Saved locally — will sync when online
+        </div>
+      )}
+
+      {/* Offline notice */}
+      {!isOnline && !savedOffline && (
+        <div
+          style={{
+            padding: "5px 14px",
+            background: "rgba(239,68,68,0.06)",
+            borderBottom: "1px solid rgba(239,68,68,0.15)",
+            fontSize: 9,
+            color: "#f87171",
+            letterSpacing: "0.1em",
+          }}
+        >
+          Offline — marker will be queued for sync
+        </div>
+      )}
 
       {/* Coordinates (read-only) */}
       <div

@@ -29,6 +29,7 @@ import { useUiStore } from "@/lib/uiStore";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useHighlightStore } from "@/lib/highlightStore";
 import { useGpsStore } from "@/lib/gpsStore";
+import { useOfflineStore } from "@/lib/offlineStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 
 const queryClient = new QueryClient();
@@ -156,6 +157,7 @@ function Main() {
   const [depthLayer, setDepthLayer] = useState<DepthLayer>("surface");
   const [scrubDatetime, setScrubDatetime] = useState<Date | null>(null);
   const [showResumeHint, setShowResumeHint] = useState(false);
+  const [showIosInstallHint, setShowIosInstallHint] = useState(false);
   const [queryOpen, setQueryOpen] = useState(false);
   const prevOverviewOpenRef = useRef(false);
 
@@ -196,6 +198,31 @@ function Main() {
     }
   }, [terrain]);
 
+  // Sync online/offline state into offlineStore
+  useEffect(() => {
+    const setOnline = useOfflineStore.getState().setOnline;
+    const handleOnline = () => setOnline(true);
+    const handleOffline = () => setOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  // iOS Safari "Add to Home Screen" hint (once per session)
+  useEffect(() => {
+    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isStandalone = ("standalone" in navigator) && (navigator as unknown as { standalone: boolean }).standalone;
+    const hintShown = sessionStorage.getItem("bs-ios-hint");
+    if (!isIos || isStandalone || hintShown) return;
+    sessionStorage.setItem("bs-ios-hint", "1");
+    setShowIosInstallHint(true);
+    const t = setTimeout(() => setShowIosInstallHint(false), 10000);
+    return () => clearTimeout(t);
+  }, []);
+
   // Flush offline-buffered trails when connection is restored
   useEffect(() => {
     const flushPendingTrails = async () => {
@@ -212,7 +239,7 @@ function Main() {
           const raw = localStorage.getItem(key);
           if (!raw) continue;
           const payload = JSON.parse(raw) as {
-            datasetId: string; name: string;
+            datasetId: string; name: string; colour?: string;
             startedAt: number; endedAt: number;
             points: { lon: number; lat: number; accuracy: number; timestamp: number; seq: number }[];
           };
@@ -222,6 +249,7 @@ function Main() {
             body: JSON.stringify({
               datasetId: payload.datasetId,
               name: payload.name,
+              colour: payload.colour ?? "#ff6600",
               startedAt: new Date(payload.startedAt).toISOString(),
               endedAt: new Date(payload.endedAt).toISOString(),
               points: payload.points,
@@ -234,9 +262,39 @@ function Main() {
       }
     };
 
-    const onlineHandler = () => void flushPendingTrails();
+    // Flush offline-buffered markers when connection is restored
+    const flushPendingMarkers = async () => {
+      const { keys, get, del } = await import("idb-keyval");
+      const allKeys = await keys();
+      const markerKeys = allKeys.filter(
+        (k): k is string => typeof k === "string" && k.startsWith("pending-marker-")
+      );
+      if (!markerKeys.length) return;
+
+      const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+      for (const key of markerKeys) {
+        try {
+          const payload = await get(key);
+          if (!payload) continue;
+          const res = await fetch(`${apiBase}/api/markers`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          if (res.ok) await del(key);
+        } catch {
+          // leave for next retry
+        }
+      }
+    };
+
+    const onlineHandler = () => {
+      void flushPendingTrails();
+      void flushPendingMarkers();
+    };
     window.addEventListener("online", onlineHandler);
     void flushPendingTrails();
+    void flushPendingMarkers();
     return () => window.removeEventListener("online", onlineHandler);
   }, []);
 
@@ -351,6 +409,51 @@ function Main() {
 
         {/* Full-screen overview map — z-40, rendered above all HUD elements */}
         {overviewOpen && <OverviewMap />}
+
+        {/* iOS "Add to Home Screen" install hint */}
+        {showIosInstallHint && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: 80,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 60,
+              background: "rgba(2,8,24,0.94)",
+              border: "1px solid rgba(0,229,255,0.25)",
+              borderRadius: 8,
+              padding: "12px 18px",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10,
+              color: "#94a3b8",
+              letterSpacing: "0.08em",
+              backdropFilter: "blur(12px)",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+              whiteSpace: "nowrap",
+              pointerEvents: "auto",
+            }}
+          >
+            <div style={{ color: "#00e5ff", fontWeight: 700, marginBottom: 4, fontSize: 9, letterSpacing: "0.2em" }}>
+              INSTALL BATHYSCAN
+            </div>
+            <div>Tap <span style={{ color: "#38bdf8" }}>Share ↑</span> → <span style={{ color: "#38bdf8" }}>Add to Home Screen</span></div>
+            <button
+              onClick={() => setShowIosInstallHint(false)}
+              style={{
+                position: "absolute",
+                top: 6,
+                right: 8,
+                background: "none",
+                border: "none",
+                color: "#475569",
+                fontSize: 14,
+                cursor: "pointer",
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {/* "Click to resume" hint — appears briefly after closing overview */}
         {showResumeHint && (

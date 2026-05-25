@@ -4,6 +4,7 @@ import { useCameraStore } from "@/lib/cameraStore";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useTerrainStore } from "@/lib/terrainStore";
+import { useOfflineStore } from "@/lib/offlineStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
 
 const HUD_STYLE: React.CSSProperties = {
@@ -56,6 +57,7 @@ export const HUD: React.FC = () => {
   const gpsActive = useGpsStore((s) => s.active);
   const gpsPosition = useGpsStore((s) => s.position);
   const overviewGrid = useTerrainStore((s) => s.overviewGrid);
+  const isOnline = useOfflineStore((s) => s.isOnline);
 
   const speed = SPEEDS[speedIndex] ?? 0.15;
   const isFly = mode === "fly";
@@ -82,6 +84,45 @@ export const HUD: React.FC = () => {
       className="absolute inset-0 overflow-hidden"
       style={{ ...HUD_STYLE, fontSize: 11, userSelect: "none" }}
     >
+      {/* ── Offline indicator ── */}
+      {!isOnline && (
+        <div
+          data-testid="offline-badge"
+          style={{
+            position: "absolute",
+            top: 8,
+            right: 8,
+            background: "rgba(239,68,68,0.15)",
+            border: "1px solid rgba(239,68,68,0.5)",
+            borderRadius: 4,
+            padding: "3px 9px",
+            fontSize: 9,
+            letterSpacing: "0.2em",
+            color: "#f87171",
+            fontWeight: 700,
+            textShadow: "0 0 6px rgba(239,68,68,0.5)",
+          }}
+        >
+          ● OFFLINE
+        </div>
+      )}
+
+      {/* ── Cached data badge (online but using stale data) ── */}
+      {!isOnline && (
+        <div
+          style={{
+            position: "absolute",
+            top: 32,
+            right: 8,
+            fontSize: 8,
+            letterSpacing: "0.12em",
+            color: "#64748b",
+          }}
+        >
+          ⚡ cached data
+        </div>
+      )}
+
       {/* ── Top-left: mode + heading ── */}
       <div className="hud-top-left absolute top-3 left-3 flex items-center gap-2">
         <div
