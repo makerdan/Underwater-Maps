@@ -90,6 +90,10 @@ describe("/api/tidal slack block", () => {
     expect(res.status).toBe(200);
     expect(res.body.available).toBe(true);
     expect(res.body.source).toBe("estimated");
+    expect(res.body.heightsSource).toBe("estimated");
+    expect(res.body.currentsSource).toBe("estimated");
+    expect(res.body.heightsStation).toBeUndefined();
+    expect(res.body.currentsStation).toBeUndefined();
     expect(res.body.slack).toBeDefined();
     expect(typeof res.body.slack.isSlack).toBe("boolean");
     expect(typeof res.body.slack.minutesToSlack).toBe("number");

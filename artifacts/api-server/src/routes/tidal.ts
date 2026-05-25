@@ -19,16 +19,32 @@ interface NoaaStation {
   lng: number;
 }
 
+interface StationRef {
+  id: string;
+  name: string;
+}
+
 interface TidalResponse {
   available: boolean;
   tideHeight?: number;
   currentDirection?: number;
   currentSpeed?: number;
   nextEvent?: { type: "high" | "low"; time: string; height: number };
+  /** Legacy: name of the station that supplied tide heights (or estimate label). */
   stationName?: string;
+  /** Legacy: id of the station that supplied tide heights. */
   stationId?: string;
   isPredicted?: boolean;
+  /** Overall source — "noaa" if either heights or currents came from NOAA. */
   source?: "noaa" | "estimated";
+  /** Source of the tide-height series (drives slack timing). */
+  heightsSource?: "noaa" | "estimated";
+  /** Source of the peak current speed + flood bearing. */
+  currentsSource?: "noaa" | "estimated";
+  /** NOAA station that supplied tide heights, if any. */
+  heightsStation?: StationRef;
+  /** NOAA currents-prediction station that supplied peak speed + flood bearing, if any. */
+  currentsStation?: StationRef;
   slack?: SlackBlock;
 }
 
@@ -59,41 +75,65 @@ async function fetchJson<T>(url: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-let stationsCache: { data: NoaaStation[]; ts: number } | null = null;
+let heightsStationsCache: { data: NoaaStation[]; ts: number } | null = null;
+let currentsStationsCache: { data: NoaaStation[]; ts: number } | null = null;
 
-async function getNearestStation(
+async function loadStations(
+  type: "waterlevels" | "currentpredictions",
+): Promise<NoaaStation[] | null> {
+  try {
+    const resp = await fetchJson<{
+      stations: Array<{ id: string; name: string; lat: number; lng: number }>;
+    }>(`${NOAA_BASE}/mdapi/prod/webapi/stations.json?type=${type}&units=metric`);
+    return resp.stations.map((s) => ({
+      id: s.id,
+      name: s.name,
+      lat: Number(s.lat),
+      lng: Number(s.lng),
+    }));
+  } catch (err) {
+    logger.warn({ err, type }, "Failed to fetch NOAA station list");
+    return null;
+  }
+}
+
+function pickNearest(
+  stations: NoaaStation[],
   lat: number,
   lon: number,
-): Promise<NoaaStation | null> {
-  const now = Date.now();
-  if (!stationsCache || now - stationsCache.ts > 24 * 60 * 60 * 1000) {
-    try {
-      const resp = await fetchJson<{ stations: Array<{ id: string; name: string; lat: number; lng: number }> }>(
-        `${NOAA_BASE}/mdapi/prod/webapi/stations.json?type=waterlevels&units=metric`,
-      );
-      stationsCache = {
-        data: resp.stations.map((s) => ({ id: s.id, name: s.name, lat: Number(s.lat), lng: Number(s.lng) })),
-        ts: now,
-      };
-    } catch (err) {
-      logger.warn({ err }, "Failed to fetch NOAA station list");
-      return null;
-    }
-  }
-
-  const MAX_KM = 100;
+  maxKm: number,
+): NoaaStation | null {
   let nearest: NoaaStation | null = null;
   let nearestDist = Infinity;
-
-  for (const s of stationsCache.data) {
+  for (const s of stations) {
     const dist = haversineKm(lat, lon, s.lat, s.lng);
-    if (dist < nearestDist && dist <= MAX_KM) {
+    if (dist < nearestDist && dist <= maxKm) {
       nearestDist = dist;
       nearest = s;
     }
   }
-
   return nearest;
+}
+
+async function getNearestHeightsStation(lat: number, lon: number): Promise<NoaaStation | null> {
+  const now = Date.now();
+  if (!heightsStationsCache || now - heightsStationsCache.ts > 24 * 60 * 60 * 1000) {
+    const data = await loadStations("waterlevels");
+    if (!data) return null;
+    heightsStationsCache = { data, ts: now };
+  }
+  return pickNearest(heightsStationsCache.data, lat, lon, 100);
+}
+
+async function getNearestCurrentsStation(lat: number, lon: number): Promise<NoaaStation | null> {
+  const now = Date.now();
+  if (!currentsStationsCache || now - currentsStationsCache.ts > 24 * 60 * 60 * 1000) {
+    const data = await loadStations("currentpredictions");
+    if (!data) return null;
+    currentsStationsCache = { data, ts: now };
+  }
+  // Currents fields are much more localized than heights, so restrict to 50 km.
+  return pickNearest(currentsStationsCache.data, lat, lon, 50);
 }
 
 function toNoaaDateStr(d: Date): string {
@@ -134,6 +174,74 @@ async function getHighLowEvents(
 }
 
 /**
+ * Fetch max-flood / max-ebb / slack predictions from a NOAA currents station
+ * and derive peak current speed (knots) and the mean flood bearing.
+ *
+ * Returns null on any failure or if the response contains no usable flood
+ * direction — callers should fall back to the heuristic estimator in that case.
+ */
+async function getCurrentsPeak(
+  stationId: string,
+  refTime: Date,
+): Promise<{ peakSpeedKnots: number; floodBearingDeg: number } | null> {
+  try {
+    const start = new Date(refTime.getTime() - 24 * 3600 * 1000);
+    const end = new Date(refTime.getTime() + 48 * 3600 * 1000);
+    // vel_type=speed_dir asks NOAA for unsigned Speed (knots) + Direction (deg).
+    const url =
+      `${NOAA_BASE}/api/prod/datagetter?station=${stationId}&product=currents_predictions` +
+      `&time_zone=GMT&interval=MAX_SLACK&units=english&format=json&vel_type=speed_dir` +
+      `&begin_date=${toNoaaDateStr(start)}&end_date=${toNoaaDateStr(end)}`;
+    const resp = await fetchJson<{
+      current_predictions?: {
+        cp?: Array<{
+          Time?: string;
+          Type?: string;
+          Speed?: string | number;
+          Direction?: string | number;
+          Velocity_Major?: string | number;
+          meanFloodDir?: string | number;
+        }>;
+      };
+    }>(url);
+    const cps = resp.current_predictions?.cp ?? [];
+    if (cps.length === 0) return null;
+
+    let maxSpeed = 0;
+    let floodDir: number | null = null;
+    for (const cp of cps) {
+      const rawSpeed =
+        cp.Speed != null ? cp.Speed : cp.Velocity_Major != null ? cp.Velocity_Major : null;
+      if (rawSpeed != null) {
+        const sp = Math.abs(parseFloat(String(rawSpeed)));
+        if (Number.isFinite(sp) && sp > maxSpeed) maxSpeed = sp;
+      }
+      if (floodDir == null) {
+        const meanFd = cp.meanFloodDir != null ? parseFloat(String(cp.meanFloodDir)) : NaN;
+        if (Number.isFinite(meanFd)) {
+          floodDir = meanFd;
+        } else if (
+          String(cp.Type ?? "").toLowerCase() === "flood" &&
+          cp.Direction != null
+        ) {
+          const d = parseFloat(String(cp.Direction));
+          if (Number.isFinite(d)) floodDir = d;
+        }
+      }
+    }
+
+    if (maxSpeed <= 0 || floodDir == null) return null;
+    return {
+      peakSpeedKnots: Math.max(0.1, Math.min(8.0, maxSpeed)),
+      floodBearingDeg: ((floodDir % 360) + 360) % 360,
+    };
+  } catch (err) {
+    logger.warn({ err, stationId }, "Failed to fetch NOAA currents predictions");
+    return null;
+  }
+}
+
+/**
  * Estimate water level at refTime by interpolating between surrounding
  * hi/lo events with a cosine curve.
  */
@@ -157,8 +265,9 @@ function interpolateHeight(events: TideEvent[], refMs: number): number {
 }
 
 /**
- * Pick peak current speed from the tidal range surrounding refTime.
- * Larger tide swings ⇒ stronger currents. Clamps to [0.2, 3.0] kt.
+ * Fallback peak-speed heuristic used when no nearby NOAA currents station
+ * publishes predictions. Larger tide swings ⇒ stronger currents.
+ * Clamps to [0.2, 3.0] kt.
  */
 function estimatePeakSpeed(events: TideEvent[], refMs: number): number {
   let prev: TideEvent | null = null;
@@ -209,32 +318,50 @@ router.get("/tidal", async (req, res): Promise<void> => {
 
   const refTime = datetime ?? new Date();
   const refMs = refTime.getTime();
-  const station = await getNearestStation(lat, lon);
 
-  let events: TideEvent[] | null = null;
-  let source: "noaa" | "estimated" = "estimated";
-  let floodBearing: number;
-  let stationName: string | undefined;
-  let stationId: string | undefined;
+  // Look up both station networks in parallel — they're independent.
+  const [heightsStation, currentsStation] = await Promise.all([
+    getNearestHeightsStation(lat, lon),
+    getNearestCurrentsStation(lat, lon),
+  ]);
 
-  if (station) {
-    events = await getHighLowEvents(station.id, refTime);
-    if (events && events.length > 0) {
-      source = "noaa";
-      stationName = station.name;
-      stationId = station.id;
-    }
-    floodBearing = bearingDeg(station.lat, station.lng, lat, lon);
+  // And fetch each station's predictions in parallel as well.
+  const [heightsEvents, currentsPeak] = await Promise.all([
+    heightsStation ? getHighLowEvents(heightsStation.id, refTime) : Promise.resolve(null),
+    currentsStation ? getCurrentsPeak(currentsStation.id, refTime) : Promise.resolve(null),
+  ]);
+
+  let events: TideEvent[];
+  let heightsSource: "noaa" | "estimated";
+  let heightsStationRef: StationRef | undefined;
+
+  if (heightsStation && heightsEvents && heightsEvents.length > 0) {
+    events = heightsEvents;
+    heightsSource = "noaa";
+    heightsStationRef = { id: heightsStation.id, name: heightsStation.name };
   } else {
-    floodBearing = ((lat + lon) * 73.1 + 360) % 360;
-  }
-
-  if (!events) {
     events = buildSyntheticEvents(refMs, lon);
-    source = "estimated";
+    heightsSource = "estimated";
   }
 
-  const peakSpeedKnots = estimatePeakSpeed(events, refMs);
+  let peakSpeedKnots: number;
+  let floodBearing: number;
+  let currentsSource: "noaa" | "estimated";
+  let currentsStationRef: StationRef | undefined;
+
+  if (currentsStation && currentsPeak) {
+    peakSpeedKnots = currentsPeak.peakSpeedKnots;
+    floodBearing = currentsPeak.floodBearingDeg;
+    currentsSource = "noaa";
+    currentsStationRef = { id: currentsStation.id, name: currentsStation.name };
+  } else {
+    peakSpeedKnots = estimatePeakSpeed(events, refMs);
+    floodBearing = heightsStation
+      ? bearingDeg(heightsStation.lat, heightsStation.lng, lat, lon)
+      : ((lat + lon) * 73.1 + 360) % 360;
+    currentsSource = "estimated";
+  }
+
   const sample = computeSlackSample({
     events,
     refTime: refMs,
@@ -244,6 +371,14 @@ router.get("/tidal", async (req, res): Promise<void> => {
   });
 
   const tideHeight = interpolateHeight(events, refMs);
+  const overallSource: "noaa" | "estimated" =
+    heightsSource === "noaa" || currentsSource === "noaa" ? "noaa" : "estimated";
+
+  const legacyStationName =
+    heightsStationRef?.name ??
+    currentsStationRef?.name ??
+    (overallSource === "estimated" ? "Estimated (no nearby station)" : undefined);
+  const legacyStationId = heightsStationRef?.id ?? currentsStationRef?.id;
 
   const body: TidalResponse = {
     available: true,
@@ -251,10 +386,14 @@ router.get("/tidal", async (req, res): Promise<void> => {
     currentDirection: sample.directionDeg,
     currentSpeed: sample.speedKnots,
     nextEvent: nextEventFrom(events, refMs),
-    stationName: stationName ?? (source === "estimated" ? "Estimated (no nearby station)" : undefined),
-    stationId,
-    isPredicted: source === "estimated" || !!datetime,
-    source,
+    stationName: legacyStationName,
+    stationId: legacyStationId,
+    isPredicted: overallSource === "estimated" || !!datetime,
+    source: overallSource,
+    heightsSource,
+    currentsSource,
+    ...(heightsStationRef ? { heightsStation: heightsStationRef } : {}),
+    ...(currentsStationRef ? { currentsStation: currentsStationRef } : {}),
     slack: sample.slack,
   };
   res.json(body);
