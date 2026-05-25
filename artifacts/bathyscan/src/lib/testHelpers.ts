@@ -122,6 +122,20 @@ export interface BathyTestApi {
   isOverviewOpen: () => boolean;
   getPendingDropIn: () => { worldX: number; worldZ: number } | null;
   clearPendingDropIn: () => void;
+  /** Whether the Marker form panel is currently open. */
+  isMarkerFormOpen: () => boolean;
+  /** Force-close the Marker form panel (used to reset between assertions). */
+  setMarkerFormOpen: (open: boolean) => void;
+  /** Coordinates last captured by a "Place marker here" or similar action. */
+  getLastClickedGps: () => { lon: number; lat: number; depth: number } | null;
+  /** Reset the lastClickedGps cameraStore slot (used to isolate tests). */
+  clearLastClickedGps: () => void;
+  /** Snapshot of the global right-click context menu (open + item labels). */
+  getContextMenuSnapshot: () => {
+    open: boolean;
+    labels: string[];
+    separators: number;
+  };
   /**
    * Seed the React Query marker-list cache for a dataset so tests can assert
    * on cache invalidation without going through a full GET round-trip.
@@ -419,6 +433,18 @@ export function installTestHelpers(): void {
     isOverviewOpen: () => useUiStore.getState().overviewOpen,
     getPendingDropIn: () => useUiStore.getState().pendingDropIn,
     clearPendingDropIn: () => useUiStore.getState().clearPendingDropIn(),
+    isMarkerFormOpen: () => useUiStore.getState().markerFormOpen,
+    setMarkerFormOpen: (open) => useUiStore.getState().setMarkerFormOpen(open),
+    getLastClickedGps: () => useCameraStore.getState().lastClickedGps,
+    clearLastClickedGps: () => useCameraStore.getState().setLastClickedGps(null),
+    getContextMenuSnapshot: () => {
+      const s = useContextMenuStore.getState();
+      return {
+        open: s.open,
+        labels: s.items.filter((i) => !i.separator).map((i) => i.label),
+        separators: s.items.filter((i) => i.separator).length,
+      };
+    },
     seedTerrain: (overrides) => {
       if (!appSetTerrain) return false;
       const resolution = overrides?.resolution ?? 64;
