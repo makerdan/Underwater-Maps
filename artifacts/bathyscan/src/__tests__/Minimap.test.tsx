@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, fireEvent } from "@testing-library/react";
+import { fireEvent } from "@testing-library/react";
+import { renderWithProviders as render } from "./setup";
 import { Minimap } from "@/components/Minimap";
 import { useUiStore } from "@/lib/uiStore";
 import { WORLD_SIZE } from "@/lib/terrain";

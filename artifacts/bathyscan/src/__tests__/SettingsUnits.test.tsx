@@ -56,15 +56,18 @@ describe("Settings → UNITS section", () => {
 
     expect(useSettingsStore.getState().units).toBe("metric");
 
-    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    const getUnitsSelect = () =>
+      screen.getAllByRole("combobox")[0] as HTMLSelectElement;
+
+    const select = getUnitsSelect();
     expect(select.value).toBe("metric");
 
     fireEvent.change(select, { target: { value: "imperial" } });
     expect(useSettingsStore.getState().units).toBe("imperial");
-    expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe("imperial");
+    expect(getUnitsSelect().value).toBe("imperial");
 
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "metric" } });
+    fireEvent.change(getUnitsSelect(), { target: { value: "metric" } });
     expect(useSettingsStore.getState().units).toBe("metric");
-    expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe("metric");
+    expect(getUnitsSelect().value).toBe("metric");
   });
 });

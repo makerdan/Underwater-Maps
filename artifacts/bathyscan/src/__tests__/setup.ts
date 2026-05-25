@@ -1,6 +1,18 @@
 import "@testing-library/jest-dom/vitest";
+import React from "react";
 import { afterEach, vi } from "vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, render, type RenderOptions, type RenderResult } from "@testing-library/react";
+import { TooltipProvider } from "@/components/ui/tooltip";
+
+export function renderWithProviders(
+  ui: React.ReactElement,
+  options?: RenderOptions,
+): RenderResult {
+  return render(ui, {
+    wrapper: ({ children }) => React.createElement(TooltipProvider, null, children),
+    ...options,
+  });
+}
 
 afterEach(() => {
   cleanup();

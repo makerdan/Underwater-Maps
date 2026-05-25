@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, act } from "@testing-library/react";
+import { act } from "@testing-library/react";
+import { renderWithProviders as render } from "./setup";
 import { DepthScaleBar } from "@/components/DepthScaleBar";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { useSettingsStore } from "@/lib/settingsStore";
