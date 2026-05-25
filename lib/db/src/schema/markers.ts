@@ -14,12 +14,14 @@ export const markersTable = pgTable("markers", {
   type: text("type").notNull().default("custom"),
   label: text("label").notNull(),
   notes: text("notes"),
+  userId: text("user_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const insertMarkerSchema = createInsertSchema(markersTable).omit({
   id: true,
   createdAt: true,
+  userId: true,
 });
 export type InsertMarker = z.infer<typeof insertMarkerSchema>;
 export type Marker = typeof markersTable.$inferSelect;

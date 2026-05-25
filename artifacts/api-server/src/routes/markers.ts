@@ -2,6 +2,7 @@ import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db, markersTable } from "@workspace/db";
 import { PostMarkersBody, DeleteMarkersIdParams, GetMarkersQueryParams } from "@workspace/api-zod";
+import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 
 const router = Router();
 
@@ -22,7 +23,7 @@ router.get("/markers", async (req, res): Promise<void> => {
   res.json(rows);
 });
 
-router.post("/markers", async (req, res): Promise<void> => {
+router.post("/markers", requireAuth, async (req, res): Promise<void> => {
   const parsed = PostMarkersBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: parsed.error.message });
@@ -30,16 +31,17 @@ router.post("/markers", async (req, res): Promise<void> => {
   }
 
   const { datasetId, lon, lat, depth, type = "custom", label, notes } = parsed.data;
+  const userId = (req as AuthenticatedRequest).clerkUserId;
 
   const [created] = await db
     .insert(markersTable)
-    .values({ datasetId, lon, lat, depth, type, label, notes: notes ?? null })
+    .values({ datasetId, lon, lat, depth, type, label, notes: notes ?? null, userId })
     .returning();
 
   res.status(201).json(created);
 });
 
-router.delete("/markers/:id", async (req, res): Promise<void> => {
+router.delete("/markers/:id", requireAuth, async (req, res): Promise<void> => {
   const parsed = DeleteMarkersIdParams.safeParse(req.params);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: "Invalid marker id" });

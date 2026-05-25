@@ -77,10 +77,12 @@
     "vaul": "^1.1.2",
     "vite": "catalog:",
     "vitest": "^3.2.4",
-    "wouter": "^3.3.5",
+    "wouter": "catalog:",
     "zod": "catalog:"
   },
   "dependencies": {
+    "@clerk/react": "^6.7.1",
+    "@clerk/themes": "^2.4.57",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
     "react-dropzone": "^15.0.0",
