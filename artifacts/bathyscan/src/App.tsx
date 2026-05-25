@@ -41,12 +41,12 @@ import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useTidalData } from "@/hooks/useTidalData";
 import { useUiStore } from "@/lib/uiStore";
 import { useClassificationStore } from "@/lib/classificationStore";
-import { useHabitatStore } from "@/lib/habitatStore";
 import { useHighlightStore } from "@/lib/highlightStore";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { useWaterTypeSideEffects } from "@/lib/useWaterTypeSideEffects";
 import { waterLabels } from "@/lib/waterLabels";
 import { useGetSettings, getGetSettingsQueryKey } from "@workspace/api-client-react";
 import { useDriftStore } from "@/lib/driftStore";
@@ -268,37 +268,17 @@ function Main() {
     }
   }, [datasets, datasetId, setDatasetId]);
 
-  // Side-effects on water-type switch:
-  // 1) Clear derived state computed for the previous environment
-  //    (terrain grids, zone classifications, habitat cache).
-  // 2) Auto-load the first preset of the new water type.
-  // 3) Auto-switch the depth colormap to the mode-appropriate default,
-  //    but only if the user hasn't manually picked a non-default theme.
-  const prevWaterTypeRef = useRef(waterType);
-  useEffect(() => {
-    if (prevWaterTypeRef.current === waterType) return;
-    const prev = prevWaterTypeRef.current;
-    prevWaterTypeRef.current = waterType;
-    try { useTerrainStore.getState().setGrids({ activeGrid: null as never }); } catch {}
-    try { useClassificationStore.getState().clearZoneMap?.(); } catch {}
-    try { useHabitatStore.getState().clear?.(); } catch {}
-    // Colormap auto-switch: only swap when the current theme is the
-    // *previous* environment's default — otherwise respect the user's
-    // explicit choice (thermal/viridis/grayscale).
-    try {
-      const st = useSettingsStore.getState();
-      const currentTheme = st.colormapTheme;
-      const prevDefault = prev === "freshwater" ? "freshwater" : "ocean";
-      const nextDefault = waterType === "freshwater" ? "freshwater" : "ocean";
-      if (currentTheme === prevDefault && currentTheme !== nextDefault) {
-        st.setColormapTheme?.(nextDefault);
-      }
-    } catch {}
-    const first = (datasets ?? [])[0];
-    if (first?.id && first.waterType === waterType) setDatasetId(first.id);
-    else setDatasetId(null);
+  // Side-effects on water-type switch (see useWaterTypeSideEffects):
+  //   1) Clear derived state computed for the previous environment
+  //      (terrain grids, zone classifications, habitat cache).
+  //   2) Auto-switch the depth colormap to the mode-appropriate default,
+  //      but only if the user hasn't manually picked a non-default theme.
+  //   3) Auto-load the first preset of the new water type.
+  // Resetting hasAutoSelectedRef here keeps the mount-time auto-select
+  // path armed for the next dataset list refresh in the new mode.
+  useWaterTypeSideEffects(datasets, setDatasetId, () => {
     hasAutoSelectedRef.current = false;
-  }, [waterType, datasets, setDatasetId]);
+  });
 
   useEffect(() => {
     if (terrain) {
