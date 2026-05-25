@@ -63,7 +63,7 @@ function elevationColor(elev: number, out: THREE.Color): THREE.Color {
  * snow). Vertices at or below sea level also receive a reduced alpha so the
  * land/water seam fades into a soft shoreline instead of a hard line.
  */
-function buildLandmassGeometry(
+export function buildLandmassGeometry(
   grid: TerrainData,
   topography: number[],
   style: "realistic" | "flat",
