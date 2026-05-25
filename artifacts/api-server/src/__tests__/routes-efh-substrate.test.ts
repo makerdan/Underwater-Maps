@@ -72,7 +72,12 @@ describe("GET /efh", () => {
         expect(p.color).toMatch(/^#[0-9a-fA-F]{6}$/);
 
         if (sourcePrefix === "TPWD") {
-          expect(p.source.startsWith("TPWD")).toBe(true);
+          // Texas freshwater bundles mix TPWD's Fish Habitat Structures
+          // (brushpile clusters) with USGS NHD shoreline / flowline
+          // polygons. Both are real upstream GIS layers; neither is NOAA.
+          expect(
+            p.source.startsWith("TPWD") || p.source.startsWith("USGS"),
+          ).toBe(true);
           expect(p.source.startsWith("NOAA")).toBe(false);
         } else {
           expect(p.source.startsWith("TPWD")).toBe(false);
@@ -100,7 +105,10 @@ describe("GET /efh", () => {
       expect(res.body.features.length).toBeGreaterThan(0);
       for (const f of res.body.features) {
         expect(f.properties.source.startsWith("NOAA")).toBe(false);
-        expect(f.properties.source.startsWith("TPWD")).toBe(true);
+        expect(
+          f.properties.source.startsWith("TPWD") ||
+            f.properties.source.startsWith("USGS"),
+        ).toBe(true);
       }
     }
   });
