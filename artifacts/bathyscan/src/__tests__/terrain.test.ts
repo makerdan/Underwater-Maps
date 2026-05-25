@@ -52,7 +52,7 @@ vi.mock("three", () => {
   return { Color, BufferAttribute, PlaneGeometry, BufferGeometry: class {} };
 });
 
-import { buildTerrainGeometry, worldXZToLonLat, lonLatToWorldXZ, worldYToMetres, MAX_DEPTH_WORLD } from "../lib/terrain";
+import { buildTerrainGeometry, computeZoneWeights, worldXZToLonLat, lonLatToWorldXZ, worldYToMetres, MAX_DEPTH_WORLD } from "../lib/terrain";
 import type { TerrainData } from "@workspace/api-client-react";
 
 function makeGrid(N: number, overrides: Partial<TerrainData> = {}): TerrainData {
@@ -135,5 +135,53 @@ describe("worldYToMetres", () => {
 
   it("worldY=-25 → ~5467.5 m (mid-depth)", () => {
     expect(worldYToMetres(-25, grid)).toBeCloseTo(10935 / 2, 0);
+  });
+});
+
+describe("computeZoneWeights", () => {
+  it("returns Float32Array of length N×N×4", () => {
+    const N = 4;
+    const grid = makeGrid(N);
+    const weights = computeZoneWeights(grid);
+    expect(weights).toBeInstanceOf(Float32Array);
+    expect(weights.length).toBe(N * N * 4);
+  });
+
+  it("each vertex has weights that sum to 1 (normalised)", () => {
+    const grid = makeGrid(8);
+    const weights = computeZoneWeights(grid);
+    const count = 8 * 8;
+    for (let i = 0; i < count; i++) {
+      const sum = (weights[i * 4] ?? 0) + (weights[i * 4 + 1] ?? 0) + (weights[i * 4 + 2] ?? 0) + (weights[i * 4 + 3] ?? 0);
+      expect(sum).toBeCloseTo(1, 4);
+    }
+  });
+
+  it("shallowest vertex (t=0, flat grid) is pure sand", () => {
+    const N = 4;
+    // All vertices at minDepth → t=0, slope=0 → 100% sand
+    const depths = new Array(N * N).fill(0) as number[];
+    const grid = makeGrid(N, { depths, minDepth: 0, maxDepth: 1000 });
+    const weights = computeZoneWeights(grid);
+    const sand = weights[0] ?? 0;
+    expect(sand).toBeCloseTo(1.0, 4);
+  });
+
+  it("deepest vertex (t=1, flat grid) is pure basalt", () => {
+    const N = 4;
+    // All vertices at maxDepth → t=1, slope=0 → 100% basalt
+    const depths = new Array(N * N).fill(1000) as number[];
+    const grid = makeGrid(N, { depths, minDepth: 0, maxDepth: 1000 });
+    const weights = computeZoneWeights(grid);
+    const basalt = weights[3] ?? 0;
+    expect(basalt).toBeCloseTo(1.0, 4);
+  });
+
+  it("all weights are non-negative", () => {
+    const grid = makeGrid(8);
+    const weights = computeZoneWeights(grid);
+    for (let i = 0; i < weights.length; i++) {
+      expect(weights[i]).toBeGreaterThanOrEqual(0);
+    }
   });
 });

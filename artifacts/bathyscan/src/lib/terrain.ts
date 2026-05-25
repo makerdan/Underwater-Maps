@@ -49,6 +49,93 @@ export function buildTerrainGeometry(grid: TerrainData): THREE.BufferGeometry {
 }
 
 // ---------------------------------------------------------------------------
+// Zone weight computation for bottom texture system
+// ---------------------------------------------------------------------------
+
+/** smoothstep — zero at edge0, one at edge1 (or inverted when edge0 > edge1). */
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - edge0) / ((edge1 - edge0) || 1)));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * Compute per-vertex zone weights for the four seafloor texture zones:
+ *   [0] sand     — shallow/shelf  (t < 0.20)
+ *   [1] sediment — mid-slope      (t 0.20–0.55)
+ *   [2] silt     — abyssal plain  (t 0.55–0.85)
+ *   [3] basalt   — trench/volcanic (t > 0.85, or slope > 35°)
+ *
+ * Thresholds are relative to each grid's own minDepth/maxDepth so every
+ * dataset shows the full texture progression.
+ *
+ * Returns a Float32Array of length N×N×4 (four weights per vertex).
+ */
+export function computeZoneWeights(grid: TerrainData): Float32Array {
+  const { resolution: N, depths, minDepth, maxDepth } = grid;
+  const depthRange = (maxDepth - minDepth) || 1;
+  const weights = new Float32Array(N * N * 4);
+
+  const vertStep = WORLD_SIZE / Math.max(1, N - 1); // horizontal world units per grid step
+  const SLOPE_THRESHOLD = 35 * (Math.PI / 180);
+  const SLOPE_MAX = SLOPE_THRESHOLD * 1.6;
+
+  for (let row = 0; row < N; row++) {
+    for (let col = 0; col < N; col++) {
+      const idx = row * N + col;
+
+      // Normalised depth [0 = shallow, 1 = deepest]
+      const depth = depths[idx] ?? 0;
+      const t = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
+
+      // Base zone weights via soft overlapping ramps
+      let wSand     = 1 - smoothstep(0.12, 0.30, t);
+      let wSediment = smoothstep(0.10, 0.28, t) * (1 - smoothstep(0.48, 0.65, t));
+      let wSilt     = smoothstep(0.44, 0.60, t) * (1 - smoothstep(0.76, 0.90, t));
+      let wBasalt   = smoothstep(0.74, 0.88, t);
+
+      // Slope override: steep faces expose hard basalt regardless of depth
+      const tOf = (r: number, c: number): number => {
+        const d = depths[r * N + c] ?? 0;
+        return (d - minDepth) / depthRange;
+      };
+      const r0 = Math.max(0, row - 1);
+      const r1 = Math.min(N - 1, row + 1);
+      const c0 = Math.max(0, col - 1);
+      const c1 = Math.min(N - 1, col + 1);
+
+      const dtX = (tOf(row, c1) - tOf(row, c0)) * MAX_DEPTH_WORLD;
+      const dtZ = (tOf(r1, col) - tOf(r0, col)) * MAX_DEPTH_WORLD;
+      const dHoriz = (col === 0 || col === N - 1 ? 1 : 2) * vertStep;
+      const dVert  = (row === 0 || row === N - 1 ? 1 : 2) * vertStep;
+
+      const slopeX = Math.abs(dtX / dHoriz);
+      const slopeZ = Math.abs(dtZ / dVert);
+      const slopeAngle = Math.atan(Math.sqrt(slopeX * slopeX + slopeZ * slopeZ));
+
+      if (slopeAngle > SLOPE_THRESHOLD) {
+        const slopeBlend = smoothstep(SLOPE_THRESHOLD, SLOPE_MAX, slopeAngle);
+        wBasalt   = Math.max(wBasalt, slopeBlend);
+        wSand     *= (1 - slopeBlend);
+        wSediment *= (1 - slopeBlend);
+        wSilt     *= (1 - slopeBlend);
+      }
+
+      // Normalise so weights sum to 1
+      const sum = wSand + wSediment + wSilt + wBasalt;
+      const inv = sum > 0 ? 1 / sum : 1;
+
+      const wi = idx * 4;
+      weights[wi]     = wSand     * inv;
+      weights[wi + 1] = wSediment * inv;
+      weights[wi + 2] = wSilt     * inv;
+      weights[wi + 3] = wBasalt   * inv;
+    }
+  }
+
+  return weights;
+}
+
+// ---------------------------------------------------------------------------
 // Coordinate mapping utilities
 // ---------------------------------------------------------------------------
 
