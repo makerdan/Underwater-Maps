@@ -864,6 +864,27 @@ export function useSectionDirty(section: SettingsSection): boolean {
   });
 }
 
+/**
+ * Returns true when any section has unsaved changes since the last sync.
+ * Used by the Settings page to warn the user before navigating away.
+ */
+export function useAnySectionDirty(): boolean {
+  return useSettingsStore((s) => {
+    const snap = s.syncedSnapshot ?? {};
+    for (const section of Object.keys(SECTION_KEYS) as SettingsSection[]) {
+      for (const k of SECTION_KEYS[section]) {
+        if (!valuesEqual(
+          (s as unknown as Record<string, unknown>)[k],
+          (snap as Record<string, unknown>)[k],
+        )) {
+          return true;
+        }
+      }
+    }
+    return false;
+  });
+}
+
 /** Snapshot helper exported for the Settings page's auto-sync subscriber. */
 export function getDataSnapshot(): Partial<SettingsState> {
   return snapshotData(useSettingsStore.getState());

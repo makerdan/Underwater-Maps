@@ -14,6 +14,7 @@ import { useGetSettings, usePutSettings, useDeleteMarkersMine, getGetSettingsQue
 import {
   useSettingsStore,
   useSectionDirty,
+  useAnySectionDirty,
   getDataSnapshot,
   SETTINGS_SCHEMA_VERSION,
   DEFAULT_SETTINGS,
@@ -2177,16 +2178,58 @@ export function Settings() {
   const showAdvancedEverywhere = useSettingsStore((s) => s.showAdvancedEverywhere);
   const setShowAdvancedEverywhere = useSettingsStore((s) => s.setShowAdvancedEverywhere);
 
+  // ── Unsaved-changes guard ─────────────────────────────────────────────
+  // Track any dirty section so we can warn before navigation/unload.
+  // Signed-out users have their changes persisted to localStorage
+  // synchronously by zustand, so no warning is needed for them.
+  const anyDirty = useAnySectionDirty();
+  const shouldGuard = !!isSignedIn && anyDirty;
+
+  useEffect(() => {
+    if (!shouldGuard) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // Required for legacy browsers; modern browsers show a generic prompt.
+      e.returnValue = "";
+      return "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [shouldGuard]);
+
+  const handleBack = useCallback(async () => {
+    if (shouldGuard) {
+      try {
+        await flushSync();
+      } catch {
+        // Swallow — user can retry via the section Save button. We still
+        // navigate so they aren't trapped on the page.
+      }
+    }
+    setLocation(basePath + "/");
+  }, [shouldGuard, flushSync, setLocation]);
+
   return (
     <SyncContext.Provider value={syncCtx}>
     <div style={S.page}>
       {/* Top bar */}
       <div style={S.topbar}>
         <button
-          onClick={() => setLocation(basePath + "/")}
-          style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 11, letterSpacing: "0.15em", padding: 0, fontFamily: FONT }}
+          onClick={handleBack}
+          title={shouldGuard ? "Saving unsaved changes before leaving…" : undefined}
+          data-testid="settings-back-btn"
+          data-unsaved={shouldGuard ? "true" : "false"}
+          style={{ background: "none", border: "none", color: shouldGuard ? "#fbbf24" : "#475569", cursor: "pointer", fontSize: 11, letterSpacing: "0.15em", padding: 0, fontFamily: FONT, display: "flex", alignItems: "center", gap: 8 }}
         >
-          ← BACK
+          <span>← BACK</span>
+          {shouldGuard && (
+            <span
+              data-testid="settings-back-unsaved-hint"
+              style={{ fontSize: 9, letterSpacing: "0.15em", color: "#fbbf24", opacity: 0.8 }}
+            >
+              • UNSAVED
+            </span>
+          )}
         </button>
         <span style={{ fontSize: 10, letterSpacing: "0.3em", color: "#00e5ff", fontWeight: 700, textShadow: "0 0 8px rgba(0,229,255,0.5)", flex: 1 }}>
           SETTINGS
