@@ -13,6 +13,8 @@ import { keys as idbKeys, clear as idbClear } from "idb-keyval";
 import { useGetSettings, usePutSettings, useDeleteMarkersMine, getGetSettingsQueryKey } from "@workspace/api-client-react";
 import {
   useSettingsStore,
+  useSectionDirty,
+  getDataSnapshot,
   SETTINGS_SCHEMA_VERSION,
   type MarkerType,
   type SettingsSection,
@@ -332,29 +334,153 @@ function ColorRow({
   );
 }
 
-function SectionResetRow({ section }: { section: SettingsSection }) {
-  const resetSection = useSettingsStore((s) => s.resetSection);
+// ─── Save/Reset row infrastructure ────────────────────────────────────────────
+
+/**
+ * Provided by the Settings page. Force-flushes any pending debounced sync
+ * to the server (or no-ops cleanly when signed out, since localStorage
+ * persistence happens synchronously).
+ */
+const SyncContext = React.createContext<{
+  flush: () => Promise<void>;
+  isSignedIn: boolean;
+} | null>(null);
+
+function SectionSaveButton({ section }: { section: SettingsSection }) {
+  const dirty = useSectionDirty(section);
+  const ctx = React.useContext(SyncContext);
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [errMsg, setErrMsg] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+
+  // If user edits the section again after a "saved" flash, return to idle so
+  // they can re-trigger a save. Also clear a stale "error" state when the
+  // section becomes clean (e.g. an auto-sync succeeded after a manual error).
+  useEffect(() => {
+    if (dirty && status === "saved") setStatus("idle");
+    if (!dirty && status === "error") {
+      setStatus("idle");
+      setErrMsg(null);
+    }
+  }, [dirty, status]);
+
+  const onClick = async () => {
+    if (!ctx) return;
+    setStatus("saving");
+    setErrMsg(null);
+    try {
+      await ctx.flush();
+      const ts = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      setSavedAt(ts);
+      setStatus("saved");
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setStatus("idle"), 3000);
+    } catch (e) {
+      setStatus("error");
+      setErrMsg((e as Error)?.message || "Save failed");
+    }
+  };
+
+  const isClean = !dirty && status !== "saving" && status !== "error";
+  const disabled = status === "saving" || (!dirty && status !== "error");
+
+  let label: string;
+  if (status === "saving") label = "SAVING…";
+  else if (status === "error") label = "RETRY SAVE";
+  else if (status === "saved") label = savedAt ? `✓ SAVED ${savedAt}` : "✓ SAVED";
+  else if (isClean) label = "✓ SAVED";
+  else label = "SAVE";
+
+  const isErrorStyle = status === "error";
+  const isSavedStyle = isClean || status === "saved";
+
   return (
-    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      {status === "error" && errMsg && (
+        <span
+          data-testid={`save-section-${section}-error`}
+          style={{ fontSize: 9, color: "#f87171", letterSpacing: "0.1em" }}
+        >
+          {errMsg}
+        </span>
+      )}
       <button
-        onClick={() => resetSection(section)}
-        data-testid={`reset-section-${section}-btn`}
+        data-testid={`save-section-${section}-btn`}
+        data-state={status}
+        data-dirty={dirty ? "true" : "false"}
+        onClick={() => void onClick()}
+        disabled={disabled}
         style={{
-          background: "none",
-          border: "1px solid rgba(0,229,255,0.15)",
+          background: isErrorStyle
+            ? "rgba(239,68,68,0.08)"
+            : isSavedStyle
+              ? "rgba(74,222,128,0.06)"
+              : "rgba(0,229,255,0.08)",
+          border: `1px solid ${
+            isErrorStyle
+              ? "rgba(239,68,68,0.35)"
+              : isSavedStyle
+                ? "rgba(74,222,128,0.25)"
+                : "rgba(0,229,255,0.3)"
+          }`,
           borderRadius: 3,
-          color: "#64748b",
+          color: isErrorStyle ? "#f87171" : isSavedStyle ? "#4ade80" : "#67e8f9",
           fontSize: 9,
           letterSpacing: "0.15em",
           padding: "3px 10px",
-          cursor: "pointer",
+          cursor: disabled ? "default" : "pointer",
           fontFamily: FONT,
+          opacity: status === "saving" ? 0.7 : 1,
         }}
       >
-        RESET SECTION
+        {label}
       </button>
     </div>
   );
+}
+
+function SectionActionsRow({
+  section,
+  withReset = true,
+  withSave = true,
+}: {
+  section: SettingsSection;
+  withReset?: boolean;
+  withSave?: boolean;
+}) {
+  const resetSection = useSettingsStore((s) => s.resetSection);
+  return (
+    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 8 }}>
+      {withReset && (
+        <button
+          onClick={() => resetSection(section)}
+          data-testid={`reset-section-${section}-btn`}
+          style={{
+            background: "none",
+            border: "1px solid rgba(0,229,255,0.15)",
+            borderRadius: 3,
+            color: "#64748b",
+            fontSize: 9,
+            letterSpacing: "0.15em",
+            padding: "3px 10px",
+            cursor: "pointer",
+            fontFamily: FONT,
+          }}
+        >
+          RESET SECTION
+        </button>
+      )}
+      {withSave && <SectionSaveButton section={section} />}
+    </div>
+  );
+}
+
+/** Reset-only row (no Save). Used by Account & Privacy. */
+function SectionResetRow({ section }: { section: SettingsSection }) {
+  return <SectionActionsRow section={section} withSave={false} />;
 }
 
 // ─── Offline / Storage helpers ────────────────────────────────────────────────
@@ -407,7 +533,7 @@ function VisualsSection() {
   return (
     <>
       <h2 style={S.sectionTitle}>◈ VISUALS &amp; PERFORMANCE</h2>
-      <SectionResetRow section="visuals" />
+      <SectionActionsRow section="visuals" />
       <div style={S.card}>
         <div style={S.cardHeader}>QUALITY PRESET</div>
         <SelectRow
@@ -547,7 +673,7 @@ function NavigationSection() {
   return (
     <>
       <h2 style={S.sectionTitle}>◈ CAMERA &amp; CONTROLS</h2>
-      <SectionResetRow section="camera" />
+      <SectionActionsRow section="camera" />
       <div style={S.card}>
         <div style={S.cardHeader}>BASICS</div>
         <SelectRow
@@ -667,7 +793,7 @@ function HUDSection() {
   return (
     <>
       <h2 style={S.sectionTitle}>◈ HUD &amp; LAYOUT</h2>
-      <SectionResetRow section="hud" />
+      <SectionActionsRow section="hud" />
       <div style={S.card}>
         <div style={S.cardHeader}>VISIBILITY</div>
         <ToggleRow label="Crosshair GPS" value={s.showCrosshairGps} onChange={s.setShowCrosshairGps} sublabel="Centre-screen target coordinates" />
@@ -728,7 +854,7 @@ function UnitsSection() {
   return (
     <>
       <h2 style={S.sectionTitle}>◈ UNITS</h2>
-      <SectionResetRow section="hud" />
+      <SectionActionsRow section="hud" />
       <div style={S.card}>
         <div style={S.cardHeader}>MEASUREMENT SYSTEM</div>
         <SelectRow
@@ -751,6 +877,7 @@ function OverviewSection() {
   return (
     <>
       <h2 style={S.sectionTitle}>◈ OVERVIEW MAP</h2>
+      <SectionActionsRow section="overview" withReset={false} />
       <div style={S.card}>
         <div style={S.cardHeader}>MAP DISPLAY</div>
         <ToggleRow label="Show Grid Lines" value={s.overviewShowGrid} onChange={s.setOverviewShowGrid} />
@@ -811,7 +938,7 @@ function MarkersSection() {
   return (
     <>
       <h2 style={S.sectionTitle}>◈ MARKERS</h2>
-      <SectionResetRow section="markers" />
+      <SectionActionsRow section="markers" />
       <div style={S.card}>
         <div style={S.cardHeader}>VISIBILITY</div>
         <ToggleRow label="Show Marker Labels" value={s.showMarkerLabels} onChange={s.setShowMarkerLabels} sublabel="Name text below marker sprites" />
@@ -866,7 +993,7 @@ function TidalSection() {
   return (
     <>
       <h2 style={S.sectionTitle}>◈ TIDAL DEFAULTS</h2>
-      <SectionResetRow section="tidal" />
+      <SectionActionsRow section="tidal" />
       <div style={S.card}>
         <div style={S.cardHeader}>BEHAVIOUR</div>
         <ToggleRow
@@ -911,7 +1038,7 @@ function HabitatSection() {
   return (
     <>
       <h2 style={S.sectionTitle}>◈ HABITAT DEFAULTS</h2>
-      <SectionResetRow section="habitat" />
+      <SectionActionsRow section="habitat" />
       <div style={S.card}>
         <div style={S.cardHeader}>BEHAVIOUR</div>
         <ToggleRow
@@ -950,7 +1077,7 @@ function GpsSection() {
   return (
     <>
       <h2 style={S.sectionTitle}>◈ GPS &amp; TRAIL</h2>
-      <SectionResetRow section="gps" />
+      <SectionActionsRow section="gps" />
       <div style={S.card}>
         <div style={S.cardHeader}>RECORDING</div>
         <ToggleRow
@@ -1002,7 +1129,7 @@ function AccessibilitySection() {
   return (
     <>
       <h2 style={S.sectionTitle}>◈ ACCESSIBILITY</h2>
-      <SectionResetRow section="accessibility" />
+      <SectionActionsRow section="accessibility" />
       <div style={S.card}>
         <div style={S.cardHeader}>DISPLAY</div>
         <ToggleRow
@@ -1167,7 +1294,7 @@ function DatasetSection() {
   return (
     <>
       <h2 style={S.sectionTitle}>◈ DATA &amp; STORAGE</h2>
-      <SectionResetRow section="data" />
+      <SectionActionsRow section="data" />
       <div style={S.card}>
         <div style={S.cardHeader}>DEFAULTS</div>
         <SelectRow
@@ -1197,6 +1324,7 @@ function EnvironmentSection() {
   return (
     <>
       <h2 style={S.sectionTitle}>≈ ENVIRONMENT</h2>
+      <SectionActionsRow section="environment" withReset={false} />
       <div style={S.card}>
         <div style={S.cardHeader}>WATER TYPE</div>
         <div style={S.row}>
@@ -1647,38 +1775,73 @@ export function Settings() {
   }, [serverSettings, hydrateFromServer]);
 
   // Debounced PUT /api/settings
-  const { mutate: saveSettings } = usePutSettings();
+  const { mutateAsync: saveSettingsAsync } = usePutSettings();
+  const markAllSaved = useSettingsStore((s) => s.markAllSaved);
+
+  const buildPayload = useCallback(() => {
+    const { hydrateFromServer: _h, resetSection: _rs, resetAll: _ra,
+      markAllSaved: _mas,
+      setDatasetHome: _sd, clearDatasetHome: _cd, datasetHomePositions: _dhp,
+      syncedSnapshot: _ss,
+      ...rest } = useSettingsStore.getState();
+    const dataOnly: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(rest)) {
+      if (typeof v !== "function") dataOnly[k] = v;
+    }
+    return dataOnly;
+  }, []);
+
+  const flashSavedMsg = useCallback(() => {
+    setSavedMsg(true);
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    savedTimerRef.current = setTimeout(() => setSavedMsg(false), 2000);
+  }, []);
+
+  /**
+   * Force-flush any pending debounced sync. Returns a promise that resolves
+   * on a successful PUT (or immediately when signed out — localStorage
+   * persistence already happened synchronously via zustand). Rejects on
+   * network/server errors so the caller can show an error state.
+   */
+  const flushSync = useCallback(async (): Promise<void> => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    if (!isSignedIn) {
+      // Local-only save — already persisted to localStorage by zustand.
+      markAllSaved();
+      flashSavedMsg();
+      return;
+    }
+    const data = buildPayload();
+    await saveSettingsAsync({
+      data: data as Parameters<typeof saveSettingsAsync>[0]["data"],
+    });
+    markAllSaved();
+    flashSavedMsg();
+  }, [isSignedIn, saveSettingsAsync, markAllSaved, flashSavedMsg, buildPayload]);
 
   const scheduleSync = useCallback(() => {
     if (!isSignedIn) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const { hydrateFromServer: _h, resetSection: _rs, resetAll: _ra,
-        setDatasetHome: _sd, clearDatasetHome: _cd, datasetHomePositions: _dhp,
-        ...rest } = useSettingsStore.getState();
-      // Strip every function-typed field; keep only data.
-      const dataOnly: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(rest)) {
-        if (typeof v !== "function") dataOnly[k] = v;
-      }
-      saveSettings(
-        // Cast: server passes through unknown fields; spec-known fields
-        // are validated by zod, extras are stored as JSON.
-        { data: dataOnly as Parameters<typeof saveSettings>[0]["data"] },
-        {
-          onSuccess: () => {
-            setSavedMsg(true);
-            if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
-            savedTimerRef.current = setTimeout(() => setSavedMsg(false), 2000);
-          },
-        },
-      );
+      // Auto-sync swallows errors here — manual Save surfaces them.
+      void flushSync().catch(() => { /* keep dirty so user sees Save button */ });
     }, 300);
-  }, [isSignedIn, saveSettings]);
+  }, [isSignedIn, flushSync]);
 
-  // Subscribe to store changes to trigger sync
+  // Subscribe to data-only changes (ignore syncedSnapshot updates) to avoid
+  // an infinite save loop once markAllSaved fires inside flushSync.
   useEffect(() => {
-    const unsub = useSettingsStore.subscribe(() => scheduleSync());
+    let last = JSON.stringify(getDataSnapshot());
+    const unsub = useSettingsStore.subscribe(() => {
+      const cur = JSON.stringify(getDataSnapshot());
+      if (cur !== last) {
+        last = cur;
+        scheduleSync();
+      }
+    });
     return () => {
       unsub();
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -1686,10 +1849,16 @@ export function Settings() {
     };
   }, [scheduleSync]);
 
+  const syncCtx = React.useMemo(
+    () => ({ flush: flushSync, isSignedIn: !!isSignedIn }),
+    [flushSync, isSignedIn],
+  );
+
   const showAdvancedEverywhere = useSettingsStore((s) => s.showAdvancedEverywhere);
   const setShowAdvancedEverywhere = useSettingsStore((s) => s.setShowAdvancedEverywhere);
 
   return (
+    <SyncContext.Provider value={syncCtx}>
     <div style={S.page}>
       {/* Top bar */}
       <div style={S.topbar}>
@@ -1759,6 +1928,7 @@ export function Settings() {
         </div>
       </div>
     </div>
+    </SyncContext.Provider>
   );
 }
 

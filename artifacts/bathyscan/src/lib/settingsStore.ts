@@ -153,6 +153,14 @@ export interface SettingsState {
 
   // ── Environment ───────────────────────────────────────────────────────
   waterType: WaterType;
+
+  /**
+   * Snapshot of the last "saved" data values. For signed-in users this is
+   * refreshed after every successful PUT /api/settings. For signed-out users
+   * (and on initial localStorage rehydration) it mirrors the persisted state.
+   * Used by `useSectionDirty()` to drive per-section Save buttons.
+   */
+  syncedSnapshot?: Partial<SettingsState>;
 }
 
 interface SettingsActions {
@@ -265,6 +273,9 @@ interface SettingsActions {
 
   /** Reset every setting back to defaults (preserves datasetHomePositions). */
   resetAll: () => void;
+
+  /** Mark every section as saved (snapshot equals current data values). */
+  markAllSaved: () => void;
 }
 
 export type SettingsStore = SettingsState & SettingsActions;
@@ -445,7 +456,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   waterType: "saltwater",
 };
 
-const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
+export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   camera: [
     "defaultNavMode", "defaultSpeedTier", "mouseSensitivity", "invertMouseY",
     "mouseZoomSensitivity", "touchpadZoomSensitivity", "pinchZoomSensitivity",
@@ -483,6 +494,32 @@ const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   environment: ["waterType"],
 };
 
+/**
+ * Keys whose values should be snapshotted/synced. Excludes function-typed
+ * actions and the snapshot itself; `datasetHomePositions` is excluded too
+ * since it is mutated outside the per-section editors.
+ */
+const DATA_KEYS: (keyof SettingsState)[] = (Object.keys(DEFAULT_SETTINGS) as (keyof SettingsState)[])
+  .filter((k) => k !== "datasetHomePositions");
+
+function snapshotData(state: Partial<SettingsState>): Partial<SettingsState> {
+  const out: Partial<SettingsState> = {};
+  for (const k of DATA_KEYS) {
+    if (k in state) {
+      (out as Record<string, unknown>)[k] = (state as Record<string, unknown>)[k];
+    }
+  }
+  return out;
+}
+
+function valuesEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((v, i) => valuesEqual(v, b[i]));
+  }
+  return false;
+}
+
 export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set, get) => {
@@ -491,6 +528,7 @@ export const useSettingsStore = create<SettingsStore>()(
 
       return {
         ...DEFAULT_SETTINGS,
+        syncedSnapshot: snapshotData(DEFAULT_SETTINGS),
 
         // Camera
         setDefaultNavMode: setter("defaultNavMode"),
@@ -604,7 +642,11 @@ export const useSettingsStore = create<SettingsStore>()(
 
         setWaterType: setter("waterType"),
 
-        hydrateFromServer: (partial) => set((state) => ({ ...state, ...partial })),
+        hydrateFromServer: (partial) =>
+          set((state) => {
+            const merged = { ...state, ...partial };
+            return { ...partial, syncedSnapshot: snapshotData(merged) };
+          }),
 
         resetSection: (section) => {
           const keys = SECTION_KEYS[section];
@@ -623,6 +665,9 @@ export const useSettingsStore = create<SettingsStore>()(
             datasetHomePositions: current.datasetHomePositions,
           });
         },
+
+        markAllSaved: () =>
+          set((state) => ({ syncedSnapshot: snapshotData(state) })),
       };
     },
     {
@@ -641,6 +686,38 @@ export const useSettingsStore = create<SettingsStore>()(
         }
         return persisted as SettingsState;
       },
+      // After localStorage rehydrates, treat the persisted values as the
+      // "saved" baseline so per-section dirty tracking starts clean.
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.syncedSnapshot = snapshotData(state);
+        }
+      },
     },
   ),
 );
+
+/**
+ * Returns true when any setting in the given section has changed since the
+ * last successful save (server PUT for signed-in users, or localStorage
+ * rehydration for signed-out users).
+ */
+export function useSectionDirty(section: SettingsSection): boolean {
+  return useSettingsStore((s) => {
+    const snap = s.syncedSnapshot ?? {};
+    for (const k of SECTION_KEYS[section]) {
+      if (!valuesEqual(
+        (s as unknown as Record<string, unknown>)[k],
+        (snap as Record<string, unknown>)[k],
+      )) {
+        return true;
+      }
+    }
+    return false;
+  });
+}
+
+/** Snapshot helper exported for the Settings page's auto-sync subscriber. */
+export function getDataSnapshot(): Partial<SettingsState> {
+  return snapshotData(useSettingsStore.getState());
+}
