@@ -15,8 +15,10 @@ import {
   renderMarkers,
   renderCameraArrow,
   renderScaleBar,
+  renderHabitatOverlay,
 } from "@/lib/overviewRenderer";
 import type { OverviewTransform } from "@/lib/overviewRenderer";
+import { useHabitatStore } from "@/lib/habitatStore";
 
 interface TooltipState {
   visible: boolean;
@@ -119,6 +121,13 @@ export const OverviewMap: React.FC = () => {
       const cam = useCameraStore.getState();
       if (cam.cameraLon !== null && cam.cameraLat !== null) {
         renderCameraArrow(ctx, cam.cameraLon, cam.cameraLat, cam.heading, grid, t);
+      }
+
+      // Habitat overlay (drawn above depth heatmap, below markers)
+      const habitatScores = useHabitatStore.getState().scores;
+      const habitatActive = useHabitatStore.getState().activeSpecies !== null;
+      if (habitatActive && habitatScores) {
+        renderHabitatOverlay(ctx, habitatScores, grid, t);
       }
 
       // Scale bar

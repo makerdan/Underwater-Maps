@@ -274,6 +274,58 @@ export function renderCameraArrow(
   ctx.restore();
 }
 
+// ---------------------------------------------------------------------------
+// Habitat overlay
+// ---------------------------------------------------------------------------
+
+/**
+ * Draw a 64×64 downsampled amber habitat heatmap on the overview canvas.
+ * Drawn at proportional alpha matching the terrain shader (score × 0.4 opacity).
+ */
+export function renderHabitatOverlay(
+  ctx: CanvasRenderingContext2D,
+  scores: Float32Array,
+  grid: TerrainData,
+  t: OverviewTransform,
+): void {
+  const N = Math.round(Math.sqrt(scores.length));
+  if (N === 0) return;
+
+  const lonRange = grid.maxLon - grid.minLon || 1;
+  const latRange = grid.maxLat - grid.minLat || 1;
+  const terrainW = t.pxPerDeg * lonRange * t.scale;
+  const terrainH = t.pxPerDeg * latRange * t.scale;
+
+  // Downsample to 64×64 for the offscreen pass
+  const DS = 64;
+  const offscreen = document.createElement("canvas");
+  offscreen.width = DS;
+  offscreen.height = DS;
+  const octx = offscreen.getContext("2d")!;
+  const imageData = octx.createImageData(DS, DS);
+
+  for (let row = 0; row < DS; row++) {
+    for (let col = 0; col < DS; col++) {
+      // Map DS pixel → source grid cell
+      const srcRow = Math.min(N - 1, Math.round((row / DS) * N));
+      const srcCol = Math.min(N - 1, Math.round((col / DS) * N));
+      const score = scores[srcRow * N + srcCol] ?? 0;
+      const i = (row * DS + col) * 4;
+      // Amber: rgb(251,146,60) at alpha = score × 0.4
+      imageData.data[i]     = 251;
+      imageData.data[i + 1] = 146;
+      imageData.data[i + 2] = 60;
+      imageData.data[i + 3] = Math.round(score * 0.4 * 255);
+    }
+  }
+  octx.putImageData(imageData, 0, 0);
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(offscreen, t.offsetX, t.offsetY, terrainW, terrainH);
+  ctx.restore();
+}
+
 /** Draw a "100 px = X km" scale bar in the bottom-left corner. */
 export function renderScaleBar(
   ctx: CanvasRenderingContext2D,

@@ -20,6 +20,7 @@ import { TidePanel } from "@/components/TidePanel";
 import { MarkerForm } from "@/components/MarkerForm";
 import { OverviewMap } from "@/components/OverviewMap";
 import { ZoneOverlay } from "@/components/ZoneOverlay";
+import { HabitatPanel } from "@/components/HabitatPanel";
 import { QueryPanel } from "@/components/QueryPanel";
 import { useTidalData } from "@/hooks/useTidalData";
 import { useUiStore } from "@/lib/uiStore";
@@ -249,6 +250,7 @@ function Main() {
         <div className="absolute top-12 left-4 z-20 flex flex-col gap-2">
           <DatasetPanel />
           <ZoneOverlay />
+          <HabitatPanel />
         </div>
 
         {/* Tidal toggle button — top-right of scene */}

@@ -8,6 +8,7 @@ import { createTerrainShaderMaterial } from "@/lib/terrainShader";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useHighlightStore } from "@/lib/highlightStore";
+import { useHabitatStore } from "@/lib/habitatStore";
 
 /**
  * Tiling scale — number of texture tile repeats across the full WORLD_SIZE.
@@ -110,8 +111,64 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       fadeRef.current.fading = true;
     }, [grid, material]);
 
+    // Track the last DataTexture we uploaded so we can dispose it when it changes.
+    const habitatTexRef = useRef<THREE.DataTexture | null>(null);
+
+    // Upload a new DataTexture whenever habitat scores change.
+    useEffect(() => {
+      const scores = useHabitatStore.getState().scores;
+      const N = grid.resolution;
+
+      // Dispose previous texture
+      if (habitatTexRef.current) {
+        habitatTexRef.current.dispose();
+        habitatTexRef.current = null;
+      }
+
+      if (scores && scores.length === N * N) {
+        const tex = new THREE.DataTexture(
+          scores,
+          N,
+          N,
+          THREE.RedFormat,
+          THREE.FloatType,
+        );
+        tex.needsUpdate = true;
+        material.uniforms["uHabitatTex"]!.value = tex;
+        habitatTexRef.current = tex;
+      }
+    // We deliberately subscribe to scores via useHabitatStore state below in useFrame.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Subscribe to habitat scores and re-run texture upload on change.
+    const habitatScores = useHabitatStore((s) => s.scores);
+    const activeSpecies = useHabitatStore((s) => s.activeSpecies);
+
+    useEffect(() => {
+      const N = grid.resolution;
+
+      if (habitatTexRef.current) {
+        habitatTexRef.current.dispose();
+        habitatTexRef.current = null;
+      }
+
+      if (habitatScores && habitatScores.length === N * N) {
+        const tex = new THREE.DataTexture(
+          habitatScores,
+          N,
+          N,
+          THREE.RedFormat,
+          THREE.FloatType,
+        );
+        tex.needsUpdate = true;
+        material.uniforms["uHabitatTex"]!.value = tex;
+        habitatTexRef.current = tex;
+      }
+    }, [habitatScores, grid, material]);
+
     // Animate opacity 0→1 (~400 ms at 60 fps), keep lamp position in sync,
-    // and reflect zone overlay + highlight state from stores.
+    // and reflect zone overlay + highlight + habitat state from stores.
     useFrame((state, delta) => {
       const f = fadeRef.current;
       if (f.fading) {
@@ -132,6 +189,9 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       material.uniforms["uHighlightMode"]!.value = modeMap[mode] ?? 0;
       material.uniforms["uHighlightMin"]!.value  = params.min;
       material.uniforms["uHighlightMax"]!.value  = params.max;
+
+      // Habitat overlay
+      material.uniforms["uShowHabitat"]!.value = activeSpecies ? 1 : 0;
     });
 
     return <mesh ref={ref} geometry={geometry} material={material} />;
