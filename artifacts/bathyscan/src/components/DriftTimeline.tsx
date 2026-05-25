@@ -62,6 +62,7 @@ export const DriftTimeline: React.FC = () => {
       {/* Mode banner */}
       <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
         <span
+          data-testid="timeline-drift-mode-badge"
           style={{
             fontSize: 9,
             letterSpacing: "0.2em",
@@ -117,7 +118,7 @@ export const DriftTimeline: React.FC = () => {
         <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
           <div>
             <div style={{ color: "#475569", fontSize: 8, letterSpacing: "0.18em" }}>DRIFT SPEED</div>
-            <div style={{ color: "#00e5ff", fontWeight: 700 }}>{wp.driftSpeedKnots.toFixed(1)} kt</div>
+            <div data-testid="drift-speed-value" style={{ color: "#00e5ff", fontWeight: 700 }}>{wp.driftSpeedKnots.toFixed(1)} kt</div>
           </div>
           <div>
             <div style={{ color: "#475569", fontSize: 8, letterSpacing: "0.18em" }}>LINE ANGLE</div>

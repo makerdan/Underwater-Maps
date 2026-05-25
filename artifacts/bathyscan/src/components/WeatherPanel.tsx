@@ -360,6 +360,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
               <div style={LABEL}>BOAT HEADING</div>
               <div style={{ ...VALUE, color: "#fbbf24" }}>{degToCardinal(boatHeadingDeg)} {Math.round(boatHeadingDeg)}°</div>
               <input
+                data-testid="boat-heading-slider"
                 type="range"
                 min={0}
                 max={359}
@@ -463,6 +464,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
             <div style={LABEL}>BOAT SPEED THROUGH WATER</div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <input
+                data-testid="boat-speed-input"
                 type="number"
                 min={0}
                 max={TROLL_MAX_KNOTS}

@@ -231,6 +231,7 @@ export const HUD: React.FC = () => {
         {/* Drift / Trolling mode badge */}
         {driftPlannerActive && (
           <div
+            data-testid="hud-drift-mode-badge"
             style={{
               ...PANEL,
               fontSize: 10,
