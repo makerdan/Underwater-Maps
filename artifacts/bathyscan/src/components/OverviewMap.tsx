@@ -30,13 +30,14 @@ import {
   renderHabitatOverlay,
   renderEfhOverlay,
   renderEfhLegend,
+  hitTestEfh,
   renderGpsPosition,
   renderLiveTrail,
   renderSavedTrails,
 } from "@/lib/overviewRenderer";
 import type { OverviewTransform, CanvasSavedTrail } from "@/lib/overviewRenderer";
 import { useGetEfh, getGetEfhQueryKey } from "@workspace/api-client-react";
-import type { EfhFeature } from "@workspace/api-client-react";
+import type { EfhFeature, EfhSpeciesProperties } from "@workspace/api-client-react";
 import { useHabitatStore } from "@/lib/habitatStore";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useTrailStore } from "@/lib/trailStore";
@@ -117,6 +118,10 @@ export const OverviewMap: React.FC = () => {
   const [tooltip, setTooltip] = useState<TooltipState>({
     visible: false, x: 0, y: 0, lon: 0, lat: 0, depth: 0,
   });
+
+  // EFH detail panel — populated when the user clicks an EFH polygon while
+  // the overlay is visible.
+  const [efhDetail, setEfhDetail] = useState<EfhSpeciesProperties | null>(null);
 
   // GPS & trail state (read directly from stores in rAF — no React re-render)
   const pulseRef = useRef(0);
@@ -444,6 +449,18 @@ export const OverviewMap: React.FC = () => {
       const my = e.clientY - rect.top;
 
       const { lon, lat } = canvasToLonLat(mx, my, overviewGrid, t);
+
+      // EFH zone takes priority when the overlay is visible and the click
+      // lands inside a polygon — open the species info panel instead of
+      // dropping into the 3D scene.
+      if (showEfhRef.current && efhFeaturesRef.current.length > 0) {
+        const hit = hitTestEfh(lon, lat, efhFeaturesRef.current);
+        if (hit) {
+          setEfhDetail(hit.properties);
+          return;
+        }
+      }
+
       const { x: worldX, z: worldZ } = lonLatToWorldXZ(lon, lat, overviewGrid);
 
       useUiStore.getState().setPendingDropIn({ worldX, worldZ });
@@ -769,9 +786,162 @@ export const OverviewMap: React.FC = () => {
           <div style={{ color: "#64748b" }}>{formatDepth(tooltip.depth, { units: unitsForUi })} depth</div>
         </div>
       )}
+
+      {/* EFH species detail panel */}
+      {efhDetail && (
+        <EfhDetailPanel
+          properties={efhDetail}
+          units={unitsForUi}
+          onClose={() => setEfhDetail(null)}
+        />
+      )}
     </div>
   );
 };
+
+// ---------------------------------------------------------------------------
+// EFH species detail panel
+// ---------------------------------------------------------------------------
+const EfhDetailPanel: React.FC<{
+  properties: EfhSpeciesProperties;
+  units: "metric" | "imperial";
+  onClose: () => void;
+}> = ({ properties, units, onClose }) => {
+  const p = properties;
+  const depthRange = Array.isArray(p.depthRangeM) && p.depthRangeM.length >= 2
+    ? `${formatDepth(p.depthRangeM[0]!, { units })} – ${formatDepth(p.depthRangeM[1]!, { units })}`
+    : null;
+
+  // Close on Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
+
+  const MONO = "'JetBrains Mono', monospace";
+  const swatchColor = p.color ?? "#00e5ff";
+
+  return (
+    <div
+      role="dialog"
+      aria-label={`EFH details for ${p.commonName}`}
+      style={{
+        position: "absolute",
+        top: 56,
+        right: 16,
+        width: 320,
+        maxHeight: "calc(100vh - 80px)",
+        overflowY: "auto",
+        background: "rgba(2,8,24,0.94)",
+        backdropFilter: "blur(8px)",
+        border: `1px solid ${swatchColor}55`,
+        borderLeft: `3px solid ${swatchColor}`,
+        borderRadius: 4,
+        padding: "12px 14px 14px",
+        zIndex: 43,
+        boxShadow: "0 4px 20px rgba(0,0,0,0.6)",
+        fontFamily: MONO,
+        color: "#e2e8f0",
+      }}
+    >
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
+        <span
+          aria-hidden
+          style={{
+            display: "inline-block",
+            width: 10,
+            height: 10,
+            background: swatchColor,
+            borderRadius: 2,
+            marginTop: 4,
+            flexShrink: 0,
+            boxShadow: `0 0 6px ${swatchColor}80`,
+          }}
+        />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12, color: "#f8fafc", fontWeight: 600, letterSpacing: "0.04em" }}>
+            {p.commonName}
+          </div>
+          <div style={{ fontSize: 9, color: "#64748b", fontStyle: "italic", marginTop: 2 }}>
+            {p.species?.replace(/_/g, " ")}
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          aria-label="Close species details"
+          style={{
+            background: "transparent",
+            border: "none",
+            color: "#64748b",
+            cursor: "pointer",
+            fontSize: 16,
+            lineHeight: 1,
+            padding: 0,
+            marginLeft: 4,
+          }}
+        >
+          ×
+        </button>
+      </div>
+
+      {/* Fields */}
+      <DetailRow label="FMP" value={p.fmp} />
+      {p.lifeStage && <DetailRow label="Life stage" value={p.lifeStage} />}
+      {p.season && <DetailRow label="Season" value={p.season} />}
+      {depthRange && <DetailRow label="Depth" value={depthRange} />}
+
+      {p.habitatDescription && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 8, color: "#475569", letterSpacing: "0.15em", marginBottom: 4 }}>
+            HABITAT
+          </div>
+          <div style={{ fontSize: 10, lineHeight: 1.5, color: "#cbd5e1" }}>
+            {p.habitatDescription}
+          </div>
+        </div>
+      )}
+
+      {/* Source citation */}
+      <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(0,229,255,0.1)" }}>
+        <div style={{ fontSize: 8, color: "#475569", letterSpacing: "0.15em", marginBottom: 4 }}>
+          SOURCE
+        </div>
+        <div style={{ fontSize: 9, color: "#94a3b8", marginBottom: 4 }}>{p.source}</div>
+        {p.creditUrl && (
+          <a
+            href={p.creditUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: 9,
+              color: "#00e5ff",
+              textDecoration: "none",
+              wordBreak: "break-all",
+            }}
+          >
+            ↗ NOAA EFH shapefiles
+          </a>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const DetailRow: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div style={{ display: "flex", gap: 8, fontSize: 10, marginTop: 4 }}>
+    <span style={{ color: "#64748b", minWidth: 72, fontSize: 9, letterSpacing: "0.08em" }}>
+      {label.toUpperCase()}
+    </span>
+    <span style={{ color: "#e2e8f0", flex: 1 }}>{value}</span>
+  </div>
+);
 
 // ---------------------------------------------------------------------------
 // Haversine distance helper (km)

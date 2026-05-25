@@ -385,6 +385,46 @@ export function renderEfhOverlay(
   ctx.restore();
 }
 
+/**
+ * Ray-casting point-in-polygon test against a single ring (lon/lat space).
+ */
+function pointInRing(lon: number, lat: number, ring: number[][]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i]?.[0] ?? 0;
+    const yi = ring[i]?.[1] ?? 0;
+    const xj = ring[j]?.[0] ?? 0;
+    const yj = ring[j]?.[1] ?? 0;
+    const intersect =
+      yi > lat !== yj > lat &&
+      lon < ((xj - xi) * (lat - yi)) / (yj - yi || 1e-12) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Hit-test a lon/lat point against a list of EFH polygon features.
+ *
+ * Returns the topmost (last-drawn) feature whose polygon contains the point,
+ * or null if the point falls outside all features. Iterating in reverse so
+ * features rendered on top of others are returned first.
+ */
+export function hitTestEfh(
+  lon: number,
+  lat: number,
+  features: EfhFeature[],
+): EfhFeature | null {
+  for (let i = features.length - 1; i >= 0; i--) {
+    const f = features[i];
+    if (!f) continue;
+    const geom = f.geometry as { type?: string; coordinates?: number[][][] };
+    if (geom.type !== "Polygon" || !geom.coordinates?.[0]) continue;
+    if (pointInRing(lon, lat, geom.coordinates[0])) return f;
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // EFH legend
 // ---------------------------------------------------------------------------

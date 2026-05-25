@@ -1286,6 +1286,8 @@ export const GetEfhResponse = zod.object({
   "fmp": zod.string().describe('Fishery Management Plan name'),
   "depthRangeM": zod.array(zod.number()).describe('[minDepth, maxDepth] in metres'),
   "habitatDescription": zod.string(),
+  "lifeStage": zod.string().optional().describe('Life stages covered by this EFH polygon (e.g. \"Juveniles & Adults\")'),
+  "season": zod.string().optional().describe('Seasonality \/ temporal window for this EFH designation (e.g. \"Year-round\", \"Spawning Feb–Apr\")'),
   "source": zod.string(),
   "creditUrl": zod.string(),
   "color": zod.string().describe('Suggested hex color for rendering')

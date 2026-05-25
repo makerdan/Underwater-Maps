@@ -2138,6 +2138,12 @@ components:
           description: "[minDepth, maxDepth] in metres"
         habitatDescription:
           type: string
+        lifeStage:
+          type: string
+          description: Life stages covered by this EFH polygon (e.g. "Juveniles & Adults")
+        season:
+          type: string
+          description: Seasonality / temporal window for this EFH designation (e.g. "Year-round", "Spawning Feb–Apr")
         source:
           type: string
         creditUrl:

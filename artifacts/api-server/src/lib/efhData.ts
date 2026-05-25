@@ -24,6 +24,8 @@ export interface EfhFeature {
     fmp: string;
     depthRangeM: [number, number];
     habitatDescription: string;
+    lifeStage?: string;
+    season?: string;
     source: string;
     creditUrl: string;
     color: string;
@@ -65,6 +67,8 @@ export const THORNE_BAY_EFH: EfhFeatureCollection = {
         habitatDescription:
           "Pacific halibut prefer sandy or muddy seafloor in depths of 20–500 m. " +
           "Juveniles use shallow nearshore habitat; adults concentrate in the deep Clarence Strait channel.",
+        lifeStage: "Juveniles & Adults",
+        season: "Year-round; spawning Nov–Mar in deep water",
         source: "IPHC / NOAA NMFS Alaska Region EFH",
         creditUrl:
           "https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles",
@@ -93,6 +97,8 @@ export const THORNE_BAY_EFH: EfhFeatureCollection = {
         habitatDescription:
           "Pacific cod occupy a wide depth range on mixed and soft substrates, " +
           "congregating near rocky structure during spawning (Feb–Apr) in Clarence Strait.",
+        lifeStage: "All life stages (eggs, larvae, juveniles, adults)",
+        season: "Year-round; peak spawning Feb–Apr",
         source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
         creditUrl:
           "https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles",
@@ -121,6 +127,8 @@ export const THORNE_BAY_EFH: EfhFeatureCollection = {
         habitatDescription:
           "Yelloweye rockfish associate strongly with high-relief rocky substrate at 80–350 m. " +
           "Key hotspots: Clarence Strait western wall, eastern POW Island banks.",
+        lifeStage: "Juveniles & Adults",
+        season: "Year-round (resident species)",
         source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
         creditUrl:
           "https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles",
@@ -149,6 +157,8 @@ export const THORNE_BAY_EFH: EfhFeatureCollection = {
         habitatDescription:
           "Dungeness crab use sandy and muddy nearshore areas to 100 m. " +
           "Thorne Bay itself and the shallow POW Island shelf are prime habitat.",
+        lifeStage: "All life stages (larvae, juveniles, adults)",
+        season: "Year-round; molting May–Jul",
         source: "ADF&G / NOAA NMFS Alaska Region EFH",
         creditUrl:
           "https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles",
@@ -178,6 +188,8 @@ export const THORNE_BAY_EFH: EfhFeatureCollection = {
           "Chinook salmon use Thorne Bay and the Clarence Strait nearshore corridor " +
           "as a migratory pathway between feeding grounds and spawning rivers. " +
           "Critical rearing habitat: 0–60 m kelp-adjacent zones.",
+        lifeStage: "Juveniles (rearing) & Adults (migration)",
+        season: "Adult migration May–Aug; juvenile rearing year-round",
         source: "NOAA NMFS Pacific Salmon EFH",
         creditUrl:
           "https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles",

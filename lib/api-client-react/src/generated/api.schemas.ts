@@ -635,6 +635,10 @@ export interface EfhSpeciesProperties {
   /** [minDepth, maxDepth] in metres */
   depthRangeM: number[];
   habitatDescription: string;
+  /** Life stages covered by this EFH polygon (e.g. "Juveniles & Adults") */
+  lifeStage?: string;
+  /** Seasonality / temporal window for this EFH designation (e.g. "Year-round", "Spawning Feb–Apr") */
+  season?: string;
   source: string;
   creditUrl: string;
   /** Suggested hex color for rendering */
