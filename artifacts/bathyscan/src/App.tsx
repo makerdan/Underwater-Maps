@@ -36,6 +36,8 @@ import { useHighlightStore } from "@/lib/highlightStore";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
+import { useSettingsStore } from "@/lib/settingsStore";
+import { useGetSettings, getGetSettingsQueryKey } from "@workspace/api-client-react";
 
 const queryClient = new QueryClient();
 
@@ -640,11 +642,23 @@ function LandingPage() {
   );
 }
 
+function SettingsHydrator() {
+  const { data: serverSettings } = useGetSettings({
+    query: { enabled: true, queryKey: getGetSettingsQueryKey() },
+  });
+  const hydrateFromServer = useSettingsStore((s) => s.hydrateFromServer);
+  useEffect(() => {
+    if (serverSettings) hydrateFromServer(serverSettings);
+  }, [serverSettings, hydrateFromServer]);
+  return null;
+}
+
 function HomeRoute() {
   return (
     <>
       <Show when="signed-in">
         <QueryClientProvider client={queryClient}>
+          <SettingsHydrator />
           <TooltipProvider>
             <AppProvider>
               <Main />
@@ -663,7 +677,12 @@ function HomeRoute() {
 function SettingsRoute() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Settings />
+      <Show when="signed-in">
+        <Settings />
+      </Show>
+      <Show when="signed-out">
+        <LandingPage />
+      </Show>
     </QueryClientProvider>
   );
 }

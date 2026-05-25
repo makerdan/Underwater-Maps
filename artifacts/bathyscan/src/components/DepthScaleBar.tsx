@@ -1,16 +1,18 @@
 import React, { useEffect, useRef } from "react";
 import { useAppState } from "@/lib/context";
 import { colormapCanvas } from "@/lib/colormap";
+import { useSettingsStore } from "@/lib/settingsStore";
 
 export const DepthScaleBar: React.FC = () => {
   const { terrain } = useAppState();
   const imgRef = useRef<HTMLImageElement>(null);
+  const colormapTheme = useSettingsStore((s) => s.colormapTheme);
 
   useEffect(() => {
     if (!imgRef.current) return;
-    const canvas = colormapCanvas(20, 200);
+    const canvas = colormapCanvas(20, 200, colormapTheme);
     imgRef.current.src = canvas.toDataURL();
-  }, []);
+  }, [colormapTheme]);
 
   if (!terrain) return null;
 

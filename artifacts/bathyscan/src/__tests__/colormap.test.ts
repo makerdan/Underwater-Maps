@@ -131,6 +131,20 @@ describe("getColormap", () => {
     expect(c.b).toBeCloseTo(expected.b, 2);
   });
 
+  it("thermal t=0.5 → interpolated between purple (#7b2d8b) and orange-red (#e8553e)", () => {
+    const fn = getColormap("thermal");
+    const c = fn(0.5);
+    const lo = hexToRgb("#7b2d8b"); // t=0.25 stop
+    const hi = hexToRgb("#e8553e"); // t=0.55 stop
+    // t=0.5 lies between stops 0.25 and 0.55; result must be within that range
+    expect(c.r).toBeGreaterThan(Math.min(lo.r, hi.r) - EPSILON);
+    expect(c.r).toBeLessThan(Math.max(lo.r, hi.r) + EPSILON);
+    expect(c.g).toBeGreaterThan(Math.min(lo.g, hi.g) - EPSILON);
+    expect(c.g).toBeLessThan(Math.max(lo.g, hi.g) + EPSILON);
+    expect(c.b).toBeGreaterThan(Math.min(lo.b, hi.b) - EPSILON);
+    expect(c.b).toBeLessThan(Math.max(lo.b, hi.b) + EPSILON);
+  });
+
   it("grayscale t=0 → near black (#050505)", () => {
     const fn = getColormap("grayscale");
     const c = fn(0);

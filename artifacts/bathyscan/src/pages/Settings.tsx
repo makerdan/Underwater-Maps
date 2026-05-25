@@ -8,7 +8,7 @@
  */
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useLocation } from "wouter";
-import { useUser } from "@clerk/react";
+import { useUser, useClerk } from "@clerk/react";
 import { keys as idbKeys, clear as idbClear } from "idb-keyval";
 import { useGetSettings, usePutSettings, useDeleteMarkersMine, getGetSettingsQueryKey } from "@workspace/api-client-react";
 import {
@@ -741,6 +741,7 @@ function AccountSection() {
   });
   const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const { signOut } = useClerk();
 
   return (
     <>
@@ -748,8 +749,24 @@ function AccountSection() {
       {user && (
         <div style={S.card}>
           <div style={S.cardHeader}>SIGNED IN AS</div>
-          <div style={{ ...S.row }}>
+          <div style={{ ...S.row, justifyContent: "space-between", alignItems: "center" }}>
             <span style={S.label}>{user.primaryEmailAddress?.emailAddress ?? user.username ?? "—"}</span>
+            <button
+              onClick={() => void signOut()}
+              style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9,
+                letterSpacing: "0.15em",
+                color: "#94a3b8",
+                background: "rgba(100,116,139,0.08)",
+                border: "1px solid rgba(100,116,139,0.25)",
+                borderRadius: 3,
+                padding: "3px 10px",
+                cursor: "pointer",
+              }}
+            >
+              SIGN OUT
+            </button>
           </div>
         </div>
       )}

@@ -9,6 +9,7 @@ import { useClassificationStore } from "@/lib/classificationStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useHighlightStore } from "@/lib/highlightStore";
 import { useHabitatStore } from "@/lib/habitatStore";
+import { useSettingsStore } from "@/lib/settingsStore";
 
 /**
  * Tiling scale — number of texture tile repeats across the full WORLD_SIZE.
@@ -47,21 +48,22 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
 
     // Subscribe to AI zone map (updates when classification completes)
     const zoneMap = useClassificationStore((s) => s.zoneMap);
+    const colormapTheme = useSettingsStore((s) => s.colormapTheme);
 
     // Textures are a lazy singleton — computed once, shared forever.
     const textures = useMemo(() => getTerrainTextures(), []);
 
-    // Geometry rebuild whenever the grid changes.
+    // Geometry rebuild whenever the grid or colormap theme changes.
     // Initial zone weights are depth-based; they'll be upgraded by the zoneMap effect below.
     // Slope attribute is computed once per grid and never changes.
     const geometry = useMemo(() => {
-      const geo = buildTerrainGeometry(grid);
+      const geo = buildTerrainGeometry(grid, colormapTheme);
       const weights = computeZoneWeights(grid);
       geo.setAttribute("zoneWeight", new THREE.BufferAttribute(weights, 4));
       const slopes = computeSlopeAttribute(grid);
       geo.setAttribute("slope", new THREE.BufferAttribute(slopes, 1));
       return geo;
-    }, [grid]);
+    }, [grid, colormapTheme]);
 
     // Material is created once (textures never change).
     const material = useMemo(() => {

@@ -19,6 +19,7 @@ import { GpsMarker } from "@/components/GpsMarker";
 import type { TidalDataResult } from "@/hooks/useTidalData";
 import { MAX_DEPTH_WORLD, WORLD_SIZE } from "@/lib/terrain";
 import type { TerrainData } from "@workspace/api-client-react";
+import { useSettingsStore } from "@/lib/settingsStore";
 
 // ---------------------------------------------------------------------------
 // FlyControlsScene — lives inside <Canvas>, wires up controls + lamp
@@ -31,14 +32,15 @@ const FlyControlsScene: React.FC<FlyControlsSceneProps> = ({ terrainMeshRef }) =
   const lightRef = useRef<THREE.PointLight>(null);
   const { mode } = useAppState();
   const { orbitTargetArr } = useFlyControls({ terrainMeshRef, lightRef });
+  const lampIntensity = useSettingsStore((s) => s.lampIntensity);
 
   return (
     <>
-      {/* Submersible lamp — warm white, follows camera forward */}
+      {/* Submersible lamp — intensity driven by user setting */}
       <pointLight
         ref={lightRef}
         color="#fff8e8"
-        intensity={2}
+        intensity={lampIntensity}
         distance={40}
         decay={2}
       />
@@ -140,11 +142,12 @@ const SceneContents: React.FC<SceneContentsProps> = ({
   depthLayer,
 }) => {
   const { terrain } = useAppState();
+  const fogDensity = useSettingsStore((s) => s.fogDensity);
 
   return (
     <>
       <color attach="background" args={["#020818"]} />
-      <fogExp2 args={["#020818", 0.012]} />
+      <fogExp2 args={["#020818", fogDensity]} />
 
       {/* Ambient fill */}
       <ambientLight intensity={0.05} color="#7aa8c8" />

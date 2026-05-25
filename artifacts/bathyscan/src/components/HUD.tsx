@@ -5,15 +5,9 @@ import { useGpsStore } from "@/lib/gpsStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useOfflineStore } from "@/lib/offlineStore";
+import { useSettingsStore } from "@/lib/settingsStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
 import { mphToKnots } from "@/lib/boatSpeed";
-
-const HUD_STYLE: React.CSSProperties = {
-  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-  color: "#94a3b8",
-  letterSpacing: "0.08em",
-  pointerEvents: "none",
-};
 
 const CYAN: React.CSSProperties = {
   color: "#00e5ff",
@@ -31,6 +25,16 @@ const PANEL: React.CSSProperties = {
 function fmt(n: number | null, decimals = 4): string {
   if (n === null) return "—";
   return n.toFixed(decimals);
+}
+
+function toDMS(decimal: number): string {
+  const abs = Math.abs(decimal);
+  const d = Math.floor(abs);
+  const mFull = (abs - d) * 60;
+  const m = Math.floor(mFull);
+  const s = Math.round((mFull - m) * 60);
+  const sign = decimal < 0 ? "-" : "";
+  return `${sign}${d}°${m}'${s}"`;
 }
 
 function SpeedDots({ index, total }: { index: number; total: number }) {
@@ -61,10 +65,28 @@ export const HUD: React.FC = () => {
   const overviewGrid = useTerrainStore((s) => s.overviewGrid);
   const isOnline = useOfflineStore((s) => s.isOnline);
 
+  const showCrosshairGps = useSettingsStore((s) => s.showCrosshairGps);
+  const showCameraPosition = useSettingsStore((s) => s.showCameraPosition);
+  const showSpeedIndicator = useSettingsStore((s) => s.showSpeedIndicator);
+  const showHeading = useSettingsStore((s) => s.showHeading);
+  const coordinateFormat = useSettingsStore((s) => s.coordinateFormat);
+  const depthUnit = useSettingsStore((s) => s.depthUnit);
+  const hudOpacity = useSettingsStore((s) => s.hudOpacity);
+
   const speed = SPEEDS[speedIndex] ?? 0.15;
   const isFly = mode === "fly";
 
-  // Check if GPS position is within the current terrain grid
+  const fmtCoord = (n: number | null): string => {
+    if (n === null) return "—";
+    return coordinateFormat === "dms" ? toDMS(n) : fmt(n, 4);
+  };
+
+  const fmtDepth = (metres: number | null): string => {
+    if (metres === null) return "—";
+    if (depthUnit === "feet") return `${Math.round(metres * 3.28084).toLocaleString()} FT`;
+    return `${Math.round(metres).toLocaleString()} M`;
+  };
+
   const gpsInBounds = gpsActive && gpsPosition && overviewGrid &&
     gpsPosition.latitude >= overviewGrid.minLat &&
     gpsPosition.latitude <= overviewGrid.maxLat &&
@@ -79,6 +101,14 @@ export const HUD: React.FC = () => {
       overviewGrid,
     );
     useUiStore.getState().setPendingDropIn({ worldX, worldZ });
+  };
+
+  const HUD_STYLE: React.CSSProperties = {
+    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    color: "#94a3b8",
+    letterSpacing: "0.08em",
+    pointerEvents: "none",
+    opacity: hudOpacity,
   };
 
   return (
@@ -143,10 +173,12 @@ export const HUD: React.FC = () => {
         >
           {isFly ? "● FLY" : "◎ ORBIT"}
         </div>
-        <div style={{ ...PANEL, fontSize: 11 }}>
-          <span style={{ color: "#475569" }}>HDG </span>
-          <span style={CYAN}>{Math.round(heading).toString().padStart(3, "0")}°</span>
-        </div>
+        {showHeading && (
+          <div style={{ ...PANEL, fontSize: 11 }}>
+            <span style={{ color: "#475569" }}>HDG </span>
+            <span style={CYAN}>{Math.round(heading).toString().padStart(3, "0")}°</span>
+          </div>
+        )}
 
         {/* GPS dive button in HUD */}
         {gpsInBounds && (
@@ -172,137 +204,141 @@ export const HUD: React.FC = () => {
       </div>
 
       {/* ── Centre: crosshair + GPS ── */}
-      <div
-        className="absolute"
-        style={{
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 8,
-        }}
-      >
-        {/* Reticle */}
-        <div style={{ position: "relative", width: 40, height: 40 }}>
-          <div
-            style={{
-              position: "absolute",
-              top: "50%",
-              left: 0,
-              right: 0,
-              height: 1,
-              background: "rgba(0,229,255,0.5)",
-              transform: "translateY(-50%)",
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              left: "50%",
-              top: 0,
-              bottom: 0,
-              width: 1,
-              background: "rgba(0,229,255,0.5)",
-              transform: "translateX(-50%)",
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              border: "1px solid rgba(0,229,255,0.25)",
-              borderRadius: "50%",
-            }}
-          />
-        </div>
-
-        {/* Crosshair GPS */}
-        <div style={{ ...PANEL, textAlign: "center", minWidth: 160 }}>
-          <div style={{ color: "#475569", fontSize: 9, letterSpacing: "0.2em", marginBottom: 2 }}>
-            CROSSHAIR TARGET
+      {showCrosshairGps && (
+        <div
+          className="absolute"
+          style={{
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          {/* Reticle */}
+          <div style={{ position: "relative", width: 40, height: 40 }}>
+            <div
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: 0,
+                right: 0,
+                height: 1,
+                background: "rgba(0,229,255,0.5)",
+                transform: "translateY(-50%)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: 0,
+                bottom: 0,
+                width: 1,
+                background: "rgba(0,229,255,0.5)",
+                transform: "translateX(-50%)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                border: "1px solid rgba(0,229,255,0.25)",
+                borderRadius: "50%",
+              }}
+            />
           </div>
-          {crosshairGps ? (
-            <>
-              <div>
-                <span style={{ color: "#475569" }}>LON </span>
-                <span style={CYAN}>{fmt(crosshairGps.lon)}</span>
-                <span style={{ color: "#475569" }}> LAT </span>
-                <span style={CYAN}>{fmt(crosshairGps.lat)}</span>
-              </div>
-              <div style={{ marginTop: 2 }}>
-                <span style={{ color: "#475569" }}>▼ </span>
-                <span style={{ ...CYAN, fontSize: 13, fontWeight: 700 }}>
-                  {Math.round(crosshairGps.depth).toLocaleString()} M
-                </span>
-              </div>
-            </>
-          ) : (
-            <div style={{ color: "#1e3a5f" }}>— NO TERRAIN —</div>
-          )}
+
+          {/* Crosshair GPS */}
+          <div style={{ ...PANEL, textAlign: "center", minWidth: 160 }}>
+            <div style={{ color: "#475569", fontSize: 9, letterSpacing: "0.2em", marginBottom: 2 }}>
+              CROSSHAIR TARGET
+            </div>
+            {crosshairGps ? (
+              <>
+                <div>
+                  <span style={{ color: "#475569" }}>LON </span>
+                  <span style={CYAN}>{fmtCoord(crosshairGps.lon)}</span>
+                  <span style={{ color: "#475569" }}> LAT </span>
+                  <span style={CYAN}>{fmtCoord(crosshairGps.lat)}</span>
+                </div>
+                <div style={{ marginTop: 2 }}>
+                  <span style={{ color: "#475569" }}>▼ </span>
+                  <span style={{ ...CYAN, fontSize: 13, fontWeight: 700 }}>
+                    {fmtDepth(crosshairGps.depth)}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div style={{ color: "#1e3a5f" }}>— NO TERRAIN —</div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Bottom-left: camera position + speed ── */}
       <div className="absolute bottom-3 left-3 space-y-1">
-        <div style={{ ...PANEL, minWidth: 200 }}>
-          <div style={{ color: "#475569", fontSize: 9, letterSpacing: "0.2em", marginBottom: 3 }}>
-            CAMERA POSITION
+        {showCameraPosition && (
+          <div style={{ ...PANEL, minWidth: 200 }}>
+            <div style={{ color: "#475569", fontSize: 9, letterSpacing: "0.2em", marginBottom: 3 }}>
+              CAMERA POSITION
+            </div>
+            <div>
+              <span style={{ color: "#475569" }}>LON </span>
+              <span style={CYAN}>{fmtCoord(cameraLon)}</span>
+            </div>
+            <div>
+              <span style={{ color: "#475569" }}>LAT </span>
+              <span style={CYAN}>{fmtCoord(cameraLat)}</span>
+            </div>
+            <div>
+              <span style={{ color: "#475569" }}>DEPTH </span>
+              <span style={CYAN}>{fmtDepth(cameraDepth)}</span>
+            </div>
           </div>
-          <div>
-            <span style={{ color: "#475569" }}>LON </span>
-            <span style={CYAN}>{fmt(cameraLon)}</span>
-          </div>
-          <div>
-            <span style={{ color: "#475569" }}>LAT </span>
-            <span style={CYAN}>{fmt(cameraLat)}</span>
-          </div>
-          <div>
-            <span style={{ color: "#475569" }}>DEPTH </span>
-            <span style={CYAN}>
-              {cameraDepth !== null ? Math.round(cameraDepth).toLocaleString() : "—"} M
-            </span>
-          </div>
-        </div>
+        )}
 
-        <div style={{ ...PANEL, display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ color: "#475569" }}>SPD </span>
-          {realisticMode ? (
-            <>
-              <span style={CYAN}>{boatSpeedMph % 1 === 0 ? boatSpeedMph : boatSpeedMph.toFixed(1)} MPH</span>
-              <span style={{ color: "#475569" }}>/</span>
-              <span style={{ color: "#7dd3fc" }}>{mphToKnots(boatSpeedMph).toFixed(1)} KT</span>
-              <span
-                style={{
-                  fontSize: 8,
-                  letterSpacing: "0.15em",
-                  color: "#22d3ee",
-                  background: "rgba(0,229,255,0.08)",
-                  border: "1px solid rgba(0,229,255,0.25)",
-                  borderRadius: 2,
-                  padding: "1px 4px",
-                  marginLeft: 2,
-                }}
-              >
-                REAL
-              </span>
-            </>
-          ) : (
-            <>
-              <SpeedDots index={speedIndex} total={SPEEDS.length} />
-              <span style={{ color: "#475569", marginLeft: 4 }}>{speed.toFixed(2)} u/s</span>
-            </>
-          )}
-        </div>
+        {showSpeedIndicator && (
+          <div style={{ ...PANEL, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ color: "#475569" }}>SPD </span>
+            {realisticMode ? (
+              <>
+                <span style={CYAN}>{boatSpeedMph % 1 === 0 ? boatSpeedMph : boatSpeedMph.toFixed(1)} MPH</span>
+                <span style={{ color: "#475569" }}>/</span>
+                <span style={{ color: "#7dd3fc" }}>{mphToKnots(boatSpeedMph).toFixed(1)} KT</span>
+                <span
+                  style={{
+                    fontSize: 8,
+                    letterSpacing: "0.15em",
+                    color: "#22d3ee",
+                    background: "rgba(0,229,255,0.08)",
+                    border: "1px solid rgba(0,229,255,0.25)",
+                    borderRadius: 2,
+                    padding: "1px 4px",
+                    marginLeft: 2,
+                  }}
+                >
+                  REAL
+                </span>
+              </>
+            ) : (
+              <>
+                <SpeedDots index={speedIndex} total={SPEEDS.length} />
+                <span style={{ color: "#475569", marginLeft: 4 }}>{speed.toFixed(2)} u/s</span>
+              </>
+            )}
+          </div>
+        )}
 
         {lastClickedGps && (
           <div style={{ ...PANEL, fontSize: 10 }}>
             <span style={{ color: "#475569" }}>PIN </span>
             <span style={{ color: "#22d3ee" }}>
-              {fmt(lastClickedGps.lon)}, {fmt(lastClickedGps.lat)}
+              {fmtCoord(lastClickedGps.lon)}, {fmtCoord(lastClickedGps.lat)}
             </span>
-            <span style={{ color: "#475569" }}> ▼ {Math.round(lastClickedGps.depth)}M</span>
+            <span style={{ color: "#475569" }}> ▼ {fmtDepth(lastClickedGps.depth)}</span>
           </div>
         )}
       </div>

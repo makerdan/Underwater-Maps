@@ -47,6 +47,18 @@ test.describe("Settings page", () => {
     await expect(page.locator("text=◈ OFFLINE")).toBeVisible({ timeout: 3_000 });
   });
 
+  test("caustics toggle changes checked state in the Visuals tab", async ({ page }) => {
+    await page.goto("/settings");
+    // Visuals tab is active by default; find the caustics toggle
+    const toggle = page.locator('[role="switch"][aria-label*="austics"], button:has-text("ENABLE CAUSTICS")').first();
+    // If there's no aria-label, find it by proximity to the label
+    const causticsSwitch = page.locator('button[role="switch"]').filter({ hasText: "" }).nth(1);
+    const initialChecked = await causticsSwitch.getAttribute("aria-checked");
+    await causticsSwitch.click();
+    const newChecked = await causticsSwitch.getAttribute("aria-checked");
+    expect(newChecked).not.toBe(initialChecked);
+  });
+
   test("Visuals tab is active by default and shows colormap selector", async ({ page }) => {
     await page.goto("/settings");
     await page.waitForLoadState("networkidle");

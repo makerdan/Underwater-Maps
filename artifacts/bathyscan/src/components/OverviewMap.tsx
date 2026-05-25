@@ -34,6 +34,7 @@ import type { OverviewTransform, CanvasSavedTrail } from "@/lib/overviewRenderer
 import { useHabitatStore } from "@/lib/habitatStore";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useTrailStore } from "@/lib/trailStore";
+import { useSettingsStore } from "@/lib/settingsStore";
 
 interface TooltipState {
   visible: boolean;
@@ -202,19 +203,24 @@ export const OverviewMap: React.FC = () => {
       // Depth heatmap
       renderHeatmap(ctx, bitmap, grid, t);
 
-      // Lat/lon grid (only at scale ≥ 2)
-      renderGridLines(ctx, grid, t, cW, cH);
+      // Lat/lon grid (gated by user setting; renderGridLines also checks scale ≥ 2 internally)
+      const { overviewShowGrid, overviewShowMarkers } = useSettingsStore.getState();
+      if (overviewShowGrid) {
+        renderGridLines(ctx, grid, t, cW, cH);
+      }
 
       // Saved trails (completed)
       if (savedTrailsRef.current.length > 0) {
         renderSavedTrails(ctx, savedTrailsRef.current, grid, t);
       }
 
-      // Markers
-      renderMarkers(ctx, markersRef.current, grid, t, cW, cH);
+      // Markers (gated by user setting)
+      if (overviewShowMarkers) {
+        renderMarkers(ctx, markersRef.current, grid, t, cW, cH);
 
-      // Depth poles (drawn above markers so labels are visible)
-      renderDepthPoles(ctx, markersRef.current, grid, t);
+        // Depth poles (drawn above markers so labels are visible)
+        renderDepthPoles(ctx, markersRef.current, grid, t);
+      }
 
       // Camera arrow — read from Zustand store directly (no React re-render)
       const cam = useCameraStore.getState();
