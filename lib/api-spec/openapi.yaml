@@ -911,6 +911,10 @@ components:
         showMarkerLabels:
           type: boolean
           default: true
+        smoothTerrainSpikes:
+          type: boolean
+          default: true
+          description: When true, the server applies an angle-based spike smoothing pass to terrain grids. Disable to inspect raw bathymetric artifacts for scientific use.
         privateMarkers:
           type: boolean
           default: false

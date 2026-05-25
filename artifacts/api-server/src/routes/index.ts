@@ -20,5 +20,6 @@ router.use(userDatasetsRouter);
 router.use(tidalRouter);
 router.use(queryRouter);
 router.use(trailsRouter);
+router.use(settingsRouter);
 
 export default router;

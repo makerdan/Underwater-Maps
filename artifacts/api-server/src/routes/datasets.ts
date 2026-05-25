@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { eq, and } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
-import { db, customDatasetsTable } from "@workspace/db";
+import { db, customDatasetsTable, userSettingsTable } from "@workspace/db";
 import {
   GetDatasetsResponse,
   GetDatasetsIdTerrainResponse,
@@ -20,6 +20,27 @@ import { datasetZonesCache, readZoneDiskByHash } from "./poe.js";
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 const router = Router();
+
+/**
+ * Look up the caller's "smoothTerrainSpikes" preference. Defaults to true
+ * (smoothing on) when unauthenticated, missing, or unset.
+ */
+async function getSmoothingPreference(req: import("express").Request): Promise<boolean> {
+  const auth = getAuth(req);
+  const userId = auth?.userId;
+  if (!userId) return true;
+  try {
+    const rows = await db
+      .select({ settings: userSettingsTable.settings })
+      .from(userSettingsTable)
+      .where(eq(userSettingsTable.userId, userId));
+    const settings = rows[0]?.settings as Record<string, unknown> | undefined;
+    const value = settings?.["smoothTerrainSpikes"];
+    return typeof value === "boolean" ? value : true;
+  } catch {
+    return true;
+  }
+}
 
 // ── GET /datasets ─────────────────────────────────────────────────────────────
 router.get("/datasets", async (_req, res): Promise<void> => {
@@ -44,7 +65,8 @@ router.get("/datasets/:id/terrain", async (req, res): Promise<void> => {
   const resolution = rawRes ? Math.max(32, Math.min(512, parseInt(String(rawRes), 10))) : 256;
 
   try {
-    const grid = await buildTerrainGrid(id, resolution);
+    const smoothing = await getSmoothingPreference(req);
+    const grid = await buildTerrainGrid(id, resolution, { smoothing });
     if (!grid) {
       res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
       return;
@@ -61,7 +83,8 @@ router.get("/datasets/:id/overview", async (req, res): Promise<void> => {
   const id = String(req.params["id"] ?? "");
 
   try {
-    const grid = await buildTerrainGrid(id, 64);
+    const smoothing = await getSmoothingPreference(req);
+    const grid = await buildTerrainGrid(id, 64, { smoothing });
     if (!grid) {
       res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
       return;
@@ -172,6 +195,7 @@ router.post("/datasets/upload", upload.single("file"), async (req, res): Promise
   }
 
   const datasetName = fileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
+  const smoothing = await getSmoothingPreference(req);
 
   // Auto-save to the user's account when authenticated. We generate the row
   // UUID client-side so that the stored grids carry the real datasetId from
@@ -181,8 +205,8 @@ router.post("/datasets/upload", upload.single("file"), async (req, res): Promise
   const userId = auth?.userId ?? null;
   const gridId = userId ? crypto.randomUUID() : "upload";
 
-  const terrain = gridPoints(points, resolution, gridId, datasetName);
-  const overview = gridPoints(points, 64, gridId, datasetName);
+  const terrain = gridPoints(points, resolution, gridId, datasetName, { smoothing });
+  const overview = gridPoints(points, 64, gridId, datasetName, { smoothing });
 
   if (userId) {
     try {
@@ -238,8 +262,9 @@ router.post("/upload", upload.single("file"), async (req, res): Promise<void> =>
   }
 
   const datasetName = fileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
-  const terrain = gridPoints(points, resolution, "upload", datasetName);
-  const overview = gridPoints(points, 64, "upload", datasetName);
+  const smoothing = await getSmoothingPreference(req);
+  const terrain = gridPoints(points, resolution, "upload", datasetName, { smoothing });
+  const overview = gridPoints(points, 64, "upload", datasetName, { smoothing });
 
   res.json(PostDatasetsUploadResponse.parse({ terrain, overview }));
 });

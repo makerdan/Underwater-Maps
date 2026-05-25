@@ -59,6 +59,9 @@ export interface SettingsState {
   privateMarkers: boolean;
   defaultMarkerType: MarkerType;
 
+  // ── Terrain rendering ────────────────────────────────────────────────
+  smoothTerrainSpikes: boolean;
+
   // ── Dataset ───────────────────────────────────────────────────────────
   defaultRegion: string;
 
@@ -99,6 +102,8 @@ interface SettingsActions {
   setShowMarkerLabels: (v: boolean) => void;
   setPrivateMarkers: (v: boolean) => void;
   setDefaultMarkerType: (v: MarkerType) => void;
+
+  setSmoothTerrainSpikes: (v: boolean) => void;
 
   setDefaultRegion: (v: string) => void;
   setGpsRecordingInterval: (ms: number) => void;
@@ -143,6 +148,8 @@ export const DEFAULT_SETTINGS: SettingsState = {
   privateMarkers: false,
   defaultMarkerType: "fish",
 
+  smoothTerrainSpikes: true,
+
   defaultRegion: "mariana-trench",
   gpsRecordingInterval: 10_000,
 
@@ -183,6 +190,8 @@ export const useSettingsStore = create<SettingsStore>()(
       setShowMarkerLabels: (v) => set({ showMarkerLabels: v }),
       setPrivateMarkers: (v) => set({ privateMarkers: v }),
       setDefaultMarkerType: (v) => set({ defaultMarkerType: v }),
+
+      setSmoothTerrainSpikes: (v) => set({ smoothTerrainSpikes: v }),
 
       setDefaultRegion: (v) => set({ defaultRegion: v }),
       setGpsRecordingInterval: (ms) => set({ gpsRecordingInterval: ms }),

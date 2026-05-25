@@ -407,6 +407,15 @@ function VisualsSection() {
           sublabel="Camera-attached point light"
         />
       </div>
+      <div style={S.card}>
+        <div style={S.cardHeader}>TERRAIN RENDERING</div>
+        <ToggleRow
+          label="Smooth terrain spikes"
+          value={s.smoothTerrainSpikes}
+          onChange={s.setSmoothTerrainSpikes}
+          sublabel="Server-side post-process that blends slopes steeper than 70°. Disable to inspect raw bathymetric artifacts."
+        />
+      </div>
     </>
   );
 }

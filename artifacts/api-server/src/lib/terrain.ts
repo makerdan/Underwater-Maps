@@ -267,10 +267,12 @@ async function writeDiskCache(key: string, grid: TerrainGrid): Promise<void> {
 
 export async function buildTerrainGrid(
   datasetId: string,
-  resolution = 256
+  resolution = 256,
+  options: { smoothing?: boolean } = {}
 ): Promise<TerrainGrid | null> {
+  const smoothing = options.smoothing ?? true;
   const safeId = datasetId.replace(/[^a-z0-9-]/gi, "_");
-  const cacheKey = `${safeId}-${resolution}`;
+  const cacheKey = `${safeId}-${resolution}${smoothing ? "" : "-raw"}`;
 
   // 1. Memory cache (fastest)
   const mem = memoryCache.get(cacheKey);
@@ -311,10 +313,11 @@ export async function buildTerrainGrid(
     maxDepth = synth.maxDepth;
   }
 
-  // Smooth spikes before finalising the grid.
-  // To disable for scientific/raw-data use, wrap this in a preference check:
-  //   if (enableSmoothing) smoothSpikes(depths, N, maxDepth - minDepth);
-  smoothSpikes(depths, N, maxDepth - minDepth);
+  // Smooth spikes before finalising the grid (skipped when the user has
+  // disabled "Smooth terrain spikes" in their settings — raw bathymetry).
+  if (smoothing) {
+    smoothSpikes(depths, N, maxDepth - minDepth);
+  }
 
   // Recompute min/max after smoothing (values may have shifted)
   minDepth = Infinity;
@@ -595,8 +598,10 @@ export function gridPoints(
   points: RawPoint[],
   resolution: number,
   datasetId: string,
-  name: string
+  name: string,
+  options: { smoothing?: boolean } = {}
 ): TerrainGrid {
+  const smoothing = options.smoothing ?? true;
   const N = Math.max(32, Math.min(512, resolution));
 
   let minLon = Infinity,
@@ -672,10 +677,9 @@ export function gridPoints(
     }
   }
 
-  // Step 4: smooth spikes before computing final min/max.
-  // To disable for scientific/raw-data use, wrap this in a preference check:
-  //   if (enableSmoothing) smoothSpikes(depths, N, roughDepthRange);
-  {
+  // Step 4: smooth spikes before computing final min/max (skipped when the
+  // user has disabled "Smooth terrain spikes" — raw bathymetry).
+  if (smoothing) {
     let roughMin = Infinity;
     let roughMax = -Infinity;
     for (let i = 0; i < N * N; i++) {
