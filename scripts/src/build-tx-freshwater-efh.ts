@@ -60,12 +60,16 @@ interface LakeSpec {
   bbox: [number, number, number, number];
   /** Waterbody name (Waterbody field in TPWD service). */
   tpwdWaterbody: string;
-  /** NHD GNIS_NAME(s) for the main reservoir polygon — first match wins.
+  /** NHD GNIS_NAME(s) for the main reservoir polygon — all matches are
+   *  collected and filtered with the centroid + minAreaSqkm guard below.
    *  Some reservoirs are mis-labelled in NHD (Lake Fork → "Case Lake"). */
   nhdLakeNames: string[];
-  /** Optional fallback: pick the single largest NHD waterbody polygon
-   *  inside the bbox if no GNIS_NAME match was found. */
-  nhdLakeByLargestInBbox: boolean;
+  /** Known reservoir centroid — used to pick the true NHD polygon when the
+   *  bbox or GNIS query contains multiple candidate waterbodies (Lake Fork case). */
+  centroidLonLat: [number, number];
+  /** Minimum-area threshold (sq km) for the NHD polygon, used as a guard
+   *  against picking small adjacent waterbodies that share the bbox. */
+  minAreaSqkm: number;
   /** Tributary GNIS names whose flowlines we keep as channels. */
   tributaryGnisNames: string[];
   /** TPWD lake info page (used as creditUrl). */
@@ -78,8 +82,9 @@ const LAKES: LakeSpec[] = [
     region: "Lake Fork Reservoir — East Texas",
     bbox: [-95.65, 32.78, -95.42, 32.95],
     tpwdWaterbody: "Lake Fork",
-    nhdLakeNames: ["Lake Fork Reservoir"],
-    nhdLakeByLargestInBbox: true,
+    nhdLakeNames: ["Lake Fork Reservoir", "Lake Fork"],
+    centroidLonLat: [-95.535, 32.86],
+    minAreaSqkm: 80,
     tributaryGnisNames: [
       "Lake Fork Creek",
       "Big Caney Creek",
@@ -94,8 +99,9 @@ const LAKES: LakeSpec[] = [
     region: "Sam Rayburn Reservoir — East Texas",
     bbox: [-94.30, 31.05, -93.95, 31.60],
     tpwdWaterbody: "Sam Rayburn",
-    nhdLakeNames: ["Sam Rayburn Reservoir"],
-    nhdLakeByLargestInBbox: true,
+    nhdLakeNames: ["Sam Rayburn Reservoir", "Sam Rayburn"],
+    centroidLonLat: [-94.10, 31.30],
+    minAreaSqkm: 300,
     tributaryGnisNames: [
       "Angelina River",
       "Attoyac Bayou",
@@ -109,8 +115,9 @@ const LAKES: LakeSpec[] = [
     region: "Lake Ray Roberts — North Texas",
     bbox: [-97.15, 33.30, -96.92, 33.52],
     tpwdWaterbody: "Ray Roberts",
-    nhdLakeNames: ["Lake Ray Roberts", "Ray Roberts Lake"],
-    nhdLakeByLargestInBbox: true,
+    nhdLakeNames: ["Lake Ray Roberts", "Ray Roberts Lake", "Ray Roberts"],
+    centroidLonLat: [-97.03, 33.41],
+    minAreaSqkm: 50,
     tributaryGnisNames: [
       "Elm Fork Trinity River",
       "Isle du Bois Creek",
@@ -125,8 +132,9 @@ const LAKES: LakeSpec[] = [
     region: "Toledo Bend Reservoir — Texas / Louisiana",
     bbox: [-93.95, 31.15, -93.55, 32.20],
     tpwdWaterbody: "Toledo Bend",
-    nhdLakeNames: ["Toledo Bend Reservoir"],
-    nhdLakeByLargestInBbox: true,
+    nhdLakeNames: ["Toledo Bend Reservoir", "Toledo Bend"],
+    centroidLonLat: [-93.75, 31.55],
+    minAreaSqkm: 400,
     tributaryGnisNames: [
       "Sabine River",
       "Patroon Bayou",
@@ -507,52 +515,113 @@ async function fetchTpwdPoints(spec: LakeSpec): Promise<AttractorPt[]> {
   }));
 }
 
+/** Geometric centroid of an Esri polygon (largest ring, vertex-averaged). */
+function esriPolygonCentroid(poly: EsriPolygon): [number, number] {
+  let bestRing: number[][] | null = null;
+  let bestArea = -Infinity;
+  for (const ring of poly.rings) {
+    let a = 0;
+    for (let i = 0; i < ring.length - 1; i++) {
+      const p = ring[i]!, q = ring[i + 1]!;
+      a += p[0]! * q[1]! - q[0]! * p[1]!;
+    }
+    a = Math.abs(a / 2);
+    if (a > bestArea) { bestArea = a; bestRing = ring; }
+  }
+  if (!bestRing) return [0, 0];
+  let sx = 0, sy = 0;
+  for (let i = 0; i < bestRing.length - 1; i++) {
+    sx += bestRing[i]![0]!;
+    sy += bestRing[i]![1]!;
+  }
+  const n = bestRing.length - 1;
+  return [sx / n, sy / n];
+}
+
+function haversineKm(a: [number, number], b: [number, number]): number {
+  const R = 6371;
+  const dLat = ((b[1] - a[1]) * Math.PI) / 180;
+  const dLon = ((b[0] - a[0]) * Math.PI) / 180;
+  const la1 = (a[1] * Math.PI) / 180;
+  const la2 = (b[1] * Math.PI) / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/** Pick the NHD candidate whose centroid lies closest to `spec.centroidLonLat`
+ *  AND whose area >= `spec.minAreaSqkm`. Returns null if none qualifies. */
+function pickBestCandidate(
+  spec: LakeSpec,
+  candidates: { geom: EsriPolygon; areaSqkm: number; gnis: string }[],
+): { geom: EsriPolygon; areaSqkm: number; gnis: string } | null {
+  const qualified = candidates.filter((c) => c.areaSqkm >= spec.minAreaSqkm);
+  if (qualified.length === 0) return null;
+  let best = qualified[0]!;
+  let bestDist = haversineKm(esriPolygonCentroid(best.geom), spec.centroidLonLat);
+  for (const c of qualified.slice(1)) {
+    const d = haversineKm(esriPolygonCentroid(c.geom), spec.centroidLonLat);
+    if (d < bestDist) { best = c; bestDist = d; }
+  }
+  return best;
+}
+
 async function fetchNhdWaterbody(spec: LakeSpec): Promise<EsriPolygon | null> {
-  // Try by GNIS_NAME first.
+  // 1) Try by GNIS_NAME, gathering ALL candidates (not just the largest).
+  const byName: { geom: EsriPolygon; areaSqkm: number; gnis: string }[] = [];
   for (const name of spec.nhdLakeNames) {
     const fc = await arcgisQuery<{
       features: EsriFeature<EsriPolygon, { AREASQKM: number; GNIS_NAME: string }>[];
     }>(NHD_WATERBODY, {
-      where: `GNIS_NAME='${name}' AND FTYPE=390 AND AREASQKM>5`,
+      where: `GNIS_NAME='${name}' AND FTYPE=390 AND AREASQKM>=1`,
       outFields: "AREASQKM,GNIS_NAME",
       outSR: "4326",
       returnGeometry: "true",
       f: "json",
     });
-    if (fc.features.length > 0) {
-      const biggest = fc.features.reduce((a, b) =>
-        a.attributes.AREASQKM > b.attributes.AREASQKM ? a : b);
-      console.log(
-        `    NHD waterbody via GNIS '${name}': ${biggest.attributes.AREASQKM.toFixed(1)} km²`,
-      );
-      return biggest.geometry;
+    for (const f of fc.features) {
+      byName.push({ geom: f.geometry, areaSqkm: f.attributes.AREASQKM, gnis: f.attributes.GNIS_NAME ?? name });
     }
   }
-  // Fallback: largest NHD waterbody intersecting bbox.
-  if (spec.nhdLakeByLargestInBbox) {
-    const [minLon, minLat, maxLon, maxLat] = spec.bbox;
-    const fc = await arcgisQuery<{
-      features: EsriFeature<EsriPolygon, { AREASQKM: number; GNIS_NAME: string }>[];
-    }>(NHD_WATERBODY, {
-      geometry: `${minLon},${minLat},${maxLon},${maxLat}`,
-      geometryType: "esriGeometryEnvelope",
-      inSR: "4326",
-      spatialRel: "esriSpatialRelIntersects",
-      where: "FTYPE=390 AND AREASQKM>10",
-      outFields: "AREASQKM,GNIS_NAME",
-      outSR: "4326",
-      returnGeometry: "true",
-      f: "json",
-    });
-    if (fc.features.length > 0) {
-      const biggest = fc.features.reduce((a, b) =>
-        a.attributes.AREASQKM > b.attributes.AREASQKM ? a : b);
-      console.log(
-        `    NHD waterbody fallback (largest in bbox): GNIS '${biggest.attributes.GNIS_NAME ?? "(none)"}' ${biggest.attributes.AREASQKM.toFixed(1)} km²`,
-      );
-      return biggest.geometry;
-    }
+  const namedPick = pickBestCandidate(spec, byName);
+  if (namedPick) {
+    console.log(
+      `    NHD waterbody via GNIS '${namedPick.gnis}': ${namedPick.areaSqkm.toFixed(1)} km² ` +
+      `(centroid-validated against ${spec.centroidLonLat.join(",")})`,
+    );
+    return namedPick.geom;
   }
+
+  // 2) Fallback: all reservoir-class waterbodies inside bbox; pick by
+  //    centroid-distance + area threshold (avoids "Case Lake" mis-pick).
+  const [minLon, minLat, maxLon, maxLat] = spec.bbox;
+  const fc = await arcgisQuery<{
+    features: EsriFeature<EsriPolygon, { AREASQKM: number; GNIS_NAME: string }>[];
+  }>(NHD_WATERBODY, {
+    geometry: `${minLon},${minLat},${maxLon},${maxLat}`,
+    geometryType: "esriGeometryEnvelope",
+    inSR: "4326",
+    spatialRel: "esriSpatialRelIntersects",
+    where: `FTYPE=390 AND AREASQKM>=${Math.max(1, spec.minAreaSqkm / 4)}`,
+    outFields: "AREASQKM,GNIS_NAME",
+    outSR: "4326",
+    returnGeometry: "true",
+    f: "json",
+  });
+  const bboxCands = fc.features.map((f) => ({
+    geom: f.geometry,
+    areaSqkm: f.attributes.AREASQKM,
+    gnis: f.attributes.GNIS_NAME ?? "(unnamed)",
+  }));
+  const bboxPick = pickBestCandidate(spec, bboxCands);
+  if (bboxPick) {
+    console.log(
+      `    NHD waterbody via bbox+centroid: '${bboxPick.gnis}' ${bboxPick.areaSqkm.toFixed(1)} km²`,
+    );
+    return bboxPick.geom;
+  }
+  console.warn(
+    `    NHD waterbody: no candidate met area>=${spec.minAreaSqkm} km² and centroid match for ${spec.datasetId}`,
+  );
   return null;
 }
 
