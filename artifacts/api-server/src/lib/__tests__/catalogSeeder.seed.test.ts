@@ -49,11 +49,13 @@ async function fetchAll(): Promise<
 }
 
 /** Run `seedDatasetCatalog()` from a fresh module instance so the
- *  module-level `seeded` flag does not short-circuit re-boot behavior. */
+ *  module-level `seeded` flag does not short-circuit re-boot behavior.
+ *  Pass `force: true` to bypass the VITEST no-op guard — this test
+ *  exercises the seeder against the real DB directly. */
 async function boot(): Promise<void> {
   vi.resetModules();
   const mod = await import("../catalogSeeder.js");
-  await mod.seedDatasetCatalog();
+  await mod.seedDatasetCatalog({ force: true });
 }
 
 beforeEach(async () => {

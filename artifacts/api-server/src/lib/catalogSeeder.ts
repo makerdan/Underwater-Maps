@@ -303,15 +303,16 @@ let seeded = false;
  */
 const RETIRED_CATALOG_IDS: string[] = [];
 
-export async function seedDatasetCatalog(): Promise<void> {
+export async function seedDatasetCatalog(opts: { force?: boolean } = {}): Promise<void> {
   if (seeded) return;
   seeded = true;
 
   // No-op under vitest: tests import route modules (which trigger this
   // seeder at module load) without a live database mock, so calling
   // `db.execute` here floods stderr with non-fatal errors and hides
-  // real test failures. Tests that exercise the seeder mock it explicitly.
-  if (process.env["VITEST"] || process.env["NODE_ENV"] === "test") {
+  // real test failures. Tests that exercise the seeder directly pass
+  // `{ force: true }` to bypass this guard.
+  if (!opts.force && (process.env["VITEST"] || process.env["NODE_ENV"] === "test")) {
     return;
   }
 

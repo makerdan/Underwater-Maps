@@ -98,6 +98,29 @@ pnpm exec playwright test tests/e2e/smoke.spec.ts
 
 ---
 
+## Substrate / EFH bundle maintenance
+
+The API server ships several pre-generated data bundles (substrate polygons, EFH zones, terrain grids) under `artifacts/api-server/src/lib/*.gen.json`. Each bundle embeds a `metadata.generatorHash` field — the SHA-256 of the builder script that produced it.
+
+The test `src/__tests__/substrate-bundles-generator-hash.test.ts` recomputes this hash on every CI run. **If you edit a builder script without re-running it, that test will fail with a "Generator-hash drift" error** and tell you exactly which bundle needs refreshing.
+
+### When to regenerate
+
+Regenerate any bundle whose builder script you edit:
+
+| Bundle | Refresh command |
+|--------|-----------------|
+| `shoreZoneData.alaska.gen.json` | `pnpm --filter @workspace/scripts run build-shorezone` |
+| `encSubstrateData.alaska.gen.json` | `pnpm --filter @workspace/scripts run build-enc-substrate` |
+| `usSeabedSubstrate.gen.json` | `pnpm --filter @workspace/scripts run build-usseabed-substrate` |
+| `txLakeSubstrate.gen.json` | `pnpm --filter @workspace/scripts run build-tx-lake-substrate` |
+| `txFreshwaterEfhData.gen.json` | `pnpm --filter @workspace/scripts run build-tx-freshwater-efh` |
+| `lakeRayRobertsTerrain.gen.json` | `pnpm --filter @workspace/scripts run build-lake-ray-roberts-terrain` |
+
+Run the command from the workspace root, then **commit the updated `.gen.json` file** alongside your script change. The hash-drift test is the automated guard that catches bundles left out of sync.
+
+---
+
 ## TypeScript conventions
 
 - Strict mode is enforced (`"strict": true`, `"noUncheckedIndexedAccess": true`).
