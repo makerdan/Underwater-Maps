@@ -15,6 +15,25 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { WORLD_SIZE } from "@/lib/terrain";
 
+/**
+ * Heading unit vector for a meteorological bearing (degrees, clockwise from
+ * north, "toward" convention). Matches the convention used to advance arrow
+ * instances each frame: x = sin(bearing), z = -cos(bearing).
+ */
+export function headingVector(directionDeg: number): [number, number] {
+  const r = (directionDeg * Math.PI) / 180;
+  return [Math.sin(r), -Math.cos(r)];
+}
+
+/**
+ * Three.js Y-rotation (radians) that aligns the arrow primitive's default
+ * tip (which points along -Z after the shape's rotateX(-PI/2)) with the
+ * heading vector returned by {@link headingVector}. Exposed for tests.
+ */
+export function arrowYawForDirection(directionDeg: number): number {
+  return -(directionDeg * Math.PI) / 180;
+}
+
 export interface DirectionArrowFieldProps {
   /** Direction the flow points TOWARD, degrees from north, clockwise. */
   directionDeg: number;
@@ -132,12 +151,10 @@ export const DirectionArrowField: React.FC<DirectionArrowFieldProps> = ({
     const zoomScale = THREE.MathUtils.clamp(camDist / 60, 0.7, 2.4);
 
     const dummy = new THREE.Object3D();
-    // Three.js rotation.y is around +Y. We want the arrow's "up" (+Z after
-    // shape rotation) to align with dirVec. The default arrow points along
-    // -Z (because shape moveTo(0, 0.55) puts tip at +Y in 2D, then we rotate
-    // -PI/2 around X bringing +Y down to -Z). So rotate by atan2(x, -z) of
-    // dirVec to align: yaw = atan2(dirVec.x, -dirVec.z) = atan2(sin, cos) = dirRad
-    const yaw = dirRad;
+    // See arrowYawForDirection — the default tip points along -Z, so Y-rotation
+    // by -dirRad sends it onto the drift heading dirVec. Without the negation
+    // the arrowhead points opposite the drift for any non-N/S heading.
+    const yaw = arrowYawForDirection(directionDeg);
     const step = WORLD_SIZE / density;
 
     for (let i = 0; i < count; i++) {
