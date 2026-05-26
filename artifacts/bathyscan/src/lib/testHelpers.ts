@@ -43,6 +43,7 @@ import {
 import { useDepthProfileStore, buildProfile } from "./depthProfileStore";
 import { useSettingsStore } from "./settingsStore";
 import { processFlyWheel } from "./flyWheel";
+import { openCrosshairContextMenu } from "./terrainContextMenu";
 import * as THREE from "three";
 
 /** Small synthetic terrain grid used by e2e tests when no real dataset is
@@ -166,6 +167,53 @@ export interface BathyTestApi {
   getLastClickedGps: () => { lon: number; lat: number; depth: number } | null;
   /** Reset the lastClickedGps cameraStore slot (used to isolate tests). */
   clearLastClickedGps: () => void;
+  /**
+   * Drive the `crosshairGps` cameraStore slot that the underwater reticle
+   * publishes each frame after raycasting the terrain. The Q-key shortcut
+   * and the HUD's touch "⋯ ACTIONS" button both read this slot via
+   * `openCrosshairContextMenu` to decide whether to pop the action menu, so
+   * e2e tests use this helper to simulate "crosshair is on terrain" without
+   * standing up a real Three.js raycaster in headless Chromium.
+   */
+  setCrosshairGps: (
+    gps: { lon: number; lat: number; depth: number } | null,
+  ) => void;
+  /**
+   * Mirror the Q-key block in `useFlyControls.handleKeyDown` so e2e specs
+   * can exercise the crosshair shortcut without the real Three.js Canvas
+   * being mounted (headless Chromium currently can't initialise WebGL on
+   * Replit-managed hosts, so the production keydown listener inside
+   * `useFlyControls` may not be attached).
+   *
+   * Returns whatever `openCrosshairContextMenu` returns — `true` when the
+   * menu actually opened, `false` when the crosshair is off-terrain or no
+   * dataset is loaded. The viewport-centre coordinates and the
+   * test-bridged terrain ref match exactly what the production handler
+   * passes.
+   */
+  pressCrosshairShortcut: () => boolean;
+  /**
+   * Read the persisted "home position" for a dataset (settings store
+   * slice mutated by the "Set as home position" menu item). Returns
+   * undefined when no home has been saved for that dataset.
+   */
+  getDatasetHome: (
+    datasetId: string,
+  ) => { lon: number; lat: number; depth: number } | undefined;
+  /**
+   * Current depth-profile anchor (set by "Start depth profile here").
+   * Returns null when no anchor has been placed.
+   */
+  getDepthProfileAnchor: () =>
+    | { lon: number; lat: number; depth: number }
+    | null;
+  /**
+   * Current measurement anchor (set by "Measure from here"). Returns
+   * null when no anchor has been placed.
+   */
+  getMeasurementAnchor: () =>
+    | { lon: number; lat: number; depth: number }
+    | null;
   /** Snapshot of the global right-click context menu (open + item labels). */
   getContextMenuSnapshot: () => {
     open: boolean;
@@ -540,6 +588,24 @@ export function installTestHelpers(): void {
     setMarkerFormOpen: (open) => useUiStore.getState().setMarkerFormOpen(open),
     getLastClickedGps: () => useCameraStore.getState().lastClickedGps,
     clearLastClickedGps: () => useCameraStore.getState().setLastClickedGps(null),
+    setCrosshairGps: (gps) => useCameraStore.getState().setCrosshairGps(gps),
+    getDatasetHome: (datasetId) =>
+      useSettingsStore.getState().datasetHomePositions[datasetId],
+    getDepthProfileAnchor: () => useDepthProfileStore.getState().anchor,
+    getMeasurementAnchor: () => useMeasureStore.getState().anchorGps,
+    pressCrosshairShortcut: () => {
+      // Mirror the Q-key handler in useFlyControls: anchor at the centre
+      // of the browser viewport (where the crosshair reticle sits), pass
+      // the same test-bridged terrain ref the real hook would have, and
+      // delegate to the production helper.
+      const w = typeof window !== "undefined" ? window.innerWidth : 0;
+      const h = typeof window !== "undefined" ? window.innerHeight : 0;
+      return openCrosshairContextMenu({
+        centerX: w / 2,
+        centerY: h / 2,
+        getTerrainGrid: () => appGetTerrainRef.current,
+      });
+    },
     getContextMenuSnapshot: () => {
       const s = useContextMenuStore.getState();
       return {
