@@ -69,6 +69,32 @@
  *
  * Usage:
  *   pnpm --filter @workspace/scripts run build-lake-ray-roberts-terrain
+ *
+ * ---------------------------------------------------------------------------
+ * Scheduled refresh
+ * ---------------------------------------------------------------------------
+ * TWDB and USACE Fort Worth typically (re)publish reservoir surveys on a
+ * multi-year cadence, and neither exposes an RSS / change feed. To pick up a
+ * new raster automatically the moment one appears, run this script on a
+ * recurring schedule and commit the regenerated bundle:
+ *
+ *   # Weekly, Monday 04:00 UTC — cheap, well below either agency's
+ *   # publishing cadence, and quiet hours for the upstream ArcGIS services.
+ *   0 4 * * 1  pnpm --filter @workspace/scripts run build-lake-ray-roberts-terrain \
+ *              && git add artifacts/api-server/src/lib/lakeRayRobertsTerrain.gen.json \
+ *              && git diff --cached --quiet \
+ *                 || git commit -m "chore: refresh Ray Roberts terrain bundle"
+ *
+ * The probes below short-circuit cheaply when no machine-readable raster is
+ * published yet (a few small HTTP HEAD/GET requests), so an idle weekly run
+ * costs only a few hundred KB of traffic. As soon as either agency exposes a
+ * Ray Roberts ImageServer / WCS endpoint, the next scheduled run will pick
+ * it up, replace the 3DEP-derived depths, and set bathymetry.source to
+ * "twdb" or "usace".
+ *
+ * On Replit this is wired by configuring a Scheduled Deployment that runs
+ * the same command on the same cadence; the deployment commits the
+ * regenerated bundle back to the repo through the normal CI pipeline.
  */
 
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -115,8 +141,20 @@ const DEP3 =
 // ranked-source comment above. These are recorded so the build log
 // honestly documents the gap.
 const TWDB_INDEX = "https://www.twdb.texas.gov/surfacewater/surveys/index.asp";
+// TWDB hosts an ArcGIS Server at gis.twdb.texas.gov. Reservoir survey
+// rasters, when published, land under a folder whose service name
+// contains the reservoir name. We walk the root + a small set of likely
+// folders looking for any ImageServer matching "ray roberts".
+const TWDB_ARCGIS_ROOT =
+  "https://gis.twdb.texas.gov/arcgis/rest/services";
+const TWDB_ARCGIS_FOLDERS = ["", "Reservoirs", "ReservoirSurveys", "Bathymetry"];
+// USACE GeoSpatial Hub exposes a standard ArcGIS Hub search API. We use
+// the Hub's items search to find any ImageServer / MapServer dataset
+// tagged with both "hydrographic survey" and "ray roberts".
 const USACE_INDEX =
   "https://geospatial-usace.opendata.arcgis.com/search?tags=hydrographic%20survey";
+const USACE_HUB_SEARCH =
+  "https://geospatial-usace.opendata.arcgis.com/api/search/v1/collections/dataset/items";
 const TNRIS_INDEX = "https://data.tnris.org/";
 
 // ---------------------------------------------------------------------------
@@ -278,15 +316,154 @@ function readF32Tiff(buf: ArrayBuffer): { width: number; height: number; data: F
 interface AttemptResult {
   ok: boolean;
   note: string;
+  /** Populated only when the probe successfully downloaded a surveyed
+   *  raster: an F32 grid co-registered with the AOI bbox at RESOLUTION,
+   *  in metres-below-pool (positive depth). NaN marks no-data cells. */
+  grid?: Float32Array;
+  /** Service URL the raster was actually pulled from (for provenance). */
+  serviceUrl?: string;
+  /** Human-readable label for the data-source badge / credit. */
+  label?: string;
 }
 
 /**
- * Probe the TWDB volumetric-survey index for a machine-readable Ray Roberts
- * deliverable. As of this writing TWDB publishes the survey as a PDF report
- * with raster contour graphics; the underlying raster is not exposed via a
- * WCS / ImageServer feed. We document the gap and fall through.
+ * Probe an ArcGIS REST folder catalog for any ImageServer whose service
+ * name matches `nameRe`. Returns the fully-qualified ImageServer URL of
+ * the first match, or null if none are exposed.
  */
-async function tryTwdbBathymetry(): Promise<AttemptResult> {
+async function findArcgisImageServer(
+  root: string,
+  folder: string,
+  nameRe: RegExp,
+): Promise<string | null> {
+  const url = `${root}${folder ? `/${folder}` : ""}?f=json`;
+  const r = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+  if (!r.ok) return null;
+  const j = (await r.json()) as { services?: { name: string; type: string }[] };
+  for (const svc of j.services ?? []) {
+    if (svc.type !== "ImageServer") continue;
+    if (!nameRe.test(svc.name)) continue;
+    // svc.name is "<folder>/<service>" when listed from the root, or just
+    // "<service>" when listed from inside the folder. Normalise.
+    const tail = svc.name.includes("/") ? svc.name : `${folder ? `${folder}/` : ""}${svc.name}`;
+    return `${root}/${tail}/ImageServer`;
+  }
+  return null;
+}
+
+/**
+ * Download an ArcGIS ImageServer raster as an F32 grid co-registered with
+ * `bbox` at `size`x`size`. Returns null when the service refuses an F32
+ * export (e.g. it only renders styled tiles). NaN marks no-data pixels.
+ */
+async function fetchImageServerF32(
+  serviceUrl: string,
+  bbox: [number, number, number, number],
+  size: number,
+): Promise<Float32Array | null> {
+  const url =
+    `${serviceUrl}/exportImage?` +
+    new URLSearchParams({
+      bbox: bbox.join(","),
+      bboxSR: "4326",
+      imageSR: "4326",
+      size: `${size},${size}`,
+      format: "tiff",
+      pixelType: "F32",
+      noData: "-9999",
+      interpolation: "RSP_BilinearInterpolation",
+      f: "image",
+    }).toString();
+  const r = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+  if (!r.ok) return null;
+  const ct = r.headers.get("content-type") ?? "";
+  if (!/tiff/i.test(ct)) return null;
+  const buf = await r.arrayBuffer();
+  const t = readF32Tiff(buf);
+  if (t.width !== size || t.height !== size) return null;
+  // Normalise sentinel no-data values to NaN so the caller can ignore
+  // them when blending against the 3DEP fallback.
+  for (let i = 0; i < t.data.length; i++) {
+    const v = t.data[i]!;
+    if (!isFinite(v) || v <= -9000 || v >= 1e30) t.data[i] = NaN;
+  }
+  return t.data;
+}
+
+/**
+ * Convert a raster sampled from a bathymetric service into depth-below-
+ * pool (positive metres) by inspecting its sign convention. Bathymetric
+ * rasters published by US agencies use one of:
+ *   (a) elevation (m, NAVD88), where lake-floor cells are below the pool
+ *       elevation, so depth = poolElev − value;
+ *   (b) depth (m, positive down), where the value already is the depth.
+ * We pick (a) when the median finite value is below the pool elevation,
+ * else (b) — and clip to a sane reservoir-scale range.
+ */
+function normaliseBathyToDepth(grid: Float32Array, poolElev: number): Float32Array {
+  const out = new Float32Array(grid.length);
+  const finite: number[] = [];
+  for (let i = 0; i < grid.length; i++) {
+    const v = grid[i]!;
+    if (isFinite(v)) finite.push(v);
+  }
+  if (finite.length === 0) { out.fill(NaN); return out; }
+  finite.sort((a, b) => a - b);
+  const median = finite[finite.length >> 1]!;
+  const elevationMode = median < poolElev;
+  for (let i = 0; i < grid.length; i++) {
+    const v = grid[i]!;
+    if (!isFinite(v)) { out[i] = NaN; continue; }
+    const d = elevationMode ? poolElev - v : v;
+    out[i] = Math.max(0, Math.min(MAX_SURVEYED_DEPTH_M * 1.5, d));
+  }
+  return out;
+}
+
+/**
+ * Try to discover and download a TWDB volumetric-survey raster for Ray
+ * Roberts. TWDB hosts an ArcGIS Server; when a Ray Roberts ImageServer
+ * eventually goes live there, this picks it up automatically. Until
+ * then, we still hit the volumetric-survey index page so the build log
+ * documents the gap honestly.
+ */
+async function tryTwdbBathymetry(
+  bbox: [number, number, number, number],
+  size: number,
+): Promise<AttemptResult> {
+  // 1. Look for a machine-readable ImageServer on the TWDB ArcGIS site.
+  //    Per-candidate failures (folder missing, non-F32 service, malformed
+  //    TIFF, …) must never suppress a valid candidate in a later folder,
+  //    so isolate each iteration with its own try/catch and continue.
+  for (const folder of TWDB_ARCGIS_FOLDERS) {
+    try {
+      const svc = await findArcgisImageServer(
+        TWDB_ARCGIS_ROOT,
+        folder,
+        /ray.?roberts/i,
+      );
+      if (!svc) continue;
+      let raw: Float32Array | null = null;
+      try {
+        raw = await fetchImageServerF32(svc, bbox, size);
+      } catch {
+        // Malformed/unsupported TIFF — try the next candidate.
+        continue;
+      }
+      if (!raw) continue;
+      const grid = normaliseBathyToDepth(raw, POOL_ELEV_M);
+      return {
+        ok: true,
+        note: `TWDB volumetric survey raster downloaded from ${svc}.`,
+        grid,
+        serviceUrl: svc,
+        label: "TWDB Reservoir Volumetric & Sedimentation Survey (Ray Roberts)",
+      };
+    } catch {
+      // Folder doesn't exist or refused JSON — keep walking.
+    }
+  }
+  // 2. Fall back to the public survey index for honest gap-logging.
   try {
     const r = await fetch(TWDB_INDEX, { signal: AbortSignal.timeout(15_000) });
     if (!r.ok) return { ok: false, note: `TWDB index HTTP ${r.status}` };
@@ -295,7 +472,7 @@ async function tryTwdbBathymetry(): Promise<AttemptResult> {
     return {
       ok: false,
       note: hasRayRoberts
-        ? "TWDB volumetric survey for Ray Roberts is published as a PDF report; no public WCS/ImageServer raster available."
+        ? "TWDB volumetric survey for Ray Roberts is published as a PDF report; no public WCS/ImageServer raster available yet."
         : "TWDB index reachable but no Ray Roberts entry surfaced in the response.",
     };
   } catch (err) {
@@ -304,18 +481,65 @@ async function tryTwdbBathymetry(): Promise<AttemptResult> {
 }
 
 /**
- * Probe the USACE GeoSpatial Repository for a published hydrographic survey
- * raster for Ray Roberts. Fort Worth District publishes deliverables but
- * mainly as project-page PDFs / FOIA artefacts rather than a single
- * machine-readable feed. Document the gap and fall through.
+ * Try to discover and download a USACE Fort Worth District hydrographic
+ * survey raster for Ray Roberts via the USACE GeoSpatial Hub search API.
+ * Falls back to a reachability check + honest gap note when no
+ * machine-readable raster is exposed yet.
  */
-async function tryUsaceBathymetry(): Promise<AttemptResult> {
+async function tryUsaceBathymetry(
+  bbox: [number, number, number, number],
+  size: number,
+): Promise<AttemptResult> {
+  // 1. Search the Hub catalogue for an Image/Map Service tagged with
+  //    Ray Roberts + hydrographic survey.
+  try {
+    const q = new URLSearchParams({
+      q: "ray roberts hydrographic survey",
+      filter: 'type IN ("Image Service","Map Service")',
+      limit: "20",
+    });
+    const r = await fetch(`${USACE_HUB_SEARCH}?${q.toString()}`, {
+      signal: AbortSignal.timeout(20_000),
+      headers: { accept: "application/json" },
+    });
+    if (r.ok) {
+      const j = (await r.json()) as {
+        features?: { properties?: { url?: string; name?: string; title?: string } }[];
+      };
+      for (const f of j.features ?? []) {
+        const url = f.properties?.url ?? "";
+        const title = `${f.properties?.title ?? ""} ${f.properties?.name ?? ""}`;
+        if (!/ray.?roberts/i.test(title)) continue;
+        if (!/ImageServer\/?$/i.test(url)) continue;
+        // Per-candidate isolation: a single malformed/unsupported raster
+        // must not abort the search across the remaining candidates.
+        let raw: Float32Array | null = null;
+        try {
+          raw = await fetchImageServerF32(url, bbox, size);
+        } catch {
+          continue;
+        }
+        if (!raw) continue;
+        const grid = normaliseBathyToDepth(raw, POOL_ELEV_M);
+        return {
+          ok: true,
+          note: `USACE hydrographic survey raster downloaded from ${url}.`,
+          grid,
+          serviceUrl: url,
+          label: "USACE Fort Worth District Hydrographic Survey (Ray Roberts)",
+        };
+      }
+    }
+  } catch {
+    // Hub unreachable — fall through to the static-index gap note.
+  }
+  // 2. Reachability check on the public Hub index for honest gap-logging.
   try {
     const r = await fetch(USACE_INDEX, { signal: AbortSignal.timeout(15_000) });
     if (!r.ok) return { ok: false, note: `USACE GeoSpatial index HTTP ${r.status}` };
     return {
       ok: false,
-      note: "USACE Fort Worth District hydrographic surveys for Ray Roberts are distributed as project-page PDFs / FOIA artefacts; no public WCS feed.",
+      note: "USACE Fort Worth District hydrographic surveys for Ray Roberts are distributed as project-page PDFs / FOIA artefacts; no public ImageServer feed yet.",
     };
   } catch (err) {
     return { ok: false, note: `USACE probe failed: ${(err as Error).message}` };
@@ -527,14 +751,26 @@ async function main(): Promise<void> {
   const bathyAttempts: { source: LayerSource; ok: boolean; note: string }[] = [];
 
   console.log("    [1] TWDB volumetric/sedimentation survey…");
-  const twdb = await tryTwdbBathymetry();
+  const twdb = await tryTwdbBathymetry(BBOX, RESOLUTION);
   console.log(`        ${twdb.ok ? "OK" : "GAP"}: ${twdb.note}`);
-  bathyAttempts.push({ source: "twdb", ...twdb });
+  bathyAttempts.push({ source: "twdb", ok: twdb.ok, note: twdb.note });
 
   console.log("    [2] USACE Fort Worth District hydrographic surveys…");
-  const usace = await tryUsaceBathymetry();
+  const usace = await tryUsaceBathymetry(BBOX, RESOLUTION);
   console.log(`        ${usace.ok ? "OK" : "GAP"}: ${usace.note}`);
-  bathyAttempts.push({ source: "usace", ...usace });
+  bathyAttempts.push({ source: "usace", ok: usace.ok, note: usace.note });
+
+  // Prefer the highest-ranked surveyed raster that actually returned
+  // data. Cells with NaN in the surveyed grid fall through to the 3DEP
+  // path below so a partially-covered survey still composes cleanly.
+  const surveyed:
+    | { source: "twdb" | "usace"; grid: Float32Array; serviceUrl: string; label: string }
+    | null =
+    twdb.ok && twdb.grid
+      ? { source: "twdb", grid: twdb.grid, serviceUrl: twdb.serviceUrl!, label: twdb.label! }
+      : usace.ok && usace.grid
+        ? { source: "usace", grid: usace.grid, serviceUrl: usace.serviceUrl!, label: usace.label! }
+        : null;
 
   console.log("    [3] USGS 3DEP DEM (pre-impoundment Elm Fork valley + shore-distance synthesis)…");
   const dem = await fetch3depGrid(BBOX, RESOLUTION, RESOLUTION);
@@ -596,6 +832,7 @@ async function main(): Promise<void> {
   const topography = new Array<number>(RESOLUTION * RESOLUTION).fill(0);
   let minDepth = Infinity, maxDepth = -Infinity;
   let minTopo = Infinity, maxTopo = -Infinity;
+  let surveyedDepthCells = 0;
   let demDerivedDepthCells = 0;
   let synthesizedDepthCells = 0;
 
@@ -603,21 +840,28 @@ async function main(): Promise<void> {
     const elev = dem[i]!;
     if (inside[i]) {
       // Below-water cell.
-      const demDepth = POOL_ELEV_M - elev;
       let depth: number;
-      if (demDepth > 0.5) {
-        // 3DEP contains pre-impoundment elevation here — use directly.
-        depth = Math.min(MAX_SURVEYED_DEPTH_M, demDepth);
-        demDerivedDepthCells++;
+      const sv = surveyed?.grid[i];
+      if (sv !== undefined && isFinite(sv) && sv > 0) {
+        // Surveyed raster covers this cell — always wins over 3DEP.
+        depth = sv;
+        surveyedDepthCells++;
       } else {
-        // 3DEP has been resampled to the current water surface — synthesise
-        // depth from distance-to-shore (shore-distance / max-shore-distance,
-        // smoothstep'd, scaled to the surveyed maximum depth).
-        const d = dist[i]!;
-        const t = maxDistCells > 0 ? Math.max(0, Math.min(1, d / maxDistCells)) : 0;
-        const s = t * t * (3 - 2 * t);
-        depth = s * MAX_SURVEYED_DEPTH_M;
-        synthesizedDepthCells++;
+        const demDepth = POOL_ELEV_M - elev;
+        if (demDepth > 0.5) {
+          // 3DEP contains pre-impoundment elevation here — use directly.
+          depth = Math.min(MAX_SURVEYED_DEPTH_M, demDepth);
+          demDerivedDepthCells++;
+        } else {
+          // 3DEP has been resampled to the current water surface — synthesise
+          // depth from distance-to-shore (shore-distance / max-shore-distance,
+          // smoothstep'd, scaled to the surveyed maximum depth).
+          const d = dist[i]!;
+          const t = maxDistCells > 0 ? Math.max(0, Math.min(1, d / maxDistCells)) : 0;
+          const s = t * t * (3 - 2 * t);
+          depth = s * MAX_SURVEYED_DEPTH_M;
+          synthesizedDepthCells++;
+        }
       }
       depths[i] = depth;
       if (depth < minDepth) minDepth = depth;
@@ -636,23 +880,37 @@ async function main(): Promise<void> {
   if (!isFinite(maxTopo)) maxTopo = 0;
 
   console.log(
-    `  Bathymetry: ${demDerivedDepthCells} cells from 3DEP DEM (pre-impoundment), ` +
+    `  Bathymetry: ${surveyedDepthCells} cells from surveyed raster (${surveyed?.source ?? "none"}), ` +
+      `${demDerivedDepthCells} cells from 3DEP DEM (pre-impoundment), ` +
       `${synthesizedDepthCells} cells from shore-distance synthesis; range ${minDepth.toFixed(1)}–${maxDepth.toFixed(1)} m`,
   );
   console.log(`  Topography: range ${minTopo.toFixed(1)}–${maxTopo.toFixed(1)} m above pool`);
 
   // --- 5. Provenance metadata ---
   const fetchedAt = new Date().toISOString();
-  const bathyProvenance: LayerProvenance = {
-    source: "usgs-3dep",
-    label: probe.isLidar
-      ? "USGS 3DEP (pre-impoundment lidar / DEM + shore-distance synthesis)"
-      : "USGS 3DEP (pre-impoundment 1/3\" DEM + shore-distance synthesis)",
-    creditUrl: "https://www.usgs.gov/3d-elevation-program",
-    serviceUrl: DEP3,
-    fetchedAt,
-    attempts: bathyAttempts,
-  };
+  const bathyProvenance: LayerProvenance = surveyed
+    ? {
+        source: surveyed.source,
+        label: surveyedDepthCells === insideCount
+          ? surveyed.label
+          : `${surveyed.label} (+ USGS 3DEP fill for ${insideCount - surveyedDepthCells} uncovered cell(s))`,
+        creditUrl: surveyed.source === "twdb"
+          ? "https://www.twdb.texas.gov/surfacewater/surveys/"
+          : "https://www.swf.usace.army.mil/",
+        serviceUrl: surveyed.serviceUrl,
+        fetchedAt,
+        attempts: bathyAttempts,
+      }
+    : {
+        source: "usgs-3dep",
+        label: probe.isLidar
+          ? "USGS 3DEP (pre-impoundment lidar / DEM + shore-distance synthesis)"
+          : "USGS 3DEP (pre-impoundment 1/3\" DEM + shore-distance synthesis)",
+        creditUrl: "https://www.usgs.gov/3d-elevation-program",
+        serviceUrl: DEP3,
+        fetchedAt,
+        attempts: bathyAttempts,
+      };
   const topoProvenance: LayerProvenance = {
     source: "usgs-3dep",
     label: probe.isLidar
