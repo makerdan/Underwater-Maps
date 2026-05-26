@@ -509,7 +509,7 @@ function Main() {
             <button
               onClick={() => setSidePaneCollapsed(false)}
               aria-label="Show side pane"
-              className="absolute top-12 left-4 z-20"
+              className="absolute top-24 left-4 z-20"
               style={{
                 fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
                 fontSize: 12,
@@ -529,7 +529,7 @@ function Main() {
           </ViewscreenTooltip>
         ) : (
           <div
-            className="absolute top-12 left-4 z-20 flex flex-col gap-2 overflow-y-auto overscroll-contain"
+            className="absolute top-24 left-4 z-20 flex flex-col gap-2 overflow-y-auto overscroll-contain"
             style={{
               maxHeight: "calc(100vh - 7rem)",
               paddingRight: 4,
