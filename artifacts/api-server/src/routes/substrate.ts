@@ -43,7 +43,11 @@ import { ALL_PRESET_DATASETS } from "../lib/terrain.js";
 import {
   ALASKA_SHOREZONE,
   ENC_SE_ALASKA_SUBSTRATE,
+  ENC_CONUS_SUBSTRATE,
+  TX_LAKE_SUBSTRATE,
   getSubstrateForDataset,
+  type SubstrateSource,
+  type ShoreZoneFeatureCollection,
 } from "../lib/shoreZoneData.js";
 
 const router = Router();
@@ -70,7 +74,27 @@ const SOURCE_PROVENANCE = {
     fetchedAt:     ENC_SE_ALASKA_SUBSTRATE.metadata.fetchedAt,
     credit:        "NOAA Office of Coast Survey — Electronic Navigational Charts (public domain)",
   },
-} as const;
+  "noaa-enc-conus": {
+    sourceName:    ENC_CONUS_SUBSTRATE.metadata.sourceName,
+    sourceLayer:   ENC_CONUS_SUBSTRATE.metadata.sourceLayer,
+    sourceService: ENC_CONUS_SUBSTRATE.metadata.sourceService,
+    sourceRegion:  ENC_CONUS_SUBSTRATE.metadata.region,
+    sourceBbox:    ENC_CONUS_SUBSTRATE.metadata.bbox,
+    creditUrl:     ENC_CONUS_SUBSTRATE.metadata.creditUrl,
+    fetchedAt:     ENC_CONUS_SUBSTRATE.metadata.fetchedAt,
+    credit:        "NOAA Office of Coast Survey — Electronic Navigational Charts (public domain)",
+  },
+  "tpwd-tx-reservoirs": {
+    sourceName:    TX_LAKE_SUBSTRATE.metadata.sourceName,
+    sourceLayer:   TX_LAKE_SUBSTRATE.metadata.sourceLayer,
+    sourceService: TX_LAKE_SUBSTRATE.metadata.sourceService,
+    sourceRegion:  TX_LAKE_SUBSTRATE.metadata.region,
+    sourceBbox:    TX_LAKE_SUBSTRATE.metadata.bbox,
+    creditUrl:     TX_LAKE_SUBSTRATE.metadata.creditUrl,
+    fetchedAt:     TX_LAKE_SUBSTRATE.metadata.fetchedAt,
+    credit:        "USGS National Hydrography Dataset + Texas Parks & Wildlife / TWDB lake-bottom surveys (public domain)",
+  },
+} as const satisfies Record<SubstrateSource, unknown>;
 
 /**
  * GET /substrate/:id
@@ -135,10 +159,15 @@ router.get("/substrate/:id", (req, res) => {
     // Attribute the "nearest coverage" hint to whichever bundle actually
     // contains the nearest polygon, rather than always pointing at the
     // ShoreZone bundle.
+    const NEAREST_BUNDLE_BY_SOURCE: Record<SubstrateSource, ShoreZoneFeatureCollection> = {
+      "alaska-shorezone":   ALASKA_SHOREZONE,
+      "noaa-enc-coastal":   ENC_SE_ALASKA_SUBSTRATE,
+      "noaa-enc-conus":     ENC_CONUS_SUBSTRATE,
+      "tpwd-tx-reservoirs": TX_LAKE_SUBSTRATE,
+    };
     const nearestBundle =
-      slice.nearestSource === "noaa-enc-coastal"
-        ? ENC_SE_ALASKA_SUBSTRATE
-        : ALASKA_SHOREZONE;
+      (slice.nearestSource && NEAREST_BUNDLE_BY_SOURCE[slice.nearestSource]) ||
+      ALASKA_SHOREZONE;
     res.json({
       type: "FeatureCollection",
       features: [],

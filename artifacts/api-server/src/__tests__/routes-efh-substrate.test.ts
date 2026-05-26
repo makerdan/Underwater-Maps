@@ -208,15 +208,20 @@ describe("GET /substrate/:id", () => {
     expect(encSrc.creditUrl).toContain("nauticalcharts.noaa.gov");
   });
 
-  it("returns empty collection with honest nearest-coverage metadata for AOIs outside SE Alaska", async () => {
+  it("returns real freshwater substrate polygons for lake-fork (NHD + TPWD bundle)", async () => {
     const res = await request(app).get("/api/substrate/lake-fork");
     expect(res.status).toBe(200);
     expect(res.body.type).toBe("FeatureCollection");
-    expect(res.body.features).toHaveLength(0);
-    expect(res.body.metadata.source).toBe("alaska-shorezone");
-    expect(res.body.metadata.nearestCoverage).toBeDefined();
-    expect(res.body.metadata.nearestCoverage.distanceKm).toBeGreaterThan(0);
-    expect(res.body.metadata.note).toMatch(/No published substrate polygons/);
+    expect(res.body.features.length).toBeGreaterThan(0);
+    for (const f of res.body.features) {
+      expect(f.properties.source).toBe("tpwd-tx-reservoirs");
+    }
+    const txSrc = res.body.metadata.sources.find(
+      (s: { source: string }) => s.source === "tpwd-tx-reservoirs",
+    );
+    expect(txSrc).toBeDefined();
+    expect(txSrc.featureCount).toBeGreaterThan(0);
+    expect(res.body.metadata.region).toMatch(/Lake Fork/i);
   });
 
   // ---- The remaining tests exercise the "features returned" code path
