@@ -36,6 +36,7 @@ import {
 } from "@workspace/api-client-react";
 import type { UserDatasetMeta } from "@workspace/api-client-react";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { useTerrainStore } from "@/lib/terrainStore";
 import { useContextMenuStore } from "@/lib/contextMenuStore";
 import {
   buildLibraryTree,
@@ -938,7 +939,8 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
         userSelect: "none",
       }}
     >
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-1">
+        <UserDatasetVisibilityToggle datasetId={ds.id} />
         {isRenaming ? (
           <div style={{ flex: 1 }}>{renameInput}</div>
         ) : (
@@ -978,6 +980,42 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
         <span style={{ color: "#1e293b" }}>{date}</span>
       </div>
     </div>
+  );
+};
+
+// ─── Per-row eye toggle for user-uploaded datasets (Task #350) ───────────────
+const UserDatasetVisibilityToggle: React.FC<{ datasetId: string }> = ({
+  datasetId,
+}) => {
+  const visible = useTerrainStore(
+    (s) => s.visibleDatasets.some((v) => v.datasetId === datasetId),
+  );
+  const isPrimary = useTerrainStore((s) => s.primaryDatasetId === datasetId);
+  const toggleVisible = useTerrainStore((s) => s.toggleVisible);
+  return (
+    <button
+      type="button"
+      data-testid={`btn-visibility-user-${datasetId}`}
+      aria-pressed={visible}
+      onClick={(e) => {
+        e.stopPropagation();
+        toggleVisible({ datasetId, source: "user" });
+      }}
+      onPointerDown={(e) => e.stopPropagation()}
+      style={{
+        width: 18,
+        flexShrink: 0,
+        background: "transparent",
+        border: "none",
+        cursor: "pointer",
+        color: visible ? (isPrimary ? "#00e5ff" : "#7dd3fc") : "#475569",
+        fontSize: 11,
+        lineHeight: 1,
+        padding: 0,
+      }}
+    >
+      {visible ? (isPrimary ? "◉" : "◎") : "○"}
+    </button>
   );
 };
 

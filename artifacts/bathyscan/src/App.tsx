@@ -48,6 +48,7 @@ import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useWaterTypeSideEffects } from "@/lib/useWaterTypeSideEffects";
 import { useActiveDatasetSync } from "@/lib/useActiveDatasetSync";
+import { VisibleDatasetsLoader } from "@/lib/VisibleDatasetsLoader";
 import { waterLabels } from "@/lib/waterLabels";
 import { useGetSettings, getGetSettingsQueryKey } from "@workspace/api-client-react";
 import { useDriftStore } from "@/lib/driftStore";
@@ -462,6 +463,7 @@ function Main() {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#040810] flex flex-col">
+      <VisibleDatasetsLoader />
       <AppHeader />
 
       <div className="relative flex-1 overflow-hidden">

@@ -24,7 +24,7 @@ import {
 } from "@workspace/api-client-react";
 import type { DatasetMeta, UserDatasetMeta } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
-import { useTerrainStore } from "@/lib/terrainStore";
+import { useTerrainStore, VISIBLE_DATASETS_CAP } from "@/lib/terrainStore";
 import { useUiStore } from "@/lib/uiStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
 import { MARKER_COLOR, MARKER_ICON } from "@/lib/markerConstants";
@@ -58,6 +58,102 @@ const PANEL: React.CSSProperties = {
 const CYAN: React.CSSProperties = {
   color: "#00e5ff",
   textShadow: "0 0 6px rgba(0,229,255,0.5)",
+};
+
+// ─── Visible-datasets summary header (Task #350) ─────────────────────────────
+const VisibleDatasetsHeader: React.FC = () => {
+  const count = useTerrainStore((s) => s.visibleDatasets.length);
+  const hideAllOthers = useTerrainStore((s) => s.hideAllOthers);
+  if (count <= 1) return null;
+  const atCap = count >= VISIBLE_DATASETS_CAP;
+  return (
+    <div
+      data-testid="visible-datasets-header"
+      style={{
+        padding: "4px 12px 6px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        fontSize: 9,
+        letterSpacing: "0.1em",
+        color: "#7dd3fc",
+        background: "rgba(0,229,255,0.04)",
+        borderBottom: "1px solid rgba(0,229,255,0.08)",
+      }}
+    >
+      <span data-testid="visible-datasets-count">
+        VISIBLE DATASETS ({count}){atCap ? " · CAP" : ""}
+      </span>
+      <button
+        data-testid="btn-hide-all-others"
+        onClick={hideAllOthers}
+        style={{
+          fontSize: 9,
+          color: "#00e5ff",
+          background: "transparent",
+          border: "1px solid rgba(0,229,255,0.35)",
+          borderRadius: 3,
+          padding: "1px 6px",
+          cursor: "pointer",
+          letterSpacing: "0.08em",
+        }}
+      >
+        HIDE ALL OTHERS
+      </button>
+    </div>
+  );
+};
+
+// ─── Per-row eye toggle (preset rows) ────────────────────────────────────────
+const PresetVisibilityToggle: React.FC<{
+  datasetId: string;
+  disabled: boolean;
+}> = ({ datasetId, disabled }) => {
+  const visible = useTerrainStore(
+    (s) => s.visibleDatasets.some((v) => v.datasetId === datasetId),
+  );
+  const isPrimary = useTerrainStore((s) => s.primaryDatasetId === datasetId);
+  const toggleVisible = useTerrainStore((s) => s.toggleVisible);
+  return (
+    <ViewscreenTooltip
+      label={
+        visible
+          ? isPrimary
+            ? "Primary dataset — hide to demote"
+            : "Hide from scene"
+          : "Show in scene alongside primary"
+      }
+      side="right"
+    >
+      <button
+        type="button"
+        data-testid={`btn-visibility-${datasetId}`}
+        aria-pressed={visible}
+        disabled={disabled}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (disabled) return;
+          toggleVisible({ datasetId, source: "preset" });
+        }}
+        style={{
+          width: 24,
+          flexShrink: 0,
+          background: "transparent",
+          border: "none",
+          cursor: disabled ? "not-allowed" : "pointer",
+          color: visible ? (isPrimary ? "#00e5ff" : "#7dd3fc") : "#475569",
+          fontSize: 12,
+          lineHeight: 1,
+          padding: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {visible ? (isPrimary ? "◉" : "◎") : "○"}
+      </button>
+    </ViewscreenTooltip>
+  );
 };
 
 export const DatasetPanel: React.FC = () => {
@@ -579,21 +675,33 @@ export const DatasetPanel: React.FC = () => {
                 </div>
               </div>
             )}
+            <VisibleDatasetsHeader />
             {(datasets ?? []).map((ds) => {
               const active = ds.id === datasetId && !pendingId && !activeUserDatasetId;
               const loading = ds.id === loadingId;
               return (
                 <ViewscreenTooltip key={ds.id} label={`Load ${ds.name}`} side="right">
+                <div
+                  data-testid={`row-dataset-${ds.id}`}
+                  className="w-full flex items-stretch transition-colors hover:bg-white/5"
+                  style={{
+                    background: active ? "rgba(0,229,255,0.07)" : "transparent",
+                    borderLeft: active ? "2px solid #00e5ff" : "2px solid transparent",
+                    opacity: !isOnline && !cachedIds.has(ds.id) ? 0.4 : 1,
+                  }}
+                >
+                  <PresetVisibilityToggle
+                    datasetId={ds.id}
+                    disabled={!isOnline && !cachedIds.has(ds.id)}
+                  />
                 <button
                   data-testid={`btn-dataset-${ds.id}`}
                   onClick={() => (isOnline || cachedIds.has(ds.id)) && handleSelectPreset(ds)}
                   disabled={!isOnline && !cachedIds.has(ds.id)}
-                  className="w-full text-left px-3 py-2 transition-colors hover:bg-white/5"
+                  className="flex-1 text-left px-2 py-2"
                   style={{
-                    background: active ? "rgba(0,229,255,0.07)" : "transparent",
-                    borderLeft: active ? "2px solid #00e5ff" : "2px solid transparent",
+                    background: "transparent",
                     cursor: !isOnline && !cachedIds.has(ds.id) ? "not-allowed" : "pointer",
-                    opacity: !isOnline && !cachedIds.has(ds.id) ? 0.4 : 1,
                   }}
                 >
                   <div className="flex items-center justify-between">
@@ -653,6 +761,7 @@ export const DatasetPanel: React.FC = () => {
                     </div>
                   )}
                 </button>
+                </div>
                 </ViewscreenTooltip>
               );
             })}

@@ -1,0 +1,132 @@
+import { describe, it, expect, beforeEach } from "vitest";
+import type { TerrainData } from "@workspace/api-client-react";
+import { useTerrainStore, VISIBLE_DATASETS_CAP } from "@/lib/terrainStore";
+
+function makeGrid(datasetId: string): TerrainData {
+  return {
+    datasetId,
+    minLat: 0,
+    maxLat: 1,
+    minLon: 0,
+    maxLon: 1,
+    minDepth: 0,
+    maxDepth: 10,
+    width: 2,
+    height: 2,
+    resolution: 2,
+    depths: [0, 5, 5, 10],
+  } as unknown as TerrainData;
+}
+
+beforeEach(() => {
+  useTerrainStore.getState().clear();
+});
+
+describe("terrainStore multi-dataset", () => {
+  it("setGrids promotes the grid's datasetId to primary and seeds visibleDatasets", () => {
+    const g = makeGrid("alpha");
+    useTerrainStore.getState().setGrids({ activeGrid: g, overviewGrid: g });
+    const s = useTerrainStore.getState();
+    expect(s.primaryDatasetId).toBe("alpha");
+    expect(s.visibleDatasets).toHaveLength(1);
+    expect(s.activeGrid).toBe(g);
+    expect(s.overviewGrid).toBe(g);
+  });
+
+  it("toggleVisible adds and removes datasets without disturbing primary", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    useTerrainStore
+      .getState()
+      .toggleVisible({ datasetId: "beta", source: "preset" });
+    let s = useTerrainStore.getState();
+    expect(s.primaryDatasetId).toBe("alpha");
+    expect(s.visibleDatasets.map((v) => v.datasetId)).toEqual(["alpha", "beta"]);
+
+    useTerrainStore
+      .getState()
+      .toggleVisible({ datasetId: "beta", source: "preset" });
+    s = useTerrainStore.getState();
+    expect(s.visibleDatasets.map((v) => v.datasetId)).toEqual(["alpha"]);
+    expect(s.primaryDatasetId).toBe("alpha");
+  });
+
+  it("hiding the primary promotes the most-recent remaining entry", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    useTerrainStore
+      .getState()
+      .toggleVisible({ datasetId: "beta", source: "preset" });
+    useTerrainStore
+      .getState()
+      .toggleVisible({ datasetId: "alpha", source: "preset" });
+    const s = useTerrainStore.getState();
+    expect(s.primaryDatasetId).toBe("beta");
+    expect(s.visibleDatasets.map((v) => v.datasetId)).toEqual(["beta"]);
+  });
+
+  it("setPrimary promotes a visible entry and mirrors its grids", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    const betaGrid = makeGrid("beta");
+    useTerrainStore
+      .getState()
+      .toggleVisible({ datasetId: "beta", source: "preset" });
+    useTerrainStore
+      .getState()
+      .setDatasetGrids("beta", { activeGrid: betaGrid, overviewGrid: betaGrid });
+    useTerrainStore.getState().setPrimary("beta");
+    const s = useTerrainStore.getState();
+    expect(s.primaryDatasetId).toBe("beta");
+    expect(s.activeGrid).toBe(betaGrid);
+    expect(s.overviewGrid).toBe(betaGrid);
+  });
+
+  it("setPrimary adds a not-yet-visible dataset", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    useTerrainStore.getState().setPrimary("gamma", "user");
+    const s = useTerrainStore.getState();
+    expect(s.primaryDatasetId).toBe("gamma");
+    expect(s.visibleDatasets.map((v) => v.datasetId)).toContain("gamma");
+    expect(
+      s.visibleDatasets.find((v) => v.datasetId === "gamma")?.source,
+    ).toBe("user");
+  });
+
+  it("hideAllOthers keeps only the primary visible", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    for (const id of ["b", "c", "d"]) {
+      useTerrainStore
+        .getState()
+        .toggleVisible({ datasetId: id, source: "preset" });
+    }
+    useTerrainStore.getState().hideAllOthers();
+    const s = useTerrainStore.getState();
+    expect(s.visibleDatasets.map((v) => v.datasetId)).toEqual(["alpha"]);
+    expect(s.primaryDatasetId).toBe("alpha");
+  });
+
+  it("respects the soft cap by evicting the oldest non-primary entry", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    const ids = ["b", "c", "d", "e", "f"];
+    for (const id of ids) {
+      useTerrainStore
+        .getState()
+        .toggleVisible({ datasetId: id, source: "preset" });
+    }
+    const s = useTerrainStore.getState();
+    expect(s.visibleDatasets.length).toBe(VISIBLE_DATASETS_CAP);
+    // Primary always preserved.
+    expect(s.visibleDatasets.find((v) => v.datasetId === "alpha")).toBeDefined();
+    expect(s.primaryDatasetId).toBe("alpha");
+    // The most-recent additions remain.
+    expect(s.visibleDatasets.map((v) => v.datasetId)).toContain("f");
+  });
+
+  it("clear resets visibleDatasets and primary", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    useTerrainStore.getState().clear();
+    const s = useTerrainStore.getState();
+    expect(s.visibleDatasets).toEqual([]);
+    expect(s.primaryDatasetId).toBeNull();
+    expect(s.activeGrid).toBeNull();
+    expect(s.overviewGrid).toBeNull();
+  });
+});

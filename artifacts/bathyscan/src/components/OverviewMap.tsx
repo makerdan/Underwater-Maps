@@ -30,6 +30,7 @@ import {
   computeInitialTransform,
   clampTransform,
   canvasToLonLat,
+  lonLatToCanvas,
   renderHeatmap,
   renderGridLines,
   renderMarkers,
@@ -74,6 +75,18 @@ export const OverviewMap: React.FC = () => {
   const gpsError = useGpsStore((s) => s.error);
   const startWatching = useGpsStore((s) => s.startWatching);
   const overviewGrid = useTerrainStore((s) => s.overviewGrid);
+  const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
+  const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
+  // Refs so the rAF render + DOM event handlers always read the latest store
+  // state without forcing the effects to re-run on every store update.
+  const visibleDatasetsRef = useRef(visibleDatasets);
+  const primaryDatasetIdRef = useRef(primaryDatasetId);
+  useEffect(() => {
+    visibleDatasetsRef.current = visibleDatasets;
+  }, [visibleDatasets]);
+  useEffect(() => {
+    primaryDatasetIdRef.current = primaryDatasetId;
+  }, [primaryDatasetId]);
   const unitsForUi = useSettingsStore((s) => s.units);
   const queryClient = useQueryClient();
 
@@ -454,6 +467,47 @@ export const OverviewMap: React.FC = () => {
         );
       }
 
+      // Non-primary dataset footprints (Task #350) — drawn above heatmap
+      // but below markers/scale-bar, projected through the *primary* grid's
+      // coordinate frame so all footprints share one canvas.
+      const visibleNow = visibleDatasetsRef.current;
+      const primIdNow = primaryDatasetIdRef.current;
+      if (visibleNow.length > 1 && primIdNow) {
+        for (const v of visibleNow) {
+          if (v.datasetId === primIdNow) continue;
+          const og = v.overviewGrid;
+          if (!og) continue;
+          const corners: Array<[number, number]> = [
+            [og.minLon, og.minLat],
+            [og.maxLon, og.minLat],
+            [og.maxLon, og.maxLat],
+            [og.minLon, og.maxLat],
+          ];
+          ctx.save();
+          ctx.beginPath();
+          corners.forEach(([lon, lat], i) => {
+            const [px, py] = lonLatToCanvas(lon, lat, grid, t);
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          });
+          ctx.closePath();
+          ctx.fillStyle = "rgba(0,229,255,0.06)";
+          ctx.fill();
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 3]);
+          ctx.strokeStyle = "rgba(0,229,255,0.55)";
+          ctx.stroke();
+          ctx.setLineDash([]);
+          // Tiny label at the top-left corner so users can identify each
+          // footprint and know clicking it promotes-to-primary.
+          const [lx, ly] = lonLatToCanvas(og.minLon, og.maxLat, grid, t);
+          ctx.fillStyle = "rgba(0,229,255,0.85)";
+          ctx.font = "10px monospace";
+          ctx.fillText(`◎ ${og.datasetId}`, lx + 4, ly + 12);
+          ctx.restore();
+        }
+      }
+
       // Scale bar
       renderScaleBar(ctx, grid, t, cH, units);
 
@@ -658,6 +712,27 @@ export const OverviewMap: React.FC = () => {
       const my = e.clientY - rect.top;
 
       const { lon, lat } = canvasToLonLat(mx, my, overviewGrid, t);
+
+      // Non-primary footprint click → promote that dataset to primary instead
+      // of dropping in. Hit-test newest-first so the most recently-added
+      // footprint wins when overlapping.
+      const visibleNow = visibleDatasetsRef.current;
+      const primIdNow = primaryDatasetIdRef.current;
+      for (let i = visibleNow.length - 1; i >= 0; i--) {
+        const v = visibleNow[i];
+        if (!v || v.datasetId === primIdNow) continue;
+        const og = v.overviewGrid;
+        if (!og) continue;
+        if (
+          lon >= og.minLon &&
+          lon <= og.maxLon &&
+          lat >= og.minLat &&
+          lat <= og.maxLat
+        ) {
+          useTerrainStore.getState().setPrimary(v.datasetId, v.source);
+          return;
+        }
+      }
 
       // EFH zone takes priority when the overlay is visible and the click
       // lands inside a polygon — open the species info panel instead of

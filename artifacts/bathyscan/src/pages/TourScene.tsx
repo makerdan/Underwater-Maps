@@ -20,7 +20,8 @@ import { DepthPoleLayer, DepthPoleDomLabels } from "@/components/DepthPoleLayer"
 import { GpsMarker } from "@/components/GpsMarker";
 import { DepthProfileLine } from "@/components/DepthProfileLine";
 import type { TidalDataResult } from "@/hooks/useTidalData";
-import { MAX_DEPTH_WORLD } from "@/lib/terrain";
+import { MAX_DEPTH_WORLD, WORLD_SIZE } from "@/lib/terrain";
+import { useTerrainStore } from "@/lib/terrainStore";
 import { WaterSurfacePlane } from "@/components/WaterSurfacePlane";
 import { LandmassMesh } from "@/components/LandmassMesh";
 import type { TerrainData } from "@workspace/api-client-react";
@@ -34,6 +35,56 @@ import { CurrentsLayer } from "@/components/CurrentsLayer";
 import { useCurrentsStore } from "@/lib/currentsStore";
 import { useWebglContextStore } from "@/lib/webglContextStore";
 import { WebglContextLostOverlay } from "@/components/WebglContextLostOverlay";
+
+// ---------------------------------------------------------------------------
+// NonPrimaryDatasetMeshes — renders every visible-but-not-primary dataset
+// inside the primary's world coordinate system. Each non-primary mesh occupies
+// world units [-WORLD_SIZE/2, WORLD_SIZE/2] in its own frame; we wrap it in
+// a <group> that scales + translates that frame so its geographic footprint
+// lines up with the primary's footprint.
+//
+// Y alignment is intentionally not corrected — each TerrainMesh normalises
+// depth to its own range, so non-primary meshes float at their own elevation.
+// Task #350 only requires XZ co-location.
+// ---------------------------------------------------------------------------
+const NonPrimaryDatasetMeshes: React.FC<{
+  primary: TerrainData;
+  showLandmass: boolean;
+}> = ({ primary, showLandmass }) => {
+  const visible = useTerrainStore((s) => s.visibleDatasets);
+  const primaryId = useTerrainStore((s) => s.primaryDatasetId);
+  const primaryLonRange = (primary.maxLon - primary.minLon) || 1;
+  const primaryLatRange = (primary.maxLat - primary.minLat) || 1;
+  return (
+    <>
+      {visible
+        .filter((v) => v.datasetId !== primaryId && v.activeGrid)
+        .map((v) => {
+          const g = v.activeGrid as TerrainData;
+          const secLonRange = (g.maxLon - g.minLon) || 1;
+          const secLatRange = (g.maxLat - g.minLat) || 1;
+          const xScale = secLonRange / primaryLonRange;
+          const zScale = secLatRange / primaryLatRange;
+          const secCenterLon = (g.minLon + g.maxLon) / 2;
+          const secCenterLat = (g.minLat + g.maxLat) / 2;
+          const primCenterLon = (primary.minLon + primary.maxLon) / 2;
+          const primCenterLat = (primary.minLat + primary.maxLat) / 2;
+          const cx = ((secCenterLon - primCenterLon) / primaryLonRange) * WORLD_SIZE;
+          const cz = -((secCenterLat - primCenterLat) / primaryLatRange) * WORLD_SIZE;
+          return (
+            <group
+              key={v.datasetId}
+              position={[cx, 0, cz]}
+              scale={[xScale, 1, zScale]}
+            >
+              <TerrainMesh grid={g} />
+              {showLandmass && <LandmassMesh grid={g} />}
+            </group>
+          );
+        })}
+    </>
+  );
+};
 
 // ---------------------------------------------------------------------------
 // FlyControlsScene — lives inside <Canvas>, wires up controls + lamp
@@ -210,6 +261,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
       <Particles />
       {terrain && <TerrainMesh ref={terrainMeshRef} grid={terrain} />}
       {terrain && showLandmass && <LandmassMesh grid={terrain} />}
+      {terrain && <NonPrimaryDatasetMeshes primary={terrain} showLandmass={showLandmass} />}
       <EfhZoneLayer />
       <SubstrateLayer />
       <Caustics />

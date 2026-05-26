@@ -47,6 +47,17 @@ export function useActiveDatasetSync(): void {
   });
 
   const committedRef = useRef<string | null>(null);
+  const promotedRef = useRef<string | null>(null);
+
+  // Promote the active preset to primary as soon as the id changes, so the
+  // 3D scene + Overview Map start showing the right dataset even before its
+  // grids arrive (the slot will just render empty until the loader fills it).
+  useEffect(() => {
+    if (!id) return;
+    if (promotedRef.current === id) return;
+    promotedRef.current = id;
+    useTerrainStore.getState().setPrimary(id, "preset");
+  }, [id]);
 
   useEffect(() => {
     if (!id) {
@@ -69,6 +80,7 @@ export function useActiveDatasetSync(): void {
     useTerrainStore.getState().setGrids({
       activeGrid: fetchedTerrain,
       overviewGrid: fetchedOverview,
+      source: "preset",
     });
   }, [id, fetchedTerrain, fetchedOverview, setTerrain, terrain]);
 }

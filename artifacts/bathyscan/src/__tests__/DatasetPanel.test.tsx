@@ -50,9 +50,22 @@ vi.mock("react-dropzone", () => ({
   }),
 }));
 
-vi.mock("@/lib/terrainStore", () => ({
-  useTerrainStore: { getState: () => ({ setGrids: vi.fn() }) },
-}));
+vi.mock("@/lib/terrainStore", () => {
+  const state = {
+    setGrids: vi.fn(),
+    visibleDatasets: [] as Array<{ datasetId: string }>,
+    primaryDatasetId: null as string | null,
+    hideAllOthers: vi.fn(),
+    toggleVisible: vi.fn(),
+  };
+  const useTerrainStore = ((selector?: (s: typeof state) => unknown) =>
+    selector ? selector(state) : state) as unknown as {
+    (sel?: (s: typeof state) => unknown): unknown;
+    getState: () => typeof state;
+  };
+  useTerrainStore.getState = () => state;
+  return { useTerrainStore, VISIBLE_DATASETS_CAP: 4 };
+});
 
 vi.mock("@/lib/uiStore", () => ({
   useUiStore: { getState: () => ({ setPendingDropIn: vi.fn() }) },
