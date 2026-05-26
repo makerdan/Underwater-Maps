@@ -13,6 +13,19 @@ import { test, expect } from "@playwright/test";
  */
 
 test.describe("Settings page", () => {
+  // E2E tests share the same dev-bypass user, so a setting persisted by an
+  // earlier test (e.g. the cross-device-sync spec leaving colormapTheme as
+  // "freshwater" or "viridis") would otherwise bleed into the assertions
+  // below that expect the default "ocean" value. Reset the relevant fields
+  // to defaults before every test. Uses the same x-e2e-user-id pattern as
+  // water-type-toggle.spec.ts.
+  test.beforeEach(async ({ request }) => {
+    await request.put("http://localhost:3151/api/settings", {
+      headers: { "x-e2e-user-id": "dev-user-bypass" },
+      data: { colormapTheme: "ocean", units: "metric", waterType: "saltwater" },
+    });
+  });
+
   // NOTE: Intentionally NO beforeEach that visits "/". The home route mounts
   // the heavy Three.js scene, which under headless Chromium leaks WebGL
   // contexts across many goto("/") calls during the full Playwright run and

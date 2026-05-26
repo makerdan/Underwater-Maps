@@ -1,7 +1,15 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("BathyScan — smoke suite", () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, request }) => {
+    // The HUD depth-value assertion below expects metric units (`M` suffix).
+    // E2E tests share the same dev-bypass user, so a setting persisted by an
+    // earlier test could leave units as "imperial" (FT). Reset before each
+    // test using the same x-e2e-user-id bypass as water-type-toggle.spec.ts.
+    await request.put("http://localhost:3151/api/settings", {
+      headers: { "x-e2e-user-id": "dev-user-bypass" },
+      data: { units: "metric" },
+    });
     await page.goto("/");
   });
 
