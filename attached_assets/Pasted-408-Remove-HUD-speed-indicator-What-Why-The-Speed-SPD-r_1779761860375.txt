@@ -1,0 +1,26 @@
+408 - Remove HUD speed indicator
+What & Why
+The Speed (SPD) readout in the bottom-left corner of the viewscreen isn't useful to users, so remove it along with its supporting wiring and settings toggle.
+
+Done looks like
+The bottom-left of the viewscreen no longer shows the SPD panel (neither the realistic mph/KT readout nor the dots + u/s readout).
+The CAMERA POSITION panel and the PIN readout below it still appear in the same spot, unchanged.
+The "Show speed indicator" toggle is removed from Settings (no orphan control).
+No remaining references to showSpeedIndicator or the SpeedDots helper anywhere in the bathyscan artifact; tests, fixtures, and persisted settings shape are updated so unit/e2e suites and typecheck pass cleanly.
+Out of scope
+The trolling boat HUD readout (🎣 TROLL … KT) and any speed values used internally for drift/throttle simulation — those stay.
+Any changes to boatSpeed.ts, formatSpeed, or mphToKnots utilities (they remain for other consumers).
+Steps
+Remove the speed indicator block and its imports/local state from the HUD (the {showSpeedIndicator && …} panel and the now-unused SpeedDots component, speedIndex, SPEEDS, formatSpeed, mphToKnots, boatSpeedMph, realisticMode, speed bindings — only drop ones that become unused).
+Remove the showSpeedIndicator field from the settings store (state, defaults, persisted shape / migration if applicable) and delete the matching toggle row in the Settings page.
+Update or delete tests and helpers that reference showSpeedIndicator / SpeedDots / the speed HUD panel (HUD.test.tsx, HUD.syntheticBadge.test.tsx, HudOverviewToggle.test.tsx, testHelpers.ts) so the suite still represents the new behavior.
+Run typecheck and the unit test suite, fix any fallout, and confirm the bottom-left HUD still renders camera position + pin info correctly.
+Relevant files
+artifacts/bathyscan/src/components/HUD.tsx:797-841
+artifacts/bathyscan/src/components/HUD.tsx:99-130
+artifacts/bathyscan/src/lib/settingsStore.ts
+artifacts/bathyscan/src/pages/Settings.tsx
+artifacts/bathyscan/src/lib/testHelpers.ts
+artifacts/bathyscan/src/__tests__/HUD.test.tsx
+artifacts/bathyscan/src/__tests__/HUD.syntheticBadge.test.tsx
+artifacts/bathyscan/src/__tests__/HudOverviewToggle.test.tsx
