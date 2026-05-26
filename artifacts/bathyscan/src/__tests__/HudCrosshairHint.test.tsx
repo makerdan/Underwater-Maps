@@ -97,7 +97,7 @@ describe("HUD crosshair shortcut hint", () => {
   it("updates the visible label and tooltip when the binding changes", () => {
     const { rerender } = render(<HUD />);
     act(() => {
-      useSettingsStore.getState().setCrosshairMenuKey("KeyT");
+      useSettingsStore.getState().setKeyBinding("crosshairMenu", "KeyT");
     });
     rerender(<HUD />);
 
@@ -107,7 +107,7 @@ describe("HUD crosshair shortcut hint", () => {
   });
 
   it("renders a friendly label for non-letter codes like Slash", () => {
-    useSettingsStore.getState().setCrosshairMenuKey("Slash");
+    useSettingsStore.getState().setKeyBinding("crosshairMenu", "Slash");
     render(<HUD />);
     const hint = screen.getByTestId("hud-crosshair-q-hint");
     expect(hint).toHaveTextContent("/ · ACTIONS");

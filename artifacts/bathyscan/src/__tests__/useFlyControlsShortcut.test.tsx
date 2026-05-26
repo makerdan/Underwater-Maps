@@ -95,7 +95,7 @@ afterEach(() => {
 
 describe("useFlyControls — keyboard shortcut", () => {
   it("opens the crosshair menu when the configured key is pressed", () => {
-    useSettingsStore.getState().setCrosshairMenuKey("KeyQ");
+    useSettingsStore.getState().setKeyBinding("crosshairMenu", "KeyQ");
     const { unmount } = mountHook();
 
     act(() => {
@@ -107,7 +107,7 @@ describe("useFlyControls — keyboard shortcut", () => {
   });
 
   it("does not open the menu when an unrelated key is pressed", () => {
-    useSettingsStore.getState().setCrosshairMenuKey("KeyQ");
+    useSettingsStore.getState().setKeyBinding("crosshairMenu", "KeyQ");
     const { unmount } = mountHook();
 
     act(() => {
@@ -119,12 +119,12 @@ describe("useFlyControls — keyboard shortcut", () => {
   });
 
   it("follows a rebound key after the store updates", () => {
-    useSettingsStore.getState().setCrosshairMenuKey("KeyQ");
+    useSettingsStore.getState().setKeyBinding("crosshairMenu", "KeyQ");
     const { unmount } = mountHook();
 
     // Rebind to KeyT — the ref-sync useEffect should pick this up.
     act(() => {
-      useSettingsStore.getState().setCrosshairMenuKey("KeyT");
+      useSettingsStore.getState().setKeyBinding("crosshairMenu", "KeyT");
     });
 
     act(() => {

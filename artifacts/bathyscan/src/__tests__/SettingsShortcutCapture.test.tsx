@@ -67,7 +67,7 @@ describe("Settings — crosshair menu key capture", () => {
     const btn = screen.getByTestId("shortcut-crosshair-menu-key");
     // Default is KeyQ → formatted as "Q" → upper-cased "Q"
     expect(btn).toHaveTextContent("Q");
-    expect(useSettingsStore.getState().crosshairMenuKey).toBe("KeyQ");
+    expect(useSettingsStore.getState().keyBindings.crosshairMenu).toBe("KeyQ");
   });
 
   it("clicking the capture button arms it and the next keydown writes the new key", () => {
@@ -80,12 +80,12 @@ describe("Settings — crosshair menu key capture", () => {
     // Bare modifier presses are ignored — the button stays armed.
     fireEvent.keyDown(window, { code: "ShiftLeft" });
     expect(btn).toHaveTextContent(/PRESS ANY KEY/i);
-    expect(useSettingsStore.getState().crosshairMenuKey).toBe("KeyQ");
+    expect(useSettingsStore.getState().keyBindings.crosshairMenu).toBe("KeyQ");
 
     // First real key resolves the capture.
     fireEvent.keyDown(window, { code: "KeyT" });
 
-    expect(useSettingsStore.getState().crosshairMenuKey).toBe("KeyT");
+    expect(useSettingsStore.getState().keyBindings.crosshairMenu).toBe("KeyT");
     expect(btn).toHaveTextContent("T");
     expect(btn).not.toHaveTextContent(/PRESS ANY KEY/i);
   });
@@ -99,12 +99,12 @@ describe("Settings — crosshair menu key capture", () => {
 
     fireEvent.keyDown(window, { code: "Escape" });
 
-    expect(useSettingsStore.getState().crosshairMenuKey).toBe("KeyQ");
+    expect(useSettingsStore.getState().keyBindings.crosshairMenu).toBe("KeyQ");
     expect(btn).toHaveTextContent("Q");
   });
 
   it("RESET button restores the default KeyQ binding", () => {
-    useSettingsStore.getState().setCrosshairMenuKey("KeyM");
+    useSettingsStore.getState().setKeyBinding("crosshairMenu", "KeyM");
     openShortcutsSection();
     const btn = screen.getByTestId("shortcut-crosshair-menu-key");
     expect(btn).toHaveTextContent("M");
@@ -113,7 +113,7 @@ describe("Settings — crosshair menu key capture", () => {
     const resetBtn = btn.parentElement!.querySelector("button:nth-of-type(2)") as HTMLButtonElement;
     fireEvent.click(resetBtn);
 
-    expect(useSettingsStore.getState().crosshairMenuKey).toBe("KeyQ");
+    expect(useSettingsStore.getState().keyBindings.crosshairMenu).toBe("KeyQ");
     expect(btn).toHaveTextContent("Q");
   });
 
@@ -123,9 +123,9 @@ describe("Settings — crosshair menu key capture", () => {
     fireEvent.click(btn);
     fireEvent.keyDown(window, { code: "Slash" });
 
-    const stored = useSettingsStore.getState().crosshairMenuKey;
+    const stored = useSettingsStore.getState().keyBindings.crosshairMenu;
     expect(stored).toBe("Slash");
-    // The HUD hint renders `formatKeyCode(crosshairMenuKey).toUpperCase()`.
+    // The HUD hint renders `formatKeyCode(keyBindings.crosshairMenu).toUpperCase()`.
     expect(btn.textContent).toContain(formatKeyCode(stored).toUpperCase());
   });
 });
