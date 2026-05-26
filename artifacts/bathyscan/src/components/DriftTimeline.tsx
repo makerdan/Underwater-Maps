@@ -190,9 +190,72 @@ export const DriftTimeline: React.FC = () => {
         </div>
       )}
 
+      {/* Arrow legend — only in trolling mode, since drift mode has no boat arrow */}
+      {isTrolling && wp && (
+        <div
+          data-testid="arrow-legend"
+          style={{
+            display: "flex",
+            gap: 12,
+            justifyContent: "center",
+            flexWrap: "wrap",
+            marginTop: 8,
+            paddingTop: 6,
+            borderTop: "1px solid rgba(0,229,255,0.08)",
+            fontSize: 9,
+            letterSpacing: "0.06em",
+          }}
+        >
+          <LegendRow
+            color="#fbbf24"
+            label="Boat"
+            valueKt={wp.boatContributionKnots}
+          />
+          <LegendRow
+            color="#22d3ee"
+            label="Drift"
+            valueKt={wp.driftContributionKnots}
+          />
+          <LegendRow
+            color="#e2e8f0"
+            label="Resultant"
+            valueKt={wp.driftSpeedKnots}
+            faint
+          />
+        </div>
+      )}
+
       <div style={{ textAlign: "center", fontSize: 8, color: "#1e3a5f", marginTop: 6, letterSpacing: "0.1em" }}>
         CLICK A CHIP TO SCRUB · ● = BOTTOM IN REACH · ○ = TOO DEEP
       </div>
     </div>
   );
 };
+
+const LegendRow: React.FC<{
+  color: string;
+  label: string;
+  valueKt?: number;
+  faint?: boolean;
+}> = ({ color, label, valueKt, faint }) => (
+  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+    <span
+      aria-hidden
+      style={{
+        display: "inline-block",
+        width: 14,
+        height: 3,
+        background: color,
+        opacity: faint ? 0.5 : 1,
+        borderRadius: 1,
+        boxShadow: faint ? "none" : `0 0 4px ${color}`,
+      }}
+    />
+    <span style={{ color: "#94a3b8", fontWeight: 600 }}>{label}</span>
+    {typeof valueKt === "number" && (
+      <span style={{ color, opacity: faint ? 0.8 : 1, fontWeight: 700 }}>
+        {valueKt.toFixed(1)} kt
+      </span>
+    )}
+  </span>
+);
