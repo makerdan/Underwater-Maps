@@ -704,18 +704,23 @@ export const DatasetPanel: React.FC = () => {
                     cursor: !isOnline && !cachedIds.has(ds.id) ? "not-allowed" : "pointer",
                   }}
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-start justify-between gap-2">
                     <span
                       style={{
+                        flex: 1,
+                        minWidth: 0,
                         fontSize: 11,
                         fontWeight: active ? 700 : 400,
                         color: active ? "#00e5ff" : !isOnline && !cachedIds.has(ds.id) ? "#64748b" : "#e2e8f0",
                         textShadow: active ? "0 0 6px rgba(0,229,255,0.4)" : "none",
+                        whiteSpace: "normal",
+                        overflowWrap: "anywhere",
+                        wordBreak: "break-word",
                       }}
                     >
                       {ds.name}
                     </span>
-                    <span style={{ fontSize: 9, color: "#cbd5e1" }}>
+                    <span style={{ fontSize: 9, color: "#cbd5e1", flexShrink: 0 }}>
                       {loading ? (
                         <span className="animate-pulse" style={{ color: "#00e5ff" }}>◌</span>
                       ) : !isOnline ? (
@@ -747,7 +752,7 @@ export const DatasetPanel: React.FC = () => {
                   <div
                     style={{
                       fontSize: 9, color: "#ffffff", marginTop: 1,
-                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                      whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word",
                     }}
                   >
                     {ds.description}

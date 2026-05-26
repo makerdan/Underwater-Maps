@@ -843,9 +843,10 @@ const FolderRow: React.FC<FolderRowProps> = ({
         <span
           style={{
             flex: 1,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            minWidth: 0,
+            whiteSpace: "normal",
+            overflowWrap: "anywhere",
+            wordBreak: "break-word",
           }}
         >
           {node.folder.name}
@@ -952,9 +953,9 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
               textShadow: active ? "0 0 6px rgba(0,229,255,0.3)" : "none",
               flex: 1,
               minWidth: 0,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+              whiteSpace: "normal",
+              overflowWrap: "anywhere",
+              wordBreak: "break-word",
             }}
           >
             {ds.name}
