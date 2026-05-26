@@ -82,7 +82,7 @@ import { fileURLToPath } from "node:url";
 const BUILDER_SRC_PATH = fileURLToPath(import.meta.url);
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const OUT_PATH = resolve(
+export const OUT_PATH = resolve(
   REPO_ROOT,
   "artifacts/api-server/src/lib/txLakeSubstrate.gen.json",
 );
@@ -944,7 +944,7 @@ function buildLakeFeatures(
 // Main
 // ---------------------------------------------------------------------------
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   console.log("=== build-tx-lake-substrate ===");
   const allFeatures: BundledFeature[] = [];
   let bbox: [number, number, number, number] = [
@@ -1000,7 +1000,13 @@ async function main(): Promise<void> {
   console.log("=== done ===");
 }
 
-main().catch((err) => {
-  console.error("Fatal error:", err);
-  process.exit(1);
-});
+const invokedDirectly =
+  import.meta.url === `file://${process.argv[1]}` ||
+  import.meta.url.endsWith(process.argv[1] ?? "");
+
+if (invokedDirectly) {
+  main().catch((err) => {
+    console.error("Fatal error:", err);
+    process.exit(1);
+  });
+}

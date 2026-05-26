@@ -33,7 +33,7 @@ import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
-const OUT_PATH = resolve(
+export const OUT_PATH = resolve(
   REPO_ROOT,
   "artifacts/api-server/src/lib/txFreshwaterEfhData.gen.json",
 );
@@ -1023,7 +1023,7 @@ async function buildLake(spec: LakeSpec): Promise<BundledCollection> {
   };
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   console.log("=== build-tx-freshwater-efh ===");
   const out: BundledOut = {};
   for (const spec of LAKES) {
@@ -1036,7 +1036,13 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const invokedDirectly =
+  import.meta.url === `file://${process.argv[1]}` ||
+  import.meta.url.endsWith(process.argv[1] ?? "");
+
+if (invokedDirectly) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

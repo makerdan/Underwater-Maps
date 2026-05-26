@@ -60,7 +60,7 @@ const FETCH_BBOX = { minLon: -138.5, minLat: 54.5, maxLon: -130.0, maxLat: 60.0 
 /** Output bbox stamped into bundle metadata. */
 const REGION_BBOX: [number, number, number, number] = [-138.5, 54.5, -130.0, 60.0];
 
-const OUT_PATH = resolve(
+export const OUT_PATH = resolve(
   REPO_ROOT,
   "artifacts/api-server/src/lib/encSubstrateData.alaska.gen.json",
 );
@@ -314,7 +314,7 @@ function buildBundle(raw: RawFeature[]): BundledCollection {
 
 // --- Main ------------------------------------------------------------------
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   console.log("=== build-enc-substrate ===");
   console.log(`Fetching ENC Seabed_Area polygons for bbox ${JSON.stringify(FETCH_BBOX)}…`);
 
@@ -336,7 +336,13 @@ async function main(): Promise<void> {
   console.log("=== done ===");
 }
 
-main().catch((err) => {
-  console.error("Fatal error:", err);
-  process.exit(1);
-});
+const invokedDirectly =
+  import.meta.url === `file://${process.argv[1]}` ||
+  import.meta.url.endsWith(process.argv[1] ?? "");
+
+if (invokedDirectly) {
+  main().catch((err) => {
+    console.error("Fatal error:", err);
+    process.exit(1);
+  });
+}

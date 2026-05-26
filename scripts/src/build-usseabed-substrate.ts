@@ -82,7 +82,7 @@ const SERVICES: ServiceSpec[] = [
 const TILE_DEG = 5;
 const REGION_BBOX: [number, number, number, number] = [-130, 24, -65, 49];
 
-const OUT_PATH = resolve(
+export const OUT_PATH = resolve(
   REPO_ROOT,
   "artifacts/api-server/src/lib/usSeabedSubstrate.gen.json",
 );
@@ -437,7 +437,7 @@ function buildBundle(tagged: TaggedFeature[]): BundledCollection {
 
 // --- Main ------------------------------------------------------------------
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   console.log("=== build-usseabed-substrate ===");
   console.log(`Fetching ENC SBDARE polygons for CONUS bbox ${JSON.stringify(REGION_BBOX)}…`);
 
@@ -459,7 +459,13 @@ async function main(): Promise<void> {
   console.log("=== done ===");
 }
 
-main().catch((err) => {
-  console.error("Fatal error:", err);
-  process.exit(1);
-});
+const invokedDirectly =
+  import.meta.url === `file://${process.argv[1]}` ||
+  import.meta.url.endsWith(process.argv[1] ?? "");
+
+if (invokedDirectly) {
+  main().catch((err) => {
+    console.error("Fatal error:", err);
+    process.exit(1);
+  });
+}

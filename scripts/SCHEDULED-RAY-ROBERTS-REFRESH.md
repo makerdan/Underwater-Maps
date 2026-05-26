@@ -1,3 +1,10 @@
+> **See also:** [`SCHEDULED-DATA-REFRESH.md`](./SCHEDULED-DATA-REFRESH.md)
+> covers the same setup for every other survey-based data layer (ShoreZone,
+> ENC substrate, USSEABED substrate, TX lake substrate, TX freshwater EFH)
+> and shares the wrapper implementation in
+> `scripts/src/lib/scheduled-refresh.ts`. Prefer that doc for new wire-up;
+> this file is kept as the Ray-Roberts-specific reference.
+
 # Scheduled refresh — Lake Ray Roberts terrain bundle
 
 The Ray Roberts terrain build script (`scripts/src/build-lake-ray-roberts-terrain.ts`)

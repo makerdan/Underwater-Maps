@@ -69,7 +69,7 @@ const FETCH_BBOX = { minLon: -138.0, minLat: 58.0, maxLon: -135.0, maxLat: 59.5 
  *  the declared region bbox. */
 const REGION_BBOX: [number, number, number, number] = [-137.2, 58.3, -135.7, 59.2];
 
-const OUT_PATH = resolve(
+export const OUT_PATH = resolve(
   REPO_ROOT,
   "artifacts/api-server/src/lib/shoreZoneData.alaska.gen.json",
 );
@@ -321,7 +321,7 @@ function buildBundle(raw: RawFeature[]): BundledCollection {
 
 // --- Main ------------------------------------------------------------------
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   console.log("=== build-shorezone-data ===");
   console.log(`Fetching ShoreZone ITZ polygons for bbox ${JSON.stringify(FETCH_BBOX)}…`);
 
@@ -346,7 +346,13 @@ async function main(): Promise<void> {
   console.log("=== done ===");
 }
 
-main().catch((err) => {
-  console.error("Fatal error:", err);
-  process.exit(1);
-});
+const invokedDirectly =
+  import.meta.url === `file://${process.argv[1]}` ||
+  import.meta.url.endsWith(process.argv[1] ?? "");
+
+if (invokedDirectly) {
+  main().catch((err) => {
+    console.error("Fatal error:", err);
+    process.exit(1);
+  });
+}
