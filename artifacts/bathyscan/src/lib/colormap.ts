@@ -125,6 +125,22 @@ export function getColormap(theme: ColormapTheme): (t: number) => THREE.Color {
 }
 
 /**
+ * Convert a THREE.Color (which, with ColorManagement enabled, stores its
+ * components in linear-sRGB space) into 8-bit display-space sRGB bytes
+ * suitable for CSS / 2D canvas. Reading `.r * 255` directly would paint
+ * the linear values onto the screen and the gradient would look much
+ * darker than the source hex codes.
+ */
+function colorToSrgbBytes(c: THREE.Color): { r: number; g: number; b: number } {
+  const srgb = c.clone().convertLinearToSRGB();
+  return {
+    r: Math.max(0, Math.min(255, Math.round(srgb.r * 255))),
+    g: Math.max(0, Math.min(255, Math.round(srgb.g * 255))),
+    b: Math.max(0, Math.min(255, Math.round(srgb.b * 255))),
+  };
+}
+
+/**
  * Build a CSS `linear-gradient(...)` string for a colormap theme.
  * Samples the theme at `samples` evenly-spaced points so the gradient
  * approximates the same curve used by the renderer.
@@ -143,10 +159,7 @@ export function colormapCssGradient(
   const stops: string[] = [];
   for (let i = 0; i < n; i++) {
     const t = i / (n - 1);
-    const c = toColor(t);
-    const r = Math.round(c.r * 255);
-    const g = Math.round(c.g * 255);
-    const b = Math.round(c.b * 255);
+    const { r, g, b } = colorToSrgbBytes(toColor(t));
     stops.push(`rgb(${r},${g},${b}) ${(t * 100).toFixed(2)}%`);
   }
   return `linear-gradient(${direction}, ${stops.join(", ")})`;
@@ -169,8 +182,8 @@ export function colormapCanvas(
 
   for (let y = 0; y < height; y++) {
     const t = y / (height - 1);
-    const c = toColor(t);
-    ctx.fillStyle = `rgb(${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(c.b * 255)})`;
+    const { r, g, b } = colorToSrgbBytes(toColor(t));
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
     ctx.fillRect(0, y, width, 1);
   }
 

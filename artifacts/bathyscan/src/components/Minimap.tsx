@@ -255,6 +255,7 @@ export const Minimap: React.FC = () => {
         <ViewscreenTooltip label="Click to teleport here" side="left">
           <canvas
             ref={canvasRef}
+            data-testid="minimap-canvas"
             width={W}
             height={H}
             onClick={handleClick}

@@ -156,28 +156,31 @@ test.describe("Bathymetric currents — interaction coverage", () => {
     // Baseline: store default is 0 → "0%".
     await expect(readout).toHaveText(/^0%$/);
 
-    // Scrub to ~50% (slider value range is 0..1000, mapped to 0..1).
-    await slider.evaluate((el: HTMLInputElement) => {
-      el.value = "500";
+    // Scrub via the native HTMLInputElement.value setter so React's internal
+    // value-tracker sees the change. Assigning `el.value = ...` directly is
+    // intercepted by React and treated as a no-op for onChange dispatch,
+    // which is why a plain assignment + Event dispatch never updated the
+    // readout. Using the prototype setter bypasses the tracker.
+    const setSliderValue = (el: HTMLInputElement, v: string) => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )!.set!;
+      setter.call(el, v);
       el.dispatchEvent(new Event("input", { bubbles: true }));
       el.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    };
+
+    // Scrub to ~50% (slider value range is 0..1000, mapped to 0..1).
+    await slider.evaluate(setSliderValue, "500");
     await expect(readout).toHaveText(/^50%$/, { timeout: 5_000 });
 
     // Scrub to 100% (peak ebb / wrap point).
-    await slider.evaluate((el: HTMLInputElement) => {
-      el.value = "1000";
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      el.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await slider.evaluate(setSliderValue, "1000");
     await expect(readout).toHaveText(/^100%$/, { timeout: 5_000 });
 
     // Back to 0 for hygiene.
-    await slider.evaluate((el: HTMLInputElement) => {
-      el.value = "0";
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      el.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await slider.evaluate(setSliderValue, "0");
     await expect(readout).toHaveText(/^0%$/, { timeout: 5_000 });
   });
 

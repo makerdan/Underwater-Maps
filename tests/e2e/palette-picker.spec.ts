@@ -56,6 +56,27 @@ test.describe("Depth palette picker — end-to-end", () => {
     await page.waitForURL((url) => url.pathname.endsWith("/settings"), { timeout: 5_000 });
     await expect(page.locator("text=◈ DEPTH COLOR PALETTE")).toBeVisible({ timeout: 10_000 });
 
+    // The depth-scale bar paints whichever colormap theme is active, and the
+    // Ocean theme is the only one whose deepest stop is sourced from the
+    // user-editable palette (the other presets have fixed stops). Force the
+    // theme to "ocean" first so the deep-colour pick below is what the bar
+    // actually paints — otherwise dev-user-bypass settings persisted from a
+    // previous test run (e.g. "freshwater" after a Lake Fork preset) would
+    // make the bottom of the bar ignore our palette change.
+    const colormapTrigger = page.getByTestId("depth-colormap-select");
+    await expect(colormapTrigger).toBeVisible({ timeout: 10_000 });
+    if ((await colormapTrigger.getAttribute("data-value")) !== "ocean") {
+      await colormapTrigger.click();
+      await page
+        .locator(`ul[role="listbox"] li[role="option"]`)
+        .filter({ hasText: /Ocean/i })
+        .first()
+        .click();
+      await expect(colormapTrigger).toHaveAttribute("data-value", "ocean", {
+        timeout: 5_000,
+      });
+    }
+
     const deepHex = page.locator('[data-testid="palette-deep-hex"]');
     await expect(deepHex).toBeVisible();
 

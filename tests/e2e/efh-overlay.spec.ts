@@ -82,8 +82,11 @@ interface CasePlan {
 }
 
 async function runEfhCase(page: Page, plan: CasePlan): Promise<void> {
-  await page.goto("/");
-  await page.waitForLoadState("networkidle");
+  // domcontentloaded (not networkidle): the bathyscan home keeps long-lived
+  // requests open (terrain warm-up, EFH fetch, /api/me, etc.), so
+  // networkidle frequently never resolves before Playwright's nav timeout.
+  // The poll loops below already establish their own readiness signals.
+  await page.goto("/", { waitUntil: "domcontentloaded" });
 
   if (!(await waitForTestHelpers(page))) {
     test.skip(true, "window.__bathyTest not installed — dev test helpers missing");

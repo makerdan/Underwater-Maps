@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { terrainCanvas } from "./_helpers/canvases";
 
 /**
  * PWA / Offline Mode E2E tests.
@@ -174,8 +175,10 @@ test.describe("Offline network-abort scenario", () => {
     // 3. Dispatch the offline event so the store updates
     await goOffline(page);
 
-    // 4. The canvas element must still be in the DOM (terrain rendered pre-abort)
-    const canvasAfter = page.locator("canvas");
+    // 4. The terrain canvas (three.js renderer) must still be in the DOM.
+    // The HUD now also mounts a Minimap <canvas>, so a plain `canvas`
+    // selector trips strict-mode — use the shared helper.
+    const canvasAfter = terrainCanvas(page);
     await expect(canvasAfter).toBeAttached({ timeout: 3000 });
 
     // 5. Offline badge must be visible

@@ -35,28 +35,41 @@ test.describe("Settings cross-device sync", () => {
     page,
   }) => {
     // ── Device A: change a setting and persist it ────────────────────────
-    await page.goto("/settings");
-    await page.waitForLoadState("networkidle");
+    // domcontentloaded (not networkidle): bathyscan keeps long-lived requests
+    // open (terrain warm-up, /api/me poll, etc.) so networkidle would time
+    // out before this page is interactive.
+    await page.goto("/settings", { waitUntil: "domcontentloaded" });
 
-    // The Depth Colormap <select> is the only one carrying a `viridis`
-    // option, so this locator is unambiguous regardless of current value.
-    const colormapSelect = page
-      .locator('select')
-      .filter({ has: page.locator('option[value="viridis"]') })
-      .first();
-    await expect(colormapSelect).toBeVisible({ timeout: 10_000 });
+    // The Depth Colormap picker is a custom (button + listbox) dropdown,
+    // not a native <select>. Drive it via its testid and the listbox
+    // option that carries the target value.
+    const colormapTrigger = page.getByTestId("depth-colormap-select");
+    await expect(colormapTrigger).toBeVisible({ timeout: 10_000 });
+
+    const selectColormap = async (value: string) => {
+      const current = await colormapTrigger.getAttribute("data-value");
+      if (current === value) return;
+      await colormapTrigger.click();
+      await page
+        .locator(`ul[role="listbox"] li[role="option"]`)
+        .filter({ hasText: new RegExp(value, "i") })
+        .first()
+        .click();
+      await expect(colormapTrigger).toHaveAttribute("data-value", value, {
+        timeout: 5_000,
+      });
+    };
 
     // Make sure we actually flip the value so the section becomes dirty —
     // if a previous test run left it on viridis, start from ocean first.
-    const startingValue = await colormapSelect.inputValue();
+    const startingValue = await colormapTrigger.getAttribute("data-value");
     if (startingValue === "viridis") {
-      await colormapSelect.selectOption("ocean");
+      await selectColormap("ocean");
       // Wait for the auto-sync debounce (300 ms) + PUT round-trip.
       await page.waitForTimeout(1500);
     }
 
-    await colormapSelect.selectOption("viridis");
-    await expect(colormapSelect).toHaveValue("viridis");
+    await selectColormap("viridis");
 
     // Force-flush the pending debounced sync via the section Save button so
     // we have a deterministic "saved" signal to await.
@@ -82,16 +95,14 @@ test.describe("Settings cross-device sync", () => {
       window.localStorage.clear();
       window.sessionStorage.clear();
     });
-    await page.goto("/settings");
-    await page.waitForLoadState("networkidle");
+    await page.goto("/settings", { waitUntil: "domcontentloaded" });
 
-    const colormapAfter = page
-      .locator('select')
-      .filter({ has: page.locator('option[value="viridis"]') })
-      .first();
+    const colormapAfter = page.getByTestId("depth-colormap-select");
     // hydrateFromServer applies the server-side viridis value because
     // lastSyncedAt is null on this "fresh device".
-    await expect(colormapAfter).toHaveValue("viridis", { timeout: 10_000 });
+    await expect(colormapAfter).toHaveAttribute("data-value", "viridis", {
+      timeout: 10_000,
+    });
 
     // The Account tab's Last synced row should be populated again from the
     // server's __updatedAt stamp (not the post-clear "NEVER" placeholder).

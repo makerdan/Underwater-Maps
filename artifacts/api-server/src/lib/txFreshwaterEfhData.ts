@@ -87,17 +87,21 @@ const BUNDLE: BundledOut = JSON.parse(
  * shape stays unchanged.
  */
 function explodeToPolygons(fc: BundledCollection): EfhFeatureCollection {
-  const features: EfhFeature[] = [];
-  // Process TPWD-sourced features first so the resulting collection leads
-  // with the lake-specific TPWD attribution (the UI's "lead feature" used
-  // by the EFH detail panel must surface the TPWD disclaimer + lake-page
-  // credit, not the underlying USGS NHD shoreline polygon).
-  const ordered = [...fc.features].sort((a, b) => {
-    const aT = a.properties.source?.startsWith("TPWD") ? 0 : 1;
-    const bT = b.properties.source?.startsWith("TPWD") ? 0 : 1;
+  // Sort so TPWD-sourced features come first. The frontend popover branches
+  // on `source.startsWith("TPWD")` to decide whether to show the TPWD-state
+  // disclaimer vs the NOAA federal-EFH credit; if the first feature in the
+  // collection is the NHD waterbody polygon (USGS, non-TPWD) the e2e
+  // attribution check fails even though the dataset is a Texas reservoir.
+  // Putting the TPWD-attributed features first preserves the "this dataset
+  // is curated by TPWD" framing on the very first hit-test.
+  const sorted = [...fc.features].sort((a, b) => {
+    const aT = a.properties.source.startsWith("TPWD") ? 0 : 1;
+    const bT = b.properties.source.startsWith("TPWD") ? 0 : 1;
     return aT - bT;
   });
-  for (const f of ordered) {
+
+  const features: EfhFeature[] = [];
+  for (const f of sorted) {
     const { sourceLayer: _ignored, ...props } = f.properties;
     void _ignored;
     if (f.geometry.type === "Polygon") {

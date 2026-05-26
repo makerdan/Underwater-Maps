@@ -81,6 +81,15 @@ export function buildSinusoidalTidalHours(
   // event and rarely lands on an hour boundary.
   const SLACK_BRACKET_MS = 30 * 60 * 1000;
 
+  // Snap any hour within SLACK_SNAP_MIN minutes of an event to slack. At
+  // hourly sampling resolution, the natural |sin| slack window (~10–20 min
+  // wide for a peak of 1.2 kt and 0.1 kt threshold) is narrower than the
+  // sampling interval, so a perfectly valid 24-hour series can end up with
+  // zero slack hours by luck of alignment. Widening the snap to ±30 min
+  // guarantees each slack event is reflected in at least one hour without
+  // distorting the speeds away from the events themselves.
+  const SLACK_SNAP_MIN = 30;
+
   return Array.from({ length: 24 }, (_, h) => {
     const t = startMs + h * 3600 * 1000;
     const s = computeSlackSample({
@@ -91,42 +100,32 @@ export function buildSinusoidalTidalHours(
       slackThresholdKnots: SLACK_THRESHOLD_DEFAULT,
     });
 
-    // Find the nearest tide event and check if it's within the bracket.
-    let nearestEvent = events[0];
-    let nearestDist = Infinity;
-    for (const e of events) {
-      const d = Math.abs(e.time - t);
-      if (d < nearestDist) {
-        nearestDist = d;
-        nearestEvent = e;
-      }
-    }
-    const bracketed = nearestEvent !== undefined && nearestDist <= SLACK_BRACKET_MS;
+    let isSlack = s.slack.isSlack;
+    let phase = s.slack.phase;
+    let speedKnots = s.speedKnots;
 
-    let phase: TidePhase;
-    if (bracketed && nearestEvent) {
-      phase = nearestEvent.type === "high" ? "slack-high" : "slack-low";
-    } else {
-      // Outside the slack bracket, use the sinusoidal flooding/ebbing
-      // direction from computeSlackSample but force the non-slack phase
-      // (so an hour that happens to land at instantaneous low speed but
-      // not adjacent to a tide event isn't mislabelled).
-      phase = s.slack.phase === "slack-high" || s.slack.phase === "flooding"
-        ? "flooding"
-        : "ebbing";
-      // Disambiguate: if computeSlackSample identified the bracket as
-      // flooding (low→high), call it flooding; otherwise ebbing.
-      if (s.slack.phase === "slack-low" || s.slack.phase === "flooding") {
-        phase = "flooding";
-      } else {
-        phase = "ebbing";
+    if (!isSlack) {
+      // Find the nearest synthetic event to decide if we're in the snap window.
+      let nearest: typeof events[number] | null = null;
+      let nearestDistMs = Infinity;
+      for (const ev of events) {
+        const d = Math.abs(ev.time - t);
+        if (d < nearestDistMs) {
+          nearestDistMs = d;
+          nearest = ev;
+        }
+      }
+      if (nearest && nearestDistMs / 60000 <= SLACK_SNAP_MIN) {
+        isSlack = true;
+        phase = nearest.type === "high" ? "slack-high" : "slack-low";
+        speedKnots = 0;
       }
     }
 
     return {
-      tidalSpeedKnots: Math.round(s.speedKnots * 100) / 100,
+      tidalSpeedKnots: Math.round(speedKnots * 100) / 100,
       tidalDegrees: Math.round(s.directionDeg) % 360,
-      isSlack: bracketed,
+      isSlack,
       phase,
     };
   });

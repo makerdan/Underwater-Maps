@@ -843,6 +843,7 @@ export const OverviewMap: React.FC = () => {
       {/* Canvas fills the overlay */}
       <canvas
         ref={canvasRef}
+        data-testid="overview-map-canvas"
         width={window.innerWidth}
         height={window.innerHeight}
         style={{ width: "100%", height: "100%", cursor: "crosshair", display: "block" }}
