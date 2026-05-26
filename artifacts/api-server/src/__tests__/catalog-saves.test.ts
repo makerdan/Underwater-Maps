@@ -7,7 +7,7 @@
  * the materializer wraps with persistence + status updates.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { buildCatalogGrids } from "../routes/catalog-saves.js";
 import { ALL_PRESET_DATASETS } from "../lib/terrain.js";
 import type { CatalogSeedEntry } from "../lib/catalogSeeder.js";
@@ -41,8 +41,66 @@ describe("buildCatalogGrids", () => {
     expect(result).toBeNull();
   });
 
-  it("returns null for global pipeline entries that aren't backed by a preset", async () => {
-    const entry = makeEntry({ id: "gebco-2024-global", sourceAgency: "GEBCO" });
+  it("materializes the GEBCO 2024 global bathymetry entry via the GEBCO WCS", async () => {
+    // Stub fetch so the test doesn't touch the network. The fetcher decodes
+    // an AAIGRID-formatted response, so produce a tiny 2x2 grid (header +
+    // values) that exercises the depth/elevation conversion path.
+    const aaigrid = [
+      "ncols 2",
+      "nrows 2",
+      "xllcorner 0",
+      "yllcorner 0",
+      "cellsize 1",
+      "nodata_value -9999",
+      "-50 -100",
+      "-25 5",
+    ].join("\n");
+    // Return a fresh Response on each call — Response bodies are
+    // single-use streams, so reusing one object across two fetches throws
+    // "Body has already been read" on the second decode.
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () =>
+        new Response(aaigrid, {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        }),
+      );
+
+    try {
+      const entry = makeEntry({
+        id: "gebco-2024-global",
+        name: "GEBCO 2024 Global Bathymetric Grid",
+        sourceAgency: "GEBCO / BODC",
+        coverageBbox: { minLon: -10, minLat: -10, maxLon: 10, maxLat: 10 },
+      });
+
+      const result = await buildCatalogGrids(entry);
+      expect(result).not.toBeNull();
+      expect(result!.terrain.datasetId).toBe(entry.id);
+      expect(result!.overview.datasetId).toBe(entry.id);
+      expect(result!.terrain.resolution).toBe(256);
+      expect(result!.overview.resolution).toBe(64);
+      expect(result!.terrain.depths).toHaveLength(256 * 256);
+      expect(result!.overview.depths).toHaveLength(64 * 64);
+      expect(result!.terrain.dataSource).toBe("gebco");
+      expect(result!.terrain.bathymetrySource).toBe("gebco");
+      // Decoded grid spans 0..100 m depth (with one land cell @ +5 m elev).
+      expect(result!.terrain.maxDepth).toBeGreaterThan(0);
+      // Both terrain + overview should hit the WCS exactly once each.
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      expect(String(fetchSpy.mock.calls[0]![0])).toContain("gebco");
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("returns null for non-GEBCO global entries that aren't backed by a preset", async () => {
+    const entry = makeEntry({
+      id: "usgs-coned-lidar-alaska",
+      sourceAgency: "USGS",
+      dataType: "lidar",
+    });
     const result = await buildCatalogGrids(entry);
     expect(result).toBeNull();
   });

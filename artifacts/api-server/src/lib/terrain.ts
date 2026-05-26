@@ -901,6 +901,94 @@ export async function previewDataset(datasetId: string): Promise<DatasetPreview 
   return result;
 }
 
+/**
+ * Build a TerrainGrid for an arbitrary bbox by fetching directly from the
+ * GEBCO 2024 WCS. Unlike `buildTerrainGrid` (which is keyed on the in-tree
+ * preset registry), this helper is bbox-driven so the catalog "Save"
+ * pipeline can materialize non-preset GEBCO entries.
+ *
+ * Throws on upstream failure — the caller decides whether to surface a
+ * `failed` save row or retry. No memory/disk caching here; catalog saves
+ * persist into `custom_datasets`, which is the durable cache.
+ */
+export async function buildGebcoTerrainForBbox(
+  meta: {
+    datasetId: string;
+    name: string;
+    waterType: "saltwater" | "freshwater";
+    bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number };
+  },
+  resolution = 256,
+  options: { smoothing?: boolean } = {},
+): Promise<TerrainGrid> {
+  const N = Math.max(32, Math.min(512, resolution));
+  const smoothing = options.smoothing ?? true;
+
+  const { depths, topography, hasTopography } = await fetchGebcoGrid(
+    meta.bbox,
+    N,
+  );
+
+  if (smoothing) {
+    let mn = Infinity, mx = -Infinity;
+    for (const d of depths) {
+      if (d < mn) mn = d;
+      if (d > mx) mx = d;
+    }
+    if (!isFinite(mn)) mn = 0;
+    if (!isFinite(mx)) mx = 0;
+    smoothSpikes(depths, N, Math.max(1, mx - mn));
+  }
+
+  let minDepth = Infinity;
+  let maxDepth = -Infinity;
+  for (const d of depths) {
+    if (d < minDepth) minDepth = d;
+    if (d > maxDepth) maxDepth = d;
+  }
+  if (!isFinite(minDepth)) minDepth = 0;
+  if (!isFinite(maxDepth)) maxDepth = 0;
+
+  const centerLon = (meta.bbox.minLon + meta.bbox.maxLon) / 2;
+  const centerLat = (meta.bbox.minLat + meta.bbox.maxLat) / 2;
+
+  const grid: TerrainGrid = {
+    datasetId: meta.datasetId,
+    name: meta.name,
+    waterType: meta.waterType,
+    resolution: N,
+    width: N,
+    height: N,
+    depths,
+    minDepth: Math.round(minDepth),
+    maxDepth: Math.round(maxDepth),
+    minLon: meta.bbox.minLon,
+    maxLon: meta.bbox.maxLon,
+    minLat: meta.bbox.minLat,
+    maxLat: meta.bbox.maxLat,
+    centerLon,
+    centerLat,
+    dataSource: "gebco",
+    bathymetrySource: "gebco",
+    bathymetrySourceLabel: "GEBCO 2024",
+    bathymetryCreditUrl:
+      "https://www.gebco.net/data_and_products/gridded_bathymetry_data/",
+    version: TERRAIN_CACHE_VERSION,
+    ...(hasTopography && topography
+      ? {
+          topography,
+          hasTopography: true,
+          topographySource: "gebco" as const,
+          topographySourceLabel: "GEBCO 2024",
+          topographyCreditUrl:
+            "https://www.gebco.net/data_and_products/gridded_bathymetry_data/",
+        }
+      : {}),
+  };
+
+  return grid;
+}
+
 export async function buildTerrainGrid(
   datasetId: string,
   resolution = 256,

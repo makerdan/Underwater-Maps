@@ -36,7 +36,11 @@ import {
   seedDatasetCatalog,
   type CatalogSeedEntry,
 } from "../lib/catalogSeeder.js";
-import { buildTerrainGrid, ALL_PRESET_DATASETS } from "../lib/terrain.js";
+import {
+  buildTerrainGrid,
+  buildGebcoTerrainForBbox,
+  ALL_PRESET_DATASETS,
+} from "../lib/terrain.js";
 
 const router = Router();
 
@@ -367,7 +371,31 @@ export async function buildCatalogGrids(
     return { terrain, overview };
   }
 
+  // GEBCO 2024 global grid — fetched directly from the GEBCO WCS using the
+  // entry's coverageBbox. The same fetcher already backs the preset pipeline
+  // as its global-fallback source, so behaviour matches what users see when
+  // a preset falls through to GEBCO. Any bathymetry entry sourced from GEBCO
+  // is routed here so future GEBCO sub-regions Just Work without code edits.
+  if (isGebcoBathymetryEntry(entry)) {
+    const meta = {
+      datasetId: entry.id,
+      name: entry.name,
+      waterType: entry.waterType,
+      bbox: entry.coverageBbox,
+    };
+    const terrain = await buildGebcoTerrainForBbox(meta, 256, { smoothing: true });
+    const overview = await buildGebcoTerrainForBbox(meta, 64, { smoothing: true });
+    return { terrain, overview };
+  }
+
   return null;
+}
+
+function isGebcoBathymetryEntry(entry: CatalogSeedEntry): boolean {
+  if (entry.dataType !== "bathymetry") return false;
+  if (entry.id === "gebco-2024-global") return true;
+  // Catch any future GEBCO sub-region entries seeded into the catalog.
+  return /\bGEBCO\b/i.test(entry.sourceAgency);
 }
 
 // ---------------------------------------------------------------------------

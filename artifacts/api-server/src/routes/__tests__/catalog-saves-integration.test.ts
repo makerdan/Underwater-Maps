@@ -316,6 +316,23 @@ const H = vi.hoisted(() => {
     lastUpdated: null,
     waterType: "saltwater" as const,
   };
+  // Non-preset GEBCO catalog entry used to exercise the GEBCO WCS branch of
+  // `buildCatalogGrids` end-to-end (catalog → materialize → user dataset).
+  const GEBCO_CATALOG_ENTRY = {
+    id: "gebco-2024-global",
+    name: "GEBCO 2024 Global Bathymetric Grid",
+    sourceAgency: "GEBCO / BODC",
+    dataType: "bathymetry" as const,
+    resolutionMMin: 400,
+    resolutionMMax: 400,
+    coverageBbox: { minLon: -180, minLat: -90, maxLon: 180, maxLat: 90 },
+    endpointUrl: null,
+    accessNotes: null,
+    description: null,
+    keywords: null,
+    lastUpdated: null,
+    waterType: "saltwater" as const,
+  };
 
   return {
     db,
@@ -331,6 +348,7 @@ const H = vi.hoisted(() => {
     trollingPresetsTable,
     FAKE_PRESET,
     CATALOG_ENTRY,
+    GEBCO_CATALOG_ENTRY,
   };
 });
 
@@ -395,6 +413,13 @@ vi.mock("../../lib/terrain.js", () => {
     NCEI_DATASET_COVERAGES: [],
     buildTerrainGrid: async (id: string, resolution: number) =>
       makeGrid(id, resolution),
+    // GEBCO direct-bbox fetcher used by the non-preset catalog branch.
+    // Returns the same deterministic synthetic grid shape so the
+    // /user/datasets read path validates identically.
+    buildGebcoTerrainForBbox: async (
+      meta: { datasetId: string },
+      resolution: number,
+    ) => makeGrid(meta.datasetId, resolution),
     TERRAIN_CACHE_VERSION: 1,
   };
 });
@@ -404,7 +429,7 @@ vi.mock("../../lib/terrain.js", () => {
 // derivation. The route only needs `getCatalogEntries` for lookup.
 vi.mock("../../lib/catalogSeeder.js", () => ({
   seedDatasetCatalog: async () => {},
-  getCatalogEntries: async () => [H.CATALOG_ENTRY],
+  getCatalogEntries: async () => [H.CATALOG_ENTRY, H.GEBCO_CATALOG_ENTRY],
   searchCatalog: async () => [],
   scoreEntry: () => 1,
 }));
@@ -537,6 +562,46 @@ describe("catalog save → materialize → fetch round trip", () => {
       .send({});
     expect(res.status).toBe(401);
   });
+
+  it(
+    "saves a non-preset GEBCO catalog entry through the GEBCO bbox fetcher and serves it back",
+    async () => {
+      const gebcoId = H.GEBCO_CATALOG_ENTRY.id;
+
+      const saveRes = await request(app)
+        .post(`/api/datasets/catalog/${gebcoId}/save`)
+        .set("x-e2e-user-id", E2E_USER)
+        .send({});
+      expect(saveRes.status).toBe(201);
+      expect(saveRes.body).toMatchObject({
+        catalogId: gebcoId,
+        status: "processing",
+      });
+      const saveId = saveRes.body.id as string;
+
+      const ready = await pollUntilReady(saveId);
+      expect(ready.status).toBe("ready");
+      expect(ready.datasetId).toBeTruthy();
+      const datasetId = ready.datasetId!;
+
+      const terrainRes = await request(app)
+        .get(`/api/user/datasets/${datasetId}/terrain`)
+        .set("x-e2e-user-id", E2E_USER);
+      expect(terrainRes.status).toBe(200);
+      expect(terrainRes.body.datasetId).toBe(datasetId);
+      expect(terrainRes.body.resolution).toBe(256);
+      expect(terrainRes.body.depths).toHaveLength(256 * 256);
+
+      const overviewRes = await request(app)
+        .get(`/api/user/datasets/${datasetId}/overview`)
+        .set("x-e2e-user-id", E2E_USER);
+      expect(overviewRes.status).toBe(200);
+      expect(overviewRes.body.datasetId).toBe(datasetId);
+      expect(overviewRes.body.resolution).toBe(64);
+      expect(overviewRes.body.depths).toHaveLength(64 * 64);
+    },
+    15_000,
+  );
 
   it("returns 404 for an unknown catalog id", async () => {
     const res = await request(app)
