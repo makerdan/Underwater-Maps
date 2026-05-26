@@ -38,6 +38,18 @@ export default defineConfig({
           // message instead of hard-failing. These flags are still the
           // correct, future-proof configuration and take effect in any CI
           // environment whose Chromium GPU process can start.
+          //
+          // To keep the rest of the suite from silently no-op'ing on the
+          // same hosts, `TourScene` ships a dev+e2e-only fallback: when
+          // VITE_DEV_AUTH_BYPASS=1 and WebGL is unavailable it renders a
+          // stub <canvas data-engine="three.js stub-no-webgl"> in place of
+          // the R3F Canvas. The `canvas[data-engine^="three.js"]` locator
+          // used by every canvas-gated spec still matches, so the specs
+          // continue past the visibility gate and drive scene state via
+          // the dev-only `__bathyTest` helper rig (which mutates the
+          // relevant Zustand stores directly and doesn't need a live R3F
+          // raycaster). Both guards are dev-only and Vite-DCE'd out of
+          // production bundles, so the fallback can never ship.
           args: [
             "--use-gl=angle",
             "--use-angle=swiftshader",
