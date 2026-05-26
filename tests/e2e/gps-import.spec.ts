@@ -282,4 +282,95 @@ test.describe("GPS import — real auth-gated flow", () => {
     const presets = await listPresets(page);
     expect(presets.some((p) => p.name === PRESET_NAME)).toBe(true);
   });
+
+  test("preview map + inline edits flow through to the created preset", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => !!window.__bathyTest, undefined, { timeout: 15_000 });
+
+    await page.evaluate((uid) => {
+      window.__bathyTest!.setRequestHeaders({ "x-e2e-user-id": uid });
+    }, TEST_USER_ID);
+
+    // Canvas-gated: same guard as the upload spec above — when headless
+    // Chromium has no WebGL the signed-in tree never mounts.
+    const canvas = page.locator("canvas").first();
+    const canvasVisible = await canvas.isVisible({ timeout: 12_000 }).catch(() => false);
+    if (!canvasVisible) {
+      test.skip(true, "Canvas not visible — user is not signed in");
+      return;
+    }
+
+    await page.evaluate((id) => {
+      window.__bathyTest!.setActiveDatasetId(id);
+    }, DATASET_ID);
+
+    const openBtn = page.locator('[data-testid="open-gps-import"]');
+    if (!(await openBtn.isVisible({ timeout: 1_000 }).catch(() => false))) {
+      await page.getByText(/MARKERS/).first().click().catch(() => {});
+    }
+    await expect(openBtn).toBeVisible({ timeout: 15_000 });
+    await openBtn.click();
+
+    const dialog = page.locator('[data-testid="gps-import-dialog"]');
+    await expect(dialog).toBeVisible();
+
+    await page
+      .locator('[data-testid="gps-import-file-input"]')
+      .setInputFiles({
+        name: "trip.gpx",
+        mimeType: "application/gpx+xml",
+        buffer: Buffer.from(SAMPLE_GPX, "utf-8"),
+      });
+
+    // Preview map renders (SVG inside the wrapper).
+    const previewMap = page.locator('[data-testid="gps-import-preview-map"]');
+    await expect(previewMap).toBeVisible({ timeout: 5_000 });
+    await expect(previewMap.locator("svg")).toBeVisible();
+
+    // Sanity: preview counts before any edits.
+    await expect(page.locator('[data-testid="gps-import-waypoint-count"]')).toHaveText("1");
+    await expect(page.locator('[data-testid="gps-import-route-count"]')).toHaveText("1");
+
+    // Rename the route. The name input is inside <details><summary>; the
+    // input itself is interactive even when the details element is closed.
+    const editedName = `gps-import-e2e-edited-${RUN_TAG}`;
+    const nameInput = page.locator('[data-testid="gps-import-route-name-0"]');
+    await nameInput.fill(editedName);
+    await expect(nameInput).toHaveValue(editedName);
+
+    // Expand the route details so the per-point remove buttons render, then
+    // drop the first waypoint of the route (3 pts → 2 pts).
+    await page.locator('[data-testid="gps-import-route-0"]').evaluate((el) => {
+      (el as HTMLDetailsElement).open = true;
+    });
+    await page.locator('[data-testid="gps-import-remove-route-point-0-0"]').click();
+    // After removal the second testid disappears (only 0 and 1 remain).
+    await expect(
+      page.locator('[data-testid="gps-import-remove-route-point-0-2"]'),
+    ).toHaveCount(0);
+
+    // Override heading and speed.
+    const heading = page.locator('[data-testid="gps-import-heading"]');
+    const speed = page.locator('[data-testid="gps-import-speed"]');
+    await heading.fill("123");
+    await speed.fill("3.7");
+
+    await page.locator('[data-testid="gps-import-confirm"]').click();
+    await expect(dialog).toBeHidden({ timeout: 15_000 });
+
+    // Verify the edits made it all the way to the persisted preset.
+    const presets = await listPresets(page);
+    const created = presets.find((p) => p.name === editedName);
+    expect(created, `expected preset named ${editedName}`).toBeTruthy();
+    expect(created!.waypoints).toHaveLength(2);
+    expect(created!.headingDeg).toBe(123);
+    expect(created!.speedKnots).toBeCloseTo(3.7, 3);
+    // The original preset name should not have been created.
+    expect(presets.some((p) => p.name === PRESET_NAME)).toBe(false);
+
+    // Best-effort: include the edited preset name in cleanup so this run is
+    // idempotent even though `cleanup()` only matches the gps-import-e2e- prefix.
+    // (editedName already starts with that prefix, so the afterEach hook
+    // will sweep it up.)
+  });
 });
