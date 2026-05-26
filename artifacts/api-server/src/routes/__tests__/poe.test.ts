@@ -116,6 +116,58 @@ describe("POST /api/poe/classify", () => {
     expect(fakeCreate).toHaveBeenCalledTimes(1);
   });
 
+  it("sends a concrete output_format.schema (not empty {}) so Poe does not return 400", async () => {
+    await request(app)
+      .post("/api/poe/classify")
+      .set("x-e2e-user-id", "user-schema-pin")
+      .send({
+        gridBase64: GRID_BASE64,
+        waterType: "saltwater",
+        datasetId: "ds-schema-pin",
+      });
+
+    expect(fakeCreate).toHaveBeenCalledTimes(1);
+    const body = fakeCreate.mock.calls[0]![0] as Record<string, unknown>;
+
+    expect(body).not.toHaveProperty("text");
+    expect(body).toHaveProperty("output_format");
+    const outputFormat = body["output_format"] as Record<string, unknown>;
+    expect(outputFormat["type"]).toBe("json_schema");
+    const schema = outputFormat["schema"] as Record<string, unknown>;
+    expect(schema).toBeTruthy();
+    expect(schema["type"]).toBe("object");
+    expect(schema).toHaveProperty("properties");
+    expect(schema).toHaveProperty("required");
+    expect(Object.keys(schema).length).toBeGreaterThan(0);
+  });
+
+  it("sends a concrete freshwater output_format.schema on freshwater classify", async () => {
+    fakeCreate.mockReset();
+    fakeCreate.mockResolvedValue({
+      id: "resp_fresh",
+      output_text: JSON.stringify({ zones: Array(1024).fill("aquatic_vegetation") }),
+      usage: { input_tokens: 10, output_tokens: 20 },
+    });
+
+    await request(app)
+      .post("/api/poe/classify")
+      .set("x-e2e-user-id", "user-schema-fresh")
+      .send({
+        gridBase64: GRID_BASE64,
+        waterType: "freshwater",
+        datasetId: "ds-schema-fresh",
+      });
+
+    expect(fakeCreate).toHaveBeenCalledTimes(1);
+    const body = fakeCreate.mock.calls[0]![0] as Record<string, unknown>;
+    const outputFormat = body["output_format"] as Record<string, unknown>;
+    const schema = outputFormat["schema"] as Record<string, unknown>;
+    const props = schema["properties"] as Record<string, { items?: { enum?: string[] } }>;
+    const freshwaterZones = props["zones"]?.items?.enum ?? [];
+    expect(freshwaterZones).toContain("aquatic_vegetation");
+    expect(freshwaterZones).not.toContain("sandy_shelf");
+  });
+
   it("returns fromCache=true on a repeated request with the same payload", async () => {
     const body = {
       gridBase64: GRID_BASE64,

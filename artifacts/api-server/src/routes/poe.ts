@@ -621,15 +621,9 @@ async function classifyOneTileAi(
         model: POE_MODELS.CLASSIFY,
         input,
         instructions: buildClassifySystemPrompt(waterType),
-        text: {
-          format: {
-            type: "json_schema",
-            json_schema: {
-              name: "zone_classification",
-              schema: buildClassifyZoneSchema(waterType),
-              strict: true,
-            },
-          },
+        output_format: {
+          type: "json_schema",
+          schema: buildClassifyZoneSchema(waterType),
         },
         max_output_tokens: 8192,
         temperature: 0.1,
@@ -962,15 +956,9 @@ router.post("/classify", async (req, res) => {
           model: POE_MODELS.CLASSIFY,
           input,
           instructions: buildClassifySystemPrompt(waterType),
-          text: {
-            format: {
-              type: "json_schema",
-              json_schema: {
-                name: "zone_classification",
-                schema: buildClassifyZoneSchema(waterType),
-                strict: true,
-              },
-            },
+          output_format: {
+            type: "json_schema",
+            schema: buildClassifyZoneSchema(waterType),
           },
           max_output_tokens: 8192,
           temperature: 0.1,
