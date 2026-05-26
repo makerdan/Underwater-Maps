@@ -95,7 +95,6 @@ describe("HUD simulated-data badge", () => {
       cameraLat: null,
       cameraDepth: null,
       heading: 0,
-      mode: "fly",
       speedIndex: 0,
     });
     mockTerrain = null;

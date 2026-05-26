@@ -22,7 +22,6 @@ function resetStores() {
     cameraLat: 47.6,
     cameraDepth: null,
     heading: 0,
-    mode: "fly",
     speedIndex: 0,
   });
 }

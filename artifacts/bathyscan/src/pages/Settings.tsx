@@ -903,16 +903,6 @@ function NavigationSection() {
       <SectionActionsRow section="camera" />
       <div style={S.card}>
         <div style={S.cardHeader}>BASICS</div>
-        <SelectRow
-          label="Default Navigation Mode"
-          value={s.defaultNavMode}
-          onChange={s.setDefaultNavMode}
-          options={[
-            { value: "fly", label: "Fly (free 6DoF)" },
-            { value: "orbit", label: "Orbit (around target)" },
-          ]}
-          sublabel="Mode entered when a dataset loads"
-        />
         <div style={S.row}>
           <div>
             <div style={S.label}>Default Speed Tier</div>

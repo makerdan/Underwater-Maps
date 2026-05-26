@@ -82,7 +82,6 @@ beforeEach(() => {
     cameraLat: null,
     cameraDepth: null,
     heading: 0,
-    mode: "fly",
     speedIndex: 0,
   });
 });

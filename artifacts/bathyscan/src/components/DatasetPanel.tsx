@@ -200,7 +200,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     setDatasetId,
     setTerrain,
     terrain,
-    mode,
     pendingExternalUserDatasetId,
     setPendingExternalUserDatasetId,
   } = useAppState();
@@ -722,7 +721,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
   const handleTeleportToMarker = (lon: number, lat: number) => {
     if (!terrain) return;
-    if (mode !== "fly") return;
     const { x, z } = lonLatToWorldXZ(lon, lat, terrain);
     useUiStore.getState().setPendingDropIn({ worldX: x, worldZ: z });
   };

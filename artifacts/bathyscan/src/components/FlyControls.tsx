@@ -11,7 +11,7 @@ import { computeWheelDolly, computePinchDolly } from "@/lib/zoomMath";
  * The main app scene (TourScene) uses useFlyControls hook instead.
  */
 export const FlyControls = () => {
-  const { mode, setMode, speedIndex, setSpeedIndex, setCameraPos } = useAppState();
+  const { speedIndex, setSpeedIndex, setCameraPos } = useAppState();
   const { camera, gl } = useThree();
 
   const keys = useRef<Record<string, boolean>>({});
@@ -37,23 +37,16 @@ export const FlyControls = () => {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       keys.current[e.code] = true;
-      if (e.code === "Tab") {
+      const bindings = keyBindingsRef.current;
+      if (e.code === getBoundKey(bindings, "speedUp") || e.code === "NumpadAdd") {
         e.preventDefault();
-        setMode(mode === "fly" ? "orbit" : "fly");
+        setSpeedIndex(Math.min(SPEEDS.length - 1, speedIndexRef.current + 1));
         return;
       }
-      if (mode === "fly") {
-        const bindings = keyBindingsRef.current;
-        if (e.code === getBoundKey(bindings, "speedUp") || e.code === "NumpadAdd") {
-          e.preventDefault();
-          setSpeedIndex(Math.min(SPEEDS.length - 1, speedIndexRef.current + 1));
-          return;
-        }
-        if (e.code === getBoundKey(bindings, "speedDown") || e.code === "NumpadSubtract") {
-          e.preventDefault();
-          setSpeedIndex(Math.max(0, speedIndexRef.current - 1));
-          return;
-        }
+      if (e.code === getBoundKey(bindings, "speedDown") || e.code === "NumpadSubtract") {
+        e.preventDefault();
+        setSpeedIndex(Math.max(0, speedIndexRef.current - 1));
+        return;
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
@@ -61,14 +54,14 @@ export const FlyControls = () => {
     };
 
     const onMouseDown = () => {
-      if (mode === "fly") isPointerLocked.current = true;
+      isPointerLocked.current = true;
     };
     const onMouseUp = () => {
       isPointerLocked.current = false;
     };
 
     const onMouseMove = (e: MouseEvent) => {
-      if (!isPointerLocked.current || mode !== "fly") return;
+      if (!isPointerLocked.current) return;
       const movementX = e.movementX ?? 0;
       const movementY = e.movementY ?? 0;
       euler.current.setFromQuaternion(camera.quaternion);
@@ -81,7 +74,6 @@ export const FlyControls = () => {
     };
 
     const onWheel = (e: WheelEvent) => {
-      if (mode !== "fly") return;
       if (e.shiftKey) {
         if (e.deltaY > 0) {
           setSpeedIndex(Math.min(SPEEDS.length - 1, speedIndexRef.current + 1));
@@ -113,7 +105,7 @@ export const FlyControls = () => {
     const onPointerMove2 = (e: PointerEvent) => {
       if (e.pointerType !== "touch" || !activePointers.has(e.pointerId)) return;
       activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (activePointers.size === 2 && mode === "fly") {
+      if (activePointers.size === 2) {
         const pts = Array.from(activePointers.values());
         const dist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
         const delta = dist - lastPinchDist;
@@ -152,25 +144,23 @@ export const FlyControls = () => {
       gl.domElement.removeEventListener("pointerup", onPointerUp2);
       gl.domElement.removeEventListener("pointercancel", onPointerUp2);
     };
-  }, [camera, gl.domElement, mode, setMode, setSpeedIndex]);
+  }, [camera, gl.domElement, setSpeedIndex]);
 
   useFrame((_state, delta: number) => {
     const speed = SPEEDS[speedIndex] ?? 0.15;
     const scaledSpeed = speed * delta * 60;
 
-    if (mode === "fly") {
-      const direction = new THREE.Vector3();
-      camera.getWorldDirection(direction);
-      const right = new THREE.Vector3().crossVectors(camera.up, direction).normalize();
+    const direction = new THREE.Vector3();
+    camera.getWorldDirection(direction);
+    const right = new THREE.Vector3().crossVectors(camera.up, direction).normalize();
 
-      const bindings = keyBindingsRef.current;
-      if (keys.current[getBoundKey(bindings, "moveForward")]) camera.position.addScaledVector(direction, scaledSpeed);
-      if (keys.current[getBoundKey(bindings, "moveBackward")]) camera.position.addScaledVector(direction, -scaledSpeed);
-      if (keys.current[getBoundKey(bindings, "strafeRight")]) camera.position.addScaledVector(right, -scaledSpeed);
-      if (keys.current[getBoundKey(bindings, "strafeLeft")]) camera.position.addScaledVector(right, scaledSpeed);
-      if (keys.current[getBoundKey(bindings, "ascend")]) camera.position.y += scaledSpeed;
-      if (keys.current[getBoundKey(bindings, "descend")]) camera.position.y -= scaledSpeed;
-    }
+    const bindings = keyBindingsRef.current;
+    if (keys.current[getBoundKey(bindings, "moveForward")]) camera.position.addScaledVector(direction, scaledSpeed);
+    if (keys.current[getBoundKey(bindings, "moveBackward")]) camera.position.addScaledVector(direction, -scaledSpeed);
+    if (keys.current[getBoundKey(bindings, "strafeRight")]) camera.position.addScaledVector(right, -scaledSpeed);
+    if (keys.current[getBoundKey(bindings, "strafeLeft")]) camera.position.addScaledVector(right, scaledSpeed);
+    if (keys.current[getBoundKey(bindings, "ascend")]) camera.position.y += scaledSpeed;
+    if (keys.current[getBoundKey(bindings, "descend")]) camera.position.y -= scaledSpeed;
 
     setCameraPos([camera.position.x, camera.position.y, camera.position.z]);
   });

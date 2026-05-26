@@ -50,7 +50,7 @@ interface FlyControlsOptions {
 export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions) {
   const { camera, gl } = useThree();
   const {
-    mode, setMode, speedIndex, setSpeedIndex, terrain, setCameraPos,
+    speedIndex, setSpeedIndex, terrain, setCameraPos,
     realisticMode, boatSpeedMph,
   } = useAppState();
 
@@ -86,20 +86,17 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   useEffect(() => { crosshairMenuGamepadButtonRef.current = crosshairMenuGamepadButton; }, [crosshairMenuGamepadButton]);
 
   // Refs for event-listener / useFrame closures to stay current
-  const modeRef = useRef(mode);
   const speedIndexRef = useRef(speedIndex);
   const terrainRef = useRef<TerrainData | null>(terrain);
   const realisticModeRef = useRef(realisticMode);
   const boatSpeedMphRef = useRef(boatSpeedMph);
 
-  useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { speedIndexRef.current = speedIndex; }, [speedIndex]);
   useEffect(() => { terrainRef.current = terrain; }, [terrain]);
   useEffect(() => { realisticModeRef.current = realisticMode; }, [realisticMode]);
   useEffect(() => { boatSpeedMphRef.current = boatSpeedMph; }, [boatSpeedMph]);
 
-  // Sync mode and speedIndex to cameraStore for HUD reads
-  useEffect(() => { useCameraStore.getState().setMode(mode); }, [mode]);
+  // Sync speedIndex to cameraStore for HUD reads
   useEffect(() => { useCameraStore.getState().setSpeedIndex(speedIndex); }, [speedIndex]);
 
   const keys = useRef<Record<string, boolean>>({});
@@ -196,7 +193,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         suppressNextClick.current = false;
         return;
       }
-      if (modeRef.current === "fly" && !isLocked.current) {
+      if (!isLocked.current) {
         canvas.requestPointerLock();
       }
     };
@@ -222,10 +219,10 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       keys.current[e.code] = true;
       const bindings = keyBindingsRef.current;
 
-      // Speed tier up / down (fly mode, not realistic). The NumpadAdd /
+      // Speed tier up / down (not in realistic mode). The NumpadAdd /
       // NumpadSubtract synonyms are always honoured in addition to the
       // user's chosen binding so a numpad keeps working out of the box.
-      if (modeRef.current === "fly" && !realisticModeRef.current) {
+      if (!realisticModeRef.current) {
         if (e.code === getBoundKey(bindings, "speedUp") || e.code === "NumpadAdd") {
           e.preventDefault();
           setSpeedIndex(Math.min(SPEEDS.length - 1, speedIndexRef.current + 1));
@@ -249,10 +246,10 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
 
       // Crosshair action menu: open the terrain action menu anchored at the
       // crosshair. Works whether pointer is locked (underwater nav) or
-      // unlocked, but only in fly mode and only when the crosshair is
-      // currently on terrain. Key binding is user-remappable via Settings →
-      // Shortcuts (defaults to "KeyQ").
-      if (e.code === getBoundKey(bindings, "crosshairMenu") && modeRef.current === "fly") {
+      // unlocked, but only when the crosshair is currently on terrain.
+      // Key binding is user-remappable via Settings → Shortcuts
+      // (defaults to "KeyQ").
+      if (e.code === getBoundKey(bindings, "crosshairMenu")) {
         const rect = gl.domElement.getBoundingClientRect();
         const opened = openCrosshairContextMenu({
           centerX: rect.left + rect.width / 2,
@@ -347,7 +344,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         }
         return;
       }
-      if (!isLocked.current || modeRef.current !== "fly") return;
+      if (!isLocked.current) return;
       const dx = e.movementX ?? 0;
       const dy = e.movementY ?? 0;
       const sens = sensitivityRef.current * 0.002;
@@ -384,7 +381,6 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         applyOrbitDolly(camera, orbitState.current.target, dolly / dist);
         return;
       }
-      if (modeRef.current !== "fly") return;
       e.preventDefault();
       const result = processFlyWheel(camera, e, speedIndexRef.current, {
         mouseZoomSensitivity: mouseZoomSensRef.current,
@@ -464,7 +460,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
           cancelLongPress();
         }
       }
-      if (activePointers.size === 2 && modeRef.current === "fly") {
+      if (activePointers.size === 2) {
         const pts = Array.from(activePointers.values());
         const dist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
         const midX = (pts[0]!.x + pts[1]!.x) / 2;
@@ -577,8 +573,6 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
     // Shared menu-showing logic used by both the desktop right-click handler
     // and the touch long-press timer. (x, y) are viewport coords.
     const showContextMenuAt = (x: number, y: number) => {
-      if (modeRef.current !== "fly" && modeRef.current !== "orbit") return;
-
       // NDC at click position
       const rect = gl.domElement.getBoundingClientRect();
       const ndcX = ((x - rect.left) / rect.width) * 2 - 1;
@@ -640,8 +634,6 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         suppressNextContextMenu.current = false;
         return;
       }
-      if (modeRef.current !== "fly") return;
-
       // Pointer locked → no menu (cursor not visible). Use crosshair GPS pin shortcut.
       if (isLocked.current) {
         const gps = useCameraStore.getState().crosshairGps;
@@ -681,7 +673,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       gl.domElement.removeEventListener("pointercancel", handlePointerUp);
       cancelLongPress();
     };
-  }, [camera, gl.domElement, setMode, setSpeedIndex, terrainMeshRef, queryClient]);
+  }, [camera, gl.domElement, setSpeedIndex, terrainMeshRef, queryClient]);
 
   // ---------------------------------------------------------------------------
   // Gamepad polling — opens the crosshair action menu when the configured
@@ -698,7 +690,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
     const prevPressed = new Map<number, boolean>();
     const poll = () => {
       const btnIdx = crosshairMenuGamepadButtonRef.current;
-      if (btnIdx !== null && btnIdx >= 0 && modeRef.current === "fly") {
+      if (btnIdx !== null && btnIdx >= 0) {
         const pads = navigator.getGamepads ? navigator.getGamepads() : [];
         for (const pad of pads) {
           if (!pad) continue;
@@ -752,8 +744,8 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       useUiStore.getState().clearPendingDropIn();
     }
 
-    // 2. WASD movement (fly mode only, suspended during an active orbit gesture)
-    if (modeRef.current === "fly" && !orbitState.current.active) {
+    // 2. WASD movement (suspended during an active orbit gesture)
+    if (!orbitState.current.active) {
       let scaledSpeed: number;
       if (realisticModeRef.current && terrainRef.current) {
         const mpu = computeMetersPerWorldUnit(terrainRef.current);

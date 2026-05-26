@@ -38,8 +38,6 @@ vi.mock("@workspace/api-client-react", () => ({
 
 // App-state context: provide everything the hook destructures.
 const appStateValue = {
-  mode: "fly" as const,
-  setMode: vi.fn(),
   speedIndex: 0,
   setSpeedIndex: vi.fn(),
   terrain: null as unknown,

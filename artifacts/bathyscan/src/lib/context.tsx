@@ -2,13 +2,9 @@ import React, { createContext, useContext, useState, ReactNode } from "react";
 import type { TerrainData } from "@workspace/api-client-react";
 import { BOAT_DEFAULT_MPH, BOAT_MIN_MPH, BOAT_MAX_MPH } from "./boatSpeed";
 
-export type AppMode = "fly" | "orbit";
-
 export const SPEEDS = [0.05, 0.15, 0.5, 1.5, 5.0] as const;
 
 interface AppState {
-  mode: AppMode;
-  setMode: (m: AppMode) => void;
   datasetId: string | null;
   setDatasetId: (id: string | null) => void;
   terrain: TerrainData | null;
@@ -55,7 +51,6 @@ function readLocalNumber(key: string, fallback: number): number {
 }
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
-  const [mode, setMode] = useState<AppMode>("fly");
   const [datasetId, setDatasetId] = useState<string | null>(null);
   const [terrain, setTerrain] = useState<TerrainData | null>(null);
   const [speedIndex, setSpeedIndex] = useState<number>(1);
@@ -92,8 +87,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   return (
     <AppContext.Provider
       value={{
-        mode,
-        setMode,
         datasetId,
         setDatasetId,
         terrain,

@@ -69,13 +69,11 @@ describe("HUD", () => {
       cameraLat: null,
       cameraDepth: null,
       heading: 0,
-      mode: "fly",
       speedIndex: 0,
     });
   });
 
   it("no longer renders the FLY / ORBIT mode badge", () => {
-    useCameraStore.setState({ mode: "fly" });
     render(<HUD />);
     expect(screen.queryByText(/● FLY/)).not.toBeInTheDocument();
     expect(screen.queryByText(/◎ ORBIT/)).not.toBeInTheDocument();

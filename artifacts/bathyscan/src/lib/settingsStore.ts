@@ -17,7 +17,7 @@ import {
   type ShortcutActionId,
 } from "./keyBindings";
 
-export const SETTINGS_SCHEMA_VERSION = 9;
+export const SETTINGS_SCHEMA_VERSION = 10;
 
 /**
  * Standard-mapping gamepad button index used to trigger the crosshair
@@ -52,7 +52,6 @@ export type UnitsSystem = "metric" | "imperial";
 export type TemperatureUnit = "auto" | "celsius" | "fahrenheit";
 export type CameraSpawnBehaviour = "deepest" | "home" | "last";
 export type MarkerType = "fish" | "shipwreck" | "coral" | "vent" | "custom" | "depth_pole" | "log" | "vegetation" | "sample" | "bass" | "trout" | "pike" | "walleye" | "crayfish";
-export type NavMode = "fly" | "orbit";
 export type JoystickMode = "auto" | "always" | "off";
 export type QualityPreset = "low" | "medium" | "high" | "ultra" | "custom";
 export type TimeFormat = "utc" | "local" | "12h" | "24h";
@@ -87,7 +86,6 @@ export interface SettingsState {
   showAdvancedEverywhere: boolean;
 
   // ── Camera & Controls ─────────────────────────────────────────────────
-  defaultNavMode: NavMode;
   defaultSpeedTier: number;
   mouseSensitivity: number;
   invertMouseY: boolean;
@@ -258,7 +256,6 @@ export interface SettingsState {
 
 interface SettingsActions {
   // Camera & Controls
-  setDefaultNavMode: (v: NavMode) => void;
   setDefaultSpeedTier: (v: number) => void;
   setMouseSensitivity: (v: number) => void;
   setInvertMouseY: (v: boolean) => void;
@@ -483,7 +480,6 @@ export const DEFAULT_SETTINGS: SettingsState = {
   showAdvancedEverywhere: false,
 
   // Camera
-  defaultNavMode: "fly",
   defaultSpeedTier: 2,
   mouseSensitivity: 1.0,
   invertMouseY: false,
@@ -606,7 +602,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
 
 export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   camera: [
-    "defaultNavMode", "defaultSpeedTier", "mouseSensitivity", "invertMouseY",
+    "defaultSpeedTier", "mouseSensitivity", "invertMouseY",
     "mouseZoomSensitivity", "touchpadZoomSensitivity", "pinchZoomSensitivity",
     "joystickMode", "fieldOfView", "renderDistance", "cameraSpawnBehaviour",
   ],
@@ -706,7 +702,6 @@ export const useSettingsStore = create<SettingsStore>()(
         lastSyncedAt: null,
 
         // Camera
-        setDefaultNavMode: setter("defaultNavMode"),
         setDefaultSpeedTier: setter("defaultSpeedTier"),
         setMouseSensitivity: setter("mouseSensitivity"),
         setInvertMouseY: setter("invertMouseY"),
@@ -939,6 +934,7 @@ export const useSettingsStore = create<SettingsStore>()(
             conditionsOverlayStyle?: ConditionsOverlayStyle;
             showSpeedIndicator?: boolean;
             crosshairMenuKey?: string;
+            defaultNavMode?: string;
           };
           // v5 → v6: split the single `conditionsOverlayStyle` into three
           // independent per-overlay keys, preserving the user's previous
@@ -964,15 +960,19 @@ export const useSettingsStore = create<SettingsStore>()(
           // Drop obsolete keys so they don't linger in persisted state.
           // v7 → v8: `showSpeedIndicator` was removed along with the HUD
           // SPD panel.
+          // v9 → v10: `defaultNavMode` was retired — orbit is now a
+          // transient right-drag gesture rather than a persistent mode.
           const {
             conditionsOverlayStyle: _drop,
             showSpeedIndicator: _dropSpd,
             crosshairMenuKey: _dropKey,
+            defaultNavMode: _dropNavMode,
             ...rest
           } = prev;
           void _drop;
           void _dropSpd;
           void _dropKey;
+          void _dropNavMode;
           return {
             ...DEFAULT_SETTINGS,
             ...rest,
