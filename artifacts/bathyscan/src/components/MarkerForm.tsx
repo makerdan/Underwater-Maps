@@ -58,15 +58,21 @@ export const MarkerForm: React.FC = () => {
   const [notesError, setNotesError] = useState("");
   const [poleColour, setPoleColour] = useState(DEPTH_POLE_DEFAULT_COLOUR);
 
-  // Reset form whenever it opens (gps changes)
+  // Reset form whenever it opens (gps changes). Honour a one-shot prefill
+  // set by callers like the depth-profile auto-suggest list.
   useEffect(() => {
-    setLabel("");
+    const prefill = useUiStore.getState().markerFormPrefill;
+    setLabel(prefill?.label ?? "");
     setNotes("");
     setLabelError("");
     setNotesError("");
-    setMarkerType("custom");
+    const candidateType = prefill?.type as MarkerTypeValue | undefined;
+    const isValidType =
+      candidateType !== undefined &&
+      visibleMarkerTypes.some((t) => t.value === candidateType);
+    setMarkerType(isValidType ? candidateType! : (MarkerInputType.custom as MarkerTypeValue));
     setPoleColour(DEPTH_POLE_DEFAULT_COLOUR);
-  }, [gps]);
+  }, [gps, visibleMarkerTypes]);
 
   const postMarkers = usePostMarkers();
   const isOnline = useOfflineStore((s) => s.isOnline);

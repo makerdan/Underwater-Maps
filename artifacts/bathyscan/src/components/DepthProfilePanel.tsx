@@ -8,13 +8,24 @@
  * Independent of the marker system; dismiss via the × button.
  */
 import React from "react";
-import { useDepthProfileStore } from "@/lib/depthProfileStore";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useDepthProfileStore,
+  detectProfileFeatures,
+  type ProfileFeature,
+  type ProfileFeatureKind,
+} from "@/lib/depthProfileStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useAppState } from "@/lib/context";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
 import { formatDistance, formatDepth } from "@/lib/units";
 import { HelpIcon } from "@/components/help/HelpButton";
+import {
+  usePostMarkers,
+  getGetMarkersQueryKey,
+  MarkerInputType,
+} from "@workspace/api-client-react";
 
 // Friendly zone labels for the hover tooltip — matches SLOT_NAMES.
 const ZONE_LABEL = ["Sand", "Sediment", "Silt", "Basalt"] as const;
@@ -92,8 +103,13 @@ export const DepthProfilePanel: React.FC = () => {
       lat: sample.lat,
       depth: sample.depthM,
     });
+    useUiStore.getState().setMarkerFormPrefill(null);
     useUiStore.getState().setMarkerFormOpen(true);
   }, []);
+
+  const qc = useQueryClient();
+  const postMarkers = usePostMarkers();
+  const [bulkPending, setBulkPending] = React.useState(false);
 
   if (!profile) return null;
 
@@ -152,6 +168,76 @@ export const DepthProfilePanel: React.FC = () => {
       );
     }
   }
+
+  // Auto-suggested features (peaks, troughs, ledges). Memo-equivalent —
+  // recomputed only when the profile reference changes (deps are derived
+  // from points/total which only change with a new profile).
+  const features: ProfileFeature[] = React.useMemo(
+    () => detectProfileFeatures(profile),
+    [profile],
+  );
+
+  const featureLabel = (f: ProfileFeature): string => {
+    const sample = points[f.index]!;
+    const distStr = formatDistance(sample.distanceM, { units });
+    const noun =
+      f.kind === "peak" ? "Hump" : f.kind === "trough" ? "Hole" : "Ledge";
+    return `${noun} @ ${distStr}`;
+  };
+
+  const FEATURE_STYLE: Record<
+    ProfileFeatureKind,
+    { color: string; glyph: string; tagBg: string }
+  > = {
+    peak:   { color: "#facc15", glyph: "▲", tagBg: "rgba(250,204,21,0.12)" },
+    trough: { color: "#f87171", glyph: "▼", tagBg: "rgba(248,113,113,0.12)" },
+    ledge:  { color: "#fb923c", glyph: "◆", tagBg: "rgba(251,146,60,0.12)" },
+  };
+
+  const promoteFeature = (f: ProfileFeature) => {
+    const sample = points[f.index];
+    if (!sample) return;
+    useCameraStore.getState().setLastClickedGps({
+      lon: sample.lon,
+      lat: sample.lat,
+      depth: sample.depthM,
+    });
+    useUiStore.getState().setMarkerFormPrefill({
+      label: featureLabel(f),
+      type: MarkerInputType.custom,
+    });
+    useUiStore.getState().setMarkerFormOpen(true);
+  };
+
+  const addAllFeatures = async () => {
+    if (!datasetId || features.length === 0 || bulkPending) return;
+    setBulkPending(true);
+    try {
+      await Promise.all(
+        features.map((f) => {
+          const sample = points[f.index]!;
+          return postMarkers.mutateAsync({
+            data: {
+              datasetId,
+              lon: sample.lon,
+              lat: sample.lat,
+              depth: sample.depthM,
+              type: MarkerInputType.custom,
+              label: featureLabel(f),
+              notes: null,
+            },
+          });
+        }),
+      );
+      void qc.invalidateQueries({
+        queryKey: getGetMarkersQueryKey({ datasetId }),
+      });
+    } catch {
+      // Surface failures via mutation state; nothing else to do here.
+    } finally {
+      setBulkPending(false);
+    }
+  };
 
   const anyClassified = points.some((p) => p.slot !== null);
   const presentSlots = Array.from(
@@ -381,6 +467,42 @@ export const DepthProfilePanel: React.FC = () => {
         {/* Zone strip beneath the chart */}
         {stripRects}
 
+        {/* Auto-detected feature indicators */}
+        {features.map((f) => {
+          const sample = points[f.index];
+          if (!sample) return null;
+          const cx = xOf(sample.distanceM);
+          const cy = yOf(sample.depthM);
+          const fs = FEATURE_STYLE[f.kind];
+          // Peaks point down toward the curve from above; troughs/ledges
+          // sit just below the line.
+          const above = f.kind === "peak";
+          const tipY = above ? cy - 7 : cy + 7;
+          return (
+            <g
+              key={`feat-${f.index}`}
+              data-testid={`depth-profile-feature-${f.kind}`}
+              style={{ cursor: "pointer" }}
+              onClick={(e) => {
+                e.stopPropagation();
+                promoteFeature(f);
+              }}
+            >
+              <text
+                x={cx}
+                y={tipY}
+                fontSize={9}
+                fill={fs.color}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                style={{ pointerEvents: "auto" }}
+              >
+                {fs.glyph}
+              </text>
+            </g>
+          );
+        })}
+
         {/* Hover indicator — vertical guide + dot + tooltip */}
         {hoverIndex !== null && points[hoverIndex] ? (() => {
           const hp = points[hoverIndex]!;
@@ -462,6 +584,89 @@ export const DepthProfilePanel: React.FC = () => {
         <span>A {start.lat.toFixed(4)},{start.lon.toFixed(4)}</span>
         <span>B {end.lat.toFixed(4)},{end.lon.toFixed(4)}</span>
       </div>
+
+      {/* Auto-suggested features */}
+      {features.length > 0 && (
+        <div
+          data-testid="depth-profile-features"
+          style={{
+            marginTop: 8,
+            paddingTop: 6,
+            borderTop: "1px dashed rgba(0,229,255,0.15)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 5,
+            }}
+          >
+            <div style={{ fontSize: 9, letterSpacing: "0.18em", color: "#94a3b8" }}>
+              SUGGESTED ({features.length})
+            </div>
+            <button
+              type="button"
+              data-testid="depth-profile-add-all-features"
+              aria-label="Add all detected features as markers"
+              disabled={bulkPending || !datasetId}
+              onClick={() => {
+                void addAllFeatures();
+              }}
+              style={{
+                ...exportBtnStyle,
+                opacity: bulkPending || !datasetId ? 0.5 : 1,
+                cursor: bulkPending || !datasetId ? "not-allowed" : "pointer",
+              }}
+            >
+              {bulkPending ? "ADDING…" : "+ ADD ALL"}
+            </button>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 5,
+              maxHeight: 70,
+              overflowY: "auto",
+            }}
+          >
+            {features.map((f) => {
+              const fs = FEATURE_STYLE[f.kind];
+              return (
+                <button
+                  key={f.index}
+                  type="button"
+                  data-testid={`depth-profile-promote-feature-${f.index}`}
+                  aria-label={`Add marker for ${featureLabel(f)}`}
+                  onClick={() => promoteFeature(f)}
+                  onMouseEnter={() => setHoverIndex(f.index)}
+                  onMouseLeave={() => setHoverIndex(null)}
+                  style={{
+                    fontSize: 9,
+                    padding: "3px 6px",
+                    borderRadius: 3,
+                    border: `1px solid ${fs.color}55`,
+                    background: fs.tagBg,
+                    color: "#e2e8f0",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    letterSpacing: "0.04em",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                >
+                  <span style={{ color: fs.color }}>{fs.glyph}</span>
+                  {featureLabel(f)}
+                  <span style={{ color: "#64748b" }}>+</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {anyClassified ? (
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6, fontSize: 9, color: "#94a3b8" }}>

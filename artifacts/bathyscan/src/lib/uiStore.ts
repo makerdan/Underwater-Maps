@@ -43,6 +43,13 @@ interface UiStore {
   setOverviewOpen: (open: boolean) => void;
   markerFormOpen: boolean;
   setMarkerFormOpen: (open: boolean) => void;
+  /**
+   * Optional values the next-opened MarkerForm should start with — used by
+   * features like the depth-profile auto-suggest list to hand the form a
+   * sensible default label/type. Cleared when the form closes.
+   */
+  markerFormPrefill: { label?: string; type?: string } | null;
+  setMarkerFormPrefill: (p: { label?: string; type?: string } | null) => void;
   zoneOverlayEnabled: boolean;
   setZoneOverlayEnabled: (enabled: boolean) => void;
   zonePaintMode: boolean;
@@ -129,7 +136,10 @@ export const useUiStore = create<UiStore>((set) => ({
   overviewOpen: false,
   setOverviewOpen: (open) => set({ overviewOpen: open }),
   markerFormOpen: false,
-  setMarkerFormOpen: (open) => set({ markerFormOpen: open }),
+  setMarkerFormOpen: (open) =>
+    set(open ? { markerFormOpen: true } : { markerFormOpen: false, markerFormPrefill: null }),
+  markerFormPrefill: null,
+  setMarkerFormPrefill: (p) => set({ markerFormPrefill: p }),
   zoneOverlayEnabled: false,
   setZoneOverlayEnabled: (enabled) =>
     set(enabled ? { zoneOverlayEnabled: true } : { zoneOverlayEnabled: false, zonePaintMode: false }),

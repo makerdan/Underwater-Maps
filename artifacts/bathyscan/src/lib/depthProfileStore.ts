@@ -193,6 +193,114 @@ export function buildProfile(
 }
 
 /**
+ * A notable feature surfaced by detectProfileFeatures — peaks (humps),
+ * troughs (holes) and ledges (sharp slope changes). The UI uses these to
+ * suggest auto-markers along the transect.
+ */
+export type ProfileFeatureKind = "peak" | "trough" | "ledge";
+
+export interface ProfileFeature {
+  /** Index into profile.points. */
+  index: number;
+  kind: ProfileFeatureKind;
+  /**
+   * For peak/trough: vertical prominence (metres) against the nearest
+   * higher/lower neighbour inside the analysis window.
+   * For ledge: absolute slope change (metres-per-metre) at that point.
+   */
+  magnitude: number;
+}
+
+/**
+ * Find notable peaks, troughs and ledges along the profile.
+ *
+ * - **peak**: shallowest sample (smallest depth) in a window with prominence
+ *   ≥ max(0.5 m, 8% of profile depth range).
+ * - **trough**: deepest sample in the same kind of window with the matching
+ *   prominence threshold.
+ * - **ledge**: large change in vertical slope between adjacent samples, away
+ *   from any already-claimed peak/trough.
+ *
+ * Pure: no store reads, deterministic for a given DepthProfileResult.
+ */
+export function detectProfileFeatures(
+  profile: DepthProfileResult,
+): ProfileFeature[] {
+  const pts = profile.points;
+  const n = pts.length;
+  if (n < 5) return [];
+
+  const range = Math.max(1e-3, profile.maxDepthM - profile.minDepthM);
+  const minProminence = Math.max(0.5, range * 0.08);
+  const windowFrac = 0.05;
+  const w = Math.max(2, Math.floor(n * windowFrac));
+
+  const features: ProfileFeature[] = [];
+
+  // Local extrema with prominence — skip the two endpoints, which aren't
+  // intrinsically interesting (they're where the user clicked). We require
+  // strict inequality against the immediate neighbours so that a flat
+  // plateau doesn't have every sample registered as the same extremum;
+  // the ledge detector will catch the boundary instead.
+  for (let i = 1; i < n - 1; i++) {
+    const d = pts[i]!.depthM;
+    const dPrev = pts[i - 1]!.depthM;
+    const dNext = pts[i + 1]!.depthM;
+    const isStrictMin = dPrev > d + 1e-6 && dNext > d + 1e-6;
+    const isStrictMax = dPrev < d - 1e-6 && dNext < d - 1e-6;
+    if (!isStrictMin && !isStrictMax) continue;
+    const lo = Math.max(0, i - w);
+    const hi = Math.min(n - 1, i + w);
+    let maxNeighbor = -Infinity;
+    let minNeighbor = Infinity;
+    for (let j = lo; j <= hi; j++) {
+      if (j === i) continue;
+      const dj = pts[j]!.depthM;
+      if (dj > maxNeighbor) maxNeighbor = dj;
+      if (dj < minNeighbor) minNeighbor = dj;
+    }
+    if (isStrictMin && maxNeighbor - d >= minProminence) {
+      features.push({ index: i, kind: "peak", magnitude: maxNeighbor - d });
+    } else if (isStrictMax && d - minNeighbor >= minProminence) {
+      features.push({ index: i, kind: "trough", magnitude: d - minNeighbor });
+    }
+  }
+
+  // Ledges — large slope changes (drop-offs, shelves) away from existing
+  // peaks/troughs.
+  const slopes: number[] = new Array(n - 1);
+  for (let i = 0; i < n - 1; i++) {
+    const dx = pts[i + 1]!.distanceM - pts[i]!.distanceM;
+    const dy = pts[i + 1]!.depthM - pts[i]!.depthM;
+    slopes[i] = dx > 1e-6 ? dy / dx : 0;
+  }
+  // Threshold scales with depth range vs transect length so it adapts to
+  // both tiny lake transects and ocean-scale ones.
+  const meanAbsSlope =
+    profile.totalDistanceM > 0 ? range / profile.totalDistanceM : 0;
+  const slopeThresh = Math.max(0.02, meanAbsSlope * 3);
+
+  for (let i = w; i < n - 1 - w; i++) {
+    const s1 = slopes[i - 1] ?? 0;
+    const s2 = slopes[i] ?? 0;
+    const delta = Math.abs(s2 - s1);
+    if (delta < slopeThresh) continue;
+    let near = false;
+    for (const f of features) {
+      if (Math.abs(f.index - i) < w) {
+        near = true;
+        break;
+      }
+    }
+    if (near) continue;
+    features.push({ index: i, kind: "ledge", magnitude: delta });
+  }
+
+  features.sort((a, b) => a.index - b.index);
+  return features;
+}
+
+/**
  * Convert a sampled point's world-Y position based on its measured depth.
  * Exported so the in-scene line component can hover slightly above the
  * terrain surface.

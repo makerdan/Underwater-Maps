@@ -1,6 +1,33 @@
 import { describe, it, expect } from "vitest";
-import { buildProfile } from "../lib/depthProfileStore";
+import {
+  buildProfile,
+  detectProfileFeatures,
+  type DepthProfileResult,
+  type ProfilePoint,
+} from "../lib/depthProfileStore";
 import type { TerrainData } from "@workspace/api-client-react";
+
+function profileFromDepths(depths: number[]): DepthProfileResult {
+  const totalDistanceM = (depths.length - 1) * 10;
+  const points: ProfilePoint[] = depths.map((depthM, i) => ({
+    distanceM: i * 10,
+    depthM,
+    slot: null,
+    worldX: i,
+    worldZ: 0,
+    lon: 0,
+    lat: 0,
+  }));
+  return {
+    start: { lon: 0, lat: 0, depth: depths[0]! },
+    end: { lon: 0, lat: 0, depth: depths[depths.length - 1]! },
+    points,
+    totalDistanceM,
+    minDepthM: Math.min(...depths),
+    maxDepthM: Math.max(...depths),
+    at: 0,
+  };
+}
 
 function makeRamp(N: number): TerrainData {
   // Depth ramps linearly from 0 (shallow) at the west edge to 1000m at the
@@ -131,5 +158,79 @@ describe("buildProfile", () => {
       expect(p.distanceM).toBe(0);
     }
     expect(r.maxDepthM - r.minDepthM).toBeLessThan(1e-6);
+  });
+});
+
+describe("detectProfileFeatures", () => {
+  it("returns no features for a flat profile", () => {
+    const p = profileFromDepths(new Array(96).fill(50));
+    expect(detectProfileFeatures(p)).toEqual([]);
+  });
+
+  it("returns no features for a short profile (<5 samples)", () => {
+    const p = profileFromDepths([10, 20, 30, 40]);
+    expect(detectProfileFeatures(p)).toEqual([]);
+  });
+
+  it("flags a prominent hump (peak) and the surrounding holes (troughs)", () => {
+    // Bowl with a sharp shallow spike in the middle: deep → shallow → deep.
+    const depths: number[] = [];
+    for (let i = 0; i < 96; i++) {
+      // Default deep value
+      let d = 100;
+      // A prominent peak at idx 48 — much shallower than neighbours
+      if (i === 48) d = 20;
+      else if (i === 47 || i === 49) d = 60;
+      depths.push(d);
+    }
+    const features = detectProfileFeatures(profileFromDepths(depths));
+    const peak = features.find((f) => f.kind === "peak");
+    expect(peak).toBeDefined();
+    expect(peak!.index).toBe(48);
+    expect(peak!.magnitude).toBeGreaterThan(0);
+  });
+
+  it("flags a prominent trough (hole) in an otherwise shallow profile", () => {
+    const depths: number[] = new Array(96).fill(10);
+    depths[50] = 200;
+    depths[49] = 80;
+    depths[51] = 80;
+    const features = detectProfileFeatures(profileFromDepths(depths));
+    const trough = features.find((f) => f.kind === "trough");
+    expect(trough).toBeDefined();
+    expect(trough!.index).toBe(50);
+  });
+
+  it("ignores tiny ripples below the prominence threshold", () => {
+    // Linear ramp gives a meaningful range so the slope threshold scales up
+    // and a 2m wobble against a 1000m range stays below both bars.
+    const depths: number[] = [];
+    for (let i = 0; i < 96; i++) depths.push((i / 95) * 1000);
+    depths[70] = depths[70]! - 2;
+    const features = detectProfileFeatures(profileFromDepths(depths));
+    expect(features.find((f) => f.index === 70)).toBeUndefined();
+  });
+
+  it("flags a ledge at a sharp drop-off", () => {
+    // Flat shallow → sharp drop → flat deep.
+    const depths: number[] = [];
+    for (let i = 0; i < 96; i++) depths.push(i < 48 ? 10 : 200);
+    const features = detectProfileFeatures(profileFromDepths(depths));
+    const ledge = features.find((f) => f.kind === "ledge");
+    expect(ledge).toBeDefined();
+    // Drop happens around the i=47→48 boundary.
+    expect(Math.abs(ledge!.index - 48)).toBeLessThanOrEqual(2);
+  });
+
+  it("features are sorted by index", () => {
+    const depths: number[] = new Array(96).fill(100);
+    depths[20] = 20;     // hump
+    depths[19] = 60; depths[21] = 60;
+    depths[70] = 200;    // hole
+    depths[69] = 150; depths[71] = 150;
+    const features = detectProfileFeatures(profileFromDepths(depths));
+    for (let i = 1; i < features.length; i++) {
+      expect(features[i]!.index).toBeGreaterThan(features[i - 1]!.index);
+    }
   });
 });
