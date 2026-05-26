@@ -17,7 +17,7 @@ import { HUD } from "@/components/HUD";
 import { DepthScaleBar } from "@/components/DepthScaleBar";
 import { OverlaysToolsPanel } from "@/components/OverlaysToolsPanel";
 import { DatasetPanel } from "@/components/DatasetPanel";
-import { SidebarSection } from "@/components/SidebarSection";
+import { SidebarSection, SidebarSectionGroup } from "@/components/SidebarSection";
 import { Minimap } from "@/components/Minimap";
 import { ControlsLegend } from "@/components/ControlsLegend";
 import { AppHeader } from "@/components/AppHeader";
@@ -598,30 +598,37 @@ function Main() {
                 scrollbarColor: "rgba(0,229,255,0.35) transparent",
               }}
             >
-              {/* ── Section 1: Map & Data ── */}
-              <SidebarSection id="mapData" title="Map & Data">
-                {showDatasetPanel ? <DatasetPanel embedded /> : null}
-                <ZoneOverlay embedded />
-                {showHabitatPanel ? <HabitatPanel embedded /> : null}
-              </SidebarSection>
+              {/* ── Grouped sections: Map & Data + Conditions ──
+                  Rendered inside one shared bordered shell so the two
+                  top-level sections read as siblings of a single panel
+                  instead of two separate cards. Each section still has
+                  its own collapsible header and independent toggle. */}
+              <SidebarSectionGroup>
+                {/* ── Section 1: Map & Data ── */}
+                <SidebarSection id="mapData" title="Map & Data">
+                  {showDatasetPanel ? <DatasetPanel embedded /> : null}
+                  <ZoneOverlay embedded />
+                  {showHabitatPanel ? <HabitatPanel embedded /> : null}
+                </SidebarSection>
 
-              {/* ── Section 2: Conditions ── */}
-              <SidebarSection id="conditions" title="Conditions">
-                {showTidePanel && tidalOverlay && tidalData !== null ? (
-                  <TidePanel
-                    data={tidalData}
-                    loading={tidalLoading}
-                    depthLayer={depthLayer}
-                    onDepthLayerChange={setDepthLayer}
-                    scrubDatetime={scrubDatetime}
-                    onScrubChange={setScrubDatetime}
-                    lat={centerLat}
-                    lon={centerLon}
-                    embedded
-                  />
-                ) : null}
-                <CurrentsPanel embedded />
-              </SidebarSection>
+                {/* ── Section 2: Conditions ── */}
+                <SidebarSection id="conditions" title="Conditions">
+                  {showTidePanel && tidalOverlay && tidalData !== null ? (
+                    <TidePanel
+                      data={tidalData}
+                      loading={tidalLoading}
+                      depthLayer={depthLayer}
+                      onDepthLayerChange={setDepthLayer}
+                      scrubDatetime={scrubDatetime}
+                      onScrubChange={setScrubDatetime}
+                      lat={centerLat}
+                      lon={centerLon}
+                      embedded
+                    />
+                  ) : null}
+                  <CurrentsPanel embedded />
+                </SidebarSection>
+              </SidebarSectionGroup>
             </div>
 
             {/* ── Footer: Conditions Legend (pinned bottom) ──
