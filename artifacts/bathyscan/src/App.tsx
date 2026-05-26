@@ -47,6 +47,7 @@ import { useGpsStore } from "@/lib/gpsStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { getBoundKey } from "@/lib/keyBindings";
 import { useWaterTypeSideEffects } from "@/lib/useWaterTypeSideEffects";
 import { useActiveDatasetSync } from "@/lib/useActiveDatasetSync";
 import { VisibleDatasetsLoader } from "@/lib/VisibleDatasetsLoader";
@@ -437,18 +438,22 @@ function Main() {
   // Escape — close query panel and clear highlights
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.code === "KeyO" && !e.repeat) {
+      const bindings = useSettingsStore.getState().keyBindings;
+      if (e.code === getBoundKey(bindings, "toggleOverview") && !e.repeat) {
         const store = useUiStore.getState();
         store.setOverviewOpen(!store.overviewOpen);
       }
-      if (e.key === "/" && !e.repeat) {
+      if (e.code === getBoundKey(bindings, "openQuery") && !e.repeat) {
         const tag = (e.target as HTMLElement)?.tagName;
         if (tag !== "INPUT" && tag !== "TEXTAREA") {
           e.preventDefault();
           setQueryOpen(true);
         }
       }
-      if (e.key === "," && !e.repeat && !e.ctrlKey && !e.metaKey) {
+      if (
+        e.code === getBoundKey(bindings, "openSettings") &&
+        !e.repeat && !e.ctrlKey && !e.metaKey
+      ) {
         const tag = (e.target as HTMLElement)?.tagName;
         if (tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") {
           setLocation(basePath + "/settings");

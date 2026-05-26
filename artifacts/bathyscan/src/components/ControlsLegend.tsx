@@ -5,7 +5,7 @@ import { formatKeyCode, formatGamepadButton } from "@/lib/keyLabel";
 
 export const ControlsLegend: React.FC = () => {
   const [open, setOpen] = useState(false);
-  const crosshairMenuKey = useSettingsStore((s) => s.crosshairMenuKey);
+  const crosshairMenuKey = useSettingsStore((s) => s.keyBindings.crosshairMenu);
   const crosshairMenuGamepadButton = useSettingsStore((s) => s.crosshairMenuGamepadButton);
 
   const crosshairActionLabel =

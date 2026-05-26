@@ -3,6 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useAppState, SPEEDS } from "@/lib/context";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { getBoundKey } from "@/lib/keyBindings";
 import { computeWheelDolly, computePinchDolly } from "@/lib/zoomMath";
 
 /**
@@ -23,12 +24,15 @@ export const FlyControls = () => {
   const mouseZoomSensitivity = useSettingsStore((s) => s.mouseZoomSensitivity);
   const touchpadZoomSensitivity = useSettingsStore((s) => s.touchpadZoomSensitivity);
   const pinchZoomSensitivity = useSettingsStore((s) => s.pinchZoomSensitivity);
+  const keyBindings = useSettingsStore((s) => s.keyBindings);
   const mouseZoomSensRef = useRef(mouseZoomSensitivity);
   const touchpadZoomSensRef = useRef(touchpadZoomSensitivity);
   const pinchZoomSensRef = useRef(pinchZoomSensitivity);
+  const keyBindingsRef = useRef(keyBindings);
   useEffect(() => { mouseZoomSensRef.current = mouseZoomSensitivity; }, [mouseZoomSensitivity]);
   useEffect(() => { touchpadZoomSensRef.current = touchpadZoomSensitivity; }, [touchpadZoomSensitivity]);
   useEffect(() => { pinchZoomSensRef.current = pinchZoomSensitivity; }, [pinchZoomSensitivity]);
+  useEffect(() => { keyBindingsRef.current = keyBindings; }, [keyBindings]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -39,12 +43,13 @@ export const FlyControls = () => {
         return;
       }
       if (mode === "fly") {
-        if (e.code === "Equal" || e.code === "NumpadAdd") {
+        const bindings = keyBindingsRef.current;
+        if (e.code === getBoundKey(bindings, "speedUp") || e.code === "NumpadAdd") {
           e.preventDefault();
           setSpeedIndex(Math.min(SPEEDS.length - 1, speedIndexRef.current + 1));
           return;
         }
-        if (e.code === "Minus" || e.code === "NumpadSubtract") {
+        if (e.code === getBoundKey(bindings, "speedDown") || e.code === "NumpadSubtract") {
           e.preventDefault();
           setSpeedIndex(Math.max(0, speedIndexRef.current - 1));
           return;
@@ -158,12 +163,13 @@ export const FlyControls = () => {
       camera.getWorldDirection(direction);
       const right = new THREE.Vector3().crossVectors(camera.up, direction).normalize();
 
-      if (keys.current["KeyW"]) camera.position.addScaledVector(direction, scaledSpeed);
-      if (keys.current["KeyS"]) camera.position.addScaledVector(direction, -scaledSpeed);
-      if (keys.current["KeyD"]) camera.position.addScaledVector(right, -scaledSpeed);
-      if (keys.current["KeyA"]) camera.position.addScaledVector(right, scaledSpeed);
-      if (keys.current["Space"]) camera.position.y += scaledSpeed;
-      if (keys.current["ShiftLeft"]) camera.position.y -= scaledSpeed;
+      const bindings = keyBindingsRef.current;
+      if (keys.current[getBoundKey(bindings, "moveForward")]) camera.position.addScaledVector(direction, scaledSpeed);
+      if (keys.current[getBoundKey(bindings, "moveBackward")]) camera.position.addScaledVector(direction, -scaledSpeed);
+      if (keys.current[getBoundKey(bindings, "strafeRight")]) camera.position.addScaledVector(right, -scaledSpeed);
+      if (keys.current[getBoundKey(bindings, "strafeLeft")]) camera.position.addScaledVector(right, scaledSpeed);
+      if (keys.current[getBoundKey(bindings, "ascend")]) camera.position.y += scaledSpeed;
+      if (keys.current[getBoundKey(bindings, "descend")]) camera.position.y -= scaledSpeed;
     }
 
     setCameraPos([camera.position.x, camera.position.y, camera.position.z]);

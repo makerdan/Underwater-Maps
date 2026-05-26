@@ -18,6 +18,7 @@ import { useContextMenuStore, type ContextMenuItem } from "@/lib/contextMenuStor
 import { runMarkerDelete } from "@/lib/markerActions";
 import { useMarkerDetailStore } from "@/lib/markerDetailStore";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { getBoundKey } from "@/lib/keyBindings";
 import {
   buildTerrainMenuItems,
   openCrosshairContextMenu,
@@ -64,22 +65,24 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   const mouseZoomSensitivity = useSettingsStore((s) => s.mouseZoomSensitivity);
   const touchpadZoomSensitivity = useSettingsStore((s) => s.touchpadZoomSensitivity);
   const pinchZoomSensitivity = useSettingsStore((s) => s.pinchZoomSensitivity);
-  // Remappable shortcut bindings for the crosshair action menu.
-  const crosshairMenuKey = useSettingsStore((s) => s.crosshairMenuKey);
+  // Remappable shortcut bindings — every action is read from settings via
+  // `keyBindings` so users can rebind movement, speed, drop-pin and the
+  // crosshair menu independently.
+  const keyBindings = useSettingsStore((s) => s.keyBindings);
   const crosshairMenuGamepadButton = useSettingsStore((s) => s.crosshairMenuGamepadButton);
   const sensitivityRef = useRef(mouseSensitivity);
   const invertMouseYRef = useRef(invertMouseY);
   const mouseZoomSensRef = useRef(mouseZoomSensitivity);
   const touchpadZoomSensRef = useRef(touchpadZoomSensitivity);
   const pinchZoomSensRef = useRef(pinchZoomSensitivity);
-  const crosshairMenuKeyRef = useRef(crosshairMenuKey);
+  const keyBindingsRef = useRef(keyBindings);
   const crosshairMenuGamepadButtonRef = useRef(crosshairMenuGamepadButton);
   useEffect(() => { sensitivityRef.current = mouseSensitivity; }, [mouseSensitivity]);
   useEffect(() => { invertMouseYRef.current = invertMouseY; }, [invertMouseY]);
   useEffect(() => { mouseZoomSensRef.current = mouseZoomSensitivity; }, [mouseZoomSensitivity]);
   useEffect(() => { touchpadZoomSensRef.current = touchpadZoomSensitivity; }, [touchpadZoomSensitivity]);
   useEffect(() => { pinchZoomSensRef.current = pinchZoomSensitivity; }, [pinchZoomSensitivity]);
-  useEffect(() => { crosshairMenuKeyRef.current = crosshairMenuKey; }, [crosshairMenuKey]);
+  useEffect(() => { keyBindingsRef.current = keyBindings; }, [keyBindings]);
   useEffect(() => { crosshairMenuGamepadButtonRef.current = crosshairMenuGamepadButton; }, [crosshairMenuGamepadButton]);
 
   // Refs for event-listener / useFrame closures to stay current
@@ -217,23 +220,26 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       keys.current[e.code] = true;
+      const bindings = keyBindingsRef.current;
 
-      // +/= : speed tier up, -/_ : speed tier down (fly mode, not realistic)
+      // Speed tier up / down (fly mode, not realistic). The NumpadAdd /
+      // NumpadSubtract synonyms are always honoured in addition to the
+      // user's chosen binding so a numpad keeps working out of the box.
       if (modeRef.current === "fly" && !realisticModeRef.current) {
-        if (e.code === "Equal" || e.code === "NumpadAdd") {
+        if (e.code === getBoundKey(bindings, "speedUp") || e.code === "NumpadAdd") {
           e.preventDefault();
           setSpeedIndex(Math.min(SPEEDS.length - 1, speedIndexRef.current + 1));
           return;
         }
-        if (e.code === "Minus" || e.code === "NumpadSubtract") {
+        if (e.code === getBoundKey(bindings, "speedDown") || e.code === "NumpadSubtract") {
           e.preventDefault();
           setSpeedIndex(Math.max(0, speedIndexRef.current - 1));
           return;
         }
       }
 
-      // G: pin GPS and open marker form
-      if (e.code === "KeyG") {
+      // Drop GPS pin: open the marker form pinned at the crosshair.
+      if (e.code === getBoundKey(bindings, "dropGpsPin")) {
         const gps = useCameraStore.getState().crosshairGps;
         if (gps) {
           useCameraStore.getState().setLastClickedGps(gps);
@@ -246,7 +252,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       // unlocked, but only in fly mode and only when the crosshair is
       // currently on terrain. Key binding is user-remappable via Settings →
       // Shortcuts (defaults to "KeyQ").
-      if (e.code === crosshairMenuKeyRef.current && modeRef.current === "fly") {
+      if (e.code === getBoundKey(bindings, "crosshairMenu") && modeRef.current === "fly") {
         const rect = gl.domElement.getBoundingClientRect();
         const opened = openCrosshairContextMenu({
           centerX: rect.left + rect.width / 2,
@@ -761,12 +767,24 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       camera.getWorldDirection(moveDir.current);
       rightDir.current.crossVectors(moveDir.current, camera.up).normalize();
 
-      if (keys.current["KeyW"]) camera.position.addScaledVector(moveDir.current, scaledSpeed);
-      if (keys.current["KeyS"]) camera.position.addScaledVector(moveDir.current, -scaledSpeed);
-      if (keys.current["KeyA"]) camera.position.addScaledVector(rightDir.current, -scaledSpeed);
-      if (keys.current["KeyD"]) camera.position.addScaledVector(rightDir.current, scaledSpeed);
-      if (keys.current["Space"]) camera.position.y += scaledSpeed;
-      if (keys.current["ShiftLeft"] || keys.current["ShiftRight"]) {
+      const bindings = keyBindingsRef.current;
+      const fwd = getBoundKey(bindings, "moveForward");
+      const back = getBoundKey(bindings, "moveBackward");
+      const left = getBoundKey(bindings, "strafeLeft");
+      const right = getBoundKey(bindings, "strafeRight");
+      const up = getBoundKey(bindings, "ascend");
+      const down = getBoundKey(bindings, "descend");
+      if (keys.current[fwd]) camera.position.addScaledVector(moveDir.current, scaledSpeed);
+      if (keys.current[back]) camera.position.addScaledVector(moveDir.current, -scaledSpeed);
+      if (keys.current[left]) camera.position.addScaledVector(rightDir.current, -scaledSpeed);
+      if (keys.current[right]) camera.position.addScaledVector(rightDir.current, scaledSpeed);
+      if (keys.current[up]) camera.position.y += scaledSpeed;
+      // ShiftRight stays as a permanent secondary "descend" so the user
+      // doesn't lose a sensible default when they rebind ShiftLeft.
+      if (
+        keys.current[down] ||
+        (down !== "ShiftRight" && keys.current["ShiftRight"])
+      ) {
         camera.position.y -= scaledSpeed;
       }
 

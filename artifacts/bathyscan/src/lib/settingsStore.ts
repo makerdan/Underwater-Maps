@@ -11,8 +11,13 @@
  */
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import {
+  DEFAULT_KEY_BINDINGS,
+  resolveKeyBindings,
+  type ShortcutActionId,
+} from "./keyBindings";
 
-export const SETTINGS_SCHEMA_VERSION = 8;
+export const SETTINGS_SCHEMA_VERSION = 9;
 
 /**
  * Standard-mapping gamepad button index used to trigger the crosshair
@@ -222,10 +227,12 @@ export interface SettingsState {
 
   // ── Shortcuts (remappable bindings) ──────────────────────────────────
   /**
-   * Keyboard binding (KeyboardEvent.code) for opening the terrain action
-   * menu anchored at the crosshair. Default "KeyQ".
+   * Map of action id (e.g. "moveForward", "crosshairMenu") to
+   * `KeyboardEvent.code` (e.g. "KeyW", "KeyQ"). Every action listed in
+   * `SHORTCUT_ACTIONS` is individually remappable. Missing keys fall back
+   * to the action's default via `resolveKeyBindings`.
    */
-  crosshairMenuKey: string;
+  keyBindings: Record<ShortcutActionId, string>;
   /**
    * Standard-mapping gamepad button index that opens the same crosshair
    * action menu. `null` disables the gamepad binding. Default = Y/Triangle.
@@ -371,7 +378,9 @@ interface SettingsActions {
   setWaterType: (v: WaterType) => void;
 
   // Shortcuts
-  setCrosshairMenuKey: (v: string) => void;
+  setKeyBinding: (action: ShortcutActionId, code: string) => void;
+  resetKeyBinding: (action: ShortcutActionId) => void;
+  resetAllKeyBindings: () => void;
   setCrosshairMenuGamepadButton: (v: number | null) => void;
 
   /** Hydrate the entire settings state from the server response. */
@@ -589,7 +598,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   waterType: "saltwater",
 
   // Shortcuts
-  crosshairMenuKey: "KeyQ",
+  keyBindings: { ...DEFAULT_KEY_BINDINGS },
   crosshairMenuGamepadButton: DEFAULT_CROSSHAIR_MENU_GAMEPAD_BUTTON,
 
   lastSyncedAt: null,
@@ -641,7 +650,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   ],
   account: ["telemetryOptIn"],
   environment: ["waterType"],
-  shortcuts: ["crosshairMenuKey", "crosshairMenuGamepadButton"],
+  shortcuts: ["keyBindings", "crosshairMenuGamepadButton"],
 };
 
 /**
@@ -666,6 +675,21 @@ function valuesEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (Array.isArray(a) && Array.isArray(b)) {
     return a.length === b.length && a.every((v, i) => valuesEqual(v, b[i]));
+  }
+  if (
+    a && b &&
+    typeof a === "object" && typeof b === "object" &&
+    !Array.isArray(a) && !Array.isArray(b)
+  ) {
+    const ar = a as Record<string, unknown>;
+    const br = b as Record<string, unknown>;
+    const ak = Object.keys(ar);
+    const bk = Object.keys(br);
+    if (ak.length !== bk.length) return false;
+    for (const k of ak) {
+      if (!valuesEqual(ar[k], br[k])) return false;
+    }
+    return true;
   }
   return false;
 }
@@ -813,7 +837,18 @@ export const useSettingsStore = create<SettingsStore>()(
         setWaterType: setter("waterType"),
 
         // Shortcuts
-        setCrosshairMenuKey: setter("crosshairMenuKey"),
+        setKeyBinding: (action, code) =>
+          set((state) => ({
+            keyBindings: { ...state.keyBindings, [action]: code },
+          })),
+        resetKeyBinding: (action) =>
+          set((state) => ({
+            keyBindings: {
+              ...state.keyBindings,
+              [action]: DEFAULT_KEY_BINDINGS[action],
+            },
+          })),
+        resetAllKeyBindings: () => set({ keyBindings: { ...DEFAULT_KEY_BINDINGS } }),
         setCrosshairMenuGamepadButton: setter("crosshairMenuGamepadButton"),
 
         hydrateFromServer: (partial) =>
@@ -903,6 +938,7 @@ export const useSettingsStore = create<SettingsStore>()(
           const prev = persisted as Partial<SettingsState> & {
             conditionsOverlayStyle?: ConditionsOverlayStyle;
             showSpeedIndicator?: boolean;
+            crosshairMenuKey?: string;
           };
           // v5 → v6: split the single `conditionsOverlayStyle` into three
           // independent per-overlay keys, preserving the user's previous
@@ -916,24 +952,42 @@ export const useSettingsStore = create<SettingsStore>()(
                   currentOverlayStyle: legacyStyle,
                 }
               : {};
+          // v8 → v9: collapse the single remappable `crosshairMenuKey`
+          // field into the new `keyBindings` action-id map so every
+          // shortcut is individually remappable.
+          const mergedBindings = resolveKeyBindings({
+            ...(prev.keyBindings ?? {}),
+            ...(typeof prev.crosshairMenuKey === "string"
+              ? { crosshairMenu: prev.crosshairMenuKey }
+              : {}),
+          });
           // Drop obsolete keys so they don't linger in persisted state.
           // v7 → v8: `showSpeedIndicator` was removed along with the HUD
           // SPD panel.
           const {
             conditionsOverlayStyle: _drop,
             showSpeedIndicator: _dropSpd,
+            crosshairMenuKey: _dropKey,
             ...rest
           } = prev;
           void _drop;
           void _dropSpd;
+          void _dropKey;
           return {
             ...DEFAULT_SETTINGS,
             ...rest,
             ...split,
+            keyBindings: mergedBindings,
             schemaVersion: SETTINGS_SCHEMA_VERSION,
           };
         }
-        return persisted as SettingsState;
+        // Even at the current version, ensure newly added actions get
+        // their defaults filled in if the persisted map is missing them.
+        const cur = persisted as SettingsState;
+        return {
+          ...cur,
+          keyBindings: resolveKeyBindings(cur.keyBindings),
+        };
       },
       // After localStorage rehydrates, treat the persisted values as the
       // "saved" baseline so per-section dirty tracking starts clean.

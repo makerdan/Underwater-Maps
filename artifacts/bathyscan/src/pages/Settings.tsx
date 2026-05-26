@@ -22,6 +22,14 @@ import {
   type SettingsSection,
   type SettingsState,
 } from "@/lib/settingsStore";
+import {
+  SHORTCUT_ACTIONS,
+  SHORTCUT_GROUPS,
+  DEFAULT_KEY_BINDINGS,
+  findBindingConflicts,
+  type ShortcutActionId,
+} from "@/lib/keyBindings";
+import { formatKeyCode, formatGamepadButton } from "@/lib/keyLabel";
 import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMarkersQueryKey } from "@workspace/api-client-react";
@@ -1517,17 +1525,13 @@ function AccessibilitySection() {
   );
 }
 
-const SHORTCUTS: { keys: string; desc: string }[] = [
-  { keys: "W A S D", desc: "Move (fly mode)" },
-  { keys: "Space / Shift", desc: "Move up / down" },
+/** Non-remappable shortcuts (mouse gestures, Escape, etc.) shown for reference only. */
+const FIXED_SHORTCUTS: { keys: string; desc: string }[] = [
+  { keys: "Click", desc: "Lock mouse / enter fly mode" },
   { keys: "Mouse drag", desc: "Look around" },
-  { keys: "1 – 5", desc: "Speed tier 0 – 4" },
-  { keys: "M", desc: "Toggle overview map" },
-  { keys: "P", desc: "Drop marker at crosshair" },
-  { keys: "T", desc: "Start / stop GPS trail" },
-  { keys: "H", desc: "Toggle HUD" },
-  { keys: "F", desc: "Reset camera to home" },
-  { keys: ",", desc: "Open settings" },
+  { keys: "Scroll", desc: "Zoom in / out" },
+  { keys: "R-drag / Ctrl-drag", desc: "Orbit around point" },
+  { keys: "R-click", desc: "Context menu" },
   { keys: "Esc", desc: "Close panels / release pointer" },
 ];
 
@@ -1604,14 +1608,301 @@ function GlobalResetFooter() {
   );
 }
 
+/** Capture row for a single remappable keyboard action. */
+function KeyBindingCapture({
+  action,
+  conflictWith,
+}: {
+  action: ShortcutActionId;
+  conflictWith: string[];
+}) {
+  const def = SHORTCUT_ACTIONS.find((a) => a.id === action)!;
+  const code = useSettingsStore((s) => s.keyBindings[action] ?? def.defaultCode);
+  const setKeyBinding = useSettingsStore((s) => s.setKeyBinding);
+  const resetKeyBinding = useSettingsStore((s) => s.resetKeyBinding);
+  const [capturing, setCapturing] = useState(false);
+  const isDefault = code === def.defaultCode;
+  const conflict = conflictWith.length > 0;
+
+  useEffect(() => {
+    if (!capturing) return;
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.code === "Escape") {
+        setCapturing(false);
+        return;
+      }
+      if (
+        e.code === "ShiftLeft" || e.code === "ShiftRight" ||
+        e.code === "ControlLeft" || e.code === "ControlRight" ||
+        e.code === "AltLeft" || e.code === "AltRight" ||
+        e.code === "MetaLeft" || e.code === "MetaRight"
+      ) return;
+      setKeyBinding(action, e.code);
+      setCapturing(false);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [capturing, action, setKeyBinding]);
+
+  return (
+    <div style={S.row}>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={S.label}>{def.label}</div>
+        <div style={S.sublabel}>{def.description}</div>
+        {conflict && (
+          <div
+            data-testid={`shortcut-conflict-${action}`}
+            style={{ fontSize: 10, color: "#fb923c", marginTop: 4, letterSpacing: "0.04em" }}
+          >
+            ⚠ Also bound to: {conflictWith.join(", ")}
+          </div>
+        )}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button
+          type="button"
+          data-testid={`shortcut-${action}-key`}
+          onClick={() => setCapturing((v) => !v)}
+          style={{
+            background: capturing
+              ? "rgba(251,146,60,0.12)"
+              : conflict
+                ? "rgba(251,146,60,0.06)"
+                : "rgba(0,229,255,0.08)",
+            border: `1px solid ${
+              capturing
+                ? "rgba(251,146,60,0.5)"
+                : conflict
+                  ? "rgba(251,146,60,0.45)"
+                  : "rgba(0,229,255,0.25)"
+            }`,
+            borderRadius: 3,
+            color: capturing ? "#fb923c" : conflict ? "#fb923c" : "#67e8f9",
+            fontFamily: FONT,
+            fontSize: 10,
+            padding: "4px 12px",
+            minWidth: 110,
+            cursor: "pointer",
+            letterSpacing: "0.1em",
+          }}
+        >
+          {capturing ? "PRESS ANY KEY…" : formatKeyCode(code).toUpperCase()}
+        </button>
+        <button
+          type="button"
+          data-testid={`shortcut-${action}-reset`}
+          onClick={() => resetKeyBinding(action)}
+          disabled={isDefault}
+          style={{
+            background: "none",
+            border: "1px solid rgba(0,229,255,0.15)",
+            borderRadius: 3,
+            color: isDefault ? "#334155" : "#64748b",
+            fontSize: 9,
+            letterSpacing: "0.15em",
+            padding: "3px 8px",
+            cursor: isDefault ? "default" : "pointer",
+            fontFamily: FONT,
+            opacity: isDefault ? 0.5 : 1,
+          }}
+        >
+          RESET
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CrosshairMenuGamepadCapture() {
+  const value = useSettingsStore((s) => s.crosshairMenuGamepadButton);
+  const setValue = useSettingsStore((s) => s.setCrosshairMenuGamepadButton);
+  const [capturing, setCapturing] = useState(false);
+
+  useEffect(() => {
+    if (!capturing) return;
+    if (typeof navigator === "undefined" || typeof navigator.getGamepads !== "function") {
+      return;
+    }
+    let raf = 0;
+    let snapshot: boolean[][] | null = null;
+    const poll = () => {
+      const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+      const current = pads.map((p) => (p ? p.buttons.map((b) => !!b.pressed) : []));
+      if (!snapshot) {
+        snapshot = current;
+      } else {
+        for (let p = 0; p < current.length; p++) {
+          const cur = current[p] ?? [];
+          const prev = snapshot[p] ?? [];
+          for (let b = 0; b < cur.length; b++) {
+            if (cur[b] && !prev[b]) {
+              setValue(b);
+              setCapturing(false);
+              return;
+            }
+          }
+        }
+        snapshot = current;
+      }
+      raf = window.requestAnimationFrame(poll);
+    };
+    raf = window.requestAnimationFrame(poll);
+    return () => window.cancelAnimationFrame(raf);
+  }, [capturing, setValue]);
+
+  return (
+    <div style={S.row}>
+      <div>
+        <div style={S.label}>Gamepad button</div>
+        <div style={S.sublabel}>
+          Controller button that opens the same crosshair action menu. Uses
+          the Standard Gamepad mapping; defaults to Y / Triangle.
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button
+          type="button"
+          data-testid="shortcut-crosshair-menu-gamepad"
+          onClick={() => setCapturing((v) => !v)}
+          style={{
+            background: capturing ? "rgba(251,146,60,0.12)" : "rgba(0,229,255,0.08)",
+            border: `1px solid ${capturing ? "rgba(251,146,60,0.5)" : "rgba(0,229,255,0.25)"}`,
+            borderRadius: 3,
+            color: capturing ? "#fb923c" : "#67e8f9",
+            fontFamily: FONT,
+            fontSize: 10,
+            padding: "4px 12px",
+            minWidth: 140,
+            cursor: "pointer",
+            letterSpacing: "0.08em",
+          }}
+        >
+          {capturing ? "PRESS A BUTTON…" : formatGamepadButton(value).toUpperCase()}
+        </button>
+        <button
+          type="button"
+          onClick={() => setValue(null)}
+          style={{
+            background: "none",
+            border: "1px solid rgba(0,229,255,0.15)",
+            borderRadius: 3,
+            color: "#64748b",
+            fontSize: 9,
+            letterSpacing: "0.15em",
+            padding: "3px 8px",
+            cursor: "pointer",
+            fontFamily: FONT,
+          }}
+        >
+          DISABLE
+        </button>
+        <button
+          type="button"
+          onClick={() => setValue(DEFAULT_CROSSHAIR_MENU_GAMEPAD_BUTTON)}
+          style={{
+            background: "none",
+            border: "1px solid rgba(0,229,255,0.15)",
+            borderRadius: 3,
+            color: "#64748b",
+            fontSize: 9,
+            letterSpacing: "0.15em",
+            padding: "3px 8px",
+            cursor: "pointer",
+            fontFamily: FONT,
+          }}
+        >
+          RESET
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ShortcutsSection() {
+  const keyBindings = useSettingsStore((s) => s.keyBindings);
+  const resetAllKeyBindings = useSettingsStore((s) => s.resetAllKeyBindings);
+
+  // Map each action id to the other actions that share its code, so each row
+  // can render an inline conflict warning. Built once per render from the
+  // current bindings snapshot.
+  const conflictByAction = React.useMemo(() => {
+    const byCode = findBindingConflicts(keyBindings);
+    const out = new Map<ShortcutActionId, string[]>();
+    for (const action of SHORTCUT_ACTIONS) {
+      const code = keyBindings[action.id] ?? action.defaultCode;
+      const sharing = (byCode.get(code) ?? []).filter((id) => id !== action.id);
+      out.set(
+        action.id,
+        sharing.map((id) => SHORTCUT_ACTIONS.find((a) => a.id === id)?.label ?? id),
+      );
+    }
+    return out;
+  }, [keyBindings]);
+
+  const allDefault = React.useMemo(
+    () =>
+      SHORTCUT_ACTIONS.every(
+        (a) => (keyBindings[a.id] ?? a.defaultCode) === DEFAULT_KEY_BINDINGS[a.id],
+      ),
+    [keyBindings],
+  );
+
   return (
     <>
       <SectionTitle helpId="keyboard-shortcuts" helpLabel="Keyboard Shortcuts">◈ KEYBOARD SHORTCUTS</SectionTitle>
+      <SectionActionsRow section="shortcuts" />
+
+      {SHORTCUT_GROUPS.map((group) => {
+        const actions = SHORTCUT_ACTIONS.filter((a) => a.group === group.id);
+        if (actions.length === 0) return null;
+        return (
+          <div key={group.id} style={S.card}>
+            <div style={S.cardHeader}>{group.title}</div>
+            {actions.map((a) => (
+              <KeyBindingCapture
+                key={a.id}
+                action={a.id}
+                conflictWith={conflictByAction.get(a.id) ?? []}
+              />
+            ))}
+          </div>
+        );
+      })}
+
       <div style={S.card}>
-        <div style={S.cardHeader}>REFERENCE</div>
+        <div style={S.cardHeader}>GAMEPAD</div>
+        <CrosshairMenuGamepadCapture />
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "flex-end", margin: "8px 0 16px" }}>
+        <button
+          type="button"
+          data-testid="reset-all-bindings-btn"
+          onClick={() => resetAllKeyBindings()}
+          disabled={allDefault}
+          style={{
+            background: "none",
+            border: "1px solid rgba(0,229,255,0.2)",
+            borderRadius: 3,
+            color: allDefault ? "#334155" : "#67e8f9",
+            fontSize: 9,
+            letterSpacing: "0.15em",
+            padding: "4px 12px",
+            cursor: allDefault ? "default" : "pointer",
+            fontFamily: FONT,
+            opacity: allDefault ? 0.5 : 1,
+          }}
+        >
+          RESET ALL KEY BINDINGS
+        </button>
+      </div>
+
+      <div style={S.card}>
+        <div style={S.cardHeader}>FIXED CONTROLS</div>
         <div style={{ padding: "8px 16px" }}>
-          {SHORTCUTS.map((sh) => (
+          {FIXED_SHORTCUTS.map((sh) => (
             <div
               key={sh.keys}
               style={{

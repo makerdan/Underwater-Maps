@@ -79,7 +79,6 @@ export const HUD: React.FC = () => {
   const isOnline = useOfflineStore((s) => s.isOnline);
 
   const showCrosshairGps = useSettingsStore((s) => s.showCrosshairGps);
-  const showSpeedIndicator = useSettingsStore((s) => s.showSpeedIndicator);
   const showHeading = useSettingsStore((s) => s.showHeading);
   const coordinateFormat = useSettingsStore((s) => s.coordinateFormat);
   const units = useSettingsStore((s) => s.units);

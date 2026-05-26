@@ -25,7 +25,7 @@ const CYAN: React.CSSProperties = {
 export const KeyboardShortcutsPanel: React.FC = () => {
   const collapsed = usePanelCollapseStore((s) => s.collapsed.keyboardShortcuts);
   const toggle = usePanelCollapseStore((s) => s.toggle);
-  const crosshairMenuKey = useSettingsStore((s) => s.crosshairMenuKey);
+  const crosshairMenuKey = useSettingsStore((s) => s.keyBindings.crosshairMenu);
   const crosshairMenuGamepadButton = useSettingsStore((s) => s.crosshairMenuGamepadButton);
 
   const crosshairActionLabel =
