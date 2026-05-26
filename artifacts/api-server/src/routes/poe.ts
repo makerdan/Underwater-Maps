@@ -18,6 +18,7 @@ import {
   substrateToZone,
   type SubstrateGridSample,
 } from "../lib/substrateGrid.js";
+import { registerCache } from "../lib/cacheRegistry.js";
 import {
   MAX_TILES_PER_SIDE,
   TILE_CONCURRENCY,
@@ -200,6 +201,7 @@ interface CachedZones {
  * never alias two unrelated uploads either.
  */
 const datasetZonesCache = new Map<string, CachedZones>();
+registerCache(() => datasetZonesCache.clear());
 
 /** Exported so the /datasets/:id/zones endpoint (datasets.ts) can read it. */
 export { datasetZonesCache };

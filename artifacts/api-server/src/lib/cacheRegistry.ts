@@ -8,6 +8,27 @@
  *
  * Production code never calls `clearAllCaches`; the registry is inert at
  * runtime except for the tiny slice of memory used to hold the callback list.
+ *
+ * ## Convention — every module-level cache MUST be registered
+ *
+ * If your route or lib file declares a module-level `Map` (or any other
+ * in-memory store whose contents persist across requests), you MUST register
+ * a clearing function here at module-init time:
+ *
+ * ```ts
+ * import { registerCache } from "../lib/cacheRegistry.js";
+ *
+ * const myCache = new Map<string, MyValue>();
+ * registerCache(() => myCache.clear());
+ * ```
+ *
+ * Skipping this registration means the cache will survive between test cases,
+ * causing the exact state-leakage problem that this registry was created to
+ * solve.  The CI test `src/__tests__/cacheRegistry-lint.test.ts` will fail if
+ * it finds a module-level `new Map` in any route file that does not also call
+ * `registerCache`.
+ *
+ * See `src/routes/tidal.ts` for the canonical reference implementation.
  */
 
 const clearFns: Array<() => void> = [];
