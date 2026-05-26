@@ -127,7 +127,134 @@ export interface DatasetMeta {
 // Preset dataset definitions
 // ---------------------------------------------------------------------------
 
-export const PRESET_DATASETS: DatasetMeta[] = [];
+export const PRESET_DATASETS: DatasetMeta[] = [
+  {
+    id: "thorne-bay",
+    name: "Thorne Bay — SE Alaska",
+    description:
+      "Clarence Strait and Thorne Bay, Prince of Wales Island — Inside Passage fishing grounds with rocky seafloor, kelp forests, and deep fjord channels (50-mi radius)",
+    waterType: "saltwater",
+    minDepth: 10,
+    maxDepth: 370,
+    centerLon: -132.53,
+    centerLat: 55.69,
+    bbox: { minLon: -133.5, minLat: 55.0, maxLon: -131.5, maxLat: 56.5 },
+    hasTopography: true,
+    hasEfh: true,
+  },
+  {
+    id: "glacier-bay",
+    name: "Glacier Bay — SE Alaska",
+    description:
+      "Glacier Bay National Park, SE Alaska — deep glacial fjords, tidewater glacier termini, and ~60 km of Alaska ShoreZone substrate coverage",
+    waterType: "saltwater",
+    minDepth: 5,
+    maxDepth: 460,
+    centerLon: -136.3,
+    centerLat: 58.75,
+    bbox: { minLon: -137.1, minLat: 58.4, maxLon: -135.8, maxLat: 59.15 },
+    hasTopography: true,
+    hasEfh: true,
+  },
+  {
+    id: "icy-strait",
+    name: "Icy Strait — SE Alaska",
+    description:
+      "Icy Strait and Cross Sound between Chichagof Island and Glacier Bay — Alaska ShoreZone substrate coverage and halibut/salmon fishing grounds",
+    waterType: "saltwater",
+    minDepth: 10,
+    maxDepth: 400,
+    centerLon: -136.0,
+    centerLat: 58.3,
+    bbox: { minLon: -136.6, minLat: 58.0, maxLon: -135.4, maxLat: 58.55 },
+    hasTopography: true,
+    hasEfh: true,
+  },
+  {
+    id: "sitka-sound",
+    name: "Sitka Sound — SE Alaska",
+    description:
+      "Sitka Sound off western Baranof Island — exposed outer-coast fishing grounds, kelp forests, and seamount-style pinnacles",
+    waterType: "saltwater",
+    minDepth: 10,
+    maxDepth: 600,
+    centerLon: -135.5,
+    centerLat: 57.0,
+    bbox: { minLon: -136.0, minLat: 56.7, maxLon: -135.0, maxLat: 57.25 },
+    hasTopography: true,
+    hasEfh: true,
+  },
+  {
+    id: "juneau-approaches",
+    name: "Juneau Approaches — SE Alaska",
+    description:
+      "Stephens Passage and Lynn Canal approaches to Juneau — deep mainland fjords, steep bedrock walls, and protected Inside Passage waters",
+    waterType: "saltwater",
+    minDepth: 10,
+    maxDepth: 470,
+    centerLon: -134.5,
+    centerLat: 58.3,
+    bbox: { minLon: -135.2, minLat: 57.9, maxLon: -133.8, maxLat: 58.7 },
+    hasTopography: true,
+    hasEfh: true,
+  },
+  {
+    id: "ketchikan",
+    name: "Ketchikan — SE Alaska",
+    description:
+      "Tongass Narrows and Revillagigedo Channel near Ketchikan — the southernmost Inside Passage fishing grounds, mixed rocky and silty seafloor",
+    waterType: "saltwater",
+    minDepth: 10,
+    maxDepth: 400,
+    centerLon: -131.65,
+    centerLat: 55.35,
+    bbox: { minLon: -132.3, minLat: 55.0, maxLon: -131.0, maxLat: 55.7 },
+    hasTopography: true,
+    hasEfh: true,
+  },
+  {
+    id: "craig-klawock",
+    name: "Craig & Klawock — SE Alaska",
+    description:
+      "Craig, Klawock, and Bucareli Bay on the west side of Prince of Wales Island — outer-coast salmon and halibut grounds with NCEI 1/3 arc-second DEM coverage",
+    waterType: "saltwater",
+    minDepth: 10,
+    maxDepth: 450,
+    centerLon: -133.15,
+    centerLat: 55.5,
+    bbox: { minLon: -133.7, minLat: 55.2, maxLon: -132.6, maxLat: 55.8 },
+    hasTopography: true,
+    hasEfh: true,
+  },
+  {
+    id: "wrangell-petersburg",
+    name: "Wrangell & Petersburg — SE Alaska",
+    description:
+      "Wrangell Narrows, Frederick Sound, and the central Inside Passage between Wrangell and Petersburg — protected mainland fjord fishing with high-res NCEI community DEM coverage",
+    waterType: "saltwater",
+    minDepth: 10,
+    maxDepth: 480,
+    centerLon: -132.85,
+    centerLat: 56.6,
+    bbox: { minLon: -133.5, minLat: 56.2, maxLon: -132.0, maxLat: 57.0 },
+    hasTopography: true,
+    hasEfh: true,
+  },
+  {
+    id: "skagway-haines",
+    name: "Skagway & Haines — Upper Lynn Canal",
+    description:
+      "Upper Lynn Canal between Haines and Skagway — deep glacial fjord at the head of the Inside Passage with NCEI 1/3 arc-second DEM coverage",
+    waterType: "saltwater",
+    minDepth: 5,
+    maxDepth: 350,
+    centerLon: -135.35,
+    centerLat: 59.25,
+    bbox: { minLon: -135.85, minLat: 58.95, maxLon: -134.85, maxLat: 59.55 },
+    hasTopography: true,
+    hasEfh: true,
+  },
+];
 
 export const FRESHWATER_PRESET_DATASETS: DatasetMeta[] = [
   {
@@ -169,6 +296,48 @@ export const FRESHWATER_PRESET_DATASETS: DatasetMeta[] = [
     centerLat: (33.78 + 34.06) / 2,
     bbox: { minLon: -97.05, minLat: 33.78, maxLon: -96.42, maxLat: 34.06 },
     hasTopography: true,
+  },
+  {
+    id: "lake-fork",
+    name: "Lake Fork Reservoir — East Texas",
+    description:
+      "TPWD-managed trophy largemouth bass reservoir on the Sabine River — shallow timber flats, hydrilla mats, and abundant crappie brushpiles",
+    waterType: "freshwater",
+    minDepth: 1,
+    maxDepth: 21,
+    centerLon: -95.535,
+    centerLat: 32.865,
+    bbox: { minLon: -95.65, minLat: 32.78, maxLon: -95.42, maxLat: 32.95 },
+    hasTopography: true,
+    hasEfh: true,
+  },
+  {
+    id: "sam-rayburn",
+    name: "Sam Rayburn Reservoir — East Texas",
+    description:
+      "Largest lake wholly in Texas, on the Angelina River — premier largemouth, white bass, crappie, and blue catfish fishery",
+    waterType: "freshwater",
+    minDepth: 1,
+    maxDepth: 24,
+    centerLon: -94.125,
+    centerLat: 31.325,
+    bbox: { minLon: -94.30, minLat: 31.05, maxLon: -93.95, maxLat: 31.60 },
+    hasTopography: true,
+    hasEfh: true,
+  },
+  {
+    id: "toledo-bend",
+    name: "Toledo Bend Reservoir — Texas / Louisiana",
+    description:
+      "Sabine River reservoir on the Texas/Louisiana border — Top-10 nationally ranked largemouth fishery with cypress timber and a stocked hybrid striper population",
+    waterType: "freshwater",
+    minDepth: 1,
+    maxDepth: 33,
+    centerLon: -93.75,
+    centerLat: 31.675,
+    bbox: { minLon: -93.95, minLat: 31.15, maxLon: -93.55, maxLat: 32.20 },
+    hasTopography: true,
+    hasEfh: true,
   },
 ];
 
@@ -374,13 +543,28 @@ export type BathymetrySourceId = keyof typeof BATHYMETRY_SOURCES;
  * national/global ones when they cover the AOI.
  */
 export const DATASET_SOURCE_PRIORITY: Record<string, BathymetrySourceId[]> = {
+  // SE Alaska multibeam-first corridors — Thorne Bay / Ketchikan / Sitka /
+  // Juneau have strong NCEI BAG (multibeam, 1–50 m) coverage. BAG first,
+  // community DEM next, GEBCO global last.
+  "thorne-bay":         ["ncei-bag-mosaic", "ncei-dem-global-mosaic", "gebco"],
+  "ketchikan":          ["ncei-bag-mosaic", "ncei-dem-global-mosaic", "gebco"],
+  "sitka-sound":        ["ncei-bag-mosaic", "ncei-dem-global-mosaic", "gebco"],
+  "juneau-approaches":  ["ncei-bag-mosaic", "ncei-dem-global-mosaic", "gebco"],
+  // SE Alaska community-DEM-first corridors — Glacier Bay / Icy Strait /
+  // Craig / Wrangell / Skagway are covered by NCEI integrated community
+  // DEMs (8–30 m) more reliably than the BAG composite there.
+  "glacier-bay":         ["ncei-dem-global-mosaic", "ncei-bag-mosaic", "gebco"],
+  "icy-strait":          ["ncei-dem-global-mosaic", "ncei-bag-mosaic", "gebco"],
+  "craig-klawock":       ["ncei-dem-global-mosaic", "ncei-bag-mosaic", "gebco"],
+  "wrangell-petersburg": ["ncei-dem-global-mosaic", "ncei-bag-mosaic", "gebco"],
+  "skagway-haines":      ["ncei-dem-global-mosaic", "ncei-bag-mosaic", "gebco"],
   // Inland TX reservoirs ship with a pre-built TWDB/USACE/3DEP bundle
   // (see scripts/src/build-lake-*-terrain.ts). The bundle is the only
   // honest depth source for these AOIs — NCEI/GEBCO have no inland
   // freshwater coverage — so it sits at the top of the list and the
   // synthetic terminal fallback handles the (rare) load-failure case.
-  "lake-ray-roberts": ["bundled-survey"],
-  "lake-texoma": ["bundled-survey"],
+  "lake-ray-roberts": ["bundled-survey", "gebco"],
+  "lake-texoma":      ["bundled-survey", "gebco"],
 };
 
 /** Default ranked list for AOIs without an explicit entry. */
@@ -1233,11 +1417,42 @@ function buildSyntheticGrid(
   N: number,
   meta: DatasetMeta
 ): { depths: number[]; minDepth: number; maxDepth: number } {
-  const depthFn = (nx: number, ny: number): number => {
+  const depthFns: Record<string, (nx: number, ny: number) => number> = {
+    "thorne-bay": (nx, ny) => {
+      // Model: Clarence Strait (N–S oriented, ~10 km wide), with Thorne Bay inlet.
+      // The bbox spans ~2° lon × 1.5° lat of SE Alaska Inside Passage.
+      const noise = fbm(nx * 12 + 17, ny * 12 + 17, 6, 0.52, 2.1);
+      const fineNoise = fbm(nx * 28 + 3, ny * 28 + 3, 4, 0.45, 2.2) * 0.15;
+
+      // Clarence Strait: deep N–S channel offset slightly west of centre
+      const straitCx = nx - 0.45;
+      const straitWidth = 0.18;
+      const straitDepth = Math.pow(Math.max(0, 1 - Math.abs(straitCx) / straitWidth), 1.4);
+
+      // Broad shelf areas on both sides
+      const shelf = Math.max(0, 1 - straitDepth * 2.5);
+
+      // Thorne Bay inlet: shallower pocket on the SW at ~(0.25, 0.55)
+      const tbDx = nx - 0.25;
+      const tbDy = ny - 0.55;
+      const thorneBayBowl = Math.pow(Math.max(0, 1 - (tbDx * tbDx * 30 + tbDy * tbDy * 20)), 1.5);
+
+      // Composite depth
+      const channelDepth = 180 + 190 * straitDepth;
+      const shelfDepth = 15 + 60 * shelf;
+      const thorneBayDepth = 10 + 55 * (1 - thorneBayBowl);
+      let depth = straitDepth * channelDepth + (1 - straitDepth) * shelfDepth;
+      // Blend in Thorne Bay bowl
+      depth = depth * (1 - thorneBayBowl * 0.6) + thorneBayDepth * (thorneBayBowl * 0.6);
+
+      return Math.max(10, depth + (noise - 0.5) * 60 + (fineNoise - 0.075) * 40);
+    },
+  };
+
+  const depthFn = depthFns[datasetId] ?? ((nx: number, ny: number) => {
     const noise = fbm(nx * 6 + 7, ny * 6 + 7, 5, 0.5, 2.0);
     return meta.minDepth + (meta.maxDepth - meta.minDepth) * noise;
-  };
-  void datasetId;
+  });
 
   const depths: number[] = new Array(N * N);
   let minDepth = Infinity;
