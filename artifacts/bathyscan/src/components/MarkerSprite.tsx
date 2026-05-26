@@ -65,6 +65,12 @@ export const MarkerSprite: React.FC<Props> = ({ marker, terrain, showLabel = tru
         <meshBasicMaterial color={color} transparent opacity={0.9} />
       </mesh>
 
+      {/* Invisible wider hit-box cylinder — improves click/tap targeting */}
+      <mesh position={[x, midY, z]}>
+        <cylinderGeometry args={[0.3, 0.3, poleHeight, 8]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+
       {/* Billboard icon disc + label at the top of the pillar */}
       <Billboard position={[x, 0.05, z]}>
         {/* Glow halo disc behind the icon — wider, additive blending */}
