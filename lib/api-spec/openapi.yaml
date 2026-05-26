@@ -1443,6 +1443,13 @@ components:
             "ai" when the labels come from the Poe AI classifier (live or cached);
             "heuristic" when the AI was unavailable and labels were estimated from
             depth percentiles only.
+        substrateFp:
+          type: string
+          description: |
+            8-char hex fingerprint of the bundled ShoreZone + ENC substrate grid
+            sampled for this dataset's AOI. Forms part of the zone-cache key so
+            a change in surveyed substrate coverage invalidates stale results.
+            "00000000" when the dataset has no substrate coverage.
       required:
         - zones
         - fromCache

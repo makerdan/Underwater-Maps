@@ -61,6 +61,12 @@ export interface ClassifyResult {
   depth percentiles only.
    */
   source?: ClassifyResultSource;
+  /** 8-char hex fingerprint of the bundled ShoreZone + ENC substrate grid
+  sampled for this dataset's AOI. Forms part of the zone-cache key so
+  a change in surveyed substrate coverage invalidates stale results.
+  "00000000" when the dataset has no substrate coverage.
+   */
+  substrateFp?: string;
 }
 
 export type ToolCallArgs = { [key: string]: unknown };

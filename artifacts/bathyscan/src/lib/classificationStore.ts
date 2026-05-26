@@ -150,8 +150,38 @@ export async function hashGrid(depths: number[]): Promise<string> {
   return out;
 }
 
-const SESSION_KEY_PREFIX = "bszone-";
-const SESSION_AI_KEY_PREFIX = "bszone-ai-";
+// Cache keys are bumped (v2) to invalidate any entries written before the
+// classifier started grounding its output in ShoreZone + ENC substrate data.
+// The substrate fingerprint is appended to each entry's key so a change in
+// surveyed substrate coverage invalidates stale cached classifications
+// without breaking content addressing on the gridHash.
+const SESSION_KEY_PREFIX = "bszone2-";
+const SESSION_AI_KEY_PREFIX = "bszone2-ai-";
+const SUBSTRATE_FP_PREFIX = "bs-subfp-";
+const NO_SUBSTRATE_FP = "00000000";
+
+function readKnownSubstrateFp(datasetId: string): string {
+  try {
+    return sessionStorage.getItem(`${SUBSTRATE_FP_PREFIX}${datasetId}`) ?? NO_SUBSTRATE_FP;
+  } catch {
+    return NO_SUBSTRATE_FP;
+  }
+}
+
+function writeKnownSubstrateFp(datasetId: string, fp: string): void {
+  try {
+    sessionStorage.setItem(`${SUBSTRATE_FP_PREFIX}${datasetId}`, fp);
+  } catch {
+    // sessionStorage unavailable / quota exceeded
+  }
+}
+
+function sessionZoneKey(gridHash: string, fp: string): string {
+  return `${SESSION_KEY_PREFIX}${gridHash}-${fp}`;
+}
+function sessionAiKey(gridHash: string, fp: string): string {
+  return `${SESSION_AI_KEY_PREFIX}${gridHash}-${fp}`;
+}
 
 /**
  * Representative zone index for each texture slot (0–3).
@@ -180,6 +210,13 @@ interface ClassificationState {
   error: ClassificationError | null;
   /** Hash of the grid currently being classified (or last successfully classified). */
   currentGridHash: string | null;
+  /**
+   * Substrate fingerprint reported by the server for the current dataset, used
+   * as part of the sessionStorage cache key so a change in surveyed substrate
+   * coverage invalidates stale cached classifications. `null` before the first
+   * server response.
+   */
+  currentSubstrateFp: string | null;
   /**
    * Provenance of the current zoneMap.
    *  - "ai":        labels from the Poe AI classifier (live or cached).
@@ -214,10 +251,11 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
   loading: false,
   error: null,
   currentGridHash: null,
+  currentSubstrateFp: null,
   source: null,
 
   clearZoneMap: () =>
-    set({ zoneMap: null, aiZoneMap: null, hasEdits: false, error: null, currentGridHash: null, source: null }),
+    set({ zoneMap: null, aiZoneMap: null, hasEdits: false, error: null, currentGridHash: null, currentSubstrateFp: null, source: null }),
 
   paintSlot: (row, col, radius, slot, waterType, resolution) => {
     const { zoneMap, currentGridHash } = get();
@@ -252,7 +290,7 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
     if (currentGridHash) {
       try {
         sessionStorage.setItem(
-          `${SESSION_KEY_PREFIX}${currentGridHash}`,
+          sessionZoneKey(currentGridHash, get().currentSubstrateFp ?? NO_SUBSTRATE_FP),
           zoneMapToStorage(next),
         );
       } catch {
@@ -263,13 +301,13 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
   },
 
   resetToAi: () => {
-    const { aiZoneMap, currentGridHash } = get();
+    const { aiZoneMap, currentGridHash, currentSubstrateFp } = get();
     if (!aiZoneMap) return;
     const restored = new Uint8Array(aiZoneMap);
     if (currentGridHash) {
       try {
         sessionStorage.setItem(
-          `${SESSION_KEY_PREFIX}${currentGridHash}`,
+          sessionZoneKey(currentGridHash, currentSubstrateFp ?? NO_SUBSTRATE_FP),
           zoneMapToStorage(restored),
         );
       } catch {
@@ -284,10 +322,17 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
     const targetN = grid.resolution ?? grid.width ?? 256;
     const wt = waterType as "saltwater" | "freshwater";
     const gridHash = await hashGrid(grid.depths);
-    const sessionKey = `${SESSION_KEY_PREFIX}${gridHash}`;
-    const aiSessionKey = `${SESSION_AI_KEY_PREFIX}${gridHash}`;
+    // Substrate fingerprint forms part of every cache key. The first time we
+    // see a dataset we use the "no coverage" sentinel; on every successful
+    // server response we update the per-dataset fp so subsequent lookups land
+    // on the canonical (gridHash, fp) entry. This means a change in surveyed
+    // substrate coverage server-side invalidates stale session entries on the
+    // next round-trip without requiring a manual clear.
+    const knownFp = readKnownSubstrateFp(datasetId);
+    const sessionKey = sessionZoneKey(gridHash, knownFp);
+    const aiSessionKey = sessionAiKey(gridHash, knownFp);
 
-    // 1. sessionStorage — synchronous, keyed by content hash.
+    // 1. sessionStorage — synchronous, keyed by content hash + substrate fp.
     //    The AI baseline is stored under a separate key so paint edits don't
     //    overwrite it (enables Reset to AI even after reload). Cache hits are
     //    always "ai" — heuristic results are never persisted.
@@ -298,7 +343,7 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
         const zoneMap = zoneMapFromStorage(stored);
         const ai = storedAi ? zoneMapFromStorage(storedAi) : new Uint8Array(zoneMap);
         const hasEdits = !!storedAi && !u8Equal(zoneMap, ai);
-        set({ zoneMap, aiZoneMap: ai, hasEdits, loading: false, error: null, currentGridHash: gridHash, source: "ai" });
+        set({ zoneMap, aiZoneMap: ai, hasEdits, loading: false, error: null, currentGridHash: gridHash, currentSubstrateFp: knownFp, source: "ai" });
         return Promise.resolve();
       }
     } catch {
@@ -309,16 +354,19 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
     const existing = inFlight.get(gridHash);
     if (existing) return existing;
 
-    set({ loading: true, error: null, zoneMap: null, aiZoneMap: null, hasEdits: false, currentGridHash: gridHash, source: null });
+    set({ loading: true, error: null, zoneMap: null, aiZoneMap: null, hasEdits: false, currentGridHash: gridHash, currentSubstrateFp: null, source: null });
 
-    const commitFresh = (zoneMap: Uint8Array, source: ClassifyResultSource) => {
+    const commitFresh = (zoneMap: Uint8Array, source: ClassifyResultSource, fp: string) => {
+      writeKnownSubstrateFp(datasetId, fp);
       // Heuristic results are intentionally NOT persisted to sessionStorage so
       // a later AI success on the same grid can take over without being masked
       // by a stale cache entry.
       if (source === "ai") {
         try {
-          sessionStorage.setItem(sessionKey, zoneMapToStorage(zoneMap));
-          sessionStorage.setItem(aiSessionKey, zoneMapToStorage(zoneMap));
+          const k = sessionZoneKey(gridHash, fp);
+          const kAi = sessionAiKey(gridHash, fp);
+          sessionStorage.setItem(k, zoneMapToStorage(zoneMap));
+          sessionStorage.setItem(kAi, zoneMapToStorage(zoneMap));
         } catch {
           // ignore
         }
@@ -331,13 +379,14 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
         hasEdits: false,
         loading: false,
         error: null,
+        currentSubstrateFp: fp,
         source,
       });
     };
 
     const work = (async () => {
       try {
-        // 2. Server zone cache (memory + disk, keyed by gridHash) — AI-only
+        // 2. Server zone cache (memory + disk, keyed by gridHash + fp) — AI-only
         try {
           // Namespace the lookup by waterType — the server keys its zone
           // cache by (gridHash, waterType) so a saltwater entry can never
@@ -345,9 +394,9 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
           const url = `/api/datasets/${encodeURIComponent(datasetId)}/zones?h=${gridHash}&w=${encodeURIComponent(wt)}`;
           const resp = await fetch(url, { credentials: "include" });
           if (resp.ok) {
-            const data = (await resp.json()) as { zones: string[]; waterType: string; source?: ClassifyResultSource };
+            const data = (await resp.json()) as { zones: string[]; waterType: string; source?: ClassifyResultSource; substrateFp?: string };
             if (get().currentGridHash !== gridHash) return;
-            commitFresh(parseAndUpsampleZones(data.zones, wt, targetN), data.source ?? "ai");
+            commitFresh(parseAndUpsampleZones(data.zones, wt, targetN), data.source ?? "ai", data.substrateFp ?? NO_SUBSTRATE_FP);
             return;
           }
         } catch {
@@ -366,7 +415,8 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
         );
 
         if (get().currentGridHash !== gridHash) return;
-        commitFresh(parseAndUpsampleZones(result.zones, wt, targetN), result.source ?? "ai");
+        const resultFp = (result as { substrateFp?: string }).substrateFp ?? NO_SUBSTRATE_FP;
+        commitFresh(parseAndUpsampleZones(result.zones, wt, targetN), result.source ?? "ai", resultFp);
       } catch (err) {
         if (get().currentGridHash !== gridHash) return;
         const categorized = categorizeClassificationError(err);

@@ -17,6 +17,7 @@ import {
   gridPoints,
 } from "../lib/terrain.js";
 import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
+import { substrateFingerprintForDataset } from "../lib/substrateGrid.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
@@ -179,17 +180,28 @@ router.get("/datasets/:id/zones", async (req, res): Promise<void> => {
   // also surface the correct provenance. The waterType is validated against
   // the cached entry as defense-in-depth, even though the namespaced cache
   // key already prevents cross-waterType collisions.
-  const namespacedKey = zoneCacheKey(gridHash, waterType);
+  //
+  // The cache key also incorporates the dataset's bundled-substrate
+  // fingerprint, so a change in surveyed substrate coverage invalidates
+  // stale classifications. Datasets with no coverage (uploads, out-of-
+  // coverage regions) collapse to fp "00000000" so behaviour is unchanged.
+  const substrateFp = substrateFingerprintForDataset(id);
+  // Under the new sha256-namespaced cache scheme there are no "bare gridHash"
+  // legacy entries — the hydrate pass unlinks any non-64-char files on
+  // startup — so we look up only the namespaced key. Datasets with no
+  // substrate coverage collapse to fp "00000000", which still produces a
+  // stable namespaced key, so behaviour is unchanged for uploads.
+  const namespacedKey = zoneCacheKey(gridHash, waterType, substrateFp);
   const inMemory = datasetZonesCache.get(namespacedKey);
   if (inMemory && inMemory.waterType === waterType) {
-    res.json({ ...inMemory, source: inMemory.source ?? "ai" });
+    res.json({ ...inMemory, source: inMemory.source ?? "ai", substrateFp });
     return;
   }
 
-  const onDisk = await readZoneDiskByHash(gridHash, waterType);
+  const onDisk = await readZoneDiskByHash(gridHash, waterType, substrateFp);
   if (onDisk && onDisk.waterType === waterType) {
     datasetZonesCache.set(namespacedKey, onDisk);
-    res.json({ ...onDisk, source: onDisk.source ?? "ai" });
+    res.json({ ...onDisk, source: onDisk.source ?? "ai", substrateFp });
     return;
   }
 

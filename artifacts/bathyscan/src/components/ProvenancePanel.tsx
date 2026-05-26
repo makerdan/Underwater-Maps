@@ -50,6 +50,8 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
 }) => {
   const [expanded, setExpanded] = useState(false);
   const zoneSource = useClassificationStore((s) => s.source);
+  const substrateFp = useClassificationStore((s) => s.currentSubstrateFp);
+  const substrateGrounded = !!substrateFp && substrateFp !== "00000000";
 
   const sourceKey: DataSource =
     (terrain.dataSource as DataSource | undefined) ??
@@ -161,6 +163,33 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
             }}
           >
             {zoneSource === "ai" ? "AI ZONES" : "EST ZONES"}
+          </span>
+          </ViewscreenTooltip>
+        )}
+
+        {substrateGrounded && (
+          <ViewscreenTooltip
+            label="Covered cells anchored to ShoreZone / NOAA ENC substrate surveys"
+            side="top"
+          >
+          <span
+            data-testid="provenance-substrate-grounded"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 3,
+              background: "rgba(132,204,22,0.12)",
+              border: "1px solid rgba(132,204,22,0.45)",
+              borderRadius: 3,
+              padding: "1px 6px",
+              fontSize: 9,
+              color: "#84cc16",
+              fontWeight: 700,
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+            }}
+          >
+            SURVEY
           </span>
           </ViewscreenTooltip>
         )}

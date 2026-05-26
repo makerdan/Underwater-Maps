@@ -126,4 +126,55 @@ describe("heuristicClassifyByDepth", () => {
     const zones = heuristicClassifyByDepth(new Array(1024).fill(7), "saltwater");
     expect(zones.every((z) => z === SALTWATER_HEURISTIC_BANDS[0])).toBe(true);
   });
+
+  it("ignores an empty / undefined substrate label array (no-coverage parity)", () => {
+    // When the substrate grid has no coverage the override path must be a
+    // no-op, so output is bit-identical to the no-substrate call.
+    const baseline = heuristicClassifyByDepth(rampDepths(), "saltwater");
+    const noneOverlay = heuristicClassifyByDepth(rampDepths(), "saltwater", null);
+    const emptyOverlay = heuristicClassifyByDepth(
+      rampDepths(),
+      "saltwater",
+      new Array(1024).fill(null),
+    );
+    expect(noneOverlay).toEqual(baseline);
+    expect(emptyOverlay).toEqual(baseline);
+  });
+
+  it("substrate labels override the depth-band assignment on covered cells", () => {
+    // Force a sand override on a deep cell that would otherwise land in the
+    // deepest depth band, and a bedrock override on a shallow cell that
+    // would land in the shallowest band.
+    const labels: Array<string | null> = new Array(1024).fill(null);
+    labels[10] = "basalt_rock"; // shallow → would be sandy_shelf
+    labels[1000] = "sandy_shelf"; // deep → would be basalt_rock
+    const zones = heuristicClassifyByDepth(rampDepths(), "saltwater", labels);
+    expect(zones[10]).toBe("basalt_rock");
+    expect(zones[1000]).toBe("sandy_shelf");
+    // Cells without coverage stay on their depth-based assignment.
+    expect(zones[300]).toBe(SALTWATER_HEURISTIC_BANDS[1]);
+    expect(zones[900]).toBe(SALTWATER_HEURISTIC_BANDS[3]);
+  });
+
+  it("substrate labels also win over the rocky-roughness override", () => {
+    // Single spike that would otherwise be promoted to the rocky override.
+    const depths = new Array(1024).fill(10);
+    const spikeIdx = 16 * 32 + 16;
+    depths[spikeIdx] = 500;
+    const labels: Array<string | null> = new Array(1024).fill(null);
+    labels[spikeIdx] = "silt_plain"; // surveyed substrate disagrees
+    const zones = heuristicClassifyByDepth(depths, "saltwater", labels);
+    expect(zones[spikeIdx]).toBe("silt_plain");
+    expect(zones[spikeIdx]).not.toBe(SALTWATER_ROUGH_OVERRIDE);
+  });
+
+  it("partial substrate coverage only changes covered cells", () => {
+    // Cover only the first 16 cells; the rest must be identical to baseline.
+    const baseline = heuristicClassifyByDepth(rampDepths(), "freshwater");
+    const labels: Array<string | null> = new Array(1024).fill(null);
+    for (let i = 0; i < 16; i++) labels[i] = "clay_flat";
+    const zones = heuristicClassifyByDepth(rampDepths(), "freshwater", labels);
+    for (let i = 0; i < 16; i++) expect(zones[i]).toBe("clay_flat");
+    for (let i = 16; i < 1024; i++) expect(zones[i]).toBe(baseline[i]);
+  });
 });

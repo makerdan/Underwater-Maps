@@ -909,7 +909,8 @@ export const PoeClassifyBody = zod.object({
 export const PoeClassifyResponse = zod.object({
   "zones": zod.array(zod.string()).describe('1024 zone labels in row-major order (32×32 coarse grid)'),
   "fromCache": zod.boolean().describe('Whether the result was served from the in-memory cache'),
-  "source": zod.enum(['ai', 'heuristic']).optional().describe('\"ai\" when the labels come from the Poe AI classifier (live or cached);\n\"heuristic\" when the AI was unavailable and labels were estimated from\ndepth percentiles only.\n')
+  "source": zod.enum(['ai', 'heuristic']).optional().describe('\"ai\" when the labels come from the Poe AI classifier (live or cached);\n\"heuristic\" when the AI was unavailable and labels were estimated from\ndepth percentiles only.\n'),
+  "substrateFp": zod.string().optional().describe('8-char hex fingerprint of the bundled ShoreZone + ENC substrate grid\nsampled for this dataset\'s AOI. Forms part of the zone-cache key so\na change in surveyed substrate coverage invalidates stale results.\n\"00000000\" when the dataset has no substrate coverage.\n')
 })
 
 

@@ -13,6 +13,11 @@ import { POE_MODELS } from "@workspace/poe";
 import { db } from "@workspace/db";
 import { poeUsageLogTable } from "@workspace/db/schema";
 import type { PoeToolSchema } from "@workspace/poe";
+import {
+  sampleSubstrateGrid,
+  substrateToZone,
+  type SubstrateGridSample,
+} from "../lib/substrateGrid.js";
 
 const router = Router();
 
@@ -187,8 +192,14 @@ export { datasetZonesCache };
  * water type the grid was classified under. The output is a 64-char lowercase
  * hex sha256 string, safe to use as both an in-memory map key and a filename.
  */
-export function zoneCacheKey(gridHash: string, waterType: "saltwater" | "freshwater"): string {
-  return createHash("sha256").update(`${gridHash}|${waterType}`).digest("hex");
+export function zoneCacheKey(
+  gridHash: string,
+  waterType: "saltwater" | "freshwater",
+  substrateFp: string,
+): string {
+  return createHash("sha256")
+    .update(`${gridHash}|${waterType}|${substrateFp}`)
+    .digest("hex");
 }
 
 // ---------------------------------------------------------------------------
@@ -226,16 +237,17 @@ export async function readZoneDiskByKey(cacheKey: string): Promise<CachedZones |
 }
 
 /**
- * Compatibility helper for callers that still hold a (gridHash, waterType)
- * pair. Derives the namespaced sha256 cache key and delegates to
- * `readZoneDiskByKey`. Returned entries are also waterType-validated to
+ * Compatibility helper for callers that still hold a (gridHash, waterType,
+ * substrateFp) triple. Derives the namespaced sha256 cache key and delegates
+ * to `readZoneDiskByKey`. Returned entries are also waterType-validated to
  * guard against on-disk tampering or stale-format files.
  */
 export async function readZoneDiskByHash(
   gridHash: string,
   waterType: "saltwater" | "freshwater",
+  substrateFp: string,
 ): Promise<CachedZones | null> {
-  const entry = await readZoneDiskByKey(zoneCacheKey(gridHash, waterType));
+  const entry = await readZoneDiskByKey(zoneCacheKey(gridHash, waterType, substrateFp));
   if (!entry) return null;
   if (entry.waterType !== waterType) return null;
   return entry;
@@ -258,11 +270,12 @@ async function writeZoneDisk(cacheKey: string, data: CachedZones): Promise<void>
 }
 
 /**
- * Hydrate in-memory cache from disk on startup (non-blocking). Legacy 8-char
- * gridHash files written before the cache-key change are silently deleted —
- * the cache is intentionally lossy on format change (one-off cleanup, not a
- * migration) since AI re-classification is the only way to know the correct
- * (key, waterType) pairing.
+ * Hydrate in-memory cache from disk on startup (non-blocking). Legacy files
+ * (FNV-1a 8-char or `<gridHash>-<substrateFp>` combined keys) written before
+ * the sha256-namespaced cache-key change are silently deleted — the cache is
+ * intentionally lossy on format change (one-off cleanup, not a migration)
+ * since AI re-classification is the only way to know the correct
+ * (key, waterType, substrateFp) tuple.
  */
 async function hydrateCacheFromDisk(): Promise<void> {
   try {
@@ -274,7 +287,8 @@ async function hydrateCacheFromDisk(): Promise<void> {
         const key = f.slice(0, -5);
         if (!isValidZoneCacheKey(key)) {
           // Stale legacy entry — drop it. We can't deduce the right new key
-          // without the original waterType, so the cache pays a one-time miss.
+          // without the original (waterType, substrateFp), so the cache pays
+          // a one-time miss.
           try {
             await fsPromises.unlink(path.join(ZONE_CACHE_DIR, f));
           } catch {
@@ -393,6 +407,7 @@ function computeLocalRoughness(cleaned: number[]): number[] {
 export function heuristicClassifyByDepth(
   depths: number[],
   waterType: "saltwater" | "freshwater",
+  substrateLabels?: ReadonlyArray<string | null> | null,
 ): string[] {
   const bands = waterType === "freshwater"
     ? FRESHWATER_HEURISTIC_BANDS
@@ -451,10 +466,20 @@ export function heuristicClassifyByDepth(
     const d = cleaned[i] as number;
     if (roughThreshold > 0 && (roughness[i] as number) > roughThreshold) {
       out[i] = roughOverride;
-      continue;
+    } else {
+      const band = d <= q1 ? 0 : d <= q2 ? 1 : d <= q3 ? 2 : 3;
+      out[i] = bands[band] as string;
     }
-    const band = d <= q1 ? 0 : d <= q2 ? 1 : d <= q3 ? 2 : 3;
-    out[i] = bands[band] as string;
+  }
+
+  // Ground covered cells with the observed substrate label. Substrate-derived
+  // labels win over both the rocky-override and the depth-band assignment
+  // because they reflect surveyed reality rather than a depth-only proxy.
+  if (substrateLabels && substrateLabels.length === N) {
+    for (let i = 0; i < N; i++) {
+      const lbl = substrateLabels[i];
+      if (lbl) out[i] = lbl;
+    }
   }
   return out;
 }
@@ -464,6 +489,39 @@ function buildClassifySystemPrompt(waterType: "saltwater" | "freshwater"): strin
     return `You are an expert limnologist and freshwater bathymetric analyst. You will be shown a greyscale depth map of a lake or reservoir where darker pixels represent shallower depths and lighter pixels represent deeper depths. Classify each cell of the 32×32 grid into one of these freshwater substrate types: aquatic_vegetation, sandy_lake_bed, rocky_shoreline, silt_deep, gravel_bed, bedrock_shelf, submerged_wood, clay_flat. Return exactly 1024 labels in row-major order. Use limnological reasoning.`;
   }
   return `You are an expert marine geologist and bathymetric data analyst. You will be shown a greyscale depth map where darker pixels represent shallower depths and lighter pixels represent deeper depths. Classify each cell of the 32×32 grid into one of: sandy_shelf, coarse_sediment, silt_plain, basalt_rock, volcanic_vent_field, trench_wall, seamount_flank, coral_reef_potential. Return exactly 1024 labels in row-major order. Favour geological reasoning over simple depth thresholds.`;
+}
+
+/**
+ * Render the per-cell substrate ground truth as a compact text block the AI
+ * model can consume alongside the depth-map image. Cells without polygon
+ * coverage are emitted as `?` so the model knows where it must fall back to
+ * pure geological reasoning. Returns `null` when there is no coverage at all
+ * — callers should then omit the substrate section entirely.
+ */
+function renderSubstrateGroundTruth(
+  sample: SubstrateGridSample,
+  waterType: "saltwater" | "freshwater",
+): string | null {
+  if (!sample.hasCoverage) return null;
+  const lines: string[] = [];
+  for (let row = 0; row < 32; row++) {
+    let line = "";
+    for (let col = 0; col < 32; col++) {
+      const lbl = sample.labels[row * 32 + col];
+      line += lbl ? substrateToZone(lbl, waterType) : "?";
+      if (col < 31) line += ",";
+    }
+    lines.push(line);
+  }
+  const pct = (sample.coverageFraction * 100).toFixed(1);
+  const counts = sample.counts;
+  return [
+    `Ground-truth substrate observations cover ${sample.coveredCount}/1024 cells (${pct}%).`,
+    `Per-class covered-cell counts: bedrock=${counts.bedrock}, gravel=${counts.gravel}, sand=${counts.sand}, mud=${counts.mud}.`,
+    `Cells marked "?" have no surveyed substrate — use geological reasoning for those.`,
+    `Substrate grid (row-major, 32 rows × 32 cols, comma-separated):`,
+    ...lines,
+  ].join("\n");
 }
 
 function buildClassifyZoneSchema(waterType: "saltwater" | "freshwater") {
@@ -501,10 +559,23 @@ router.post("/classify", async (req, res) => {
     return;
   }
 
-  const cacheKey = hashCacheKey(datasetId ?? "unknown", waterType, gridBase64);
+  // Sample bundled ShoreZone + ENC substrate polygons onto the 32×32 grid so
+  // covered cells can be grounded in surveyed substrate (vs. inferred from
+  // the depth map alone). For datasets without preset bbox / coverage this
+  // returns an empty sample with fingerprint "00000000" — keeping behaviour
+  // unchanged for uploads and out-of-coverage regions.
+  const substrate = datasetId ? sampleSubstrateGrid(datasetId) : sampleSubstrateGrid("");
+  const substrateFp = substrate.fingerprint;
+  const substratePrompt = renderSubstrateGroundTruth(substrate, waterType);
+
+  // The substrate fingerprint feeds the upstream content hash so changing
+  // substrate coverage (e.g. a new ShoreZone release) invalidates the
+  // globalPoeCache entry even when datasetId / waterType / gridBase64 are
+  // unchanged.
+  const cacheKey = hashCacheKey(`${datasetId ?? "unknown"}|sub:${substrateFp}`, waterType, gridBase64);
   const cached = globalPoeCache.get(cacheKey);
   if (cached) {
-    res.json({ zones: JSON.parse(cached), fromCache: true, source: "ai" });
+    res.json({ zones: JSON.parse(cached), fromCache: true, source: "ai", substrateFp });
     return;
   }
 
@@ -513,7 +584,7 @@ router.post("/classify", async (req, res) => {
   // before serving a cached entry from a different grid.
   const contentHash = createHash("sha256").update(gridBase64).digest("hex");
   if (gridHash) {
-    const secondaryKey = zoneCacheKey(gridHash, waterType);
+    const secondaryKey = zoneCacheKey(gridHash, waterType, substrateFp);
     const inMemoryHit = datasetZonesCache.get(secondaryKey);
     const diskHit = inMemoryHit ?? (await readZoneDiskByKey(secondaryKey));
     if (
@@ -523,7 +594,7 @@ router.post("/classify", async (req, res) => {
     ) {
       // Hydrate in-memory cache from a disk hit so subsequent reads skip I/O.
       if (!inMemoryHit) datasetZonesCache.set(secondaryKey, diskHit);
-      res.json({ zones: diskHit.zones, fromCache: true, source: diskHit.source ?? "ai" });
+      res.json({ zones: diskHit.zones, fromCache: true, source: diskHit.source ?? "ai", substrateFp });
       return;
     }
   }
@@ -531,10 +602,10 @@ router.post("/classify", async (req, res) => {
   try {
     const result = await withRetry(async () => {
       const client = getPoeClient();
-      const input = buildVisionInput(
-        `Classify the seafloor/lake-bed zones in this depth map. Return exactly 1024 zone labels for the 32×32 grid.`,
-        gridBase64,
-      );
+      const promptText = substratePrompt
+        ? `Classify the seafloor/lake-bed zones in this depth map. Return exactly 1024 zone labels for the 32×32 grid.\n\n${substratePrompt}\n\nFor every cell where a substrate label is provided above, you MUST output that exact label. Only reason from the depth map for cells marked "?".`
+        : `Classify the seafloor/lake-bed zones in this depth map. Return exactly 1024 zone labels for the 32×32 grid.`;
+      const input = buildVisionInput(promptText, gridBase64);
 
       const response = await (client as unknown as {
         responses: {
@@ -574,16 +645,31 @@ router.post("/classify", async (req, res) => {
     }, 3);
 
     const parsed = JSON.parse(result.output_text) as { zones: string[] };
-    const zones = parsed.zones;
+    let zones = parsed.zones;
+
+    // Post-AI reconciliation — covered cells in surveyed substrate are the
+    // source of truth. The prompt instructs the model to honour them, but we
+    // enforce it server-side so model drift / hallucination can't override
+    // measured reality. Uncovered cells (no polygon coverage) are left as the
+    // model produced them.
+    if (substrate.hasCoverage && Array.isArray(zones) && zones.length === substrate.labels.length) {
+      const reconciled = zones.slice();
+      for (let i = 0; i < substrate.labels.length; i++) {
+        const lbl = substrate.labels[i];
+        if (lbl) reconciled[i] = substrateToZone(lbl, waterType);
+      }
+      zones = reconciled;
+    }
 
     globalPoeCache.set(cacheKey, JSON.stringify(zones));
 
-    // Populate secondary zone cache keyed by sha256(gridHash + "|" + waterType).
-    // The waterType-namespaced key prevents cross-waterType collisions, and
-    // the stored contentHash lets future reads detect FNV-1a 32-bit collisions
-    // between two unrelated depth payloads before serving stale labels.
+    // Populate secondary zone cache keyed by sha256(gridHash | waterType |
+    // substrateFp). The waterType+substrateFp namespacing prevents stale
+    // labels surviving across either dimension, and the stored contentHash
+    // lets future reads detect FNV-1a 32-bit collisions between two unrelated
+    // depth payloads before serving stale labels.
     if (gridHash) {
-      const secondaryKey = zoneCacheKey(gridHash, waterType);
+      const secondaryKey = zoneCacheKey(gridHash, waterType, substrateFp);
       const cached: CachedZones = {
         zones,
         waterType,
@@ -603,20 +689,24 @@ router.post("/classify", async (req, res) => {
       result.usage?.output_tokens ?? 0,
     );
 
-    res.json({ zones, fromCache: false, source: "ai" });
+    res.json({ zones, fromCache: false, source: "ai", substrateFp });
   } catch (err) {
     // Depth-based fallback — if the client supplied a 1024-length depth grid
     // we always return *some* overlay so uploads aren't left blank when the
     // AI is unavailable (missing key, rate limit, network error, malformed
     // JSON, etc.). Heuristic results are NEVER written to globalPoeCache /
     // datasetZonesCache / disk so a later successful AI call can still take
-    // over and be cached normally.
+    // over and be cached normally. We still ground covered cells in observed
+    // substrate so the overlay matches surveyed reality where available.
     if (Array.isArray(depths32) && depths32.length === 1024) {
       console.warn(
         `[poe/classify] AI unavailable (${(err as Error)?.message ?? "unknown"}) — returning depth-based heuristic`,
       );
-      const zones = heuristicClassifyByDepth(depths32, waterType);
-      res.json({ zones, fromCache: false, source: "heuristic" });
+      const substrateZoneLabels = substrate.hasCoverage
+        ? substrate.labels.map((l) => (l ? substrateToZone(l, waterType) : null))
+        : null;
+      const zones = heuristicClassifyByDepth(depths32, waterType, substrateZoneLabels);
+      res.json({ zones, fromCache: false, source: "heuristic", substrateFp });
       return;
     }
     handlePoeError(err, res);
