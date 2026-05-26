@@ -221,6 +221,127 @@ test.describe("Settings page", () => {
     await expect(reloadedSelect).toHaveAttribute("data-value", "ocean");
   });
 
+  test("settings on Visuals, HUD, Camera, and Markers tabs all survive a full page reload", async ({ page }) => {
+    await page.goto("/settings");
+    await page.waitForLoadState("networkidle");
+
+    // Helper: read a field out of the persisted settings blob in localStorage.
+    const readPersisted = (field: string) =>
+      page.evaluate((key) => {
+        const raw = window.localStorage.getItem("bathyscan:settings");
+        if (!raw) return null;
+        try {
+          const parsed = JSON.parse(raw);
+          return parsed?.state?.[key] ?? null;
+        } catch {
+          return null;
+        }
+      }, field);
+
+    // Helper: locate a ToggleRow's [role="switch"] by its visible label.
+    const toggleByLabel = (label: string) =>
+      page
+        .locator("div")
+        .filter({ has: page.locator(`text="${label}"`) })
+        .filter({ has: page.locator('[role="switch"]') })
+        .last()
+        .locator('[role="switch"]')
+        .first();
+
+    // Helper: locate a SliderRow's range input by its visible label, then set
+    // its value via the native HTMLInputElement setter so React's onChange
+    // fires (Playwright's locator.fill() does not work on range inputs).
+    const setSliderByLabel = async (label: string, value: number) => {
+      const row = page
+        .locator("div")
+        .filter({ has: page.locator(`text="${label}"`) })
+        .filter({ has: page.locator('input[type="range"]') })
+        .last();
+      const input = row.locator('input[type="range"]').first();
+      await expect(input).toBeVisible({ timeout: 5_000 });
+      await input.evaluate((el, v) => {
+        const setter = Object.getOwnPropertyDescriptor(
+          window.HTMLInputElement.prototype,
+          "value",
+        )?.set;
+        setter?.call(el, String(v));
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      }, value);
+    };
+
+    // ── Visuals tab (active by default): flip the Caustics toggle. ──────
+    await expect(page.locator("text=◈ VISUALS").first()).toBeVisible({ timeout: 10_000 });
+    const caustics = toggleByLabel("Caustics Effect");
+    await expect(caustics).toBeVisible({ timeout: 5_000 });
+    const causticsInitial = await caustics.getAttribute("aria-checked");
+    await caustics.click();
+    const causticsExpected = causticsInitial === "true" ? false : true;
+    await expect(caustics).toHaveAttribute("aria-checked", String(causticsExpected));
+
+    // ── HUD & Layout tab: change HUD Opacity to a non-default value. ────
+    await page.locator('button:has-text("HUD & LAYOUT")').first().click();
+    await expect(page.locator("text=◈ HUD").first()).toBeVisible({ timeout: 5_000 });
+    const hudOpacityTarget = 0.5; // default is 0.75
+    await setSliderByLabel("HUD Opacity", hudOpacityTarget);
+
+    // ── Camera & Controls tab: bump Mouse Sensitivity off its default. ──
+    await page.locator('button:has-text("CAMERA & CTRL")').first().click();
+    await expect(page.locator("text=◈ CAMERA").first()).toBeVisible({ timeout: 5_000 });
+    const mouseSensTarget = 2.3; // default is 1.0
+    await setSliderByLabel("Mouse Sensitivity", mouseSensTarget);
+
+    // ── Markers tab: flip the Show Marker Labels toggle. ────────────────
+    await page.locator('button:has-text("MARKERS")').first().click();
+    await expect(page.locator("text=◈ MARKERS").first()).toBeVisible({ timeout: 5_000 });
+    const labels = toggleByLabel("Show Marker Labels");
+    await expect(labels).toBeVisible({ timeout: 5_000 });
+    const labelsInitial = await labels.getAttribute("aria-checked");
+    await labels.click();
+    const labelsExpected = labelsInitial === "true" ? false : true;
+    await expect(labels).toHaveAttribute("aria-checked", String(labelsExpected));
+
+    // Wait for the persist middleware to flush every changed field to
+    // localStorage before we reload. The store writes the whole object so
+    // any one of these polls confirming success means the write happened.
+    await expect.poll(() => readPersisted("enableCaustics"), { timeout: 5_000 }).toBe(causticsExpected);
+    await expect.poll(() => readPersisted("hudOpacity"), { timeout: 5_000 }).toBe(hudOpacityTarget);
+    await expect.poll(() => readPersisted("mouseSensitivity"), { timeout: 5_000 }).toBe(mouseSensTarget);
+    await expect.poll(() => readPersisted("showMarkerLabels"), { timeout: 5_000 }).toBe(labelsExpected);
+
+    // Full page reload — the real persistence check.
+    await page.reload();
+    await page.waitForLoadState("networkidle");
+    await expect(page.locator("text=◈ VISUALS").first()).toBeVisible({ timeout: 10_000 });
+
+    // After reload, every changed field must still be in localStorage
+    // (which is what the persist middleware re-hydrates the store from).
+    expect(await readPersisted("enableCaustics")).toBe(causticsExpected);
+    expect(await readPersisted("hudOpacity")).toBe(hudOpacityTarget);
+    expect(await readPersisted("mouseSensitivity")).toBe(mouseSensTarget);
+    expect(await readPersisted("showMarkerLabels")).toBe(labelsExpected);
+
+    // And the rehydrated UI must reflect those values on each tab.
+    const causticsAfter = toggleByLabel("Caustics Effect");
+    await expect(causticsAfter).toHaveAttribute("aria-checked", String(causticsExpected));
+
+    await page.locator('button:has-text("MARKERS")').first().click();
+    await expect(page.locator("text=◈ MARKERS").first()).toBeVisible({ timeout: 5_000 });
+    const labelsAfter = toggleByLabel("Show Marker Labels");
+    await expect(labelsAfter).toHaveAttribute("aria-checked", String(labelsExpected));
+
+    // Cleanup: restore every setting to defaults via the global reset
+    // (two-step confirm) so this test doesn't bleed into other specs.
+    await page.locator("[data-testid='reset-all-btn']").click();
+    await page.locator("[data-testid='confirm-reset-all-btn']").click();
+    await expect
+      .poll(() => readPersisted("enableCaustics"), { timeout: 5_000 })
+      .toBe(false);
+    await expect.poll(() => readPersisted("hudOpacity"), { timeout: 5_000 }).toBe(0.75);
+    await expect.poll(() => readPersisted("mouseSensitivity"), { timeout: 5_000 }).toBe(1.0);
+    await expect.poll(() => readPersisted("showMarkerLabels"), { timeout: 5_000 }).toBe(true);
+  });
+
   test("comma keyboard shortcut navigates to /settings from the main page", async ({ page }) => {
     await page.goto("/");
     await page.waitForLoadState("networkidle");
