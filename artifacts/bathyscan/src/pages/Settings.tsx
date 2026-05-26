@@ -1086,10 +1086,10 @@ function UnitsSection() {
           value={s.units}
           onChange={s.setUnits}
           options={[
-            { value: "metric", label: "Metric (m, m/s, °C)" },
-            { value: "imperial", label: "Imperial (ft, kn, °F)" },
+            { value: "metric", label: "Metric (m, m/s)" },
+            { value: "imperial", label: "Imperial (ft, kn)" },
           ]}
-          sublabel="Switching also updates the depth unit"
+          sublabel="Switching also updates depth and temperature unless overridden below"
         />
         <SelectRow
           label="Depth Unit"
@@ -1100,6 +1100,17 @@ function UnitsSection() {
             { value: "feet", label: "Feet" },
           ]}
           sublabel="Override depth display unit independently of the global units system"
+        />
+        <SelectRow
+          label="Temperature Unit"
+          value={s.temperatureUnit}
+          onChange={s.setTemperatureUnit}
+          options={[
+            { value: "auto", label: "Auto (follow Units)" },
+            { value: "celsius", label: "Celsius (°C)" },
+            { value: "fahrenheit", label: "Fahrenheit (°F)" },
+          ]}
+          sublabel="Override temperature display unit independently of the global units system"
         />
       </div>
     </>

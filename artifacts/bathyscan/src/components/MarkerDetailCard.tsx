@@ -18,6 +18,9 @@ export const MarkerDetailCard: React.FC = () => {
   const marker = useMarkerDetailStore((s) => s.marker);
   const hide = useMarkerDetailStore((s) => s.hide);
   const units = useSettingsStore((s) => s.units);
+  // Subscribe so a change to the temperature-only override re-renders the
+  // temperature row even when the global units selector hasn't moved.
+  useSettingsStore((s) => s.temperatureUnit);
   // The marker itself carries the location we want SST for — far more
   // accurate than the dataset centre when markers are spread out, and it
   // means we don't need to reach into AppProvider (this component is
@@ -102,7 +105,7 @@ export const MarkerDetailCard: React.FC = () => {
             : "No live ocean feed available — showing an estimated thermocline based on a typical 15 °C surface.";
           return (
             <span style={{ color: "#fb923c" }} title={tooltip}>
-              {formatTemperature(sample.celsius, { units })}
+              {formatTemperature(sample.celsius)}
               <span
                 style={{
                   marginLeft: 6,

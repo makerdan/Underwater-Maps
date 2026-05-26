@@ -8,7 +8,7 @@
  */
 import React from "react";
 import type { TemperatureProfile } from "@/lib/waterTemp";
-import { formatTemperature, formatDepth } from "@/lib/units";
+import { formatTemperature, formatDepth, temperatureSuffix } from "@/lib/units";
 import type { useSettingsStore } from "@/lib/settingsStore";
 
 type Units = ReturnType<typeof useSettingsStore.getState>["units"];
@@ -191,7 +191,7 @@ export const TemperatureProfileChart: React.FC<TemperatureProfileChartProps> = (
             textAnchor="middle" fontSize={9} fill="#64748b"
             fontFamily="'JetBrains Mono', monospace"
           >
-            {formatTemperature(c, { units })}
+            {formatTemperature(c)}
           </text>
         ))}
 
@@ -219,7 +219,7 @@ export const TemperatureProfileChart: React.FC<TemperatureProfileChartProps> = (
           x={PAD_LEFT + PLOT_W / 2} y={HEIGHT - 2}
           textAnchor="middle" fontSize={8} fill="#475569" letterSpacing="0.2em"
         >
-          TEMPERATURE
+          TEMPERATURE ({temperatureSuffix()})
         </text>
         <text
           x={10} y={PAD_TOP + PLOT_H / 2}

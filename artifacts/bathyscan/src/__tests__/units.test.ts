@@ -108,6 +108,39 @@ describe("formatTemperature", () => {
     expect(formatTemperature(100, { units: "imperial" })).toBe("212.0 °F");
     expect(formatTemperature(-40, { units: "imperial" })).toBe("-40.0 °F");
   });
+
+  it("falls back to the live store temperature preference when no override is given", () => {
+    // Defaults: temperatureUnit "auto" → follows global units (metric → °C).
+    expect(formatTemperature(20)).toBe("20.0 °C");
+
+    useSettingsStore.getState().setUnits("imperial");
+    expect(formatTemperature(0)).toBe("32.0 °F");
+
+    useSettingsStore.getState().setUnits("metric");
+    expect(formatTemperature(0)).toBe("0.0 °C");
+  });
+
+  it("temperatureUnit override beats the global units setting", () => {
+    // Global metric, but override forces Fahrenheit.
+    useSettingsStore.getState().setUnits("metric");
+    useSettingsStore.getState().setTemperatureUnit("fahrenheit");
+    expect(formatTemperature(0)).toBe("32.0 °F");
+
+    // Global imperial, but override forces Celsius.
+    useSettingsStore.getState().setUnits("imperial");
+    useSettingsStore.getState().setTemperatureUnit("celsius");
+    expect(formatTemperature(0)).toBe("0.0 °C");
+
+    // "auto" hands control back to the global selector.
+    useSettingsStore.getState().setTemperatureUnit("auto");
+    expect(formatTemperature(0)).toBe("32.0 °F");
+  });
+
+  it("explicit opts.units still wins over the temperatureUnit override", () => {
+    useSettingsStore.getState().setUnits("metric");
+    useSettingsStore.getState().setTemperatureUnit("fahrenheit");
+    expect(formatTemperature(0, { units: "metric" })).toBe("0.0 °C");
+  });
 });
 
 describe("suffix helpers", () => {

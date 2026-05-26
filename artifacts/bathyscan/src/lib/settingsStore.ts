@@ -12,7 +12,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export const SETTINGS_SCHEMA_VERSION = 6;
+export const SETTINGS_SCHEMA_VERSION = 7;
 
 export type LandmassStyle = "realistic" | "flat";
 
@@ -32,6 +32,12 @@ export type ColormapTheme = "ocean" | "thermal" | "grayscale" | "viridis" | "fre
 export type CoordinateFormat = "decimal" | "dms";
 export type DepthUnit = "metres" | "feet";
 export type UnitsSystem = "metric" | "imperial";
+/**
+ * Temperature display override. "auto" follows the global `units` selector
+ * (metric → °C, imperial → °F); "celsius" / "fahrenheit" force a specific
+ * unit regardless of the global selector — mirrors how `depthUnit` works.
+ */
+export type TemperatureUnit = "auto" | "celsius" | "fahrenheit";
 export type CameraSpawnBehaviour = "deepest" | "home" | "last";
 export type MarkerType = "fish" | "shipwreck" | "coral" | "vent" | "custom" | "depth_pole" | "log" | "vegetation" | "sample" | "bass" | "trout" | "pike" | "walleye" | "crayfish";
 export type NavMode = "fly" | "orbit";
@@ -122,6 +128,7 @@ export interface SettingsState {
   coordinateFormat: CoordinateFormat;
   depthUnit: DepthUnit;
   units: UnitsSystem;
+  temperatureUnit: TemperatureUnit;
 
   // ── Overview Map ──────────────────────────────────────────────────────
   overviewDefaultZoom: number;
@@ -277,6 +284,7 @@ interface SettingsActions {
   setCoordinateFormat: (v: CoordinateFormat) => void;
   setDepthUnit: (v: DepthUnit) => void;
   setUnits: (v: UnitsSystem) => void;
+  setTemperatureUnit: (v: TemperatureUnit) => void;
 
   // Overview Map
   setOverviewDefaultZoom: (v: number) => void;
@@ -495,6 +503,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   coordinateFormat: "decimal",
   depthUnit: "metres",
   units: "metric",
+  temperatureUnit: "auto",
 
   // Overview
   overviewDefaultZoom: 1.0,
@@ -579,6 +588,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "showHeading", "showDepthLegend", "showDepthScaleBar", "showCompassMinimap",
     "showControlsLegend", "showTidePanel", "showHabitatPanel", "showDatasetPanel",
     "showQueryPanel", "showUiTooltips", "timeFormat", "coordinateFormat", "depthUnit", "units",
+    "temperatureUnit",
   ],
   overview: [
     "overviewDefaultZoom", "overviewShowGrid", "overviewShowMarkers", "overviewOpenOnLoad",
@@ -701,6 +711,7 @@ export const useSettingsStore = create<SettingsStore>()(
         setCoordinateFormat: setter("coordinateFormat"),
         setDepthUnit: setter("depthUnit"),
         setUnits: (v) => set({ units: v, depthUnit: v === "imperial" ? "feet" : "metres" }),
+        setTemperatureUnit: setter("temperatureUnit"),
 
         // Overview
         setOverviewDefaultZoom: setter("overviewDefaultZoom"),

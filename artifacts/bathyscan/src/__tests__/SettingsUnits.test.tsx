@@ -70,4 +70,28 @@ describe("Settings → UNITS section", () => {
     expect(useSettingsStore.getState().units).toBe("metric");
     expect(getUnitsSelect().value).toBe("metric");
   });
+
+  it("temperature-unit override flips only temperatureUnit (not depthUnit or units)", () => {
+    render(<Settings />);
+    fireEvent.click(screen.getByText("UNITS"));
+
+    // Default: auto. Units row is first, Depth Unit second, Temperature third.
+    expect(useSettingsStore.getState().temperatureUnit).toBe("auto");
+    const selects = screen.getAllByRole("combobox") as HTMLSelectElement[];
+    const tempSelect = selects[2]!;
+    expect(tempSelect.value).toBe("auto");
+
+    fireEvent.change(tempSelect, { target: { value: "fahrenheit" } });
+    const state = useSettingsStore.getState();
+    expect(state.temperatureUnit).toBe("fahrenheit");
+    // The override must not bleed into the other unit prefs.
+    expect(state.units).toBe("metric");
+    expect(state.depthUnit).toBe("metres");
+
+    fireEvent.change(
+      (screen.getAllByRole("combobox") as HTMLSelectElement[])[2]!,
+      { target: { value: "celsius" } },
+    );
+    expect(useSettingsStore.getState().temperatureUnit).toBe("celsius");
+  });
 });

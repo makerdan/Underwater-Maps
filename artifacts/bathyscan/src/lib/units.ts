@@ -23,6 +23,20 @@ export function getUnits(): UnitsSystem {
   return useSettingsStore.getState().units;
 }
 
+/**
+ * Resolved temperature unit, honouring the per-temperature override in
+ * settings. When `temperatureUnit === "auto"` it follows the global
+ * `units` selector (metric → metric / °C, imperial → imperial / °F).
+ * Returns a `UnitsSystem` so it can be passed straight through to
+ * `formatTemperature(..., { units })` and the existing °C/°F branch.
+ */
+export function getTemperatureUnit(): UnitsSystem {
+  const s = useSettingsStore.getState();
+  if (s.temperatureUnit === "celsius") return "metric";
+  if (s.temperatureUnit === "fahrenheit") return "imperial";
+  return s.units;
+}
+
 // ── Depth ────────────────────────────────────────────────────────────────
 export function formatDepth(
   metres: number | null | undefined,
@@ -108,19 +122,31 @@ export function formatSpeed(
 }
 
 // ── Temperature ──────────────────────────────────────────────────────────
-/** Temperature in °C → "X °C" (metric) or "X °F" (imperial). */
+/**
+ * Temperature in °C → "X °C" (metric) or "X °F" (imperial).
+ *
+ * Resolution order for which unit to display in:
+ *   1. explicit `opts.units` (caller wins, e.g. unit tests)
+ *   2. the per-temperature override (`temperatureUnit !== "auto"`)
+ *   3. the global `units` selector
+ */
 export function formatTemperature(
   celsius: number | null | undefined,
   opts: { units?: UnitsSystem; decimals?: number } = {},
 ): string {
   if (celsius === null || celsius === undefined || !Number.isFinite(celsius)) return "—";
-  const units = opts.units ?? getUnits();
+  const units = opts.units ?? getTemperatureUnit();
   const decimals = opts.decimals ?? 1;
   if (units === "imperial") {
     const f = celsius * 9 / 5 + 32;
     return `${f.toFixed(decimals)} °F`;
   }
   return `${celsius.toFixed(decimals)} °C`;
+}
+
+/** Short °C/°F suffix for axis labels and badge text. */
+export function temperatureSuffix(units: UnitsSystem = getTemperatureUnit()): string {
+  return units === "imperial" ? "°F" : "°C";
 }
 
 // ── Short suffix helpers ─────────────────────────────────────────────────

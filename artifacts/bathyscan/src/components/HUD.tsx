@@ -122,6 +122,9 @@ export const HUD: React.FC = () => {
   const showHeading = useSettingsStore((s) => s.showHeading);
   const coordinateFormat = useSettingsStore((s) => s.coordinateFormat);
   const units = useSettingsStore((s) => s.units);
+  // Subscribe so the TEMP chip / profile chart re-render when the user
+  // flips the per-temperature override without touching the global units.
+  useSettingsStore((s) => s.temperatureUnit);
   const hudOpacity = useSettingsStore((s) => s.hudOpacity);
   const largeHudText = useSettingsStore((s) => s.largeHudText);
   const highContrastHud = useSettingsStore((s) => s.highContrastHud);
@@ -499,7 +502,7 @@ export const HUD: React.FC = () => {
                       >
                         <span style={{ color: "#475569" }}>TEMP </span>
                         <span style={{ color: "#fb923c", textShadow: "0 0 6px rgba(251,146,60,0.4)" }}>
-                          {formatTemperature(sample.celsius, { units }).toUpperCase()}
+                          {formatTemperature(sample.celsius).toUpperCase()}
                         </span>
                         <span
                           data-testid="hud-water-temp-source"
