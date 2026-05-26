@@ -129,7 +129,48 @@ export interface DatasetMeta {
 
 export const PRESET_DATASETS: DatasetMeta[] = [];
 
-export const FRESHWATER_PRESET_DATASETS: DatasetMeta[] = [];
+export const FRESHWATER_PRESET_DATASETS: DatasetMeta[] = [
+  {
+    id: "lake-ray-roberts",
+    name: "Lake Ray Roberts (TX)",
+    description:
+      "Lake Ray Roberts, Denton County, TX. Bathymetry + topography are " +
+      "served from a pre-built USGS 3DEP-derived bundle (pool elevation " +
+      "192.79 m, surveyed max depth ≈ 28 m) — see " +
+      "scripts/src/build-lake-ray-roberts-terrain.ts for the build " +
+      "pipeline and lakeRayRobertsTerrain.gen.json for the bundle " +
+      "itself. The 'bundled-survey' source is registered first in " +
+      "DATASET_SOURCE_PRIORITY so the viewer always gets the real " +
+      "surveyed grid instead of falling through to NCEI/GEBCO.",
+    waterType: "freshwater",
+    minDepth: 0,
+    maxDepth: 28,
+    centerLon: (-97.15 + -96.92) / 2,
+    centerLat: (33.3 + 33.52) / 2,
+    bbox: { minLon: -97.15, minLat: 33.3, maxLon: -96.92, maxLat: 33.52 },
+    hasTopography: true,
+  },
+  {
+    id: "lake-texoma",
+    name: "Lake Texoma (TX/OK)",
+    description:
+      "Lake Texoma on the Red River at the TX/OK border. Bathymetry + " +
+      "topography are served from a pre-built USGS 3DEP-derived bundle " +
+      "(pool elevation 188.06 m, surveyed max depth ≈ 30 m near Denison " +
+      "Dam) — see scripts/src/build-lake-texoma-terrain.ts for the " +
+      "build pipeline and lakeTexomaTerrain.gen.json for the bundle " +
+      "itself. The 'bundled-survey' source is registered first in " +
+      "DATASET_SOURCE_PRIORITY so the viewer always gets the real " +
+      "surveyed grid instead of falling through to NCEI/GEBCO.",
+    waterType: "freshwater",
+    minDepth: 0,
+    maxDepth: 30,
+    centerLon: (-97.05 + -96.42) / 2,
+    centerLat: (33.78 + 34.06) / 2,
+    bbox: { minLon: -97.05, minLat: 33.78, maxLon: -96.42, maxLat: 34.06 },
+    hasTopography: true,
+  },
+];
 
 export const ALL_PRESET_DATASETS: DatasetMeta[] = [
   ...PRESET_DATASETS,
@@ -332,7 +373,15 @@ export type BathymetrySourceId = keyof typeof BATHYMETRY_SOURCES;
  * accessibility, then scope. Local/regional sources always precede
  * national/global ones when they cover the AOI.
  */
-export const DATASET_SOURCE_PRIORITY: Record<string, BathymetrySourceId[]> = {};
+export const DATASET_SOURCE_PRIORITY: Record<string, BathymetrySourceId[]> = {
+  // Inland TX reservoirs ship with a pre-built TWDB/USACE/3DEP bundle
+  // (see scripts/src/build-lake-*-terrain.ts). The bundle is the only
+  // honest depth source for these AOIs — NCEI/GEBCO have no inland
+  // freshwater coverage — so it sits at the top of the list and the
+  // synthetic terminal fallback handles the (rare) load-failure case.
+  "lake-ray-roberts": ["bundled-survey"],
+  "lake-texoma": ["bundled-survey"],
+};
 
 /** Default ranked list for AOIs without an explicit entry. */
 const DEFAULT_SOURCE_PRIORITY: readonly BathymetrySourceId[] = ["gebco"];
@@ -689,13 +738,19 @@ function loadBundledTerrain(fileName: string): BundledTerrain | null {
  * Pre-built bundles keyed by datasetId. When `buildTerrainGrid` is called
  * for one of these ids, the bundled grid is returned immediately (after
  * a nearest-neighbour resample to the requested resolution).
+ *
+ * Bundles are generated offline by the `@workspace/scripts`
+ * `build-*-terrain` builders and committed under
+ * `artifacts/api-server/src/lib/*Terrain.gen.json`. Each entry below
+ * loads its bundle synchronously at module init so `buildTerrainGrid`
+ * and `previewDataset` can short-circuit before attempting any HTTP
+ * fetch. A missing/unreadable file logs a warning and leaves the entry
+ * null — the ranked resolver then falls through to the next source.
  */
-const BUNDLED_TERRAIN: Record<string, BundledTerrain | null> = {};
-
-// Keep the loader referenced so unused-symbol lint stays quiet when no
-// bundled terrain is registered. The function is exercised when a preset
-// dataset re-introduces a bundled grid.
-void loadBundledTerrain;
+const BUNDLED_TERRAIN: Record<string, BundledTerrain | null> = {
+  "lake-ray-roberts": loadBundledTerrain("lakeRayRobertsTerrain.gen.json"),
+  "lake-texoma": loadBundledTerrain("lakeTexomaTerrain.gen.json"),
+};
 
 /** Resample a bundled grid to the requested resolution by nearest neighbour. */
 function resampleBundled(bundle: BundledTerrain, N: number): {

@@ -1,11 +1,14 @@
 /**
  * Tests for the ranked bathymetry source resolver (Task #398).
  *
- * All bundled preset datasets were removed in Task #403, so the per-AOI
- * priority map is empty and the resolver falls back to its default
- * gebco-only list for every input. These tests cover:
+ * The per-AOI priority map currently registers the inland TX reservoirs
+ * (Ray Roberts, Texoma) at the top of the list with `bundled-survey`,
+ * since those are the only AOIs with a committed pre-built bundle. All
+ * other AOIs fall back to the default gebco-only list. These tests cover:
  *  - Registry shape (every source declares a scope, dataSource, label,
  *    fetch, and credit URL; scopes match the expected vocabulary).
+ *  - Per-AOI priority entries are well-formed (every listed source id
+ *    resolves to a real registry entry).
  *  - Ranked-fallback behaviour using a synthetic AOI that exercises the
  *    default priority list.
  */
@@ -48,8 +51,28 @@ describe("BATHYMETRY_SOURCES registry", () => {
 });
 
 describe("DATASET_SOURCE_PRIORITY", () => {
-  it("is empty now that all preset AOIs have been retired", () => {
-    expect(Object.keys(DATASET_SOURCE_PRIORITY)).toHaveLength(0);
+  it("registers the inland TX reservoirs with bundled-survey first", () => {
+    expect(DATASET_SOURCE_PRIORITY["lake-ray-roberts"]?.[0]).toBe(
+      "bundled-survey",
+    );
+    expect(DATASET_SOURCE_PRIORITY["lake-texoma"]?.[0]).toBe("bundled-survey");
+  });
+
+  it("only references source ids that exist in BATHYMETRY_SOURCES", () => {
+    const validIds = new Set(Object.keys(BATHYMETRY_SOURCES));
+    for (const [aoi, sources] of Object.entries(DATASET_SOURCE_PRIORITY)) {
+      for (const id of sources) {
+        expect(
+          validIds.has(id),
+          `${aoi} references unknown source '${id}'`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it("derives NCEI_DATASET_COVERAGES from the priority map (no inland NCEI coverage)", () => {
+    // Inland TX reservoirs don't list NCEI sources, so the derived
+    // NCEI coverage map stays empty until a saltwater preset returns.
     expect(Object.keys(NCEI_DATASET_COVERAGES)).toHaveLength(0);
   });
 });
