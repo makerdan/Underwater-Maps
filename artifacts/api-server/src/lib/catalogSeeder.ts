@@ -15,7 +15,7 @@
  */
 
 import { db, datasetCatalogTable } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import { sql, notInArray } from "drizzle-orm";
 import { ALL_PRESET_DATASETS, NCEI_DATASET_COVERAGES } from "./terrain.js";
 
 export interface CatalogSeedEntry {
@@ -297,37 +297,54 @@ export async function seedDatasetCatalog(): Promise<void> {
   seeded = true;
 
   try {
-    // One-time cleanup: previously seeded `preset-*` catalog rows for the
-    // retired bundled presets must be removed on startup so they don't keep
-    // showing up in Find Data search after the registry was emptied. Safe to
-    // run every boot — once they're gone, the DELETE is a no-op.
-    const purged = await db.execute(
-      sql`DELETE FROM dataset_catalog WHERE id LIKE 'preset-%'`,
-    );
+    // Reconcile preset-* rows against the current registry on every boot so
+    // that newly-added preset datasets show up in Find Data search for
+    // existing deployments, and retired presets stop showing up.
+    const presetEntries = buildPresetCatalogEntries();
+    const desiredPresetIds = presetEntries.map((e) => e.id);
+
+    const purged = await db
+      .delete(datasetCatalogTable)
+      .where(
+        desiredPresetIds.length > 0
+          ? sql`${datasetCatalogTable.id} LIKE 'preset-%' AND ${notInArray(datasetCatalogTable.id, desiredPresetIds)}`
+          : sql`${datasetCatalogTable.id} LIKE 'preset-%'`,
+      );
     const purgedCount = Number(
       (purged as { rowCount?: number | null }).rowCount ?? 0,
     );
     if (purgedCount > 0) {
       console.info(
-        `[catalog] Purged ${purgedCount} stale preset-* rows from prior boots.`,
+        `[catalog] Purged ${purgedCount} stale preset-* rows no longer in registry.`,
       );
       inMemoryCatalog = null;
     }
 
-    const count = await db.execute(sql`SELECT COUNT(*) FROM dataset_catalog`);
-    const existing = Number((count.rows[0] as { count: string }).count ?? "0");
-    if (existing > 0) {
-      console.info(`[catalog] Already seeded (${existing} rows) — skipping.`);
-      return;
-    }
-
+    // Idempotent upsert: insert any preset/extra catalog rows missing from the
+    // table (handles fresh DBs AND existing deployments getting new presets or
+    // new EXTRA_CATALOG_ENTRIES). onConflictDoNothing keeps repeat boots safe.
     const entries: CatalogSeedEntry[] = [
-      ...buildPresetCatalogEntries(),
+      ...presetEntries,
       ...EXTRA_CATALOG_ENTRIES,
     ];
 
-    await db.insert(datasetCatalogTable).values(entries);
-    console.info(`[catalog] Seeded ${entries.length} catalog entries.`);
+    const inserted = await db
+      .insert(datasetCatalogTable)
+      .values(entries)
+      .onConflictDoNothing({ target: datasetCatalogTable.id });
+    const insertedCount = Number(
+      (inserted as { rowCount?: number | null }).rowCount ?? 0,
+    );
+    if (insertedCount > 0) {
+      console.info(
+        `[catalog] Upserted ${insertedCount} new catalog entries (of ${entries.length} total).`,
+      );
+      inMemoryCatalog = null;
+    } else {
+      console.info(
+        `[catalog] Catalog up to date (${entries.length} known entries).`,
+      );
+    }
   } catch (err) {
     console.warn(`[catalog] Seed failed (non-fatal): ${(err as Error).message}`);
     seeded = false;
