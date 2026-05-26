@@ -1114,6 +1114,8 @@ export interface TrollingPreset {
   waypoints: TrollingPresetWaypoint[];
   /** Ascending sort key; lower values surface first */
   sortOrder: number;
+  /** ID of the folder grouping this preset, or null for root */
+  folderId?: string | null;
   createdAt: string;
 }
 
@@ -1127,6 +1129,8 @@ export interface TrollingPresetUpdate {
      */
   name?: string;
   sortOrder?: number;
+  /** ID of the folder this preset belongs to, or null to move to the root */
+  folderId?: string | null;
 }
 
 export interface TrollingPresetInput {
@@ -1149,6 +1153,33 @@ export interface TrollingPresetInput {
   startLon?: number | null;
   /** @maxItems 50 */
   waypoints?: TrollingPresetWaypoint[];
+  folderId?: string | null;
+}
+
+/**
+ * A folder for grouping the user's saved trolling presets
+ */
+export interface TrollingPresetFolder {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTrollingPresetFolderBody {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name: string;
+}
+
+export interface RenameTrollingPresetFolderBody {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name: string;
 }
 
 export type MarkerInputType = typeof MarkerInputType[keyof typeof MarkerInputType];

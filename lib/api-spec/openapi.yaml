@@ -26,6 +26,8 @@ tags:
     description: Surface conditions for drift planning
   - name: trolling-presets
     description: Saved trolling heading/speed presets
+  - name: trolling-preset-folders
+    description: Folders for grouping saved trolling presets
 paths:
   /datasets:
     get:
@@ -989,6 +991,126 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "404":
           description: Preset not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /trolling-preset-folders:
+    get:
+      operationId: getTrollingPresetFolders
+      tags: [trolling-preset-folders]
+      summary: List the authenticated user's trolling preset folders
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Folder list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrollingPresetFolder"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    post:
+      operationId: postTrollingPresetFolders
+      tags: [trolling-preset-folders]
+      summary: Create a new trolling preset folder
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTrollingPresetFolderBody"
+      responses:
+        "201":
+          description: Created folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrollingPresetFolder"
+        "400":
+          description: Invalid name or duplicate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /trolling-preset-folders/{id}:
+    patch:
+      operationId: patchTrollingPresetFoldersId
+      tags: [trolling-preset-folders]
+      summary: Rename a trolling preset folder
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameTrollingPresetFolderBody"
+      responses:
+        "200":
+          description: Renamed folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrollingPresetFolder"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Folder not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteTrollingPresetFoldersId
+      tags: [trolling-preset-folders]
+      summary: Delete a trolling preset folder (presets inside are moved to root)
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Folder deleted
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Folder not found
           content:
             application/json:
               schema:
@@ -2952,6 +3074,10 @@ components:
         sortOrder:
           type: integer
           description: Ascending sort key; lower values surface first
+        folderId:
+          type: string
+          nullable: true
+          description: ID of the folder grouping this preset, or null for root
         createdAt:
           type: string
           format: date-time
@@ -2990,6 +3116,10 @@ components:
           maxLength: 80
         sortOrder:
           type: integer
+        folderId:
+          type: string
+          nullable: true
+          description: ID of the folder this preset belongs to, or null to move to the root
       minProperties: 1
 
     TrollingPresetInput:
@@ -3018,10 +3148,53 @@ components:
           maxItems: 50
           items:
             $ref: "#/components/schemas/TrollingPresetWaypoint"
+        folderId:
+          type: string
+          nullable: true
       required:
         - name
         - headingDeg
         - speedKnots
+
+    TrollingPresetFolder:
+      type: object
+      description: A folder for grouping the user's saved trolling presets
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - createdAt
+        - updatedAt
+
+    CreateTrollingPresetFolderBody:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+      required:
+        - name
+
+    RenameTrollingPresetFolderBody:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+      required:
+        - name
 
     MarkerInput:
       type: object

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { and, asc, eq } from "drizzle-orm";
-import { db, trollingPresetsTable } from "@workspace/db";
+import { db, trollingPresetsTable, trollingPresetFoldersTable } from "@workspace/db";
 import {
   PostTrollingPresetsBody,
   PatchTrollingPresetsIdBody,
@@ -27,7 +27,23 @@ router.post("/trolling-presets", requireAuth, async (req, res): Promise<void> =>
     return;
   }
   const userId = (req as AuthenticatedRequest).clerkUserId;
-  const { name, headingDeg, speedKnots, startLat, startLon, waypoints } = parsed.data;
+  const { name, headingDeg, speedKnots, startLat, startLon, waypoints, folderId } = parsed.data;
+
+  if (folderId) {
+    const [folder] = await db
+      .select({ id: trollingPresetFoldersTable.id })
+      .from(trollingPresetFoldersTable)
+      .where(
+        and(
+          eq(trollingPresetFoldersTable.id, folderId),
+          eq(trollingPresetFoldersTable.userId, userId),
+        ),
+      );
+    if (!folder) {
+      res.status(400).json({ error: "invalid_folder", details: "Folder not found" });
+      return;
+    }
+  }
 
   const [created] = await db
     .insert(trollingPresetsTable)
@@ -39,6 +55,7 @@ router.post("/trolling-presets", requireAuth, async (req, res): Promise<void> =>
       startLat: startLat ?? null,
       startLon: startLon ?? null,
       waypoints: waypoints ?? [],
+      folderId: folderId ?? null,
     })
     .returning();
 
@@ -54,13 +71,30 @@ router.patch("/trolling-presets/:id", requireAuth, async (req, res): Promise<voi
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
 
-  const updates: { name?: string; sortOrder?: number } = {};
+  const updates: { name?: string; sortOrder?: number; folderId?: string | null } = {};
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
   if (parsed.data.sortOrder !== undefined) updates.sortOrder = parsed.data.sortOrder;
+  if (parsed.data.folderId !== undefined) updates.folderId = parsed.data.folderId;
 
   if (Object.keys(updates).length === 0) {
     res.status(400).json({ error: "invalid_request", details: "No fields to update" });
     return;
+  }
+
+  if (updates.folderId) {
+    const [folder] = await db
+      .select({ id: trollingPresetFoldersTable.id })
+      .from(trollingPresetFoldersTable)
+      .where(
+        and(
+          eq(trollingPresetFoldersTable.id, updates.folderId),
+          eq(trollingPresetFoldersTable.userId, userId),
+        ),
+      );
+    if (!folder) {
+      res.status(400).json({ error: "invalid_folder", details: "Folder not found" });
+      return;
+    }
   }
 
   const [updated] = await db

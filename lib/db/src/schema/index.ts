@@ -7,4 +7,5 @@ export * from "./gps-trails.js";
 export * from "./user-settings.js";
 export * from "./dataset-catalog.js";
 export * from "./user-catalog-saves.js";
+export * from "./trolling-preset-folders.js";
 export * from "./trolling-presets.js";

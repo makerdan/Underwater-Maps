@@ -15,6 +15,7 @@ import efhRouter from "./efh";
 import catalogSavesRouter from "./catalog-saves";
 import surfaceConditionsRouter from "./surface-conditions";
 import trollingPresetsRouter from "./trolling-presets";
+import trollingPresetFoldersRouter from "./trolling-preset-folders";
 import waterTemperatureRouter from "./water-temperature";
 import temperatureProfileRouter from "./temperature-profile";
 
@@ -36,6 +37,7 @@ router.use(efhRouter);
 router.use(catalogSavesRouter);
 router.use(surfaceConditionsRouter);
 router.use(trollingPresetsRouter);
+router.use(trollingPresetFoldersRouter);
 router.use(waterTemperatureRouter);
 router.use(temperatureProfileRouter);
 

@@ -959,6 +959,7 @@ export const GetTrollingPresetsResponseItem = zod.object({
   "lon": zod.number().min(getTrollingPresetsResponseWaypointsItemLonMin).max(getTrollingPresetsResponseWaypointsItemLonMax)
 })),
   "sortOrder": zod.number().describe('Ascending sort key; lower values surface first'),
+  "folderId": zod.string().nullish().describe('ID of the folder grouping this preset, or null for root'),
   "createdAt": zod.coerce.date()
 })
 export const GetTrollingPresetsResponse = zod.array(GetTrollingPresetsResponseItem)
@@ -994,7 +995,8 @@ export const PostTrollingPresetsBody = zod.object({
   "waypoints": zod.array(zod.object({
   "lat": zod.number().min(postTrollingPresetsBodyWaypointsItemLatMin).max(postTrollingPresetsBodyWaypointsItemLatMax),
   "lon": zod.number().min(postTrollingPresetsBodyWaypointsItemLonMin).max(postTrollingPresetsBodyWaypointsItemLonMax)
-})).max(postTrollingPresetsBodyWaypointsMax).optional()
+})).max(postTrollingPresetsBodyWaypointsMax).optional(),
+  "folderId": zod.string().nullish()
 })
 
 
@@ -1011,7 +1013,8 @@ export const patchTrollingPresetsIdBodyNameMax = 80;
 
 export const PatchTrollingPresetsIdBody = zod.object({
   "name": zod.string().min(1).max(patchTrollingPresetsIdBodyNameMax).optional(),
-  "sortOrder": zod.number().optional()
+  "sortOrder": zod.number().optional(),
+  "folderId": zod.string().nullish().describe('ID of the folder this preset belongs to, or null to move to the root')
 }).describe('Partial update to a saved trolling preset. At least one field must be provided.')
 
 export const patchTrollingPresetsIdResponseHeadingDegMin = 0;
@@ -1041,6 +1044,7 @@ export const PatchTrollingPresetsIdResponse = zod.object({
   "lon": zod.number().min(patchTrollingPresetsIdResponseWaypointsItemLonMin).max(patchTrollingPresetsIdResponseWaypointsItemLonMax)
 })),
   "sortOrder": zod.number().describe('Ascending sort key; lower values surface first'),
+  "folderId": zod.string().nullish().describe('ID of the folder grouping this preset, or null for root'),
   "createdAt": zod.coerce.date()
 })
 
@@ -1049,6 +1053,61 @@ export const PatchTrollingPresetsIdResponse = zod.object({
  * @summary Delete a trolling preset by ID
  */
 export const DeleteTrollingPresetsIdParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+
+/**
+ * @summary List the authenticated user's trolling preset folders
+ */
+export const GetTrollingPresetFoldersResponseItem = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).describe('A folder for grouping the user\'s saved trolling presets')
+export const GetTrollingPresetFoldersResponse = zod.array(GetTrollingPresetFoldersResponseItem)
+
+
+/**
+ * @summary Create a new trolling preset folder
+ */
+export const postTrollingPresetFoldersBodyNameMax = 80;
+
+
+
+export const PostTrollingPresetFoldersBody = zod.object({
+  "name": zod.string().min(1).max(postTrollingPresetFoldersBodyNameMax)
+})
+
+
+/**
+ * @summary Rename a trolling preset folder
+ */
+export const PatchTrollingPresetFoldersIdParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const patchTrollingPresetFoldersIdBodyNameMax = 80;
+
+
+
+export const PatchTrollingPresetFoldersIdBody = zod.object({
+  "name": zod.string().min(1).max(patchTrollingPresetFoldersIdBodyNameMax)
+})
+
+export const PatchTrollingPresetFoldersIdResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).describe('A folder for grouping the user\'s saved trolling presets')
+
+
+/**
+ * @summary Delete a trolling preset folder (presets inside are moved to root)
+ */
+export const DeleteTrollingPresetFoldersIdParams = zod.object({
   "id": zod.coerce.string()
 })
 

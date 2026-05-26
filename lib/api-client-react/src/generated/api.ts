@@ -23,6 +23,7 @@ import type {
   ApiError,
   ClassifyResult,
   CreateDatasetFolderBody,
+  CreateTrollingPresetFolderBody,
   DatasetCatalogEntry,
   DatasetCatalogSearchResult,
   DatasetFolder,
@@ -59,12 +60,14 @@ import type {
   PostDatasetsUploadBody,
   QueryResult,
   RenameDatasetFolderBody,
+  RenameTrollingPresetFolderBody,
   SubstrateFeatureCollection,
   SurfaceConditions,
   TemperatureProfile,
   TerrainData,
   TrailPointsPage,
   TrollingPreset,
+  TrollingPresetFolder,
   TrollingPresetInput,
   TrollingPresetUpdate,
   UploadResult,
@@ -2505,6 +2508,296 @@ export const useDeleteTrollingPresetsId = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getDeleteTrollingPresetsIdMutationOptions(options));
+    }
+
+export const getGetTrollingPresetFoldersUrl = () => {
+
+
+
+
+  return `/api/trolling-preset-folders`
+}
+
+/**
+ * @summary List the authenticated user's trolling preset folders
+ */
+export const getTrollingPresetFolders = async ( options?: RequestInit): Promise<TrollingPresetFolder[]> => {
+
+  return customFetch<TrollingPresetFolder[]>(getGetTrollingPresetFoldersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTrollingPresetFoldersQueryKey = () => {
+    return [
+    `/api/trolling-preset-folders`
+    ] as const;
+    }
+
+
+export const getGetTrollingPresetFoldersQueryOptions = <TData = Awaited<ReturnType<typeof getTrollingPresetFolders>>, TError = ErrorType<ApiError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTrollingPresetFolders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTrollingPresetFoldersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTrollingPresetFolders>>> = ({ signal }) => getTrollingPresetFolders({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTrollingPresetFolders>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTrollingPresetFoldersQueryResult = NonNullable<Awaited<ReturnType<typeof getTrollingPresetFolders>>>
+export type GetTrollingPresetFoldersQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List the authenticated user's trolling preset folders
+ */
+
+export function useGetTrollingPresetFolders<TData = Awaited<ReturnType<typeof getTrollingPresetFolders>>, TError = ErrorType<ApiError>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTrollingPresetFolders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTrollingPresetFoldersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPostTrollingPresetFoldersUrl = () => {
+
+
+
+
+  return `/api/trolling-preset-folders`
+}
+
+/**
+ * @summary Create a new trolling preset folder
+ */
+export const postTrollingPresetFolders = async (createTrollingPresetFolderBody: CreateTrollingPresetFolderBody, options?: RequestInit): Promise<TrollingPresetFolder> => {
+
+  return customFetch<TrollingPresetFolder>(getPostTrollingPresetFoldersUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createTrollingPresetFolderBody,)
+  }
+);}
+
+
+
+
+export const getPostTrollingPresetFoldersMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postTrollingPresetFolders>>, TError,{data: BodyType<CreateTrollingPresetFolderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postTrollingPresetFolders>>, TError,{data: BodyType<CreateTrollingPresetFolderBody>}, TContext> => {
+
+const mutationKey = ['postTrollingPresetFolders'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postTrollingPresetFolders>>, {data: BodyType<CreateTrollingPresetFolderBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  postTrollingPresetFolders(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostTrollingPresetFoldersMutationResult = NonNullable<Awaited<ReturnType<typeof postTrollingPresetFolders>>>
+    export type PostTrollingPresetFoldersMutationBody = BodyType<CreateTrollingPresetFolderBody>
+    export type PostTrollingPresetFoldersMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Create a new trolling preset folder
+ */
+export const usePostTrollingPresetFolders = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postTrollingPresetFolders>>, TError,{data: BodyType<CreateTrollingPresetFolderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postTrollingPresetFolders>>,
+        TError,
+        {data: BodyType<CreateTrollingPresetFolderBody>},
+        TContext
+      > => {
+      return useMutation(getPostTrollingPresetFoldersMutationOptions(options));
+    }
+
+export const getPatchTrollingPresetFoldersIdUrl = (id: string,) => {
+
+
+
+
+  return `/api/trolling-preset-folders/${id}`
+}
+
+/**
+ * @summary Rename a trolling preset folder
+ */
+export const patchTrollingPresetFoldersId = async (id: string,
+    renameTrollingPresetFolderBody: RenameTrollingPresetFolderBody, options?: RequestInit): Promise<TrollingPresetFolder> => {
+
+  return customFetch<TrollingPresetFolder>(getPatchTrollingPresetFoldersIdUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      renameTrollingPresetFolderBody,)
+  }
+);}
+
+
+
+
+export const getPatchTrollingPresetFoldersIdMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchTrollingPresetFoldersId>>, TError,{id: string;data: BodyType<RenameTrollingPresetFolderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchTrollingPresetFoldersId>>, TError,{id: string;data: BodyType<RenameTrollingPresetFolderBody>}, TContext> => {
+
+const mutationKey = ['patchTrollingPresetFoldersId'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchTrollingPresetFoldersId>>, {id: string;data: BodyType<RenameTrollingPresetFolderBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  patchTrollingPresetFoldersId(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchTrollingPresetFoldersIdMutationResult = NonNullable<Awaited<ReturnType<typeof patchTrollingPresetFoldersId>>>
+    export type PatchTrollingPresetFoldersIdMutationBody = BodyType<RenameTrollingPresetFolderBody>
+    export type PatchTrollingPresetFoldersIdMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Rename a trolling preset folder
+ */
+export const usePatchTrollingPresetFoldersId = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchTrollingPresetFoldersId>>, TError,{id: string;data: BodyType<RenameTrollingPresetFolderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof patchTrollingPresetFoldersId>>,
+        TError,
+        {id: string;data: BodyType<RenameTrollingPresetFolderBody>},
+        TContext
+      > => {
+      return useMutation(getPatchTrollingPresetFoldersIdMutationOptions(options));
+    }
+
+export const getDeleteTrollingPresetFoldersIdUrl = (id: string,) => {
+
+
+
+
+  return `/api/trolling-preset-folders/${id}`
+}
+
+/**
+ * @summary Delete a trolling preset folder (presets inside are moved to root)
+ */
+export const deleteTrollingPresetFoldersId = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteTrollingPresetFoldersIdUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteTrollingPresetFoldersIdMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTrollingPresetFoldersId>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTrollingPresetFoldersId>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteTrollingPresetFoldersId'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTrollingPresetFoldersId>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteTrollingPresetFoldersId(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTrollingPresetFoldersIdMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTrollingPresetFoldersId>>>
+
+    export type DeleteTrollingPresetFoldersIdMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Delete a trolling preset folder (presets inside are moved to root)
+ */
+export const useDeleteTrollingPresetFoldersId = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTrollingPresetFoldersId>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTrollingPresetFoldersId>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteTrollingPresetFoldersIdMutationOptions(options));
     }
 
 export const getHealthCheckUrl = () => {

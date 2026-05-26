@@ -50,6 +50,11 @@ vi.mock("@workspace/api-client-react", () => ({
   usePatchTrollingPresetsId: () => ({ mutateAsync: vi.fn() }),
   useDeleteTrollingPresetsId: () => ({ mutateAsync: vi.fn() }),
   getGetTrollingPresetsQueryKey: () => ["trolling-presets"],
+  useGetTrollingPresetFolders: () => ({ data: [] }),
+  usePostTrollingPresetFolders: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  usePatchTrollingPresetFoldersId: () => ({ mutateAsync: vi.fn() }),
+  useDeleteTrollingPresetFoldersId: () => ({ mutateAsync: vi.fn() }),
+  getGetTrollingPresetFoldersQueryKey: () => ["trolling-preset-folders"],
 }));
 
 vi.mock("@tanstack/react-query", () => ({

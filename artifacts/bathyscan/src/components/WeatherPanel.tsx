@@ -14,6 +14,11 @@ import {
   usePatchTrollingPresetsId,
   useDeleteTrollingPresetsId,
   getGetTrollingPresetsQueryKey,
+  useGetTrollingPresetFolders,
+  usePostTrollingPresetFolders,
+  usePatchTrollingPresetFoldersId,
+  useDeleteTrollingPresetFoldersId,
+  getGetTrollingPresetFoldersQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppState } from "@/lib/context";
@@ -135,16 +140,33 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
 
   const queryClient = useQueryClient();
   const presetsQueryKey = getGetTrollingPresetsQueryKey();
+  const foldersQueryKey = getGetTrollingPresetFoldersQueryKey();
   const { data: trollingPresets } = useGetTrollingPresets({
     query: { queryKey: presetsQueryKey, staleTime: 60 * 1000 },
+  });
+  const { data: presetFolders } = useGetTrollingPresetFolders({
+    query: { queryKey: foldersQueryKey, staleTime: 60 * 1000 },
   });
   const postPresetMutation = usePostTrollingPresets();
   const patchPresetMutation = usePatchTrollingPresetsId();
   const deletePresetMutation = useDeleteTrollingPresetsId();
+  const postFolderMutation = usePostTrollingPresetFolders();
+  const patchFolderMutation = usePatchTrollingPresetFoldersId();
+  const deleteFolderMutation = useDeleteTrollingPresetFoldersId();
   const [presetName, setPresetName] = useState("");
   const [presetError, setPresetError] = useState<string | null>(null);
   const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  // Folder UI state. Save target controls which folder a new preset will
+  // land in (null = root). Collapsed folder ids are remembered locally so
+  // groups can be expanded/collapsed without a server round-trip.
+  const [saveFolderId, setSaveFolderId] = useState<string | null>(null);
+  const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<string>>(new Set());
+  const [folderRootCollapsed, setFolderRootCollapsed] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [folderError, setFolderError] = useState<string | null>(null);
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
+  const [editingFolderName, setEditingFolderName] = useState("");
 
   const handleSavePreset = useCallback(async () => {
     const trimmed = presetName.trim();
@@ -162,6 +184,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
           startLat: driftStartLat,
           startLon: driftStartLon,
           waypoints: driftWaypoints.map((wp) => ({ lat: wp.lat, lon: wp.lon })),
+          folderId: saveFolderId,
         },
       });
       setPresetName("");
@@ -169,7 +192,84 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     } catch (err) {
       setPresetError(err instanceof Error ? err.message : "Save failed");
     }
-  }, [presetName, postPresetMutation, boatHeadingDeg, boatSpeedKnots, driftStartLat, driftStartLon, driftWaypoints, queryClient, presetsQueryKey]);
+  }, [presetName, postPresetMutation, boatHeadingDeg, boatSpeedKnots, driftStartLat, driftStartLon, driftWaypoints, saveFolderId, queryClient, presetsQueryKey]);
+
+  const handleCreateFolder = useCallback(async () => {
+    const trimmed = newFolderName.trim();
+    if (!trimmed) {
+      setFolderError("Name required");
+      return;
+    }
+    setFolderError(null);
+    try {
+      await postFolderMutation.mutateAsync({ data: { name: trimmed } });
+      setNewFolderName("");
+      await queryClient.invalidateQueries({ queryKey: foldersQueryKey });
+    } catch (err) {
+      setFolderError(err instanceof Error ? err.message : "Create failed");
+    }
+  }, [newFolderName, postFolderMutation, queryClient, foldersQueryKey]);
+
+  const handleStartFolderRename = useCallback((id: string, currentName: string) => {
+    setEditingFolderId(id);
+    setEditingFolderName(currentName);
+  }, []);
+
+  const handleCancelFolderRename = useCallback(() => {
+    setEditingFolderId(null);
+    setEditingFolderName("");
+  }, []);
+
+  const handleCommitFolderRename = useCallback(async () => {
+    if (!editingFolderId) return;
+    const trimmed = editingFolderName.trim();
+    if (!trimmed) {
+      handleCancelFolderRename();
+      return;
+    }
+    try {
+      await patchFolderMutation.mutateAsync({ id: editingFolderId, data: { name: trimmed } });
+      await queryClient.invalidateQueries({ queryKey: foldersQueryKey });
+    } catch {
+      // no-op; query will refetch
+    } finally {
+      handleCancelFolderRename();
+    }
+  }, [editingFolderId, editingFolderName, patchFolderMutation, queryClient, foldersQueryKey, handleCancelFolderRename]);
+
+  const handleDeleteFolder = useCallback(async (id: string) => {
+    if (typeof window !== "undefined" && !window.confirm("Delete this folder? Presets inside will move back to the root list.")) {
+      return;
+    }
+    try {
+      await deleteFolderMutation.mutateAsync({ id });
+      if (saveFolderId === id) setSaveFolderId(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: foldersQueryKey }),
+        queryClient.invalidateQueries({ queryKey: presetsQueryKey }),
+      ]);
+    } catch {
+      // no-op
+    }
+  }, [deleteFolderMutation, saveFolderId, queryClient, foldersQueryKey, presetsQueryKey]);
+
+  const handleAssignPresetToFolder = useCallback(async (presetId: string, folderId: string | null) => {
+    try {
+      await patchPresetMutation.mutateAsync({ id: presetId, data: { folderId } });
+      await queryClient.invalidateQueries({ queryKey: presetsQueryKey });
+    } catch {
+      // no-op
+    }
+  }, [patchPresetMutation, queryClient, presetsQueryKey]);
+
+  const toggleFolderCollapsed = useCallback((id: string) => {
+    setCollapsedFolderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   const handleLoadPreset = useCallback((presetId: string) => {
     const preset = trollingPresets?.find((p) => p.id === presetId);
@@ -223,21 +323,36 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     }
   }, [editingPresetId, editingName, patchPresetMutation, queryClient, presetsQueryKey, handleCancelRename]);
 
-  const handleMovePreset = useCallback(async (index: number, delta: -1 | 1) => {
+  const handleMovePresetInFolder = useCallback(async (
+    folderId: string | null,
+    presetId: string,
+    delta: -1 | 1,
+  ) => {
     if (!trollingPresets) return;
-    const ordered = [...trollingPresets];
-    const target = index + delta;
-    if (target < 0 || target >= ordered.length) return;
-    const a = ordered[index];
-    const b = ordered[target];
+    // Reorder only within the same folder bucket so visual moves don't
+    // accidentally hop a preset across folders. We rewrite sortOrder for
+    // every preset in that bucket as a contiguous 0..N-1 sequence.
+    const inFolder = trollingPresets.filter(
+      (p) => (p.folderId ?? null) === folderId,
+    );
+    const idx = inFolder.findIndex((p) => p.id === presetId);
+    const target = idx + delta;
+    if (idx < 0 || target < 0 || target >= inFolder.length) return;
+    const reordered = [...inFolder];
+    const a = reordered[idx];
+    const b = reordered[target];
     if (!a || !b) return;
-    // Reorder locally, then persist a fresh 0..N-1 sortOrder for the whole list
-    // so future inserts/deletes don't degrade the ordering.
-    [ordered[index], ordered[target]] = [b, a];
-    queryClient.setQueryData(presetsQueryKey, ordered);
+    [reordered[idx], reordered[target]] = [b, a];
+
+    // Optimistic update so the list doesn't snap back during the round-trip.
+    const next = trollingPresets.map((p) => {
+      const newIndex = reordered.findIndex((r) => r.id === p.id);
+      return newIndex >= 0 ? { ...p, sortOrder: newIndex } : p;
+    });
+    queryClient.setQueryData(presetsQueryKey, next);
     try {
       await Promise.all(
-        ordered.map((p, i) =>
+        reordered.map((p, i) =>
           p.sortOrder === i
             ? Promise.resolve()
             : patchPresetMutation.mutateAsync({ id: p.id, data: { sortOrder: i } }),
@@ -483,173 +598,246 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
 
           <div style={{ marginBottom: 6 }}>
             <div style={LABEL}>PRESETS</div>
-            {trollingPresets && trollingPresets.length > 0 ? (
-              <div data-testid="preset-list" style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 3 }}>
-                {trollingPresets.map((p, i) => {
-                  const isEditing = editingPresetId === p.id;
-                  const isFirst = i === 0;
-                  const isLast = i === trollingPresets.length - 1;
-                  return (
-                    <div key={p.id} style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                        <button
-                          title="Move up"
-                          aria-label={`Move preset ${p.name} up`}
-                          disabled={isFirst}
-                          onClick={() => void handleMovePreset(i, -1)}
-                          style={{
-                            background: "none",
-                            border: "1px solid rgba(0,229,255,0.2)",
-                            color: isFirst ? "#334155" : "#00e5ff",
-                            cursor: isFirst ? "default" : "pointer",
-                            fontSize: 8,
-                            padding: "0 3px",
-                            borderRadius: 2,
-                            lineHeight: 1.2,
-                          }}
-                        >▲</button>
-                        <button
-                          title="Move down"
-                          aria-label={`Move preset ${p.name} down`}
-                          disabled={isLast}
-                          onClick={() => void handleMovePreset(i, 1)}
-                          style={{
-                            background: "none",
-                            border: "1px solid rgba(0,229,255,0.2)",
-                            color: isLast ? "#334155" : "#00e5ff",
-                            cursor: isLast ? "default" : "pointer",
-                            fontSize: 8,
-                            padding: "0 3px",
-                            borderRadius: 2,
-                            lineHeight: 1.2,
-                          }}
-                        >▼</button>
-                      </div>
-                      {isEditing ? (
-                        <input
-                          autoFocus
-                          aria-label={`Rename preset ${p.name}`}
-                          value={editingName}
-                          maxLength={80}
-                          onChange={(e) => setEditingName(e.target.value)}
-                          onBlur={() => void handleCommitRename()}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              void handleCommitRename();
-                            } else if (e.key === "Escape") {
-                              e.preventDefault();
-                              handleCancelRename();
-                            }
-                          }}
-                          style={{
-                            flex: 1,
-                            background: "rgba(0,10,20,0.8)",
-                            border: "1px solid rgba(0,229,255,0.4)",
-                            color: "#00e5ff",
-                            fontFamily: "inherit",
-                            fontSize: 9,
-                            padding: "3px 6px",
-                            borderRadius: 3,
-                          }}
-                        />
-                      ) : (
-                        <button
-                          onClick={() => handleLoadPreset(p.id)}
-                          title={`Load ${p.name}: ${Math.round(p.headingDeg)}° @ ${p.speedKnots}kt`}
-                          style={{
-                            flex: 1,
-                            textAlign: "left",
-                            background: "rgba(0,10,20,0.8)",
-                            border: "1px solid rgba(0,229,255,0.2)",
-                            color: "#00e5ff",
-                            fontFamily: "inherit",
-                            fontSize: 9,
-                            padding: "3px 6px",
-                            borderRadius: 3,
-                            cursor: "pointer",
-                            letterSpacing: "0.1em",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {p.name} · {Math.round(p.headingDeg)}° @ {p.speedKnots}kt
-                        </button>
-                      )}
-                      {!isEditing && (
-                        <button
-                          onClick={() => handleStartRename(p.id, p.name)}
-                          aria-label={`Rename preset ${p.name}`}
-                          title="Rename preset"
-                          style={{
-                            background: "rgba(0,10,20,0.8)",
-                            border: "1px solid rgba(0,229,255,0.2)",
-                            color: "#00e5ff",
-                            fontFamily: "inherit",
-                            fontSize: 9,
-                            padding: "3px 6px",
-                            borderRadius: 3,
-                            cursor: "pointer",
-                          }}
-                        >✎</button>
-                      )}
+            {(() => {
+              const sortedFolders = [...(presetFolders ?? [])].sort((a, b) =>
+                a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+              );
+              const renderPresetRow = (p: NonNullable<typeof trollingPresets>[number], idxInGroup: number, groupLen: number, folderId: string | null) => {
+                const isEditing = editingPresetId === p.id;
+                const isFirst = idxInGroup === 0;
+                const isLast = idxInGroup === groupLen - 1;
+                return (
+                  <div key={p.id} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                       <button
-                        onClick={() => void handleDeletePreset(p.id)}
-                        aria-label={`Delete preset ${p.name}`}
-                        title="Delete preset"
-                        style={{
-                          background: "rgba(0,10,20,0.8)",
-                          border: "1px solid rgba(248,113,113,0.3)",
-                          color: "#f87171",
-                          fontFamily: "inherit",
-                          fontSize: 9,
-                          padding: "3px 6px",
-                          borderRadius: 3,
-                          cursor: "pointer",
-                        }}
-                      >×</button>
+                        title="Move up"
+                        aria-label={`Move preset ${p.name} up`}
+                        disabled={isFirst}
+                        onClick={() => void handleMovePresetInFolder(folderId, p.id, -1)}
+                        style={{ background: "none", border: "1px solid rgba(0,229,255,0.2)", color: isFirst ? "#334155" : "#00e5ff", cursor: isFirst ? "default" : "pointer", fontSize: 8, padding: "0 3px", borderRadius: 2, lineHeight: 1.2 }}
+                      >▲</button>
+                      <button
+                        title="Move down"
+                        aria-label={`Move preset ${p.name} down`}
+                        disabled={isLast}
+                        onClick={() => void handleMovePresetInFolder(folderId, p.id, 1)}
+                        style={{ background: "none", border: "1px solid rgba(0,229,255,0.2)", color: isLast ? "#334155" : "#00e5ff", cursor: isLast ? "default" : "pointer", fontSize: 8, padding: "0 3px", borderRadius: 2, lineHeight: 1.2 }}
+                      >▼</button>
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div style={{ fontSize: 8, color: "#475569", marginTop: 2 }}>
-                No saved presets yet
-              </div>
+                    {isEditing ? (
+                      <input
+                        autoFocus
+                        aria-label={`Rename preset ${p.name}`}
+                        value={editingName}
+                        maxLength={80}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onBlur={() => void handleCommitRename()}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); void handleCommitRename(); }
+                          else if (e.key === "Escape") { e.preventDefault(); handleCancelRename(); }
+                        }}
+                        style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.4)", color: "#00e5ff", fontFamily: "inherit", fontSize: 9, padding: "3px 6px", borderRadius: 3 }}
+                      />
+                    ) : (
+                      <button
+                        onClick={() => handleLoadPreset(p.id)}
+                        title={`Load ${p.name}: ${Math.round(p.headingDeg)}° @ ${p.speedKnots}kt`}
+                        style={{ flex: 1, textAlign: "left", background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 9, padding: "3px 6px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.1em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                      >
+                        {p.name} · {Math.round(p.headingDeg)}° @ {p.speedKnots}kt
+                      </button>
+                    )}
+                    {sortedFolders.length > 0 && !isEditing && (
+                      <select
+                        aria-label={`Move preset ${p.name} to folder`}
+                        title="Move to folder"
+                        value={p.folderId ?? ""}
+                        onChange={(e) => void handleAssignPresetToFolder(p.id, e.target.value === "" ? null : e.target.value)}
+                        style={{ background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 9, padding: "2px", borderRadius: 3, cursor: "pointer", maxWidth: 60 }}
+                      >
+                        <option value="">— root —</option>
+                        {sortedFolders.map((f) => (
+                          <option key={f.id} value={f.id}>{f.name}</option>
+                        ))}
+                      </select>
+                    )}
+                    {!isEditing && (
+                      <button
+                        onClick={() => handleStartRename(p.id, p.name)}
+                        aria-label={`Rename preset ${p.name}`}
+                        title="Rename preset"
+                        style={{ background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 9, padding: "3px 6px", borderRadius: 3, cursor: "pointer" }}
+                      >✎</button>
+                    )}
+                    <button
+                      onClick={() => void handleDeletePreset(p.id)}
+                      aria-label={`Delete preset ${p.name}`}
+                      title="Delete preset"
+                      style={{ background: "rgba(0,10,20,0.8)", border: "1px solid rgba(248,113,113,0.3)", color: "#f87171", fontFamily: "inherit", fontSize: 9, padding: "3px 6px", borderRadius: 3, cursor: "pointer" }}
+                    >×</button>
+                  </div>
+                );
+              };
+
+              const inRoot = (trollingPresets ?? []).filter((p) => !p.folderId);
+              const totalPresets = trollingPresets?.length ?? 0;
+              if (totalPresets === 0 && sortedFolders.length === 0) {
+                return (
+                  <div style={{ fontSize: 8, color: "#475569", marginTop: 2 }}>
+                    No saved presets yet
+                  </div>
+                );
+              }
+              return (
+                <div data-testid="preset-list" style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 3 }}>
+                  {sortedFolders.map((folder) => {
+                    const inFolder = (trollingPresets ?? []).filter((p) => p.folderId === folder.id);
+                    const collapsed = collapsedFolderIds.has(folder.id);
+                    const isEditingFolder = editingFolderId === folder.id;
+                    return (
+                      <div key={folder.id} data-testid={`preset-folder-${folder.id}`} style={{ border: "1px solid rgba(0,229,255,0.12)", borderRadius: 3, padding: "3px 4px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <button
+                            onClick={() => toggleFolderCollapsed(folder.id)}
+                            aria-label={collapsed ? `Expand folder ${folder.name}` : `Collapse folder ${folder.name}`}
+                            title={collapsed ? "Expand" : "Collapse"}
+                            style={{ background: "none", border: "none", color: "#00e5ff", cursor: "pointer", fontSize: 10, padding: "0 4px" }}
+                          >{collapsed ? "▸" : "▾"}</button>
+                          {isEditingFolder ? (
+                            <input
+                              autoFocus
+                              aria-label={`Rename folder ${folder.name}`}
+                              value={editingFolderName}
+                              maxLength={80}
+                              onChange={(e) => setEditingFolderName(e.target.value)}
+                              onBlur={() => void handleCommitFolderRename()}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") { e.preventDefault(); void handleCommitFolderRename(); }
+                                else if (e.key === "Escape") { e.preventDefault(); handleCancelFolderRename(); }
+                              }}
+                              style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.4)", color: "#fbbf24", fontFamily: "inherit", fontSize: 9, padding: "2px 6px", borderRadius: 3 }}
+                            />
+                          ) : (
+                            <span style={{ flex: 1, color: "#fbbf24", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              📁 {folder.name} ({inFolder.length})
+                            </span>
+                          )}
+                          {!isEditingFolder && (
+                            <>
+                              <button
+                                onClick={() => handleStartFolderRename(folder.id, folder.name)}
+                                aria-label={`Rename folder ${folder.name}`}
+                                title="Rename folder"
+                                style={{ background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 9, padding: "2px 5px", borderRadius: 3, cursor: "pointer" }}
+                              >✎</button>
+                              <button
+                                onClick={() => void handleDeleteFolder(folder.id)}
+                                aria-label={`Delete folder ${folder.name}`}
+                                title="Delete folder"
+                                style={{ background: "rgba(0,10,20,0.8)", border: "1px solid rgba(248,113,113,0.3)", color: "#f87171", fontFamily: "inherit", fontSize: 9, padding: "2px 5px", borderRadius: 3, cursor: "pointer" }}
+                              >×</button>
+                            </>
+                          )}
+                        </div>
+                        {!collapsed && inFolder.length > 0 && (
+                          <div data-testid={`preset-folder-${folder.id}-contents`} style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 3, paddingLeft: 8 }}>
+                            {inFolder.map((p, i) => renderPresetRow(p, i, inFolder.length, folder.id))}
+                          </div>
+                        )}
+                        {!collapsed && inFolder.length === 0 && (
+                          <div style={{ fontSize: 8, color: "#475569", marginTop: 2, paddingLeft: 14, fontStyle: "italic" }}>
+                            Empty
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {/* Root (unfiled) presets — only show the header when folders exist */}
+                  {sortedFolders.length > 0 ? (
+                    <div data-testid="preset-folder-root" style={{ border: "1px dashed rgba(0,229,255,0.12)", borderRadius: 3, padding: "3px 4px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <button
+                          onClick={() => setFolderRootCollapsed((v) => !v)}
+                          aria-label={folderRootCollapsed ? "Expand root presets" : "Collapse root presets"}
+                          title={folderRootCollapsed ? "Expand" : "Collapse"}
+                          style={{ background: "none", border: "none", color: "#00e5ff", cursor: "pointer", fontSize: 10, padding: "0 4px" }}
+                        >{folderRootCollapsed ? "▸" : "▾"}</button>
+                        <span style={{ flex: 1, color: "#64748b", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em" }}>
+                          UNFILED ({inRoot.length})
+                        </span>
+                      </div>
+                      {!folderRootCollapsed && inRoot.length > 0 && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 3, paddingLeft: 8 }}>
+                          {inRoot.map((p, i) => renderPresetRow(p, i, inRoot.length, null))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    inRoot.length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        {inRoot.map((p, i) => renderPresetRow(p, i, inRoot.length, null))}
+                      </div>
+                    )
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* New-folder controls */}
+            <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
+              <input
+                type="text"
+                placeholder="New folder name"
+                aria-label="New folder name"
+                value={newFolderName}
+                maxLength={80}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); void handleCreateFolder(); }
+                }}
+                style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#fbbf24", fontFamily: "inherit", fontSize: 10, padding: "2px 6px", borderRadius: 3 }}
+              />
+              <button
+                onClick={() => void handleCreateFolder()}
+                disabled={postFolderMutation.isPending}
+                title="Create folder"
+                style={{ background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.3)", color: "#fbbf24", fontFamily: "inherit", fontSize: 9, padding: "2px 8px", borderRadius: 3, cursor: postFolderMutation.isPending ? "wait" : "pointer", letterSpacing: "0.15em" }}
+              >+ FOLDER</button>
+            </div>
+            {folderError && (
+              <div style={{ fontSize: 8, color: "#f87171", marginTop: 2 }}>{folderError}</div>
             )}
-            <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+
+            {/* Save-preset controls */}
+            <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
               <input
                 type="text"
                 placeholder="Name this pass"
                 value={presetName}
                 maxLength={80}
                 onChange={(e) => setPresetName(e.target.value)}
-                style={{
-                  flex: 1,
-                  background: "rgba(0,10,20,0.8)",
-                  border: "1px solid rgba(0,229,255,0.2)",
-                  color: "#00e5ff",
-                  fontFamily: "inherit",
-                  fontSize: 10,
-                  padding: "2px 6px",
-                  borderRadius: 3,
-                }}
+                style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 10, padding: "2px 6px", borderRadius: 3 }}
               />
+              {(presetFolders?.length ?? 0) > 0 && (
+                <select
+                  aria-label="Save to folder"
+                  title="Save to folder"
+                  value={saveFolderId ?? ""}
+                  onChange={(e) => setSaveFolderId(e.target.value === "" ? null : e.target.value)}
+                  style={{ background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 9, padding: "2px 4px", borderRadius: 3, cursor: "pointer", maxWidth: 70 }}
+                >
+                  <option value="">root</option>
+                  {[...(presetFolders ?? [])]
+                    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
+                    .map((f) => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                </select>
+              )}
               <button
                 onClick={() => void handleSavePreset()}
                 disabled={postPresetMutation.isPending}
-                style={{
-                  background: "rgba(0,229,255,0.1)",
-                  border: "1px solid rgba(0,229,255,0.3)",
-                  color: "#00e5ff",
-                  fontFamily: "inherit",
-                  fontSize: 9,
-                  padding: "2px 8px",
-                  borderRadius: 3,
-                  cursor: postPresetMutation.isPending ? "wait" : "pointer",
-                  letterSpacing: "0.15em",
-                }}
+                style={{ background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", color: "#00e5ff", fontFamily: "inherit", fontSize: 9, padding: "2px 8px", borderRadius: 3, cursor: postPresetMutation.isPending ? "wait" : "pointer", letterSpacing: "0.15em" }}
               >SAVE</button>
             </div>
             {presetError && (
