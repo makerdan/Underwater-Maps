@@ -2302,8 +2302,27 @@ export function Settings() {
   });
 
   useEffect(() => {
-    if (serverSettings) {
-      hydrateFromServer(serverSettings as Parameters<typeof hydrateFromServer>[0]);
+    if (!serverSettings) return;
+    // Recency check matches settingsStore.hydrateFromServer: the server wins
+    // only when its `__updatedAt` is newer than the last local sync (or when
+    // we've never synced). We evaluate it here BEFORE calling the settings
+    // hydrator (which mutates lastSyncedAt) so we can apply the same rule to
+    // the separate paletteStore.
+    const serverRec = serverSettings as Record<string, unknown>;
+    const serverUpdatedAt =
+      typeof serverRec.__updatedAt === "string" ? (serverRec.__updatedAt as string) : undefined;
+    const lastSyncedAt = useSettingsStore.getState().lastSyncedAt;
+    const serverIsNewer =
+      !lastSyncedAt || (serverUpdatedAt !== undefined && serverUpdatedAt > lastSyncedAt);
+
+    hydrateFromServer(serverSettings as Parameters<typeof hydrateFromServer>[0]);
+
+    if (serverIsNewer) {
+      usePaletteStore.getState().hydrateFromServer({
+        paletteShallow: serverRec.paletteShallow,
+        paletteDeep: serverRec.paletteDeep,
+        customStops: serverRec.customStops,
+      });
     }
   }, [serverSettings, hydrateFromServer]);
 
@@ -2321,6 +2340,13 @@ export function Settings() {
     for (const [k, v] of Object.entries(rest)) {
       if (typeof v !== "function") dataOnly[k] = v;
     }
+    // Palette state lives in a separate zustand store but syncs through the
+    // same /api/settings endpoint so users get one canonical record of their
+    // visual preferences across devices.
+    const palette = usePaletteStore.getState();
+    dataOnly.paletteShallow = palette.shallow;
+    dataOnly.paletteDeep = palette.deep;
+    dataOnly.customStops = palette.customStops;
     return dataOnly;
   }, []);
 
@@ -2368,18 +2394,33 @@ export function Settings() {
   }, [isSignedIn, flushSync]);
 
   // Subscribe to data-only changes (ignore syncedSnapshot updates) to avoid
-  // an infinite save loop once markAllSaved fires inside flushSync.
+  // an infinite save loop once markAllSaved fires inside flushSync. Also
+  // watch the separate paletteStore so palette edits ride the same debounced
+  // PUT /api/settings as the rest of the visual preferences.
   useEffect(() => {
-    let last = JSON.stringify(getDataSnapshot());
-    const unsub = useSettingsStore.subscribe(() => {
+    const palSnap = () => {
+      const p = usePaletteStore.getState();
+      return JSON.stringify({ s: p.shallow, d: p.deep, c: p.customStops });
+    };
+    let lastSettings = JSON.stringify(getDataSnapshot());
+    let lastPalette = palSnap();
+    const unsubSettings = useSettingsStore.subscribe(() => {
       const cur = JSON.stringify(getDataSnapshot());
-      if (cur !== last) {
-        last = cur;
+      if (cur !== lastSettings) {
+        lastSettings = cur;
+        scheduleSync();
+      }
+    });
+    const unsubPalette = usePaletteStore.subscribe(() => {
+      const cur = palSnap();
+      if (cur !== lastPalette) {
+        lastPalette = cur;
         scheduleSync();
       }
     });
     return () => {
-      unsub();
+      unsubSettings();
+      unsubPalette();
       if (debounceRef.current) clearTimeout(debounceRef.current);
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
     };

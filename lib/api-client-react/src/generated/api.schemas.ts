@@ -189,7 +189,18 @@ export const UserSettingsColormapTheme = {
   grayscale: 'grayscale',
   viridis: 'viridis',
   freshwater: 'freshwater',
+  custom: 'custom',
 } as const;
+
+export type UserSettingsCustomStopsItem = {
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  position: number;
+  /** @pattern ^#[0-9a-fA-F]{6}$ */
+  hex: string;
+};
 
 export type UserSettingsCameraSpawnBehaviour = typeof UserSettingsCameraSpawnBehaviour[keyof typeof UserSettingsCameraSpawnBehaviour];
 
@@ -291,6 +302,21 @@ export interface UserSettings {
      */
   fogDensity?: number;
   colormapTheme?: UserSettingsColormapTheme;
+  /**
+     * Shallow endpoint hex colour for the Ocean depth palette.
+     * @pattern ^#[0-9a-fA-F]{6}$
+     */
+  paletteShallow?: string;
+  /**
+     * Deep endpoint hex colour for the Ocean depth palette.
+     * @pattern ^#[0-9a-fA-F]{6}$
+     */
+  paletteDeep?: string;
+  /**
+     * Ordered colour stops for the user's Custom depth palette (min 2). Positions are normalised to [0, 1] along the depth axis.
+     * @minItems 2
+     */
+  customStops?: UserSettingsCustomStopsItem[];
   /**
      * @minimum 0
      * @maximum 5

@@ -1675,8 +1675,38 @@ components:
           default: 0.012
         colormapTheme:
           type: string
-          enum: [ocean, thermal, grayscale, viridis, freshwater]
+          enum: [ocean, thermal, grayscale, viridis, freshwater, custom]
           default: ocean
+        paletteShallow:
+          type: string
+          pattern: '^#[0-9a-fA-F]{6}$'
+          default: '#00e5ff'
+          description: Shallow endpoint hex colour for the Ocean depth palette.
+        paletteDeep:
+          type: string
+          pattern: '^#[0-9a-fA-F]{6}$'
+          default: '#283593'
+          description: Deep endpoint hex colour for the Ocean depth palette.
+        customStops:
+          type: array
+          minItems: 2
+          description: Ordered colour stops for the user's Custom depth palette (min 2). Positions are normalised to [0, 1] along the depth axis.
+          items:
+            type: object
+            required: [position, hex]
+            properties:
+              position:
+                type: number
+                minimum: 0
+                maximum: 1
+              hex:
+                type: string
+                pattern: '^#[0-9a-fA-F]{6}$'
+          default:
+            - { position: 0.0,  hex: '#00e5ff' }
+            - { position: 0.3,  hex: '#0d47a1' }
+            - { position: 0.65, hex: '#1a237e' }
+            - { position: 1.0,  hex: '#283593' }
         lampIntensity:
           type: number
           minimum: 0

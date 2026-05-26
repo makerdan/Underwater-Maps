@@ -114,6 +114,16 @@ interface PaletteStore {
   updateCustomStop: (index: number, patch: Partial<CustomStop>) => void;
   resetCustomStops: () => void;
   reset: () => void;
+  /**
+   * Apply server-side palette values (shallow / deep / customStops) to the
+   * store. Values that are missing or malformed are left untouched. Used by
+   * the Settings page after a successful GET /api/settings hydration.
+   */
+  hydrateFromServer: (partial: {
+    paletteShallow?: unknown;
+    paletteDeep?: unknown;
+    customStops?: unknown;
+  }) => void;
 }
 
 /**
@@ -182,6 +192,20 @@ export const usePaletteStore = create<PaletteStore>()(
           deep: DEFAULT_DEEP,
           customStops: DEFAULT_CUSTOM_STOPS.map((s) => ({ ...s })),
         }),
+      hydrateFromServer: (partial) => {
+        const patch: Partial<PaletteStore> = {};
+        if (typeof partial.paletteShallow === "string" && HEX_RE.test(partial.paletteShallow)) {
+          patch.shallow = partial.paletteShallow.toLowerCase();
+        }
+        if (typeof partial.paletteDeep === "string" && HEX_RE.test(partial.paletteDeep)) {
+          patch.deep = partial.paletteDeep.toLowerCase();
+        }
+        if (partial.customStops !== undefined) {
+          const cleaned = sanitizeCustomStops(partial.customStops);
+          if (cleaned) patch.customStops = cleaned;
+        }
+        if (Object.keys(patch).length > 0) set(patch);
+      },
     }),
     {
       name: "bathyscan:palette",

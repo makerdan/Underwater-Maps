@@ -38,6 +38,14 @@ const DEFAULT_SETTINGS = {
   gpsRecordingInterval: 10000,
   waterType: "saltwater",
   showUiTooltips: true,
+  paletteShallow: "#00e5ff",
+  paletteDeep: "#283593",
+  customStops: [
+    { position: 0.0, hex: "#00e5ff" },
+    { position: 0.3, hex: "#0d47a1" },
+    { position: 0.65, hex: "#1a237e" },
+    { position: 1.0, hex: "#283593" },
+  ],
 };
 
 /**

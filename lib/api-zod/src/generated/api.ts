@@ -551,6 +551,17 @@ export const getSettingsResponseFogDensityMin = 0.004;
 export const getSettingsResponseFogDensityMax = 0.03;
 
 export const getSettingsResponseColormapThemeDefault = `ocean`;
+export const getSettingsResponsePaletteShallowDefault = `#00e5ff`;
+export const getSettingsResponsePaletteShallowRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const getSettingsResponsePaletteDeepDefault = `#283593`;
+export const getSettingsResponsePaletteDeepRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const getSettingsResponseCustomStopsItemPositionMin = 0;
+export const getSettingsResponseCustomStopsItemPositionMax = 1;
+
+export const getSettingsResponseCustomStopsItemHexRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const getSettingsResponseCustomStopsDefault = [{ position: 0, hex: `#00e5ff`, }, { position: 0.3, hex: `#0d47a1`, }, { position: 0.65, hex: `#1a237e`, }, { position: 1, hex: `#283593`, }];
+export const getSettingsResponseCustomStopsMin = 2;
+
 export const getSettingsResponseLampIntensityDefault = 2;
 export const getSettingsResponseLampIntensityMin = 0;
 export const getSettingsResponseLampIntensityMax = 5;
@@ -600,7 +611,13 @@ export const GetSettingsResponse = zod.object({
   "enableCaustics": zod.boolean().default(getSettingsResponseEnableCausticsDefault),
   "particleDensity": zod.enum(['off', 'sparse', 'dense']).default(getSettingsResponseParticleDensityDefault),
   "fogDensity": zod.number().min(getSettingsResponseFogDensityMin).max(getSettingsResponseFogDensityMax).default(getSettingsResponseFogDensityDefault),
-  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis', 'freshwater']).default(getSettingsResponseColormapThemeDefault),
+  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis', 'freshwater', 'custom']).default(getSettingsResponseColormapThemeDefault),
+  "paletteShallow": zod.string().regex(getSettingsResponsePaletteShallowRegExp).default(getSettingsResponsePaletteShallowDefault).describe('Shallow endpoint hex colour for the Ocean depth palette.'),
+  "paletteDeep": zod.string().regex(getSettingsResponsePaletteDeepRegExp).default(getSettingsResponsePaletteDeepDefault).describe('Deep endpoint hex colour for the Ocean depth palette.'),
+  "customStops": zod.array(zod.object({
+  "position": zod.number().min(getSettingsResponseCustomStopsItemPositionMin).max(getSettingsResponseCustomStopsItemPositionMax),
+  "hex": zod.string().regex(getSettingsResponseCustomStopsItemHexRegExp)
+})).min(getSettingsResponseCustomStopsMin).default(getSettingsResponseCustomStopsDefault).describe('Ordered colour stops for the user\'s Custom depth palette (min 2). Positions are normalised to [0, 1] along the depth axis.'),
   "lampIntensity": zod.number().min(getSettingsResponseLampIntensityMin).max(getSettingsResponseLampIntensityMax).default(getSettingsResponseLampIntensityDefault),
   "defaultSpeedTier": zod.number().min(getSettingsResponseDefaultSpeedTierMin).max(getSettingsResponseDefaultSpeedTierMax).default(getSettingsResponseDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(getSettingsResponseInvertMouseYDefault),
@@ -642,6 +659,17 @@ export const putSettingsBodyFogDensityMin = 0.004;
 export const putSettingsBodyFogDensityMax = 0.03;
 
 export const putSettingsBodyColormapThemeDefault = `ocean`;
+export const putSettingsBodyPaletteShallowDefault = `#00e5ff`;
+export const putSettingsBodyPaletteShallowRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsBodyPaletteDeepDefault = `#283593`;
+export const putSettingsBodyPaletteDeepRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsBodyCustomStopsItemPositionMin = 0;
+export const putSettingsBodyCustomStopsItemPositionMax = 1;
+
+export const putSettingsBodyCustomStopsItemHexRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsBodyCustomStopsDefault = [{ position: 0, hex: `#00e5ff`, }, { position: 0.3, hex: `#0d47a1`, }, { position: 0.65, hex: `#1a237e`, }, { position: 1, hex: `#283593`, }];
+export const putSettingsBodyCustomStopsMin = 2;
+
 export const putSettingsBodyLampIntensityDefault = 2;
 export const putSettingsBodyLampIntensityMin = 0;
 export const putSettingsBodyLampIntensityMax = 5;
@@ -691,7 +719,13 @@ export const PutSettingsBody = zod.object({
   "enableCaustics": zod.boolean().default(putSettingsBodyEnableCausticsDefault),
   "particleDensity": zod.enum(['off', 'sparse', 'dense']).default(putSettingsBodyParticleDensityDefault),
   "fogDensity": zod.number().min(putSettingsBodyFogDensityMin).max(putSettingsBodyFogDensityMax).default(putSettingsBodyFogDensityDefault),
-  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis', 'freshwater']).default(putSettingsBodyColormapThemeDefault),
+  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis', 'freshwater', 'custom']).default(putSettingsBodyColormapThemeDefault),
+  "paletteShallow": zod.string().regex(putSettingsBodyPaletteShallowRegExp).default(putSettingsBodyPaletteShallowDefault).describe('Shallow endpoint hex colour for the Ocean depth palette.'),
+  "paletteDeep": zod.string().regex(putSettingsBodyPaletteDeepRegExp).default(putSettingsBodyPaletteDeepDefault).describe('Deep endpoint hex colour for the Ocean depth palette.'),
+  "customStops": zod.array(zod.object({
+  "position": zod.number().min(putSettingsBodyCustomStopsItemPositionMin).max(putSettingsBodyCustomStopsItemPositionMax),
+  "hex": zod.string().regex(putSettingsBodyCustomStopsItemHexRegExp)
+})).min(putSettingsBodyCustomStopsMin).default(putSettingsBodyCustomStopsDefault).describe('Ordered colour stops for the user\'s Custom depth palette (min 2). Positions are normalised to [0, 1] along the depth axis.'),
   "lampIntensity": zod.number().min(putSettingsBodyLampIntensityMin).max(putSettingsBodyLampIntensityMax).default(putSettingsBodyLampIntensityDefault),
   "defaultSpeedTier": zod.number().min(putSettingsBodyDefaultSpeedTierMin).max(putSettingsBodyDefaultSpeedTierMax).default(putSettingsBodyDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(putSettingsBodyInvertMouseYDefault),
@@ -728,6 +762,17 @@ export const putSettingsResponseFogDensityMin = 0.004;
 export const putSettingsResponseFogDensityMax = 0.03;
 
 export const putSettingsResponseColormapThemeDefault = `ocean`;
+export const putSettingsResponsePaletteShallowDefault = `#00e5ff`;
+export const putSettingsResponsePaletteShallowRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsResponsePaletteDeepDefault = `#283593`;
+export const putSettingsResponsePaletteDeepRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsResponseCustomStopsItemPositionMin = 0;
+export const putSettingsResponseCustomStopsItemPositionMax = 1;
+
+export const putSettingsResponseCustomStopsItemHexRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsResponseCustomStopsDefault = [{ position: 0, hex: `#00e5ff`, }, { position: 0.3, hex: `#0d47a1`, }, { position: 0.65, hex: `#1a237e`, }, { position: 1, hex: `#283593`, }];
+export const putSettingsResponseCustomStopsMin = 2;
+
 export const putSettingsResponseLampIntensityDefault = 2;
 export const putSettingsResponseLampIntensityMin = 0;
 export const putSettingsResponseLampIntensityMax = 5;
@@ -777,7 +822,13 @@ export const PutSettingsResponse = zod.object({
   "enableCaustics": zod.boolean().default(putSettingsResponseEnableCausticsDefault),
   "particleDensity": zod.enum(['off', 'sparse', 'dense']).default(putSettingsResponseParticleDensityDefault),
   "fogDensity": zod.number().min(putSettingsResponseFogDensityMin).max(putSettingsResponseFogDensityMax).default(putSettingsResponseFogDensityDefault),
-  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis', 'freshwater']).default(putSettingsResponseColormapThemeDefault),
+  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis', 'freshwater', 'custom']).default(putSettingsResponseColormapThemeDefault),
+  "paletteShallow": zod.string().regex(putSettingsResponsePaletteShallowRegExp).default(putSettingsResponsePaletteShallowDefault).describe('Shallow endpoint hex colour for the Ocean depth palette.'),
+  "paletteDeep": zod.string().regex(putSettingsResponsePaletteDeepRegExp).default(putSettingsResponsePaletteDeepDefault).describe('Deep endpoint hex colour for the Ocean depth palette.'),
+  "customStops": zod.array(zod.object({
+  "position": zod.number().min(putSettingsResponseCustomStopsItemPositionMin).max(putSettingsResponseCustomStopsItemPositionMax),
+  "hex": zod.string().regex(putSettingsResponseCustomStopsItemHexRegExp)
+})).min(putSettingsResponseCustomStopsMin).default(putSettingsResponseCustomStopsDefault).describe('Ordered colour stops for the user\'s Custom depth palette (min 2). Positions are normalised to [0, 1] along the depth axis.'),
   "lampIntensity": zod.number().min(putSettingsResponseLampIntensityMin).max(putSettingsResponseLampIntensityMax).default(putSettingsResponseLampIntensityDefault),
   "defaultSpeedTier": zod.number().min(putSettingsResponseDefaultSpeedTierMin).max(putSettingsResponseDefaultSpeedTierMax).default(putSettingsResponseDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(putSettingsResponseInvertMouseYDefault),
