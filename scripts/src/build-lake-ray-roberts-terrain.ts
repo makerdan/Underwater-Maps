@@ -737,7 +737,9 @@ function shoreDistance(insideMask: Uint8Array, N: number): Int32Array {
 // Main builder
 // ---------------------------------------------------------------------------
 
-async function main(): Promise<void> {
+export const RAY_ROBERTS_TERRAIN_OUT_PATH = OUT_PATH;
+
+export async function main(): Promise<void> {
   console.log("=== build-lake-ray-roberts-terrain ===");
   console.log(`  AOI: ${BBOX.join(",")}  resolution: ${RESOLUTION}x${RESOLUTION}`);
 
@@ -945,7 +947,13 @@ async function main(): Promise<void> {
   console.log("=== done ===");
 }
 
-main().catch((err) => {
-  console.error("Fatal error:", err);
-  process.exit(1);
-});
+const invokedDirectly =
+  import.meta.url === `file://${process.argv[1]}` ||
+  import.meta.url.endsWith(process.argv[1] ?? "");
+
+if (invokedDirectly) {
+  main().catch((err) => {
+    console.error("Fatal error:", err);
+    process.exit(1);
+  });
+}

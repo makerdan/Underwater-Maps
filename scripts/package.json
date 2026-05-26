@@ -12,6 +12,7 @@
     "build-tx-lake-substrate": "tsx ./src/build-tx-lake-substrate.ts",
     "build-tx-freshwater-efh": "tsx ./src/build-tx-freshwater-efh.ts",
     "build-lake-ray-roberts-terrain": "tsx ./src/build-lake-ray-roberts-terrain.ts",
+    "scheduled-refresh-lake-ray-roberts-terrain": "tsx ./src/scheduled-refresh-lake-ray-roberts-terrain.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
