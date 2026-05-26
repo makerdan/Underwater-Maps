@@ -382,6 +382,66 @@ describe("computeDrift — waypoint-following trolling circuit", () => {
     expect(sawLegReset).toBe(true);
   });
 
+  it("degenerate circuit (all waypoints stacked on the start) skips the waypoint branch", () => {
+    // Two waypoints sitting exactly on the start point produce a circuit with
+    // zero total perimeter. The per-hour sub-step loop used to silently burn
+    // its 50-iteration safety guard every hour, producing a frozen path with
+    // misleading bookkeeping (activeLegIndex/legRemainingKm populated as if a
+    // real circuit were being followed). Up-front detection should drop the
+    // waypoint branch so behaviour matches pure drift-with-boat-vector and
+    // the circuit-only bookkeeping fields stay undefined.
+    const conditions = makeConditions({
+      tidalSpeedKnots: 0.5,
+      tidalDegrees: 90,
+      windSpeedKnots: 4,
+      windDegrees: 180,
+    });
+    const stacked = computeDrift({
+      conditions,
+      startLat: 0.5,
+      startLon: 0.5,
+      lineLengthM: 50,
+      lineWeightG: 500,
+      terrain: makeFlatGrid(100),
+      mode: "trolling",
+      boatSpeedKnots: 3,
+      boatHeadingDeg: 45,
+      trollWaypoints: [
+        { lat: 0.5, lon: 0.5 },
+        { lat: 0.5, lon: 0.5 },
+      ],
+    });
+    const noWaypoints = computeDrift({
+      conditions,
+      startLat: 0.5,
+      startLon: 0.5,
+      lineLengthM: 50,
+      lineWeightG: 500,
+      terrain: makeFlatGrid(100),
+      mode: "trolling",
+      boatSpeedKnots: 3,
+      boatHeadingDeg: 45,
+    });
+
+    expect(stacked).toHaveLength(24);
+    for (let i = 0; i < 24; i++) {
+      // Positions must match the no-waypoints trolling path exactly: the
+      // boat moves at its configured heading instead of being pinned at the
+      // start by a frozen waypoint loop.
+      expect(stacked[i]!.lat).toBeCloseTo(noWaypoints[i]!.lat, 12);
+      expect(stacked[i]!.lon).toBeCloseTo(noWaypoints[i]!.lon, 12);
+      // No circuit was actually followed, so leg bookkeeping must be absent.
+      expect(stacked[i]!.activeLegIndex).toBeUndefined();
+      expect(stacked[i]!.legRemainingKm).toBeUndefined();
+      expect(stacked[i]!.targetWaypointIndex).toBeUndefined();
+    }
+    // The boat actually moves (it's not pinned at the start by guard
+    // exhaustion) — pick any later hour and confirm displacement.
+    const movedLat = Math.abs(stacked[5]!.lat - 0.5);
+    const movedLon = Math.abs(stacked[5]!.lon - 0.5);
+    expect(movedLat + movedLon).toBeGreaterThan(0);
+  });
+
   it("trollWaypoints with boatSpeedKnots=0 falls back to pure drift (waypoints ignored)", () => {
     // With a real drift vector but zero boat propulsion, the waypoint branch
     // must NOT activate: positions should match the no-waypoints trolling

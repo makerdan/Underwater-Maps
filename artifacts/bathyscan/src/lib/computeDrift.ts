@@ -165,7 +165,7 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
   // Build the leg target sequence for waypoint-following trolling: the user's
   // ordered waypoints, then back to the start, repeated forever. This produces
   // realistic back-and-forth passes over a hump when 1+ waypoints are placed.
-  const useWaypoints =
+  let useWaypoints =
     mode === "trolling" && boatSpeedKnots > 0 && trollWaypoints.length > 0;
   const circuit: Array<{ lat: number; lon: number; userIndex: number }> = [];
   if (useWaypoints) {
@@ -175,6 +175,23 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
     }
     // Return-to-start leg (userIndex = -1) closes the loop.
     circuit.push({ lat: startLat, lon: startLon, userIndex: -1 });
+
+    // Detect degenerate circuits up front: if the total perimeter is
+    // effectively zero (e.g. all waypoints stacked on the start point, or on
+    // each other at the start location), the per-hour sub-step loop would
+    // silently spin through its 50-iteration safety guard every hour and
+    // produce a frozen path with misleading leg bookkeeping. Skip the
+    // waypoint branch entirely so we fall back to pure drift-with-boat-vector.
+    let perimeterKm = 0;
+    let prev = { lat: startLat, lon: startLon };
+    for (const node of circuit) {
+      perimeterKm += distanceKm(prev.lat, prev.lon, node.lat, node.lon);
+      prev = node;
+    }
+    if (perimeterKm < 1e-4) {
+      useWaypoints = false;
+      circuit.length = 0;
+    }
   }
   let legIndex = 0;
 
