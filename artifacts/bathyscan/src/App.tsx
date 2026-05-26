@@ -633,8 +633,10 @@ function Main() {
 
             {/* ── Footer: Conditions Legend (pinned bottom) ──
                 Only renders when at least one of Wind / Tide / Current
-                overlays is active (returns null otherwise). */}
-            <div style={{ flexShrink: 0 }}>
+                overlays is active (returns null otherwise). The small
+                top margin keeps a visible gap between the scrolling
+                section list and the pinned footer on short viewports. */}
+            <div className="sidebar-footer-wrap" style={{ flexShrink: 0 }}>
               <ConditionsLegend />
             </div>
           </div>

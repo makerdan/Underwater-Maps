@@ -123,6 +123,57 @@ body.bs-cb-palette {
 }
 
 /* ---------------------------------------------------------------------------
+   Sidebar sections — base (desktop) styles (SidebarSection.tsx)
+   --------------------------------------------------------------------------- */
+.sidebar-section-header {
+  padding: 8px 12px;
+}
+.sidebar-section-body {
+  padding: 4px 0;
+}
+.sidebar-section-item {
+  padding: 8px 12px;
+}
+
+/* ---------------------------------------------------------------------------
+   Short-viewport sidebar tightening (height-based, not width-based)
+   Tighter spacing + lighter dividers + a small gap above the pinned
+   ConditionsLegend footer when vertical real estate is limited. Desktop
+   look is unaffected — these only kick in below the height breakpoints.
+   --------------------------------------------------------------------------- */
+@media (max-height: 800px) {
+  .sidebar-section-header {
+    padding: 6px 10px;
+  }
+  .sidebar-section-title {
+    font-size: 10px !important;
+    letter-spacing: 0.18em !important;
+  }
+  .sidebar-section-chevron {
+    font-size: 18px !important;
+  }
+  .sidebar-section-body {
+    padding: 2px 0;
+  }
+  .sidebar-section-item {
+    padding: 6px 10px;
+    border-top-color: rgba(0, 229, 255, 0.07) !important;
+  }
+  .sidebar-footer-wrap {
+    margin-top: 6px;
+  }
+}
+
+@media (max-height: 680px) {
+  .sidebar-section-header {
+    padding: 5px 10px;
+  }
+  .sidebar-section-item {
+    padding: 5px 10px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
    Mobile responsive overrides (< 768px)
    --------------------------------------------------------------------------- */
 @media (max-width: 768px) {

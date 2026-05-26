@@ -92,7 +92,11 @@ export const SidebarSection: React.FC<SidebarSectionProps> = ({
     : SHELL;
 
   return (
-    <div data-testid={testId ?? `sidebar-section-${id}`} style={shellStyle}>
+    <div
+      data-testid={testId ?? `sidebar-section-${id}`}
+      className="sidebar-section"
+      style={shellStyle}
+    >
       <ViewscreenTooltip
         label={collapsed ? `Expand ${title}` : `Collapse ${title}`}
         side="right"
@@ -102,9 +106,8 @@ export const SidebarSection: React.FC<SidebarSectionProps> = ({
           onClick={() => toggle(id)}
           aria-expanded={!collapsed}
           aria-controls={`sidebar-section-body-${id}`}
-          className="w-full flex items-center justify-between"
+          className="sidebar-section-header w-full flex items-center justify-between"
           style={{
-            padding: "8px 12px",
             background: "none",
             border: "none",
             borderBottom: collapsed ? "none" : "1px solid rgba(0,229,255,0.12)",
@@ -113,8 +116,13 @@ export const SidebarSection: React.FC<SidebarSectionProps> = ({
             textAlign: "left",
           }}
         >
-          <span style={HEADER_TITLE}>{title}</span>
-          <span style={{ color: "#cbd5e1", fontSize: 22, lineHeight: 1 }}>
+          <span className="sidebar-section-title" style={HEADER_TITLE}>
+            {title}
+          </span>
+          <span
+            className="sidebar-section-chevron"
+            style={{ color: "#cbd5e1", fontSize: 22, lineHeight: 1 }}
+          >
             {collapsed ? "▸" : "▾"}
           </span>
         </button>
@@ -123,13 +131,13 @@ export const SidebarSection: React.FC<SidebarSectionProps> = ({
       {!collapsed && (
         <div
           id={`sidebar-section-body-${id}`}
-          style={{ padding: "4px 0" }}
+          className="sidebar-section-body"
         >
           {items.map((child, i) => (
             <div
               key={i}
+              className="sidebar-section-item"
               style={{
-                padding: "8px 12px",
                 borderTop:
                   i === 0 ? "none" : "1px dashed rgba(0,229,255,0.10)",
               }}
