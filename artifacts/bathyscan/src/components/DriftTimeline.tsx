@@ -8,6 +8,8 @@
 
 import React from "react";
 import { useDriftStore } from "@/lib/driftStore";
+import { useSettingsStore, type UnitsSystem } from "@/lib/settingsStore";
+import { formatSpeedFromKnots } from "@/lib/units";
 
 const PANEL_STYLE: React.CSSProperties = {
   position: "absolute",
@@ -49,6 +51,7 @@ function formatHour(h: number): string {
 
 export const DriftTimeline: React.FC = () => {
   const { driftPath, driftHour, setDriftHour, driftConditions, lineLengthM, driftMode, boatHeadingDeg, boatSpeedKnots, driftWaypoints } = useDriftStore();
+  const units = useSettingsStore((s) => s.units);
 
   if (!driftPath || driftPath.length === 0) return null;
 
@@ -146,16 +149,16 @@ export const DriftTimeline: React.FC = () => {
             <div style={{ color: "#475569", fontSize: 8, letterSpacing: "0.18em" }}>
               {isTrolling ? "TOTAL SPEED" : "DRIFT SPEED"}
             </div>
-            <div data-testid="drift-speed-value" style={{ color: "#00e5ff", fontWeight: 700 }}>{wp.driftSpeedKnots.toFixed(1)} kt</div>
+            <div data-testid="drift-speed-value" style={{ color: "#00e5ff", fontWeight: 700 }}>{formatSpeedFromKnots(wp.driftSpeedKnots, { units })}</div>
             {isTrolling && typeof wp.boatContributionKnots === "number" && typeof wp.driftContributionKnots === "number" && (
               <div
                 data-testid="drift-breakdown"
                 title="Boat propulsion and wind+tide drift are vectors; the total combines their directions, so it may be less than the sum."
                 style={{ fontSize: 8, color: "#94a3b8", marginTop: 2, letterSpacing: "0.04em", cursor: "help" }}
               >
-                <span style={{ color: "#fbbf24" }}>boat: {wp.boatContributionKnots.toFixed(1)} kt</span>
+                <span style={{ color: "#fbbf24" }}>boat: {formatSpeedFromKnots(wp.boatContributionKnots, { units })}</span>
                 <span style={{ color: "#475569" }}> + </span>
-                <span style={{ color: "#7dd3fc" }}>drift: {wp.driftContributionKnots.toFixed(1)} kt</span>
+                <span style={{ color: "#7dd3fc" }}>drift: {formatSpeedFromKnots(wp.driftContributionKnots, { units })}</span>
               </div>
             )}
           </div>
@@ -184,7 +187,7 @@ export const DriftTimeline: React.FC = () => {
           {cond && (
             <div>
               <div style={{ color: "#475569", fontSize: 8, letterSpacing: "0.18em" }}>WIND</div>
-              <div style={{ color: "#93c5fd", fontWeight: 700 }}>{cond.windSpeedKnots.toFixed(1)} kt</div>
+              <div style={{ color: "#93c5fd", fontWeight: 700 }}>{formatSpeedFromKnots(cond.windSpeedKnots, { units })}</div>
             </div>
           )}
         </div>
@@ -210,16 +213,19 @@ export const DriftTimeline: React.FC = () => {
             color="#fbbf24"
             label="Boat"
             valueKt={wp.boatContributionKnots}
+            units={units}
           />
           <LegendRow
             color="#22d3ee"
             label="Drift"
             valueKt={wp.driftContributionKnots}
+            units={units}
           />
           <LegendRow
             color="#e2e8f0"
             label="Resultant"
             valueKt={wp.driftSpeedKnots}
+            units={units}
             faint
           />
         </div>
@@ -236,8 +242,9 @@ const LegendRow: React.FC<{
   color: string;
   label: string;
   valueKt?: number;
+  units: UnitsSystem;
   faint?: boolean;
-}> = ({ color, label, valueKt, faint }) => (
+}> = ({ color, label, valueKt, units, faint }) => (
   <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
     <span
       aria-hidden
@@ -254,7 +261,7 @@ const LegendRow: React.FC<{
     <span style={{ color: "#94a3b8", fontWeight: 600 }}>{label}</span>
     {typeof valueKt === "number" && (
       <span style={{ color, opacity: faint ? 0.8 : 1, fontWeight: 700 }}>
-        {valueKt.toFixed(1)} kt
+        {formatSpeedFromKnots(valueKt, { units })}
       </span>
     )}
   </span>

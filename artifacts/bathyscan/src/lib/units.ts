@@ -134,6 +134,19 @@ export function formatSpeed(
   return `${txt} km/h`;
 }
 
+/**
+ * Speed where the source value is already in knots (e.g. wind / tide / current
+ * readings from Open-Meteo and NOAA). Converts back through mph so the
+ * formatting / unit branch logic stays in one place.
+ */
+export function formatSpeedFromKnots(
+  knots: number | null | undefined,
+  opts: { units?: UnitsSystem; decimals?: number } = {},
+): string {
+  if (knots === null || knots === undefined || !Number.isFinite(knots)) return "—";
+  return formatSpeed(knots / MPH_TO_KNOTS, opts);
+}
+
 /** Short speed suffix matching `formatSpeed` — "mph" / "km/h" / "kn". */
 export function speedSuffix(units: UnitsSystem = getUnits()): string {
   if (units === "imperial") return "mph";

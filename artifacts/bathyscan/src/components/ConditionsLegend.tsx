@@ -9,6 +9,8 @@
 import React from "react";
 import { useUiStore, CURRENT_DEPTH_LAYERS } from "@/lib/uiStore";
 import { useDriftStore } from "@/lib/driftStore";
+import { useSettingsStore } from "@/lib/settingsStore";
+import { formatSpeedFromKnots } from "@/lib/units";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
 import { windColor } from "@/components/ConditionsOverlays";
 import {
@@ -88,6 +90,7 @@ export const ConditionsLegend: React.FC = () => {
   const cur = useUiStore((s) => s.currentOverlayActive);
   const currentLayers = useUiStore((s) => s.currentDepthLayers);
   const toggleCurrentLayer = useUiStore((s) => s.toggleCurrentDepthLayer);
+  const units = useSettingsStore((s) => s.units);
 
   const anyActive = wind || tide || cur;
   const { snapshot, estimated, timestamp, fallback } = useSurfaceConditions(anyActive);
@@ -137,7 +140,7 @@ export const ConditionsLegend: React.FC = () => {
         <Row
           swatch={windColor(windSpd)}
           label="Wind"
-          value={`${windSpd.toFixed(1)} kn ${cardinal(windToward)}`}
+          value={`${formatSpeedFromKnots(windSpd, { units })} ${cardinal(windToward)}`}
           detail={`from ${cardinal(windFrom)}`}
         />
       )}
@@ -145,7 +148,7 @@ export const ConditionsLegend: React.FC = () => {
         <Row
           swatch={rising ? "#34d399" : "#fbbf24"}
           label="Tide"
-          value={`${rising ? "Rising" : "Falling"} ${tidSpd.toFixed(2)} kn ${cardinal(tidDeg)}`}
+          value={`${rising ? "Rising" : "Falling"} ${formatSpeedFromKnots(tidSpd, { units, decimals: 2 })} ${cardinal(tidDeg)}`}
           detail={`${rising ? "flood" : "ebb"}`}
         />
       )}
@@ -159,7 +162,7 @@ export const ConditionsLegend: React.FC = () => {
                 key={layer}
                 swatch={LAYER_COLORS[layer]}
                 label={`Current · ${LAYER_LABEL[layer]}`}
-                value={`${layerSpd.toFixed(2)} kn ${cardinal(tidDeg)}`}
+                value={`${formatSpeedFromKnots(layerSpd, { units, decimals: 2 })} ${cardinal(tidDeg)}`}
                 detail={`${Math.round(atten * 100)}%`}
               />
             );

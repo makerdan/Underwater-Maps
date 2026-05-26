@@ -3,7 +3,7 @@ import type { TidalDataResult } from "@/hooks/useTidalData";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
-import { formatDistance, formatDepth } from "@/lib/units";
+import { formatDistance, formatDepth, formatSpeedFromKnots } from "@/lib/units";
 import { useTidalSchedule, type TidalScheduleEvent } from "@/hooks/useTidalSchedule";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
@@ -377,7 +377,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                 </div>
                 <div>
                   <div style={LABEL}>Speed</div>
-                  <div style={CYAN}>{data.currentSpeed.toFixed(2)} kn</div>
+                  <div style={CYAN}>{formatSpeedFromKnots(data.currentSpeed, { units, decimals: 2 })}</div>
                 </div>
               </div>
 

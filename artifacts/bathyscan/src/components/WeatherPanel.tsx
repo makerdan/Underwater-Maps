@@ -26,6 +26,8 @@ import { useAppState } from "@/lib/context";
 import { useDriftStore, TROLL_MAX_KNOTS } from "@/lib/driftStore";
 import { computeDrift } from "@/lib/computeDrift";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
+import { useSettingsStore } from "@/lib/settingsStore";
+import { formatSpeedFromKnots } from "@/lib/units";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 
@@ -145,6 +147,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     clearDriftWaypoints,
     setDriftWaypoints,
   } = useDriftStore();
+  const units = useSettingsStore((s) => s.units);
 
   const queryClient = useQueryClient();
   const presetsQueryKey = getGetTrollingPresetsQueryKey();
@@ -606,7 +609,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
             <Compass degrees={cond.windDegrees} size={42} color="#7dd3fc" />
             <div>
               <div style={LABEL}>WIND</div>
-              <div style={{ ...VALUE, color: "#7dd3fc" }}>{cond.windSpeedKnots.toFixed(1)} kt</div>
+              <div style={{ ...VALUE, color: "#7dd3fc" }}>{formatSpeedFromKnots(cond.windSpeedKnots, { units })}</div>
               <div style={{ fontSize: 9, color: "#475569" }}>{degToCardinal(cond.windDegrees)} {Math.round(cond.windDegrees)}°</div>
             </div>
           </div>
@@ -614,7 +617,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
             <Compass degrees={cond.tidalDegrees} size={42} color="#34d399" />
             <div>
               <div style={LABEL}>TIDAL CURRENT</div>
-              <div style={{ ...VALUE, color: "#34d399" }}>{cond.tidalSpeedKnots.toFixed(1)} kt</div>
+              <div style={{ ...VALUE, color: "#34d399" }}>{formatSpeedFromKnots(cond.tidalSpeedKnots, { units })}</div>
               <div style={{ fontSize: 9, color: "#475569" }}>{degToCardinal(cond.tidalDegrees)} {Math.round(cond.tidalDegrees)}°</div>
               {data?.tidalDataSource === "noaa-coops" && data.tidalStationName ? (
                 <div
