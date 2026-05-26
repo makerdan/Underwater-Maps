@@ -42,6 +42,39 @@ import { HelpIcon } from "@/components/help/HelpButton";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { GpsImportDialog } from "@/components/GpsImportDialog";
 import { GpsExportDialog } from "@/components/GpsExportDialog";
+import { LoadingDial } from "@/components/LoadingDial";
+import { useActiveLoadStore } from "@/lib/activeLoadStore";
+import { fetchJsonWithProgress } from "@/lib/fetchWithProgress";
+import {
+  getGetDatasetsIdTerrainUrl,
+  getGetDatasetsIdOverviewUrl,
+  getGetUserDatasetsIdTerrainUrl,
+  getGetUserDatasetsIdOverviewUrl,
+} from "@workspace/api-client-react";
+import type { TerrainData } from "@workspace/api-client-react";
+
+/**
+ * Build a queryFn that streams the terrain payload via fetchJsonWithProgress
+ * and pushes byte-level progress into the activeLoadStore. Used to override
+ * the generated TanStack queryFn for the *pending* terrain/overview requests
+ * so the row in this panel can render a real loading dial. Only the terrain
+ * request reports progress — the (smaller) overview request is silent.
+ */
+function makeProgressTerrainFetcher(
+  url: string,
+  datasetId: string,
+  reportProgress: boolean,
+) {
+  return ({ signal }: { signal?: AbortSignal }): Promise<TerrainData> =>
+    fetchJsonWithProgress<TerrainData>(url, {
+      signal,
+      onProgress: reportProgress
+        ? ({ loaded, total }) => {
+            useActiveLoadStore.getState().update(datasetId, loaded, total);
+          }
+        : undefined,
+    });
+}
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
@@ -245,6 +278,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       query: {
         enabled: !!pendingId,
         queryKey: getGetDatasetsIdTerrainQueryKey(pendingId ?? ""),
+        queryFn: makeProgressTerrainFetcher(
+          getGetDatasetsIdTerrainUrl(pendingId ?? ""),
+          pendingId ?? "",
+          true,
+        ),
       },
     },
   );
@@ -255,6 +293,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       query: {
         enabled: !!pendingId,
         queryKey: getGetDatasetsIdOverviewQueryKey(pendingId ?? ""),
+        queryFn: makeProgressTerrainFetcher(
+          getGetDatasetsIdOverviewUrl(pendingId ?? ""),
+          pendingId ?? "",
+          false,
+        ),
       },
     },
   );
@@ -267,6 +310,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       setPresetLoadError({ id: failedId, name });
       setLoadingId(null);
       setPendingId(null);
+      useActiveLoadStore.getState().fail(failedId);
     }
   }, [pendingId, terrainFetchError, overviewFetchError, datasets]);
 
@@ -280,6 +324,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     useTerrainStore.getState().setGrids({ activeGrid: pendingTerrain, overviewGrid: pendingOverview });
     useClassificationStore.getState().clearZoneMap();
     void useClassificationStore.getState().classify(pendingTerrain);
+    useActiveLoadStore.getState().complete(pendingId);
     setLoadingId(null);
     setPendingId(null);
   }, [pendingTerrain, pendingOverview, pendingId, setDatasetId, setTerrain]);
@@ -291,6 +336,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       query: {
         enabled: !!pendingUserDatasetId,
         queryKey: getGetUserDatasetsIdTerrainQueryKey(pendingUserDatasetId ?? ""),
+        queryFn: makeProgressTerrainFetcher(
+          getGetUserDatasetsIdTerrainUrl(pendingUserDatasetId ?? ""),
+          pendingUserDatasetId ?? "",
+          true,
+        ),
       },
     },
   );
@@ -301,6 +351,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       query: {
         enabled: !!pendingUserDatasetId,
         queryKey: getGetUserDatasetsIdOverviewQueryKey(pendingUserDatasetId ?? ""),
+        queryFn: makeProgressTerrainFetcher(
+          getGetUserDatasetsIdOverviewUrl(pendingUserDatasetId ?? ""),
+          pendingUserDatasetId ?? "",
+          false,
+        ),
       },
     },
   );
@@ -313,6 +368,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       setUserLoadError({ id: failedId, name });
       setLoadingId(null);
       setPendingUserDatasetId(null);
+      useActiveLoadStore.getState().fail(failedId);
     }
   }, [pendingUserDatasetId, userTerrainError, userOverviewError, userDatasets]);
 
@@ -333,6 +389,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     });
     useClassificationStore.getState().clearZoneMap();
     void useClassificationStore.getState().classify(userPendingTerrain);
+    useActiveLoadStore.getState().complete(pendingUserDatasetId);
     setLoadingId(null);
     setPendingUserDatasetId(null);
   }, [userPendingTerrain, userPendingOverview, pendingUserDatasetId, setTerrain, setDatasetId]);
@@ -354,6 +411,17 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   }, [activeOverviewData, terrain, activeId]);
 
   // ─── Dataset click handlers ────────────────────────────────────────────────
+  const beginActiveLoad = (id: string) => {
+    // Cancel any previous load's dial (the previous request is aborted by
+    // TanStack Query when its `enabled` flag flips, via the AbortSignal it
+    // already passed to our progress wrapper).
+    const prev = useActiveLoadStore.getState().active;
+    if (prev && prev.datasetId !== id) {
+      useActiveLoadStore.getState().fail(prev.datasetId);
+    }
+    useActiveLoadStore.getState().start({ datasetId: id, bucket: id });
+  };
+
   const handleSelectPreset = (ds: DatasetMeta) => {
     if (ds.id === datasetId && !pendingId) return;
     void requestDatasetSwitch({
@@ -363,6 +431,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         setPresetLoadError(null);
         setUserLoadError(null);
         setLoadingId(ds.id);
+        beginActiveLoad(ds.id);
         setPendingId(ds.id);
         setPendingUserDatasetId(null);
       },
@@ -374,6 +443,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     setUserLoadError(null);
     setPresetLoadError(null);
     setLoadingId(ds.id);
+    beginActiveLoad(ds.id);
     setPendingUserDatasetId(ds.id);
     setPendingId(null);
   };
@@ -416,6 +486,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     void qc.invalidateQueries({ queryKey: getGetUserDatasetsIdOverviewQueryKey(id) });
     setUserLoadError(null);
     setLoadingId(id);
+    beginActiveLoad(id);
     setPendingUserDatasetId(id);
     setPendingId(null);
   };
@@ -428,6 +499,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     void qc.invalidateQueries({ queryKey: getGetDatasetsIdOverviewQueryKey(id) });
     setPresetLoadError(null);
     setLoadingId(id);
+    beginActiveLoad(id);
     setPendingId(id);
     setPendingUserDatasetId(null);
   };
@@ -781,7 +853,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                     </span>
                     <span style={{ fontSize: 9, color: "#cbd5e1", flexShrink: 0 }}>
                       {loading ? (
-                        <span className="animate-pulse" style={{ color: "#00e5ff" }}>◌</span>
+                        <LoadingDial datasetId={ds.id} label={ds.name} />
                       ) : !isOnline ? (
                         cachedIds.has(ds.id) ? (
                           <ViewscreenTooltip label="Cached — works offline" side="left">

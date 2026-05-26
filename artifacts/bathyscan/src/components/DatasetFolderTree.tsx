@@ -38,6 +38,7 @@ import type { UserDatasetMeta } from "@workspace/api-client-react";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { formatDepthRange } from "@/lib/units";
 import { useTerrainStore } from "@/lib/terrainStore";
+import { LoadingDial } from "@/components/LoadingDial";
 import { useContextMenuStore } from "@/lib/contextMenuStore";
 import {
   buildLibraryTree,
@@ -988,7 +989,7 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
           </span>
         )}
         {loading && (
-          <span className="animate-pulse" style={{ fontSize: 9, color: "#00e5ff" }}>◌</span>
+          <LoadingDial datasetId={ds.id} label={ds.name} />
         )}
         {!isRenaming && !deleting && (
           <RowDeleteButton
