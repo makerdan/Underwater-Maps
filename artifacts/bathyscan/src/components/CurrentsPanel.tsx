@@ -18,6 +18,20 @@ import React, { useEffect, useRef } from "react";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useCurrentsStore } from "@/lib/currentsStore";
 import { CURRENT_RAMP_STOPS, speedToColor } from "@/lib/currentColor";
+import { formatSpeedFromKnots, speedSuffix, MPH_TO_KNOTS, MPH_TO_KPH } from "@/lib/units";
+import type { UnitsSystem } from "@/lib/settingsStore";
+
+function knotsToDisplay(kt: number, units: UnitsSystem): number {
+  if (units === "nautical") return kt;
+  const mph = kt / MPH_TO_KNOTS;
+  return units === "imperial" ? mph : mph * MPH_TO_KPH;
+}
+
+function displayToKnots(v: number, units: UnitsSystem): number {
+  if (units === "nautical") return v;
+  if (units === "imperial") return v * MPH_TO_KNOTS;
+  return (v / MPH_TO_KPH) * MPH_TO_KNOTS;
+}
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 
@@ -78,7 +92,7 @@ function rgbCss({ r, g, b }: { r: number; g: number; b: number }): string {
   return `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
 }
 
-function Legend(): React.ReactElement {
+function Legend({ units }: { units: UnitsSystem }): React.ReactElement {
   const gradient = CURRENT_RAMP_STOPS
     .map((s) => {
       const c = speedToColor(s.t);
@@ -87,7 +101,7 @@ function Legend(): React.ReactElement {
     .join(", ");
   return (
     <div style={{ marginTop: 6 }} data-testid="currents-legend">
-      <div style={{ ...label, marginBottom: 3 }}>Speed (kt)</div>
+      <div style={{ ...label, marginBottom: 3 }}>Speed ({speedSuffix(units)})</div>
       <div
         style={{
           height: 8,
@@ -111,6 +125,7 @@ interface CurrentsPanelProps {
 
 export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }) => {
   const s = useSettingsStore();
+  const units = s.units;
   const field = useCurrentsStore((st) => st.field);
   const noaaAmbient = useCurrentsStore((st) => st.noaaAmbient);
 
@@ -203,14 +218,14 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
             />
           </div>
           <div style={{ flex: 1 }}>
-            <div style={label}>Speed (kt)</div>
+            <div style={label}>Speed ({speedSuffix(units)})</div>
             <input
               type="number"
               min={0}
-              max={10}
+              max={parseFloat(knotsToDisplay(10, units).toFixed(1))}
               step={0.1}
-              value={s.currentsManualSpeedKt}
-              onChange={(e) => s.setCurrentsManualSpeedKt(Number(e.target.value) || 0)}
+              value={parseFloat(knotsToDisplay(s.currentsManualSpeedKt, units).toFixed(2))}
+              onChange={(e) => s.setCurrentsManualSpeedKt(displayToKnots(Number(e.target.value) || 0, units))}
               style={input}
               data-testid="currents-manual-speed"
             />
@@ -223,7 +238,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
               <div>
                 {noaaAmbient.source === "noaa" ? "NOAA" : "Estimated"}:{" "}
                 {noaaAmbient.directionDeg.toFixed(0)}° @{" "}
-                {noaaAmbient.speedKt.toFixed(2)} kt
+                {formatSpeedFromKnots(noaaAmbient.speedKt, { units, decimals: 2 })}
               </div>
               {noaaAmbient.source === "noaa" &&
               (noaaAmbient.stationName || noaaAmbient.stationId) ? (
@@ -299,11 +314,11 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
         </button>
       </div>
 
-      <Legend />
+      <Legend units={units} />
 
       {field && (
         <div style={{ marginTop: 6, fontSize: 9, color: "#475569" }} data-testid="currents-field-stats">
-          Field: {field.resolution}² · max {maxKt.toFixed(2)} kt
+          Field: {field.resolution}² · max {formatSpeedFromKnots(maxKt, { units, decimals: 2 })}
         </div>
       )}
     </div>
