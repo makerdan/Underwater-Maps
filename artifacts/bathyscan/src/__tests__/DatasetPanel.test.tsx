@@ -2,6 +2,62 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { DatasetPanel } from "@/components/DatasetPanel";
 
+// ---------------------------------------------------------------------------
+// Shared proxy factory — available to the synchronous vi.mock factory below.
+//
+// vi.mock() calls are hoisted before ES imports resolve, so helpers imported
+// at the top of this file are NOT available inside a vi.mock() factory.
+// vi.hoisted() is Vitest's escape hatch: its callback runs during the hoisting
+// phase, before any imports or mock processing, making the returned value
+// usable in the synchronous factory below.
+//
+// See src/__tests__/apiClientMock.ts for full documentation and the canonical
+// copy of this pattern that other test files should follow.
+// ---------------------------------------------------------------------------
+const makeApiClientMock = vi.hoisted(() => {
+  function noop() {}
+  function queryHook() {
+    return { data: undefined, isLoading: false, isError: false };
+  }
+  function mutationHook() {
+    return {
+      mutate: noop,
+      mutateAsync: noop,
+      isPending: false,
+      isSuccess: false,
+      variables: undefined,
+    };
+  }
+  return (overrides: Record<string, unknown> = {}) =>
+    new Proxy(overrides, {
+      get(t, p) {
+        if (
+          typeof p === "symbol" ||
+          p === "then" ||
+          p === "catch" ||
+          p === "finally"
+        )
+          return undefined;
+        const k = String(p);
+        if (k in t) return t[k];
+        if (k.startsWith("useGet")) return queryHook;
+        if (/^use(Post|Put|Patch|Delete|Health|Poe)/.test(k))
+          return mutationHook;
+        if (k.startsWith("getGet") && k.endsWith("QueryKey")) {
+          const label = k.replace(/^getGet/, "").replace(/QueryKey$/, "");
+          return (...a: unknown[]) => [label, ...a];
+        }
+        if (/^get(Get|Post|Put|Patch|Delete).*Url$/.test(k))
+          return (...a: unknown[]) =>
+            `/api/mock/${a.filter(Boolean).join("/")}`;
+        return noop;
+      },
+      has(_t, p) {
+        return typeof p !== "symbol";
+      },
+    });
+});
+
 const setDatasetIdMock = vi.fn();
 const setTerrainMock = vi.fn();
 
@@ -106,43 +162,28 @@ vi.mock("@/lib/offlineStore", () => ({
     sel({ isOnline: true }),
 }));
 
-vi.mock("@workspace/api-client-react", () => ({
-  useGetDatasets: (params?: { waterType?: "saltwater" | "freshwater" }) => ({
-    data: params?.waterType
-      ? datasets.filter((d) => d.waterType === params.waterType)
-      : datasets,
-    isLoading: false,
-  }),
-  useGetUserDatasets: () => ({ data: [], isLoading: false }),
-  usePutSettings: () => ({ mutate: vi.fn() }),
-  useGetDatasetsIdOverview: () => ({ data: null, isError: false }),
-  useGetDatasetsIdTerrain: () => ({ data: null, isError: false }),
-  useGetUserDatasetsIdTerrain: () => ({ data: null, isError: false }),
-  useGetUserDatasetsIdOverview: () => ({ data: null, isError: false }),
-  useGetMarkers: () => ({ data: [] }),
-  useDeleteUserDatasetsId: () => ({
-    mutate: vi.fn(),
-    isPending: false,
-    variables: undefined,
-  }),
-  useDeleteMarkersId: () => ({ mutate: vi.fn() }),
-  usePostDatasetsUpload: () => ({
-    mutate: vi.fn(),
-    isPending: false,
-    isSuccess: false,
-  }),
-  getGetDatasetsQueryKey: (params?: unknown) => ["datasets", ...(params ? [params] : [])],
-  getGetDatasetsIdTerrainQueryKey: (id: string) => ["datasets", id, "terrain"],
-  getGetDatasetsIdOverviewQueryKey: (id: string) => ["datasets", id, "overview"],
-  getGetUserDatasetsQueryKey: () => ["user-datasets"],
-  getGetUserDatasetsIdTerrainQueryKey: (id: string) => ["user-datasets", id, "terrain"],
-  getGetUserDatasetsIdOverviewQueryKey: (id: string) => ["user-datasets", id, "overview"],
-  getGetMarkersQueryKey: (p: unknown) => ["markers", p],
-  getGetDatasetsIdTerrainUrl: (id: string) => `/api/datasets/${id}/terrain`,
-  getGetUserDatasetsIdTerrainUrl: (id: string) => `/api/user/datasets/${id}/terrain`,
-  getGetDatasetsIdOverviewUrl: (id: string) => `/api/datasets/${id}/overview`,
-  getGetUserDatasetsIdOverviewUrl: (id: string) => `/api/user/datasets/${id}/overview`,
-}));
+// Only the three hooks this test actually exercises need explicit overrides.
+// Every other export from @workspace/api-client-react is auto-stubbed by the
+// proxy above (query hooks → {data:undefined,isLoading:false}, mutation hooks
+// → {mutate:noop,isPending:false}, query-key helpers → [...], URL helpers →
+// "/api/mock/...").  When new endpoints are added to the generated client,
+// this test continues to compile and run without any manual patching.
+vi.mock(
+  "@workspace/api-client-react",
+  () =>
+    makeApiClientMock({
+      useGetDatasets: (params?: {
+        waterType?: "saltwater" | "freshwater";
+      }) => ({
+        data: params?.waterType
+          ? datasets.filter((d) => d.waterType === params.waterType)
+          : datasets,
+        isLoading: false,
+      }),
+      useGetUserDatasets: () => ({ data: [], isLoading: false }),
+      useGetMarkers: () => ({ data: [] }),
+    }),
+);
 
 describe("DatasetPanel", () => {
   beforeEach(() => {
