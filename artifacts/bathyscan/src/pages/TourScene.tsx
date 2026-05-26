@@ -56,6 +56,20 @@ import { WebglContextLostOverlay } from "@/components/WebglContextLostOverlay";
 // Solving for worldY in terms of localY gives:
 //   yScale  = gDepthRange / primaryDepthRange
 //   yOffset = (primary.minDepth - g.minDepth) / primaryDepthRange * MAX
+//
+// Envelope policy: the primary mesh occupies world-Y [0, -MAX_DEPTH_WORLD],
+// and a solid floor closes off everything below -MAX_DEPTH_WORLD. When a
+// secondary dataset is dramatically deeper (or shallower) than the primary,
+// the natural yScale/yOffset above can drive the mesh below the floor or
+// above the water surface, producing a sliver-or-tower that reads as broken.
+// To keep visuals legible we apply two clamps in order:
+//   1. Cap yScale at 1 so the secondary's vertical extent never exceeds the
+//      primary's world envelope (compressing exaggeration for very deep
+//      datasets — they lose true-depth correspondence but stay readable).
+//   2. Clamp yOffset so the mesh sits inside [0, -MAX_DEPTH_WORLD], moving
+//      it as close to its natural position as possible. The mesh is biased
+//      toward the floor when it would have extended deeper, and toward the
+//      surface when it would have extended above it.
 // ---------------------------------------------------------------------------
 const NonPrimaryDatasetMeshes: React.FC<{
   primary: TerrainData;
@@ -77,15 +91,23 @@ const NonPrimaryDatasetMeshes: React.FC<{
           const secDepthRange = (g.maxDepth - g.minDepth) || 1;
           const xScale = secLonRange / primaryLonRange;
           const zScale = secLatRange / primaryLatRange;
-          const yScale = secDepthRange / primaryDepthRange;
+          const naturalYScale = secDepthRange / primaryDepthRange;
           const secCenterLon = (g.minLon + g.maxLon) / 2;
           const secCenterLat = (g.minLat + g.maxLat) / 2;
           const primCenterLon = (primary.minLon + primary.maxLon) / 2;
           const primCenterLat = (primary.minLat + primary.maxLat) / 2;
           const cx = ((secCenterLon - primCenterLon) / primaryLonRange) * WORLD_SIZE;
           const cz = -((secCenterLat - primCenterLat) / primaryLatRange) * WORLD_SIZE;
-          const cy =
+          const naturalCy =
             ((primary.minDepth - g.minDepth) / primaryDepthRange) * MAX_DEPTH_WORLD;
+
+          // Envelope clamp (see header comment): cap vertical extent to the
+          // primary's world envelope, then slide the mesh into [-MAX, 0].
+          const yScale = Math.min(naturalYScale, 1);
+          const extent = yScale * MAX_DEPTH_WORLD;
+          const cyMin = extent - MAX_DEPTH_WORLD; // lower bound: bottom rests on floor
+          const cyMax = 0;                         // upper bound: top rests at surface
+          const cy = Math.max(cyMin, Math.min(cyMax, naturalCy));
           return (
             <group
               key={v.datasetId}
