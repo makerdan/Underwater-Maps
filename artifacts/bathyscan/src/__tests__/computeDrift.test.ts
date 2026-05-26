@@ -248,6 +248,157 @@ describe("computeDrift — bottom-reach flag", () => {
   });
 });
 
+describe("computeDrift — force-arrow bearings (boatHeadingDegSep, driftHeadingDeg)", () => {
+  it("drift heading aligns with a pure-tide easterly flow (tide 90° → drift heading ≈ 90°)", () => {
+    const path = computeDrift({
+      conditions: makeConditions({
+        tidalSpeedKnots: 1.5,
+        tidalDegrees: 90, // due east (oceanographic "going to" convention)
+        windSpeedKnots: 0,
+        windDegrees: 0,
+      }),
+      startLat: 0.5,
+      startLon: 0.5,
+      lineLengthM: 50,
+      lineWeightG: 500,
+      terrain: makeFlatGrid(100),
+    });
+    expect(path[0]!.driftHeadingDeg).toBeDefined();
+    expect(path[0]!.driftHeadingDeg!).toBeCloseTo(90, 2);
+    // Pure drift (no boat propulsion) — boat-arrow bearing is not emitted.
+    expect(path[0]!.boatHeadingDegSep).toBeUndefined();
+  });
+
+  it("drift heading follows the tidal bearing for a southerly flow (tide 180° → drift heading ≈ 180°)", () => {
+    const path = computeDrift({
+      conditions: makeConditions({
+        tidalSpeedKnots: 1,
+        tidalDegrees: 180, // due south
+      }),
+      startLat: 0.5,
+      startLon: 0.5,
+      lineLengthM: 50,
+      lineWeightG: 500,
+      terrain: makeFlatGrid(100),
+    });
+    expect(path[0]!.driftHeadingDeg!).toBeCloseTo(180, 2);
+  });
+
+  it("blends tide + wind-leeway: orthogonal tide (E) and wind (N) produce a NE-ish drift heading", () => {
+    // Tide east at 1 kt (weight 0.7) vs wind north at 10 kt × 3% = 0.3 kt (weight 0.3).
+    // East component = 0.7 * 1 = 0.70; North component = 0.3 * 0.3 = 0.09.
+    // Bearing = atan2(east, north) = atan2(0.70, 0.09) ≈ 82.7°.
+    const path = computeDrift({
+      conditions: makeConditions({
+        tidalSpeedKnots: 1,
+        tidalDegrees: 90,
+        windSpeedKnots: 10,
+        windDegrees: 0,
+      }),
+      startLat: 0.5,
+      startLon: 0.5,
+      lineLengthM: 50,
+      lineWeightG: 500,
+      terrain: makeFlatGrid(100),
+    });
+    const expected = (Math.atan2(0.7, 0.09) * 180) / Math.PI;
+    expect(path[0]!.driftHeadingDeg!).toBeCloseTo(expected, 1);
+  });
+
+  it("boat heading equals the configured boatHeadingDeg in simple trolling mode (no waypoints)", () => {
+    const path = computeDrift({
+      conditions: makeConditions({
+        tidalSpeedKnots: 1,
+        tidalDegrees: 0,
+        windSpeedKnots: 5,
+        windDegrees: 90,
+      }),
+      startLat: 0.5,
+      startLon: 0.5,
+      lineLengthM: 50,
+      lineWeightG: 500,
+      terrain: makeFlatGrid(100),
+      mode: "trolling",
+      boatSpeedKnots: 2.5,
+      boatHeadingDeg: 135,
+    });
+    for (const wp of path) {
+      expect(wp.boatHeadingDegSep).toBeCloseTo(135, 6);
+    }
+  });
+
+  it("normalizes negative configured boat headings into [0, 360)", () => {
+    const path = computeDrift({
+      conditions: makeConditions({}),
+      startLat: 0.5,
+      startLon: 0.5,
+      lineLengthM: 50,
+      lineWeightG: 500,
+      terrain: makeFlatGrid(100),
+      mode: "trolling",
+      boatSpeedKnots: 2,
+      boatHeadingDeg: -45, // == 315°
+    });
+    expect(path[0]!.boatHeadingDegSep).toBeCloseTo(315, 6);
+  });
+
+  it("with waypoints, hour-0 boat heading points toward the first leg target", () => {
+    // Waypoint due east of start ⇒ bearing 90°.
+    const eastPath = computeDrift({
+      conditions: makeConditions({}),
+      startLat: 0.5,
+      startLon: 0.5,
+      lineLengthM: 50,
+      lineWeightG: 500,
+      terrain: makeFlatGrid(100),
+      mode: "trolling",
+      boatSpeedKnots: 3,
+      boatHeadingDeg: 0, // should be ignored when waypoints drive steering
+      trollWaypoints: [{ lat: 0.5, lon: 0.6 }],
+    });
+    expect(eastPath[0]!.boatHeadingDegSep).toBeDefined();
+    expect(eastPath[0]!.boatHeadingDegSep!).toBeCloseTo(90, 1);
+
+    // Waypoint due north of start ⇒ bearing 0°.
+    const northPath = computeDrift({
+      conditions: makeConditions({}),
+      startLat: 0.5,
+      startLon: 0.5,
+      lineLengthM: 50,
+      lineWeightG: 500,
+      terrain: makeFlatGrid(100),
+      mode: "trolling",
+      boatSpeedKnots: 3,
+      boatHeadingDeg: 180, // ignored under waypoint steering
+      trollWaypoints: [{ lat: 0.6, lon: 0.5 }],
+    });
+    expect(northPath[0]!.boatHeadingDegSep!).toBeCloseTo(0, 1);
+  });
+
+  it("boat heading flips toward the return-to-start leg after the first waypoint is reached", () => {
+    // Waypoint east of start. Boat = 3 kt covers ~5.55 km in 1 h; the waypoint
+    // is ~11.1 km away, so hour 0 still chases wp0 (bearing ≈ 90° east), and
+    // by hour 2 the boat has rounded wp0 and is heading back west (bearing ≈ 270°).
+    const path = computeDrift({
+      conditions: makeConditions({}),
+      startLat: 0.5,
+      startLon: 0.5,
+      lineLengthM: 50,
+      lineWeightG: 500,
+      terrain: makeFlatGrid(100),
+      mode: "trolling",
+      boatSpeedKnots: 3,
+      trollWaypoints: [{ lat: 0.5, lon: 0.6 }],
+    });
+    // Hour 0: still chasing wp0 (east).
+    expect(path[0]!.targetWaypointIndex).toBe(0);
+    expect(path[0]!.boatHeadingDegSep!).toBeCloseTo(90, 1);
+    // Hour 2: well into the return-to-start leg (west).
+    expect(path[2]!.targetWaypointIndex).toBe(-1);
+    expect(path[2]!.boatHeadingDegSep!).toBeCloseTo(270, 1);
+  });
+});
+
 describe("computeDrift — waypoint-following trolling circuit", () => {
   // Flat-water defaults: no tide, no wind. Boat motion is the only displacement
   // so the math is exact and easy to reason about.
