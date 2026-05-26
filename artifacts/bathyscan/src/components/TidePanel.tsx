@@ -64,6 +64,79 @@ function compassLabelLocal(deg: number): string {
   return dirs[Math.round(deg / 45) % 8] ?? "N";
 }
 
+interface StationSourceBadgeProps {
+  source?: "noaa" | "estimated";
+  stationId?: string;
+  stationName?: string;
+}
+
+const StationSourceBadge: React.FC<StationSourceBadgeProps> = ({
+  source,
+  stationId,
+  stationName,
+}) => {
+  const isNoaa = source === "noaa";
+  const label = isNoaa
+    ? `From NOAA station${stationName ? ` ${stationName}` : ""}`
+    : "Estimated (no nearby station)";
+  const tooltip = isNoaa
+    ? stationId
+      ? `Real observations from NOAA station ${stationId}`
+      : "Real observations from a nearby NOAA station"
+    : "Synthetic fallback — no NOAA station was in range, slack windows are approximate";
+  const style: React.CSSProperties = isNoaa
+    ? {
+        marginTop: 3,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        fontSize: 9,
+        letterSpacing: "0.15em",
+        textTransform: "uppercase",
+        padding: "1px 5px",
+        borderRadius: 2,
+        background: "rgba(52,211,153,0.12)",
+        border: "1px solid rgba(52,211,153,0.5)",
+        color: "#34d399",
+      }
+    : {
+        marginTop: 3,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        fontSize: 9,
+        letterSpacing: "0.15em",
+        textTransform: "uppercase",
+        padding: "1px 5px",
+        borderRadius: 2,
+        background: "rgba(148,163,184,0.08)",
+        border: "1px dashed rgba(148,163,184,0.4)",
+        color: "#94a3b8",
+      };
+  const content = (
+    <span data-testid="tide-source-badge" data-source={isNoaa ? "noaa" : "estimated"} style={style} title={tooltip}>
+      <span aria-hidden="true">{isNoaa ? "●" : "◌"}</span>
+      <span>{label}</span>
+      {isNoaa && stationId && (
+        <span style={{ opacity: 0.85, letterSpacing: 0 }}>#{stationId}</span>
+      )}
+    </span>
+  );
+  if (isNoaa && stationId) {
+    return (
+      <a
+        href={`https://tidesandcurrents.noaa.gov/stationhome.html?id=${encodeURIComponent(stationId)}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ textDecoration: "none" }}
+      >
+        {content}
+      </a>
+    );
+  }
+  return content;
+};
+
 const DEPTH_LAYERS: DepthLayer[] = ["surface", "mid", "near-bottom"];
 const LAYER_LABELS: Record<DepthLayer, string> = {
   surface: "Surface",
@@ -252,6 +325,11 @@ export const TidePanel: React.FC<TidePanelProps> = ({
               <div>
                 <div style={LABEL}>Station</div>
                 <div style={{ color: "#7dd3fc", fontSize: 11 }}>{data.stationName}</div>
+                <StationSourceBadge
+                  source={data.source}
+                  stationId={data.stationId}
+                  stationName={data.stationName}
+                />
               </div>
 
               {/* Tide height */}
