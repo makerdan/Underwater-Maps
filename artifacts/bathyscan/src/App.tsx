@@ -512,8 +512,9 @@ function Main() {
               className="absolute top-24 left-4 z-20"
               style={{
                 fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                fontSize: 12,
-                padding: "6px 8px",
+                fontSize: 24,
+                lineHeight: 1,
+                padding: "6px 10px",
                 borderRadius: 4,
                 border: "1px solid rgba(0,229,255,0.35)",
                 background: "rgba(2,8,18,0.94)",
@@ -555,7 +556,7 @@ function Main() {
                     letterSpacing: "0.1em",
                   }}
                 >
-                  ◂ HIDE
+                  <span style={{ fontSize: 22, lineHeight: 1, verticalAlign: "middle" }}>◂</span> HIDE
                 </button>
               </ViewscreenTooltip>
             </div>

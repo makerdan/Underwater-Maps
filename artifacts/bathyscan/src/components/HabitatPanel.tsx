@@ -316,7 +316,7 @@ export const HabitatPanel: React.FC = () => {
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <HelpIcon articleId="ai-assistant" label="Habitat layer" />
-          <span style={{ fontSize: 11, color: "#cbd5e1" }}>
+          <span style={{ fontSize: 22, lineHeight: 1, color: "#cbd5e1" }}>
             {collapsed ? "▶" : "▼"}
           </span>
         </span>

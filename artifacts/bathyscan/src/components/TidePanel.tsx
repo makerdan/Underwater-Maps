@@ -225,7 +225,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
               <HelpIcon articleId="tidal-overlay" label="Tidal overlay" />
             </span>
           </span>
-          <span style={DIM}>{collapsed ? "▲" : "▼"}</span>
+          <span style={{ ...DIM, fontSize: 20, lineHeight: 1 }}>{collapsed ? "▲" : "▼"}</span>
         </div>
       </ViewscreenTooltip>
 

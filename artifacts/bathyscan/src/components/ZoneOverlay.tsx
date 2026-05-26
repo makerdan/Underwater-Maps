@@ -130,7 +130,7 @@ export const ZoneOverlay: React.FC = () => {
             </span>
           )}
           <HelpIcon articleId="zones-paint-mode" label="Zones and paint mode" />
-          <span style={{ fontSize: 12, color: "#cbd5e1" }}>{collapsed ? "▸" : "▾"}</span>
+          <span style={{ fontSize: 24, lineHeight: 1, color: "#cbd5e1" }}>{collapsed ? "▸" : "▾"}</span>
         </div>
       </button>
 

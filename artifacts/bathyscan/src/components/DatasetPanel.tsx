@@ -598,7 +598,7 @@ export const DatasetPanel: React.FC = () => {
               <span className="animate-spin" style={{ fontSize: 10 }}>◌</span>
             )}
             <HelpIcon articleId="datasets-uploads" label="Datasets and uploads" />
-            <span style={{ color: "#cbd5e1", fontSize: 12 }}>{collapsed ? "▸" : "▾"}</span>
+            <span style={{ color: "#cbd5e1", fontSize: 24, lineHeight: 1 }}>{collapsed ? "▸" : "▾"}</span>
           </div>
         </button>
       </ViewscreenTooltip>

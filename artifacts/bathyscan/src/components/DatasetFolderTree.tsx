@@ -833,7 +833,7 @@ const FolderRow: React.FC<FolderRowProps> = ({
         userSelect: "none",
       }}
     >
-      <span style={{ color: "#64748b", width: 10, textAlign: "center" }}>
+      <span style={{ color: "#64748b", width: 20, textAlign: "center", fontSize: 20, lineHeight: 1 }}>
         {isExpanded ? "▾" : "▸"}
       </span>
       <span style={{ color: "#00e5ff" }}>▣</span>

@@ -521,7 +521,8 @@ export const HUD: React.FC = () => {
                           style={{
                             marginLeft: 4,
                             color: "#64748b",
-                            fontSize: 9,
+                            fontSize: 18,
+                            lineHeight: 1,
                           }}
                         >
                           {tempProfileOpen ? "▴" : "▾"}

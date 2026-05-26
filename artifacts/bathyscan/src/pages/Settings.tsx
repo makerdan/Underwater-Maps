@@ -420,7 +420,7 @@ function ColormapSelectRow({
           }}
         >
           <span style={{ color: "#e2e8f0" }}>{current.label}</span>
-          <span style={{ color: "#64748b", fontSize: 8 }}>{open ? "▲" : "▼"}</span>
+          <span style={{ color: "#64748b", fontSize: 16, lineHeight: 1 }}>{open ? "▲" : "▼"}</span>
         </button>
         {open && (
           <ul

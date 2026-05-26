@@ -64,6 +64,8 @@ export const AdvancedDisclosure: React.FC<Props> = ({
             transform: open ? "rotate(90deg)" : "rotate(0deg)",
             transition: "transform 0.15s",
             color: "#00e5ff",
+            fontSize: 20,
+            lineHeight: 1,
           }}
         >
           ▶

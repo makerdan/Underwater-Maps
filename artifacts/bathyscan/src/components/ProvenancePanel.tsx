@@ -225,7 +225,7 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
           style={{
             marginLeft: "auto",
             color: "#4b5563",
-            fontSize: 9,
+            fontSize: 18,
             lineHeight: 1,
           }}
         >

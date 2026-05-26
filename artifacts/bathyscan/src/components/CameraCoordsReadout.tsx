@@ -73,7 +73,7 @@ export const CameraCoordsReadout: React.FC = () => {
         }}
       >
         <span>CAMERA POSITION</span>
-        <span style={{ color: "#cbd5e1", fontSize: 12 }}>{collapsed ? "▸" : "▾"}</span>
+        <span style={{ color: "#cbd5e1", fontSize: 24, lineHeight: 1 }}>{collapsed ? "▸" : "▾"}</span>
       </button>
       {!collapsed && (
         <div style={{ padding: "4px 12px 8px" }}>

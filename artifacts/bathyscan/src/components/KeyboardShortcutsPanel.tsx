@@ -53,7 +53,7 @@ export const KeyboardShortcutsPanel: React.FC = () => {
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <HelpIcon articleId="keyboard-shortcuts" label="Keyboard shortcuts" />
-          <span style={{ color: "#cbd5e1", fontSize: 12 }}>
+          <span style={{ color: "#cbd5e1", fontSize: 24, lineHeight: 1 }}>
             {collapsed ? "▸" : "▾"}
           </span>
         </span>
