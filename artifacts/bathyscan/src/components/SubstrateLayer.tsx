@@ -103,6 +103,35 @@ function polygonToFillGeometry(
   return geo;
 }
 
+/**
+ * Pure helper: maps a single SubstrateFeature + collection-level metadata
+ * onto the SelectedSubstrate shape written to uiStore on click.
+ *
+ * Exported so unit tests can exercise the 3D click-dispatch logic without
+ * spinning up a React Three Fiber canvas.
+ */
+export function buildSelectedSubstrate(
+  feature: SubstrateFeature,
+  sourceName: string,
+  creditUrl: string,
+): import("@/lib/uiStore").SelectedSubstrate {
+  const props = feature.properties;
+  return {
+    unitId: props.unitId,
+    substrate: props.substrate,
+    shoreZoneClass: props.shoreZoneClass,
+    cmecsCode: props.cmecsCode,
+    color: props.color,
+    szMaterial: props.szMaterial ?? null,
+    szForm: props.szForm ?? null,
+    areaSqM: props.areaSqM ?? null,
+    natsur: props.natsur ?? null,
+    encChart: props.encChart ?? null,
+    sourceName,
+    creditUrl,
+  };
+}
+
 interface PolyRender {
   fillGeometry: THREE.BufferGeometry | null;
   outlineGeometry: THREE.BufferGeometry;
@@ -210,21 +239,7 @@ export const SubstrateLayer: React.FC = () => {
   const handleClick = useCallback(
     (feature: SubstrateFeature) => (e: ThreeEvent<MouseEvent>) => {
       e.stopPropagation();
-      const props = feature.properties;
-      setSelectedSubstrate({
-        unitId: props.unitId,
-        substrate: props.substrate,
-        shoreZoneClass: props.shoreZoneClass,
-        cmecsCode: props.cmecsCode,
-        color: props.color,
-        szMaterial: props.szMaterial ?? null,
-        szForm: props.szForm ?? null,
-        areaSqM: props.areaSqM ?? null,
-        natsur: props.natsur ?? null,
-        encChart: props.encChart ?? null,
-        sourceName,
-        creditUrl,
-      });
+      setSelectedSubstrate(buildSelectedSubstrate(feature, sourceName, creditUrl));
     },
     [setSelectedSubstrate, sourceName, creditUrl],
   );

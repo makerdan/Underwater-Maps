@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderWithProviders } from "./setup";
 import { useUiStore } from "@/lib/uiStore";
 import { useTerrainStore } from "@/lib/terrainStore";
+import { substrateCollection } from "./substrateFixture";
 
 vi.mock("@/lib/context", () => ({
   useAppState: () => ({ setDatasetId: vi.fn(), terrain: null }),
@@ -13,72 +14,6 @@ vi.mock("@/lib/context", () => ({
 vi.mock("@/lib/simulatedDataStore", () => ({
   requestDatasetSwitch: vi.fn(),
 }));
-
-const substrateCollection = {
-  type: "FeatureCollection",
-  metadata: {
-    sourceName: "Test Substrate Source",
-    creditUrl: "https://example.test/credit",
-  },
-  features: [
-    {
-      type: "Feature",
-      properties: {
-        unitId: "poly-1",
-        substrate: "sand",
-        shoreZoneClass: "SAND",
-        cmecsCode: "SBS_SA",
-        color: "#e2d5a0",
-        szMaterial: "sand",
-        szForm: "flat",
-        areaSqM: 1234,
-        natsur: "Sandy bottom per S-57 NATSUR.",
-        encChart: "US5AK4DM",
-      },
-      geometry: {
-        type: "Polygon",
-        coordinates: [
-          [
-            [-119.8, 47.3],
-            [-119.7, 47.3],
-            [-119.7, 47.4],
-            [-119.8, 47.4],
-            [-119.8, 47.3],
-          ],
-        ],
-      },
-    },
-    {
-      type: "Feature",
-      properties: {
-        unitId: "poly-2",
-        substrate: "gravel",
-        shoreZoneClass: "GRAVEL",
-        cmecsCode: "SBS_GR",
-        color: "#9ab5c4",
-        szMaterial: "gravel",
-        szForm: "ramp",
-        areaSqM: 5678,
-        natsur: "TPWD lake-survey: gravel substrate near boat ramp.",
-        encChart: "https://tpwd.texas.gov/fishboat/fish/recreational/lakes/example",
-      },
-      geometry: {
-        type: "MultiPolygon",
-        coordinates: [
-          [
-            [
-              [-119.5, 47.6],
-              [-119.4, 47.6],
-              [-119.4, 47.7],
-              [-119.5, 47.7],
-              [-119.5, 47.6],
-            ],
-          ],
-        ],
-      },
-    },
-  ],
-};
 
 vi.mock("@workspace/api-client-react", () => {
   const noop = () => ({ data: undefined });
