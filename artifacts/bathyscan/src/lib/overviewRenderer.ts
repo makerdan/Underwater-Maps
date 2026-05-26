@@ -497,6 +497,7 @@ export function renderSubstrateOverlay(
   grid: TerrainData,
   t: OverviewTransform,
   selectedUnitId: string | null = null,
+  hiddenClasses: ReadonlySet<string> = new Set(),
 ): void {
   if (!features.length) return;
   ctx.save();
@@ -513,6 +514,7 @@ export function renderSubstrateOverlay(
   };
 
   for (const feature of features) {
+    if (hiddenClasses.has(feature.properties.substrate.toLowerCase())) continue;
     const geom = feature.geometry as
       | { type: "Polygon"; coordinates: number[][][] }
       | { type: "MultiPolygon"; coordinates: number[][][][] }
@@ -559,10 +561,12 @@ export function hitTestSubstrate(
   lon: number,
   lat: number,
   features: SubstrateFeature[],
+  hiddenClasses: ReadonlySet<string> = new Set(),
 ): SubstrateFeature | null {
   for (let i = features.length - 1; i >= 0; i--) {
     const f = features[i];
     if (!f) continue;
+    if (hiddenClasses.has(f.properties.substrate.toLowerCase())) continue;
     const geom = f.geometry as
       | { type: "Polygon"; coordinates: number[][][] }
       | { type: "MultiPolygon"; coordinates: number[][][][] }
@@ -584,16 +588,42 @@ export function hitTestSubstrate(
 }
 
 /**
+ * One row of the substrate legend, with the canvas-pixel bounding box used
+ * for click hit-testing the row to toggle visibility.
+ */
+export interface SubstrateLegendRow {
+  /** Lower-cased substrate key, matches `feature.properties.substrate`. */
+  key: string;
+  /** Display label (upper-cased substrate name). */
+  label: string;
+  /** CMECS swatch color (hex). */
+  color: string;
+  /** Click hit-rect in canvas pixels: [x, y, w, h]. */
+  rect: [number, number, number, number];
+}
+
+export interface SubstrateLegendLayout {
+  /** Box bounds: [x, y, w, h]. */
+  box: [number, number, number, number];
+  rows: SubstrateLegendRow[];
+}
+
+/**
  * Draw a compact substrate legend (CMECS classes present in the current
  * feature set) in the bottom-left corner. The 3D scene's substrate legend
  * lives in the Overlays & Tools side panel; this is the 2D equivalent.
+ *
+ * Rows whose substrate key is in `hiddenClasses` are rendered dimmed to
+ * signal they're filtered out. Returns the layout so callers can hit-test
+ * legend clicks against `rows[i].rect` and toggle the class.
  */
 export function renderSubstrateLegend(
   ctx: CanvasRenderingContext2D,
   features: SubstrateFeature[],
   cH: number,
-): void {
-  if (!features.length) return;
+  hiddenClasses: ReadonlySet<string> = new Set(),
+): SubstrateLegendLayout | null {
+  if (!features.length) return null;
 
   // Collect unique (substrate, color) pairs, preserving first-seen order.
   const seen = new Map<string, string>();
@@ -601,8 +631,8 @@ export function renderSubstrateLegend(
     const key = f.properties.substrate;
     if (!seen.has(key)) seen.set(key, f.properties.color ?? "#e2d5a0");
   }
-  const rows = Array.from(seen.entries());
-  if (!rows.length) return;
+  const entries = Array.from(seen.entries());
+  if (!entries.length) return null;
 
   const FONT = "'JetBrains Mono', monospace";
   const SWATCH = 9;
@@ -613,11 +643,11 @@ export function renderSubstrateLegend(
 
   ctx.save();
   ctx.font = `${FONT_SIZE}px ${FONT}`;
-  const labels = rows.map(([s]) => s.toUpperCase());
+  const labels = entries.map(([s]) => s.toUpperCase());
   const maxW = labels.reduce((m, l) => Math.max(m, ctx.measureText(l).width), 0);
   const headerW = ctx.measureText("SUBSTRATE").width;
   const boxW = PAD * 2 + SWATCH + 6 + Math.max(maxW, headerW);
-  const boxH = PAD * 2 + HEADER_H + rows.length * ROW_H;
+  const boxH = PAD * 2 + HEADER_H + entries.length * ROW_H;
   const x = 12;
   const y = cH - boxH - 40;
 
@@ -632,18 +662,64 @@ export function renderSubstrateLegend(
   ctx.fillStyle = "#475569";
   ctx.fillText("SUBSTRATE", x + PAD, y + PAD + FONT_SIZE);
 
-  rows.forEach(([label, color], i) => {
-    const row = y + PAD + HEADER_H + i * ROW_H;
+  const rows: SubstrateLegendRow[] = entries.map(([label, color], i) => {
+    const rowY = y + PAD + HEADER_H + i * ROW_H;
+    const key = label.toLowerCase();
+    const hidden = hiddenClasses.has(key);
+    const alpha = hidden ? 0.32 : 1.0;
+
+    ctx.globalAlpha = alpha;
     ctx.fillStyle = color;
-    ctx.fillRect(x + PAD, row + 1, SWATCH, SWATCH);
+    ctx.fillRect(x + PAD, rowY + 1, SWATCH, SWATCH);
     ctx.strokeStyle = hexToRgba(color, 0.95);
     ctx.lineWidth = 1;
-    ctx.strokeRect(x + PAD + 0.5, row + 1.5, SWATCH, SWATCH);
+    ctx.strokeRect(x + PAD + 0.5, rowY + 1.5, SWATCH, SWATCH);
     ctx.fillStyle = "#cbd5e1";
-    ctx.fillText(label.toUpperCase(), x + PAD + SWATCH + 6, row + FONT_SIZE);
+    ctx.fillText(labels[i] ?? label.toUpperCase(), x + PAD + SWATCH + 6, rowY + FONT_SIZE);
+
+    // Strike-through hidden rows so the dimming reads as "filtered out".
+    if (hidden) {
+      ctx.globalAlpha = 0.6;
+      ctx.strokeStyle = "#cbd5e1";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      const lineY = rowY + 1 + SWATCH / 2 + 0.5;
+      ctx.moveTo(x + PAD, lineY);
+      ctx.lineTo(x + boxW - PAD, lineY);
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha = 1.0;
+
+    return {
+      key,
+      label: labels[i] ?? label.toUpperCase(),
+      color,
+      rect: [x + 2, rowY, boxW - 4, ROW_H],
+    };
   });
 
   ctx.restore();
+
+  return { box: [x, y, boxW, boxH], rows };
+}
+
+/**
+ * Hit-test a canvas-pixel click against a substrate legend layout. Returns
+ * the substrate key (lower-cased) whose row was clicked, or null if the
+ * click was outside any row. Used by OverviewMap to toggle legend filters.
+ */
+export function hitTestSubstrateLegend(
+  cx: number,
+  cy: number,
+  layout: SubstrateLegendLayout | null,
+): string | null {
+  if (!layout) return null;
+  for (const r of layout.rows) {
+    const [x, y, w, h] = r.rect;
+    if (cx >= x && cx <= x + w && cy >= y && cy <= y + h) return r.key;
+  }
+  return null;
 }
 
 /**

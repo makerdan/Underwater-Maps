@@ -161,6 +161,7 @@ export const SubstrateLayer: React.FC = () => {
   const substrateColorMode = useUiStore((s) => s.substrateColorMode);
   const setSelectedSubstrate = useUiStore((s) => s.setSelectedSubstrate);
   const selectedSubstrate = useUiStore((s) => s.selectedSubstrate);
+  const hiddenSubstrateClasses = useUiStore((s) => s.hiddenSubstrateClasses);
 
   const datasetId = terrain?.datasetId ?? "";
 
@@ -183,12 +184,18 @@ export const SubstrateLayer: React.FC = () => {
 
   const polys = useMemo(() => {
     if (!collection?.features?.length || !terrain) return [];
+    // Honor the shared substrate-class filter so the 3D scene stays in sync
+    // with the 2D OverviewMap legend. Hidden classes are dropped entirely
+    // rather than dimmed — anglers wanted them out of the way.
+    const visible = collection.features.filter(
+      (f) => !hiddenSubstrateClasses.has(f.properties.substrate.toLowerCase()),
+    );
     return buildPolyRenders(
-      collection.features,
+      visible,
       terrain.minLon, terrain.maxLon,
       terrain.minLat, terrain.maxLat,
     );
-  }, [collection, terrain]);
+  }, [collection, terrain, hiddenSubstrateClasses]);
 
   // Free GPU buffers when polys change or the component unmounts.
   useEffect(() => {

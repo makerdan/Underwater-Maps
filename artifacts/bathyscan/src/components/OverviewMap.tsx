@@ -45,6 +45,7 @@ import {
   renderSubstrateOverlay,
   renderSubstrateLegend,
   hitTestSubstrate,
+  hitTestSubstrateLegend,
   renderGpsPosition,
   renderLiveTrail,
   renderSavedTrails,
@@ -145,6 +146,8 @@ export const OverviewMap: React.FC = () => {
   const substrateFeaturesRef = useRef<SubstrateFeature[]>([]);
   const substrateColorModeRef = useRef(false);
   const selectedSubstrateUnitIdRef = useRef<string | null>(null);
+  const hiddenSubstrateClassesRef = useRef<ReadonlySet<string>>(new Set());
+  const substrateLegendLayoutRef = useRef<ReturnType<typeof renderSubstrateLegend>>(null);
 
   // Drag tracking
   const isDraggingRef = useRef(false);
@@ -321,6 +324,10 @@ export const OverviewMap: React.FC = () => {
   useEffect(() => {
     selectedSubstrateUnitIdRef.current = selectedSubstrateUnitId;
   }, [selectedSubstrateUnitId]);
+  const hiddenSubstrateClasses = useUiStore((s) => s.hiddenSubstrateClasses);
+  useEffect(() => {
+    hiddenSubstrateClassesRef.current = hiddenSubstrateClasses;
+  }, [hiddenSubstrateClasses]);
 
   const { data: substrateCollection } = useGetSubstrate(datasetId, {
     query: {
@@ -493,8 +500,16 @@ export const OverviewMap: React.FC = () => {
           grid,
           t,
           selectedSubstrateUnitIdRef.current,
+          hiddenSubstrateClassesRef.current,
         );
-        renderSubstrateLegend(ctx, substrateFeaturesRef.current, cH);
+        substrateLegendLayoutRef.current = renderSubstrateLegend(
+          ctx,
+          substrateFeaturesRef.current,
+          cH,
+          hiddenSubstrateClassesRef.current,
+        );
+      } else {
+        substrateLegendLayoutRef.current = null;
       }
 
       // GPS position + live trail
@@ -766,6 +781,21 @@ export const OverviewMap: React.FC = () => {
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
 
+      // Substrate legend row click → toggle that CMECS class. Checked before
+      // anything else so the legend behaves like a button overlay even when
+      // it sits over substrate/EFH polygons.
+      if (substrateColorModeRef.current) {
+        const hitKey = hitTestSubstrateLegend(
+          mx,
+          my,
+          substrateLegendLayoutRef.current,
+        );
+        if (hitKey) {
+          useUiStore.getState().toggleSubstrateClass(hitKey);
+          return;
+        }
+      }
+
       const { lon, lat } = canvasToLonLat(mx, my, overviewGrid, t);
 
       // Non-primary footprint click → promote that dataset to primary instead
@@ -810,6 +840,7 @@ export const OverviewMap: React.FC = () => {
           lon,
           lat,
           substrateFeaturesRef.current,
+          hiddenSubstrateClassesRef.current,
         );
         if (hit) {
           const p = hit.properties;

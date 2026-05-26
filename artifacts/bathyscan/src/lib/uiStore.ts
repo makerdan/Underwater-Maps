@@ -63,6 +63,15 @@ interface UiStore {
   /** Currently selected substrate polygon (set on click; null = closed card). */
   selectedSubstrate: SelectedSubstrate | null;
   setSelectedSubstrate: (s: SelectedSubstrate | null) => void;
+  /**
+   * CMECS substrate classes the user has hidden via the legend (lower-cased
+   * keys, matching `feature.properties.substrate`). Empty set = all visible.
+   * Shared between the 2D overview legend and the 3D SubstrateLayer so the
+   * two views stay in sync.
+   */
+  hiddenSubstrateClasses: Set<string>;
+  toggleSubstrateClass: (substrate: string) => void;
+  clearHiddenSubstrateClasses: () => void;
   /** Show EFH zone polygon outlines in the 3D scene. */
   efhOverlayEnabled: boolean;
   setEfhOverlayEnabled: (enabled: boolean) => void;
@@ -152,6 +161,22 @@ export const useUiStore = create<UiStore>((set) => ({
     set(enabled ? { substrateColorMode: true } : { substrateColorMode: false, selectedSubstrate: null }),
   selectedSubstrate: null,
   setSelectedSubstrate: (s) => set({ selectedSubstrate: s }),
+  hiddenSubstrateClasses: new Set<string>(),
+  toggleSubstrateClass: (substrate) => set((state) => {
+    const key = substrate.toLowerCase();
+    const next = new Set(state.hiddenSubstrateClasses);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    // If the currently-selected polygon belongs to a class we just hid,
+    // close its info card — leaving it open would point at geometry the
+    // user can no longer see.
+    const sel = state.selectedSubstrate;
+    const clearSel = sel && next.has(sel.substrate.toLowerCase());
+    return clearSel
+      ? { hiddenSubstrateClasses: next, selectedSubstrate: null }
+      : { hiddenSubstrateClasses: next };
+  }),
+  clearHiddenSubstrateClasses: () => set({ hiddenSubstrateClasses: new Set<string>() }),
   efhOverlayEnabled: false,
   setEfhOverlayEnabled: (enabled) =>
     set(enabled ? { efhOverlayEnabled: true } : { efhOverlayEnabled: false, selectedEfh: null }),
