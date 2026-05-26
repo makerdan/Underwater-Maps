@@ -131,8 +131,13 @@ export const TOLEDO_BEND_EFH: EfhFeatureCollection = explodeToPolygons(
   BUNDLE["toledo-bend"]!,
 );
 
+export const LAKE_RAY_ROBERTS_EFH: EfhFeatureCollection = explodeToPolygons(
+  BUNDLE["lake-ray-roberts"]!,
+);
+
 export const TX_FRESHWATER_EFH_BY_DATASET: Record<string, EfhFeatureCollection> = {
   "lake-fork": LAKE_FORK_EFH,
   "sam-rayburn": SAM_RAYBURN_EFH,
   "toledo-bend": TOLEDO_BEND_EFH,
+  "lake-ray-roberts": LAKE_RAY_ROBERTS_EFH,
 };

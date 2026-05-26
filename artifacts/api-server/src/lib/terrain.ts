@@ -204,6 +204,20 @@ export const FRESHWATER_PRESET_DATASETS: DatasetMeta[] = [
     hasEfh: true,
   },
   {
+    id: "lake-ray-roberts",
+    name: "Lake Ray Roberts — North Texas",
+    description:
+      "USACE reservoir on the Elm Fork Trinity River near Denton — known for striped bass, largemouth, white bass, crappie, and channel/blue catfish",
+    waterType: "freshwater",
+    minDepth: 1,
+    maxDepth: 30,
+    centerLon: -97.03,
+    centerLat: 33.40,
+    bbox: { minLon: -97.15, minLat: 33.30, maxLon: -96.92, maxLat: 33.52 },
+    hasTopography: true,
+    hasEfh: true,
+  },
+  {
     id: "toledo-bend",
     name: "Toledo Bend Reservoir — Texas / Louisiana",
     description:

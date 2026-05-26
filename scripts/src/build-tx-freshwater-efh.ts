@@ -105,6 +105,22 @@ const LAKES: LakeSpec[] = [
       "https://tpwd.texas.gov/fishboat/fish/recreational/lakes/samrayburn/",
   },
   {
+    datasetId: "lake-ray-roberts",
+    region: "Lake Ray Roberts — North Texas",
+    bbox: [-97.15, 33.30, -96.92, 33.52],
+    tpwdWaterbody: "Ray Roberts",
+    nhdLakeNames: ["Lake Ray Roberts", "Ray Roberts Lake"],
+    nhdLakeByLargestInBbox: true,
+    tributaryGnisNames: [
+      "Elm Fork Trinity River",
+      "Isle du Bois Creek",
+      "Range Creek",
+      "Johnson Branch",
+    ],
+    lakePageUrl:
+      "https://tpwd.texas.gov/fishboat/fish/recreational/lakes/rayroberts/",
+  },
+  {
     datasetId: "toledo-bend",
     region: "Toledo Bend Reservoir — Texas / Louisiana",
     bbox: [-93.95, 31.15, -93.55, 32.20],
@@ -659,6 +675,41 @@ const TEMPLATES: Record<string, LakeTemplates> = {
         "TPWD-deployed PVC cubes and natural brush clusters on Sam Rayburn's main lake hold prolific crappie populations.",
       lifeStage: "All life stages",
       season: "Year-round; peak spring & fall",
+      color: "#a855f7",
+    },
+  },
+  "lake-ray-roberts": {
+    shoreline: {
+      species: "micropterus_salmoides",
+      commonName: "Largemouth Bass (spawning flats)",
+      fmp: "TPWD Priority Spawning Habitat",
+      depthRangeM: [1, 5],
+      habitatDescription:
+        "Shallow vegetated coves and standing-timber flats in the Isle du Bois and Johnson Branch arms of Lake Ray Roberts host the largemouth spawn from late February through May.",
+      lifeStage: "Adults (spawning)",
+      season: "Late Feb–May",
+      color: "#22c55e",
+    },
+    channel: {
+      species: "ictalurus_furcatus",
+      commonName: "Channel & Blue Catfish (creek channels)",
+      fmp: "TPWD Priority Habitat",
+      depthRangeM: [4, 15],
+      habitatDescription:
+        "The submerged Elm Fork Trinity River channel and feeder-creek mouths are the dominant channel and blue catfish habitat in Lake Ray Roberts.",
+      lifeStage: "Adults",
+      season: "Year-round",
+      color: "#0ea5e9",
+    },
+    brushpile: {
+      species: "pomoxis_annularis",
+      commonName: "White & Black Crappie (brushpiles)",
+      fmp: "TPWD Priority Habitat",
+      depthRangeM: [3, 9],
+      habitatDescription:
+        "TPWD-deployed PVC cubes, artificial habitat, and natural brush clusters across Lake Ray Roberts hold white and black crappie year-round.",
+      lifeStage: "All life stages",
+      season: "Year-round; peak Mar–Apr & Oct–Nov",
       color: "#a855f7",
     },
   },

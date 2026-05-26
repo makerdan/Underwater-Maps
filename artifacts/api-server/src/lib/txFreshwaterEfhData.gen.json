@@ -24001,6 +24001,164 @@
       ]
     }
   },
+  "lake-ray-roberts": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {
+          "species": "micropterus_salmoides",
+          "commonName": "Largemouth Bass (spawning flats)",
+          "fmp": "TPWD Priority Spawning Habitat",
+          "depthRangeM": [
+            1,
+            5
+          ],
+          "habitatDescription": "Shallow vegetated coves and standing-timber flats in the Isle du Bois and Johnson Branch arms of Lake Ray Roberts host the largemouth spawn from late February through May.",
+          "lifeStage": "Adults (spawning)",
+          "season": "Late Feb–May",
+          "source": "USGS National Hydrography Dataset (NHD)",
+          "creditUrl": "https://www.usgs.gov/national-hydrography/national-hydrography-dataset",
+          "color": "#22c55e",
+          "sourceLayer": "nhd-waterbody"
+        },
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                -97.14540000000001,
+                33.304399999999994
+              ],
+              [
+                -96.9246,
+                33.304399999999994
+              ],
+              [
+                -96.9246,
+                33.515600000000006
+              ],
+              [
+                -97.14540000000001,
+                33.515600000000006
+              ],
+              [
+                -97.14540000000001,
+                33.304399999999994
+              ]
+            ]
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "species": "ictalurus_furcatus",
+          "commonName": "Channel & Blue Catfish (creek channels)",
+          "fmp": "TPWD Priority Habitat",
+          "depthRangeM": [
+            4,
+            15
+          ],
+          "habitatDescription": "The submerged Elm Fork Trinity River channel and feeder-creek mouths are the dominant channel and blue catfish habitat in Lake Ray Roberts.",
+          "lifeStage": "Adults",
+          "season": "Year-round",
+          "source": "USGS National Hydrography Dataset (NHD)",
+          "creditUrl": "https://www.usgs.gov/national-hydrography/national-hydrography-dataset",
+          "color": "#0ea5e9",
+          "sourceLayer": "nhd-flowline"
+        },
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                -97.10860000000001,
+                33.3396
+              ],
+              [
+                -96.9614,
+                33.3396
+              ],
+              [
+                -96.9614,
+                33.4804
+              ],
+              [
+                -97.10860000000001,
+                33.4804
+              ],
+              [
+                -97.10860000000001,
+                33.3396
+              ]
+            ]
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "species": "pomoxis_annularis",
+          "commonName": "White & Black Crappie (brushpiles)",
+          "fmp": "TPWD Priority Habitat",
+          "depthRangeM": [
+            3,
+            9
+          ],
+          "habitatDescription": "TPWD-deployed PVC cubes, artificial habitat, and natural brush clusters across Lake Ray Roberts hold white and black crappie year-round.",
+          "lifeStage": "All life stages",
+          "season": "Year-round; peak Mar–Apr & Oct–Nov",
+          "source": "TPWD — Texas Parks & Wildlife Fish Habitat Structures",
+          "creditUrl": "https://tpwd.maps.arcgis.com/home/item.html?id=e9e4d4de85ce4a379600ffc7978cc1c6",
+          "color": "#a855f7",
+          "sourceLayer": "tpwd-fish-habitat-structures"
+        },
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                -97.0764,
+                33.3704
+              ],
+              [
+                -96.9936,
+                33.3704
+              ],
+              [
+                -96.9936,
+                33.449600000000004
+              ],
+              [
+                -97.0764,
+                33.449600000000004
+              ],
+              [
+                -97.0764,
+                33.3704
+              ]
+            ]
+          ]
+        }
+      }
+    ],
+    "metadata": {
+      "region": "Lake Ray Roberts — North Texas",
+      "bbox": [
+        -97.15,
+        33.3,
+        -96.92,
+        33.52
+      ],
+      "creditUrl": "https://tpwd.texas.gov/fishboat/fish/recreational/lakes/rayroberts/",
+      "lastUpdated": "2026-05-25",
+      "sources": [
+        "TPWD — Texas Parks & Wildlife Fish Habitat Structures — https://experience.arcgis.com/experience/2bc3b75711b7496fac31455dddb0d060",
+        "USGS National Hydrography Dataset (NHD) — https://www.usgs.gov/national-hydrography/national-hydrography-dataset"
+      ]
+    }
+  },
   "toledo-bend": {
     "type": "FeatureCollection",
     "features": [

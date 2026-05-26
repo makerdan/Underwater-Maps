@@ -8,6 +8,7 @@
     "seed-thorne-bay": "tsx ./src/seed-thorne-bay.ts",
     "build-shorezone": "tsx ./src/build-shorezone-data.ts",
     "build-enc-substrate": "tsx ./src/build-enc-substrate.ts",
+    "build-tx-freshwater-efh": "tsx ./src/build-tx-freshwater-efh.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
