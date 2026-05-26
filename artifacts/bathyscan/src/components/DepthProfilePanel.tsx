@@ -148,14 +148,9 @@ export const DepthProfilePanel: React.FC = () => {
 
   const exportCsv = () => {
     const header = "distance_m,depth_m,slot,lon,lat";
-    const dx = end.lon - start.lon;
-    const dy = end.lat - start.lat;
     const lines = points.map((p) => {
-      const t = totalDistanceM > 0 ? p.distanceM / totalDistanceM : 0;
-      const lon = start.lon + dx * t;
-      const lat = start.lat + dy * t;
       const slot = p.slot === null ? "" : String(p.slot);
-      return `${p.distanceM.toFixed(3)},${p.depthM.toFixed(4)},${slot},${lon.toFixed(7)},${lat.toFixed(7)}`;
+      return `${p.distanceM.toFixed(3)},${p.depthM.toFixed(4)},${slot},${p.lon.toFixed(7)},${p.lat.toFixed(7)}`;
     });
     const csv = [header, ...lines].join("\n") + "\n";
     triggerDownload(

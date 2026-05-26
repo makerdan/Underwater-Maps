@@ -39,6 +39,9 @@ export interface ProfilePoint {
   /** World-space XZ — convenient for drawing the line in the 3D scene. */
   worldX: number;
   worldZ: number;
+  /** Geographic coordinates of this sample, derived via worldXZToLonLat. */
+  lon: number;
+  lat: number;
 }
 
 export interface DepthProfileResult {
@@ -161,6 +164,7 @@ export function buildProfile(
     const worldZ = a.z + (b.z - a.z) * t;
     const depthM = sampleDepthMetres(grid, worldX, worldZ);
     const slot   = sampleSlot(grid, zoneMap, worldX, worldZ);
+    const { lon, lat } = worldXZToLonLat(worldX, worldZ, grid);
     if (depthM < minDepthM) minDepthM = depthM;
     if (depthM > maxDepthM) maxDepthM = depthM;
     points.push({
@@ -169,6 +173,8 @@ export function buildProfile(
       slot,
       worldX,
       worldZ,
+      lon,
+      lat,
     });
   }
 

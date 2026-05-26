@@ -102,6 +102,22 @@ describe("buildProfile", () => {
     expect(r.points.every((p) => p.slot === null)).toBe(true);
   });
 
+  it("records lon/lat per sample, endpoints match start/end exactly", () => {
+    const start = { lon: -132.5, lat: 56.0, depth: 0 };
+    const end = { lon: -132.3, lat: 56.05, depth: 1000 };
+    const r = buildProfile(grid, start, end, null);
+    expect(r.points[0]!.lon).toBeCloseTo(start.lon, 6);
+    expect(r.points[0]!.lat).toBeCloseTo(start.lat, 6);
+    expect(r.points[r.points.length - 1]!.lon).toBeCloseTo(end.lon, 6);
+    expect(r.points[r.points.length - 1]!.lat).toBeCloseTo(end.lat, 6);
+    for (const p of r.points) {
+      expect(p.lon).toBeGreaterThanOrEqual(grid.minLon);
+      expect(p.lon).toBeLessThanOrEqual(grid.maxLon);
+      expect(p.lat).toBeGreaterThanOrEqual(grid.minLat);
+      expect(p.lat).toBeLessThanOrEqual(grid.maxLat);
+    }
+  });
+
   it("anchor === end produces zero-length transect with constant depth", () => {
     const r = buildProfile(
       grid,
