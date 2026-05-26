@@ -58,8 +58,11 @@ export interface TerrainGrid {
  *   1 — initial cache format
  *   2 — Task #26: smoothSpikes pass added in buildTerrainGrid
  *   3 — Task #115: topography array (above-water elevation) added
+ *   4 — Task #336: multi-coverage NCEI fetcher (BAG + DEM Global Mosaic);
+ *       SE Alaska presets now route through NCEI first, so previously
+ *       cached GEBCO-only grids must be invalidated.
  */
-export const TERRAIN_CACHE_VERSION = 3;
+export const TERRAIN_CACHE_VERSION = 4;
 
 export interface DatasetMeta {
   id: string;
@@ -172,6 +175,48 @@ export const PRESET_DATASETS: DatasetMeta[] = [
     hasTopography: true,
     hasEfh: true,
   },
+  {
+    id: "craig-klawock",
+    name: "Craig & Klawock — SE Alaska",
+    description:
+      "Craig, Klawock, and Bucareli Bay on the west side of Prince of Wales Island — outer-coast salmon and halibut grounds with NCEI 1/3 arc-second DEM coverage",
+    waterType: "saltwater",
+    minDepth: 10,
+    maxDepth: 450,
+    centerLon: -133.15,
+    centerLat: 55.5,
+    bbox: { minLon: -133.7, minLat: 55.2, maxLon: -132.6, maxLat: 55.8 },
+    hasTopography: true,
+    hasEfh: true,
+  },
+  {
+    id: "wrangell-petersburg",
+    name: "Wrangell & Petersburg — SE Alaska",
+    description:
+      "Wrangell Narrows, Frederick Sound, and the central Inside Passage between Wrangell and Petersburg — protected mainland fjord fishing with high-res NCEI community DEM coverage",
+    waterType: "saltwater",
+    minDepth: 10,
+    maxDepth: 480,
+    centerLon: -132.85,
+    centerLat: 56.6,
+    bbox: { minLon: -133.5, minLat: 56.2, maxLon: -132.0, maxLat: 57.0 },
+    hasTopography: true,
+    hasEfh: true,
+  },
+  {
+    id: "skagway-haines",
+    name: "Skagway & Haines — Upper Lynn Canal",
+    description:
+      "Upper Lynn Canal between Haines and Skagway — deep glacial fjord at the head of the Inside Passage with NCEI 1/3 arc-second DEM coverage",
+    waterType: "saltwater",
+    minDepth: 5,
+    maxDepth: 350,
+    centerLon: -135.35,
+    centerLat: 59.25,
+    bbox: { minLon: -135.85, minLat: 58.95, maxLon: -134.85, maxLat: 59.55 },
+    hasTopography: true,
+    hasEfh: true,
+  },
 ];
 
 export const FRESHWATER_PRESET_DATASETS: DatasetMeta[] = [
@@ -243,34 +288,85 @@ export const ALL_PRESET_DATASETS: DatasetMeta[] = [
 // datasets that declare a preferred NCEI source)
 // ---------------------------------------------------------------------------
 
-const NCEI_WCS =
-  "https://gis.ngdc.noaa.gov/arcgis/services/bag_mosaic/ImageServer/WCSServer";
-
 /**
- * Datasets that should prefer the NCEI Bag Mosaic WCS over GEBCO.
- * NCEI has high-resolution multibeam coverage for surveyed coastal areas.
+ * NCEI WCS coverage specs.
+ *
+ *   bagMosaic        — NCEI multibeam BAG composite, 1–50 m where surveyed.
+ *                      Best for inshore corridors that have multibeam survey
+ *                      coverage (Thorne Bay, Ketchikan, Sitka Sound, Juneau).
+ *   demGlobalMosaic  — NCEI "best-available" DEM mosaic that integrates
+ *                      community/tsunami DEMs (Juneau, Sitka, Ketchikan,
+ *                      Craig, Skagway, Wrangell, etc.) at 8–90 m where they
+ *                      exist, and falls back to coarser global grids
+ *                      otherwise. Used as the secondary high-res source.
  */
-const NCEI_PREFERRED_DATASETS = new Set(["thorne-bay"]);
+interface NceiCoverage {
+  url: string;
+  coverage: string;
+  label: string;
+}
+
+const NCEI_COVERAGES = {
+  bagMosaic: {
+    url: "https://gis.ngdc.noaa.gov/arcgis/services/bag_mosaic/ImageServer/WCSServer",
+    coverage: "1",
+    label: "NCEI BAG Mosaic",
+  },
+  demGlobalMosaic: {
+    url: "https://gis.ngdc.noaa.gov/arcgis/services/DEM_global_mosaic/ImageServer/WCSServer",
+    coverage: "1",
+    label: "NCEI DEM Global Mosaic",
+  },
+} as const satisfies Record<string, NceiCoverage>;
+
+type NceiCoverageKey = keyof typeof NCEI_COVERAGES;
 
 /**
- * Fetch bathymetric data from the NCEI Bag Mosaic WCS for a given bounding box.
+ * Per-dataset ordered list of NCEI coverages to try before falling back to
+ * GEBCO. The first coverage that returns a usable grid wins; if all NCEI
+ * attempts fail or return out-of-coverage data, GEBCO is used (and finally
+ * a synthetic fbm fallback if GEBCO is also unreachable).
  *
- * The NCEI Bag Mosaic is a composite of multibeam surveys at 1–50 m resolution
- * for surveyed US coastal and Alaskan waters. Not all areas are covered; an error
- * or empty response means GEBCO should be used as fallback.
+ * Datasets not listed here skip NCEI entirely and go straight to GEBCO.
+ */
+export const NCEI_DATASET_COVERAGES: Record<string, NceiCoverageKey[]> = {
+  "thorne-bay":         ["bagMosaic", "demGlobalMosaic"],
+  "ketchikan":          ["bagMosaic", "demGlobalMosaic"],
+  "sitka-sound":        ["bagMosaic", "demGlobalMosaic"],
+  "juneau-approaches":  ["bagMosaic", "demGlobalMosaic"],
+  "glacier-bay":        ["demGlobalMosaic", "bagMosaic"],
+  "icy-strait":         ["demGlobalMosaic", "bagMosaic"],
+  "craig-klawock":      ["demGlobalMosaic", "bagMosaic"],
+  "wrangell-petersburg":["demGlobalMosaic", "bagMosaic"],
+  "skagway-haines":     ["demGlobalMosaic", "bagMosaic"],
+};
+
+/**
+ * Fetch bathymetric data from an NCEI WCS coverage for a given bounding box.
  *
- * Returns the same shape as fetchGebcoGrid for a transparent swap-in.
+ * NCEI elevation values are metres relative to MHW/MLLW (positive up, land > 0,
+ * seafloor < 0). For BathyScan's TerrainGrid contract we convert to positive-down
+ * depth and capture positive elevations in the topography array. The MLLW vs MSL
+ * offset across SE Alaska is < 2 m and well below the viewer's vertical
+ * resolution, so no per-source datum shift is applied.
+ *
+ * Returns the same shape as fetchGebcoGrid for a transparent swap-in. Throws
+ * when the coverage returns an XML error, an empty grid, or a near-flat grid
+ * (indicating no real survey coverage for the requested bbox) — callers should
+ * catch and fall through to the next coverage / GEBCO.
  */
 async function fetchNceiGrid(
   bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number },
-  resolution: number
+  resolution: number,
+  coverageKey: NceiCoverageKey = "bagMosaic"
 ): Promise<{ depths: number[]; minDepth: number; maxDepth: number; topography: number[]; hasTopography: boolean }> {
   const { minLon, minLat, maxLon, maxLat } = bbox;
+  const cov = NCEI_COVERAGES[coverageKey]!;
   const params = new URLSearchParams({
     SERVICE: "WCS",
     VERSION: "1.0.0",
     REQUEST: "GetCoverage",
-    COVERAGE: "1",
+    COVERAGE: cov.coverage,
     CRS: "EPSG:4326",
     BBOX: `${minLon},${minLat},${maxLon},${maxLat}`,
     FORMAT: "image/x-aaigrid",
@@ -278,7 +374,7 @@ async function fetchNceiGrid(
     HEIGHT: String(resolution),
   });
 
-  const url = `${NCEI_WCS}?${params.toString()}`;
+  const url = `${cov.url}?${params.toString()}`;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);
@@ -547,54 +643,42 @@ export async function buildTerrainGrid(
   }
 
   // 3. Fetch from upstream source:
-  //    NCEI Bag Mosaic WCS → GEBCO WCS → synthetic fallback
-  let depths: number[];
-  let minDepth: number;
-  let maxDepth: number;
+  //    NCEI WCS (per-dataset coverage list) → GEBCO WCS → synthetic fallback
+  let depths: number[] = [];
+  let minDepth = 0;
+  let maxDepth = 0;
   let topography: number[] | undefined;
   let hasTopography = false;
   let synthetic = false;
   let dataSource: TerrainDataSource = "gebco";
+  let resolved = false;
 
-  // Try NCEI first for datasets with high-resolution multibeam coverage
-  if (NCEI_PREFERRED_DATASETS.has(datasetId)) {
-    try {
-      console.info(`[terrain] Trying NCEI Bag Mosaic WCS for ${datasetId} at ${N}×${N}…`);
-      const ncei = await fetchNceiGrid(meta.bbox, N);
-      depths = ncei.depths;
-      minDepth = ncei.minDepth;
-      maxDepth = ncei.maxDepth;
-      topography = ncei.topography;
-      hasTopography = ncei.hasTopography;
-      dataSource = "ncei";
-      console.info(`[terrain] NCEI data fetched successfully for ${datasetId}`);
-    } catch (nceiErr) {
-      console.info(
-        `[terrain] NCEI WCS unavailable for ${datasetId}: ${(nceiErr as Error).message}. Falling back to GEBCO.`
-      );
-      // Fall through to GEBCO below
+  const nceiCoverages = NCEI_DATASET_COVERAGES[datasetId];
+
+  if (nceiCoverages && nceiCoverages.length > 0) {
+    for (const coverageKey of nceiCoverages) {
+      const cov = NCEI_COVERAGES[coverageKey]!;
       try {
-        console.info(`[terrain] Fetching GEBCO WCS for ${datasetId} at ${N}×${N}…`);
-        const gebco = await fetchGebcoGrid(meta.bbox, N);
-        depths = gebco.depths;
-        minDepth = gebco.minDepth;
-        maxDepth = gebco.maxDepth;
-        topography = gebco.topography;
-        hasTopography = gebco.hasTopography;
-        dataSource = "gebco";
-      } catch (gebcoErr) {
-        console.warn(
-          `[terrain] GEBCO WCS also unavailable for ${datasetId}: ${(gebcoErr as Error).message}. Using synthetic fallback.`
+        console.info(`[terrain] Trying ${cov.label} for ${datasetId} at ${N}×${N}…`);
+        const ncei = await fetchNceiGrid(meta.bbox, N, coverageKey);
+        depths = ncei.depths;
+        minDepth = ncei.minDepth;
+        maxDepth = ncei.maxDepth;
+        topography = ncei.topography;
+        hasTopography = ncei.hasTopography;
+        dataSource = "ncei";
+        resolved = true;
+        console.info(`[terrain] ${cov.label} fetched successfully for ${datasetId}`);
+        break;
+      } catch (nceiErr) {
+        console.info(
+          `[terrain] ${cov.label} unavailable for ${datasetId}: ${(nceiErr as Error).message}.`
         );
-        const synth = buildSyntheticGrid(datasetId, N, meta);
-        depths = synth.depths;
-        minDepth = synth.minDepth;
-        maxDepth = synth.maxDepth;
-        synthetic = true;
-        dataSource = "synthetic";
       }
     }
-  } else {
+  }
+
+  if (!resolved) {
     try {
       console.info(`[terrain] Fetching GEBCO WCS for ${datasetId} at ${N}×${N}…`);
       const gebco = await fetchGebcoGrid(meta.bbox, N);

@@ -16,7 +16,7 @@
 
 import { db, datasetCatalogTable } from "@workspace/db";
 import { sql } from "drizzle-orm";
-import { ALL_PRESET_DATASETS } from "./terrain.js";
+import { ALL_PRESET_DATASETS, NCEI_DATASET_COVERAGES } from "./terrain.js";
 
 export interface CatalogSeedEntry {
   id: string;
@@ -62,8 +62,113 @@ const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     endpointUrl: "https://gis.ngdc.noaa.gov/arcgis/services/bag_mosaic/ImageServer/WCSServer",
     accessNotes: "Requires WCS query. Coverage limited to surveyed coastal corridors.",
     description: "High-resolution multibeam echosounder survey composite from NOAA National Centers for Environmental Information (NCEI). Covers Inside Passage and Alaskan coastal waters at 1–50 m resolution where surveys exist.",
-    keywords: "Alaska,NCEI,multibeam,inside passage,high resolution,survey,bathymetry,SE Alaska,Thorne Bay,Clarence Strait",
+    keywords: "Alaska,NCEI,multibeam,inside passage,high resolution,survey,bathymetry,SE Alaska,Thorne Bay,Clarence Strait,Ketchikan,Sitka,Juneau",
     lastUpdated: "2024-06-01",
+    waterType: "saltwater",
+  },
+  {
+    id: "ncei-dem-global-mosaic",
+    name: "NCEI DEM Global Mosaic — SE Alaska Coverage",
+    sourceAgency: "NOAA/NCEI",
+    dataType: "bathymetry",
+    resolutionMMin: 8,
+    resolutionMMax: 90,
+    coverageBbox: { minLon: -180, minLat: -90, maxLon: 180, maxLat: 90 },
+    endpointUrl: "https://gis.ngdc.noaa.gov/arcgis/services/DEM_global_mosaic/ImageServer/WCSServer",
+    accessNotes: "WCS endpoint serving NCEI's best-available DEM mosaic. Integrates community/tsunami DEMs for Juneau, Sitka, Ketchikan, Craig, Skagway, Wrangell, and Petersburg at 8–30 m where they exist.",
+    description: "NCEI's integrated best-available DEM. In SE Alaska it blends multiple community DEMs (1/3 and 8/15 arc-second tsunami models) into a seamless 8–30 m bathy/topo grid, falling back to coarser regional grids elsewhere.",
+    keywords: "Alaska,NCEI,DEM,community DEM,tsunami DEM,Juneau,Sitka,Ketchikan,Craig,Skagway,Wrangell,Petersburg,SE Alaska,high resolution,bathymetry,topography",
+    lastUpdated: "2024-06-01",
+    waterType: "saltwater",
+  },
+  {
+    id: "ncei-community-dem-juneau",
+    name: "NCEI Community DEM — Juneau, AK (1/3 arc-second)",
+    sourceAgency: "NOAA/NCEI",
+    dataType: "bathymetry",
+    resolutionMMin: 10,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -135.2, minLat: 57.9, maxLon: -133.8, maxLat: 58.7 },
+    endpointUrl: "https://www.ncei.noaa.gov/products/coastal-elevation-models",
+    accessNotes: "Integrated bathy/topo DEM built for tsunami inundation modelling. Accessed via the NCEI DEM Global Mosaic WCS in BathyScan.",
+    description: "Juneau, Alaska 1/3 arc-second (~10 m) integrated bathy/topo DEM. Covers Stephens Passage, Lynn Canal approaches, Gastineau Channel, and the Juneau road system.",
+    keywords: "Juneau,Alaska,NCEI,community DEM,tsunami,bathymetry,topography,Stephens Passage,Lynn Canal,Gastineau,SE Alaska",
+    lastUpdated: "2023-01-01",
+    waterType: "saltwater",
+  },
+  {
+    id: "ncei-community-dem-sitka",
+    name: "NCEI Community DEM — Sitka, AK (8/15 arc-second)",
+    sourceAgency: "NOAA/NCEI",
+    dataType: "bathymetry",
+    resolutionMMin: 16,
+    resolutionMMax: 16,
+    coverageBbox: { minLon: -136.0, minLat: 56.7, maxLon: -135.0, maxLat: 57.25 },
+    endpointUrl: "https://www.ncei.noaa.gov/products/coastal-elevation-models",
+    accessNotes: "Accessed via the NCEI DEM Global Mosaic WCS in BathyScan.",
+    description: "Sitka, Alaska 8/15 arc-second (~16 m) integrated bathy/topo DEM covering Sitka Sound and the outer Baranof Island coast.",
+    keywords: "Sitka,Alaska,NCEI,community DEM,tsunami,bathymetry,topography,Sitka Sound,Baranof,SE Alaska",
+    lastUpdated: "2023-01-01",
+    waterType: "saltwater",
+  },
+  {
+    id: "ncei-community-dem-ketchikan",
+    name: "NCEI Community DEM — Ketchikan, AK (8/15 arc-second)",
+    sourceAgency: "NOAA/NCEI",
+    dataType: "bathymetry",
+    resolutionMMin: 16,
+    resolutionMMax: 16,
+    coverageBbox: { minLon: -132.3, minLat: 55.0, maxLon: -131.0, maxLat: 55.7 },
+    endpointUrl: "https://www.ncei.noaa.gov/products/coastal-elevation-models",
+    accessNotes: "Accessed via the NCEI DEM Global Mosaic WCS in BathyScan.",
+    description: "Ketchikan, Alaska 8/15 arc-second (~16 m) integrated bathy/topo DEM covering Tongass Narrows, Revillagigedo Channel, and Clarence Strait approaches.",
+    keywords: "Ketchikan,Alaska,NCEI,community DEM,tsunami,bathymetry,topography,Tongass Narrows,Revillagigedo,SE Alaska",
+    lastUpdated: "2023-01-01",
+    waterType: "saltwater",
+  },
+  {
+    id: "ncei-community-dem-craig",
+    name: "NCEI Community DEM — Craig, AK (1/3 arc-second)",
+    sourceAgency: "NOAA/NCEI",
+    dataType: "bathymetry",
+    resolutionMMin: 10,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -133.7, minLat: 55.2, maxLon: -132.6, maxLat: 55.8 },
+    endpointUrl: "https://www.ncei.noaa.gov/products/coastal-elevation-models",
+    accessNotes: "Accessed via the NCEI DEM Global Mosaic WCS in BathyScan.",
+    description: "Craig, Alaska 1/3 arc-second (~10 m) integrated bathy/topo DEM covering Craig, Klawock, Bucareli Bay, and the west side of Prince of Wales Island.",
+    keywords: "Craig,Klawock,Alaska,NCEI,community DEM,tsunami,bathymetry,topography,Prince of Wales,Bucareli Bay,SE Alaska",
+    lastUpdated: "2023-01-01",
+    waterType: "saltwater",
+  },
+  {
+    id: "ncei-community-dem-skagway",
+    name: "NCEI Community DEM — Skagway, AK (1/3 arc-second)",
+    sourceAgency: "NOAA/NCEI",
+    dataType: "bathymetry",
+    resolutionMMin: 10,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -135.85, minLat: 58.95, maxLon: -134.85, maxLat: 59.55 },
+    endpointUrl: "https://www.ncei.noaa.gov/products/coastal-elevation-models",
+    accessNotes: "Accessed via the NCEI DEM Global Mosaic WCS in BathyScan.",
+    description: "Skagway / Haines, Alaska 1/3 arc-second (~10 m) integrated bathy/topo DEM covering upper Lynn Canal at the head of the Inside Passage.",
+    keywords: "Skagway,Haines,Alaska,NCEI,community DEM,tsunami,bathymetry,topography,Lynn Canal,SE Alaska",
+    lastUpdated: "2023-01-01",
+    waterType: "saltwater",
+  },
+  {
+    id: "ncei-community-dem-wrangell-petersburg",
+    name: "NCEI Community DEM — Wrangell & Petersburg, AK",
+    sourceAgency: "NOAA/NCEI",
+    dataType: "bathymetry",
+    resolutionMMin: 16,
+    resolutionMMax: 30,
+    coverageBbox: { minLon: -133.5, minLat: 56.2, maxLon: -132.0, maxLat: 57.0 },
+    endpointUrl: "https://www.ncei.noaa.gov/products/coastal-elevation-models",
+    accessNotes: "Accessed via the NCEI DEM Global Mosaic WCS in BathyScan.",
+    description: "Wrangell and Petersburg community DEMs covering Wrangell Narrows, Frederick Sound, and the central Inside Passage between Wrangell and Petersburg at ~16–30 m resolution.",
+    keywords: "Wrangell,Petersburg,Alaska,NCEI,community DEM,bathymetry,topography,Wrangell Narrows,Frederick Sound,SE Alaska",
+    lastUpdated: "2023-01-01",
     waterType: "saltwater",
   },
   {
@@ -159,21 +264,30 @@ const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
 ];
 
 function buildPresetCatalogEntries(): CatalogSeedEntry[] {
-  return ALL_PRESET_DATASETS.map((d) => ({
-    id: `preset-${d.id}`,
-    name: d.name,
-    sourceAgency: d.waterType === "saltwater" ? "NOAA/NCEI + GEBCO" : "GEBCO / Synthetic",
-    dataType: "bathymetry" as const,
-    resolutionMMin: d.waterType === "saltwater" && d.id === "thorne-bay" ? 1 : 400,
-    resolutionMMax: 400,
-    coverageBbox: d.bbox,
-    endpointUrl: null,
-    accessNotes: "Available directly in BathyScan viewer — select from the Datasets panel.",
-    description: d.description,
-    keywords: [d.name, d.waterType, "bathymetry", "terrain", d.id].join(","),
-    lastUpdated: "2024-01-01",
-    waterType: d.waterType,
-  }));
+  return ALL_PRESET_DATASETS.map((d) => {
+    const usesNcei = d.waterType === "saltwater" && d.id in NCEI_DATASET_COVERAGES;
+    return {
+      id: `preset-${d.id}`,
+      name: d.name,
+      sourceAgency: usesNcei
+        ? "NOAA/NCEI + GEBCO"
+        : d.waterType === "saltwater"
+          ? "GEBCO"
+          : "GEBCO / Synthetic",
+      dataType: "bathymetry" as const,
+      // NCEI-preferred SE Alaska presets reach 1–24 m where multibeam / community
+      // DEM coverage exists; everything else falls through to GEBCO's ~400 m grid.
+      resolutionMMin: usesNcei ? 1 : 400,
+      resolutionMMax: 400,
+      coverageBbox: d.bbox,
+      endpointUrl: null,
+      accessNotes: "Available directly in BathyScan viewer — select from the Datasets panel.",
+      description: d.description,
+      keywords: [d.name, d.waterType, "bathymetry", "terrain", d.id].join(","),
+      lastUpdated: "2024-01-01",
+      waterType: d.waterType,
+    };
+  });
 }
 
 let seeded = false;
