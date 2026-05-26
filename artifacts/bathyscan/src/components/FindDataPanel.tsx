@@ -457,6 +457,28 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     },
   });
 
+  // When a save's server-side materialization finishes, surface the new
+  // user-dataset row in the rest of the app (notably DatasetPanel's "MY
+  // UPLOADS" list) without forcing a manual refresh. We watch the polled
+  // saves for status transitions into "ready" with a resolved datasetId
+  // and invalidate the user-datasets list query on each fresh transition.
+  const readyDatasetIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!isSignedIn) return;
+    let anyNew = false;
+    for (const save of mySaves) {
+      if (save.status === "ready" && save.datasetId) {
+        if (!readyDatasetIdsRef.current.has(save.datasetId)) {
+          readyDatasetIdsRef.current.add(save.datasetId);
+          anyNew = true;
+        }
+      }
+    }
+    if (anyNew) {
+      void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+    }
+  }, [mySaves, qc, isSignedIn]);
+
   const saveMutation = usePostDatasetsCatalogIdSave();
   const retryMutation = usePostDatasetsMySavesIdRetry();
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());

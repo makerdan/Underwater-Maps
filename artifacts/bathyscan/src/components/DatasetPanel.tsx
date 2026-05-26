@@ -11,7 +11,6 @@ import {
   useGetUserDatasets,
   useGetUserDatasetsIdTerrain,
   useGetUserDatasetsIdOverview,
-  useDeleteUserDatasetsId,
   useGetMarkers,
   useDeleteMarkersId,
   getGetDatasetsIdTerrainQueryKey,
@@ -504,19 +503,36 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     setPendingUserDatasetId(null);
   };
 
-  // ─── Delete user dataset (mutation surface kept for compatibility) ────────
-  const deleteMutation = useDeleteUserDatasetsId();
-
-  // When a delete completes in the tree, clear active selection if needed.
-  useEffect(() => {
-    if (
-      deleteMutation.isSuccess &&
-      typeof deleteMutation.variables?.id === "string" &&
-      activeUserDatasetId === deleteMutation.variables.id
-    ) {
-      setActiveUserDatasetId(null);
-    }
-  }, [deleteMutation.isSuccess, deleteMutation.variables, activeUserDatasetId]);
+  // ─── Delete user dataset — clean up active state when the row goes away ──
+  // DatasetFolderTree owns the delete mutation (single-row and recursive
+  // folder delete). When it finishes, it tells us which dataset ids were
+  // removed so we can drop active-dataset state and clear the scene if the
+  // user just deleted the dataset they were looking at.
+  const handleDatasetsRemoved = useCallback(
+    (removedIds: string[]) => {
+      if (removedIds.length === 0) return;
+      const removed = new Set(removedIds);
+      if (activeUserDatasetId && removed.has(activeUserDatasetId)) {
+        setActiveUserDatasetId(null);
+        setTerrain(null);
+        useTerrainStore.getState().setGrids({ activeGrid: null, overviewGrid: null });
+        try {
+          useClassificationStore.getState().clearZoneMap?.();
+        } catch {
+          // noop
+        }
+        activeOverviewWrittenRef.current = null;
+      }
+      // Also cancel any in-flight load targeting a removed id so we don't
+      // commit grids for a row that no longer exists.
+      if (pendingUserDatasetId && removed.has(pendingUserDatasetId)) {
+        setPendingUserDatasetId(null);
+        setLoadingId(null);
+        useActiveLoadStore.getState().fail(pendingUserDatasetId);
+      }
+    },
+    [activeUserDatasetId, pendingUserDatasetId, setTerrain],
+  );
 
   // ─── Upload ────────────────────────────────────────────────────────────────
   const postDatasetsUpload = usePostDatasetsUpload();
@@ -971,6 +987,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                   activeUserDatasetId={pendingUserDatasetId ? null : activeUserDatasetId}
                   loadingId={loadingId}
                   onSelectDataset={handleSelectUserDataset}
+                  onDatasetsRemoved={handleDatasetsRemoved}
                 />
               </ErrorBoundary>
             </div>

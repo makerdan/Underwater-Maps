@@ -33,6 +33,8 @@ import {
   usePostUserDatasetsIdDuplicate,
   getGetUserFoldersQueryKey,
   getGetUserDatasetsQueryKey,
+  getGetUserDatasetsIdTerrainQueryKey,
+  getGetUserDatasetsIdOverviewQueryKey,
 } from "@workspace/api-client-react";
 import type { UserDatasetMeta } from "@workspace/api-client-react";
 import { useSettingsStore } from "@/lib/settingsStore";
@@ -54,6 +56,13 @@ interface Props {
   activeUserDatasetId: string | null;
   loadingId: string | null;
   onSelectDataset: (ds: UserDatasetMeta) => void;
+  /**
+   * Called after one or more user datasets have been removed from the server
+   * (single delete or recursive folder delete). The parent uses this to drop
+   * active-dataset state if it referenced any of the removed ids. Per-dataset
+   * terrain/overview React Query cache entries are already evicted here.
+   */
+  onDatasetsRemoved?: (datasetIds: string[]) => void;
 }
 
 type DragKind = "folder" | "dataset";
@@ -72,6 +81,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
   activeUserDatasetId,
   loadingId,
   onSelectDataset,
+  onDatasetsRemoved,
 }) => {
   const qc = useQueryClient();
   const expanded = useSettingsStore((s) => s.datasetFolderExpanded);
@@ -101,6 +111,21 @@ export const DatasetFolderTree: React.FC<Props> = ({
     void qc.invalidateQueries({ queryKey: getGetUserFoldersQueryKey() });
     void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
   }, [qc]);
+
+  // After a user dataset is deleted server-side, its per-dataset terrain
+  // and overview React Query entries are stale forever — evict them so any
+  // future view of that id starts from a fresh fetch (which will 404)
+  // instead of resurrecting cached bytes from a row that no longer exists.
+  const evictDatasetCaches = useCallback(
+    (ids: string[]) => {
+      for (const id of ids) {
+        if (!id) continue;
+        qc.removeQueries({ queryKey: getGetUserDatasetsIdTerrainQueryKey(id) });
+        qc.removeQueries({ queryKey: getGetUserDatasetsIdOverviewQueryKey(id) });
+      }
+    },
+    [qc],
+  );
 
   // ─── Inline rename state ─────────────────────────────────────────────────
   const [renaming, setRenaming] = useState<{ kind: "folder" | "dataset"; id: string } | null>(null);
@@ -238,10 +263,15 @@ export const DatasetFolderTree: React.FC<Props> = ({
   const handleDelete = () => {
     if (!confirmDelete) return;
     if (confirmDelete.kind === "dataset") {
+      const removedId = confirmDelete.id;
       deleteDataset.mutate(
-        { id: confirmDelete.id },
+        { id: removedId },
         {
-          onSuccess: invalidateAll,
+          onSuccess: () => {
+            evictDatasetCaches([removedId]);
+            invalidateAll();
+            onDatasetsRemoved?.([removedId]);
+          },
           onSettled: () => setConfirmDelete(null),
         },
       );
@@ -251,10 +281,29 @@ export const DatasetFolderTree: React.FC<Props> = ({
       // treats it as a no-op. The recursive flag is captured at confirm-time
       // so the user explicitly opts into deleting the children they saw.
       const mode = confirmDelete.recursive ? "contents" : "contents";
+      // Collect every dataset id that lives in the doomed subtree *before*
+      // the delete fires, so we can evict their per-dataset cache entries
+      // and tell the parent which active-dataset ids to clear.
+      const folderIds = new Set<string>([confirmDelete.id]);
+      for (const id of descendantFolderIds(tree.byId, confirmDelete.id)) {
+        folderIds.add(id);
+      }
+      const removedDatasetIds: string[] = [];
+      for (const ds of datasets) {
+        if (ds.folderId && folderIds.has(ds.folderId)) {
+          removedDatasetIds.push(ds.id);
+        }
+      }
       deleteFolder.mutate(
         { id: confirmDelete.id, data: { mode } },
         {
-          onSuccess: invalidateAll,
+          onSuccess: () => {
+            evictDatasetCaches(removedDatasetIds);
+            invalidateAll();
+            if (removedDatasetIds.length > 0) {
+              onDatasetsRemoved?.(removedDatasetIds);
+            }
+          },
           onSettled: () => setConfirmDelete(null),
         },
       );
