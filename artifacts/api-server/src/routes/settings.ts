@@ -34,7 +34,7 @@ const DEFAULT_SETTINGS = {
   smoothTerrainSpikes: true,
   privateMarkers: false,
   defaultMarkerType: "fish",
-  defaultRegion: "thorne-bay",
+  defaultRegion: "",
   gpsRecordingInterval: 10000,
   waterType: "saltwater",
   showUiTooltips: true,

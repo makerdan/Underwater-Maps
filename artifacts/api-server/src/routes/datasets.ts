@@ -182,7 +182,18 @@ router.get("/datasets/:id/zones", async (req, res): Promise<void> => {
 
   // --- Auth / ownership gate ---
   const isPreset = ALL_PRESET_DATASETS.some((d) => d.id === id);
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!isPreset) {
+    // Only two non-preset ID shapes are recognised now that the bundled
+    // presets have been retired: UUID-format saved uploads, and the
+    // placeholder "upload" used for anonymous uploads. Anything else
+    // (e.g. legacy preset IDs like `thorne-bay`) returns 404 cleanly so
+    // the public /datasets/:id/* surface reflects an empty registry.
+    if (!UUID_RE.test(id) && id !== "upload") {
+      res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
+      return;
+    }
+
     const auth = getAuth(req);
     const callerId = auth?.userId ?? null;
 
@@ -192,7 +203,6 @@ router.get("/datasets/:id/zones", async (req, res): Promise<void> => {
     }
 
     // For UUID-format dataset IDs, verify ownership against the database.
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (UUID_RE.test(id)) {
       const rows = await db
         .select({ userId: customDatasetsTable.userId })
@@ -204,7 +214,7 @@ router.get("/datasets/:id/zones", async (req, res): Promise<void> => {
         return;
       }
     }
-    // For non-UUID, non-preset IDs (e.g. "upload") auth is sufficient; no DB row exists.
+    // For "upload" placeholder ID, auth is sufficient; no DB row exists.
   }
 
   // --- Cache lookup by sha256(gridHash + "|" + waterType) ---

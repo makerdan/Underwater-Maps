@@ -580,7 +580,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   trailRetention: "30",
 
   // Data
-  defaultRegion: "thorne-bay",
+  defaultRegion: "",
   autoLoadLastDataset: true,
 
   // Accessibility

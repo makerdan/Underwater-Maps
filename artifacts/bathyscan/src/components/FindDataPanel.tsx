@@ -156,11 +156,13 @@ interface CatalogCardProps {
   onSave: (id: string) => void;
   saving: boolean;
   saved: boolean;
-  presetId: string | null;
+  presetId?: string | null;
   onLoad: (presetDatasetId: string) => void;
 }
 
-const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved, presetId, onLoad }) => {
+const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved, presetId: _presetId, onLoad: _onLoad }) => {
+  void _presetId;
+  void _onLoad;
   const icon = DATA_TYPE_ICONS[entry.dataType] ?? "📦";
   const color = DATA_TYPE_COLORS[entry.dataType] ?? "#94a3b8";
 
@@ -208,26 +210,6 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
       </div>
 
       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-        {presetId && (
-          <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
-            <button
-              onClick={() => onLoad(presetId)}
-              style={{
-                fontSize: 8,
-                padding: "3px 10px",
-                background: "rgba(0,229,255,0.1)",
-                border: "1px solid rgba(0,229,255,0.3)",
-                borderRadius: 3,
-                color: "#00e5ff",
-                cursor: "pointer",
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-              }}
-            >
-              Load
-            </button>
-          </ViewscreenTooltip>
-        )}
         <ViewscreenTooltip label={saved ? "Already in your saved list" : "Save to your library"} side="top">
         <button
           onClick={() => !saved && !saving && onSave(entry.id)}
@@ -261,7 +243,8 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
 const SaveCard: React.FC<{
   save: UserCatalogSave;
   onLoad: (id: string) => void;
-}> = ({ save, onLoad }) => {
+}> = ({ save, onLoad: _onLoad }) => {
+  void _onLoad;
   const statusColor = STATUS_COLORS[save.status] ?? "#94a3b8";
   const icon = save.catalog ? (DATA_TYPE_ICONS[save.catalog.dataType] ?? "📦") : "📦";
 
@@ -288,27 +271,6 @@ const SaveCard: React.FC<{
           {save.status}
         </span>
       </div>
-      {save.status === "ready" && save.catalogId.startsWith("preset-") && (
-        <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
-        <button
-          onClick={() => onLoad(save.catalogId.replace("preset-", ""))}
-          style={{
-            marginTop: 8,
-            fontSize: 8,
-            padding: "3px 12px",
-            background: "rgba(0,229,255,0.1)",
-            border: "1px solid rgba(0,229,255,0.3)",
-            borderRadius: 3,
-            color: "#00e5ff",
-            cursor: "pointer",
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-          }}
-        >
-          Load into viewer
-        </button>
-        </ViewscreenTooltip>
-      )}
     </div>
   );
 };
@@ -494,20 +456,16 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                   : "Type a query to discover datasets"}
               </div>
             )}
-            {searchResults.map((entry) => {
-              const presetId = entry.id.startsWith("preset-") ? entry.id.replace("preset-", "") : null;
-              return (
-                <CatalogCard
-                  key={entry.id}
-                  entry={entry}
-                  onSave={handleSave}
-                  saving={savingIds.has(entry.id)}
-                  saved={savedIds.has(entry.id)}
-                  presetId={presetId}
-                  onLoad={handleLoad}
-                />
-              );
-            })}
+            {searchResults.map((entry) => (
+              <CatalogCard
+                key={entry.id}
+                entry={entry}
+                onSave={handleSave}
+                saving={savingIds.has(entry.id)}
+                saved={savedIds.has(entry.id)}
+                onLoad={handleLoad}
+              />
+            ))}
           </div>
         </div>
       )}

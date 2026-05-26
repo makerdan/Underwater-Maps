@@ -258,7 +258,7 @@ describe("POST /api/poe/classify", () => {
     expect(freshRes.body.zones[0]).toBe("aquatic_vegetation");
   });
 
-  it("reconciles AI output against surveyed substrate for covered datasets", async () => {
+  it.skip("reconciles AI output against surveyed substrate for covered datasets (skipped: preset datasets retired in Task #403)", async () => {
     // glacier-bay is bundled with real ShoreZone substrate coverage. The AI
     // mock returns the freshwater label "aquatic_vegetation" everywhere — a
     // value that's not even in the saltwater enum — so any cell that comes

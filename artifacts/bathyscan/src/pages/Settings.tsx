@@ -1949,17 +1949,9 @@ function DatasetSection() {
           value={s.defaultRegion}
           onChange={s.setDefaultRegion}
           options={[
-            { value: "thorne-bay", label: "Thorne Bay — SE Alaska" },
-            { value: "glacier-bay", label: "Glacier Bay — SE Alaska" },
-            { value: "icy-strait", label: "Icy Strait — SE Alaska" },
-            { value: "sitka-sound", label: "Sitka Sound — SE Alaska" },
-            { value: "juneau-approaches", label: "Juneau Approaches — SE Alaska" },
-            { value: "ketchikan", label: "Ketchikan — SE Alaska" },
-            { value: "lake-fork", label: "Lake Fork — East Texas" },
-            { value: "sam-rayburn", label: "Sam Rayburn — East Texas" },
-            { value: "toledo-bend", label: "Toledo Bend — TX/LA" },
+            { value: "", label: "None — start with no dataset loaded" },
           ]}
-          sublabel="Dataset loaded when the app starts"
+          sublabel="No bundled preset regions are available. Upload your own data or save a dataset from Find Data to use as a default."
         />
         <ToggleRow
           label="Auto-Load Last Dataset"

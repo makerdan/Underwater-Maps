@@ -187,23 +187,14 @@ export const OverviewMap: React.FC = () => {
   const [bboxSavingIds, setBboxSavingIds] = useState<Set<string>>(new Set());
 
   const handleBboxLoad = useCallback(
-    (entry: DatasetCatalogSearchResult) => {
-      // Preset bundled datasets load directly into the 3D view; non-preset
-      // (user-saved or external) entries don't have a runtime grid yet, so
-      // we just close the map and let the Find Data flow handle them.
-      if (entry.id.startsWith("preset-")) {
-        const presetId = entry.id.replace("preset-", "");
-        void requestDatasetSwitch({
-          datasetId: presetId,
-          datasetName: entry.name,
-          onConfirm: () => {
-            setDatasetId(presetId);
-            setOverviewOpen(false);
-          },
-        });
-      }
+    (_entry: DatasetCatalogSearchResult) => {
+      // Preset datasets are retired (Task #403). Non-preset (user-saved or
+      // external) entries don't have a runtime grid here, so this is a
+      // no-op — the Find Data flow handles them.
+      void _entry;
+      void setDatasetId;
     },
-    [setDatasetId, setOverviewOpen],
+    [setDatasetId],
   );
 
   const handleBboxSave = useCallback(
@@ -1584,7 +1575,7 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
   onRedraw,
   onClear,
   onClose,
-  onLoad,
+  onLoad: _onLoad,
   onSave,
   savedIds,
   savingIds,
@@ -1757,7 +1748,6 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
           </div>
         )}
         {results && results.map((entry) => {
-          const isPreset = entry.id.startsWith("preset-");
           const saved = savedIds.has(entry.id);
           const saving = savingIds.has(entry.id);
           return (
@@ -1777,27 +1767,8 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
                 {entry.dataType} · {entry.sourceAgency}
               </div>
               <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                {isPreset && (
-                  <button
-                    data-testid="overview-bbox-load"
-                    onClick={() => onLoad(entry)}
-                    style={{
-                      flex: 1,
-                      background: "rgba(0,229,255,0.1)",
-                      border: "1px solid rgba(0,229,255,0.35)",
-                      borderRadius: 3,
-                      color: "#00e5ff",
-                      padding: "3px 6px",
-                      cursor: "pointer",
-                      fontSize: 9,
-                      letterSpacing: "0.08em",
-                    }}
-                  >
-                    LOAD
-                  </button>
-                )}
-                {/* Save is always available — mirrors FindDataPanel where
-                    presets can also be saved to the user's library. */}
+                {/* Save is always available — presets are retired (Task #403),
+                    but user-saved/external entries can still be saved here. */}
                 <button
                   data-testid="overview-bbox-save"
                   onClick={() => !saved && !saving && onSave(entry.id)}

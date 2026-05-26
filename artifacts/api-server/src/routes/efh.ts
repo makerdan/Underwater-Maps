@@ -41,9 +41,7 @@ export const EFH_DATASET_IDS: ReadonlySet<string> = new Set(
 router.get("/efh", (req, res) => {
   const { datasetId, species } = req.query as { datasetId?: string; species?: string };
 
-  // Default to Thorne Bay when no datasetId is provided (legacy behaviour).
-  const lookupId = datasetId ?? "thorne-bay";
-  const collection = EFH_BY_DATASET[lookupId];
+  const collection = datasetId ? EFH_BY_DATASET[datasetId] : undefined;
 
   if (!collection) {
     res.json({

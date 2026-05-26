@@ -297,6 +297,23 @@ export async function seedDatasetCatalog(): Promise<void> {
   seeded = true;
 
   try {
+    // One-time cleanup: previously seeded `preset-*` catalog rows for the
+    // retired bundled presets must be removed on startup so they don't keep
+    // showing up in Find Data search after the registry was emptied. Safe to
+    // run every boot — once they're gone, the DELETE is a no-op.
+    const purged = await db.execute(
+      sql`DELETE FROM dataset_catalog WHERE id LIKE 'preset-%'`,
+    );
+    const purgedCount = Number(
+      (purged as { rowCount?: number | null }).rowCount ?? 0,
+    );
+    if (purgedCount > 0) {
+      console.info(
+        `[catalog] Purged ${purgedCount} stale preset-* rows from prior boots.`,
+      );
+      inMemoryCatalog = null;
+    }
+
     const count = await db.execute(sql`SELECT COUNT(*) FROM dataset_catalog`);
     const existing = Number((count.rows[0] as { count: string }).count ?? "0");
     if (existing > 0) {
