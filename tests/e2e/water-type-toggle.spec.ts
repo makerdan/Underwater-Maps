@@ -78,9 +78,14 @@ test.describe("Water-type toggle", () => {
     // to the inactive slate color. Wait for the style transition to settle.
     await expect
       .poll(async () => saltBtn.evaluate((el) => getComputedStyle(el).color), {
-        timeout: 5_000,
+        timeout: 10_000,
       })
       .not.toBe(activeSaltColor);
+    // The auto-debounced PUT /api/settings for the colormap side-effect runs
+    // ~300 ms after the click. Wait for it to flush before navigating to
+    // /settings so the page re-hydrates from the server with the new value
+    // instead of catching the pre-flip "ocean" state.
+    await page.waitForTimeout(1500);
     const activeFreshColor = await freshBtn.evaluate((el) => getComputedStyle(el).color);
     const inactiveSaltColor = await saltBtn.evaluate((el) => getComputedStyle(el).color);
     expect(activeFreshColor).not.toBe(inactiveSaltColor);

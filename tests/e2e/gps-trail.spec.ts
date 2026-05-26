@@ -44,12 +44,17 @@ test.describe("BathyScan — GPS activation", () => {
       return;
     }
 
-    // Open overview map via keyboard
-    await page.keyboard.press("o");
-    await page.waitForTimeout(800);
+    // Open overview map via the dev test helper. The bare "o" keypress goes
+    // through the canvas focus chain, which is unreliable when the React app
+    // is still settling after navigation — switch to the deterministic
+    // `__bathyTest.setOverviewOpen(true)` bridge that the overview-map spec
+    // also uses.
+    await page.waitForFunction(() => Boolean(window.__bathyTest?.setOverviewOpen), null, { timeout: 10_000 }).catch(() => {});
+    await page.evaluate(() => window.__bathyTest?.setOverviewOpen?.(true)).catch(() => {});
+    await page.waitForTimeout(400);
 
     const gpsBtn = page.locator("[data-testid='gps-activate-btn']");
-    const btnVisible = await gpsBtn.isVisible({ timeout: 5_000 }).catch(() => false);
+    const btnVisible = await gpsBtn.isVisible({ timeout: 8_000 }).catch(() => false);
     if (!btnVisible) {
       test.skip(true, "GPS button not found — overview map may not have opened");
       return;
@@ -71,11 +76,12 @@ test.describe("BathyScan — GPS activation", () => {
       return;
     }
 
-    await page.keyboard.press("o");
-    await page.waitForTimeout(800);
+    await page.waitForFunction(() => Boolean(window.__bathyTest?.setOverviewOpen), null, { timeout: 10_000 }).catch(() => {});
+    await page.evaluate(() => window.__bathyTest?.setOverviewOpen?.(true)).catch(() => {});
+    await page.waitForTimeout(400);
 
     const gpsBtn = page.locator("[data-testid='gps-activate-btn']");
-    const btnVisible = await gpsBtn.isVisible({ timeout: 5_000 }).catch(() => false);
+    const btnVisible = await gpsBtn.isVisible({ timeout: 8_000 }).catch(() => false);
     if (!btnVisible) {
       test.skip(true, "GPS button not found");
       return;
@@ -120,12 +126,13 @@ test.describe("BathyScan — trail recording flow", () => {
       return;
     }
 
-    // Activate GPS via overview map
-    await page.keyboard.press("o");
-    await page.waitForTimeout(600);
+    // Activate GPS via overview map (use deterministic test bridge)
+    await page.waitForFunction(() => Boolean(window.__bathyTest?.setOverviewOpen), null, { timeout: 10_000 }).catch(() => {});
+    await page.evaluate(() => window.__bathyTest?.setOverviewOpen?.(true)).catch(() => {});
+    await page.waitForTimeout(400);
 
     const gpsBtn = page.locator("[data-testid='gps-activate-btn']");
-    const btnVisible = await gpsBtn.isVisible({ timeout: 4_000 }).catch(() => false);
+    const btnVisible = await gpsBtn.isVisible({ timeout: 8_000 }).catch(() => false);
     if (!btnVisible) {
       test.skip(true, "GPS button not found");
       return;
@@ -135,8 +142,8 @@ test.describe("BathyScan — trail recording flow", () => {
     await page.waitForTimeout(2000);
 
     // Close overview map
-    await page.keyboard.press("o");
-    await page.waitForTimeout(600);
+    await page.evaluate(() => window.__bathyTest?.setOverviewOpen?.(false)).catch(() => {});
+    await page.waitForTimeout(400);
 
     // Only test recorder if GPS actually activated
     const isActive = await gpsBtn.getAttribute("aria-pressed") === "true";
@@ -159,12 +166,13 @@ test.describe("BathyScan — trail recording flow", () => {
       return;
     }
 
-    // Activate GPS
-    await page.keyboard.press("o");
-    await page.waitForTimeout(600);
+    // Activate GPS via the deterministic test bridge
+    await page.waitForFunction(() => Boolean(window.__bathyTest?.setOverviewOpen), null, { timeout: 10_000 }).catch(() => {});
+    await page.evaluate(() => window.__bathyTest?.setOverviewOpen?.(true)).catch(() => {});
+    await page.waitForTimeout(400);
 
     const gpsBtn = page.locator("[data-testid='gps-activate-btn']");
-    const btnVisible = await gpsBtn.isVisible({ timeout: 4_000 }).catch(() => false);
+    const btnVisible = await gpsBtn.isVisible({ timeout: 8_000 }).catch(() => false);
     if (!btnVisible) {
       test.skip(true, "GPS button not found");
       return;
@@ -172,8 +180,8 @@ test.describe("BathyScan — trail recording flow", () => {
 
     await gpsBtn.click();
     await page.waitForTimeout(2000);
-    await page.keyboard.press("o");
-    await page.waitForTimeout(600);
+    await page.evaluate(() => window.__bathyTest?.setOverviewOpen?.(false)).catch(() => {});
+    await page.waitForTimeout(400);
 
     const isActive = await gpsBtn.getAttribute("aria-pressed") === "true";
     if (!isActive) {

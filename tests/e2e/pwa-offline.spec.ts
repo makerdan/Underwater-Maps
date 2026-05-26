@@ -86,7 +86,14 @@ test.describe("Offline indicator & query panel", () => {
   test("offline badge appears when offline event is dispatched", async ({ page }) => {
     await page.goto(BASE, { waitUntil: "domcontentloaded" });
 
-    if (!(await page.$("canvas"))) {
+    // Wait briefly for the canvas to mount — `page.$` is a one-shot probe
+    // and races the React app's first render under sequential suite load.
+    const canvasVisible = await page
+      .locator("canvas")
+      .first()
+      .isVisible({ timeout: 10_000 })
+      .catch(() => false);
+    if (!canvasVisible) {
       test.skip();
       return;
     }
@@ -104,7 +111,12 @@ test.describe("Offline indicator & query panel", () => {
   test("query panel shows offline notice and disables input when offline", async ({ page }) => {
     await page.goto(BASE, { waitUntil: "domcontentloaded" });
 
-    if (!(await page.$("canvas"))) {
+    const canvasVisible = await page
+      .locator("canvas")
+      .first()
+      .isVisible({ timeout: 10_000 })
+      .catch(() => false);
+    if (!canvasVisible) {
       test.skip();
       return;
     }
@@ -203,12 +215,18 @@ test.describe("Offline network-abort scenario", () => {
   test("dataset picker shows availability indicators when offline", async ({ page }) => {
     await page.goto(BASE, { waitUntil: "domcontentloaded" });
 
-    if (!(await page.$("canvas"))) {
+    const canvasVisible = await page
+      .locator("canvas")
+      .first()
+      .isVisible({ timeout: 10_000 })
+      .catch(() => false);
+    if (!canvasVisible) {
       test.skip();
       return;
     }
 
-    await page.waitForTimeout(1000);
+    // Give the dataset list a moment to render before blocking the network.
+    await page.waitForTimeout(1500);
     await page.route("**/api/**", (route) => route.abort("failed"));
     await goOffline(page);
 
@@ -217,10 +235,15 @@ test.describe("Offline network-abort scenario", () => {
     const unavailableBadges = page.locator('[data-testid^="unavailable-badge-"]');
     const cachedBadges = page.locator('[data-testid^="cache-badge-"]');
 
-    // At least one of the two types of badge must be visible (datasets listed)
-    const unavailableCount = await unavailableBadges.count();
-    const cachedCount = await cachedBadges.count();
-    expect(unavailableCount + cachedCount).toBeGreaterThan(0);
+    // Poll: the badges render once the offline event propagates through the
+    // dataset panel, which can take a frame or two under suite load.
+    await expect
+      .poll(
+        async () =>
+          (await unavailableBadges.count()) + (await cachedBadges.count()),
+        { timeout: 5_000 },
+      )
+      .toBeGreaterThan(0);
   });
 
   test("Settings page is accessible and shows cache management UI", async ({ page }) => {

@@ -62,7 +62,25 @@ test.describe("BathyScan — smoke suite", () => {
       test.skip(true, "HUD not visible — user is not signed in; landing page is shown");
       return;
     }
-    expect(hudText).toMatch(/▼\s*[\d,]+\s*M/);
+    // Wait for terrain to actually finish loading before reading the HUD.
+    // Otherwise the depth scale bar may have populated while the HUD still
+    // shows "DEPTH —" — see Task #420 (terrain race).
+    await page.waitForFunction(
+      () => {
+        const t = window.__bathyTest?.getTerrainSummary?.();
+        return Boolean(t?.datasetId);
+      },
+      null,
+      { timeout: 15_000 },
+    ).catch(() => {});
+    // Poll the body text — the HUD writes the numeric depth on the next
+    // useFrame tick after terrain becomes available.
+    await expect
+      .poll(async () => (await page.locator("body").textContent()) ?? "", {
+        timeout: 10_000,
+        intervals: [200, 400, 800],
+      })
+      .toMatch(/▼\s*[\d,]+\s*M/);
   });
 
   test("file upload zone is present on the page", async ({ page }) => {

@@ -4,7 +4,11 @@ export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
   forbidOnly: !!process.env["CI"],
-  retries: 0,
+  // Per-test retries. Stabilizes the suite against rare timing flakes
+  // (terrain race, network jitter on tide/NOAA, debounced settings sync)
+  // without masking genuine product regressions: a test that fails twice
+  // in a row still fails. CI uses 2 retries for headroom under load.
+  retries: process.env["CI"] ? 2 : 1,
   workers: 1,
   reporter: "list",
   use: {

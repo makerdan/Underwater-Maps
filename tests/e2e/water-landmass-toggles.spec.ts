@@ -143,6 +143,17 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
       { resolution: RESOLUTION, topo: topography },
     );
 
+    // Confirm the seed actually stuck (no late terrain effect raced past it)
+    // before we wait for the badge — otherwise a flake here misleadingly
+    // blames the badge component instead of the seed race.
+    await expect
+      .poll(
+        async () =>
+          await page.evaluate(() => window.__bathyTest!.getTerrainSummary()),
+        { timeout: 15_000 },
+      )
+      .toEqual({ datasetId: "hawaii-seamount", hasTopography: true });
+
     await expect(page.locator('[data-testid="topo-badge"]').first()).toBeVisible({
       timeout: 10_000,
     });

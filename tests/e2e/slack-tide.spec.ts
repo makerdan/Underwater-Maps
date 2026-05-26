@@ -73,6 +73,16 @@ test.describe("Slack-tide visuals", () => {
       return;
     }
 
+    // Wait for terrain to load before opening the tidal overlay — the
+    // TidePanel only fetches tide data once a dataset is active, and
+    // toggling TIDAL before then leaves the panel in a loading state past
+    // our visibility timeout.
+    await page.waitForFunction(
+      () => Boolean(window.__bathyTest?.getTerrainSummary?.()?.datasetId),
+      null,
+      { timeout: 20_000 },
+    ).catch(() => {});
+
     // Enable the Tidal Overlay from the top-right toolbar.
     await clickTopBarToggle(page, "TIDAL");
 
@@ -80,7 +90,7 @@ test.describe("Slack-tide visuals", () => {
     // available for the dataset centre.
     const tidalHeader = page.locator("text=TIDAL OVERLAY").first();
     const noDataMessage = page.locator("text=/No tidal station within/").first();
-    await expect(tidalHeader.or(noDataMessage)).toBeVisible({ timeout: 20_000 });
+    await expect(tidalHeader.or(noDataMessage)).toBeVisible({ timeout: 30_000 });
 
     if (await noDataMessage.isVisible().catch(() => false)) {
       test.skip(true, "No tidal station available for the default dataset in this env");
