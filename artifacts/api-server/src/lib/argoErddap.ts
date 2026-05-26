@@ -25,6 +25,34 @@ const SEARCH_WINDOW_DAYS = 60;
 const FETCH_TIMEOUT_MS = 6000;
 const MAX_ROWS = 2000;
 
+// In-process cache: coarse lat/lon bucket → recent ERDDAP result. The bucket
+// is large enough that nearby requests share an entry but small enough that a
+// distant request won't be served a wildly-off cast. Positive entries live
+// long enough to absorb burst load; negative entries (no Argo in range) expire
+// sooner so we recheck once a new float drifts into the area.
+const CACHE_BUCKET_DEG = 0.5;
+const POSITIVE_TTL_MS = 30 * 60_000;
+const NEGATIVE_TTL_MS = 5 * 60_000;
+
+interface CacheEntry {
+  expiresAt: number;
+  value: TemperatureProfilePayload | null;
+}
+
+const profileCache = new Map<string, CacheEntry>();
+
+function cacheKey(lat: number, lon: number): string {
+  const b = CACHE_BUCKET_DEG;
+  const latBucket = Math.round(lat / b) * b;
+  const lonBucket = Math.round(lon / b) * b;
+  return `${latBucket.toFixed(2)},${lonBucket.toFixed(2)}`;
+}
+
+/** Test helper — drop all cached Argo lookups. */
+export function __clearArgoCache(): void {
+  profileCache.clear();
+}
+
 interface ErddapResponse {
   table?: {
     columnNames?: string[];
@@ -200,6 +228,24 @@ export function pickClosestArgoCast(
  * null when the upstream is unreachable / has no rows in range.
  */
 export async function fetchArgoProfile(
+  lat: number,
+  lon: number,
+): Promise<TemperatureProfilePayload | null> {
+  const key = cacheKey(lat, lon);
+  const now = Date.now();
+  const cached = profileCache.get(key);
+  if (cached && cached.expiresAt > now) {
+    return cached.value;
+  }
+  const value = await fetchArgoProfileUncached(lat, lon);
+  profileCache.set(key, {
+    value,
+    expiresAt: Date.now() + (value ? POSITIVE_TTL_MS : NEGATIVE_TTL_MS),
+  });
+  return value;
+}
+
+async function fetchArgoProfileUncached(
   lat: number,
   lon: number,
 ): Promise<TemperatureProfilePayload | null> {

@@ -4,6 +4,7 @@ import {
   parseArgoRows,
   pickClosestArgoCast,
   fetchArgoProfile,
+  __clearArgoCache,
 } from "../argoErddap";
 
 describe("buildArgoQueryUrl", () => {
@@ -122,10 +123,13 @@ describe("pickClosestArgoCast", () => {
 describe("fetchArgoProfile", () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
+    __clearArgoCache();
     fetchSpy = vi.spyOn(globalThis, "fetch");
   });
   afterEach(() => {
     fetchSpy.mockRestore();
+    vi.useRealTimers();
+    __clearArgoCache();
   });
 
   function ok(body: unknown): Response {
@@ -181,5 +185,115 @@ describe("fetchArgoProfile", () => {
       },
     }));
     expect(await fetchArgoProfile(0, 0)).toBeNull();
+  });
+});
+
+describe("fetchArgoProfile caching", () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    __clearArgoCache();
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+  afterEach(() => {
+    fetchSpy.mockRestore();
+    vi.useRealTimers();
+    __clearArgoCache();
+  });
+
+  function ok(body: unknown): Response {
+    return { ok: true, status: 200, json: async () => body } as unknown as Response;
+  }
+
+  const goodBody = {
+    table: {
+      columnNames: [
+        "platform_number", "cycle_number", "time",
+        "latitude", "longitude", "pres", "temp",
+      ],
+      rows: [
+        ["5905012", 42, "2026-04-12T08:00:00Z", 55.7, -132.6, 0, 12.4],
+        ["5905012", 42, "2026-04-12T08:00:00Z", 55.7, -132.6, 100, 6.5],
+      ],
+    },
+  };
+
+  it("serves a second nearby request from cache without re-hitting ERDDAP", async () => {
+    fetchSpy.mockResolvedValueOnce(ok(goodBody));
+    const first = await fetchArgoProfile(55.70, -132.60);
+    const second = await fetchArgoProfile(55.71, -132.59);
+    expect(first).not.toBeNull();
+    expect(second).toEqual(first);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("caches negative results too (no rows in range)", async () => {
+    const emptyBody = {
+      table: {
+        columnNames: [
+          "platform_number", "cycle_number", "time",
+          "latitude", "longitude", "pres", "temp",
+        ],
+        rows: [],
+      },
+    };
+    fetchSpy.mockResolvedValueOnce(ok(emptyBody));
+    expect(await fetchArgoProfile(10, 20)).toBeNull();
+    expect(await fetchArgoProfile(10, 20)).toBeNull();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-fetches after the positive TTL (30 min) expires", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-01T00:00:00Z"));
+    fetchSpy.mockResolvedValueOnce(ok(goodBody));
+    await fetchArgoProfile(55.7, -132.6);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    // Just before expiry — still cached.
+    vi.setSystemTime(new Date("2026-05-01T00:29:00Z"));
+    await fetchArgoProfile(55.7, -132.6);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    // Past expiry — re-fetches.
+    vi.setSystemTime(new Date("2026-05-01T00:31:00Z"));
+    fetchSpy.mockResolvedValueOnce(ok(goodBody));
+    await fetchArgoProfile(55.7, -132.6);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-fetches negative results sooner than positive ones", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-01T00:00:00Z"));
+    const emptyBody = {
+      table: {
+        columnNames: [
+          "platform_number", "cycle_number", "time",
+          "latitude", "longitude", "pres", "temp",
+        ],
+        rows: [],
+      },
+    };
+    fetchSpy.mockResolvedValueOnce(ok(emptyBody));
+    expect(await fetchArgoProfile(10, 20)).toBeNull();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    // Within 5-min negative TTL — still cached.
+    vi.setSystemTime(new Date("2026-05-01T00:04:00Z"));
+    expect(await fetchArgoProfile(10, 20)).toBeNull();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    // Past negative TTL but well within positive TTL — re-fetches.
+    vi.setSystemTime(new Date("2026-05-01T00:06:00Z"));
+    fetchSpy.mockResolvedValueOnce(ok(emptyBody));
+    expect(await fetchArgoProfile(10, 20)).toBeNull();
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses separate cache entries for distant coordinates", async () => {
+    fetchSpy.mockResolvedValueOnce(ok(goodBody));
+    fetchSpy.mockResolvedValueOnce(ok(goodBody));
+    await fetchArgoProfile(55.7, -132.6);
+    await fetchArgoProfile(10, 20);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 });
