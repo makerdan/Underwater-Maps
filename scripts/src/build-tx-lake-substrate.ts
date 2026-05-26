@@ -56,13 +56,30 @@
  *   - TWDB Reservoir Volumetric & Sedimentation Surveys:
  *     https://www.twdb.texas.gov/surfacewater/surveys/index.asp
  *
- * Usage:
+ * Usage / refreshing the bundle:
  *   pnpm --filter @workspace/scripts run build-tx-lake-substrate
+ *
+ * The script makes live HTTP requests to the USGS NHD and TPWD ArcGIS
+ * FeatureServers, so refreshing requires outbound network access. After
+ * a refresh, commit the updated `txLakeSubstrate.gen.json` alongside any
+ * builder-source changes that triggered the regeneration.
+ *
+ * Generator-hash drift check:
+ *   The bundle's `metadata.generatorHash` is a SHA-256 of this source
+ *   file. A unit test in `artifacts/api-server` recomputes the hash on
+ *   every test run and fails if the committed bundle was produced by a
+ *   different version of this script — flagging stale bundles whenever
+ *   the builder logic, lake catalogue, or curated zones change without
+ *   the JSON being regenerated. If the test fails, run the command
+ *   above and commit the refreshed JSON.
  */
 
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+const BUILDER_SRC_PATH = fileURLToPath(import.meta.url);
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const OUT_PATH = resolve(
@@ -402,7 +419,19 @@ interface BundledCollection {
     creditUrl: string;
     fetchedAt: string;
     featureCount: number;
+    /** SHA-256 of the builder source file (`build-tx-lake-substrate.ts`),
+     *  recorded so consumers can detect a stale bundle when the builder
+     *  logic, lake catalogue, or curated zones change without the JSON
+     *  being regenerated. Validated by a unit test in api-server. */
+    generatorHash: string;
   };
+}
+
+/** SHA-256 hex digest of the builder source file. Computed at runtime so
+ *  any edit to this script changes the hash and therefore the bundle. */
+function computeGeneratorHash(): string {
+  const src = readFileSync(BUILDER_SRC_PATH);
+  return createHash("sha256").update(src).digest("hex");
 }
 
 // ---------------------------------------------------------------------------
@@ -961,6 +990,7 @@ async function main(): Promise<void> {
         "https://tpwd.texas.gov/fishing/freshwater-fishing/where-to-fish/freshwater-lakes/",
       fetchedAt: new Date().toISOString(),
       featureCount: allFeatures.length,
+      generatorHash: computeGeneratorHash(),
     },
   };
 
