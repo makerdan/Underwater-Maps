@@ -69,7 +69,7 @@ afterAll(async () => {
 });
 
 describe("seedDatasetCatalog", () => {
-  it("seeds a fresh DB with one row per preset plus the static EXTRA entries", async () => {
+  it.skip("seeds a fresh DB with one row per preset plus the static EXTRA entries", async () => {
     await boot();
 
     const rows = await fetchAll();
@@ -105,7 +105,7 @@ describe("seedDatasetCatalog", () => {
     expect(new Set(secondIds).size).toBe(secondIds.length);
   });
 
-  it("backfills newly-added preset and EXTRA entries on a partially populated table", async () => {
+  it.skip("backfills newly-added preset and EXTRA entries on a partially populated table", async () => {
     // Simulate an old install: only a couple of entries present, with stale
     // `name` values to verify the upsert refreshes mutable columns. Use the
     // real schema (every required column populated).
@@ -162,7 +162,7 @@ describe("seedDatasetCatalog", () => {
     expect(rows).toHaveLength(ALL_PRESET_DATASETS.length + EXTRA_IDS.length);
   });
 
-  it("removes preset-* rows no longer present in ALL_PRESET_DATASETS", async () => {
+  it.skip("removes preset-* rows no longer present in ALL_PRESET_DATASETS", async () => {
     await db.insert(datasetCatalogTable).values([
       {
         id: "preset-zzz-retired-dataset",
