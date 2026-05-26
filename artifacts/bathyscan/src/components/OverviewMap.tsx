@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetMarkers,
@@ -70,6 +70,8 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { formatDepth, formatDistance } from "@/lib/units";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
+import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 
 interface TooltipState {
   visible: boolean;
@@ -114,14 +116,90 @@ export const OverviewMap: React.FC = () => {
     { query: { enabled: !!datasetId, queryKey: getGetTrailsQueryKey({ datasetId }) } },
   );
 
-  const deleteTrail = useDeleteTrailsId({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetTrailsQueryKey({ datasetId }) });
-        void refetchTrails();
-      },
+  const deleteTrailMutation = useDeleteTrailsId();
+  const { toast } = useToast();
+
+  const UNDO_TRAIL_DELETE_MS = 5000;
+  const pendingDeleteTrailsRef = useRef(
+    new Map<string, { timer: ReturnType<typeof setTimeout>; commit: () => void }>(),
+  );
+
+  // Flush any open trail-delete undo windows on unmount so the server
+  // always receives the DELETE even if the overview map closes.
+  useEffect(() => {
+    const map = pendingDeleteTrailsRef.current;
+    return () => {
+      const entries = Array.from(map.values());
+      map.clear();
+      for (const entry of entries) entry.commit();
+    };
+  }, []);
+
+  const trailsQueryKey = useMemo(
+    () => getGetTrailsQueryKey({ datasetId }),
+    [datasetId],
+  );
+
+  const handleDeleteTrail = useCallback(
+    (id: string, name: string) => {
+      const snapshot = queryClient.getQueryData<GpsTrail[]>(trailsQueryKey);
+      queryClient.setQueryData<GpsTrail[] | undefined>(trailsQueryKey, (prev) =>
+        prev ? prev.filter((t) => t.id !== id) : prev,
+      );
+
+      const commit = () => {
+        pendingDeleteTrailsRef.current.delete(id);
+        deleteTrailMutation.mutate(
+          { id },
+          {
+            onSuccess: () => {
+              queryClient.invalidateQueries({ queryKey: trailsQueryKey });
+              void refetchTrails();
+            },
+            onError: () => {
+              if (snapshot !== undefined) queryClient.setQueryData(trailsQueryKey, snapshot);
+            },
+          },
+        );
+      };
+
+      const undo = () => {
+        const entry = pendingDeleteTrailsRef.current.get(id);
+        if (!entry) return;
+        clearTimeout(entry.timer);
+        pendingDeleteTrailsRef.current.delete(id);
+        if (snapshot !== undefined) queryClient.setQueryData(trailsQueryKey, snapshot);
+      };
+
+      const timer = setTimeout(commit, UNDO_TRAIL_DELETE_MS);
+      pendingDeleteTrailsRef.current.set(id, {
+        timer,
+        commit: () => {
+          clearTimeout(timer);
+          commit();
+        },
+      });
+
+      const toastHandle = toast({
+        title: "Trail deleted",
+        description: `"${name}" will be removed.`,
+        duration: UNDO_TRAIL_DELETE_MS,
+        action: (
+          <ToastAction
+            altText="Undo delete"
+            data-testid="undo-delete-trail"
+            onClick={() => {
+              undo();
+              toastHandle.dismiss();
+            }}
+          >
+            Undo
+          </ToastAction>
+        ),
+      });
     },
-  });
+    [queryClient, trailsQueryKey, deleteTrailMutation, refetchTrails, toast],
+  );
 
   // EFH availability is now derived from dataset metadata (hasEfh flag from
   // /api/datasets), so this list does not need to be hardcoded here.
@@ -1187,7 +1265,7 @@ export const OverviewMap: React.FC = () => {
         <TrailListPanel
           trails={trailsData}
           savedTrailsRef={savedTrailsRef}
-          onDelete={(id) => deleteTrail.mutate({ id })}
+          onDelete={handleDeleteTrail}
           onClose={() => setShowTrailList(false)}
         />
       )}
@@ -1280,7 +1358,7 @@ function haversineKm(
 interface TrailListPanelProps {
   trails: GpsTrail[];
   savedTrailsRef: React.RefObject<CanvasSavedTrail[]>;
-  onDelete: (id: string) => void;
+  onDelete: (id: string, name: string) => void;
   onClose: () => void;
 }
 
@@ -1421,10 +1499,8 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef,
 
           <button
             onClick={() => {
-              if (confirm(`Delete trail "${selectedTrail.name}"?`)) {
-                onDelete(selectedTrail.id);
-                setSelectedId(null);
-              }
+              onDelete(selectedTrail.id, selectedTrail.name);
+              setSelectedId(null);
             }}
             style={{
               marginTop: 12,

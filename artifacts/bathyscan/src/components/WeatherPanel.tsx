@@ -20,6 +20,7 @@ import {
   useDeleteTrollingPresetFoldersId,
   getGetTrollingPresetFoldersQueryKey,
   type TrollingPreset,
+  type TrollingPresetFolder,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppState } from "@/lib/context";
@@ -248,21 +249,92 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     }
   }, [editingFolderId, editingFolderName, patchFolderMutation, queryClient, foldersQueryKey, handleCancelFolderRename]);
 
-  const handleDeleteFolder = useCallback(async (id: string) => {
-    if (typeof window !== "undefined" && !window.confirm("Delete this folder? Presets inside will move back to the root list.")) {
-      return;
-    }
-    try {
-      await deleteFolderMutation.mutateAsync({ id });
-      if (saveFolderId === id) setSaveFolderId(null);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: foldersQueryKey }),
-        queryClient.invalidateQueries({ queryKey: presetsQueryKey }),
-      ]);
-    } catch {
-      // no-op
-    }
-  }, [deleteFolderMutation, saveFolderId, queryClient, foldersQueryKey, presetsQueryKey]);
+  // ─── Shared undo infrastructure ──────────────────────────────────────────
+  // Both folder deletes and preset deletes share the same pending-deletes ref
+  // and toast hook so a single flush-on-unmount effect covers all of them.
+  const pendingDeletesRef = useRef(
+    new Map<string, { timer: ReturnType<typeof setTimeout>; commit: () => void }>(),
+  );
+  const { toast } = useToast();
+
+  const handleDeleteFolder = useCallback((id: string, folderName: string) => {
+    const foldersSnapshot = queryClient.getQueryData<TrollingPresetFolder[]>(foldersQueryKey);
+    const presetsSnapshot = queryClient.getQueryData<TrollingPreset[]>(presetsQueryKey);
+    // Capture save-target so it can be restored if the user undoes or the
+    // server rejects the delete.
+    const prevSaveFolderId = saveFolderId;
+
+    // Optimistically remove the folder and move its presets to root so the
+    // list reflects the change while the 5-second undo window is open.
+    queryClient.setQueryData<TrollingPresetFolder[] | undefined>(foldersQueryKey, (prev) =>
+      prev ? prev.filter((f) => f.id !== id) : prev,
+    );
+    queryClient.setQueryData<TrollingPreset[] | undefined>(presetsQueryKey, (prev) =>
+      prev
+        ? prev.map((p) => (p.folderId === id ? { ...p, folderId: null } : p))
+        : prev,
+    );
+    if (saveFolderId === id) setSaveFolderId(null);
+
+    const undoKey = `folder:${id}`;
+
+    const restore = () => {
+      if (foldersSnapshot !== undefined) queryClient.setQueryData(foldersQueryKey, foldersSnapshot);
+      if (presetsSnapshot !== undefined) queryClient.setQueryData(presetsQueryKey, presetsSnapshot);
+      if (prevSaveFolderId !== null) setSaveFolderId(prevSaveFolderId);
+    };
+
+    const commit = () => {
+      pendingDeletesRef.current.delete(undoKey);
+      deleteFolderMutation.mutate(
+        { id },
+        {
+          onSuccess: () => {
+            void Promise.all([
+              queryClient.invalidateQueries({ queryKey: foldersQueryKey }),
+              queryClient.invalidateQueries({ queryKey: presetsQueryKey }),
+            ]);
+          },
+          onError: restore,
+        },
+      );
+    };
+
+    const undo = () => {
+      const entry = pendingDeletesRef.current.get(undoKey);
+      if (!entry) return;
+      clearTimeout(entry.timer);
+      pendingDeletesRef.current.delete(undoKey);
+      restore();
+    };
+
+    const timer = setTimeout(commit, UNDO_DELETE_WINDOW_MS);
+    pendingDeletesRef.current.set(undoKey, {
+      timer,
+      commit: () => {
+        clearTimeout(timer);
+        commit();
+      },
+    });
+
+    const toastHandle = toast({
+      title: "Folder deleted",
+      description: `"${folderName}" will be removed. Its presets will move to the root list.`,
+      duration: UNDO_DELETE_WINDOW_MS,
+      action: (
+        <ToastAction
+          altText="Undo delete"
+          data-testid="undo-delete-trolling-folder"
+          onClick={() => {
+            undo();
+            toastHandle.dismiss();
+          }}
+        >
+          Undo
+        </ToastAction>
+      ),
+    });
+  }, [queryClient, foldersQueryKey, presetsQueryKey, saveFolderId, deleteFolderMutation, toast]);
 
   const handleAssignPresetToFolder = useCallback(async (presetId: string, folderId: string | null) => {
     try {
@@ -305,10 +377,6 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
   const [pendingDeletePresetIds, setPendingDeletePresetIds] = useState<
     Set<string>
   >(() => new Set());
-  const pendingDeletesRef = useRef(
-    new Map<string, { timer: ReturnType<typeof setTimeout>; commit: () => void }>(),
-  );
-  const { toast } = useToast();
 
   const handleDeletePreset = useCallback((presetId: string) => {
     const preset = trollingPresets?.find((p) => p.id === presetId);
@@ -840,7 +908,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
                                 style={{ background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 9, padding: "2px 5px", borderRadius: 3, cursor: "pointer" }}
                               >✎</button>
                               <button
-                                onClick={() => void handleDeleteFolder(folder.id)}
+                                onClick={() => handleDeleteFolder(folder.id, folder.name)}
                                 aria-label={`Delete folder ${folder.name}`}
                                 title="Delete folder"
                                 style={{ background: "rgba(0,10,20,0.8)", border: "1px solid rgba(248,113,113,0.3)", color: "#f87171", fontFamily: "inherit", fontSize: 9, padding: "2px 5px", borderRadius: 3, cursor: "pointer" }}
