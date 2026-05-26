@@ -17,58 +17,14 @@ import {
 import { useSurfaceTemperature } from "@/hooks/useSurfaceTemperature";
 import { useTemperatureProfile } from "@/hooks/useTemperatureProfile";
 import { HelpIcon } from "@/components/help/HelpButton";
-import {
-  useGetDatasets,
-  getGetDatasetsQueryKey,
-} from "@workspace/api-client-react";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { TemperatureProfileChart } from "@/components/TemperatureProfileChart";
-import { ShoreZoneCredit } from "@/components/ShoreZoneCredit";
-import { SubstrateLegend } from "@/components/SubstrateLegend";
 import { openCrosshairContextMenu } from "@/lib/terrainContextMenu";
 
 const IS_TOUCH_DEVICE =
   typeof window !== "undefined" &&
   ("ontouchstart" in window || (navigator?.maxTouchPoints ?? 0) > 0);
 
-
-/**
- * HUD button that opens/closes the 2D Overview Map. Subscribes to the
- * `overviewOpen` slice so the active/pressed visuals stay in sync with the
- * `O` keyboard shortcut and the in-map close button.
- */
-const HudOverviewToggle: React.FC = () => {
-  const overviewOpen = useUiStore((s) => s.overviewOpen);
-  const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
-  return (
-    <ViewscreenTooltip
-      label={overviewOpen ? "Close the 2D Overview Map (O)" : "Open the 2D Overview Map (O)"}
-      side="left"
-    >
-      <button
-        data-testid="hud-toggle-overview"
-        aria-pressed={overviewOpen}
-        aria-label="Toggle Overview Map"
-        onClick={() => setOverviewOpen(!overviewOpen)}
-        style={{
-          background: overviewOpen ? "rgba(0,229,255,0.15)" : "rgba(0,10,20,0.75)",
-          border: `1px solid ${overviewOpen ? "rgba(0,229,255,0.6)" : "rgba(0,229,255,0.2)"}`,
-          borderRadius: 4,
-          color: overviewOpen ? "#00e5ff" : "#7dd3fc",
-          fontFamily: "'JetBrains Mono', monospace",
-          fontSize: 9,
-          padding: "3px 10px",
-          cursor: "pointer",
-          letterSpacing: "0.1em",
-          backdropFilter: "blur(4px)",
-          textShadow: overviewOpen ? "0 0 6px rgba(0,229,255,0.5)" : "none",
-        }}
-      >
-        🗺 OVERVIEW
-      </button>
-    </ViewscreenTooltip>
-  );
-};
 
 // NOTE: legacy module-scope panel style. The component below derives
 // accessibility-aware overrides (`CYAN`, `PANEL`) from settings and uses
@@ -155,25 +111,9 @@ export const HUD: React.FC = () => {
   const driftPath = useDriftStore((s) => s.driftPath);
   const driftHour = useDriftStore((s) => s.driftHour);
 
-  const substrateColorMode = useUiStore((s) => s.substrateColorMode);
-  const setSubstrateColorMode = useUiStore((s) => s.setSubstrateColorMode);
   const selectedSubstrate = useUiStore((s) => s.selectedSubstrate);
   const setSelectedSubstrate = useUiStore((s) => s.setSelectedSubstrate);
-  const efhOverlayEnabled = useUiStore((s) => s.efhOverlayEnabled);
-  const setEfhOverlayEnabled = useUiStore((s) => s.setEfhOverlayEnabled);
-  const windOverlayActive = useUiStore((s) => s.windOverlayActive);
-  const setWindOverlayActive = useUiStore((s) => s.setWindOverlayActive);
-  const tideOverlayActive = useUiStore((s) => s.tideOverlayActive);
-  const setTideOverlayActive = useUiStore((s) => s.setTideOverlayActive);
-  const currentOverlayActive = useUiStore((s) => s.currentOverlayActive);
-  const setCurrentOverlayActive = useUiStore((s) => s.setCurrentOverlayActive);
   const { terrain } = useAppState();
-  const waterTypeForEfh = useSettingsStore((s) => s.waterType);
-  const { data: hudDatasets } = useGetDatasets(
-    { waterType: waterTypeForEfh },
-    { query: { queryKey: getGetDatasetsQueryKey({ waterType: waterTypeForEfh }) } },
-  );
-  const hasEfh = !!hudDatasets?.find((d) => d.id === (terrain?.datasetId ?? ""))?.hasEfh;
 
   // Live sea-surface temperature for the dataset centre — used as the
   // surface anchor of the thermocline model below.
@@ -626,172 +566,9 @@ export const HUD: React.FC = () => {
         </div>
       )}
 
-      {/* ── Bottom-right: Find Data button + substrate + EFH overlay toggles ── */}
-      {terrain && (
-        <div
-          className="absolute bottom-3 right-3 flex flex-col gap-1 items-end"
-          style={{ pointerEvents: "auto" }}
-        >
-          {/* Help shortcut for the overlay toggle cluster */}
-          <div style={{ alignSelf: "flex-end" }}>
-            <HelpIcon articleId="hud-overlays" label="HUD overlay toggles" />
-          </div>
-
-          {/* Overview Map toggle (keyboard shortcut: O) */}
-          <HudOverviewToggle />
-
-          {/* Find Data panel toggle */}
-          <ViewscreenTooltip label="Browse datasets, markers and habitats" side="left">
-            <button
-              onClick={() => {
-                const { findDataPanelOpen, setFindDataPanelOpen } = useUiStore.getState();
-                setFindDataPanelOpen(!findDataPanelOpen);
-              }}
-              style={{
-                background: "rgba(0,10,20,0.75)",
-                border: "1px solid rgba(0,229,255,0.2)",
-                borderRadius: 4,
-                color: "#00e5ff",
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 9,
-                padding: "3px 10px",
-                cursor: "pointer",
-                letterSpacing: "0.1em",
-                backdropFilter: "blur(4px)",
-                textShadow: "0 0 6px rgba(0,229,255,0.4)",
-              }}
-            >
-              🔍 FIND DATA
-            </button>
-          </ViewscreenTooltip>
-
-          {/* Substrate colour toggle */}
-          <ViewscreenTooltip label="Tint seafloor by substrate type (sand, mud, rock)" side="left">
-            <button
-              aria-pressed={substrateColorMode}
-              onClick={() => setSubstrateColorMode(!substrateColorMode)}
-              style={{
-                background: substrateColorMode ? "rgba(226,213,160,0.15)" : "rgba(0,10,20,0.75)",
-                border: `1px solid ${substrateColorMode ? "rgba(226,213,160,0.5)" : "rgba(0,229,255,0.15)"}`,
-                borderRadius: 4,
-                color: substrateColorMode ? "#e2d5a0" : "#475569",
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 9,
-                padding: "3px 10px",
-                cursor: "pointer",
-                letterSpacing: "0.1em",
-                backdropFilter: "blur(4px)",
-              }}
-            >
-              ◼ SUBSTRATE
-            </button>
-          </ViewscreenTooltip>
-
-          {/* Attribution for the ShoreZone substrate dataset — required for
-              public-domain reuse. Only shown while the substrate tint overlay
-              is active. */}
-          {substrateColorMode && (
-            <>
-              <SubstrateLegend />
-              <ShoreZoneCredit style={{ textAlign: "right", maxWidth: 260 }} />
-            </>
-          )}
-
-          {/* Always-on Wind / Tide / Current overlay toggles */}
-          <ViewscreenTooltip label="Toggle wind direction arrows overlay" side="left">
-            <button
-              data-testid="overlay-toggle-wind"
-              aria-pressed={windOverlayActive}
-              onClick={() => setWindOverlayActive(!windOverlayActive)}
-              style={{
-                background: windOverlayActive ? "rgba(0,229,255,0.10)" : "rgba(0,10,20,0.75)",
-                border: `1px solid ${windOverlayActive ? "rgba(125,211,252,0.5)" : "rgba(0,229,255,0.15)"}`,
-                borderRadius: 4,
-                color: windOverlayActive ? "#7dd3fc" : "#475569",
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 9,
-                padding: "3px 10px",
-                cursor: "pointer",
-                letterSpacing: "0.1em",
-                backdropFilter: "blur(4px)",
-                textShadow: windOverlayActive ? "0 0 6px rgba(125,211,252,0.5)" : "none",
-              }}
-            >
-              💨 WIND
-            </button>
-          </ViewscreenTooltip>
-
-          <ViewscreenTooltip label="Toggle tidal flow arrows overlay" side="left">
-            <button
-              data-testid="overlay-toggle-tide"
-              aria-pressed={tideOverlayActive}
-              onClick={() => setTideOverlayActive(!tideOverlayActive)}
-              style={{
-                background: tideOverlayActive ? "rgba(0,229,255,0.10)" : "rgba(0,10,20,0.75)",
-                border: `1px solid ${tideOverlayActive ? "rgba(52,211,153,0.5)" : "rgba(0,229,255,0.15)"}`,
-                borderRadius: 4,
-                color: tideOverlayActive ? "#34d399" : "#475569",
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 9,
-                padding: "3px 10px",
-                cursor: "pointer",
-                letterSpacing: "0.1em",
-                backdropFilter: "blur(4px)",
-                textShadow: tideOverlayActive ? "0 0 6px rgba(52,211,153,0.5)" : "none",
-              }}
-            >
-              🌊 TIDE
-            </button>
-          </ViewscreenTooltip>
-
-          <ViewscreenTooltip label="Toggle sub-surface current arrows overlay" side="left">
-            <button
-              data-testid="overlay-toggle-current"
-              aria-pressed={currentOverlayActive}
-              onClick={() => setCurrentOverlayActive(!currentOverlayActive)}
-              style={{
-                background: currentOverlayActive ? "rgba(0,229,255,0.10)" : "rgba(0,10,20,0.75)",
-                border: `1px solid ${currentOverlayActive ? "rgba(34,211,238,0.5)" : "rgba(0,229,255,0.15)"}`,
-                borderRadius: 4,
-                color: currentOverlayActive ? "#22d3ee" : "#475569",
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 9,
-                padding: "3px 10px",
-                cursor: "pointer",
-                letterSpacing: "0.1em",
-                backdropFilter: "blur(4px)",
-                textShadow: currentOverlayActive ? "0 0 6px rgba(34,211,238,0.5)" : "none",
-              }}
-            >
-              ↬ CURRENT
-            </button>
-          </ViewscreenTooltip>
-
-          {/* EFH zone toggle — only for datasets with bundled EFH data */}
-          {hasEfh && (
-            <ViewscreenTooltip label="Show Essential Fish Habitat zones overlay" side="left">
-              <button
-                aria-pressed={efhOverlayEnabled}
-                onClick={() => setEfhOverlayEnabled(!efhOverlayEnabled)}
-                style={{
-                  background: efhOverlayEnabled ? "rgba(34,197,94,0.15)" : "rgba(0,10,20,0.75)",
-                  border: `1px solid ${efhOverlayEnabled ? "rgba(34,197,94,0.5)" : "rgba(0,229,255,0.15)"}`,
-                  borderRadius: 4,
-                  color: efhOverlayEnabled ? "#4ade80" : "#475569",
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 9,
-                  padding: "3px 10px",
-                  cursor: "pointer",
-                  letterSpacing: "0.1em",
-                  backdropFilter: "blur(4px)",
-                }}
-              >
-                🐟 EFH ZONES
-              </button>
-            </ViewscreenTooltip>
-          )}
-        </div>
-      )}
+      {/* Bottom-right overlay/command toggle stack has moved into the
+          left sidebar's "Overlays & Tools" panel (see OverlaysToolsPanel).
+          The Substrate Legend also lives inline within that panel now. */}
 
       {/* ── Bottom-left: speed + pin readouts ──
           The "CAMERA POSITION" LON/LAT panel that used to live here was

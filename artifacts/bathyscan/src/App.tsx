@@ -15,6 +15,7 @@ import { TourScene } from "@/pages/TourScene";
 import { Settings } from "@/pages/Settings";
 import { HUD } from "@/components/HUD";
 import { DepthScaleBar } from "@/components/DepthScaleBar";
+import { OverlaysToolsPanel } from "@/components/OverlaysToolsPanel";
 import { DatasetPanel } from "@/components/DatasetPanel";
 import { CameraCoordsReadout } from "@/components/CameraCoordsReadout";
 import { Minimap } from "@/components/Minimap";
@@ -504,8 +505,13 @@ function Main() {
           <div className="flex-1 relative">
             <HUD />
           </div>
-          {showDepthScaleBar && <DepthScaleBar />}
         </div>
+
+        {/* Top-right depth legend dropdown — sits just under the app
+            header, outside the HUD overlay container so the new
+            collapsible legend is anchored to the scene edge rather
+            than to the HUD's padded inset. */}
+        {showDepthScaleBar && <DepthScaleBar />}
 
         {/* Help launch button — upper-left of main interactive area */}
         <HelpButton />
@@ -573,6 +579,7 @@ function Main() {
                 </button>
               </ViewscreenTooltip>
             </div>
+            <OverlaysToolsPanel />
             {showDatasetPanel && <DatasetPanel />}
             <ZoneOverlay />
             {showHabitatPanel && <HabitatPanel />}
