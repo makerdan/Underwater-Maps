@@ -69,7 +69,7 @@ export default defineConfig({
     {
       command:
         "PORT=3151 E2E_AUTH_BYPASS=1 pnpm --filter @workspace/api-server run dev",
-      url: "http://localhost:3151/api/datasets",
+      url: "http://127.0.0.1:3151/api/datasets",
       reuseExistingServer: !process.env["CI"],
       timeout: 60_000,
       stdout: "ignore",

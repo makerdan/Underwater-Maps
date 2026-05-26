@@ -31,7 +31,7 @@ test.describe("Water-type toggle", () => {
     // server matches on the `x-e2e-user-id` header that the frontend's
     // devAuth helper injects on every fetch; sending the same header here
     // targets the same row.
-    await page.request.put("http://localhost:3151/api/settings", {
+    await page.request.put("http://127.0.0.1:3151/api/settings", {
       headers: { "x-e2e-user-id": "dev-user-bypass" },
       data: { waterType: "saltwater" },
     });

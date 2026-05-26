@@ -16,7 +16,7 @@ import { test, expect, type APIRequestContext } from "@playwright/test";
  *     - persistence across "reloads" (a fresh request context)
  */
 
-const API_BASE = "http://localhost:3151/api";
+const API_BASE = "http://127.0.0.1:3151/api";
 const USER_A = `e2e-folders-user-${Date.now()}`;
 const USER_B = `e2e-folders-other-${Date.now()}`;
 

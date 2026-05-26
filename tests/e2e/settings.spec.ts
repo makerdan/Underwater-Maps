@@ -20,7 +20,7 @@ test.describe("Settings page", () => {
   // to defaults before every test. Uses the same x-e2e-user-id pattern as
   // water-type-toggle.spec.ts.
   test.beforeEach(async ({ request }) => {
-    await request.put("http://localhost:3151/api/settings", {
+    await request.put("http://127.0.0.1:3151/api/settings", {
       headers: { "x-e2e-user-id": "dev-user-bypass" },
       data: { colormapTheme: "ocean", units: "metric", waterType: "saltwater" },
     });

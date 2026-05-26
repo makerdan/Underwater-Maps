@@ -31,13 +31,20 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
+// Bind explicitly to 127.0.0.1 (IPv4 loopback) rather than the default
+// 0.0.0.0. On dual-stack Linux systems Node.js may resolve the bare
+// hostname "localhost" to ::1 (IPv6) before 127.0.0.1, so a caller that
+// connects to http://localhost:PORT ends up on ::1 while the server is
+// only reachable on IPv4 — producing ECONNREFUSED ::1:PORT. Pinning the
+// listen address to 127.0.0.1 and using http://127.0.0.1:PORT on the
+// caller side eliminates the ambiguity entirely.
+app.listen(port, "127.0.0.1", (err) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
     process.exit(1);
   }
 
-  logger.info({ port }, "Server listening");
+  logger.info({ port }, "Server listening on 127.0.0.1");
 
   // Seed the dataset discovery catalog on startup (idempotent).
   void seedDatasetCatalog().catch((seedErr: unknown) => {

@@ -6,7 +6,7 @@ test.describe("BathyScan — smoke suite", () => {
     // E2E tests share the same dev-bypass user, so a setting persisted by an
     // earlier test could leave units as "imperial" (FT). Reset before each
     // test using the same x-e2e-user-id bypass as water-type-toggle.spec.ts.
-    await request.put("http://localhost:3151/api/settings", {
+    await request.put("http://127.0.0.1:3151/api/settings", {
       headers: { "x-e2e-user-id": "dev-user-bypass" },
       data: { units: "metric" },
     });
