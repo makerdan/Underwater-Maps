@@ -31,14 +31,99 @@ function makeEntry(overrides: Partial<CatalogSeedEntry> & { id: string }): Catal
 }
 
 describe("buildCatalogGrids", () => {
-  it("returns null for non-preset catalog entries (no materializer wired yet)", async () => {
+  it("returns null for non-preset catalog entries with no materializer wired", async () => {
     const entry = makeEntry({
-      id: "noaa-efh-alaska-rockfish",
-      dataType: "habitat",
-      sourceAgency: "NOAA/NMFS",
+      id: "some-future-source-not-yet-wired",
+      dataType: "bathymetry",
+      sourceAgency: "Hypothetical Agency",
     });
     const result = await buildCatalogGrids(entry);
     expect(result).toBeNull();
+  });
+
+  it("materializes a NOAA EFH habitat catalog entry into a polygon overlay grid", async () => {
+    const entry = makeEntry({
+      id: "noaa-efh-alaska-rockfish",
+      name: "NOAA EFH — Rockfish Complex (SE Alaska)",
+      sourceAgency: "NOAA Fisheries / NMFS Alaska Region",
+      dataType: "habitat",
+      coverageBbox: { minLon: -170, minLat: 47, maxLon: -130, maxLat: 72 },
+      waterType: "saltwater",
+    });
+
+    const result = await buildCatalogGrids(entry);
+    expect(result).not.toBeNull();
+    expect(result!.terrain.datasetId).toBe(entry.id);
+    expect(result!.overview.datasetId).toBe(entry.id);
+    expect(result!.terrain.resolution).toBe(256);
+    expect(result!.overview.resolution).toBe(64);
+    expect(result!.terrain.depths).toHaveLength(256 * 256);
+    expect(result!.overview.depths).toHaveLength(64 * 64);
+    expect(result!.terrain.waterType).toBe("saltwater");
+
+    // The grid carries the habitat polygons under an extra `habitatPolygons`
+    // field so the persisted jsonb retains the overlay. Cast through unknown
+    // because TerrainGrid doesn't declare the field.
+    const terrainWithHabitat = result!.terrain as unknown as {
+      habitatPolygons?: { type: string; features: Array<{ properties: { species: string } }> };
+    };
+    const collection = terrainWithHabitat.habitatPolygons;
+    expect(collection).toBeDefined();
+    expect(collection!.type).toBe("FeatureCollection");
+    expect(collection!.features.length).toBeGreaterThan(0);
+    // Rockfish suffix filters to Sebastes species only.
+    for (const f of collection!.features) {
+      expect(f.properties.species.startsWith("sebastes_")).toBe(true);
+    }
+  });
+
+  it("filters EFH polygons to Pacific Cod for the pcod catalog entry", async () => {
+    const entry = makeEntry({
+      id: "noaa-efh-alaska-pcod",
+      name: "NOAA EFH — Pacific Cod (SE Alaska)",
+      dataType: "habitat",
+      coverageBbox: { minLon: -170, minLat: 47, maxLon: -130, maxLat: 72 },
+    });
+    const result = await buildCatalogGrids(entry);
+    const collection = (result!.terrain as unknown as {
+      habitatPolygons: { features: Array<{ properties: { species: string } }> };
+    }).habitatPolygons;
+    expect(collection.features.length).toBeGreaterThan(0);
+    for (const f of collection.features) {
+      expect(f.properties.species).toBe("gadus_macrocephalus");
+    }
+  });
+
+  it("filters EFH polygons to Pacific Halibut for the halibut catalog entry", async () => {
+    const entry = makeEntry({
+      id: "noaa-efh-alaska-halibut",
+      name: "NOAA EFH — Pacific Halibut (SE Alaska)",
+      dataType: "habitat",
+      coverageBbox: { minLon: -170, minLat: 47, maxLon: -130, maxLat: 72 },
+    });
+    const result = await buildCatalogGrids(entry);
+    const collection = (result!.terrain as unknown as {
+      habitatPolygons: { features: Array<{ properties: { species: string } }> };
+    }).habitatPolygons;
+    expect(collection.features.length).toBeGreaterThan(0);
+    for (const f of collection.features) {
+      expect(f.properties.species).toBe("hippoglossus_stenolepis");
+    }
+  });
+
+  it("returns no habitat features when the coverage bbox is outside the bundled regions", async () => {
+    const entry = makeEntry({
+      id: "noaa-efh-alaska-halibut",
+      name: "NOAA EFH — Pacific Halibut (out of region)",
+      dataType: "habitat",
+      // Mid-Pacific bbox far from any SE Alaska region polygon.
+      coverageBbox: { minLon: 150, minLat: -10, maxLon: 160, maxLat: 0 },
+    });
+    const result = await buildCatalogGrids(entry);
+    const collection = (result!.terrain as unknown as {
+      habitatPolygons: { features: unknown[] };
+    }).habitatPolygons;
+    expect(collection.features).toHaveLength(0);
   });
 
   it("materializes the GEBCO 2024 global bathymetry entry via the GEBCO WCS", async () => {

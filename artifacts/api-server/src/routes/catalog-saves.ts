@@ -42,6 +42,11 @@ import {
   buildNceiTerrainForBbox,
   ALL_PRESET_DATASETS,
 } from "../lib/terrain.js";
+import {
+  SALTWATER_EFH_BY_DATASET,
+  type EfhFeature,
+  type EfhFeatureCollection,
+} from "../lib/efhData.js";
 
 const router = Router();
 
@@ -372,6 +377,22 @@ export async function buildCatalogGrids(
     return { terrain, overview };
   }
 
+  // NOAA EFH (Essential Fish Habitat) species polygons — materialize as a
+  // habitat polygon overlay. The bundled SE Alaska EFH feature collections
+  // (`SALTWATER_EFH_BY_DATASET`) are filtered by the species encoded in the
+  // catalog id suffix (pcod / halibut / rockfish) and clipped to the entry's
+  // coverage bbox, then bundled into a flat synthetic terrain grid so the
+  // result still satisfies the user-dataset terrain/overview contract. The
+  // EFH FeatureCollection is preserved on the stored grid under
+  // `habitatPolygons` so future read paths can serve the polygons back even
+  // though the terrain GET endpoint currently strips unknown fields.
+  if (entry.id.startsWith("noaa-efh-")) {
+    const collection = buildEfhHabitatCollection(entry);
+    const terrain = buildHabitatGrid(entry, collection, 256);
+    const overview = buildHabitatGrid(entry, collection, 64);
+    return { terrain, overview };
+  }
+
   // GEBCO 2024 global grid — fetched directly from the GEBCO WCS using the
   // entry's coverageBbox. The same fetcher already backs the preset pipeline
   // as its global-fallback source, so behaviour matches what users see when
@@ -411,6 +432,130 @@ export async function buildCatalogGrids(
   }
 
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// NOAA EFH habitat overlay materializer
+// ---------------------------------------------------------------------------
+
+/** Map a `noaa-efh-<suffix>` id to a species-matcher used to filter features. */
+function efhSpeciesMatcher(catalogId: string): (f: EfhFeature) => boolean {
+  const suffix = catalogId.replace(/^noaa-efh-(?:alaska-)?/, "").toLowerCase();
+  if (suffix === "pcod" || suffix === "cod" || suffix === "pacific-cod") {
+    return (f) => f.properties.species === "gadus_macrocephalus";
+  }
+  if (suffix === "halibut" || suffix === "pacific-halibut") {
+    return (f) => f.properties.species === "hippoglossus_stenolepis";
+  }
+  if (suffix === "rockfish") {
+    return (f) => f.properties.species.startsWith("sebastes_");
+  }
+  // Unknown suffix — accept every feature so the user still gets a non-empty
+  // overlay rather than a silently empty save.
+  return () => true;
+}
+
+function polygonBbox(coordinates: number[][][]): [number, number, number, number] {
+  let minLon = Infinity;
+  let minLat = Infinity;
+  let maxLon = -Infinity;
+  let maxLat = -Infinity;
+  for (const ring of coordinates) {
+    for (const [lon, lat] of ring) {
+      if (lon === undefined || lat === undefined) continue;
+      if (lon < minLon) minLon = lon;
+      if (lon > maxLon) maxLon = lon;
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+    }
+  }
+  return [minLon, minLat, maxLon, maxLat];
+}
+
+function bboxesIntersect(
+  a: { minLon: number; minLat: number; maxLon: number; maxLat: number },
+  b: [number, number, number, number],
+): boolean {
+  const [bMinLon, bMinLat, bMaxLon, bMaxLat] = b;
+  return !(
+    bMaxLon < a.minLon ||
+    bMinLon > a.maxLon ||
+    bMaxLat < a.minLat ||
+    bMinLat > a.maxLat
+  );
+}
+
+/**
+ * Pull every EFH polygon from the bundled SE Alaska regional collections that
+ * matches the catalog entry's species suffix and intersects its coverage bbox.
+ * Returns a single merged FeatureCollection that the materialized dataset
+ * carries as a `habitatPolygons` payload.
+ */
+export function buildEfhHabitatCollection(
+  entry: CatalogSeedEntry,
+): EfhFeatureCollection {
+  const matches = efhSpeciesMatcher(entry.id);
+  const features: EfhFeature[] = [];
+  for (const region of Object.values(SALTWATER_EFH_BY_DATASET)) {
+    for (const feature of region.features) {
+      if (!matches(feature)) continue;
+      const fbbox = polygonBbox(feature.geometry.coordinates);
+      if (!bboxesIntersect(entry.coverageBbox, fbbox)) continue;
+      features.push(feature);
+    }
+  }
+  return {
+    type: "FeatureCollection",
+    features,
+    metadata: {
+      region: entry.name,
+      bbox: [
+        entry.coverageBbox.minLon,
+        entry.coverageBbox.minLat,
+        entry.coverageBbox.maxLon,
+        entry.coverageBbox.maxLat,
+      ],
+      creditUrl:
+        entry.endpointUrl ??
+        "https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles",
+      lastUpdated: entry.lastUpdated ?? "2024",
+    },
+  };
+}
+
+/**
+ * Build a TerrainGrid wrapper around a habitat polygon overlay. The depth
+ * grid itself is a flat zero-depth surface (habitat layers carry no
+ * bathymetry); the EFH FeatureCollection rides along on `habitatPolygons`
+ * so the persisted jsonb preserves the overlay even though the current
+ * /user/datasets terrain GET strips unknown fields.
+ */
+function buildHabitatGrid(
+  entry: CatalogSeedEntry,
+  collection: EfhFeatureCollection,
+  resolution: number,
+): TerrainGrid {
+  const { minLon, minLat, maxLon, maxLat } = entry.coverageBbox;
+  const depths = new Array<number>(resolution * resolution).fill(0);
+  const grid: TerrainGrid & { habitatPolygons?: EfhFeatureCollection } = {
+    datasetId: entry.id,
+    name: entry.name,
+    waterType: entry.waterType,
+    resolution,
+    width: resolution,
+    height: resolution,
+    depths,
+    minDepth: 0,
+    maxDepth: 0,
+    minLon,
+    maxLon,
+    minLat,
+    maxLat,
+    centerLon: (minLon + maxLon) / 2,
+    centerLat: (minLat + maxLat) / 2,
+    habitatPolygons: collection,
+  };
+  return grid;
 }
 
 function isGebcoBathymetryEntry(entry: CatalogSeedEntry): boolean {

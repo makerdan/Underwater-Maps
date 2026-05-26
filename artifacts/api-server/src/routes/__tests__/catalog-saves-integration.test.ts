@@ -316,6 +316,27 @@ const H = vi.hoisted(() => {
     lastUpdated: null,
     waterType: "saltwater" as const,
   };
+  // Non-preset NOAA EFH habitat catalog entry used to exercise the EFH
+  // habitat-polygon materializer end-to-end. The bundled SE Alaska EFH
+  // feature collections live inside the real `efhData` module — the test
+  // hits them through `buildCatalogGrids`, so we deliberately do NOT mock
+  // that module here.
+  const EFH_CATALOG_ENTRY = {
+    id: "noaa-efh-alaska-rockfish",
+    name: "NOAA EFH — Rockfish Complex (SE Alaska)",
+    sourceAgency: "NOAA Fisheries / NMFS Alaska Region",
+    dataType: "habitat" as const,
+    resolutionMMin: null,
+    resolutionMMax: null,
+    coverageBbox: { minLon: -170, minLat: 47, maxLon: -130, maxLat: 72 },
+    endpointUrl:
+      "https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles",
+    accessNotes: null,
+    description: null,
+    keywords: null,
+    lastUpdated: "2024",
+    waterType: "saltwater" as const,
+  };
   // Non-preset GEBCO catalog entry used to exercise the GEBCO WCS branch of
   // `buildCatalogGrids` end-to-end (catalog → materialize → user dataset).
   const GEBCO_CATALOG_ENTRY = {
@@ -384,6 +405,7 @@ const H = vi.hoisted(() => {
     GEBCO_CATALOG_ENTRY,
     NCEI_BAG_CATALOG_ENTRY,
     NCEI_COMMUNITY_DEM_CATALOG_ENTRY,
+    EFH_CATALOG_ENTRY,
   };
 });
 
@@ -476,6 +498,7 @@ vi.mock("../../lib/catalogSeeder.js", () => ({
     H.GEBCO_CATALOG_ENTRY,
     H.NCEI_BAG_CATALOG_ENTRY,
     H.NCEI_COMMUNITY_DEM_CATALOG_ENTRY,
+    H.EFH_CATALOG_ENTRY,
   ],
   searchCatalog: async () => [],
   scoreEntry: () => 1,
@@ -692,6 +715,63 @@ describe("catalog save → materialize → fetch round trip", () => {
       const ready = await pollUntilReady(saveId);
       expect(ready.status).toBe("ready");
       expect(ready.datasetId).toBeTruthy();
+    },
+    15_000,
+  );
+
+  it(
+    "saves a NOAA EFH habitat catalog entry as a polygon overlay dataset",
+    async () => {
+      const efhId = H.EFH_CATALOG_ENTRY.id;
+
+      const saveRes = await request(app)
+        .post(`/api/datasets/catalog/${efhId}/save`)
+        .set("x-e2e-user-id", E2E_USER)
+        .send({});
+      expect(saveRes.status).toBe(201);
+      expect(saveRes.body).toMatchObject({
+        catalogId: efhId,
+        status: "processing",
+      });
+      const saveId = saveRes.body.id as string;
+
+      const ready = await pollUntilReady(saveId);
+      expect(ready.status).toBe("ready");
+      expect(ready.datasetId).toBeTruthy();
+      const datasetId = ready.datasetId!;
+
+      // The materialized dataset row exists and serves a valid terrain grid
+      // (flat depth surface bounded by the EFH coverage bbox).
+      const terrainRes = await request(app)
+        .get(`/api/user/datasets/${datasetId}/terrain`)
+        .set("x-e2e-user-id", E2E_USER);
+      expect(terrainRes.status).toBe(200);
+      expect(terrainRes.body.datasetId).toBe(datasetId);
+      expect(terrainRes.body.resolution).toBe(256);
+      expect(terrainRes.body.depths).toHaveLength(256 * 256);
+      expect(terrainRes.body.waterType).toBe("saltwater");
+
+      const overviewRes = await request(app)
+        .get(`/api/user/datasets/${datasetId}/overview`)
+        .set("x-e2e-user-id", E2E_USER);
+      expect(overviewRes.status).toBe(200);
+      expect(overviewRes.body.resolution).toBe(64);
+      expect(overviewRes.body.depths).toHaveLength(64 * 64);
+
+      // The persisted jsonb retains the habitat polygon overlay even though
+      // the GET endpoint's zod schema strips unknown fields. Inspect the
+      // mock DB row directly to confirm the overlay was stored.
+      const datasetRow = H.dbState.datasets.find((d) => d["id"] === datasetId);
+      expect(datasetRow).toBeDefined();
+      const terrainJson = datasetRow!["terrainJson"] as {
+        habitatPolygons?: { type: string; features: Array<{ properties: { species: string } }> };
+      };
+      expect(terrainJson.habitatPolygons).toBeDefined();
+      expect(terrainJson.habitatPolygons!.type).toBe("FeatureCollection");
+      expect(terrainJson.habitatPolygons!.features.length).toBeGreaterThan(0);
+      for (const f of terrainJson.habitatPolygons!.features) {
+        expect(f.properties.species.startsWith("sebastes_")).toBe(true);
+      }
     },
     15_000,
   );
