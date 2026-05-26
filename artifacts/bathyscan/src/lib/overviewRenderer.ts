@@ -795,3 +795,47 @@ export function renderScaleBar(
 
   ctx.restore();
 }
+
+/**
+ * Draw the user's box-select rectangle on top of the overview.
+ *
+ * Inputs are canvas-pixel coords (post-transform). We render a translucent
+ * cyan fill with a dashed border and the bbox dimensions in degrees so the
+ * user has a quick read on how big the area is.
+ */
+export function drawSelectionRect(
+  ctx: CanvasRenderingContext2D,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  bboxDeg?: { width: number; height: number },
+): void {
+  const x = Math.min(x0, x1);
+  const y = Math.min(y0, y1);
+  const w = Math.abs(x1 - x0);
+  const h = Math.abs(y1 - y0);
+  if (w < 1 || h < 1) return;
+
+  ctx.save();
+  ctx.fillStyle = "rgba(0,229,255,0.10)";
+  ctx.fillRect(x, y, w, h);
+
+  ctx.strokeStyle = "rgba(0,229,255,0.9)";
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([6, 4]);
+  ctx.strokeRect(x + 0.5, y + 0.5, w, h);
+  ctx.setLineDash([]);
+
+  if (bboxDeg && w > 60 && h > 24) {
+    const label = `${bboxDeg.width.toFixed(3)}° × ${bboxDeg.height.toFixed(3)}°`;
+    ctx.font = "10px 'JetBrains Mono', monospace";
+    const tw = ctx.measureText(label).width;
+    ctx.fillStyle = "rgba(0,10,20,0.85)";
+    ctx.fillRect(x + 4, y + 4, tw + 8, 16);
+    ctx.fillStyle = "#00e5ff";
+    ctx.textBaseline = "top";
+    ctx.fillText(label, x + 8, y + 7);
+  }
+  ctx.restore();
+}

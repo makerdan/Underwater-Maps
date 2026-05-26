@@ -1091,6 +1091,63 @@ export const GetDatasetsCatalogSearchResponse = zod.array(GetDatasetsCatalogSear
 
 
 /**
+ * Returns the dataset catalog entries whose coverage bounding box
+intersects the request bbox. Use this for "give me data for this area"
+queries drawn on the 2D overview map.
+
+Validation rules:
+  * north > south, east > west
+  * latitudes clamped to [-90, 90], longitudes clamped to [-180, 180]
+  * zero-area or near-zero-area bboxes are rejected
+  * antimeridian-crossing bboxes (east < west) are rejected
+  * boxes spanning more than 180° in longitude or 170° in latitude
+    are rejected as "too large"
+
+ * @summary Find catalog datasets whose coverage intersects a bounding box
+ */
+export const PostDatasetsBboxQueryBody = zod.object({
+  "north": zod.number().describe('Northern latitude in decimal degrees'),
+  "south": zod.number().describe('Southern latitude in decimal degrees'),
+  "east": zod.number().describe('Eastern longitude in decimal degrees'),
+  "west": zod.number().describe('Western longitude in decimal degrees'),
+  "dataType": zod.enum(['bathymetry', 'substrate', 'habitat', 'lidar', 'chart']).optional(),
+  "waterType": zod.enum(['saltwater', 'freshwater']).optional()
+})
+
+export const PostDatasetsBboxQueryResponse = zod.object({
+  "bbox": zod.object({
+  "north": zod.number(),
+  "south": zod.number(),
+  "east": zod.number(),
+  "west": zod.number()
+}),
+  "datasets": zod.array(zod.object({
+  "id": zod.string().describe('Stable slug identifier'),
+  "name": zod.string(),
+  "sourceAgency": zod.string().describe('Organisation that produced the data (e.g. NOAA\/NCEI, GEBCO, Alaska DNR)'),
+  "dataType": zod.enum(['bathymetry', 'substrate', 'habitat', 'lidar', 'chart']),
+  "resolutionMMin": zod.number().nullish().describe('Finest resolution in metres'),
+  "resolutionMMax": zod.number().nullish().describe('Coarsest resolution in metres'),
+  "coverageBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}),
+  "endpointUrl": zod.string().nullish(),
+  "accessNotes": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "keywords": zod.string().nullish().describe('Comma-separated keyword tags'),
+  "lastUpdated": zod.string().nullish(),
+  "waterType": zod.enum(['saltwater', 'freshwater']),
+  "createdAt": zod.coerce.date()
+}).describe('A known public data source in the discovery catalog').and(zod.object({
+  "relevanceScore": zod.number().describe('0–1 relevance to the search query')
+})))
+})
+
+
+/**
  * Queues a catalog dataset for caching and associates it with the authenticated user's account. Returns a save job record.
  * @summary Save a catalog dataset to the user's account
  */

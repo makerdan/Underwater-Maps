@@ -1130,6 +1130,50 @@ export const GetDatasetsCatalogSearchWaterType = {
   freshwater: 'freshwater',
 } as const;
 
+export type PostDatasetsBboxQueryBodyDataType = typeof PostDatasetsBboxQueryBodyDataType[keyof typeof PostDatasetsBboxQueryBodyDataType];
+
+
+export const PostDatasetsBboxQueryBodyDataType = {
+  bathymetry: 'bathymetry',
+  substrate: 'substrate',
+  habitat: 'habitat',
+  lidar: 'lidar',
+  chart: 'chart',
+} as const;
+
+export type PostDatasetsBboxQueryBodyWaterType = typeof PostDatasetsBboxQueryBodyWaterType[keyof typeof PostDatasetsBboxQueryBodyWaterType];
+
+
+export const PostDatasetsBboxQueryBodyWaterType = {
+  saltwater: 'saltwater',
+  freshwater: 'freshwater',
+} as const;
+
+export type PostDatasetsBboxQueryBody = {
+  /** Northern latitude in decimal degrees */
+  north: number;
+  /** Southern latitude in decimal degrees */
+  south: number;
+  /** Eastern longitude in decimal degrees */
+  east: number;
+  /** Western longitude in decimal degrees */
+  west: number;
+  dataType?: PostDatasetsBboxQueryBodyDataType;
+  waterType?: PostDatasetsBboxQueryBodyWaterType;
+};
+
+export type PostDatasetsBboxQuery200Bbox = {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+};
+
+export type PostDatasetsBboxQuery200 = {
+  bbox: PostDatasetsBboxQuery200Bbox;
+  datasets: DatasetCatalogSearchResult[];
+};
+
 export type GetSurfaceConditionsParams = {
 /**
  * Latitude of query point

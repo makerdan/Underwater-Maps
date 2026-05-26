@@ -10,6 +10,7 @@
 
 import { Router } from "express";
 import { eq, and } from "drizzle-orm";
+import { z } from "zod";
 import { db, userCatalogSavesTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import {
@@ -92,6 +93,105 @@ router.get("/datasets/catalog/search", async (req, res): Promise<void> => {
         relevanceScore: r.relevanceScore,
       })),
     );
+  } catch (err) {
+    res.status(500).json({ error: "search_error", details: (err as Error).message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /datasets/bbox-query
+//
+// "Give me datasets for this area" — returns catalog entries whose coverage
+// bbox intersects the request bbox. Validates bbox shape (zero-area,
+// antimeridian, oversize) up-front so clients can show a clean error.
+// ---------------------------------------------------------------------------
+
+// We accept latitudes outside [-90, 90] and longitudes outside [-180, 180]
+// at the wire level, then normalize/clamp them before validating the bbox
+// shape. This makes the endpoint resilient to clients that send slightly
+// out-of-range values from canvas math without forcing them to clamp.
+const BboxQueryBody = z.object({
+  north: z.number().finite(),
+  south: z.number().finite(),
+  east: z.number().finite(),
+  west: z.number().finite(),
+  dataType: z.enum(["bathymetry", "substrate", "habitat", "lidar", "chart"]).optional(),
+  waterType: z.enum(["saltwater", "freshwater"]).optional(),
+});
+
+/** Wrap a longitude into (-180, 180] using the standard modulo trick.
+ * Values already in range are returned untouched to avoid floating-point
+ * drift (e.g. ((-132.6 + 180) % 360) - 180 = -132.60000000000002). */
+function normalizeLon(lon: number): number {
+  if (lon > -180 && lon <= 180) return lon;
+  const wrapped = ((lon + 180) % 360 + 360) % 360 - 180;
+  return wrapped === -180 ? 180 : wrapped;
+}
+
+/** Smallest bbox we accept — anything thinner is treated as a stray click. */
+const MIN_BBOX_DEG = 1e-4;
+/** Largest bbox we allow — keeps the result set sensible. */
+const MAX_BBOX_LON_DEG = 180;
+const MAX_BBOX_LAT_DEG = 170;
+
+router.post("/datasets/bbox-query", async (req, res): Promise<void> => {
+  const parsed = BboxQueryBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: "invalid_param",
+      details: parsed.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; "),
+    });
+    return;
+  }
+
+  const { dataType, waterType } = parsed.data;
+  // Clamp latitudes to the valid range and normalize longitudes to (-180, 180].
+  const north = Math.max(-90, Math.min(90, parsed.data.north));
+  const south = Math.max(-90, Math.min(90, parsed.data.south));
+  const east = normalizeLon(parsed.data.east);
+  const west = normalizeLon(parsed.data.west);
+
+  if (north <= south) {
+    res.status(400).json({ error: "invalid_bbox", details: "north must be greater than south" });
+    return;
+  }
+  if (east <= west) {
+    // Note: antimeridian-crossing bboxes (e.g. west=170, east=-170) fall in
+    // here. We explicitly reject rather than try to split the query.
+    res.status(400).json({
+      error: "invalid_bbox",
+      details: "east must be greater than west (antimeridian-crossing bboxes are not supported)",
+    });
+    return;
+  }
+  if (north - south < MIN_BBOX_DEG || east - west < MIN_BBOX_DEG) {
+    res.status(400).json({ error: "invalid_bbox", details: "bbox has zero or near-zero area" });
+    return;
+  }
+  if (east - west > MAX_BBOX_LON_DEG || north - south > MAX_BBOX_LAT_DEG) {
+    res.status(400).json({
+      error: "invalid_bbox",
+      details: `bbox too large (max ${MAX_BBOX_LON_DEG}° lon × ${MAX_BBOX_LAT_DEG}° lat)`,
+    });
+    return;
+  }
+
+  try {
+    const results = await searchCatalog({
+      dataType,
+      waterType,
+      minLon: west,
+      minLat: south,
+      maxLon: east,
+      maxLat: north,
+    });
+    res.json({
+      bbox: { north, south, east, west },
+      datasets: results.map((r) => ({
+        ...toCatalogResponse(r, r.createdAt),
+        relevanceScore: r.relevanceScore,
+      })),
+    });
   } catch (err) {
     res.status(500).json({ error: "search_error", details: (err as Error).message });
   }

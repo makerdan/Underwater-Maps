@@ -1140,6 +1140,69 @@ paths:
                 items:
                   $ref: "#/components/schemas/DatasetCatalogSearchResult"
 
+  /datasets/bbox-query:
+    post:
+      operationId: postDatasetsBboxQuery
+      tags: [datasets]
+      summary: Find catalog datasets whose coverage intersects a bounding box
+      description: |
+        Returns the dataset catalog entries whose coverage bounding box
+        intersects the request bbox. Use this for "give me data for this area"
+        queries drawn on the 2D overview map.
+
+        Validation rules:
+          * north > south, east > west
+          * latitudes clamped to [-90, 90], longitudes clamped to [-180, 180]
+          * zero-area or near-zero-area bboxes are rejected
+          * antimeridian-crossing bboxes (east < west) are rejected
+          * boxes spanning more than 180° in longitude or 170° in latitude
+            are rejected as "too large"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [north, south, east, west]
+              properties:
+                north: { type: number, description: Northern latitude in decimal degrees }
+                south: { type: number, description: Southern latitude in decimal degrees }
+                east:  { type: number, description: Eastern longitude in decimal degrees }
+                west:  { type: number, description: Western longitude in decimal degrees }
+                dataType:
+                  type: string
+                  enum: [bathymetry, substrate, habitat, lidar, chart]
+                waterType:
+                  type: string
+                  enum: [saltwater, freshwater]
+      responses:
+        "200":
+          description: Catalog entries intersecting the bbox, ordered by relevance
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bbox, datasets]
+                properties:
+                  bbox:
+                    type: object
+                    required: [north, south, east, west]
+                    properties:
+                      north: { type: number }
+                      south: { type: number }
+                      east:  { type: number }
+                      west:  { type: number }
+                  datasets:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DatasetCatalogSearchResult"
+        "400":
+          description: Invalid bbox (zero area, antimeridian, out of range, or too large)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /datasets/catalog/{id}/save:
     post:
       operationId: postDatasetsCatalogIdSave

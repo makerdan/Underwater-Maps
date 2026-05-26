@@ -338,4 +338,51 @@ test.describe("BathyScan — Overview Map", () => {
         .catch(() => {});
     });
   });
+
+  /**
+   * Box-select tool (Task #349). Draws a rectangle on the canvas and
+   * verifies the bbox panel + dataset request flow.
+   */
+  test.describe("Box-select area tool", () => {
+    test("HUD toggle opens overview, and Select Area draws a bbox", async ({ page }) => {
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      if (!(await ensureSignedInOrSkip(page))) return;
+
+      // Open via the new HUD button (mirrors the O shortcut).
+      const hudBtn = page.getByTestId("hud-toggle-overview");
+      await expect(hudBtn).toBeVisible({ timeout: 10_000 });
+      await hudBtn.click();
+      await expect(page.locator(OVERLAY_HEADER)).toBeVisible({ timeout: 5_000 });
+
+      // Activate the box-select tool.
+      const selectBtn = page.getByTestId("overview-select-area-toggle");
+      await expect(selectBtn).toBeVisible();
+      await selectBtn.click();
+      await expect(selectBtn).toHaveAttribute("aria-pressed", "true");
+
+      // Drag a rectangle across the canvas.
+      const canvas = overviewCanvas(page);
+      const box = await canvas.boundingBox();
+      if (!box) throw new Error("Overview canvas missing");
+      const x0 = box.x + box.width * 0.35;
+      const y0 = box.y + box.height * 0.35;
+      const x1 = box.x + box.width * 0.65;
+      const y1 = box.y + box.height * 0.65;
+
+      await page.mouse.move(x0, y0);
+      await page.mouse.down();
+      await page.mouse.move(x1, y1, { steps: 10 });
+      await page.mouse.up();
+
+      // Panel appears with bbox metrics and the Request button.
+      const panel = page.getByTestId("overview-bbox-panel");
+      await expect(panel).toBeVisible({ timeout: 5_000 });
+      await expect(page.getByTestId("overview-bbox-metrics")).toBeVisible();
+      await expect(page.getByTestId("overview-bbox-request")).toBeEnabled();
+
+      // Fire the request and wait for the results container to populate.
+      await page.getByTestId("overview-bbox-request").click();
+      await expect(page.getByTestId("overview-bbox-results")).toBeVisible({ timeout: 10_000 });
+    });
+  });
 });

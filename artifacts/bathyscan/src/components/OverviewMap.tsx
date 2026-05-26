@@ -9,8 +9,17 @@ import {
   getTrailsIdPoints,
   useGetDatasets,
   getGetDatasetsQueryKey,
+  usePostDatasetsBboxQuery,
+  useGetDatasetsMySaves,
+  getGetDatasetsMySavesQueryKey,
+  usePostDatasetsCatalogIdSave,
 } from "@workspace/api-client-react";
-import type { Marker, GpsTrail } from "@workspace/api-client-react";
+import type {
+  Marker,
+  GpsTrail,
+  DatasetCatalogSearchResult,
+} from "@workspace/api-client-react";
+import { useAppState } from "@/lib/context";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
@@ -34,6 +43,7 @@ import {
   renderGpsPosition,
   renderLiveTrail,
   renderSavedTrails,
+  drawSelectionRect,
 } from "@/lib/overviewRenderer";
 import type { OverviewTransform, CanvasSavedTrail } from "@/lib/overviewRenderer";
 import { useGetEfh, getGetEfhQueryKey } from "@workspace/api-client-react";
@@ -123,6 +133,120 @@ export const OverviewMap: React.FC = () => {
   // EFH detail panel — populated when the user clicks an EFH polygon while
   // the overlay is visible.
   const [efhDetail, setEfhDetail] = useState<EfhSpeciesProperties | null>(null);
+
+  // --- Box-select tool state ------------------------------------------------
+  // `selectMode` is the toolbar toggle. When true, the canvas mouse handlers
+  // switch from pan/drop-in into rectangle-drawing mode. Refs mirror state
+  // for use inside the imperative mouse handlers (which only run when the
+  // owning effect is re-registered).
+  const [selectMode, setSelectMode] = useState(false);
+  const selectModeRef = useRef(false);
+  useEffect(() => { selectModeRef.current = selectMode; }, [selectMode]);
+
+  // In-progress drag rectangle (canvas pixels). `null` when no drag.
+  const dragRectRef = useRef<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+
+  // Committed bbox (lon/lat) — drives the result panel. React state so the
+  // panel re-renders when the user releases the mouse.
+  const [selectedBbox, setSelectedBbox] = useState<
+    | { north: number; south: number; east: number; west: number }
+    | null
+  >(null);
+  // Mirror committed bbox into a ref so the rAF loop can paint the persistent
+  // rectangle without re-registering on every state change.
+  const selectedBboxRef = useRef<typeof selectedBbox>(null);
+  useEffect(() => { selectedBboxRef.current = selectedBbox; }, [selectedBbox]);
+
+  // --- Box-query hook + Load/Save plumbing (reuses FindDataPanel pattern) ---
+  const bboxQuery = usePostDatasetsBboxQuery();
+  const [bboxResults, setBboxResults] = useState<DatasetCatalogSearchResult[] | null>(null);
+  const [bboxError, setBboxError] = useState<string | null>(null);
+  const { setDatasetId } = useAppState();
+  const saveMutation = usePostDatasetsCatalogIdSave();
+  const { data: mySaves = [], refetch: refetchMySaves } = useGetDatasetsMySaves({
+    query: { queryKey: getGetDatasetsMySavesQueryKey() },
+  });
+  const savedCatalogIds = React.useMemo(
+    () => new Set(mySaves.map((s) => s.catalogId)),
+    [mySaves],
+  );
+  const [bboxSavingIds, setBboxSavingIds] = useState<Set<string>>(new Set());
+
+  const handleBboxLoad = useCallback(
+    (entry: DatasetCatalogSearchResult) => {
+      // Preset bundled datasets load directly into the 3D view; non-preset
+      // (user-saved or external) entries don't have a runtime grid yet, so
+      // we just close the map and let the Find Data flow handle them.
+      if (entry.id.startsWith("preset-")) {
+        setDatasetId(entry.id.replace("preset-", ""));
+        setOverviewOpen(false);
+      }
+    },
+    [setDatasetId, setOverviewOpen],
+  );
+
+  const handleBboxSave = useCallback(
+    async (id: string) => {
+      setBboxSavingIds((s) => new Set(s).add(id));
+      try {
+        await saveMutation.mutateAsync({ id });
+        await refetchMySaves();
+      } catch (err) {
+        void err;
+      } finally {
+        setBboxSavingIds((s) => {
+          const n = new Set(s);
+          n.delete(id);
+          return n;
+        });
+      }
+    },
+    [saveMutation, refetchMySaves],
+  );
+
+  const requestBbox = useCallback(async () => {
+    if (!selectedBbox) return;
+    setBboxError(null);
+    try {
+      const res = await bboxQuery.mutateAsync({ data: selectedBbox });
+      setBboxResults(res.datasets);
+    } catch (err) {
+      const e = err as { details?: string; message?: string };
+      setBboxError(e?.details ?? e?.message ?? "Request failed");
+      setBboxResults(null);
+    }
+  }, [bboxQuery, selectedBbox]);
+
+  const clearBbox = useCallback(() => {
+    setSelectedBbox(null);
+    setBboxResults(null);
+    setBboxError(null);
+  }, []);
+
+  // Escape behavior (capture-phase so we win against the global App handler):
+  //   1. Mid-drag (drawing a rectangle): cancel the in-progress drag only.
+  //   2. Completed box (or panel showing results): clear the box + panel.
+  //   3. Otherwise: do nothing — let App.tsx's global Escape close the
+  //      Overview Map as usual. We do NOT consume Escape just because
+  //      select-mode is toggled on, so the map can still be closed with one
+  //      key press from a "no box drawn yet" state.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (dragRectRef.current && !selectedBbox && !bboxResults) {
+        e.stopPropagation();
+        dragRectRef.current = null;
+        return;
+      }
+      if (selectedBbox || bboxResults) {
+        e.stopPropagation();
+        dragRectRef.current = null;
+        clearBbox();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [selectedBbox, bboxResults, clearBbox]);
 
   // Expose the setter to e2e tests (Task #319) so they can open the same
   // panel a click would, without reverse-engineering the canvas projection.
@@ -333,6 +457,44 @@ export const OverviewMap: React.FC = () => {
       // Scale bar
       renderScaleBar(ctx, grid, t, cH, units);
 
+      // Box-select overlay (in-progress drag + committed bbox). Painted on
+      // top of every other layer so the user can always see what they drew.
+      const drag = dragRectRef.current;
+      if (drag) {
+        const dl = canvasToLonLat(drag.x0, drag.y0, grid, t);
+        const dr = canvasToLonLat(drag.x1, drag.y1, grid, t);
+        drawSelectionRect(ctx, drag.x0, drag.y0, drag.x1, drag.y1, {
+          width: Math.abs(dr.lon - dl.lon),
+          height: Math.abs(dr.lat - dl.lat),
+        });
+      } else if (selectedBboxRef.current) {
+        const { north, south, east, west } = selectedBboxRef.current;
+        const [x0, y0] = (() => {
+          const lonRange = grid.maxLon - grid.minLon || 1;
+          const latRange = grid.maxLat - grid.minLat || 1;
+          const terrainW = t.pxPerDeg * lonRange * t.scale;
+          const terrainH = t.pxPerDeg * latRange * t.scale;
+          return [
+            t.offsetX + ((west - grid.minLon) / lonRange) * terrainW,
+            t.offsetY + ((north - grid.minLat) / latRange) * terrainH,
+          ];
+        })();
+        const [x1, y1] = (() => {
+          const lonRange = grid.maxLon - grid.minLon || 1;
+          const latRange = grid.maxLat - grid.minLat || 1;
+          const terrainW = t.pxPerDeg * lonRange * t.scale;
+          const terrainH = t.pxPerDeg * latRange * t.scale;
+          return [
+            t.offsetX + ((east - grid.minLon) / lonRange) * terrainW,
+            t.offsetY + ((south - grid.minLat) / latRange) * terrainH,
+          ];
+        })();
+        drawSelectionRect(ctx, x0, y0, x1, y1, {
+          width: east - west,
+          height: north - south,
+        });
+      }
+
       // Subtle border
       ctx.strokeStyle = "rgba(0,229,255,0.12)";
       ctx.lineWidth = 1;
@@ -353,6 +515,16 @@ export const OverviewMap: React.FC = () => {
     if (!canvas) return;
 
     const handleMouseDown = (e: MouseEvent) => {
+      // Select-area tool: capture rectangle start in canvas coords and
+      // suppress pan; left-button only.
+      if (selectModeRef.current && e.button === 0) {
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        dragRectRef.current = { x0: mx, y0: my, x1: mx, y1: my };
+        hasDraggedRef.current = true; // prevents the trailing `click` from firing drop-in
+        return;
+      }
       isDraggingRef.current = true;
       hasDraggedRef.current = false;
       dragStartRef.current = {
@@ -385,6 +557,16 @@ export const OverviewMap: React.FC = () => {
       const my = e.clientY - rect.top;
       mousePosRef.current = { x: mx, y: my };
 
+      // Select-area tool: extend the drag rectangle, suppress tooltip/pan.
+      if (selectModeRef.current) {
+        if (dragRectRef.current) {
+          dragRectRef.current.x1 = Math.max(0, Math.min(canvas.width, mx));
+          dragRectRef.current.y1 = Math.max(0, Math.min(canvas.height, my));
+        }
+        setTooltip((prev) => (prev.visible ? { ...prev, visible: false } : prev));
+        return;
+      }
+
       // Tooltip
       const insideCanvas =
         mx >= 0 && mx < canvas.width && my >= 0 && my < canvas.height;
@@ -413,6 +595,22 @@ export const OverviewMap: React.FC = () => {
     };
 
     const handleMouseUp = () => {
+      // Commit the drawn rectangle as a bbox (if it has meaningful area).
+      if (selectModeRef.current && dragRectRef.current) {
+        const r = dragRectRef.current;
+        const t = transformRef.current;
+        dragRectRef.current = null;
+        if (t && overviewGrid && Math.abs(r.x1 - r.x0) > 4 && Math.abs(r.y1 - r.y0) > 4) {
+          const a = canvasToLonLat(r.x0, r.y0, overviewGrid, t);
+          const b = canvasToLonLat(r.x1, r.y1, overviewGrid, t);
+          const north = Math.max(a.lat, b.lat);
+          const south = Math.min(a.lat, b.lat);
+          const east = Math.max(a.lon, b.lon);
+          const west = Math.min(a.lon, b.lon);
+          setSelectedBbox({ north, south, east, west });
+        }
+        return;
+      }
       isDraggingRef.current = false;
     };
 
@@ -449,6 +647,8 @@ export const OverviewMap: React.FC = () => {
     };
 
     const handleClick = (e: MouseEvent) => {
+      // Select tool owns the canvas; never drop-in or open EFH while active.
+      if (selectModeRef.current) return;
       if (hasDraggedRef.current) return;
       const t = transformRef.current;
       if (!t || !overviewGrid) return;
@@ -478,6 +678,9 @@ export const OverviewMap: React.FC = () => {
 
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
+      // Suppress the right-click "Drop in here" menu while the select tool
+      // is active — the user is in a different mental mode.
+      if (selectModeRef.current) return;
       const t = transformRef.current;
       if (!t || !overviewGrid) return;
 
@@ -666,6 +869,33 @@ export const OverviewMap: React.FC = () => {
             );
           })()}
 
+          {/* Box-select tool toggle — draw a rectangle to query catalog */}
+          <ViewscreenTooltip label="Draw a rectangle to find datasets that cover that area" side="bottom">
+            <button
+              data-testid="overview-select-area-toggle"
+              aria-pressed={selectMode}
+              onClick={() => {
+                setSelectMode((v) => !v);
+                if (selectMode) clearBbox();
+              }}
+              style={{
+                background: selectMode ? "rgba(0,229,255,0.15)" : "rgba(0,10,20,0.75)",
+                border: `1px solid ${selectMode ? "rgba(0,229,255,0.6)" : "rgba(0,229,255,0.2)"}`,
+                borderRadius: 3,
+                color: selectMode ? "#00e5ff" : "#475569",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9,
+                padding: "2px 10px",
+                cursor: "pointer",
+                letterSpacing: "0.1em",
+                lineHeight: "20px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              ▭ SELECT AREA
+            </button>
+          </ViewscreenTooltip>
+
           {/* EFH overlay toggle — only shown for datasets with bundled EFH zones */}
           {hasEfh && (
             <ViewscreenTooltip label="Toggle Essential Fish Habitat zones" side="bottom">
@@ -794,6 +1024,24 @@ export const OverviewMap: React.FC = () => {
           </div>
           <div style={{ color: "#64748b" }}>{formatDepth(tooltip.depth, { units: unitsForUi })} depth</div>
         </div>
+      )}
+
+      {/* Box-select bbox panel — appears once the user releases a drag */}
+      {selectedBbox && (
+        <BboxQueryPanel
+          bbox={selectedBbox}
+          results={bboxResults}
+          loading={bboxQuery.isPending}
+          error={bboxError}
+          onRequest={() => void requestBbox()}
+          onRedraw={() => { setBboxResults(null); setBboxError(null); setSelectedBbox(null); }}
+          onClear={clearBbox}
+          onClose={() => { clearBbox(); setSelectMode(false); }}
+          onLoad={handleBboxLoad}
+          onSave={(id) => void handleBboxSave(id)}
+          savedIds={savedCatalogIds}
+          savingIds={bboxSavingIds}
+        />
       )}
 
       {/* EFH species detail panel */}
@@ -1216,6 +1464,280 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef,
           );
         })
       )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Box-select query panel
+//
+// Floats over the right side of the overview map once the user releases a
+// drag in select-area mode. Shows the bbox metrics, a "Request bathymetry"
+// button, and the resulting catalog entries with Load/Save controls that
+// mirror the Find Data flow.
+// ---------------------------------------------------------------------------
+
+interface BboxQueryPanelProps {
+  bbox: { north: number; south: number; east: number; west: number };
+  results: DatasetCatalogSearchResult[] | null;
+  loading: boolean;
+  error: string | null;
+  onRequest: () => void;
+  onRedraw: () => void;
+  onClear: () => void;
+  onClose: () => void;
+  onLoad: (entry: DatasetCatalogSearchResult) => void;
+  onSave: (id: string) => void;
+  savedIds: Set<string>;
+  savingIds: Set<string>;
+}
+
+const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
+  bbox,
+  results,
+  loading,
+  error,
+  onRequest,
+  onRedraw,
+  onClear,
+  onClose,
+  onLoad,
+  onSave,
+  savedIds,
+  savingIds,
+}) => {
+  const widthDeg = bbox.east - bbox.west;
+  const heightDeg = bbox.north - bbox.south;
+  // Approximate km dimensions using Haversine along the bbox midlines.
+  const midLat = (bbox.north + bbox.south) / 2;
+  const midLon = (bbox.east + bbox.west) / 2;
+  const widthKm = haversineKm(midLat, bbox.west, midLat, bbox.east);
+  const heightKm = haversineKm(bbox.south, midLon, bbox.north, midLon);
+  const areaKm2 = widthKm * heightKm;
+  const fmtKm = (km: number) =>
+    km >= 100 ? `${km.toFixed(0)} km` : km >= 10 ? `${km.toFixed(1)} km` : `${km.toFixed(2)} km`;
+  const fmtArea = (km2: number) =>
+    km2 >= 1000 ? `${(km2 / 1000).toFixed(1)}k km²` : km2 >= 10 ? `${km2.toFixed(0)} km²` : `${km2.toFixed(1)} km²`;
+  return (
+    <div
+      data-testid="overview-bbox-panel"
+      role="dialog"
+      aria-label="Selected area datasets"
+      style={{
+        position: "absolute",
+        top: 48,
+        right: 12,
+        width: 320,
+        maxHeight: "calc(100vh - 64px)",
+        display: "flex",
+        flexDirection: "column",
+        background: "rgba(2,8,24,0.95)",
+        border: "1px solid rgba(0,229,255,0.25)",
+        borderRadius: 4,
+        backdropFilter: "blur(8px)",
+        boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
+        zIndex: 43,
+        pointerEvents: "auto",
+        fontFamily: "'JetBrains Mono', monospace",
+      }}
+    >
+      <div
+        style={{
+          padding: "8px 12px",
+          borderBottom: "1px solid rgba(0,229,255,0.15)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <span style={{ color: "#00e5ff", fontSize: 10, letterSpacing: "0.15em" }}>
+          SELECTED AREA
+        </span>
+        <button
+          onClick={onClose}
+          aria-label="Close selected area panel"
+          style={{
+            background: "none",
+            border: "none",
+            color: "#475569",
+            cursor: "pointer",
+            fontSize: 14,
+            lineHeight: 1,
+          }}
+        >
+          ✕
+        </button>
+      </div>
+
+      <div style={{ padding: "10px 12px", fontSize: 10, color: "#cbd5e1" }}>
+        <div data-testid="overview-bbox-metrics" style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 8px" }}>
+          <span style={{ color: "#475569" }}>N</span>
+          <span>{bbox.north.toFixed(5)}°</span>
+          <span style={{ color: "#475569" }}>S</span>
+          <span>{bbox.south.toFixed(5)}°</span>
+          <span style={{ color: "#475569" }}>E</span>
+          <span>{bbox.east.toFixed(5)}°</span>
+          <span style={{ color: "#475569" }}>W</span>
+          <span>{bbox.west.toFixed(5)}°</span>
+          <span style={{ color: "#475569" }}>SIZE</span>
+          <span data-testid="overview-bbox-size-deg">{widthDeg.toFixed(4)}° × {heightDeg.toFixed(4)}°</span>
+          <span style={{ color: "#475569" }}>SPAN</span>
+          <span data-testid="overview-bbox-size-km">{fmtKm(widthKm)} × {fmtKm(heightKm)}</span>
+          <span style={{ color: "#475569" }}>AREA</span>
+          <span data-testid="overview-bbox-area-km">~{fmtArea(areaKm2)}</span>
+        </div>
+
+        <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+          <button
+            data-testid="overview-bbox-request"
+            onClick={onRequest}
+            disabled={loading}
+            style={{
+              flex: 1,
+              background: "rgba(0,229,255,0.15)",
+              border: "1px solid rgba(0,229,255,0.5)",
+              borderRadius: 3,
+              color: "#00e5ff",
+              padding: "4px 8px",
+              cursor: loading ? "wait" : "pointer",
+              fontSize: 9,
+              letterSpacing: "0.1em",
+              opacity: loading ? 0.6 : 1,
+            }}
+          >
+            {loading ? "REQUESTING…" : "▼ REQUEST BATHYMETRY"}
+          </button>
+          <button
+            data-testid="overview-bbox-redraw"
+            onClick={onRedraw}
+            style={{
+              background: "transparent",
+              border: "1px solid rgba(0,229,255,0.2)",
+              borderRadius: 3,
+              color: "#7dd3fc",
+              padding: "4px 8px",
+              cursor: "pointer",
+              fontSize: 9,
+              letterSpacing: "0.1em",
+            }}
+          >
+            REDRAW
+          </button>
+          <button
+            data-testid="overview-bbox-clear"
+            onClick={onClear}
+            style={{
+              background: "transparent",
+              border: "1px solid rgba(239,68,68,0.25)",
+              borderRadius: 3,
+              color: "#fca5a5",
+              padding: "4px 8px",
+              cursor: "pointer",
+              fontSize: 9,
+              letterSpacing: "0.1em",
+            }}
+          >
+            CLEAR
+          </button>
+        </div>
+
+        {error && (
+          <div
+            data-testid="overview-bbox-error"
+            style={{
+              marginTop: 8,
+              padding: "6px 8px",
+              background: "rgba(239,68,68,0.08)",
+              border: "1px solid rgba(239,68,68,0.35)",
+              borderRadius: 3,
+              color: "#fca5a5",
+              fontSize: 9,
+            }}
+          >
+            ⚠ {error}
+          </div>
+        )}
+      </div>
+
+      <div
+        data-testid="overview-bbox-results"
+        style={{ flex: 1, overflowY: "auto", padding: "0 12px 12px", minHeight: 0 }}
+      >
+        {results === null && !loading && !error && (
+          <div style={{ fontSize: 9, color: "#475569", textAlign: "center", padding: "16px 0" }}>
+            Click "Request bathymetry" to see matching datasets.
+          </div>
+        )}
+        {results && results.length === 0 && (
+          <div style={{ fontSize: 9, color: "#475569", textAlign: "center", padding: "16px 0" }}>
+            No datasets cover this area.
+          </div>
+        )}
+        {results && results.map((entry) => {
+          const isPreset = entry.id.startsWith("preset-");
+          const saved = savedIds.has(entry.id);
+          const saving = savingIds.has(entry.id);
+          return (
+            <div
+              key={entry.id}
+              data-testid="overview-bbox-result-card"
+              style={{
+                padding: "8px 10px",
+                marginBottom: 6,
+                background: "rgba(255,255,255,0.02)",
+                border: "1px solid rgba(0,229,255,0.1)",
+                borderRadius: 3,
+              }}
+            >
+              <div style={{ fontSize: 10, color: "#e2e8f0", fontWeight: 600 }}>{entry.name}</div>
+              <div style={{ fontSize: 8, color: "#64748b", marginTop: 2, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                {entry.dataType} · {entry.sourceAgency}
+              </div>
+              <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                {isPreset && (
+                  <button
+                    data-testid="overview-bbox-load"
+                    onClick={() => onLoad(entry)}
+                    style={{
+                      flex: 1,
+                      background: "rgba(0,229,255,0.1)",
+                      border: "1px solid rgba(0,229,255,0.35)",
+                      borderRadius: 3,
+                      color: "#00e5ff",
+                      padding: "3px 6px",
+                      cursor: "pointer",
+                      fontSize: 9,
+                      letterSpacing: "0.08em",
+                    }}
+                  >
+                    LOAD
+                  </button>
+                )}
+                {/* Save is always available — mirrors FindDataPanel where
+                    presets can also be saved to the user's library. */}
+                <button
+                  data-testid="overview-bbox-save"
+                  onClick={() => !saved && !saving && onSave(entry.id)}
+                  disabled={saved || saving}
+                  style={{
+                    flex: 1,
+                    background: saved ? "rgba(34,197,94,0.1)" : "rgba(0,229,255,0.05)",
+                    border: `1px solid ${saved ? "rgba(34,197,94,0.4)" : "rgba(0,229,255,0.2)"}`,
+                    borderRadius: 3,
+                    color: saved ? "#4ade80" : "#7dd3fc",
+                    padding: "3px 6px",
+                    cursor: saved || saving ? "default" : "pointer",
+                    fontSize: 9,
+                    letterSpacing: "0.08em",
+                  }}
+                >
+                  {saved ? "✓ SAVED" : saving ? "SAVING…" : "+ SAVE"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

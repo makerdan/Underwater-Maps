@@ -26,6 +26,44 @@ import { TemperatureProfileChart } from "@/components/TemperatureProfileChart";
 import { ShoreZoneCredit } from "@/components/ShoreZoneCredit";
 
 
+/**
+ * HUD button that opens/closes the 2D Overview Map. Subscribes to the
+ * `overviewOpen` slice so the active/pressed visuals stay in sync with the
+ * `O` keyboard shortcut and the in-map close button.
+ */
+const HudOverviewToggle: React.FC = () => {
+  const overviewOpen = useUiStore((s) => s.overviewOpen);
+  const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
+  return (
+    <ViewscreenTooltip
+      label={overviewOpen ? "Close the 2D Overview Map (O)" : "Open the 2D Overview Map (O)"}
+      side="left"
+    >
+      <button
+        data-testid="hud-toggle-overview"
+        aria-pressed={overviewOpen}
+        aria-label="Toggle Overview Map"
+        onClick={() => setOverviewOpen(!overviewOpen)}
+        style={{
+          background: overviewOpen ? "rgba(0,229,255,0.15)" : "rgba(0,10,20,0.75)",
+          border: `1px solid ${overviewOpen ? "rgba(0,229,255,0.6)" : "rgba(0,229,255,0.2)"}`,
+          borderRadius: 4,
+          color: overviewOpen ? "#00e5ff" : "#7dd3fc",
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 9,
+          padding: "3px 10px",
+          cursor: "pointer",
+          letterSpacing: "0.1em",
+          backdropFilter: "blur(4px)",
+          textShadow: overviewOpen ? "0 0 6px rgba(0,229,255,0.5)" : "none",
+        }}
+      >
+        🗺 OVERVIEW
+      </button>
+    </ViewscreenTooltip>
+  );
+};
+
 // NOTE: legacy module-scope panel style. The component below derives
 // accessibility-aware overrides (`CYAN`, `PANEL`) from settings and uses
 // those locally instead of this base.
@@ -521,6 +559,9 @@ export const HUD: React.FC = () => {
           <div style={{ alignSelf: "flex-end" }}>
             <HelpIcon articleId="hud-overlays" label="HUD overlay toggles" />
           </div>
+
+          {/* Overview Map toggle (keyboard shortcut: O) */}
+          <HudOverviewToggle />
 
           {/* Find Data panel toggle */}
           <ViewscreenTooltip label="Browse datasets, markers and habitats" side="left">

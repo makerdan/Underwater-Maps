@@ -53,6 +53,8 @@ import type {
   PoeError,
   PoeModelList,
   PoeQueryRequest,
+  PostDatasetsBboxQuery200,
+  PostDatasetsBboxQueryBody,
   PostDatasetsUploadBody,
   QueryResult,
   RenameDatasetFolderBody,
@@ -2972,6 +2974,89 @@ export function useGetDatasetsCatalogSearch<TData = Awaited<ReturnType<typeof ge
 
 
 
+
+export const getPostDatasetsBboxQueryUrl = () => {
+
+
+
+
+  return `/api/datasets/bbox-query`
+}
+
+/**
+ * Returns the dataset catalog entries whose coverage bounding box
+intersects the request bbox. Use this for "give me data for this area"
+queries drawn on the 2D overview map.
+
+Validation rules:
+  * north > south, east > west
+  * latitudes clamped to [-90, 90], longitudes clamped to [-180, 180]
+  * zero-area or near-zero-area bboxes are rejected
+  * antimeridian-crossing bboxes (east < west) are rejected
+  * boxes spanning more than 180° in longitude or 170° in latitude
+    are rejected as "too large"
+
+ * @summary Find catalog datasets whose coverage intersects a bounding box
+ */
+export const postDatasetsBboxQuery = async (postDatasetsBboxQueryBody: PostDatasetsBboxQueryBody, options?: RequestInit): Promise<PostDatasetsBboxQuery200> => {
+
+  return customFetch<PostDatasetsBboxQuery200>(getPostDatasetsBboxQueryUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      postDatasetsBboxQueryBody,)
+  }
+);}
+
+
+
+
+export const getPostDatasetsBboxQueryMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsBboxQuery>>, TError,{data: BodyType<PostDatasetsBboxQueryBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postDatasetsBboxQuery>>, TError,{data: BodyType<PostDatasetsBboxQueryBody>}, TContext> => {
+
+const mutationKey = ['postDatasetsBboxQuery'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postDatasetsBboxQuery>>, {data: BodyType<PostDatasetsBboxQueryBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  postDatasetsBboxQuery(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostDatasetsBboxQueryMutationResult = NonNullable<Awaited<ReturnType<typeof postDatasetsBboxQuery>>>
+    export type PostDatasetsBboxQueryMutationBody = BodyType<PostDatasetsBboxQueryBody>
+    export type PostDatasetsBboxQueryMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Find catalog datasets whose coverage intersects a bounding box
+ */
+export const usePostDatasetsBboxQuery = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsBboxQuery>>, TError,{data: BodyType<PostDatasetsBboxQueryBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postDatasetsBboxQuery>>,
+        TError,
+        {data: BodyType<PostDatasetsBboxQueryBody>},
+        TContext
+      > => {
+      return useMutation(getPostDatasetsBboxQueryMutationOptions(options));
+    }
 
 export const getPostDatasetsCatalogIdSaveUrl = (id: string,) => {
 
