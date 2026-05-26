@@ -15,7 +15,7 @@
  */
 
 import { db, datasetCatalogTable } from "@workspace/db";
-import { sql, notInArray } from "drizzle-orm";
+import { inArray, notInArray, sql } from "drizzle-orm";
 import { ALL_PRESET_DATASETS, NCEI_DATASET_COVERAGES } from "./terrain.js";
 
 export interface CatalogSeedEntry {
@@ -292,6 +292,17 @@ function buildPresetCatalogEntries(): CatalogSeedEntry[] {
 
 let seeded = false;
 
+/**
+ * IDs of catalog entries that were seeded by previous versions of this file
+ * and have since been retired. Listed explicitly so reconciliation never
+ * touches user-saved catalog rows (which use other id prefixes).
+ *
+ * NOTE: `preset-*` rows are reconciled via the live `buildPresetCatalogEntries()`
+ * output below — any preset that disappears from the registry is pruned
+ * automatically, no entry needed here.
+ */
+const RETIRED_CATALOG_IDS: string[] = [];
+
 export async function seedDatasetCatalog(): Promise<void> {
   if (seeded) return;
   seeded = true;
@@ -317,34 +328,55 @@ export async function seedDatasetCatalog(): Promise<void> {
       console.info(
         `[catalog] Purged ${purgedCount} stale preset-* rows no longer in registry.`,
       );
-      inMemoryCatalog = null;
     }
 
-    // Idempotent upsert: insert any preset/extra catalog rows missing from the
-    // table (handles fresh DBs AND existing deployments getting new presets or
-    // new EXTRA_CATALOG_ENTRIES). onConflictDoNothing keeps repeat boots safe.
+    let retiredCount = 0;
+    if (RETIRED_CATALOG_IDS.length > 0) {
+      const retired = await db
+        .delete(datasetCatalogTable)
+        .where(inArray(datasetCatalogTable.id, RETIRED_CATALOG_IDS));
+      retiredCount = Number(
+        (retired as unknown as { rowCount?: number | null }).rowCount ?? 0,
+      );
+      if (retiredCount > 0) {
+        console.info(
+          `[catalog] Purged ${retiredCount} retired non-preset row(s).`,
+        );
+      }
+    }
+
     const entries: CatalogSeedEntry[] = [
       ...presetEntries,
       ...EXTRA_CATALOG_ENTRIES,
     ];
 
-    const inserted = await db
+    // Upsert every static entry by id so additions and edits in the source
+    // file flow to existing installs on the next boot. onConflictDoUpdate
+    // refreshes all mutable fields from `excluded.*` while leaving
+    // user-saved catalog rows (different id prefixes) untouched.
+    await db
       .insert(datasetCatalogTable)
       .values(entries)
-      .onConflictDoNothing({ target: datasetCatalogTable.id });
-    const insertedCount = Number(
-      (inserted as { rowCount?: number | null }).rowCount ?? 0,
-    );
-    if (insertedCount > 0) {
-      console.info(
-        `[catalog] Upserted ${insertedCount} new catalog entries (of ${entries.length} total).`,
-      );
-      inMemoryCatalog = null;
-    } else {
-      console.info(
-        `[catalog] Catalog up to date (${entries.length} known entries).`,
-      );
-    }
+      .onConflictDoUpdate({
+        target: datasetCatalogTable.id,
+        set: {
+          name: sql`excluded.name`,
+          sourceAgency: sql`excluded.source_agency`,
+          dataType: sql`excluded.data_type`,
+          resolutionMMin: sql`excluded.resolution_m_min`,
+          resolutionMMax: sql`excluded.resolution_m_max`,
+          coverageBbox: sql`excluded.coverage_bbox`,
+          endpointUrl: sql`excluded.endpoint_url`,
+          accessNotes: sql`excluded.access_notes`,
+          description: sql`excluded.description`,
+          keywords: sql`excluded.keywords`,
+          lastUpdated: sql`excluded.last_updated`,
+          waterType: sql`excluded.water_type`,
+        },
+      });
+
+    inMemoryCatalog = null;
+    console.info(`[catalog] Reconciled ${entries.length} catalog entries.`);
   } catch (err) {
     console.warn(`[catalog] Seed failed (non-fatal): ${(err as Error).message}`);
     seeded = false;
