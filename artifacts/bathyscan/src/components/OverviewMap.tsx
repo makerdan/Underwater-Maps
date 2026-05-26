@@ -277,21 +277,29 @@ export const OverviewMap: React.FC = () => {
     markersRef.current = markerData ?? [];
   }, [markerData]);
 
-  // EFH data — only fetch for datasets that have bundled EFH zones
-  // (declared via the `hasEfh` flag in the dataset metadata).
+  // EFH data — either embedded in the overview grid (for user-saved noaa-efh-*
+  // datasets) or fetched from /efh (for preset datasets with the hasEfh flag).
+  const embeddedEfhPolygons = overviewGrid?.habitatPolygons ?? null;
   const waterTypeForDatasets = useSettingsStore((s) => s.waterType);
   const { data: allDatasets } = useGetDatasets(
     { waterType: waterTypeForDatasets },
     { query: { queryKey: getGetDatasetsQueryKey({ waterType: waterTypeForDatasets }) } },
   );
   const hasEfh = !!allDatasets?.find((d) => d.id === datasetId)?.hasEfh;
+  // Only hit /efh for preset datasets — user-saved EFH datasets have polygons
+  // already embedded in overviewGrid.habitatPolygons.
   const { data: efhData } = useGetEfh(
     { datasetId },
-    { query: { enabled: hasEfh, staleTime: 60_000, queryKey: getGetEfhQueryKey({ datasetId }) } },
+    { query: { enabled: hasEfh && !embeddedEfhPolygons, staleTime: 60_000, queryKey: getGetEfhQueryKey({ datasetId }) } },
+  );
+  // Prefer embedded polygons (user-saved datasets) over the fetched preset data.
+  const activeEfhFeatures = useMemo(
+    () => embeddedEfhPolygons?.features ?? efhData?.features ?? [],
+    [embeddedEfhPolygons, efhData],
   );
   useEffect(() => {
-    efhFeaturesRef.current = efhData?.features ?? [];
-  }, [efhData]);
+    efhFeaturesRef.current = activeEfhFeatures;
+  }, [activeEfhFeatures]);
 
   // Keep showEfhRef in sync so the rAF loop can read it without a dep-array entry
   useEffect(() => {
@@ -1077,8 +1085,8 @@ export const OverviewMap: React.FC = () => {
             </button>
           </ViewscreenTooltip>
 
-          {/* EFH overlay toggle — only shown for datasets with bundled EFH zones */}
-          {hasEfh && (
+          {/* EFH overlay toggle — shown for preset datasets (hasEfh) and user-saved EFH datasets (embeddedEfhPolygons) */}
+          {(hasEfh || !!embeddedEfhPolygons) && (
             <ViewscreenTooltip label="Toggle Essential Fish Habitat zones" side="bottom">
             <button
               onClick={() => setShowEfh(!showEfh)}

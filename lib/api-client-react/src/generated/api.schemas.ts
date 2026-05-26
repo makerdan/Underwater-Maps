@@ -526,6 +526,8 @@ export interface TerrainData {
   bathymetryCreditUrl?: string;
   /** Credit URL surfaced next to the topography source badge. */
   topographyCreditUrl?: string;
+  /** EFH FeatureCollection embedded for user-saved noaa-efh-* catalog datasets. Present only when the dataset carries polygon habitat data. */
+  habitatPolygons?: EfhFeatureCollection;
 }
 
 export type DatasetPreviewBbox = {

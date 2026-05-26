@@ -2256,6 +2256,36 @@ components:
         topographyCreditUrl:
           type: string
           description: Credit URL surfaced next to the topography source badge.
+        habitatPolygons:
+          type: object
+          description: |
+            EFH (Essential Fish Habitat) FeatureCollection embedded directly in the terrain
+            response for user-saved noaa-efh-* catalog datasets. Present only when the
+            dataset carries polygon habitat data (i.e. was saved from a NOAA EFH catalog
+            entry). Clients should render these polygons instead of (or in addition to)
+            fetching from /efh when this field is present.
+          properties:
+            type:
+              type: string
+              enum: [FeatureCollection]
+            features:
+              type: array
+              items:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    enum: [Feature]
+                  properties:
+                    $ref: "#/components/schemas/EfhSpeciesProperties"
+                  geometry:
+                    type: object
+                    additionalProperties: true
+                required: [type, properties, geometry]
+            metadata:
+              type: object
+              additionalProperties: true
+          required: [type, features]
       required:
         - datasetId
         - name

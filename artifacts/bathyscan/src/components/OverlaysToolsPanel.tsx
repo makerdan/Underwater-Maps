@@ -109,7 +109,9 @@ export const OverlaysToolsPanel: React.FC = () => {
     { waterType },
     { query: { queryKey: getGetDatasetsQueryKey({ waterType }) } },
   );
-  const hasEfh = !!datasets?.find((d) => d.id === (terrain?.datasetId ?? ""))?.hasEfh;
+  const hasEfh =
+    !!datasets?.find((d) => d.id === (terrain?.datasetId ?? ""))?.hasEfh ||
+    !!terrain?.habitatPolygons;
 
   if (!terrain) return null;
 

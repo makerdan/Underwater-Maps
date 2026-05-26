@@ -165,6 +165,11 @@ export const EfhZoneLayer: React.FC = () => {
   const setSelectedEfh = useUiStore((s) => s.setSelectedEfh);
 
   const datasetId = terrain?.datasetId ?? "";
+
+  // For user-saved noaa-efh-* datasets, the polygons are embedded directly in
+  // the terrain response under `habitatPolygons` — no secondary /efh fetch needed.
+  const embeddedPolygons = terrain?.habitatPolygons ?? null;
+
   const waterTypeForDatasets = useSettingsStore((s) => s.waterType);
   const { data: allDatasets } = useGetDatasets(
     { waterType: waterTypeForDatasets },
@@ -172,19 +177,24 @@ export const EfhZoneLayer: React.FC = () => {
   );
   const hasEfh = !!allDatasets?.find((d) => d.id === datasetId)?.hasEfh;
 
+  // Only fetch from /efh for preset datasets (hasEfh flag). For user-saved EFH
+  // datasets the polygons arrive via `habitatPolygons` on the terrain object.
   const { data: efhData } = useGetEfh(
     { datasetId },
-    { query: { enabled: hasEfh && efhOverlayEnabled, queryKey: getGetEfhQueryKey({ datasetId }) } },
+    { query: { enabled: hasEfh && efhOverlayEnabled && !embeddedPolygons, queryKey: getGetEfhQueryKey({ datasetId }) } },
   );
 
+  // Prefer embedded polygons (user-saved datasets) over the fetched preset data.
+  const activeFeatures = embeddedPolygons?.features ?? efhData?.features ?? null;
+
   const zones = useMemo(() => {
-    if (!efhData?.features || !terrain) return [];
+    if (!activeFeatures || !terrain) return [];
     return buildZoneRenders(
-      efhData.features,
+      activeFeatures,
       terrain.minLon, terrain.maxLon,
       terrain.minLat, terrain.maxLat,
     );
-  }, [efhData, terrain]);
+  }, [activeFeatures, terrain]);
 
   // Free GPU buffers when zones change or the component unmounts
   useEffect(() => {
