@@ -39,6 +39,7 @@ import { WaterTypeToggle } from "@/components/WaterTypeToggle";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { GpsImportDialog } from "@/components/GpsImportDialog";
+import { GpsExportDialog } from "@/components/GpsExportDialog";
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
@@ -452,6 +453,7 @@ export const DatasetPanel: React.FC = () => {
   // ─── Markers ──────────────────────────────────────────────────────────────
   const [markersOpen, setMarkersOpen] = useState(false);
   const [gpsImportOpen, setGpsImportOpen] = useState(false);
+  const [gpsExportOpen, setGpsExportOpen] = useState(false);
   const markerDatasetId = terrain?.datasetId ?? "";
   const { data: markers } = useGetMarkers(
     { datasetId: markerDatasetId },
@@ -753,13 +755,13 @@ export const DatasetPanel: React.FC = () => {
 
               {markersOpen && (
                 <div style={{ paddingBottom: 4 }}>
-                  <div style={{ padding: "2px 12px 6px" }}>
+                  <div style={{ padding: "2px 12px 6px", display: "flex", gap: 6 }}>
                     <ViewscreenTooltip label="Import waypoints/routes from GPX, KML, KMZ, or CSV" side="right">
                       <button
                         onClick={() => setGpsImportOpen(true)}
                         data-testid="open-gps-import"
                         style={{
-                          width: "100%",
+                          flex: 1,
                           padding: "5px 8px",
                           background: "rgba(0,229,255,0.06)",
                           border: "1px solid rgba(0,229,255,0.2)",
@@ -772,6 +774,26 @@ export const DatasetPanel: React.FC = () => {
                         }}
                       >
                         ▼ IMPORT GPS…
+                      </button>
+                    </ViewscreenTooltip>
+                    <ViewscreenTooltip label="Export markers and trolling routes as GPX or KML" side="right">
+                      <button
+                        onClick={() => setGpsExportOpen(true)}
+                        data-testid="open-gps-export"
+                        style={{
+                          flex: 1,
+                          padding: "5px 8px",
+                          background: "rgba(0,229,255,0.06)",
+                          border: "1px solid rgba(0,229,255,0.2)",
+                          borderRadius: 3,
+                          color: "#00e5ff",
+                          fontSize: 10,
+                          letterSpacing: "0.12em",
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                        }}
+                      >
+                        ▲ EXPORT GPS…
                       </button>
                     </ViewscreenTooltip>
                   </div>
@@ -846,6 +868,10 @@ export const DatasetPanel: React.FC = () => {
 
           {gpsImportOpen && terrain && (
             <GpsImportDialog terrain={terrain} onClose={() => setGpsImportOpen(false)} />
+          )}
+
+          {gpsExportOpen && terrain && (
+            <GpsExportDialog terrain={terrain} onClose={() => setGpsExportOpen(false)} />
           )}
 
           {/* ── Upload accordion ── */}
