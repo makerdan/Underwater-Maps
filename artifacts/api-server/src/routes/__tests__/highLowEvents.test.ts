@@ -1,9 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-import {
-  getHighLowEvents,
-  __clearHighLowEventsCacheForTests,
-} from "../tidal.js";
+import { getHighLowEvents } from "../tidal.js";
 
 function buildNoaaResponse() {
   return {
@@ -27,7 +24,6 @@ describe("getHighLowEvents caching", () => {
   let fetchSpy: ReturnType<typeof mockFetchOk>;
 
   beforeEach(() => {
-    __clearHighLowEventsCacheForTests();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-25T12:00:00Z"));
     fetchSpy = mockFetchOk();

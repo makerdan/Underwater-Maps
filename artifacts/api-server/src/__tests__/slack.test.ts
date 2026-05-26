@@ -1,7 +1,7 @@
 /**
  * Unit tests for the shared slack-tide model and API responses.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import request from "supertest";
 import {
   buildSyntheticEvents,
@@ -9,20 +9,6 @@ import {
   SEMI_DIURNAL_MS,
   type TideEvent,
 } from "../lib/slack";
-import {
-  __clearHighLowEventsCacheForTests,
-  __clearStationCachesForTests,
-  __clearCurrentsPeakCacheForTests,
-} from "../routes/tidal";
-
-// Module-level NOAA caches are shared across tests; clear them between
-// cases so a fetch-failure cached as "empty stations" by one test does
-// not pin later tests to the estimated-fallback path.
-beforeEach(() => {
-  __clearHighLowEventsCacheForTests();
-  __clearStationCachesForTests();
-  __clearCurrentsPeakCacheForTests();
-});
 
 describe("slack model", () => {
   const peak = 2.0;

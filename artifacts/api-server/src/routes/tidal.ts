@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { logger } from "../lib/logger.js";
+import { registerCache } from "../lib/cacheRegistry.js";
 import {
   buildSyntheticEvents,
   computeSlackSample,
@@ -100,6 +101,7 @@ const STATION_LISTS_EMPTY_TTL_MS = 5 * 60 * 1000;
  */
 const stationListsFailureCache = new Map<StationListType, number>();
 const STATION_LISTS_FAILURE_TTL_MS = 60 * 1000;
+registerCache(() => { stationListsCache.clear(); stationListsFailureCache.clear(); });
 
 function stationListTtlMs(data: NoaaStation[]): number {
   return data.length === 0 ? STATION_LISTS_EMPTY_TTL_MS : STATION_LISTS_TTL_MS;
@@ -193,16 +195,19 @@ function toNoaaDateStr(d: Date): string {
 const highLowEventsCache = new Map<string, { result: TideEvent[] | null; ts: number }>();
 const HIGH_LOW_EVENTS_TTL_MS = 30 * 60 * 1000;
 
-/** Exposed for tests so they can reset state between cases. */
+/**
+ * Clear the high/low events cache.
+ *
+ * Exported for tests that need to reset this specific cache mid-test
+ * (e.g. to simulate expiry while keeping station-list caches warm).
+ * The global vitest setup already calls `clearAllCaches()` before each
+ * test, so this export is only needed for those mid-test edge-cases.
+ */
 export function __clearHighLowEventsCacheForTests(): void {
   highLowEventsCache.clear();
 }
 
-/** Exposed for tests so they can reset cached NOAA station lists. */
-export function __clearStationCachesForTests(): void {
-  stationListsCache.clear();
-  stationListsFailureCache.clear();
-}
+registerCache(() => highLowEventsCache.clear());
 
 /**
  * Fetch high/low tide events covering [refTime - beforeDays, refTime + afterDays].
@@ -254,10 +259,7 @@ type CurrentsPeakResult = { peakSpeedKnots: number; floodBearingDeg: number } | 
 const currentsPeakCache = new Map<string, { result: CurrentsPeakResult; ts: number }>();
 const CURRENTS_PEAK_TTL_MS = 30 * 60 * 1000;
 
-/** Exposed for tests so they can reset state between cases. */
-export function __clearCurrentsPeakCacheForTests(): void {
-  currentsPeakCache.clear();
-}
+registerCache(() => currentsPeakCache.clear());
 
 /**
  * Fetch max-flood / max-ebb / slack predictions from a NOAA currents station

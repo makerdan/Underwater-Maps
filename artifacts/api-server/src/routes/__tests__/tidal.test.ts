@@ -2,11 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
 
-import tidalRouter, {
-  __clearHighLowEventsCacheForTests,
-  __clearCurrentsPeakCacheForTests,
-  __clearStationCachesForTests,
-} from "../tidal";
+import tidalRouter, { __clearHighLowEventsCacheForTests } from "../tidal";
 
 function makeApp() {
   const app = express();
@@ -26,9 +22,6 @@ describe("GET /tidal/schedule", () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    __clearHighLowEventsCacheForTests();
-    __clearCurrentsPeakCacheForTests();
-    __clearStationCachesForTests();
     fetchSpy = vi.spyOn(globalThis, "fetch");
   });
   afterEach(() => {
@@ -94,9 +87,6 @@ describe("GET /tidal", () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    __clearHighLowEventsCacheForTests();
-    __clearCurrentsPeakCacheForTests();
-    __clearStationCachesForTests();
     fetchSpy = vi.spyOn(globalThis, "fetch");
   });
   afterEach(() => {

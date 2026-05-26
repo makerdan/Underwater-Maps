@@ -1,9 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-import {
-  getCurrentsPeak,
-  __clearCurrentsPeakCacheForTests,
-} from "../tidal.js";
+import { getCurrentsPeak } from "../tidal.js";
 
 function buildNoaaResponse() {
   return {
@@ -28,7 +25,6 @@ describe("getCurrentsPeak caching", () => {
   let fetchSpy: ReturnType<typeof mockFetchOk>;
 
   beforeEach(() => {
-    __clearCurrentsPeakCacheForTests();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-25T12:00:00Z"));
     fetchSpy = mockFetchOk();
