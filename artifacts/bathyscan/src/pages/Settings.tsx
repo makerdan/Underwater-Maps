@@ -18,10 +18,12 @@ import {
   getDataSnapshot,
   SETTINGS_SCHEMA_VERSION,
   DEFAULT_SETTINGS,
+  DEFAULT_CROSSHAIR_MENU_GAMEPAD_BUTTON,
   type MarkerType,
   type SettingsSection,
   type SettingsState,
 } from "@/lib/settingsStore";
+import { formatKeyCode, formatGamepadButton } from "@/lib/keyLabel";
 import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMarkersQueryKey } from "@workspace/api-client-react";
@@ -1604,10 +1606,200 @@ function GlobalResetFooter() {
   );
 }
 
+function CrosshairMenuKeyCapture() {
+  const value = useSettingsStore((s) => s.crosshairMenuKey);
+  const setValue = useSettingsStore((s) => s.setCrosshairMenuKey);
+  const [capturing, setCapturing] = useState(false);
+
+  useEffect(() => {
+    if (!capturing) return;
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.code === "Escape") {
+        setCapturing(false);
+        return;
+      }
+      // Ignore bare modifier presses — wait for an actual key.
+      if (
+        e.code === "ShiftLeft" || e.code === "ShiftRight" ||
+        e.code === "ControlLeft" || e.code === "ControlRight" ||
+        e.code === "AltLeft" || e.code === "AltRight" ||
+        e.code === "MetaLeft" || e.code === "MetaRight"
+      ) return;
+      setValue(e.code);
+      setCapturing(false);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [capturing, setValue]);
+
+  return (
+    <div style={S.row}>
+      <div>
+        <div style={S.label}>Open crosshair action menu</div>
+        <div style={S.sublabel}>
+          Key pressed in fly mode to open the terrain action menu anchored at
+          the crosshair. Press Esc while capturing to cancel.
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button
+          type="button"
+          data-testid="shortcut-crosshair-menu-key"
+          onClick={() => setCapturing((v) => !v)}
+          style={{
+            background: capturing ? "rgba(251,146,60,0.12)" : "rgba(0,229,255,0.08)",
+            border: `1px solid ${capturing ? "rgba(251,146,60,0.5)" : "rgba(0,229,255,0.25)"}`,
+            borderRadius: 3,
+            color: capturing ? "#fb923c" : "#67e8f9",
+            fontFamily: FONT,
+            fontSize: 10,
+            padding: "4px 12px",
+            minWidth: 96,
+            cursor: "pointer",
+            letterSpacing: "0.1em",
+          }}
+        >
+          {capturing ? "PRESS ANY KEY…" : formatKeyCode(value).toUpperCase()}
+        </button>
+        <button
+          type="button"
+          onClick={() => setValue("KeyQ")}
+          style={{
+            background: "none",
+            border: "1px solid rgba(0,229,255,0.15)",
+            borderRadius: 3,
+            color: "#64748b",
+            fontSize: 9,
+            letterSpacing: "0.15em",
+            padding: "3px 8px",
+            cursor: "pointer",
+            fontFamily: FONT,
+          }}
+        >
+          RESET
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CrosshairMenuGamepadCapture() {
+  const value = useSettingsStore((s) => s.crosshairMenuGamepadButton);
+  const setValue = useSettingsStore((s) => s.setCrosshairMenuGamepadButton);
+  const [capturing, setCapturing] = useState(false);
+
+  useEffect(() => {
+    if (!capturing) return;
+    if (typeof navigator === "undefined" || typeof navigator.getGamepads !== "function") {
+      return;
+    }
+    let raf = 0;
+    let snapshot: boolean[][] | null = null;
+    const poll = () => {
+      const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+      const current = pads.map((p) => (p ? p.buttons.map((b) => !!b.pressed) : []));
+      if (!snapshot) {
+        snapshot = current;
+      } else {
+        for (let p = 0; p < current.length; p++) {
+          const cur = current[p] ?? [];
+          const prev = snapshot[p] ?? [];
+          for (let b = 0; b < cur.length; b++) {
+            if (cur[b] && !prev[b]) {
+              setValue(b);
+              setCapturing(false);
+              return;
+            }
+          }
+        }
+        snapshot = current;
+      }
+      raf = window.requestAnimationFrame(poll);
+    };
+    raf = window.requestAnimationFrame(poll);
+    return () => window.cancelAnimationFrame(raf);
+  }, [capturing, setValue]);
+
+  return (
+    <div style={S.row}>
+      <div>
+        <div style={S.label}>Gamepad button</div>
+        <div style={S.sublabel}>
+          Controller button that opens the same crosshair action menu. Uses
+          the Standard Gamepad mapping; defaults to Y / Triangle.
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button
+          type="button"
+          data-testid="shortcut-crosshair-menu-gamepad"
+          onClick={() => setCapturing((v) => !v)}
+          style={{
+            background: capturing ? "rgba(251,146,60,0.12)" : "rgba(0,229,255,0.08)",
+            border: `1px solid ${capturing ? "rgba(251,146,60,0.5)" : "rgba(0,229,255,0.25)"}`,
+            borderRadius: 3,
+            color: capturing ? "#fb923c" : "#67e8f9",
+            fontFamily: FONT,
+            fontSize: 10,
+            padding: "4px 12px",
+            minWidth: 140,
+            cursor: "pointer",
+            letterSpacing: "0.08em",
+          }}
+        >
+          {capturing ? "PRESS A BUTTON…" : formatGamepadButton(value).toUpperCase()}
+        </button>
+        <button
+          type="button"
+          onClick={() => setValue(null)}
+          style={{
+            background: "none",
+            border: "1px solid rgba(0,229,255,0.15)",
+            borderRadius: 3,
+            color: "#64748b",
+            fontSize: 9,
+            letterSpacing: "0.15em",
+            padding: "3px 8px",
+            cursor: "pointer",
+            fontFamily: FONT,
+          }}
+        >
+          DISABLE
+        </button>
+        <button
+          type="button"
+          onClick={() => setValue(DEFAULT_CROSSHAIR_MENU_GAMEPAD_BUTTON)}
+          style={{
+            background: "none",
+            border: "1px solid rgba(0,229,255,0.15)",
+            borderRadius: 3,
+            color: "#64748b",
+            fontSize: 9,
+            letterSpacing: "0.15em",
+            padding: "3px 8px",
+            cursor: "pointer",
+            fontFamily: FONT,
+          }}
+        >
+          RESET
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ShortcutsSection() {
   return (
     <>
       <SectionTitle helpId="keyboard-shortcuts" helpLabel="Keyboard Shortcuts">◈ KEYBOARD SHORTCUTS</SectionTitle>
+      <SectionActionsRow section="shortcuts" />
+      <div style={S.card}>
+        <div style={S.cardHeader}>REMAPPABLE BINDINGS</div>
+        <CrosshairMenuKeyCapture />
+        <CrosshairMenuGamepadCapture />
+      </div>
       <div style={S.card}>
         <div style={S.cardHeader}>REFERENCE</div>
         <div style={{ padding: "8px 16px" }}>

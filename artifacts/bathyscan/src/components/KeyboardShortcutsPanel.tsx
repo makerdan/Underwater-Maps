@@ -2,20 +2,8 @@ import React from "react";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
-
-const BINDINGS: { key: string; action: string }[] = [
-  { key: "Click", action: "Lock mouse / enter fly mode" },
-  { key: "W A S D", action: "Move forward / strafe" },
-  { key: "Space", action: "Ascend" },
-  { key: "Shift", action: "Descend" },
-  { key: "Scroll", action: "Change speed tier" },
-  { key: "R-drag / Ctrl-drag", action: "Orbit around point" },
-  { key: "G", action: "Drop GPS pin at crosshair" },
-  { key: "Q", action: "Action menu at crosshair" },
-  { key: "R-click", action: "Context menu (pin, measure, …)" },
-  { key: "Esc", action: "Release mouse" },
-  { key: "O", action: "Toggle overview map" },
-];
+import { useSettingsStore } from "@/lib/settingsStore";
+import { formatKeyCode, formatGamepadButton } from "@/lib/keyLabel";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(2,8,18,0.94)",
@@ -37,6 +25,27 @@ const CYAN: React.CSSProperties = {
 export const KeyboardShortcutsPanel: React.FC = () => {
   const collapsed = usePanelCollapseStore((s) => s.collapsed.keyboardShortcuts);
   const toggle = usePanelCollapseStore((s) => s.toggle);
+  const crosshairMenuKey = useSettingsStore((s) => s.crosshairMenuKey);
+  const crosshairMenuGamepadButton = useSettingsStore((s) => s.crosshairMenuGamepadButton);
+
+  const crosshairActionLabel =
+    crosshairMenuGamepadButton !== null
+      ? `${formatKeyCode(crosshairMenuKey).toUpperCase()} / ${formatGamepadButton(crosshairMenuGamepadButton)}`
+      : formatKeyCode(crosshairMenuKey).toUpperCase();
+
+  const BINDINGS: { key: string; action: string }[] = [
+    { key: "Click", action: "Lock mouse / enter fly mode" },
+    { key: "W A S D", action: "Move forward / strafe" },
+    { key: "Space", action: "Ascend" },
+    { key: "Shift", action: "Descend" },
+    { key: "Scroll", action: "Change speed tier" },
+    { key: "R-drag / Ctrl-drag", action: "Orbit around point" },
+    { key: "G", action: "Drop GPS pin at crosshair" },
+    { key: crosshairActionLabel, action: "Action menu at crosshair" },
+    { key: "R-click", action: "Context menu (pin, measure, …)" },
+    { key: "Esc", action: "Release mouse" },
+    { key: "O", action: "Toggle overview map" },
+  ];
 
   return (
     <div style={{ ...PANEL, pointerEvents: "auto" }} className="select-none">

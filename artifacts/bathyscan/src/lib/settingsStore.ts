@@ -12,7 +12,14 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export const SETTINGS_SCHEMA_VERSION = 7;
+export const SETTINGS_SCHEMA_VERSION = 8;
+
+/**
+ * Standard-mapping gamepad button index used to trigger the crosshair
+ * action menu by default. Index 3 is Y (Xbox) / Triangle (PlayStation) /
+ * X (Nintendo) — a free face button on every common controller layout.
+ */
+export const DEFAULT_CROSSHAIR_MENU_GAMEPAD_BUTTON = 3;
 
 export type LandmassStyle = "realistic" | "flat";
 
@@ -65,7 +72,8 @@ export type SettingsSection =
   | "account"
   | "overview"
   | "environment"
-  | "currents";
+  | "currents"
+  | "shortcuts";
 
 export interface SettingsState {
   schemaVersion: number;
@@ -213,6 +221,18 @@ export interface SettingsState {
   // ── Environment ───────────────────────────────────────────────────────
   waterType: WaterType;
 
+  // ── Shortcuts (remappable bindings) ──────────────────────────────────
+  /**
+   * Keyboard binding (KeyboardEvent.code) for opening the terrain action
+   * menu anchored at the crosshair. Default "KeyQ".
+   */
+  crosshairMenuKey: string;
+  /**
+   * Standard-mapping gamepad button index that opens the same crosshair
+   * action menu. `null` disables the gamepad binding. Default = Y/Triangle.
+   */
+  crosshairMenuGamepadButton: number | null;
+
   /**
    * Snapshot of the last "saved" data values. For signed-in users this is
    * refreshed after every successful PUT /api/settings. For signed-out users
@@ -351,6 +371,10 @@ interface SettingsActions {
   clearDatasetHome: (datasetId: string) => void;
 
   setWaterType: (v: WaterType) => void;
+
+  // Shortcuts
+  setCrosshairMenuKey: (v: string) => void;
+  setCrosshairMenuGamepadButton: (v: number | null) => void;
 
   /** Hydrate the entire settings state from the server response. */
   hydrateFromServer: (partial: Partial<SettingsState>) => void;
@@ -567,6 +591,10 @@ export const DEFAULT_SETTINGS: SettingsState = {
 
   waterType: "saltwater",
 
+  // Shortcuts
+  crosshairMenuKey: "KeyQ",
+  crosshairMenuGamepadButton: DEFAULT_CROSSHAIR_MENU_GAMEPAD_BUTTON,
+
   lastSyncedAt: null,
 };
 
@@ -616,6 +644,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   ],
   account: ["telemetryOptIn"],
   environment: ["waterType"],
+  shortcuts: ["crosshairMenuKey", "crosshairMenuGamepadButton"],
 };
 
 /**
@@ -786,6 +815,10 @@ export const useSettingsStore = create<SettingsStore>()(
           }),
 
         setWaterType: setter("waterType"),
+
+        // Shortcuts
+        setCrosshairMenuKey: setter("crosshairMenuKey"),
+        setCrosshairMenuGamepadButton: setter("crosshairMenuGamepadButton"),
 
         hydrateFromServer: (partial) =>
           set((state) => {

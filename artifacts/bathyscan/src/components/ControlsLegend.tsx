@@ -1,26 +1,35 @@
 import React, { useState } from "react";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
-
-const BINDINGS = [
-  { key: "Click", action: "Lock mouse / enter fly mode" },
-  { key: "W A S D", action: "Move forward / strafe" },
-  { key: "Space", action: "Ascend" },
-  { key: "Shift", action: "Descend" },
-  { key: "Scroll", action: "Zoom in / out" },
-  { key: "Shift + Scroll", action: "Change speed tier" },
-  { key: "+ / −", action: "Change speed tier" },
-  { key: "Pinch", action: "Zoom in / out (touch)" },
-  { key: "R-drag / Ctrl-drag", action: "Orbit around point under cursor" },
-  { key: "2-finger drag", action: "Orbit around midpoint (touch)" },
-  { key: "G", action: "Drop GPS pin at crosshair" },
-  { key: "Q", action: "Action menu at crosshair" },
-  { key: "R-click", action: "Context menu (pin, measure, …)" },
-  { key: "Esc", action: "Release mouse" },
-  { key: "O", action: "Toggle overview map" },
-];
+import { useSettingsStore } from "@/lib/settingsStore";
+import { formatKeyCode, formatGamepadButton } from "@/lib/keyLabel";
 
 export const ControlsLegend: React.FC = () => {
   const [open, setOpen] = useState(false);
+  const crosshairMenuKey = useSettingsStore((s) => s.crosshairMenuKey);
+  const crosshairMenuGamepadButton = useSettingsStore((s) => s.crosshairMenuGamepadButton);
+
+  const crosshairActionLabel =
+    crosshairMenuGamepadButton !== null
+      ? `${formatKeyCode(crosshairMenuKey).toUpperCase()} / ${formatGamepadButton(crosshairMenuGamepadButton)}`
+      : formatKeyCode(crosshairMenuKey).toUpperCase();
+
+  const BINDINGS = [
+    { key: "Click", action: "Lock mouse / enter fly mode" },
+    { key: "W A S D", action: "Move forward / strafe" },
+    { key: "Space", action: "Ascend" },
+    { key: "Shift", action: "Descend" },
+    { key: "Scroll", action: "Zoom in / out" },
+    { key: "Shift + Scroll", action: "Change speed tier" },
+    { key: "+ / −", action: "Change speed tier" },
+    { key: "Pinch", action: "Zoom in / out (touch)" },
+    { key: "R-drag / Ctrl-drag", action: "Orbit around point under cursor" },
+    { key: "2-finger drag", action: "Orbit around midpoint (touch)" },
+    { key: "G", action: "Drop GPS pin at crosshair" },
+    { key: crosshairActionLabel, action: "Action menu at crosshair" },
+    { key: "R-click", action: "Context menu (pin, measure, …)" },
+    { key: "Esc", action: "Release mouse" },
+    { key: "O", action: "Toggle overview map" },
+  ];
 
   return (
     <div className="controls-legend relative pointer-events-auto select-none">

@@ -64,16 +64,23 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   const mouseZoomSensitivity = useSettingsStore((s) => s.mouseZoomSensitivity);
   const touchpadZoomSensitivity = useSettingsStore((s) => s.touchpadZoomSensitivity);
   const pinchZoomSensitivity = useSettingsStore((s) => s.pinchZoomSensitivity);
+  // Remappable shortcut bindings for the crosshair action menu.
+  const crosshairMenuKey = useSettingsStore((s) => s.crosshairMenuKey);
+  const crosshairMenuGamepadButton = useSettingsStore((s) => s.crosshairMenuGamepadButton);
   const sensitivityRef = useRef(mouseSensitivity);
   const invertMouseYRef = useRef(invertMouseY);
   const mouseZoomSensRef = useRef(mouseZoomSensitivity);
   const touchpadZoomSensRef = useRef(touchpadZoomSensitivity);
   const pinchZoomSensRef = useRef(pinchZoomSensitivity);
+  const crosshairMenuKeyRef = useRef(crosshairMenuKey);
+  const crosshairMenuGamepadButtonRef = useRef(crosshairMenuGamepadButton);
   useEffect(() => { sensitivityRef.current = mouseSensitivity; }, [mouseSensitivity]);
   useEffect(() => { invertMouseYRef.current = invertMouseY; }, [invertMouseY]);
   useEffect(() => { mouseZoomSensRef.current = mouseZoomSensitivity; }, [mouseZoomSensitivity]);
   useEffect(() => { touchpadZoomSensRef.current = touchpadZoomSensitivity; }, [touchpadZoomSensitivity]);
   useEffect(() => { pinchZoomSensRef.current = pinchZoomSensitivity; }, [pinchZoomSensitivity]);
+  useEffect(() => { crosshairMenuKeyRef.current = crosshairMenuKey; }, [crosshairMenuKey]);
+  useEffect(() => { crosshairMenuGamepadButtonRef.current = crosshairMenuGamepadButton; }, [crosshairMenuGamepadButton]);
 
   // Refs for event-listener / useFrame closures to stay current
   const modeRef = useRef(mode);
@@ -234,10 +241,12 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         }
       }
 
-      // Q: open the terrain action menu anchored at the crosshair. Works
-      // whether pointer is locked (underwater nav) or unlocked, but only in
-      // fly mode and only when the crosshair is currently on terrain.
-      if (e.code === "KeyQ" && modeRef.current === "fly") {
+      // Crosshair action menu: open the terrain action menu anchored at the
+      // crosshair. Works whether pointer is locked (underwater nav) or
+      // unlocked, but only in fly mode and only when the crosshair is
+      // currently on terrain. Key binding is user-remappable via Settings →
+      // Shortcuts (defaults to "KeyQ").
+      if (e.code === crosshairMenuKeyRef.current && modeRef.current === "fly") {
         const rect = gl.domElement.getBoundingClientRect();
         const opened = openCrosshairContextMenu({
           centerX: rect.left + rect.width / 2,
@@ -667,6 +676,51 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       cancelLongPress();
     };
   }, [camera, gl.domElement, setMode, setSpeedIndex, terrainMeshRef, queryClient]);
+
+  // ---------------------------------------------------------------------------
+  // Gamepad polling — opens the crosshair action menu when the configured
+  // gamepad button transitions from released → pressed. Uses the Standard
+  // Gamepad mapping (button index 3 = Y/Triangle by default). Polled via
+  // requestAnimationFrame because gamepads don't emit DOM events for button
+  // state changes.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (typeof navigator === "undefined" || typeof navigator.getGamepads !== "function") {
+      return;
+    }
+    let rafId = 0;
+    const prevPressed = new Map<number, boolean>();
+    const poll = () => {
+      const btnIdx = crosshairMenuGamepadButtonRef.current;
+      if (btnIdx !== null && btnIdx >= 0 && modeRef.current === "fly") {
+        const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+        for (const pad of pads) {
+          if (!pad) continue;
+          const btn = pad.buttons[btnIdx];
+          const pressed = !!btn?.pressed;
+          const key = pad.index;
+          const wasPressed = prevPressed.get(key) ?? false;
+          if (pressed && !wasPressed) {
+            const rect = gl.domElement.getBoundingClientRect();
+            openCrosshairContextMenu({
+              centerX: rect.left + rect.width / 2,
+              centerY: rect.top + rect.height / 2,
+              getTerrainGrid: () => terrainRef.current,
+              exitPointerLock: () => {
+                if (isLocked.current) document.exitPointerLock();
+              },
+            });
+          }
+          prevPressed.set(key, pressed);
+        }
+      }
+      rafId = window.requestAnimationFrame(poll);
+    };
+    rafId = window.requestAnimationFrame(poll);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+    };
+  }, [gl.domElement]);
 
   // ---------------------------------------------------------------------------
   // Frame loop

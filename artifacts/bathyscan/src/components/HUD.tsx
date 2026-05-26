@@ -26,6 +26,7 @@ import { TemperatureProfileChart } from "@/components/TemperatureProfileChart";
 import { ShoreZoneCredit } from "@/components/ShoreZoneCredit";
 import { SubstrateLegend } from "@/components/SubstrateLegend";
 import { openCrosshairContextMenu } from "@/lib/terrainContextMenu";
+import { formatKeyCode } from "@/lib/keyLabel";
 
 const IS_TOUCH_DEVICE =
   typeof window !== "undefined" &&
@@ -123,6 +124,7 @@ export const HUD: React.FC = () => {
   const isOnline = useOfflineStore((s) => s.isOnline);
 
   const showCrosshairGps = useSettingsStore((s) => s.showCrosshairGps);
+  const crosshairMenuKey = useSettingsStore((s) => s.crosshairMenuKey);
   const showCameraPosition = useSettingsStore((s) => s.showCameraPosition);
   const showSpeedIndicator = useSettingsStore((s) => s.showSpeedIndicator);
   const showHeading = useSettingsStore((s) => s.showHeading);
@@ -517,9 +519,9 @@ export const HUD: React.FC = () => {
                       padding: "0 4px",
                       fontSize: 8,
                     }}
-                    title="Press Q to open the action menu at the crosshair"
+                    title={`Press ${formatKeyCode(crosshairMenuKey)} to open the action menu at the crosshair`}
                   >
-                    Q · ACTIONS
+                    {formatKeyCode(crosshairMenuKey).toUpperCase()} · ACTIONS
                   </span>
                 )
               )}
