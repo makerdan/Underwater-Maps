@@ -13,6 +13,8 @@
     "build-tx-freshwater-efh": "tsx ./src/build-tx-freshwater-efh.ts",
     "build-lake-ray-roberts-terrain": "tsx ./src/build-lake-ray-roberts-terrain.ts",
     "build-lake-texoma-terrain": "tsx ./src/build-lake-texoma-terrain.ts",
+    "build-lake-tawakoni-terrain": "tsx ./src/build-lake-tawakoni-terrain.ts",
+    "build-lake-lewisville-terrain": "tsx ./src/build-lake-lewisville-terrain.ts",
     "scheduled-refresh-lake-ray-roberts-terrain": "tsx ./src/scheduled-refresh-lake-ray-roberts-terrain.ts",
     "scheduled-refresh-shorezone-data": "tsx ./src/scheduled-refresh-shorezone-data.ts",
     "scheduled-refresh-enc-substrate": "tsx ./src/scheduled-refresh-enc-substrate.ts",
