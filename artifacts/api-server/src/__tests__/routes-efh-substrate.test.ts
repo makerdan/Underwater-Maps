@@ -473,3 +473,172 @@ describe("GET /substrate/:id", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Texas reservoir substrate bundle (scripts/src/build-tx-lake-substrate.ts)
+// Verifies the generated bundle round-trips correctly so a regression in the
+// builder can't silently flatten the substrate layer back to a single mud
+// basin per lake. (task #376)
+// ---------------------------------------------------------------------------
+
+describe("txLakeSubstrate.gen.json (Texas reservoir substrate bundle)", () => {
+  const METERS_PER_DEG_LAT = 111_320;
+  const metersPerDegLon = (latDeg: number): number =>
+    METERS_PER_DEG_LAT * Math.cos((latDeg * Math.PI) / 180);
+
+  function ringAreaXY(ring: [number, number][]): number {
+    let a = 0;
+    for (let i = 0, n = ring.length; i < n; i++) {
+      const p = ring[i]!;
+      const q = ring[(i + 1) % n]!;
+      a += p[0] * q[1] - q[0] * p[1];
+    }
+    return a / 2;
+  }
+
+  function ringCentroidXY(ring: [number, number][]): { cx: number; cy: number; area: number } {
+    let cx = 0, cy = 0, a = 0;
+    for (let i = 0, n = ring.length; i < n; i++) {
+      const p = ring[i]!;
+      const q = ring[(i + 1) % n]!;
+      const cross = p[0] * q[1] - q[0] * p[1];
+      a += cross;
+      cx += (p[0] + q[0]) * cross;
+      cy += (p[1] + q[1]) * cross;
+    }
+    a /= 2;
+    return { cx: cx / (6 * a), cy: cy / (6 * a), area: a };
+  }
+
+  type AnyGeom =
+    | { type: "Polygon"; coordinates: number[][][] }
+    | { type: "MultiPolygon"; coordinates: number[][][][] };
+
+  function polygonsOf(geom: AnyGeom): number[][][][] {
+    return geom.type === "Polygon" ? [geom.coordinates] : geom.coordinates;
+  }
+
+  const TX_LAKE_DATASET_IDS = [
+    "lake-fork",
+    "sam-rayburn",
+    "lake-ray-roberts",
+    "toledo-bend",
+  ] as const;
+
+  it("each Texas lake has >2 features and at least 2 distinct substrate classes", async () => {
+    const bundle = (
+      await import("../lib/txLakeSubstrate.gen.json", { with: { type: "json" } })
+    ).default as {
+      type: "FeatureCollection";
+      features: { properties: { unitId: string; substrate: string } }[];
+    };
+    expect(bundle.type).toBe("FeatureCollection");
+
+    for (const datasetId of TX_LAKE_DATASET_IDS) {
+      const lakeFeatures = bundle.features.filter((f) =>
+        f.properties.unitId.startsWith(`${datasetId}-`),
+      );
+      expect(
+        lakeFeatures.length,
+        `${datasetId} should have >2 features`,
+      ).toBeGreaterThan(2);
+      const classes = new Set(lakeFeatures.map((f) => f.properties.substrate));
+      expect(
+        classes.size,
+        `${datasetId} should have ≥2 distinct substrate classes (got ${[...classes].join(",")})`,
+      ).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("Lake Fork polygon centroid lies within ~2 km of the true reservoir centroid", async () => {
+    const bundle = (
+      await import("../lib/txLakeSubstrate.gen.json", { with: { type: "json" } })
+    ).default as {
+      features: { properties: { unitId: string }; geometry: AnyGeom }[];
+    };
+
+    // The basin + shoreline-belt features together reconstitute the full
+    // NHD waterbody outline for Lake Fork. Use their area-weighted
+    // centroid as the polygon centroid.
+    const lakeFeatures = bundle.features.filter(
+      (f) =>
+        f.properties.unitId === "lake-fork-basin" ||
+        f.properties.unitId === "lake-fork-shoreline",
+    );
+    expect(lakeFeatures.length).toBeGreaterThan(0);
+
+    // True Lake Fork Reservoir centroid. Wikipedia lists the reservoir at
+    // 32°52′N 95°35′W (≈ -95.583, 32.867). The NHD waterbody polygon's
+    // centre of mass sits near (-95.59, 32.87); we use that as the
+    // ground-truth reference for this regression test. (The builder's
+    // `centroidLonLat` field is only a probe point for picking the right
+    // NHD polygon, not the actual geographic centroid.)
+    const TRUE_CENTROID: [number, number] = [-95.59, 32.87];
+    const originLat = TRUE_CENTROID[1];
+    const mLon = metersPerDegLon(originLat);
+
+    let sumCx = 0, sumCy = 0, sumA = 0;
+    for (const feat of lakeFeatures) {
+      for (const poly of polygonsOf(feat.geometry)) {
+        // First ring = outer; subsequent rings = holes (subtract).
+        for (let r = 0; r < poly.length; r++) {
+          const ringLL = poly[r]!.map((c) => [c[0]!, c[1]!] as [number, number]);
+          const ringXY = ringLL.map(([lon, lat]) =>
+            [lon * mLon, lat * METERS_PER_DEG_LAT] as [number, number],
+          );
+          const { cx, cy, area } = ringCentroidXY(ringXY);
+          const sign = r === 0 ? 1 : -1;
+          sumCx += sign * cx * Math.abs(area);
+          sumCy += sign * cy * Math.abs(area);
+          sumA += sign * Math.abs(area);
+        }
+      }
+    }
+    expect(sumA).toBeGreaterThan(0);
+    const centroidLon = sumCx / sumA / mLon;
+    const centroidLat = sumCy / sumA / METERS_PER_DEG_LAT;
+
+    const dxM = (centroidLon - TRUE_CENTROID[0]) * mLon;
+    const dyM = (centroidLat - TRUE_CENTROID[1]) * METERS_PER_DEG_LAT;
+    const distKm = Math.hypot(dxM, dyM) / 1000;
+    expect(
+      distKm,
+      `Lake Fork centroid ${centroidLon.toFixed(4)},${centroidLat.toFixed(4)} is ${distKm.toFixed(2)} km from the true centroid`,
+    ).toBeLessThan(2);
+  });
+
+  it("every ring in the Texas reservoir bundle is closed and has ≥4 vertices", async () => {
+    const bundle = (
+      await import("../lib/txLakeSubstrate.gen.json", { with: { type: "json" } })
+    ).default as {
+      features: { properties: { unitId: string }; geometry: AnyGeom }[];
+    };
+    expect(bundle.features.length).toBeGreaterThan(0);
+
+    for (const feat of bundle.features) {
+      expect(["Polygon", "MultiPolygon"]).toContain(feat.geometry.type);
+      for (const poly of polygonsOf(feat.geometry)) {
+        expect(poly.length).toBeGreaterThan(0);
+        for (const ring of poly) {
+          expect(
+            ring.length,
+            `${feat.properties.unitId} ring has <4 vertices`,
+          ).toBeGreaterThanOrEqual(4);
+          const first = ring[0]!;
+          const last = ring[ring.length - 1]!;
+          expect(
+            first[0],
+            `${feat.properties.unitId} ring not closed (lon)`,
+          ).toBe(last[0]);
+          expect(
+            first[1],
+            `${feat.properties.unitId} ring not closed (lat)`,
+          ).toBe(last[1]);
+          // And the ring must enclose non-zero area.
+          const xy = ring.map((c) => [c[0]!, c[1]!] as [number, number]);
+          expect(Math.abs(ringAreaXY(xy))).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+});
