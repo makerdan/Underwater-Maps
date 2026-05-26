@@ -7,7 +7,7 @@ import {
 } from "@/lib/boatSpeed";
 import { useAppState } from "@/lib/context";
 import { useSettingsStore } from "@/lib/settingsStore";
-import { formatSpeed } from "@/lib/units";
+import { formatSpeed, MPH_TO_KPH } from "@/lib/units";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
 
@@ -29,6 +29,19 @@ function clampMph(mph: number): number {
 
 function roundToTenth(mph: number): number {
   return Math.round(mph * 10) / 10;
+}
+
+function mphToDisplay(mph: number, units: "metric" | "imperial"): number {
+  return units === "imperial" ? mph : mph * MPH_TO_KPH;
+}
+
+function displayToMph(value: number, units: "metric" | "imperial"): number {
+  return units === "imperial" ? value : value / MPH_TO_KPH;
+}
+
+function formatDisplayValue(mph: number, units: "metric" | "imperial"): string {
+  const v = mphToDisplay(mph, units);
+  return String(Math.round(v * 10) / 10);
 }
 
 const PANEL_STYLE: React.CSSProperties = {
@@ -55,7 +68,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
   const { boatSpeedMph, setBoatSpeedMph } = useAppState();
   const units = useSettingsStore((s) => s.units);
   const [minimized, setMinimized] = useState(false);
-  const [inputVal, setInputVal] = useState<string>(String(Math.round(boatSpeedMph)));
+  const [inputVal, setInputVal] = useState<string>(formatDisplayValue(boatSpeedMph, units));
   const [dragging, setDragging] = useState(false);
 
   const trackRef = useRef<HTMLDivElement>(null);
@@ -64,9 +77,9 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
 
   useEffect(() => {
     if (!dragging) {
-      setInputVal(String(boatSpeedMph));
+      setInputVal(formatDisplayValue(boatSpeedMph, units));
     }
-  }, [boatSpeedMph, dragging]);
+  }, [boatSpeedMph, dragging, units]);
 
   const fraction = mphToFraction(boatSpeedMph);
   const thumbTop = (1 - fraction) * LEVER_TRAVEL;
@@ -74,8 +87,8 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
   const applyMph = useCallback((mph: number) => {
     const clamped = roundToTenth(clampMph(mph));
     setBoatSpeedMph(clamped);
-    setInputVal(String(clamped));
-  }, [setBoatSpeedMph]);
+    setInputVal(formatDisplayValue(clamped, units));
+  }, [setBoatSpeedMph, units]);
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -90,8 +103,8 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
     const dFrac = -dy / LEVER_TRAVEL;
     const newMph = roundToTenth(clampMph(dragStartMph.current + dFrac * (BOAT_MAX_MPH - BOAT_MIN_MPH)));
     setBoatSpeedMph(newMph);
-    setInputVal(String(newMph));
-  }, [dragging, setBoatSpeedMph]);
+    setInputVal(formatDisplayValue(newMph, units));
+  }, [dragging, setBoatSpeedMph, units]);
 
   const onPointerUp = useCallback((e: React.PointerEvent) => {
     e.currentTarget.releasePointerCapture(e.pointerId);
@@ -114,9 +127,9 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
   const commitInput = () => {
     const n = parseFloat(inputVal);
     if (!isNaN(n)) {
-      applyMph(n);
+      applyMph(displayToMph(n, units));
     } else {
-      setInputVal(String(Math.round(boatSpeedMph)));
+      setInputVal(formatDisplayValue(boatSpeedMph, units));
     }
   };
 
@@ -128,6 +141,9 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
   };
 
   const knots = mphToKnots(boatSpeedMph);
+  const unitSuffix = units === "imperial" ? "mph" : "km/h";
+  const inputMin = Math.round(mphToDisplay(BOAT_MIN_MPH, units) * 10) / 10;
+  const inputMax = Math.round(mphToDisplay(BOAT_MAX_MPH, units) * 10) / 10;
 
   if (minimized) {
     return (
@@ -308,7 +324,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
               }}
               onClick={() => applyMph(tick)}
             >
-              {tick}
+              {Math.round(mphToDisplay(tick, units))}
             </div>
           ))}
         </div>
@@ -317,8 +333,8 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
       <div style={{ padding: "0 12px 10px", display: "flex", alignItems: "center", gap: 6 }}>
         <input
           type="number"
-          min={BOAT_MIN_MPH}
-          max={BOAT_MAX_MPH}
+          min={inputMin}
+          max={inputMax}
           value={inputVal}
           onChange={onInputChange}
           onBlur={commitInput}
@@ -336,7 +352,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
             outline: "none",
           }}
         />
-        <span style={{ fontSize: 9, color: "#475569", whiteSpace: "nowrap" }}>{units === "imperial" ? "MPH" : "MPH→KM/H"}</span>
+        <span style={{ fontSize: 9, color: "#475569", whiteSpace: "nowrap" }}>{unitSuffix}</span>
       </div>
     </div>
   );

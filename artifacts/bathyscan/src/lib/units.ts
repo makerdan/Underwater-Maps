@@ -17,7 +17,7 @@ import { useSettingsStore, type UnitsSystem } from "./settingsStore";
 
 const M_TO_FT = 3.28084;
 const KM_TO_MI = 0.621371;
-const MPH_TO_KPH = 1.609344;
+export const MPH_TO_KPH = 1.609344;
 
 export function getUnits(): UnitsSystem {
   return useSettingsStore.getState().units;
