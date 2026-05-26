@@ -32,6 +32,7 @@ import { DepthProfilePanel } from "@/components/DepthProfilePanel";
 import { MarkerDetailCard } from "@/components/MarkerDetailCard";
 import { OverviewMap } from "@/components/OverviewMap";
 import { EfhDetailPanel } from "@/components/EfhDetailPanel";
+import { SubstrateDetailPanel } from "@/components/SubstrateDetailPanel";
 import { ZoneOverlay } from "@/components/ZoneOverlay";
 import { FindDataPanel } from "@/components/FindDataPanel";
 import { HabitatPanel } from "@/components/HabitatPanel";
@@ -755,6 +756,7 @@ function Main() {
             and the overview map so clicking an EFH zone in either view
             shows the same card. Reads from uiStore.selectedEfh. */}
         <EfhDetailPanel />
+        <SubstrateDetailPanel />
 
         {/* Find Data slide-in panel — z-50, right side */}
         {findDataPanelOpen && (

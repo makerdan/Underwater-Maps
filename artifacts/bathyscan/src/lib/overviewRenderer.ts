@@ -4,7 +4,11 @@
  * No React dependencies. All functions accept a 2D canvas context plus
  * data params and draw directly. Called every rAF frame.
  */
-import type { TerrainData, EfhFeature } from "@workspace/api-client-react";
+import type {
+  TerrainData,
+  EfhFeature,
+  SubstrateFeature,
+} from "@workspace/api-client-react";
 import type { Marker } from "@workspace/api-client-react";
 import { depthToColor } from "./colormap";
 import { MARKER_COLOR } from "./markerConstants";
@@ -473,6 +477,169 @@ export function renderEfhLegend(
     ctx.fillRect(x + PAD, row + 1, SWATCH, SWATCH);
     ctx.fillStyle = "#94a3b8";
     ctx.fillText(label, x + PAD + SWATCH + 4, row + FONT_SIZE);
+  });
+
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Substrate overlay (ShoreZone / ENC / TPWD lake polygons)
+// ---------------------------------------------------------------------------
+
+/**
+ * Draw substrate polygons (Polygon + MultiPolygon) on the overview canvas.
+ * Each polygon is filled at low opacity and outlined using its CMECS color.
+ */
+export function renderSubstrateOverlay(
+  ctx: CanvasRenderingContext2D,
+  features: SubstrateFeature[],
+  grid: TerrainData,
+  t: OverviewTransform,
+  selectedUnitId: string | null = null,
+): void {
+  if (!features.length) return;
+  ctx.save();
+
+  const drawRing = (ring: number[][]) => {
+    ctx.beginPath();
+    for (let i = 0; i < ring.length; i++) {
+      const pt = ring[i]!;
+      const [cx, cy] = lonLatToCanvas(pt[0] ?? 0, pt[1] ?? 0, grid, t);
+      if (i === 0) ctx.moveTo(cx, cy);
+      else ctx.lineTo(cx, cy);
+    }
+    ctx.closePath();
+  };
+
+  for (const feature of features) {
+    const geom = feature.geometry as
+      | { type: "Polygon"; coordinates: number[][][] }
+      | { type: "MultiPolygon"; coordinates: number[][][][] }
+      | { type?: string };
+    const color = feature.properties.color ?? "#e2d5a0";
+    const selected = selectedUnitId === feature.properties.unitId;
+    const fillAlpha = selected ? 0.45 : 0.25;
+    const strokeAlpha = selected ? 1.0 : 0.8;
+
+    const ringsList: number[][][][] = [];
+    if (geom.type === "Polygon" && Array.isArray((geom as { coordinates?: unknown }).coordinates)) {
+      ringsList.push((geom as { coordinates: number[][][] }).coordinates);
+    } else if (
+      geom.type === "MultiPolygon" &&
+      Array.isArray((geom as { coordinates?: unknown }).coordinates)
+    ) {
+      for (const rings of (geom as { coordinates: number[][][][] }).coordinates) {
+        ringsList.push(rings);
+      }
+    } else {
+      continue;
+    }
+
+    for (const rings of ringsList) {
+      const outer = rings[0];
+      if (!outer || outer.length < 3) continue;
+      drawRing(outer);
+      ctx.fillStyle = hexToRgba(color, fillAlpha);
+      ctx.fill("evenodd");
+      ctx.lineWidth = selected ? 2 : 1.25;
+      ctx.strokeStyle = hexToRgba(color, strokeAlpha);
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}
+
+/**
+ * Hit-test a lon/lat point against substrate polygon features. Returns the
+ * topmost (last-drawn) feature whose outer ring contains the point, or null.
+ */
+export function hitTestSubstrate(
+  lon: number,
+  lat: number,
+  features: SubstrateFeature[],
+): SubstrateFeature | null {
+  for (let i = features.length - 1; i >= 0; i--) {
+    const f = features[i];
+    if (!f) continue;
+    const geom = f.geometry as
+      | { type: "Polygon"; coordinates: number[][][] }
+      | { type: "MultiPolygon"; coordinates: number[][][][] }
+      | { type?: string };
+    if (geom.type === "Polygon" && Array.isArray((geom as { coordinates?: unknown }).coordinates)) {
+      const outer = (geom as { coordinates: number[][][] }).coordinates[0];
+      if (outer && pointInRing(lon, lat, outer)) return f;
+    } else if (
+      geom.type === "MultiPolygon" &&
+      Array.isArray((geom as { coordinates?: unknown }).coordinates)
+    ) {
+      for (const rings of (geom as { coordinates: number[][][][] }).coordinates) {
+        const outer = rings[0];
+        if (outer && pointInRing(lon, lat, outer)) return f;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Draw a compact substrate legend (CMECS classes present in the current
+ * feature set) in the bottom-left corner. The 3D scene's substrate legend
+ * lives in the Overlays & Tools side panel; this is the 2D equivalent.
+ */
+export function renderSubstrateLegend(
+  ctx: CanvasRenderingContext2D,
+  features: SubstrateFeature[],
+  cH: number,
+): void {
+  if (!features.length) return;
+
+  // Collect unique (substrate, color) pairs, preserving first-seen order.
+  const seen = new Map<string, string>();
+  for (const f of features) {
+    const key = f.properties.substrate;
+    if (!seen.has(key)) seen.set(key, f.properties.color ?? "#e2d5a0");
+  }
+  const rows = Array.from(seen.entries());
+  if (!rows.length) return;
+
+  const FONT = "'JetBrains Mono', monospace";
+  const SWATCH = 9;
+  const ROW_H = 14;
+  const PAD = 8;
+  const FONT_SIZE = 9;
+  const HEADER_H = 14;
+
+  ctx.save();
+  ctx.font = `${FONT_SIZE}px ${FONT}`;
+  const labels = rows.map(([s]) => s.toUpperCase());
+  const maxW = labels.reduce((m, l) => Math.max(m, ctx.measureText(l).width), 0);
+  const headerW = ctx.measureText("SUBSTRATE").width;
+  const boxW = PAD * 2 + SWATCH + 6 + Math.max(maxW, headerW);
+  const boxH = PAD * 2 + HEADER_H + rows.length * ROW_H;
+  const x = 12;
+  const y = cH - boxH - 40;
+
+  ctx.fillStyle = "rgba(2,8,24,0.85)";
+  ctx.beginPath();
+  ctx.roundRect(x, y, boxW, boxH, 3);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(0,229,255,0.18)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.fillStyle = "#475569";
+  ctx.fillText("SUBSTRATE", x + PAD, y + PAD + FONT_SIZE);
+
+  rows.forEach(([label, color], i) => {
+    const row = y + PAD + HEADER_H + i * ROW_H;
+    ctx.fillStyle = color;
+    ctx.fillRect(x + PAD, row + 1, SWATCH, SWATCH);
+    ctx.strokeStyle = hexToRgba(color, 0.95);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + PAD + 0.5, row + 1.5, SWATCH, SWATCH);
+    ctx.fillStyle = "#cbd5e1";
+    ctx.fillText(label.toUpperCase(), x + PAD + SWATCH + 6, row + FONT_SIZE);
   });
 
   ctx.restore();

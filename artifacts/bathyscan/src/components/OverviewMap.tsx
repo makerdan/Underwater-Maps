@@ -42,14 +42,26 @@ import {
   renderEfhOverlay,
   renderEfhLegend,
   hitTestEfh,
+  renderSubstrateOverlay,
+  renderSubstrateLegend,
+  hitTestSubstrate,
   renderGpsPosition,
   renderLiveTrail,
   renderSavedTrails,
   drawSelectionRect,
 } from "@/lib/overviewRenderer";
 import type { OverviewTransform, CanvasSavedTrail } from "@/lib/overviewRenderer";
-import { useGetEfh, getGetEfhQueryKey } from "@workspace/api-client-react";
-import type { EfhFeature } from "@workspace/api-client-react";
+import {
+  useGetEfh,
+  getGetEfhQueryKey,
+  useGetSubstrate,
+  getGetSubstrateQueryKey,
+} from "@workspace/api-client-react";
+import type {
+  EfhFeature,
+  SubstrateFeature,
+  SubstrateFeatureCollection,
+} from "@workspace/api-client-react";
 import { useHabitatStore } from "@/lib/habitatStore";
 import { HabitatLegend } from "@/components/HabitatLegend";
 import { useGpsStore } from "@/lib/gpsStore";
@@ -130,6 +142,9 @@ export const OverviewMap: React.FC = () => {
   const savedTrailsRef = useRef<CanvasSavedTrail[]>([]);
   const rafRef = useRef<number>(0);
   const efhFeaturesRef = useRef<EfhFeature[]>([]);
+  const substrateFeaturesRef = useRef<SubstrateFeature[]>([]);
+  const substrateColorModeRef = useRef(false);
+  const selectedSubstrateUnitIdRef = useRef<string | null>(null);
 
   // Drag tracking
   const isDraggingRef = useRef(false);
@@ -291,6 +306,39 @@ export const OverviewMap: React.FC = () => {
     showEfhRef.current = showEfh;
   }, [showEfh]);
 
+  // Substrate overlay — gated on the shared `substrateColorMode` toggle from
+  // uiStore (also drives the 3D SubstrateLayer). When enabled, we fetch the
+  // same /substrate/:id endpoint and render the polygons + legend on the 2D
+  // canvas, mirroring the 3D scene.
+  const substrateColorMode = useUiStore((s) => s.substrateColorMode);
+  const setSelectedSubstrate = useUiStore((s) => s.setSelectedSubstrate);
+  const selectedSubstrateUnitId = useUiStore(
+    (s) => s.selectedSubstrate?.unitId ?? null,
+  );
+  useEffect(() => {
+    substrateColorModeRef.current = substrateColorMode;
+  }, [substrateColorMode]);
+  useEffect(() => {
+    selectedSubstrateUnitIdRef.current = selectedSubstrateUnitId;
+  }, [selectedSubstrateUnitId]);
+
+  const { data: substrateCollection } = useGetSubstrate(datasetId, {
+    query: {
+      enabled: !!datasetId && substrateColorMode,
+      queryKey: getGetSubstrateQueryKey(datasetId),
+      staleTime: 5 * 60 * 1000,
+    },
+  });
+  const substrateMeta = (substrateCollection as SubstrateFeatureCollection | undefined)
+    ?.metadata as { sourceName?: string; creditUrl?: string } | undefined;
+  const substrateSourceName =
+    substrateMeta?.sourceName ?? "Alaska ShoreZone (NOAA AKR / ADF&G)";
+  const substrateCreditUrl =
+    substrateMeta?.creditUrl ?? "https://alaskafisheries.noaa.gov/shorezone/";
+  useEffect(() => {
+    substrateFeaturesRef.current = substrateCollection?.features ?? [];
+  }, [substrateCollection]);
+
   // Fetch trail points when trails list changes; update savedTrailsRef for rAF
   useEffect(() => {
     if (!trailsData || trailsData.length === 0) {
@@ -433,6 +481,20 @@ export const OverviewMap: React.FC = () => {
       if (showEfhRef.current && efhFeaturesRef.current.length > 0) {
         renderEfhOverlay(ctx, efhFeaturesRef.current, grid, t);
         renderEfhLegend(ctx, efhFeaturesRef.current, cW, cH);
+      }
+
+      // Substrate overlay (CMECS-coloured polygons + legend) — mirrors the
+      // 3D SubstrateLayer so anglers can see the gravel / sand / mud zones
+      // when planning from the top-down view.
+      if (substrateColorModeRef.current && substrateFeaturesRef.current.length > 0) {
+        renderSubstrateOverlay(
+          ctx,
+          substrateFeaturesRef.current,
+          grid,
+          t,
+          selectedSubstrateUnitIdRef.current,
+        );
+        renderSubstrateLegend(ctx, substrateFeaturesRef.current, cH);
       }
 
       // GPS position + live trail
@@ -734,6 +796,37 @@ export const OverviewMap: React.FC = () => {
         const hit = hitTestEfh(lon, lat, efhFeaturesRef.current);
         if (hit) {
           useUiStore.getState().setSelectedEfh(hit.properties);
+          return;
+        }
+      }
+
+      // Substrate polygon — when the overlay is on, a click inside a
+      // polygon opens the same info card the 3D scene shows.
+      if (
+        substrateColorModeRef.current &&
+        substrateFeaturesRef.current.length > 0
+      ) {
+        const hit = hitTestSubstrate(
+          lon,
+          lat,
+          substrateFeaturesRef.current,
+        );
+        if (hit) {
+          const p = hit.properties;
+          useUiStore.getState().setSelectedSubstrate({
+            unitId: p.unitId,
+            substrate: p.substrate,
+            shoreZoneClass: p.shoreZoneClass,
+            cmecsCode: p.cmecsCode,
+            color: p.color,
+            szMaterial: p.szMaterial ?? null,
+            szForm: p.szForm ?? null,
+            areaSqM: p.areaSqM ?? null,
+            natsur: p.natsur ?? null,
+            encChart: p.encChart ?? null,
+            sourceName: substrateSourceName,
+            creditUrl: substrateCreditUrl,
+          });
           return;
         }
       }
