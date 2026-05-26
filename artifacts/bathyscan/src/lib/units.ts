@@ -18,6 +18,7 @@ import { useSettingsStore, type UnitsSystem } from "./settingsStore";
 const M_TO_FT = 3.28084;
 const KM_TO_MI = 0.621371;
 export const MPH_TO_KPH = 1.609344;
+export const MPH_TO_KNOTS = 0.868976;
 
 export function getUnits(): UnitsSystem {
   return useSettingsStore.getState().units;
@@ -34,7 +35,9 @@ export function getTemperatureUnit(): UnitsSystem {
   const s = useSettingsStore.getState();
   if (s.temperatureUnit === "celsius") return "metric";
   if (s.temperatureUnit === "fahrenheit") return "imperial";
-  return s.units;
+  // "nautical" doesn't have its own temperature scale — fall back to
+  // metric (°C), which the user can override via `temperatureUnit`.
+  return s.units === "nautical" ? "metric" : s.units;
 }
 
 // ── Depth ────────────────────────────────────────────────────────────────
@@ -46,7 +49,7 @@ export function formatDepth(
   const units = opts.units ?? getUnits();
   const decimals = opts.decimals ?? 0;
   const localize = opts.localize ?? true;
-  if (units === "imperial") {
+  if (units !== "metric") {
     const ft = metres * M_TO_FT;
     const rounded = decimals > 0 ? Number(ft.toFixed(decimals)) : Math.round(ft);
     return `${localize ? rounded.toLocaleString() : rounded} ft`;
@@ -72,10 +75,11 @@ export function formatDepthRange(
     return "—";
   }
   const units = opts.units ?? getUnits();
+  const imperialish = units !== "metric";
   const toUnit = (m: number): number =>
-    units === "imperial" ? Math.round(m * M_TO_FT) : Math.round(m);
-  const singular = units === "imperial" ? "foot" : "meter";
-  const plural = units === "imperial" ? "feet" : "meters";
+    imperialish ? Math.round(m * M_TO_FT) : Math.round(m);
+  const singular = imperialish ? "foot" : "meter";
+  const plural = imperialish ? "feet" : "meters";
   const lo = toUnit(minMetres);
   const hi = toUnit(maxMetres);
   const loLabel = `${lo.toLocaleString()} ${lo === 1 ? singular : plural}`;
@@ -91,7 +95,7 @@ export function formatDistance(
 ): string {
   if (metres === null || metres === undefined || !Number.isFinite(metres)) return "—";
   const units = opts.units ?? getUnits();
-  if (units === "imperial") {
+  if (units !== "metric") {
     const ft = metres * M_TO_FT;
     if (ft < 1000) return `${Math.round(ft)} ft`;
     const mi = (metres / 1000) * KM_TO_MI;
@@ -103,7 +107,11 @@ export function formatDistance(
 }
 
 // ── Speed ────────────────────────────────────────────────────────────────
-/** Speed in mph → "X mph" (imperial) or "X km/h" (metric). */
+/**
+ * Speed in mph → "X mph" (imperial), "X km/h" (metric), or "X kn" (nautical).
+ * The `nautical` branch is the boater-facing primary readout — knots is a
+ * first-class option, not a secondary annotation.
+ */
 export function formatSpeed(
   mph: number | null | undefined,
   opts: { units?: UnitsSystem; decimals?: number } = {},
@@ -116,9 +124,21 @@ export function formatSpeed(
     const txt = v % 1 === 0 ? String(v) : v.toFixed(decimals);
     return `${txt} mph`;
   }
+  if (units === "nautical") {
+    const kt = mph * MPH_TO_KNOTS;
+    const txt = kt % 1 === 0 ? String(kt) : kt.toFixed(decimals);
+    return `${txt} kn`;
+  }
   const kph = mph * MPH_TO_KPH;
   const txt = kph % 1 === 0 ? String(kph) : kph.toFixed(decimals);
   return `${txt} km/h`;
+}
+
+/** Short speed suffix matching `formatSpeed` — "mph" / "km/h" / "kn". */
+export function speedSuffix(units: UnitsSystem = getUnits()): string {
+  if (units === "imperial") return "mph";
+  if (units === "nautical") return "kn";
+  return "km/h";
 }
 
 // ── Temperature ──────────────────────────────────────────────────────────
@@ -151,9 +171,9 @@ export function temperatureSuffix(units: UnitsSystem = getTemperatureUnit()): st
 
 // ── Short suffix helpers ─────────────────────────────────────────────────
 export function depthSuffix(units: UnitsSystem = getUnits()): string {
-  return units === "imperial" ? "ft" : "m";
+  return units === "metric" ? "m" : "ft";
 }
 
 export function distanceLargeSuffix(units: UnitsSystem = getUnits()): string {
-  return units === "imperial" ? "mi" : "km";
+  return units === "metric" ? "km" : "mi";
 }

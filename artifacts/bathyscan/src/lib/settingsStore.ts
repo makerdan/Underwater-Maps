@@ -43,7 +43,13 @@ export type TextureQuality = "off" | "low" | "high";
 export type ColormapTheme = "ocean" | "thermal" | "grayscale" | "viridis" | "freshwater" | "custom";
 export type CoordinateFormat = "decimal" | "dms";
 export type DepthUnit = "metres" | "feet";
-export type UnitsSystem = "metric" | "imperial";
+/**
+ * Global units system. "nautical" is geared at boaters: speeds render in
+ * knots while depths/distances follow the imperial-style feet/miles familiar
+ * from nautical charts. Temperature defaults to Celsius (override via
+ * `temperatureUnit`).
+ */
+export type UnitsSystem = "metric" | "imperial" | "nautical";
 /**
  * Temperature display override. "auto" follows the global `units` selector
  * (metric → °C, imperial → °F); "celsius" / "fahrenheit" force a specific
@@ -754,7 +760,8 @@ export const useSettingsStore = create<SettingsStore>()(
         setTimeFormat: setter("timeFormat"),
         setCoordinateFormat: setter("coordinateFormat"),
         setDepthUnit: setter("depthUnit"),
-        setUnits: (v) => set({ units: v, depthUnit: v === "imperial" ? "feet" : "metres" }),
+        setUnits: (v) =>
+          set({ units: v, depthUnit: v === "metric" ? "metres" : "feet" }),
         setTemperatureUnit: setter("temperatureUnit"),
 
         // Overview

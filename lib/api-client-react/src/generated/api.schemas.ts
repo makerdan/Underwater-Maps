@@ -228,7 +228,7 @@ export const UserSettingsDepthUnit = {
 } as const;
 
 /**
- * Global units system applied to depths, distances, speeds and temperatures throughout the app.
+ * Global units system applied to depths, distances, speeds and temperatures throughout the app. "nautical" shows speeds in knots and depths/distances in imperial-style feet/miles, for boaters who think in nautical units.
  */
 export type UserSettingsUnits = typeof UserSettingsUnits[keyof typeof UserSettingsUnits];
 
@@ -236,6 +236,7 @@ export type UserSettingsUnits = typeof UserSettingsUnits[keyof typeof UserSettin
 export const UserSettingsUnits = {
   metric: 'metric',
   imperial: 'imperial',
+  nautical: 'nautical',
 } as const;
 
 export type UserSettingsVisibleMarkerTypesItem = typeof UserSettingsVisibleMarkerTypesItem[keyof typeof UserSettingsVisibleMarkerTypesItem];
@@ -340,7 +341,7 @@ export interface UserSettings {
   showHeading?: boolean;
   coordinateFormat?: UserSettingsCoordinateFormat;
   depthUnit?: UserSettingsDepthUnit;
-  /** Global units system applied to depths, distances, speeds and temperatures throughout the app. */
+  /** Global units system applied to depths, distances, speeds and temperatures throughout the app. "nautical" shows speeds in knots and depths/distances in imperial-style feet/miles, for boaters who think in nautical units. */
   units?: UserSettingsUnits;
   /**
      * @minimum 0.3

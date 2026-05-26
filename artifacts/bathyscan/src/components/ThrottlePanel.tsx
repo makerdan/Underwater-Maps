@@ -6,8 +6,8 @@ import {
   mphToKnots,
 } from "@/lib/boatSpeed";
 import { useAppState } from "@/lib/context";
-import { useSettingsStore } from "@/lib/settingsStore";
-import { formatSpeed, MPH_TO_KPH } from "@/lib/units";
+import { useSettingsStore, type UnitsSystem } from "@/lib/settingsStore";
+import { formatSpeed, MPH_TO_KPH, MPH_TO_KNOTS, speedSuffix } from "@/lib/units";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
 
@@ -31,15 +31,19 @@ function roundToTenth(mph: number): number {
   return Math.round(mph * 10) / 10;
 }
 
-function mphToDisplay(mph: number, units: "metric" | "imperial"): number {
-  return units === "imperial" ? mph : mph * MPH_TO_KPH;
+function mphToDisplay(mph: number, units: UnitsSystem): number {
+  if (units === "imperial") return mph;
+  if (units === "nautical") return mph * MPH_TO_KNOTS;
+  return mph * MPH_TO_KPH;
 }
 
-function displayToMph(value: number, units: "metric" | "imperial"): number {
-  return units === "imperial" ? value : value / MPH_TO_KPH;
+function displayToMph(value: number, units: UnitsSystem): number {
+  if (units === "imperial") return value;
+  if (units === "nautical") return value / MPH_TO_KNOTS;
+  return value / MPH_TO_KPH;
 }
 
-function formatDisplayValue(mph: number, units: "metric" | "imperial"): string {
+function formatDisplayValue(mph: number, units: UnitsSystem): string {
   const v = mphToDisplay(mph, units);
   return String(Math.round(v * 10) / 10);
 }
@@ -141,7 +145,10 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
   };
 
   const knots = mphToKnots(boatSpeedMph);
-  const unitSuffix = units === "imperial" ? "mph" : "km/h";
+  // When the primary readout is already in knots, suppress the redundant
+  // secondary "KT" line so we don't show the same value twice.
+  const showSecondaryKnots = units !== "nautical";
+  const unitSuffix = speedSuffix(units);
   const inputMin = Math.round(mphToDisplay(BOAT_MIN_MPH, units) * 10) / 10;
   const inputMax = Math.round(mphToDisplay(BOAT_MAX_MPH, units) * 10) / 10;
 
@@ -163,8 +170,12 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
         >
           <span style={{ color: "#22d3ee", fontSize: 13 }}>⛵</span>
           <span style={CYAN}>{formatSpeed(boatSpeedMph, { units }).toUpperCase()}</span>
-          <span style={{ color: "#475569" }}>/</span>
-          <span style={{ color: "#7dd3fc" }}>{knots.toFixed(1)} KT</span>
+          {showSecondaryKnots && (
+            <>
+              <span style={{ color: "#475569" }}>/</span>
+              <span style={{ color: "#7dd3fc" }}>{knots.toFixed(1)} KT</span>
+            </>
+          )}
           <span style={{ color: "#1e3a5f", fontSize: 10 }}>▲</span>
         </div>
       </ViewscreenTooltip>
@@ -229,9 +240,11 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
           <div style={{ ...CYAN, fontSize: 15, fontWeight: 700, letterSpacing: "0.05em" }}>
             {formatSpeed(boatSpeedMph, { units }).toUpperCase()}
           </div>
-          <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.15em", marginTop: 1 }}>
-            {knots.toFixed(1)} KT
-          </div>
+          {showSecondaryKnots && (
+            <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.15em", marginTop: 1 }}>
+              {knots.toFixed(1)} KT
+            </div>
+          )}
         </div>
       </div>
 

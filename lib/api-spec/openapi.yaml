@@ -1930,9 +1930,9 @@ components:
           default: metres
         units:
           type: string
-          enum: [metric, imperial]
+          enum: [metric, imperial, nautical]
           default: metric
-          description: Global units system applied to depths, distances, speeds and temperatures throughout the app.
+          description: Global units system applied to depths, distances, speeds and temperatures throughout the app. "nautical" shows speeds in knots and depths/distances in imperial-style feet/miles, for boaters who think in nautical units.
         hudOpacity:
           type: number
           minimum: 0.3

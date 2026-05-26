@@ -1084,8 +1084,9 @@ function UnitsSection() {
           value={s.units}
           onChange={s.setUnits}
           options={[
-            { value: "metric", label: "Metric (m, m/s)" },
-            { value: "imperial", label: "Imperial (ft, kn)" },
+            { value: "metric", label: "Metric (m, km/h)" },
+            { value: "imperial", label: "Imperial (ft, mph)" },
+            { value: "nautical", label: "Nautical (ft, kn)" },
           ]}
           sublabel="Switching also updates depth and temperature unless overridden below"
         />

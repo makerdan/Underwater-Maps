@@ -10,6 +10,7 @@ import type {
   SubstrateFeature,
 } from "@workspace/api-client-react";
 import type { Marker } from "@workspace/api-client-react";
+import type { UnitsSystem } from "./settingsStore";
 import { depthToColor } from "./colormap";
 import { MARKER_COLOR } from "./markerConstants";
 
@@ -656,7 +657,7 @@ export function renderDepthPoles(
   markers: Marker[],
   grid: TerrainData,
   t: OverviewTransform,
-  units: "metric" | "imperial" = "metric",
+  units: UnitsSystem = "metric",
 ): void {
   const poles = markers.filter((m) => m.type === "depth_pole");
   if (!poles.length) return;
@@ -693,7 +694,7 @@ export function renderDepthPoles(
     ctx.font = "8px 'JetBrains Mono', monospace";
     ctx.textBaseline = "middle";
     const depthM = Math.abs(Math.round(m.depth));
-    const depthTxt = units === "imperial"
+    const depthTxt = units !== "metric"
       ? `${Math.round(depthM * 3.28084)}ft`
       : `${depthM}m`;
     ctx.fillText(`\u2212${depthTxt}`, cx + 5, cy - 14);
@@ -720,7 +721,7 @@ export function renderGpsPosition(
   canvasW: number,
   canvasH: number,
   pulse: number,
-  units: "metric" | "imperial" = "metric",
+  units: UnitsSystem = "metric",
 ): void {
   const inBounds =
     lon >= grid.minLon && lon <= grid.maxLon &&
@@ -803,7 +804,7 @@ export function renderGpsPosition(
     ctx.textBaseline = "middle";
     ctx.rotate(-angle);
     let distLabel: string;
-    if (units === "imperial") {
+    if (units !== "metric") {
       const mi = distKm * 0.621371;
       distLabel = mi >= 10 ? `${Math.round(mi)} mi` : `${mi.toFixed(1)} mi`;
     } else {
@@ -919,7 +920,7 @@ export function renderScaleBar(
   grid: TerrainData,
   t: OverviewTransform,
   canvasH: number,
-  units: "metric" | "imperial" = "metric",
+  units: UnitsSystem = "metric",
 ): void {
   const latCenter = (grid.minLat + grid.maxLat) / 2;
   const kmPerDeg = 111.32 * Math.cos((latCenter * Math.PI) / 180);
@@ -944,7 +945,7 @@ export function renderScaleBar(
   ctx.stroke();
 
   let label: string;
-  if (units === "imperial") {
+  if (units !== "metric") {
     const miPer100px = kmPer100px * 0.621371;
     if (miPer100px >= 1) {
       label = miPer100px >= 10 ? `${Math.round(miPer100px)} mi` : `${miPer100px.toFixed(1)} mi`;
