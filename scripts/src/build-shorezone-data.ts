@@ -25,15 +25,31 @@
  *      artifacts/api-server/src/lib/shoreZoneData.alaska.gen.ts
  *      as a TypeScript constant that the API server bundles directly.
  *
- * Usage:
+ * Usage / refreshing the bundle:
  *   pnpm --filter @workspace/scripts run build-shorezone
  *
- * Re-run whenever the upstream ShoreZone service publishes updates.
+ * Re-run whenever the upstream ShoreZone service publishes updates, then
+ * commit the refreshed `shoreZoneData.alaska.gen.json` alongside any
+ * builder-source changes that triggered the regeneration. The script
+ * makes live HTTP requests to the AGOL FeatureServer, so refreshing
+ * requires outbound network access.
+ *
+ * Generator-hash drift check:
+ *   The bundle's `metadata.generatorHash` is a SHA-256 of this source
+ *   file. A unit test in `artifacts/api-server` recomputes the hash on
+ *   every test run and fails if the committed bundle was produced by a
+ *   different version of this script — flagging stale bundles whenever
+ *   the builder logic, classifier, or region bbox change without the
+ *   JSON being regenerated. If the test fails, run the command above
+ *   and commit the refreshed JSON.
  */
 
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+const BUILDER_SRC_PATH = fileURLToPath(import.meta.url);
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -247,7 +263,19 @@ interface BundledCollection {
     creditUrl: string;
     fetchedAt: string;
     featureCount: number;
+    /** SHA-256 of the builder source file (`build-shorezone-data.ts`),
+     *  recorded so consumers can detect a stale bundle when the builder
+     *  logic, classifier, or region bbox change without the JSON being
+     *  regenerated. Validated by a unit test in api-server. */
+    generatorHash: string;
   };
+}
+
+/** SHA-256 hex digest of the builder source file. Computed at runtime so
+ *  any edit to this script changes the hash and therefore the bundle. */
+function computeGeneratorHash(): string {
+  const src = readFileSync(BUILDER_SRC_PATH);
+  return createHash("sha256").update(src).digest("hex");
 }
 
 function buildBundle(raw: RawFeature[]): BundledCollection {
@@ -286,6 +314,7 @@ function buildBundle(raw: RawFeature[]): BundledCollection {
       creditUrl: "https://alaskafisheries.noaa.gov/shorezone/",
       fetchedAt: new Date().toISOString(),
       featureCount: features.length,
+      generatorHash: computeGeneratorHash(),
     },
   };
 }

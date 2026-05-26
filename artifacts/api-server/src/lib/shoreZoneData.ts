@@ -93,6 +93,11 @@ export interface ShoreZoneFeatureCollection {
     creditUrl: string;
     fetchedAt: string;
     featureCount: number;
+    /** SHA-256 of the builder source file that produced this bundle.
+     *  Populated by every builder under `scripts/src/`; validated by the
+     *  `substrate-bundles-generator-hash` unit test, which fails with a
+     *  "re-run the builder" message when the hash disagrees. */
+    generatorHash?: string;
   };
 }
 
