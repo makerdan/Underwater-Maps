@@ -66,6 +66,7 @@ import type {
   TrailPointsPage,
   TrollingPreset,
   TrollingPresetInput,
+  TrollingPresetUpdate,
   UploadResult,
   UserCatalogSave,
   UserDatasetMeta,
@@ -2362,6 +2363,78 @@ export const usePostTrollingPresets = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getPostTrollingPresetsMutationOptions(options));
+    }
+
+export const getPatchTrollingPresetsIdUrl = (id: string,) => {
+
+
+
+
+  return `/api/trolling-presets/${id}`
+}
+
+/**
+ * @summary Update a trolling preset's name or sort order
+ */
+export const patchTrollingPresetsId = async (id: string,
+    trollingPresetUpdate: TrollingPresetUpdate, options?: RequestInit): Promise<TrollingPreset> => {
+
+  return customFetch<TrollingPreset>(getPatchTrollingPresetsIdUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      trollingPresetUpdate,)
+  }
+);}
+
+
+
+
+export const getPatchTrollingPresetsIdMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchTrollingPresetsId>>, TError,{id: string;data: BodyType<TrollingPresetUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchTrollingPresetsId>>, TError,{id: string;data: BodyType<TrollingPresetUpdate>}, TContext> => {
+
+const mutationKey = ['patchTrollingPresetsId'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchTrollingPresetsId>>, {id: string;data: BodyType<TrollingPresetUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  patchTrollingPresetsId(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchTrollingPresetsIdMutationResult = NonNullable<Awaited<ReturnType<typeof patchTrollingPresetsId>>>
+    export type PatchTrollingPresetsIdMutationBody = BodyType<TrollingPresetUpdate>
+    export type PatchTrollingPresetsIdMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Update a trolling preset's name or sort order
+ */
+export const usePatchTrollingPresetsId = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchTrollingPresetsId>>, TError,{id: string;data: BodyType<TrollingPresetUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof patchTrollingPresetsId>>,
+        TError,
+        {id: string;data: BodyType<TrollingPresetUpdate>},
+        TContext
+      > => {
+      return useMutation(getPatchTrollingPresetsIdMutationOptions(options));
     }
 
 export const getDeleteTrollingPresetsIdUrl = (id: string,) => {

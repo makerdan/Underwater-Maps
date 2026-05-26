@@ -1,8 +1,9 @@
 import { Router } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db, trollingPresetsTable } from "@workspace/db";
 import {
   PostTrollingPresetsBody,
+  PatchTrollingPresetsIdBody,
   DeleteTrollingPresetsIdParams,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
@@ -15,7 +16,7 @@ router.get("/trolling-presets", requireAuth, async (req, res): Promise<void> => 
     .select()
     .from(trollingPresetsTable)
     .where(eq(trollingPresetsTable.userId, userId))
-    .orderBy(trollingPresetsTable.createdAt);
+    .orderBy(asc(trollingPresetsTable.sortOrder), asc(trollingPresetsTable.createdAt));
   res.json(rows);
 });
 
@@ -42,6 +43,38 @@ router.post("/trolling-presets", requireAuth, async (req, res): Promise<void> =>
     .returning();
 
   res.status(201).json(created);
+});
+
+router.patch("/trolling-presets/:id", requireAuth, async (req, res): Promise<void> => {
+  const parsed = PatchTrollingPresetsIdBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_request", details: parsed.error.message });
+    return;
+  }
+  const userId = (req as AuthenticatedRequest).clerkUserId;
+  const id = String(req.params["id"] ?? "");
+
+  const updates: { name?: string; sortOrder?: number } = {};
+  if (parsed.data.name !== undefined) updates.name = parsed.data.name;
+  if (parsed.data.sortOrder !== undefined) updates.sortOrder = parsed.data.sortOrder;
+
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({ error: "invalid_request", details: "No fields to update" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(trollingPresetsTable)
+    .set(updates)
+    .where(and(eq(trollingPresetsTable.id, id), eq(trollingPresetsTable.userId, userId)))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "not_found", details: `Preset '${id}' not found` });
+    return;
+  }
+
+  res.json(updated);
 });
 
 router.delete("/trolling-presets/:id", requireAuth, async (req, res): Promise<void> => {

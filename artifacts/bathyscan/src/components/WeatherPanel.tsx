@@ -11,6 +11,7 @@ import React, { useEffect, useCallback, useState } from "react";
 import {
   useGetTrollingPresets,
   usePostTrollingPresets,
+  usePatchTrollingPresetsId,
   useDeleteTrollingPresetsId,
   getGetTrollingPresetsQueryKey,
 } from "@workspace/api-client-react";
@@ -138,9 +139,12 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     query: { queryKey: presetsQueryKey, staleTime: 60 * 1000 },
   });
   const postPresetMutation = usePostTrollingPresets();
+  const patchPresetMutation = usePatchTrollingPresetsId();
   const deletePresetMutation = useDeleteTrollingPresetsId();
   const [presetName, setPresetName] = useState("");
   const [presetError, setPresetError] = useState<string | null>(null);
+  const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
 
   const handleSavePreset = useCallback(async () => {
     const trimmed = presetName.trim();
@@ -191,6 +195,58 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
       // no-op; query will refetch on next visit
     }
   }, [deletePresetMutation, queryClient, presetsQueryKey]);
+
+  const handleStartRename = useCallback((presetId: string, currentName: string) => {
+    setEditingPresetId(presetId);
+    setEditingName(currentName);
+  }, []);
+
+  const handleCancelRename = useCallback(() => {
+    setEditingPresetId(null);
+    setEditingName("");
+  }, []);
+
+  const handleCommitRename = useCallback(async () => {
+    if (!editingPresetId) return;
+    const trimmed = editingName.trim();
+    if (!trimmed) {
+      handleCancelRename();
+      return;
+    }
+    try {
+      await patchPresetMutation.mutateAsync({ id: editingPresetId, data: { name: trimmed } });
+      await queryClient.invalidateQueries({ queryKey: presetsQueryKey });
+    } catch {
+      // no-op; query will refetch on next visit
+    } finally {
+      handleCancelRename();
+    }
+  }, [editingPresetId, editingName, patchPresetMutation, queryClient, presetsQueryKey, handleCancelRename]);
+
+  const handleMovePreset = useCallback(async (index: number, delta: -1 | 1) => {
+    if (!trollingPresets) return;
+    const ordered = [...trollingPresets];
+    const target = index + delta;
+    if (target < 0 || target >= ordered.length) return;
+    const a = ordered[index];
+    const b = ordered[target];
+    if (!a || !b) return;
+    // Reorder locally, then persist a fresh 0..N-1 sortOrder for the whole list
+    // so future inserts/deletes don't degrade the ordering.
+    [ordered[index], ordered[target]] = [b, a];
+    queryClient.setQueryData(presetsQueryKey, ordered);
+    try {
+      await Promise.all(
+        ordered.map((p, i) =>
+          p.sortOrder === i
+            ? Promise.resolve()
+            : patchPresetMutation.mutateAsync({ id: p.id, data: { sortOrder: i } }),
+        ),
+      );
+    } finally {
+      await queryClient.invalidateQueries({ queryKey: presetsQueryKey });
+    }
+  }, [trollingPresets, patchPresetMutation, queryClient, presetsQueryKey]);
 
   const centerLat = terrain ? (terrain.minLat + terrain.maxLat) / 2 : 0;
   const centerLon = terrain ? (terrain.minLon + terrain.maxLon) / 2 : 0;
@@ -428,48 +484,134 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
           <div style={{ marginBottom: 6 }}>
             <div style={LABEL}>PRESETS</div>
             {trollingPresets && trollingPresets.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 3 }}>
-                {trollingPresets.map((p) => (
-                  <div key={p.id} style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                    <button
-                      onClick={() => handleLoadPreset(p.id)}
-                      title={`Load ${p.name}: ${Math.round(p.headingDeg)}° @ ${p.speedKnots}kt`}
-                      style={{
-                        flex: 1,
-                        textAlign: "left",
-                        background: "rgba(0,10,20,0.8)",
-                        border: "1px solid rgba(0,229,255,0.2)",
-                        color: "#00e5ff",
-                        fontFamily: "inherit",
-                        fontSize: 9,
-                        padding: "3px 6px",
-                        borderRadius: 3,
-                        cursor: "pointer",
-                        letterSpacing: "0.1em",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {p.name} · {Math.round(p.headingDeg)}° @ {p.speedKnots}kt
-                    </button>
-                    <button
-                      onClick={() => void handleDeletePreset(p.id)}
-                      aria-label={`Delete preset ${p.name}`}
-                      title="Delete preset"
-                      style={{
-                        background: "rgba(0,10,20,0.8)",
-                        border: "1px solid rgba(248,113,113,0.3)",
-                        color: "#f87171",
-                        fontFamily: "inherit",
-                        fontSize: 9,
-                        padding: "3px 6px",
-                        borderRadius: 3,
-                        cursor: "pointer",
-                      }}
-                    >×</button>
-                  </div>
-                ))}
+              <div data-testid="preset-list" style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 3 }}>
+                {trollingPresets.map((p, i) => {
+                  const isEditing = editingPresetId === p.id;
+                  const isFirst = i === 0;
+                  const isLast = i === trollingPresets.length - 1;
+                  return (
+                    <div key={p.id} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        <button
+                          title="Move up"
+                          aria-label={`Move preset ${p.name} up`}
+                          disabled={isFirst}
+                          onClick={() => void handleMovePreset(i, -1)}
+                          style={{
+                            background: "none",
+                            border: "1px solid rgba(0,229,255,0.2)",
+                            color: isFirst ? "#334155" : "#00e5ff",
+                            cursor: isFirst ? "default" : "pointer",
+                            fontSize: 8,
+                            padding: "0 3px",
+                            borderRadius: 2,
+                            lineHeight: 1.2,
+                          }}
+                        >▲</button>
+                        <button
+                          title="Move down"
+                          aria-label={`Move preset ${p.name} down`}
+                          disabled={isLast}
+                          onClick={() => void handleMovePreset(i, 1)}
+                          style={{
+                            background: "none",
+                            border: "1px solid rgba(0,229,255,0.2)",
+                            color: isLast ? "#334155" : "#00e5ff",
+                            cursor: isLast ? "default" : "pointer",
+                            fontSize: 8,
+                            padding: "0 3px",
+                            borderRadius: 2,
+                            lineHeight: 1.2,
+                          }}
+                        >▼</button>
+                      </div>
+                      {isEditing ? (
+                        <input
+                          autoFocus
+                          aria-label={`Rename preset ${p.name}`}
+                          value={editingName}
+                          maxLength={80}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          onBlur={() => void handleCommitRename()}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              void handleCommitRename();
+                            } else if (e.key === "Escape") {
+                              e.preventDefault();
+                              handleCancelRename();
+                            }
+                          }}
+                          style={{
+                            flex: 1,
+                            background: "rgba(0,10,20,0.8)",
+                            border: "1px solid rgba(0,229,255,0.4)",
+                            color: "#00e5ff",
+                            fontFamily: "inherit",
+                            fontSize: 9,
+                            padding: "3px 6px",
+                            borderRadius: 3,
+                          }}
+                        />
+                      ) : (
+                        <button
+                          onClick={() => handleLoadPreset(p.id)}
+                          title={`Load ${p.name}: ${Math.round(p.headingDeg)}° @ ${p.speedKnots}kt`}
+                          style={{
+                            flex: 1,
+                            textAlign: "left",
+                            background: "rgba(0,10,20,0.8)",
+                            border: "1px solid rgba(0,229,255,0.2)",
+                            color: "#00e5ff",
+                            fontFamily: "inherit",
+                            fontSize: 9,
+                            padding: "3px 6px",
+                            borderRadius: 3,
+                            cursor: "pointer",
+                            letterSpacing: "0.1em",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {p.name} · {Math.round(p.headingDeg)}° @ {p.speedKnots}kt
+                        </button>
+                      )}
+                      {!isEditing && (
+                        <button
+                          onClick={() => handleStartRename(p.id, p.name)}
+                          aria-label={`Rename preset ${p.name}`}
+                          title="Rename preset"
+                          style={{
+                            background: "rgba(0,10,20,0.8)",
+                            border: "1px solid rgba(0,229,255,0.2)",
+                            color: "#00e5ff",
+                            fontFamily: "inherit",
+                            fontSize: 9,
+                            padding: "3px 6px",
+                            borderRadius: 3,
+                            cursor: "pointer",
+                          }}
+                        >✎</button>
+                      )}
+                      <button
+                        onClick={() => void handleDeletePreset(p.id)}
+                        aria-label={`Delete preset ${p.name}`}
+                        title="Delete preset"
+                        style={{
+                          background: "rgba(0,10,20,0.8)",
+                          border: "1px solid rgba(248,113,113,0.3)",
+                          color: "#f87171",
+                          fontFamily: "inherit",
+                          fontSize: 9,
+                          padding: "3px 6px",
+                          borderRadius: 3,
+                          cursor: "pointer",
+                        }}
+                      >×</button>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div style={{ fontSize: 8, color: "#475569", marginTop: 2 }}>

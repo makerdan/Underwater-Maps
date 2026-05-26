@@ -1111,7 +1111,21 @@ export interface TrollingPreset {
   startLat?: number | null;
   startLon?: number | null;
   waypoints: TrollingPresetWaypoint[];
+  /** Ascending sort key; lower values surface first */
+  sortOrder: number;
   createdAt: string;
+}
+
+/**
+ * Partial update to a saved trolling preset. At least one field must be provided.
+ */
+export interface TrollingPresetUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name?: string;
+  sortOrder?: number;
 }
 
 export interface TrollingPresetInput {

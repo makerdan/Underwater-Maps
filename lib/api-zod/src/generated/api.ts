@@ -958,6 +958,7 @@ export const GetTrollingPresetsResponseItem = zod.object({
   "lat": zod.number().min(getTrollingPresetsResponseWaypointsItemLatMin).max(getTrollingPresetsResponseWaypointsItemLatMax),
   "lon": zod.number().min(getTrollingPresetsResponseWaypointsItemLonMin).max(getTrollingPresetsResponseWaypointsItemLonMax)
 })),
+  "sortOrder": zod.number().describe('Ascending sort key; lower values surface first'),
   "createdAt": zod.coerce.date()
 })
 export const GetTrollingPresetsResponse = zod.array(GetTrollingPresetsResponseItem)
@@ -994,6 +995,53 @@ export const PostTrollingPresetsBody = zod.object({
   "lat": zod.number().min(postTrollingPresetsBodyWaypointsItemLatMin).max(postTrollingPresetsBodyWaypointsItemLatMax),
   "lon": zod.number().min(postTrollingPresetsBodyWaypointsItemLonMin).max(postTrollingPresetsBodyWaypointsItemLonMax)
 })).max(postTrollingPresetsBodyWaypointsMax).optional()
+})
+
+
+/**
+ * @summary Update a trolling preset's name or sort order
+ */
+export const PatchTrollingPresetsIdParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const patchTrollingPresetsIdBodyNameMax = 80;
+
+
+
+export const PatchTrollingPresetsIdBody = zod.object({
+  "name": zod.string().min(1).max(patchTrollingPresetsIdBodyNameMax).optional(),
+  "sortOrder": zod.number().optional()
+}).describe('Partial update to a saved trolling preset. At least one field must be provided.')
+
+export const patchTrollingPresetsIdResponseHeadingDegMin = 0;
+export const patchTrollingPresetsIdResponseHeadingDegMax = 360;
+
+export const patchTrollingPresetsIdResponseSpeedKnotsMin = 0;
+export const patchTrollingPresetsIdResponseSpeedKnotsMax = 10;
+
+export const patchTrollingPresetsIdResponseWaypointsItemLatMin = -90;
+export const patchTrollingPresetsIdResponseWaypointsItemLatMax = 90;
+
+export const patchTrollingPresetsIdResponseWaypointsItemLonMin = -180;
+export const patchTrollingPresetsIdResponseWaypointsItemLonMax = 180;
+
+
+
+export const PatchTrollingPresetsIdResponse = zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "userId": zod.string(),
+  "name": zod.string(),
+  "headingDeg": zod.number().min(patchTrollingPresetsIdResponseHeadingDegMin).max(patchTrollingPresetsIdResponseHeadingDegMax),
+  "speedKnots": zod.number().min(patchTrollingPresetsIdResponseSpeedKnotsMin).max(patchTrollingPresetsIdResponseSpeedKnotsMax),
+  "startLat": zod.number().nullish(),
+  "startLon": zod.number().nullish(),
+  "waypoints": zod.array(zod.object({
+  "lat": zod.number().min(patchTrollingPresetsIdResponseWaypointsItemLatMin).max(patchTrollingPresetsIdResponseWaypointsItemLatMax),
+  "lon": zod.number().min(patchTrollingPresetsIdResponseWaypointsItemLonMin).max(patchTrollingPresetsIdResponseWaypointsItemLonMax)
+})),
+  "sortOrder": zod.number().describe('Ascending sort key; lower values surface first'),
+  "createdAt": zod.coerce.date()
 })
 
 

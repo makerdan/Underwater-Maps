@@ -50,6 +50,7 @@ vi.mock("@/hooks/useSurfaceConditions", () => ({
 vi.mock("@workspace/api-client-react", () => ({
   useGetTrollingPresets: () => ({ data: [] }),
   usePostTrollingPresets: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  usePatchTrollingPresetsId: () => ({ mutateAsync: vi.fn() }),
   useDeleteTrollingPresetsId: () => ({ mutateAsync: vi.fn() }),
   getGetTrollingPresetsQueryKey: () => ["trolling-presets"],
 }));

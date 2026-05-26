@@ -923,6 +923,49 @@ paths:
                 $ref: "#/components/schemas/ApiError"
 
   /trolling-presets/{id}:
+    patch:
+      operationId: patchTrollingPresetsId
+      tags: [trolling-presets]
+      summary: Update a trolling preset's name or sort order
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrollingPresetUpdate"
+      responses:
+        "200":
+          description: Updated preset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrollingPreset"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Preset not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
     delete:
       operationId: deleteTrollingPresetsId
       tags: [trolling-presets]
@@ -2906,6 +2949,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TrollingPresetWaypoint"
+        sortOrder:
+          type: integer
+          description: Ascending sort key; lower values surface first
         createdAt:
           type: string
           format: date-time
@@ -2916,6 +2962,7 @@ components:
         - headingDeg
         - speedKnots
         - waypoints
+        - sortOrder
         - createdAt
 
     TrollingPresetWaypoint:
@@ -2932,6 +2979,18 @@ components:
       required:
         - lat
         - lon
+
+    TrollingPresetUpdate:
+      type: object
+      description: Partial update to a saved trolling preset. At least one field must be provided.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        sortOrder:
+          type: integer
+      minProperties: 1
 
     TrollingPresetInput:
       type: object
