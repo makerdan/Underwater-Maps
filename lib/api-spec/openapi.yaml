@@ -1524,6 +1524,15 @@ paths:
           schema:
             type: number
           description: Longitude of query point
+        - name: datasetId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            Optional preset dataset id (e.g. `thorne-bay`). When provided,
+            the server prefers a bundled cast registered for that dataset
+            over a generic nearest-neighbour lookup.
       responses:
         "200":
           description: Depth-resolved temperature profile for the point

@@ -115,6 +115,7 @@ export const HUD: React.FC = () => {
     hudCenterLat,
     hudCenterLon,
     !!terrain,
+    terrain?.datasetId ?? null,
   );
 
   const fmtCoord = (n: number | null): string => {

@@ -112,4 +112,14 @@ describe("GET /temperature-profile", () => {
     expect(res.body.available).toBe(false);
     expect(res.body.samples).toEqual([]);
   });
+
+  it("forwards datasetId to providers so they can pick a preset-bundled cast", async () => {
+    const seen: Array<{ lat: number; lon: number; datasetId: string | null }> = [];
+    profileProviders.push((req) => {
+      seen.push({ lat: req.lat, lon: req.lon, datasetId: req.datasetId ?? null });
+      return null;
+    });
+    await request(makeApp()).get("/temperature-profile?lat=55.7&lon=-132.5&datasetId=thorne-bay");
+    expect(seen).toEqual([{ lat: 55.7, lon: -132.5, datasetId: "thorne-bay" }]);
+  });
 });

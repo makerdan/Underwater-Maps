@@ -1496,7 +1496,8 @@ thermocline model.
  */
 export const GetTemperatureProfileQueryParams = zod.object({
   "lat": zod.coerce.number().describe('Latitude of query point'),
-  "lon": zod.coerce.number().describe('Longitude of query point')
+  "lon": zod.coerce.number().describe('Longitude of query point'),
+  "datasetId": zod.coerce.string().optional().describe('Optional preset dataset id (e.g. `thorne-bay`). When provided,\nthe server prefers a bundled cast registered for that dataset\nover a generic nearest-neighbour lookup.\n')
 })
 
 export const GetTemperatureProfileResponse = zod.object({

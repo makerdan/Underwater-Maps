@@ -23,8 +23,13 @@ export function useTemperatureProfile(
   lat: number | null,
   lon: number | null,
   enabled = true,
+  datasetId?: string | null,
 ): TemperatureProfileResult {
-  const params = { lat: lat ?? 0, lon: lon ?? 0 };
+  const params = {
+    lat: lat ?? 0,
+    lon: lon ?? 0,
+    ...(datasetId ? { datasetId } : {}),
+  };
   const { data, isLoading, isError } = useGetTemperatureProfile(params, {
     query: {
       queryKey: getGetTemperatureProfileQueryKey(params),

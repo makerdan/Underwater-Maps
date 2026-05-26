@@ -2,24 +2,30 @@
  * temperature-profile.ts — Depth-resolved temperature profile for a lat/lon
  * point.
  *
- * GET /api/temperature-profile?lat=&lon=
+ * GET /api/temperature-profile?lat=&lon=&datasetId=
  *
- * Strategy: real per-location data when we have it, `{ available: false }`
- * otherwise so the client can fall back to its surface-anchored thermocline
- * model (see artifacts/bathyscan/src/lib/waterTemp.ts).
+ * Strategy: real per-location measured data when we have it,
+ * `{ available: false }` otherwise so the client can fall back to its
+ * surface-anchored thermocline model (see
+ * artifacts/bathyscan/src/lib/waterTemp.ts).
  *
- * The "real data" path is intentionally a pluggable provider registry — the
- * task description lists Argo float casts, Copernicus Marine reanalysis, and
- * per-dataset CTD metadata uploaded with the bathymetry as candidate sources.
- * Each provider is a function that returns either a `{ samples, source, ... }`
- * payload or null. The first provider that returns a payload wins. Bundled
- * CTD casts are checked first because they ship with preset datasets, then
- * any future Argo/reanalysis providers can be appended without touching the
- * route itself.
+ * Providers are tried in order and the first one that returns a usable
+ * payload wins. Current registry:
+ *   1. **Bundled WOA climatology** — per-dataset NOAA World Ocean Atlas
+ *      2023 monthly-mean casts shipped with the preset AOIs. Matched
+ *      first by `datasetId`, then by great-circle distance.
+ *   2. **Argo float ERDDAP lookup** — nearest recent Argo float profile
+ *      from Ifremer's public ERDDAP. Real, instantaneous, measured CTD
+ *      anywhere the global float array has coverage.
+ *
+ * Provider failures (timeouts, malformed responses, no rows in range) are
+ * caught and never break the chain — the next provider is tried, and if
+ * none returns data the response is `{ available: false, samples: [] }`.
  */
 
 import { Router } from "express";
 import { findBundledTemperatureProfile } from "../lib/temperatureProfiles";
+import { fetchArgoProfile } from "../lib/argoErddap";
 
 const router = Router();
 
@@ -36,23 +42,35 @@ export interface TemperatureProfilePayload {
   provider: string;
 }
 
+export interface TemperatureProfileRequest {
+  lat: number;
+  lon: number;
+  datasetId?: string | null;
+}
+
 export type TemperatureProfileProvider = (
-  lat: number,
-  lon: number,
+  req: TemperatureProfileRequest,
 ) => Promise<TemperatureProfilePayload | null> | TemperatureProfilePayload | null;
 
 // Registry of providers consulted in order. Exported so tests (and future
 // integrations) can register/unregister real data sources.
 export const profileProviders: TemperatureProfileProvider[] = [
-  // 1. Per-dataset CTD casts bundled with the preset bathymetry.
-  (lat, lon) => findBundledTemperatureProfile(lat, lon),
-  // 2. (future) Argo float lookup via ERDDAP
+  // 1. Per-dataset / nearby bundled WOA climatology casts.
+  ({ lat, lon, datasetId }) =>
+    findBundledTemperatureProfile(lat, lon, datasetId ?? null),
+  // 2. Live Argo float lookup via Ifremer ERDDAP.
+  ({ lat, lon }) => fetchArgoProfile(lat, lon),
   // 3. (future) Copernicus Marine reanalysis
 ];
 
 router.get("/temperature-profile", async (req, res): Promise<void> => {
   const lat = parseFloat(req.query["lat"] as string);
   const lon = parseFloat(req.query["lon"] as string);
+  const datasetIdRaw = req.query["datasetId"];
+  const datasetId =
+    typeof datasetIdRaw === "string" && datasetIdRaw.length > 0
+      ? datasetIdRaw
+      : null;
 
   if (
     !Number.isFinite(lat) || !Number.isFinite(lon) ||
@@ -65,12 +83,13 @@ router.get("/temperature-profile", async (req, res): Promise<void> => {
     return;
   }
 
-  // Cache for 1h — climatology and bundled casts change very slowly.
+  // Cache for 1h — climatology and bundled casts change very slowly, and
+  // a fresh Argo float profile is only published every 10 days.
   res.setHeader("Cache-Control", "public, max-age=3600");
 
   for (const provider of profileProviders) {
     try {
-      const payload = await provider(lat, lon);
+      const payload = await provider({ lat, lon, datasetId });
       if (payload && payload.samples.length >= 2) {
         // Defensive: ensure samples are sorted shallow→deep so clients can
         // plot them without re-sorting.

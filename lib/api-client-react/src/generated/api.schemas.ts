@@ -1358,6 +1358,13 @@ lat: number;
  * Longitude of query point
  */
 lon: number;
+/**
+ * Optional preset dataset id (e.g. `thorne-bay`). When provided,
+the server prefers a bundled cast registered for that dataset
+over a generic nearest-neighbour lookup.
+
+ */
+datasetId?: string;
 };
 
 export type GetEfhParams = {
