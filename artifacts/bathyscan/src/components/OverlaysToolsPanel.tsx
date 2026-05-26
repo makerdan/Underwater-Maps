@@ -228,7 +228,7 @@ export const OverlaysToolsPanel: React.FC = () => {
             <ToggleButton
               active={efhOverlayEnabled}
               onClick={() => setEfhOverlayEnabled(!efhOverlayEnabled)}
-              label="🐟 EFH ZONES"
+              label="🐟 ESSENTIAL FISH HABITAT"
               tooltip="Show Essential Fish Habitat zones overlay"
               activeBg="rgba(34,197,94,0.15)"
               activeBorder="rgba(34,197,94,0.5)"

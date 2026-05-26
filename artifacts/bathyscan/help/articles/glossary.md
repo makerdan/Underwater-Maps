@@ -19,7 +19,7 @@ Quick definitions for terms you will see throughout BathyScan.
 
 **Drift** — the motion of a boat or fishing line caused by wind and current when the engine is off.
 
-**EFH (Essential Fish Habitat)** — regulated zones in some US waters where particular fish species are known to feed or spawn. Shown when available with the 🐟 EFH button.
+**Essential Fish Habitat (EFH)** — regulated zones in some US waters where particular fish species are known to feed or spawn. Shown when available with the 🐟 Essential Fish Habitat button.
 
 **Fly mode** — first-person free-flight camera. Locks the mouse and uses WASD.
 

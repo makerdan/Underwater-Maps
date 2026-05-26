@@ -3656,12 +3656,12 @@ export const getGetEfhUrl = (params?: GetEfhParams,) => {
 }
 
 /**
- * Returns GeoJSON EFH zone polygons for the requested area.
+ * Returns GeoJSON Essential Fish Habitat zone polygons for the requested area.
 Currently covers the Thorne Bay / Clarence Strait / SE Alaska region.
 Data credit: NOAA Fisheries / NMFS Alaska Region.
 https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles
 
- * @summary Essential Fish Habitat (EFH) zones
+ * @summary Essential Fish Habitat zones
  */
 export const getEfh = async (params?: GetEfhParams, options?: RequestInit): Promise<EfhFeatureCollection> => {
 
@@ -3708,7 +3708,7 @@ export type GetEfhQueryError = ErrorType<unknown>
 
 
 /**
- * @summary Essential Fish Habitat (EFH) zones
+ * @summary Essential Fish Habitat zones
  */
 
 export function useGetEfh<TData = Awaited<ReturnType<typeof getEfh>>, TError = ErrorType<unknown>>(

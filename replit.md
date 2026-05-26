@@ -34,7 +34,7 @@ _Describe the high-level user-facing capabilities of this app once they exist._
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Always spell out "EFH" as "Essential Fish Habitat" in user-facing copy (UI strings, help articles, READMEs, OpenAPI summaries/descriptions). Bare "EFH" is allowed only as a parenthetical after the full phrase on first mention, e.g. "Essential Fish Habitat (EFH)". Code identifiers, file names, route paths, dataset `source` strings, log lines, and test-only strings are unaffected.
 
 ## Gotchas
 

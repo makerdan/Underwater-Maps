@@ -32,7 +32,7 @@ export const GetDatasetsResponseItem = zod.object({
   "maxLat": zod.number()
 }).describe('Bounding box [minLon, minLat, maxLon, maxLat]'),
   "hasTopography": zod.boolean().optional().describe('True when the dataset bbox includes above-water terrain (land\/islands) suitable for landmass visualisation.'),
-  "hasEfh": zod.boolean().optional().describe('True when the dataset has bundled Essential Fish Habitat (EFH) zone data available via \/efh.')
+  "hasEfh": zod.boolean().optional().describe('True when the dataset has bundled Essential Fish Habitat zone data available via \/efh.')
 })
 export const GetDatasetsResponse = zod.array(GetDatasetsResponseItem)
 
@@ -1448,12 +1448,12 @@ export const GetTemperatureProfileResponse = zod.object({
 
 
 /**
- * Returns GeoJSON EFH zone polygons for the requested area.
+ * Returns GeoJSON Essential Fish Habitat zone polygons for the requested area.
 Currently covers the Thorne Bay / Clarence Strait / SE Alaska region.
 Data credit: NOAA Fisheries / NMFS Alaska Region.
 https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles
 
- * @summary Essential Fish Habitat (EFH) zones
+ * @summary Essential Fish Habitat zones
  */
 export const GetEfhQueryParams = zod.object({
   "datasetId": zod.coerce.string().optional().describe('Filter to a known preset dataset\'s AOI (e.g. thorne-bay)'),
@@ -1470,8 +1470,8 @@ export const GetEfhResponse = zod.object({
   "fmp": zod.string().describe('Fishery Management Plan name'),
   "depthRangeM": zod.array(zod.number()).describe('[minDepth, maxDepth] in metres'),
   "habitatDescription": zod.string(),
-  "lifeStage": zod.string().optional().describe('Life stages covered by this EFH polygon (e.g. \"Juveniles & Adults\")'),
-  "season": zod.string().optional().describe('Seasonality \/ temporal window for this EFH designation (e.g. \"Year-round\", \"Spawning Feb–Apr\")'),
+  "lifeStage": zod.string().optional().describe('Life stages covered by this Essential Fish Habitat polygon (e.g. \"Juveniles & Adults\")'),
+  "season": zod.string().optional().describe('Seasonality \/ temporal window for this Essential Fish Habitat designation (e.g. \"Year-round\", \"Spawning Feb–Apr\")'),
   "source": zod.string(),
   "creditUrl": zod.string(),
   "color": zod.string().describe('Suggested hex color for rendering')

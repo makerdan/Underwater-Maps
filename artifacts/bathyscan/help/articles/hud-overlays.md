@@ -25,8 +25,9 @@ quickly compare conditions without opening a side panel.
 - **↬ CURRENT** — overlays sub-surface current arrows. Use the Tidal Overlay
   panel's **Current layer** buttons to switch between surface, mid-column, and
   near-bottom layers.
-- **🐟 EFH ZONES** — (visible only for datasets bundled with Essential Fish
-  Habitat data) overlays NOAA EFH polygons coloured by species group.
+- **🐟 ESSENTIAL FISH HABITAT** — (visible only for datasets bundled with
+  Essential Fish Habitat data) overlays NOAA Essential Fish Habitat polygons
+  coloured by species group.
 
 ## Tips
 

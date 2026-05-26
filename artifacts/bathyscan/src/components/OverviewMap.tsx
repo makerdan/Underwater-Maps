@@ -990,7 +990,7 @@ export const OverviewMap: React.FC = () => {
                 whiteSpace: "nowrap",
               }}
             >
-              🐟 EFH
+              🐟 Essential Fish Habitat
             </button>
             </ViewscreenTooltip>
           )}
@@ -1161,7 +1161,7 @@ const EfhDetailPanel: React.FC<{
   return (
     <div
       role="dialog"
-      aria-label={`EFH details for ${p.commonName}`}
+      aria-label={`Essential Fish Habitat details for ${p.commonName}`}
       style={{
         position: "absolute",
         top: 56,

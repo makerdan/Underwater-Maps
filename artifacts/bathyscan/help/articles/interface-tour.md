@@ -29,7 +29,7 @@ These float above the 3D scene and are organised by corner:
 - **Top-right** — Offline indicator and cached-data badge (only when you go offline).
 - **Centre** — Crosshair, with longitude, latitude, and depth under the cursor.
 - **Bottom-left** — Camera position (depth), speed indicator, and the last pin you dropped.
-- **Bottom-right** — **Find Data**, **Substrate**, and (where available) **EFH Zones** buttons.
+- **Bottom-right** — **Find Data**, **Substrate**, and (where available) **Essential Fish Habitat** buttons.
 
 Most of these can be turned off or made transparent under **Settings → HUD**.
 
@@ -56,4 +56,4 @@ You can hide the whole column with the **◂ HIDE** button at the top to get a f
 
 - **🔍 Find Data** — search the public dataset catalog.
 - **◼ Substrate** — recolour the terrain by texture (sand, sediment, silt, basalt).
-- **🐟 EFH Zones** — overlay essential fish habitat polygons (only on datasets that ship with them).
+- **🐟 Essential Fish Habitat** — overlay Essential Fish Habitat polygons (only on datasets that ship with them).

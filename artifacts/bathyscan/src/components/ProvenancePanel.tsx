@@ -153,7 +153,7 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
               textTransform: "uppercase",
             }}
           >
-            EFH
+            Essential Fish Habitat
           </span>
         )}
 

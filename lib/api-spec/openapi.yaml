@@ -1447,9 +1447,9 @@ paths:
     get:
       operationId: getEfh
       tags: [datasets]
-      summary: Essential Fish Habitat (EFH) zones
+      summary: Essential Fish Habitat zones
       description: |
-        Returns GeoJSON EFH zone polygons for the requested area.
+        Returns GeoJSON Essential Fish Habitat zone polygons for the requested area.
         Currently covers the Thorne Bay / Clarence Strait / SE Alaska region.
         Data credit: NOAA Fisheries / NMFS Alaska Region.
         https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles
@@ -1466,7 +1466,7 @@ paths:
           description: Comma-separated species names or common names to filter
       responses:
         "200":
-          description: GeoJSON FeatureCollection of EFH zone polygons
+          description: GeoJSON FeatureCollection of Essential Fish Habitat zone polygons
           content:
             application/json:
               schema:
@@ -1895,7 +1895,7 @@ components:
           description: True when the dataset bbox includes above-water terrain (land/islands) suitable for landmass visualisation.
         hasEfh:
           type: boolean
-          description: True when the dataset has bundled Essential Fish Habitat (EFH) zone data available via /efh.
+          description: True when the dataset has bundled Essential Fish Habitat zone data available via /efh.
       required:
         - id
         - name
@@ -2395,10 +2395,10 @@ components:
           type: string
         lifeStage:
           type: string
-          description: Life stages covered by this EFH polygon (e.g. "Juveniles & Adults")
+          description: Life stages covered by this Essential Fish Habitat polygon (e.g. "Juveniles & Adults")
         season:
           type: string
-          description: Seasonality / temporal window for this EFH designation (e.g. "Year-round", "Spawning Feb–Apr")
+          description: Seasonality / temporal window for this Essential Fish Habitat designation (e.g. "Year-round", "Spawning Feb–Apr")
         source:
           type: string
         creditUrl:

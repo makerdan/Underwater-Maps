@@ -416,7 +416,7 @@ export interface DatasetMeta {
   bbox: DatasetMetaBbox;
   /** True when the dataset bbox includes above-water terrain (land/islands) suitable for landmass visualisation. */
   hasTopography?: boolean;
-  /** True when the dataset has bundled Essential Fish Habitat (EFH) zone data available via /efh. */
+  /** True when the dataset has bundled Essential Fish Habitat zone data available via /efh. */
   hasEfh?: boolean;
 }
 
@@ -819,9 +819,9 @@ export interface EfhSpeciesProperties {
   /** [minDepth, maxDepth] in metres */
   depthRangeM: number[];
   habitatDescription: string;
-  /** Life stages covered by this EFH polygon (e.g. "Juveniles & Adults") */
+  /** Life stages covered by this Essential Fish Habitat polygon (e.g. "Juveniles & Adults") */
   lifeStage?: string;
-  /** Seasonality / temporal window for this EFH designation (e.g. "Year-round", "Spawning Feb–Apr") */
+  /** Seasonality / temporal window for this Essential Fish Habitat designation (e.g. "Year-round", "Spawning Feb–Apr") */
   season?: string;
   source: string;
   creditUrl: string;

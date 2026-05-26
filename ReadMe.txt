@@ -70,7 +70,7 @@ Live conditions overlays
 
 Habitat & substrate
 -------------------
-- Essential Fish Habitat (EFH) zones overlaid on the map and 3D scene.
+- Essential Fish Habitat zones overlaid on the map and 3D scene.
 - Alaska ShoreZone substrate polygons (where available) with credit display.
 - Per-dataset metadata flags so the UI only offers overlays that actually have data.
 
@@ -111,7 +111,8 @@ BathyScan is a pnpm monorepo with three deployable artifacts and several shared 
                               +-----------------+------------------+
                               v                                    v
                     NOAA tides & currents,                   Poe AI / OpenAI
-                    NCEI BAG, GEBCO, EFH,                    (AI assistant)
+                    NCEI BAG, GEBCO,                         (AI assistant)
+                    Essential Fish Habitat,
                     ShoreZone, SST feeds
 
 API contract is the single source of truth. lib/api-spec/openapi.yaml defines every HTTP endpoint. Orval generates:
@@ -289,7 +290,7 @@ BathyScan stands on a lot of public data and open-source work:
 - Bathymetry:           NOAA NCEI BAG mosaics; GEBCO global grid as a fallback.
 - Tides & currents:     NOAA CO-OPS (api.tidesandcurrents.noaa.gov).
 - Sea-surface temp.:    public SST feeds via the API server's water-temperature route.
-- Habitat:              NOAA Essential Fish Habitat (EFH) zone data.
+- Habitat:              NOAA Essential Fish Habitat zone data.
 - Substrate:            Alaska ShoreZone substrate polygons (credit displayed in-app).
 - Auth:                 Clerk (https://clerk.com/).
 - AI:                   Poe AI and OpenAI.

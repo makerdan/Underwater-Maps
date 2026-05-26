@@ -191,10 +191,10 @@ async function runEfhCase(page: Page, plan: CasePlan): Promise<void> {
   // is itself a guard that the new dataset was recognised as EFH-bearing.
   // aria-pressed mirrors `efhOverlayEnabled` from uiStore.
   // Match by visible text — the emoji glyph in the aria-name lookup isn't
-  // reliable across headless Chromium builds, but the visible "EFH" label
-  // on the button is.
+  // reliable across headless Chromium builds, but the visible
+  // "Essential Fish Habitat" label on the button is.
   const efhToggle = page.locator(".overview-map-header button", {
-    hasText: "EFH",
+    hasText: "Essential Fish Habitat",
   });
   await expect(efhToggle).toBeVisible({ timeout: 5_000 });
   await expect(efhToggle).toHaveAttribute("aria-pressed", "false");
@@ -300,8 +300,10 @@ async function runEfhCase(page: Page, plan: CasePlan): Promise<void> {
   );
   expect(opened).toBe(true);
 
-  // The popover is a role="dialog" with aria-label "EFH details for …".
-  const dialog = page.getByRole("dialog", { name: /^EFH details for / });
+  // The popover is a role="dialog" with aria-label "Essential Fish Habitat details for …".
+  const dialog = page.getByRole("dialog", {
+    name: /^Essential Fish Habitat details for /,
+  });
   await expect(dialog).toBeVisible({ timeout: 5_000 });
 
   if (plan.sourceFamily === "tpwd") {
