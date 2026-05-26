@@ -311,7 +311,7 @@ export const DirectionParticleField: React.FC<DirectionParticleFieldProps> = ({
  * Returns a (vx, vz) unit vector. Falls back to the input heading when the
  * floor is essentially flat (open / deep water).
  */
-function deflect(
+export function deflect(
   terrain: TerrainData,
   x: number,
   z: number,

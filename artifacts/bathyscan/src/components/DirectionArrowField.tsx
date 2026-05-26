@@ -14,6 +14,8 @@ import React, { useRef, useMemo, useEffect } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { WORLD_SIZE } from "@/lib/terrain";
+import type { TerrainData } from "@workspace/api-client-react";
+import { deflect } from "@/components/DirectionParticleField";
 
 /**
  * Heading unit vector for a meteorological bearing (degrees, clockwise from
@@ -61,6 +63,14 @@ export interface DirectionArrowFieldProps {
   renderOrder?: number;
   /** Optional opacity multiplier (legend keying). */
   opacity?: number;
+  /**
+   * When provided, each arrow's heading is locally deflected to follow the
+   * seafloor's isobaths — same gradient/projection approach used by
+   * {@link DirectionParticleField}. Sampled per arrow per frame (cheap: one
+   * bilinear depth lookup plus two for the finite-difference gradient).
+   * Omit for purely flat / heading-only flow.
+   */
+  terrain?: TerrainData;
 }
 
 function buildArrowGeometry(): THREE.BufferGeometry {
@@ -90,6 +100,7 @@ export const DirectionArrowField: React.FC<DirectionArrowFieldProps> = ({
   animate = true,
   renderOrder = 3,
   opacity = 0.85,
+  terrain,
 }) => {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const count = positions ? positions.length : density * density;
@@ -153,8 +164,11 @@ export const DirectionArrowField: React.FC<DirectionArrowFieldProps> = ({
     const dummy = new THREE.Object3D();
     // See arrowYawForDirection — the default tip points along -Z, so Y-rotation
     // by -dirRad sends it onto the drift heading dirVec. Without the negation
-    // the arrowhead points opposite the drift for any non-N/S heading.
-    const yaw = arrowYawForDirection(directionDeg);
+    // the arrowhead points opposite the drift for any non-N/S heading. When a
+    // `terrain` prop is supplied we recompute this per-arrow from the locally
+    // deflected velocity so each arrow visibly bends around shoals and into
+    // bays, matching the particle-style overlay.
+    const baseYaw = arrowYawForDirection(directionDeg);
     const step = WORLD_SIZE / density;
 
     for (let i = 0; i < count; i++) {
@@ -164,9 +178,24 @@ export const DirectionArrowField: React.FC<DirectionArrowFieldProps> = ({
       progressRef.current[i] = ((progressRef.current[i] ?? 0) + delta * driftSpeed * 0.15) % 1;
       const t = progressRef.current[i] ?? 0;
 
+      // Per-arrow heading: deflected around terrain when available, otherwise
+      // the nominal dataset-wide direction.
+      let vxN = dirVec.x;
+      let vzN = dirVec.z;
+      let yaw = baseYaw;
+      if (terrain) {
+        const [dx, dz] = deflect(terrain, base[0], base[1], dirVec.x, dirVec.z);
+        vxN = dx;
+        vzN = dz;
+        // Inverse of arrowYawForDirection for an arbitrary unit (vx, vz):
+        // rotateY(yaw) applied to (0,0,-1) is (-sin(yaw), 0, -cos(yaw)),
+        // so yaw = atan2(-vx, -vz). Reduces to baseYaw when (vx,vz)==dirVec.
+        yaw = Math.atan2(-vxN, -vzN);
+      }
+
       const travel = (t - 0.5) * step * 0.9;
-      const x = base[0] + dirVec.x * travel;
-      const z = base[1] + dirVec.z * travel;
+      const x = base[0] + vxN * travel;
+      const z = base[1] + vzN * travel;
       const pulse = 0.4 + 0.6 * Math.sin(t * Math.PI);
       const scale = baseScale * magScale * zoomScale * pulse;
 

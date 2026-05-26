@@ -120,6 +120,7 @@ export const WindOverlay: React.FC = () => {
       animate
       opacity={opacity}
       renderOrder={4}
+      terrain={terrain}
     />
   );
 };
@@ -179,6 +180,7 @@ export const TideOverlay: React.FC = () => {
       animate
       opacity={opacity}
       renderOrder={3}
+      terrain={terrain}
     />
   );
 };
@@ -235,6 +237,7 @@ export const CurrentOverlay: React.FC = () => {
             animate
             opacity={opacity}
             renderOrder={2 + idx}
+            terrain={terrain}
           />
         );
       })}
