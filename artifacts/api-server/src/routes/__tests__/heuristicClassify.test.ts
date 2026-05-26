@@ -5,6 +5,8 @@ import {
   FRESHWATER_HEURISTIC_BANDS,
   SALTWATER_ROUGH_OVERRIDE,
   FRESHWATER_ROUGH_OVERRIDE,
+  SALTWATER_FLAT_OVERRIDE,
+  FRESHWATER_FLAT_OVERRIDE,
 } from "../poe.js";
 
 function rampDepths(): number[] {
@@ -166,6 +168,111 @@ describe("heuristicClassifyByDepth", () => {
     const zones = heuristicClassifyByDepth(depths, "saltwater", labels);
     expect(zones[spikeIdx]).toBe("silt_plain");
     expect(zones[spikeIdx]).not.toBe(SALTWATER_ROUGH_OVERRIDE);
+  });
+
+  it("labels a flat deep basin inside rugged terrain with the silt override (saltwater)", () => {
+    // Rugged checkerboard background (alternating 100 / 130) gives every
+    // background cell a non-trivial local roughness. Carve out an 8x8 flat
+    // patch at the deepest value the field will see — its interior cells
+    // have roughness ~0 and must be relabeled as silt_plain rather than the
+    // deepest depth band (basalt_rock).
+    const depths = new Array<number>(1024);
+    for (let r = 0; r < 32; r++) {
+      for (let c = 0; c < 32; c++) {
+        depths[r * 32 + c] = (r + c) % 2 === 0 ? 100 : 130;
+      }
+    }
+    for (let r = 20; r < 28; r++) {
+      for (let c = 20; c < 28; c++) {
+        depths[r * 32 + c] = 500;
+      }
+    }
+    const zones = heuristicClassifyByDepth(depths, "saltwater");
+    // Center of the basin — purely flat neighbourhood.
+    expect(zones[23 * 32 + 23]).toBe(SALTWATER_FLAT_OVERRIDE);
+    expect(zones[24 * 32 + 24]).toBe(SALTWATER_FLAT_OVERRIDE);
+    // A good fraction of the 8x8 basin cells should be silt-flagged.
+    let basinFlat = 0;
+    for (let r = 20; r < 28; r++) {
+      for (let c = 20; c < 28; c++) {
+        if (zones[r * 32 + c] === SALTWATER_FLAT_OVERRIDE) basinFlat++;
+      }
+    }
+    expect(basinFlat).toBeGreaterThanOrEqual(16);
+    // ...and the rugged background must NOT all be silt — most cells should
+    // still come out of the depth-band classifier.
+    const totalFlat = zones.filter((z) => z === SALTWATER_FLAT_OVERRIDE).length;
+    expect(totalFlat).toBeLessThan(200);
+  });
+
+  it("labels a flat deep basin with the freshwater silt override", () => {
+    const depths = new Array<number>(1024);
+    for (let r = 0; r < 32; r++) {
+      for (let c = 0; c < 32; c++) {
+        depths[r * 32 + c] = (r + c) % 2 === 0 ? 5 : 9;
+      }
+    }
+    for (let r = 4; r < 12; r++) {
+      for (let c = 4; c < 12; c++) {
+        depths[r * 32 + c] = 40;
+      }
+    }
+    const zones = heuristicClassifyByDepth(depths, "freshwater");
+    expect(zones[7 * 32 + 7]).toBe(FRESHWATER_FLAT_OVERRIDE);
+    expect(zones[8 * 32 + 8]).toBe(FRESHWATER_FLAT_OVERRIDE);
+  });
+
+  it("flat override does not fire on a perfectly flat grid", () => {
+    // Roughness 0 everywhere and depthRange 0 → no override should trigger,
+    // matching the pre-existing all-shallow guarantee.
+    const zones = heuristicClassifyByDepth(new Array(1024).fill(50), "saltwater");
+    expect(zones.every((z) => z === SALTWATER_HEURISTIC_BANDS[0])).toBe(true);
+    expect(zones.some((z) => z === SALTWATER_FLAT_OVERRIDE)).toBe(false);
+  });
+
+  it("flat override does not steal cells from the ramp (everywhere-rough field)", () => {
+    // A monotonic ramp has roughness ~24 everywhere interior — well above
+    // the 1%-of-depth-range absolute floor (~10.23) — so the flat override
+    // path must not fire. Note that SALTWATER_FLAT_OVERRIDE ("silt_plain")
+    // aliases SALTWATER_HEURISTIC_BANDS[2], so simply checking the label
+    // alone is ambiguous. Instead, assert a quantitative property: cells
+    // labelled "silt_plain" should sit overwhelmingly within the depth
+    // ranges that belong to band[2], proving they came from the depth-band
+    // classifier and not from the flat override.
+    const depths = rampDepths();
+    const zones = heuristicClassifyByDepth(depths, "saltwater");
+    expect(new Set(zones).size).toBe(4);
+    const siltCells = zones
+      .map((z, i) => ({ z, d: depths[i] as number }))
+      .filter((x) => x.z === SALTWATER_HEURISTIC_BANDS[2]);
+    // Band[2] on a 0..1023 ramp covers depths roughly in (511, 767].
+    // If the flat override had fired we'd see silt_plain cells at depths
+    // far outside that band (e.g. near 0 or near 1023).
+    const outOfBand = siltCells.filter((x) => x.d <= 400 || x.d > 850).length;
+    expect(outOfBand).toBe(0);
+    // And the silt band should be roughly the expected ~256 cells (one
+    // quartile), give or take threshold ties — not e.g. half the grid.
+    expect(siltCells.length).toBeGreaterThan(200);
+    expect(siltCells.length).toBeLessThan(320);
+  });
+
+  it("substrate labels still win over the flat-basin silt override", () => {
+    const depths = new Array<number>(1024);
+    for (let r = 0; r < 32; r++) {
+      for (let c = 0; c < 32; c++) {
+        depths[r * 32 + c] = (r + c) % 2 === 0 ? 100 : 130;
+      }
+    }
+    for (let r = 20; r < 28; r++) {
+      for (let c = 20; c < 28; c++) {
+        depths[r * 32 + c] = 500;
+      }
+    }
+    const labels: Array<string | null> = new Array(1024).fill(null);
+    const basinIdx = 23 * 32 + 23;
+    labels[basinIdx] = "basalt_rock"; // surveyed substrate disagrees
+    const zones = heuristicClassifyByDepth(depths, "saltwater", labels);
+    expect(zones[basinIdx]).toBe("basalt_rock");
   });
 
   it("partial substrate coverage only changes covered cells", () => {

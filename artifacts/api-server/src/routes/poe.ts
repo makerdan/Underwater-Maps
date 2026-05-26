@@ -374,6 +374,15 @@ export const FRESHWATER_HEURISTIC_BANDS = [
 export const SALTWATER_ROUGH_OVERRIDE = "basalt_rock";
 export const FRESHWATER_ROUGH_OVERRIDE = "rocky_shoreline";
 
+/**
+ * Label used to mark unusually-flat cells (deep sediment basins, lake bottoms)
+ * regardless of depth band. Complements the rocky-roughness override so flat
+ * silty patches sitting inside otherwise rolling terrain don't get smeared into
+ * the deepest depth quartile (which for saltwater is `basalt_rock`).
+ */
+export const SALTWATER_FLAT_OVERRIDE = "silt_plain";
+export const FRESHWATER_FLAT_OVERRIDE = "silt_deep";
+
 const HEURISTIC_GRID_W = 32;
 const HEURISTIC_GRID_H = 32;
 
@@ -476,13 +485,29 @@ export function heuristicClassifyByDepth(
   // flat grid (roughness 0 everywhere) never triggers an override.
   const roughness = computeLocalRoughness(cleaned);
   const sortedRough = roughness.slice().sort((a, b) => a - b);
+  const roughQ1 = sortedRough[Math.floor(N * 0.25)] as number;
   const roughQ3 = sortedRough[Math.floor(N * 0.75)] as number;
   const roughThreshold = Math.max(roughQ3, depthRange * 0.05);
 
+  // Flat-basin pass — promote cells whose local roughness sits in the bottom
+  // quartile AND below an absolute floor (1% of the overall depth range) to a
+  // soft-sediment label, but only when the field is "otherwise non-flat" (the
+  // top-quartile roughness is strictly positive, so there's some rolling
+  // terrain elsewhere to contrast against). On a perfectly flat grid every
+  // cell has roughness 0 and this guard prevents flagging the whole field.
+  const flatOverride = waterType === "freshwater"
+    ? FRESHWATER_FLAT_OVERRIDE
+    : SALTWATER_FLAT_OVERRIDE;
+  const flatFloor = depthRange * 0.01;
+  const fieldNonFlat = roughQ3 > 0;
+
   for (let i = 0; i < N; i++) {
     const d = cleaned[i] as number;
-    if (roughThreshold > 0 && (roughness[i] as number) > roughThreshold) {
+    const r = roughness[i] as number;
+    if (roughThreshold > 0 && r > roughThreshold) {
       out[i] = roughOverride;
+    } else if (fieldNonFlat && r <= roughQ1 && r < flatFloor) {
+      out[i] = flatOverride;
     } else {
       const band = d <= q1 ? 0 : d <= q2 ? 1 : d <= q3 ? 2 : 3;
       out[i] = bands[band] as string;
