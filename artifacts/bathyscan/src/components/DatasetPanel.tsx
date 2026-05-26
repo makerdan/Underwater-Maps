@@ -716,6 +716,8 @@ export const DatasetPanel: React.FC = () => {
                         whiteSpace: "normal",
                         overflowWrap: "anywhere",
                         wordBreak: "break-word",
+                        textDecoration: "underline",
+                        textUnderlineOffset: 2,
                       }}
                     >
                       {ds.name}
@@ -748,14 +750,6 @@ export const DatasetPanel: React.FC = () => {
                   </div>
                   <div style={{ fontSize: 10, color: "#cbd5e1", marginTop: 2, letterSpacing: "0.05em" }}>
                     {ds.minDepth}m – {ds.maxDepth}m
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 9, color: "#ffffff", marginTop: 1,
-                      whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word",
-                    }}
-                  >
-                    {ds.description}
                   </div>
                   {active && terrain && terrain.datasetId === ds.id && (
                     <div onClick={(e) => e.stopPropagation()}>
