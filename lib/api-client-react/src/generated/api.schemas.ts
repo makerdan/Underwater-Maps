@@ -481,6 +481,63 @@ export const TerrainDataTopographySource = {
   'usgs-3dep': 'usgs-3dep',
 } as const;
 
+export type TerrainDataHabitatPolygonsType = typeof TerrainDataHabitatPolygonsType[keyof typeof TerrainDataHabitatPolygonsType];
+
+
+export const TerrainDataHabitatPolygonsType = {
+  FeatureCollection: 'FeatureCollection',
+} as const;
+
+export type TerrainDataHabitatPolygonsFeaturesItemType = typeof TerrainDataHabitatPolygonsFeaturesItemType[keyof typeof TerrainDataHabitatPolygonsFeaturesItemType];
+
+
+export const TerrainDataHabitatPolygonsFeaturesItemType = {
+  Feature: 'Feature',
+} as const;
+
+export type TerrainDataHabitatPolygonsFeaturesItemGeometry = { [key: string]: unknown };
+
+export interface EfhSpeciesProperties {
+  /** Scientific species name (snake_case) */
+  species: string;
+  commonName: string;
+  /** Fishery Management Plan name */
+  fmp: string;
+  /** [minDepth, maxDepth] in metres */
+  depthRangeM: number[];
+  habitatDescription: string;
+  /** Life stages covered by this Essential Fish Habitat polygon (e.g. "Juveniles & Adults") */
+  lifeStage?: string;
+  /** Seasonality / temporal window for this Essential Fish Habitat designation (e.g. "Year-round", "Spawning Feb–Apr") */
+  season?: string;
+  source: string;
+  creditUrl: string;
+  /** Suggested hex color for rendering */
+  color: string;
+}
+
+export type TerrainDataHabitatPolygonsFeaturesItem = {
+  type: TerrainDataHabitatPolygonsFeaturesItemType;
+  properties: EfhSpeciesProperties;
+  geometry: TerrainDataHabitatPolygonsFeaturesItemGeometry;
+};
+
+export type TerrainDataHabitatPolygonsMetadata = { [key: string]: unknown };
+
+/**
+ * EFH (Essential Fish Habitat) FeatureCollection embedded directly in the terrain
+response for user-saved noaa-efh-* catalog datasets. Present only when the
+dataset carries polygon habitat data (i.e. was saved from a NOAA EFH catalog
+entry). Clients should render these polygons instead of (or in addition to)
+fetching from /efh when this field is present.
+
+ */
+export type TerrainDataHabitatPolygons = {
+  type: TerrainDataHabitatPolygonsType;
+  features: TerrainDataHabitatPolygonsFeaturesItem[];
+  metadata?: TerrainDataHabitatPolygonsMetadata;
+};
+
 export interface TerrainData {
   datasetId: string;
   name: string;
@@ -526,8 +583,13 @@ export interface TerrainData {
   bathymetryCreditUrl?: string;
   /** Credit URL surfaced next to the topography source badge. */
   topographyCreditUrl?: string;
-  /** EFH FeatureCollection embedded for user-saved noaa-efh-* catalog datasets. Present only when the dataset carries polygon habitat data. */
-  habitatPolygons?: EfhFeatureCollection;
+  /** EFH (Essential Fish Habitat) FeatureCollection embedded directly in the terrain
+  response for user-saved noaa-efh-* catalog datasets. Present only when the
+  dataset carries polygon habitat data (i.e. was saved from a NOAA EFH catalog
+  entry). Clients should render these polygons instead of (or in addition to)
+  fetching from /efh when this field is present.
+   */
+  habitatPolygons?: TerrainDataHabitatPolygons;
 }
 
 export type DatasetPreviewBbox = {
@@ -811,25 +873,6 @@ export interface SubstrateFeatureCollection {
   type: SubstrateFeatureCollectionType;
   features: SubstrateFeature[];
   metadata?: SubstrateFeatureCollectionMetadata;
-}
-
-export interface EfhSpeciesProperties {
-  /** Scientific species name (snake_case) */
-  species: string;
-  commonName: string;
-  /** Fishery Management Plan name */
-  fmp: string;
-  /** [minDepth, maxDepth] in metres */
-  depthRangeM: number[];
-  habitatDescription: string;
-  /** Life stages covered by this Essential Fish Habitat polygon (e.g. "Juveniles & Adults") */
-  lifeStage?: string;
-  /** Seasonality / temporal window for this Essential Fish Habitat designation (e.g. "Year-round", "Spawning Feb–Apr") */
-  season?: string;
-  source: string;
-  creditUrl: string;
-  /** Suggested hex color for rendering */
-  color: string;
 }
 
 export type EfhFeatureType = typeof EfhFeatureType[keyof typeof EfhFeatureType];

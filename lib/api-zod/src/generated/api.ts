@@ -80,7 +80,27 @@ export const GetDatasetsIdTerrainResponse = zod.object({
   "bathymetrySourceLabel": zod.string().optional().describe('Display label for the bathymetry source (overrides the default per-source label in the UI).'),
   "topographySourceLabel": zod.string().optional().describe('Display label for the topography source (overrides the default per-source label in the UI).'),
   "bathymetryCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the bathymetry source badge.'),
-  "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.')
+  "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.'),
+  "habitatPolygons": zod.object({
+  "type": zod.enum(['FeatureCollection']),
+  "features": zod.array(zod.object({
+  "type": zod.enum(['Feature']),
+  "properties": zod.object({
+  "species": zod.string().describe('Scientific species name (snake_case)'),
+  "commonName": zod.string(),
+  "fmp": zod.string().describe('Fishery Management Plan name'),
+  "depthRangeM": zod.array(zod.number()).describe('[minDepth, maxDepth] in metres'),
+  "habitatDescription": zod.string(),
+  "lifeStage": zod.string().optional().describe('Life stages covered by this Essential Fish Habitat polygon (e.g. \"Juveniles & Adults\")'),
+  "season": zod.string().optional().describe('Seasonality \/ temporal window for this Essential Fish Habitat designation (e.g. \"Year-round\", \"Spawning Feb–Apr\")'),
+  "source": zod.string(),
+  "creditUrl": zod.string(),
+  "color": zod.string().describe('Suggested hex color for rendering')
+}),
+  "geometry": zod.record(zod.string(), zod.unknown())
+})),
+  "metadata": zod.record(zod.string(), zod.unknown()).optional()
+}).optional().describe('EFH (Essential Fish Habitat) FeatureCollection embedded directly in the terrain\nresponse for user-saved noaa-efh-\* catalog datasets. Present only when the\ndataset carries polygon habitat data (i.e. was saved from a NOAA EFH catalog\nentry). Clients should render these polygons instead of (or in addition to)\nfetching from \/efh when this field is present.\n')
 })
 
 
@@ -145,7 +165,27 @@ export const GetDatasetsIdOverviewResponse = zod.object({
   "bathymetrySourceLabel": zod.string().optional().describe('Display label for the bathymetry source (overrides the default per-source label in the UI).'),
   "topographySourceLabel": zod.string().optional().describe('Display label for the topography source (overrides the default per-source label in the UI).'),
   "bathymetryCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the bathymetry source badge.'),
-  "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.')
+  "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.'),
+  "habitatPolygons": zod.object({
+  "type": zod.enum(['FeatureCollection']),
+  "features": zod.array(zod.object({
+  "type": zod.enum(['Feature']),
+  "properties": zod.object({
+  "species": zod.string().describe('Scientific species name (snake_case)'),
+  "commonName": zod.string(),
+  "fmp": zod.string().describe('Fishery Management Plan name'),
+  "depthRangeM": zod.array(zod.number()).describe('[minDepth, maxDepth] in metres'),
+  "habitatDescription": zod.string(),
+  "lifeStage": zod.string().optional().describe('Life stages covered by this Essential Fish Habitat polygon (e.g. \"Juveniles & Adults\")'),
+  "season": zod.string().optional().describe('Seasonality \/ temporal window for this Essential Fish Habitat designation (e.g. \"Year-round\", \"Spawning Feb–Apr\")'),
+  "source": zod.string(),
+  "creditUrl": zod.string(),
+  "color": zod.string().describe('Suggested hex color for rendering')
+}),
+  "geometry": zod.record(zod.string(), zod.unknown())
+})),
+  "metadata": zod.record(zod.string(), zod.unknown()).optional()
+}).optional().describe('EFH (Essential Fish Habitat) FeatureCollection embedded directly in the terrain\nresponse for user-saved noaa-efh-\* catalog datasets. Present only when the\ndataset carries polygon habitat data (i.e. was saved from a NOAA EFH catalog\nentry). Clients should render these polygons instead of (or in addition to)\nfetching from \/efh when this field is present.\n')
 })
 
 
@@ -197,7 +237,27 @@ export const PostDatasetsUploadResponse = zod.object({
   "bathymetrySourceLabel": zod.string().optional().describe('Display label for the bathymetry source (overrides the default per-source label in the UI).'),
   "topographySourceLabel": zod.string().optional().describe('Display label for the topography source (overrides the default per-source label in the UI).'),
   "bathymetryCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the bathymetry source badge.'),
-  "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.')
+  "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.'),
+  "habitatPolygons": zod.object({
+  "type": zod.enum(['FeatureCollection']),
+  "features": zod.array(zod.object({
+  "type": zod.enum(['Feature']),
+  "properties": zod.object({
+  "species": zod.string().describe('Scientific species name (snake_case)'),
+  "commonName": zod.string(),
+  "fmp": zod.string().describe('Fishery Management Plan name'),
+  "depthRangeM": zod.array(zod.number()).describe('[minDepth, maxDepth] in metres'),
+  "habitatDescription": zod.string(),
+  "lifeStage": zod.string().optional().describe('Life stages covered by this Essential Fish Habitat polygon (e.g. \"Juveniles & Adults\")'),
+  "season": zod.string().optional().describe('Seasonality \/ temporal window for this Essential Fish Habitat designation (e.g. \"Year-round\", \"Spawning Feb–Apr\")'),
+  "source": zod.string(),
+  "creditUrl": zod.string(),
+  "color": zod.string().describe('Suggested hex color for rendering')
+}),
+  "geometry": zod.record(zod.string(), zod.unknown())
+})),
+  "metadata": zod.record(zod.string(), zod.unknown()).optional()
+}).optional().describe('EFH (Essential Fish Habitat) FeatureCollection embedded directly in the terrain\nresponse for user-saved noaa-efh-\* catalog datasets. Present only when the\ndataset carries polygon habitat data (i.e. was saved from a NOAA EFH catalog\nentry). Clients should render these polygons instead of (or in addition to)\nfetching from \/efh when this field is present.\n')
 }),
   "overview": zod.object({
   "datasetId": zod.string(),
@@ -224,7 +284,27 @@ export const PostDatasetsUploadResponse = zod.object({
   "bathymetrySourceLabel": zod.string().optional().describe('Display label for the bathymetry source (overrides the default per-source label in the UI).'),
   "topographySourceLabel": zod.string().optional().describe('Display label for the topography source (overrides the default per-source label in the UI).'),
   "bathymetryCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the bathymetry source badge.'),
-  "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.')
+  "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.'),
+  "habitatPolygons": zod.object({
+  "type": zod.enum(['FeatureCollection']),
+  "features": zod.array(zod.object({
+  "type": zod.enum(['Feature']),
+  "properties": zod.object({
+  "species": zod.string().describe('Scientific species name (snake_case)'),
+  "commonName": zod.string(),
+  "fmp": zod.string().describe('Fishery Management Plan name'),
+  "depthRangeM": zod.array(zod.number()).describe('[minDepth, maxDepth] in metres'),
+  "habitatDescription": zod.string(),
+  "lifeStage": zod.string().optional().describe('Life stages covered by this Essential Fish Habitat polygon (e.g. \"Juveniles & Adults\")'),
+  "season": zod.string().optional().describe('Seasonality \/ temporal window for this Essential Fish Habitat designation (e.g. \"Year-round\", \"Spawning Feb–Apr\")'),
+  "source": zod.string(),
+  "creditUrl": zod.string(),
+  "color": zod.string().describe('Suggested hex color for rendering')
+}),
+  "geometry": zod.record(zod.string(), zod.unknown())
+})),
+  "metadata": zod.record(zod.string(), zod.unknown()).optional()
+}).optional().describe('EFH (Essential Fish Habitat) FeatureCollection embedded directly in the terrain\nresponse for user-saved noaa-efh-\* catalog datasets. Present only when the\ndataset carries polygon habitat data (i.e. was saved from a NOAA EFH catalog\nentry). Clients should render these polygons instead of (or in addition to)\nfetching from \/efh when this field is present.\n')
 }),
   "savedDatasetId": zod.string().optional().describe('UUID of the saved custom_datasets row. Present whenever persistence succeeded; omitted only if the database insert returned no row (see `saveError`).'),
   "savedDatasetMeta": zod.object({
@@ -306,7 +386,7 @@ export const GetUserDatasetsIdTerrainResponse = zod.object({
   "geometry": zod.record(zod.string(), zod.unknown())
 })),
   "metadata": zod.record(zod.string(), zod.unknown()).optional()
-}).optional().describe('EFH FeatureCollection embedded for user-saved noaa-efh-* catalog datasets. Present only when the dataset carries polygon habitat data.')
+}).optional().describe('EFH (Essential Fish Habitat) FeatureCollection embedded directly in the terrain\nresponse for user-saved noaa-efh-\* catalog datasets. Present only when the\ndataset carries polygon habitat data (i.e. was saved from a NOAA EFH catalog\nentry). Clients should render these polygons instead of (or in addition to)\nfetching from \/efh when this field is present.\n')
 })
 
 
@@ -362,7 +442,7 @@ export const GetUserDatasetsIdOverviewResponse = zod.object({
   "geometry": zod.record(zod.string(), zod.unknown())
 })),
   "metadata": zod.record(zod.string(), zod.unknown()).optional()
-}).optional().describe('EFH FeatureCollection embedded for user-saved noaa-efh-* catalog datasets. Present only when the dataset carries polygon habitat data.')
+}).optional().describe('EFH (Essential Fish Habitat) FeatureCollection embedded directly in the terrain\nresponse for user-saved noaa-efh-\* catalog datasets. Present only when the\ndataset carries polygon habitat data (i.e. was saved from a NOAA EFH catalog\nentry). Clients should render these polygons instead of (or in addition to)\nfetching from \/efh when this field is present.\n')
 })
 
 
