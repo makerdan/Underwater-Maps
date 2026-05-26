@@ -18,6 +18,7 @@ import {
   getDataSnapshot,
   SETTINGS_SCHEMA_VERSION,
   DEFAULT_SETTINGS,
+  DEFAULT_CROSSHAIR_MENU_GAMEPAD_BUTTON,
   type MarkerType,
   type SettingsSection,
   type SettingsState,
@@ -1024,7 +1025,6 @@ function HUDSection() {
         <div style={S.cardHeader}>VISIBILITY</div>
         <ToggleRow label="Crosshair GPS" value={s.showCrosshairGps} onChange={s.setShowCrosshairGps} sublabel="Centre-screen target coordinates" />
         <ToggleRow label="Your Current Coordinates" value={s.showCameraPosition} onChange={s.setShowCameraPosition} sublabel="Shows your viewpoint's longitude and latitude in the side pane" />
-        <ToggleRow label="Speed Indicator" value={s.showSpeedIndicator} onChange={s.setShowSpeedIndicator} sublabel="Speed dots or MPH display" />
         <ToggleRow label="Heading" value={s.showHeading} onChange={s.setShowHeading} sublabel="Top-left HDG compass value" />
       </div>
       <div style={S.card}>

@@ -24,10 +24,7 @@ vi.mock("@/hooks/useTemperatureProfile", () => ({
 }));
 
 vi.mock("@/lib/context", () => ({
-  SPEEDS: [0.05, 0.15, 0.5, 1.5, 5.0],
   useAppState: () => ({
-    realisticMode: false,
-    boatSpeedMph: 5,
     terrain: mockTerrain,
   }),
 }));

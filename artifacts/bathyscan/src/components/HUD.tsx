@@ -556,7 +556,7 @@ export const HUD: React.FC = () => {
           The "CAMERA POSITION" LON/LAT panel was renamed to
           "YOUR CURRENT COORDINATES" and moved into the left side pane
           (rendered via <CameraCoordsReadout /> in App.tsx). The SPD
-          readout was removed entirely (Task #408). */}
+          readout was removed entirely. */}
       <div className="absolute bottom-3 left-3 space-y-1">
         {lastClickedGps && (
           <div style={{ ...PANEL, fontSize: 10 }}>
