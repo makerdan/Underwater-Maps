@@ -31,6 +31,7 @@ import { MeasurementBanner } from "@/components/MeasurementBanner";
 import { DepthProfilePanel } from "@/components/DepthProfilePanel";
 import { MarkerDetailCard } from "@/components/MarkerDetailCard";
 import { OverviewMap } from "@/components/OverviewMap";
+import { EfhDetailPanel } from "@/components/EfhDetailPanel";
 import { ZoneOverlay } from "@/components/ZoneOverlay";
 import { FindDataPanel } from "@/components/FindDataPanel";
 import { HabitatPanel } from "@/components/HabitatPanel";
@@ -749,6 +750,11 @@ function Main() {
 
         {/* Full-screen overview map — z-40, rendered above all HUD elements */}
         {overviewOpen && <OverviewMap />}
+
+        {/* EFH species detail panel — z-60, lives above both the 3D scene
+            and the overview map so clicking an EFH zone in either view
+            shows the same card. Reads from uiStore.selectedEfh. */}
+        <EfhDetailPanel />
 
         {/* Find Data slide-in panel — z-50, right side */}
         {findDataPanelOpen && (

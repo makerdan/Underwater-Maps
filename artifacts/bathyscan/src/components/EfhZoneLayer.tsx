@@ -17,7 +17,7 @@
  *   worldX = ((lon - minLon) / lonRange) * WORLD_SIZE - WORLD_SIZE / 2
  *   worldZ = ((lat - minLat) / latRange) * WORLD_SIZE - WORLD_SIZE / 2
  */
-import React, { useEffect, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
@@ -28,8 +28,9 @@ import {
   useGetDatasets,
   getGetDatasetsQueryKey,
 } from "@workspace/api-client-react";
-import type { EfhFeature } from "@workspace/api-client-react";
+import type { EfhFeature, EfhSpeciesProperties } from "@workspace/api-client-react";
 import { useSettingsStore } from "@/lib/settingsStore";
+import type { ThreeEvent } from "@react-three/fiber";
 /** Y elevation for EFH filled polygons — just above ocean surface (Y=0). */
 const EFH_FILL_Y = 1.0;
 /** Y elevation for EFH outlines — slightly above the fill so they are not z-fought. */
@@ -109,6 +110,8 @@ interface ZoneRender {
   outlineGeometry: THREE.BufferGeometry;
   color: string;
   commonName: string;
+  /** Full species properties used to populate the EfhDetailPanel on click. */
+  properties: EfhSpeciesProperties;
 }
 
 function buildZoneRenders(
@@ -131,6 +134,7 @@ function buildZoneRenders(
       outlineGeometry: outline,
       color: feature.properties.color ?? "#00e5ff",
       commonName: feature.properties.commonName ?? feature.properties.species ?? "",
+      properties: feature.properties,
     });
   }
   return out;
@@ -139,6 +143,7 @@ function buildZoneRenders(
 export const EfhZoneLayer: React.FC = () => {
   const { terrain } = useAppState();
   const efhOverlayEnabled = useUiStore((s) => s.efhOverlayEnabled);
+  const setSelectedEfh = useUiStore((s) => s.setSelectedEfh);
 
   const datasetId = terrain?.datasetId ?? "";
   const waterTypeForDatasets = useSettingsStore((s) => s.waterType);
@@ -172,6 +177,24 @@ export const EfhZoneLayer: React.FC = () => {
     };
   }, [zones]);
 
+  // Single stable click handler — pulls the species properties off the
+  // intersected mesh's userData so we don't have to rebuild a closure per
+  // zone on every render.
+  const handleZoneClick = useCallback(
+    (e: ThreeEvent<MouseEvent>) => {
+      const props = (e.object.userData?.efhProperties ?? null) as
+        | EfhSpeciesProperties
+        | null;
+      if (!props) return;
+      // Stop the click from also dispatching to terrain / other layers
+      // beneath the zone — otherwise the fly-controls' onClick would fire
+      // and yank the camera around the moment the user inspects a zone.
+      e.stopPropagation();
+      setSelectedEfh(props);
+    },
+    [setSelectedEfh],
+  );
+
   if (!efhOverlayEnabled || !zones.length) return null;
 
   return (
@@ -179,7 +202,14 @@ export const EfhZoneLayer: React.FC = () => {
       {zones.map((zone, i) => (
         <React.Fragment key={i}>
           {zone.fillGeometry && (
-            <mesh geometry={zone.fillGeometry} renderOrder={2}>
+            <mesh
+              geometry={zone.fillGeometry}
+              renderOrder={2}
+              userData={{ efhProperties: zone.properties }}
+              onClick={handleZoneClick}
+              onPointerOver={() => { document.body.style.cursor = "pointer"; }}
+              onPointerOut={() => { document.body.style.cursor = ""; }}
+            >
               <meshBasicMaterial
                 color={zone.color}
                 transparent

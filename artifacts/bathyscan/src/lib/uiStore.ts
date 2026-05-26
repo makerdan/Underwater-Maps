@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
+import type { EfhSpeciesProperties } from "@workspace/api-client-react";
 
 export const CURRENT_DEPTH_LAYERS: DepthLayer[] = ["surface", "mid", "near-bottom"];
 
@@ -58,6 +59,13 @@ interface UiStore {
   /** Show EFH zone polygon outlines in the 3D scene. */
   efhOverlayEnabled: boolean;
   setEfhOverlayEnabled: (enabled: boolean) => void;
+  /**
+   * Currently selected EFH species (set on click in the OverviewMap or in
+   * the 3D scene). When non-null, the shared EfhDetailPanel renders the
+   * species info card. Null = panel closed.
+   */
+  selectedEfh: EfhSpeciesProperties | null;
+  setSelectedEfh: (p: EfhSpeciesProperties | null) => void;
   /** Controls visibility of the Find Data slide-in panel. */
   findDataPanelOpen: boolean;
   setFindDataPanelOpen: (open: boolean) => void;
@@ -135,7 +143,10 @@ export const useUiStore = create<UiStore>((set) => ({
   selectedSubstrate: null,
   setSelectedSubstrate: (s) => set({ selectedSubstrate: s }),
   efhOverlayEnabled: false,
-  setEfhOverlayEnabled: (enabled) => set({ efhOverlayEnabled: enabled }),
+  setEfhOverlayEnabled: (enabled) =>
+    set(enabled ? { efhOverlayEnabled: true } : { efhOverlayEnabled: false, selectedEfh: null }),
+  selectedEfh: null,
+  setSelectedEfh: (p) => set({ selectedEfh: p }),
   findDataPanelOpen: false,
   setFindDataPanelOpen: (open) => set({ findDataPanelOpen: open }),
   windOverlayActive: readLocalBool("bathyscan:windOverlayActive", false),

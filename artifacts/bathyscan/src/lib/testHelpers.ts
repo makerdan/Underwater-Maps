@@ -98,17 +98,11 @@ export function registerTestBridge(
   if (realisticModeRef) appRealisticModeRef = realisticModeRef;
 }
 
-// OverviewMap's species detail panel (`efhDetail`) is local React state, not
-// a Zustand store. The map component registers its setter here at mount so
-// the test-only `openEfhDetailForFeature` helper can open the same panel a
-// user opens by clicking an EFH polygon — without the spec having to
-// reverse-engineer the canvas projection to click an exact pixel.
-let overviewEfhDetailSetter: ((p: EfhSpeciesProperties | null) => void) | null = null;
-export function registerOverviewEfhDetailSetter(
-  setter: ((p: EfhSpeciesProperties | null) => void) | null,
-): void {
-  overviewEfhDetailSetter = setter;
-}
+// The EFH species detail panel is now driven by uiStore.selectedEfh so the
+// 2D OverviewMap and the 3D EfhZoneLayer both open the same card. Tests
+// drive it through `openEfhDetailForFeature` below, which writes directly
+// to the store instead of reverse-engineering the canvas projection / 3D
+// raycaster to click an exact pixel.
 
 // Camera position is mutated each frame inside the Three.js render loop and
 // pushed into AppContext via `setCameraPos`. The TestBridge component below
@@ -811,17 +805,16 @@ export function installTestHelpers(): void {
       return data?.features?.[index]?.properties ?? null;
     },
     openEfhDetailForFeature: (datasetId, index) => {
-      if (!overviewEfhDetailSetter) return false;
       const data = queryClient.getQueryData<EfhFeatureCollection>(
         getGetEfhQueryKey({ datasetId }),
       );
       const props = data?.features?.[index]?.properties;
       if (!props) return false;
-      overviewEfhDetailSetter(props);
+      useUiStore.getState().setSelectedEfh(props);
       return true;
     },
     closeEfhDetail: () => {
-      overviewEfhDetailSetter?.(null);
+      useUiStore.getState().setSelectedEfh(null);
     },
     showDepthProfileTerrainMenu: (x, y, point) =>
       useContextMenuStore
