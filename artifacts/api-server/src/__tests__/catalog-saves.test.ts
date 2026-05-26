@@ -105,6 +105,151 @@ describe("buildCatalogGrids", () => {
     expect(result).toBeNull();
   });
 
+  it("materializes the NCEI BAG mosaic Alaska entry via the BAG mosaic WCS", async () => {
+    // Tiny AAIGRID with a usable depth range so fetchNceiGrid doesn't trip
+    // the "near-flat grid" coverage check.
+    const aaigrid = [
+      "ncols 2",
+      "nrows 2",
+      "xllcorner 0",
+      "yllcorner 0",
+      "cellsize 1",
+      "nodata_value -9999",
+      "-50 -100",
+      "-25 5",
+    ].join("\n");
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () =>
+        new Response(aaigrid, {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        }),
+      );
+
+    try {
+      const entry = makeEntry({
+        id: "ncei-bag-mosaic-alaska",
+        name: "NCEI Multibeam Bag Mosaic — SE Alaska",
+        sourceAgency: "NOAA/NCEI",
+        coverageBbox: { minLon: -170, minLat: 54, maxLon: -130, maxLat: 72 },
+      });
+
+      const result = await buildCatalogGrids(entry);
+      expect(result).not.toBeNull();
+      expect(result!.terrain.datasetId).toBe(entry.id);
+      expect(result!.overview.datasetId).toBe(entry.id);
+      expect(result!.terrain.resolution).toBe(256);
+      expect(result!.overview.resolution).toBe(64);
+      expect(result!.terrain.dataSource).toBe("ncei");
+      expect(result!.terrain.bathymetrySource).toBe("ncei");
+      expect(result!.terrain.bathymetrySourceLabel).toMatch(/BAG/i);
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      expect(String(fetchSpy.mock.calls[0]![0])).toContain("bag_mosaic");
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("materializes an NCEI Community DEM entry via the DEM Global Mosaic WCS", async () => {
+    const aaigrid = [
+      "ncols 2",
+      "nrows 2",
+      "xllcorner 0",
+      "yllcorner 0",
+      "cellsize 1",
+      "nodata_value -9999",
+      "-20 -80",
+      "-40 10",
+    ].join("\n");
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () =>
+        new Response(aaigrid, {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        }),
+      );
+
+    try {
+      const entry = makeEntry({
+        id: "ncei-community-dem-juneau",
+        name: "NCEI Community DEM — Juneau, AK",
+        sourceAgency: "NOAA/NCEI",
+        coverageBbox: { minLon: -135.2, minLat: 57.9, maxLon: -133.8, maxLat: 58.7 },
+      });
+
+      const result = await buildCatalogGrids(entry);
+      expect(result).not.toBeNull();
+      expect(result!.terrain.dataSource).toBe("ncei");
+      expect(result!.terrain.bathymetrySourceLabel).toMatch(/DEM/i);
+      expect(String(fetchSpy.mock.calls[0]![0])).toContain("DEM_global_mosaic");
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("surfaces a clear 'coverage unavailable' error when NCEI returns an XML error doc", async () => {
+    const xmlError =
+      '<?xml version="1.0"?><ServiceExceptionReport><ServiceException>no coverage</ServiceException></ServiceExceptionReport>';
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () =>
+        new Response(xmlError, {
+          status: 200,
+          headers: { "content-type": "application/xml" },
+        }),
+      );
+
+    try {
+      const entry = makeEntry({
+        id: "ncei-community-dem-juneau",
+        name: "NCEI Community DEM — Juneau, AK",
+        sourceAgency: "NOAA/NCEI",
+        coverageBbox: { minLon: -135.2, minLat: 57.9, maxLon: -133.8, maxLat: 58.7 },
+      });
+
+      await expect(buildCatalogGrids(entry)).rejects.toThrow(/coverage unavailable/i);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("surfaces a clear 'no coverage' error when NCEI returns a near-flat grid", async () => {
+    // All zeros → range == 0, which trips the near-flat sanity check.
+    const aaigrid = [
+      "ncols 2",
+      "nrows 2",
+      "xllcorner 0",
+      "yllcorner 0",
+      "cellsize 1",
+      "nodata_value -9999",
+      "0 0",
+      "0 0",
+    ].join("\n");
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () =>
+        new Response(aaigrid, {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        }),
+      );
+
+    try {
+      const entry = makeEntry({
+        id: "ncei-bag-mosaic-alaska",
+        name: "NCEI Multibeam Bag Mosaic — SE Alaska",
+        sourceAgency: "NOAA/NCEI",
+        coverageBbox: { minLon: -170, minLat: 54, maxLon: -130, maxLat: 72 },
+      });
+
+      await expect(buildCatalogGrids(entry)).rejects.toThrow(/no coverage|near-flat/i);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it("rejects preset-* ids that don't map to a known preset dataset", async () => {
     const entry = makeEntry({ id: "preset-does-not-exist" });
     await expect(buildCatalogGrids(entry)).rejects.toThrow(/unknown dataset id/);

@@ -39,6 +39,7 @@ import {
 import {
   buildTerrainGrid,
   buildGebcoTerrainForBbox,
+  buildNceiTerrainForBbox,
   ALL_PRESET_DATASETS,
 } from "../lib/terrain.js";
 
@@ -388,6 +389,27 @@ export async function buildCatalogGrids(
     return { terrain, overview };
   }
 
+  // NCEI bathymetry entries — high-resolution multibeam (BAG mosaic) and
+  // integrated community DEMs (DEM Global Mosaic). Both are fetched from
+  // an NCEI WCS using the entry's `coverageBbox`. The fetcher already
+  // throws a clear "coverage unavailable" / "near-flat grid — likely no
+  // coverage" error when the bbox falls outside actual NCEI survey
+  // coverage; the materializer catches that and writes it into the save
+  // row's `errorMessage`, producing the "clear failed message" path.
+  const nceiCoverageKey = nceiCoverageForEntry(entry);
+  if (nceiCoverageKey) {
+    const meta = {
+      datasetId: entry.id,
+      name: entry.name,
+      waterType: entry.waterType,
+      bbox: entry.coverageBbox,
+      coverageKey: nceiCoverageKey,
+    };
+    const terrain = await buildNceiTerrainForBbox(meta, 256, { smoothing: true });
+    const overview = await buildNceiTerrainForBbox(meta, 64, { smoothing: true });
+    return { terrain, overview };
+  }
+
   return null;
 }
 
@@ -396,6 +418,30 @@ function isGebcoBathymetryEntry(entry: CatalogSeedEntry): boolean {
   if (entry.id === "gebco-2024-global") return true;
   // Catch any future GEBCO sub-region entries seeded into the catalog.
   return /\bGEBCO\b/i.test(entry.sourceAgency);
+}
+
+/**
+ * Returns the NCEI WCS coverage key that should be used to materialize the
+ * given catalog entry, or null if the entry isn't an NCEI bathymetry layer.
+ *
+ *   `bagMosaic`        — high-resolution multibeam BAG composite. Used for
+ *                        `ncei-bag-mosaic-*` entries (SE Alaska + future
+ *                        BAG sub-regions).
+ *   `demGlobalMosaic`  — best-available integrated DEM. Used for the global
+ *                        mosaic entry plus each `ncei-community-dem-*`
+ *                        sub-region (Juneau / Sitka / Ketchikan / Craig /
+ *                        Skagway / Wrangell-Petersburg), which the catalog
+ *                        accesses via the DEM Global Mosaic WCS.
+ */
+function nceiCoverageForEntry(
+  entry: CatalogSeedEntry,
+): "bagMosaic" | "demGlobalMosaic" | null {
+  if (entry.dataType !== "bathymetry") return null;
+  if (!/\bNCEI\b/i.test(entry.sourceAgency)) return null;
+  if (entry.id.startsWith("ncei-bag-mosaic")) return "bagMosaic";
+  if (entry.id === "ncei-dem-global-mosaic") return "demGlobalMosaic";
+  if (entry.id.startsWith("ncei-community-dem-")) return "demGlobalMosaic";
+  return null;
 }
 
 // ---------------------------------------------------------------------------

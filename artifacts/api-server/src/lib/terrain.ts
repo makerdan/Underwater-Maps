@@ -1228,6 +1228,105 @@ export async function buildGebcoTerrainForBbox(
   return grid;
 }
 
+/**
+ * Build a TerrainGrid for an arbitrary bbox by fetching directly from an
+ * NCEI WCS coverage (BAG mosaic or DEM Global Mosaic). Mirrors
+ * `buildGebcoTerrainForBbox` so the catalog "Save" pipeline can
+ * materialize non-preset NCEI entries (e.g. `ncei-bag-mosaic-alaska`,
+ * `ncei-community-dem-*`) end-to-end.
+ *
+ * Throws on upstream failure — `fetchNceiGrid` already surfaces a clear
+ * "coverage unavailable" / "near-flat grid — likely no coverage" message
+ * which the catalog materializer then writes into the save row's
+ * `errorMessage`. No memory/disk caching here; catalog saves persist
+ * into `custom_datasets`, which is the durable cache.
+ */
+export async function buildNceiTerrainForBbox(
+  meta: {
+    datasetId: string;
+    name: string;
+    waterType: "saltwater" | "freshwater";
+    bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number };
+    coverageKey: NceiCoverageKey;
+  },
+  resolution = 256,
+  options: { smoothing?: boolean } = {},
+): Promise<TerrainGrid> {
+  const N = Math.max(32, Math.min(512, resolution));
+  const smoothing = options.smoothing ?? true;
+
+  const { depths, topography, hasTopography } = await fetchNceiGrid(
+    meta.bbox,
+    N,
+    meta.coverageKey,
+  );
+
+  if (smoothing) {
+    let mn = Infinity, mx = -Infinity;
+    for (const d of depths) {
+      if (d < mn) mn = d;
+      if (d > mx) mx = d;
+    }
+    if (!isFinite(mn)) mn = 0;
+    if (!isFinite(mx)) mx = 0;
+    smoothSpikes(depths, N, Math.max(1, mx - mn));
+  }
+
+  let minDepth = Infinity;
+  let maxDepth = -Infinity;
+  for (const d of depths) {
+    if (d < minDepth) minDepth = d;
+    if (d > maxDepth) maxDepth = d;
+  }
+  if (!isFinite(minDepth)) minDepth = 0;
+  if (!isFinite(maxDepth)) maxDepth = 0;
+
+  const centerLon = (meta.bbox.minLon + meta.bbox.maxLon) / 2;
+  const centerLat = (meta.bbox.minLat + meta.bbox.maxLat) / 2;
+
+  const cov = NCEI_COVERAGES[meta.coverageKey]!;
+
+  const grid: TerrainGrid = {
+    datasetId: meta.datasetId,
+    name: meta.name,
+    waterType: meta.waterType,
+    resolution: N,
+    width: N,
+    height: N,
+    depths,
+    minDepth: Math.round(minDepth),
+    maxDepth: Math.round(maxDepth),
+    minLon: meta.bbox.minLon,
+    maxLon: meta.bbox.maxLon,
+    minLat: meta.bbox.minLat,
+    maxLat: meta.bbox.maxLat,
+    centerLon,
+    centerLat,
+    dataSource: "ncei",
+    bathymetrySource: "ncei",
+    bathymetrySourceLabel: cov.label,
+    bathymetryCreditUrl:
+      meta.coverageKey === "bagMosaic"
+        ? "https://www.ncei.noaa.gov/products/bathymetry"
+        : "https://www.ncei.noaa.gov/products/coastal-elevation-models",
+    version: TERRAIN_CACHE_VERSION,
+    ...(hasTopography && topography
+      ? {
+          topography,
+          hasTopography: true,
+          topographySource: "ncei" as const,
+          topographySourceLabel: cov.label,
+          topographyCreditUrl:
+            meta.coverageKey === "bagMosaic"
+              ? "https://www.ncei.noaa.gov/products/bathymetry"
+              : "https://www.ncei.noaa.gov/products/coastal-elevation-models",
+        }
+      : {}),
+  };
+
+  return grid;
+}
+
 export async function buildTerrainGrid(
   datasetId: string,
   resolution = 256,

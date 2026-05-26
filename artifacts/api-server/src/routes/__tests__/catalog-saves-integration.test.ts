@@ -333,6 +333,39 @@ const H = vi.hoisted(() => {
     lastUpdated: null,
     waterType: "saltwater" as const,
   };
+  // NCEI BAG mosaic catalog entry used to exercise the NCEI WCS branch of
+  // `buildCatalogGrids` end-to-end (catalog → materialize → user dataset).
+  const NCEI_BAG_CATALOG_ENTRY = {
+    id: "ncei-bag-mosaic-alaska",
+    name: "NCEI Multibeam Bag Mosaic — SE Alaska",
+    sourceAgency: "NOAA/NCEI",
+    dataType: "bathymetry" as const,
+    resolutionMMin: 1,
+    resolutionMMax: 50,
+    coverageBbox: { minLon: -170, minLat: 54, maxLon: -130, maxLat: 72 },
+    endpointUrl: null,
+    accessNotes: null,
+    description: null,
+    keywords: null,
+    lastUpdated: null,
+    waterType: "saltwater" as const,
+  };
+  // NCEI Community DEM catalog entry routed through the DEM Global Mosaic WCS.
+  const NCEI_COMMUNITY_DEM_CATALOG_ENTRY = {
+    id: "ncei-community-dem-juneau",
+    name: "NCEI Community DEM — Juneau, AK",
+    sourceAgency: "NOAA/NCEI",
+    dataType: "bathymetry" as const,
+    resolutionMMin: 10,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -135.2, minLat: 57.9, maxLon: -133.8, maxLat: 58.7 },
+    endpointUrl: null,
+    accessNotes: null,
+    description: null,
+    keywords: null,
+    lastUpdated: null,
+    waterType: "saltwater" as const,
+  };
 
   return {
     db,
@@ -349,6 +382,8 @@ const H = vi.hoisted(() => {
     FAKE_PRESET,
     CATALOG_ENTRY,
     GEBCO_CATALOG_ENTRY,
+    NCEI_BAG_CATALOG_ENTRY,
+    NCEI_COMMUNITY_DEM_CATALOG_ENTRY,
   };
 });
 
@@ -420,6 +455,13 @@ vi.mock("../../lib/terrain.js", () => {
       meta: { datasetId: string },
       resolution: number,
     ) => makeGrid(meta.datasetId, resolution),
+    // NCEI direct-bbox fetcher used by the NCEI catalog branch (BAG
+    // mosaic + DEM Global Mosaic). Mirrored stub so the integration test
+    // doesn't hit the live WCS.
+    buildNceiTerrainForBbox: async (
+      meta: { datasetId: string },
+      resolution: number,
+    ) => makeGrid(meta.datasetId, resolution),
     TERRAIN_CACHE_VERSION: 1,
   };
 });
@@ -429,7 +471,12 @@ vi.mock("../../lib/terrain.js", () => {
 // derivation. The route only needs `getCatalogEntries` for lookup.
 vi.mock("../../lib/catalogSeeder.js", () => ({
   seedDatasetCatalog: async () => {},
-  getCatalogEntries: async () => [H.CATALOG_ENTRY, H.GEBCO_CATALOG_ENTRY],
+  getCatalogEntries: async () => [
+    H.CATALOG_ENTRY,
+    H.GEBCO_CATALOG_ENTRY,
+    H.NCEI_BAG_CATALOG_ENTRY,
+    H.NCEI_COMMUNITY_DEM_CATALOG_ENTRY,
+  ],
   searchCatalog: async () => [],
   scoreEntry: () => 1,
 }));
@@ -599,6 +646,52 @@ describe("catalog save → materialize → fetch round trip", () => {
       expect(overviewRes.body.datasetId).toBe(datasetId);
       expect(overviewRes.body.resolution).toBe(64);
       expect(overviewRes.body.depths).toHaveLength(64 * 64);
+    },
+    15_000,
+  );
+
+  it(
+    "saves a non-preset NCEI BAG mosaic catalog entry through the NCEI WCS fetcher",
+    async () => {
+      const nceiId = H.NCEI_BAG_CATALOG_ENTRY.id;
+
+      const saveRes = await request(app)
+        .post(`/api/datasets/catalog/${nceiId}/save`)
+        .set("x-e2e-user-id", E2E_USER)
+        .send({});
+      expect(saveRes.status).toBe(201);
+      const saveId = saveRes.body.id as string;
+
+      const ready = await pollUntilReady(saveId);
+      expect(ready.status).toBe("ready");
+      expect(ready.datasetId).toBeTruthy();
+      const datasetId = ready.datasetId!;
+
+      const terrainRes = await request(app)
+        .get(`/api/user/datasets/${datasetId}/terrain`)
+        .set("x-e2e-user-id", E2E_USER);
+      expect(terrainRes.status).toBe(200);
+      expect(terrainRes.body.datasetId).toBe(datasetId);
+      expect(terrainRes.body.resolution).toBe(256);
+    },
+    15_000,
+  );
+
+  it(
+    "saves an NCEI Community DEM catalog entry through the NCEI WCS fetcher",
+    async () => {
+      const demId = H.NCEI_COMMUNITY_DEM_CATALOG_ENTRY.id;
+
+      const saveRes = await request(app)
+        .post(`/api/datasets/catalog/${demId}/save`)
+        .set("x-e2e-user-id", E2E_USER)
+        .send({});
+      expect(saveRes.status).toBe(201);
+      const saveId = saveRes.body.id as string;
+
+      const ready = await pollUntilReady(saveId);
+      expect(ready.status).toBe("ready");
+      expect(ready.datasetId).toBeTruthy();
     },
     15_000,
   );
