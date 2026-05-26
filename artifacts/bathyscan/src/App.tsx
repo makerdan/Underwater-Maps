@@ -577,6 +577,10 @@ function Main() {
               />
             )}
             <CurrentsPanel />
+            {/* Conditions legend — pinned at the bottom of the sidebar.
+                Only renders when at least one of Wind / Tide / Current
+                overlays is active (returns null otherwise). */}
+            <ConditionsLegend />
           </div>
         )}
 
@@ -692,10 +696,10 @@ function Main() {
         )}
         {driftPlannerActive && <DriftTimeline />}
 
-        {/* Always-on Wind / Tide / Current legend — bottom-left, above HUD speed panel */}
-        <div className="absolute z-20" style={{ bottom: 80, left: 16 }}>
-          <ConditionsLegend />
-        </div>
+        {/* ConditionsLegend has moved into the left sidebar (rendered above
+            inside the side-pane flex column, after CurrentsPanel). Leaving
+            this comment as a breadcrumb for anyone searching for the old
+            bottom-left mount. */}
 
         {/*
           NOTE: <ContextMenu />, <MeasurementBanner /> and <MarkerDetailCard />

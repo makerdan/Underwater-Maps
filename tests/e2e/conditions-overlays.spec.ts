@@ -76,8 +76,8 @@ test.describe("Wind / Tide / Current overlays", () => {
       return;
     }
 
-    // App.tsx mounts exactly one <ConditionsLegend />, bottom-left above the
-    // HUD speed panel.
+    // App.tsx mounts exactly one <ConditionsLegend />, pinned at the bottom
+    // of the left sidebar (below the Currents panel).
     const legend = page.locator("[data-testid='conditions-legend']");
     const windBtn = page.locator("[data-testid='overlay-toggle-wind']");
     const tideBtn = page.locator("[data-testid='overlay-toggle-tide']");
