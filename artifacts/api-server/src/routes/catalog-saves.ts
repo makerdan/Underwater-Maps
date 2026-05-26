@@ -371,6 +371,63 @@ export async function buildCatalogGrids(
 }
 
 // ---------------------------------------------------------------------------
+// POST /datasets/my-saves/:id/retry  (auth-gated)
+//
+// Re-runs materialization for a save row that previously failed. Flips the
+// row back to `processing` (clearing the prior error_message) and kicks off
+// `materializeSave` again. Idempotent-ish: if the row is already processing
+// or ready, returns the current row unchanged.
+// ---------------------------------------------------------------------------
+
+router.post("/datasets/my-saves/:id/retry", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthenticatedRequest).clerkUserId;
+  const saveId = String(req.params["id"] ?? "");
+
+  const rows = await db
+    .select()
+    .from(userCatalogSavesTable)
+    .where(and(eq(userCatalogSavesTable.id, saveId), eq(userCatalogSavesTable.userId, userId)));
+
+  const row = rows[0];
+  if (!row) {
+    res.status(404).json({ error: "not_found", details: `Save record '${saveId}' not found` });
+    return;
+  }
+
+  const entries = await getCatalogEntries();
+  const entry = entries.find((e) => e.id === row.catalogId);
+  if (!entry) {
+    res.status(404).json({
+      error: "not_found",
+      details: `Catalog entry '${row.catalogId}' no longer exists`,
+    });
+    return;
+  }
+
+  // Only failed saves are retryable. Already-processing or ready rows are a
+  // no-op so accidental double-clicks don't kick off duplicate jobs.
+  if (row.status !== "failed") {
+    res.status(200).json(formatSaveRow(row, entry));
+    return;
+  }
+
+  const [updated] = await db
+    .update(userCatalogSavesTable)
+    .set({ status: "processing", errorMessage: null, readyAt: null })
+    .where(eq(userCatalogSavesTable.id, saveId))
+    .returning();
+
+  if (!updated) {
+    res.status(500).json({ error: "db_error", details: "Failed to update save record" });
+    return;
+  }
+
+  void materializeSave(updated.id, userId, entry);
+
+  res.status(200).json(formatSaveRow(updated, entry));
+});
+
+// ---------------------------------------------------------------------------
 // GET /datasets/my-saves  (auth-gated)
 // ---------------------------------------------------------------------------
 

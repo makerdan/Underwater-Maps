@@ -1360,6 +1360,51 @@ export const GetDatasetsMySavesIdStatusResponse = zod.object({
 
 
 /**
+ * Re-runs materialization for a save row that previously failed. Flips
+the row status back to `processing`, clears the prior `errorMessage`,
+and kicks off the materialization pipeline again. If the save is
+already `processing` or `ready`, returns the current row unchanged.
+
+ * @summary Retry materialization of a failed save
+ */
+export const PostDatasetsMySavesIdRetryParams = zod.object({
+  "id": zod.coerce.string().describe('Save record UUID')
+})
+
+export const PostDatasetsMySavesIdRetryResponse = zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "catalogId": zod.string().describe('References the dataset_catalog.id'),
+  "status": zod.enum(['queued', 'processing', 'ready', 'failed']),
+  "requestedAt": zod.coerce.date(),
+  "readyAt": zod.coerce.date().nullish(),
+  "cacheKey": zod.string().nullish(),
+  "errorMessage": zod.string().nullish(),
+  "datasetId": zod.string().nullish().describe('UUID of the materialized `custom_datasets` row for this save, or null if materialization has not completed (status `queued`, `processing`, or `failed`).'),
+  "catalog": zod.object({
+  "id": zod.string().describe('Stable slug identifier'),
+  "name": zod.string(),
+  "sourceAgency": zod.string().describe('Organisation that produced the data (e.g. NOAA\/NCEI, GEBCO, Alaska DNR)'),
+  "dataType": zod.enum(['bathymetry', 'substrate', 'habitat', 'lidar', 'chart']),
+  "resolutionMMin": zod.number().nullish().describe('Finest resolution in metres'),
+  "resolutionMMax": zod.number().nullish().describe('Coarsest resolution in metres'),
+  "coverageBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}),
+  "endpointUrl": zod.string().nullish(),
+  "accessNotes": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "keywords": zod.string().nullish().describe('Comma-separated keyword tags'),
+  "lastUpdated": zod.string().nullish(),
+  "waterType": zod.enum(['saltwater', 'freshwater']),
+  "createdAt": zod.coerce.date()
+}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)')
+}).describe('A user\'s saved reference to a catalog dataset')
+
+
+/**
  * Returns 24 hours of hourly wind, tidal current, and wave data for a given
 lat/lon from Open-Meteo. Tidal current is approximated via a sinusoidal
 model when live data is unavailable. Returns estimatedConditions=true when

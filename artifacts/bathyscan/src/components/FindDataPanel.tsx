@@ -18,6 +18,7 @@ import {
   useGetDatasetsCatalogSearch,
   useGetDatasetsMySaves,
   usePostDatasetsCatalogIdSave,
+  usePostDatasetsMySavesIdRetry,
   getGetDatasetsCatalogSearchQueryKey,
   getGetDatasetsMySavesQueryKey,
   type GetDatasetsCatalogSearchDataType,
@@ -273,7 +274,9 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
 const SaveCard: React.FC<{
   save: UserCatalogSave;
   onLoadUserDataset: (userDatasetId: string) => void;
-}> = ({ save, onLoadUserDataset }) => {
+  onRetry: (saveId: string) => void;
+  retrying: boolean;
+}> = ({ save, onLoadUserDataset, onRetry, retrying }) => {
   const statusColor = STATUS_COLORS[save.status] ?? "#94a3b8";
   const icon = save.catalog ? (DATA_TYPE_ICONS[save.catalog.dataType] ?? "📦") : "📦";
 
@@ -321,10 +324,35 @@ const SaveCard: React.FC<{
           </button>
         </ViewscreenTooltip>
       )}
-      {save.status === "failed" && save.errorMessage && (
-        <div style={{ marginTop: 6, fontSize: 8, color: "#f87171", lineHeight: 1.4 }}>
-          {save.errorMessage}
-        </div>
+      {save.status === "failed" && (
+        <>
+          {save.errorMessage && (
+            <div style={{ marginTop: 6, fontSize: 8, color: "#f87171", lineHeight: 1.4 }}>
+              {save.errorMessage}
+            </div>
+          )}
+          <ViewscreenTooltip label="Try materializing this dataset again" side="top">
+            <button
+              onClick={() => !retrying && onRetry(save.id)}
+              disabled={retrying}
+              data-testid={`save-retry-${save.id}`}
+              style={{
+                marginTop: 8,
+                fontSize: 8,
+                padding: "3px 12px",
+                background: "rgba(248,113,113,0.1)",
+                border: "1px solid rgba(248,113,113,0.3)",
+                borderRadius: 3,
+                color: retrying ? "#64748b" : "#f87171",
+                cursor: retrying ? "default" : "pointer",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+              }}
+            >
+              {retrying ? "Retrying…" : "Retry"}
+            </button>
+          </ViewscreenTooltip>
+        </>
       )}
     </div>
   );
@@ -396,6 +424,26 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   });
 
   const saveMutation = usePostDatasetsCatalogIdSave();
+  const retryMutation = usePostDatasetsMySavesIdRetry();
+  const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
+
+  const handleRetry = useCallback(
+    async (saveId: string) => {
+      if (!isSignedIn) return;
+      setRetryingIds((s) => new Set(s).add(saveId));
+      try {
+        await retryMutation.mutateAsync({ id: saveId });
+        void refetchSaves();
+      } finally {
+        setRetryingIds((s) => {
+          const next = new Set(s);
+          next.delete(saveId);
+          return next;
+        });
+      }
+    },
+    [isSignedIn, retryMutation, refetchSaves],
+  );
 
   const handleSave = useCallback(
     async (id: string) => {
@@ -586,7 +634,13 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             </div>
           )}
           {mySaves.map((save) => (
-            <SaveCard key={save.id} save={save} onLoadUserDataset={handleLoadUserDataset} />
+            <SaveCard
+              key={save.id}
+              save={save}
+              onLoadUserDataset={handleLoadUserDataset}
+              onRetry={handleRetry}
+              retrying={retryingIds.has(save.id)}
+            />
           ))}
         </div>
       )}

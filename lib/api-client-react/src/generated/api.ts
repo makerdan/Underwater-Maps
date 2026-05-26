@@ -3376,6 +3376,81 @@ export function useGetDatasetsMySavesIdStatus<TData = Awaited<ReturnType<typeof 
 
 
 
+export const getPostDatasetsMySavesIdRetryUrl = (id: string,) => {
+
+
+
+
+  return `/api/datasets/my-saves/${id}/retry`
+}
+
+/**
+ * Re-runs materialization for a save row that previously failed. Flips
+the row status back to `processing`, clears the prior `errorMessage`,
+and kicks off the materialization pipeline again. If the save is
+already `processing` or `ready`, returns the current row unchanged.
+
+ * @summary Retry materialization of a failed save
+ */
+export const postDatasetsMySavesIdRetry = async (id: string, options?: RequestInit): Promise<UserCatalogSave> => {
+
+  return customFetch<UserCatalogSave>(getPostDatasetsMySavesIdRetryUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getPostDatasetsMySavesIdRetryMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsMySavesIdRetry>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postDatasetsMySavesIdRetry>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['postDatasetsMySavesIdRetry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postDatasetsMySavesIdRetry>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  postDatasetsMySavesIdRetry(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostDatasetsMySavesIdRetryMutationResult = NonNullable<Awaited<ReturnType<typeof postDatasetsMySavesIdRetry>>>
+
+    export type PostDatasetsMySavesIdRetryMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Retry materialization of a failed save
+ */
+export const usePostDatasetsMySavesIdRetry = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsMySavesIdRetry>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postDatasetsMySavesIdRetry>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getPostDatasetsMySavesIdRetryMutationOptions(options));
+    }
+
 export const getGetSurfaceConditionsUrl = (params: GetSurfaceConditionsParams,) => {
   const normalizedParams = new URLSearchParams();
 

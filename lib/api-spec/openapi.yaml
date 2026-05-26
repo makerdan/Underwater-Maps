@@ -1349,6 +1349,45 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /datasets/my-saves/{id}/retry:
+    post:
+      operationId: postDatasetsMySavesIdRetry
+      tags: [datasets]
+      summary: Retry materialization of a failed save
+      description: |
+        Re-runs materialization for a save row that previously failed. Flips
+        the row status back to `processing`, clears the prior `errorMessage`,
+        and kicks off the materialization pipeline again. If the save is
+        already `processing` or `ready`, returns the current row unchanged.
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Save record UUID
+      responses:
+        "200":
+          description: Save row after retry (status processing, or unchanged if not retryable)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserCatalogSave"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Save record or catalog entry not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /surface-conditions:
     get:
       operationId: getSurfaceConditions
