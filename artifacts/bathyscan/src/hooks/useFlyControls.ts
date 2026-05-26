@@ -16,12 +16,12 @@ import { computeMetersPerWorldUnit, boatMphToWorldUnitsPerSecond } from "@/lib/b
 import { markerGroupRef } from "@/components/MarkerLayer";
 import { useContextMenuStore, type ContextMenuItem } from "@/lib/contextMenuStore";
 import { runMarkerDelete } from "@/lib/markerActions";
-import { useMeasureStore } from "@/lib/measureStore";
-import { useDepthProfileStore, buildProfile } from "@/lib/depthProfileStore";
-import { useClassificationStore } from "@/lib/classificationStore";
 import { useMarkerDetailStore } from "@/lib/markerDetailStore";
 import { useSettingsStore } from "@/lib/settingsStore";
-import { haversineDistance } from "@/lib/geo";
+import {
+  buildTerrainMenuItems,
+  openCrosshairContextMenu,
+} from "@/lib/terrainContextMenu";
 import { computePinchDolly, computeWheelDolly } from "@/lib/zoomMath";
 import { processFlyWheel } from "@/lib/flyWheel";
 import {
@@ -232,6 +232,22 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
           useCameraStore.getState().setLastClickedGps(gps);
           useUiStore.getState().setMarkerFormOpen(true);
         }
+      }
+
+      // Q: open the terrain action menu anchored at the crosshair. Works
+      // whether pointer is locked (underwater nav) or unlocked, but only in
+      // fly mode and only when the crosshair is currently on terrain.
+      if (e.code === "KeyQ" && modeRef.current === "fly") {
+        const rect = gl.domElement.getBoundingClientRect();
+        const opened = openCrosshairContextMenu({
+          centerX: rect.left + rect.width / 2,
+          centerY: rect.top + rect.height / 2,
+          getTerrainGrid: () => terrainRef.current,
+          exitPointerLock: () => {
+            if (isLocked.current) document.exitPointerLock();
+          },
+        });
+        if (opened) e.preventDefault();
       }
     };
 
@@ -490,89 +506,6 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       }
     };
 
-    const buildTerrainMenuItems = (
-      lon: number,
-      lat: number,
-      depth: number,
-      datasetId: string,
-    ): ContextMenuItem[] => {
-      const measureAnchor = useMeasureStore.getState().anchorGps;
-      const profileAnchor = useDepthProfileStore.getState().anchor;
-      const items: ContextMenuItem[] = [
-        {
-          label: "Drop GPS pin here",
-          icon: "📍",
-          onClick: () => {
-            useCameraStore.getState().setLastClickedGps({ lon, lat, depth });
-            useUiStore.getState().setMarkerFormOpen(true);
-          },
-        },
-        {
-          label: measureAnchor ? "Measure to here" : "Measure from here",
-          icon: "📏",
-          onClick: () => {
-            const ms = useMeasureStore.getState();
-            if (ms.anchorGps) {
-              const distanceKm = haversineDistance(
-                { lon: ms.anchorGps.lon, lat: ms.anchorGps.lat },
-                { lon, lat },
-              );
-              const depthDeltaM = depth - ms.anchorGps.depth;
-              ms.setResult(distanceKm, depthDeltaM);
-            } else {
-              ms.setAnchor({ lon, lat, depth });
-            }
-          },
-        },
-        {
-          label: "Set as home position",
-          icon: "🏠",
-          onClick: () => {
-            if (datasetId) {
-              useSettingsStore
-                .getState()
-                .setDatasetHome(datasetId, { lon, lat, depth });
-            }
-          },
-          disabled: !datasetId,
-        },
-        {
-          label: profileAnchor ? "End depth profile here" : "Start depth profile here",
-          icon: "📈",
-          onClick: () => {
-            const store = useDepthProfileStore.getState();
-            const grid = terrainRef.current;
-            if (store.anchor && grid) {
-              const zoneMap = useClassificationStore.getState().zoneMap;
-              const result = buildProfile(
-                grid,
-                store.anchor,
-                { lon, lat, depth },
-                zoneMap,
-              );
-              store.setProfile(result);
-            } else {
-              store.setAnchor({ lon, lat, depth });
-            }
-          },
-        },
-        ...(profileAnchor
-          ? [{
-              label: "Cancel depth profile",
-              icon: "✖",
-              onClick: () => useDepthProfileStore.getState().clearAnchor(),
-            } as ContextMenuItem]
-          : []),
-        { label: "", onClick: () => {}, separator: true },
-        {
-          label: "Copy coordinates",
-          icon: "📋",
-          onClick: () => copyToClipboard(formatCoords(lon, lat, depth)),
-        },
-      ];
-      return items;
-    };
-
     const buildMarkerMenuItems = (marker: Marker): ContextMenuItem[] => {
       const grid = terrainRef.current;
       const items: ContextMenuItem[] = [
@@ -669,7 +602,17 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
           const depth = worldYToMetres(pt.y, grid);
           useContextMenuStore
             .getState()
-            .show(x, y, buildTerrainMenuItems(lon, lat, depth, grid.datasetId));
+            .show(
+              x,
+              y,
+              buildTerrainMenuItems(
+                lon,
+                lat,
+                depth,
+                grid.datasetId,
+                () => terrainRef.current,
+              ),
+            );
         }
       }
     };

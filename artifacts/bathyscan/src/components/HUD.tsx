@@ -25,6 +25,11 @@ import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { TemperatureProfileChart } from "@/components/TemperatureProfileChart";
 import { ShoreZoneCredit } from "@/components/ShoreZoneCredit";
 import { SubstrateLegend } from "@/components/SubstrateLegend";
+import { openCrosshairContextMenu } from "@/lib/terrainContextMenu";
+
+const IS_TOUCH_DEVICE =
+  typeof window !== "undefined" &&
+  ("ontouchstart" in window || (navigator?.maxTouchPoints ?? 0) > 0);
 
 
 /**
@@ -457,8 +462,67 @@ export const HUD: React.FC = () => {
 
           {/* Crosshair GPS */}
           <div style={{ ...PANEL, textAlign: "center", minWidth: 160 }}>
-            <div style={{ color: "#475569", fontSize: 9, letterSpacing: "0.2em", marginBottom: 2 }}>
-              CROSSHAIR TARGET
+            <div
+              style={{
+                color: "#475569",
+                fontSize: 9,
+                letterSpacing: "0.2em",
+                marginBottom: 2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+              }}
+            >
+              <span>CROSSHAIR TARGET</span>
+              {crosshairGps && (
+                IS_TOUCH_DEVICE ? (
+                  <ViewscreenTooltip label="Open action menu at crosshair" side="bottom">
+                    <button
+                      data-testid="hud-crosshair-actions"
+                      type="button"
+                      aria-label="Open crosshair action menu"
+                      onClick={() => {
+                        const w = window.innerWidth;
+                        const h = window.innerHeight;
+                        openCrosshairContextMenu({
+                          centerX: w / 2,
+                          centerY: h / 2,
+                          getTerrainGrid: () => terrain,
+                        });
+                      }}
+                      style={{
+                        pointerEvents: "auto",
+                        background: "rgba(0,229,255,0.10)",
+                        border: "1px solid rgba(0,229,255,0.35)",
+                        borderRadius: 3,
+                        color: "#00e5ff",
+                        font: "inherit",
+                        letterSpacing: "inherit",
+                        padding: "1px 5px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      ⋯ ACTIONS
+                    </button>
+                  </ViewscreenTooltip>
+                ) : (
+                  <span
+                    data-testid="hud-crosshair-q-hint"
+                    style={{
+                      background: "rgba(0,229,255,0.08)",
+                      border: "1px solid rgba(0,229,255,0.25)",
+                      borderRadius: 3,
+                      color: "#00e5ff",
+                      padding: "0 4px",
+                      fontSize: 8,
+                    }}
+                    title="Press Q to open the action menu at the crosshair"
+                  >
+                    Q · ACTIONS
+                  </span>
+                )
+              )}
             </div>
             {crosshairGps ? (
               <>
