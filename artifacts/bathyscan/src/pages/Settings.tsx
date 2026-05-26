@@ -26,7 +26,7 @@ import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMarkersQueryKey } from "@workspace/api-client-react";
 import { useTerrainStore } from "@/lib/terrainStore";
-import { usePaletteStore, DEFAULT_SHALLOW, DEFAULT_DEEP, PALETTE_PRESETS, MID1_HEX, MID2_HEX } from "@/lib/paletteStore";
+import { usePaletteStore, DEFAULT_SHALLOW, DEFAULT_DEEP, PALETTE_PRESETS, MID1_HEX, MID2_HEX, customStopsFromPreset, type CustomStop } from "@/lib/paletteStore";
 import { colormapCanvas, colormapCssGradient } from "@/lib/colormap";
 import type { ColormapTheme } from "@/lib/settingsStore";
 import { HelpIcon } from "@/components/help/HelpButton";
@@ -776,6 +776,7 @@ function VisualsSection() {
             { value: "thermal", label: "Thermal (purple→white)" },
             { value: "grayscale", label: "Grayscale" },
             { value: "viridis", label: "Viridis (purple→yellow)" },
+            { value: "custom", label: "Custom (edit stops)" },
           ]}
           sublabel="Terrain surface colour gradient"
         />
@@ -2527,12 +2528,23 @@ function PalettePickerCard() {
   const setShallow = usePaletteStore((s) => s.setShallow);
   const setDeep = usePaletteStore((s) => s.setDeep);
   const reset = usePaletteStore((s) => s.reset);
+  const customStops = usePaletteStore((s) => s.customStops);
+  const setCustomStops = usePaletteStore((s) => s.setCustomStops);
+  const addCustomStop = usePaletteStore((s) => s.addCustomStop);
+  const removeCustomStop = usePaletteStore((s) => s.removeCustomStop);
+  const updateCustomStop = usePaletteStore((s) => s.updateCustomStop);
+  const resetCustomStops = usePaletteStore((s) => s.resetCustomStops);
+
+  const colormapTheme = useSettingsStore((s) => s.colormapTheme);
+  const isCustom = colormapTheme === "custom";
 
   const previewRef = React.useRef<HTMLImageElement>(null);
   React.useEffect(() => {
     if (!previewRef.current) return;
     // colormapCanvas paints top→bottom; rotate -90° so shallow is on the left.
-    const vert = colormapCanvas(14, 240);
+    // Render the active theme so the preview matches the 3D mesh tint
+    // (including live edits to the Custom stops).
+    const vert = colormapCanvas(14, 240, colormapTheme);
     const horiz = document.createElement("canvas");
     horiz.width = 240;
     horiz.height = 14;
@@ -2543,7 +2555,7 @@ function PalettePickerCard() {
     hctx.drawImage(vert, 0, 0, 14, 240);
     hctx.restore();
     previewRef.current.src = horiz.toDataURL();
-  }, [shallow, deep]);
+  }, [shallow, deep, customStops, colormapTheme]);
 
   const isDefault = shallow.toLowerCase() === DEFAULT_SHALLOW.toLowerCase()
     && deep.toLowerCase() === DEFAULT_DEEP.toLowerCase();
@@ -2611,6 +2623,9 @@ function PalettePickerCard() {
                 onClick={() => {
                   setShallow(preset.shallow);
                   setDeep(preset.deep);
+                  // In Custom mode, seed the editable stops with the preset's
+                  // shape so the user can fine-tune from there.
+                  if (isCustom) setCustomStops(customStopsFromPreset(preset));
                 }}
                 style={{
                   display: "flex",
@@ -2667,80 +2682,217 @@ function PalettePickerCard() {
         />
       </div>
 
-      {/* Shallow picker */}
-      <div style={swatchRow}>
-        <span style={labelStyle}>SHALLOW</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <input
-            type="text"
-            data-testid="palette-shallow-hex"
-            value={shallow}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (/^#[0-9a-fA-F]{6}$/.test(v)) setShallow(v);
-              else if (/^#[0-9a-fA-F]{0,6}$/.test(v)) {
-                // allow typing intermediate values without committing
-                const el = e.target;
-                el.value = v;
-              }
-            }}
-            style={hexStyle}
-          />
-          <input
-            type="color"
-            data-testid="palette-shallow-input"
-            value={shallow}
-            onChange={(e) => setShallow(e.target.value)}
-            style={colorInputStyle}
-            aria-label="Shallow water color"
-          />
-        </div>
-      </div>
+      {!isCustom && (
+        <>
+          {/* Shallow picker (Ocean theme) */}
+          <div style={swatchRow}>
+            <span style={labelStyle}>SHALLOW</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <input
+                type="text"
+                data-testid="palette-shallow-hex"
+                value={shallow}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (/^#[0-9a-fA-F]{6}$/.test(v)) setShallow(v);
+                  else if (/^#[0-9a-fA-F]{0,6}$/.test(v)) {
+                    // allow typing intermediate values without committing
+                    const el = e.target;
+                    el.value = v;
+                  }
+                }}
+                style={hexStyle}
+              />
+              <input
+                type="color"
+                data-testid="palette-shallow-input"
+                value={shallow}
+                onChange={(e) => setShallow(e.target.value)}
+                style={colorInputStyle}
+                aria-label="Shallow water color"
+              />
+            </div>
+          </div>
 
-      {/* Deep picker */}
-      <div style={swatchRow}>
-        <span style={labelStyle}>DEEP</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <input
-            type="text"
-            data-testid="palette-deep-hex"
-            value={deep}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (/^#[0-9a-fA-F]{6}$/.test(v)) setDeep(v);
-            }}
-            style={hexStyle}
-          />
-          <input
-            type="color"
-            data-testid="palette-deep-input"
-            value={deep}
-            onChange={(e) => setDeep(e.target.value)}
-            style={colorInputStyle}
-            aria-label="Deep water color"
-          />
-        </div>
-      </div>
+          {/* Deep picker (Ocean theme) */}
+          <div style={swatchRow}>
+            <span style={labelStyle}>DEEP</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <input
+                type="text"
+                data-testid="palette-deep-hex"
+                value={deep}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (/^#[0-9a-fA-F]{6}$/.test(v)) setDeep(v);
+                }}
+                style={hexStyle}
+              />
+              <input
+                type="color"
+                data-testid="palette-deep-input"
+                value={deep}
+                onChange={(e) => setDeep(e.target.value)}
+                style={colorInputStyle}
+                aria-label="Deep water color"
+              />
+            </div>
+          </div>
+        </>
+      )}
+
+      {isCustom && (
+        <CustomStopsEditor
+          stops={customStops}
+          onUpdate={updateCustomStop}
+          onRemove={removeCustomStop}
+          onAdd={addCustomStop}
+          labelStyle={labelStyle}
+          hexStyle={hexStyle}
+          colorInputStyle={colorInputStyle}
+        />
+      )}
 
       {/* Reset */}
       <div style={{ padding: "10px 16px 14px", display: "flex", justifyContent: "flex-end" }}>
         <button
           data-testid="palette-reset-btn"
-          onClick={reset}
-          disabled={isDefault}
+          onClick={() => {
+            if (isCustom) resetCustomStops();
+            else reset();
+          }}
+          disabled={!isCustom && isDefault}
           style={{
             background: "rgba(0,229,255,0.06)",
             border: "1px solid rgba(0,229,255,0.25)",
             borderRadius: 3,
-            color: isDefault ? "#334155" : "#67e8f9",
+            color: (!isCustom && isDefault) ? "#334155" : "#67e8f9",
             fontSize: 9,
             letterSpacing: "0.15em",
             padding: "4px 12px",
-            cursor: isDefault ? "not-allowed" : "pointer",
+            cursor: (!isCustom && isDefault) ? "not-allowed" : "pointer",
             fontFamily: "inherit",
           }}
         >
           RESET TO DEFAULTS
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Custom palette stop editor — list of rows with colour swatch + position
+ * slider + remove button, plus an "Add stop" button. Edits flow through
+ * paletteStore and re-tint the 3D mesh and preview gradient live.
+ */
+function CustomStopsEditor({
+  stops, onUpdate, onRemove, onAdd, labelStyle, hexStyle, colorInputStyle,
+}: {
+  stops: CustomStop[];
+  onUpdate: (i: number, patch: Partial<CustomStop>) => void;
+  onRemove: (i: number) => void;
+  onAdd: () => void;
+  labelStyle: React.CSSProperties;
+  hexStyle: React.CSSProperties;
+  colorInputStyle: React.CSSProperties;
+}) {
+  const canRemove = stops.length > 2;
+  return (
+    <div style={{ padding: "6px 16px 8px" }} data-testid="palette-custom-editor">
+      <div style={{ ...labelStyle, marginBottom: 6 }}>STOPS ({stops.length})</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {stops.map((stop, i) => (
+          <div
+            key={i}
+            data-testid={`palette-custom-stop-${i}`}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "auto 1fr auto auto auto",
+              alignItems: "center",
+              gap: 8,
+              padding: "6px 0",
+              borderBottom: "1px solid rgba(0,229,255,0.06)",
+            }}
+          >
+            <input
+              type="color"
+              data-testid={`palette-custom-stop-${i}-color`}
+              value={stop.hex}
+              onChange={(e) => onUpdate(i, { hex: e.target.value })}
+              style={colorInputStyle}
+              aria-label={`Stop ${i + 1} colour`}
+            />
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              data-testid={`palette-custom-stop-${i}-position`}
+              value={stop.position}
+              onChange={(e) => onUpdate(i, { position: Number(e.target.value) })}
+              style={{ width: "100%" }}
+              aria-label={`Stop ${i + 1} position`}
+            />
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              data-testid={`palette-custom-stop-${i}-percent`}
+              value={Math.round(stop.position * 100)}
+              onChange={(e) => {
+                const pct = Number(e.target.value);
+                if (Number.isFinite(pct)) {
+                  onUpdate(i, { position: Math.max(0, Math.min(1, pct / 100)) });
+                }
+              }}
+              style={{ ...hexStyle, width: 48 }}
+              aria-label={`Stop ${i + 1} position percent`}
+            />
+            <span style={{ ...labelStyle, fontFamily: "inherit", color: "#64748b", minWidth: 22 }}>%</span>
+            <button
+              type="button"
+              data-testid={`palette-custom-stop-${i}-remove`}
+              onClick={() => onRemove(i)}
+              disabled={!canRemove}
+              title={canRemove ? "Remove stop" : "Minimum of 2 stops"}
+              style={{
+                background: "transparent",
+                border: "1px solid rgba(0,229,255,0.2)",
+                borderRadius: 3,
+                color: canRemove ? "#67e8f9" : "#334155",
+                fontSize: 11,
+                width: 24,
+                height: 24,
+                cursor: canRemove ? "pointer" : "not-allowed",
+                fontFamily: "inherit",
+              }}
+              aria-label={`Remove stop ${i + 1}`}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-start", marginTop: 8 }}>
+        <button
+          type="button"
+          data-testid="palette-custom-add"
+          onClick={onAdd}
+          style={{
+            background: "rgba(0,229,255,0.06)",
+            border: "1px solid rgba(0,229,255,0.25)",
+            borderRadius: 3,
+            color: "#67e8f9",
+            fontSize: 9,
+            letterSpacing: "0.15em",
+            padding: "4px 12px",
+            cursor: "pointer",
+            fontFamily: "inherit",
+          }}
+        >
+          + ADD STOP
         </button>
       </div>
     </div>

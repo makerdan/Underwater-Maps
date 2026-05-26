@@ -203,6 +203,7 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     // but re-running for them is harmless and keeps the code simple).
     const paletteShallow = usePaletteStore((s) => s.shallow);
     const paletteDeep = usePaletteStore((s) => s.deep);
+    const customStops = usePaletteStore((s) => s.customStops);
     useEffect(() => {
       const { depths, minDepth, maxDepth } = grid;
       const depthRange = (maxDepth - minDepth) || 1;
@@ -219,7 +220,7 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
         colors[i * 3 + 2] = c.b;
       }
       colorAttr.needsUpdate = true;
-    }, [paletteShallow, paletteDeep, colormapTheme, grid, geometry]);
+    }, [paletteShallow, paletteDeep, customStops, colormapTheme, grid, geometry]);
 
     // Substrate colour mode no longer recolours the mesh from slope-derived
     // heuristics. The real ShoreZone polygons are drawn as a draped overlay

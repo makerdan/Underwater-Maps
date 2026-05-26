@@ -28,7 +28,7 @@ export interface DatasetHomePosition {
 export type WaterType = "saltwater" | "freshwater";
 export type ParticleDensity = "off" | "sparse" | "dense";
 export type TextureQuality = "off" | "low" | "high";
-export type ColormapTheme = "ocean" | "thermal" | "grayscale" | "viridis" | "freshwater";
+export type ColormapTheme = "ocean" | "thermal" | "grayscale" | "viridis" | "freshwater" | "custom";
 export type CoordinateFormat = "decimal" | "dms";
 export type DepthUnit = "metres" | "feet";
 export type UnitsSystem = "metric" | "imperial";

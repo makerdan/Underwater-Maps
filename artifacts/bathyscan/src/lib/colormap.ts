@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { ColormapTheme } from "./settingsStore";
-import { usePaletteStore, MID1_HEX, MID2_HEX } from "./paletteStore";
+import { usePaletteStore, MID1_HEX, MID2_HEX, DEFAULT_CUSTOM_STOPS } from "./paletteStore";
 
 interface ColorStop {
   t: number;
@@ -22,7 +22,34 @@ function getOceanStops(): ColorStop[] {
   ];
 }
 
-const FIXED_THEME_STOPS: Record<Exclude<ColormapTheme, "ocean">, ColorStop[]> = {
+/**
+ * Build the user's Custom palette stops from paletteStore. Endpoints are
+ * pinned to t=0 and t=1 if the persisted stops don't already span the full
+ * range, and identical positions are nudged apart so the interpolator never
+ * divides by zero. Returns the Default Ocean stops if the persisted data
+ * has fewer than 2 usable entries.
+ */
+function getCustomStops(): ColorStop[] {
+  const raw = usePaletteStore.getState().customStops;
+  const source = raw.length >= 2 ? raw : DEFAULT_CUSTOM_STOPS;
+  // Defensive copy + sort (store already normalises, but be safe for callers
+  // that may have mutated state outside the setter).
+  const sorted = [...source].sort((a, b) => a.position - b.position);
+  const stops: ColorStop[] = sorted.map((s) => ({
+    t: Math.max(0, Math.min(1, s.position)),
+    color: new THREE.Color(s.hex),
+  }));
+  // Clamp endpoints to 0 / 1 so the gradient covers the full depth range.
+  if (stops[0]!.t > 0) {
+    stops.unshift({ t: 0, color: stops[0]!.color.clone() });
+  }
+  if (stops[stops.length - 1]!.t < 1) {
+    stops.push({ t: 1, color: stops[stops.length - 1]!.color.clone() });
+  }
+  return stops;
+}
+
+const FIXED_THEME_STOPS: Record<Exclude<ColormapTheme, "ocean" | "custom">, ColorStop[]> = {
   thermal: [
     { t: 0.00, color: new THREE.Color("#0d0221") },
     { t: 0.25, color: new THREE.Color("#7b2d8b") },
@@ -51,7 +78,9 @@ const FIXED_THEME_STOPS: Record<Exclude<ColormapTheme, "ocean">, ColorStop[]> = 
 };
 
 function stopsForTheme(theme: ColormapTheme): ColorStop[] {
-  return theme === "ocean" ? getOceanStops() : FIXED_THEME_STOPS[theme];
+  if (theme === "ocean") return getOceanStops();
+  if (theme === "custom") return getCustomStops();
+  return FIXED_THEME_STOPS[theme];
 }
 
 function interpolateStops(stops: ColorStop[], t: number): THREE.Color {
