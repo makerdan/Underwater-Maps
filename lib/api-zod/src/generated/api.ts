@@ -1320,6 +1320,19 @@ export const GetDatasetsMySavesResponse = zod.array(GetDatasetsMySavesResponseIt
 
 
 /**
+ * Removes the user's `user_catalog_saves` row and, if the save has been
+materialized, the linked `custom_datasets` row (terrain + overview
+grids) as well. Ownership is enforced — only the user that created
+the save may delete it.
+
+ * @summary Delete a saved catalog dataset
+ */
+export const DeleteDatasetsMySavesIdParams = zod.object({
+  "id": zod.coerce.string().describe('Save record UUID')
+})
+
+
+/**
  * @summary Poll the status of a user's save job
  */
 export const GetDatasetsMySavesIdStatusParams = zod.object({

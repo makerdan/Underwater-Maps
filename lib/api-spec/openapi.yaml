@@ -1315,6 +1315,41 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /datasets/my-saves/{id}:
+    delete:
+      operationId: deleteDatasetsMySavesId
+      tags: [datasets]
+      summary: Delete a saved catalog dataset
+      description: |
+        Removes the user's `user_catalog_saves` row and, if the save has been
+        materialized, the linked `custom_datasets` row (terrain + overview
+        grids) as well. Ownership is enforced — only the user that created
+        the save may delete it.
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Save record UUID
+      responses:
+        "204":
+          description: Save deleted
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Save record not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /datasets/my-saves/{id}/status:
     get:
       operationId: getDatasetsMySavesIdStatus

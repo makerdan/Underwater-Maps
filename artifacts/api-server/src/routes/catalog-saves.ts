@@ -474,6 +474,51 @@ router.get("/datasets/my-saves/:id/status", requireAuth, async (req, res): Promi
 });
 
 // ---------------------------------------------------------------------------
+// DELETE /datasets/my-saves/:id  (auth-gated)
+//
+// Removes the user's save row and, when a materialized dataset is linked,
+// the corresponding custom_datasets row (which carries the terrain +
+// overview grids). Ownership is enforced on both rows — a user cannot
+// delete another user's save or the dataset it points to.
+// ---------------------------------------------------------------------------
+
+router.delete("/datasets/my-saves/:id", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthenticatedRequest).clerkUserId;
+  const saveId = String(req.params["id"] ?? "");
+
+  const [save] = await db
+    .select({ id: userCatalogSavesTable.id, datasetId: userCatalogSavesTable.datasetId })
+    .from(userCatalogSavesTable)
+    .where(
+      and(eq(userCatalogSavesTable.id, saveId), eq(userCatalogSavesTable.userId, userId)),
+    );
+
+  if (!save) {
+    res.status(404).json({ error: "not_found", details: `Save record '${saveId}' not found` });
+    return;
+  }
+
+  await db
+    .delete(userCatalogSavesTable)
+    .where(
+      and(eq(userCatalogSavesTable.id, saveId), eq(userCatalogSavesTable.userId, userId)),
+    );
+
+  if (save.datasetId) {
+    await db
+      .delete(customDatasetsTable)
+      .where(
+        and(
+          eq(customDatasetsTable.id, save.datasetId),
+          eq(customDatasetsTable.userId, userId),
+        ),
+      );
+  }
+
+  res.status(204).send();
+});
+
+// ---------------------------------------------------------------------------
 // Shared formatter
 // ---------------------------------------------------------------------------
 

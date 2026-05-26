@@ -14,13 +14,16 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetDatasetsCatalogSearch,
   useGetDatasetsMySaves,
   usePostDatasetsCatalogIdSave,
   usePostDatasetsMySavesIdRetry,
+  useDeleteDatasetsMySavesId,
   getGetDatasetsCatalogSearchQueryKey,
   getGetDatasetsMySavesQueryKey,
+  getGetUserDatasetsQueryKey,
   type GetDatasetsCatalogSearchDataType,
   type DatasetCatalogSearchResult,
   type UserCatalogSave,
@@ -276,12 +279,18 @@ const SaveCard: React.FC<{
   onLoadUserDataset: (userDatasetId: string) => void;
   onRetry: (saveId: string) => void;
   retrying: boolean;
-}> = ({ save, onLoadUserDataset, onRetry, retrying }) => {
+  onDelete: (save: UserCatalogSave) => void;
+  deleting: boolean;
+}> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting }) => {
   const statusColor = STATUS_COLORS[save.status] ?? "#94a3b8";
   const icon = save.catalog ? (DATA_TYPE_ICONS[save.catalog.dataType] ?? "📦") : "📦";
 
   return (
-    <div style={{ ...CARD, borderLeft: `2px solid ${statusColor}40` }}>
+    <div
+      style={{ ...CARD, borderLeft: `2px solid ${statusColor}40`, opacity: deleting ? 0.5 : 1 }}
+      data-testid={`save-card-${save.id}`}
+      aria-busy={deleting || undefined}
+    >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ fontSize: 12 }}>{icon}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -302,6 +311,27 @@ const SaveCard: React.FC<{
         >
           {save.status}
         </span>
+        <ViewscreenTooltip label="Delete this saved dataset" side="left">
+          <button
+            type="button"
+            data-testid={`btn-delete-save-${save.id}`}
+            aria-label={`Delete saved dataset ${save.catalog?.name ?? save.catalogId}`}
+            disabled={deleting}
+            onClick={() => onDelete(save)}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "#64748b",
+              cursor: deleting ? "wait" : "pointer",
+              fontSize: 12,
+              lineHeight: 1,
+              padding: "0 2px",
+              flexShrink: 0,
+            }}
+          >
+            ×
+          </button>
+        </ViewscreenTooltip>
       </div>
       {save.status === "ready" && save.datasetId && (
         <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
@@ -373,9 +403,13 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const [dataTypeFilter, setDataTypeFilter] = useState<string>("");
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [confirmDelete, setConfirmDelete] = useState<UserCatalogSave | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { setDatasetId, setPendingExternalUserDatasetId } = useAppState();
   const { isSignedIn } = useAuth();
+  const qc = useQueryClient();
 
   // Debounce search query
   const handleQueryChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -444,6 +478,41 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     },
     [isSignedIn, retryMutation, refetchSaves],
   );
+
+  const deleteSaveMutation = useDeleteDatasetsMySavesId();
+
+  const handleRequestDelete = useCallback((save: UserCatalogSave) => {
+    setDeleteError(null);
+    setConfirmDelete(save);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!confirmDelete) return;
+    const target = confirmDelete;
+    setConfirmDelete(null);
+    setDeletingIds((s) => new Set(s).add(target.id));
+    try {
+      await deleteSaveMutation.mutateAsync({ id: target.id });
+      // Drop the "saved" badge on the catalog card so users can re-save it.
+      setSavedIds((s) => {
+        const next = new Set(s);
+        next.delete(target.catalogId);
+        return next;
+      });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: getGetDatasetsMySavesQueryKey() }),
+        qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() }),
+      ]);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Could not delete saved dataset");
+    } finally {
+      setDeletingIds((s) => {
+        const next = new Set(s);
+        next.delete(target.id);
+        return next;
+      });
+    }
+  }, [confirmDelete, deleteSaveMutation, qc]);
 
   const handleSave = useCallback(
     async (id: string) => {
@@ -633,6 +702,39 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               Sign in to see saved datasets.
             </div>
           )}
+          {deleteError && (
+            <div
+              data-testid="save-delete-error"
+              style={{
+                marginBottom: 8,
+                padding: "6px 8px",
+                border: "1px solid rgba(248,113,113,0.4)",
+                background: "rgba(248,113,113,0.08)",
+                borderRadius: 4,
+                fontSize: 9,
+                color: "#fca5a5",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <span>⚠ {deleteError}</span>
+              <button
+                onClick={() => setDeleteError(null)}
+                aria-label="Dismiss error"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#64748b",
+                  cursor: "pointer",
+                  fontSize: 10,
+                }}
+              >
+                ×
+              </button>
+            </div>
+          )}
           {mySaves.map((save) => (
             <SaveCard
               key={save.id}
@@ -640,8 +742,93 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               onLoadUserDataset={handleLoadUserDataset}
               onRetry={handleRetry}
               retrying={retryingIds.has(save.id)}
+              onDelete={handleRequestDelete}
+              deleting={deletingIds.has(save.id)}
             />
           ))}
+        </div>
+      )}
+
+      {confirmDelete && (
+        <div
+          role="dialog"
+          aria-label="Confirm delete saved dataset"
+          data-testid="confirm-delete-save"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,4,10,0.75)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 200,
+          }}
+          onClick={() => setConfirmDelete(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "rgba(0,12,24,0.98)",
+              border: "1px solid rgba(0,229,255,0.25)",
+              borderRadius: 6,
+              padding: "16px 18px",
+              maxWidth: 320,
+              fontFamily: "'JetBrains Mono', monospace",
+              color: "#cbd5e1",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                color: "#e2e8f0",
+                fontWeight: 700,
+                marginBottom: 8,
+                letterSpacing: "0.05em",
+              }}
+            >
+              Delete &ldquo;{confirmDelete.catalog?.name ?? confirmDelete.catalogId}&rdquo;?
+            </div>
+            <div style={{ fontSize: 10, color: "#94a3b8", lineHeight: 1.5, marginBottom: 14 }}>
+              This will remove the saved dataset and its terrain grids from your library.
+              You can re-save it from the catalog later.
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                onClick={() => setConfirmDelete(null)}
+                data-testid="confirm-delete-cancel"
+                style={{
+                  fontSize: 9,
+                  padding: "5px 12px",
+                  background: "transparent",
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  borderRadius: 3,
+                  color: "#94a3b8",
+                  cursor: "pointer",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleConfirmDelete()}
+                data-testid="confirm-delete-confirm"
+                style={{
+                  fontSize: 9,
+                  padding: "5px 12px",
+                  background: "rgba(248,113,113,0.12)",
+                  border: "1px solid rgba(248,113,113,0.5)",
+                  borderRadius: 3,
+                  color: "#fca5a5",
+                  cursor: "pointer",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

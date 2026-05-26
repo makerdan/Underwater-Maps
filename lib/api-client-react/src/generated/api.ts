@@ -3299,6 +3299,81 @@ export function useGetDatasetsMySaves<TData = Awaited<ReturnType<typeof getDatas
 
 
 
+export const getDeleteDatasetsMySavesIdUrl = (id: string,) => {
+
+
+
+
+  return `/api/datasets/my-saves/${id}`
+}
+
+/**
+ * Removes the user's `user_catalog_saves` row and, if the save has been
+materialized, the linked `custom_datasets` row (terrain + overview
+grids) as well. Ownership is enforced — only the user that created
+the save may delete it.
+
+ * @summary Delete a saved catalog dataset
+ */
+export const deleteDatasetsMySavesId = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteDatasetsMySavesIdUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteDatasetsMySavesIdMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDatasetsMySavesId>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteDatasetsMySavesId>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteDatasetsMySavesId'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteDatasetsMySavesId>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteDatasetsMySavesId(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteDatasetsMySavesIdMutationResult = NonNullable<Awaited<ReturnType<typeof deleteDatasetsMySavesId>>>
+
+    export type DeleteDatasetsMySavesIdMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Delete a saved catalog dataset
+ */
+export const useDeleteDatasetsMySavesId = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDatasetsMySavesId>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteDatasetsMySavesId>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteDatasetsMySavesIdMutationOptions(options));
+    }
+
 export const getGetDatasetsMySavesIdStatusUrl = (id: string,) => {
 
 
