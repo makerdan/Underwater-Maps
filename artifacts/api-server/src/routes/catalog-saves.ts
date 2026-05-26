@@ -47,6 +47,10 @@ import {
   type EfhFeature,
   type EfhFeatureCollection,
 } from "../lib/efhData.js";
+import {
+  fetchNoaaAlaskaEfh,
+  buildCollectionFromLiveFeatures,
+} from "../lib/efhFetcher.js";
 
 const router = Router();
 
@@ -387,7 +391,7 @@ export async function buildCatalogGrids(
   // `habitatPolygons` so future read paths can serve the polygons back even
   // though the terrain GET endpoint currently strips unknown fields.
   if (entry.id.startsWith("noaa-efh-")) {
-    const collection = buildEfhHabitatCollection(entry);
+    const collection = await buildEfhHabitatCollection(entry);
     const terrain = buildHabitatGrid(entry, collection, 256);
     const overview = buildHabitatGrid(entry, collection, 64);
     return { terrain, overview };
@@ -486,15 +490,57 @@ function bboxesIntersect(
 }
 
 /**
- * Pull every EFH polygon from the bundled SE Alaska regional collections that
- * matches the catalog entry's species suffix and intersects its coverage bbox.
- * Returns a single merged FeatureCollection that the materialized dataset
- * carries as a `habitatPolygons` payload.
+ * Build the EFH habitat polygon collection for a catalog entry.
+ *
+ * First attempts to use real NOAA Alaska EFH species GeoJSON data fetched
+ * (and disk-cached) by `fetchNoaaAlaskaEfh`. If the upstream is unreachable
+ * or returns no usable features, falls back to the bundled hand-simplified
+ * SE Alaska regional polygons from `efhData.ts` so materialization always
+ * produces a non-empty overlay.
+ *
+ * The returned FeatureCollection is filtered to the catalog entry's species
+ * suffix and clipped to its coverage bbox.
  */
-export function buildEfhHabitatCollection(
+export async function buildEfhHabitatCollection(
   entry: CatalogSeedEntry,
-): EfhFeatureCollection {
+): Promise<EfhFeatureCollection> {
   const matches = efhSpeciesMatcher(entry.id);
+  const creditUrl =
+    entry.endpointUrl ??
+    "https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles";
+  const lastUpdated = entry.lastUpdated ?? "2024";
+
+  // --- Attempt 1: real NOAA upstream / disk cache -------------------------
+  try {
+    const liveFeatures = await fetchNoaaAlaskaEfh();
+    if (liveFeatures !== null && liveFeatures.length > 0) {
+      const collection = buildCollectionFromLiveFeatures(
+        liveFeatures,
+        entry.coverageBbox,
+        matches,
+        entry.name,
+        creditUrl,
+        lastUpdated,
+      );
+      // If the live data yielded features for this species, use it.
+      if (collection.features.length > 0) {
+        console.info(
+          `[efh] Using ${collection.features.length} real NOAA features for ${entry.id}.`,
+        );
+        return collection;
+      }
+      console.info(
+        `[efh] Live NOAA data had 0 matching features for ${entry.id}; falling back to bundled data.`,
+      );
+    }
+  } catch (err) {
+    console.warn(
+      `[efh] Live NOAA fetch error for ${entry.id}: ${(err as Error).message}; falling back to bundled data.`,
+    );
+  }
+
+  // --- Fallback: bundled hand-simplified SE Alaska polygons ---------------
+  console.info(`[efh] Building ${entry.id} from bundled EFH data.`);
   const features: EfhFeature[] = [];
   for (const region of Object.values(SALTWATER_EFH_BY_DATASET)) {
     for (const feature of region.features) {
@@ -515,10 +561,8 @@ export function buildEfhHabitatCollection(
         entry.coverageBbox.maxLon,
         entry.coverageBbox.maxLat,
       ],
-      creditUrl:
-        entry.endpointUrl ??
-        "https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles",
-      lastUpdated: entry.lastUpdated ?? "2024",
+      creditUrl,
+      lastUpdated,
     },
   };
 }

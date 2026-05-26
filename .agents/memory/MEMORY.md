@@ -1,0 +1,1 @@
+- [NOAA Alaska EFH FeatureServer](noaa-efh-featureserver.md) — confirmed org/endpoints/layer structure for the GulfOfAlaska EFH data used in BathyScan.
