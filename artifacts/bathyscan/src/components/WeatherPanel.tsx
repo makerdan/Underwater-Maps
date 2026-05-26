@@ -7,7 +7,7 @@
  * override sliders so the user can still plan a drift.
  */
 
-import React, { useEffect, useCallback, useState } from "react";
+import React, { useEffect, useCallback, useRef, useState } from "react";
 import {
   useGetTrollingPresets,
   usePostTrollingPresets,
@@ -19,12 +19,20 @@ import {
   usePatchTrollingPresetFoldersId,
   useDeleteTrollingPresetFoldersId,
   getGetTrollingPresetFoldersQueryKey,
+  type TrollingPreset,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppState } from "@/lib/context";
 import { useDriftStore, TROLL_MAX_KNOTS } from "@/lib/driftStore";
 import { computeDrift } from "@/lib/computeDrift";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
+import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
+
+// Undo window for "soft" trolling-preset deletes (ms). The preset is hidden
+// from the list immediately and the actual DELETE only fires when the
+// window elapses, so a misclick can still be reverted by clicking "Undo".
+const UNDO_DELETE_WINDOW_MS = 5000;
 
 interface CompassProps {
   degrees: number;
@@ -287,14 +295,112 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     setDriftMode("trolling");
   }, [trollingPresets, setBoatHeadingDeg, setBoatSpeedKnots, setDriftStart, setDriftWaypoints, setDriftMode]);
 
-  const handleDeletePreset = useCallback(async (presetId: string) => {
-    try {
-      await deletePresetMutation.mutateAsync({ id: presetId });
-      await queryClient.invalidateQueries({ queryKey: presetsQueryKey });
-    } catch {
-      // no-op; query will refetch on next visit
-    }
-  }, [deletePresetMutation, queryClient, presetsQueryKey]);
+  // ─── Soft-delete (undo) state ────────────────────────────────────────────
+  // Preset ids hidden from the list while their 5s undo window is still
+  // open. The actual DELETE only fires when the window elapses, so a
+  // misclick can be reverted by clicking "Undo".
+  const [pendingDeletePresetIds, setPendingDeletePresetIds] = useState<
+    Set<string>
+  >(() => new Set());
+  const pendingDeletesRef = useRef(
+    new Map<string, { timer: ReturnType<typeof setTimeout>; commit: () => void }>(),
+  );
+  const { toast } = useToast();
+
+  const handleDeletePreset = useCallback((presetId: string) => {
+    const preset = trollingPresets?.find((p) => p.id === presetId);
+    if (!preset) return;
+    const snapshot = queryClient.getQueryData<TrollingPreset[]>(presetsQueryKey);
+
+    // Hide the row immediately by removing it from the cache so other
+    // consumers of this query (and this list) reflect the pending delete.
+    queryClient.setQueryData<TrollingPreset[] | undefined>(presetsQueryKey, (prev) =>
+      prev ? prev.filter((p) => p.id !== presetId) : prev,
+    );
+    setPendingDeletePresetIds((s) => new Set(s).add(presetId));
+
+    const commit = () => {
+      pendingDeletesRef.current.delete(presetId);
+      deletePresetMutation.mutate(
+        { id: presetId },
+        {
+          onSuccess: () => {
+            void queryClient.invalidateQueries({ queryKey: presetsQueryKey });
+          },
+          onError: () => {
+            // Restore the list on failure so the user can retry.
+            if (snapshot !== undefined) {
+              queryClient.setQueryData(presetsQueryKey, snapshot);
+            }
+          },
+          onSettled: () => {
+            setPendingDeletePresetIds((s) => {
+              if (!s.has(presetId)) return s;
+              const next = new Set(s);
+              next.delete(presetId);
+              return next;
+            });
+          },
+        },
+      );
+    };
+
+    const undo = () => {
+      const entry = pendingDeletesRef.current.get(presetId);
+      if (!entry) return;
+      clearTimeout(entry.timer);
+      pendingDeletesRef.current.delete(presetId);
+      if (snapshot !== undefined) {
+        queryClient.setQueryData(presetsQueryKey, snapshot);
+      }
+      setPendingDeletePresetIds((s) => {
+        const next = new Set(s);
+        next.delete(presetId);
+        return next;
+      });
+    };
+
+    const timer = setTimeout(commit, UNDO_DELETE_WINDOW_MS);
+    pendingDeletesRef.current.set(presetId, {
+      timer,
+      commit: () => {
+        clearTimeout(timer);
+        commit();
+      },
+    });
+
+    const toastHandle = toast({
+      title: "Trolling course deleted",
+      description: `"${preset.name}" will be removed.`,
+      duration: UNDO_DELETE_WINDOW_MS,
+      action: (
+        <ToastAction
+          altText="Undo delete"
+          data-testid="undo-delete-trolling-preset"
+          onClick={() => {
+            undo();
+            toastHandle.dismiss();
+          }}
+        >
+          Undo
+        </ToastAction>
+      ),
+    });
+  }, [trollingPresets, deletePresetMutation, queryClient, presetsQueryKey, toast]);
+
+  // Flush any open undo windows on unmount so the server eventually
+  // receives the DELETE even if the user closes the Drift Planner.
+  useEffect(() => {
+    const map = pendingDeletesRef.current;
+    return () => {
+      const entries = Array.from(map.values());
+      map.clear();
+      for (const entry of entries) entry.commit();
+    };
+  }, []);
+  // pendingDeletePresetIds drives this effect indirectly via React Query
+  // cache updates; we reference it so eslint sees the dependency.
+  void pendingDeletePresetIds;
 
   const handleStartRename = useCallback((presetId: string, currentName: string) => {
     setEditingPresetId(presetId);

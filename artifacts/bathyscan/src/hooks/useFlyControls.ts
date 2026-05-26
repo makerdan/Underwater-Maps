@@ -4,9 +4,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import * as THREE from "three";
 import type { Marker, TerrainData } from "@workspace/api-client-react";
 import {
-  useDeleteMarkersId,
   getGetMarkersQueryKey,
 } from "@workspace/api-client-react";
+import { useUndoableMarkerDelete } from "@/hooks/useUndoableMarkerDelete";
 import { useAppState, SPEEDS } from "@/lib/context";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
@@ -15,7 +15,6 @@ import { useJoystickStore } from "@/components/VirtualJoystick";
 import { computeMetersPerWorldUnit, boatMphToWorldUnitsPerSecond } from "@/lib/boatSpeed";
 import { markerGroupRef } from "@/components/MarkerLayer";
 import { useContextMenuStore, type ContextMenuItem } from "@/lib/contextMenuStore";
-import { runMarkerDelete } from "@/lib/markerActions";
 import { useMarkerDetailStore } from "@/lib/markerDetailStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { getBoundKey } from "@/lib/keyBindings";
@@ -55,9 +54,9 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   } = useAppState();
 
   const queryClient = useQueryClient();
-  const deleteMarker = useDeleteMarkersId();
-  const deleteMarkerRef = useRef(deleteMarker);
-  useEffect(() => { deleteMarkerRef.current = deleteMarker; }, [deleteMarker]);
+  const requestMarkerDelete = useUndoableMarkerDelete();
+  const requestMarkerDeleteRef = useRef(requestMarkerDelete);
+  useEffect(() => { requestMarkerDeleteRef.current = requestMarkerDelete; }, [requestMarkerDelete]);
 
   // Settings: sensitivity and invert-Y for mouse look
   const mouseSensitivity = useSettingsStore((s) => s.mouseSensitivity);
@@ -549,12 +548,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
             // Capture datasetId at action time so a mid-flight dataset switch
             // doesn't cause us to invalidate the wrong query key.
             const datasetId = terrainRef.current?.datasetId ?? "";
-            runMarkerDelete({
-              marker,
-              datasetId,
-              queryClient,
-              mutation: deleteMarkerRef.current,
-            });
+            requestMarkerDeleteRef.current(marker, datasetId);
           },
         },
       ];

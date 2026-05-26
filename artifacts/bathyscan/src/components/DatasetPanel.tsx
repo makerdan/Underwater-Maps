@@ -12,7 +12,6 @@ import {
   useGetUserDatasetsIdTerrain,
   useGetUserDatasetsIdOverview,
   useGetMarkers,
-  useDeleteMarkersId,
   getGetDatasetsIdTerrainQueryKey,
   getGetDatasetsIdOverviewQueryKey,
   getGetUserDatasetsQueryKey,
@@ -44,6 +43,7 @@ import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { WaterTypeToggle } from "@/components/WaterTypeToggle";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
+import { useUndoableMarkerDelete } from "@/hooks/useUndoableMarkerDelete";
 import { GpsImportDialog } from "@/components/GpsImportDialog";
 import { GpsExportDialog } from "@/components/GpsExportDialog";
 import { LoadingDial } from "@/components/LoadingDial";
@@ -706,20 +706,13 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     { datasetId: markerDatasetId },
     { query: { enabled: !!markerDatasetId, queryKey: getGetMarkersQueryKey({ datasetId: markerDatasetId }) } },
   );
-  const deleteMarkerMutation = useDeleteMarkersId();
+  const requestMarkerDelete = useUndoableMarkerDelete();
 
   const handleDeleteMarker = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    deleteMarkerMutation.mutate(
-      { id },
-      {
-        onSuccess: () => {
-          void qc.invalidateQueries({
-            queryKey: getGetMarkersQueryKey({ datasetId: markerDatasetId }),
-          });
-        },
-      },
-    );
+    const marker = markers?.find((m) => m.id === id);
+    if (!marker) return;
+    requestMarkerDelete(marker, markerDatasetId);
   };
 
   const handleTeleportToMarker = (lon: number, lat: number) => {
@@ -1069,16 +1062,12 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                   {(markers ?? []).map((m) => {
                     const color = MARKER_COLOR[m.type] ?? "#e2e8f0";
                     const icon = MARKER_ICON[m.type] ?? "●";
-                    const deleting =
-                      deleteMarkerMutation.isPending &&
-                      (deleteMarkerMutation.variables as { id: string } | undefined)?.id === m.id;
                     return (
                       <button
                         key={m.id}
                         onClick={() => handleTeleportToMarker(m.lon, m.lat)}
                         className="w-full text-left px-3 py-1.5 hover:bg-white/5 transition-colors group"
                         style={{
-                          opacity: deleting ? 0.4 : 1,
                           cursor: "pointer",
                         }}
                       >

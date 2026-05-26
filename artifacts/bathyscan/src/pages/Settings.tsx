@@ -11,6 +11,15 @@ import { useLocation } from "wouter";
 import { useUser, useClerk } from "@/lib/clerkCompat";
 import { keys as idbKeys, clear as idbClear } from "idb-keyval";
 import { useGetSettings, usePutSettings, useDeleteMarkersMine, getGetSettingsQueryKey } from "@workspace/api-client-react";
+import type { Marker } from "@workspace/api-client-react";
+import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
+
+// Undo window for "soft" bulk-marker deletes (ms). The active dataset's
+// marker list is cleared from the cache immediately and the actual DELETE
+// only fires when the window elapses, so a misclick can be reverted by
+// clicking "Undo".
+const UNDO_DELETE_WINDOW_MS = 5000;
 import {
   useSettingsStore,
   useSectionDirty,
@@ -2145,6 +2154,8 @@ function AccountSection() {
   const qc = useQueryClient();
   const activeGrid = useTerrainStore((s) => s.activeGrid);
   const s = useSettingsStore();
+  const { toast } = useToast();
+  const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
   const deleteAllMarkers = useDeleteMarkersMine({
     mutation: {
       onSuccess: (data) => {
@@ -2157,7 +2168,91 @@ function AccountSection() {
       },
     },
   });
-  const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
+  // Pending bulk-delete undo state. While a window is open, the active
+  // dataset's marker list is hidden from the cache and the actual mutation
+  // hasn't fired yet — clicking "Undo" restores the snapshot and cancels
+  // the pending DELETE. Flushed on unmount so the server eventually
+  // receives the request even if the user navigates away.
+  const pendingBulkDeleteRef = useRef<{
+    timer: ReturnType<typeof setTimeout>;
+    commit: () => void;
+  } | null>(null);
+  useEffect(() => {
+    return () => {
+      const entry = pendingBulkDeleteRef.current;
+      if (entry) {
+        pendingBulkDeleteRef.current = null;
+        entry.commit();
+      }
+    };
+  }, []);
+
+  const requestBulkDeleteAllMarkers = useCallback(() => {
+    // If a previous undo window is still open, flush it first so we don't
+    // stack two deferred mutations.
+    const prev = pendingBulkDeleteRef.current;
+    if (prev) {
+      pendingBulkDeleteRef.current = null;
+      prev.commit();
+    }
+
+    const datasetId = activeGrid?.datasetId ?? "";
+    const markersKey = datasetId ? getGetMarkersQueryKey({ datasetId }) : null;
+    const snapshot = markersKey ? qc.getQueryData<Marker[]>(markersKey) : undefined;
+    if (markersKey) {
+      qc.setQueryData<Marker[] | undefined>(markersKey, (prevList) =>
+        prevList ? [] : prevList,
+      );
+    }
+
+    const commit = () => {
+      pendingBulkDeleteRef.current = null;
+      deleteAllMarkers.mutate(undefined, {
+        onError: () => {
+          if (markersKey && snapshot !== undefined) {
+            qc.setQueryData(markersKey, snapshot);
+          }
+        },
+      });
+    };
+
+    const undo = () => {
+      const entry = pendingBulkDeleteRef.current;
+      if (!entry) return;
+      clearTimeout(entry.timer);
+      pendingBulkDeleteRef.current = null;
+      if (markersKey && snapshot !== undefined) {
+        qc.setQueryData(markersKey, snapshot);
+      }
+    };
+
+    const timer = setTimeout(commit, UNDO_DELETE_WINDOW_MS);
+    pendingBulkDeleteRef.current = {
+      timer,
+      commit: () => {
+        clearTimeout(timer);
+        commit();
+      },
+    };
+
+    const toastHandle = toast({
+      title: "All markers deleted",
+      description: "Your markers will be removed.",
+      duration: UNDO_DELETE_WINDOW_MS,
+      action: (
+        <ToastAction
+          altText="Undo delete"
+          data-testid="undo-delete-all-markers"
+          onClick={() => {
+            undo();
+            toastHandle.dismiss();
+          }}
+        >
+          Undo
+        </ToastAction>
+      ),
+    });
+  }, [activeGrid, qc, deleteAllMarkers, toast]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -2474,7 +2569,7 @@ function AccountSection() {
               <span style={{ fontSize: 10, color: "#f87171" }}>Are you sure?</span>
               <button
                 onClick={() => {
-                  deleteAllMarkers.mutate();
+                  requestBulkDeleteAllMarkers();
                   setConfirmDelete(false);
                 }}
                 disabled={deleteAllMarkers.isPending}
