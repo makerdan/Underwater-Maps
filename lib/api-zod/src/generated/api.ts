@@ -903,14 +903,22 @@ export const PoeClassifyBody = zod.object({
   "waterType": zod.enum(['saltwater', 'freshwater']).default(poeClassifyBodyWaterTypeDefault),
   "datasetId": zod.string().optional().describe('Dataset identifier used for cache keying'),
   "gridHash": zod.string().optional().describe('Client-computed FNV-1a 32-bit hash of the depth grid (8-char hex)'),
-  "depths32": zod.array(zod.number()).optional().describe('Optional 1024-length (32×32 row-major) downsample of the depth grid in metres.\nUsed by the server as input for the depth-based fallback classifier when the\nAI call fails. Not used when the AI call succeeds.\n')
+  "depths32": zod.array(zod.number()).optional().describe('Optional 1024-length (32×32 row-major) downsample of the depth grid in metres.\nUsed by the server as input for the depth-based fallback classifier when the\nAI call fails. Not used when the AI call succeeds.\n'),
+  "depthsFull": zod.array(zod.number()).optional().describe('Optional full-resolution row-major depth grid (length widthFull\*heightFull).\nWhen provided the server may split the area into multiple overlapping 32×32\ntiles, classify each at the existing per-call resolution, and stitch the\nresults so high-resolution datasets preserve detail instead of being\ncollapsed into a single thumbnail.\n'),
+  "widthFull": zod.number().optional().describe('Width of `depthsFull` in cells. Required when `depthsFull` is set.'),
+  "heightFull": zod.number().optional().describe('Height of `depthsFull` in cells. Required when `depthsFull` is set.')
 })
 
 export const PoeClassifyResponse = zod.object({
-  "zones": zod.array(zod.string()).describe('1024 zone labels in row-major order (32×32 coarse grid)'),
+  "zones": zod.array(zod.string()).describe('Zone labels in row-major order. Length is `coarseWidth\*coarseHeight`,\nwhich defaults to 1024 (32×32) for the single-tile path and grows for\ntiled high-resolution datasets.\n'),
   "fromCache": zod.boolean().describe('Whether the result was served from the in-memory cache'),
-  "source": zod.enum(['ai', 'heuristic']).optional().describe('\"ai\" when the labels come from the Poe AI classifier (live or cached);\n\"heuristic\" when the AI was unavailable and labels were estimated from\ndepth percentiles only.\n'),
-  "substrateFp": zod.string().optional().describe('8-char hex fingerprint of the bundled ShoreZone + ENC substrate grid\nsampled for this dataset\'s AOI. Forms part of the zone-cache key so\na change in surveyed substrate coverage invalidates stale results.\n\"00000000\" when the dataset has no substrate coverage.\n')
+  "source": zod.enum(['ai', 'heuristic', 'partial']).optional().describe('\"ai\" when every cell was labeled by the Poe AI classifier (live or\ncached); \"heuristic\" when the depth-based fallback covered the whole\ngrid because the AI was unavailable; \"partial\" when the result was\nstitched from a mix of AI-classified and heuristic tiles.\n'),
+  "substrateFp": zod.string().optional().describe('8-char hex fingerprint of the bundled ShoreZone + ENC substrate grid\nsampled for this dataset\'s AOI. Forms part of the zone-cache key so\na change in surveyed substrate coverage invalidates stale results.\n\"00000000\" when the dataset has no substrate coverage.\n'),
+  "coarseWidth": zod.number().optional().describe('Width of the returned zones grid. Defaults to 32 when omitted.'),
+  "coarseHeight": zod.number().optional().describe('Height of the returned zones grid. Defaults to 32 when omitted.'),
+  "tilesTotal": zod.number().optional().describe('Total number of tiles in the plan (1 for the single-tile path).'),
+  "tilesAi": zod.number().optional().describe('Number of tiles that were successfully labeled by the AI.'),
+  "tilesHeuristic": zod.number().optional().describe('Number of tiles that fell back to the heuristic classifier.')
 })
 
 

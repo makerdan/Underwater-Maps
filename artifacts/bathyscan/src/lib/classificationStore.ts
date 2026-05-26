@@ -223,7 +223,7 @@ interface ClassificationState {
    *  - "heuristic": labels estimated from depth percentiles when AI was unavailable.
    *  - null:        no zoneMap loaded yet.
    */
-  source: "ai" | "heuristic" | null;
+  source: "ai" | "heuristic" | "partial" | null;
 
   classify: (grid: TerrainData) => Promise<void>;
   clearZoneMap: () => void;
@@ -394,9 +394,26 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
           const url = `/api/datasets/${encodeURIComponent(datasetId)}/zones?h=${gridHash}&w=${encodeURIComponent(wt)}`;
           const resp = await fetch(url, { credentials: "include" });
           if (resp.ok) {
-            const data = (await resp.json()) as { zones: string[]; waterType: string; source?: ClassifyResultSource; substrateFp?: string };
+            const data = (await resp.json()) as {
+              zones: string[];
+              waterType: string;
+              source?: ClassifyResultSource;
+              substrateFp?: string;
+              coarseWidth?: number;
+              coarseHeight?: number;
+            };
             if (get().currentGridHash !== gridHash) return;
-            commitFresh(parseAndUpsampleZones(data.zones, wt, targetN), data.source ?? "ai", data.substrateFp ?? NO_SUBSTRATE_FP);
+            commitFresh(
+              parseAndUpsampleZones(
+                data.zones,
+                wt,
+                targetN,
+                data.coarseWidth ?? 32,
+                data.coarseHeight ?? 32,
+              ),
+              data.source ?? "ai",
+              data.substrateFp ?? NO_SUBSTRATE_FP,
+            );
             return;
           }
         } catch {
@@ -410,13 +427,37 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
         // fails (missing key, rate-limited, malformed response, …).
         const gridBase64 = gridToBase64Png(grid);
         const depths32 = downsampleDepths32(grid);
+        // Send the full-resolution depth grid so the server can split it into
+        // overlapping tiles and classify each at native LLM resolution. This is
+        // a no-op for small grids (the server's tile planner falls through to
+        // the single-tile path when K=1) so legacy clients/datasets behave
+        // exactly as before.
         const result = await poeClassify(
-          { gridBase64, waterType: wt, datasetId, gridHash, depths32 } as PoeClassifyRequest
+          {
+            gridBase64,
+            waterType: wt,
+            datasetId,
+            gridHash,
+            depths32,
+            depthsFull: grid.depths as unknown as number[],
+            widthFull: grid.width,
+            heightFull: grid.height,
+          } as PoeClassifyRequest,
         );
 
         if (get().currentGridHash !== gridHash) return;
         const resultFp = (result as { substrateFp?: string }).substrateFp ?? NO_SUBSTRATE_FP;
-        commitFresh(parseAndUpsampleZones(result.zones, wt, targetN), result.source ?? "ai", resultFp);
+        commitFresh(
+          parseAndUpsampleZones(
+            result.zones,
+            wt,
+            targetN,
+            result.coarseWidth ?? 32,
+            result.coarseHeight ?? 32,
+          ),
+          result.source ?? "ai",
+          resultFp,
+        );
       } catch (err) {
         if (get().currentGridHash !== gridHash) return;
         const categorized = categorizeClassificationError(err);

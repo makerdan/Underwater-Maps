@@ -18,6 +18,18 @@ import {
   substrateToZone,
   type SubstrateGridSample,
 } from "../lib/substrateGrid.js";
+import {
+  MAX_TILES_PER_SIDE,
+  TILE_CONCURRENCY,
+  TILE_SIZE,
+  planTiles,
+  extractTileDepths32,
+  tileFingerprint,
+  stitchTileLabels,
+  mapWithConcurrency,
+  tileDepthsToPngDataUrl,
+  type TilePlan,
+} from "../lib/tileClassify.js";
 
 const router = Router();
 
@@ -158,11 +170,12 @@ interface CachedZones {
   waterType: "saltwater" | "freshwater";
   classifiedAt: number;
   /**
-   * Provenance of the cached labels. The zone cache is AI-only — heuristic
-   * fallbacks are never persisted — so any entry served from this cache is
-   * "ai". Declared on the type so the field surfaces in GET /zones responses.
+   * Provenance of the cached labels. The zone cache stores AI-derived stitched
+   * results (a tile that fell back to the heuristic doesn't disqualify the
+   * stitched result from being cached — "partial" is a valid cached state).
+   * Pure-heuristic results are never persisted.
    */
-  source?: "ai" | "heuristic";
+  source?: "ai" | "heuristic" | "partial";
   /**
    * Strong content fingerprint of the depth grid (sha256 of gridBase64).
    * Stored so a same-bucket FNV-1a 32-bit collision between two different
@@ -170,6 +183,10 @@ interface CachedZones {
    * the wrong labels.
    */
   contentHash?: string;
+  /** Width of the cached zones grid. Defaults to 32 for legacy entries. */
+  coarseWidth?: number;
+  /** Height of the cached zones grid. Defaults to 32 for legacy entries. */
+  coarseHeight?: number;
 }
 
 /**
@@ -541,10 +558,200 @@ function buildClassifyZoneSchema(waterType: "saltwater" | "freshwater") {
   };
 }
 
+/**
+ * Issue a single Poe classify call for one 32×32 greyscale depth tile.
+ * Pulled out of the route handler so the tiled path can reuse the exact same
+ * model, prompt, and JSON schema as the legacy single-tile path.
+ *
+ * Returns `{ zones, usage }` on success. Rejects with the underlying error
+ * on failure — callers decide whether to fall back to a heuristic.
+ */
+async function classifyOneTileAi(
+  gridBase64: string,
+  waterType: "saltwater" | "freshwater",
+  datasetId: string,
+): Promise<{ zones: string[]; usage: { input_tokens: number; output_tokens: number } }> {
+  const result = await withRetry(async () => {
+    const client = getPoeClient();
+    const input = buildVisionInput(
+      `Classify the seafloor/lake-bed zones in this depth map. Return exactly 1024 zone labels for the 32×32 grid.`,
+      gridBase64,
+    );
+
+    const response = await (client as unknown as {
+      responses: {
+        create: (
+          b: Record<string, unknown>,
+          opts?: { signal?: AbortSignal },
+        ) => Promise<{
+          id: string;
+          output_text: string;
+          usage?: { input_tokens?: number; output_tokens?: number };
+        }>;
+      };
+    }).responses.create(
+      {
+        model: POE_MODELS.CLASSIFY,
+        input,
+        instructions: buildClassifySystemPrompt(waterType),
+        text: {
+          format: {
+            type: "json_schema",
+            json_schema: {
+              name: "zone_classification",
+              schema: buildClassifyZoneSchema(waterType),
+              strict: true,
+            },
+          },
+        },
+        max_output_tokens: 8192,
+        temperature: 0.1,
+        truncation: "auto",
+        metadata: { datasetId, waterType },
+      },
+      { signal: AbortSignal.timeout(POE_CLASSIFY_TIMEOUT_MS) },
+    );
+
+    return response;
+  }, 3);
+
+  const parsed = JSON.parse(result.output_text) as { zones: string[] };
+  return {
+    zones: parsed.zones,
+    usage: {
+      input_tokens: result.usage?.input_tokens ?? 0,
+      output_tokens: result.usage?.output_tokens ?? 0,
+    },
+  };
+}
+
+/**
+ * Tiled-classification driver. Plans a tile grid for `(widthFull, heightFull)`,
+ * pulls each tile's 32×32 depths out of `depthsFull`, classifies each tile via
+ * the LLM (bounded concurrency, per-tile caching), and stitches the results
+ * into a single `coarseWidth × coarseHeight` zones grid.
+ *
+ * Per-tile failures fall back to the depth-based heuristic for that tile only.
+ * The whole-dataset call cap is enforced by `planTiles`' `maxPerSide` argument
+ * (defaults to MAX_TILES_PER_SIDE = 4 → 16 tiles max). Identical tiles across
+ * different datasets share cache entries via `tileFingerprint`.
+ */
+async function runTiledClassify(opts: {
+  depthsFull: number[];
+  widthFull: number;
+  heightFull: number;
+  waterType: "saltwater" | "freshwater";
+  datasetId: string;
+  userId: string;
+}): Promise<{
+  zones: string[];
+  source: "ai" | "partial";
+  coarseWidth: number;
+  coarseHeight: number;
+  plan: TilePlan;
+  tilesAi: number;
+  tilesHeuristic: number;
+}> {
+  const { depthsFull, widthFull, heightFull, waterType, datasetId, userId } = opts;
+  const plan = planTiles(widthFull, heightFull, MAX_TILES_PER_SIDE);
+
+  const tileDepths = plan.tiles.map((bounds) =>
+    extractTileDepths32(depthsFull, widthFull, heightFull, bounds),
+  );
+  const fingerprints = tileDepths.map((d) => tileFingerprint(d));
+
+  let tilesAi = 0;
+  let tilesHeuristic = 0;
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+
+  const perTileLabels = await mapWithConcurrency<number[], string[] | null>(
+    tileDepths,
+    TILE_CONCURRENCY,
+    async (depths, i) => {
+      // Per-tile cache, keyed by waterType + tile fingerprint — independent
+      // of datasetId so identical tiles across datasets share entries.
+      const tileCacheKey = hashCacheKey("tile", waterType, fingerprints[i]!);
+      const hit = globalPoeCache.get(tileCacheKey);
+      if (hit) {
+        try {
+          const parsed = JSON.parse(hit) as string[];
+          if (Array.isArray(parsed) && parsed.length === TILE_SIZE * TILE_SIZE) {
+            tilesAi++;
+            return parsed;
+          }
+        } catch {
+          // fall through to live call
+        }
+      }
+
+      try {
+        const gridBase64 = tileDepthsToPngDataUrl(depths);
+        const { zones, usage } = await classifyOneTileAi(gridBase64, waterType, datasetId);
+        if (!Array.isArray(zones) || zones.length !== TILE_SIZE * TILE_SIZE) {
+          throw new Error(`tile classifier returned ${zones?.length ?? 0} labels`);
+        }
+        globalPoeCache.set(tileCacheKey, JSON.stringify(zones));
+        tilesAi++;
+        totalInputTokens += usage.input_tokens;
+        totalOutputTokens += usage.output_tokens;
+        return zones;
+      } catch (err) {
+        // Partial failure — return null so stitch() can fill this tile from
+        // the depth-based heuristic without sinking the whole request.
+        console.warn(
+          `[poe/classify] tile ${i} (${plan.tiles[i]?.tileRow},${plan.tiles[i]?.tileCol}) failed: ${
+            (err as Error)?.message ?? "unknown"
+          }`,
+        );
+        tilesHeuristic++;
+        return null;
+      }
+    },
+  );
+
+  const zones = stitchTileLabels(
+    perTileLabels,
+    plan,
+    widthFull,
+    heightFull,
+    (idx) => heuristicClassifyByDepth(tileDepths[idx]!, waterType),
+  );
+
+  if (totalInputTokens > 0 || totalOutputTokens > 0) {
+    await logUsage(
+      userId,
+      POE_MODELS.CLASSIFY,
+      "classify",
+      totalInputTokens,
+      totalOutputTokens,
+    );
+  }
+
+  return {
+    zones,
+    source: tilesHeuristic === 0 ? "ai" : "partial",
+    coarseWidth: plan.coarseWidth,
+    coarseHeight: plan.coarseHeight,
+    plan,
+    tilesAi,
+    tilesHeuristic,
+  };
+}
+
 router.post("/classify", async (req, res) => {
   const userId = getAuthenticatedUserId(req);
 
-  const { gridBase64, waterType = "saltwater", datasetId, gridHash, depths32 } = req.body as {
+  const {
+    gridBase64,
+    waterType = "saltwater",
+    datasetId,
+    gridHash,
+    depths32,
+    depthsFull,
+    widthFull,
+    heightFull,
+  } = req.body as {
     gridBase64: string;
     waterType?: "saltwater" | "freshwater";
     datasetId?: string;
@@ -552,6 +759,10 @@ router.post("/classify", async (req, res) => {
     gridHash?: string;
     /** Optional 1024-length downsampled depth grid for the heuristic fallback. */
     depths32?: number[];
+    /** Optional full-resolution depths — triggers the tiled path when present. */
+    depthsFull?: number[];
+    widthFull?: number;
+    heightFull?: number;
   };
 
   if (!gridBase64) {
@@ -568,20 +779,37 @@ router.post("/classify", async (req, res) => {
   const substrateFp = substrate.fingerprint;
   const substratePrompt = renderSubstrateGroundTruth(substrate, waterType);
 
-  // The substrate fingerprint feeds the upstream content hash so changing
+  // ── Stitched-result cache lookup ───────────────────────────────────────
+  // The substrate fingerprint feeds the primary content hash so changing
   // substrate coverage (e.g. a new ShoreZone release) invalidates the
   // globalPoeCache entry even when datasetId / waterType / gridBase64 are
-  // unchanged.
+  // unchanged. Both single-tile and tiled paths share this cache; coarse
+  // dimensions live on the namespaced secondary entry so a tiled hit can
+  // be returned at full fidelity.
   const cacheKey = hashCacheKey(`${datasetId ?? "unknown"}|sub:${substrateFp}`, waterType, gridBase64);
   const cached = globalPoeCache.get(cacheKey);
   if (cached) {
-    res.json({ zones: JSON.parse(cached), fromCache: true, source: "ai", substrateFp });
+    const zones = JSON.parse(cached) as string[];
+    const secondary = gridHash
+      ? datasetZonesCache.get(zoneCacheKey(gridHash, waterType, substrateFp))
+      : null;
+    const coarseWidth = secondary?.coarseWidth ?? TILE_SIZE;
+    const coarseHeight = secondary?.coarseHeight ?? TILE_SIZE;
+    res.json({
+      zones,
+      fromCache: true,
+      source: secondary?.source ?? "ai",
+      substrateFp,
+      coarseWidth,
+      coarseHeight,
+      tilesTotal: (coarseWidth / TILE_SIZE) * (coarseHeight / TILE_SIZE),
+    });
     return;
   }
 
   // Strong content fingerprint of the actual depth payload — used to detect
-  // FNV-1a 32-bit collisions on the secondary (gridHash, waterType) cache
-  // before serving a cached entry from a different grid.
+  // FNV-1a 32-bit collisions on the secondary (gridHash, waterType,
+  // substrateFp) cache before serving a cached entry from a different grid.
   const contentHash = createHash("sha256").update(gridBase64).digest("hex");
   if (gridHash) {
     const secondaryKey = zoneCacheKey(gridHash, waterType, substrateFp);
@@ -594,11 +822,95 @@ router.post("/classify", async (req, res) => {
     ) {
       // Hydrate in-memory cache from a disk hit so subsequent reads skip I/O.
       if (!inMemoryHit) datasetZonesCache.set(secondaryKey, diskHit);
-      res.json({ zones: diskHit.zones, fromCache: true, source: diskHit.source ?? "ai", substrateFp });
+      const coarseWidth = diskHit.coarseWidth ?? TILE_SIZE;
+      const coarseHeight = diskHit.coarseHeight ?? TILE_SIZE;
+      res.json({
+        zones: diskHit.zones,
+        fromCache: true,
+        source: diskHit.source ?? "ai",
+        substrateFp,
+        coarseWidth,
+        coarseHeight,
+        tilesTotal: (coarseWidth / TILE_SIZE) * (coarseHeight / TILE_SIZE),
+      });
       return;
     }
   }
 
+  // ── Tiled path ────────────────────────────────────────────────────────
+  // Triggered when the client sends a full-resolution depth grid. The
+  // planner decides how many tiles to use; if it picks K=1 we still fall
+  // through to the single-tile path below so small datasets behave exactly
+  // as they did before this change. Substrate reconciliation runs on the
+  // 32×32 substrate grid so it only applies on the single-tile path; tiled
+  // output stays as the model produced it (substrateFp still namespaces the
+  // cache so a substrate update still invalidates entries).
+  if (
+    Array.isArray(depthsFull) &&
+    typeof widthFull === "number" &&
+    typeof heightFull === "number" &&
+    widthFull > 0 &&
+    heightFull > 0 &&
+    depthsFull.length === widthFull * heightFull
+  ) {
+    const plan = planTiles(widthFull, heightFull, MAX_TILES_PER_SIDE);
+    if (plan.K > 1) {
+      try {
+        const out = await runTiledClassify({
+          depthsFull,
+          widthFull,
+          heightFull,
+          waterType,
+          datasetId: datasetId ?? "unknown",
+          userId,
+        });
+
+        // Persist the stitched result. Primary content-hash cache stores
+        // just the zones (back-compat with single-tile cache entries) and the
+        // secondary namespaced cache carries coarse dimensions, provenance,
+        // and contentHash for collision detection on read.
+        globalPoeCache.set(cacheKey, JSON.stringify(out.zones));
+        if (gridHash) {
+          const secondaryKey = zoneCacheKey(gridHash, waterType, substrateFp);
+          const cachedEntry: CachedZones = {
+            zones: out.zones,
+            waterType,
+            classifiedAt: Date.now(),
+            source: out.source,
+            contentHash,
+            coarseWidth: out.coarseWidth,
+            coarseHeight: out.coarseHeight,
+          };
+          datasetZonesCache.set(secondaryKey, cachedEntry);
+          void writeZoneDisk(secondaryKey, cachedEntry);
+        }
+
+        res.json({
+          zones: out.zones,
+          fromCache: false,
+          source: out.source,
+          substrateFp,
+          coarseWidth: out.coarseWidth,
+          coarseHeight: out.coarseHeight,
+          tilesTotal: out.plan.tiles.length,
+          tilesAi: out.tilesAi,
+          tilesHeuristic: out.tilesHeuristic,
+        });
+        return;
+      } catch (err) {
+        // If the *driver itself* explodes (not just per-tile failures —
+        // those are absorbed inside runTiledClassify), drop through to the
+        // single-tile/heuristic fallback below.
+        console.warn(
+          `[poe/classify] tiled path failed, falling back to single-tile: ${
+            (err as Error)?.message ?? "unknown"
+          }`,
+        );
+      }
+    }
+  }
+
+  // ── Single-tile path (substrate-grounded) ────────────────────────────
   try {
     const result = await withRetry(async () => {
       const client = getPoeClient();
@@ -670,15 +982,17 @@ router.post("/classify", async (req, res) => {
     // depth payloads before serving stale labels.
     if (gridHash) {
       const secondaryKey = zoneCacheKey(gridHash, waterType, substrateFp);
-      const cached: CachedZones = {
+      const cachedEntry: CachedZones = {
         zones,
         waterType,
         classifiedAt: Date.now(),
         source: "ai",
         contentHash,
+        coarseWidth: TILE_SIZE,
+        coarseHeight: TILE_SIZE,
       };
-      datasetZonesCache.set(secondaryKey, cached);
-      void writeZoneDisk(secondaryKey, cached);
+      datasetZonesCache.set(secondaryKey, cachedEntry);
+      void writeZoneDisk(secondaryKey, cachedEntry);
     }
 
     await logUsage(
@@ -689,7 +1003,17 @@ router.post("/classify", async (req, res) => {
       result.usage?.output_tokens ?? 0,
     );
 
-    res.json({ zones, fromCache: false, source: "ai", substrateFp });
+    res.json({
+      zones,
+      fromCache: false,
+      source: "ai",
+      substrateFp,
+      coarseWidth: TILE_SIZE,
+      coarseHeight: TILE_SIZE,
+      tilesTotal: 1,
+      tilesAi: 1,
+      tilesHeuristic: 0,
+    });
   } catch (err) {
     // Depth-based fallback — if the client supplied a 1024-length depth grid
     // we always return *some* overlay so uploads aren't left blank when the
@@ -706,7 +1030,17 @@ router.post("/classify", async (req, res) => {
         ? substrate.labels.map((l) => (l ? substrateToZone(l, waterType) : null))
         : null;
       const zones = heuristicClassifyByDepth(depths32, waterType, substrateZoneLabels);
-      res.json({ zones, fromCache: false, source: "heuristic", substrateFp });
+      res.json({
+        zones,
+        fromCache: false,
+        source: "heuristic",
+        substrateFp,
+        coarseWidth: TILE_SIZE,
+        coarseHeight: TILE_SIZE,
+        tilesTotal: 1,
+        tilesAi: 0,
+        tilesHeuristic: 1,
+      });
       return;
     }
     handlePoeError(err, res);

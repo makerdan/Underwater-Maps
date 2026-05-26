@@ -100,56 +100,67 @@ const FRESHWATER_LABEL_TO_INDEX = new Map<string, number>(
 );
 
 /**
- * Parse an array of 1024 zone label strings (32×32 coarse grid) into a Uint8Array
- * of zone indices, then upsample to `targetN × targetN` via bilinear interpolation.
+ * Parse an array of zone label strings on a `coarseW × coarseH` grid into a
+ * Uint8Array of zone indices, then upsample to `targetN × targetN` via
+ * bilinear interpolation.
  *
- * Bilinear interpolation is used so zone boundaries blend smoothly rather than
- * showing hard nearest-neighbour block edges. Because zone indices are discrete
- * categorical values, the weighted sum is rounded to the nearest integer — this
- * keeps boundary pixels snapped to a real zone label while still producing
- * smoother transitions than nearest-neighbour.
+ * The coarse dimensions default to 32×32 (1024 labels) for back-compat with
+ * the single-tile classifier. The tiled classifier returns larger grids
+ * (e.g. 64×64 = 4096 labels for K=2, up to 128×128 for K=4) — passing those
+ * dimensions through preserves the extra spatial detail rather than collapsing
+ * it back into a thumbnail.
  *
- * @param labels    — 1024 zone label strings from the AI response
+ * Bilinear interpolation is used so zone boundaries blend smoothly rather
+ * than showing hard nearest-neighbour block edges. Because zone indices are
+ * discrete categorical values, the weighted sum is rounded to the nearest
+ * integer — this keeps boundary pixels snapped to a real zone label while
+ * still producing smoother transitions than nearest-neighbour.
+ *
+ * @param labels    — `coarseW * coarseH` zone label strings from the classifier
  * @param waterType — "saltwater" | "freshwater"
  * @param targetN   — output grid resolution (e.g. 256 for a 256×256 terrain)
+ * @param coarseW   — width of the coarse label grid (defaults to 32)
+ * @param coarseH   — height of the coarse label grid (defaults to 32)
  */
 export function parseAndUpsampleZones(
   labels: string[],
   waterType: "saltwater" | "freshwater",
   targetN: number,
+  coarseW: number = 32,
+  coarseH: number = 32,
 ): Uint8Array {
-  const COARSE = 32;
   const labelToIndex = waterType === "freshwater"
     ? FRESHWATER_LABEL_TO_INDEX
     : SALTWATER_LABEL_TO_INDEX;
 
-  // Build the 32×32 coarse index map
-  const coarse = new Uint8Array(COARSE * COARSE);
-  for (let i = 0; i < Math.min(labels.length, COARSE * COARSE); i++) {
+  // Tolerate slightly-off label arrays by clamping rather than throwing.
+  const expected = coarseW * coarseH;
+  const coarse = new Uint8Array(expected);
+  for (let i = 0; i < Math.min(labels.length, expected); i++) {
     coarse[i] = labelToIndex.get(labels[i] ?? "") ?? 0;
   }
 
-  // Upsample to targetN × targetN via bilinear interpolation
   const out = new Uint8Array(targetN * targetN);
-  const norm = targetN > 1 ? (COARSE - 1) / (targetN - 1) : 0;
+  const normR = targetN > 1 ? (coarseH - 1) / (targetN - 1) : 0;
+  const normC = targetN > 1 ? (coarseW - 1) / (targetN - 1) : 0;
 
   for (let row = 0; row < targetN; row++) {
     for (let col = 0; col < targetN; col++) {
-      const srcRow = row * norm;
-      const srcCol = col * norm;
+      const srcRow = row * normR;
+      const srcCol = col * normC;
 
       const r0 = Math.floor(srcRow);
-      const r1 = Math.min(r0 + 1, COARSE - 1);
+      const r1 = Math.min(r0 + 1, coarseH - 1);
       const c0 = Math.floor(srcCol);
-      const c1 = Math.min(c0 + 1, COARSE - 1);
+      const c1 = Math.min(c0 + 1, coarseW - 1);
 
       const dr = srcRow - r0;
       const dc = srcCol - c0;
 
-      const v00 = coarse[r0 * COARSE + c0] ?? 0;
-      const v01 = coarse[r0 * COARSE + c1] ?? 0;
-      const v10 = coarse[r1 * COARSE + c0] ?? 0;
-      const v11 = coarse[r1 * COARSE + c1] ?? 0;
+      const v00 = coarse[r0 * coarseW + c0] ?? 0;
+      const v01 = coarse[r0 * coarseW + c1] ?? 0;
+      const v10 = coarse[r1 * coarseW + c0] ?? 0;
+      const v11 = coarse[r1 * coarseW + c1] ?? 0;
 
       const value =
         v00 * (1 - dr) * (1 - dc) +

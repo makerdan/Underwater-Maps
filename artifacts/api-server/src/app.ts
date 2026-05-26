@@ -36,8 +36,14 @@ app.use(
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
 app.use(cors({ credentials: true, origin: true }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// JSON body limit raised from the 100 KB default so the classify route can
+// accept a full-resolution depth grid (`depthsFull`) for high-res datasets.
+// 1024×1024 floats serialise to roughly 5 MB of JSON; 10 MB leaves comfortable
+// headroom while still capping pathological uploads. Everything else on the
+// API is far smaller than this so the wider limit doesn't change other routes
+// in any meaningful way.
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.use(
   clerkMiddleware((req) => ({

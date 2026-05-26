@@ -177,14 +177,6 @@ router.get("/datasets/:id/zones", async (req, res): Promise<void> => {
   // The zone cache only ever stores AI results — heuristic fallbacks are not
   // persisted — so every hit reports `source: "ai"`. We default the field on
   // the response so older cached entries written before the field existed
-  // also surface the correct provenance. The waterType is validated against
-  // the cached entry as defense-in-depth, even though the namespaced cache
-  // key already prevents cross-waterType collisions.
-  //
-  // The cache key also incorporates the dataset's bundled-substrate
-  // fingerprint, so a change in surveyed substrate coverage invalidates
-  // stale classifications. Datasets with no coverage (uploads, out-of-
-  // coverage regions) collapse to fp "00000000" so behaviour is unchanged.
   const substrateFp = substrateFingerprintForDataset(id);
   // Under the new sha256-namespaced cache scheme there are no "bare gridHash"
   // legacy entries — the hydrate pass unlinks any non-64-char files on
@@ -194,14 +186,26 @@ router.get("/datasets/:id/zones", async (req, res): Promise<void> => {
   const namespacedKey = zoneCacheKey(gridHash, waterType, substrateFp);
   const inMemory = datasetZonesCache.get(namespacedKey);
   if (inMemory && inMemory.waterType === waterType) {
-    res.json({ ...inMemory, source: inMemory.source ?? "ai", substrateFp });
+    res.json({
+      ...inMemory,
+      source: inMemory.source ?? "ai",
+      substrateFp,
+      coarseWidth: inMemory.coarseWidth ?? 32,
+      coarseHeight: inMemory.coarseHeight ?? 32,
+    });
     return;
   }
 
   const onDisk = await readZoneDiskByHash(gridHash, waterType, substrateFp);
   if (onDisk && onDisk.waterType === waterType) {
     datasetZonesCache.set(namespacedKey, onDisk);
-    res.json({ ...onDisk, source: onDisk.source ?? "ai", substrateFp });
+    res.json({
+      ...onDisk,
+      source: onDisk.source ?? "ai",
+      substrateFp,
+      coarseWidth: onDisk.coarseWidth ?? 32,
+      coarseHeight: onDisk.coarseHeight ?? 32,
+    });
     return;
   }
 

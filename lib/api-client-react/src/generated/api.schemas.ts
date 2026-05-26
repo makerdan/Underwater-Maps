@@ -35,12 +35,24 @@ export interface PoeClassifyRequest {
   AI call fails. Not used when the AI call succeeds.
    */
   depths32?: number[];
+  /** Optional full-resolution row-major depth grid (length widthFull*heightFull).
+  When provided the server may split the area into multiple overlapping 32×32
+  tiles, classify each at the existing per-call resolution, and stitch the
+  results so high-resolution datasets preserve detail instead of being
+  collapsed into a single thumbnail.
+   */
+  depthsFull?: number[];
+  /** Width of `depthsFull` in cells. Required when `depthsFull` is set. */
+  widthFull?: number;
+  /** Height of `depthsFull` in cells. Required when `depthsFull` is set. */
+  heightFull?: number;
 }
 
 /**
- * "ai" when the labels come from the Poe AI classifier (live or cached);
-"heuristic" when the AI was unavailable and labels were estimated from
-depth percentiles only.
+ * "ai" when every cell was labeled by the Poe AI classifier (live or
+cached); "heuristic" when the depth-based fallback covered the whole
+grid because the AI was unavailable; "partial" when the result was
+stitched from a mix of AI-classified and heuristic tiles.
 
  */
 export type ClassifyResultSource = typeof ClassifyResultSource[keyof typeof ClassifyResultSource];
@@ -49,16 +61,21 @@ export type ClassifyResultSource = typeof ClassifyResultSource[keyof typeof Clas
 export const ClassifyResultSource = {
   ai: 'ai',
   heuristic: 'heuristic',
+  partial: 'partial',
 } as const;
 
 export interface ClassifyResult {
-  /** 1024 zone labels in row-major order (32×32 coarse grid) */
+  /** Zone labels in row-major order. Length is `coarseWidth*coarseHeight`,
+  which defaults to 1024 (32×32) for the single-tile path and grows for
+  tiled high-resolution datasets.
+   */
   zones: string[];
   /** Whether the result was served from the in-memory cache */
   fromCache: boolean;
-  /** "ai" when the labels come from the Poe AI classifier (live or cached);
-  "heuristic" when the AI was unavailable and labels were estimated from
-  depth percentiles only.
+  /** "ai" when every cell was labeled by the Poe AI classifier (live or
+  cached); "heuristic" when the depth-based fallback covered the whole
+  grid because the AI was unavailable; "partial" when the result was
+  stitched from a mix of AI-classified and heuristic tiles.
    */
   source?: ClassifyResultSource;
   /** 8-char hex fingerprint of the bundled ShoreZone + ENC substrate grid
@@ -67,6 +84,16 @@ export interface ClassifyResult {
   "00000000" when the dataset has no substrate coverage.
    */
   substrateFp?: string;
+  /** Width of the returned zones grid. Defaults to 32 when omitted. */
+  coarseWidth?: number;
+  /** Height of the returned zones grid. Defaults to 32 when omitted. */
+  coarseHeight?: number;
+  /** Total number of tiles in the plan (1 for the single-tile path). */
+  tilesTotal?: number;
+  /** Number of tiles that were successfully labeled by the AI. */
+  tilesAi?: number;
+  /** Number of tiles that fell back to the heuristic classifier. */
+  tilesHeuristic?: number;
 }
 
 export type ToolCallArgs = { [key: string]: unknown };

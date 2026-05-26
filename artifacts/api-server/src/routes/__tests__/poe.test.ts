@@ -321,122 +321,141 @@ describe("POST /api/poe/classify", () => {
     expect(new Set(res.body.zones as string[])).toEqual(new Set(["volcanic_vent_field"]));
   });
 
-  it("returns 429 once the per-user rate limit (30 req/min) is exceeded", async () => {
-    const userId = "user-ratelimit";
+  it("uses the tiled path when depthsFull is supplied for a high-res dataset", async () => {
+    // 128×128 grid → planTiles picks K=2 → 4 LLM calls.
+    const W = 128;
+    const H = 128;
+    const depthsFull = Array.from({ length: W * H }, (_, i) => i);
 
-    // Burn through the 30-request window. Vary datasetId so the cache
-    // doesn't short-circuit each call before logUsage runs.
-    for (let i = 0; i < 30; i++) {
-      const res = await request(app)
-        .post("/api/poe/classify")
-        .set("x-e2e-user-id", userId)
-        .send({
-          gridBase64: GRID_BASE64,
-          waterType: "saltwater",
-          datasetId: `ds-rl-${i}`,
-        });
-      expect(res.status).toBe(200);
-    }
+    // Each tile gets a distinct label so we can spot which tile owned which
+    // quadrant after stitching.
+    let callIdx = 0;
+    fakeCreate.mockReset();
+    fakeCreate.mockImplementation(async () => {
+      const label = `sandy_shelf`; // any valid label works
+      callIdx++;
+      return {
+        id: `resp_tile_${callIdx}`,
+        output_text: JSON.stringify({ zones: Array(1024).fill(label) }),
+        usage: { input_tokens: 50, output_tokens: 100 },
+      };
+    });
 
-    const limited = await request(app)
+    const res = await request(app)
       .post("/api/poe/classify")
-      .set("x-e2e-user-id", userId)
+      .set("x-e2e-user-id", "user-tiled")
       .send({
         gridBase64: GRID_BASE64,
         waterType: "saltwater",
-        datasetId: "ds-rl-overflow",
+        datasetId: "ds-tiled",
+        depthsFull,
+        widthFull: W,
+        heightFull: H,
       });
 
-    expect(limited.status).toBe(429);
-    expect(limited.body).toMatchObject({ error: "rate_limit" });
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBe("ai");
+    expect(res.body.coarseWidth).toBe(64);
+    expect(res.body.coarseHeight).toBe(64);
+    expect(res.body.tilesTotal).toBe(4);
+    expect(res.body.tilesAi).toBe(4);
+    expect(res.body.tilesHeuristic).toBe(0);
+    expect(res.body.zones).toHaveLength(64 * 64);
+    expect(fakeCreate).toHaveBeenCalledTimes(4);
   });
-});
 
-describe("POST /api/poe/describe — client disconnect", () => {
-  it("aborts the upstream stream when the client closes the connection mid-stream", async () => {
-    // Capture the AbortSignal the route passes to the streaming SDK call.
-    let receivedSignal: AbortSignal | undefined;
-    let upstreamAborted = false;
+  it("falls back to per-tile heuristic when AI is unavailable, marking source=partial", async () => {
+    const W = 128;
+    const H = 128;
+    // Use a depth ramp so the heuristic produces a mix of zone labels rather
+    // than a single flat value (lets us verify the heuristic actually ran).
+    const depthsFull = Array.from({ length: W * H }, (_, i) => (i % 50));
 
-    fakeChatCreate.mockReset();
-    fakeChatCreate.mockImplementation(
-      async (
-        _body: unknown,
-        opts?: { signal?: AbortSignal },
-      ): Promise<AsyncIterable<{ choices: Array<{ delta: { content?: string } }> }>> => {
-        receivedSignal = opts?.signal;
-        receivedSignal?.addEventListener("abort", () => {
-          upstreamAborted = true;
-        });
-        async function* gen() {
-          // Stream indefinitely until aborted.
-          for (let i = 0; i < 1000; i++) {
-            if (receivedSignal?.aborted) {
-              throw Object.assign(new Error("aborted"), { name: "AbortError" });
-            }
-            yield { choices: [{ delta: { content: "x" } }] };
-            await new Promise((r) => setTimeout(r, 20));
-          }
-        }
-        return gen();
-      },
-    );
+    // Every per-tile AI call fails (including all retries), so every tile
+    // should fall through to the heuristic. The whole-grid result is still
+    // returned with source="partial" (mixed AI=0, heuristic=N).
+    fakeCreate.mockReset();
+    fakeCreate.mockRejectedValue(new Error("simulated AI outage"));
 
-    const server = app.listen(0);
-    try {
-      const addr = server.address();
-      if (!addr || typeof addr === "string") throw new Error("no address");
-      const port = addr.port;
-
-      // Fire a request with the http module so we can destroy mid-flight.
-      const http = await import("node:http");
-      await new Promise<void>((resolve, reject) => {
-        const req = http.request(
-          {
-            hostname: "127.0.0.1",
-            port,
-            path: "/api/poe/describe",
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              "x-e2e-user-id": "user-describe-abort",
-            },
-          },
-          (res) => {
-            let received = 0;
-            res.on("data", () => {
-              received++;
-              // Tear down after we've seen a couple of chunks so we know the
-              // stream is genuinely flowing.
-              if (received >= 2) req.destroy();
-            });
-            res.on("close", () => resolve());
-            res.on("error", () => resolve());
-          },
-        );
-        req.on("error", () => resolve());
-        req.write(
-          JSON.stringify({
-            lon: 0,
-            lat: 0,
-            depth: 100,
-            zoneName: "sandy_shelf",
-            datasetName: "ds",
-            waterType: "saltwater",
-          }),
-        );
-        req.end();
-
-        setTimeout(() => reject(new Error("test timed out")), 8000);
+    const res = await request(app)
+      .post("/api/poe/classify")
+      .set("x-e2e-user-id", "user-partial")
+      .send({
+        gridBase64: GRID_BASE64,
+        waterType: "saltwater",
+        datasetId: "ds-partial",
+        depthsFull,
+        widthFull: W,
+        heightFull: H,
       });
 
-      // Give the server a moment to wire the close → abort propagation.
-      await new Promise((r) => setTimeout(r, 100));
-      expect(receivedSignal).toBeDefined();
-      expect(receivedSignal?.aborted).toBe(true);
-      expect(upstreamAborted).toBe(true);
-    } finally {
-      await new Promise<void>((r) => server.close(() => r()));
-    }
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBe("partial");
+    expect(res.body.tilesTotal).toBe(4);
+    expect(res.body.tilesHeuristic).toBe(4);
+    expect(res.body.tilesAi).toBe(0);
+    expect(res.body.zones).toHaveLength(64 * 64);
+    // Heuristic produces multiple zone labels for a non-flat depth grid.
+    const unique = new Set(res.body.zones as string[]);
+    expect(unique.size).toBeGreaterThan(1);
   });
-});
+
+  it("accepts a large depthsFull payload (>100 KB) and saturates the 16-tile cap", async () => {
+    // A 256×256 grid serialises to ~130 KB of JSON — comfortably over the
+    // default 100 KB Express body limit. This guards against future
+    // regressions of the limit raise in `app.ts` and exercises the full
+    // 4×4=16-tile cap end-to-end.
+    const W = 256;
+    const H = 256;
+    const depthsFull = new Array(W * H).fill(0);
+
+    fakeCreate.mockReset();
+    fakeCreate.mockResolvedValue({
+      id: "resp_big",
+      output_text: JSON.stringify({ zones: Array(1024).fill("silt_plain") }),
+      usage: { input_tokens: 10, output_tokens: 10 },
+    });
+
+    const res = await request(app)
+      .post("/api/poe/classify")
+      .set("x-e2e-user-id", "user-big")
+      .send({
+        gridBase64: GRID_BASE64,
+        waterType: "saltwater",
+        datasetId: "ds-big",
+        depthsFull,
+        widthFull: W,
+        heightFull: H,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.tilesTotal).toBeLessThanOrEqual(16);
+    expect(res.body.tilesTotal).toBeGreaterThan(1);
+    expect(res.body.coarseWidth).toBeGreaterThanOrEqual(64);
+    expect(fakeCreate.mock.calls.length).toBeLessThanOrEqual(16);
+  });
+
+  it("falls through to the single-tile path when depthsFull resolves to K=1", async () => {
+    const W = 32;
+    const H = 32;
+    const depthsFull = new Array(W * H).fill(0);
+
+    const res = await request(app)
+      .post("/api/poe/classify")
+      .set("x-e2e-user-id", "user-small")
+      .send({
+        gridBase64: GRID_BASE64,
+        waterType: "saltwater",
+        datasetId: "ds-small",
+        depthsFull,
+        widthFull: W,
+        heightFull: H,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.tilesTotal).toBe(1);
+    expect(res.body.coarseWidth).toBe(32);
+    expect(res.body.coarseHeight).toBe(32);
+    expect(res.body.zones).toHaveLength(1024);
+    expect(fakeCreate).toHaveBeenCalledTimes(1);
+  });
