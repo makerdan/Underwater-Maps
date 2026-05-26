@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 
 /**
  * Water-type toggle end-to-end test.
@@ -25,16 +25,6 @@ const FRESHWATER_DATASET = "btn-dataset-lake-fork";
 test.describe("Water-type toggle", () => {
   test("switching to freshwater and back updates UI, datasets, and colormap", async ({ page }) => {
     test.setTimeout(120_000);
-
-    // Reset the dev user's persisted waterType to a known baseline
-    // ("saltwater") before the page loads. The dev-auth bypass on the API
-    // server matches on the `x-e2e-user-id` header that the frontend's
-    // devAuth helper injects on every fetch; sending the same header here
-    // targets the same row.
-    await page.request.put("http://127.0.0.1:3151/api/settings", {
-      headers: { "x-e2e-user-id": "dev-user-bypass" },
-      data: { waterType: "saltwater" },
-    });
 
     await page.goto("/");
 

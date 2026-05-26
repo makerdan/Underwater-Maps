@@ -1,14 +1,7 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 
 test.describe("BathyScan — minimap visibility", () => {
-  test.beforeEach(async ({ page, request }) => {
-    // Reset the toggle that the "disabled" test below flips, so a prior
-    // failure can't leave the minimap hidden for this run (or for other
-    // specs sharing the dev-user-bypass user).
-    await request.put("http://127.0.0.1:3151/api/settings", {
-      headers: { "x-e2e-user-id": "dev-user-bypass" },
-      data: { showCompassMinimap: true },
-    });
+  test.beforeEach(async ({ page }) => {
     await page.goto("/");
   });
 
@@ -70,11 +63,7 @@ test.describe("BathyScan — minimap visibility", () => {
     // Wait for the scene to come back up before asserting absence.
     await canvas.isVisible({ timeout: 15_000 }).catch(() => false);
     await expect(minimap).toHaveCount(0);
-
-    // Restore default so we don't poison other specs that share the dev user.
-    await request.put("http://127.0.0.1:3151/api/settings", {
-      headers: { "x-e2e-user-id": "dev-user-bypass" },
-      data: { showCompassMinimap: true },
-    });
+    // No manual restore needed — the shared resetSettings fixture (fixtures.ts)
+    // resets showCompassMinimap to true automatically before the next test.
   });
 });
