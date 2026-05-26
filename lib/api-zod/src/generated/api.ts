@@ -1096,7 +1096,10 @@ export const GetSubstrateResponse = zod.object({
   "color": zod.string().describe('Suggested hex color for rendering'),
   "szMaterial": zod.string().nullish().describe('Raw ShoreZone Mat_Desc (Rock \/ Clastic \/ Biogenic)'),
   "szForm": zod.string().nullish().describe('Raw ShoreZone Form_Desc (Cliff \/ Platform \/ Beach \/ Tidal Flat \/ Marsh)'),
-  "areaSqM": zod.number().nullish().describe('Polygon area in square metres from the upstream Area attribute')
+  "areaSqM": zod.number().nullish().describe('Polygon area in square metres from the upstream Area attribute'),
+  "natsur": zod.string().nullish().describe('Per-feature citation \/ classification narrative. For NOAA ENC features\nthis is the raw S-57 NATSUR descriptor; for TPWD Texas lake-substrate\nfeatures this is the lake-survey narrative explaining why this polygon\nwas classified the way it was (used as the tooltip body).\n'),
+  "natqua": zod.string().nullish().describe('Raw S-57 NATQUA qualifier (ENC features only)'),
+  "encChart": zod.string().nullish().describe('Provenance link for this feature. For NOAA ENC features this is the\nchart number; for TPWD Texas lake-substrate features this is the\noutbound TPWD lake page URL shown as a \"↗ TPWD lake page\" link in\nthe substrate info card.\n')
 }).describe('Per-feature properties for an Alaska ShoreZone substrate polygon.\n'),
   "geometry": zod.record(zod.string(), zod.unknown())
 })),

@@ -24,6 +24,7 @@ import {
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { TemperatureProfileChart } from "@/components/TemperatureProfileChart";
 import { ShoreZoneCredit } from "@/components/ShoreZoneCredit";
+import { SubstrateLegend } from "@/components/SubstrateLegend";
 
 
 /**
@@ -627,7 +628,10 @@ export const HUD: React.FC = () => {
               public-domain reuse. Only shown while the substrate tint overlay
               is active. */}
           {substrateColorMode && (
-            <ShoreZoneCredit style={{ textAlign: "right", maxWidth: 260 }} />
+            <>
+              <SubstrateLegend />
+              <ShoreZoneCredit style={{ textAlign: "right", maxWidth: 260 }} />
+            </>
           )}
 
           {/* Always-on Wind / Tide / Current overlay toggles */}
@@ -815,7 +819,7 @@ export const HUD: React.FC = () => {
                 letterSpacing: "0.2em",
               }}
             >
-              SHOREZONE UNIT
+              SUBSTRATE FEATURE
             </span>
             <button
               onClick={() => setSelectedSubstrate(null)}
@@ -868,6 +872,35 @@ export const HUD: React.FC = () => {
               </span>
             </div>
           )}
+          {selectedSubstrate.natsur && (
+            <div
+              data-testid="substrate-info-natsur"
+              style={{
+                marginTop: 6,
+                paddingTop: 6,
+                borderTop: "1px solid rgba(148,163,184,0.2)",
+                color: "#cbd5e1",
+                fontSize: 9,
+                lineHeight: 1.45,
+              }}
+            >
+              {selectedSubstrate.natsur}
+            </div>
+          )}
+          {selectedSubstrate.encChart &&
+            /^https?:\/\//.test(selectedSubstrate.encChart) && (
+              <div style={{ marginTop: 6 }}>
+                <a
+                  data-testid="substrate-info-feature-link"
+                  href={selectedSubstrate.encChart}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "#7dd3fc", textDecoration: "underline", fontSize: 9 }}
+                >
+                  ↗ TPWD lake page
+                </a>
+              </div>
+            )}
           <div
             style={{
               marginTop: 8,

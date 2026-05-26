@@ -704,6 +704,20 @@ export interface SubstrateProperties {
   szForm?: string | null;
   /** Polygon area in square metres from the upstream Area attribute */
   areaSqM?: number | null;
+  /** Per-feature citation / classification narrative. For NOAA ENC features
+  this is the raw S-57 NATSUR descriptor; for TPWD Texas lake-substrate
+  features this is the lake-survey narrative explaining why this polygon
+  was classified the way it was (used as the tooltip body).
+   */
+  natsur?: string | null;
+  /** Raw S-57 NATQUA qualifier (ENC features only) */
+  natqua?: string | null;
+  /** Provenance link for this feature. For NOAA ENC features this is the
+  chart number; for TPWD Texas lake-substrate features this is the
+  outbound TPWD lake page URL shown as a "↗ TPWD lake page" link in
+  the substrate info card.
+   */
+  encChart?: string | null;
 }
 
 export type SubstrateFeatureType = typeof SubstrateFeatureType[keyof typeof SubstrateFeatureType];

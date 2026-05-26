@@ -213,6 +213,8 @@ export const SubstrateLayer: React.FC = () => {
         szMaterial: props.szMaterial ?? null,
         szForm: props.szForm ?? null,
         areaSqM: props.areaSqM ?? null,
+        natsur: props.natsur ?? null,
+        encChart: props.encChart ?? null,
         sourceName,
         creditUrl,
       });

@@ -17,6 +17,18 @@ export interface SelectedSubstrate {
   szMaterial: string | null;
   szForm: string | null;
   areaSqM: number | null;
+  /**
+   * Per-feature citation narrative. For ENC features this is the raw S-57
+   * NATSUR; for TPWD Texas lake features this is the lake-survey sentence
+   * explaining the classification. Rendered in the info-card tooltip body.
+   */
+  natsur: string | null;
+  /**
+   * Per-feature outbound link. For TPWD Texas lake features this is the
+   * TPWD lake page URL ("↗ TPWD lake page"); for ENC features this is the
+   * chart number string (no link rendered then).
+   */
+  encChart: string | null;
   /** Source / credit metadata from the FeatureCollection. */
   sourceName: string;
   creditUrl: string;
