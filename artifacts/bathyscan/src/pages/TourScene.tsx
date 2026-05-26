@@ -43,9 +43,19 @@ import { WebglContextLostOverlay } from "@/components/WebglContextLostOverlay";
 // a <group> that scales + translates that frame so its geographic footprint
 // lines up with the primary's footprint.
 //
-// Y alignment is intentionally not corrected — each TerrainMesh normalises
-// depth to its own range, so non-primary meshes float at their own elevation.
-// Task #350 only requires XZ co-location.
+// Y alignment: each TerrainMesh internally normalises its own depth range to
+// [0, -MAX_DEPTH_WORLD] (sea-surface depth=minDepth at y=0, deepest at
+// y=-MAX_DEPTH_WORLD). To make a non-primary mesh read at its true ocean
+// depth relative to the primary, we re-scale and offset Y so equal world-Y
+// distances correspond to equal meters across all datasets, and y=0 always
+// represents depth=primary.minDepth.
+//
+//   worldY(depth) = (primary.minDepth - depth) / primaryDepthRange * MAX
+//   localY(depth) = -(depth - g.minDepth)     / gDepthRange       * MAX
+//
+// Solving for worldY in terms of localY gives:
+//   yScale  = gDepthRange / primaryDepthRange
+//   yOffset = (primary.minDepth - g.minDepth) / primaryDepthRange * MAX
 // ---------------------------------------------------------------------------
 const NonPrimaryDatasetMeshes: React.FC<{
   primary: TerrainData;
@@ -55,6 +65,7 @@ const NonPrimaryDatasetMeshes: React.FC<{
   const primaryId = useTerrainStore((s) => s.primaryDatasetId);
   const primaryLonRange = (primary.maxLon - primary.minLon) || 1;
   const primaryLatRange = (primary.maxLat - primary.minLat) || 1;
+  const primaryDepthRange = (primary.maxDepth - primary.minDepth) || 1;
   return (
     <>
       {visible
@@ -63,19 +74,23 @@ const NonPrimaryDatasetMeshes: React.FC<{
           const g = v.activeGrid as TerrainData;
           const secLonRange = (g.maxLon - g.minLon) || 1;
           const secLatRange = (g.maxLat - g.minLat) || 1;
+          const secDepthRange = (g.maxDepth - g.minDepth) || 1;
           const xScale = secLonRange / primaryLonRange;
           const zScale = secLatRange / primaryLatRange;
+          const yScale = secDepthRange / primaryDepthRange;
           const secCenterLon = (g.minLon + g.maxLon) / 2;
           const secCenterLat = (g.minLat + g.maxLat) / 2;
           const primCenterLon = (primary.minLon + primary.maxLon) / 2;
           const primCenterLat = (primary.minLat + primary.maxLat) / 2;
           const cx = ((secCenterLon - primCenterLon) / primaryLonRange) * WORLD_SIZE;
           const cz = -((secCenterLat - primCenterLat) / primaryLatRange) * WORLD_SIZE;
+          const cy =
+            ((primary.minDepth - g.minDepth) / primaryDepthRange) * MAX_DEPTH_WORLD;
           return (
             <group
               key={v.datasetId}
-              position={[cx, 0, cz]}
-              scale={[xScale, 1, zScale]}
+              position={[cx, cy, cz]}
+              scale={[xScale, yScale, zScale]}
             >
               <TerrainMesh grid={g} />
               {showLandmass && <LandmassMesh grid={g} />}
