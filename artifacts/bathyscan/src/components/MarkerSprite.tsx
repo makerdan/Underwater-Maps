@@ -33,7 +33,33 @@ export const MarkerSprite: React.FC<Props> = ({ marker, terrain, showLabel = tru
 
   return (
     <group userData={{ markerId: marker.id }}>
-      {/* Slim glowing vertical cylinder (pillar) */}
+      {/* Outer glow cylinder — wide, very transparent, additive blending */}
+      <mesh position={[x, midY, z]}>
+        <cylinderGeometry args={[0.18, 0.18, poleHeight, 8]} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={0.08}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+
+      {/* Inner glow cylinder — slightly wider than the core, additive blending */}
+      <mesh position={[x, midY, z]}>
+        <cylinderGeometry args={[0.10, 0.10, poleHeight, 8]} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={0.18}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+
+      {/* Slim core cylinder (pillar) */}
       <mesh position={[x, midY, z]}>
         <cylinderGeometry args={[0.04, 0.04, poleHeight, 8]} />
         <meshBasicMaterial color={color} transparent opacity={0.9} />
@@ -41,6 +67,19 @@ export const MarkerSprite: React.FC<Props> = ({ marker, terrain, showLabel = tru
 
       {/* Billboard icon disc + label at the top of the pillar */}
       <Billboard position={[x, 0.05, z]}>
+        {/* Glow halo disc behind the icon — wider, additive blending */}
+        <mesh>
+          <circleGeometry args={[0.55, 20]} />
+          <meshBasicMaterial
+            color={color}
+            side={THREE.DoubleSide}
+            transparent
+            opacity={0.15}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
+          />
+        </mesh>
+
         {/* Icon disc */}
         <mesh>
           <circleGeometry args={[0.3, 20]} />
