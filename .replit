@@ -106,6 +106,7 @@ externalPort = 3001
 [[ports]]
 localPort = 3151
 externalPort = 3003
+exposeLocalhost = true
 
 [[ports]]
 localPort = 8080

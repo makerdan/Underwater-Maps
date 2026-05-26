@@ -890,7 +890,7 @@ interface BundledLayerProvenance {
   attempts: { source: TerrainDataSource | string; ok: boolean; note: string }[];
 }
 
-interface BundledTerrain {
+export interface BundledTerrain {
   datasetId: string;
   bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number };
   width: number;
@@ -931,13 +931,13 @@ function loadBundledTerrain(fileName: string): BundledTerrain | null {
  * fetch. A missing/unreadable file logs a warning and leaves the entry
  * null — the ranked resolver then falls through to the next source.
  */
-const BUNDLED_TERRAIN: Record<string, BundledTerrain | null> = {
+export const BUNDLED_TERRAIN: Record<string, BundledTerrain | null> = {
   "lake-ray-roberts": loadBundledTerrain("lakeRayRobertsTerrain.gen.json"),
   "lake-texoma": loadBundledTerrain("lakeTexomaTerrain.gen.json"),
 };
 
 /** Resample a bundled grid to the requested resolution by nearest neighbour. */
-function resampleBundled(bundle: BundledTerrain, N: number): {
+export function resampleBundled(bundle: BundledTerrain, N: number): {
   depths: number[];
   topography: number[];
   minDepth: number;

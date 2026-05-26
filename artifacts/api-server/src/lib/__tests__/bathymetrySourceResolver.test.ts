@@ -14,8 +14,10 @@
 import { describe, it, expect } from "vitest";
 import {
   BATHYMETRY_SOURCES,
+  BUNDLED_TERRAIN,
   DATASET_SOURCE_PRIORITY,
   NCEI_DATASET_COVERAGES,
+  resampleBundled,
   resolveBathymetrySource,
   type BathymetrySourceId,
 } from "../terrain.js";
@@ -145,6 +147,79 @@ describe("resolveBathymetrySource — ranked fallback", () => {
       expect(fake.calls).toEqual(["gebco"]);
     } finally {
       fake.restore();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bundled surveyed-bathymetry bundles — presence and resample integrity
+// ---------------------------------------------------------------------------
+
+describe("BUNDLED_TERRAIN — bundle file presence and resample integrity", () => {
+  it("registers exactly the expected bundled dataset ids", () => {
+    expect(Object.keys(BUNDLED_TERRAIN).sort()).toEqual(
+      ["lake-ray-roberts", "lake-texoma"].sort(),
+    );
+  });
+
+  it("every registered bundle loaded successfully (non-null)", () => {
+    for (const [id, bundle] of Object.entries(BUNDLED_TERRAIN)) {
+      expect(
+        bundle,
+        `BUNDLED_TERRAIN["${id}"] is null — the bundle file is missing or unparseable`,
+      ).not.toBeNull();
+    }
+  });
+
+  it("every bundle has a valid bbox, positive width and height", () => {
+    for (const [id, bundle] of Object.entries(BUNDLED_TERRAIN)) {
+      if (!bundle) continue;
+      expect(bundle.width, `${id}: width must be > 0`).toBeGreaterThan(0);
+      expect(bundle.height, `${id}: height must be > 0`).toBeGreaterThan(0);
+      expect(bundle.bbox.minLon, `${id}: minLon`).toBeLessThan(bundle.bbox.maxLon);
+      expect(bundle.bbox.minLat, `${id}: minLat`).toBeLessThan(bundle.bbox.maxLat);
+    }
+  });
+
+  it("resampleBundled round-trips at native resolution without throwing", () => {
+    for (const [id, bundle] of Object.entries(BUNDLED_TERRAIN)) {
+      if (!bundle) continue;
+      const rs = resampleBundled(bundle, bundle.width);
+      expect(rs.depths.length, `${id}: depths.length at native res`).toBe(
+        bundle.width * bundle.height,
+      );
+      expect(rs.topography.length, `${id}: topography.length at native res`).toBe(
+        bundle.width * bundle.height,
+      );
+      expect(Number.isFinite(rs.minDepth), `${id}: minDepth must be finite`).toBe(true);
+      expect(Number.isFinite(rs.maxDepth), `${id}: maxDepth must be finite`).toBe(true);
+      expect(rs.maxDepth, `${id}: maxDepth >= minDepth`).toBeGreaterThanOrEqual(rs.minDepth);
+    }
+  });
+
+  it("resampleBundled round-trips at a downsampled resolution without throwing", () => {
+    const N = 16;
+    for (const [id, bundle] of Object.entries(BUNDLED_TERRAIN)) {
+      if (!bundle) continue;
+      const rs = resampleBundled(bundle, N);
+      expect(rs.depths.length, `${id}: depths.length at N=${N}`).toBe(N * N);
+      expect(rs.topography.length, `${id}: topography.length at N=${N}`).toBe(N * N);
+      expect(Number.isFinite(rs.minDepth), `${id}: minDepth must be finite`).toBe(true);
+      expect(Number.isFinite(rs.maxDepth), `${id}: maxDepth must be finite`).toBe(true);
+    }
+  });
+
+  it("bundled-survey source in DATASET_SOURCE_PRIORITY covers every BUNDLED_TERRAIN key", () => {
+    for (const id of Object.keys(BUNDLED_TERRAIN)) {
+      const priority = DATASET_SOURCE_PRIORITY[id];
+      expect(
+        priority,
+        `DATASET_SOURCE_PRIORITY["${id}"] is missing — add it so bundled-survey is reachable`,
+      ).toBeDefined();
+      expect(
+        priority?.[0],
+        `DATASET_SOURCE_PRIORITY["${id}"] must lead with 'bundled-survey'`,
+      ).toBe("bundled-survey");
     }
   });
 });
