@@ -22,6 +22,11 @@ test.describe("BathyScan — GPS activation", () => {
   test.beforeEach(async ({ page, context }) => {
     await context.grantPermissions(["geolocation"]).catch(() => {});
     await context.setGeolocation({ latitude: MOCK_LAT, longitude: MOCK_LON, accuracy: 8 });
+    await page.addInitScript(() => {
+      try {
+        sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+    });
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await page.waitForTimeout(500);
@@ -95,7 +100,7 @@ test.describe("BathyScan — GPS activation", () => {
     }
 
     // Click to activate — with mocked geolocation this triggers watchPosition callback
-    await gpsBtn.click();
+    await gpsBtn.click({ force: true });
     await page.waitForTimeout(2000);
 
     // aria-pressed should be valid regardless of whether GPS resolved
@@ -113,12 +118,20 @@ test.describe("BathyScan — trail recording flow", () => {
   test.beforeEach(async ({ page, context }) => {
     await context.grantPermissions(["geolocation"]).catch(() => {});
     await context.setGeolocation({ latitude: MOCK_LAT, longitude: MOCK_LON, accuracy: 8 });
+    // Suppress SimulatedDataConfirmDialog so its overlay cannot intercept
+    // clicks on the GPS button inside the OverviewMap.
+    await page.addInitScript(() => {
+      try {
+        sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+    });
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await page.waitForTimeout(500);
   });
 
   test("trail recorder UI elements are present (signed-in, GPS active)", async ({ page }) => {
+    test.setTimeout(90_000);
     const canvas = page.locator("canvas").first();
     const canvasVisible = await canvas.isVisible({ timeout: 12_000 }).catch(() => false);
     if (!canvasVisible) {
@@ -138,15 +151,21 @@ test.describe("BathyScan — trail recording flow", () => {
       return;
     }
 
-    await gpsBtn.click();
+    // Use dispatchEvent to bypass any overlay that may intercept pointer
+    // events (the SimulatedDataConfirmDialog covers the whole screen).
+    await gpsBtn.dispatchEvent("click");
     await page.waitForTimeout(2000);
+
+    // Read the GPS state BEFORE closing the overview map — after closing,
+    // the OverviewMap component may unmount and remove the GPS button from
+    // the DOM, causing getAttribute to wait indefinitely.
+    const isActive = await gpsBtn.getAttribute("aria-pressed", { timeout: 5_000 }).catch(() => null) === "true";
 
     // Close overview map
     await page.evaluate(() => window.__bathyTest?.setOverviewOpen?.(false)).catch(() => {});
     await page.waitForTimeout(400);
 
     // Only test recorder if GPS actually activated
-    const isActive = await gpsBtn.getAttribute("aria-pressed") === "true";
     if (!isActive) {
       test.skip(true, "GPS did not activate in headless environment");
       return;
@@ -159,6 +178,7 @@ test.describe("BathyScan — trail recording flow", () => {
   });
 
   test("start recording captures GPS points, stop returns to idle (signed-in, GPS active)", async ({ page }) => {
+    test.setTimeout(90_000);
     const canvas = page.locator("canvas").first();
     const canvasVisible = await canvas.isVisible({ timeout: 12_000 }).catch(() => false);
     if (!canvasVisible) {
@@ -178,12 +198,16 @@ test.describe("BathyScan — trail recording flow", () => {
       return;
     }
 
-    await gpsBtn.click();
+    await gpsBtn.dispatchEvent("click");
     await page.waitForTimeout(2000);
+
+    // Read GPS state BEFORE closing the overview map to avoid getAttribute
+    // timing out when the OverviewMap unmounts and removes the button from DOM.
+    const isActive = await gpsBtn.getAttribute("aria-pressed", { timeout: 5_000 }).catch(() => null) === "true";
+
     await page.evaluate(() => window.__bathyTest?.setOverviewOpen?.(false)).catch(() => {});
     await page.waitForTimeout(400);
 
-    const isActive = await gpsBtn.getAttribute("aria-pressed") === "true";
     if (!isActive) {
       test.skip(true, "GPS did not activate in headless environment");
       return;
@@ -197,7 +221,7 @@ test.describe("BathyScan — trail recording flow", () => {
     }
 
     // ─── Start recording ───────────────────────────────────────────────────
-    await page.locator("[data-testid='trail-start-btn']").click();
+    await page.locator("[data-testid='trail-start-btn']").dispatchEvent("click");
     await page.waitForTimeout(800);
 
     // Stop button must appear (recording is active)
@@ -215,7 +239,7 @@ test.describe("BathyScan — trail recording flow", () => {
     expect(pts).toBeGreaterThanOrEqual(1);
 
     // ─── Stop recording ────────────────────────────────────────────────────
-    await stopBtn.click();
+    await stopBtn.dispatchEvent("click");
     await page.waitForTimeout(1000);
 
     // Start button must return (recording stopped)

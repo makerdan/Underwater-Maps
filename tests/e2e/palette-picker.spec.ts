@@ -35,13 +35,13 @@ test.describe("Depth palette picker — end-to-end", () => {
     // 1. Land on the main scene and wait for the depth scale bar (which
     //    requires `terrain` to be loaded into AppState).
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     const scaleBar = page.locator('img[alt="depth colormap"]');
     // Terrain has to load from the API before the depth scale bar mounts;
     // first-request fetches can take a while when caches are cold.
     const barVisible = await scaleBar
-      .waitFor({ state: "visible", timeout: 45_000 })
+      .waitFor({ state: "visible", timeout: 25_000 })
       .then(() => true)
       .catch(() => false);
     if (!barVisible) {
@@ -52,7 +52,7 @@ test.describe("Depth palette picker — end-to-end", () => {
     // 2. SPA-navigate to /settings via the topbar Settings button so
     //    AppState (and the loaded terrain) is preserved across the
     //    transition back to `/`.
-    await page.locator('button[aria-label="Settings"], button:has-text("Settings")').first().click();
+    await page.locator('button[aria-label="Settings"], button:has-text("Settings")').first().dispatchEvent("click");
     await page.waitForURL((url) => url.pathname.endsWith("/settings"), { timeout: 5_000 });
     await expect(page.locator("text=◈ DEPTH COLOR PALETTE")).toBeVisible({ timeout: 10_000 });
 
@@ -66,12 +66,12 @@ test.describe("Depth palette picker — end-to-end", () => {
     const colormapTrigger = page.getByTestId("depth-colormap-select");
     await expect(colormapTrigger).toBeVisible({ timeout: 10_000 });
     if ((await colormapTrigger.getAttribute("data-value")) !== "ocean") {
-      await colormapTrigger.click();
+      await colormapTrigger.dispatchEvent("click");
       await page
         .locator(`ul[role="listbox"] li[role="option"]`)
         .filter({ hasText: /Ocean/i })
         .first()
-        .click();
+        .dispatchEvent("click");
       await expect(colormapTrigger).toHaveAttribute("data-value", "ocean", {
         timeout: 5_000,
       });
@@ -99,7 +99,7 @@ test.describe("Depth palette picker — end-to-end", () => {
 
     // 4. SPA-navigate back to the main scene via ← BACK and assert the
     //    HUD scale bar repainted with the new gradient.
-    await page.locator("text=← BACK").click();
+    await page.locator("text=← BACK").dispatchEvent("click");
     await page.waitForURL((url) => !url.pathname.endsWith("/settings"), { timeout: 5_000 });
 
     const scaleBar2 = page.locator('img[alt="depth colormap"]');
@@ -143,8 +143,8 @@ test.describe("Depth palette picker — end-to-end", () => {
     expect(bottomPixel.b).toBeLessThan(80);
 
     // 6. Clean up so a re-run of the suite starts from defaults.
-    await page.locator('button[aria-label="Settings"], button:has-text("Settings")').first().click();
+    await page.locator('button[aria-label="Settings"], button:has-text("Settings")').first().dispatchEvent("click");
     await page.waitForURL((url) => url.pathname.endsWith("/settings"), { timeout: 5_000 });
-    await page.locator('[data-testid="palette-reset-btn"]').click();
+    await page.locator('[data-testid="palette-reset-btn"]').dispatchEvent("click");
   });
 });

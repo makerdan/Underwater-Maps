@@ -27,7 +27,11 @@ import { test, expect, type Page } from "@playwright/test";
 
 async function ensureSignedIn(page: Page): Promise<void> {
   await page.goto("/");
-  await page.waitForLoadState("networkidle");
+  // domcontentloaded (not networkidle): the home route keeps long-lived
+  // requests open (NOAA, surface-conditions, terrain warm-up) so networkidle
+  // never resolves before Playwright's 30 s timeout. The canvas visibility
+  // check below is the real gate for "signed in".
+  await page.waitForLoadState("domcontentloaded");
   const canvas = page.locator("canvas").first();
   const visible = await canvas.isVisible({ timeout: 15_000 }).catch(() => false);
   if (!visible) {
@@ -51,7 +55,7 @@ async function expectHelpOpenedTo(page: Page, expectedTitle: string): Promise<vo
 async function closeHelpWindow(page: Page): Promise<void> {
   const closeBtn = page.locator('[data-testid="help-window"] .help-titlebar-close');
   if (await closeBtn.isVisible().catch(() => false)) {
-    await closeBtn.click();
+    await closeBtn.dispatchEvent("click");
     await expect(page.locator('[data-testid="help-window"]')).toHaveCount(0);
   }
 }
@@ -93,25 +97,37 @@ async function stubTidalEndpoints(page: Page): Promise<void> {
 }
 
 test.describe("Help-icon deep links", () => {
+  test.beforeEach(async ({ page }) => {
+    // Suppress SimulatedDataConfirmDialog before each test navigates so it
+    // cannot block toolbar/toggle clicks or prevent TidePanel from mounting.
+    await page.addInitScript(() => {
+      try {
+        sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+    });
+  });
+
   test("Throttle panel help icon → 'Throttle Panel' article", async ({ page }) => {
+    test.setTimeout(60_000);
     await ensureSignedIn(page);
 
     // ThrottlePanel only mounts when "DRIVE BOAT" boat-throttle mode is on.
     const realisticBtn = page.locator("button", { hasText: /\bDRIVE BOAT\b/ }).first();
     await expect(realisticBtn).toBeVisible({ timeout: 10_000 });
     if (((await realisticBtn.textContent()) ?? "").trim().startsWith("○")) {
-      await realisticBtn.click();
+      await realisticBtn.dispatchEvent("click");
     }
 
     const icon = page.locator('[data-testid="help-icon-throttle"]');
     await expect(icon).toBeVisible({ timeout: 10_000 });
-    await icon.click();
+    await icon.dispatchEvent("click");
 
     await expectHelpOpenedTo(page, "Throttle Panel");
     await closeHelpWindow(page);
   });
 
   test("HUD overlay-cluster help icon → 'HUD Overlay Toggles' article", async ({ page }) => {
+    test.setTimeout(60_000);
     await ensureSignedIn(page);
 
     const icon = page.locator('[data-testid="help-icon-hud-overlays"]');
@@ -127,6 +143,7 @@ test.describe("Help-icon deep links", () => {
   });
 
   test("Find Data drawer help icon → 'Find Data' article", async ({ page }) => {
+    test.setTimeout(60_000);
     await ensureSignedIn(page);
 
     // Open the Find Data drawer via the HUD button. The Minimap canvas sits
@@ -137,29 +154,60 @@ test.describe("Help-icon deep links", () => {
 
     const icon = page.locator('[data-testid="help-icon-find-data"]');
     await expect(icon).toBeVisible({ timeout: 5_000 });
-    await icon.click();
+    await icon.dispatchEvent("click");
 
     await expectHelpOpenedTo(page, "Find Data");
     await closeHelpWindow(page);
   });
 
   test("Tide panel help icon → 'Tidal Overlay' article", async ({ page }) => {
+    test.setTimeout(60_000);
+    // Reset showTidePanel and autoLoadTidal so a prior test that disabled them
+    // cannot prevent TidePanel from mounting in this test.
+    await page.request.put("http://localhost:3151/api/settings", {
+      headers: { "x-e2e-user-id": "dev-user-bypass" },
+      data: { showTidePanel: true, autoLoadTidal: true },
+    });
     await stubTidalEndpoints(page);
     await ensureSignedIn(page);
 
+    // useTidalData is gated on terrain coordinates being available.
+    // Wait for any terrain (real auto-load or simulated fallback) to be
+    // set in the store — once it is, useTidalData fires and the stubbed
+    // tidal endpoint above responds, allowing TidePanel to mount.
+    await page
+      .waitForFunction(
+        () =>
+          Boolean(
+            (window as unknown as { __bathyTest?: { getTerrainSummary?: () => unknown } }).__bathyTest?.getTerrainSummary?.(),
+          ),
+        { timeout: 20_000 },
+      )
+      .catch(() => {});
+    // If terrain didn't load in time, seed synthetic terrain so useTidalData
+    // receives non-null lat/lon coordinates and fires the tidal API fetch.
+    const hasTerrain = await page.evaluate(
+      () => Boolean((window as unknown as { __bathyTest?: { getTerrainSummary?: () => unknown } }).__bathyTest?.getTerrainSummary?.()),
+    ).catch(() => false);
+    if (!hasTerrain) {
+      await page.evaluate(
+        () => (window as unknown as { __bathyTest?: { seedTerrain?: () => boolean } }).__bathyTest?.seedTerrain?.(),
+      );
+      await page.waitForTimeout(500);
+    }
+
     // Enable the tidal overlay via the top-right toolbar so <TidePanel /> mounts.
-    const tidalBtn = page.locator("button", { hasText: /\bTIDAL\b/ }).first();
+    const tidalBtn = page.locator("[data-testid='overlay-toggle-tide']");
     await expect(tidalBtn).toBeVisible({ timeout: 10_000 });
     // App auto-loads the overlay if `autoLoadTidal` is set; only click if off.
     const ariaPressed = await tidalBtn.getAttribute("aria-pressed").catch(() => null);
-    const textNow = (await tidalBtn.textContent()) ?? "";
-    if (ariaPressed !== "true" && !textNow.includes("◉")) {
-      await tidalBtn.click();
+    if (ariaPressed !== "true") {
+      await tidalBtn.dispatchEvent("click");
     }
 
     const icon = page.locator('[data-testid="help-icon-tidal-overlay"]');
     await expect(icon).toBeVisible({ timeout: 10_000 });
-    await icon.click();
+    await icon.dispatchEvent("click");
 
     await expectHelpOpenedTo(page, "Tidal Overlay");
     await closeHelpWindow(page);

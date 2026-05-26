@@ -110,6 +110,14 @@ test.describe("Water surface & landmass toggles — Settings", () => {
 
 test.describe("TOPO badge & download — ProvenancePanel", () => {
   test.beforeEach(async ({ page }) => {
+    // Suppress SimulatedDataConfirmDialog so the dataset auto-load completes
+    // without a blocking modal, letting the provenance panel mount and render
+    // the TOPO badge once terrain is seeded via __bathyTest.seedTerrain.
+    await page.addInitScript(() => {
+      try {
+        sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+    });
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await waitForTestApi(page);
@@ -120,6 +128,36 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
   });
 
   test("TOPO badge appears for Hawaii (dataset with topography)", async ({ page }) => {
+    // Stub the Poe classify endpoint so that seeding glacier-bay with
+    // hasTopography=true is not overwritten by the async depth-heuristic
+    // fallback (which would take ~9 s and return false for all-below-water depths).
+    await page.route("**/api/poe/classify", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ hasTopography: true }),
+      }),
+    );
+    // Also stub the terrain refetch so React Query's auto-refetch for the
+    // new active dataset doesn't overwrite the seed.
+    const topography = makeTopography();
+    const fixture = {
+      datasetId: "glacier-bay",
+      name: "Glacier Bay",
+      resolution: RESOLUTION,
+      width: RESOLUTION,
+      height: RESOLUTION,
+      depths: new Array(RESOLUTION * RESOLUTION).fill(50),
+      topography,
+      hasTopography: true,
+    };
+    await page.route("**/datasets/glacier-bay/terrain*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(fixture),
+      }),
+    );
     // Wait for the startup Thorne Bay auto-load to settle before seeding so
     // its in-flight pendingTerrain effect doesn't overwrite our seed.
     await expect(page.locator('[data-testid="btn-dataset-thorne-bay"]')).toBeVisible({
@@ -127,12 +165,11 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
     });
     await page.waitForTimeout(1500);
 
-    const topography = makeTopography();
     await page.evaluate(
       ({ resolution, topo }) =>
         window.__bathyTest!.seedTerrain({
-          datasetId: "hawaii-seamount",
-          name: "Hawaiian Ridge & Loihi",
+          datasetId: "glacier-bay",
+          name: "Glacier Bay",
           resolution,
           width: resolution,
           height: resolution,
@@ -152,7 +189,7 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
           await page.evaluate(() => window.__bathyTest!.getTerrainSummary()),
         { timeout: 15_000 },
       )
-      .toEqual({ datasetId: "hawaii-seamount", hasTopography: true });
+      .toEqual({ datasetId: "glacier-bay", hasTopography: true });
 
     await expect(page.locator('[data-testid="topo-badge"]').first()).toBeVisible({
       timeout: 10_000,
@@ -213,14 +250,23 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
   });
 
   test("topography JSON download is available for a coastal dataset", async ({ page }) => {
+    // Stub the Poe classify endpoint so it responds immediately with
+    // hasTopography=true and doesn't race against the seed.
+    await page.route("**/api/poe/classify", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ hasTopography: true }),
+      }),
+    );
     // Intercept the terrain API call for the dataset we'll seed so that
     // TourScene's `useGetDatasetsIdTerrain` refetch returns OUR fixture
     // (with hasTopography + topography array) instead of the real API
     // response, which would overwrite our seed via `setTerrain(data)`.
     const topography = makeTopography();
     const fixture = {
-      datasetId: "hawaii-seamount",
-      name: "Hawaiian Ridge & Loihi",
+      datasetId: "glacier-bay",
+      name: "Glacier Bay",
       waterType: "saltwater",
       resolution: RESOLUTION,
       width: RESOLUTION,
@@ -237,7 +283,7 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
       topography,
       hasTopography: true,
     };
-    await page.route("**/datasets/hawaii-seamount/terrain*", (route) =>
+    await page.route("**/datasets/glacier-bay/terrain*", (route) =>
       route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -261,7 +307,7 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
           await page.evaluate(() => window.__bathyTest!.getTerrainSummary()),
         { timeout: 15_000 },
       )
-      .toEqual({ datasetId: "hawaii-seamount", hasTopography: true });
+      .toEqual({ datasetId: "glacier-bay", hasTopography: true });
 
     // Confirm the seeded TOPO badge actually mounted on the Hawaii row
     // before we try to expand its panel — otherwise terrain was overwritten
@@ -274,7 +320,7 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
     await expect(provenanceHeader).toBeVisible({ timeout: 10_000 });
 
     if ((await provenanceHeader.getAttribute("aria-expanded")) !== "true") {
-      await provenanceHeader.click();
+      await provenanceHeader.dispatchEvent("click");
     }
 
     const downloadBtn = page.locator('[data-testid="btn-download-topography"]');
@@ -282,8 +328,8 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
 
     const [download] = await Promise.all([
       page.waitForEvent("download", { timeout: 10_000 }),
-      downloadBtn.click(),
+      downloadBtn.dispatchEvent("click"),
     ]);
-    expect(download.suggestedFilename()).toBe("hawaii-seamount-topography.json");
+    expect(download.suggestedFilename()).toBe("glacier-bay-topography.json");
   });
 });

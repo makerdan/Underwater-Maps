@@ -126,7 +126,7 @@ test.describe("Offline indicator & query panel", () => {
 
     const trigger = page.locator('[data-testid="query-panel-trigger"]');
     if (await trigger.isVisible()) {
-      await trigger.click();
+      await trigger.dispatchEvent("click");
     } else {
       await page.keyboard.press("/");
     }
@@ -202,7 +202,7 @@ test.describe("Offline network-abort scenario", () => {
     // Open the query panel
     const trigger = page.locator('[data-testid="query-panel-trigger"]');
     if (await trigger.isVisible()) {
-      await trigger.click();
+      await trigger.dispatchEvent("click");
     } else {
       await page.keyboard.press("/");
     }

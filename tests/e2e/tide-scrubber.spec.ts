@@ -27,7 +27,9 @@ async function ensureTidalOverlayEnabled(page: Page): Promise<void> {
   await expect(btn).toBeVisible({ timeout: 10_000 });
   const text = (await btn.innerText()).trim();
   if (!text.startsWith("◉")) {
-    await btn.click();
+    // Use dispatchEvent to bypass any canvas element that may intercept
+    // the click in headless mode (z-order overlap with HUD).
+    await btn.dispatchEvent("click");
   }
 }
 
@@ -72,6 +74,19 @@ function buildMockSchedule() {
 
 test.describe("Tide HUD scrubber slack visuals", () => {
   test.beforeEach(async ({ page }) => {
+    // Suppress SimulatedDataConfirmDialog before navigating so it cannot
+    // block the dataset auto-load that TidePanel depends on.
+    await page.addInitScript(() => {
+      try {
+        sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+    });
+    // Ensure showTidePanel / autoLoadTidal are enabled so a prior test that
+    // disabled them cannot prevent TidePanel from mounting.
+    await page.request.put("http://localhost:3151/api/settings", {
+      headers: { "x-e2e-user-id": "dev-user-bypass" },
+      data: { showTidePanel: true, autoLoadTidal: true },
+    });
     // Mock the schedule endpoint with a deterministic 7-day slack schedule.
     await page.route("**/api/tidal/schedule*", async (route) => {
       await route.fulfill({
@@ -114,13 +129,36 @@ test.describe("Tide HUD scrubber slack visuals", () => {
       });
     });
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    // domcontentloaded (not networkidle): the home route keeps long-lived
+    // requests open (NOAA, surface-conditions, terrain warm-up) so networkidle
+    // never resolves before Playwright's 30 s timeout. The canvas visibility
+    // check and explicit element waits below handle synchronisation.
+    await page.waitForLoadState("domcontentloaded");
   });
 
   test("renders day badges, slack bands, and a hover tooltip on the scrubber", async ({ page }) => {
+    test.setTimeout(90_000);
     if (!(await appIsSignedIn(page))) {
       test.skip(true, "Canvas not visible — landing page shown (e2e auth bypass inactive)");
       return;
+    }
+
+    // TidePanel only fetches tidal data once a dataset is active (it needs
+    // the dataset centre coordinates). Wait for terrain to load so the tidal
+    // API call fires and our mock can respond.
+    await page.waitForFunction(
+      () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
+      null,
+      { timeout: 25_000 },
+    ).catch(() => {});
+    // If terrain didn't load in time, seed synthetic terrain so that
+    // useTidalData receives non-null lat/lon and fires the fetch.
+    const hasTerrain = await page.evaluate(
+      () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
+    ).catch(() => false);
+    if (!hasTerrain) {
+      await page.evaluate(() => window.__bathyTest?.seedTerrain?.());
+      await page.waitForTimeout(500);
     }
 
     await ensureTidalOverlayEnabled(page);

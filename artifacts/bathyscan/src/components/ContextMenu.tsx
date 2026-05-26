@@ -5,7 +5,7 @@
  * Escape. Items are keyboard accessible (Tab/Enter). Position is clamped to
  * the viewport so the menu never overflows off-screen.
  */
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useContextMenuStore } from "@/lib/contextMenuStore";
 
@@ -21,7 +21,11 @@ export const ContextMenu: React.FC = () => {
   const hide = useContextMenuStore((s) => s.hide);
   const ref = useRef<HTMLUListElement>(null);
 
-  useEffect(() => {
+  // useLayoutEffect (not useEffect) so the listeners are registered
+  // synchronously after the DOM mutation and before the browser paints.
+  // This eliminates the race where a Playwright keypress fires between
+  // the render and the async useEffect flush.
+  useLayoutEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) hide();
@@ -92,6 +96,13 @@ export const ContextMenu: React.FC = () => {
       ref={ref}
       role="menu"
       data-testid="context-menu"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          hide();
+        }
+      }}
       style={{
         position: "fixed",
         left: clampedX,

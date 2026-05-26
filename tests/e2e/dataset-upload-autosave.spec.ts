@@ -106,7 +106,7 @@ async function openUploadAccordion(page: Page): Promise<void> {
   // TERRAIN" accordion to reveal the dropzone.
   const toggle = page.getByRole("button", { name: /UPLOAD CUSTOM TERRAIN/i });
   await expect(toggle).toBeVisible();
-  await toggle.click();
+  await toggle.dispatchEvent("click");
   await expect(page.getByTestId("dropzone-terrain")).toBeVisible();
 }
 
@@ -130,7 +130,14 @@ test.describe("upload auto-save end-to-end", () => {
     ).toBe(true);
   });
 
-  test.beforeEach(async ({ request }) => {
+  test.beforeEach(async ({ page, request }) => {
+    // Suppress SimulatedDataConfirmDialog before any navigation so it cannot
+    // block the MY UPLOADS panel or dataset row clicks.
+    await page.addInitScript(() => {
+      try {
+        sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+    });
     await cleanupAllUploads(request);
   });
 
@@ -275,7 +282,7 @@ test.describe("upload auto-save end-to-end", () => {
     page,
     request,
   }) => {
-    await page.goto("/");
+    await page.goto("/?noCanvas=1", { waitUntil: "domcontentloaded" });
     await openUploadAccordion(page);
 
     // Stub the upload response with a fully-synthetic 200-with-saveError

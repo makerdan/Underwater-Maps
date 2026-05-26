@@ -236,6 +236,12 @@ export interface BathyTestApi {
    */
   isMarkerCacheInvalidated: (datasetId: string) => boolean;
   /**
+   * Returns the current colormapTheme value from the settings store.
+   * Used by water-type-toggle e2e tests to verify auto-switch without
+   * navigating to /settings (which would re-hydrate from the server).
+   */
+  getColormapTheme: () => string;
+  /**
    * Render a production-shaped marker context menu whose "Delete marker"
    * onClick fires the REAL `deleteMarkersId` request and the REAL
    * `runMarkerDelete` cache-invalidation path (same code as
@@ -539,6 +545,7 @@ export function installTestHelpers(): void {
     isMarkerCacheInvalidated: (datasetId) =>
       queryClient.getQueryState(getGetMarkersQueryKey({ datasetId }))
         ?.isInvalidated ?? false,
+    getColormapTheme: () => useSettingsStore.getState().colormapTheme,
     showProductionMarkerMenu: (x, y, marker, capturedDatasetId) =>
       useContextMenuStore
         .getState()

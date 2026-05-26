@@ -113,8 +113,6 @@ export const OverlaysToolsPanel: React.FC = () => {
     !!datasets?.find((d) => d.id === (terrain?.datasetId ?? ""))?.hasEfh ||
     !!terrain?.habitatPolygons;
 
-  if (!terrain) return null;
-
   return (
     <div
       data-testid="overlays-tools-panel"

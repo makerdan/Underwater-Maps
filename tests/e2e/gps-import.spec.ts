@@ -249,13 +249,13 @@ test.describe("GPS import — real auth-gated flow", () => {
     // The Markers accordion may be collapsed by default; expand it by
     // clicking the MARKERS header if the import button isn't visible yet.
     if (!(await openBtn.isVisible({ timeout: 1_000 }).catch(() => false))) {
-      await page.getByText(/MARKERS/).first().click().catch(() => {});
+      await page.getByText(/MARKERS/).first().dispatchEvent("click").catch(() => {});
     }
     await expect(openBtn).toBeVisible({ timeout: 15_000 });
-    await openBtn.click();
+    await openBtn.dispatchEvent("click");
 
     const dialog = page.locator('[data-testid="gps-import-dialog"]');
-    await expect(dialog).toBeVisible();
+    await expect(dialog).toBeVisible({ timeout: 15_000 });
 
     // Attach the in-memory GPX to the hidden file input and assert the
     // preview surfaces both the waypoint and the route counts.
@@ -273,7 +273,7 @@ test.describe("GPS import — real auth-gated flow", () => {
     // Confirming the import calls POST /api/markers and POST
     // /api/trolling-presets through the React Query mutations — which the
     // browser-side fetch wrapper carries the auth-bypass header on.
-    await page.locator('[data-testid="gps-import-confirm"]').click();
+    await page.locator('[data-testid="gps-import-confirm"]').dispatchEvent("click");
     await expect(dialog).toBeHidden({ timeout: 15_000 });
 
     // Verify the import landed in Postgres for real.
@@ -306,13 +306,13 @@ test.describe("GPS import — real auth-gated flow", () => {
 
     const openBtn = page.locator('[data-testid="open-gps-import"]');
     if (!(await openBtn.isVisible({ timeout: 1_000 }).catch(() => false))) {
-      await page.getByText(/MARKERS/).first().click().catch(() => {});
+      await page.getByText(/MARKERS/).first().dispatchEvent("click").catch(() => {});
     }
     await expect(openBtn).toBeVisible({ timeout: 15_000 });
-    await openBtn.click();
+    await openBtn.dispatchEvent("click");
 
     const dialog = page.locator('[data-testid="gps-import-dialog"]');
-    await expect(dialog).toBeVisible();
+    await expect(dialog).toBeVisible({ timeout: 15_000 });
 
     await page
       .locator('[data-testid="gps-import-file-input"]')
@@ -343,7 +343,7 @@ test.describe("GPS import — real auth-gated flow", () => {
     await page.locator('[data-testid="gps-import-route-0"]').evaluate((el) => {
       (el as HTMLDetailsElement).open = true;
     });
-    await page.locator('[data-testid="gps-import-remove-route-point-0-0"]').click();
+    await page.locator('[data-testid="gps-import-remove-route-point-0-0"]').dispatchEvent("click");
     // After removal the second testid disappears (only 0 and 1 remain).
     await expect(
       page.locator('[data-testid="gps-import-remove-route-point-0-2"]'),
@@ -355,7 +355,7 @@ test.describe("GPS import — real auth-gated flow", () => {
     await heading.fill("123");
     await speed.fill("3.7");
 
-    await page.locator('[data-testid="gps-import-confirm"]').click();
+    await page.locator('[data-testid="gps-import-confirm"]').dispatchEvent("click");
     await expect(dialog).toBeHidden({ timeout: 15_000 });
 
     // Verify the edits made it all the way to the persisted preset.

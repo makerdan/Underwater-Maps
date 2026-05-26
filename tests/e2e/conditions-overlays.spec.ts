@@ -65,6 +65,28 @@ async function mockOkSurfaceConditions(page: Page): Promise<void> {
  * weakening any assertion.
  */
 test.describe("Wind / Tide / Current overlays", () => {
+  test.beforeEach(async ({ page }) => {
+    // Reset overlay toggle localStorage so each test starts with all three
+    // overlays OFF. Without this, the persistence test (which saves
+    // windOverlayActive=true) poisons subsequent tests: a blind click on an
+    // already-ON toggle turns it OFF instead of ON, producing the wrong
+    // number of manual-override sliders (2 instead of 4) and breaking
+    // the ESTIMATED badge assertion.
+    //
+    // IMPORTANT: addInitScript runs before EVERY navigation including reloads.
+    // To avoid clearing localStorage on the reload inside the persistence
+    // test, we use a sessionStorage flag as a "first-load-only" guard.
+    // sessionStorage persists across page.reload() in the same tab session but
+    // is fresh on each new page.goto() (new Playwright test context).
+    await page.addInitScript(() => {
+      if (!sessionStorage.getItem("__overlayStateCleared")) {
+        sessionStorage.setItem("__overlayStateCleared", "1");
+        localStorage.removeItem("bathyscan:windOverlayActive");
+        localStorage.removeItem("bathyscan:tideOverlayActive");
+        localStorage.removeItem("bathyscan:currentOverlayActive");
+      }
+    });
+  });
   test("each HUD toggle reveals the Conditions Legend with the right row", async ({
     page,
   }) => {
@@ -89,25 +111,25 @@ test.describe("Wind / Tide / Current overlays", () => {
     ).toHaveCount(0);
 
     // Wind on → legend with Wind row.
-    await page.locator("[data-testid='overlay-toggle-wind']").click();
+    await page.locator("[data-testid='overlay-toggle-wind']").dispatchEvent("click");
     await expect(windBtn).toHaveAttribute("aria-pressed", "true");
     await expect(legend).toBeVisible({ timeout: 10_000 });
-    await expect(legend.locator("text=Wind")).toBeVisible();
+    await expect(legend.locator("text=Wind").first()).toBeVisible();
 
     // Tide on → Tide row joins.
-    await page.locator("[data-testid='overlay-toggle-tide']").click();
+    await page.locator("[data-testid='overlay-toggle-tide']").dispatchEvent("click");
     await expect(tideBtn).toHaveAttribute("aria-pressed", "true");
     await expect(legend.locator("text=Tide")).toBeVisible();
 
     // Current on → Current row joins.
-    await page.locator("[data-testid='overlay-toggle-current']").click();
+    await page.locator("[data-testid='overlay-toggle-current']").dispatchEvent("click");
     await expect(curBtn).toHaveAttribute("aria-pressed", "true");
     await expect(legend.locator("text=Current")).toBeVisible();
 
     // Turning everything off hides the legend.
-    await page.locator("[data-testid='overlay-toggle-wind']").click();
-    await page.locator("[data-testid='overlay-toggle-tide']").click();
-    await page.locator("[data-testid='overlay-toggle-current']").click();
+    await page.locator("[data-testid='overlay-toggle-wind']").dispatchEvent("click");
+    await page.locator("[data-testid='overlay-toggle-tide']").dispatchEvent("click");
+    await page.locator("[data-testid='overlay-toggle-current']").dispatchEvent("click");
     await expect(
       page.locator("[data-testid='conditions-legend']"),
     ).toHaveCount(0);
@@ -127,8 +149,8 @@ test.describe("Wind / Tide / Current overlays", () => {
     const curBtn = page.locator("[data-testid='overlay-toggle-current']");
 
     await expect(windBtn).toBeVisible({ timeout: 10_000 });
-    await page.locator("[data-testid='overlay-toggle-wind']").click();
-    await page.locator("[data-testid='overlay-toggle-tide']").click();
+    await page.locator("[data-testid='overlay-toggle-wind']").dispatchEvent("click");
+    await page.locator("[data-testid='overlay-toggle-tide']").dispatchEvent("click");
     // Leave current off so we can verify mixed state survives the reload.
 
     await expect(windBtn).toHaveAttribute("aria-pressed", "true");
@@ -182,8 +204,8 @@ test.describe("Wind / Tide / Current overlays", () => {
     await expect(windBtn).toBeVisible({ timeout: 10_000 });
 
     // Turn on Wind and Tide so both manual-override sections render.
-    await page.locator("[data-testid='overlay-toggle-wind']").click();
-    await page.locator("[data-testid='overlay-toggle-tide']").click();
+    await page.locator("[data-testid='overlay-toggle-wind']").dispatchEvent("click");
+    await page.locator("[data-testid='overlay-toggle-tide']").dispatchEvent("click");
 
     const legend = page.locator("[data-testid='conditions-legend']");
     await expect(legend).toBeVisible({ timeout: 10_000 });

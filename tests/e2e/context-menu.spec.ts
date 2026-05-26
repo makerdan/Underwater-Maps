@@ -23,6 +23,13 @@ async function waitForTestApi(page: Page): Promise<void> {
 
 test.describe("BathyScan — Right-click context menu", () => {
   test.beforeEach(async ({ page }) => {
+    // Suppress SimulatedDataConfirmDialog before any navigation so it cannot
+    // steal focus or intercept Escape from the context menu.
+    await page.addInitScript(() => {
+      try {
+        sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+    });
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await waitForTestApi(page);
@@ -44,7 +51,7 @@ test.describe("BathyScan — Right-click context menu", () => {
     test.skip(!hasCanvas, "3D canvas requires authentication");
 
     const urlBefore = page.url();
-    await canvas.click({ button: "right" });
+    await canvas.click({ button: "right", force: true });
     await page.waitForTimeout(200);
     expect(page.url()).toBe(urlBefore);
   });
@@ -57,6 +64,11 @@ test.describe("BathyScan — Right-click context menu", () => {
 
 test.describe("BathyScan — Context menu rendering & keyboard nav", () => {
   test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      try {
+        sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+    });
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await waitForTestApi(page);
@@ -196,6 +208,11 @@ test.describe("BathyScan — Context menu rendering & keyboard nav", () => {
 
 test.describe("BathyScan — Two-click measurement flow", () => {
   test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      try {
+        sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+    });
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await waitForTestApi(page);
@@ -286,6 +303,11 @@ test.describe("BathyScan — Two-click measurement flow", () => {
 
 test.describe("BathyScan — Marker context menu items", () => {
   test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      try {
+        sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+    });
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await waitForTestApi(page);

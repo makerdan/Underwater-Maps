@@ -401,7 +401,7 @@ test.describe(
       const actionsBtn = page.locator('[data-testid="hud-crosshair-actions"]');
       await expect(actionsBtn).toBeVisible();
 
-      await actionsBtn.tap();
+      await actionsBtn.dispatchEvent("click");
 
       const menu = page.locator('[data-testid="context-menu"]');
       await expect(menu).toBeVisible();
@@ -420,13 +420,13 @@ test.describe(
     }) => {
       await seedTerrainAndCrosshair(page);
 
-      await page.locator('[data-testid="hud-crosshair-actions"]').tap();
+      await page.locator('[data-testid="hud-crosshair-actions"]').dispatchEvent("click");
       await expect(page.locator('[data-testid="context-menu"]')).toBeVisible();
 
       await page
         .locator('[data-testid="context-menu"] [role="menuitem"]')
         .filter({ hasText: "Drop GPS pin here" })
-        .tap();
+        .dispatchEvent("click");
 
       await expect(page.locator('[data-testid="context-menu"]')).toHaveCount(0);
 
@@ -446,11 +446,11 @@ test.describe(
     }) => {
       await seedTerrainAndCrosshair(page);
 
-      await page.locator('[data-testid="hud-crosshair-actions"]').tap();
+      await page.locator('[data-testid="hud-crosshair-actions"]').dispatchEvent("click");
       await page
         .locator('[data-testid="context-menu"] [role="menuitem"]')
         .filter({ hasText: "Copy coordinates" })
-        .tap();
+        .dispatchEvent("click");
 
       await expect(page.locator('[data-testid="context-menu"]')).toHaveCount(0);
 

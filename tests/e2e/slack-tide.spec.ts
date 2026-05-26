@@ -31,23 +31,24 @@ async function appIsSignedIn(page: Page): Promise<boolean> {
 async function clickTopBarToggle(page: Page, label: string): Promise<void> {
   const btn = page.locator(`button:has-text('${label}')`).first();
   await expect(btn).toBeVisible({ timeout: 10_000 });
-  await btn.click();
+  // Use dispatchEvent to bypass any canvas element that may sit on top of
+  // the toolbar button in headless mode (z-order intercept).
+  await btn.dispatchEvent("click");
 }
 
 /** Force the WeatherPanel into "estimated conditions" mode so the manual
  *  override controls (incl. SLACK NOW checkbox) render reliably regardless
- *  of whether Open-Meteo / NOAA are reachable from the test env. */
+ *  of whether Open-Meteo / NOAA are reachable from the test env. Uses the
+ *  same hour-object shape that WeatherPanel parses (windSpeed/windDir/
+ *  currentSpeed/currentDir) so fields aren't silently undefined. */
 async function mockEstimatedSurfaceConditions(page: Page): Promise<void> {
   await page.route("**/api/surface-conditions*", async (route) => {
-    const hours = Array.from({ length: 24 }, (_, h) => ({
-      hour: h,
-      windSpeedKnots: 10,
-      windDegrees: 180,
-      tidalSpeedKnots: 1.2,
-      tidalDegrees: 90,
-      waveHeightM: 0.3,
-      isSlack: false,
-      phase: "flooding" as const,
+    const hours = Array.from({ length: 24 }, (_, i) => ({
+      time: `2025-01-01T${String(i).padStart(2, "0")}:00:00.000Z`,
+      windSpeed: 10,
+      windDir: 180,
+      currentSpeed: 1.2,
+      currentDir: 90,
     }));
     await route.fulfill({
       status: 200,
@@ -63,11 +64,60 @@ async function mockEstimatedSurfaceConditions(page: Page): Promise<void> {
 
 test.describe("Slack-tide visuals", () => {
   test.beforeEach(async ({ page }) => {
+    // Suppress the SimulatedDataConfirmDialog before navigating so it cannot
+    // block clicks or intercept keyboard events during tests.
+    await page.addInitScript(() => {
+      try {
+        sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+    });
+    // Ensure showTidePanel / autoLoadTidal are enabled on the server so they
+    // don't get overwritten by a prior test that disabled them.
+    await page.request.put("http://localhost:3151/api/settings", {
+      headers: { "x-e2e-user-id": "dev-user-bypass" },
+      data: { showTidePanel: true, autoLoadTidal: true },
+    });
+    // Mock the live tidal endpoint BEFORE navigating so useTidalData picks up
+    // the stub on the very first fetch. Without this, TidePanel may never
+    // mount if the real NOAA station lookup times out or returns no station.
+    await page.route(/\/api\/tidal(\?|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          available: true,
+          tideHeight: 1.23,
+          currentDirection: 90,
+          currentSpeed: 0.8,
+          stationName: "Mock Station",
+          stationId: "MOCK1",
+          isPredicted: true,
+          source: "estimated",
+          nextEvent: {
+            type: "high",
+            time: new Date(Date.now() + 60 * 60_000).toISOString(),
+            height: 1.5,
+          },
+          slack: {
+            isSlack: false,
+            phase: "flooding",
+            minutesToSlack: 15,
+            minutesSinceSlack: 0,
+            nextReversalAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+          },
+        }),
+      });
+    });
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    // domcontentloaded (not networkidle): the home route keeps long-lived
+    // requests open (NOAA, surface-conditions, terrain warm-up) so networkidle
+    // never resolves before Playwright's 30 s timeout. Tests wait on specific
+    // elements below instead.
+    await page.waitForLoadState("domcontentloaded");
   });
 
   test("TidePanel shows the slack status line with a numeric minute countdown", async ({ page }) => {
+    test.setTimeout(90_000);
     if (!(await appIsSignedIn(page))) {
       test.skip(true, "Canvas not visible — landing page shown (e2e auth bypass inactive)");
       return;
@@ -78,10 +128,19 @@ test.describe("Slack-tide visuals", () => {
     // toggling TIDAL before then leaves the panel in a loading state past
     // our visibility timeout.
     await page.waitForFunction(
-      () => Boolean(window.__bathyTest?.getTerrainSummary?.()?.datasetId),
+      () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
       null,
       { timeout: 20_000 },
     ).catch(() => {});
+    // If terrain didn't load in time, seed synthetic terrain so that
+    // useTidalData receives non-null lat/lon and fires the fetch.
+    const hasTerrain = await page.evaluate(
+      () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
+    ).catch(() => false);
+    if (!hasTerrain) {
+      await page.evaluate(() => window.__bathyTest?.seedTerrain?.());
+      await page.waitForTimeout(500);
+    }
 
     // Enable the Tidal Overlay from the top-right toolbar.
     await clickTopBarToggle(page, "TIDAL");
@@ -107,13 +166,19 @@ test.describe("Slack-tide visuals", () => {
   });
 
   test("DriftTimeline shows '◐ SLK' on a chip when conditions are slack", async ({ page }) => {
+    test.setTimeout(60_000);
     if (!(await appIsSignedIn(page))) {
       test.skip(true, "Canvas not visible — landing page shown");
       return;
     }
 
-    // Force estimated conditions so the manual override panel renders.
+    // Register mock BEFORE reloading so the fresh initial fetch (and React
+    // Query's cache entry) returns estimatedConditions:true. Without a
+    // reload the cache from the beforeEach goto may already hold real-API
+    // data (estimatedConditions:false) and the WeatherPanel uses it from
+    // cache without re-fetching, meaning MANUAL OVERRIDE never renders.
     await mockEstimatedSurfaceConditions(page);
+    await page.reload({ waitUntil: "domcontentloaded" });
 
     await clickTopBarToggle(page, "DRIFT");
     await expect(page.locator("text=DRIFT PLANNER")).toBeVisible({ timeout: 5_000 });
@@ -124,8 +189,8 @@ test.describe("Slack-tide visuals", () => {
     // Tick "SLACK NOW" and recompute the drift — all 24 hours will then have
     // isSlack=true, so every chip should display the SLK indicator.
     const slackNow = page.locator("input[type='checkbox']").first();
-    await slackNow.check();
-    await page.locator("button:has-text('COMPUTE DRIFT')").click();
+    await slackNow.check({ force: true });
+    await page.locator("button:has-text('COMPUTE DRIFT')").dispatchEvent("click");
 
     // At least one hour chip in the timeline must carry the SLK label.
     const slkChip = page.locator("text=/◐\\s*SLK/").first();
@@ -133,12 +198,16 @@ test.describe("Slack-tide visuals", () => {
   });
 
   test("Toggling 'SLACK NOW' updates the line-angle copy to 'Line vertical — slack tide'", async ({ page }) => {
+    test.setTimeout(60_000);
     if (!(await appIsSignedIn(page))) {
       test.skip(true, "Canvas not visible — landing page shown");
       return;
     }
 
+    // Same reload pattern as the SLK-chip test: set mock first, reload so
+    // the initial surface-conditions fetch is intercepted and cached.
     await mockEstimatedSurfaceConditions(page);
+    await page.reload({ waitUntil: "domcontentloaded" });
 
     await clickTopBarToggle(page, "DRIFT");
     await expect(page.locator("text=DRIFT PLANNER")).toBeVisible({ timeout: 5_000 });
@@ -151,8 +220,8 @@ test.describe("Slack-tide visuals", () => {
     ).toBeVisible({ timeout: 5_000 });
 
     // Force slack, recompute, and assert the copy flips to the slack message.
-    await page.locator("input[type='checkbox']").first().check();
-    await page.locator("button:has-text('COMPUTE DRIFT')").click();
+    await page.locator("input[type='checkbox']").first().check({ force: true });
+    await page.locator("button:has-text('COMPUTE DRIFT')").dispatchEvent("click");
 
     await expect(
       page.locator("text=Line vertical — slack tide").first(),

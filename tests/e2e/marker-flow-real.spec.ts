@@ -105,6 +105,13 @@ test.describe("real auth-gated marker flow (api-server E2E_AUTH_BYPASS)", () => 
   });
 
   test.beforeEach(async ({ page }) => {
+    // Suppress SimulatedDataConfirmDialog before any test navigation so it
+    // cannot block clicks, steal focus, or intercept Escape.
+    await page.addInitScript(() => {
+      try {
+        sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+    });
     // Best-effort cleanup of stray e2e markers from prior runs.
     try {
       const existing = await listMarkers(page, DATASET_ID);
@@ -419,6 +426,8 @@ test.describe("real auth-gated marker flow (api-server E2E_AUTH_BYPASS)", () => 
     );
 
     // The captured (A) dataset cache ends up flagged invalidated.
+    // Allow up to 15 s — the real DELETE round-trip to the local API server
+    // plus onSuccess cache-invalidation can take several seconds under load.
     await expect
       .poll(
         async () =>
@@ -426,7 +435,7 @@ test.describe("real auth-gated marker flow (api-server E2E_AUTH_BYPASS)", () => 
             (id) => window.__bathyTest!.isMarkerCacheInvalidated(id),
             DATASET_ID,
           ),
-        { timeout: 5_000 },
+        { timeout: 15_000 },
       )
       .toBe(true);
 
@@ -482,11 +491,11 @@ test.describe("real auth-gated marker flow (api-server E2E_AUTH_BYPASS)", () => 
       ]);
     });
 
-    const menu = page.getByRole("menu");
+    const menu = page.locator('[data-testid="context-menu"]');
     await expect(menu).toBeVisible();
 
     await page.keyboard.press("Escape");
-    await expect(menu).toBeHidden();
+    await expect(menu).toHaveCount(0, { timeout: 3_000 });
 
     expect(deleteFired).toBe(false);
 

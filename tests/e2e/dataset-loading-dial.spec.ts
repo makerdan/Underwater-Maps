@@ -11,7 +11,11 @@ test.describe("dataset row loading dial", () => {
     page,
   }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    // domcontentloaded (not networkidle): the home route keeps long-lived
+    // requests open (NOAA, surface-conditions, terrain warm-up) so networkidle
+    // never resolves before Playwright's 30 s timeout. The isVisible check
+    // below is the real gate before interacting with the dataset picker.
+    await page.waitForLoadState("domcontentloaded");
 
     const target = page.locator('[data-testid="btn-dataset-thorne-bay"]');
     const visible = await target.isVisible({ timeout: 10_000 }).catch(() => false);

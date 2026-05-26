@@ -34,13 +34,17 @@ async function appIsSignedIn(page: Page): Promise<boolean> {
 
 async function openCurrentsHome(page: Page): Promise<void> {
   await page.goto("/");
-  await page.waitForLoadState("networkidle");
+  // domcontentloaded (not networkidle): the home route keeps long-lived
+  // requests open (NOAA, surface-conditions, terrain warm-up) so networkidle
+  // never resolves before Playwright's 30 s timeout. appIsSignedIn (which
+  // waits for the currents-panel element) is the real readiness gate.
+  await page.waitForLoadState("domcontentloaded");
 }
 
 async function enableCurrents(page: Page): Promise<void> {
   const enableBtn = page.locator("[data-testid='currents-enable']");
   if (await enableBtn.isVisible().catch(() => false)) {
-    await enableBtn.click();
+    await enableBtn.dispatchEvent("click");
   }
   await expect(page.locator("[data-testid='currents-disable']")).toBeVisible({
     timeout: 5_000,
@@ -78,6 +82,14 @@ function buildMockTidal() {
 
 test.describe("Bathymetric currents — interaction coverage", () => {
   test.beforeEach(async ({ page }) => {
+    // Suppress SimulatedDataConfirmDialog before any navigation (tests call
+    // openCurrentsHome which does page.goto); the dialog's overlay can
+    // intercept clicks on the NOAA source button inside CurrentsPanel.
+    await page.addInitScript(() => {
+      try {
+        sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+    });
     // Make /api/tidal deterministic so the NOAA path always has something
     // to surface in `currents-noaa-readout`. The schedule endpoint is fine
     // to leave to the real handler — this spec doesn't touch slack ticks.
@@ -204,19 +216,19 @@ test.describe("Bathymetric currents — interaction coverage", () => {
     await expect(streams).not.toHaveCSS("color", ACTIVE_COLOR_RGB);
 
     // Each toggle must round-trip independently.
-    await particles.click();
+    await particles.dispatchEvent("click");
     await expect(particles).not.toHaveCSS("color", ACTIVE_COLOR_RGB);
-    await particles.click();
+    await particles.dispatchEvent("click");
     await expect(particles).toHaveCSS("color", ACTIVE_COLOR_RGB);
 
-    await arrows.click();
+    await arrows.dispatchEvent("click");
     await expect(arrows).not.toHaveCSS("color", ACTIVE_COLOR_RGB);
-    await arrows.click();
+    await arrows.dispatchEvent("click");
     await expect(arrows).toHaveCSS("color", ACTIVE_COLOR_RGB);
 
-    await streams.click();
+    await streams.dispatchEvent("click");
     await expect(streams).toHaveCSS("color", ACTIVE_COLOR_RGB);
-    await streams.click();
+    await streams.dispatchEvent("click");
     await expect(streams).not.toHaveCSS("color", ACTIVE_COLOR_RGB);
   });
 

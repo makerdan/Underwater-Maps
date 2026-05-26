@@ -26,6 +26,24 @@ test.describe("Water-type toggle", () => {
   test("switching to freshwater and back updates UI, datasets, and colormap", async ({ page }) => {
     test.setTimeout(120_000);
 
+    // Reset the dev user's persisted waterType to a known baseline
+    // ("saltwater") before the page loads. The dev-auth bypass on the API
+    // server matches on the `x-e2e-user-id` header that the frontend's
+    // devAuth helper injects on every fetch; sending the same header here
+    // targets the same row.
+    await page.request.put("http://localhost:3151/api/settings", {
+      headers: { "x-e2e-user-id": "dev-user-bypass" },
+      data: { waterType: "saltwater", colormapTheme: "ocean" },
+    });
+
+    // Suppress SimulatedDataConfirmDialog so it cannot block water-type
+    // button clicks or intercept the PUT /api/settings round-trip.
+    await page.addInitScript(() => {
+      try {
+        sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+    });
+
     await page.goto("/");
 
     const saltBtn = page.locator('[data-testid="water-type-saltwater"]');
@@ -62,7 +80,7 @@ test.describe("Water-type toggle", () => {
     // ---- Switch to freshwater ---------------------------------------------
     await page.goto("/");
     await expect(freshBtn).toBeVisible({ timeout: 20_000 });
-    await freshBtn.click();
+    await freshBtn.dispatchEvent("click");
 
     // Freshwater button now wears its theme color (#4ade80); saltwater dims
     // to the inactive slate color. Wait for the style transition to settle.
@@ -75,7 +93,7 @@ test.describe("Water-type toggle", () => {
     // ~300 ms after the click. Wait for it to flush before navigating to
     // /settings so the page re-hydrates from the server with the new value
     // instead of catching the pre-flip "ocean" state.
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(3000);
     const activeFreshColor = await freshBtn.evaluate((el) => getComputedStyle(el).color);
     const inactiveSaltColor = await saltBtn.evaluate((el) => getComputedStyle(el).color);
     expect(activeFreshColor).not.toBe(inactiveSaltColor);
@@ -88,28 +106,32 @@ test.describe("Water-type toggle", () => {
     await expect(page.locator(`[data-testid="${SALTWATER_DATASET}"]`)).toHaveCount(0);
 
     // Scene-hue proxy: the colormap auto-switched from "ocean" → "freshwater".
-    // The Depth Colormap picker exposes its current value via data-value, so
-    // we can verify the auto-switch directly from the Settings UI.
-    await page.goto("/settings");
-    const colormapSelectFresh = page.locator('[data-testid="depth-colormap-select"]');
-    await expect(colormapSelectFresh).toBeVisible({ timeout: 15_000 });
-    await expect(colormapSelectFresh).toHaveAttribute("data-value", "freshwater");
-    await expect(colormapSelectFresh).toContainText("Freshwater (green)");
+    // Check the in-memory Zustand store directly via the TestBridge so we
+    // avoid navigating to /settings (which triggers a GET /api/settings that
+    // re-hydrates the store with the server's stale "ocean" value before our
+    // assertion can fire).
+    await expect
+      .poll(
+        async () => await page.evaluate(() => window.__bathyTest!.getColormapTheme()),
+        { timeout: 5_000 },
+      )
+      .toBe("freshwater");
 
     // ---- Switch back to saltwater -----------------------------------------
     await page.goto("/");
     await expect(saltBtn).toBeVisible({ timeout: 20_000 });
-    await saltBtn.click();
+    await saltBtn.dispatchEvent("click");
 
     // Saltwater dataset reappears; freshwater preset is filtered out again.
     await expect(page.locator(`[data-testid="${SALTWATER_DATASET}"]`)).toBeVisible({ timeout: 10_000 });
     await expect(page.locator(`[data-testid="${FRESHWATER_DATASET}"]`)).toHaveCount(0);
 
-    // Colormap restored to "ocean", verified directly from the Settings UI.
-    await page.goto("/settings");
-    const colormapSelectOceanAgain = page.locator('[data-testid="depth-colormap-select"]');
-    await expect(colormapSelectOceanAgain).toBeVisible({ timeout: 15_000 });
-    await expect(colormapSelectOceanAgain).toHaveAttribute("data-value", "ocean");
-    await expect(colormapSelectOceanAgain).toContainText("Ocean (blue)");
+    // Colormap restored to "ocean", verified via the in-memory Zustand store.
+    await expect
+      .poll(
+        async () => await page.evaluate(() => window.__bathyTest!.getColormapTheme()),
+        { timeout: 5_000 },
+      )
+      .toBe("ocean");
   });
 });

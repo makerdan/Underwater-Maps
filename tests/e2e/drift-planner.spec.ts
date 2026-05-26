@@ -26,13 +26,65 @@ async function appIsSignedIn(page: Page): Promise<boolean> {
 async function openDriftPlanner(page: Page): Promise<void> {
   const driftBtn = page.locator("button:has-text('DRIFT')").first();
   await expect(driftBtn).toBeVisible({ timeout: 10_000 });
-  await driftBtn.click();
+  await driftBtn.dispatchEvent("click");
+}
+
+async function mockOkSurfaceConditions(page: Page): Promise<void> {
+  const hours = Array.from({ length: 24 }, (_, i) => ({
+    hour: i,
+    windSpeedKnots: 5,
+    windDegrees: 180,
+    tidalSpeedKnots: 0.5,
+    tidalDegrees: 90,
+    waveHeightM: 0.1,
+  }));
+  await page.route("**/api/surface-conditions*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        hours,
+        estimatedConditions: false,
+        tidalDataSource: "noaa",
+      }),
+    }),
+  );
 }
 
 test.describe("Drift Planner", () => {
   test.beforeEach(async ({ page }) => {
+    // Suppress the SimulatedDataConfirmDialog so it cannot steal focus or
+    // intercept Escape before drift-planner interactions run. Also register
+    // the surface-conditions mock BEFORE goto so the initial fetch (which
+    // React Query caches) is intercepted — a late route registration after
+    // domcontentloaded means the cached real-API response is used and the
+    // WeatherPanel never sees the mocked data.
+    await page.addInitScript(() => {
+      try {
+        sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+    });
+    await mockOkSurfaceConditions(page);
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    // domcontentloaded (not networkidle): the home route keeps long-lived
+    // requests open (NOAA, surface-conditions, terrain warm-up) so networkidle
+    // never resolves before Playwright's 30 s timeout. Each test waits on the
+    // specific element it cares about instead.
+    await page.waitForLoadState("domcontentloaded");
+    // useSurfaceConditions is gated on `centerLat !== null`, which requires
+    // terrain to be loaded. Wait for the TestBridge to report any terrain
+    // (real Thorne Bay auto-load or simulated fallback). Once terrain is set,
+    // the always-on useSurfaceConditions hook fires automatically and the
+    // mock registered above intercepts it — no need to seed synthetic terrain.
+    await page
+      .waitForFunction(
+        () =>
+          Boolean(
+            (window as unknown as { __bathyTest?: { getTerrainSummary?: () => unknown } }).__bathyTest?.getTerrainSummary?.(),
+          ),
+        { timeout: 20_000 },
+      )
+      .catch(() => {});
   });
 
   test("DRIFT toolbar button opens the Weather Panel overlay", async ({ page }) => {
@@ -86,7 +138,7 @@ test.describe("Drift Planner", () => {
     // Click a non-default hour and assert the selected chip styling changes
     // (active chip uses cyan color #00e5ff vs slate #475569 for inactive).
     const hour05 = page.locator("button:has-text('05:00')").first();
-    await hour05.click();
+    await hour05.dispatchEvent("click");
     await expect(hour05).toHaveCSS("color", "rgb(0, 229, 255)");
   });
 
@@ -104,7 +156,7 @@ test.describe("Drift Planner", () => {
       .locator("div", { has: panel })
       .locator("button:has-text('×')")
       .first();
-    await closeBtn.click();
+    await closeBtn.dispatchEvent("click");
 
     await expect(panel).toBeHidden({ timeout: 3_000 });
     // Hour chips also disappear.

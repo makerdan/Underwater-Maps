@@ -33,7 +33,11 @@ async function waitForTestHelpers(page: Page): Promise<boolean> {
 test.describe("Zone paint mode", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    // domcontentloaded (not networkidle): the home route keeps long-lived
+    // requests open (NOAA, surface-conditions, terrain warm-up) so networkidle
+    // never resolves before Playwright's 30 s timeout. The waitForFunction
+    // calls below handle synchronisation with the dev test helpers instead.
+    await page.waitForLoadState("domcontentloaded");
   });
 
   test("painting mutates zoneMap and Reset to AI restores baseline", async ({ page }) => {

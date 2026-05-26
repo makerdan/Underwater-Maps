@@ -29,12 +29,34 @@ async function appIsSignedIn(page: Page): Promise<boolean> {
 async function openDriftPlanner(page: Page): Promise<void> {
   const driftBtn = page.locator("button:has-text('DRIFT')").first();
   await expect(driftBtn).toBeVisible({ timeout: 10_000 });
-  await driftBtn.click();
+  await driftBtn.dispatchEvent("click");
   await expect(page.locator("text=DRIFT PLANNER")).toBeVisible({ timeout: 5_000 });
   // Timeline only renders after computeDrift resolves.
   await expect(page.locator("[data-testid='timeline-drift-mode-badge']")).toBeVisible({
     timeout: 15_000,
   });
+}
+
+async function mockOkSurfaceConditions(page: Page): Promise<void> {
+  const hours = Array.from({ length: 24 }, (_, i) => ({
+    hour: i,
+    windSpeedKnots: 5,
+    windDegrees: 180,
+    tidalSpeedKnots: 0.5,
+    tidalDegrees: 90,
+    waveHeightM: 0.1,
+  }));
+  await page.route("**/api/surface-conditions*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        hours,
+        estimatedConditions: false,
+        tidalDataSource: "noaa",
+      }),
+    }),
+  );
 }
 
 async function setRange(locator: Locator, value: number): Promise<void> {
@@ -57,13 +79,34 @@ async function switchMode(page: Page, mode: "drift" | "trolling"): Promise<void>
     .locator(`button:has-text('${label}')`)
     .filter({ hasNotText: "DRIFT PLANNER" })
     .last();
-  await btn.click();
+  await btn.dispatchEvent("click");
 }
 
 test.describe("Drift Planner — Drift vs Trolling modes", () => {
   test.beforeEach(async ({ page }) => {
+    // Suppress SimulatedDataConfirmDialog and register the surface-conditions
+    // mock BEFORE goto so React Query's initial fetch is intercepted.
+    await page.addInitScript(() => {
+      try {
+        sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+    });
+    await mockOkSurfaceConditions(page);
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
+    // useSurfaceConditions is gated on centerLat !== null (needs terrain).
+    // Wait for the TestBridge to report any terrain (real or simulated
+    // fallback). Once terrain is loaded the always-on useSurfaceConditions
+    // hook fires automatically and the mock above intercepts it.
+    await page
+      .waitForFunction(
+        () =>
+          Boolean(
+            (window as unknown as { __bathyTest?: { getTerrainSummary?: () => unknown } }).__bathyTest?.getTerrainSummary?.(),
+          ),
+        { timeout: 20_000 },
+      )
+      .catch(() => {});
   });
 
   test("Trolling: heading + speed propagate to HUD and Timeline; switching back restores Drift", async ({

@@ -144,7 +144,11 @@ async function runHabitatCase(
   speciesId: string,
 ): Promise<void> {
   await page.goto("/");
-  await page.waitForLoadState("networkidle");
+  // domcontentloaded (not networkidle): the home route keeps long-lived
+  // requests open (NOAA, surface-conditions, terrain warm-up) so networkidle
+  // never resolves before Playwright's 30 s timeout. The waitForFunction
+  // calls below handle synchronisation with the dev test helpers instead.
+  await page.waitForLoadState("domcontentloaded");
 
   if (!(await waitForTestHelpers(page))) {
     test.skip(true, "window.__bathyTest not installed — dev test helpers missing");
