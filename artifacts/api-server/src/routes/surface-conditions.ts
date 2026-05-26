@@ -74,13 +74,6 @@ export function buildSinusoidalTidalHours(
   const peakSpeed = 1.2;
   const floodBearing = ((lat + lon) * 73.1 + 360) % 360;
   const events = buildSyntheticEvents(startMs, lon);
-  // An hour is "slack" if a tide event (high/low reversal) lies within
-  // ±30 minutes of the hour sample. Sampling the instantaneous speed at
-  // the top of each hour is non-deterministic because the slack window
-  // (|sin(πt)| < threshold) is only ~10 minutes either side of each
-  // event and rarely lands on an hour boundary.
-  const SLACK_BRACKET_MS = 30 * 60 * 1000;
-
   // Snap any hour within SLACK_SNAP_MIN minutes of an event to slack. At
   // hourly sampling resolution, the natural |sin| slack window (~10–20 min
   // wide for a peak of 1.2 kt and 0.1 kt threshold) is narrower than the

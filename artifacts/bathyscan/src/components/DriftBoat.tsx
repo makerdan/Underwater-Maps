@@ -417,7 +417,6 @@ export const DriftBoat: React.FC<{ surfaceY: number }> = ({ surfaceY }) => {
   const sternZ = (L / 2) * BOAT_SCALE;
   const bowZ = -(L / 2) * BOAT_SCALE;
   const railY = (DECK_Y + 0.02) * BOAT_SCALE;
-  const navLightZ = -0.6 * BOAT_SCALE;
   const navLightX = 0.42 * BOAT_SCALE;
 
   return (

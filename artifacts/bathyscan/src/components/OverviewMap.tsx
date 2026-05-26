@@ -20,7 +20,6 @@ import type {
   DatasetCatalogSearchResult,
 } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
-import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
@@ -314,7 +313,6 @@ export const OverviewMap: React.FC = () => {
   // same /substrate/:id endpoint and render the polygons + legend on the 2D
   // canvas, mirroring the 3D scene.
   const substrateColorMode = useUiStore((s) => s.substrateColorMode);
-  const setSelectedSubstrate = useUiStore((s) => s.setSelectedSubstrate);
   const selectedSubstrateUnitId = useUiStore(
     (s) => s.selectedSubstrate?.unitId ?? null,
   );
