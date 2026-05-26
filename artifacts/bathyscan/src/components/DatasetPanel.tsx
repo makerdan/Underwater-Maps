@@ -38,6 +38,7 @@ import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { WaterTypeToggle } from "@/components/WaterTypeToggle";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
+import { GpsImportDialog } from "@/components/GpsImportDialog";
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
@@ -450,6 +451,7 @@ export const DatasetPanel: React.FC = () => {
 
   // ─── Markers ──────────────────────────────────────────────────────────────
   const [markersOpen, setMarkersOpen] = useState(false);
+  const [gpsImportOpen, setGpsImportOpen] = useState(false);
   const markerDatasetId = terrain?.datasetId ?? "";
   const { data: markers } = useGetMarkers(
     { datasetId: markerDatasetId },
@@ -751,6 +753,28 @@ export const DatasetPanel: React.FC = () => {
 
               {markersOpen && (
                 <div style={{ paddingBottom: 4 }}>
+                  <div style={{ padding: "2px 12px 6px" }}>
+                    <ViewscreenTooltip label="Import waypoints/routes from GPX, KML, KMZ, or CSV" side="right">
+                      <button
+                        onClick={() => setGpsImportOpen(true)}
+                        data-testid="open-gps-import"
+                        style={{
+                          width: "100%",
+                          padding: "5px 8px",
+                          background: "rgba(0,229,255,0.06)",
+                          border: "1px solid rgba(0,229,255,0.2)",
+                          borderRadius: 3,
+                          color: "#00e5ff",
+                          fontSize: 10,
+                          letterSpacing: "0.12em",
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                        }}
+                      >
+                        ▼ IMPORT GPS…
+                      </button>
+                    </ViewscreenTooltip>
+                  </div>
                   {!markers?.length && (
                     <div style={{ fontSize: 10, color: "#cbd5e1", padding: "4px 12px 6px" }}>
                       No markers yet — press G or right-click to drop one
@@ -818,6 +842,10 @@ export const DatasetPanel: React.FC = () => {
                 </div>
               )}
             </div>
+          )}
+
+          {gpsImportOpen && terrain && (
+            <GpsImportDialog terrain={terrain} onClose={() => setGpsImportOpen(false)} />
           )}
 
           {/* ── Upload accordion ── */}
