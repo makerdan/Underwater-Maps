@@ -19,6 +19,9 @@ afterEach(() => {
 });
 
 if (typeof HTMLCanvasElement !== "undefined") {
+  HTMLCanvasElement.prototype.toDataURL = vi.fn(
+    () => "data:image/png;base64,",
+  ) as unknown as HTMLCanvasElement["toDataURL"];
   HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
     fillStyle: "",
     fillRect: vi.fn(),
