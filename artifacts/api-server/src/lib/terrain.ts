@@ -93,8 +93,13 @@ export interface TerrainGrid {
  *   5 — Task #380: Lake Ray Roberts now short-circuits to a real
  *       USGS-3DEP-derived bathymetry + topography bundle before the
  *       NCEI/GEBCO chain; previously cached synthetic grids must go.
+ *   6 — Task #398: ranked bathymetry source resolver. Every AOI now goes
+ *       through a unified `BATHYMETRY_SOURCES` registry + per-AOI
+ *       `DATASET_SOURCE_PRIORITY` ranked list (local → regional/state →
+ *       national → global → synthetic). Source ordering may differ from
+ *       the v5 hard-coded chain, so previously cached grids are flushed.
  */
-export const TERRAIN_CACHE_VERSION = 5;
+export const TERRAIN_CACHE_VERSION = 6;
 
 export interface DatasetMeta {
   id: string;
@@ -316,22 +321,87 @@ export const ALL_PRESET_DATASETS: DatasetMeta[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// NCEI Bag Mosaic WCS fetch (high-resolution multibeam, tried first for
-// datasets that declare a preferred NCEI source)
+// Bathymetry source registry + ranked resolver (Task #398)
+//
+// Every AOI flows through a single ranked list of bathymetry sources. The
+// resolver tries each source in priority order and the first one that
+// returns a usable grid wins; failures are logged and fall through to the
+// next source, exactly mirroring the old NCEI→GEBCO loop. Synthetic fbm
+// remains the implicit terminal fallback when every ranked source fails.
+//
+// Ranking rubric (highest priority first):
+//   1. **Quality** — native resolution (1–50 m local multibeam beats
+//      8–30 m community DEM beats ~400 m global grid), survey recency,
+//      and survey type (purpose-built hydro survey > integrated DEM
+//      mosaic > satellite-altimetry interpolation).
+//   2. **Accessibility** — public WCS / REST / bundled grid, no auth,
+//      reasonable response time (<60 s for a 256² tile). A source that
+//      requires a manual download / FOIA request never makes the list.
+//   3. **Scope** — within a given quality tier we prefer narrower scope
+//      (local > regional > state > national > global), since local
+//      surveys are usually purpose-built for the AOI.
+//
+// Recipe to add a new source:
+//   1. Add an entry to `BATHYMETRY_SOURCES` with `{id, label, scope,
+//      dataSource, creditUrl, fetch(meta, N) -> SourceFetchResult}`.
+//      The fetch contract is identical to the legacy `fetchNceiGrid` /
+//      `fetchGebcoGrid` helpers: return a usable grid or *throw* (the
+//      resolver catches and falls through).
+//   2. Add the new source id to the ranked list of every AOI it covers
+//      in `DATASET_SOURCE_PRIORITY`, placing it according to the rubric.
+//
+// Recipe to add a new AOI:
+//   1. Append the `DatasetMeta` to `ALL_PRESET_DATASETS` (via the
+//      saltwater or freshwater preset list).
+//   2. Add a `DATASET_SOURCE_PRIORITY[<id>]` entry with at least the
+//      top 3 candidate sources in ranked order. If none is provided
+//      the resolver defaults to `["gebco"]` and ultimately synthetic.
 // ---------------------------------------------------------------------------
 
-/**
- * NCEI WCS coverage specs.
- *
- *   bagMosaic        — NCEI multibeam BAG composite, 1–50 m where surveyed.
- *                      Best for inshore corridors that have multibeam survey
- *                      coverage (Thorne Bay, Ketchikan, Sitka Sound, Juneau).
- *   demGlobalMosaic  — NCEI "best-available" DEM mosaic that integrates
- *                      community/tsunami DEMs (Juneau, Sitka, Ketchikan,
- *                      Craig, Skagway, Wrangell, etc.) at 8–90 m where they
- *                      exist, and falls back to coarser global grids
- *                      otherwise. Used as the secondary high-res source.
- */
+/** Provenance overrides a source can return (lets bundled grids report
+ *  separate bathymetry vs topography sources). */
+interface LayerProvenance {
+  source: TerrainDataSource;
+  label: string;
+  creditUrl?: string;
+}
+
+/** Shape every `BathymetrySource.fetch` must return. Throws on failure;
+ *  the resolver catches and tries the next ranked source. */
+interface SourceFetchResult {
+  depths: number[];
+  minDepth: number;
+  maxDepth: number;
+  topography?: number[];
+  hasTopography: boolean;
+  /** Override the bathymetry provenance if it differs from the source's
+   *  defaults (used by bundled grids whose bath layer comes from a
+   *  different upstream than their topo layer). */
+  bathymetryProvenance?: LayerProvenance;
+  /** Override topography provenance (defaults to the bathymetry source's
+   *  provenance when omitted). */
+  topographyProvenance?: LayerProvenance;
+  /** Source-supplied bbox override (bundled grids may not exactly match
+   *  `meta.bbox`). When omitted the resolver uses `meta.bbox`. */
+  bbox?: { minLon: number; minLat: number; maxLon: number; maxLat: number };
+}
+
+export type BathymetrySourceScope =
+  | "local"
+  | "regional"
+  | "state"
+  | "national"
+  | "global";
+
+interface BathymetrySource {
+  id: string;
+  label: string;
+  scope: BathymetrySourceScope;
+  dataSource: TerrainDataSource;
+  creditUrl: string;
+  fetch(meta: DatasetMeta, N: number): Promise<SourceFetchResult>;
+}
+
 interface NceiCoverage {
   url: string;
   coverage: string;
@@ -354,24 +424,188 @@ const NCEI_COVERAGES = {
 type NceiCoverageKey = keyof typeof NCEI_COVERAGES;
 
 /**
- * Per-dataset ordered list of NCEI coverages to try before falling back to
- * GEBCO. The first coverage that returns a usable grid wins; if all NCEI
- * attempts fail or return out-of-coverage data, GEBCO is used (and finally
- * a synthetic fbm fallback if GEBCO is also unreachable).
- *
- * Datasets not listed here skip NCEI entirely and go straight to GEBCO.
+ * Concrete bathymetry-source registry. Each entry conforms to the
+ * `BathymetrySource` contract above. The resolver looks up entries by id
+ * from a dataset's ranked priority list — sources are otherwise
+ * independent of any AOI, so new sources can be added once and reused
+ * across many AOIs.
  */
-export const NCEI_DATASET_COVERAGES: Record<string, NceiCoverageKey[]> = {
-  "thorne-bay":         ["bagMosaic", "demGlobalMosaic"],
-  "ketchikan":          ["bagMosaic", "demGlobalMosaic"],
-  "sitka-sound":        ["bagMosaic", "demGlobalMosaic"],
-  "juneau-approaches":  ["bagMosaic", "demGlobalMosaic"],
-  "glacier-bay":        ["demGlobalMosaic", "bagMosaic"],
-  "icy-strait":         ["demGlobalMosaic", "bagMosaic"],
-  "craig-klawock":      ["demGlobalMosaic", "bagMosaic"],
-  "wrangell-petersburg":["demGlobalMosaic", "bagMosaic"],
-  "skagway-haines":     ["demGlobalMosaic", "bagMosaic"],
+export const BATHYMETRY_SOURCES = {
+  /** Per-AOI pre-built survey bundles (e.g. Lake Ray Roberts USACE+3DEP).
+   *  Throws when the active AOI has no bundle registered. */
+  "bundled-survey": {
+    id: "bundled-survey",
+    label: "Bundled survey",
+    scope: "local",
+    dataSource: "usgs-3dep",
+    creditUrl: "https://www.usgs.gov/3d-elevation-program",
+    async fetch(meta: DatasetMeta, N: number): Promise<SourceFetchResult> {
+      const bundle = BUNDLED_TERRAIN[meta.id];
+      if (!bundle) throw new Error(`no bundled grid registered for ${meta.id}`);
+      const rs = resampleBundled(bundle, N);
+      return {
+        depths: rs.depths,
+        minDepth: rs.minDepth,
+        maxDepth: rs.maxDepth,
+        topography: rs.hasTopography ? rs.topography : undefined,
+        hasTopography: rs.hasTopography,
+        bathymetryProvenance: {
+          source: bundle.bathymetry.source,
+          label: bundle.bathymetry.label,
+          creditUrl: bundle.bathymetry.creditUrl,
+        },
+        topographyProvenance: {
+          source: bundle.topographyProvenance.source,
+          label: bundle.topographyProvenance.label,
+          creditUrl: bundle.topographyProvenance.creditUrl,
+        },
+        bbox: bundle.bbox,
+      };
+    },
+  },
+  /** NCEI multibeam BAG composite, 1–50 m where surveyed. Best for
+   *  inshore corridors with dedicated multibeam coverage. */
+  "ncei-bag-mosaic": {
+    id: "ncei-bag-mosaic",
+    label: NCEI_COVERAGES.bagMosaic.label,
+    scope: "regional",
+    dataSource: "ncei",
+    creditUrl: "https://www.ncei.noaa.gov/products/bathymetry",
+    async fetch(meta: DatasetMeta, N: number): Promise<SourceFetchResult> {
+      const r = await fetchNceiGrid(meta.bbox, N, "bagMosaic");
+      return { ...r };
+    },
+  },
+  /** NCEI "best-available" DEM mosaic — community/tsunami DEMs at 8–90 m
+   *  where they exist, with coarser fallback elsewhere. */
+  "ncei-dem-global-mosaic": {
+    id: "ncei-dem-global-mosaic",
+    label: NCEI_COVERAGES.demGlobalMosaic.label,
+    scope: "regional",
+    dataSource: "ncei",
+    creditUrl: "https://www.ncei.noaa.gov/products/coastal-elevation-models",
+    async fetch(meta: DatasetMeta, N: number): Promise<SourceFetchResult> {
+      const r = await fetchNceiGrid(meta.bbox, N, "demGlobalMosaic");
+      return { ...r };
+    },
+  },
+  /** GEBCO 2024 global grid (~400 m). Last-resort upstream before
+   *  synthetic — covers everywhere on the ocean but is too coarse for
+   *  most inshore fishing-grade detail. */
+  "gebco": {
+    id: "gebco",
+    label: "GEBCO 2024",
+    scope: "global",
+    dataSource: "gebco",
+    creditUrl: "https://www.gebco.net/data_and_products/gridded_bathymetry_data/",
+    async fetch(meta: DatasetMeta, N: number): Promise<SourceFetchResult> {
+      const r = await fetchGebcoGrid(meta.bbox, N);
+      return { ...r };
+    },
+  },
+} as const satisfies Record<string, BathymetrySource>;
+
+export type BathymetrySourceId = keyof typeof BATHYMETRY_SOURCES;
+
+/**
+ * Per-AOI ranked list of bathymetry sources. The resolver tries each
+ * entry in order until one returns a usable grid. Datasets not listed
+ * here fall through to `DEFAULT_SOURCE_PRIORITY` (gebco → synthetic).
+ *
+ * Ordering rubric (see header comment above): quality first, then
+ * accessibility, then scope. Local/regional sources always precede
+ * national/global ones when they cover the AOI.
+ */
+export const DATASET_SOURCE_PRIORITY: Record<string, BathymetrySourceId[]> = {
+  // SE Alaska multibeam-first corridors — Thorne Bay / Ketchikan / Sitka /
+  // Juneau have strong NCEI BAG (multibeam, 1–50 m) coverage. BAG first,
+  // community DEM next, GEBCO global last.
+  "thorne-bay":         ["ncei-bag-mosaic", "ncei-dem-global-mosaic", "gebco"],
+  "ketchikan":          ["ncei-bag-mosaic", "ncei-dem-global-mosaic", "gebco"],
+  "sitka-sound":        ["ncei-bag-mosaic", "ncei-dem-global-mosaic", "gebco"],
+  "juneau-approaches":  ["ncei-bag-mosaic", "ncei-dem-global-mosaic", "gebco"],
+  // SE Alaska community-DEM-first corridors — Glacier Bay / Icy Strait /
+  // Craig / Wrangell / Skagway are covered by NCEI integrated community
+  // DEMs (8–30 m) more reliably than the BAG composite there.
+  "glacier-bay":         ["ncei-dem-global-mosaic", "ncei-bag-mosaic", "gebco"],
+  "icy-strait":          ["ncei-dem-global-mosaic", "ncei-bag-mosaic", "gebco"],
+  "craig-klawock":       ["ncei-dem-global-mosaic", "ncei-bag-mosaic", "gebco"],
+  "wrangell-petersburg": ["ncei-dem-global-mosaic", "ncei-bag-mosaic", "gebco"],
+  "skagway-haines":      ["ncei-dem-global-mosaic", "ncei-bag-mosaic", "gebco"],
+  // Lake Ray Roberts — bundled USACE+3DEP survey, GEBCO has no usable
+  // inland coverage so the synthetic terminal is the practical fallback.
+  "lake-ray-roberts":    ["bundled-survey", "gebco"],
 };
+
+/** Default ranked list for AOIs without an explicit entry. */
+const DEFAULT_SOURCE_PRIORITY: readonly BathymetrySourceId[] = ["gebco"];
+
+export function getDatasetSourcePriority(
+  datasetId: string,
+): readonly BathymetrySourceId[] {
+  return DATASET_SOURCE_PRIORITY[datasetId] ?? DEFAULT_SOURCE_PRIORITY;
+}
+
+/**
+ * Back-compat shim for the old `NCEI_DATASET_COVERAGES` export used by
+ * `catalogSeeder.ts` (and mirrored client-side by `DatasetPanel.tsx`).
+ * Derived from `DATASET_SOURCE_PRIORITY` so it always reflects the
+ * current ranked lists.
+ * @deprecated Use `DATASET_SOURCE_PRIORITY` / `getDatasetSourcePriority`.
+ */
+export const NCEI_DATASET_COVERAGES: Record<string, NceiCoverageKey[]> =
+  Object.fromEntries(
+    Object.entries(DATASET_SOURCE_PRIORITY)
+      .map(([id, sources]) => {
+        const ncei = sources
+          .map((s) =>
+            s === "ncei-bag-mosaic"
+              ? ("bagMosaic" as NceiCoverageKey)
+              : s === "ncei-dem-global-mosaic"
+                ? ("demGlobalMosaic" as NceiCoverageKey)
+                : null,
+          )
+          .filter((v): v is NceiCoverageKey => v !== null);
+        return [id, ncei];
+      })
+      .filter(([, list]) => (list as NceiCoverageKey[]).length > 0),
+  ) as Record<string, NceiCoverageKey[]>;
+
+/**
+ * Ranked-fallback resolver. Walks the AOI's `DATASET_SOURCE_PRIORITY` list
+ * and returns the first source whose `fetch` succeeds. Each failure is
+ * logged with its reason and the loop falls through to the next source —
+ * mirroring the legacy NCEI loop. Returns `null` when every ranked source
+ * fails; callers fall through to the synthetic fbm terminal.
+ *
+ * Exported for tests; production callers use it via `buildTerrainGrid`.
+ */
+export async function resolveBathymetrySource(
+  meta: DatasetMeta,
+  N: number,
+): Promise<{ source: BathymetrySource; result: SourceFetchResult } | null> {
+  const ranked = getDatasetSourcePriority(meta.id);
+  for (const sourceId of ranked) {
+    const source = BATHYMETRY_SOURCES[sourceId];
+    if (!source) {
+      console.warn(`[terrain] Unknown source '${sourceId}' for ${meta.id}; skipping.`);
+      continue;
+    }
+    try {
+      console.info(
+        `[terrain] Trying ${source.label} (${source.scope}) for ${meta.id} at ${N}×${N}…`,
+      );
+      const result = await source.fetch(meta, N);
+      console.info(`[terrain] ${source.label} resolved successfully for ${meta.id}.`);
+      return { source, result };
+    } catch (err) {
+      console.info(
+        `[terrain] ${source.label} unavailable for ${meta.id}: ${(err as Error).message}.`,
+      );
+    }
+  }
+  return null;
+}
 
 /**
  * Fetch bathymetric data from an NCEI WCS coverage for a given bounding box.
@@ -770,112 +1004,61 @@ export async function buildTerrainGrid(
     return disk;
   }
 
-  // 2b. Bundled pre-built terrain (real surveys/DEMs for AOIs where NCEI
-  //     and GEBCO have no usable coverage — e.g. inland TX reservoirs).
-  //     Short-circuits the upstream chain entirely so we never fall through
-  //     to synthetic for these datasets.
-  const bundle = BUNDLED_TERRAIN[datasetId];
-  if (bundle) {
-    console.info(
-      `[terrain] Using bundled terrain for ${datasetId} ` +
-        `(bathymetry: ${bundle.bathymetry.source}, topography: ${bundle.topographyProvenance.source})`,
-    );
-    const rs = resampleBundled(bundle, N);
-    if (smoothing) smoothSpikes(rs.depths, N, rs.maxDepth - rs.minDepth);
-    let minD = Infinity, maxD = -Infinity;
-    for (let i = 0; i < rs.depths.length; i++) {
-      if (rs.depths[i]! < minD) minD = rs.depths[i]!;
-      if (rs.depths[i]! > maxD) maxD = rs.depths[i]!;
-    }
-    const grid: TerrainGrid = {
-      datasetId,
-      name: meta.name,
-      waterType: meta.waterType,
-      resolution: N,
-      width: N,
-      height: N,
-      depths: rs.depths,
-      minDepth: Math.round(minD),
-      maxDepth: Math.round(maxD),
-      minLon: bundle.bbox.minLon,
-      maxLon: bundle.bbox.maxLon,
-      minLat: bundle.bbox.minLat,
-      maxLat: bundle.bbox.maxLat,
-      centerLon: meta.centerLon,
-      centerLat: meta.centerLat,
-      synthetic: false,
-      dataSource: bundle.bathymetry.source,
-      bathymetrySource: bundle.bathymetry.source,
-      topographySource: bundle.topographyProvenance.source,
-      bathymetrySourceLabel: bundle.bathymetry.label,
-      topographySourceLabel: bundle.topographyProvenance.label,
-      bathymetryCreditUrl: bundle.bathymetry.creditUrl,
-      topographyCreditUrl: bundle.topographyProvenance.creditUrl,
-      ...(rs.hasTopography ? { topography: rs.topography, hasTopography: true } : {}),
-    };
-    memoryCache.set(cacheKey, grid);
-    await writeDiskCache(cacheKey, grid);
-    return grid;
-  }
+  // 3. Resolve the bathymetry grid through the AOI's ranked source list.
+  //    Each source is tried in priority order (local → regional/state →
+  //    national → global); the first usable grid wins. Synthetic fbm is
+  //    the implicit terminal fallback when every ranked source fails.
+  const resolved = await resolveBathymetrySource(meta, N);
 
-  // 3. Fetch from upstream source:
-  //    NCEI WCS (per-dataset coverage list) → GEBCO WCS → synthetic fallback
-  let depths: number[] = [];
-  let minDepth = 0;
-  let maxDepth = 0;
+  let depths: number[];
+  let minDepth: number;
+  let maxDepth: number;
   let topography: number[] | undefined;
   let hasTopography = false;
   let synthetic = false;
-  let dataSource: TerrainDataSource = "gebco";
-  let resolved = false;
+  let dataSource: TerrainDataSource;
+  let bathymetrySource: TerrainDataSource;
+  let topographySource: TerrainDataSource | undefined;
+  let bathymetrySourceLabel: string | undefined;
+  let topographySourceLabel: string | undefined;
+  let bathymetryCreditUrl: string | undefined;
+  let topographyCreditUrl: string | undefined;
+  let bbox = meta.bbox;
 
-  const nceiCoverages = NCEI_DATASET_COVERAGES[datasetId];
-
-  if (nceiCoverages && nceiCoverages.length > 0) {
-    for (const coverageKey of nceiCoverages) {
-      const cov = NCEI_COVERAGES[coverageKey]!;
-      try {
-        console.info(`[terrain] Trying ${cov.label} for ${datasetId} at ${N}×${N}…`);
-        const ncei = await fetchNceiGrid(meta.bbox, N, coverageKey);
-        depths = ncei.depths;
-        minDepth = ncei.minDepth;
-        maxDepth = ncei.maxDepth;
-        topography = ncei.topography;
-        hasTopography = ncei.hasTopography;
-        dataSource = "ncei";
-        resolved = true;
-        console.info(`[terrain] ${cov.label} fetched successfully for ${datasetId}`);
-        break;
-      } catch (nceiErr) {
-        console.info(
-          `[terrain] ${cov.label} unavailable for ${datasetId}: ${(nceiErr as Error).message}.`
-        );
-      }
+  if (resolved) {
+    const { source, result } = resolved;
+    depths = result.depths;
+    minDepth = result.minDepth;
+    maxDepth = result.maxDepth;
+    topography = result.topography;
+    hasTopography = result.hasTopography;
+    if (result.bbox) bbox = result.bbox;
+    const bathProv = result.bathymetryProvenance ?? {
+      source: source.dataSource,
+      label: source.label,
+      creditUrl: source.creditUrl,
+    };
+    const topoProv = result.topographyProvenance ?? bathProv;
+    dataSource = bathProv.source;
+    bathymetrySource = bathProv.source;
+    bathymetrySourceLabel = bathProv.label;
+    bathymetryCreditUrl = bathProv.creditUrl;
+    if (hasTopography) {
+      topographySource = topoProv.source;
+      topographySourceLabel = topoProv.label;
+      topographyCreditUrl = topoProv.creditUrl;
     }
-  }
-
-  if (!resolved) {
-    try {
-      console.info(`[terrain] Fetching GEBCO WCS for ${datasetId} at ${N}×${N}…`);
-      const gebco = await fetchGebcoGrid(meta.bbox, N);
-      depths = gebco.depths;
-      minDepth = gebco.minDepth;
-      maxDepth = gebco.maxDepth;
-      topography = gebco.topography;
-      hasTopography = gebco.hasTopography;
-      dataSource = "gebco";
-    } catch (err) {
-      // Fallback to synthetic data if GEBCO is unreachable (dev / offline)
-      console.warn(
-        `[terrain] GEBCO WCS unavailable for ${datasetId}: ${(err as Error).message}. Using synthetic fallback.`
-      );
-      const synth = buildSyntheticGrid(datasetId, N, meta);
-      depths = synth.depths;
-      minDepth = synth.minDepth;
-      maxDepth = synth.maxDepth;
-      synthetic = true;
-      dataSource = "synthetic";
-    }
+  } else {
+    console.warn(
+      `[terrain] All ranked sources failed for ${datasetId}; using synthetic fallback.`,
+    );
+    const synth = buildSyntheticGrid(datasetId, N, meta);
+    depths = synth.depths;
+    minDepth = synth.minDepth;
+    maxDepth = synth.maxDepth;
+    synthetic = true;
+    dataSource = "synthetic";
+    bathymetrySource = "synthetic";
   }
 
   // Smooth spikes before finalising the grid (skipped when the user has
@@ -902,14 +1085,20 @@ export async function buildTerrainGrid(
     depths,
     minDepth: Math.round(minDepth),
     maxDepth: Math.round(maxDepth),
-    minLon: meta.bbox.minLon,
-    maxLon: meta.bbox.maxLon,
-    minLat: meta.bbox.minLat,
-    maxLat: meta.bbox.maxLat,
+    minLon: bbox.minLon,
+    maxLon: bbox.maxLon,
+    minLat: bbox.minLat,
+    maxLat: bbox.maxLat,
     centerLon: meta.centerLon,
     centerLat: meta.centerLat,
     synthetic,
     dataSource,
+    bathymetrySource,
+    ...(bathymetrySourceLabel ? { bathymetrySourceLabel } : {}),
+    ...(bathymetryCreditUrl ? { bathymetryCreditUrl } : {}),
+    ...(topographySource ? { topographySource } : {}),
+    ...(topographySourceLabel ? { topographySourceLabel } : {}),
+    ...(topographyCreditUrl ? { topographyCreditUrl } : {}),
     ...(hasTopography && topography ? { topography, hasTopography: true } : {}),
   };
 
