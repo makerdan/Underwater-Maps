@@ -124,18 +124,37 @@ function buildZoneRenders(
   const out: ZoneRender[] = [];
 
   for (const feature of features) {
-    const geom = feature.geometry as { type?: string; coordinates?: number[][][] };
-    if (geom.type !== "Polygon" || !geom.coordinates?.[0]) continue;
+    const geom = feature.geometry as {
+      type?: string;
+      coordinates?: number[][][] | number[][][][];
+    };
 
-    const outline = ringToLineGeometry(geom.coordinates[0], minLon, lonRange, minLat, latRange);
-    const fill = polygonToFillGeometry(geom.coordinates, minLon, lonRange, minLat, latRange);
-    out.push({
-      fillGeometry: fill,
-      outlineGeometry: outline,
-      color: feature.properties.color ?? "#00e5ff",
-      commonName: feature.properties.commonName ?? feature.properties.species ?? "",
-      properties: feature.properties,
-    });
+    // Normalize Polygon and MultiPolygon to a single list of polygons, where each
+    // polygon is an array of rings (rings[0] is the outer ring, rings[1..] are holes).
+    let polygons: number[][][][] = [];
+    if (geom.type === "Polygon") {
+      const coords = geom.coordinates as number[][][] | undefined;
+      if (coords?.[0]) polygons = [coords];
+    } else if (geom.type === "MultiPolygon") {
+      const coords = geom.coordinates as number[][][][] | undefined;
+      if (coords) polygons = coords.filter((p) => p?.[0]);
+    } else {
+      continue;
+    }
+
+    for (const rings of polygons) {
+      const outerRing = rings[0];
+      if (!outerRing) continue;
+      const outline = ringToLineGeometry(outerRing, minLon, lonRange, minLat, latRange);
+      const fill = polygonToFillGeometry(rings, minLon, lonRange, minLat, latRange);
+      out.push({
+        fillGeometry: fill,
+        outlineGeometry: outline,
+        color: feature.properties.color ?? "#00e5ff",
+        commonName: feature.properties.commonName ?? feature.properties.species ?? "",
+        properties: feature.properties,
+      });
+    }
   }
   return out;
 }
