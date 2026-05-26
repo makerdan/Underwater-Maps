@@ -11,6 +11,9 @@ const PANEL_IDS: PanelId[] = [
   "cameraCoords",
   "keyboardShortcuts",
   "tide",
+  "overlaysTools",
+  "mapData",
+  "conditions",
 ];
 
 const DEFAULTS: Record<PanelId, boolean> = {
@@ -20,6 +23,9 @@ const DEFAULTS: Record<PanelId, boolean> = {
   cameraCoords: false,
   keyboardShortcuts: true,
   tide: false,
+  overlaysTools: false,
+  mapData: false,
+  conditions: false,
 };
 
 async function flush() {
@@ -85,6 +91,9 @@ describe("panelCollapseStore persistence", () => {
       cameraCoords: false,
       keyboardShortcuts: false,
       tide: true,
+      overlaysTools: true,
+      mapData: false,
+      conditions: true,
     };
     const { setCollapsed } = usePanelCollapseStore.getState();
     for (const id of PANEL_IDS) setCollapsed(id, pattern[id]);

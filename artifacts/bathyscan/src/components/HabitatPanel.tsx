@@ -170,7 +170,11 @@ const HotspotCard: React.FC<HotspotCardProps> = ({
 // ---------------------------------------------------------------------------
 // HabitatPanel
 // ---------------------------------------------------------------------------
-export const HabitatPanel: React.FC = () => {
+interface HabitatPanelProps {
+  embedded?: boolean;
+}
+
+export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) => {
   const { terrain } = useAppState();
   const zoneMap = useClassificationStore((s) => s.zoneMap);
   const activeSpecies = useHabitatStore((s) => s.activeSpecies);
@@ -182,7 +186,8 @@ export const HabitatPanel: React.FC = () => {
   const habitatOverlayIntensity = useSettingsStore((s) => s.habitatOverlayIntensity);
   const setHabitatOverlayIntensity = useSettingsStore((s) => s.setHabitatOverlayIntensity);
 
-  const collapsed = usePanelCollapseStore((s) => s.collapsed.habitat);
+  const storeCollapsed = usePanelCollapseStore((s) => s.collapsed.habitat);
+  const collapsed = embedded ? false : storeCollapsed;
   const togglePanel = usePanelCollapseStore((s) => s.toggle);
   const [droppingIdx, setDroppingIdx] = useState<number | null>(null);
 
@@ -290,8 +295,9 @@ export const HabitatPanel: React.FC = () => {
   const showOverlay = !!activeSpecies && !!scores;
 
   return (
-    <div style={PANEL} className="habitat-panel">
-      {/* Header */}
+    <div style={embedded ? { width: "100%" } : PANEL} className="habitat-panel">
+      {/* Header — hidden when embedded inside a SidebarSection */}
+      {!embedded && (
       <ViewscreenTooltip label={collapsed ? "Expand habitat panel" : "Collapse habitat panel"} side="right">
       <button
         onClick={() => togglePanel("habitat")}
@@ -322,6 +328,7 @@ export const HabitatPanel: React.FC = () => {
         </span>
       </button>
       </ViewscreenTooltip>
+      )}
 
       {!collapsed && (
         <div className="px-3 py-2">

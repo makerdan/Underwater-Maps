@@ -17,10 +17,9 @@ import { HUD } from "@/components/HUD";
 import { DepthScaleBar } from "@/components/DepthScaleBar";
 import { OverlaysToolsPanel } from "@/components/OverlaysToolsPanel";
 import { DatasetPanel } from "@/components/DatasetPanel";
-import { CameraCoordsReadout } from "@/components/CameraCoordsReadout";
+import { SidebarSection } from "@/components/SidebarSection";
 import { Minimap } from "@/components/Minimap";
 import { ControlsLegend } from "@/components/ControlsLegend";
-import { KeyboardShortcutsPanel } from "@/components/KeyboardShortcutsPanel";
 import { AppHeader } from "@/components/AppHeader";
 import { TidePanel } from "@/components/TidePanel";
 import { CurrentsPanel } from "@/components/CurrentsPanel";
@@ -554,7 +553,7 @@ function Main() {
           </ViewscreenTooltip>
         ) : (
           <div
-            className="absolute top-24 left-4 z-20 flex flex-col gap-2 overflow-y-auto overscroll-contain"
+            className="absolute top-24 left-4 z-20 flex flex-col gap-2"
             style={{
               maxHeight: "calc(100vh - 7rem)",
               paddingRight: 4,
@@ -585,28 +584,52 @@ function Main() {
               </ViewscreenTooltip>
             </div>
             <OverlaysToolsPanel />
-            {showDatasetPanel && <DatasetPanel />}
-            <ZoneOverlay />
-            {showHabitatPanel && <HabitatPanel />}
-            <CameraCoordsReadout />
-            <KeyboardShortcutsPanel />
-            {showTidePanel && tidalOverlay && tidalData !== null && (
-              <TidePanel
-                data={tidalData}
-                loading={tidalLoading}
-                depthLayer={depthLayer}
-                onDepthLayerChange={setDepthLayer}
-                scrubDatetime={scrubDatetime}
-                onScrubChange={setScrubDatetime}
-                lat={centerLat}
-                lon={centerLon}
-              />
-            )}
-            <CurrentsPanel />
-            {/* Conditions legend — pinned at the bottom of the sidebar.
+
+            {/* Scrollable section column — sits between the OverlaysTools
+                block and the pinned footer so long content can scroll
+                without pushing the footer off-screen. */}
+            <div
+              className="flex flex-col gap-2 overflow-y-auto overscroll-contain"
+              style={{
+                flex: 1,
+                minHeight: 0,
+                paddingRight: 2,
+                scrollbarWidth: "thin",
+                scrollbarColor: "rgba(0,229,255,0.35) transparent",
+              }}
+            >
+              {/* ── Section 1: Map & Data ── */}
+              <SidebarSection id="mapData" title="Map & Data">
+                {showDatasetPanel ? <DatasetPanel embedded /> : null}
+                <ZoneOverlay embedded />
+                {showHabitatPanel ? <HabitatPanel embedded /> : null}
+              </SidebarSection>
+
+              {/* ── Section 2: Conditions ── */}
+              <SidebarSection id="conditions" title="Conditions">
+                {showTidePanel && tidalOverlay && tidalData !== null ? (
+                  <TidePanel
+                    data={tidalData}
+                    loading={tidalLoading}
+                    depthLayer={depthLayer}
+                    onDepthLayerChange={setDepthLayer}
+                    scrubDatetime={scrubDatetime}
+                    onScrubChange={setScrubDatetime}
+                    lat={centerLat}
+                    lon={centerLon}
+                    embedded
+                  />
+                ) : null}
+                <CurrentsPanel embedded />
+              </SidebarSection>
+            </div>
+
+            {/* ── Footer: Conditions Legend (pinned bottom) ──
                 Only renders when at least one of Wind / Tide / Current
                 overlays is active (returns null otherwise). */}
-            <ConditionsLegend />
+            <div style={{ flexShrink: 0 }}>
+              <ConditionsLegend />
+            </div>
           </div>
         )}
 

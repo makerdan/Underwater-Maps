@@ -49,7 +49,11 @@ const CYAN: React.CSSProperties = {
   textShadow: "0 0 6px rgba(0,229,255,0.5)",
 };
 
-export const ZoneOverlay: React.FC = () => {
+interface ZoneOverlayProps {
+  embedded?: boolean;
+}
+
+export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) => {
   const { terrain } = useAppState();
   const loading = useClassificationStore((s) => s.loading);
   const zoneMap = useClassificationStore((s) => s.zoneMap);
@@ -64,7 +68,8 @@ export const ZoneOverlay: React.FC = () => {
   const setPaintSlot = useUiStore((s) => s.setZonePaintSlot);
   const hasEdits = useClassificationStore((s) => s.hasEdits);
   const resetToAi = useClassificationStore((s) => s.resetToAi);
-  const collapsed = usePanelCollapseStore((s) => s.collapsed.zoneOverlay);
+  const storeCollapsed = usePanelCollapseStore((s) => s.collapsed.zoneOverlay);
+  const collapsed = embedded ? false : storeCollapsed;
   const togglePanel = usePanelCollapseStore((s) => s.toggle);
 
   // Only show this panel when there's a terrain loaded
@@ -76,8 +81,9 @@ export const ZoneOverlay: React.FC = () => {
   const hasZoneMap = !!zoneMap;
 
   return (
-    <div style={PANEL}>
-      {/* Header */}
+    <div style={embedded ? { width: "100%" } : PANEL}>
+      {/* Header — hidden when embedded inside a SidebarSection */}
+      {!embedded && (
       <button
         type="button"
         onClick={() => togglePanel("zoneOverlay")}
@@ -133,6 +139,7 @@ export const ZoneOverlay: React.FC = () => {
           <span style={{ fontSize: 24, lineHeight: 1, color: "#cbd5e1" }}>{collapsed ? "▸" : "▾"}</span>
         </div>
       </button>
+      )}
 
       {/* Body */}
       {!collapsed && (

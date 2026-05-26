@@ -105,22 +105,30 @@ function Legend(): React.ReactElement {
   );
 }
 
-export const CurrentsPanel: React.FC = () => {
+interface CurrentsPanelProps {
+  embedded?: boolean;
+}
+
+export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }) => {
   const s = useSettingsStore();
   const field = useCurrentsStore((st) => st.field);
   const noaaAmbient = useCurrentsStore((st) => st.noaaAmbient);
 
+  const wrapStyle: React.CSSProperties = embedded
+    ? { width: "100%", color: "#94a3b8", fontFamily: FONT, fontSize: 11 }
+    : card;
+
   if (!s.currentsEnabled) {
     return (
-      <div style={card} data-testid="currents-panel">
-        <div style={header}>◈ CURRENTS</div>
+      <div style={wrapStyle} data-testid="currents-panel">
+        {!embedded && <div style={header}>◈ CURRENTS</div>}
         <div style={{ display: "flex", gap: 6 }}>
           <button
             data-testid="currents-enable"
             style={toggleBtn(false)}
             onClick={() => s.setCurrentsEnabled(true)}
           >
-            ○ ENABLE
+            ○ ENABLE CURRENTS
           </button>
         </div>
       </div>
@@ -130,7 +138,8 @@ export const CurrentsPanel: React.FC = () => {
   const maxKt = field ? field.maxSpeed : Math.max(s.currentsManualSpeedKt, 0.5);
 
   return (
-    <div style={card} data-testid="currents-panel">
+    <div style={wrapStyle} data-testid="currents-panel">
+      {!embedded && (
       <div style={{ ...header, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span>◉ CURRENTS</span>
         <button
@@ -141,6 +150,18 @@ export const CurrentsPanel: React.FC = () => {
           OFF
         </button>
       </div>
+      )}
+      {embedded && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+          <button
+            data-testid="currents-disable"
+            style={{ ...toggleBtn(true), flex: 0, padding: "2px 8px" }}
+            onClick={() => s.setCurrentsEnabled(false)}
+          >
+            OFF
+          </button>
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
         <button

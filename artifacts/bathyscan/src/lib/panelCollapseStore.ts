@@ -8,7 +8,9 @@ export type PanelId =
   | "cameraCoords"
   | "keyboardShortcuts"
   | "tide"
-  | "overlaysTools";
+  | "overlaysTools"
+  | "mapData"
+  | "conditions";
 
 interface PanelCollapseStore {
   collapsed: Record<PanelId, boolean>;
@@ -24,6 +26,8 @@ const DEFAULTS: Record<PanelId, boolean> = {
   keyboardShortcuts: true,
   tide: false,
   overlaysTools: false,
+  mapData: false,
+  conditions: false,
 };
 
 export const usePanelCollapseStore = create<PanelCollapseStore>()(

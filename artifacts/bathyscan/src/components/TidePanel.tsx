@@ -56,6 +56,7 @@ interface TidePanelProps {
   onScrubChange: (d: Date | null) => void;
   lat: number | null;
   lon: number | null;
+  embedded?: boolean;
 }
 
 function compassLabelLocal(deg: number): string {
@@ -79,8 +80,10 @@ export const TidePanel: React.FC<TidePanelProps> = ({
   onScrubChange,
   lat,
   lon,
+  embedded = false,
 }) => {
-  const collapsed = usePanelCollapseStore((s) => s.collapsed.tide);
+  const storeCollapsed = usePanelCollapseStore((s) => s.collapsed.tide);
+  const collapsed = embedded ? false : storeCollapsed;
   const togglePanel = usePanelCollapseStore((s) => s.toggle);
   const [hoveredEvent, setHoveredEvent] = useState<TidalScheduleEvent | null>(null);
   const units = useSettingsStore((s) => s.units);
@@ -211,8 +214,9 @@ export const TidePanel: React.FC<TidePanelProps> = ({
   }, [schedule, scrubDay, today]);
 
   return (
-    <div style={PANEL}>
-      {/* Header */}
+    <div style={embedded ? { width: "100%" } : PANEL}>
+      {/* Header — hidden when embedded inside a SidebarSection */}
+      {!embedded && (
       <ViewscreenTooltip label={collapsed ? "Expand tide panel" : "Collapse tide panel"} side="left">
         <div
           className="flex items-center justify-between px-2 py-1.5 cursor-pointer"
@@ -228,6 +232,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
           <span style={{ ...DIM, fontSize: 20, lineHeight: 1 }}>{collapsed ? "▲" : "▼"}</span>
         </div>
       </ViewscreenTooltip>
+      )}
 
       {!collapsed && (
         <div className="px-2 py-2 space-y-2">

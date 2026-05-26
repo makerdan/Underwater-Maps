@@ -158,7 +158,11 @@ const PresetVisibilityToggle: React.FC<{
   );
 };
 
-export const DatasetPanel: React.FC = () => {
+interface DatasetPanelProps {
+  embedded?: boolean;
+}
+
+export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) => {
   const { datasetId, setDatasetId, setTerrain, terrain, mode } = useAppState();
   const { isSignedIn } = useAuth();
   const qc = useQueryClient();
@@ -187,7 +191,8 @@ export const DatasetPanel: React.FC = () => {
     })();
   }, [isOnline]);
 
-  const collapsed = usePanelCollapseStore((s) => s.collapsed.datasets);
+  const storeCollapsed = usePanelCollapseStore((s) => s.collapsed.datasets);
+  const collapsed = embedded ? false : storeCollapsed;
   const togglePanel = usePanelCollapseStore((s) => s.toggle);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -591,8 +596,12 @@ export const DatasetPanel: React.FC = () => {
   const anyLoading = datasetsLoading || userDatasetsLoading;
 
   return (
-    <div style={{ ...PANEL, pointerEvents: "auto" }} className="dataset-panel select-none">
-      {/* Header */}
+    <div
+      style={embedded ? { width: "100%" } : { ...PANEL, pointerEvents: "auto" }}
+      className="dataset-panel select-none"
+    >
+      {/* Header — hidden when embedded inside a SidebarSection */}
+      {!embedded && (
       <ViewscreenTooltip label={collapsed ? "Expand datasets panel" : "Collapse datasets panel"} side="right">
         <button
           onClick={() => togglePanel("datasets")}
@@ -611,6 +620,7 @@ export const DatasetPanel: React.FC = () => {
           </div>
         </button>
       </ViewscreenTooltip>
+      )}
 
       {!collapsed && (
         <div>
