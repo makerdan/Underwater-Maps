@@ -2,6 +2,10 @@ import React from "react";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
+import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
+
+const COORDS_TOOLTIP =
+  "Longitude and latitude of your viewpoint in the 3D scene — where you're looking from, not where your cursor is.";
 
 const CYAN: React.CSSProperties = {
   color: "#00e5ff",
@@ -54,27 +58,29 @@ export const CameraCoordsReadout: React.FC = () => {
 
   return (
     <div style={{ ...PANEL, opacity: hudOpacity, userSelect: "none" }}>
-      <button
-        type="button"
-        onClick={() => togglePanel("cameraCoords")}
-        aria-expanded={!collapsed}
-        className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors rounded-t"
-        style={{
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          textAlign: "left",
-          color: "#cbd5e1",
-          fontFamily: "inherit",
-          fontSize: 10,
-          letterSpacing: "0.2em",
-          marginBottom: 4,
-          fontWeight: 600,
-        }}
-      >
-        <span>CAMERA POSITION</span>
-        <span style={{ color: "#cbd5e1", fontSize: 24, lineHeight: 1 }}>{collapsed ? "▸" : "▾"}</span>
-      </button>
+      <ViewscreenTooltip label={COORDS_TOOLTIP} side="right">
+        <button
+          type="button"
+          onClick={() => togglePanel("cameraCoords")}
+          aria-expanded={!collapsed}
+          className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors rounded-t"
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            textAlign: "left",
+            color: "#cbd5e1",
+            fontFamily: "inherit",
+            fontSize: 10,
+            letterSpacing: "0.2em",
+            marginBottom: 4,
+            fontWeight: 600,
+          }}
+        >
+          <span>YOUR CURRENT COORDINATES</span>
+          <span style={{ color: "#cbd5e1", fontSize: 24, lineHeight: 1 }}>{collapsed ? "▸" : "▾"}</span>
+        </button>
+      </ViewscreenTooltip>
       {!collapsed && (
         <div style={{ padding: "4px 12px 8px" }}>
           <div>
