@@ -163,7 +163,15 @@ interface DatasetPanelProps {
 }
 
 export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) => {
-  const { datasetId, setDatasetId, setTerrain, terrain, mode } = useAppState();
+  const {
+    datasetId,
+    setDatasetId,
+    setTerrain,
+    terrain,
+    mode,
+    pendingExternalUserDatasetId,
+    setPendingExternalUserDatasetId,
+  } = useAppState();
   const { isSignedIn } = useAuth();
   const qc = useQueryClient();
   const isOnline = useOfflineStore((s) => s.isOnline);
@@ -369,6 +377,36 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     setPendingUserDatasetId(ds.id);
     setPendingId(null);
   };
+
+  // ─── Cross-panel handoff (FileUpload / FindDataPanel → DatasetPanel) ──────
+  // Other panels can ask us to load a freshly-materialized user dataset by
+  // setting `pendingExternalUserDatasetId` on the global app context. We
+  // route it through the same /user/datasets/:id/{terrain,overview} pipeline
+  // as a click on a "My Uploads" row, then clear the handoff field.
+  useEffect(() => {
+    if (!pendingExternalUserDatasetId) return;
+    if (
+      pendingExternalUserDatasetId === activeUserDatasetId &&
+      !pendingUserDatasetId
+    ) {
+      setPendingExternalUserDatasetId(null);
+      return;
+    }
+    setUserLoadError(null);
+    setPresetLoadError(null);
+    setLoadingId(pendingExternalUserDatasetId);
+    setPendingUserDatasetId(pendingExternalUserDatasetId);
+    setPendingId(null);
+    setPendingExternalUserDatasetId(null);
+    // Make sure /user/datasets list reflects the brand-new row.
+    void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+  }, [
+    pendingExternalUserDatasetId,
+    activeUserDatasetId,
+    pendingUserDatasetId,
+    qc,
+    setPendingExternalUserDatasetId,
+  ]);
 
   const handleRetryUserDataset = (e: React.MouseEvent) => {
     e.stopPropagation();

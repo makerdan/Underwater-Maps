@@ -431,8 +431,15 @@ export const getPostDatasetsUploadUrl = () => {
 }
 
 /**
- * Accepts a UTF-8 .xyz or .csv file with lon,lat,depth columns via multipart form upload. Auto-detects delimiter, header rows, and column order. Returns both a full terrain grid and a 64×64 overview grid.
- * @summary Upload an XYZ or CSV file and receive terrain data at two resolutions
+ * Accepts a UTF-8 .xyz or .csv file with lon,lat,depth columns via
+multipart form upload. Auto-detects delimiter, header rows, and column
+order. Authentication is required — every successful upload is
+persisted into the caller's `custom_datasets` library and the new
+row's UUID is returned as `savedDatasetId`. The response also includes
+a full terrain grid and a 64×64 overview grid for the client to
+render immediately without round-tripping to /user/datasets.
+
+ * @summary Upload an XYZ or CSV file and persist it to the user's dataset library
  */
 export const postDatasetsUpload = async (postDatasetsUploadBody: PostDatasetsUploadBody, options?: RequestInit): Promise<UploadResult> => {
     const formData = new FormData();
@@ -486,7 +493,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type PostDatasetsUploadMutationError = ErrorType<ApiError>
 
     /**
- * @summary Upload an XYZ or CSV file and receive terrain data at two resolutions
+ * @summary Upload an XYZ or CSV file and persist it to the user's dataset library
  */
 export const usePostDatasetsUpload = <TError = ErrorType<ApiError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsUpload>>, TError,{data: BodyType<PostDatasetsUploadBody>}, TContext>, request?: SecondParameter<typeof customFetch>}

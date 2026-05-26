@@ -159,8 +159,17 @@ paths:
     post:
       operationId: postDatasetsUpload
       tags: [datasets]
-      summary: Upload an XYZ or CSV file and receive terrain data at two resolutions
-      description: Accepts a UTF-8 .xyz or .csv file with lon,lat,depth columns via multipart form upload. Auto-detects delimiter, header rows, and column order. Returns both a full terrain grid and a 64×64 overview grid.
+      summary: Upload an XYZ or CSV file and persist it to the user's dataset library
+      description: |
+        Accepts a UTF-8 .xyz or .csv file with lon,lat,depth columns via
+        multipart form upload. Auto-detects delimiter, header rows, and column
+        order. Authentication is required — every successful upload is
+        persisted into the caller's `custom_datasets` library and the new
+        row's UUID is returned as `savedDatasetId`. The response also includes
+        a full terrain grid and a 64×64 overview grid for the client to
+        render immediately without round-tripping to /user/datasets.
+      security:
+        - clerkAuth: []
       requestBody:
         required: true
         content:
@@ -182,13 +191,25 @@ paths:
                 - file
       responses:
         "200":
-          description: Parsed terrain and overview grids
+          description: Parsed terrain and overview grids, persisted to the user's dataset library
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/UploadResult"
         "400":
           description: Unparseable file or insufficient valid points
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "413":
+          description: Uploaded file exceeds the server-side size limit
           content:
             application/json:
               schema:
@@ -2070,7 +2091,7 @@ components:
 
     UploadResult:
       type: object
-      description: Full terrain and overview grids generated from an uploaded file. When the user is authenticated the terrain is also persisted and savedDatasetId is returned.
+      description: Full terrain and overview grids generated from an uploaded file. The upload is always persisted into the caller's dataset library; `savedDatasetId` carries the new row's UUID.
       properties:
         terrain:
           $ref: "#/components/schemas/TerrainData"
@@ -2078,13 +2099,13 @@ components:
           $ref: "#/components/schemas/TerrainData"
         savedDatasetId:
           type: string
-          description: UUID of the saved custom dataset row (only present when the request was authenticated AND the row was persisted successfully)
+          description: UUID of the saved custom_datasets row. Present whenever persistence succeeded; omitted only if the database insert returned no row (see `saveError`).
         savedDatasetMeta:
           $ref: "#/components/schemas/UserDatasetMeta"
           description: Metadata for the freshly-saved row, suitable for optimistically inserting into the "My Uploads" list without a refetch
         saveError:
           type: string
-          description: Human-readable error string returned when the request was authenticated but the auto-save to the user's account failed. The terrain itself is still returned so the session is usable.
+          description: Human-readable error string returned when the auto-save to the user's account failed. The terrain itself is still returned so the session is usable.
       required:
         - terrain
         - overview
@@ -2548,6 +2569,10 @@ components:
         errorMessage:
           type: string
           nullable: true
+        datasetId:
+          type: string
+          nullable: true
+          description: UUID of the materialized `custom_datasets` row for this save, or null if materialization has not completed (status `queued`, `processing`, or `failed`).
         catalog:
           nullable: true
           allOf:

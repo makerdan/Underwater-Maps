@@ -616,16 +616,16 @@ export interface UserDatasetMeta {
 }
 
 /**
- * Full terrain and overview grids generated from an uploaded file. When the user is authenticated the terrain is also persisted and savedDatasetId is returned.
+ * Full terrain and overview grids generated from an uploaded file. The upload is always persisted into the caller's dataset library; `savedDatasetId` carries the new row's UUID.
  */
 export interface UploadResult {
   terrain: TerrainData;
   overview: TerrainData;
-  /** UUID of the saved custom dataset row (only present when the request was authenticated AND the row was persisted successfully) */
+  /** UUID of the saved custom_datasets row. Present whenever persistence succeeded; omitted only if the database insert returned no row (see `saveError`). */
   savedDatasetId?: string;
   /** Metadata for the freshly-saved row, suitable for optimistically inserting into the "My Uploads" list without a refetch */
   savedDatasetMeta?: UserDatasetMeta;
-  /** Human-readable error string returned when the request was authenticated but the auto-save to the user's account failed. The terrain itself is still returned so the session is usable. */
+  /** Human-readable error string returned when the auto-save to the user's account failed. The terrain itself is still returned so the session is usable. */
   saveError?: string;
 }
 
@@ -938,6 +938,8 @@ export interface UserCatalogSave {
   readyAt?: string | null;
   cacheKey?: string | null;
   errorMessage?: string | null;
+  /** UUID of the materialized `custom_datasets` row for this save, or null if materialization has not completed (status `queued`, `processing`, or `failed`). */
+  datasetId?: string | null;
   /** Embedded catalog metadata (present when returned from list/status endpoints) */
   catalog?: DatasetCatalogEntry | null;
 }

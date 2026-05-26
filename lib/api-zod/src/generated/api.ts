@@ -150,8 +150,15 @@ export const GetDatasetsIdOverviewResponse = zod.object({
 
 
 /**
- * Accepts a UTF-8 .xyz or .csv file with lon,lat,depth columns via multipart form upload. Auto-detects delimiter, header rows, and column order. Returns both a full terrain grid and a 64×64 overview grid.
- * @summary Upload an XYZ or CSV file and receive terrain data at two resolutions
+ * Accepts a UTF-8 .xyz or .csv file with lon,lat,depth columns via
+multipart form upload. Auto-detects delimiter, header rows, and column
+order. Authentication is required — every successful upload is
+persisted into the caller's `custom_datasets` library and the new
+row's UUID is returned as `savedDatasetId`. The response also includes
+a full terrain grid and a 64×64 overview grid for the client to
+render immediately without round-tripping to /user/datasets.
+
+ * @summary Upload an XYZ or CSV file and persist it to the user's dataset library
  */
 export const postDatasetsUploadBodyResolutionDefault = 256;
 export const postDatasetsUploadBodyResolutionMin = 32;
@@ -219,7 +226,7 @@ export const PostDatasetsUploadResponse = zod.object({
   "bathymetryCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the bathymetry source badge.'),
   "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.')
 }),
-  "savedDatasetId": zod.string().optional().describe('UUID of the saved custom dataset row (only present when the request was authenticated AND the row was persisted successfully)'),
+  "savedDatasetId": zod.string().optional().describe('UUID of the saved custom_datasets row. Present whenever persistence succeeded; omitted only if the database insert returned no row (see `saveError`).'),
   "savedDatasetMeta": zod.object({
   "id": zod.string().describe('UUID primary key'),
   "name": zod.string().describe('Dataset name derived from the uploaded filename'),
@@ -228,8 +235,8 @@ export const PostDatasetsUploadResponse = zod.object({
   "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
   "createdAt": zod.coerce.date()
 }).optional().describe('Metadata for the freshly-saved row, suitable for optimistically inserting into the \"My Uploads\" list without a refetch'),
-  "saveError": zod.string().optional().describe('Human-readable error string returned when the request was authenticated but the auto-save to the user\'s account failed. The terrain itself is still returned so the session is usable.')
-}).describe('Full terrain and overview grids generated from an uploaded file. When the user is authenticated the terrain is also persisted and savedDatasetId is returned.')
+  "saveError": zod.string().optional().describe('Human-readable error string returned when the auto-save to the user\'s account failed. The terrain itself is still returned so the session is usable.')
+}).describe('Full terrain and overview grids generated from an uploaded file. The upload is always persisted into the caller\'s dataset library; `savedDatasetId` carries the new row\'s UUID.')
 
 
 /**
@@ -1286,6 +1293,7 @@ export const GetDatasetsMySavesResponseItem = zod.object({
   "readyAt": zod.coerce.date().nullish(),
   "cacheKey": zod.string().nullish(),
   "errorMessage": zod.string().nullish(),
+  "datasetId": zod.string().nullish().describe('UUID of the materialized `custom_datasets` row for this save, or null if materialization has not completed (status `queued`, `processing`, or `failed`).'),
   "catalog": zod.object({
   "id": zod.string().describe('Stable slug identifier'),
   "name": zod.string(),
@@ -1326,6 +1334,7 @@ export const GetDatasetsMySavesIdStatusResponse = zod.object({
   "readyAt": zod.coerce.date().nullish(),
   "cacheKey": zod.string().nullish(),
   "errorMessage": zod.string().nullish(),
+  "datasetId": zod.string().nullish().describe('UUID of the materialized `custom_datasets` row for this save, or null if materialization has not completed (status `queued`, `processing`, or `failed`).'),
   "catalog": zod.object({
   "id": zod.string().describe('Stable slug identifier'),
   "name": zod.string(),

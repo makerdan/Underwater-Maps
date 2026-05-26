@@ -25,6 +25,7 @@ import {
   type UserCatalogSave,
 } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
+import { useAuth } from "@/lib/clerkCompat";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
@@ -156,13 +157,12 @@ interface CatalogCardProps {
   onSave: (id: string) => void;
   saving: boolean;
   saved: boolean;
-  presetId?: string | null;
+  canSave: boolean;
+  presetId: string | null;
   onLoad: (presetDatasetId: string) => void;
 }
 
-const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved, presetId: _presetId, onLoad: _onLoad }) => {
-  void _presetId;
-  void _onLoad;
+const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved, canSave, presetId, onLoad }) => {
   const icon = DATA_TYPE_ICONS[entry.dataType] ?? "📦";
   const color = DATA_TYPE_COLORS[entry.dataType] ?? "#94a3b8";
 
@@ -210,24 +210,54 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
       </div>
 
       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-        <ViewscreenTooltip label={saved ? "Already in your saved list" : "Save to your library"} side="top">
-        <button
-          onClick={() => !saved && !saving && onSave(entry.id)}
-          disabled={saved || saving}
-          style={{
-            fontSize: 8,
-            padding: "3px 10px",
-            background: saved ? "rgba(74,222,128,0.1)" : "rgba(255,255,255,0.04)",
-            border: `1px solid ${saved ? "rgba(74,222,128,0.3)" : "rgba(255,255,255,0.1)"}`,
-            borderRadius: 3,
-            color: saved ? "#4ade80" : "#64748b",
-            cursor: saved ? "default" : "pointer",
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-          }}
+        {presetId && (
+          <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
+            <button
+              onClick={() => onLoad(presetId)}
+              style={{
+                fontSize: 8,
+                padding: "3px 10px",
+                background: "rgba(0,229,255,0.1)",
+                border: "1px solid rgba(0,229,255,0.3)",
+                borderRadius: 3,
+                color: "#00e5ff",
+                cursor: "pointer",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+              }}
+            >
+              Load
+            </button>
+          </ViewscreenTooltip>
+        )}
+        <ViewscreenTooltip
+          label={
+            !canSave
+              ? "Sign in to save datasets to your library"
+              : saved
+                ? "Already in your saved list"
+                : "Save to your library"
+          }
+          side="top"
         >
-          {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
-        </button>
+          <button
+            onClick={() => canSave && !saved && !saving && onSave(entry.id)}
+            disabled={!canSave || saved || saving}
+            style={{
+              fontSize: 8,
+              padding: "3px 10px",
+              background: saved ? "rgba(74,222,128,0.1)" : "rgba(255,255,255,0.04)",
+              border: `1px solid ${saved ? "rgba(74,222,128,0.3)" : "rgba(255,255,255,0.1)"}`,
+              borderRadius: 3,
+              color: !canSave ? "#334155" : saved ? "#4ade80" : "#64748b",
+              cursor: !canSave || saved ? "default" : "pointer",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              opacity: !canSave ? 0.6 : 1,
+            }}
+          >
+            {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
+          </button>
         </ViewscreenTooltip>
       </div>
 
@@ -242,9 +272,8 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
 
 const SaveCard: React.FC<{
   save: UserCatalogSave;
-  onLoad: (id: string) => void;
-}> = ({ save, onLoad: _onLoad }) => {
-  void _onLoad;
+  onLoadUserDataset: (userDatasetId: string) => void;
+}> = ({ save, onLoadUserDataset }) => {
   const statusColor = STATUS_COLORS[save.status] ?? "#94a3b8";
   const icon = save.catalog ? (DATA_TYPE_ICONS[save.catalog.dataType] ?? "📦") : "📦";
 
@@ -271,6 +300,32 @@ const SaveCard: React.FC<{
           {save.status}
         </span>
       </div>
+      {save.status === "ready" && save.datasetId && (
+        <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
+          <button
+            onClick={() => onLoadUserDataset(save.datasetId!)}
+            style={{
+              marginTop: 8,
+              fontSize: 8,
+              padding: "3px 12px",
+              background: "rgba(0,229,255,0.1)",
+              border: "1px solid rgba(0,229,255,0.3)",
+              borderRadius: 3,
+              color: "#00e5ff",
+              cursor: "pointer",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}
+          >
+            Load into viewer
+          </button>
+        </ViewscreenTooltip>
+      )}
+      {save.status === "failed" && save.errorMessage && (
+        <div style={{ marginTop: 6, fontSize: 8, color: "#f87171", lineHeight: 1.4 }}>
+          {save.errorMessage}
+        </div>
+      )}
     </div>
   );
 };
@@ -291,7 +346,8 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { setDatasetId } = useAppState();
+  const { setDatasetId, setPendingExternalUserDatasetId } = useAppState();
+  const { isSignedIn } = useAuth();
 
   // Debounce search query
   const handleQueryChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -327,7 +383,15 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   } = useGetDatasetsMySaves({
     query: {
       queryKey: getGetDatasetsMySavesQueryKey(),
-      enabled: tab === "saves",
+      enabled: tab === "saves" && !!isSignedIn,
+      // Materialization runs server-side after POST /save returns. Poll so
+      // status (queued → processing → ready/failed) and the resulting
+      // datasetId become visible without forcing the user to refresh.
+      refetchInterval: (q) => {
+        const data = q.state.data as UserCatalogSave[] | undefined;
+        if (!data) return false;
+        return data.some((s) => s.status === "queued" || s.status === "processing") ? 2_000 : false;
+      },
     },
   });
 
@@ -335,6 +399,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
 
   const handleSave = useCallback(
     async (id: string) => {
+      if (!isSignedIn) return;
       setSavingIds((s) => new Set(s).add(id));
       try {
         await saveMutation.mutateAsync({ id });
@@ -348,7 +413,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
         });
       }
     },
-    [saveMutation, refetchSaves],
+    [isSignedIn, saveMutation, refetchSaves],
   );
 
   const handleLoad = useCallback(
@@ -362,6 +427,22 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
       });
     },
     [setDatasetId, onClose],
+  );
+
+  // Load a materialized catalog save through the unified user-datasets read
+  // path. DatasetPanel listens on `pendingExternalUserDatasetId` and runs the
+  // /user/datasets/:id/{terrain,overview} fetch + classification pipeline.
+  const handleLoadUserDataset = useCallback(
+    (userDatasetId: string) => {
+      void requestDatasetSwitch({
+        datasetId: userDatasetId,
+        onConfirm: () => {
+          setPendingExternalUserDatasetId(userDatasetId);
+          onClose();
+        },
+      });
+    },
+    [setPendingExternalUserDatasetId, onClose],
   );
 
   return (
@@ -456,16 +537,34 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                   : "Type a query to discover datasets"}
               </div>
             )}
-            {searchResults.map((entry) => (
-              <CatalogCard
-                key={entry.id}
-                entry={entry}
-                onSave={handleSave}
-                saving={savingIds.has(entry.id)}
-                saved={savedIds.has(entry.id)}
-                onLoad={handleLoad}
-              />
-            ))}
+            {!isSignedIn && (
+              <div
+                style={{
+                  fontSize: 9,
+                  color: "#f59e0b",
+                  textAlign: "center",
+                  padding: "8px 0 12px",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                Sign in to save catalog datasets to your account.
+              </div>
+            )}
+            {searchResults.map((entry) => {
+              const presetId = entry.id.startsWith("preset-") ? entry.id.replace("preset-", "") : null;
+              return (
+                <CatalogCard
+                  key={entry.id}
+                  entry={entry}
+                  onSave={handleSave}
+                  saving={savingIds.has(entry.id)}
+                  saved={savedIds.has(entry.id)}
+                  canSave={!!isSignedIn}
+                  presetId={presetId}
+                  onLoad={handleLoad}
+                />
+              );
+            })}
           </div>
         </div>
       )}
@@ -481,8 +580,13 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               No saved datasets yet — search and save some above
             </div>
           )}
+          {!isSignedIn && (
+            <div style={{ fontSize: 9, color: "#f59e0b", textAlign: "center", paddingTop: 32 }}>
+              Sign in to see saved datasets.
+            </div>
+          )}
           {mySaves.map((save) => (
-            <SaveCard key={save.id} save={save} onLoad={handleLoad} />
+            <SaveCard key={save.id} save={save} onLoadUserDataset={handleLoadUserDataset} />
           ))}
         </div>
       )}

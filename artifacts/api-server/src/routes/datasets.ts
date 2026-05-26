@@ -1,9 +1,10 @@
-import { Router } from "express";
+import { Router, type Request, type Response, type NextFunction } from "express";
 import multer from "multer";
 import { eq, and } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { z } from "zod";
 import { db, customDatasetsTable, userSettingsTable } from "@workspace/db";
+import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import {
   GetDatasetsResponse,
   GetDatasetsIdTerrainResponse,
@@ -20,7 +21,32 @@ import {
 import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
 import { substrateFingerprintForDataset } from "../lib/substrateGrid.js";
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+const UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: UPLOAD_MAX_BYTES } });
+
+/**
+ * Translates multer errors (file too large, etc.) into the standard ApiError
+ * shape so the client sees a structured 4xx instead of a stack-trace 500.
+ */
+function multerErrorHandler(
+  err: unknown,
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      res.status(413).json({
+        error: "file_too_large",
+        details: `Uploaded file exceeds the ${Math.floor(UPLOAD_MAX_BYTES / (1024 * 1024))} MB limit.`,
+      });
+      return;
+    }
+    res.status(400).json({ error: "upload_error", details: err.message });
+    return;
+  }
+  next(err);
+}
 
 const router = Router();
 
@@ -257,7 +283,18 @@ router.get("/datasets/:id/zones", async (req, res): Promise<void> => {
 });
 
 // ── POST /datasets/upload (multipart/form-data via multer) ───────────────────
-router.post("/datasets/upload", upload.single("file"), async (req, res): Promise<void> => {
+//
+// Auth-required. Every successful upload is persisted into the caller's
+// dataset library (`custom_datasets`) and the new row's UUID is returned as
+// `savedDatasetId`. The viewer loads the uploaded terrain by hitting the
+// unified per-user read path (/user/datasets/:id/{terrain,overview}) — there
+// is no longer an anonymous "upload" placeholder dataset id.
+router.post(
+  "/datasets/upload",
+  requireAuth,
+  upload.single("file"),
+  multerErrorHandler,
+  async (req: Request, res: Response): Promise<void> => {
   const file = req.file;
   if (!file) {
     res.status(400).json({ error: "missing_file", details: "No file uploaded. Send the XYZ/CSV as the 'file' field in a multipart/form-data request." });
@@ -309,69 +346,59 @@ router.post("/datasets/upload", upload.single("file"), async (req, res): Promise
   const datasetName = fileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
   const smoothing = await getSmoothingPreference(req);
 
-  // Auto-save to the user's account when authenticated. We generate the row
-  // UUID client-side so that the stored grids carry the real datasetId from
-  // the start (instead of the legacy "upload" placeholder).
+  // Auth-gated: requireAuth above guarantees a clerkUserId is present.
+  const effectiveUserId = (req as AuthenticatedRequest).clerkUserId;
+  const gridId = crypto.randomUUID();
+
+  const terrain = gridPoints(points, resolution, gridId, datasetName, { smoothing });
+  const overview = gridPoints(points, 64, gridId, datasetName, { smoothing });
+
   let savedDatasetId: string | undefined;
   let savedDatasetMeta:
     | { id: string; name: string; minDepth: number; maxDepth: number; createdAt: string }
     | undefined;
   let saveError: string | undefined;
 
-  const auth = getAuth(req);
-  const userId = auth?.userId ?? null;
-  const isE2EBypass =
-    process.env["E2E_AUTH_BYPASS"] === "1" &&
-    typeof req.headers["x-e2e-user-id"] === "string" &&
-    (req.headers["x-e2e-user-id"] as string).trim() !== "";
-  const effectiveUserId = userId ?? (isE2EBypass ? (req.headers["x-e2e-user-id"] as string).trim() : null);
-  const gridId = effectiveUserId ? crypto.randomUUID() : "upload";
-
-  const terrain = gridPoints(points, resolution, gridId, datasetName, { smoothing });
-  const overview = gridPoints(points, 64, gridId, datasetName, { smoothing });
-
-  if (effectiveUserId) {
-    try {
-      const [saved] = await db
-        .insert(customDatasetsTable)
-        .values({
-          id: gridId,
-          userId: effectiveUserId,
-          name: datasetName,
-          minDepth: terrain.minDepth,
-          maxDepth: terrain.maxDepth,
-          terrainJson: terrain as unknown as Record<string, unknown>,
-          overviewJson: overview as unknown as Record<string, unknown>,
-        })
-        .returning({
-          id: customDatasetsTable.id,
-          name: customDatasetsTable.name,
-          minDepth: customDatasetsTable.minDepth,
-          maxDepth: customDatasetsTable.maxDepth,
-          createdAt: customDatasetsTable.createdAt,
-        });
-      if (saved) {
-        savedDatasetId = saved.id;
-        savedDatasetMeta = {
-          id: saved.id,
-          name: saved.name,
-          minDepth: saved.minDepth,
-          maxDepth: saved.maxDepth,
-          createdAt: saved.createdAt.toISOString(),
-        };
-      } else {
-        saveError = "Database insert returned no row";
-        console.warn(
-          `[datasets/upload] authenticated upload returned without savedDatasetId (userId=${effectiveUserId}, name=${datasetName})`,
-        );
-      }
-    } catch (err) {
-      saveError = err instanceof Error ? err.message : "Failed to save upload to account";
-      console.error(
-        `[datasets/upload] failed to persist authenticated upload (userId=${effectiveUserId}, name=${datasetName}):`,
-        err,
+  try {
+    const [saved] = await db
+      .insert(customDatasetsTable)
+      .values({
+        id: gridId,
+        userId: effectiveUserId,
+        name: datasetName,
+        minDepth: terrain.minDepth,
+        maxDepth: terrain.maxDepth,
+        terrainJson: terrain as unknown as Record<string, unknown>,
+        overviewJson: overview as unknown as Record<string, unknown>,
+      })
+      .returning({
+        id: customDatasetsTable.id,
+        name: customDatasetsTable.name,
+        minDepth: customDatasetsTable.minDepth,
+        maxDepth: customDatasetsTable.maxDepth,
+        createdAt: customDatasetsTable.createdAt,
+      });
+    if (saved) {
+      savedDatasetId = saved.id;
+      savedDatasetMeta = {
+        id: saved.id,
+        name: saved.name,
+        minDepth: saved.minDepth,
+        maxDepth: saved.maxDepth,
+        createdAt: saved.createdAt.toISOString(),
+      };
+    } else {
+      saveError = "Database insert returned no row";
+      console.warn(
+        `[datasets/upload] authenticated upload returned without savedDatasetId (userId=${effectiveUserId}, name=${datasetName})`,
       );
     }
+  } catch (err) {
+    saveError = err instanceof Error ? err.message : "Failed to save upload to account";
+    console.error(
+      `[datasets/upload] failed to persist authenticated upload (userId=${effectiveUserId}, name=${datasetName}):`,
+      err,
+    );
   }
 
   res.json(

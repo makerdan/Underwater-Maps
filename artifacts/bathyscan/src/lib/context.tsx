@@ -23,6 +23,12 @@ interface AppState {
   setRealisticMode: (b: boolean) => void;
   boatSpeedMph: number;
   setBoatSpeedMph: (mph: number) => void;
+  // Cross-panel handoff: when FindDataPanel materializes a catalog save into
+  // the user's dataset library, it writes the new custom_datasets UUID here.
+  // DatasetPanel watches this field and routes the load through its
+  // /user/datasets/:id/{terrain,overview} flow, then clears the value.
+  pendingExternalUserDatasetId: string | null;
+  setPendingExternalUserDatasetId: (id: string | null) => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -65,6 +71,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const raw = readLocalNumber("bathyscan:boatSpeedMph", BOAT_DEFAULT_MPH);
     return Math.max(BOAT_MIN_MPH, Math.min(BOAT_MAX_MPH, raw));
   });
+  const [pendingExternalUserDatasetId, setPendingExternalUserDatasetId] =
+    useState<string | null>(null);
 
   function setTidalOverlay(b: boolean) {
     setTidalOverlayRaw(b);
@@ -100,6 +108,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setRealisticMode,
         boatSpeedMph,
         setBoatSpeedMph,
+        pendingExternalUserDatasetId,
+        setPendingExternalUserDatasetId,
       }}
     >
       {children}

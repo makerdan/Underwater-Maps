@@ -43,11 +43,17 @@ beforeEach(() => {
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
 });
 
+// /datasets/upload is auth-gated (task #433). All requests below carry the
+// e2e bypass header so requireAuth admits the request and the underlying
+// numeric-param validation actually runs.
+const E2E_USER = "user_e2e_datasets_test";
+
 describe("POST /api/datasets/upload — numeric-param validation", () => {
   it("returns 400 with invalid_param when resolution is malformed", async () => {
     const csv = "lon,lat,depth\n-122.0,37.0,10\n-122.1,37.1,15\n";
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "not-a-number")
       .attach("file", Buffer.from(csv), "small.csv");
 
@@ -59,6 +65,7 @@ describe("POST /api/datasets/upload — numeric-param validation", () => {
     const csv = "lon,lat,depth\n-122.0,37.0,10\n-122.1,37.1,15\n";
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "8")
       .attach("file", Buffer.from(csv), "small.csv");
 
@@ -70,6 +77,7 @@ describe("POST /api/datasets/upload — numeric-param validation", () => {
     const csv = "lon,lat,depth\n-122.0,37.0,10\n-122.1,37.1,15\n";
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "9999")
       .attach("file", Buffer.from(csv), "small.csv");
 
@@ -83,11 +91,21 @@ describe("POST /api/datasets/upload — numeric-param validation", () => {
     const csv = "lon,lat,depth\n-122.0,37.0,10\n-122.1,37.1,15\n";
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-user-id", E2E_USER)
       .field("gridResolution", "NaN")
       .attach("file", Buffer.from(csv), "small.csv");
 
     expect(res.status).toBe(400);
     expect(res.body).toMatchObject({ error: "invalid_param" });
+  });
+
+  it("returns 401 when neither Clerk session nor e2e bypass header is present", async () => {
+    const csv = "lon,lat,depth\n-122.0,37.0,10\n-122.1,37.1,15\n";
+    const res = await request(app)
+      .post("/api/datasets/upload")
+      .attach("file", Buffer.from(csv), "small.csv");
+
+    expect(res.status).toBe(401);
   });
 });
 

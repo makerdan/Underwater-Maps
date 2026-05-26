@@ -6,12 +6,29 @@
  * POST /api/datasets/catalog/:id/save  — save to user account (auth-gated)
  * GET  /api/datasets/my-saves          — list user's saves (auth-gated)
  * GET  /api/datasets/my-saves/:id/status — poll save status (auth-gated)
+ *
+ * Materialization model
+ * ---------------------
+ * "Saving" a catalog dataset means: build the terrain + overview grids
+ * server-side and persist them into the user's own dataset store
+ * (`custom_datasets`). The resulting row is then linked from the save record
+ * via `user_catalog_saves.dataset_id`, so the viewer can load saved catalog
+ * datasets through the unified per-user read path
+ * (/user/datasets/:id/{terrain,overview}) — no second round-trip to the
+ * preset/pipeline endpoint required.
+ *
+ * preset-* entries materialize directly through `buildTerrainGrid` (which
+ * already handles NCEI/GEBCO upstream fetches, disk cache, and synthetic
+ * fallback). All other catalog entries (lidar, habitat shapefiles, chart
+ * ENCs, generic global bathymetry that isn't wired into the BathyScan
+ * preset pipeline) currently mark the save as `failed` with a clear error
+ * — wiring up those fetchers is tracked separately.
  */
 
 import { Router } from "express";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
-import { db, userCatalogSavesTable } from "@workspace/db";
+import { db, userCatalogSavesTable, customDatasetsTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import {
   getCatalogEntries,
@@ -19,6 +36,7 @@ import {
   seedDatasetCatalog,
   type CatalogSeedEntry,
 } from "../lib/catalogSeeder.js";
+import { buildTerrainGrid, ALL_PRESET_DATASETS } from "../lib/terrain.js";
 
 const router = Router();
 
@@ -106,10 +124,6 @@ router.get("/datasets/catalog/search", async (req, res): Promise<void> => {
 // antimeridian, oversize) up-front so clients can show a clean error.
 // ---------------------------------------------------------------------------
 
-// We accept latitudes outside [-90, 90] and longitudes outside [-180, 180]
-// at the wire level, then normalize/clamp them before validating the bbox
-// shape. This makes the endpoint resilient to clients that send slightly
-// out-of-range values from canvas math without forcing them to clamp.
 const BboxQueryBody = z.object({
   north: z.number().finite(),
   south: z.number().finite(),
@@ -119,18 +133,13 @@ const BboxQueryBody = z.object({
   waterType: z.enum(["saltwater", "freshwater"]).optional(),
 });
 
-/** Wrap a longitude into (-180, 180] using the standard modulo trick.
- * Values already in range are returned untouched to avoid floating-point
- * drift (e.g. ((-132.6 + 180) % 360) - 180 = -132.60000000000002). */
 function normalizeLon(lon: number): number {
   if (lon > -180 && lon <= 180) return lon;
   const wrapped = ((lon + 180) % 360 + 360) % 360 - 180;
   return wrapped === -180 ? 180 : wrapped;
 }
 
-/** Smallest bbox we accept — anything thinner is treated as a stray click. */
 const MIN_BBOX_DEG = 1e-4;
-/** Largest bbox we allow — keeps the result set sensible. */
 const MAX_BBOX_LON_DEG = 180;
 const MAX_BBOX_LAT_DEG = 170;
 
@@ -145,7 +154,6 @@ router.post("/datasets/bbox-query", async (req, res): Promise<void> => {
   }
 
   const { dataType, waterType } = parsed.data;
-  // Clamp latitudes to the valid range and normalize longitudes to (-180, 180].
   const north = Math.max(-90, Math.min(90, parsed.data.north));
   const south = Math.max(-90, Math.min(90, parsed.data.south));
   const east = normalizeLon(parsed.data.east);
@@ -156,8 +164,6 @@ router.post("/datasets/bbox-query", async (req, res): Promise<void> => {
     return;
   }
   if (east <= west) {
-    // Note: antimeridian-crossing bboxes (e.g. west=170, east=-170) fall in
-    // here. We explicitly reject rather than try to split the query.
     res.status(400).json({
       error: "invalid_bbox",
       details: "east must be greater than west (antimeridian-crossing bboxes are not supported)",
@@ -213,9 +219,11 @@ router.post("/datasets/catalog/:id/save", requireAuth, async (req, res): Promise
     return;
   }
 
-  // Check for duplicate save (same user + catalogId)
+  // Idempotent: if the user already has a save row for this catalog entry,
+  // return it as-is. Callers can re-issue a save to retry a failed job via
+  // a separate DELETE + re-POST flow (out of scope here).
   const existing = await db
-    .select({ id: userCatalogSavesTable.id, status: userCatalogSavesTable.status })
+    .select()
     .from(userCatalogSavesTable)
     .where(
       and(
@@ -224,26 +232,18 @@ router.post("/datasets/catalog/:id/save", requireAuth, async (req, res): Promise
       ),
     );
 
-  if (existing.length > 0) {
-    // Return existing record — idempotent
-    const row = existing[0]!;
-    const dbRow = await db
-      .select()
-      .from(userCatalogSavesTable)
-      .where(eq(userCatalogSavesTable.id, row.id));
-    if (dbRow[0]) {
-      res.status(200).json(formatSaveRow(dbRow[0], entry));
-      return;
-    }
+  if (existing.length > 0 && existing[0]) {
+    res.status(200).json(formatSaveRow(existing[0], entry));
+    return;
   }
 
-  // Create new save record in queued state
+  // Create new save record in processing state.
   const [created] = await db
     .insert(userCatalogSavesTable)
     .values({
       userId,
       catalogId,
-      status: "queued",
+      status: "processing",
     })
     .returning();
 
@@ -252,32 +252,122 @@ router.post("/datasets/catalog/:id/save", requireAuth, async (req, res): Promise
     return;
   }
 
-  // Fire-and-forget: mark as ready immediately for catalog entries that are
-  // served by the existing terrain pipeline (preset-* IDs). External-only
-  // entries (e.g. lidar, shapefile downloads) stay in "queued" status and
-  // require a future background job to fetch the raw data.
-  if (catalogId.startsWith("preset-")) {
-    void markSaveReady(created.id, catalogId);
-  }
+  // Kick off materialization. Fire-and-forget so the HTTP response returns
+  // quickly; clients poll /my-saves/:id/status (or refetch /my-saves) for
+  // the eventual ready/failed status.
+  void materializeSave(created.id, userId, entry);
 
   res.status(201).json(formatSaveRow(created, entry));
 });
 
-async function markSaveReady(saveId: string, catalogId: string): Promise<void> {
+/**
+ * Background materialization: builds the terrain + overview grids for the
+ * catalog entry and persists them into the user's `custom_datasets` store.
+ * On success, links `user_catalog_saves.dataset_id` to the new row and
+ * marks the save as `ready`. On failure, marks it `failed` with a
+ * human-readable `error_message`.
+ */
+async function materializeSave(
+  saveId: string,
+  userId: string,
+  entry: CatalogSeedEntry,
+): Promise<void> {
   try {
-    const cacheKey = `catalog:${catalogId}`;
+    const materialized = await buildCatalogGrids(entry);
+    if (!materialized) {
+      throw new Error(
+        `Materialization is not yet implemented for catalog entries of type '${entry.dataType}' ` +
+          `from source '${entry.sourceAgency}'. preset-* entries are supported today.`,
+      );
+    }
+
+    const { terrain, overview } = materialized;
+
+    // Insert the materialized grids into the user's dataset store. We let
+    // Postgres allocate the row UUID, then patch the in-memory grid copies
+    // to carry that same id so the /user/datasets/:id/{terrain,overview}
+    // responses validate against the schema's datasetId field.
+    const [created] = await db
+      .insert(customDatasetsTable)
+      .values({
+        userId,
+        name: entry.name,
+        minDepth: terrain.minDepth,
+        maxDepth: terrain.maxDepth,
+        terrainJson: terrain as unknown as Record<string, unknown>,
+        overviewJson: overview as unknown as Record<string, unknown>,
+      })
+      .returning({ id: customDatasetsTable.id });
+
+    if (!created) {
+      throw new Error("custom_datasets insert returned no row");
+    }
+
+    // Rewrite the stored grids so their datasetId matches the new row id.
+    const terrainStamped = { ...terrain, datasetId: created.id };
+    const overviewStamped = { ...overview, datasetId: created.id };
+    await db
+      .update(customDatasetsTable)
+      .set({
+        terrainJson: terrainStamped as unknown as Record<string, unknown>,
+        overviewJson: overviewStamped as unknown as Record<string, unknown>,
+      })
+      .where(eq(customDatasetsTable.id, created.id));
+
     await db
       .update(userCatalogSavesTable)
-      .set({ status: "ready", readyAt: new Date(), cacheKey })
+      .set({
+        status: "ready",
+        readyAt: new Date(),
+        cacheKey: `catalog:${entry.id}`,
+        datasetId: created.id,
+        errorMessage: null,
+      })
       .where(eq(userCatalogSavesTable.id, saveId));
   } catch (err) {
-    console.warn(`[catalog-saves] Failed to mark ${saveId} ready: ${(err as Error).message}`);
+    const message = err instanceof Error ? err.message : "Materialization failed";
+    console.warn(`[catalog-saves] materialize ${saveId} (${entry.id}) failed: ${message}`);
     await db
       .update(userCatalogSavesTable)
-      .set({ status: "failed", errorMessage: (err as Error).message })
+      .set({ status: "failed", errorMessage: message })
       .where(eq(userCatalogSavesTable.id, saveId))
-      .catch(() => {});
+      .catch(() => {
+        /* best effort; nothing more we can do here */
+      });
   }
+}
+
+/**
+ * Build the terrain + overview grids for a catalog entry. Returns null when
+ * the entry has no materializer wired up (e.g. raw lidar/shapefile downloads).
+ *
+ * preset-* entries reuse the existing terrain pipeline (NCEI WCS → GEBCO →
+ * synthetic fbm), which already provides disk caching and source fallback.
+ *
+ * Exported for tests.
+ */
+type TerrainGrid = NonNullable<Awaited<ReturnType<typeof buildTerrainGrid>>>;
+
+export async function buildCatalogGrids(
+  entry: CatalogSeedEntry,
+): Promise<{ terrain: TerrainGrid; overview: TerrainGrid } | null> {
+  if (entry.id.startsWith("preset-")) {
+    const presetId = entry.id.replace(/^preset-/, "");
+    // Sanity check: the catalog seeder only emits preset-<id> entries for
+    // ids present in ALL_PRESET_DATASETS, but guard so unknown ids surface
+    // a clear error instead of a generic "Dataset not found".
+    if (!ALL_PRESET_DATASETS.some((d) => d.id === presetId)) {
+      throw new Error(`Preset catalog entry references unknown dataset id '${presetId}'`);
+    }
+    const terrain = await buildTerrainGrid(presetId, 256, { smoothing: true });
+    const overview = await buildTerrainGrid(presetId, 64, { smoothing: true });
+    if (!terrain || !overview) {
+      throw new Error(`Terrain pipeline returned no grid for preset '${presetId}'`);
+    }
+    return { terrain, overview };
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -342,6 +432,7 @@ function formatSaveRow(
     readyAt: row.readyAt?.toISOString() ?? null,
     cacheKey: row.cacheKey ?? null,
     errorMessage: row.errorMessage ?? null,
+    datasetId: row.datasetId ?? null,
     catalog: entry ? { ...toCatalogResponse(entry), createdAt: new Date().toISOString() } : null,
   };
 }

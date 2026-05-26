@@ -36,14 +36,13 @@ app.use(
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
 app.use(cors({ credentials: true, origin: true }));
-// JSON body limit raised from the 100 KB default so the classify route can
-// accept a full-resolution depth grid (`depthsFull`) for high-res datasets.
-// 1024×1024 floats serialise to roughly 5 MB of JSON; 10 MB leaves comfortable
-// headroom while still capping pathological uploads. Everything else on the
-// API is far smaller than this so the wider limit doesn't change other routes
-// in any meaningful way.
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+// JSON body limit. Catalog dataset materialization can synthesize and round-trip
+// full-resolution terrain grids in jsonb form; classify also accepts a 1024×1024
+// depthsFull payload (~5 MB). 50 MB matches the multer file-upload cap and
+// leaves headroom for high-resolution pipeline grids while still capping
+// pathological payloads.
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 app.use(
   clerkMiddleware((req) => ({
