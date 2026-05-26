@@ -96,8 +96,8 @@ test.describe("Help-icon deep links", () => {
   test("Throttle panel help icon → 'Throttle Panel' article", async ({ page }) => {
     await ensureSignedIn(page);
 
-    // ThrottlePanel only mounts when "REALISTIC" boat-throttle mode is on.
-    const realisticBtn = page.locator("button", { hasText: /\bREALISTIC\b/ }).first();
+    // ThrottlePanel only mounts when "DRIVE BOAT" boat-throttle mode is on.
+    const realisticBtn = page.locator("button", { hasText: /\bDRIVE BOAT\b/ }).first();
     await expect(realisticBtn).toBeVisible({ timeout: 10_000 });
     if (((await realisticBtn.textContent()) ?? "").trim().startsWith("○")) {
       await realisticBtn.click();

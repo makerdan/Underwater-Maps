@@ -609,7 +609,7 @@ function Main() {
               transition: "all 0.15s ease",
             }}
           >
-            {realisticMode ? "◉" : "○"} REALISTIC
+            {realisticMode ? "◉" : "○"} DRIVE BOAT
           </button>
           </ViewscreenTooltip>
           <ViewscreenTooltip
