@@ -286,6 +286,129 @@ describe("persist merge hook", () => {
   });
 });
 
+describe("paletteStore.hydrateFromServer", () => {
+  it("applies valid shallow / deep hex from the server", () => {
+    usePaletteStore.getState().hydrateFromServer({
+      paletteShallow: "#AABBCC",
+      paletteDeep: "#112233",
+    });
+    const st = usePaletteStore.getState();
+    expect(st.shallow).toBe("#aabbcc");
+    expect(st.deep).toBe("#112233");
+  });
+
+  it("leaves shallow / deep untouched when the server hex is malformed", () => {
+    const before = usePaletteStore.getState();
+    usePaletteStore.getState().hydrateFromServer({
+      paletteShallow: "not-a-hex",
+      paletteDeep: "#xyz123",
+    });
+    const after = usePaletteStore.getState();
+    expect(after.shallow).toBe(before.shallow);
+    expect(after.deep).toBe(before.deep);
+  });
+
+  it("leaves shallow / deep untouched when the server fields are missing or non-string", () => {
+    const before = usePaletteStore.getState();
+    usePaletteStore.getState().hydrateFromServer({
+      paletteShallow: 12345 as unknown as string,
+      paletteDeep: undefined,
+    });
+    const after = usePaletteStore.getState();
+    expect(after.shallow).toBe(before.shallow);
+    expect(after.deep).toBe(before.deep);
+  });
+
+  it("applies a well-formed customStops payload from the server", () => {
+    const incoming = [
+      { position: 0, hex: "#abcdef" },
+      { position: 0.4, hex: "#123456" },
+      { position: 1, hex: "#fedcba" },
+    ];
+    usePaletteStore.getState().hydrateFromServer({ customStops: incoming });
+    expect(usePaletteStore.getState().customStops).toEqual(incoming);
+  });
+
+  it("clamps out-of-range positions in incoming customStops to [0, 1]", () => {
+    usePaletteStore.getState().hydrateFromServer({
+      customStops: [
+        { position: -2, hex: "#aabbcc" },
+        { position: 0.5, hex: "#445566" },
+        { position: 5, hex: "#ddeeff" },
+      ],
+    });
+    const stops = usePaletteStore.getState().customStops;
+    expect(stops.map((s) => s.position)).toEqual([0, 0.5, 1]);
+  });
+
+  it("leaves customStops untouched when the payload has fewer than 2 valid stops", () => {
+    // First seed a known non-default palette so we can prove it survived.
+    const seeded = [
+      { position: 0, hex: "#abcdef" },
+      { position: 1, hex: "#fedcba" },
+    ];
+    usePaletteStore.getState().setCustomStops(seeded);
+
+    usePaletteStore.getState().hydrateFromServer({
+      customStops: [{ position: 0.5, hex: "#aabbcc" }],
+    });
+    expect(usePaletteStore.getState().customStops).toEqual(seeded);
+
+    usePaletteStore.getState().hydrateFromServer({
+      customStops: [
+        { position: 0, hex: "not-hex" },
+        { position: 1, hex: "also-not-hex" },
+      ],
+    });
+    expect(usePaletteStore.getState().customStops).toEqual(seeded);
+  });
+
+  it("leaves customStops untouched when the payload is not an array", () => {
+    const seeded = [
+      { position: 0, hex: "#abcdef" },
+      { position: 1, hex: "#fedcba" },
+    ];
+    usePaletteStore.getState().setCustomStops(seeded);
+    usePaletteStore.getState().hydrateFromServer({
+      customStops: "definitely not an array" as unknown,
+    });
+    expect(usePaletteStore.getState().customStops).toEqual(seeded);
+  });
+
+  it("drops only the malformed entries when some stops are bad", () => {
+    usePaletteStore.getState().hydrateFromServer({
+      customStops: [
+        { position: 0, hex: "#aabbcc" },
+        { position: 0.5, hex: "garbage" },
+        { position: "x" as unknown as number, hex: "#112233" },
+        { position: 1, hex: "#001122" },
+      ] as unknown,
+    });
+    expect(usePaletteStore.getState().customStops).toEqual([
+      { position: 0, hex: "#aabbcc" },
+      { position: 1, hex: "#001122" },
+    ]);
+  });
+
+  it("applies a partial payload independently per field", () => {
+    // Pre-seed a non-default palette so we can tell which fields moved.
+    const seededStops = [
+      { position: 0, hex: "#abcdef" },
+      { position: 1, hex: "#fedcba" },
+    ];
+    usePaletteStore.getState().setShallow("#010203");
+    usePaletteStore.getState().setDeep("#040506");
+    usePaletteStore.getState().setCustomStops(seededStops);
+
+    // Only paletteDeep present — shallow and customStops must survive.
+    usePaletteStore.getState().hydrateFromServer({ paletteDeep: "#aabbcc" });
+    const st = usePaletteStore.getState();
+    expect(st.shallow).toBe("#010203");
+    expect(st.deep).toBe("#aabbcc");
+    expect(st.customStops).toEqual(seededStops);
+  });
+});
+
 describe("customStopsFromPreset", () => {
   it("uses the preset's shallow and deep endpoints", () => {
     for (const preset of PALETTE_PRESETS) {
