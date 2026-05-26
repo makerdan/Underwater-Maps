@@ -373,21 +373,30 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
   useEffect(() => {
     if (!pendingUserDatasetId || !userPendingTerrain || !userPendingOverview) return;
-    if (
-      userPendingTerrain.datasetId !== pendingUserDatasetId ||
-      userPendingOverview.datasetId !== pendingUserDatasetId
-    )
-      return;
 
-    setTerrain(userPendingTerrain);
+    // Some stored payloads embed a stale `datasetId` — duplicate/folder-clone
+    // write paths used to copy terrainJson as-is, and pre-stamping rows still
+    // carry the original id. The row id we just fetched against is the source
+    // of truth, so rebrand the in-memory grids onto pendingUserDatasetId
+    // rather than silently bailing (which would leave the scene blank).
+    const terrainStamped =
+      userPendingTerrain.datasetId === pendingUserDatasetId
+        ? userPendingTerrain
+        : { ...userPendingTerrain, datasetId: pendingUserDatasetId };
+    const overviewStamped =
+      userPendingOverview.datasetId === pendingUserDatasetId
+        ? userPendingOverview
+        : { ...userPendingOverview, datasetId: pendingUserDatasetId };
+
+    setTerrain(terrainStamped);
     setDatasetId(null);
     setActiveUserDatasetId(pendingUserDatasetId);
     useTerrainStore.getState().setGrids({
-      activeGrid: userPendingTerrain,
-      overviewGrid: userPendingOverview,
+      activeGrid: terrainStamped,
+      overviewGrid: overviewStamped,
     });
     useClassificationStore.getState().clearZoneMap();
-    void useClassificationStore.getState().classify(userPendingTerrain);
+    void useClassificationStore.getState().classify(terrainStamped);
     useActiveLoadStore.getState().complete(pendingUserDatasetId);
     setLoadingId(null);
     setPendingUserDatasetId(null);

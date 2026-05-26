@@ -143,6 +143,24 @@ router.post("/user/datasets/:id/duplicate", requireAuth, async (req, res): Promi
     res.status(500).json({ error: "db_error", details: "Could not duplicate" });
     return;
   }
+
+  // Rewrite the embedded `datasetId` so the duplicated row's grids identify
+  // as the new row, not the source. The client's load path treats this id as
+  // the source of truth and will rebrand on read, but stamping here keeps the
+  // stored payload internally consistent for future tooling.
+  const dupTerrain = {
+    ...(source.terrainJson as Record<string, unknown>),
+    datasetId: created.id,
+  };
+  const dupOverview = {
+    ...(source.overviewJson as Record<string, unknown>),
+    datasetId: created.id,
+  };
+  await db
+    .update(customDatasetsTable)
+    .set({ terrainJson: dupTerrain, overviewJson: dupOverview })
+    .where(eq(customDatasetsTable.id, created.id));
+
   res.status(201).json(metaJson(created));
 });
 

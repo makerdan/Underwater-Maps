@@ -283,15 +283,34 @@ router.post("/user/folders/:id/duplicate", requireAuth, async (req, res): Promis
         .where(eq(customDatasetsTable.userId, userId));
       for (const ds of datasetsInside) {
         if (ds.folderId && newIdByOld.has(ds.folderId)) {
-          await tx.insert(customDatasetsTable).values({
-            userId,
-            name: ds.name,
-            minDepth: ds.minDepth,
-            maxDepth: ds.maxDepth,
-            terrainJson: ds.terrainJson as Record<string, unknown>,
-            overviewJson: ds.overviewJson as Record<string, unknown>,
-            folderId: newIdByOld.get(ds.folderId) ?? null,
-          });
+          const [inserted] = await tx
+            .insert(customDatasetsTable)
+            .values({
+              userId,
+              name: ds.name,
+              minDepth: ds.minDepth,
+              maxDepth: ds.maxDepth,
+              terrainJson: ds.terrainJson as Record<string, unknown>,
+              overviewJson: ds.overviewJson as Record<string, unknown>,
+              folderId: newIdByOld.get(ds.folderId) ?? null,
+            })
+            .returning({ id: customDatasetsTable.id });
+          if (!inserted) throw new Error("insert_dataset_failed");
+          // Rewrite the embedded datasetId so the cloned grids identify as
+          // the new row, not the source — otherwise the client's load guard
+          // will reject the payload and the scene stays blank.
+          const stampedTerrain = {
+            ...(ds.terrainJson as Record<string, unknown>),
+            datasetId: inserted.id,
+          };
+          const stampedOverview = {
+            ...(ds.overviewJson as Record<string, unknown>),
+            datasetId: inserted.id,
+          };
+          await tx
+            .update(customDatasetsTable)
+            .set({ terrainJson: stampedTerrain, overviewJson: stampedOverview })
+            .where(eq(customDatasetsTable.id, inserted.id));
         }
       }
 
