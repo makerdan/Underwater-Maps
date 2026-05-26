@@ -240,6 +240,11 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     recomputeAutoDrift();
   }, [recomputeAutoDrift]);
 
+  // Single source of truth for the manual-override recompute. Every input
+  // that feeds computeDrift is captured in the dependency list — including
+  // the "slack now" toggle and the store setters — so manual wind/tide
+  // changes flow into the drift path and timeline immediately instead of
+  // waiting for another render to catch up.
   const recomputeWithManual = useCallback(() => {
     if (!terrain) return;
     const tidalSpeed = manualSlackNow ? 0 : manualTidalSpeedKnots;
@@ -269,7 +274,24 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
       trollWaypoints: driftWaypoints,
     });
     setDriftPath(path);
-  }, [terrain, manualWindSpeedKnots, manualWindDegrees, manualTidalSpeedKnots, manualTidalDegrees, driftStartLat, driftStartLon, lineLengthM, centerLat, centerLon, driftMode, boatHeadingDeg, boatSpeedKnots, driftWaypoints]);
+  }, [
+    terrain,
+    manualWindSpeedKnots, manualWindDegrees,
+    manualTidalSpeedKnots, manualTidalDegrees, manualSlackNow,
+    driftStartLat, driftStartLon, centerLat, centerLon,
+    lineLengthM, driftMode, boatHeadingDeg, boatSpeedKnots, driftWaypoints,
+    setDriftConditions, setDriftPath,
+  ]);
+
+  // Auto-rerun manual recompute whenever its inputs change while the
+  // manual-override UI is the active source (live data missing or
+  // estimated). Mirrors the auto-drift useEffect above so the readout
+  // stays in lockstep with the sliders.
+  const manualOverrideActive = isError || estimatedConditions;
+  useEffect(() => {
+    if (!manualOverrideActive) return;
+    recomputeWithManual();
+  }, [manualOverrideActive, recomputeWithManual]);
 
   const cond = driftConditions?.[driftHour];
 
