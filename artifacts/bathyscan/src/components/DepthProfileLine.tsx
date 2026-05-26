@@ -14,6 +14,8 @@ import * as THREE from "three";
 import { Line } from "@react-three/drei";
 import { useAppState } from "@/lib/context";
 import { useDepthProfileStore, depthMetresToWorldY } from "@/lib/depthProfileStore";
+import { useCameraStore } from "@/lib/cameraStore";
+import { useUiStore } from "@/lib/uiStore";
 
 const LINE_HOVER_WORLD = 0.4; // raise the line slightly above the surface
 // Radius of the invisible hit-test tube wrapping the polyline. Generous
@@ -104,9 +106,33 @@ export const DepthProfileLine: React.FC = () => {
         <meshBasicMaterial color="#00e5ff" />
       </mesh>
       {/* Hover marker — appears at the sample currently highlighted by
-          either the SVG chart or the in-scene hit tube. */}
-      {hoverPoint ? (
-        <mesh position={hoverPoint}>
+          either the SVG chart or the in-scene hit tube. Clicking it drops
+          a real waypoint marker at that exact sample's lon/lat/depth. */}
+      {hoverPoint && hoverIndex !== null && profile ? (
+        <mesh
+          position={hoverPoint}
+          onClick={(e) => {
+            e.stopPropagation();
+            const sample = profile.points[hoverIndex];
+            if (!sample) return;
+            useCameraStore.getState().setLastClickedGps({
+              lon: sample.lon,
+              lat: sample.lat,
+              depth: sample.depthM,
+            });
+            useUiStore.getState().setMarkerFormOpen(true);
+          }}
+          onPointerOver={() => {
+            if (typeof document !== "undefined") {
+              document.body.style.cursor = "pointer";
+            }
+          }}
+          onPointerOut={() => {
+            if (typeof document !== "undefined") {
+              document.body.style.cursor = "";
+            }
+          }}
+        >
           <sphereGeometry args={[0.9, 16, 16]} />
           <meshBasicMaterial color="#00e5ff" transparent opacity={0.95} />
         </mesh>

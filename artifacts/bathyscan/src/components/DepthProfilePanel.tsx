@@ -11,6 +11,8 @@ import React from "react";
 import { useDepthProfileStore } from "@/lib/depthProfileStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useAppState } from "@/lib/context";
+import { useCameraStore } from "@/lib/cameraStore";
+import { useUiStore } from "@/lib/uiStore";
 import { formatDistance, formatDepth } from "@/lib/units";
 import { HelpIcon } from "@/components/help/HelpButton";
 
@@ -78,6 +80,20 @@ export const DepthProfilePanel: React.FC = () => {
   const units = useSettingsStore((s) => s.units);
   const { datasetId } = useAppState();
   const svgRef = React.useRef<SVGSVGElement | null>(null);
+
+  const dropMarkerAtHover = React.useCallback(() => {
+    const state = useDepthProfileStore.getState();
+    const p = state.profile;
+    const idx = state.hoverIndex;
+    if (!p || idx === null || idx < 0 || idx >= p.points.length) return;
+    const sample = p.points[idx]!;
+    useCameraStore.getState().setLastClickedGps({
+      lon: sample.lon,
+      lat: sample.lat,
+      depth: sample.depthM,
+    });
+    useUiStore.getState().setMarkerFormOpen(true);
+  }, []);
 
   if (!profile) return null;
 
@@ -284,7 +300,6 @@ export const DepthProfilePanel: React.FC = () => {
         height={HEIGHT}
         role="img"
         aria-label="Depth cross-section"
-        style={{ display: "block" }}
         onMouseMove={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
           const localX = ((e.clientX - rect.left) * WIDTH) / rect.width;
@@ -297,6 +312,22 @@ export const DepthProfilePanel: React.FC = () => {
           if (idx !== hoverIndex) setHoverIndex(idx);
         }}
         onMouseLeave={() => setHoverIndex(null)}
+        onClick={(e) => {
+          // Clicking the chart drops a marker at the currently hovered
+          // sample. Touch devices fire mousemove → click in sequence so
+          // the hover index will be set correctly by the time we get here;
+          // for mouse users the existing onMouseMove already tracks it.
+          const rect = e.currentTarget.getBoundingClientRect();
+          const localX = ((e.clientX - rect.left) * WIDTH) / rect.width;
+          const t = Math.max(0, Math.min(1, (localX - PAD_LEFT) / PLOT_W));
+          const idx = Math.max(
+            0,
+            Math.min(points.length - 1, Math.round(t * (points.length - 1))),
+          );
+          setHoverIndex(idx);
+          dropMarkerAtHover();
+        }}
+        style={{ display: "block", cursor: "crosshair" }}
       >
         {/* Plot background */}
         <rect
