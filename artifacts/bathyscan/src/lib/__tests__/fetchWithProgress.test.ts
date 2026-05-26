@@ -81,12 +81,20 @@ describe("fetchJsonWithProgress", () => {
         });
       },
     });
-    // Swallow the synthetic unhandled rejection that jsdom surfaces from the
-    // aborted ReadableStream — the test only cares that the outer promise rejects.
+    // Swallow the synthetic unhandled rejection that jsdom + Node surface
+    // from the aborted ReadableStream — the test only cares that the outer
+    // promise rejects. Vitest watches Node's process-level event, not jsdom's
+    // window event, so we register on both.
     const onUnhandled = (e: PromiseRejectionEvent) => {
       if (e.reason?.name === "AbortError") e.preventDefault();
     };
     window.addEventListener("unhandledrejection", onUnhandled);
+    const onNodeUnhandled = (reason: unknown) => {
+      if ((reason as { name?: string } | null)?.name === "AbortError") {
+        // no-op: handled by the outer `await expect(p).rejects` below
+      }
+    };
+    process.on("unhandledRejection", onNodeUnhandled);
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((_url, init: RequestInit | undefined) => {

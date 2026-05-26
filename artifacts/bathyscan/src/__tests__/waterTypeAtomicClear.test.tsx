@@ -10,6 +10,15 @@ vi.mock("@workspace/api-client-react", () => ({
   usePutSettings: () => ({ mutate: vi.fn() }),
 }));
 
+// Bypass the async preview/confirmation flow so the side-effect runs
+// synchronously inside the test's `act()` block.
+vi.mock("@/lib/simulatedDataStore", () => ({
+  requestDatasetSwitch: ({ onConfirm }: { onConfirm: () => void }) => {
+    onConfirm();
+    return Promise.resolve();
+  },
+}));
+
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useWaterTypeSideEffects } from "@/lib/useWaterTypeSideEffects";

@@ -110,22 +110,20 @@ describe("buildCatalogGrids", () => {
     await expect(buildCatalogGrids(entry)).rejects.toThrow(/unknown dataset id/);
   });
 
-  // Skipped: ALL_PRESET_DATASETS is currently empty (PRESET_DATASETS and
-  // FRESHWATER_PRESET_DATASETS were cleared out). Re-enable this test once
-  // the preset registry is repopulated — tracked by the separate task
-  // "Make the preset registry non-empty again so saved presets actually
-  // work in production".
-  it.skip(
+  // The preset registry is currently empty (PRESET_DATASETS and
+  // FRESHWATER_PRESET_DATASETS were cleared out). `skipIf` lets this
+  // test re-enable itself automatically the moment ALL_PRESET_DATASETS
+  // is repopulated, without a follow-up code change.
+  it.skipIf(ALL_PRESET_DATASETS.length === 0)(
     "materializes a real preset entry into terrain + overview grids tagged with the preset id",
     async () => {
-      const preset = ALL_PRESET_DATASETS[0];
-      expect(preset).toBeDefined();
-      const entry = makeEntry({ id: `preset-${preset!.id}`, name: preset!.name });
+      const preset = ALL_PRESET_DATASETS[0]!;
+      const entry = makeEntry({ id: `preset-${preset.id}`, name: preset.name });
 
       const result = await buildCatalogGrids(entry);
       expect(result).not.toBeNull();
-      expect(result!.terrain.datasetId).toBe(preset!.id);
-      expect(result!.overview.datasetId).toBe(preset!.id);
+      expect(result!.terrain.datasetId).toBe(preset.id);
+      expect(result!.overview.datasetId).toBe(preset.id);
       // Terrain pipeline uses the requested resolution; overview is fixed at 64.
       expect(result!.terrain.resolution).toBe(256);
       expect(result!.overview.resolution).toBe(64);

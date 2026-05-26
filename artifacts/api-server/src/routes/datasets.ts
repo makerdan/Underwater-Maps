@@ -134,18 +134,17 @@ router.get("/datasets/:id/preview", async (req, res): Promise<void> => {
     }
     res.json(preview);
   } catch (err) {
-    // Preflight itself failed (rare — internal probes already catch). Tell
-    // the client to assume worst case rather than silently loading.
+    // Preflight itself failed (rare — internal probes already catch). Always
+    // return a graceful 200 with dataSource=unknown so the client can decide
+    // whether to proceed; we do NOT gate on the preset registry here because
+    // the registry is currently empty in production and user-saved catalog
+    // entries should still get the same fallback shape.
     const meta = ALL_PRESET_DATASETS.find((d) => d.id === id);
-    if (!meta) {
-      res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
-      return;
-    }
     const msg = err instanceof Error ? err.message : "Preflight failed";
     res.json({
-      datasetId: meta.id,
-      name: meta.name,
-      bbox: meta.bbox,
+      datasetId: id,
+      name: meta?.name ?? id,
+      bbox: meta?.bbox ?? { minLon: 0, minLat: 0, maxLon: 0, maxLat: 0 },
       dataSource: "unknown" as const,
       syntheticReason: `Could not verify data source: ${msg}`,
     });

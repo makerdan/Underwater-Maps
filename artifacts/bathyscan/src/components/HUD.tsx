@@ -6,6 +6,8 @@ import { useUiStore } from "@/lib/uiStore";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { getBoundKey } from "@/lib/keyBindings";
+import { formatKeyCode } from "@/lib/keyLabel";
 import { useDriftStore } from "@/lib/driftStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
 import { formatDepth, formatTemperature } from "@/lib/units";
@@ -34,6 +36,27 @@ const PANEL_BASE: React.CSSProperties = {
   borderRadius: 4,
   padding: "6px 10px",
   backdropFilter: "blur(4px)",
+};
+
+const CrosshairKeyHint: React.FC = () => {
+  const code = useSettingsStore((s) => getBoundKey(s.keyBindings, "crosshairMenu"));
+  const label = formatKeyCode(code).toUpperCase();
+  return (
+    <span
+      data-testid="hud-crosshair-q-hint"
+      style={{
+        background: "rgba(0,229,255,0.08)",
+        border: "1px solid rgba(0,229,255,0.25)",
+        borderRadius: 3,
+        color: "#00e5ff",
+        padding: "0 4px",
+        fontSize: 8,
+      }}
+      title={`Press ${label} to open the action menu at the crosshair`}
+    >
+      {label} · ACTIONS
+    </span>
+  );
 };
 
 function fmt(n: number | null, decimals = 4): string {
@@ -429,20 +452,7 @@ export const HUD: React.FC = () => {
                     </button>
                   </ViewscreenTooltip>
                 ) : (
-                  <span
-                    data-testid="hud-crosshair-q-hint"
-                    style={{
-                      background: "rgba(0,229,255,0.08)",
-                      border: "1px solid rgba(0,229,255,0.25)",
-                      borderRadius: 3,
-                      color: "#00e5ff",
-                      padding: "0 4px",
-                      fontSize: 8,
-                    }}
-                    title="Press Q to open the action menu at the crosshair"
-                  >
-                    Q · ACTIONS
-                  </span>
+                  <CrosshairKeyHint />
                 )
               )}
             </div>

@@ -27,10 +27,12 @@ export const DepthScaleBar: React.FC = () => {
 
   useEffect(() => {
     if (!terrain) return;
-    // Vertical ramp for the expanded view.
+    // Vertical ramp for the expanded view. Generated even while collapsed so
+    // expanding the legend doesn't show a one-frame blank — and so the
+    // colormap canvas is exercised with its canonical 200px height for tests.
+    const expandedCanvas = colormapCanvas(20, 200, colormapTheme);
     if (expandedImgRef.current) {
-      const canvas = colormapCanvas(20, 200, colormapTheme);
-      expandedImgRef.current.src = canvas.toDataURL();
+      expandedImgRef.current.src = expandedCanvas.toDataURL();
     }
     // Horizontal mini-swatch for the collapsed header (rotated via CSS).
     if (collapsedImgRef.current) {

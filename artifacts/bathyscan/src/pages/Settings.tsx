@@ -1644,7 +1644,7 @@ function KeyBindingCapture({
         <div style={S.sublabel}>{def.description}</div>
         {conflict && (
           <div
-            data-testid={`shortcut-conflict-${action}`}
+            data-testid={`shortcut-conflict-${action.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}`}
             style={{ fontSize: 10, color: "#fb923c", marginTop: 4, letterSpacing: "0.04em" }}
           >
             ⚠ Also bound to: {conflictWith.join(", ")}
@@ -1654,7 +1654,7 @@ function KeyBindingCapture({
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <button
           type="button"
-          data-testid={`shortcut-${action}-key`}
+          data-testid={`shortcut-${action.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}-key`}
           onClick={() => setCapturing((v) => !v)}
           style={{
             background: capturing
@@ -1683,7 +1683,7 @@ function KeyBindingCapture({
         </button>
         <button
           type="button"
-          data-testid={`shortcut-${action}-reset`}
+          data-testid={`shortcut-${action.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}-reset`}
           onClick={() => resetKeyBinding(action)}
           disabled={isDefault}
           style={{

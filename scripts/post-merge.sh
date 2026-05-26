@@ -7,3 +7,5 @@ pnpm install --frozen-lockfile
 # refreshes the generated files.
 pnpm --filter @workspace/api-spec run codegen:generate
 pnpm --filter db push
+# Guardrail: surface typecheck/lint/unit-test regressions immediately after a merge.
+pnpm run test-all

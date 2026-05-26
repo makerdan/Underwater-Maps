@@ -38,7 +38,8 @@ _Describe the high-level user-facing capabilities of this app once they exist._
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- `pnpm run test-all` (typecheck + lint + unit tests) is the green-bar gate. It runs automatically after every merge via `scripts/post-merge.sh`, so a regression in any of the three will fail the merge.
+- `react-hooks/exhaustive-deps` is configured as an **error** (not a warning) in `eslint.config.mjs`. Don't silence it lazily — either include the dependency or refactor; suppressions need an inline justification.
 
 ## Pointers
 

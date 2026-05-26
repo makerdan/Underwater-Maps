@@ -946,7 +946,7 @@ export const OverviewMap: React.FC = () => {
       canvas.removeEventListener("click", handleClick);
       canvas.removeEventListener("contextmenu", handleContextMenu);
     };
-  }, [overviewGrid]);
+  }, [overviewGrid, substrateCreditUrl, substrateSourceName]);
 
   // ---------------------------------------------------------------------------
   // Render

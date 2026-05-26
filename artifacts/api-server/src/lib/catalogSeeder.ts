@@ -307,6 +307,14 @@ export async function seedDatasetCatalog(): Promise<void> {
   if (seeded) return;
   seeded = true;
 
+  // No-op under vitest: tests import route modules (which trigger this
+  // seeder at module load) without a live database mock, so calling
+  // `db.execute` here floods stderr with non-fatal errors and hides
+  // real test failures. Tests that exercise the seeder mock it explicitly.
+  if (process.env["VITEST"] || process.env["NODE_ENV"] === "test") {
+    return;
+  }
+
   try {
     // Reconcile preset-* rows against the current registry on every boot so
     // that newly-added preset datasets show up in Find Data search for

@@ -31,6 +31,11 @@ import { MARKER_COLOR, MARKER_ICON } from "@/lib/markerConstants";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import { useSettingsStore } from "@/lib/settingsStore";
+
+// Auto-retry backoff schedule for transient save-to-account failures.
+// Module-scope so reading it inside the upload callback doesn't require
+// a hook deps entry.
+const AUTO_RETRY_DELAYS_MS = [500, 1500];
 import { formatDepthRange } from "@/lib/units";
 import { ProvenancePanel } from "@/components/ProvenancePanel";
 import { DatasetFolderTree } from "@/components/DatasetFolderTree";
@@ -569,8 +574,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       if (progressTimer.current) clearInterval(progressTimer.current);
     };
   }, [postDatasetsUpload.isPending, postDatasetsUpload.isSuccess]);
-
-  const AUTO_RETRY_DELAYS_MS = [500, 1500];
 
   const uploadFile = useCallback(
     (

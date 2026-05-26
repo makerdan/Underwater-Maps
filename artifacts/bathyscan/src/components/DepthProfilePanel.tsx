@@ -111,6 +111,13 @@ export const DepthProfilePanel: React.FC = () => {
   const postMarkers = usePostMarkers();
   const [bulkPending, setBulkPending] = React.useState(false);
 
+  // Auto-suggested features (peaks, troughs, ledges). Computed before the
+  // early return so hook order stays stable across renders.
+  const features: ProfileFeature[] = React.useMemo(
+    () => (profile ? detectProfileFeatures(profile) : []),
+    [profile],
+  );
+
   if (!profile) return null;
 
   const { points, totalDistanceM, minDepthM, maxDepthM, start, end } = profile;
@@ -168,14 +175,6 @@ export const DepthProfilePanel: React.FC = () => {
       );
     }
   }
-
-  // Auto-suggested features (peaks, troughs, ledges). Memo-equivalent —
-  // recomputed only when the profile reference changes (deps are derived
-  // from points/total which only change with a new profile).
-  const features: ProfileFeature[] = React.useMemo(
-    () => detectProfileFeatures(profile),
-    [profile],
-  );
 
   const featureLabel = (f: ProfileFeature): string => {
     const sample = points[f.index]!;

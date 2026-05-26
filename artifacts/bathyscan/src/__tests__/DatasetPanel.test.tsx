@@ -40,6 +40,10 @@ vi.mock("@/lib/clerkCompat", () => ({
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  QueryClient: class {
+    fetchQuery = vi.fn();
+    invalidateQueries = vi.fn();
+  },
 }));
 
 vi.mock("react-dropzone", () => ({
@@ -91,6 +95,12 @@ vi.mock("@/lib/settingsStore", () => {
   return { useSettingsStore };
 });
 
+vi.mock("@/lib/simulatedDataStore", () => ({
+  requestDatasetSwitch: ({ onConfirm }: { onConfirm: () => void }) => {
+    onConfirm();
+  },
+}));
+
 vi.mock("@/lib/offlineStore", () => ({
   useOfflineStore: (sel: (s: { isOnline: boolean }) => unknown) =>
     sel({ isOnline: true }),
@@ -128,6 +138,10 @@ vi.mock("@workspace/api-client-react", () => ({
   getGetUserDatasetsIdTerrainQueryKey: (id: string) => ["user-datasets", id, "terrain"],
   getGetUserDatasetsIdOverviewQueryKey: (id: string) => ["user-datasets", id, "overview"],
   getGetMarkersQueryKey: (p: unknown) => ["markers", p],
+  getGetDatasetsIdTerrainUrl: (id: string) => `/api/datasets/${id}/terrain`,
+  getGetUserDatasetsIdTerrainUrl: (id: string) => `/api/user/datasets/${id}/terrain`,
+  getGetDatasetsIdOverviewUrl: (id: string) => `/api/datasets/${id}/overview`,
+  getGetUserDatasetsIdOverviewUrl: (id: string) => `/api/user/datasets/${id}/overview`,
 }));
 
 describe("DatasetPanel", () => {
@@ -150,15 +164,15 @@ describe("DatasetPanel", () => {
     render(<DatasetPanel />);
     const btn = screen.getByTestId("btn-dataset-alaska-fjord");
     fireEvent.click(btn);
-    // The loading dot (◌) should appear for the clicked dataset
-    expect(btn.textContent).toContain("◌");
+    // The LoadingDial should mount for the clicked dataset's row.
+    expect(screen.getByTestId("loading-dial")).toBeInTheDocument();
   });
 
   it("collapses and expands dataset list when header is clicked", () => {
     render(<DatasetPanel />);
     expect(screen.getByText("Alaska Fjord")).toBeInTheDocument();
 
-    const header = screen.getByText(/▼ Datasets/);
+    const header = screen.getByText("Datasets").closest("button")!;
     fireEvent.click(header);
     expect(screen.queryByText("Alaska Fjord")).not.toBeInTheDocument();
 

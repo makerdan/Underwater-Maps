@@ -79,8 +79,11 @@ export async function fetchJsonWithProgress<T = unknown>(
       }
     }
   } catch (err) {
+    // `reader.cancel()` returns a promise that rejects with the stream's
+    // error reason — we must await + swallow it here, otherwise it surfaces
+    // as an unhandled rejection (e.g. AbortError) when the caller aborts.
     try {
-      reader.cancel();
+      await reader.cancel();
     } catch {
       /* ignore */
     }
