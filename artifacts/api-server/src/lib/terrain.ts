@@ -978,6 +978,129 @@ async function writeDiskCache(key: string, grid: TerrainGrid): Promise<void> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Preflight / preview — resolves the upstream dataSource without transferring
+// the full depth grid. Used by the client to warn before loading synthetic
+// bathymetry. Cached briefly per dataset id so an immediate confirm does not
+// re-probe upstream services.
+// ---------------------------------------------------------------------------
+
+export interface DatasetPreview {
+  datasetId: string;
+  name: string;
+  bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number };
+  dataSource: TerrainDataSource | "unknown";
+  syntheticReason?: string;
+}
+
+interface PreviewCacheEntry {
+  result: DatasetPreview;
+  ts: number;
+}
+
+const previewCache = new Map<string, PreviewCacheEntry>();
+const PREVIEW_CACHE_TTL_MS = 60_000;
+
+export function clearPreviewCache(): void {
+  previewCache.clear();
+}
+
+/**
+ * Probe upstream services to determine which dataSource (ncei | gebco |
+ * synthetic) would serve this dataset, without transferring the full depth
+ * grid. Uses a small N=32 probe and caches the verdict for ~60s so the
+ * follow-up terrain fetch doesn't pay for a second round of probing.
+ *
+ * If the dataset's terrain is already in the memory cache at any resolution,
+ * its dataSource is reused directly.
+ */
+export async function previewDataset(datasetId: string): Promise<DatasetPreview | null> {
+  const meta = ALL_PRESET_DATASETS.find((d) => d.id === datasetId);
+  if (!meta) return null;
+
+  const now = Date.now();
+  const cached = previewCache.get(datasetId);
+  if (cached && now - cached.ts < PREVIEW_CACHE_TTL_MS) {
+    return cached.result;
+  }
+
+  // Reuse any already-built terrain grid (any resolution) for this dataset.
+  for (const [key, grid] of memoryCache) {
+    if (key.startsWith(meta.id.replace(/[^a-z0-9-]/gi, "_") + "-") && grid.dataSource) {
+      const result: DatasetPreview = {
+        datasetId: meta.id,
+        name: meta.name,
+        bbox: meta.bbox,
+        dataSource: grid.dataSource,
+        ...(grid.dataSource === "synthetic"
+          ? { syntheticReason: "upstream bathymetry services unreachable" }
+          : {}),
+      };
+      previewCache.set(datasetId, { result, ts: now });
+      return result;
+    }
+  }
+
+  // Bundled pre-built terrain (real surveys/DEMs for AOIs where NCEI and
+  // GEBCO have no usable coverage — e.g. inland TX reservoirs). Mirrors
+  // the short-circuit in buildTerrainGrid so preflight never reports
+  // "synthetic" for a dataset that will actually load real bundled data.
+  const bundle = BUNDLED_TERRAIN[datasetId];
+  if (bundle) {
+    const result: DatasetPreview = {
+      datasetId: meta.id,
+      name: meta.name,
+      bbox: meta.bbox,
+      dataSource: bundle.bathymetry.source,
+    };
+    previewCache.set(datasetId, { result, ts: now });
+    return result;
+  }
+
+  // Probe upstream at the smallest resolution (cheap) just to learn the
+  // dataSource. Mirrors the order used in buildTerrainGrid.
+  const N = 32;
+  let dataSource: DatasetPreview["dataSource"] = "synthetic";
+  let syntheticReason: string | undefined;
+
+  const nceiCoverages = NCEI_DATASET_COVERAGES[datasetId];
+  let nceiTried = false;
+  if (nceiCoverages && nceiCoverages.length > 0) {
+    nceiTried = true;
+    for (const coverageKey of nceiCoverages) {
+      try {
+        await fetchNceiGrid(meta.bbox, N, coverageKey);
+        dataSource = "ncei";
+        break;
+      } catch {
+        // try next NCEI coverage
+      }
+    }
+  }
+
+  if (dataSource !== "ncei") {
+    try {
+      await fetchGebcoGrid(meta.bbox, N);
+      dataSource = "gebco";
+    } catch {
+      dataSource = "synthetic";
+      syntheticReason = nceiTried
+        ? "Outside NCEI coverage and GEBCO unreachable"
+        : "Upstream bathymetry services (GEBCO) unreachable";
+    }
+  }
+
+  const result: DatasetPreview = {
+    datasetId: meta.id,
+    name: meta.name,
+    bbox: meta.bbox,
+    dataSource,
+    ...(dataSource === "synthetic" && syntheticReason ? { syntheticReason } : {}),
+  };
+  previewCache.set(datasetId, { result, ts: now });
+  return result;
+}
+
 export async function buildTerrainGrid(
   datasetId: string,
   resolution = 256,

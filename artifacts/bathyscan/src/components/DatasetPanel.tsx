@@ -24,6 +24,7 @@ import {
 } from "@workspace/api-client-react";
 import type { DatasetMeta, UserDatasetMeta } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
+import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { useTerrainStore, VISIBLE_DATASETS_CAP } from "@/lib/terrainStore";
 import { useUiStore } from "@/lib/uiStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
@@ -364,11 +365,17 @@ export const DatasetPanel: React.FC = () => {
   // ─── Dataset click handlers ────────────────────────────────────────────────
   const handleSelectPreset = (ds: DatasetMeta) => {
     if (ds.id === datasetId && !pendingId) return;
-    setPresetLoadError(null);
-    setUserLoadError(null);
-    setLoadingId(ds.id);
-    setPendingId(ds.id);
-    setPendingUserDatasetId(null);
+    void requestDatasetSwitch({
+      datasetId: ds.id,
+      datasetName: ds.name,
+      onConfirm: () => {
+        setPresetLoadError(null);
+        setUserLoadError(null);
+        setLoadingId(ds.id);
+        setPendingId(ds.id);
+        setPendingUserDatasetId(null);
+      },
+    });
   };
 
   const handleSelectUserDataset = (ds: UserDatasetMeta) => {

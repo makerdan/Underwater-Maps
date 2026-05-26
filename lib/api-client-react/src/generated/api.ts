@@ -27,6 +27,7 @@ import type {
   DatasetCatalogSearchResult,
   DatasetFolder,
   DatasetMeta,
+  DatasetPreview,
   DeleteDatasetFolderBody,
   DeleteMarkersMine200,
   EfhFeatureCollection,
@@ -247,6 +248,90 @@ export function useGetDatasetsIdTerrain<TData = Awaited<ReturnType<typeof getDat
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDatasetsIdTerrainQueryOptions(id,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetDatasetsIdPreviewUrl = (id: string,) => {
+
+
+
+
+  return `/api/datasets/${id}/preview`
+}
+
+/**
+ * Lightweight preflight that resolves the upstream `dataSource`
+(`ncei` | `gebco` | `synthetic`) for the given dataset without
+transferring the full depth grid. The client uses this to warn the
+user before loading procedurally-generated (synthetic) bathymetry.
+Results are cached briefly per dataset to avoid double-probing
+upstream services when the user immediately confirms.
+
+ * @summary Probe which upstream source would serve this dataset
+ */
+export const getDatasetsIdPreview = async (id: string, options?: RequestInit): Promise<DatasetPreview> => {
+
+  return customFetch<DatasetPreview>(getGetDatasetsIdPreviewUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDatasetsIdPreviewQueryKey = (id: string,) => {
+    return [
+    `/api/datasets/${id}/preview`
+    ] as const;
+    }
+
+
+export const getGetDatasetsIdPreviewQueryOptions = <TData = Awaited<ReturnType<typeof getDatasetsIdPreview>>, TError = ErrorType<ApiError>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetsIdPreview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDatasetsIdPreviewQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDatasetsIdPreview>>> = ({ signal }) => getDatasetsIdPreview(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDatasetsIdPreview>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDatasetsIdPreviewQueryResult = NonNullable<Awaited<ReturnType<typeof getDatasetsIdPreview>>>
+export type GetDatasetsIdPreviewQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Probe which upstream source would serve this dataset
+ */
+
+export function useGetDatasetsIdPreview<TData = Awaited<ReturnType<typeof getDatasetsIdPreview>>, TError = ErrorType<ApiError>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetsIdPreview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDatasetsIdPreviewQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

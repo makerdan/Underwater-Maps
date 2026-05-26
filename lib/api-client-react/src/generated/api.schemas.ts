@@ -527,6 +527,66 @@ export interface TerrainData {
   topographyCreditUrl?: string;
 }
 
+export type DatasetPreviewBbox = {
+  minLon: number;
+  minLat: number;
+  maxLon: number;
+  maxLat: number;
+};
+
+/**
+ * Which upstream source would produce this grid.
+ncei       — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
+gebco      — GEBCO 2024 WCS (~400 m global grid)
+twdb       — Texas Water Development Board reservoir bathymetry
+usace      — US Army Corps of Engineers reservoir survey
+usgs-3dep  — USGS 3DEP DEM (used for inland AOIs)
+synthetic  — fbm fallback used when no real source is available
+unknown    — preflight itself failed (e.g. network/timeout); treat as suspect
+
+ */
+export type DatasetPreviewDataSource = typeof DatasetPreviewDataSource[keyof typeof DatasetPreviewDataSource];
+
+
+export const DatasetPreviewDataSource = {
+  ncei: 'ncei',
+  gebco: 'gebco',
+  synthetic: 'synthetic',
+  twdb: 'twdb',
+  usace: 'usace',
+  'usgs-3dep': 'usgs-3dep',
+  unknown: 'unknown',
+} as const;
+
+/**
+ * Lightweight preflight describing which upstream source would serve
+this dataset, without transferring the full depth grid. Used by the
+client to warn the user before loading procedurally-generated
+(synthetic) bathymetry.
+
+ */
+export interface DatasetPreview {
+  datasetId: string;
+  name: string;
+  bbox: DatasetPreviewBbox;
+  /** Which upstream source would produce this grid.
+  ncei       — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
+  gebco      — GEBCO 2024 WCS (~400 m global grid)
+  twdb       — Texas Water Development Board reservoir bathymetry
+  usace      — US Army Corps of Engineers reservoir survey
+  usgs-3dep  — USGS 3DEP DEM (used for inland AOIs)
+  synthetic  — fbm fallback used when no real source is available
+  unknown    — preflight itself failed (e.g. network/timeout); treat as suspect
+   */
+  dataSource: DatasetPreviewDataSource;
+  /** Short human-readable reason describing why the result would be
+  synthetic (e.g. "outside NCEI/GEBCO coverage" or "upstream
+  bathymetry services unreachable"). Present whenever
+  `dataSource` is `synthetic` or `unknown`.
+   */
+  syntheticReason?: string;
+}
+
 export interface TerrainUploadInput {
   /** Raw UTF-8 text content of the XYZ or CSV file */
   fileContent: string;

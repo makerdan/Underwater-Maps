@@ -91,6 +91,38 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /datasets/{id}/preview:
+    get:
+      operationId: getDatasetsIdPreview
+      tags: [datasets]
+      summary: Probe which upstream source would serve this dataset
+      description: |
+        Lightweight preflight that resolves the upstream `dataSource`
+        (`ncei` | `gebco` | `synthetic`) for the given dataset without
+        transferring the full depth grid. The client uses this to warn the
+        user before loading procedurally-generated (synthetic) bathymetry.
+        Results are cached briefly per dataset to avoid double-probing
+        upstream services when the user immediately confirms.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Preflight result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetPreview"
+        "404":
+          description: Dataset not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /datasets/{id}/overview:
     get:
       operationId: getDatasetsIdOverview
@@ -1971,6 +2003,51 @@ components:
         - maxLat
         - centerLon
         - centerLat
+
+    DatasetPreview:
+      type: object
+      description: |
+        Lightweight preflight describing which upstream source would serve
+        this dataset, without transferring the full depth grid. Used by the
+        client to warn the user before loading procedurally-generated
+        (synthetic) bathymetry.
+      properties:
+        datasetId:
+          type: string
+        name:
+          type: string
+        bbox:
+          type: object
+          properties:
+            minLon: { type: number }
+            minLat: { type: number }
+            maxLon: { type: number }
+            maxLat: { type: number }
+          required: [minLon, minLat, maxLon, maxLat]
+        dataSource:
+          type: string
+          enum: [ncei, gebco, synthetic, twdb, usace, usgs-3dep, unknown]
+          description: |
+            Which upstream source would produce this grid.
+            ncei       — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
+            gebco      — GEBCO 2024 WCS (~400 m global grid)
+            twdb       — Texas Water Development Board reservoir bathymetry
+            usace      — US Army Corps of Engineers reservoir survey
+            usgs-3dep  — USGS 3DEP DEM (used for inland AOIs)
+            synthetic  — fbm fallback used when no real source is available
+            unknown    — preflight itself failed (e.g. network/timeout); treat as suspect
+        syntheticReason:
+          type: string
+          description: |
+            Short human-readable reason describing why the result would be
+            synthetic (e.g. "outside NCEI/GEBCO coverage" or "upstream
+            bathymetry services unreachable"). Present whenever
+            `dataSource` is `synthetic` or `unknown`.
+      required:
+        - datasetId
+        - name
+        - bbox
+        - dataSource
 
     TerrainUploadInput:
       type: object

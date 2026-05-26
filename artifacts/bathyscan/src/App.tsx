@@ -58,6 +58,8 @@ import { HelpButton } from "@/components/help/HelpButton";
 import { HelpWindow } from "@/components/help/HelpWindow";
 import "@/components/help/help.css";
 import { ConditionsLegend } from "@/components/ConditionsLegend";
+import { SimulatedDataConfirmDialog } from "@/components/SimulatedDataConfirmDialog";
+import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 
 
 function TestBridge(): null {
@@ -280,7 +282,18 @@ function Main() {
     if (hasAutoSelectedRef.current) return;
     if (datasets?.length && !datasetId) {
       hasAutoSelectedRef.current = true;
-      setDatasetId(datasets[0]?.id ?? null);
+      const first = datasets[0];
+      if (first?.id) {
+        void requestDatasetSwitch({
+          datasetId: first.id,
+          datasetName: first.name,
+          onConfirm: () => setDatasetId(first.id),
+          // On cancel, leave datasetId as-is (mount-time has no previous
+          // dataset to preserve; user can pick from the panel manually).
+        });
+      } else {
+        setDatasetId(null);
+      }
     }
   }, [datasets, datasetId, setDatasetId]);
 
@@ -922,6 +935,7 @@ function HomeRoute() {
           <AppProvider>
             <TestBridge />
             <Main />
+            <SimulatedDataConfirmDialog />
           </AppProvider>
           <Toaster />
         </TooltipProvider>

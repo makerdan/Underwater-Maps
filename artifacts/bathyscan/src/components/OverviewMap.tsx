@@ -20,6 +20,7 @@ import type {
   DatasetCatalogSearchResult,
 } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
+import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
@@ -191,8 +192,15 @@ export const OverviewMap: React.FC = () => {
       // (user-saved or external) entries don't have a runtime grid yet, so
       // we just close the map and let the Find Data flow handle them.
       if (entry.id.startsWith("preset-")) {
-        setDatasetId(entry.id.replace("preset-", ""));
-        setOverviewOpen(false);
+        const presetId = entry.id.replace("preset-", "");
+        void requestDatasetSwitch({
+          datasetId: presetId,
+          datasetName: entry.name,
+          onConfirm: () => {
+            setDatasetId(presetId);
+            setOverviewOpen(false);
+          },
+        });
       }
     },
     [setDatasetId, setOverviewOpen],

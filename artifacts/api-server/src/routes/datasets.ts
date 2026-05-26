@@ -15,6 +15,7 @@ import {
   buildTerrainGrid,
   parseXyzCsv,
   gridPoints,
+  previewDataset,
 } from "../lib/terrain.js";
 import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
 import { substrateFingerprintForDataset } from "../lib/substrateGrid.js";
@@ -89,6 +90,39 @@ router.get("/datasets/:id/terrain", async (req, res): Promise<void> => {
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Upstream fetch failed";
     res.status(502).json({ error: "upstream_error", details: msg });
+  }
+});
+
+// ── GET /datasets/:id/preview ─────────────────────────────────────────────────
+// Lightweight preflight: returns the resolved dataSource (ncei | gebco |
+// synthetic) for a preset dataset without transferring the full depth grid.
+// The client uses this to warn users before loading procedurally-generated
+// (synthetic) bathymetry.
+router.get("/datasets/:id/preview", async (req, res): Promise<void> => {
+  const id = String(req.params["id"] ?? "");
+  try {
+    const preview = await previewDataset(id);
+    if (!preview) {
+      res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
+      return;
+    }
+    res.json(preview);
+  } catch (err) {
+    // Preflight itself failed (rare — internal probes already catch). Tell
+    // the client to assume worst case rather than silently loading.
+    const meta = ALL_PRESET_DATASETS.find((d) => d.id === id);
+    if (!meta) {
+      res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
+      return;
+    }
+    const msg = err instanceof Error ? err.message : "Preflight failed";
+    res.json({
+      datasetId: meta.id,
+      name: meta.name,
+      bbox: meta.bbox,
+      dataSource: "unknown" as const,
+      syntheticReason: `Could not verify data source: ${msg}`,
+    });
   }
 });
 

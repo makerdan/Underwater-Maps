@@ -19,6 +19,20 @@ vi.mock("@workspace/api-client-react", () => ({
   usePutSettings: () => ({ mutate: vi.fn() }),
 }));
 
+// Default: auto-confirm any synthetic-data prompt so the existing tests
+// (which assert the switch happens) keep exercising the post-confirm path.
+// Individual tests can override via requestDatasetSwitchMock.
+const requestDatasetSwitchMock = vi.fn(
+  async (args: { onConfirm: () => void; onCancel?: () => void }) => {
+    args.onConfirm();
+  },
+);
+vi.mock("@/lib/simulatedDataStore", () => ({
+  requestDatasetSwitch: (args: Parameters<typeof requestDatasetSwitchMock>[0]) =>
+    requestDatasetSwitchMock(args),
+  useSimulatedDataStore: { getState: () => ({ suppressed: false, setPending: () => {} }) },
+}));
+
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useClassificationStore } from "@/lib/classificationStore";
@@ -90,7 +104,13 @@ function resetAllStores() {
 }
 
 describe("water-type switch (end-to-end)", () => {
-  beforeEach(() => resetAllStores());
+  beforeEach(() => {
+    resetAllStores();
+    requestDatasetSwitchMock.mockReset();
+    requestDatasetSwitchMock.mockImplementation(async (args) => {
+      args.onConfirm();
+    });
+  });
 
   it("switching saltwater → freshwater auto-loads a freshwater preset and clears derived stores", async () => {
     // Seed derived stores with non-empty state representing the prior
@@ -168,6 +188,42 @@ describe("water-type switch (end-to-end)", () => {
     expect(useTerrainStore.getState().activeGrid).toBeNull();
     // Colormap auto-flipped back to the saltwater default ("ocean").
     expect(useSettingsStore.getState().colormapTheme).toBe("ocean");
+  });
+
+  it("cancelling the synthetic-data warning keeps the previous dataset and water-type", async () => {
+    // Override the mock: simulate the user clicking "Cancel" in the
+    // simulated-data warning dialog.
+    requestDatasetSwitchMock.mockImplementation(async (args) => {
+      args.onCancel?.();
+    });
+
+    // Start in saltwater with salt-1 active and seeded derived state.
+    const seededGrid = { fakeGrid: true } as never;
+    useTerrainStore.setState({ activeGrid: seededGrid, overviewGrid: null });
+    useClassificationStore.setState({
+      zoneMap: new Uint8Array([1, 2, 3, 4]),
+      aiZoneMap: null,
+      hasEdits: true,
+      loading: false,
+      error: null,
+      currentGridHash: "deadbeef",
+    });
+
+    const onDatasetChange = vi.fn();
+    render(<Harness onDatasetChange={onDatasetChange} />);
+
+    const user = userEvent.setup();
+    await act(async () => {
+      await user.click(screen.getByTestId("water-type-freshwater"));
+    });
+
+    // Cancel path: water-type was reverted, dataset unchanged, derived state preserved.
+    expect(useSettingsStore.getState().waterType).toBe("saltwater");
+    expect(onDatasetChange).not.toHaveBeenCalled();
+    expect(screen.getByTestId("active-dataset").textContent).toBe("salt-1");
+    expect(useTerrainStore.getState().activeGrid).toBe(seededGrid);
+    expect(useClassificationStore.getState().zoneMap).not.toBeNull();
+    expect(useClassificationStore.getState().hasEdits).toBe(true);
   });
 
   it("preserves a user-chosen non-default colormap across a water-type switch", async () => {

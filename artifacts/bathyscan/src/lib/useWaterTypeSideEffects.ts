@@ -18,6 +18,7 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useHabitatStore } from "@/lib/habitatStore";
+import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 
 export function useWaterTypeSideEffects(
   datasets: DatasetMeta[] | undefined,
@@ -32,26 +33,44 @@ export function useWaterTypeSideEffects(
     const prev = prevWaterTypeRef.current;
     prevWaterTypeRef.current = waterType;
 
-    // Clear both active and overview grids in a single store update so the UI
-    // never sees a half-updated state where one grid still references the
-    // previous water type's dataset.
-    try { useTerrainStore.getState().setGrids({ activeGrid: null, overviewGrid: null }); } catch { /* noop */ }
-    try { useClassificationStore.getState().clearZoneMap?.(); } catch { /* noop */ }
-    try { useHabitatStore.getState().clear?.(); } catch { /* noop */ }
+    // Apply the full water-type switch: clear derived state, flip the
+    // colormap default, and load the first preset of the new water type.
+    // Wrapped so that if the dataset switch is cancelled (synthetic warning),
+    // we preserve the previously-active dataset and its derived state.
+    function applySwitch(newDatasetId: string | null): void {
+      try { useTerrainStore.getState().setGrids({ activeGrid: null, overviewGrid: null }); } catch { /* noop */ }
+      try { useClassificationStore.getState().clearZoneMap?.(); } catch { /* noop */ }
+      try { useHabitatStore.getState().clear?.(); } catch { /* noop */ }
 
-    try {
-      const st = useSettingsStore.getState();
-      const currentTheme = st.colormapTheme;
-      const prevDefault = prev === "freshwater" ? "freshwater" : "ocean";
-      const nextDefault = waterType === "freshwater" ? "freshwater" : "ocean";
-      if (currentTheme === prevDefault && currentTheme !== nextDefault) {
-        st.setColormapTheme?.(nextDefault);
-      }
-    } catch { /* noop */ }
+      try {
+        const st = useSettingsStore.getState();
+        const currentTheme = st.colormapTheme;
+        const prevDefault = prev === "freshwater" ? "freshwater" : "ocean";
+        const nextDefault = waterType === "freshwater" ? "freshwater" : "ocean";
+        if (currentTheme === prevDefault && currentTheme !== nextDefault) {
+          st.setColormapTheme?.(nextDefault);
+        }
+      } catch { /* noop */ }
+
+      setDatasetId(newDatasetId);
+      onAfterSwitch?.();
+    }
 
     const first = (datasets ?? []).find((d) => d.waterType === waterType);
-    setDatasetId(first?.id ?? null);
-
-    onAfterSwitch?.();
+    if (first?.id) {
+      void requestDatasetSwitch({
+        datasetId: first.id,
+        datasetName: first.name,
+        onConfirm: () => applySwitch(first.id),
+        onCancel: () => {
+          // User declined synthetic load — revert water-type setting and
+          // leave the previously-active dataset + derived state intact.
+          prevWaterTypeRef.current = prev;
+          try { useSettingsStore.getState().setWaterType?.(prev); } catch { /* noop */ }
+        },
+      });
+    } else {
+      applySwitch(null);
+    }
   }, [waterType, datasets, setDatasetId, onAfterSwitch]);
 }

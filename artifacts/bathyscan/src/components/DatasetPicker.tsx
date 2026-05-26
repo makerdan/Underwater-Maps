@@ -1,6 +1,7 @@
 import React from "react";
 import type { DatasetMeta } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
+import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
@@ -25,7 +26,13 @@ export const DatasetPicker = ({ datasets, isLoading }: { datasets: DatasetMeta[]
               <ViewscreenTooltip key={ds.id} label={`Load ${ds.name}`} side="right">
               <button
                 data-testid={`btn-dataset-${ds.id}`}
-                onClick={() => setDatasetId(ds.id)}
+                onClick={() =>
+                  void requestDatasetSwitch({
+                    datasetId: ds.id,
+                    datasetName: ds.name,
+                    onConfirm: () => setDatasetId(ds.id),
+                  })
+                }
                 className={`text-left p-3 rounded-md transition-colors ${
                   datasetId === ds.id 
                     ? "bg-primary/20 border border-primary/50" 

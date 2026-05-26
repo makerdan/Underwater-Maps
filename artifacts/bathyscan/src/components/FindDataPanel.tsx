@@ -25,6 +25,7 @@ import {
   type UserCatalogSave,
 } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
+import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
 
@@ -390,8 +391,13 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
 
   const handleLoad = useCallback(
     (presetDatasetId: string) => {
-      setDatasetId(presetDatasetId);
-      onClose();
+      void requestDatasetSwitch({
+        datasetId: presetDatasetId,
+        onConfirm: () => {
+          setDatasetId(presetDatasetId);
+          onClose();
+        },
+      });
     },
     [setDatasetId, onClose],
   );

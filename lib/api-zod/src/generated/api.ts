@@ -85,6 +85,34 @@ export const GetDatasetsIdTerrainResponse = zod.object({
 
 
 /**
+ * Lightweight preflight that resolves the upstream `dataSource`
+(`ncei` | `gebco` | `synthetic`) for the given dataset without
+transferring the full depth grid. The client uses this to warn the
+user before loading procedurally-generated (synthetic) bathymetry.
+Results are cached briefly per dataset to avoid double-probing
+upstream services when the user immediately confirms.
+
+ * @summary Probe which upstream source would serve this dataset
+ */
+export const GetDatasetsIdPreviewParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetDatasetsIdPreviewResponse = zod.object({
+  "datasetId": zod.string(),
+  "name": zod.string(),
+  "bbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}),
+  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep', 'unknown']).describe('Which upstream source would produce this grid.\nncei       — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco      — GEBCO 2024 WCS (~400 m global grid)\ntwdb       — Texas Water Development Board reservoir bathymetry\nusace      — US Army Corps of Engineers reservoir survey\nusgs-3dep  — USGS 3DEP DEM (used for inland AOIs)\nsynthetic  — fbm fallback used when no real source is available\nunknown    — preflight itself failed (e.g. network\/timeout); treat as suspect\n'),
+  "syntheticReason": zod.string().optional().describe('Short human-readable reason describing why the result would be\nsynthetic (e.g. \"outside NCEI\/GEBCO coverage\" or \"upstream\nbathymetry services unreachable\"). Present whenever\n`dataSource` is `synthetic` or `unknown`.\n')
+}).describe('Lightweight preflight describing which upstream source would serve\nthis dataset, without transferring the full depth grid. Used by the\nclient to warn the user before loading procedurally-generated\n(synthetic) bathymetry.\n')
+
+
+/**
  * Returns a 64×64 downsampled depth grid for use in the overview map — lightweight alternative to the full terrain
  * @summary Get a low-resolution overview terrain for a dataset
  */

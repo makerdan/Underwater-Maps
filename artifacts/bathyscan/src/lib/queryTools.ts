@@ -12,6 +12,7 @@
  * opts.setDatasetId is passed in because dataset state lives in AppContext.
  */
 import { useTerrainStore }       from "./terrainStore";
+import { requestDatasetSwitch }   from "./simulatedDataStore";
 import { useUiStore }             from "./uiStore";
 import { useCameraStore }         from "./cameraStore";
 import { useClassificationStore } from "./classificationStore";
@@ -168,7 +169,10 @@ function openOverview(): string {
 }
 
 function switchDataset(args: { datasetId: string }, opts: ToolOptions): string {
-  opts.setDatasetId(args.datasetId);
+  void requestDatasetSwitch({
+    datasetId: args.datasetId,
+    onConfirm: () => opts.setDatasetId(args.datasetId),
+  });
   return `Switching to dataset: ${args.datasetId}.`;
 }
 
