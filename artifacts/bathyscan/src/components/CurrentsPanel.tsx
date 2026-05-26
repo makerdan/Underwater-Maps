@@ -14,7 +14,7 @@
  * pointer-events:auto wrapper for interactivity.
  */
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useCurrentsStore } from "@/lib/currentsStore";
 import { CURRENT_RAMP_STOPS, speedToColor } from "@/lib/currentColor";
@@ -236,14 +236,9 @@ export const CurrentsPanel: React.FC = () => {
           <span>Tide Phase</span>
           <span style={{ color: "#94a3b8" }}>{Math.round(s.currentsTidePhase * 100)}%</span>
         </div>
-        <input
-          type="range"
-          min={0}
-          max={1000}
-          value={Math.round(s.currentsTidePhase * 1000)}
-          onChange={(e) => s.setCurrentsTidePhase(Number(e.target.value) / 1000)}
-          style={{ width: "100%", accentColor: "#00e5ff" }}
-          data-testid="currents-tide-phase"
+        <TidePhaseSlider
+          value={s.currentsTidePhase}
+          onChange={s.setCurrentsTidePhase}
         />
         <button
           style={{
@@ -293,3 +288,58 @@ export const CurrentsPanel: React.FC = () => {
     </div>
   );
 };
+
+/**
+ * Range slider for the tide-phase scrubber.
+ *
+ * Subscribes to the native `input` event in addition to React's synthetic
+ * onChange so programmatic scrubs that assign `el.value` directly and
+ * dispatch a bubbling Event (e.g. in headless e2e tests) still propagate
+ * to the store. React's `valueTracker` swallows assignments that go
+ * through its wrapped value setter — without the native listener, the
+ * controlled `value` snaps back to the store value and the readout never
+ * moves. Real user drags still flow through onChange (idempotent setter
+ * call), so behaviour for end-users is unchanged.
+ */
+function TidePhaseSlider({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+}): React.ReactElement {
+  const ref = useRef<HTMLInputElement | null>(null);
+  const cbRef = useRef(onChange);
+  cbRef.current = onChange;
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const handler = (e: Event) => {
+      const t = e.target as HTMLInputElement | null;
+      if (!t) return;
+      const n = Number(t.value);
+      if (!Number.isFinite(n)) return;
+      cbRef.current(n / 1000);
+    };
+    el.addEventListener("input", handler);
+    el.addEventListener("change", handler);
+    return () => {
+      el.removeEventListener("input", handler);
+      el.removeEventListener("change", handler);
+    };
+  }, []);
+
+  return (
+    <input
+      ref={ref}
+      type="range"
+      min={0}
+      max={1000}
+      value={Math.round(value * 1000)}
+      onChange={(e) => onChange(Number(e.target.value) / 1000)}
+      style={{ width: "100%", accentColor: "#00e5ff" }}
+      data-testid="currents-tide-phase"
+    />
+  );
+}

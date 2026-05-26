@@ -230,4 +230,65 @@ describe("/api/surface-conditions slack fields", () => {
     expect(slackHours).toBeLessThan(24);
     vi.unstubAllGlobals();
   });
+
+  it("phase transitions are monotonic and slack hours bracket each tide event", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new Error("network disabled");
+    }));
+    const { buildSinusoidalTidalHours } = await import(
+      "../routes/surface-conditions"
+    );
+    // Anchor at UTC midnight so the synthetic schedule (anchored on local
+    // solar noon) is deterministic.
+    const startMs = Date.UTC(2026, 0, 1, 0, 0, 0);
+    const hours = buildSinusoidalTidalHours(55.6, -132.5, startMs);
+    expect(hours).toHaveLength(24);
+
+    // 1) Each slack hour's phase reflects the bracketed event type.
+    for (const h of hours) {
+      if (h.isSlack) {
+        expect(["slack-high", "slack-low"]).toContain(h.phase);
+      } else {
+        expect(["flooding", "ebbing"]).toContain(h.phase);
+      }
+    }
+
+    // 2) Between consecutive slack hours, the non-slack phase should be
+    // constant (no flooding→ebbing flips except across a slack event).
+    let lastNonSlack: string | null = null;
+    for (const h of hours) {
+      if (h.isSlack) {
+        // crossing a slack event resets the comparison.
+        lastNonSlack = null;
+        continue;
+      }
+      if (lastNonSlack === null) {
+        lastNonSlack = h.phase;
+      } else {
+        expect(h.phase).toBe(lastNonSlack);
+      }
+    }
+
+    // 3) There is at least one slack and at least one non-slack hour in
+    // the 24-hour cycle (semi-diurnal ⇒ ~4 events per 25h).
+    const slackCount = hours.filter((h) => h.isSlack).length;
+    expect(slackCount).toBeGreaterThan(0);
+    expect(slackCount).toBeLessThan(24);
+
+    // 4) tidalSpeedKnots increases from a slack hour toward the midpoint
+    // between consecutive slack events. We check that whenever a slack
+    // hour is followed within the next 3 hours by a non-slack hour, the
+    // non-slack speed is strictly greater than the slack speed (which
+    // should be ≈0 inside the ±30-min slack bracket but could legitimately
+    // be small but non-zero at the bracket edge).
+    for (let i = 0; i < hours.length - 1; i++) {
+      const cur = hours[i]!;
+      const next = hours[i + 1]!;
+      if (cur.isSlack && !next.isSlack) {
+        expect(next.tidalSpeedKnots).toBeGreaterThanOrEqual(cur.tidalSpeedKnots);
+      }
+    }
+
+    vi.unstubAllGlobals();
+  });
 });

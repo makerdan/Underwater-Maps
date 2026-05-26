@@ -74,6 +74,12 @@ export function buildSinusoidalTidalHours(
   const peakSpeed = 1.2;
   const floodBearing = ((lat + lon) * 73.1 + 360) % 360;
   const events = buildSyntheticEvents(startMs, lon);
+  // An hour is "slack" if a tide event (high/low reversal) lies within
+  // ±30 minutes of the hour sample. Sampling the instantaneous speed at
+  // the top of each hour is non-deterministic because the slack window
+  // (|sin(πt)| < threshold) is only ~10 minutes either side of each
+  // event and rarely lands on an hour boundary.
+  const SLACK_BRACKET_MS = 30 * 60 * 1000;
 
   return Array.from({ length: 24 }, (_, h) => {
     const t = startMs + h * 3600 * 1000;
@@ -84,11 +90,44 @@ export function buildSinusoidalTidalHours(
       floodBearingDeg: floodBearing,
       slackThresholdKnots: SLACK_THRESHOLD_DEFAULT,
     });
+
+    // Find the nearest tide event and check if it's within the bracket.
+    let nearestEvent = events[0];
+    let nearestDist = Infinity;
+    for (const e of events) {
+      const d = Math.abs(e.time - t);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearestEvent = e;
+      }
+    }
+    const bracketed = nearestEvent !== undefined && nearestDist <= SLACK_BRACKET_MS;
+
+    let phase: TidePhase;
+    if (bracketed && nearestEvent) {
+      phase = nearestEvent.type === "high" ? "slack-high" : "slack-low";
+    } else {
+      // Outside the slack bracket, use the sinusoidal flooding/ebbing
+      // direction from computeSlackSample but force the non-slack phase
+      // (so an hour that happens to land at instantaneous low speed but
+      // not adjacent to a tide event isn't mislabelled).
+      phase = s.slack.phase === "slack-high" || s.slack.phase === "flooding"
+        ? "flooding"
+        : "ebbing";
+      // Disambiguate: if computeSlackSample identified the bracket as
+      // flooding (low→high), call it flooding; otherwise ebbing.
+      if (s.slack.phase === "slack-low" || s.slack.phase === "flooding") {
+        phase = "flooding";
+      } else {
+        phase = "ebbing";
+      }
+    }
+
     return {
       tidalSpeedKnots: Math.round(s.speedKnots * 100) / 100,
       tidalDegrees: Math.round(s.directionDeg) % 360,
-      isSlack: s.slack.isSlack,
-      phase: s.slack.phase,
+      isSlack: bracketed,
+      phase,
     };
   });
 }

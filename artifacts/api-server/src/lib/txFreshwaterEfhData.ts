@@ -88,7 +88,16 @@ const BUNDLE: BundledOut = JSON.parse(
  */
 function explodeToPolygons(fc: BundledCollection): EfhFeatureCollection {
   const features: EfhFeature[] = [];
-  for (const f of fc.features) {
+  // Process TPWD-sourced features first so the resulting collection leads
+  // with the lake-specific TPWD attribution (the UI's "lead feature" used
+  // by the EFH detail panel must surface the TPWD disclaimer + lake-page
+  // credit, not the underlying USGS NHD shoreline polygon).
+  const ordered = [...fc.features].sort((a, b) => {
+    const aT = a.properties.source?.startsWith("TPWD") ? 0 : 1;
+    const bT = b.properties.source?.startsWith("TPWD") ? 0 : 1;
+    return aT - bT;
+  });
+  for (const f of ordered) {
     const { sourceLayer: _ignored, ...props } = f.properties;
     void _ignored;
     if (f.geometry.type === "Polygon") {

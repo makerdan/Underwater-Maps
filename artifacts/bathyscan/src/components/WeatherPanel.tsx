@@ -333,7 +333,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
                   data-testid="tidal-source"
                   style={{ fontSize: 8, color: "#64748b", marginTop: 2, letterSpacing: "0.05em", fontStyle: "italic" }}
                 >
-                  Estimated tidal current
+                  Estimated (no NOAA station nearby)
                 </div>
               )}
             </div>
