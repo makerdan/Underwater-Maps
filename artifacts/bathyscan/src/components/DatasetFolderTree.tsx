@@ -567,6 +567,16 @@ export const DatasetFolderTree: React.FC<Props> = ({
         onToggle={() => toggleExpand(node.folder.id)}
         onContextMenu={(e) => showFolderMenu(e, node)}
         onDoubleClick={() => beginRename("folder", node.folder.id, node.folder.name)}
+        onDelete={() => {
+          const hasChildren = node.children.length > 0 || node.datasets.length > 0;
+          setConfirmDelete({
+            kind: "folder",
+            id: node.folder.id,
+            name: node.folder.name,
+            hasChildren,
+            recursive: hasChildren,
+          });
+        }}
         isRenaming={isRenaming}
         renameInput={isRenaming ? renderRenameInput(node.folder.name) : null}
         isDraggingThis={isDraggingThis}
@@ -600,6 +610,9 @@ export const DatasetFolderTree: React.FC<Props> = ({
         onClick={() => onSelectDataset(ds)}
         onContextMenu={(e) => showDatasetMenu(e, ds)}
         onDoubleClick={() => beginRename("dataset", ds.id, ds.name)}
+        onDelete={() =>
+          setConfirmDelete({ kind: "dataset", id: ds.id, name: ds.name })
+        }
         isRenaming={isRenaming}
         renameInput={isRenaming ? renderRenameInput(ds.name) : null}
         isDragging={dragging?.kind === "dataset" && dragging.id === ds.id}
@@ -761,6 +774,7 @@ interface FolderRowProps {
   onToggle: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
+  onDelete: () => void;
   registerRow: (kind: "folder" | "dataset", id: string, el: HTMLElement | null) => void;
 }
 
@@ -774,6 +788,7 @@ const FolderRow: React.FC<FolderRowProps> = ({
   onToggle,
   onContextMenu,
   onDoubleClick,
+  onDelete,
   registerRow,
 }) => {
   const indent = node.depth * INDENT_PX;
@@ -853,6 +868,13 @@ const FolderRow: React.FC<FolderRowProps> = ({
           {node.folder.name}
         </span>
       )}
+      {!isRenaming && !deleting && (
+        <RowDeleteButton
+          testId={`btn-delete-folder-${node.folder.id}`}
+          ariaLabel={`Delete folder ${node.folder.name}`}
+          onActivate={onDelete}
+        />
+      )}
     </div>
   );
 };
@@ -869,6 +891,7 @@ interface DatasetRowProps {
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
+  onDelete: () => void;
   registerRow: (kind: "folder" | "dataset", id: string, el: HTMLElement | null) => void;
 }
 
@@ -884,6 +907,7 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
   onClick,
   onContextMenu,
   onDoubleClick,
+  onDelete,
   registerRow,
 }) => {
   const indent = depth * INDENT_PX;
@@ -966,6 +990,13 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
         {loading && (
           <span className="animate-pulse" style={{ fontSize: 9, color: "#00e5ff" }}>◌</span>
         )}
+        {!isRenaming && !deleting && (
+          <RowDeleteButton
+            testId={`btn-delete-dataset-${ds.id}`}
+            ariaLabel={`Delete dataset ${ds.name}`}
+            onActivate={onDelete}
+          />
+        )}
       </div>
       <div
         style={{
@@ -984,6 +1015,55 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
         <span style={{ color: "#1e293b", flexShrink: 0 }}>{date}</span>
       </div>
     </div>
+  );
+};
+
+// ─── Visible per-row delete affordance (Task #399) ───────────────────────────
+// A small ✕ button that sits on the right edge of folder and dataset rows so
+// users can find the delete control without right-clicking. It does NOT call
+// the delete mutation directly — it opens the same confirm dialog the
+// context menu uses.
+const RowDeleteButton: React.FC<{
+  testId: string;
+  ariaLabel: string;
+  onActivate: () => void;
+}> = ({ testId, ariaLabel, onActivate }) => {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      aria-label={ariaLabel}
+      title="Delete"
+      onClick={(e) => {
+        e.stopPropagation();
+        onActivate();
+      }}
+      onPointerDown={(e) => e.stopPropagation()}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onFocus={() => setHover(true)}
+      onBlur={() => setHover(false)}
+      style={{
+        width: 18,
+        height: 18,
+        flexShrink: 0,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "transparent",
+        border: "none",
+        cursor: "pointer",
+        color: hover ? "#f87171" : "#475569",
+        fontSize: 12,
+        lineHeight: 1,
+        padding: 0,
+        borderRadius: 2,
+        transition: "color 120ms ease",
+      }}
+    >
+      ✕
+    </button>
   );
 };
 
