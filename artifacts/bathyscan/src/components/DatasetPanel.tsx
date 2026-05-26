@@ -615,7 +615,7 @@ export const DatasetPanel: React.FC = () => {
           style={{ cursor: "pointer" }}
         >
           <span className="uppercase tracking-widest" style={{ fontSize: 10, ...CYAN, fontWeight: 700 }}>
-            ▼ Datasets
+            Datasets
           </span>
           <div className="flex items-center gap-2">
             {anyLoading && (

@@ -59,7 +59,7 @@ export const KeyboardShortcutsPanel: React.FC = () => {
           className="uppercase tracking-widest"
           style={{ fontSize: 11, ...CYAN, fontWeight: 700 }}
         >
-          ▼ Keyboard
+          Keyboard
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <HelpIcon articleId="keyboard-shortcuts" label="Keyboard shortcuts" />
