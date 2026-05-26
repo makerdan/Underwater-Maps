@@ -281,8 +281,17 @@ export const HUD: React.FC = () => {
         </div>
       )}
 
-      {/* ── Top-left: heading ── */}
-      <div className="hud-top-left absolute top-3 left-3 flex items-center gap-2">
+      {/* ── Top-left: heading ──
+          Positioned to sit directly to the right of the global Help
+          button (which is anchored to top:8 / left:8 outside this HUD
+          overlay). The overlay container adds 80px top / 16px side
+          padding, so we offset out of it with negative top + an x
+          offset that clears the help button's ~80px width plus an 8px
+          gap. */}
+      <div
+        className="hud-top-left absolute flex items-center gap-2"
+        style={{ top: -72, left: 80 }}
+      >
         {showHeading && (
           <div style={{ ...PANEL, fontSize: 11 }}>
             <span style={{ color: "#475569" }}>HDG </span>
