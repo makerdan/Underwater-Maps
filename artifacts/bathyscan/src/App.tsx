@@ -853,7 +853,7 @@ function Main() {
 
         {/* Minimap + controls legend — bottom-right and bottom-left */}
         {showCompassMinimap && (
-          <div className="absolute bottom-4 right-4 z-20">
+          <div data-testid="minimap-container" className="absolute bottom-4 right-4 z-20">
             <Minimap />
           </div>
         )}
