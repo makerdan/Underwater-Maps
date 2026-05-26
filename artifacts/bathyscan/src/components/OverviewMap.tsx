@@ -51,6 +51,7 @@ import type { OverviewTransform, CanvasSavedTrail } from "@/lib/overviewRenderer
 import { useGetEfh, getGetEfhQueryKey } from "@workspace/api-client-react";
 import type { EfhFeature, EfhSpeciesProperties } from "@workspace/api-client-react";
 import { useHabitatStore } from "@/lib/habitatStore";
+import { HabitatLegend } from "@/components/HabitatLegend";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useTrailStore } from "@/lib/trailStore";
 import { useSettingsStore } from "@/lib/settingsStore";
@@ -1074,6 +1075,21 @@ export const OverviewMap: React.FC = () => {
           onClose={() => setShowTrailList(false)}
         />
       )}
+
+      {/* Habitat suitability legend — mirrors the floating 3D legend so the
+          amber heat key sits next to the habitat overlay here too. Renders
+          nothing unless a species is active. */}
+      <div
+        style={{
+          position: "absolute",
+          left: 12,
+          bottom: 12,
+          zIndex: 41,
+          pointerEvents: "none",
+        }}
+      >
+        <HabitatLegend embedded />
+      </div>
 
       {/* Depth tooltip */}
       {tooltip.visible && (

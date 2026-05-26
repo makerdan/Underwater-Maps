@@ -34,6 +34,7 @@ import { OverviewMap } from "@/components/OverviewMap";
 import { ZoneOverlay } from "@/components/ZoneOverlay";
 import { FindDataPanel } from "@/components/FindDataPanel";
 import { HabitatPanel } from "@/components/HabitatPanel";
+import { HabitatLegend } from "@/components/HabitatLegend";
 import { QueryPanel } from "@/components/QueryPanel";
 import { TrailRecorder } from "@/components/TrailRecorder";
 import { VirtualJoystick } from "@/components/VirtualJoystick";
@@ -516,6 +517,12 @@ function Main() {
             collapsible legend is anchored to the scene edge rather
             than to the HUD's padded inset. */}
         {showDepthScaleBar && <DepthScaleBar />}
+
+        {/* Floating habitat suitability legend — pinned to the 3D scene so
+            the amber-gradient key stays visible even when the HabitatPanel
+            (top-left HUD) is collapsed or hidden. Renders nothing unless a
+            species is active. */}
+        <HabitatLegend />
 
         {/* Help launch button — upper-left of main interactive area */}
         <HelpButton />
