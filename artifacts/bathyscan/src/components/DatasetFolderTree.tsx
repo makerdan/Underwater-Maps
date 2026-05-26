@@ -50,6 +50,13 @@ import {
   type FolderNode,
   type LibraryTree,
 } from "@/lib/datasetLibrary";
+import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
+
+// Undo window for "soft" dataset/folder deletes (ms). The row(s) are
+// hidden from the tree immediately and the actual DELETE only fires when
+// the window elapses, so a misclick can be reverted by clicking "Undo".
+const UNDO_DELETE_WINDOW_MS = 5000;
 
 interface Props {
   datasets: UserDatasetMeta[];
@@ -91,10 +98,66 @@ export const DatasetFolderTree: React.FC<Props> = ({
     query: { queryKey: getGetUserFoldersQueryKey() },
   });
 
-  const tree = useMemo(
+  // ─── Soft-delete (undo) state ────────────────────────────────────────────
+  // Ids hidden from the visible tree while their 5s undo window is still
+  // open. We keep timers + commit closures in a ref so we can cancel on
+  // Undo and flush on unmount.
+  const [pendingDeleteDatasetIds, setPendingDeleteDatasetIds] = useState<
+    Set<string>
+  >(() => new Set());
+  const [pendingDeleteFolderIds, setPendingDeleteFolderIds] = useState<
+    Set<string>
+  >(() => new Set());
+  const pendingDeletesRef = useRef(
+    new Map<
+      string,
+      { timer: ReturnType<typeof setTimeout>; commit: () => void }
+    >(),
+  );
+  const { toast } = useToast();
+
+  // Build the tree from the full folder/dataset lists first so we can
+  // resolve descendant folder ids even for folders that are pending delete
+  // (callers captured them at confirm time). The *visible* tree below
+  // hides everything that is mid-undo.
+  const fullTree = useMemo(
     () => buildLibraryTree(folders ?? [], datasets),
     [folders, datasets],
   );
+
+  const hiddenFolderIds = useMemo(() => {
+    if (pendingDeleteFolderIds.size === 0) return new Set<string>();
+    const s = new Set<string>();
+    for (const fid of pendingDeleteFolderIds) {
+      s.add(fid);
+      for (const d of descendantFolderIds(fullTree.byId, fid)) s.add(d);
+    }
+    return s;
+  }, [fullTree.byId, pendingDeleteFolderIds]);
+
+  const tree = useMemo(() => {
+    if (
+      pendingDeleteDatasetIds.size === 0 &&
+      hiddenFolderIds.size === 0
+    ) {
+      return fullTree;
+    }
+    const visibleFolders = (folders ?? []).filter(
+      (f) => !hiddenFolderIds.has(f.id),
+    );
+    const visibleDatasets = datasets.filter(
+      (d) =>
+        !pendingDeleteDatasetIds.has(d.id) &&
+        !(d.folderId && hiddenFolderIds.has(d.folderId)),
+    );
+    return buildLibraryTree(visibleFolders, visibleDatasets);
+  }, [
+    fullTree,
+    folders,
+    datasets,
+    hiddenFolderIds,
+    pendingDeleteDatasetIds,
+  ]);
 
   // ─── Mutations ───────────────────────────────────────────────────────────
   const postFolder = usePostUserFolders();
@@ -264,28 +327,89 @@ export const DatasetFolderTree: React.FC<Props> = ({
     if (!confirmDelete) return;
     if (confirmDelete.kind === "dataset") {
       const removedId = confirmDelete.id;
-      deleteDataset.mutate(
-        { id: removedId },
-        {
-          onSuccess: () => {
-            evictDatasetCaches([removedId]);
-            invalidateAll();
-            onDatasetsRemoved?.([removedId]);
+      const name = confirmDelete.name;
+      setConfirmDelete(null);
+
+      // Hide the row immediately; the actual mutation only fires after the
+      // undo window elapses, so a misclick can still be reverted.
+      setPendingDeleteDatasetIds((s) => new Set(s).add(removedId));
+
+      const undoKey = `dataset:${removedId}`;
+      const commit = () => {
+        pendingDeletesRef.current.delete(undoKey);
+        deleteDataset.mutate(
+          { id: removedId },
+          {
+            onSuccess: () => {
+              evictDatasetCaches([removedId]);
+              invalidateAll();
+              onDatasetsRemoved?.([removedId]);
+            },
+            onSettled: () => {
+              setPendingDeleteDatasetIds((s) => {
+                if (!s.has(removedId)) return s;
+                const next = new Set(s);
+                next.delete(removedId);
+                return next;
+              });
+            },
           },
-          onSettled: () => setConfirmDelete(null),
+        );
+      };
+
+      const undo = () => {
+        const entry = pendingDeletesRef.current.get(undoKey);
+        if (!entry) return;
+        clearTimeout(entry.timer);
+        pendingDeletesRef.current.delete(undoKey);
+        setPendingDeleteDatasetIds((s) => {
+          const next = new Set(s);
+          next.delete(removedId);
+          return next;
+        });
+      };
+
+      const timer = setTimeout(commit, UNDO_DELETE_WINDOW_MS);
+      pendingDeletesRef.current.set(undoKey, {
+        timer,
+        commit: () => {
+          clearTimeout(timer);
+          commit();
         },
-      );
+      });
+
+      const toastHandle = toast({
+        title: "Dataset deleted",
+        description: `"${name}" will be removed.`,
+        duration: UNDO_DELETE_WINDOW_MS,
+        action: (
+          <ToastAction
+            altText="Undo delete"
+            data-testid="undo-delete-dataset"
+            onClick={() => {
+              undo();
+              toastHandle.dismiss();
+            }}
+          >
+            Undo
+          </ToastAction>
+        ),
+      });
     } else {
       // Recursive delete (mode: "contents") is required when the folder has
       // children; for empty folders we still send "contents" since the API
       // treats it as a no-op. The recursive flag is captured at confirm-time
       // so the user explicitly opts into deleting the children they saw.
+      const folderId = confirmDelete.id;
+      const name = confirmDelete.name;
       const mode = confirmDelete.recursive ? "contents" : "contents";
+      setConfirmDelete(null);
+
       // Collect every dataset id that lives in the doomed subtree *before*
-      // the delete fires, so we can evict their per-dataset cache entries
-      // and tell the parent which active-dataset ids to clear.
-      const folderIds = new Set<string>([confirmDelete.id]);
-      for (const id of descendantFolderIds(tree.byId, confirmDelete.id)) {
+      // we hide it, so we can evict their per-dataset cache entries on
+      // commit and tell the parent which active-dataset ids to clear.
+      const folderIds = new Set<string>([folderId]);
+      for (const id of descendantFolderIds(tree.byId, folderId)) {
         folderIds.add(id);
       }
       const removedDatasetIds: string[] = [];
@@ -294,21 +418,93 @@ export const DatasetFolderTree: React.FC<Props> = ({
           removedDatasetIds.push(ds.id);
         }
       }
-      deleteFolder.mutate(
-        { id: confirmDelete.id, data: { mode } },
-        {
-          onSuccess: () => {
-            evictDatasetCaches(removedDatasetIds);
-            invalidateAll();
-            if (removedDatasetIds.length > 0) {
-              onDatasetsRemoved?.(removedDatasetIds);
-            }
+
+      setPendingDeleteFolderIds((s) => {
+        const next = new Set(s);
+        folderIds.forEach((id) => next.add(id));
+        return next;
+      });
+
+      const undoKey = `folder:${folderId}`;
+      const dropFromPending = () => {
+        setPendingDeleteFolderIds((s) => {
+          let changed = false;
+          const next = new Set(s);
+          for (const id of folderIds) {
+            if (next.delete(id)) changed = true;
+          }
+          return changed ? next : s;
+        });
+      };
+
+      const commit = () => {
+        pendingDeletesRef.current.delete(undoKey);
+        deleteFolder.mutate(
+          { id: folderId, data: { mode } },
+          {
+            onSuccess: () => {
+              evictDatasetCaches(removedDatasetIds);
+              invalidateAll();
+              if (removedDatasetIds.length > 0) {
+                onDatasetsRemoved?.(removedDatasetIds);
+              }
+            },
+            onSettled: dropFromPending,
           },
-          onSettled: () => setConfirmDelete(null),
+        );
+      };
+
+      const undo = () => {
+        const entry = pendingDeletesRef.current.get(undoKey);
+        if (!entry) return;
+        clearTimeout(entry.timer);
+        pendingDeletesRef.current.delete(undoKey);
+        dropFromPending();
+      };
+
+      const timer = setTimeout(commit, UNDO_DELETE_WINDOW_MS);
+      pendingDeletesRef.current.set(undoKey, {
+        timer,
+        commit: () => {
+          clearTimeout(timer);
+          commit();
         },
-      );
+      });
+
+      const childCount = removedDatasetIds.length;
+      const toastHandle = toast({
+        title: "Folder deleted",
+        description:
+          childCount > 0
+            ? `"${name}" and ${childCount} dataset${childCount === 1 ? "" : "s"} will be removed.`
+            : `"${name}" will be removed.`,
+        duration: UNDO_DELETE_WINDOW_MS,
+        action: (
+          <ToastAction
+            altText="Undo delete"
+            data-testid="undo-delete-folder"
+            onClick={() => {
+              undo();
+              toastHandle.dismiss();
+            }}
+          >
+            Undo
+          </ToastAction>
+        ),
+      });
     }
   };
+
+  // Flush any open undo windows on unmount so the server eventually
+  // receives the DELETE even if the user navigates away.
+  useEffect(() => {
+    const map = pendingDeletesRef.current;
+    return () => {
+      const entries = Array.from(map.values());
+      map.clear();
+      for (const entry of entries) entry.commit();
+    };
+  }, []);
 
   // Compute the set of folder ids and dataset ids currently being deleted
   // by a pending deleteFolder mutation (the target folder itself + all of

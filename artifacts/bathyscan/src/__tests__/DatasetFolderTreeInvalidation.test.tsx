@@ -6,10 +6,14 @@
  * terrain/overview cache entries, and notifies the parent of the removed
  * ids so it can clear active-dataset state.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import React from "react";
 import { DatasetFolderTree } from "@/components/DatasetFolderTree";
+
+// Deletes use a 5s undo window before the actual mutation fires; fake
+// timers let these tests advance past it deterministically.
+const UNDO_WINDOW_MS = 5000;
 
 // ─── Mutation captures ───────────────────────────────────────────────────────
 const deleteDatasetMutate = vi.fn();
@@ -103,6 +107,10 @@ describe("DatasetFolderTree — invalidation contract on delete", () => {
     deleteFolderMutate.mockReset();
     invalidateQueries.mockReset();
     removeQueries.mockReset();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("evicts per-dataset terrain/overview cache and notifies parent on single delete", () => {
@@ -121,6 +129,12 @@ describe("DatasetFolderTree — invalidation contract on delete", () => {
     // Click the row's ✕ to open the confirm dialog, then confirm.
     fireEvent.click(screen.getByTestId("btn-delete-dataset-d3"));
     fireEvent.click(screen.getByTestId("confirm-delete-confirm"));
+
+    // The mutation does not fire immediately — there's an undo window first.
+    expect(deleteDatasetMutate).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(UNDO_WINDOW_MS);
+    });
 
     // Simulate the mutation's onSuccess firing.
     expect(deleteDatasetMutate).toHaveBeenCalledTimes(1);
@@ -158,6 +172,12 @@ describe("DatasetFolderTree — invalidation contract on delete", () => {
 
     fireEvent.click(screen.getByTestId("btn-delete-folder-f1"));
     fireEvent.click(screen.getByTestId("confirm-delete-confirm"));
+
+    // The mutation does not fire immediately — there's an undo window first.
+    expect(deleteFolderMutate).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(UNDO_WINDOW_MS);
+    });
 
     expect(deleteFolderMutate).toHaveBeenCalledTimes(1);
     const opts = deleteFolderMutate.mock.calls[0]![1] as { onSuccess: () => void };

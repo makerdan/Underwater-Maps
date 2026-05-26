@@ -33,6 +33,13 @@ import { useAuth } from "@/lib/clerkCompat";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
+import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
+
+// Undo window for "soft" dataset deletes (ms). The row is hidden from the
+// list immediately and the actual DELETE request is deferred until the
+// window elapses, so a misclick can be reverted by clicking "Undo".
+const UNDO_DELETE_WINDOW_MS = 5000;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -406,6 +413,16 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState<UserCatalogSave | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Saves whose row should be hidden from the list while their "Undo"
+  // window is still open. Once the timer fires we commit the DELETE and
+  // drop the id; if the user clicks Undo we just drop the id.
+  const [pendingDeleteSaveIds, setPendingDeleteSaveIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const pendingDeletesRef = useRef(
+    new Map<string, { timer: ReturnType<typeof setTimeout>; commit: () => void }>(),
+  );
+  const { toast } = useToast();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { setDatasetId, setPendingExternalUserDatasetId } = useAppState();
   const { isSignedIn } = useAuth();
@@ -508,33 +525,115 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     setConfirmDelete(save);
   }, []);
 
-  const handleConfirmDelete = useCallback(async () => {
+  // Commit the deferred DELETE for a save. Used both by the 5s undo timer
+  // and by the on-unmount flush so we don't leak ghost rows on the server.
+  const commitDeleteSave = useCallback(
+    async (target: UserCatalogSave) => {
+      pendingDeletesRef.current.delete(target.id);
+      setDeletingIds((s) => new Set(s).add(target.id));
+      try {
+        await deleteSaveMutation.mutateAsync({ id: target.id });
+        // Drop the "saved" badge on the catalog card so users can re-save it.
+        setSavedIds((s) => {
+          const next = new Set(s);
+          next.delete(target.catalogId);
+          return next;
+        });
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: getGetDatasetsMySavesQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() }),
+        ]);
+      } catch (err) {
+        setDeleteError(err instanceof Error ? err.message : "Could not delete saved dataset");
+        // Restore the row to the visible list so the user can retry — the
+        // server still has it because the mutation failed.
+        setPendingDeleteSaveIds((s) => {
+          const next = new Set(s);
+          next.delete(target.id);
+          return next;
+        });
+      } finally {
+        setDeletingIds((s) => {
+          const next = new Set(s);
+          next.delete(target.id);
+          return next;
+        });
+        setPendingDeleteSaveIds((s) => {
+          if (!s.has(target.id)) return s;
+          const next = new Set(s);
+          next.delete(target.id);
+          return next;
+        });
+      }
+    },
+    [deleteSaveMutation, qc],
+  );
+
+  const handleConfirmDelete = useCallback(() => {
     if (!confirmDelete) return;
     const target = confirmDelete;
     setConfirmDelete(null);
-    setDeletingIds((s) => new Set(s).add(target.id));
-    try {
-      await deleteSaveMutation.mutateAsync({ id: target.id });
-      // Drop the "saved" badge on the catalog card so users can re-save it.
-      setSavedIds((s) => {
-        const next = new Set(s);
-        next.delete(target.catalogId);
-        return next;
-      });
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: getGetDatasetsMySavesQueryKey() }),
-        qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() }),
-      ]);
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Could not delete saved dataset");
-    } finally {
-      setDeletingIds((s) => {
+    setDeleteError(null);
+
+    // Hide the row from the saves list immediately and start the undo
+    // window. The DELETE request only fires once the timer elapses.
+    setPendingDeleteSaveIds((s) => new Set(s).add(target.id));
+
+    const undo = () => {
+      const entry = pendingDeletesRef.current.get(target.id);
+      if (!entry) return;
+      clearTimeout(entry.timer);
+      pendingDeletesRef.current.delete(target.id);
+      setPendingDeleteSaveIds((s) => {
         const next = new Set(s);
         next.delete(target.id);
         return next;
       });
-    }
-  }, [confirmDelete, deleteSaveMutation, qc]);
+    };
+
+    const timer = setTimeout(() => {
+      void commitDeleteSave(target);
+    }, UNDO_DELETE_WINDOW_MS);
+    pendingDeletesRef.current.set(target.id, {
+      timer,
+      commit: () => {
+        clearTimeout(timer);
+        void commitDeleteSave(target);
+      },
+    });
+
+    const name = target.catalog?.name ?? target.catalogId;
+    const toastHandle = toast({
+      title: "Saved dataset deleted",
+      description: `"${name}" will be removed.`,
+      duration: UNDO_DELETE_WINDOW_MS,
+      action: (
+        <ToastAction
+          altText="Undo delete"
+          data-testid="undo-delete-save"
+          onClick={() => {
+            undo();
+            toastHandle.dismiss();
+          }}
+        >
+          Undo
+        </ToastAction>
+      ),
+    });
+  }, [confirmDelete, commitDeleteSave, toast]);
+
+  // If the panel unmounts (e.g. user closes the drawer) while undo windows
+  // are still open, flush them so the server eventually receives the DELETE.
+  useEffect(() => {
+    const map = pendingDeletesRef.current;
+    return () => {
+      const entries = Array.from(map.values());
+      map.clear();
+      for (const entry of entries) entry.commit();
+    };
+  }, []);
+
+  const visibleSaves = mySaves.filter((s) => !pendingDeleteSaveIds.has(s.id));
 
   const handleSave = useCallback(
     async (id: string) => {
@@ -714,7 +813,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
           {isSaveFetching && (
             <div style={{ fontSize: 9, color: "#475569", marginBottom: 8 }}>Loading…</div>
           )}
-          {!isSaveFetching && mySaves.length === 0 && (
+          {!isSaveFetching && visibleSaves.length === 0 && (
             <div style={{ fontSize: 9, color: "#475569", textAlign: "center", paddingTop: 32 }}>
               No saved datasets yet — search and save some above
             </div>
@@ -757,7 +856,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               </button>
             </div>
           )}
-          {mySaves.map((save) => (
+          {visibleSaves.map((save) => (
             <SaveCard
               key={save.id}
               save={save}
