@@ -17,7 +17,13 @@ interface ProvenancePanelProps {
   hasEfh?: boolean;
 }
 
-type DataSource = "ncei" | "gebco" | "synthetic";
+type DataSource =
+  | "ncei"
+  | "gebco"
+  | "synthetic"
+  | "twdb"
+  | "usace"
+  | "usgs-3dep";
 
 const SOURCE_META: Record<
   DataSource,
@@ -41,6 +47,27 @@ const SOURCE_META: Record<
     description:
       "Procedurally generated terrain. Real upstream data sources (NCEI, GEBCO) were unreachable.",
     creditUrl: "",
+  },
+  "usgs-3dep": {
+    label: "USGS 3DEP",
+    color: "#34d399",
+    description:
+      "USGS 3D Elevation Program — best-available DEM (1-m lidar where collected, 1/3\" seamless otherwise). Used for inland reservoir pre-impoundment bathymetry and surrounding topography.",
+    creditUrl: "https://www.usgs.gov/3d-elevation-program",
+  },
+  twdb: {
+    label: "TWDB Survey",
+    color: "#34d399",
+    description:
+      "Texas Water Development Board Reservoir Volumetric & Sedimentation Survey.",
+    creditUrl: "https://www.twdb.texas.gov/surfacewater/surveys/index.asp",
+  },
+  usace: {
+    label: "USACE Hydro",
+    color: "#34d399",
+    description:
+      "US Army Corps of Engineers hydrographic survey.",
+    creditUrl: "https://www.usace.army.mil/",
   },
 };
 

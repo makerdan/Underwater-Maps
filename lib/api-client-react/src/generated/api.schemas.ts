@@ -429,10 +429,13 @@ export const TerrainDataWaterType = {
 } as const;
 
 /**
- * Which upstream data service produced this grid.
+ * Which upstream data service produced this grid (bathymetry primary).
 ncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
 gebco     — GEBCO 2024 WCS (~400 m global grid)
 synthetic — fbm fallback used when all upstream services are unreachable
+twdb      — TWDB Reservoir Volumetric & Sedimentation Survey
+usace     — USACE hydrographic survey
+usgs-3dep — USGS 3DEP best-available DEM (pre-impoundment basin + topography)
 
  */
 export type TerrainDataDataSource = typeof TerrainDataDataSource[keyof typeof TerrainDataDataSource];
@@ -442,6 +445,39 @@ export const TerrainDataDataSource = {
   ncei: 'ncei',
   gebco: 'gebco',
   synthetic: 'synthetic',
+  twdb: 'twdb',
+  usace: 'usace',
+  'usgs-3dep': 'usgs-3dep',
+} as const;
+
+/**
+ * Per-layer provenance for the below-water (bathymetry) layer when it has a different source than topography (e.g. inland reservoirs).
+ */
+export type TerrainDataBathymetrySource = typeof TerrainDataBathymetrySource[keyof typeof TerrainDataBathymetrySource];
+
+
+export const TerrainDataBathymetrySource = {
+  ncei: 'ncei',
+  gebco: 'gebco',
+  synthetic: 'synthetic',
+  twdb: 'twdb',
+  usace: 'usace',
+  'usgs-3dep': 'usgs-3dep',
+} as const;
+
+/**
+ * Per-layer provenance for the above-water (topography) layer when it has a different source than bathymetry.
+ */
+export type TerrainDataTopographySource = typeof TerrainDataTopographySource[keyof typeof TerrainDataTopographySource];
+
+
+export const TerrainDataTopographySource = {
+  ncei: 'ncei',
+  gebco: 'gebco',
+  synthetic: 'synthetic',
+  twdb: 'twdb',
+  usace: 'usace',
+  'usgs-3dep': 'usgs-3dep',
 } as const;
 
 export interface TerrainData {
@@ -468,12 +504,27 @@ export interface TerrainData {
   hasTopography?: boolean;
   /** Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback. */
   synthetic?: boolean;
-  /** Which upstream data service produced this grid.
+  /** Which upstream data service produced this grid (bathymetry primary).
   ncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
   gebco     — GEBCO 2024 WCS (~400 m global grid)
   synthetic — fbm fallback used when all upstream services are unreachable
+  twdb      — TWDB Reservoir Volumetric & Sedimentation Survey
+  usace     — USACE hydrographic survey
+  usgs-3dep — USGS 3DEP best-available DEM (pre-impoundment basin + topography)
    */
   dataSource?: TerrainDataDataSource;
+  /** Per-layer provenance for the below-water (bathymetry) layer when it has a different source than topography (e.g. inland reservoirs). */
+  bathymetrySource?: TerrainDataBathymetrySource;
+  /** Per-layer provenance for the above-water (topography) layer when it has a different source than bathymetry. */
+  topographySource?: TerrainDataTopographySource;
+  /** Display label for the bathymetry source (overrides the default per-source label in the UI). */
+  bathymetrySourceLabel?: string;
+  /** Display label for the topography source (overrides the default per-source label in the UI). */
+  topographySourceLabel?: string;
+  /** Credit URL surfaced next to the bathymetry source badge. */
+  bathymetryCreditUrl?: string;
+  /** Credit URL surfaced next to the topography source badge. */
+  topographyCreditUrl?: string;
 }
 
 export interface TerrainUploadInput {

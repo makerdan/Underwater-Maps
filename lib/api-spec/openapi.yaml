@@ -1926,12 +1926,35 @@ components:
           description: "Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback."
         dataSource:
           type: string
-          enum: [ncei, gebco, synthetic]
+          enum: [ncei, gebco, synthetic, twdb, usace, usgs-3dep]
           description: |
-            Which upstream data service produced this grid.
+            Which upstream data service produced this grid (bathymetry primary).
             ncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
             gebco     — GEBCO 2024 WCS (~400 m global grid)
             synthetic — fbm fallback used when all upstream services are unreachable
+            twdb      — TWDB Reservoir Volumetric & Sedimentation Survey
+            usace     — USACE hydrographic survey
+            usgs-3dep — USGS 3DEP best-available DEM (pre-impoundment basin + topography)
+        bathymetrySource:
+          type: string
+          enum: [ncei, gebco, synthetic, twdb, usace, usgs-3dep]
+          description: Per-layer provenance for the below-water (bathymetry) layer when it has a different source than topography (e.g. inland reservoirs).
+        topographySource:
+          type: string
+          enum: [ncei, gebco, synthetic, twdb, usace, usgs-3dep]
+          description: Per-layer provenance for the above-water (topography) layer when it has a different source than bathymetry.
+        bathymetrySourceLabel:
+          type: string
+          description: Display label for the bathymetry source (overrides the default per-source label in the UI).
+        topographySourceLabel:
+          type: string
+          description: Display label for the topography source (overrides the default per-source label in the UI).
+        bathymetryCreditUrl:
+          type: string
+          description: Credit URL surfaced next to the bathymetry source badge.
+        topographyCreditUrl:
+          type: string
+          description: Credit URL surfaced next to the topography source badge.
       required:
         - datasetId
         - name

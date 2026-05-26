@@ -1,13 +1,26 @@
-import { promises as fsPromises } from "fs";
+import { promises as fsPromises, readFileSync } from "fs";
 import path from "path";
+import { dirname, resolve as resolvePath } from "path";
+import { fileURLToPath } from "url";
 
 /**
  * Which upstream data service produced this grid.
- *   "ncei"      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
- *   "gebco"     — GEBCO 2024 WCS (~400 m global grid)
- *   "synthetic" — fbm fallback used when all upstream services are unreachable
+ *   "ncei"          — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
+ *   "gebco"         — GEBCO 2024 WCS (~400 m global grid)
+ *   "synthetic"     — fbm fallback used when all upstream services are unreachable
+ *   "twdb"          — TWDB Reservoir Volumetric & Sedimentation Survey
+ *   "usace"         — USACE Fort Worth District hydrographic survey
+ *   "usgs-3dep"     — USGS 3DEP best-available DEM (lidar where available,
+ *                     1/3" seamless otherwise) — used for inland reservoir
+ *                     pre-impoundment bathymetry and surrounding topography.
  */
-export type TerrainDataSource = "ncei" | "gebco" | "synthetic";
+export type TerrainDataSource =
+  | "ncei"
+  | "gebco"
+  | "synthetic"
+  | "twdb"
+  | "usace"
+  | "usgs-3dep";
 
 export interface TerrainGrid {
   datasetId: string;
@@ -43,8 +56,24 @@ export interface TerrainGrid {
    * @deprecated Use `dataSource` for a more descriptive indicator.
    */
   synthetic?: boolean;
-  /** Which upstream source produced this grid. */
+  /** Which upstream source produced this grid (bathymetry primary). */
   dataSource?: TerrainDataSource;
+  /**
+   * Per-layer provenance for grids that bundle separately-sourced
+   * bathymetry and topography layers (e.g. inland reservoirs where
+   * bathymetry comes from a pre-impoundment DEM + shore-distance synthesis
+   * and topography comes from a current lidar / DEM).
+   */
+  bathymetrySource?: TerrainDataSource;
+  topographySource?: TerrainDataSource;
+  /** Display label for the bathymetry source (overrides default per-source label). */
+  bathymetrySourceLabel?: string;
+  /** Display label for the topography source (overrides default per-source label). */
+  topographySourceLabel?: string;
+  /** Credit URL for the bathymetry source. */
+  bathymetryCreditUrl?: string;
+  /** Credit URL for the topography source. */
+  topographyCreditUrl?: string;
   version?: number;
 }
 
@@ -61,8 +90,11 @@ export interface TerrainGrid {
  *   4 — Task #336: multi-coverage NCEI fetcher (BAG + DEM Global Mosaic);
  *       SE Alaska presets now route through NCEI first, so previously
  *       cached GEBCO-only grids must be invalidated.
+ *   5 — Task #380: Lake Ray Roberts now short-circuits to a real
+ *       USGS-3DEP-derived bathymetry + topography bundle before the
+ *       NCEI/GEBCO chain; previously cached synthetic grids must go.
  */
-export const TERRAIN_CACHE_VERSION = 4;
+export const TERRAIN_CACHE_VERSION = 5;
 
 export interface DatasetMeta {
   id: string;
@@ -579,6 +611,102 @@ async function fetchGebcoGrid(
 }
 
 // ---------------------------------------------------------------------------
+// Bundled per-dataset terrain grids (built at repo build time from
+// real surveys/DEMs that the NCEI/GEBCO chain can't supply, e.g. inland
+// reservoirs). Loaded synchronously at startup so buildTerrainGrid can
+// short-circuit to them before attempting any HTTP fetch.
+// ---------------------------------------------------------------------------
+
+interface BundledLayerProvenance {
+  source: TerrainDataSource;
+  label: string;
+  creditUrl: string;
+  serviceUrl: string;
+  fetchedAt: string;
+  attempts: { source: TerrainDataSource | string; ok: boolean; note: string }[];
+}
+
+interface BundledTerrain {
+  datasetId: string;
+  bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number };
+  width: number;
+  height: number;
+  depths: number[];
+  topography: number[];
+  minDepth: number;
+  maxDepth: number;
+  minTopography: number;
+  maxTopography: number;
+  poolElevationM: number;
+  bathymetry: BundledLayerProvenance;
+  topographyProvenance: BundledLayerProvenance;
+}
+
+const __terrainDir = dirname(fileURLToPath(import.meta.url));
+
+function loadBundledTerrain(fileName: string): BundledTerrain | null {
+  try {
+    const raw = readFileSync(resolvePath(__terrainDir, fileName), "utf8");
+    return JSON.parse(raw) as BundledTerrain;
+  } catch (err) {
+    console.warn(`[terrain] Bundled terrain '${fileName}' unavailable: ${(err as Error).message}`);
+    return null;
+  }
+}
+
+/**
+ * Pre-built bundles keyed by datasetId. When `buildTerrainGrid` is called
+ * for one of these ids, the bundled grid is returned immediately (after
+ * a nearest-neighbour resample to the requested resolution).
+ */
+const BUNDLED_TERRAIN: Record<string, BundledTerrain | null> = {
+  "lake-ray-roberts": loadBundledTerrain("lakeRayRobertsTerrain.gen.json"),
+};
+
+/** Resample a bundled grid to the requested resolution by nearest neighbour. */
+function resampleBundled(bundle: BundledTerrain, N: number): {
+  depths: number[];
+  topography: number[];
+  minDepth: number;
+  maxDepth: number;
+  hasTopography: boolean;
+} {
+  const { width, height, depths: srcD, topography: srcT } = bundle;
+  if (width === N && height === N) {
+    const hasTopo = srcT.some((v) => v > 0);
+    return {
+      depths: srcD.slice(),
+      topography: srcT.slice(),
+      minDepth: bundle.minDepth,
+      maxDepth: bundle.maxDepth,
+      hasTopography: hasTopo,
+    };
+  }
+  const depths = new Array<number>(N * N).fill(0);
+  const topography = new Array<number>(N * N).fill(0);
+  let minDepth = Infinity, maxDepth = -Infinity;
+  let landCells = 0;
+  for (let row = 0; row < N; row++) {
+    const srcRow = Math.min(height - 1, Math.floor((row / N) * height));
+    for (let col = 0; col < N; col++) {
+      const srcCol = Math.min(width - 1, Math.floor((col / N) * width));
+      const srcIdx = srcRow * width + srcCol;
+      const dstIdx = row * N + col;
+      const d = srcD[srcIdx]!;
+      const t = srcT[srcIdx]!;
+      depths[dstIdx] = d;
+      topography[dstIdx] = t;
+      if (t > 0) landCells++;
+      if (d < minDepth) minDepth = d;
+      if (d > maxDepth) maxDepth = d;
+    }
+  }
+  if (!isFinite(minDepth)) minDepth = 0;
+  if (!isFinite(maxDepth)) maxDepth = 0;
+  return { depths, topography, minDepth, maxDepth, hasTopography: landCells > 0 };
+}
+
+// ---------------------------------------------------------------------------
 // Terrain cache & grid builder (memory + disk)
 // ---------------------------------------------------------------------------
 
@@ -640,6 +768,54 @@ export async function buildTerrainGrid(
     console.info(`[terrain] Disk cache hit: ${cacheKey}`);
     memoryCache.set(cacheKey, disk);
     return disk;
+  }
+
+  // 2b. Bundled pre-built terrain (real surveys/DEMs for AOIs where NCEI
+  //     and GEBCO have no usable coverage — e.g. inland TX reservoirs).
+  //     Short-circuits the upstream chain entirely so we never fall through
+  //     to synthetic for these datasets.
+  const bundle = BUNDLED_TERRAIN[datasetId];
+  if (bundle) {
+    console.info(
+      `[terrain] Using bundled terrain for ${datasetId} ` +
+        `(bathymetry: ${bundle.bathymetry.source}, topography: ${bundle.topographyProvenance.source})`,
+    );
+    const rs = resampleBundled(bundle, N);
+    if (smoothing) smoothSpikes(rs.depths, N, rs.maxDepth - rs.minDepth);
+    let minD = Infinity, maxD = -Infinity;
+    for (let i = 0; i < rs.depths.length; i++) {
+      if (rs.depths[i]! < minD) minD = rs.depths[i]!;
+      if (rs.depths[i]! > maxD) maxD = rs.depths[i]!;
+    }
+    const grid: TerrainGrid = {
+      datasetId,
+      name: meta.name,
+      waterType: meta.waterType,
+      resolution: N,
+      width: N,
+      height: N,
+      depths: rs.depths,
+      minDepth: Math.round(minD),
+      maxDepth: Math.round(maxD),
+      minLon: bundle.bbox.minLon,
+      maxLon: bundle.bbox.maxLon,
+      minLat: bundle.bbox.minLat,
+      maxLat: bundle.bbox.maxLat,
+      centerLon: meta.centerLon,
+      centerLat: meta.centerLat,
+      synthetic: false,
+      dataSource: bundle.bathymetry.source,
+      bathymetrySource: bundle.bathymetry.source,
+      topographySource: bundle.topographyProvenance.source,
+      bathymetrySourceLabel: bundle.bathymetry.label,
+      topographySourceLabel: bundle.topographyProvenance.label,
+      bathymetryCreditUrl: bundle.bathymetry.creditUrl,
+      topographyCreditUrl: bundle.topographyProvenance.creditUrl,
+      ...(rs.hasTopography ? { topography: rs.topography, hasTopography: true } : {}),
+    };
+    memoryCache.set(cacheKey, grid);
+    await writeDiskCache(cacheKey, grid);
+    return grid;
   }
 
   // 3. Fetch from upstream source:

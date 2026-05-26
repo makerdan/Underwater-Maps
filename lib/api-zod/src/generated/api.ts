@@ -74,7 +74,13 @@ export const GetDatasetsIdTerrainResponse = zod.object({
   "topography": zod.array(zod.number()).optional().describe('Row-major flat array of above-water elevation values (metres above sea level, 0 for water cells). Same NxN shape as `depths`. Omitted when the dataset has no above-water terrain.'),
   "hasTopography": zod.boolean().optional().describe('True when this terrain grid includes a non-empty `topography` array. Clients can use this to enable\/hide the landmass visualisation.'),
   "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
-  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic']).optional().describe('Which upstream data service produced this grid.\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\n')
+  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Which upstream data service produced this grid (bathymetry primary).\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\ntwdb      — TWDB Reservoir Volumetric & Sedimentation Survey\nusace     — USACE hydrographic survey\nusgs-3dep — USGS 3DEP best-available DEM (pre-impoundment basin + topography)\n'),
+  "bathymetrySource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Per-layer provenance for the below-water (bathymetry) layer when it has a different source than topography (e.g. inland reservoirs).'),
+  "topographySource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Per-layer provenance for the above-water (topography) layer when it has a different source than bathymetry.'),
+  "bathymetrySourceLabel": zod.string().optional().describe('Display label for the bathymetry source (overrides the default per-source label in the UI).'),
+  "topographySourceLabel": zod.string().optional().describe('Display label for the topography source (overrides the default per-source label in the UI).'),
+  "bathymetryCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the bathymetry source badge.'),
+  "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.')
 })
 
 
@@ -105,7 +111,13 @@ export const GetDatasetsIdOverviewResponse = zod.object({
   "topography": zod.array(zod.number()).optional().describe('Row-major flat array of above-water elevation values (metres above sea level, 0 for water cells). Same NxN shape as `depths`. Omitted when the dataset has no above-water terrain.'),
   "hasTopography": zod.boolean().optional().describe('True when this terrain grid includes a non-empty `topography` array. Clients can use this to enable\/hide the landmass visualisation.'),
   "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
-  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic']).optional().describe('Which upstream data service produced this grid.\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\n')
+  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Which upstream data service produced this grid (bathymetry primary).\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\ntwdb      — TWDB Reservoir Volumetric & Sedimentation Survey\nusace     — USACE hydrographic survey\nusgs-3dep — USGS 3DEP best-available DEM (pre-impoundment basin + topography)\n'),
+  "bathymetrySource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Per-layer provenance for the below-water (bathymetry) layer when it has a different source than topography (e.g. inland reservoirs).'),
+  "topographySource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Per-layer provenance for the above-water (topography) layer when it has a different source than bathymetry.'),
+  "bathymetrySourceLabel": zod.string().optional().describe('Display label for the bathymetry source (overrides the default per-source label in the UI).'),
+  "topographySourceLabel": zod.string().optional().describe('Display label for the topography source (overrides the default per-source label in the UI).'),
+  "bathymetryCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the bathymetry source badge.'),
+  "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.')
 })
 
 
@@ -144,7 +156,13 @@ export const PostDatasetsUploadResponse = zod.object({
   "topography": zod.array(zod.number()).optional().describe('Row-major flat array of above-water elevation values (metres above sea level, 0 for water cells). Same NxN shape as `depths`. Omitted when the dataset has no above-water terrain.'),
   "hasTopography": zod.boolean().optional().describe('True when this terrain grid includes a non-empty `topography` array. Clients can use this to enable\/hide the landmass visualisation.'),
   "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
-  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic']).optional().describe('Which upstream data service produced this grid.\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\n')
+  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Which upstream data service produced this grid (bathymetry primary).\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\ntwdb      — TWDB Reservoir Volumetric & Sedimentation Survey\nusace     — USACE hydrographic survey\nusgs-3dep — USGS 3DEP best-available DEM (pre-impoundment basin + topography)\n'),
+  "bathymetrySource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Per-layer provenance for the below-water (bathymetry) layer when it has a different source than topography (e.g. inland reservoirs).'),
+  "topographySource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Per-layer provenance for the above-water (topography) layer when it has a different source than bathymetry.'),
+  "bathymetrySourceLabel": zod.string().optional().describe('Display label for the bathymetry source (overrides the default per-source label in the UI).'),
+  "topographySourceLabel": zod.string().optional().describe('Display label for the topography source (overrides the default per-source label in the UI).'),
+  "bathymetryCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the bathymetry source badge.'),
+  "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.')
 }),
   "overview": zod.object({
   "datasetId": zod.string(),
@@ -165,7 +183,13 @@ export const PostDatasetsUploadResponse = zod.object({
   "topography": zod.array(zod.number()).optional().describe('Row-major flat array of above-water elevation values (metres above sea level, 0 for water cells). Same NxN shape as `depths`. Omitted when the dataset has no above-water terrain.'),
   "hasTopography": zod.boolean().optional().describe('True when this terrain grid includes a non-empty `topography` array. Clients can use this to enable\/hide the landmass visualisation.'),
   "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
-  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic']).optional().describe('Which upstream data service produced this grid.\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\n')
+  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Which upstream data service produced this grid (bathymetry primary).\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\ntwdb      — TWDB Reservoir Volumetric & Sedimentation Survey\nusace     — USACE hydrographic survey\nusgs-3dep — USGS 3DEP best-available DEM (pre-impoundment basin + topography)\n'),
+  "bathymetrySource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Per-layer provenance for the below-water (bathymetry) layer when it has a different source than topography (e.g. inland reservoirs).'),
+  "topographySource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Per-layer provenance for the above-water (topography) layer when it has a different source than bathymetry.'),
+  "bathymetrySourceLabel": zod.string().optional().describe('Display label for the bathymetry source (overrides the default per-source label in the UI).'),
+  "topographySourceLabel": zod.string().optional().describe('Display label for the topography source (overrides the default per-source label in the UI).'),
+  "bathymetryCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the bathymetry source badge.'),
+  "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.')
 }),
   "savedDatasetId": zod.string().optional().describe('UUID of the saved custom dataset row (only present when the request was authenticated AND the row was persisted successfully)'),
   "savedDatasetMeta": zod.object({
@@ -221,7 +245,13 @@ export const GetUserDatasetsIdTerrainResponse = zod.object({
   "topography": zod.array(zod.number()).optional().describe('Row-major flat array of above-water elevation values (metres above sea level, 0 for water cells). Same NxN shape as `depths`. Omitted when the dataset has no above-water terrain.'),
   "hasTopography": zod.boolean().optional().describe('True when this terrain grid includes a non-empty `topography` array. Clients can use this to enable\/hide the landmass visualisation.'),
   "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
-  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic']).optional().describe('Which upstream data service produced this grid.\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\n')
+  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Which upstream data service produced this grid (bathymetry primary).\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\ntwdb      — TWDB Reservoir Volumetric & Sedimentation Survey\nusace     — USACE hydrographic survey\nusgs-3dep — USGS 3DEP best-available DEM (pre-impoundment basin + topography)\n'),
+  "bathymetrySource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Per-layer provenance for the below-water (bathymetry) layer when it has a different source than topography (e.g. inland reservoirs).'),
+  "topographySource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Per-layer provenance for the above-water (topography) layer when it has a different source than bathymetry.'),
+  "bathymetrySourceLabel": zod.string().optional().describe('Display label for the bathymetry source (overrides the default per-source label in the UI).'),
+  "topographySourceLabel": zod.string().optional().describe('Display label for the topography source (overrides the default per-source label in the UI).'),
+  "bathymetryCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the bathymetry source badge.'),
+  "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.')
 })
 
 
@@ -251,7 +281,13 @@ export const GetUserDatasetsIdOverviewResponse = zod.object({
   "topography": zod.array(zod.number()).optional().describe('Row-major flat array of above-water elevation values (metres above sea level, 0 for water cells). Same NxN shape as `depths`. Omitted when the dataset has no above-water terrain.'),
   "hasTopography": zod.boolean().optional().describe('True when this terrain grid includes a non-empty `topography` array. Clients can use this to enable\/hide the landmass visualisation.'),
   "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
-  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic']).optional().describe('Which upstream data service produced this grid.\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\n')
+  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Which upstream data service produced this grid (bathymetry primary).\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\ntwdb      — TWDB Reservoir Volumetric & Sedimentation Survey\nusace     — USACE hydrographic survey\nusgs-3dep — USGS 3DEP best-available DEM (pre-impoundment basin + topography)\n'),
+  "bathymetrySource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Per-layer provenance for the below-water (bathymetry) layer when it has a different source than topography (e.g. inland reservoirs).'),
+  "topographySource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Per-layer provenance for the above-water (topography) layer when it has a different source than bathymetry.'),
+  "bathymetrySourceLabel": zod.string().optional().describe('Display label for the bathymetry source (overrides the default per-source label in the UI).'),
+  "topographySourceLabel": zod.string().optional().describe('Display label for the topography source (overrides the default per-source label in the UI).'),
+  "bathymetryCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the bathymetry source badge.'),
+  "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.')
 })
 
 
