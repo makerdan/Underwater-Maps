@@ -43,6 +43,28 @@ import { GpsExportDialog } from "@/components/GpsExportDialog";
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
+/**
+ * Preset dataset IDs backed by real high-resolution survey bathymetry
+ * (NCEI multibeam BAG mosaic or NCEI DEM community mosaic). These are
+ * mirrored from the server-side `NCEI_DATASET_COVERAGES` map in
+ * `artifacts/api-server/src/lib/terrain.ts` — keep the two in sync.
+ *
+ * Datasets not in this set still use real-world sources (GEBCO global
+ * grid, TPWD/NHD shoreline survey, etc.) but their seafloor depth grid
+ * is interpolated rather than directly surveyed.
+ */
+const REAL_SURVEY_DATASET_IDS = new Set<string>([
+  "thorne-bay",
+  "ketchikan",
+  "sitka-sound",
+  "juneau-approaches",
+  "glacier-bay",
+  "icy-strait",
+  "craig-klawock",
+  "wrangell-petersburg",
+  "skagway-haines",
+]);
+
 const PANEL: React.CSSProperties = {
   background: "rgba(0,10,20,0.82)",
   border: "1px solid rgba(0,229,255,0.18)",
@@ -720,6 +742,28 @@ export const DatasetPanel: React.FC = () => {
                         textUnderlineOffset: 2,
                       }}
                     >
+                      {REAL_SURVEY_DATASET_IDS.has(ds.id) && (
+                        <ViewscreenTooltip
+                          label="Real high-resolution survey bathymetry (NCEI multibeam / community DEM)"
+                          side="right"
+                        >
+                          <span
+                            data-testid={`real-data-dot-${ds.id}`}
+                            aria-label="Real survey data"
+                            style={{
+                              display: "inline-block",
+                              width: 8,
+                              height: 8,
+                              borderRadius: "50%",
+                              background: "#22c55e",
+                              boxShadow: "0 0 6px rgba(34,197,94,0.8)",
+                              marginRight: 6,
+                              verticalAlign: "middle",
+                              textDecoration: "none",
+                            }}
+                          />
+                        </ViewscreenTooltip>
+                      )}
                       {ds.name}
                     </span>
                     <span style={{ fontSize: 9, color: "#cbd5e1", flexShrink: 0 }}>
