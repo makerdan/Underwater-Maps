@@ -92,6 +92,15 @@ const stationListsCache = new Map<StationListType, { data: NoaaStation[]; ts: nu
 const STATION_LISTS_TTL_MS = 24 * 60 * 60 * 1000;
 const STATION_LISTS_EMPTY_TTL_MS = 5 * 60 * 1000;
 
+/**
+ * Short negative-cache window: when NOAA is down AND we have no prior
+ * good station list to fall back to, remember the failure for ~60s so
+ * a single outage doesn't cause every subsequent /tidal request to
+ * re-hit NOAA with an 8s timeout and stall the API server.
+ */
+const stationListsFailureCache = new Map<StationListType, number>();
+const STATION_LISTS_FAILURE_TTL_MS = 60 * 1000;
+
 function stationListTtlMs(data: NoaaStation[]): number {
   return data.length === 0 ? STATION_LISTS_EMPTY_TTL_MS : STATION_LISTS_TTL_MS;
 }
@@ -119,8 +128,23 @@ async function getStationList(type: StationListType): Promise<NoaaStation[] | nu
   if (cached && now - cached.ts < stationListTtlMs(cached.data)) {
     return cached.data;
   }
+  // If the last upstream call failed recently, short-circuit so a NOAA
+  // outage doesn't fan out into a flood of 8s-timeout fetches — even
+  // when a stale cache is around (otherwise every post-TTL request
+  // would still pay the full timeout before falling back to it).
+  const failedAt = stationListsFailureCache.get(type);
+  if (failedAt != null && now - failedAt < STATION_LISTS_FAILURE_TTL_MS) {
+    return cached?.data ?? null;
+  }
   const data = await loadStations(type);
-  if (!data) return null;
+  if (!data) {
+    // Remember the failure for the negative-cache window, and fall back
+    // to the previously cached list (even if stale) when available so
+    // nearby callers keep getting real station data through the outage.
+    stationListsFailureCache.set(type, now);
+    return cached ? cached.data : null;
+  }
+  stationListsFailureCache.delete(type);
   stationListsCache.set(type, { data, ts: now });
   return data;
 }
@@ -177,6 +201,7 @@ export function __clearHighLowEventsCacheForTests(): void {
 /** Exposed for tests so they can reset cached NOAA station lists. */
 export function __clearStationCachesForTests(): void {
   stationListsCache.clear();
+  stationListsFailureCache.clear();
 }
 
 /**

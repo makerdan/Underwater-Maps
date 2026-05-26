@@ -207,6 +207,119 @@ describe("GET /tidal", () => {
     }
   });
 
+  it("negatively caches NOAA station-list failures so one outage doesn't fan out into many upstream fetches", async () => {
+    // Every fetch rejects (simulating a NOAA outage with no prior cache).
+    fetchSpy.mockRejectedValue(new Error("NOAA down"));
+
+    const app = makeApp();
+
+    const first = await request(app).get(
+      "/tidal?lat=55.33&lon=-131.63&datetime=2026-05-25T03:00:00Z",
+    );
+    expect(first.status).toBe(200);
+    expect(first.body.source).toBe("estimated");
+
+    const callsAfterFirst = fetchSpy.mock.calls.length;
+    // Both station-list lookups (heights + currents) hit NOAA once each.
+    expect(callsAfterFirst).toBe(2);
+
+    // A burst of follow-up requests should NOT re-hit NOAA while the
+    // negative-cache window is open — they short-circuit to estimates.
+    for (let i = 0; i < 5; i++) {
+      const res = await request(app).get(
+        "/tidal?lat=55.33&lon=-131.63&datetime=2026-05-25T03:00:00Z",
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.source).toBe("estimated");
+    }
+    expect(fetchSpy.mock.calls.length).toBe(callsAfterFirst);
+  });
+
+  it("falls back to the previously cached station list when NOAA later fails", async () => {
+    const station = {
+      id: "9450460",
+      name: "Ketchikan",
+      lat: 55.33,
+      lng: -131.63,
+    };
+    // First request: NOAA is healthy and returns a real station list for
+    // heights; currents list is empty; hi/lo predictions succeed.
+    fetchSpy
+      .mockResolvedValueOnce(jsonResponse({ stations: [station] }))
+      .mockResolvedValueOnce(jsonResponse({ stations: [] }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          predictions: [
+            { t: "2026-05-25 00:00", v: "2.0", type: "H" },
+            { t: "2026-05-25 06:00", v: "0.2", type: "L" },
+            { t: "2026-05-25 12:00", v: "2.1", type: "H" },
+            { t: "2026-05-25 18:00", v: "0.1", type: "L" },
+          ],
+        }),
+      );
+
+    const app = makeApp();
+    const warm = await request(app).get(
+      `/tidal?lat=${station.lat}&lon=${station.lng}&datetime=2026-05-25T03:00:00Z`,
+    );
+    expect(warm.status).toBe(200);
+    expect(warm.body.heightsStation).toEqual({ id: station.id, name: station.name });
+
+    // Expire the good cache so getStationList re-fetches, but make the
+    // upstream fail — we should still get the previously cached station.
+    __clearHighLowEventsCacheForTests();
+    // Simulate cache expiry by advancing the clock past the 24h TTL.
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(Date.now() + 25 * 60 * 60 * 1000); // > 24h TTL
+
+      fetchSpy.mockReset();
+      fetchSpy
+        .mockRejectedValueOnce(new Error("NOAA outage")) // heights list refetch
+        .mockRejectedValueOnce(new Error("NOAA outage")) // currents list refetch
+        .mockResolvedValue(
+          jsonResponse({
+            predictions: [
+              { t: "2026-05-26 00:00", v: "2.0", type: "H" },
+              { t: "2026-05-26 06:00", v: "0.2", type: "L" },
+            ],
+          }),
+        );
+
+      const stale = await request(app).get(
+        `/tidal?lat=${station.lat}&lon=${station.lng}&datetime=2026-05-26T03:00:00Z`,
+      );
+      expect(stale.status).toBe(200);
+      // Even though NOAA refused to refresh the station list, the previous
+      // good cache is reused so heights still resolves to the real station.
+      expect(stale.body.heightsStation).toEqual({ id: station.id, name: station.name });
+
+      // Count how many fetch calls the first stale request consumed
+      // (two station-list refetches + at least one prediction call).
+      const upstreamCallsAfterStale = fetchSpy.mock.calls.filter((c) =>
+        String(c[0]).includes("/mdapi/prod/webapi/stations.json"),
+      ).length;
+      expect(upstreamCallsAfterStale).toBe(2);
+
+      // A burst of follow-up requests during the 60s failure window must
+      // NOT re-hit the NOAA station-list endpoint — they should serve
+      // the stale cache immediately instead of paying another 8s timeout.
+      for (let i = 0; i < 5; i++) {
+        const res = await request(app).get(
+          `/tidal?lat=${station.lat}&lon=${station.lng}&datetime=2026-05-26T03:00:00Z`,
+        );
+        expect(res.status).toBe(200);
+        expect(res.body.heightsStation).toEqual({ id: station.id, name: station.name });
+      }
+      const stationListCalls = fetchSpy.mock.calls.filter((c) =>
+        String(c[0]).includes("/mdapi/prod/webapi/stations.json"),
+      ).length;
+      expect(stationListCalls).toBe(upstreamCallsAfterStale);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("returns 503 from the admin refresh endpoint when TIDAL_ADMIN_TOKEN is unset", async () => {
     delete process.env["TIDAL_ADMIN_TOKEN"];
     const res = await request(makeApp())
