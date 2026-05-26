@@ -74,11 +74,18 @@ interface BundledCollection {
   };
 }
 
-type BundledOut = Record<string, BundledCollection>;
+type BundledDatasets = Record<string, BundledCollection>;
 
-const BUNDLE: BundledOut = JSON.parse(
-  readFileSync(resolve(__dirname, "txFreshwaterEfhData.gen.json"), "utf8"),
-) as BundledOut;
+interface BundledOut {
+  datasets: BundledDatasets;
+  metadata: { generatorHash: string };
+}
+
+const BUNDLE: BundledDatasets = (
+  JSON.parse(
+    readFileSync(resolve(__dirname, "txFreshwaterEfhData.gen.json"), "utf8"),
+  ) as BundledOut
+).datasets;
 
 /**
  * The shared EfhFeature geometry is `{ type: "Polygon"; coordinates: number[][][] }`,

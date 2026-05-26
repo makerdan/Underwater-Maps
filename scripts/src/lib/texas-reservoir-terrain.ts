@@ -39,8 +39,18 @@
  *     sources were probed and why each one succeeded or failed.
  */
 
-import { writeFileSync, mkdirSync, statSync } from "node:fs";
+import { writeFileSync, mkdirSync, statSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname } from "node:path";
+
+/** SHA-256 hex digest over the concatenated bytes of every builder source
+ *  file listed in `paths`. Order matters; pass paths in a stable order
+ *  (wrapper first, shared module second) so the digest is reproducible. */
+function computeGeneratorHash(paths: string[]): string {
+  const h = createHash("sha256");
+  for (const p of paths) h.update(readFileSync(p));
+  return h.digest("hex");
+}
 
 // ---------------------------------------------------------------------------
 // Public spec / output types
@@ -78,6 +88,12 @@ export interface BundledTerrain {
   poolElevationM: number;
   bathymetry: LayerProvenance;
   topographyProvenance: LayerProvenance;
+  /** Drift-check metadata. `generatorHash` is a SHA-256 of the
+   *  concatenated source bytes of the builder script(s) listed in
+   *  `ReservoirSpec.builderSrcPaths`. A unit test in api-server
+   *  recomputes the hash and fails if the bundle was produced by a
+   *  different version of the builder, surfacing stale bundles. */
+  metadata?: { generatorHash: string };
 }
 
 export interface ReservoirSpec {
@@ -109,6 +125,12 @@ export interface ReservoirSpec {
    *  against picking small adjacent ponds. Reservoir-class waterbodies
    *  used here are all > 20 km². */
   minWaterbodyAreaSqkm: number;
+  /** Absolute paths to the builder source files whose SHA-256 should be
+   *  embedded in the bundle's `metadata.generatorHash`. Include the
+   *  thin spec wrapper *and* this shared module so an edit to either
+   *  invalidates the recorded hash and trips the drift-check unit test
+   *  in api-server. Omit to skip embedding (legacy callers). */
+  builderSrcPaths?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -807,6 +829,9 @@ export async function buildReservoirTerrainBundle(
     poolElevationM: spec.poolElevationM,
     bathymetry: bathyProvenance,
     topographyProvenance: topoProvenance,
+    ...(spec.builderSrcPaths && spec.builderSrcPaths.length > 0
+      ? { metadata: { generatorHash: computeGeneratorHash(spec.builderSrcPaths) } }
+      : {}),
   };
 
   mkdirSync(dirname(spec.outPath), { recursive: true });

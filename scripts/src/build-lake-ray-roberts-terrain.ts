@@ -23,6 +23,23 @@
  *   pnpm --filter @workspace/scripts run build-lake-ray-roberts-terrain
  *
  * Scheduled refresh — see scripts/SCHEDULED-RAY-ROBERTS-REFRESH.md.
+ *
+ * ---------------------------------------------------------------------------
+ * Generator-hash drift check
+ * ---------------------------------------------------------------------------
+ * The bundle's `metadata.generatorHash` is a SHA-256 over the
+ * concatenated source bytes of this wrapper *and* the shared module in
+ * `lib/texas-reservoir-terrain.ts`. A unit test in `artifacts/api-server`
+ * recomputes the hash on every test run and fails — with a clear
+ * "re-run the builder" message — whenever the committed JSON was
+ * produced by a different version of either file. That flags stale
+ * bundles whenever the wrapper's spec, the shared pipeline, or any
+ * upstream service URL changes without the JSON being regenerated. If
+ * the test fails, refresh the bundle with:
+ *
+ *   pnpm --filter @workspace/scripts run build-lake-ray-roberts-terrain
+ *
+ * and commit the regenerated JSON alongside the builder-source change.
  */
 
 import { resolve, dirname } from "node:path";
@@ -32,7 +49,8 @@ import {
   type ReservoirSpec,
 } from "./lib/texas-reservoir-terrain.js";
 
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(__dirname, "../..");
 const OUT_PATH = resolve(
   REPO_ROOT,
   "artifacts/api-server/src/lib/lakeRayRobertsTerrain.gen.json",
@@ -56,6 +74,13 @@ const SPEC: ReservoirSpec = {
   usaceDistrict: "Fort Worth District",
   usaceDistrictUrl: "https://www.swf.usace.army.mil/",
   minWaterbodyAreaSqkm: 20,
+  // Drift-check sources: hash this wrapper + the shared pipeline so any
+  // edit to either file invalidates the recorded generatorHash and trips
+  // the unit test in api-server.
+  builderSrcPaths: [
+    fileURLToPath(import.meta.url),
+    resolve(__dirname, "lib/texas-reservoir-terrain.ts"),
+  ],
 };
 
 export const RAY_ROBERTS_TERRAIN_OUT_PATH = OUT_PATH;

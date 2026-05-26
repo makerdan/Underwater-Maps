@@ -23,8 +23,12 @@ const REPO_ROOT = resolve(__dirname, "../../../..");
 interface BundleCase {
   /** Short name used in test descriptions. */
   name: string;
-  /** Builder source whose SHA-256 is the source of truth. */
-  builderPath: string;
+  /** Builder source(s) whose SHA-256 is the source of truth. When more
+   *  than one path is given, the digest is computed over the
+   *  concatenation in array order — used when a thin spec wrapper
+   *  delegates to a shared pipeline module and we want either file's
+   *  edits to trip the drift check. */
+  builderPath: string | string[];
   /** Generated JSON bundle to verify. */
   bundlePath: string;
   /** pnpm script the operator should run to refresh the bundle. */
@@ -58,19 +62,43 @@ const CASES: BundleCase[] = [
     refreshCommand:
       "pnpm --filter @workspace/scripts run build-tx-lake-substrate",
   },
+  {
+    name: "Lake Ray Roberts terrain (lakeRayRobertsTerrain.gen.json)",
+    // Thin wrapper delegates to the shared Texas-reservoir pipeline; hash
+    // both so an edit to either trips the drift check.
+    builderPath: [
+      "scripts/src/build-lake-ray-roberts-terrain.ts",
+      "scripts/src/lib/texas-reservoir-terrain.ts",
+    ],
+    bundlePath: "artifacts/api-server/src/lib/lakeRayRobertsTerrain.gen.json",
+    refreshCommand:
+      "pnpm --filter @workspace/scripts run build-lake-ray-roberts-terrain",
+  },
+  {
+    name: "TX freshwater EFH (txFreshwaterEfhData.gen.json)",
+    builderPath: "scripts/src/build-tx-freshwater-efh.ts",
+    bundlePath: "artifacts/api-server/src/lib/txFreshwaterEfhData.gen.json",
+    refreshCommand:
+      "pnpm --filter @workspace/scripts run build-tx-freshwater-efh",
+  },
 ];
 
-function sha256File(path: string): string {
-  return createHash("sha256").update(readFileSync(path)).digest("hex");
+function sha256Files(paths: string[]): string {
+  const h = createHash("sha256");
+  for (const p of paths) h.update(readFileSync(p));
+  return h.digest("hex");
 }
 
 describe("substrate bundle generator hashes", () => {
   for (const c of CASES) {
     it(`${c.name} matches its builder source SHA-256`, () => {
-      const builderAbs = resolve(REPO_ROOT, c.builderPath);
+      const builderPaths = Array.isArray(c.builderPath)
+        ? c.builderPath
+        : [c.builderPath];
+      const builderAbs = builderPaths.map((p) => resolve(REPO_ROOT, p));
       const bundleAbs = resolve(REPO_ROOT, c.bundlePath);
 
-      const expected = sha256File(builderAbs);
+      const expected = sha256Files(builderAbs);
       const bundle = JSON.parse(readFileSync(bundleAbs, "utf8")) as {
         metadata?: { generatorHash?: unknown };
       };
@@ -79,7 +107,7 @@ describe("substrate bundle generator hashes", () => {
       if (recorded !== expected) {
         throw new Error(
           `Generator-hash drift for ${c.bundlePath}: ` +
-            `bundle records "${String(recorded)}" but ${c.builderPath} ` +
+            `bundle records "${String(recorded)}" but ${builderPaths.join(" + ")} ` +
             `currently hashes to "${expected}". ` +
             `Re-run the builder to refresh the bundle: ${c.refreshCommand}`,
         );

@@ -25,11 +25,24 @@
  *
  * Usage:
  *   pnpm --filter @workspace/scripts run build-tx-freshwater-efh
+ *
+ * Generator-hash drift check:
+ *   The bundle's top-level `metadata.generatorHash` is a SHA-256 of this
+ *   source file. A unit test in `artifacts/api-server` recomputes the
+ *   hash on every test run and fails — with a clear "re-run the builder"
+ *   message — whenever the committed JSON was produced by a different
+ *   version of this script. That flags stale bundles whenever the
+ *   builder logic, lake catalogue, or curated species templates change
+ *   without the JSON being regenerated. If the test fails, run the
+ *   command above and commit the refreshed JSON.
  */
 
-import { writeFileSync } from "node:fs";
+import { writeFileSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+const BUILDER_SRC_PATH = fileURLToPath(import.meta.url);
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -37,6 +50,13 @@ export const OUT_PATH = resolve(
   REPO_ROOT,
   "artifacts/api-server/src/lib/txFreshwaterEfhData.gen.json",
 );
+
+/** SHA-256 hex digest of the builder source file. Computed at runtime so
+ *  any edit to this script changes the hash and therefore the bundle. */
+function computeGeneratorHash(): string {
+  const src = readFileSync(BUILDER_SRC_PATH);
+  return createHash("sha256").update(src).digest("hex");
+}
 
 const TPWD_SERVICE =
   "https://services1.arcgis.com/1mtXwieMId59thmg/arcgis/rest/services/Texas_Fish_Habitat_Structures_20221206/FeatureServer/1";
@@ -186,7 +206,18 @@ interface BundledCollection {
   };
 }
 
-type BundledOut = Record<string, BundledCollection>;
+type BundledDatasets = Record<string, BundledCollection>;
+
+interface BundledOut {
+  datasets: BundledDatasets;
+  metadata: {
+    /** SHA-256 of the builder source file (`build-tx-freshwater-efh.ts`),
+     *  recorded so consumers can detect a stale bundle when the builder
+     *  logic, lake catalogue, or curated species templates change without
+     *  the JSON being regenerated. Validated by a unit test in api-server. */
+    generatorHash: string;
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Geometry helpers (lon/lat, equirectangular at the lake's latitude)
@@ -1025,13 +1056,17 @@ async function buildLake(spec: LakeSpec): Promise<BundledCollection> {
 
 export async function main(): Promise<void> {
   console.log("=== build-tx-freshwater-efh ===");
-  const out: BundledOut = {};
+  const datasets: BundledDatasets = {};
   for (const spec of LAKES) {
-    out[spec.datasetId] = await buildLake(spec);
+    datasets[spec.datasetId] = await buildLake(spec);
   }
+  const out: BundledOut = {
+    datasets,
+    metadata: { generatorHash: computeGeneratorHash() },
+  };
   writeFileSync(OUT_PATH, JSON.stringify(out, null, 2));
   console.log(`\nWrote ${OUT_PATH}`);
-  for (const [id, c] of Object.entries(out)) {
+  for (const [id, c] of Object.entries(datasets)) {
     console.log(`  ${id}: ${c.features.length} feature(s)`);
   }
 }
