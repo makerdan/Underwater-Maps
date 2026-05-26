@@ -3,9 +3,16 @@
  *
  * Opened from DatasetPanel's "Import GPS…" button. Lets the user pick a
  * .gpx/.kml/.kmz/.csv file, previews how many points fall inside the active
- * dataset's bounding box, lets them pick a marker type and/or a trolling
- * preset name, and on confirm calls POST /api/markers per waypoint and
- * POST /api/trolling-presets per route.
+ * dataset's bounding box (with a small in-dialog map so they can see the
+ * filtering visually), and lets them edit the import before committing:
+ *
+ *   • rename routes / remove individual waypoints from each route
+ *   • remove individual standalone waypoints
+ *   • pick the marker type that waypoints will become
+ *   • override the default heading / speed assigned to imported routes
+ *
+ * On confirm it calls POST /api/markers per surviving waypoint and
+ * POST /api/trolling-presets per surviving route.
  *
  * Hard limits:
  *   • MAX_IMPORT_POINTS (5000) total points per file (enforced in parseGpsFile)
@@ -28,6 +35,7 @@ import {
   partitionByBounds,
   countPoints,
   isInBounds,
+  type Bounds,
   type ParseResult,
   type ParsedRoute,
 } from "@/lib/gpsImport";
@@ -44,6 +52,13 @@ const MARKER_LABEL_MAX = 60;
 const MARKER_NOTES_MAX = 500;
 const TROLLING_NAME_MAX = 80;
 
+const DEFAULT_HEADING_DEG = 0;
+const DEFAULT_SPEED_KNOTS = 2.5;
+const HEADING_MIN = 0;
+const HEADING_MAX = 360;
+const SPEED_MIN = 0;
+const SPEED_MAX = 10;
+
 interface Props {
   terrain: TerrainData;
   onClose: () => void;
@@ -55,8 +70,10 @@ type Phase =
   | {
       kind: "preview";
       fileName: string;
+      /** Editable, bounds-filtered import payload. */
       parsed: ParseResult;
-      insideCount: number;
+      /** Original parsed file, used by the preview map to show outside-bounds points. */
+      original: ParseResult;
       outsideWp: number;
       outsideRoutes: number;
       outsideRoutePoints: number;
@@ -84,6 +101,11 @@ function sanitize(s: string): string {
   return s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
 }
 
+function clampNumber(n: number, lo: number, hi: number): number {
+  if (!Number.isFinite(n)) return lo;
+  return Math.max(lo, Math.min(hi, n));
+}
+
 export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -102,9 +124,11 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   );
   const [importWaypoints, setImportWaypoints] = useState(true);
   const [importRoutes, setImportRoutes] = useState(true);
+  const [headingDeg, setHeadingDeg] = useState<number>(DEFAULT_HEADING_DEG);
+  const [speedKnots, setSpeedKnots] = useState<number>(DEFAULT_SPEED_KNOTS);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const bounds = useMemo(
+  const bounds = useMemo<Bounds>(
     () => ({
       minLon: terrain.minLon,
       minLat: terrain.minLat,
@@ -124,7 +148,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
           kind: "preview",
           fileName: file.name,
           parsed: part.inside,
-          insideCount: countPoints(part.inside),
+          original: result,
           outsideWp: part.outsideWaypoints,
           outsideRoutes: part.outsideRoutes,
           outsideRoutePoints: part.outsideRoutePoints,
@@ -132,6 +156,9 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
         // Default checkboxes to whichever the file actually contains.
         setImportWaypoints(part.inside.waypoints.length > 0);
         setImportRoutes(part.inside.routes.length > 0);
+        // Reset heading/speed to dialog defaults on each new file.
+        setHeadingDeg(DEFAULT_HEADING_DEG);
+        setSpeedKnots(DEFAULT_SPEED_KNOTS);
       } catch (err) {
         setPhase({
           kind: "error",
@@ -149,11 +176,73 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     e.target.value = "";
   };
 
+  /** Apply an in-place edit to the editable `parsed` payload in preview phase. */
+  const updateParsed = useCallback((mut: (p: ParseResult) => ParseResult) => {
+    setPhase((prev) => {
+      if (prev.kind !== "preview") return prev;
+      return { ...prev, parsed: mut(prev.parsed) };
+    });
+  }, []);
+
+  const removeWaypoint = useCallback(
+    (idx: number) => {
+      updateParsed((p) => ({
+        ...p,
+        waypoints: p.waypoints.filter((_, i) => i !== idx),
+      }));
+    },
+    [updateParsed],
+  );
+
+  const renameRoute = useCallback(
+    (idx: number, name: string) => {
+      updateParsed((p) => ({
+        ...p,
+        routes: p.routes.map((r, i) => (i === idx ? { ...r, name } : r)),
+      }));
+    },
+    [updateParsed],
+  );
+
+  const removeRoutePoint = useCallback(
+    (routeIdx: number, pointIdx: number) => {
+      updateParsed((p) => ({
+        ...p,
+        routes: p.routes.map((r, i) =>
+          i === routeIdx
+            ? { ...r, points: r.points.filter((_, j) => j !== pointIdx) }
+            : r,
+        ),
+      }));
+    },
+    [updateParsed],
+  );
+
+  const removeRoute = useCallback(
+    (idx: number) => {
+      updateParsed((p) => ({
+        ...p,
+        routes: p.routes.filter((_, i) => i !== idx),
+      }));
+    },
+    [updateParsed],
+  );
+
   const doImport = useCallback(async () => {
     if (phase.kind !== "preview") return;
     const { parsed } = phase;
+
+    // Routes that have been edited down to <2 points can't be imported as
+    // trolling presets; surface that early rather than silently skipping.
+    const importableRoutes = importRoutes
+      ? parsed.routes.filter((r) => r.points.length >= 2)
+      : [];
+    const tooShortRoutes = importRoutes
+      ? parsed.routes.length - importableRoutes.length
+      : 0;
+
     const wpToImport = importWaypoints ? parsed.waypoints : [];
-    const routesToImport: ParsedRoute[] = importRoutes ? parsed.routes : [];
+    const routesToImport: ParsedRoute[] = importableRoutes;
 
     setPhase({ kind: "importing" });
 
@@ -185,15 +274,15 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     let presetsOk = 0;
     let presetsFail = 0;
     let downsampled = 0;
+    const safeHeading = clampNumber(headingDeg, HEADING_MIN, HEADING_MAX);
+    const safeSpeed = clampNumber(speedKnots, SPEED_MIN, SPEED_MAX);
     for (const r of routesToImport) {
-      // `routesToImport` already comes from partitionByBounds which trims
-      // out-of-bounds points and drops routes with <2 surviving points, so
-      // these are guaranteed in-bounds. We re-assert here as a defence in
-      // depth: no off-map coordinate may ever reach the API.
+      // `routesToImport` originates from partitionByBounds which trims
+      // out-of-bounds points and drops routes with <2 surviving points; the
+      // user can also edit waypoints out in the dialog. We re-assert in-bounds
+      // here as defence in depth: no off-map coordinate may reach the API.
       let pts = r.points.filter((p) => isInBounds(p.lon, p.lat, bounds));
       if (pts.length < 2) {
-        // Should be unreachable given the partition contract, but skip
-        // rather than fall back to the raw (potentially off-map) sequence.
         presetsFail++;
         continue;
       }
@@ -205,9 +294,8 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
         await postTrollingPresets.mutateAsync({
           data: {
             name: sanitize(clamp(r.name || "Imported route", TROLLING_NAME_MAX)) || "Imported route",
-            // Sensible defaults — user can edit afterwards in the trolling UI.
-            headingDeg: 0,
-            speedKnots: 2.5,
+            headingDeg: safeHeading,
+            speedKnots: safeSpeed,
             waypoints: pts.map((p) => ({ lon: p.lon, lat: p.lat })),
           },
         });
@@ -230,7 +318,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     const parts: string[] = [];
     if (markersOk) parts.push(`${markersOk} marker${markersOk === 1 ? "" : "s"}`);
     if (presetsOk) parts.push(`${presetsOk} trolling preset${presetsOk === 1 ? "" : "s"}`);
-    const failTotal = markersFail + presetsFail;
+    const failTotal = markersFail + presetsFail + tooShortRoutes;
 
     if (parts.length === 0) {
       toast({
@@ -249,14 +337,35 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
         `${downsampled} route${downsampled === 1 ? "" : "s"} downsampled to ${TROLLING_PRESET_WAYPOINTS_MAX} waypoints.`,
       );
     }
-    if (failTotal > 0) desc.push(`${failTotal} item(s) failed.`);
+    if (tooShortRoutes > 0) {
+      desc.push(
+        `${tooShortRoutes} route${tooShortRoutes === 1 ? "" : "s"} skipped (fewer than 2 waypoints).`,
+      );
+    }
+    if (failTotal - tooShortRoutes > 0) {
+      desc.push(`${failTotal - tooShortRoutes} item(s) failed.`);
+    }
 
     toast({
       title: "GPS import complete",
       description: desc.join(" "),
     });
     onClose();
-  }, [phase, importWaypoints, importRoutes, postMarkers, postTrollingPresets, qc, terrain.datasetId, markerType, bounds, toast, onClose]);
+  }, [
+    phase,
+    importWaypoints,
+    importRoutes,
+    headingDeg,
+    speedKnots,
+    postMarkers,
+    postTrollingPresets,
+    qc,
+    terrain.datasetId,
+    markerType,
+    bounds,
+    toast,
+    onClose,
+  ]);
 
   const body = (
     <div
@@ -282,7 +391,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     >
       <div
         style={{
-          width: 460,
+          width: 520,
           maxWidth: "92vw",
           maxHeight: "86vh",
           overflow: "auto",
@@ -364,126 +473,27 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
           )}
 
           {phase.kind === "preview" && (
-            <>
-              <div style={{ marginBottom: 10, color: "#94a3b8" }}>
-                <strong style={{ color: "#cbd5e1" }}>{phase.fileName}</strong>
-              </div>
-              <div
-                data-testid="gps-import-summary"
-                style={{
-                  padding: "10px 12px",
-                  background: "rgba(0,229,255,0.04)",
-                  border: "1px solid rgba(0,229,255,0.15)",
-                  borderRadius: 4,
-                  marginBottom: 12,
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 6,
-                  fontSize: 10,
-                }}
-              >
-                <div>
-                  <div style={{ color: "#64748b" }}>Waypoints (in bounds)</div>
-                  <div style={{ color: "#cbd5e1", fontSize: 13 }} data-testid="gps-import-waypoint-count">
-                    {phase.parsed.waypoints.length}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ color: "#64748b" }}>Routes / Tracks</div>
-                  <div style={{ color: "#cbd5e1", fontSize: 13 }} data-testid="gps-import-route-count">
-                    {phase.parsed.routes.length}
-                  </div>
-                </div>
-                {(phase.outsideWp > 0 ||
-                  phase.outsideRoutes > 0 ||
-                  phase.outsideRoutePoints > 0) && (
-                  <div
-                    style={{ gridColumn: "1 / -1", color: "#fbbf24", fontSize: 10 }}
-                    data-testid="gps-import-skipped"
-                  >
-                    Skipped {phase.outsideWp} waypoint
-                    {phase.outsideWp === 1 ? "" : "s"},{" "}
-                    {phase.outsideRoutePoints} route point
-                    {phase.outsideRoutePoints === 1 ? "" : "s"}, and{" "}
-                    {phase.outsideRoutes} fully-out-of-bounds route
-                    {phase.outsideRoutes === 1 ? "" : "s"}.
-                  </div>
-                )}
-              </div>
-
-              {phase.parsed.waypoints.length > 0 && (
-                <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={importWaypoints}
-                    onChange={(e) => setImportWaypoints(e.target.checked)}
-                    data-testid="gps-import-toggle-waypoints"
-                  />
-                  Import {phase.parsed.waypoints.length} waypoint
-                  {phase.parsed.waypoints.length === 1 ? "" : "s"} as markers
-                </label>
-              )}
-
-              {phase.parsed.waypoints.length > 0 && importWaypoints && (
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 9, color: "#64748b", marginBottom: 4, letterSpacing: "0.12em" }}>
-                    MARKER TYPE
-                  </div>
-                  <select
-                    value={markerType}
-                    onChange={(e) => setMarkerType(e.target.value as MarkerTypeValue)}
-                    data-testid="gps-import-marker-type"
-                    style={{
-                      width: "100%",
-                      padding: "5px 6px",
-                      background: "rgba(2,8,24,0.6)",
-                      border: "1px solid rgba(0,229,255,0.2)",
-                      borderRadius: 3,
-                      color: "#cbd5e1",
-                      fontFamily: "inherit",
-                      fontSize: 11,
-                    }}
-                  >
-                    {markerTypes.map((t) => (
-                      <option key={t.value} value={t.value}>
-                        {t.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {phase.parsed.routes.length > 0 && (
-                <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                  <input
-                    type="checkbox"
-                    checked={importRoutes}
-                    onChange={(e) => setImportRoutes(e.target.checked)}
-                    data-testid="gps-import-toggle-routes"
-                  />
-                  Import {phase.parsed.routes.length} route
-                  {phase.parsed.routes.length === 1 ? "" : "s"} as trolling preset
-                  {phase.parsed.routes.length === 1 ? "" : "s"}
-                </label>
-              )}
-
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-                <button onClick={onClose} style={btnStyle("ghost")}>
-                  Cancel
-                </button>
-                <button
-                  onClick={() => void doImport()}
-                  data-testid="gps-import-confirm"
-                  disabled={
-                    (!importWaypoints || phase.parsed.waypoints.length === 0) &&
-                    (!importRoutes || phase.parsed.routes.length === 0)
-                  }
-                  style={btnStyle("primary")}
-                >
-                  Import
-                </button>
-              </div>
-            </>
+            <PreviewPanel
+              phase={phase}
+              bounds={bounds}
+              importWaypoints={importWaypoints}
+              setImportWaypoints={setImportWaypoints}
+              importRoutes={importRoutes}
+              setImportRoutes={setImportRoutes}
+              markerType={markerType}
+              setMarkerType={setMarkerType}
+              markerTypes={markerTypes}
+              headingDeg={headingDeg}
+              setHeadingDeg={setHeadingDeg}
+              speedKnots={speedKnots}
+              setSpeedKnots={setSpeedKnots}
+              removeWaypoint={removeWaypoint}
+              renameRoute={renameRoute}
+              removeRoutePoint={removeRoutePoint}
+              removeRoute={removeRoute}
+              onCancel={onClose}
+              onConfirm={() => void doImport()}
+            />
           )}
 
           {phase.kind === "importing" && (
@@ -497,6 +507,646 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   );
 
   return createPortal(body, document.body);
+};
+
+// ---------------------------------------------------------------------------
+// Preview panel (extracted so the dialog body stays readable)
+// ---------------------------------------------------------------------------
+
+interface PreviewPanelProps {
+  phase: Extract<Phase, { kind: "preview" }>;
+  bounds: Bounds;
+  importWaypoints: boolean;
+  setImportWaypoints: (v: boolean) => void;
+  importRoutes: boolean;
+  setImportRoutes: (v: boolean) => void;
+  markerType: MarkerTypeValue;
+  setMarkerType: (v: MarkerTypeValue) => void;
+  markerTypes: ReadonlyArray<{ value: string; label: string }>;
+  headingDeg: number;
+  setHeadingDeg: (v: number) => void;
+  speedKnots: number;
+  setSpeedKnots: (v: number) => void;
+  removeWaypoint: (idx: number) => void;
+  renameRoute: (idx: number, name: string) => void;
+  removeRoutePoint: (routeIdx: number, pointIdx: number) => void;
+  removeRoute: (idx: number) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
+const PreviewPanel: React.FC<PreviewPanelProps> = ({
+  phase,
+  bounds,
+  importWaypoints,
+  setImportWaypoints,
+  importRoutes,
+  setImportRoutes,
+  markerType,
+  setMarkerType,
+  markerTypes,
+  headingDeg,
+  setHeadingDeg,
+  speedKnots,
+  setSpeedKnots,
+  removeWaypoint,
+  renameRoute,
+  removeRoutePoint,
+  removeRoute,
+  onCancel,
+  onConfirm,
+}) => {
+  const { parsed, original } = phase;
+  const insideWpCount = parsed.waypoints.length;
+  const insideRouteCount = parsed.routes.length;
+  const totalInside = countPoints(parsed);
+  const shortRoutes = parsed.routes.filter((r) => r.points.length < 2).length;
+
+  const importDisabled =
+    (!importWaypoints || insideWpCount === 0) &&
+    (!importRoutes || insideRouteCount === 0 || insideRouteCount === shortRoutes);
+
+  return (
+    <>
+      <div style={{ marginBottom: 10, color: "#94a3b8" }}>
+        <strong style={{ color: "#cbd5e1" }}>{phase.fileName}</strong>
+      </div>
+
+      <PreviewMap original={original} bounds={bounds} />
+
+      <div
+        data-testid="gps-import-summary"
+        style={{
+          padding: "10px 12px",
+          background: "rgba(0,229,255,0.04)",
+          border: "1px solid rgba(0,229,255,0.15)",
+          borderRadius: 4,
+          margin: "10px 0 12px",
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          gap: 6,
+          fontSize: 10,
+        }}
+      >
+        <div>
+          <div style={{ color: "#64748b" }}>Waypoints (in bounds)</div>
+          <div style={{ color: "#cbd5e1", fontSize: 13 }} data-testid="gps-import-waypoint-count">
+            {insideWpCount}
+          </div>
+        </div>
+        <div>
+          <div style={{ color: "#64748b" }}>Routes / Tracks</div>
+          <div style={{ color: "#cbd5e1", fontSize: 13 }} data-testid="gps-import-route-count">
+            {insideRouteCount}
+          </div>
+        </div>
+        <div>
+          <div style={{ color: "#64748b" }}>Total points</div>
+          <div style={{ color: "#cbd5e1", fontSize: 13 }}>{totalInside}</div>
+        </div>
+        {(phase.outsideWp > 0 ||
+          phase.outsideRoutes > 0 ||
+          phase.outsideRoutePoints > 0) && (
+          <div
+            style={{ gridColumn: "1 / -1", color: "#fbbf24", fontSize: 10 }}
+            data-testid="gps-import-skipped"
+          >
+            Skipped {phase.outsideWp} waypoint
+            {phase.outsideWp === 1 ? "" : "s"},{" "}
+            {phase.outsideRoutePoints} route point
+            {phase.outsideRoutePoints === 1 ? "" : "s"}, and{" "}
+            {phase.outsideRoutes} fully-out-of-bounds route
+            {phase.outsideRoutes === 1 ? "" : "s"}.
+          </div>
+        )}
+      </div>
+
+      {insideWpCount > 0 && (
+        <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <input
+            type="checkbox"
+            checked={importWaypoints}
+            onChange={(e) => setImportWaypoints(e.target.checked)}
+            data-testid="gps-import-toggle-waypoints"
+          />
+          Import {insideWpCount} waypoint
+          {insideWpCount === 1 ? "" : "s"} as markers
+        </label>
+      )}
+
+      {insideWpCount > 0 && importWaypoints && (
+        <>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 9, color: "#64748b", marginBottom: 4, letterSpacing: "0.12em" }}>
+              MARKER TYPE
+            </div>
+            <select
+              value={markerType}
+              onChange={(e) => setMarkerType(e.target.value as MarkerTypeValue)}
+              data-testid="gps-import-marker-type"
+              style={selectStyle}
+            >
+              {markerTypes.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <details
+            data-testid="gps-import-waypoints-editor"
+            style={{ marginBottom: 12 }}
+          >
+            <summary
+              style={{
+                cursor: "pointer",
+                color: "#94a3b8",
+                fontSize: 10,
+                letterSpacing: "0.1em",
+                marginBottom: 6,
+              }}
+            >
+              EDIT WAYPOINTS ({insideWpCount})
+            </summary>
+            <ul style={listStyle} data-testid="gps-import-waypoint-list">
+              {parsed.waypoints.map((w, i) => (
+                <li key={i} style={listItemStyle}>
+                  <span style={{ flex: 1, color: "#cbd5e1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {w.name || "(unnamed)"}
+                  </span>
+                  <span style={{ color: "#64748b", fontSize: 10 }}>
+                    {w.lat.toFixed(4)}, {w.lon.toFixed(4)}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={`Remove waypoint ${w.name || i + 1}`}
+                    data-testid={`gps-import-remove-waypoint-${i}`}
+                    onClick={() => removeWaypoint(i)}
+                    style={removeBtnStyle}
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </details>
+        </>
+      )}
+
+      {insideRouteCount > 0 && (
+        <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <input
+            type="checkbox"
+            checked={importRoutes}
+            onChange={(e) => setImportRoutes(e.target.checked)}
+            data-testid="gps-import-toggle-routes"
+          />
+          Import {insideRouteCount} route
+          {insideRouteCount === 1 ? "" : "s"} as trolling preset
+          {insideRouteCount === 1 ? "" : "s"}
+        </label>
+      )}
+
+      {insideRouteCount > 0 && importRoutes && (
+        <>
+          <div
+            data-testid="gps-import-default-vector"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 8,
+              marginBottom: 12,
+              padding: "8px 10px",
+              background: "rgba(0,229,255,0.04)",
+              border: "1px solid rgba(0,229,255,0.15)",
+              borderRadius: 4,
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 9, color: "#64748b", marginBottom: 4, letterSpacing: "0.12em" }}>
+                DEFAULT HEADING (°)
+              </div>
+              <input
+                type="number"
+                min={HEADING_MIN}
+                max={HEADING_MAX}
+                step={1}
+                value={Number.isFinite(headingDeg) ? headingDeg : ""}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  setHeadingDeg(Number.isFinite(v) ? clampNumber(v, HEADING_MIN, HEADING_MAX) : DEFAULT_HEADING_DEG);
+                }}
+                data-testid="gps-import-heading"
+                aria-label="Default heading in degrees"
+                style={numberInputStyle}
+              />
+            </div>
+            <div>
+              <div style={{ fontSize: 9, color: "#64748b", marginBottom: 4, letterSpacing: "0.12em" }}>
+                DEFAULT SPEED (KT)
+              </div>
+              <input
+                type="number"
+                min={SPEED_MIN}
+                max={SPEED_MAX}
+                step={0.1}
+                value={Number.isFinite(speedKnots) ? speedKnots : ""}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  setSpeedKnots(Number.isFinite(v) ? clampNumber(v, SPEED_MIN, SPEED_MAX) : DEFAULT_SPEED_KNOTS);
+                }}
+                data-testid="gps-import-speed"
+                aria-label="Default speed in knots"
+                style={numberInputStyle}
+              />
+            </div>
+            <div style={{ gridColumn: "1 / -1", fontSize: 9, color: "#64748b", lineHeight: 1.4 }}>
+              Applied to every imported route. You can fine-tune individual presets afterwards in the trolling UI.
+            </div>
+          </div>
+
+          <div data-testid="gps-import-routes-editor" style={{ marginBottom: 12 }}>
+            <div
+              style={{
+                fontSize: 9,
+                color: "#64748b",
+                letterSpacing: "0.1em",
+                marginBottom: 6,
+              }}
+            >
+              EDIT ROUTES ({insideRouteCount})
+            </div>
+            {parsed.routes.map((r, ri) => (
+              <RouteEditor
+                key={ri}
+                route={r}
+                index={ri}
+                renameRoute={renameRoute}
+                removeRoutePoint={removeRoutePoint}
+                removeRoute={removeRoute}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+        <button onClick={onCancel} style={btnStyle("ghost")}>
+          Cancel
+        </button>
+        <button
+          onClick={onConfirm}
+          data-testid="gps-import-confirm"
+          disabled={importDisabled}
+          style={btnStyle("primary")}
+        >
+          Import
+        </button>
+      </div>
+    </>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Per-route editor (rename + drop individual route points)
+// ---------------------------------------------------------------------------
+
+const RouteEditor: React.FC<{
+  route: ParsedRoute;
+  index: number;
+  renameRoute: (idx: number, name: string) => void;
+  removeRoutePoint: (routeIdx: number, pointIdx: number) => void;
+  removeRoute: (idx: number) => void;
+}> = ({ route, index, renameRoute, removeRoutePoint, removeRoute }) => {
+  const tooShort = route.points.length < 2;
+  return (
+    <details
+      data-testid={`gps-import-route-${index}`}
+      style={{
+        border: tooShort
+          ? "1px solid rgba(251,191,36,0.4)"
+          : "1px solid rgba(148,163,184,0.15)",
+        borderRadius: 4,
+        marginBottom: 6,
+        background: "rgba(15,23,42,0.4)",
+      }}
+    >
+      <summary
+        style={{
+          cursor: "pointer",
+          padding: "6px 8px",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        <input
+          type="text"
+          value={route.name}
+          onChange={(e) => renameRoute(index, e.target.value.slice(0, TROLLING_NAME_MAX))}
+          maxLength={TROLLING_NAME_MAX}
+          aria-label={`Route ${index + 1} name`}
+          data-testid={`gps-import-route-name-${index}`}
+          style={{
+            flex: 1,
+            padding: "4px 6px",
+            background: "rgba(2,8,24,0.6)",
+            border: "1px solid rgba(0,229,255,0.2)",
+            borderRadius: 3,
+            color: "#cbd5e1",
+            fontFamily: "inherit",
+            fontSize: 11,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        />
+        <span
+          style={{
+            color: tooShort ? "#fbbf24" : "#64748b",
+            fontSize: 10,
+            minWidth: 50,
+            textAlign: "right",
+          }}
+        >
+          {route.points.length} pt{route.points.length === 1 ? "" : "s"}
+        </span>
+        <button
+          type="button"
+          aria-label={`Remove route ${route.name || index + 1}`}
+          data-testid={`gps-import-remove-route-${index}`}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            removeRoute(index);
+          }}
+          style={removeBtnStyle}
+        >
+          ✕
+        </button>
+      </summary>
+      {tooShort && (
+        <div style={{ padding: "4px 10px", color: "#fbbf24", fontSize: 10 }}>
+          Fewer than 2 waypoints — this route will be skipped.
+        </div>
+      )}
+      <ul style={{ ...listStyle, margin: "4px 8px 8px" }} data-testid={`gps-import-route-points-${index}`}>
+        {route.points.map((p, pi) => (
+          <li key={pi} style={listItemStyle}>
+            <span style={{ flex: 1, color: "#cbd5e1", fontSize: 10 }}>
+              #{pi + 1}
+            </span>
+            <span style={{ color: "#64748b", fontSize: 10 }}>
+              {p.lat.toFixed(4)}, {p.lon.toFixed(4)}
+            </span>
+            <button
+              type="button"
+              aria-label={`Remove waypoint ${pi + 1} from route ${route.name || index + 1}`}
+              data-testid={`gps-import-remove-route-point-${index}-${pi}`}
+              onClick={() => removeRoutePoint(index, pi)}
+              style={removeBtnStyle}
+            >
+              ✕
+            </button>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Preview map (SVG; in-bounds = cyan, out-of-bounds = amber)
+// ---------------------------------------------------------------------------
+
+const MAP_WIDTH = 480;
+const MAP_HEIGHT = 180;
+const MAP_PAD = 6;
+
+interface PreviewMapProps {
+  original: ParseResult;
+  bounds: Bounds;
+}
+
+const PreviewMap: React.FC<PreviewMapProps> = ({ original, bounds }) => {
+  // Compute drawing bounds = dataset bbox union all points, with a 5% pad on
+  // each side so points right on the edge are visible.
+  const viewBox = useMemo(() => {
+    let minLon = bounds.minLon;
+    let maxLon = bounds.maxLon;
+    let minLat = bounds.minLat;
+    let maxLat = bounds.maxLat;
+    const visit = (lon: number, lat: number) => {
+      if (lon < minLon) minLon = lon;
+      if (lon > maxLon) maxLon = lon;
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+    };
+    for (const w of original.waypoints) visit(w.lon, w.lat);
+    for (const r of original.routes) for (const p of r.points) visit(p.lon, p.lat);
+    // Guard against degenerate bbox (all points colinear or single dataset).
+    if (maxLon - minLon < 1e-9) {
+      maxLon += 1e-4;
+      minLon -= 1e-4;
+    }
+    if (maxLat - minLat < 1e-9) {
+      maxLat += 1e-4;
+      minLat -= 1e-4;
+    }
+    const padLon = (maxLon - minLon) * 0.05;
+    const padLat = (maxLat - minLat) * 0.05;
+    return {
+      minLon: minLon - padLon,
+      maxLon: maxLon + padLon,
+      minLat: minLat - padLat,
+      maxLat: maxLat + padLat,
+    };
+  }, [original, bounds]);
+
+  const innerW = MAP_WIDTH - MAP_PAD * 2;
+  const innerH = MAP_HEIGHT - MAP_PAD * 2;
+  const lonSpan = viewBox.maxLon - viewBox.minLon;
+  const latSpan = viewBox.maxLat - viewBox.minLat;
+
+  const project = useCallback(
+    (lon: number, lat: number): [number, number] => {
+      const x = MAP_PAD + ((lon - viewBox.minLon) / lonSpan) * innerW;
+      // SVG Y grows downward; latitude grows upward → flip.
+      const y = MAP_PAD + (1 - (lat - viewBox.minLat) / latSpan) * innerH;
+      return [x, y];
+    },
+    [viewBox, lonSpan, latSpan, innerW, innerH],
+  );
+
+  const [bx1, by1] = project(bounds.minLon, bounds.maxLat);
+  const [bx2, by2] = project(bounds.maxLon, bounds.minLat);
+
+  const hasAnything =
+    original.waypoints.length > 0 ||
+    original.routes.some((r) => r.points.length > 0);
+
+  return (
+    <div data-testid="gps-import-preview-map">
+      <svg
+        width="100%"
+        viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
+        preserveAspectRatio="xMidYMid meet"
+        role="img"
+        aria-label="Preview of imported GPS points relative to the dataset bounds"
+        style={{
+          display: "block",
+          background: "rgba(2,8,24,0.7)",
+          border: "1px solid rgba(0,229,255,0.2)",
+          borderRadius: 4,
+        }}
+      >
+        <rect
+          x={bx1}
+          y={by1}
+          width={Math.max(0, bx2 - bx1)}
+          height={Math.max(0, by2 - by1)}
+          fill="rgba(0,229,255,0.06)"
+          stroke="rgba(0,229,255,0.6)"
+          strokeWidth={1}
+          strokeDasharray="3 3"
+        />
+
+        {original.routes.map((r, ri) => {
+          const segments: Array<{ d: string; inside: boolean }> = [];
+          for (let i = 1; i < r.points.length; i++) {
+            const a = r.points[i - 1]!;
+            const b = r.points[i]!;
+            const inside =
+              isInBounds(a.lon, a.lat, bounds) && isInBounds(b.lon, b.lat, bounds);
+            const [ax, ay] = project(a.lon, a.lat);
+            const [bxp, byp] = project(b.lon, b.lat);
+            segments.push({
+              d: `M${ax.toFixed(1)},${ay.toFixed(1)} L${bxp.toFixed(1)},${byp.toFixed(1)}`,
+              inside,
+            });
+          }
+          return (
+            <g key={`r${ri}`}>
+              {segments.map((s, si) => (
+                <path
+                  key={si}
+                  d={s.d}
+                  stroke={s.inside ? "#00e5ff" : "#fbbf24"}
+                  strokeWidth={1.4}
+                  fill="none"
+                  opacity={0.85}
+                />
+              ))}
+            </g>
+          );
+        })}
+
+        {original.waypoints.map((w, wi) => {
+          const inside = isInBounds(w.lon, w.lat, bounds);
+          const [x, y] = project(w.lon, w.lat);
+          return (
+            <circle
+              key={`w${wi}`}
+              cx={x}
+              cy={y}
+              r={2.5}
+              fill={inside ? "#00e5ff" : "#fbbf24"}
+              stroke="rgba(2,8,24,0.9)"
+              strokeWidth={0.5}
+            />
+          );
+        })}
+
+        {!hasAnything && (
+          <text
+            x={MAP_WIDTH / 2}
+            y={MAP_HEIGHT / 2}
+            textAnchor="middle"
+            fill="#475569"
+            fontSize={10}
+            fontFamily="inherit"
+          >
+            (no points)
+          </text>
+        )}
+      </svg>
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          justifyContent: "flex-end",
+          fontSize: 9,
+          color: "#64748b",
+          marginTop: 4,
+        }}
+      >
+        <span>
+          <span style={{ color: "#00e5ff" }}>●</span> in bounds
+        </span>
+        <span>
+          <span style={{ color: "#fbbf24" }}>●</span> outside (skipped)
+        </span>
+        <span>
+          <span style={{ color: "#00e5ff", letterSpacing: -1 }}>┄┄</span> dataset bbox
+        </span>
+      </div>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Shared styles
+// ---------------------------------------------------------------------------
+
+const selectStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "5px 6px",
+  background: "rgba(2,8,24,0.6)",
+  border: "1px solid rgba(0,229,255,0.2)",
+  borderRadius: 3,
+  color: "#cbd5e1",
+  fontFamily: "inherit",
+  fontSize: 11,
+};
+
+const numberInputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "5px 6px",
+  background: "rgba(2,8,24,0.6)",
+  border: "1px solid rgba(0,229,255,0.2)",
+  borderRadius: 3,
+  color: "#cbd5e1",
+  fontFamily: "inherit",
+  fontSize: 11,
+};
+
+const listStyle: React.CSSProperties = {
+  listStyle: "none",
+  padding: 0,
+  margin: 0,
+  maxHeight: 160,
+  overflowY: "auto",
+  border: "1px solid rgba(148,163,184,0.12)",
+  borderRadius: 3,
+};
+
+const listItemStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "4px 6px",
+  borderBottom: "1px solid rgba(148,163,184,0.06)",
+};
+
+const removeBtnStyle: React.CSSProperties = {
+  background: "transparent",
+  border: "1px solid rgba(148,163,184,0.25)",
+  borderRadius: 3,
+  color: "#94a3b8",
+  cursor: "pointer",
+  fontFamily: "inherit",
+  fontSize: 10,
+  padding: "2px 6px",
+  lineHeight: 1,
 };
 
 function btnStyle(variant: "primary" | "ghost"): React.CSSProperties {

@@ -459,3 +459,4 @@ describe("POST /api/poe/classify", () => {
     expect(res.body.zones).toHaveLength(1024);
     expect(fakeCreate).toHaveBeenCalledTimes(1);
   });
+});
