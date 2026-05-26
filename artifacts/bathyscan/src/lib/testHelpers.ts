@@ -305,7 +305,7 @@ export interface BathyTestApi {
   /**
    * Drive the production `processFlyWheel` logic against the test camera with
    * a synthesised WheelEvent shape. Applies any speed-tier change back to the
-   * production cameraStore (the same store the HUD SpeedDots subscribe to).
+   * production cameraStore (the same store fly-mode tier consumers read).
    */
   simulateFlyWheel: (deltaY: number, shiftKey: boolean) => void;
   /**

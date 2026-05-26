@@ -121,7 +121,6 @@ export interface SettingsState {
   hudOpacity: number;
   showCrosshairGps: boolean;
   showCameraPosition: boolean;
-  showSpeedIndicator: boolean;
   showHeading: boolean;
   showDepthLegend: boolean;
   showDepthScaleBar: boolean;
@@ -289,7 +288,6 @@ interface SettingsActions {
   setHudOpacity: (v: number) => void;
   setShowCrosshairGps: (v: boolean) => void;
   setShowCameraPosition: (v: boolean) => void;
-  setShowSpeedIndicator: (v: boolean) => void;
   setShowHeading: (v: boolean) => void;
   setShowDepthLegend: (v: boolean) => void;
   setShowDepthScaleBar: (v: boolean) => void;
@@ -512,7 +510,6 @@ export const DEFAULT_SETTINGS: SettingsState = {
   hudOpacity: 0.75,
   showCrosshairGps: true,
   showCameraPosition: true,
-  showSpeedIndicator: true,
   showHeading: true,
   showDepthLegend: true,
   showDepthScaleBar: true,
@@ -612,7 +609,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "showWaterSurface", "showLandmass", "landmassStyle",
   ],
   hud: [
-    "hudOpacity", "showCrosshairGps", "showCameraPosition", "showSpeedIndicator",
+    "hudOpacity", "showCrosshairGps", "showCameraPosition",
     "showHeading", "showDepthLegend", "showDepthScaleBar", "showCompassMinimap",
     "showControlsLegend", "showTidePanel", "showHabitatPanel", "showDatasetPanel",
     "showQueryPanel", "showUiTooltips", "timeFormat", "coordinateFormat", "depthUnit", "units",
@@ -725,7 +722,6 @@ export const useSettingsStore = create<SettingsStore>()(
         setHudOpacity: setter("hudOpacity"),
         setShowCrosshairGps: setter("showCrosshairGps"),
         setShowCameraPosition: setter("showCameraPosition"),
-        setShowSpeedIndicator: setter("showSpeedIndicator"),
         setShowHeading: setter("showHeading"),
         setShowDepthLegend: setter("showDepthLegend"),
         setShowDepthScaleBar: setter("showDepthScaleBar"),
@@ -906,6 +902,7 @@ export const useSettingsStore = create<SettingsStore>()(
         if (version < SETTINGS_SCHEMA_VERSION) {
           const prev = persisted as Partial<SettingsState> & {
             conditionsOverlayStyle?: ConditionsOverlayStyle;
+            showSpeedIndicator?: boolean;
           };
           // v5 → v6: split the single `conditionsOverlayStyle` into three
           // independent per-overlay keys, preserving the user's previous
@@ -919,9 +916,16 @@ export const useSettingsStore = create<SettingsStore>()(
                   currentOverlayStyle: legacyStyle,
                 }
               : {};
-          // Drop the obsolete key so it doesn't linger in persisted state.
-          const { conditionsOverlayStyle: _drop, ...rest } = prev;
+          // Drop obsolete keys so they don't linger in persisted state.
+          // v7 → v8: `showSpeedIndicator` was removed along with the HUD
+          // SPD panel.
+          const {
+            conditionsOverlayStyle: _drop,
+            showSpeedIndicator: _dropSpd,
+            ...rest
+          } = prev;
           void _drop;
+          void _dropSpd;
           return {
             ...DEFAULT_SETTINGS,
             ...rest,

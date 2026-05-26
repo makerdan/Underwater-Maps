@@ -49,7 +49,6 @@ vi.mock("@/lib/settingsStore", () => ({
     sel({
       showCrosshairGps: true,
       showCameraPosition: true,
-      showSpeedIndicator: true,
       showHeading: true,
       coordinateFormat: "decimal",
       depthUnit: "metres",

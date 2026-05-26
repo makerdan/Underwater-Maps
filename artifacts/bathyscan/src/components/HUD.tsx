@@ -1,5 +1,5 @@
 import React from "react";
-import { SPEEDS, useAppState } from "@/lib/context";
+import { useAppState } from "@/lib/context";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useUiStore } from "@/lib/uiStore";
@@ -8,8 +8,7 @@ import { useOfflineStore } from "@/lib/offlineStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useDriftStore } from "@/lib/driftStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
-import { mphToKnots } from "@/lib/boatSpeed";
-import { formatDepth, formatSpeed, formatTemperature } from "@/lib/units";
+import { formatDepth, formatTemperature } from "@/lib/units";
 import {
   estimateWaterTemperature,
   resolveTemperatureProfile,
@@ -97,26 +96,12 @@ function toDMS(decimal: number): string {
   return `${sign}${d}°${m}'${s}"`;
 }
 
-function SpeedDots({ index, total, activeStyle }: { index: number; total: number; activeStyle: React.CSSProperties }) {
-  return (
-    <span>
-      {Array.from({ length: total }).map((_, i) => (
-        <span key={i} style={i <= index ? activeStyle : { color: "#1e3a5f" }}>
-          {i <= index ? "●" : "○"}
-        </span>
-      ))}
-    </span>
-  );
-}
-
 export const HUD: React.FC = () => {
   const [tempProfileOpen, setTempProfileOpen] = React.useState(false);
   const crosshairGps = useCameraStore((s) => s.crosshairGps);
   const lastClickedGps = useCameraStore((s) => s.lastClickedGps);
   const cameraDepth = useCameraStore((s) => s.cameraDepth);
   const heading = useCameraStore((s) => s.heading);
-  const speedIndex = useCameraStore((s) => s.speedIndex);
-  const { realisticMode, boatSpeedMph } = useAppState();
 
   const gpsActive = useGpsStore((s) => s.active);
   const gpsPosition = useGpsStore((s) => s.position);
@@ -126,7 +111,6 @@ export const HUD: React.FC = () => {
   const showCrosshairGps = useSettingsStore((s) => s.showCrosshairGps);
   const crosshairMenuKey = useSettingsStore((s) => s.crosshairMenuKey);
   const showCameraPosition = useSettingsStore((s) => s.showCameraPosition);
-  const showSpeedIndicator = useSettingsStore((s) => s.showSpeedIndicator);
   const showHeading = useSettingsStore((s) => s.showHeading);
   const coordinateFormat = useSettingsStore((s) => s.coordinateFormat);
   const units = useSettingsStore((s) => s.units);
@@ -195,8 +179,6 @@ export const HUD: React.FC = () => {
     hudCenterLon,
     !!terrain,
   );
-
-  const speed = SPEEDS[speedIndex] ?? 0.15;
 
   const fmtCoord = (n: number | null): string => {
     if (n === null) return "—";
@@ -807,38 +789,6 @@ export const HUD: React.FC = () => {
               <span style={{ color: "#475569" }}>DEPTH </span>
               <span style={CYAN}>{fmtDepth(cameraDepth)}</span>
             </div>
-          </div>
-        )}
-
-        {showSpeedIndicator && (
-          <div style={{ ...PANEL, display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ color: "#475569" }}>SPD </span>
-            {realisticMode ? (
-              <>
-                <span style={CYAN}>{formatSpeed(boatSpeedMph, { units }).toUpperCase()}</span>
-                <span style={{ color: "#475569" }}>/</span>
-                <span style={{ color: "#7dd3fc" }}>{mphToKnots(boatSpeedMph).toFixed(1)} KT</span>
-                <span
-                  style={{
-                    fontSize: 8,
-                    letterSpacing: "0.15em",
-                    color: "#22d3ee",
-                    background: "rgba(0,229,255,0.08)",
-                    border: "1px solid rgba(0,229,255,0.25)",
-                    borderRadius: 2,
-                    padding: "1px 4px",
-                    marginLeft: 2,
-                  }}
-                >
-                  REAL
-                </span>
-              </>
-            ) : (
-              <>
-                <SpeedDots index={speedIndex} total={SPEEDS.length} activeStyle={CYAN} />
-                <span style={{ color: "#475569", marginLeft: 4 }}>{speed.toFixed(2)} u/s</span>
-              </>
-            )}
           </div>
         )}
 

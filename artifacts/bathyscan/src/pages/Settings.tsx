@@ -1018,7 +1018,6 @@ function HUDSection() {
         <div style={S.cardHeader}>VISIBILITY</div>
         <ToggleRow label="Crosshair GPS" value={s.showCrosshairGps} onChange={s.setShowCrosshairGps} sublabel="Centre-screen target coordinates" />
         <ToggleRow label="Camera Position" value={s.showCameraPosition} onChange={s.setShowCameraPosition} sublabel="Bottom-left LON/LAT/DEPTH panel" />
-        <ToggleRow label="Speed Indicator" value={s.showSpeedIndicator} onChange={s.setShowSpeedIndicator} sublabel="Speed dots or MPH display" />
         <ToggleRow label="Heading" value={s.showHeading} onChange={s.setShowHeading} sublabel="Top-left HDG compass value" />
       </div>
       <div style={S.card}>
