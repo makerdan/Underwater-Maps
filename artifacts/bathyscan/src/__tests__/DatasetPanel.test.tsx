@@ -77,10 +77,19 @@ vi.mock("@/lib/classificationStore", () => ({
   },
 }));
 
-vi.mock("@/lib/settingsStore", () => ({
-  useSettingsStore: (sel: (s: { waterType: "saltwater" | "freshwater" }) => unknown) =>
-    sel({ waterType: "saltwater" }),
-}));
+vi.mock("@/lib/settingsStore", () => {
+  type SettingsMockState = {
+    waterType: "saltwater" | "freshwater";
+    units: "metric" | "imperial";
+  };
+  const state: SettingsMockState = { waterType: "saltwater", units: "metric" };
+  const useSettingsStore = ((sel: (s: SettingsMockState) => unknown) =>
+    sel(state)) as ((sel: (s: SettingsMockState) => unknown) => unknown) & {
+    getState: () => SettingsMockState;
+  };
+  useSettingsStore.getState = () => state;
+  return { useSettingsStore };
+});
 
 vi.mock("@/lib/offlineStore", () => ({
   useOfflineStore: (sel: (s: { isOnline: boolean }) => unknown) =>
@@ -130,7 +139,8 @@ describe("DatasetPanel", () => {
   it("renders datasets matching the current waterType setting (default saltwater)", () => {
     render(<DatasetPanel />);
     expect(screen.getByText("Alaska Fjord")).toBeInTheDocument();
-    expect(screen.getByText("Deep saltwater fjord")).toBeInTheDocument();
+    // Depth range is shown in full-word form under the active units setting.
+    expect(screen.getByText("5 meters to 350 meters")).toBeInTheDocument();
     expect(screen.getByTestId("btn-dataset-alaska-fjord")).toBeInTheDocument();
     // Freshwater dataset is filtered out under the default saltwater setting.
     expect(screen.queryByText("Lake Michigan")).not.toBeInTheDocument();

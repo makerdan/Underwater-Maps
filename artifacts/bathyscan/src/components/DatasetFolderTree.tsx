@@ -36,6 +36,7 @@ import {
 } from "@workspace/api-client-react";
 import type { UserDatasetMeta } from "@workspace/api-client-react";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { formatDepthRange } from "@/lib/units";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useContextMenuStore } from "@/lib/contextMenuStore";
 import {
@@ -886,6 +887,7 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
   registerRow,
 }) => {
   const indent = depth * INDENT_PX;
+  const units = useSettingsStore((s) => s.units);
   const date = new Date(ds.createdAt).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
@@ -973,12 +975,13 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
           letterSpacing: "0.05em",
           display: "flex",
           justifyContent: "space-between",
+          gap: 6,
         }}
       >
-        <span>
-          {ds.minDepth}m – {ds.maxDepth}m
+        <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+          {formatDepthRange(ds.minDepth, ds.maxDepth, { units })}
         </span>
-        <span style={{ color: "#1e293b" }}>{date}</span>
+        <span style={{ color: "#1e293b", flexShrink: 0 }}>{date}</span>
       </div>
     </div>
   );

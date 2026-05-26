@@ -31,6 +31,7 @@ import { MARKER_COLOR, MARKER_ICON } from "@/lib/markerConstants";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { formatDepthRange } from "@/lib/units";
 import { ProvenancePanel } from "@/components/ProvenancePanel";
 import { DatasetFolderTree } from "@/components/DatasetFolderTree";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -233,6 +234,7 @@ export const DatasetPanel: React.FC = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const waterType = useSettingsStore((s) => s.waterType);
+  const units = useSettingsStore((s) => s.units);
 
   // ─── Fetch dataset lists ───────────────────────────────────────────────────
   const { data: datasets, isLoading: datasetsLoading } = useGetDatasets(
@@ -793,7 +795,7 @@ export const DatasetPanel: React.FC = () => {
                     </span>
                   </div>
                   <div style={{ fontSize: 10, color: "#cbd5e1", marginTop: 2, letterSpacing: "0.05em" }}>
-                    {ds.minDepth}m – {ds.maxDepth}m
+                    {formatDepthRange(ds.minDepth, ds.maxDepth, { units })}
                   </div>
                   {active && terrain && terrain.datasetId === ds.id && (
                     <div onClick={(e) => e.stopPropagation()}>

@@ -41,6 +41,34 @@ export function formatDepth(
   return `${localize ? rounded.toLocaleString() : rounded} m`;
 }
 
+/**
+ * Depth range as a full-word sentence, e.g. "1 meter to 24 meters" (metric)
+ * or "3 feet to 79 feet" (imperial). Honors the user's Units preference
+ * and pluralises the unit noun appropriately.
+ */
+export function formatDepthRange(
+  minMetres: number | null | undefined,
+  maxMetres: number | null | undefined,
+  opts: { units?: UnitsSystem } = {},
+): string {
+  if (
+    minMetres === null || minMetres === undefined || !Number.isFinite(minMetres) ||
+    maxMetres === null || maxMetres === undefined || !Number.isFinite(maxMetres)
+  ) {
+    return "—";
+  }
+  const units = opts.units ?? getUnits();
+  const toUnit = (m: number): number =>
+    units === "imperial" ? Math.round(m * M_TO_FT) : Math.round(m);
+  const singular = units === "imperial" ? "foot" : "meter";
+  const plural = units === "imperial" ? "feet" : "meters";
+  const lo = toUnit(minMetres);
+  const hi = toUnit(maxMetres);
+  const loLabel = `${lo.toLocaleString()} ${lo === 1 ? singular : plural}`;
+  const hiLabel = `${hi.toLocaleString()} ${hi === 1 ? singular : plural}`;
+  return `${loLabel} to ${hiLabel}`;
+}
+
 // ── Distance ─────────────────────────────────────────────────────────────
 /** Distance in metres → "X m" / "X km" (metric) or "X ft" / "X mi" (imperial). */
 export function formatDistance(
