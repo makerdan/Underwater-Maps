@@ -79,7 +79,6 @@ test.describe("BathyScan — WebGL availability", () => {
     const info = await probeWebGL(page);
 
     if (!info.hasWebgl) {
-      // eslint-disable-next-line no-console
       console.warn(
         "[webgl-smoke] No WebGL context available — Chromium GPU process " +
           "is not initialising swiftshader on this host (see " +
@@ -90,7 +89,6 @@ test.describe("BathyScan — WebGL availability", () => {
       return;
     }
 
-    // eslint-disable-next-line no-console
     console.log(
       `[webgl-smoke] WebGL OK — vendor=${info.vendor}, renderer=${info.renderer}, version=${info.version}, webgl2=${info.hasWebgl2}`,
     );
