@@ -22,9 +22,10 @@
  * `nearestCoverage` info via the same API client, ready for future
  * use by an "out of coverage" badge.
  */
-import React, { useEffect, useMemo, useCallback } from "react";
+import React, { useEffect, useMemo, useCallback, useRef } from "react";
 import * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
+import { useFrame } from "@react-three/fiber";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
 import { WORLD_SIZE } from "@/lib/terrain";
@@ -137,6 +138,8 @@ interface PolyRender {
   outlineGeometry: THREE.BufferGeometry;
   color: string;
   feature: SubstrateFeature;
+  /** Stable React key: unitId + polygon-part index within the feature. */
+  stableKey: string;
 }
 
 /**
@@ -189,13 +192,15 @@ export function buildPolyRenders(
         outlineGeometry: ringToLineGeometry(outer, minLon, lonRange, minLat, latRange),
         color,
         feature,
+        stableKey: `${feature.properties.unitId}:0`,
       });
     } else if (
       geom.type === "MultiPolygon" &&
       Array.isArray((geom as { coordinates?: unknown }).coordinates)
     ) {
       const polys = (geom as { coordinates: number[][][][] }).coordinates;
-      for (const rings of polys) {
+      for (let pi = 0; pi < polys.length; pi++) {
+        const rings = polys[pi]!;
         const outer = rings[0];
         if (!outer) continue;
         out.push({
@@ -203,12 +208,115 @@ export function buildPolyRenders(
           outlineGeometry: ringToLineGeometry(outer, minLon, lonRange, minLat, latRange),
           color,
           feature,
+          stableKey: `${feature.properties.unitId}:${pi}`,
         });
       }
     }
   }
   return out;
 }
+
+/** Duration of the fade in/out animation in seconds. */
+const FADE_DURATION = 0.15;
+
+/** Fill opacity targets when fully visible. */
+const FILL_OPACITY_NORMAL = 0.35;
+const FILL_OPACITY_SELECTED = 0.55;
+
+/** Outline opacity targets when fully visible. */
+const OUTLINE_OPACITY_NORMAL = 0.85;
+const OUTLINE_OPACITY_SELECTED = 1.0;
+
+interface SubstratePolyProps {
+  poly: PolyRender;
+  isVisible: boolean;
+  isSelected: boolean;
+  onClick: (e: ThreeEvent<MouseEvent>) => void;
+}
+
+/**
+ * Renders one substrate polygon (fill + outline) with a smooth opacity
+ * fade (~150 ms) when `isVisible` changes. GPU buffers are never disposed
+ * on a simple visibility toggle — opacity is lerped via `useFrame` and
+ * `visible` is only flipped off once the fade has fully completed.
+ */
+const SubstratePoly: React.FC<SubstratePolyProps> = ({
+  poly,
+  isVisible,
+  isSelected,
+  onClick,
+}) => {
+  const fillRef = useRef<THREE.Mesh>(null);
+  const lineRef = useRef<THREE.LineLoop>(null);
+
+  // Tracks the current fade progress: 0 = fully hidden, 1 = fully visible.
+  // Starts at the correct value to avoid a pop on first render.
+  const progress = useRef(isVisible ? 1 : 0);
+
+  useFrame((_, delta) => {
+    const target = isVisible ? 1 : 0;
+    const cur = progress.current;
+    if (cur === target) return;
+
+    const step = delta / FADE_DURATION;
+    const next = target > cur
+      ? Math.min(cur + step, target)
+      : Math.max(cur - step, target);
+    progress.current = next;
+
+    const fillMat = fillRef.current?.material as THREE.MeshBasicMaterial | undefined;
+    if (fillMat) {
+      fillMat.opacity = (isSelected ? FILL_OPACITY_SELECTED : FILL_OPACITY_NORMAL) * next;
+      if (fillRef.current) fillRef.current.visible = next > 0;
+    }
+
+    const lineMat = lineRef.current?.material as THREE.LineBasicMaterial | undefined;
+    if (lineMat) {
+      lineMat.opacity = (isSelected ? OUTLINE_OPACITY_SELECTED : OUTLINE_OPACITY_NORMAL) * next;
+      if (lineRef.current) lineRef.current.visible = next > 0;
+    }
+  });
+
+  const fillOpacity = (isSelected ? FILL_OPACITY_SELECTED : FILL_OPACITY_NORMAL) * progress.current;
+  const outlineOpacity = (isSelected ? OUTLINE_OPACITY_SELECTED : OUTLINE_OPACITY_NORMAL) * progress.current;
+  const everVisible = progress.current > 0;
+
+  return (
+    <React.Fragment>
+      {poly.fillGeometry && (
+        <mesh
+          ref={fillRef}
+          geometry={poly.fillGeometry}
+          visible={everVisible}
+          renderOrder={2}
+          onClick={isVisible ? onClick : undefined}
+        >
+          <meshBasicMaterial
+            color={poly.color}
+            transparent
+            opacity={fillOpacity}
+            depthWrite={false}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      )}
+      <lineLoop
+        ref={lineRef}
+        geometry={poly.outlineGeometry}
+        visible={everVisible}
+        renderOrder={3}
+      >
+        <lineBasicMaterial
+          color={poly.color}
+          transparent
+          opacity={outlineOpacity}
+          depthWrite={false}
+          linewidth={2}
+        />
+      </lineLoop>
+    </React.Fragment>
+  );
+};
 
 export const SubstrateLayer: React.FC = () => {
   const { terrain } = useAppState();
@@ -271,44 +379,20 @@ export const SubstrateLayer: React.FC = () => {
 
   return (
     <group name="substrate-polygons">
-      {allPolys.map((p, i) => {
+      {allPolys.map((p) => {
         const isSelected =
           selectedSubstrate?.unitId === p.feature.properties.unitId;
         const isVisible = !hiddenSubstrateClasses.has(
           p.feature.properties.substrate.toLowerCase(),
         );
         return (
-          <React.Fragment key={i}>
-            {p.fillGeometry && (
-              <mesh
-                geometry={p.fillGeometry}
-                visible={isVisible}
-                renderOrder={2}
-                onClick={isVisible ? handleClick(p.feature) : undefined}
-              >
-                <meshBasicMaterial
-                  color={p.color}
-                  transparent
-                  opacity={isSelected ? 0.55 : 0.35}
-                  depthWrite={false}
-                  side={THREE.DoubleSide}
-                />
-              </mesh>
-            )}
-            <lineLoop
-              geometry={p.outlineGeometry}
-              visible={isVisible}
-              renderOrder={3}
-            >
-              <lineBasicMaterial
-                color={p.color}
-                transparent
-                opacity={isSelected ? 1.0 : 0.85}
-                depthWrite={false}
-                linewidth={2}
-              />
-            </lineLoop>
-          </React.Fragment>
+          <SubstratePoly
+            key={p.stableKey}
+            poly={p}
+            isVisible={isVisible}
+            isSelected={isSelected}
+            onClick={handleClick(p.feature)}
+          />
         );
       })}
     </group>
