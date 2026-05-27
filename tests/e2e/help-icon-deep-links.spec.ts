@@ -109,11 +109,15 @@ test.describe("Help-icon deep links", () => {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
       } catch {}
     });
+    // Skip the entire test early (before any test body runs) when the E2E
+    // auth bypass is not active. Doing this in beforeEach rather than inside
+    // each individual test body guarantees the skip fires before test-specific
+    // setup (e.g. page.request.put calls) can throw a hard failure.
+    await ensureSignedIn(page);
   });
 
   test("Throttle panel help icon → 'Throttle Panel' article", async ({ page }) => {
     test.setTimeout(60_000);
-    await ensureSignedIn(page);
 
     // ThrottlePanel only mounts when "DRIVE BOAT" boat-throttle mode is on.
     const realisticBtn = page.locator("button", { hasText: /\bDRIVE BOAT\b/ }).first();
@@ -132,7 +136,6 @@ test.describe("Help-icon deep links", () => {
 
   test("HUD overlay-cluster help icon → 'HUD Overlay Toggles' article", async ({ page }) => {
     test.setTimeout(60_000);
-    await ensureSignedIn(page);
 
     const icon = page.locator('[data-testid="help-icon-hud-overlays"]');
     await expect(icon).toBeVisible({ timeout: 10_000 });
@@ -148,7 +151,6 @@ test.describe("Help-icon deep links", () => {
 
   test("Find Data drawer help icon → 'Find Data' article", async ({ page }) => {
     test.setTimeout(60_000);
-    await ensureSignedIn(page);
 
     // Open the Find Data drawer via the HUD button. The Minimap canvas sits
     // in the same corner, so dispatch the click directly to the button.
@@ -173,7 +175,6 @@ test.describe("Help-icon deep links", () => {
       data: { showTidePanel: true, autoLoadTidal: true },
     });
     await stubTidalEndpoints(page);
-    await ensureSignedIn(page);
 
     // useTidalData is gated on terrain coordinates being available.
     // Wait for any terrain (real auto-load or simulated fallback) to be
