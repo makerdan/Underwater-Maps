@@ -566,7 +566,6 @@ function Main() {
             style={{
               maxHeight: "calc(100vh - 7rem)",
               paddingRight: 4,
-              paddingBottom: "2in",
               scrollbarWidth: "thin",
               scrollbarColor: "rgba(0,229,255,0.35) transparent",
             }}
@@ -637,6 +636,7 @@ function Main() {
             <div className="sidebar-footer-wrap" style={{ flexShrink: 0 }}>
               <ConditionsLegend />
             </div>
+            <div style={{ height: "2in", flexShrink: 0 }} aria-hidden="true" />
           </div>
         )}
 
