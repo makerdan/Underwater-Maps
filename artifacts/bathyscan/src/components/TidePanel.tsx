@@ -7,6 +7,7 @@ import { formatDistance, formatDepth, formatSpeedFromKnots } from "@/lib/units";
 import { useTidalSchedule, type TidalScheduleEvent } from "@/hooks/useTidalSchedule";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
+import { Spinner } from "@/components/ui/spinner";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(2,8,18,0.94)",
@@ -298,6 +299,9 @@ export const TidePanel: React.FC<TidePanelProps> = ({
         >
           <span style={{ ...CYAN, fontSize: 10, letterSpacing: "0.2em", display: "inline-flex", alignItems: "center", gap: 6 }}>
             ◉ TIDAL OVERLAY
+            {loading && (
+              <Spinner className="size-3 text-cyan-400" aria-label="Fetching tidal data" />
+            )}
             <span onClick={(e) => e.stopPropagation()} style={{ display: "inline-flex" }}>
               <HelpIcon articleId="tidal-overlay" label="Tidal overlay" />
             </span>
