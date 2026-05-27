@@ -10,7 +10,9 @@ export type PanelId =
   | "tide"
   | "overlaysTools"
   | "mapData"
-  | "conditions";
+  | "conditions"
+  | "markersAccordion"
+  | "uploadTerrainAccordion";
 
 interface PanelCollapseStore {
   collapsed: Record<PanelId, boolean>;
@@ -28,6 +30,8 @@ const DEFAULTS: Record<PanelId, boolean> = {
   overlaysTools: false,
   mapData: false,
   conditions: false,
+  markersAccordion: true,
+  uploadTerrainAccordion: true,
 };
 
 export const usePanelCollapseStore = create<PanelCollapseStore>()(

@@ -238,7 +238,12 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const storeCollapsed = usePanelCollapseStore((s) => s.collapsed.datasets);
   const collapsed = embedded ? false : storeCollapsed;
   const togglePanel = usePanelCollapseStore((s) => s.toggle);
-  const [uploadOpen, setUploadOpen] = useState(false);
+  const setPanelCollapsed = usePanelCollapseStore((s) => s.setCollapsed);
+  const uploadOpen = !usePanelCollapseStore((s) => s.collapsed.uploadTerrainAccordion);
+  const setUploadOpen = useCallback(
+    (v: boolean) => setPanelCollapsed("uploadTerrainAccordion", !v),
+    [setPanelCollapsed],
+  );
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lastUploadedFile, setLastUploadedFile] = useState<File | null>(null);
@@ -654,7 +659,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         },
       );
     },
-    [postDatasetsUpload, setDatasetId, setTerrain, qc],
+    [postDatasetsUpload, setDatasetId, setTerrain, qc, setUploadOpen],
   );
 
   const onDrop = useCallback(
@@ -698,7 +703,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   });
 
   // ─── Markers ──────────────────────────────────────────────────────────────
-  const [markersOpen, setMarkersOpen] = useState(false);
+  const markersOpen = !usePanelCollapseStore((s) => s.collapsed.markersAccordion);
+  const setMarkersOpen = useCallback(
+    (v: boolean) => usePanelCollapseStore.getState().setCollapsed("markersAccordion", !v),
+    [],
+  );
   const [gpsImportOpen, setGpsImportOpen] = useState(false);
   const [gpsExportOpen, setGpsExportOpen] = useState(false);
   const markerDatasetId = terrain?.datasetId ?? "";
@@ -1000,7 +1009,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           {markerDatasetId && (
             <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}>
               <button
-                onClick={() => setMarkersOpen((o) => !o)}
+                onClick={() => setMarkersOpen(!markersOpen)}
                 className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
                 style={{ cursor: "pointer" }}
               >
@@ -1131,7 +1140,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}>
             <ViewscreenTooltip label={uploadOpen ? "Hide upload area" : "Upload your own terrain file"} side="right">
             <button
-              onClick={() => setUploadOpen((o) => !o)}
+              onClick={() => setUploadOpen(!uploadOpen)}
               className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
               style={{ cursor: "pointer" }}
             >
