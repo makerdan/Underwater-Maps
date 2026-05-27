@@ -454,6 +454,15 @@ function efhSpeciesMatcher(catalogId: string): (f: EfhFeature) => boolean {
   if (suffix === "rockfish") {
     return (f) => f.properties.species.startsWith("sebastes_");
   }
+  if (suffix === "pollock" || suffix === "walleye-pollock") {
+    return (f) => f.properties.species === "gadus_chalcogrammus";
+  }
+  if (suffix === "sablefish") {
+    return (f) => f.properties.species === "anoplopoma_fimbria";
+  }
+  if (suffix === "arrowtooth" || suffix === "arrowtooth-flounder") {
+    return (f) => f.properties.species === "atheresthes_stomias";
+  }
   // Unknown suffix — accept every feature so the user still gets a non-empty
   // overlay rather than a silently empty save.
   return () => true;

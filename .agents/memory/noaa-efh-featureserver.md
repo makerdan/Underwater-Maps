@@ -34,6 +34,9 @@ description: Confirmed ArcGIS org, service URLs, and layer structure for NOAA Al
 | sebastes_variabilis | Dusky Rockfish | 41–45 |
 | sebastes_melanops | Black Rockfish | 30 |
 | sebastes_maliger | Quillback Rockfish | 92 |
+| atheresthes_stomias | Arrowtooth Flounder | 14–19 (adults fall/spring/summer/winter, juveniles, larvae) |
+| anoplopoma_fimbria | Sablefish | 112–117 (adults fall/spring/summer/winter, juveniles, larvae) |
+| gadus_chalcogrammus | Walleye Pollock | 135–141 (adults fall/spring/summer/winter, eggs, juveniles, larvae) |
 
 ## Data geometry notes
 

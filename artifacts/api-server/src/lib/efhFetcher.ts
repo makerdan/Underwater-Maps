@@ -38,8 +38,10 @@ import type { EfhFeature, EfhFeatureCollection } from "./efhData.js";
 //       FeatureServer (C8EMgrsFcRFL6LrL / GulfOfAlaska). Queries specific
 //       layer IDs for pcod, halibut, and rockfish; injects species metadata
 //       from the GOA_LAYER_SPECS table; expands MultiPolygon per-part.
+//   2 — added walleye pollock (layers 135–141), sablefish (112–117), and
+//       arrowtooth flounder (14–19) to GOA_LAYER_SPECS.
 // ---------------------------------------------------------------------------
-export const EFH_CACHE_VERSION = 1;
+export const EFH_CACHE_VERSION = 2;
 
 const CACHE_DIR = "/tmp/efh-cache";
 const CACHE_KEY = "alaska-efh-species";
@@ -195,6 +197,75 @@ const GOA_LAYER_SPECS: LayerSpec[] = [
   { layerId: 150, species: "sebastes_ruberrimus", commonName: "Yelloweye Rockfish",
     fmp: ROCKFISH_FMP, depthRangeM: [0, 150], color: "#ef4444",
     lifeStage: "Juveniles", season: "Summer" },
+
+  // -------------------------------------------------------------------------
+  // Arrowtooth Flounder (atheresthes_stomias) — layers 14–19
+  // -------------------------------------------------------------------------
+  { layerId: 14, species: "atheresthes_stomias", commonName: "Arrowtooth Flounder",
+    fmp: "Gulf of Alaska Groundfish FMP", depthRangeM: [0, 900], color: "#16a34a",
+    lifeStage: "Adults", season: "Fall" },
+  { layerId: 15, species: "atheresthes_stomias", commonName: "Arrowtooth Flounder",
+    fmp: "Gulf of Alaska Groundfish FMP", depthRangeM: [0, 900], color: "#16a34a",
+    lifeStage: "Adults", season: "Spring" },
+  { layerId: 16, species: "atheresthes_stomias", commonName: "Arrowtooth Flounder",
+    fmp: "Gulf of Alaska Groundfish FMP", depthRangeM: [0, 900], color: "#16a34a",
+    lifeStage: "Adults", season: "Summer" },
+  { layerId: 17, species: "atheresthes_stomias", commonName: "Arrowtooth Flounder",
+    fmp: "Gulf of Alaska Groundfish FMP", depthRangeM: [0, 900], color: "#16a34a",
+    lifeStage: "Adults", season: "Winter" },
+  { layerId: 18, species: "atheresthes_stomias", commonName: "Arrowtooth Flounder",
+    fmp: "Gulf of Alaska Groundfish FMP", depthRangeM: [0, 300], color: "#16a34a",
+    lifeStage: "Juveniles", season: "Summer" },
+  { layerId: 19, species: "atheresthes_stomias", commonName: "Arrowtooth Flounder",
+    fmp: "Gulf of Alaska Groundfish FMP", depthRangeM: [0, 150], color: "#16a34a",
+    lifeStage: "Larvae", season: "Summer" },
+
+  // -------------------------------------------------------------------------
+  // Sablefish (anoplopoma_fimbria) — layers 112–117
+  // -------------------------------------------------------------------------
+  { layerId: 112, species: "anoplopoma_fimbria", commonName: "Sablefish",
+    fmp: "Gulf of Alaska Groundfish FMP", depthRangeM: [200, 2000], color: "#0e7490",
+    lifeStage: "Adults", season: "Fall" },
+  { layerId: 113, species: "anoplopoma_fimbria", commonName: "Sablefish",
+    fmp: "Gulf of Alaska Groundfish FMP", depthRangeM: [200, 2000], color: "#0e7490",
+    lifeStage: "Adults", season: "Spring" },
+  { layerId: 114, species: "anoplopoma_fimbria", commonName: "Sablefish",
+    fmp: "Gulf of Alaska Groundfish FMP", depthRangeM: [200, 2000], color: "#0e7490",
+    lifeStage: "Adults", season: "Summer" },
+  { layerId: 115, species: "anoplopoma_fimbria", commonName: "Sablefish",
+    fmp: "Gulf of Alaska Groundfish FMP", depthRangeM: [200, 2000], color: "#0e7490",
+    lifeStage: "Adults", season: "Winter" },
+  { layerId: 116, species: "anoplopoma_fimbria", commonName: "Sablefish",
+    fmp: "Gulf of Alaska Groundfish FMP", depthRangeM: [0, 400], color: "#0e7490",
+    lifeStage: "Juveniles", season: "Summer" },
+  { layerId: 117, species: "anoplopoma_fimbria", commonName: "Sablefish",
+    fmp: "Gulf of Alaska Groundfish FMP", depthRangeM: [0, 200], color: "#0e7490",
+    lifeStage: "Larvae", season: "Summer" },
+
+  // -------------------------------------------------------------------------
+  // Walleye Pollock (gadus_chalcogrammus) — layers 135–141
+  // -------------------------------------------------------------------------
+  { layerId: 135, species: "gadus_chalcogrammus", commonName: "Walleye Pollock",
+    fmp: "Gulf of Alaska Groundfish FMP", depthRangeM: [0, 500], color: "#7c3aed",
+    lifeStage: "Adults", season: "Fall" },
+  { layerId: 136, species: "gadus_chalcogrammus", commonName: "Walleye Pollock",
+    fmp: "Gulf of Alaska Groundfish FMP", depthRangeM: [0, 500], color: "#7c3aed",
+    lifeStage: "Adults", season: "Spring" },
+  { layerId: 137, species: "gadus_chalcogrammus", commonName: "Walleye Pollock",
+    fmp: "Gulf of Alaska Groundfish FMP", depthRangeM: [0, 500], color: "#7c3aed",
+    lifeStage: "Adults", season: "Summer" },
+  { layerId: 138, species: "gadus_chalcogrammus", commonName: "Walleye Pollock",
+    fmp: "Gulf of Alaska Groundfish FMP", depthRangeM: [0, 500], color: "#7c3aed",
+    lifeStage: "Adults", season: "Winter" },
+  { layerId: 139, species: "gadus_chalcogrammus", commonName: "Walleye Pollock",
+    fmp: "Gulf of Alaska Groundfish FMP", depthRangeM: [0, 200], color: "#7c3aed",
+    lifeStage: "Eggs", season: "Summer" },
+  { layerId: 140, species: "gadus_chalcogrammus", commonName: "Walleye Pollock",
+    fmp: "Gulf of Alaska Groundfish FMP", depthRangeM: [0, 200], color: "#7c3aed",
+    lifeStage: "Juveniles", season: "Summer" },
+  { layerId: 141, species: "gadus_chalcogrammus", commonName: "Walleye Pollock",
+    fmp: "Gulf of Alaska Groundfish FMP", depthRangeM: [0, 100], color: "#7c3aed",
+    lifeStage: "Larvae", season: "Summer" },
 ];
 
 // ---------------------------------------------------------------------------
