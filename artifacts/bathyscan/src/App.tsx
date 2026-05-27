@@ -600,7 +600,7 @@ function Main() {
           </ViewscreenTooltip>
         ) : (
           <div
-            className="absolute top-24 left-4 z-20 flex flex-col gap-2 overflow-y-auto overscroll-contain"
+            className="absolute top-24 left-4 z-20 overflow-y-auto overscroll-contain space-y-2"
             style={{
               maxHeight: "calc(100vh - 7rem)",
               paddingRight: 4,
