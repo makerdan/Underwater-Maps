@@ -64,10 +64,9 @@ async function closeHelpWindow(page: Page): Promise<void> {
  * Stub the tidal-data endpoint(s) so the TidePanel renders without depending
  * on a real NOAA station being in range. The App only mounts <TidePanel /> if
  * `tidalData !== null`, so we need useTidalData() to resolve to something
- * non-null. The shape is conservative — TidePanel reads `data.available` and
- * happily renders the header either way (showing a "No tidal station" body if
- * unavailable). For our purposes we just need the *header* to mount so the
- * help icon is in the DOM.
+ * non-null. We return `available: true` with a minimal valid payload so
+ * TidePanel renders its full content (including the help icon in the header)
+ * rather than a "No tidal station" fallback body.
  */
 async function stubTidalEndpoints(page: Page): Promise<void> {
   // useTidalSchedule (more specific) calls /api/tidal/schedule — match it first.
@@ -84,13 +83,18 @@ async function stubTidalEndpoints(page: Page): Promise<void> {
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        available: false,
-        station: null,
-        distanceMeters: null,
-        events: [],
-        currentLevel: null,
+        available: true,
+        stationName: "E2E Test Station",
+        stationId: "9999999",
+        source: "noaa",
+        distanceMeters: 1000,
+        tideHeight: 1.5,
+        currentDirection: 90,
+        currentSpeed: 0.5,
+        isPredicted: true,
         nextEvent: null,
         slack: null,
+        events: [],
       }),
     });
   });
@@ -190,16 +194,46 @@ test.describe("Help-icon deep links", () => {
       () => Boolean((window as unknown as { __bathyTest?: { getTerrainSummary?: () => unknown } }).__bathyTest?.getTerrainSummary?.()),
     ).catch(() => false);
     if (!hasTerrain) {
+      // Wait for the test bridge to be registered before calling seedTerrain —
+      // after auth the React tree re-mounts and __bathyTest may not be wired
+      // up yet. Without this guard, seedTerrain() is a silent no-op.
+      await page
+        .waitForFunction(
+          () => typeof (window as unknown as { __bathyTest?: { seedTerrain?: unknown } }).__bathyTest?.seedTerrain === "function",
+          { timeout: 10_000 },
+        )
+        .catch(() => {});
       await page.evaluate(
         () => (window as unknown as { __bathyTest?: { seedTerrain?: () => boolean } }).__bathyTest?.seedTerrain?.(),
       );
-      await page.waitForTimeout(500);
+      // Confirm the terrain actually propagated into the store before proceeding.
+      await page
+        .waitForFunction(
+          () =>
+            Boolean(
+              (window as unknown as { __bathyTest?: { getTerrainSummary?: () => unknown } }).__bathyTest?.getTerrainSummary?.(),
+            ),
+          { timeout: 5_000 },
+        )
+        .catch(() => {});
     }
 
     // Enable the tidal overlay via the top-right toolbar so <TidePanel /> mounts.
     const tidalBtn = page.locator("[data-testid='overlay-toggle-tide']");
     await expect(tidalBtn).toBeVisible({ timeout: 10_000 });
-    // App auto-loads the overlay if `autoLoadTidal` is set; only click if off.
+    // `autoLoadTidal` causes a useEffect to set aria-pressed="true" shortly
+    // after mount. Wait for that effect to settle before reading the value so
+    // we don't accidentally click the button off just as the effect enables it.
+    await page
+      .waitForFunction(
+        () => {
+          const btn = document.querySelector("[data-testid='overlay-toggle-tide']");
+          return btn?.getAttribute("aria-pressed") === "true";
+        },
+        { timeout: 5_000 },
+      )
+      .catch(() => {});
+    // Only click if the overlay is still off after the effect had a chance to run.
     const ariaPressed = await tidalBtn.getAttribute("aria-pressed").catch(() => null);
     if (ariaPressed !== "true") {
       await tidalBtn.dispatchEvent("click");
