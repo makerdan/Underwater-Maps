@@ -10,7 +10,7 @@
  * The actual shader tinting is driven by uiStore.zoneOverlayEnabled which
  * TerrainMesh reads every frame via useUiStore.getState().
  */
-import React from "react";
+import React, { useEffect } from "react";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useUiStore } from "@/lib/uiStore";
 import { HelpIcon } from "@/components/help/HelpButton";
@@ -68,9 +68,41 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
   const setPaintSlot = useUiStore((s) => s.setZonePaintSlot);
   const hasEdits = useClassificationStore((s) => s.hasEdits);
   const resetToAi = useClassificationStore((s) => s.resetToAi);
+  const undoPaint = useClassificationStore((s) => s.undoPaint);
+  const clearPaintUndoStack = useClassificationStore((s) => s.clearPaintUndoStack);
+  const paintUndoStack = useClassificationStore((s) => s.paintUndoStack);
+  const canUndo = paintUndoStack.length > 0;
   const storeCollapsed = usePanelCollapseStore((s) => s.collapsed.zoneOverlay);
   const collapsed = embedded ? false : storeCollapsed;
   const togglePanel = usePanelCollapseStore((s) => s.toggle);
+
+  // Clear undo stack whenever Paint Mode is turned off — any path (button, overlay toggle, etc.)
+  useEffect(() => {
+    if (!paintMode) {
+      clearPaintUndoStack();
+    }
+  }, [paintMode, clearPaintUndoStack]);
+
+  // Ctrl+Z / Cmd+Z — undo last stroke while Paint Mode is active
+  useEffect(() => {
+    if (!paintMode) return;
+    const handler = (e: KeyboardEvent) => {
+      if (!((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey)) return;
+      // Don't intercept undo inside text fields / contentEditable elements
+      const target = e.target as HTMLElement | null;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target?.isContentEditable
+      ) return;
+      // Only suppress browser default undo when we have a stroke to undo
+      if (useClassificationStore.getState().paintUndoStack.length === 0) return;
+      e.preventDefault();
+      undoPaint();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [paintMode, undoPaint]);
 
   // Only show this panel when there's a terrain loaded
   if (!terrain) return null;
@@ -377,7 +409,52 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
               </>
             )}
 
-            {hasEdits && (
+            {paintMode && (
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  data-testid="zone-undo-paint"
+                  onClick={() => undoPaint()}
+                  disabled={!canUndo}
+                  title="Undo last stroke (Ctrl+Z)"
+                  style={{
+                    fontSize: 11,
+                    color: canUndo ? "#cbd5e1" : "#475569",
+                    background: "transparent",
+                    border: `1px solid ${canUndo ? "rgba(0,229,255,0.28)" : "rgba(100,116,139,0.3)"}`,
+                    borderRadius: 3,
+                    padding: "4px 6px",
+                    cursor: canUndo ? "pointer" : "default",
+                    letterSpacing: "0.04em",
+                    flex: 1,
+                    textAlign: "left",
+                    transition: "color 0.15s, border-color 0.15s",
+                  }}
+                >
+                  ↩ Undo
+                </button>
+                {hasEdits && (
+                  <button
+                    data-testid="zone-reset-ai"
+                    onClick={() => resetToAi()}
+                    style={{
+                      fontSize: 11,
+                      color: "#cbd5e1",
+                      background: "transparent",
+                      border: "1px solid rgba(0,229,255,0.28)",
+                      borderRadius: 3,
+                      padding: "4px 6px",
+                      cursor: "pointer",
+                      letterSpacing: "0.04em",
+                      flex: 1,
+                      textAlign: "left",
+                    }}
+                  >
+                    ↺ Reset to AI
+                  </button>
+                )}
+              </div>
+            )}
+            {!paintMode && hasEdits && (
               <button
                 data-testid="zone-reset-ai"
                 onClick={() => resetToAi()}

@@ -200,6 +200,8 @@ function u8Equal(a: Uint8Array, b: Uint8Array): boolean {
   return true;
 }
 
+const UNDO_LIMIT = 50;
+
 interface ClassificationState {
   zoneMap: Uint8Array | null;
   /** Unedited AI baseline — preserved so Reset to AI works after painting. */
@@ -224,6 +226,8 @@ interface ClassificationState {
    *  - null:        no zoneMap loaded yet.
    */
   source: "ai" | "heuristic" | "partial" | null;
+  /** Per-stroke undo snapshots. Cleared on Paint Mode toggle-off and Reset to AI. */
+  paintUndoStack: Uint8Array[];
 
   classify: (grid: TerrainData) => Promise<void>;
   clearZoneMap: () => void;
@@ -242,6 +246,10 @@ interface ClassificationState {
   ) => void;
   /** Revert zoneMap to the AI baseline and clear the edited sessionStorage entry. */
   resetToAi: () => void;
+  /** Clear the paint undo stack (called when Paint Mode is toggled off). */
+  clearPaintUndoStack: () => void;
+  /** Undo the last brush stroke, restoring the previous zoneMap snapshot. */
+  undoPaint: () => void;
 }
 
 export const useClassificationStore = create<ClassificationState>((set, get) => ({
@@ -253,12 +261,13 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
   currentGridHash: null,
   currentSubstrateFp: null,
   source: null,
+  paintUndoStack: [],
 
   clearZoneMap: () =>
-    set({ zoneMap: null, aiZoneMap: null, hasEdits: false, error: null, currentGridHash: null, currentSubstrateFp: null, source: null }),
+    set({ zoneMap: null, aiZoneMap: null, hasEdits: false, error: null, currentGridHash: null, currentSubstrateFp: null, source: null, paintUndoStack: [] }),
 
   paintSlot: (row, col, radius, slot, waterType, resolution) => {
-    const { zoneMap, currentGridHash } = get();
+    const { zoneMap, currentGridHash, paintUndoStack } = get();
     if (!zoneMap || zoneMap.length !== resolution * resolution) return;
 
     const slotToZone =
@@ -287,6 +296,12 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
     }
     if (!changed) return;
 
+    // Snapshot current zoneMap before committing the stroke so it can be undone.
+    const snapshot = new Uint8Array(zoneMap);
+    const newStack = paintUndoStack.length >= UNDO_LIMIT
+      ? [...paintUndoStack.slice(paintUndoStack.length - UNDO_LIMIT + 1), snapshot]
+      : [...paintUndoStack, snapshot];
+
     if (currentGridHash) {
       try {
         sessionStorage.setItem(
@@ -297,7 +312,7 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
         // sessionStorage unavailable / quota exceeded — keep in-memory edits anyway
       }
     }
-    set({ zoneMap: next, hasEdits: true });
+    set({ zoneMap: next, hasEdits: true, paintUndoStack: newStack });
   },
 
   resetToAi: () => {
@@ -314,7 +329,29 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
         // ignore
       }
     }
-    set({ zoneMap: restored, hasEdits: false });
+    set({ zoneMap: restored, hasEdits: false, paintUndoStack: [] });
+  },
+
+  clearPaintUndoStack: () => set({ paintUndoStack: [] }),
+
+  undoPaint: () => {
+    const { paintUndoStack, currentGridHash, currentSubstrateFp } = get();
+    if (paintUndoStack.length === 0) return;
+    const newStack = paintUndoStack.slice(0, -1);
+    const restored = new Uint8Array(paintUndoStack[paintUndoStack.length - 1]!);
+    if (currentGridHash) {
+      try {
+        sessionStorage.setItem(
+          sessionZoneKey(currentGridHash, currentSubstrateFp ?? NO_SUBSTRATE_FP),
+          zoneMapToStorage(restored),
+        );
+      } catch {
+        // ignore
+      }
+    }
+    const { aiZoneMap } = get();
+    const hasEdits = !!aiZoneMap && !u8Equal(restored, aiZoneMap);
+    set({ zoneMap: restored, hasEdits, paintUndoStack: newStack });
   },
 
   classify: async (grid: TerrainData): Promise<void> => {
@@ -343,7 +380,7 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
         const zoneMap = zoneMapFromStorage(stored);
         const ai = storedAi ? zoneMapFromStorage(storedAi) : new Uint8Array(zoneMap);
         const hasEdits = !!storedAi && !u8Equal(zoneMap, ai);
-        set({ zoneMap, aiZoneMap: ai, hasEdits, loading: false, error: null, currentGridHash: gridHash, currentSubstrateFp: knownFp, source: "ai" });
+        set({ zoneMap, aiZoneMap: ai, hasEdits, loading: false, error: null, currentGridHash: gridHash, currentSubstrateFp: knownFp, source: "ai", paintUndoStack: [] });
         return Promise.resolve();
       }
     } catch {
@@ -354,7 +391,7 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
     const existing = inFlight.get(gridHash);
     if (existing) return existing;
 
-    set({ loading: true, error: null, zoneMap: null, aiZoneMap: null, hasEdits: false, currentGridHash: gridHash, currentSubstrateFp: null, source: null });
+    set({ loading: true, error: null, zoneMap: null, aiZoneMap: null, hasEdits: false, currentGridHash: gridHash, currentSubstrateFp: null, source: null, paintUndoStack: [] });
 
     const commitFresh = (zoneMap: Uint8Array, source: ClassifyResultSource, fp: string) => {
       writeKnownSubstrateFp(datasetId, fp);
@@ -381,6 +418,7 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
         error: null,
         currentSubstrateFp: fp,
         source,
+        paintUndoStack: [],
       });
     };
 
