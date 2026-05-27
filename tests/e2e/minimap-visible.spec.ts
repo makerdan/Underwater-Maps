@@ -1,4 +1,4 @@
-import { test, expect, API_URL } from "./fixtures";
+import { test, expect, API_URL, E2E_USER_ID } from "./fixtures";
 
 test.describe("BathyScan — minimap visibility", () => {
   test.beforeEach(async ({ page, request }) => {
@@ -6,7 +6,7 @@ test.describe("BathyScan — minimap visibility", () => {
     // failure can't leave the minimap hidden for this run (or for other
     // specs sharing the dev-user-bypass user).
     await request.put(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": "dev-user-bypass" },
+      headers: { "x-e2e-user-id": E2E_USER_ID },
       data: { showCompassMinimap: true },
     });
     // Suppress the SimulatedDataConfirmDialog so it cannot block the dataset
@@ -77,7 +77,7 @@ test.describe("BathyScan — minimap visibility", () => {
 
     // Turn the minimap off via the same x-e2e-user-id bypass other specs use.
     await request.put(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": "dev-user-bypass" },
+      headers: { "x-e2e-user-id": E2E_USER_ID },
       data: { showCompassMinimap: false },
     });
     await page.reload();

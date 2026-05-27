@@ -1,4 +1,4 @@
-import { test, expect, type Page, API_URL } from "./fixtures";
+import { test, expect, type Page, API_URL, E2E_USER_ID } from "./fixtures";
 
 /**
  * Tide HUD scrubber end-to-end tests
@@ -84,7 +84,7 @@ test.describe("Tide HUD scrubber slack visuals", () => {
     // Ensure showTidePanel / autoLoadTidal are enabled so a prior test that
     // disabled them cannot prevent TidePanel from mounting.
     await page.request.put(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": "dev-user-bypass" },
+      headers: { "x-e2e-user-id": E2E_USER_ID },
       data: { showTidePanel: true, autoLoadTidal: true },
     });
     // Mock the schedule endpoint with a deterministic 7-day slack schedule.

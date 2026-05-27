@@ -1,4 +1,4 @@
-import { test, expect, API_URL } from "./fixtures";
+import { test, expect, API_URL, E2E_USER_ID } from "./fixtures";
 
 /**
  * Task #368 — end-to-end coverage for depth-palette cross-device sync.
@@ -30,7 +30,7 @@ test.describe("Depth palette cross-device sync", () => {
     //    run that failed before cleanup could leave #ff00aa on the server,
     //    making our nativeInputValueSetter a no-op (value unchanged → no dirty).
     await page.request.put(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": "dev-user-bypass" },
+      headers: { "x-e2e-user-id": E2E_USER_ID },
       data: { paletteDeep: "#283593" },
     });
 
@@ -62,7 +62,7 @@ test.describe("Depth palette cross-device sync", () => {
     // hydrates from the server.  This correctly exercises the "Device A saved
     // → Device B loads" cross-device-sync path the test is designed to cover.
     await page.request.put(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": "dev-user-bypass" },
+      headers: { "x-e2e-user-id": E2E_USER_ID },
       data: { paletteDeep: newDeep },
     });
     // Reload (simulating a fresh page visit after saving) so the settings page

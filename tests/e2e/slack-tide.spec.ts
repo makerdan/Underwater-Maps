@@ -1,4 +1,4 @@
-import { test, expect, type Page, API_URL } from "./fixtures";
+import { test, expect, type Page, API_URL, E2E_USER_ID } from "./fixtures";
 
 /**
  * Slack-tide visuals end-to-end tests
@@ -74,7 +74,7 @@ test.describe("Slack-tide visuals", () => {
     // Ensure showTidePanel / autoLoadTidal are enabled on the server so they
     // don't get overwritten by a prior test that disabled them.
     await page.request.put(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": "dev-user-bypass" },
+      headers: { "x-e2e-user-id": E2E_USER_ID },
       data: { showTidePanel: true, autoLoadTidal: true },
     });
     // Mock the live tidal endpoint BEFORE navigating so useTidalData picks up

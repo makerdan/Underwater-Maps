@@ -17,10 +17,10 @@
  * (added in Task #122) so the auto-save path against the real DB is
  * exercised without a Clerk JWT.
  */
-import { test, expect, type APIRequestContext, type Page, API_URL } from "./fixtures";
+import { test, expect, type APIRequestContext, type Page, API_URL, E2E_USER_ID } from "./fixtures";
 
 const API_BASE = API_URL;
-const FAKE_USER_ID = "dev-user-bypass";
+const FAKE_USER_ID = E2E_USER_ID;
 
 const authHeaders = { "x-e2e-user-id": FAKE_USER_ID };
 

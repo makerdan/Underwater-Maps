@@ -21,7 +21,7 @@ export function apiUrl(path: string): string {
   return `${API_URL}${path}`;
 }
 
-const E2E_USER_ID = "dev-user-bypass";
+export const E2E_USER_ID = "dev-user-bypass";
 
 export const DEFAULT_SETTINGS = {
   units: "metric",

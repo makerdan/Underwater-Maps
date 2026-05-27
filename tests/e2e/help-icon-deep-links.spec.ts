@@ -1,4 +1,4 @@
-import { test, expect, type Page, API_URL } from "./fixtures";
+import { test, expect, type Page, API_URL, E2E_USER_ID } from "./fixtures";
 
 /**
  * Help-icon deep-link coverage (task #219).
@@ -171,7 +171,7 @@ test.describe("Help-icon deep links", () => {
     // Reset showTidePanel and autoLoadTidal so a prior test that disabled them
     // cannot prevent TidePanel from mounting in this test.
     await page.request.put(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": "dev-user-bypass" },
+      headers: { "x-e2e-user-id": E2E_USER_ID },
       data: { showTidePanel: true, autoLoadTidal: true },
     });
     await stubTidalEndpoints(page);
