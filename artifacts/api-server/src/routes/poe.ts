@@ -6,7 +6,7 @@ import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAu
 import { createRateLimit, stampBaselineRateLimitHeaders } from "../middlewares/rateLimit.js";
 import { getPoeClient } from "@workspace/poe";
 import { withRetry } from "@workspace/poe";
-import { PoeCreditsError, PoeRateLimitError, PoeAuthError } from "@workspace/poe";
+import { PoeCreditsError, PoeRateLimitError, PoeAuthError, ZoneParseError } from "@workspace/poe";
 import { hashCacheKey, globalPoeCache } from "@workspace/poe";
 import { buildVisionInput } from "@workspace/poe";
 import { POE_MODELS } from "@workspace/poe";
@@ -636,7 +636,19 @@ async function classifyOneTileAi(
     return response;
   }, 3);
 
-  const parsed = JSON.parse(result.output_text) as { zones: string[] };
+  if (!result.output_text || result.output_text.trim() === "") {
+    throw new ZoneParseError("content-filtered or empty response from Poe");
+  }
+
+  let parsed: { zones: string[] };
+  try {
+    parsed = JSON.parse(result.output_text) as { zones: string[] };
+  } catch {
+    throw new ZoneParseError(
+      `Poe returned invalid JSON for zone classification: ${result.output_text.slice(0, 200)}`,
+    );
+  }
+
   return {
     zones: parsed.zones,
     usage: {

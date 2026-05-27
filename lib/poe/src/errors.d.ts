@@ -15,6 +15,7 @@ export declare class PoeInvalidRequestError extends Error {
     constructor(message: string);
 }
 export declare class ZoneParseError extends Error {
+    readonly __isZoneParseError: true;
     constructor(message: string);
 }
 export declare function mapHttpStatusToError(status: number, message: string): Error;

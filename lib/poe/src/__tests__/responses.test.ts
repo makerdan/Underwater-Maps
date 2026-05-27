@@ -54,6 +54,38 @@ describe("poeRespond", () => {
     expect(result.text).toContain("sandy_shelf");
   });
 
+  it("throws ZoneParseError when output_text is empty and jsonSchema is set", async () => {
+    vi.mocked(getPoeClient).mockReturnValue(
+      makeMockClient("") as unknown as ReturnType<typeof getPoeClient>,
+    );
+    await expect(
+      poeRespond({
+        model: "Claude-Sonnet-4.6",
+        input: "Classify",
+        jsonSchema: {
+          name: "zone_result",
+          schema: {},
+        },
+      }),
+    ).rejects.toBeInstanceOf(ZoneParseError);
+  });
+
+  it("throws ZoneParseError when output_text is a refusal string and jsonSchema is set", async () => {
+    vi.mocked(getPoeClient).mockReturnValue(
+      makeMockClient("Sorry, I cannot classify this image as requested.") as unknown as ReturnType<typeof getPoeClient>,
+    );
+    await expect(
+      poeRespond({
+        model: "Claude-Sonnet-4.6",
+        input: "Classify",
+        jsonSchema: {
+          name: "zone_result",
+          schema: {},
+        },
+      }),
+    ).rejects.toBeInstanceOf(ZoneParseError);
+  });
+
   it("throws ZoneParseError when Poe returns invalid JSON with a jsonSchema", async () => {
     vi.mocked(getPoeClient).mockReturnValue(
       makeMockClient("NOT_JSON_AT_ALL") as unknown as ReturnType<typeof getPoeClient>,

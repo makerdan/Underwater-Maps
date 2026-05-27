@@ -1,12 +1,16 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { withRetry } from "../retry.js";
-import { PoeCreditsError, PoeRateLimitError, PoeAuthError } from "../errors.js";
+import { PoeCreditsError, PoeRateLimitError, PoeAuthError, ZoneParseError } from "../errors.js";
 
 function makeOpenAIError(status: number, message = "error"): { status: number; message: string } {
   return { status, message };
 }
 
 describe("withRetry", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("returns value on first success", async () => {
     const fn = vi.fn().mockResolvedValue("ok");
     const result = await withRetry(fn, 3);
@@ -26,6 +30,12 @@ describe("withRetry", () => {
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
+  it("throws ZoneParseError immediately without any retries", async () => {
+    const fn = vi.fn().mockRejectedValue(new ZoneParseError("content-filtered or empty response from Poe"));
+    await expect(withRetry(fn, 3)).rejects.toBeInstanceOf(ZoneParseError);
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
   it("retries on 429 and eventually succeeds", async () => {
     vi.useFakeTimers();
     let calls = 0;
@@ -41,7 +51,6 @@ describe("withRetry", () => {
     const result = await resultPromise;
     expect(result).toBe("recovered");
     expect(fn).toHaveBeenCalledTimes(3);
-    vi.useRealTimers();
   });
 
   it("throws PoeRateLimitError after exhausting retries on 429", async () => {
@@ -52,6 +61,5 @@ describe("withRetry", () => {
     await vi.runAllTimersAsync();
     await expect(resultPromise).rejects.toBeInstanceOf(PoeRateLimitError);
     expect(fn).toHaveBeenCalledTimes(4);
-    vi.useRealTimers();
   });
 });

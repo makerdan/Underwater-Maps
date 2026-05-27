@@ -487,6 +487,85 @@ describe("POST /api/poe/classify", () => {
     expect(fakeCreate.mock.calls.length).toBeLessThanOrEqual(16);
   });
 
+  it("single-tile: empty output_text (content-filtered) falls back to heuristic", async () => {
+    fakeCreate.mockReset();
+    fakeCreate.mockResolvedValue({
+      id: "resp_cf_empty",
+      output_text: "",
+      usage: { input_tokens: 10, output_tokens: 0 },
+    });
+
+    const depths32 = Array.from({ length: 1024 }, (_, i) => i % 50);
+    const res = await request(app)
+      .post("/api/poe/classify")
+      .set("x-e2e-user-id", "user-cf-empty")
+      .send({
+        gridBase64: GRID_BASE64,
+        waterType: "saltwater",
+        datasetId: "ds-cf-empty",
+        depths32,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBe("heuristic");
+    expect(res.body.zones).toHaveLength(1024);
+  });
+
+  it("single-tile: refusal string output_text falls back to heuristic", async () => {
+    fakeCreate.mockReset();
+    fakeCreate.mockResolvedValue({
+      id: "resp_cf_refusal",
+      output_text: "Sorry, I cannot classify this image as requested.",
+      usage: { input_tokens: 10, output_tokens: 0 },
+    });
+
+    const depths32 = Array.from({ length: 1024 }, (_, i) => i % 50);
+    const res = await request(app)
+      .post("/api/poe/classify")
+      .set("x-e2e-user-id", "user-cf-refusal")
+      .send({
+        gridBase64: GRID_BASE64,
+        waterType: "saltwater",
+        datasetId: "ds-cf-refusal",
+        depths32,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBe("heuristic");
+    expect(res.body.zones).toHaveLength(1024);
+  });
+
+  it("tiled: all tiles return empty output_text → source=partial, all tiles heuristic", async () => {
+    const W = 128;
+    const H = 128;
+    const depthsFull = Array.from({ length: W * H }, (_, i) => i % 50);
+
+    fakeCreate.mockReset();
+    fakeCreate.mockResolvedValue({
+      id: "resp_cf_tiled",
+      output_text: "",
+      usage: { input_tokens: 10, output_tokens: 0 },
+    });
+
+    const res = await request(app)
+      .post("/api/poe/classify")
+      .set("x-e2e-user-id", "user-cf-tiled")
+      .send({
+        gridBase64: GRID_BASE64,
+        waterType: "saltwater",
+        datasetId: "ds-cf-tiled",
+        depthsFull,
+        widthFull: W,
+        heightFull: H,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBe("partial");
+    expect(res.body.tilesHeuristic).toBe(res.body.tilesTotal);
+    expect(res.body.tilesAi).toBe(0);
+    expect(res.body.zones).toHaveLength(64 * 64);
+  });
+
   it("falls through to the single-tile path when depthsFull resolves to K=1", async () => {
     const W = 32;
     const H = 32;

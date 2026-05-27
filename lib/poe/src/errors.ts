@@ -35,6 +35,7 @@ export class PoeInvalidRequestError extends Error {
 }
 
 export class ZoneParseError extends Error {
+  readonly __isZoneParseError = true as const;
   constructor(message: string) {
     super(message);
     this.name = "ZoneParseError";

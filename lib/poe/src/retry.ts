@@ -1,4 +1,4 @@
-import { PoeCreditsError, PoeRateLimitError, mapHttpStatusToError } from "./errors.js";
+import { PoeCreditsError, PoeRateLimitError, ZoneParseError, mapHttpStatusToError } from "./errors.js";
 
 const RETRY_DELAYS_MS = [1000, 2000, 4000];
 
@@ -51,6 +51,14 @@ export async function withRetry<T>(
         }
 
         throw mapHttpStatusToError(status, err.message);
+      }
+
+      if (
+        err instanceof ZoneParseError ||
+        (err as { name?: string }).name === "ZoneParseError" ||
+        (err as { __isZoneParseError?: boolean }).__isZoneParseError === true
+      ) {
+        throw err;
       }
 
       if (attempt < maxRetries) {
