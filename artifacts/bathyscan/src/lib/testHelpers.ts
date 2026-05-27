@@ -490,6 +490,37 @@ export function installTestHelpers(): void {
 
   let requestHeaders: Record<string, string> = {};
 
+  // Track dataset IDs whose marker-list query has been invalidated at least
+  // once since installTestHelpers() ran (i.e. since the current page load).
+  // We persist this in a Set rather than relying solely on
+  // `getQueryState().isInvalidated` because TanStack Query v5 resets that
+  // flag to `false` as soon as a refetch triggered by the invalidation
+  // completes — which can happen in < 500 ms when there is an active
+  // observer.  If the poll interval in the test is slower than the refetch,
+  // `isInvalidated` would already be `false` by the time the poll reads it,
+  // causing a spurious 15-second timeout.
+  const _invalidatedMarkerDatasets = new Set<string>();
+
+  queryClient.getQueryCache().subscribe((event) => {
+    if (event.type !== "updated") return;
+    const { query } = event;
+    if (!query.state.isInvalidated) return;
+    const key = query.queryKey as unknown[];
+    if (
+      Array.isArray(key) &&
+      key[0] === "/api/markers" &&
+      key.length > 1 &&
+      key[1] !== null &&
+      typeof key[1] === "object"
+    ) {
+      const params = key[1] as Record<string, unknown>;
+      const datasetId = params["datasetId"];
+      if (typeof datasetId === "string" && datasetId) {
+        _invalidatedMarkerDatasets.add(datasetId);
+      }
+    }
+  });
+
   const buildProductionMarkerMenuItems = (
     marker: Marker,
     capturedDatasetId: string,
@@ -543,8 +574,9 @@ export function installTestHelpers(): void {
       queryClient.getQueryState(getGetMarkersQueryKey({ datasetId }))
         ?.dataUpdatedAt ?? 0,
     isMarkerCacheInvalidated: (datasetId) =>
-      queryClient.getQueryState(getGetMarkersQueryKey({ datasetId }))
-        ?.isInvalidated ?? false,
+      _invalidatedMarkerDatasets.has(datasetId) ||
+      (queryClient.getQueryState(getGetMarkersQueryKey({ datasetId }))
+        ?.isInvalidated ?? false),
     getColormapTheme: () => useSettingsStore.getState().colormapTheme,
     showProductionMarkerMenu: (x, y, marker, capturedDatasetId) =>
       useContextMenuStore
