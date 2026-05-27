@@ -23,6 +23,7 @@ import { SALTWATER_ZONES, FRESHWATER_ZONES } from "@/lib/zoneMap";
 import type { QueryContext } from "@/lib/queryLLM";
 import type { ToolOptions } from "@/lib/queryTools";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
+import { useSettingsStore } from "@/lib/settingsStore";
 
 const HISTORY_KEY = "bsquery-history";
 const MAX_HISTORY = 10;
@@ -59,6 +60,8 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
   const [history, setHistory] = useState<string[]>(loadHistory);
   const inputRef = useRef<HTMLInputElement>(null);
   const isOnline = useOfflineStore((s) => s.isOnline);
+  const llmDisclosureAcknowledged = useSettingsStore((s) => s.llmDisclosureAcknowledged);
+  const setLlmDisclosureAcknowledged = useSettingsStore((s) => s.setLlmDisclosureAcknowledged);
 
   // Focus input when panel opens
   useEffect(() => {
@@ -100,6 +103,8 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
   const handleSubmit = useCallback(async (q: string) => {
     const trimmed = q.trim();
     if (!trimmed || loading) return;
+    // Require disclosure acknowledgment before sending any data to the LLM.
+    if (!llmDisclosureAcknowledged) return;
 
     setLoading(true);
     setResult(null);
@@ -137,7 +142,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
     } finally {
       setLoading(false);
     }
-  }, [loading, buildContext, setDatasetId]);
+  }, [loading, buildContext, setDatasetId, llmDisclosureAcknowledged]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") void handleSubmit(query);
@@ -180,6 +185,48 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
           </button>
         </ViewscreenTooltip>
       </div>
+
+      {/* LLM data-sharing disclosure — shown until the user dismisses it */}
+      {!llmDisclosureAcknowledged && (
+        <div
+          data-testid="llm-disclosure-notice"
+          style={{
+            background: "rgba(251,146,60,0.07)",
+            border: "1px solid rgba(251,146,60,0.35)",
+            borderRadius: 4,
+            padding: "9px 11px",
+            marginBottom: 10,
+            fontSize: 10,
+            color: "#e2e8f0",
+            lineHeight: 1.6,
+            letterSpacing: "0.04em",
+          }}
+        >
+          <div style={{ color: "#fb923c", fontWeight: 700, letterSpacing: "0.12em", marginBottom: 5 }}>
+            ◈ AI QUERY — DATA NOTICE
+          </div>
+          When you submit a query, the following context is sent to a third-party AI service (OpenAI): your <strong style={{ color: "#fbbf24" }}>approximate camera location & depth</strong>, <strong style={{ color: "#fbbf24" }}>dataset name</strong>, dataset depth range, water type, and top habitat zone names. Raw sonar grid data is not transmitted. Queries are not stored after processing.
+          <div style={{ marginTop: 8 }}>
+            <button
+              data-testid="llm-disclosure-acknowledge"
+              onClick={() => setLlmDisclosureAcknowledged(true)}
+              style={{
+                background: "rgba(251,146,60,0.15)",
+                border: "1px solid rgba(251,146,60,0.5)",
+                borderRadius: 3,
+                color: "#fb923c",
+                fontFamily: "inherit",
+                fontSize: 10,
+                letterSpacing: "0.14em",
+                padding: "4px 12px",
+                cursor: "pointer",
+              }}
+            >
+              UNDERSTOOD — ENABLE AI QUERIES
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Offline notice */}
       {!isOnline && (
@@ -227,16 +274,16 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
         <button
           data-testid="query-submit"
           onClick={() => void handleSubmit(query)}
-          disabled={loading || !query.trim() || !isOnline}
+          disabled={loading || !query.trim() || !isOnline || !llmDisclosureAcknowledged}
           style={{
-            background: (loading || !isOnline) ? "rgba(0,229,255,0.05)" : "rgba(0,229,255,0.12)",
+            background: (loading || !isOnline || !llmDisclosureAcknowledged) ? "rgba(0,229,255,0.05)" : "rgba(0,229,255,0.12)",
             border: "1px solid rgba(0,229,255,0.3)",
             borderRadius: 4,
-            color: (loading || !isOnline) ? "#475569" : "#00e5ff",
+            color: (loading || !isOnline || !llmDisclosureAcknowledged) ? "#475569" : "#00e5ff",
             fontSize: 10,
             letterSpacing: "0.18em",
             padding: "7px 14px",
-            cursor: (loading || !isOnline) ? "not-allowed" : "pointer",
+            cursor: (loading || !isOnline || !llmDisclosureAcknowledged) ? "not-allowed" : "pointer",
             fontFamily: "inherit",
             transition: "all 0.15s",
           }}

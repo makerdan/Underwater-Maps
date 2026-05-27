@@ -17,7 +17,7 @@ import {
   type ShortcutActionId,
 } from "./keyBindings";
 
-export const SETTINGS_SCHEMA_VERSION = 10;
+export const SETTINGS_SCHEMA_VERSION = 11;
 
 /**
  * Standard-mapping gamepad button index used to trigger the crosshair
@@ -219,6 +219,12 @@ export interface SettingsState {
 
   // ── Account & Privacy ────────────────────────────────────────────────
   telemetryOptIn: boolean;
+  /**
+   * Whether the user has read and dismissed the one-time disclosure
+   * explaining that AI queries transmit their approximate camera location
+   * and dataset name to a third-party LLM service.
+   */
+  llmDisclosureAcknowledged: boolean;
 
   /** Per-dataset saved camera spawn positions (set via "Set as home" context menu). */
   datasetHomePositions: Record<string, DatasetHomePosition>;
@@ -370,6 +376,7 @@ interface SettingsActions {
 
   // Account
   setTelemetryOptIn: (v: boolean) => void;
+  setLlmDisclosureAcknowledged: (v: boolean) => void;
 
   // Page-level
   setShowAdvancedEverywhere: (v: boolean) => void;
@@ -593,6 +600,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
 
   // Account
   telemetryOptIn: false,
+  llmDisclosureAcknowledged: false,
 
   datasetHomePositions: {},
   datasetFolderExpanded: {},
@@ -650,7 +658,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   accessibility: [
     "reducedMotion", "colorBlindSafePalette", "largeHudText", "highContrastHud",
   ],
-  account: ["telemetryOptIn"],
+  account: ["telemetryOptIn", "llmDisclosureAcknowledged"],
   environment: ["waterType"],
   shortcuts: ["keyBindings", "crosshairMenuGamepadButton"],
 };
@@ -820,6 +828,7 @@ export const useSettingsStore = create<SettingsStore>()(
 
         // Account
         setTelemetryOptIn: setter("telemetryOptIn"),
+        setLlmDisclosureAcknowledged: setter("llmDisclosureAcknowledged"),
 
         // Page-level
         setShowAdvancedEverywhere: setter("showAdvancedEverywhere"),

@@ -56,6 +56,7 @@ import { VisibleDatasetsLoader } from "@/lib/VisibleDatasetsLoader";
 import { waterLabels } from "@/lib/waterLabels";
 import { useGetSettings, getGetSettingsQueryKey } from "@workspace/api-client-react";
 import { useDriftStore } from "@/lib/driftStore";
+import { useMarkerLayerStore } from "@/lib/markerLayerStore";
 import { WeatherPanel } from "@/components/WeatherPanel";
 import { DriftTimeline } from "@/components/DriftTimeline";
 import { HelpButton } from "@/components/help/HelpButton";
@@ -924,6 +925,9 @@ function Main() {
           />
         )}
 
+        {/* Marker subsampling notice — bottom-right, shown when markers are capped */}
+        <MarkerSubsampleBadge />
+
         {/* Query panel toggle hint — bottom-centre, visible when panel is closed */}
         {!queryOpen && (
           <ViewscreenTooltip label='Open natural-language query panel (press "/")' side="top">
@@ -953,6 +957,75 @@ function Main() {
           </ViewscreenTooltip>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * MarkerSubsampleBadge — renders a small floating notice at the bottom-right
+ * of the scene viewport when MarkerLayer is actively subsampling (the total
+ * marker count exceeds the user's cluster threshold). Instructs the user to
+ * zoom in to see more markers.
+ */
+function MarkerSubsampleBadge() {
+  const isSubsampled = useMarkerLayerStore((s) => s.isSubsampled);
+  const totalVisible = useMarkerLayerStore((s) => s.totalVisible);
+  const renderedCount = useMarkerLayerStore((s) => s.renderedCount);
+  const [dismissed, setDismissed] = useState(false);
+
+  // Re-show the badge whenever subsampling becomes active again after being off
+  // so new subsampling episodes aren't silently swallowed by a stale dismiss.
+  const prevIsSubsampled = React.useRef(false);
+  useEffect(() => {
+    if (isSubsampled && !prevIsSubsampled.current) {
+      setDismissed(false);
+    }
+    prevIsSubsampled.current = isSubsampled;
+  }, [isSubsampled]);
+
+  if (!isSubsampled || dismissed) return null;
+
+  return (
+    <div
+      data-testid="marker-subsample-badge"
+      style={{
+        position: "absolute",
+        bottom: 56,
+        right: 16,
+        zIndex: 25,
+        background: "rgba(2,8,18,0.92)",
+        border: "1px solid rgba(251,146,60,0.4)",
+        borderRadius: 4,
+        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+        fontSize: 10,
+        color: "#fb923c",
+        padding: "5px 10px",
+        backdropFilter: "blur(6px)",
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        pointerEvents: "auto",
+        letterSpacing: "0.06em",
+      }}
+    >
+      <span>
+        Showing <strong>{renderedCount}</strong> of <strong>{totalVisible}</strong> markers — zoom in to see more
+      </span>
+      <button
+        onClick={() => setDismissed(true)}
+        aria-label="Dismiss marker notice"
+        style={{
+          background: "none",
+          border: "none",
+          color: "#64748b",
+          cursor: "pointer",
+          fontSize: 11,
+          lineHeight: 1,
+          padding: 0,
+        }}
+      >
+        ✕
+      </button>
     </div>
   );
 }

@@ -7,10 +7,11 @@
  * Sampling time:
  *   - When Drift Planner is active, the snapshot follows `driftHour` so the
  *     planner visuals and always-on overlays agree.
- *   - Otherwise the snapshot tracks the current UTC hour.
+ *   - Otherwise the snapshot tracks the current UTC hour, updated on a
+ *     1-minute interval so the displayed time never drifts behind real time.
  *   - Callers can pin a specific hour via the `hourOverride` argument.
  */
-import { useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   useGetSurfaceConditions,
   getGetSurfaceConditionsQueryKey,
@@ -82,6 +83,16 @@ export function useSurfaceConditions(
     },
   });
 
+  // Keep `nowHour` current with a 1-minute tick so the displayed time never
+  // drifts up to 30 minutes behind real time when the app sits idle.
+  const [nowHour, setNowHour] = useState(() => new Date().getUTCHours());
+  useEffect(() => {
+    const id = setInterval(() => {
+      setNowHour(new Date().getUTCHours());
+    }, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   return useMemo(() => {
     const fallback = {
       windSpeedKnots: manualWindSpeedKnots,
@@ -108,7 +119,6 @@ export function useSurfaceConditions(
     });
 
     // Sample hour priority: explicit override > Drift Planner scrubber > now.
-    const nowHour = new Date().getUTCHours();
     const activeHour =
       hourOverride !== undefined
         ? ((hourOverride % 24) + 24) % 24
@@ -142,5 +152,5 @@ export function useSurfaceConditions(
   }, [data, isLoading, isError, refetch, centerLat, centerLon,
       manualWindSpeedKnots, manualWindDegrees,
       manualTidalSpeedKnots, manualTidalDegrees,
-      driftPlannerActive, driftHour, hourOverride]);
+      driftPlannerActive, driftHour, hourOverride, nowHour]);
 }
