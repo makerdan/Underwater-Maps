@@ -1,6 +1,23 @@
 import { getAuth } from "@clerk/express";
 import type { Request, Response, NextFunction } from "express";
 
+// ---------------------------------------------------------------------------
+// Production safety guard — refuse to start if E2E_AUTH_BYPASS is active
+// in a production Replit deployment. This is checked once at module load so
+// the server aborts immediately rather than accepting (and bypassing) real
+// user requests.
+// ---------------------------------------------------------------------------
+if (
+  process.env["E2E_AUTH_BYPASS"] === "1" &&
+  (process.env["NODE_ENV"] === "production" || Boolean(process.env["REPLIT_DEPLOYMENT"]))
+) {
+  throw new Error(
+    "[requireAuth] E2E_AUTH_BYPASS=1 is set but NODE_ENV=production or REPLIT_DEPLOYMENT is " +
+      "present. This combination is forbidden — it would allow any caller to impersonate any " +
+      "user. Server startup aborted.",
+  );
+}
+
 export interface AuthenticatedRequest extends Request {
   clerkUserId: string;
 }

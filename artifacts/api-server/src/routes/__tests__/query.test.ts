@@ -19,9 +19,17 @@ vi.mock("@workspace/db", () => ({
     insert: vi.fn().mockReturnValue({
       values: vi.fn().mockResolvedValue([]),
     }),
+    update: vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([]),
+        }),
+      }),
+    }),
   },
   pool: { query: vi.fn() },
   poeUsageLogTable: {},
+  userCatalogSavesTable: {},
 }));
 
 vi.mock("@workspace/poe", async () => {

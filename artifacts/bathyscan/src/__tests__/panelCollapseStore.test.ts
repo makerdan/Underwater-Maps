@@ -14,6 +14,8 @@ const PANEL_IDS: PanelId[] = [
   "overlaysTools",
   "mapData",
   "conditions",
+  "markersAccordion",
+  "uploadTerrainAccordion",
 ];
 
 const DEFAULTS: Record<PanelId, boolean> = {
@@ -26,6 +28,8 @@ const DEFAULTS: Record<PanelId, boolean> = {
   overlaysTools: false,
   mapData: false,
   conditions: false,
+  markersAccordion: true,
+  uploadTerrainAccordion: true,
 };
 
 async function flush() {
@@ -94,6 +98,8 @@ describe("panelCollapseStore persistence", () => {
       overlaysTools: true,
       mapData: false,
       conditions: true,
+      markersAccordion: false,
+      uploadTerrainAccordion: false,
     };
     const { setCollapsed } = usePanelCollapseStore.getState();
     for (const id of PANEL_IDS) setCollapsed(id, pattern[id]);

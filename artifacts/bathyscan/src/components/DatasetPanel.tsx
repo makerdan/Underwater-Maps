@@ -412,11 +412,17 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   }, [userPendingTerrain, userPendingOverview, pendingUserDatasetId, setTerrain, setDatasetId]);
 
   // ─── Overview for the active dataset (initial / background) ───────────────
-  const activeId = pendingId ? "" : (datasetId ?? "");
-  const { data: activeOverviewData } = useGetDatasetsIdOverview(activeId, {
+  // Use a non-empty sentinel key when there is no real dataset ID so the
+  // query key never collapses to an empty string — which would collide with
+  // any other query that happens to run with id="". The query is disabled
+  // when there is no real ID, so the sentinel value is never fetched.
+  const _OVERVIEW_NO_ID_SENTINEL = "__no_dataset__";
+  const activeId = pendingId ? null : datasetId;
+  const activeOverviewQueryId = activeId ?? _OVERVIEW_NO_ID_SENTINEL;
+  const { data: activeOverviewData } = useGetDatasetsIdOverview(activeOverviewQueryId, {
     query: {
       enabled: !!activeId,
-      queryKey: getGetDatasetsIdOverviewQueryKey(activeId),
+      queryKey: getGetDatasetsIdOverviewQueryKey(activeOverviewQueryId),
     },
   });
 

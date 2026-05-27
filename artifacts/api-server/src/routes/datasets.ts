@@ -5,6 +5,7 @@ import { getAuth } from "@clerk/express";
 import { z } from "zod";
 import { db, customDatasetsTable, userSettingsTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
+import { createRateLimit } from "../middlewares/rateLimit.js";
 import {
   GetDatasetsResponse,
   GetDatasetsIdTerrainResponse,
@@ -20,6 +21,13 @@ import {
 } from "../lib/terrain.js";
 import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
 import { substrateFingerprintForDataset } from "../lib/substrateGrid.js";
+
+const datasetUploadRateLimit = createRateLimit({
+  route: "dataset-upload",
+  windowMs: 60_000,
+  max: 10,
+  mode: "ip",
+});
 
 const UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: UPLOAD_MAX_BYTES } });
@@ -290,6 +298,7 @@ router.get("/datasets/:id/zones", async (req, res): Promise<void> => {
 // is no longer an anonymous "upload" placeholder dataset id.
 router.post(
   "/datasets/upload",
+  datasetUploadRateLimit,
   requireAuth,
   upload.single("file"),
   multerErrorHandler,

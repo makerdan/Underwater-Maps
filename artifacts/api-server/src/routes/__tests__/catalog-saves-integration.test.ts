@@ -437,6 +437,7 @@ const H = vi.hoisted(() => {
 vi.mock("drizzle-orm", () => ({
   eq: (col: unknown, val: unknown) => ({ kind: "eq", col, val }),
   and: (...parts: unknown[]) => ({ kind: "and", parts }),
+  lt: (col: unknown, val: unknown) => ({ kind: "lt", col, val }),
   desc: (col: unknown) => ({ kind: "desc", col }),
   asc: (col: unknown) => ({ kind: "asc", col }),
   sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({

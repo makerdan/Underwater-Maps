@@ -26,7 +26,7 @@
  */
 
 import { Router } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq, and, lt } from "drizzle-orm";
 import { z } from "zod";
 import { db, userCatalogSavesTable, customDatasetsTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
@@ -57,6 +57,45 @@ const router = Router();
 // Kick off catalog seed on first request (non-blocking fallback — server
 // startup also calls this, but it's idempotent so calling it twice is fine).
 void seedDatasetCatalog();
+
+// ---------------------------------------------------------------------------
+// Startup sweeper: recover saves that are permanently stuck in "processing"
+// ---------------------------------------------------------------------------
+// Any save row that has been in "processing" for longer than 10 minutes has
+// certainly lost its background job (e.g. the process was killed mid-flight).
+// Mark those rows "failed" so users can see a clear error state and retry
+// rather than waiting forever. Called once at module load (server startup)
+// and not on a recurring schedule — the fire-and-forget materializeSave
+// function always transitions to "ready" or "failed" on its own, so rows
+// only get permanently stuck across process restarts.
+async function recoverStuckSaves(): Promise<void> {
+  const STUCK_THRESHOLD_MS = 10 * 60 * 1000;
+  try {
+    const cutoff = new Date(Date.now() - STUCK_THRESHOLD_MS);
+    const updated = await db
+      .update(userCatalogSavesTable)
+      .set({
+        status: "failed",
+        errorMessage:
+          "Materialization timed out (the server was likely restarted while this save was processing). Please retry.",
+      })
+      .where(
+        and(
+          eq(userCatalogSavesTable.status, "processing"),
+          lt(userCatalogSavesTable.requestedAt, cutoff),
+        ),
+      )
+      .returning({ id: userCatalogSavesTable.id });
+    if (updated.length > 0) {
+      console.warn(
+        `[catalog-saves] recoverStuckSaves: marked ${updated.length} stuck processing row(s) as failed`,
+      );
+    }
+  } catch (err) {
+    console.warn(`[catalog-saves] recoverStuckSaves failed: ${(err as Error).message}`);
+  }
+}
+void recoverStuckSaves();
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -280,6 +319,13 @@ router.post("/datasets/catalog/:id/save", requireAuth, async (req, res): Promise
  * On success, links `user_catalog_saves.dataset_id` to the new row and
  * marks the save as `ready`. On failure, marks it `failed` with a
  * human-readable `error_message`.
+ *
+ * Two-layer error containment:
+ *  - Inner try/catch: handles expected materializer errors (grid build failures,
+ *    unsupported entry types) and writes a descriptive `failed` status.
+ *  - Outer try/catch: unconditional safety net that catches anything the inner
+ *    handler itself might throw (e.g. the DB update in the catch block failing)
+ *    and makes a last-ditch attempt to mark the row `failed`.
  */
 async function materializeSave(
   saveId: string,
@@ -287,67 +333,83 @@ async function materializeSave(
   entry: CatalogSeedEntry,
 ): Promise<void> {
   try {
-    const materialized = await buildCatalogGrids(entry);
-    if (!materialized) {
-      throw new Error(
-        `Materialization is not yet implemented for catalog entries of type '${entry.dataType}' ` +
-          `from source '${entry.sourceAgency}'. preset-* entries are supported today.`,
-      );
+    try {
+      const materialized = await buildCatalogGrids(entry);
+      if (!materialized) {
+        throw new Error(
+          `Materialization is not yet implemented for catalog entries of type '${entry.dataType}' ` +
+            `from source '${entry.sourceAgency}'. preset-* entries are supported today.`,
+        );
+      }
+
+      const { terrain, overview } = materialized;
+
+      // Insert the materialized grids into the user's dataset store. We let
+      // Postgres allocate the row UUID, then patch the in-memory grid copies
+      // to carry that same id so the /user/datasets/:id/{terrain,overview}
+      // responses validate against the schema's datasetId field.
+      const [created] = await db
+        .insert(customDatasetsTable)
+        .values({
+          userId,
+          name: entry.name,
+          minDepth: terrain.minDepth,
+          maxDepth: terrain.maxDepth,
+          terrainJson: terrain as unknown as Record<string, unknown>,
+          overviewJson: overview as unknown as Record<string, unknown>,
+        })
+        .returning({ id: customDatasetsTable.id });
+
+      if (!created) {
+        throw new Error("custom_datasets insert returned no row");
+      }
+
+      // Rewrite the stored grids so their datasetId matches the new row id.
+      const terrainStamped = { ...terrain, datasetId: created.id };
+      const overviewStamped = { ...overview, datasetId: created.id };
+      await db
+        .update(customDatasetsTable)
+        .set({
+          terrainJson: terrainStamped as unknown as Record<string, unknown>,
+          overviewJson: overviewStamped as unknown as Record<string, unknown>,
+        })
+        .where(eq(customDatasetsTable.id, created.id));
+
+      await db
+        .update(userCatalogSavesTable)
+        .set({
+          status: "ready",
+          readyAt: new Date(),
+          cacheKey: `catalog:${entry.id}`,
+          datasetId: created.id,
+          errorMessage: null,
+        })
+        .where(eq(userCatalogSavesTable.id, saveId));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Materialization failed";
+      console.warn(`[catalog-saves] materialize ${saveId} (${entry.id}) failed: ${message}`);
+      await db
+        .update(userCatalogSavesTable)
+        .set({ status: "failed", errorMessage: message })
+        .where(eq(userCatalogSavesTable.id, saveId));
     }
-
-    const { terrain, overview } = materialized;
-
-    // Insert the materialized grids into the user's dataset store. We let
-    // Postgres allocate the row UUID, then patch the in-memory grid copies
-    // to carry that same id so the /user/datasets/:id/{terrain,overview}
-    // responses validate against the schema's datasetId field.
-    const [created] = await db
-      .insert(customDatasetsTable)
-      .values({
-        userId,
-        name: entry.name,
-        minDepth: terrain.minDepth,
-        maxDepth: terrain.maxDepth,
-        terrainJson: terrain as unknown as Record<string, unknown>,
-        overviewJson: overview as unknown as Record<string, unknown>,
-      })
-      .returning({ id: customDatasetsTable.id });
-
-    if (!created) {
-      throw new Error("custom_datasets insert returned no row");
+  } catch (outerErr) {
+    // Safety net: the inner catch itself threw (e.g. the DB update in the
+    // error handler failed). Make one unconditional last-ditch attempt to
+    // surface a visible error state rather than leaving the row stuck in
+    // "processing" indefinitely.
+    console.error(
+      `[catalog-saves] materialize ${saveId} outer-catch (status update may have failed):`,
+      outerErr,
+    );
+    try {
+      await db
+        .update(userCatalogSavesTable)
+        .set({ status: "failed", errorMessage: "Unexpected internal error; please retry." })
+        .where(eq(userCatalogSavesTable.id, saveId));
+    } catch {
+      /* truly nothing more we can do */
     }
-
-    // Rewrite the stored grids so their datasetId matches the new row id.
-    const terrainStamped = { ...terrain, datasetId: created.id };
-    const overviewStamped = { ...overview, datasetId: created.id };
-    await db
-      .update(customDatasetsTable)
-      .set({
-        terrainJson: terrainStamped as unknown as Record<string, unknown>,
-        overviewJson: overviewStamped as unknown as Record<string, unknown>,
-      })
-      .where(eq(customDatasetsTable.id, created.id));
-
-    await db
-      .update(userCatalogSavesTable)
-      .set({
-        status: "ready",
-        readyAt: new Date(),
-        cacheKey: `catalog:${entry.id}`,
-        datasetId: created.id,
-        errorMessage: null,
-      })
-      .where(eq(userCatalogSavesTable.id, saveId));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Materialization failed";
-    console.warn(`[catalog-saves] materialize ${saveId} (${entry.id}) failed: ${message}`);
-    await db
-      .update(userCatalogSavesTable)
-      .set({ status: "failed", errorMessage: message })
-      .where(eq(userCatalogSavesTable.id, saveId))
-      .catch(() => {
-        /* best effort; nothing more we can do here */
-      });
   }
 }
 

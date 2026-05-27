@@ -2,7 +2,15 @@ import { Router } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, gpsTrailsTable, gpsTrailPointsTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
+import { createRateLimit } from "../middlewares/rateLimit.js";
 import { z } from "zod";
+
+const trailUploadRateLimit = createRateLimit({
+  route: "trail-upload",
+  windowMs: 60_000,
+  max: 10,
+  mode: "ip",
+});
 
 const router = Router();
 
@@ -69,7 +77,7 @@ router.get("/trails", requireAuth, async (req, res): Promise<void> => {
 // ---------------------------------------------------------------------------
 // POST /trails
 // ---------------------------------------------------------------------------
-router.post("/trails", requireAuth, async (req, res): Promise<void> => {
+router.post("/trails", trailUploadRateLimit, requireAuth, async (req, res): Promise<void> => {
   const parsed = PostTrailBodySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: parsed.error.message });
@@ -105,10 +113,15 @@ router.post("/trails", requireAuth, async (req, res): Promise<void> => {
         recordedAt: new Date(p.timestamp),
       }));
 
-      // Bulk-insert in chunks of 500 to avoid query size limits
+      // Bulk-insert in chunks of 500 to avoid query size limits.
+      // Yield between chunks so a large upload (up to 50 k points) does
+      // not monopolise the Node.js event loop for its entire duration.
       const CHUNK = 500;
       for (let i = 0; i < pointRows.length; i += CHUNK) {
         await tx.insert(gpsTrailPointsTable).values(pointRows.slice(i, i + CHUNK));
+        if (i + CHUNK < pointRows.length) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
       }
     }
 
