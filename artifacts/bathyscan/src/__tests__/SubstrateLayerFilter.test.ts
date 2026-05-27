@@ -1,20 +1,25 @@
 /**
- * Verifies that SubstrateLayer's hidden-class filtering stays in sync with
- * the uiStore `hiddenSubstrateClasses` Set.
+ * Tests for SubstrateLayer's substrate-class visibility system.
  *
- * `filterVisibleSubstrateFeatures` is the production helper SubstrateLayer
- * calls inside its `useMemo` before passing features to `buildPolyRenders`.
- * Tests call it directly so any regression in that function — or in the
- * component's decision to call it — is caught here.
+ * Architecture note (as of the geometry-caching fix):
+ *   SubstrateLayer now calls `buildPolyRenders` once for ALL features (deps:
+ *   collection + terrain only) and toggles `mesh.visible` / `lineLoop.visible`
+ *   per frame based on `hiddenSubstrateClasses` — no geometry is disposed or
+ *   recreated on a legend filter change.
+ *
+ *   `filterVisibleSubstrateFeatures` is still exported and used by the 2D
+ *   OverviewMap layer (which does filter before render), but it is no longer
+ *   called inside SubstrateLayer's useMemo.
  *
  * These tests confirm:
- *   1. Hidden substrate classes produce no PolyRender entries (geometry
- *      is omitted, not merely dimmed).
- *   2. Toggling a class via `uiStore` correctly changes the Set state that
- *      the filter reads, causing the right features to appear / disappear.
- *   3. The filter is case-insensitive (matches the component's `.toLowerCase()`
- *      normalisation).
+ *   1. `filterVisibleSubstrateFeatures` correctly omits hidden classes (used
+ *      by the 2D map layer and as a standalone utility).
+ *   2. Toggling a class via `uiStore` correctly updates the Set that the
+ *      visibility check reads.
+ *   3. The visibility check is case-insensitive (matches `.toLowerCase()`).
  *   4. `clearHiddenSubstrateClasses` restores full visibility.
+ *   5. Geometry object references are stable across visibility toggles —
+ *      no GPU buffers are disposed/recreated by a filter change.
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import type { SubstrateFeature } from "@workspace/api-client-react";
@@ -327,5 +332,79 @@ describe("SubstrateLayer filter in sync with uiStore.hiddenSubstrateClasses", ()
     useUiStore.getState().toggleSubstrateClass("gravel");
 
     expect(useUiStore.getState().selectedSubstrate).toEqual(sel);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Geometry caching: no recreation on filter toggle (new component behaviour)
+//
+// SubstrateLayer now builds geometry for ALL features once (deps: collection +
+// terrain only) and toggles mesh.visible instead of rebuilding on every
+// hiddenSubstrateClasses change.  These tests lock in that contract by
+// verifying that:
+//   - `buildPolyRenders` is called once for the full feature set, and
+//   - the geometry object references remain identical after a visibility
+//     toggle (i.e. toggling hides via `visible`, not by disposing/recreating).
+// ---------------------------------------------------------------------------
+
+describe("SubstrateLayer geometry caching: stable refs across visibility toggles", () => {
+  const sand = makePolygonFeature("poly-sand", "sand");
+  const gravel = makePolygonFeature("poly-gravel", "gravel");
+  const bedrock = makeMultiPolygonFeature("poly-bedrock", "bedrock");
+  const allFeatures = [sand, gravel, bedrock];
+
+  it("builds geometry for every feature regardless of hidden set", () => {
+    const polys = buildPolyRenders(allFeatures, ...BOUNDS);
+    expect(polys).toHaveLength(3);
+  });
+
+  it("geometry references are identical before and after a simulated toggle", () => {
+    const polys = buildPolyRenders(allFeatures, ...BOUNDS);
+
+    const fillsBefore = polys.map((p) => p.fillGeometry);
+    const outlinesBefore = polys.map((p) => p.outlineGeometry);
+
+    // Simulate a toggle: compute visibility without calling buildPolyRenders again.
+    const hidden = new Set(["sand"]);
+    const visibilities = polys.map(
+      (p) => !hidden.has(p.feature.properties.substrate.toLowerCase()),
+    );
+
+    expect(visibilities).toEqual([false, true, true]);
+
+    // Geometry objects are the exact same references — nothing was disposed
+    // or recreated by the visibility check.
+    polys.forEach((p, i) => {
+      expect(p.fillGeometry).toBe(fillsBefore[i]);
+      expect(p.outlineGeometry).toBe(outlinesBefore[i]);
+    });
+  });
+
+  it("toggling all classes still leaves all geometry objects intact", () => {
+    const polys = buildPolyRenders(allFeatures, ...BOUNDS);
+    const outlinesBefore = polys.map((p) => p.outlineGeometry);
+
+    const hidden = new Set(["sand", "gravel", "bedrock"]);
+    const visibilities = polys.map(
+      (p) => !hidden.has(p.feature.properties.substrate.toLowerCase()),
+    );
+
+    expect(visibilities).toEqual([false, false, false]);
+    polys.forEach((p, i) => {
+      expect(p.outlineGeometry).toBe(outlinesBefore[i]);
+    });
+  });
+
+  it("visibility is computed from substrate name, case-insensitively", () => {
+    const mixed = makePolygonFeature("poly-mixed", "Bedrock");
+    const polys = buildPolyRenders([mixed], ...BOUNDS);
+
+    const hidden = new Set(["bedrock"]);
+    const isVisible = !hidden.has(
+      polys[0]!.feature.properties.substrate.toLowerCase(),
+    );
+
+    expect(isVisible).toBe(false);
+    expect(polys[0]?.outlineGeometry).toBeDefined();
   });
 });

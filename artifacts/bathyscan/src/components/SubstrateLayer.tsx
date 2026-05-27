@@ -236,31 +236,28 @@ export const SubstrateLayer: React.FC = () => {
   const sourceName = meta?.sourceName ?? "Alaska ShoreZone (NOAA AKR / ADF&G)";
   const creditUrl = meta?.creditUrl ?? "https://alaskafisheries.noaa.gov/shorezone/";
 
-  const polys = useMemo(() => {
+  // Build geometry for ALL features once. hiddenSubstrateClasses is intentionally
+  // excluded from the deps — visibility is toggled via mesh.visible so GPU buffers
+  // are never disposed and recreated on a simple filter change.
+  const allPolys = useMemo(() => {
     if (!collection?.features?.length || !terrain) return [];
-    // Honor the shared substrate-class filter so the 3D scene stays in sync
-    // with the 2D OverviewMap legend. Hidden classes are dropped entirely
-    // rather than dimmed — anglers wanted them out of the way.
-    const visible = filterVisibleSubstrateFeatures(
-      collection.features,
-      hiddenSubstrateClasses,
-    );
     return buildPolyRenders(
-      visible,
+      collection.features,
       terrain.minLon, terrain.maxLon,
       terrain.minLat, terrain.maxLat,
     );
-  }, [collection, terrain, hiddenSubstrateClasses]);
+  }, [collection, terrain]);
 
-  // Free GPU buffers when polys change or the component unmounts.
+  // Free GPU buffers only when the dataset changes or the component unmounts —
+  // not on every legend filter toggle.
   useEffect(() => {
     return () => {
-      for (const p of polys) {
+      for (const p of allPolys) {
         p.outlineGeometry.dispose();
         p.fillGeometry?.dispose();
       }
     };
-  }, [polys]);
+  }, [allPolys]);
 
   const handleClick = useCallback(
     (feature: SubstrateFeature) => (e: ThreeEvent<MouseEvent>) => {
@@ -270,18 +267,22 @@ export const SubstrateLayer: React.FC = () => {
     [setSelectedSubstrate, sourceName, creditUrl],
   );
 
-  if (!substrateColorMode || !polys.length) return null;
+  if (!substrateColorMode || !allPolys.length) return null;
 
   return (
     <group name="substrate-polygons">
-      {polys.map((p, i) => {
+      {allPolys.map((p, i) => {
         const isSelected =
           selectedSubstrate?.unitId === p.feature.properties.unitId;
+        const isVisible = !hiddenSubstrateClasses.has(
+          p.feature.properties.substrate.toLowerCase(),
+        );
         return (
           <React.Fragment key={i}>
             {p.fillGeometry && (
               <mesh
                 geometry={p.fillGeometry}
+                visible={isVisible}
                 renderOrder={2}
                 onClick={handleClick(p.feature)}
               >
@@ -294,7 +295,11 @@ export const SubstrateLayer: React.FC = () => {
                 />
               </mesh>
             )}
-            <lineLoop geometry={p.outlineGeometry} renderOrder={3}>
+            <lineLoop
+              geometry={p.outlineGeometry}
+              visible={isVisible}
+              renderOrder={3}
+            >
               <lineBasicMaterial
                 color={p.color}
                 transparent
