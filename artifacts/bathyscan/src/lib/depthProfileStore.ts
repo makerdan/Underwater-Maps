@@ -6,11 +6,11 @@
  *   1. User right-clicks terrain → "Start depth profile here"
  *      → setAnchor({ lon, lat, depth })
  *   2. User right-clicks terrain → "End depth profile here"
- *      → sampleProfile(grid, end) walks the terrain grid between the two
- *        points, records depth + (optional) zone slot per sample, and stores
- *        the result. Anchor is cleared on completion.
- *   3. <DepthProfilePanel/> reads `profile` and renders the chart. The user
- *      can dismiss it via clearProfile().
+ *      → pushProfile(result) prepends it to the history and shows the panel.
+ *      Anchor is cleared on completion.
+ *   3. <DepthProfilePanel/> reads `profile` (the active entry) and renders the
+ *      chart. History tabs let the user revisit any of the last 5 profiles.
+ *      The user can dismiss everything via clearProfile().
  *
  * Independent of the marker system — nothing here writes to markers,
  * cameraStore, or measureStore.
@@ -56,8 +56,28 @@ export interface DepthProfileResult {
   at: number;
 }
 
+/** Maximum number of profiles kept in the session history. */
+const MAX_HISTORY = 5;
+
 interface DepthProfileStore {
   anchor: { lon: number; lat: number; depth: number } | null;
+  /**
+   * History of profiles captured this session, newest first.
+   * Length is at most MAX_HISTORY (5).
+   */
+  profiles: DepthProfileResult[];
+  /**
+   * Index into `profiles` currently shown in the panel.
+   * 0 = most recent. -1 when the panel is hidden (no profiles, or after
+   * setAnchor hides the panel while a new measurement is in progress).
+   */
+  selectedIndex: number;
+  /**
+   * The profile currently shown in the panel:
+   * profiles[selectedIndex] ?? null.
+   * Kept as a first-class field so selectors reading only `profile` still
+   * work without subscribing to the full profiles array.
+   */
   profile: DepthProfileResult | null;
   /**
    * Index of the sample currently being hovered (by chart or 3D scene).
@@ -67,19 +87,78 @@ interface DepthProfileStore {
   hoverIndex: number | null;
   setAnchor: (p: { lon: number; lat: number; depth: number }) => void;
   clearAnchor: () => void;
+  /**
+   * Prepend a new profile to the history (max 5) and make it the active
+   * one. This is the primary way new profiles are stored.
+   */
+  pushProfile: (r: DepthProfileResult) => void;
+  /** @deprecated Alias for pushProfile — kept for legacy callers. */
   setProfile: (r: DepthProfileResult) => void;
+  /** Dismiss the panel and clear all profile history. */
   clearProfile: () => void;
+  /** Switch the panel to show a different history entry. */
+  selectProfile: (index: number) => void;
   setHoverIndex: (i: number | null) => void;
 }
 
 export const useDepthProfileStore = create<DepthProfileStore>((set) => ({
   anchor: null,
+  profiles: [],
+  selectedIndex: 0,
   profile: null,
   hoverIndex: null,
-  setAnchor: (p) => set({ anchor: p, profile: null, hoverIndex: null }),
-  clearAnchor: () => set({ anchor: null }),
-  setProfile: (r) => set({ profile: r, anchor: null, hoverIndex: null }),
-  clearProfile: () => set({ profile: null, hoverIndex: null }),
+
+  setAnchor: (p) =>
+    set({
+      anchor: p,
+      // Hide the panel while the user is picking the endpoint. History is
+      // preserved so tabs reappear once the new profile is generated.
+      profile: null,
+      hoverIndex: null,
+    }),
+
+  clearAnchor: () =>
+    set((s) => ({
+      anchor: null,
+      // Restore the previously active profile if history exists, so
+      // cancelling a mid-flight measurement brings the panel back.
+      profile: s.profiles[s.selectedIndex] ?? null,
+    })),
+
+  pushProfile: (r) =>
+    set((s) => {
+      const profiles = [r, ...s.profiles].slice(0, MAX_HISTORY);
+      return {
+        profiles,
+        selectedIndex: 0,
+        profile: r,
+        anchor: null,
+        hoverIndex: null,
+      };
+    }),
+
+  setProfile: (r) =>
+    set((s) => {
+      const profiles = [r, ...s.profiles].slice(0, MAX_HISTORY);
+      return {
+        profiles,
+        selectedIndex: 0,
+        profile: r,
+        anchor: null,
+        hoverIndex: null,
+      };
+    }),
+
+  clearProfile: () =>
+    set({ profiles: [], selectedIndex: 0, profile: null, hoverIndex: null }),
+
+  selectProfile: (index) =>
+    set((s) => {
+      const clamped = Math.max(0, Math.min(s.profiles.length - 1, index));
+      const p = s.profiles[clamped] ?? null;
+      return { selectedIndex: clamped, profile: p, hoverIndex: null };
+    }),
+
   setHoverIndex: (i) => set({ hoverIndex: i }),
 }));
 

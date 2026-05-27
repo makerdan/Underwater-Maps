@@ -429,7 +429,7 @@ export function installTestHelpers(): void {
               { lon, lat, depth },
               null,
             );
-            store.setProfile(result);
+            store.pushProfile(result);
           } else {
             store.setAnchor({ lon, lat, depth });
           }

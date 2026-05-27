@@ -85,6 +85,9 @@ function triggerDownload(blob: Blob, filename: string) {
 
 export const DepthProfilePanel: React.FC = () => {
   const profile = useDepthProfileStore((s) => s.profile);
+  const profiles = useDepthProfileStore((s) => s.profiles);
+  const selectedIndex = useDepthProfileStore((s) => s.selectedIndex);
+  const selectProfile = useDepthProfileStore((s) => s.selectProfile);
   const clearProfile = useDepthProfileStore((s) => s.clearProfile);
   const hoverIndex = useDepthProfileStore((s) => s.hoverIndex);
   const setHoverIndex = useDepthProfileStore((s) => s.setHoverIndex);
@@ -369,6 +372,67 @@ export const DepthProfilePanel: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* History tabs — only shown when more than one profile exists */}
+      {profiles.length > 1 && (
+        <div
+          data-testid="depth-profile-history"
+          style={{
+            display: "flex",
+            gap: 4,
+            marginBottom: 8,
+            flexWrap: "wrap",
+          }}
+        >
+          {profiles.map((p, i) => {
+            const isActive = i === selectedIndex;
+            const deltaM = p.maxDepthM - p.minDepthM;
+            const distKm = p.totalDistanceM / 1000;
+            const distLabel =
+              distKm >= 1
+                ? `${distKm.toFixed(1)} km`
+                : `${Math.round(p.totalDistanceM)} m`;
+            const depthLabel = formatDepth(deltaM, { units, decimals: 0 });
+            const label = i === 0 ? "Latest" : `#${i + 1}`;
+            return (
+              <button
+                key={p.at}
+                data-testid={`depth-profile-history-tab-${i}`}
+                aria-label={`Depth profile ${label}: Δ ${depthLabel}, ${distLabel}`}
+                aria-pressed={isActive}
+                onClick={() => selectProfile(i)}
+                style={{
+                  fontSize: 9,
+                  padding: "3px 7px",
+                  borderRadius: 3,
+                  border: isActive
+                    ? "1px solid rgba(0,229,255,0.7)"
+                    : "1px solid rgba(0,229,255,0.2)",
+                  background: isActive
+                    ? "rgba(0,229,255,0.15)"
+                    : "rgba(0,229,255,0.04)",
+                  color: isActive ? "#00e5ff" : "#64748b",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  letterSpacing: "0.06em",
+                  display: "inline-flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 1,
+                  lineHeight: 1.3,
+                  minWidth: 48,
+                  transition: "border-color 0.1s, background 0.1s, color 0.1s",
+                }}
+              >
+                <span style={{ fontWeight: isActive ? 700 : 400 }}>{label}</span>
+                <span style={{ fontSize: 8, color: isActive ? "#94a3b8" : "#475569" }}>
+                  Δ{depthLabel} · {distLabel}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Stats row */}
       <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 6, display: "flex", gap: 14, flexWrap: "wrap" }}>

@@ -120,7 +120,7 @@ export function buildTerrainMenuItems(
             { lon, lat, depth },
             zoneMap,
           );
-          store.setProfile(result);
+          store.pushProfile(result);
         } else {
           store.setAnchor({ lon, lat, depth });
         }
