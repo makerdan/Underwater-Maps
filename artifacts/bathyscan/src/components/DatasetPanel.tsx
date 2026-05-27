@@ -26,16 +26,12 @@ import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { useTerrainStore, VISIBLE_DATASETS_CAP } from "@/lib/terrainStore";
 import { useUiStore } from "@/lib/uiStore";
 import { lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
-import { MARKER_COLOR, MARKER_ICON } from "@/lib/markerConstants";
+import { MARKER_COLOR, MARKER_ICON, SALTWATER_MARKER_TYPES, FRESHWATER_MARKER_TYPES } from "@/lib/markerConstants";
+import { useMarkerEditStore } from "@/lib/markerEditStore";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import type { CameraBookmark } from "@/lib/settingsStore";
-
-// Auto-retry backoff schedule for transient save-to-account failures.
-// Module-scope so reading it inside the upload callback doesn't require
-// a hook deps entry.
-const AUTO_RETRY_DELAYS_MS = [500, 1500];
 import { formatDepthRange } from "@/lib/units";
 import { ProvenancePanel } from "@/components/ProvenancePanel";
 import { DatasetFolderTree } from "@/components/DatasetFolderTree";
@@ -57,6 +53,11 @@ import {
   getGetUserDatasetsIdOverviewUrl,
 } from "@workspace/api-client-react";
 import type { TerrainData } from "@workspace/api-client-react";
+
+// Auto-retry backoff schedule for transient save-to-account failures.
+// Module-scope so reading it inside the upload callback doesn't require
+// a hook deps entry.
+const AUTO_RETRY_DELAYS_MS = [500, 1500];
 
 /**
  * Build a queryFn that streams the terrain payload via fetchJsonWithProgress
@@ -715,8 +716,18 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     (v: boolean) => usePanelCollapseStore.getState().setCollapsed("markersAccordion", !v),
     [],
   );
+  const [markerSearch, setMarkerSearch] = useState("");
+  const [markerTypeFilter, setMarkerTypeFilter] = useState<string | null>(null);
   const [gpsImportOpen, setGpsImportOpen] = useState(false);
   const [gpsExportOpen, setGpsExportOpen] = useState(false);
+
+  // Reset search + filter whenever the MARKERS accordion is closed.
+  useEffect(() => {
+    if (!markersOpen) {
+      setMarkerSearch("");
+      setMarkerTypeFilter(null);
+    }
+  }, [markersOpen]);
 
   // ─── Bookmarks ─────────────────────────────────────────────────────────────
   const [bookmarksOpen, setBookmarksOpen] = useState(false);
@@ -1060,7 +1071,19 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                 <span style={{ color: "#cbd5e1", fontSize: 11 }}>{markersOpen ? "−" : "+"}</span>
               </button>
 
-              {markersOpen && (
+              {markersOpen && (() => {
+                const markerTypeOptions = waterType === "freshwater" ? FRESHWATER_MARKER_TYPES : SALTWATER_MARKER_TYPES;
+                const q = markerSearch.trim().toLowerCase();
+                const visibleMarkers = (markers ?? []).filter((m) => {
+                  if (markerTypeFilter && m.type !== markerTypeFilter) return false;
+                  if (q) {
+                    const inLabel = m.label.toLowerCase().includes(q);
+                    const inNotes = (m.notes ?? "").toLowerCase().includes(q);
+                    if (!inLabel && !inNotes) return false;
+                  }
+                  return true;
+                });
+                return (
                 <div style={{ paddingBottom: 4 }}>
                   <div style={{ padding: "2px 12px 6px", display: "flex", gap: 6 }}>
                     <ViewscreenTooltip label="Import waypoints/routes from GPX, KML, KMZ, or CSV" side="right">
@@ -1104,12 +1127,92 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       </button>
                     </ViewscreenTooltip>
                   </div>
+
+                  {/* ── Search + type filter ── */}
+                  {(markers?.length ?? 0) > 0 && (
+                    <div style={{ padding: "0 10px 6px" }}>
+                      <input
+                        type="search"
+                        data-testid="marker-search-input"
+                        value={markerSearch}
+                        onChange={(e) => setMarkerSearch(e.target.value)}
+                        placeholder="Search markers…"
+                        style={{
+                          width: "100%",
+                          boxSizing: "border-box",
+                          background: "rgba(0,229,255,0.04)",
+                          border: "1px solid rgba(0,229,255,0.15)",
+                          borderRadius: 3,
+                          color: "#e2e8f0",
+                          fontSize: 10,
+                          padding: "4px 7px",
+                          fontFamily: "inherit",
+                          outline: "none",
+                          marginBottom: 5,
+                        }}
+                      />
+                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                        {markerTypeOptions.map((t) => {
+                          const active = markerTypeFilter === t.value;
+                          return (
+                            <ViewscreenTooltip key={t.value} label={`Filter by ${t.label}`} side="top">
+                              <button
+                                type="button"
+                                data-testid={`marker-type-filter-${t.value}`}
+                                onClick={() => setMarkerTypeFilter(active ? null : t.value)}
+                                style={{
+                                  fontSize: 11,
+                                  padding: "2px 5px",
+                                  borderRadius: 3,
+                                  border: `1px solid ${active ? t.color : "rgba(0,229,255,0.12)"}`,
+                                  background: active ? `${t.color}22` : "transparent",
+                                  color: active ? t.color : "#475569",
+                                  cursor: "pointer",
+                                  lineHeight: 1,
+                                  fontFamily: "inherit",
+                                }}
+                                aria-pressed={active}
+                                aria-label={t.label}
+                              >
+                                {t.icon}
+                              </button>
+                            </ViewscreenTooltip>
+                          );
+                        })}
+                        {markerTypeFilter && (
+                          <button
+                            type="button"
+                            onClick={() => setMarkerTypeFilter(null)}
+                            style={{
+                              fontSize: 9,
+                              padding: "2px 5px",
+                              borderRadius: 3,
+                              border: "1px solid rgba(0,229,255,0.15)",
+                              background: "transparent",
+                              color: "#64748b",
+                              cursor: "pointer",
+                              fontFamily: "inherit",
+                              letterSpacing: "0.06em",
+                            }}
+                          >
+                            ✕ all
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {!markers?.length && (
                     <div style={{ fontSize: 10, color: "#cbd5e1", padding: "4px 12px 6px" }}>
                       No markers yet — press G or right-click to drop one
                     </div>
                   )}
-                  {(markers ?? []).map((m) => {
+                  {markers?.length && !visibleMarkers.length ? (
+                    <div style={{ fontSize: 10, color: "#475569", padding: "4px 12px 6px" }}>
+                      No markers match the current filter
+                    </div>
+                  ) : null}
+                  {visibleMarkers.map((m) => {
                     const color = MARKER_COLOR[m.type] ?? "#e2e8f0";
                     const icon = MARKER_ICON[m.type] ?? "●";
                     return (
@@ -1138,6 +1241,33 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           <span style={{ fontSize: 9, color: "#334155", flexShrink: 0 }}>
                             {Math.round(m.depth)}m
                           </span>
+                          <ViewscreenTooltip label="Edit this marker" side="left">
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                useMarkerEditStore.getState().open(m);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.stopPropagation();
+                                  useMarkerEditStore.getState().open(m);
+                                }
+                              }}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity"
+                              style={{
+                                fontSize: 10,
+                                color: "#7dd3fc",
+                                cursor: "pointer",
+                                lineHeight: 1,
+                                padding: "0 2px",
+                                flexShrink: 0,
+                              }}
+                            >
+                              ✏
+                            </span>
+                          </ViewscreenTooltip>
                           <ViewscreenTooltip label="Delete this marker" side="left">
                             <span
                               role="button"
@@ -1165,7 +1295,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                     );
                   })}
                 </div>
-              )}
+                );
+              })()}
             </div>
           )}
 

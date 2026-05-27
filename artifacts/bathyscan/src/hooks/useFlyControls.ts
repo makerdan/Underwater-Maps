@@ -16,6 +16,7 @@ import { computeMetersPerWorldUnit, boatMphToWorldUnitsPerSecond } from "@/lib/b
 import { markerGroupRef } from "@/components/MarkerLayer";
 import { useContextMenuStore, type ContextMenuItem } from "@/lib/contextMenuStore";
 import { useMarkerDetailStore } from "@/lib/markerDetailStore";
+import { useMarkerEditStore } from "@/lib/markerEditStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { getBoundKey } from "@/lib/keyBindings";
 import {
@@ -533,6 +534,11 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
           label: "View details",
           icon: "ℹ️",
           onClick: () => useMarkerDetailStore.getState().show(marker),
+        },
+        {
+          label: "Edit marker",
+          icon: "✏️",
+          onClick: () => useMarkerEditStore.getState().open(marker),
         },
         {
           label: "Copy coordinates",

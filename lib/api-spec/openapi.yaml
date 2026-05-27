@@ -665,6 +665,43 @@ paths:
                 $ref: "#/components/schemas/ApiError"
 
   /markers/{id}:
+    patch:
+      operationId: patchMarkersId
+      tags: [markers]
+      summary: Edit a marker's label, type, or notes
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarkerPatch"
+      responses:
+        "200":
+          description: Updated marker
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Marker"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Marker not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
     delete:
       operationId: deleteMarkersId
       tags: [markers]
@@ -3225,6 +3262,21 @@ components:
           maxLength: 80
       required:
         - name
+
+    MarkerPatch:
+      type: object
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 60
+        type:
+          type: string
+          enum: [fish, shipwreck, coral, vent, custom, depth_pole, log, vegetation, sample, bass, trout, pike, walleye, crayfish]
+        notes:
+          type: string
+          maxLength: 500
+          nullable: true
 
     MarkerInput:
       type: object

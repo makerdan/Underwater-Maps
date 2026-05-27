@@ -48,6 +48,7 @@ import type {
   HealthStatus,
   Marker,
   MarkerInput,
+  MarkerPatch,
   MoveDatasetBody,
   MoveDatasetFolderBody,
   PoeClassifyRequest,
@@ -1684,6 +1685,78 @@ export const useDeleteMarkersMine = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getDeleteMarkersMineMutationOptions(options));
+    }
+
+export const getPatchMarkersIdUrl = (id: string,) => {
+
+
+
+
+  return `/api/markers/${id}`
+}
+
+/**
+ * @summary Edit a marker's label, type, or notes
+ */
+export const patchMarkersId = async (id: string,
+    markerPatch: MarkerPatch, options?: RequestInit): Promise<Marker> => {
+
+  return customFetch<Marker>(getPatchMarkersIdUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      markerPatch,)
+  }
+);}
+
+
+
+
+export const getPatchMarkersIdMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchMarkersId>>, TError,{id: string;data: BodyType<MarkerPatch>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchMarkersId>>, TError,{id: string;data: BodyType<MarkerPatch>}, TContext> => {
+
+const mutationKey = ['patchMarkersId'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchMarkersId>>, {id: string;data: BodyType<MarkerPatch>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  patchMarkersId(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchMarkersIdMutationResult = NonNullable<Awaited<ReturnType<typeof patchMarkersId>>>
+    export type PatchMarkersIdMutationBody = BodyType<MarkerPatch>
+    export type PatchMarkersIdMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Edit a marker's label, type, or notes
+ */
+export const usePatchMarkersId = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchMarkersId>>, TError,{id: string;data: BodyType<MarkerPatch>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof patchMarkersId>>,
+        TError,
+        {id: string;data: BodyType<MarkerPatch>},
+        TContext
+      > => {
+      return useMutation(getPatchMarkersIdMutationOptions(options));
     }
 
 export const getDeleteMarkersIdUrl = (id: string,) => {

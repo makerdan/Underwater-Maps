@@ -1,9 +1,13 @@
 /**
- * MarkerForm — floating panel for creating a persisted seafloor marker.
+ * MarkerForm — floating panel for creating or editing a persisted seafloor marker.
  *
- * Opened by pressing G or right-clicking the canvas in fly mode.
- * Pre-fills lon/lat/depth from cameraStore.lastClickedGps.
- * On submit, calls usePostMarkers and invalidates the markers query.
+ * Create mode: Opened by pressing G or right-clicking the canvas in fly mode.
+ *   Pre-fills lon/lat/depth from cameraStore.lastClickedGps.
+ *   On submit, calls usePostMarkers and invalidates the markers query.
+ *
+ * Edit mode: Opened via the right-click "Edit marker" context menu action.
+ *   Pre-fills all fields from the existing marker stored in markerEditStore.
+ *   On submit, calls usePatchMarkersId and invalidates the markers query.
  */
 import React, { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,6 +21,7 @@ import { HelpIcon } from "@/components/help/HelpButton";
 import { formatDepth } from "@/lib/units";
 import {
   usePostMarkers,
+  usePatchMarkersId,
   getGetMarkersQueryKey,
   MarkerInputType,
 } from "@workspace/api-client-react";
@@ -28,6 +33,7 @@ import {
 } from "@/lib/markerConstants";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { markerLabelSchema, markerNotesSchema } from "@/lib/markerFormSchema";
+import { useMarkerEditStore } from "@/lib/markerEditStore";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(2,8,24,0.92)",
@@ -42,6 +48,10 @@ const PANEL: React.CSSProperties = {
 };
 
 export const MarkerForm: React.FC = () => {
+  const editMarker = useMarkerEditStore((s) => s.marker);
+  const closeEdit = useMarkerEditStore((s) => s.close);
+  const isEditMode = editMarker !== null;
+
   const gps = useCameraStore((s) => s.lastClickedGps);
   const setMarkerFormOpen = useUiStore((s) => s.setMarkerFormOpen);
   const units = useSettingsStore((s) => s.units);
@@ -58,9 +68,39 @@ export const MarkerForm: React.FC = () => {
   const [notesError, setNotesError] = useState("");
   const [poleColour, setPoleColour] = useState(DEPTH_POLE_DEFAULT_COLOUR);
 
-  // Reset form whenever it opens (gps changes). Honour a one-shot prefill
-  // set by callers like the depth-profile auto-suggest list.
+  // In edit mode: populate from the stored marker.
+  // In create mode: reset when GPS changes, honouring one-shot prefill.
   useEffect(() => {
+    if (isEditMode && editMarker) {
+      setLabel(editMarker.label);
+      const existingNotes =
+        editMarker.type === "depth_pole"
+          ? ""
+          : (editMarker.notes ?? "");
+      setNotes(existingNotes);
+      setLabelError("");
+      setNotesError("");
+      const candidateType = editMarker.type as MarkerTypeValue | undefined;
+      const isValidType =
+        candidateType !== undefined &&
+        visibleMarkerTypes.some((t) => t.value === candidateType);
+      setMarkerType(isValidType ? candidateType! : (MarkerInputType.custom as MarkerTypeValue));
+      if (editMarker.type === "depth_pole" && editMarker.notes) {
+        try {
+          const parsed = JSON.parse(editMarker.notes) as { colour?: string };
+          setPoleColour(parsed.colour ?? DEPTH_POLE_DEFAULT_COLOUR);
+        } catch {
+          setPoleColour(DEPTH_POLE_DEFAULT_COLOUR);
+        }
+      } else {
+        setPoleColour(DEPTH_POLE_DEFAULT_COLOUR);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editMarker]);
+
+  useEffect(() => {
+    if (isEditMode) return;
     const prefill = useUiStore.getState().markerFormPrefill;
     setLabel(prefill?.label ?? "");
     setNotes("");
@@ -72,15 +112,23 @@ export const MarkerForm: React.FC = () => {
       visibleMarkerTypes.some((t) => t.value === candidateType);
     setMarkerType(isValidType ? candidateType! : (MarkerInputType.custom as MarkerTypeValue));
     setPoleColour(DEPTH_POLE_DEFAULT_COLOUR);
-  }, [gps, visibleMarkerTypes]);
+  }, [gps, visibleMarkerTypes, isEditMode]);
 
   const postMarkers = usePostMarkers();
+  const patchMarker = usePatchMarkersId();
   const isOnline = useOfflineStore((s) => s.isOnline);
   const [savedOffline, setSavedOffline] = useState(false);
 
+  const handleClose = () => {
+    if (isEditMode) {
+      closeEdit();
+    } else {
+      setMarkerFormOpen(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!gps || !terrain) return;
 
     const labelResult = markerLabelSchema.safeParse(label);
     if (!labelResult.success) {
@@ -101,6 +149,32 @@ export const MarkerForm: React.FC = () => {
       setNotesError("");
       notesForBody = notesResult.data.length > 0 ? notesResult.data : null;
     }
+
+    // ── Edit mode ────────────────────────────────────────────────────────────
+    if (isEditMode && editMarker) {
+      patchMarker.mutate(
+        {
+          id: editMarker.id,
+          data: {
+            label: labelResult.data,
+            type: markerType as MarkerInputType,
+            notes: notesForBody,
+          },
+        },
+        {
+          onSuccess: () => {
+            void qc.invalidateQueries({
+              queryKey: getGetMarkersQueryKey({ datasetId: editMarker.datasetId }),
+            });
+            closeEdit();
+          },
+        },
+      );
+      return;
+    }
+
+    // ── Create mode ──────────────────────────────────────────────────────────
+    if (!gps || !terrain) return;
 
     const markerBody = {
       datasetId: terrain.datasetId,
@@ -167,9 +241,14 @@ export const MarkerForm: React.FC = () => {
     );
   };
 
-  const handleCancel = () => setMarkerFormOpen(false);
+  const handleCancel = handleClose;
 
-  if (!gps || !terrain) return null;
+  if (!isEditMode && (!gps || !terrain)) return null;
+
+  // In edit mode use the stored marker's coordinates; in create mode use GPS.
+  const displayGps = isEditMode && editMarker
+    ? { lon: editMarker.lon, lat: editMarker.lat, depth: editMarker.depth }
+    : gps;
 
   const selectedType = visibleMarkerTypes.find((t) => t.value === markerType);
 
@@ -194,7 +273,7 @@ export const MarkerForm: React.FC = () => {
             fontWeight: 700,
           }}
         >
-          ▼ DROP MARKER
+          {isEditMode ? "✏ EDIT MARKER" : "▼ DROP MARKER"}
         </span>
         <HelpIcon articleId="markers" label="Markers" />
         <ViewscreenTooltip label="Close without saving" side="left">
@@ -259,9 +338,9 @@ export const MarkerForm: React.FC = () => {
         }}
       >
         {[
-          { key: "lon",   val: gps.lon.toFixed(4) },
-          { key: "lat",   val: gps.lat.toFixed(4) },
-          { key: "depth", val: formatDepth(gps.depth, { units }) },
+          { key: "lon",   val: displayGps ? displayGps.lon.toFixed(4) : "—" },
+          { key: "lat",   val: displayGps ? displayGps.lat.toFixed(4) : "—" },
+          { key: "depth", val: displayGps ? formatDepth(displayGps.depth, { units }) : "—" },
         ].map(({ key, val }) => (
           <div key={key}>
             <div style={{ fontSize: 8, letterSpacing: "0.12em", color: "#334155", marginBottom: 1 }}>
@@ -439,7 +518,7 @@ export const MarkerForm: React.FC = () => {
           </button>
           <button
             type="submit"
-            disabled={postMarkers.isPending}
+            disabled={postMarkers.isPending || patchMarker.isPending}
             style={{
               fontSize: 9,
               letterSpacing: "0.12em",
@@ -448,12 +527,12 @@ export const MarkerForm: React.FC = () => {
               border: `1px solid ${selectedType?.color ?? "#00e5ff"}`,
               background: `${selectedType?.color ?? "#00e5ff"}18`,
               color: selectedType?.color ?? "#00e5ff",
-              cursor: postMarkers.isPending ? "not-allowed" : "pointer",
+              cursor: (postMarkers.isPending || patchMarker.isPending) ? "not-allowed" : "pointer",
               fontFamily: "inherit",
-              opacity: postMarkers.isPending ? 0.6 : 1,
+              opacity: (postMarkers.isPending || patchMarker.isPending) ? 0.6 : 1,
             }}
           >
-            {postMarkers.isPending ? "SAVING..." : "SAVE MARKER"}
+            {(postMarkers.isPending || patchMarker.isPending) ? "SAVING..." : isEditMode ? "SAVE CHANGES" : "SAVE MARKER"}
           </button>
         </div>
       </form>

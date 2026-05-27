@@ -633,6 +633,38 @@ export const DeleteMarkersMineResponse = zod.object({
 
 
 /**
+ * @summary Edit a marker's label, type, or notes
+ */
+export const PatchMarkersIdParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const patchMarkersIdBodyLabelMax = 60;
+
+export const patchMarkersIdBodyNotesMax = 500;
+
+
+
+export const PatchMarkersIdBody = zod.object({
+  "label": zod.string().min(1).max(patchMarkersIdBodyLabelMax).optional(),
+  "type": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'depth_pole', 'log', 'vegetation', 'sample', 'bass', 'trout', 'pike', 'walleye', 'crayfish']).optional(),
+  "notes": zod.string().max(patchMarkersIdBodyNotesMax).nullish()
+})
+
+export const PatchMarkersIdResponse = zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "datasetId": zod.string().describe('Dataset this marker belongs to'),
+  "lon": zod.number(),
+  "lat": zod.number(),
+  "depth": zod.number().describe('Depth in metres (positive = below surface)'),
+  "type": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'depth_pole', 'log', 'vegetation', 'sample', 'bass', 'trout', 'pike', 'walleye', 'crayfish']),
+  "label": zod.string(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Delete a marker by ID
  */
 export const DeleteMarkersIdParams = zod.object({

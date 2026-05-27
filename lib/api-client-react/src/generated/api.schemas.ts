@@ -1227,6 +1227,37 @@ export interface RenameTrollingPresetFolderBody {
   name: string;
 }
 
+export type MarkerPatchType = typeof MarkerPatchType[keyof typeof MarkerPatchType];
+
+
+export const MarkerPatchType = {
+  fish: 'fish',
+  shipwreck: 'shipwreck',
+  coral: 'coral',
+  vent: 'vent',
+  custom: 'custom',
+  depth_pole: 'depth_pole',
+  log: 'log',
+  vegetation: 'vegetation',
+  sample: 'sample',
+  bass: 'bass',
+  trout: 'trout',
+  pike: 'pike',
+  walleye: 'walleye',
+  crayfish: 'crayfish',
+} as const;
+
+export interface MarkerPatch {
+  /**
+     * @minLength 1
+     * @maxLength 60
+     */
+  label?: string;
+  type?: MarkerPatchType;
+  /** @maxLength 500 */
+  notes?: string | null;
+}
+
 export type MarkerInputType = typeof MarkerInputType[keyof typeof MarkerInputType];
 
 

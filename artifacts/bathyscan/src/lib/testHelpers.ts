@@ -22,6 +22,7 @@
 import { useContextMenuStore, type ContextMenuItem } from "./contextMenuStore";
 import { useMeasureStore } from "./measureStore";
 import { useMarkerDetailStore } from "./markerDetailStore";
+import { useMarkerEditStore } from "./markerEditStore";
 import { useUiStore } from "./uiStore";
 import { useCameraStore } from "./cameraStore";
 import { useClassificationStore } from "./classificationStore";
@@ -530,6 +531,11 @@ export function installTestHelpers(): void {
       label: "View details",
       icon: "ℹ️",
       onClick: () => useMarkerDetailStore.getState().show(marker),
+    },
+    {
+      label: "Edit marker",
+      icon: "✏️",
+      onClick: () => useMarkerEditStore.getState().open(marker),
     },
     { label: "Copy coordinates", icon: "📋", onClick: () => {} },
     { label: "", onClick: () => {}, separator: true },

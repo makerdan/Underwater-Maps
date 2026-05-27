@@ -26,6 +26,7 @@ import { CurrentsPanel } from "@/components/CurrentsPanel";
 import { useCurrentsStore } from "@/lib/currentsStore";
 import { ThrottlePanel } from "@/components/ThrottlePanel";
 import { MarkerForm } from "@/components/MarkerForm";
+import { useMarkerEditStore } from "@/lib/markerEditStore";
 import { ContextMenu } from "@/components/ContextMenu";
 import { MeasurementBanner } from "@/components/MeasurementBanner";
 import { DepthProfilePanel } from "@/components/DepthProfilePanel";
@@ -213,6 +214,7 @@ function Main() {
     realisticMode, setRealisticMode,
   } = useAppState();
   const markerFormOpen = useUiStore((s) => s.markerFormOpen);
+  const markerEditOpen = useMarkerEditStore((s) => s.marker !== null);
   const overviewOpen = useUiStore((s) => s.overviewOpen);
   const findDataPanelOpen = useUiStore((s) => s.findDataPanelOpen);
   const setFindDataPanelOpen = useUiStore((s) => s.setFindDataPanelOpen);
@@ -765,8 +767,8 @@ function Main() {
           </div>
         )}
 
-        {/* Marker form overlay — centred, z-30 */}
-        {markerFormOpen && (
+        {/* Marker form overlay — centred, z-30 (create or edit) */}
+        {(markerFormOpen || markerEditOpen) && (
           <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
             <div style={{ pointerEvents: "auto" }}>
               <MarkerForm />
