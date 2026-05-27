@@ -122,16 +122,17 @@ test.describe("BathyScan — Crosshair action menu (desktop / Q key)", () => {
 
     const menu = page.locator('[data-testid="context-menu"]');
 
-    // Five action items: Drop pin / Measure / Set home / Depth profile /
-    // Copy coords. The separator above "Copy coordinates" renders as a
-    // non-menuitem <li role="separator">.
+    // Six action items: Drop pin / Measure / Set home / Depth profile /
+    // Copy coords / Copy share link. The separator above "Copy coordinates"
+    // renders as a non-menuitem <li role="separator">.
     const items = menu.locator('[role="menuitem"]');
-    await expect(items).toHaveCount(5);
+    await expect(items).toHaveCount(6);
     await expect(items.nth(0)).toContainText("Drop GPS pin here");
     await expect(items.nth(1)).toContainText("Measure from here");
     await expect(items.nth(2)).toContainText("Set as home position");
     await expect(items.nth(3)).toContainText("Start depth profile here");
     await expect(items.nth(4)).toContainText("Copy coordinates");
+    await expect(items.nth(5)).toContainText("Copy share link");
     await expect(menu.locator('[role="separator"]')).toHaveCount(1);
 
     // Menu should be anchored at (roughly) the viewport centre — that's
@@ -407,12 +408,13 @@ test.describe(
       await expect(menu).toBeVisible();
 
       const items = menu.locator('[role="menuitem"]');
-      await expect(items).toHaveCount(5);
+      await expect(items).toHaveCount(6);
       await expect(items.nth(0)).toContainText("Drop GPS pin here");
       await expect(items.nth(1)).toContainText("Measure from here");
       await expect(items.nth(2)).toContainText("Set as home position");
       await expect(items.nth(3)).toContainText("Start depth profile here");
       await expect(items.nth(4)).toContainText("Copy coordinates");
+      await expect(items.nth(5)).toContainText("Copy share link");
     });
 
     test('touch flow: "Drop GPS pin here" opens the marker form pre-filled', async ({

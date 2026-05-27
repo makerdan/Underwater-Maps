@@ -23,12 +23,34 @@ import {
   type ContextMenuItem,
 } from "@/lib/contextMenuStore";
 import { haversineDistance } from "@/lib/geo";
+import { toast } from "@/hooks/use-toast";
 
 function copyToClipboard(text: string): void {
   if (typeof navigator === "undefined" || !navigator.clipboard) return;
   navigator.clipboard.writeText(text).catch(() => {
     // Best-effort; clipboard may be blocked by permissions
   });
+}
+
+function copyShareLink(): void {
+  if (typeof navigator === "undefined" || !navigator.clipboard) return;
+  const url = window.location.href;
+  navigator.clipboard
+    .writeText(url)
+    .then(() => {
+      toast({
+        title: "Link copied",
+        description: "Share link copied to clipboard.",
+        duration: 3000,
+      });
+    })
+    .catch(() => {
+      toast({
+        title: "Copy failed",
+        description: "Could not access clipboard. Copy the URL bar manually.",
+        duration: 4000,
+      });
+    });
 }
 
 function formatCoords(lon: number, lat: number, depth: number): string {
@@ -118,6 +140,11 @@ export function buildTerrainMenuItems(
       label: "Copy coordinates",
       icon: "📋",
       onClick: () => copyToClipboard(formatCoords(lon, lat, depth)),
+    },
+    {
+      label: "Copy share link",
+      icon: "🔗",
+      onClick: () => copyShareLink(),
     },
   ];
   return items;

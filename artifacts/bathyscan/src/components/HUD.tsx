@@ -21,6 +21,7 @@ import { HelpIcon } from "@/components/help/HelpButton";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { TemperatureProfileChart } from "@/components/TemperatureProfileChart";
 import { openCrosshairContextMenu } from "@/lib/terrainContextMenu";
+import { toast } from "@/hooks/use-toast";
 
 const IS_TOUCH_DEVICE =
   typeof window !== "undefined" &&
@@ -252,6 +253,49 @@ export const HUD: React.FC = () => {
         <div style={{ pointerEvents: "auto" }}>
           <HelpIcon articleId="interface-tour" label="Help: HUD overlay" />
         </div>
+
+        {/* Share / copy link button */}
+        <ViewscreenTooltip label="Copy share link to clipboard" side="bottom">
+          <button
+            data-testid="hud-share-link"
+            type="button"
+            aria-label="Copy share link"
+            onClick={() => {
+              const url = window.location.href;
+              navigator.clipboard
+                .writeText(url)
+                .then(() => {
+                  toast({
+                    title: "Link copied",
+                    description: "Share link copied to clipboard.",
+                    duration: 3000,
+                  });
+                })
+                .catch(() => {
+                  toast({
+                    title: "Copy failed",
+                    description:
+                      "Could not access clipboard. Copy the URL bar manually.",
+                    duration: 4000,
+                  });
+                });
+            }}
+            style={{
+              pointerEvents: "auto",
+              background: "rgba(0,229,255,0.08)",
+              border: "1px solid rgba(0,229,255,0.25)",
+              borderRadius: 3,
+              color: "#00e5ff",
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              letterSpacing: "0.08em",
+              fontSize: 10,
+              padding: "3px 8px",
+              cursor: "pointer",
+            }}
+          >
+            🔗 SHARE
+          </button>
+        </ViewscreenTooltip>
 
         {/* Synthetic / simulated data warning badge */}
         {terrain?.synthetic && (

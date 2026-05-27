@@ -7,6 +7,15 @@ export const CURRENT_DEPTH_LAYERS: DepthLayer[] = ["surface", "mid", "near-botto
 export interface DropInTarget {
   worldX: number;
   worldZ: number;
+  /** Optional compass heading (degrees, 0 = north) to restore when spawning from a share link. */
+  headingDeg?: number;
+  /**
+   * Optional target world-Y to place the camera at.
+   * When provided, the drop-in skips the downward raycast and uses this Y
+   * directly (adding the usual hover offset). Used when restoring a share link
+   * so the encoded depth is preserved instead of always snapping to surface+3.
+   */
+  worldY?: number;
 }
 
 export interface SelectedSubstrate {

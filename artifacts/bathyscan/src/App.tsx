@@ -64,6 +64,9 @@ import "@/components/help/help.css";
 import { ConditionsLegend } from "@/components/ConditionsLegend";
 import { SimulatedDataConfirmDialog } from "@/components/SimulatedDataConfirmDialog";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
+import { initialViewParams } from "@/lib/viewUrl";
+import { useUrlSync } from "@/hooks/useUrlSync";
+import { lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
 
 
 function TestBridge(): null {
@@ -281,17 +284,28 @@ function Main() {
     }
   }, [tidalData, setNoaaAmbient]);
 
+  // Keep URL in sync with current camera + dataset (debounced, no-op until
+  // terrain is loaded so we never write partial initialisation state).
+  useUrlSync(datasetId, !!terrain);
+
   const hasAutoSelectedRef = useRef(false);
   useEffect(() => {
     if (hasAutoSelectedRef.current) return;
     if (datasets?.length && !datasetId) {
       hasAutoSelectedRef.current = true;
-      const first = datasets[0];
-      if (first?.id) {
+
+      // Prefer the dataset encoded in the share URL if it exists in the list.
+      const urlDatasetId = initialViewParams?.datasetId;
+      const urlMatch = urlDatasetId
+        ? datasets.find((d) => d.id === urlDatasetId)
+        : undefined;
+      const target = urlMatch ?? datasets[0];
+
+      if (target?.id) {
         void requestDatasetSwitch({
-          datasetId: first.id,
-          datasetName: first.name,
-          onConfirm: () => setDatasetId(first.id),
+          datasetId: target.id,
+          datasetName: target.name,
+          onConfirm: () => setDatasetId(target.id),
           // On cancel, leave datasetId as-is (mount-time has no previous
           // dataset to preserve; user can pick from the panel manually).
         });
@@ -322,6 +336,30 @@ function Main() {
   useEffect(() => {
     if (terrain) {
       useTerrainStore.getState().setGrids({ activeGrid: terrain });
+    }
+  }, [terrain]);
+
+  // One-shot camera spawn from share-link params. Fires the first time the
+  // terrain matching the URL dataset is loaded, then never again.
+  const didApplyUrlSpawnRef = useRef(false);
+  useEffect(() => {
+    if (didApplyUrlSpawnRef.current) return;
+    if (!terrain || !initialViewParams) return;
+    // Only apply if this terrain belongs to the dataset in the URL.
+    if (terrain.datasetId !== initialViewParams.datasetId) return;
+
+    didApplyUrlSpawnRef.current = true;
+    const { lon, lat, depth, heading } = initialViewParams;
+    try {
+      const { x: worldX, z: worldZ } = lonLatToWorldXZ(lon, lat, terrain);
+      // Convert the encoded seafloor depth (metres) to a world-Y coordinate so
+      // the camera spawns at the correct depth, not just surface+3.
+      const depthRange = (terrain.maxDepth - terrain.minDepth) || 1;
+      const t = Math.max(0, Math.min(1, (depth - terrain.minDepth) / depthRange));
+      const worldY = -t * MAX_DEPTH_WORLD;
+      useUiStore.getState().setPendingDropIn({ worldX, worldZ, headingDeg: heading, worldY });
+    } catch {
+      // If conversion fails (e.g. coords outside dataset bounds), skip silently.
     }
   }, [terrain]);
 

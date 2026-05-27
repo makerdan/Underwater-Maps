@@ -721,19 +721,37 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
     // 1. Drop-in receiver
     const pendingDropIn = useUiStore.getState().pendingDropIn;
     if (pendingDropIn) {
-      const { worldX, worldZ } = pendingDropIn;
-      let surfaceY = 3;
-      const mesh = terrainMeshRef.current;
-      if (mesh) {
-        downRaycaster.current.set(
-          new THREE.Vector3(worldX, 200, worldZ),
-          downDir.current,
-        );
-        const hits = downRaycaster.current.intersectObject(mesh, false);
-        if (hits[0]) surfaceY = hits[0].point.y + 3;
+      const { worldX, worldZ, headingDeg, worldY: targetWorldY } = pendingDropIn;
+
+      let finalY: number;
+      if (targetWorldY !== undefined) {
+        // Depth-based Y was pre-computed from the encoded depth; use it
+        // directly with the standard hover offset so the camera appears just
+        // above the seafloor at the correct depth.
+        finalY = targetWorldY + 3;
+      } else {
+        // No depth hint — raycast the terrain mesh and hover 3 units above.
+        let surfaceY = 3;
+        const mesh = terrainMeshRef.current;
+        if (mesh) {
+          downRaycaster.current.set(
+            new THREE.Vector3(worldX, 200, worldZ),
+            downDir.current,
+          );
+          const hits = downRaycaster.current.intersectObject(mesh, false);
+          if (hits[0]) surfaceY = hits[0].point.y + 3;
+        }
+        finalY = surfaceY;
       }
-      camera.position.set(worldX, surfaceY, worldZ);
-      euler.current.set(-0.2, 0, 0);
+
+      camera.position.set(worldX, finalY, worldZ);
+      // Restore compass heading if provided (e.g. from a share link).
+      // Convert compass degrees (0=north, CW) to Three.js Y-rotation (0=south, CCW).
+      const yaw =
+        headingDeg !== undefined
+          ? -(headingDeg * (Math.PI / 180)) + Math.PI
+          : 0;
+      euler.current.set(-0.2, yaw, 0);
       camera.quaternion.setFromEuler(euler.current);
       useUiStore.getState().clearPendingDropIn();
     }
