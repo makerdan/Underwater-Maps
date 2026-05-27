@@ -15,7 +15,12 @@ import type { Page, Locator, APIRequestContext, APIResponse } from "@playwright/
  * baseline without duplicating the reset logic.
  */
 
-const API_URL = "http://127.0.0.1:3151";
+export const API_URL = process.env["E2E_API_BASE_URL"] ?? "http://127.0.0.1:3151";
+
+export function apiUrl(path: string): string {
+  return `${API_URL}${path}`;
+}
+
 const E2E_USER_ID = "dev-user-bypass";
 
 export const DEFAULT_SETTINGS = {

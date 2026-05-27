@@ -12,7 +12,7 @@
  *
  * Companion spec to `marker-flow-real.spec.ts` — same auth-bypass pattern.
  */
-import { test, expect, type Page, type APIResponse } from "./fixtures";
+import { test, expect, type Page, type APIResponse, API_URL } from "./fixtures";
 
 const DATASET_ID = "thorne-bay";
 // Must match `FAKE_DEV_USER_ID` in artifacts/bathyscan/src/lib/devAuth.ts —
@@ -21,7 +21,7 @@ const DATASET_ID = "thorne-bay";
 // are scoped to that id. Using a different id here would create rows in one
 // user's account via the UI and then query for them as a different user.
 const TEST_USER_ID = "dev-user-bypass";
-const API_BASE = process.env["E2E_API_BASE_URL"] ?? "http://127.0.0.1:3151";
+const API_BASE = API_URL;
 const authHeaders = { "x-e2e-user-id": TEST_USER_ID };
 
 interface Marker {

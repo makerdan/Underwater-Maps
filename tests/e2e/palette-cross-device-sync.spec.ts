@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, API_URL } from "./fixtures";
 
 /**
  * Task #368 — end-to-end coverage for depth-palette cross-device sync.
@@ -29,7 +29,7 @@ test.describe("Depth palette cross-device sync", () => {
     //    starts with the default deep colour (#283593). Without this, a prior
     //    run that failed before cleanup could leave #ff00aa on the server,
     //    making our nativeInputValueSetter a no-op (value unchanged → no dirty).
-    await page.request.put("http://127.0.0.1:3151/api/settings", {
+    await page.request.put(`${API_URL}/api/settings`, {
       headers: { "x-e2e-user-id": "dev-user-bypass" },
       data: { paletteDeep: "#283593" },
     });
@@ -61,7 +61,7 @@ test.describe("Depth palette cross-device sync", () => {
     // the UI writes via the Save button — then reload so the settings page
     // hydrates from the server.  This correctly exercises the "Device A saved
     // → Device B loads" cross-device-sync path the test is designed to cover.
-    await page.request.put("http://127.0.0.1:3151/api/settings", {
+    await page.request.put(`${API_URL}/api/settings`, {
       headers: { "x-e2e-user-id": "dev-user-bypass" },
       data: { paletteDeep: newDeep },
     });

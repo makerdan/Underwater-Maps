@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "./fixtures";
+import { test, expect, type Page, API_URL } from "./fixtures";
 
 /**
  * Tide HUD scrubber end-to-end tests
@@ -83,7 +83,7 @@ test.describe("Tide HUD scrubber slack visuals", () => {
     });
     // Ensure showTidePanel / autoLoadTidal are enabled so a prior test that
     // disabled them cannot prevent TidePanel from mounting.
-    await page.request.put("http://127.0.0.1:3151/api/settings", {
+    await page.request.put(`${API_URL}/api/settings`, {
       headers: { "x-e2e-user-id": "dev-user-bypass" },
       data: { showTidePanel: true, autoLoadTidal: true },
     });

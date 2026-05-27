@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext } from "./fixtures";
+import { test, expect, type APIRequestContext, API_URL } from "./fixtures";
 
 /**
  * Dataset folders E2E.
@@ -8,7 +8,7 @@ import { test, expect, type APIRequestContext } from "./fixtures";
  *   through requireAuth). The Playwright webServer for api-server is started
  *   with E2E_AUTH_BYPASS=1, which accepts an x-e2e-user-id header in lieu of
  *   a Clerk JWT. We drive the real folders API directly against the
- *   api-server on port 3151 (configured in playwright.config.ts), which
+ *   api-server (port configured via E2E_API_BASE_URL / playwright.config.ts), which
  *   exercises:
  *     - create / rename / move / duplicate / delete folder endpoints
  *     - dataset move + duplicate
@@ -16,7 +16,7 @@ import { test, expect, type APIRequestContext } from "./fixtures";
  *     - persistence across "reloads" (a fresh request context)
  */
 
-const API_BASE = "http://127.0.0.1:3151/api";
+const API_BASE = `${API_URL}/api`;
 const USER_A = `e2e-folders-user-${Date.now()}`;
 const USER_B = `e2e-folders-other-${Date.now()}`;
 

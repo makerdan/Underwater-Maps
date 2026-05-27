@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, API_URL } from "./fixtures";
 
 /**
  * Water-type toggle end-to-end test.
@@ -31,7 +31,7 @@ test.describe("Water-type toggle", () => {
     // server matches on the `x-e2e-user-id` header that the frontend's
     // devAuth helper injects on every fetch; sending the same header here
     // targets the same row.
-    await page.request.put("http://127.0.0.1:3151/api/settings", {
+    await page.request.put(`${API_URL}/api/settings`, {
       headers: { "x-e2e-user-id": "dev-user-bypass" },
       data: { waterType: "saltwater", colormapTheme: "ocean" },
     });
