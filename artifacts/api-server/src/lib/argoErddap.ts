@@ -18,6 +18,7 @@
  */
 
 import type { TemperatureProfilePayload } from "../routes/temperature-profile";
+import { registerCache } from "./cacheRegistry.js";
 
 const ERDDAP_BASE = "https://erddap.ifremer.fr/erddap/tabledap/ArgoFloats.json";
 const SEARCH_RADIUS_DEG = 2.0;
@@ -40,6 +41,7 @@ interface CacheEntry {
 }
 
 const profileCache = new Map<string, CacheEntry>();
+registerCache(() => profileCache.clear());
 
 function cacheKey(lat: number, lon: number): string {
   const b = CACHE_BUCKET_DEG;

@@ -19,6 +19,7 @@
 import type { Bbox, ShoreZoneFeature, ShoreZoneSubstrate } from "./shoreZoneData.js";
 import { getSubstrateForDataset } from "./shoreZoneData.js";
 import { ALL_PRESET_DATASETS } from "./terrain.js";
+import { registerCache } from "./cacheRegistry.js";
 
 export const SUBSTRATE_GRID_W = 32;
 export const SUBSTRATE_GRID_H = 32;
@@ -263,6 +264,7 @@ export function substrateToZone(
  * that only need the cache-key fingerprint, not the full grid.
  */
 const fpMemo = new Map<string, string>();
+registerCache(() => fpMemo.clear());
 export function substrateFingerprintForDataset(datasetId: string): string {
   const hit = fpMemo.get(datasetId);
   if (hit !== undefined) return hit;

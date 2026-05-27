@@ -2,6 +2,7 @@ import { promises as fsPromises, readFileSync } from "fs";
 import path from "path";
 import { dirname, resolve as resolvePath } from "path";
 import { fileURLToPath } from "url";
+import { registerCache } from "./cacheRegistry.js";
 
 /**
  * Which upstream data service produced this grid.
@@ -985,6 +986,7 @@ export function resampleBundled(bundle: BundledTerrain, N: number): {
 
 const DISK_CACHE_DIR = "/tmp/gebco-cache";
 const memoryCache = new Map<string, TerrainGrid>();
+registerCache(() => memoryCache.clear());
 
 async function readDiskCache(key: string): Promise<TerrainGrid | null> {
   try {
@@ -1038,6 +1040,7 @@ interface PreviewCacheEntry {
 }
 
 const previewCache = new Map<string, PreviewCacheEntry>();
+registerCache(() => previewCache.clear());
 const PREVIEW_CACHE_TTL_MS = 60_000;
 
 export function clearPreviewCache(): void {

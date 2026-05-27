@@ -1,6 +1,6 @@
 /**
- * Lint check: every module-level `new Map` in a route file must be accompanied
- * by a `registerCache` call in the same file.
+ * Lint check: every module-level `new Map` in a route or lib file must be
+ * accompanied by a `registerCache` call in the same file.
  *
  * This test exists to enforce the convention documented in
  * `src/lib/cacheRegistry.ts`: any in-memory cache that persists across
@@ -17,12 +17,22 @@
  *
  * ## How to fix a failure
  *
- * 1. Import `registerCache` from `"../lib/cacheRegistry.js"` in the offending
- *    route file.
+ * For a **route** file:
+ * 1. Import `registerCache` from `"../lib/cacheRegistry.js"`.
+ * 2. Call `registerCache(() => myCache.clear())` immediately after the `new Map`
+ *    declaration.
+ *
+ * For a **lib** file:
+ * 1. Import `registerCache` from `"./cacheRegistry.js"`.
  * 2. Call `registerCache(() => myCache.clear())` immediately after the `new Map`
  *    declaration.
  *
  * See `src/routes/tidal.ts` for the canonical reference implementation.
+ *
+ * ## Excluded lib files
+ *
+ * `cacheRegistry.ts` itself is excluded — it is the registry definition, not
+ * a consumer of it.
  */
 
 import { readFileSync, readdirSync } from "fs";
@@ -30,6 +40,9 @@ import { join } from "path";
 import { describe, it, expect } from "vitest";
 
 const ROUTES_DIR = join(__dirname, "..", "routes");
+const LIB_DIR = join(__dirname, "..", "lib");
+
+const LIB_EXCLUDES = new Set(["cacheRegistry.ts"]);
 
 function getRouteFiles(): string[] {
   return readdirSync(ROUTES_DIR)
@@ -37,32 +50,51 @@ function getRouteFiles(): string[] {
     .map((f) => join(ROUTES_DIR, f));
 }
 
+function getLibFiles(): string[] {
+  return readdirSync(LIB_DIR)
+    .filter(
+      (f) =>
+        f.endsWith(".ts") && !f.endsWith(".test.ts") && !LIB_EXCLUDES.has(f),
+    )
+    .map((f) => join(LIB_DIR, f));
+}
+
+function checkFiles(files: string[], dirLabel: string): string[] {
+  const violations: string[] = [];
+
+  for (const filePath of files) {
+    const source = readFileSync(filePath, "utf8");
+    const lines = source.split("\n");
+
+    const hasModuleLevelMap = lines.some(
+      (line) => /^const \w+ = new Map[<(]/.test(line),
+    );
+
+    if (!hasModuleLevelMap) continue;
+
+    const hasRegisterCache = source.includes("registerCache(");
+
+    if (!hasRegisterCache) {
+      const fileName = filePath.split(`/${dirLabel}/`).pop() ?? filePath;
+      violations.push(
+        `${dirLabel}/${fileName}: has a module-level "new Map" but does not call registerCache(). ` +
+          `Add "registerCache(() => yourCache.clear())" after each module-level Map declaration ` +
+          `and import registerCache from ${dirLabel === "routes" ? '"../lib/cacheRegistry.js"' : '"./cacheRegistry.js"'}.`,
+      );
+    }
+  }
+
+  return violations;
+}
+
 describe("cacheRegistry lint", () => {
   it("every route file with a module-level new Map must call registerCache", () => {
-    const violations: string[] = [];
+    const violations = checkFiles(getRouteFiles(), "routes");
+    expect(violations).toEqual([]);
+  });
 
-    for (const filePath of getRouteFiles()) {
-      const source = readFileSync(filePath, "utf8");
-      const lines = source.split("\n");
-
-      const hasModuleLevelMap = lines.some(
-        (line) => /^const \w+ = new Map[<(]/.test(line),
-      );
-
-      if (!hasModuleLevelMap) continue;
-
-      const hasRegisterCache = source.includes("registerCache(");
-
-      if (!hasRegisterCache) {
-        const fileName = filePath.replace(ROUTES_DIR + "/", "");
-        violations.push(
-          `routes/${fileName}: has a module-level "new Map" but does not call registerCache(). ` +
-            `Add "registerCache(() => yourCache.clear())" after each module-level Map declaration ` +
-            `and import registerCache from "../lib/cacheRegistry.js".`,
-        );
-      }
-    }
-
+  it("every lib file with a module-level new Map must call registerCache", () => {
+    const violations = checkFiles(getLibFiles(), "lib");
     expect(violations).toEqual([]);
   });
 });
