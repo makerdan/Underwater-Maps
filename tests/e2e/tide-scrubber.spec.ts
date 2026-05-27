@@ -157,8 +157,19 @@ test.describe("Tide HUD scrubber slack visuals", () => {
       () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
     ).catch(() => false);
     if (!hasTerrain) {
-      await page.evaluate(() => window.__bathyTest?.seedTerrain?.());
-      await page.waitForTimeout(500);
+      const seeded = await page.evaluate(
+        () => window.__bathyTest?.seedTerrain?.(),
+      ).catch(() => false);
+      // Wait for the seeded terrain to actually propagate into app state.
+      if (seeded) {
+        await page.waitForFunction(
+          () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
+          null,
+          { timeout: 5_000 },
+        ).catch(() => {});
+      } else {
+        await page.waitForTimeout(500);
+      }
     }
 
     await ensureTidalOverlayEnabled(page);

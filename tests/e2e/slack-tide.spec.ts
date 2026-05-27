@@ -138,12 +138,31 @@ test.describe("Slack-tide visuals", () => {
       () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
     ).catch(() => false);
     if (!hasTerrain) {
-      await page.evaluate(() => window.__bathyTest?.seedTerrain?.());
-      await page.waitForTimeout(500);
+      const seeded = await page.evaluate(
+        () => window.__bathyTest?.seedTerrain?.(),
+      ).catch(() => false);
+      // Wait for the seeded terrain to actually propagate into app state.
+      if (seeded) {
+        await page.waitForFunction(
+          () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
+          null,
+          { timeout: 5_000 },
+        ).catch(() => {});
+      } else {
+        await page.waitForTimeout(500);
+      }
     }
 
-    // Enable the Tidal Overlay from the top-right toolbar.
-    await clickTopBarToggle(page, "TIDAL");
+    // Enable the Tidal Overlay only if it is not already on.
+    // autoLoadTidal:true causes the app to activate the overlay on first
+    // render; clicking an already-active button would toggle it *off* and
+    // prevent TidePanel from ever mounting.
+    const tidalBtn = page.locator("button:has-text('TIDAL')").first();
+    await expect(tidalBtn).toBeVisible({ timeout: 10_000 });
+    const tidalBtnText = (await tidalBtn.innerText()).trim();
+    if (!tidalBtnText.startsWith("◉")) {
+      await tidalBtn.dispatchEvent("click");
+    }
 
     // Wait for the TidePanel to mount. It only renders once tidal data is
     // available for the dataset centre.
