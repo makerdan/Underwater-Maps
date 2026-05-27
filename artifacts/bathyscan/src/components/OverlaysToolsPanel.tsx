@@ -25,6 +25,7 @@ import { ShoreZoneCredit } from "@/components/ShoreZoneCredit";
 import { Spinner } from "@/components/ui/spinner";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
 import { useToast } from "@/hooks/use-toast";
+import { EFH_SPECIES_PALETTE } from "@/lib/efhSpeciesPalette";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(2,8,18,0.94)",
@@ -118,6 +119,8 @@ export const OverlaysToolsPanel: React.FC = () => {
   const setSubstrateColorMode = useUiStore((s) => s.setSubstrateColorMode);
   const efhOverlayEnabled = useUiStore((s) => s.efhOverlayEnabled);
   const setEfhOverlayEnabled = useUiStore((s) => s.setEfhOverlayEnabled);
+  const hiddenEfhSpecies = useUiStore((s) => s.hiddenEfhSpecies);
+  const toggleEfhSpecies = useUiStore((s) => s.toggleEfhSpecies);
   const windOverlayActive = useUiStore((s) => s.windOverlayActive);
   const setWindOverlayActive = useUiStore((s) => s.setWindOverlayActive);
   const tideOverlayActive = useUiStore((s) => s.tideOverlayActive);
@@ -315,16 +318,83 @@ export const OverlaysToolsPanel: React.FC = () => {
           />
 
           {hasEfh && (
-            <ToggleButton
-              active={efhOverlayEnabled}
-              onClick={() => setEfhOverlayEnabled(!efhOverlayEnabled)}
-              label="🐟 ESSENTIAL FISH HABITAT"
-              tooltip="Show Essential Fish Habitat zones overlay"
-              activeBg="rgba(34,197,94,0.15)"
-              activeBorder="rgba(34,197,94,0.5)"
-              activeColor="#4ade80"
-              isLoading={efhOverlayEnabled && efhLoading}
-            />
+            <>
+              <ToggleButton
+                active={efhOverlayEnabled}
+                onClick={() => setEfhOverlayEnabled(!efhOverlayEnabled)}
+                label="🐟 ESSENTIAL FISH HABITAT"
+                tooltip="Show Essential Fish Habitat zones overlay"
+                activeBg="rgba(34,197,94,0.15)"
+                activeBorder="rgba(34,197,94,0.5)"
+                activeColor="#4ade80"
+                isLoading={efhOverlayEnabled && efhLoading}
+              />
+              {efhOverlayEnabled && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 2,
+                    paddingLeft: 8,
+                    paddingRight: 4,
+                    paddingTop: 4,
+                    paddingBottom: 2,
+                    borderLeft: "2px solid rgba(34,197,94,0.25)",
+                    marginLeft: 4,
+                  }}
+                >
+                  {EFH_SPECIES_PALETTE.map(({ commonName, color }) => {
+                    const hidden = hiddenEfhSpecies.has(commonName);
+                    return (
+                      <button
+                        key={commonName}
+                        onClick={() => toggleEfhSpecies(commonName)}
+                        aria-pressed={!hidden}
+                        title={hidden ? `Show ${commonName}` : `Hide ${commonName}`}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          padding: "2px 0",
+                          width: "100%",
+                          textAlign: "left",
+                          opacity: hidden ? 0.38 : 1,
+                          transition: "opacity 0.15s ease",
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: "inline-block",
+                            width: 10,
+                            height: 10,
+                            borderRadius: 2,
+                            background: color,
+                            flexShrink: 0,
+                            border: "1px solid rgba(255,255,255,0.18)",
+                          }}
+                        />
+                        <span
+                          style={{
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 9,
+                            letterSpacing: "0.08em",
+                            color: hidden ? "#64748b" : "#cbd5e1",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {commonName.toUpperCase()}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
