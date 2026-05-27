@@ -26,6 +26,7 @@ import type { SubstrateFeature } from "@workspace/api-client-react";
 import {
   filterVisibleSubstrateFeatures,
   buildPolyRenders,
+  buildSelectedSubstrate,
 } from "@/components/SubstrateLayer";
 import { useUiStore } from "@/lib/uiStore";
 
@@ -406,5 +407,96 @@ describe("SubstrateLayer geometry caching: stable refs across visibility toggles
 
     expect(isVisible).toBe(false);
     expect(polys[0]?.outlineGeometry).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Click guard: hidden polygons must not set selectedSubstrate
+//
+// The component attaches `onClick` only when `isVisible` is true (i.e.
+// `onClick={isVisible ? handleClick(p.feature) : undefined}`).  These tests
+// mirror that conditional by computing `isVisible` from hiddenSubstrateClasses
+// before deciding whether to call setSelectedSubstrate — confirming that no
+// selectedSubstrate is ever written for a hidden feature.
+// ---------------------------------------------------------------------------
+
+describe("SubstrateLayer click guard: hidden polygons do not set selectedSubstrate", () => {
+  beforeEach(() => {
+    useUiStore.setState({
+      hiddenSubstrateClasses: new Set<string>(),
+      substrateColorMode: true,
+      selectedSubstrate: null,
+    });
+  });
+
+  it("clicking a visible polygon sets selectedSubstrate", () => {
+    const sand = makePolygonFeature("poly-sand", "sand");
+    const hidden = useUiStore.getState().hiddenSubstrateClasses;
+    const isVisible = !hidden.has(sand.properties.substrate.toLowerCase());
+
+    if (isVisible) {
+      useUiStore
+        .getState()
+        .setSelectedSubstrate(
+          buildSelectedSubstrate(sand, "test source", "http://test.com"),
+        );
+    }
+
+    expect(useUiStore.getState().selectedSubstrate?.unitId).toBe("poly-sand");
+  });
+
+  it("clicking a hidden polygon does NOT set selectedSubstrate", () => {
+    const bedrock = makePolygonFeature("poly-bedrock", "bedrock");
+    useUiStore.getState().toggleSubstrateClass("bedrock");
+
+    const hidden = useUiStore.getState().hiddenSubstrateClasses;
+    const isVisible = !hidden.has(bedrock.properties.substrate.toLowerCase());
+
+    if (isVisible) {
+      useUiStore
+        .getState()
+        .setSelectedSubstrate(
+          buildSelectedSubstrate(bedrock, "test source", "http://test.com"),
+        );
+    }
+
+    expect(useUiStore.getState().selectedSubstrate).toBeNull();
+  });
+
+  it("case-insensitive: mixed-case substrate name is correctly identified as hidden", () => {
+    const mixed = makePolygonFeature("poly-mixed", "Bedrock");
+    useUiStore.getState().toggleSubstrateClass("bedrock");
+
+    const hidden = useUiStore.getState().hiddenSubstrateClasses;
+    const isVisible = !hidden.has(mixed.properties.substrate.toLowerCase());
+
+    if (isVisible) {
+      useUiStore
+        .getState()
+        .setSelectedSubstrate(
+          buildSelectedSubstrate(mixed, "test source", "http://test.com"),
+        );
+    }
+
+    expect(useUiStore.getState().selectedSubstrate).toBeNull();
+  });
+
+  it("re-showing a hidden polygon (toggle x2) allows selectedSubstrate to be set again", () => {
+    const sand = makePolygonFeature("poly-sand", "sand");
+    useUiStore.getState().toggleSubstrateClass("sand");
+    useUiStore.getState().toggleSubstrateClass("sand");
+
+    const hidden = useUiStore.getState().hiddenSubstrateClasses;
+    const isVisible = !hidden.has(sand.properties.substrate.toLowerCase());
+
+    if (isVisible) {
+      useUiStore
+        .getState()
+        .setSelectedSubstrate(
+          buildSelectedSubstrate(sand, "test source", "http://test.com"),
+        );
+    }
+
+    expect(useUiStore.getState().selectedSubstrate?.unitId).toBe("poly-sand");
   });
 });

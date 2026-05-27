@@ -284,7 +284,7 @@ export const SubstrateLayer: React.FC = () => {
                 geometry={p.fillGeometry}
                 visible={isVisible}
                 renderOrder={2}
-                onClick={handleClick(p.feature)}
+                onClick={isVisible ? handleClick(p.feature) : undefined}
               >
                 <meshBasicMaterial
                   color={p.color}
