@@ -163,6 +163,7 @@ export const EfhZoneLayer: React.FC = () => {
   const { terrain } = useAppState();
   const efhOverlayEnabled = useUiStore((s) => s.efhOverlayEnabled);
   const setSelectedEfh = useUiStore((s) => s.setSelectedEfh);
+  const hiddenEfhSpecies = useUiStore((s) => s.hiddenEfhSpecies);
 
   const datasetId = terrain?.datasetId ?? "";
 
@@ -189,12 +190,15 @@ export const EfhZoneLayer: React.FC = () => {
 
   const zones = useMemo(() => {
     if (!activeFeatures || !terrain) return [];
+    const visibleFeatures = activeFeatures.filter(
+      (f) => !hiddenEfhSpecies.has(f.properties.commonName ?? ""),
+    );
     return buildZoneRenders(
-      activeFeatures,
+      visibleFeatures,
       terrain.minLon, terrain.maxLon,
       terrain.minLat, terrain.maxLat,
     );
-  }, [activeFeatures, terrain]);
+  }, [activeFeatures, terrain, hiddenEfhSpecies]);
 
   // Free GPU buffers when zones change or the component unmounts
   useEffect(() => {

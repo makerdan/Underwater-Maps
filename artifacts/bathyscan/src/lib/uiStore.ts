@@ -82,6 +82,15 @@ interface UiStore {
    */
   selectedEfh: EfhSpeciesProperties | null;
   setSelectedEfh: (p: EfhSpeciesProperties | null) => void;
+  /**
+   * EFH species common names the user has hidden via the legend toggle.
+   * Keys match `feature.properties.commonName` (case-sensitive).
+   * Empty set = all species visible.
+   * Shared between the 2D overview legend and the 3D EfhZoneLayer.
+   */
+  hiddenEfhSpecies: Set<string>;
+  toggleEfhSpecies: (commonName: string) => void;
+  clearHiddenEfhSpecies: () => void;
   /** Controls visibility of the Find Data slide-in panel. */
   findDataPanelOpen: boolean;
   setFindDataPanelOpen: (open: boolean) => void;
@@ -182,6 +191,18 @@ export const useUiStore = create<UiStore>((set) => ({
     set(enabled ? { efhOverlayEnabled: true } : { efhOverlayEnabled: false, selectedEfh: null }),
   selectedEfh: null,
   setSelectedEfh: (p) => set({ selectedEfh: p }),
+  hiddenEfhSpecies: new Set<string>(),
+  toggleEfhSpecies: (commonName) => set((state) => {
+    const next = new Set(state.hiddenEfhSpecies);
+    if (next.has(commonName)) next.delete(commonName);
+    else next.add(commonName);
+    const sel = state.selectedEfh;
+    const clearSel = sel && next.has(sel.commonName ?? "");
+    return clearSel
+      ? { hiddenEfhSpecies: next, selectedEfh: null }
+      : { hiddenEfhSpecies: next };
+  }),
+  clearHiddenEfhSpecies: () => set({ hiddenEfhSpecies: new Set<string>() }),
   findDataPanelOpen: false,
   setFindDataPanelOpen: (open) => set({ findDataPanelOpen: open }),
   windOverlayActive: readLocalBool("bathyscan:windOverlayActive", false),

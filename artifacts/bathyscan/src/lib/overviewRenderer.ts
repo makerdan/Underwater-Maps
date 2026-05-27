@@ -355,12 +355,14 @@ export function renderEfhOverlay(
   features: EfhFeature[],
   grid: TerrainData,
   t: OverviewTransform,
+  hiddenSpecies: ReadonlySet<string> = new Set(),
 ): void {
   if (!features.length) return;
 
   ctx.save();
 
   for (const feature of features) {
+    if (hiddenSpecies.has(feature.properties.commonName ?? "")) continue;
     const geom = feature.geometry as { type?: string; coordinates?: number[][][] };
     if (geom.type !== "Polygon" || !geom.coordinates?.[0]) continue;
 
@@ -431,56 +433,138 @@ export function hitTestEfh(
 }
 
 // ---------------------------------------------------------------------------
-// EFH legend
+// EFH legend (interactive, per-species toggle)
 // ---------------------------------------------------------------------------
 
 /**
- * Draw a compact species legend in the bottom-right corner of the canvas.
- * Only call when the EFH overlay is active and features are non-empty.
+ * One row of the EFH species legend used for click hit-testing.
+ */
+export interface EfhLegendRow {
+  /** `commonName` as stored in feature.properties — used as the toggle key. */
+  key: string;
+  /** Display label. */
+  label: string;
+  /** Species hex color. */
+  color: string;
+  /** Click hit-rect in canvas pixels: [x, y, w, h]. */
+  rect: [number, number, number, number];
+}
+
+export interface EfhLegendLayout {
+  box: [number, number, number, number];
+  rows: EfhLegendRow[];
+}
+
+/**
+ * Draw a compact per-species toggle legend in the bottom-right corner of the
+ * canvas. Unique species are derived from the features array; each row can be
+ * toggled on/off via `hiddenSpecies`. Hidden rows are dimmed and struck-through.
+ *
+ * Returns the layout so callers can hit-test clicks and call
+ * `uiStore.toggleEfhSpecies(key)`.
  */
 export function renderEfhLegend(
   ctx: CanvasRenderingContext2D,
   features: EfhFeature[],
   cW: number,
   cH: number,
-): void {
-  if (!features.length) return;
+  hiddenSpecies: ReadonlySet<string> = new Set(),
+): EfhLegendLayout | null {
+  if (!features.length) return null;
+
+  // Collect unique (commonName, color) pairs in first-seen order.
+  const seen = new Map<string, string>();
+  for (const f of features) {
+    const name = f.properties.commonName ?? f.properties.species ?? "";
+    if (name && !seen.has(name)) seen.set(name, f.properties.color ?? "#00e5ff");
+  }
+  const entries = Array.from(seen.entries());
+  if (!entries.length) return null;
 
   const FONT = "'JetBrains Mono', monospace";
-  const SWATCH = 8;
+  const SWATCH = 9;
   const ROW_H = 14;
-  const PAD = 6;
-  const FONT_SIZE = 8;
+  const PAD = 8;
+  const FONT_SIZE = 9;
+  const HEADER_H = 14;
 
   ctx.save();
   ctx.font = `${FONT_SIZE}px ${FONT}`;
 
-  const labels = features.map((f) => f.properties.commonName ?? f.properties.species ?? "");
+  const labels = entries.map(([name]) => name);
   const maxW = labels.reduce((m, l) => Math.max(m, ctx.measureText(l).width), 0);
-  const boxW = PAD * 2 + SWATCH + 4 + maxW;
-  const boxH = PAD * 2 + labels.length * ROW_H;
+  const headerW = ctx.measureText("EFH SPECIES").width;
+  const boxW = PAD * 2 + SWATCH + 6 + Math.max(maxW, headerW);
+  const boxH = PAD * 2 + HEADER_H + entries.length * ROW_H;
   const x = cW - boxW - 8;
   const y = cH - boxH - 30;
 
-  ctx.fillStyle = "rgba(2,8,24,0.80)";
+  ctx.fillStyle = "rgba(2,8,24,0.85)";
   ctx.beginPath();
   ctx.roundRect(x, y, boxW, boxH, 3);
   ctx.fill();
-
-  ctx.strokeStyle = "rgba(0,229,255,0.15)";
+  ctx.strokeStyle = "rgba(34,197,94,0.18)";
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  labels.forEach((label, i) => {
-    const color = features[i]?.properties.color ?? "#00e5ff";
-    const row = y + PAD + i * ROW_H;
+  ctx.fillStyle = "#475569";
+  ctx.fillText("EFH SPECIES", x + PAD, y + PAD + FONT_SIZE);
+
+  const rows: EfhLegendRow[] = entries.map(([name, color], i) => {
+    const rowY = y + PAD + HEADER_H + i * ROW_H;
+    const hidden = hiddenSpecies.has(name);
+    const alpha = hidden ? 0.32 : 1.0;
+
+    ctx.globalAlpha = alpha;
     ctx.fillStyle = color;
-    ctx.fillRect(x + PAD, row + 1, SWATCH, SWATCH);
-    ctx.fillStyle = "#94a3b8";
-    ctx.fillText(label, x + PAD + SWATCH + 4, row + FONT_SIZE);
+    ctx.fillRect(x + PAD, rowY + 1, SWATCH, SWATCH);
+    ctx.strokeStyle = hexToRgba(color, 0.95);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + PAD + 0.5, rowY + 1.5, SWATCH, SWATCH);
+    ctx.fillStyle = "#cbd5e1";
+    ctx.fillText(name, x + PAD + SWATCH + 6, rowY + FONT_SIZE);
+
+    if (hidden) {
+      ctx.globalAlpha = 0.6;
+      ctx.strokeStyle = "#cbd5e1";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      const lineY = rowY + 1 + SWATCH / 2 + 0.5;
+      ctx.moveTo(x + PAD, lineY);
+      ctx.lineTo(x + boxW - PAD, lineY);
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha = 1.0;
+
+    return {
+      key: name,
+      label: name,
+      color,
+      rect: [x + 2, rowY, boxW - 4, ROW_H],
+    };
   });
 
   ctx.restore();
+
+  return { box: [x, y, boxW, boxH], rows };
+}
+
+/**
+ * Hit-test a canvas-pixel click against an EFH legend layout. Returns the
+ * commonName key whose row was clicked, or null if outside any row.
+ */
+export function hitTestEfhLegend(
+  cx: number,
+  cy: number,
+  layout: EfhLegendLayout | null,
+): string | null {
+  if (!layout) return null;
+  for (const r of layout.rows) {
+    const [x, y, w, h] = r.rect;
+    if (cx >= x && cx <= x + w && cy >= y && cy <= y + h) return r.key;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------

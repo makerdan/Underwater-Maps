@@ -39,6 +39,7 @@ import {
   renderEfhOverlay,
   renderEfhLegend,
   hitTestEfh,
+  hitTestEfhLegend,
   renderSubstrateOverlay,
   renderSubstrateLegend,
   hitTestSubstrate,
@@ -48,7 +49,7 @@ import {
   renderSavedTrails,
   drawSelectionRect,
 } from "@/lib/overviewRenderer";
-import type { OverviewTransform, CanvasSavedTrail } from "@/lib/overviewRenderer";
+import type { OverviewTransform, CanvasSavedTrail, EfhLegendLayout } from "@/lib/overviewRenderer";
 import {
   useGetEfh,
   getGetEfhQueryKey,
@@ -137,6 +138,8 @@ export const OverviewMap: React.FC = () => {
   const selectedSubstrateUnitIdRef = useRef<string | null>(null);
   const hiddenSubstrateClassesRef = useRef<ReadonlySet<string>>(new Set());
   const substrateLegendLayoutRef = useRef<ReturnType<typeof renderSubstrateLegend>>(null);
+  const hiddenEfhSpeciesRef = useRef<ReadonlySet<string>>(new Set());
+  const efhLegendLayoutRef = useRef<EfhLegendLayout | null>(null);
 
   // Drag tracking
   const isDraggingRef = useRef(false);
@@ -324,6 +327,10 @@ export const OverviewMap: React.FC = () => {
   useEffect(() => {
     hiddenSubstrateClassesRef.current = hiddenSubstrateClasses;
   }, [hiddenSubstrateClasses]);
+  const hiddenEfhSpecies = useUiStore((s) => s.hiddenEfhSpecies);
+  useEffect(() => {
+    hiddenEfhSpeciesRef.current = hiddenEfhSpecies;
+  }, [hiddenEfhSpecies]);
 
   const { data: substrateCollection } = useGetSubstrate(datasetId, {
     query: {
@@ -482,8 +489,10 @@ export const OverviewMap: React.FC = () => {
 
       // EFH overlay (dashed species polygon outlines + legend)
       if (showEfhRef.current && efhFeaturesRef.current.length > 0) {
-        renderEfhOverlay(ctx, efhFeaturesRef.current, grid, t);
-        renderEfhLegend(ctx, efhFeaturesRef.current, cW, cH);
+        renderEfhOverlay(ctx, efhFeaturesRef.current, grid, t, hiddenEfhSpeciesRef.current);
+        efhLegendLayoutRef.current = renderEfhLegend(ctx, efhFeaturesRef.current, cW, cH, hiddenEfhSpeciesRef.current);
+      } else {
+        efhLegendLayoutRef.current = null;
       }
 
       // Substrate overlay (CMECS-coloured polygons + legend) — mirrors the
@@ -777,6 +786,17 @@ export const OverviewMap: React.FC = () => {
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
 
+      // EFH legend row click → toggle that species. Checked before polygon
+      // hit-tests so the legend rows behave like buttons even when they
+      // sit above EFH polygons on the canvas.
+      if (showEfhRef.current && efhLegendLayoutRef.current) {
+        const hitKey = hitTestEfhLegend(mx, my, efhLegendLayoutRef.current);
+        if (hitKey) {
+          useUiStore.getState().toggleEfhSpecies(hitKey);
+          return;
+        }
+      }
+
       // Substrate legend row click → toggle that CMECS class. Checked before
       // anything else so the legend behaves like a button overlay even when
       // it sits over substrate/EFH polygons.
@@ -817,9 +837,13 @@ export const OverviewMap: React.FC = () => {
 
       // EFH zone takes priority when the overlay is visible and the click
       // lands inside a polygon — open the species info panel instead of
-      // dropping into the 3D scene.
+      // dropping into the 3D scene. Hidden species are excluded so clicks
+      // on filtered-out polygons fall through to the drop-in handler.
       if (showEfhRef.current && efhFeaturesRef.current.length > 0) {
-        const hit = hitTestEfh(lon, lat, efhFeaturesRef.current);
+        const visibleEfh = efhFeaturesRef.current.filter(
+          (f) => !hiddenEfhSpeciesRef.current.has(f.properties.commonName ?? ""),
+        );
+        const hit = hitTestEfh(lon, lat, visibleEfh);
         if (hit) {
           useUiStore.getState().setSelectedEfh(hit.properties);
           return;
