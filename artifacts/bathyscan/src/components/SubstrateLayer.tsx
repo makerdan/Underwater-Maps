@@ -139,7 +139,32 @@ interface PolyRender {
   feature: SubstrateFeature;
 }
 
-function buildPolyRenders(
+/**
+ * Pure helper: filters a SubstrateFeature array down to the classes that are
+ * NOT in `hiddenSubstrateClasses`.
+ *
+ * This is the exact filter the 3D SubstrateLayer applies inside its `useMemo`
+ * before calling `buildPolyRenders`. Exported so unit tests exercise the same
+ * code path the component uses — a regression here is immediately visible in
+ * both the component and the tests.
+ */
+export function filterVisibleSubstrateFeatures(
+  features: SubstrateFeature[],
+  hiddenClasses: Set<string>,
+): SubstrateFeature[] {
+  return features.filter(
+    (f) => !hiddenClasses.has(f.properties.substrate.toLowerCase()),
+  );
+}
+
+/**
+ * Pure helper: converts an array of SubstrateFeatures (already filtered to
+ * only the visible ones) into the PolyRender descriptors the 3D scene uses.
+ *
+ * Exported so unit tests can exercise the geometry-building step without
+ * spinning up a React Three Fiber canvas.
+ */
+export function buildPolyRenders(
   features: SubstrateFeature[],
   minLon: number, maxLon: number,
   minLat: number, maxLat: number,
@@ -216,8 +241,9 @@ export const SubstrateLayer: React.FC = () => {
     // Honor the shared substrate-class filter so the 3D scene stays in sync
     // with the 2D OverviewMap legend. Hidden classes are dropped entirely
     // rather than dimmed — anglers wanted them out of the way.
-    const visible = collection.features.filter(
-      (f) => !hiddenSubstrateClasses.has(f.properties.substrate.toLowerCase()),
+    const visible = filterVisibleSubstrateFeatures(
+      collection.features,
+      hiddenSubstrateClasses,
     );
     return buildPolyRenders(
       visible,
