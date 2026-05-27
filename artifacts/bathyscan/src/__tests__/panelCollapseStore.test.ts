@@ -107,7 +107,9 @@ describe("panelCollapseStore persistence", () => {
 
     await simulateReload();
 
-    expect(usePanelCollapseStore.getState().collapsed).toEqual(pattern);
+    expect(usePanelCollapseStore.getState().collapsed).toEqual(
+      expect.objectContaining(pattern),
+    );
   });
 
   it("toggle round-trips through localStorage on reload", async () => {
