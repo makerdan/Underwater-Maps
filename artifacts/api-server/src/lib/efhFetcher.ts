@@ -283,7 +283,7 @@ async function fetchLayerFeatures(
  * records. MultiPolygon geometries are expanded to one EfhFeature per polygon
  * part so the full official EFH footprint is preserved.
  */
-function expandFeature(raw: RawFeature, spec: LayerSpec): EfhFeature[] {
+export function expandFeature(raw: RawFeature, spec: LayerSpec): EfhFeature[] {
   const geom = raw.geometry;
   if (!geom || !geom.coordinates) return [];
 
