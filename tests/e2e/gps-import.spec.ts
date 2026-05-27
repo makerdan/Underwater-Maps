@@ -12,8 +12,7 @@
  *
  * Companion spec to `marker-flow-real.spec.ts` — same auth-bypass pattern.
  */
-import { test, expect } from "@playwright/test";
-import type { Page, APIResponse } from "@playwright/test";
+import { test, expect, type Page, type APIResponse } from "./fixtures";
 
 const DATASET_ID = "thorne-bay";
 // Must match `FAKE_DEV_USER_ID` in artifacts/bathyscan/src/lib/devAuth.ts —

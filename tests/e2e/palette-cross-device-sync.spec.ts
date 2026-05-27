@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 
 /**
  * Task #368 — end-to-end coverage for depth-palette cross-device sync.

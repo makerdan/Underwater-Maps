@@ -12,7 +12,7 @@
  *   - gridder.test.ts            → gridPoints smoothing flag (depth range)
  *   - smooth-terrain.test.ts     → PUT /settings → GET /terrain integration
  */
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 
 test.describe("Smooth terrain spikes toggle", () => {
   test("toggle state persists across reload", async ({ page }) => {

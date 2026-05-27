@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 
 // Detect the signed-in dev shell by waiting for the dev-only `__bathyTest`
 // helper to install. We can't rely on the WebGL canvas being visible — it

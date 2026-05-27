@@ -1,4 +1,5 @@
 import { test as base, expect } from "@playwright/test";
+import type { Page, Locator, APIRequestContext, APIResponse } from "@playwright/test";
 
 /**
  * Shared Playwright fixtures for the BathyScan e2e suite.
@@ -38,3 +39,4 @@ export const test = base.extend<{ resetSettings: void }>({
 });
 
 export { expect };
+export type { Page, Locator, APIRequestContext, APIResponse };
