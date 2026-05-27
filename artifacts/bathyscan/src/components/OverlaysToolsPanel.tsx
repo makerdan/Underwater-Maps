@@ -26,7 +26,6 @@ import { ShoreZoneCredit } from "@/components/ShoreZoneCredit";
 import { Spinner } from "@/components/ui/spinner";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
 import { useToast } from "@/hooks/use-toast";
-import { EFH_SPECIES_PALETTE } from "@/lib/efhSpeciesPalette";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(2,8,18,0.94)",
@@ -346,151 +345,85 @@ export const OverlaysToolsPanel: React.FC = () => {
                 activeColor="#4ade80"
                 isLoading={efhOverlayEnabled && efhLoading}
               />
-              {efhOverlayEnabled && (
+              {efhOverlayEnabled && efhSpeciesEntries.length > 0 && (
                 <div
                   style={{
+                    marginTop: 2,
+                    paddingLeft: 8,
                     display: "flex",
                     flexDirection: "column",
                     gap: 2,
-                    paddingLeft: 8,
-                    paddingRight: 4,
-                    paddingTop: 4,
-                    paddingBottom: 2,
-                    borderLeft: "2px solid rgba(34,197,94,0.25)",
-                    marginLeft: 4,
                   }}
                 >
-                  {EFH_SPECIES_PALETTE.map(({ commonName, color }) => {
-                    const hidden = hiddenEfhSpecies.has(commonName);
+                  <span
+                    style={{
+                      fontSize: 9,
+                      letterSpacing: "0.12em",
+                      color: "#475569",
+                      textTransform: "uppercase",
+                      paddingBottom: 2,
+                    }}
+                  >
+                    Filter by species
+                  </span>
+                  {efhSpeciesEntries.map(([name, color]) => {
+                    const hidden = hiddenEfhSpecies.has(name);
                     return (
-                      <button
-                        key={commonName}
-                        onClick={() => toggleEfhSpecies(commonName)}
-                        aria-pressed={!hidden}
-                        title={hidden ? `Show ${commonName}` : `Hide ${commonName}`}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          padding: "2px 0",
-                          width: "100%",
-                          textAlign: "left",
-                          opacity: hidden ? 0.38 : 1,
-                          transition: "opacity 0.15s ease",
-                        }}
+                      <ViewscreenTooltip
+                        key={name}
+                        label={hidden ? `Show ${name}` : `Hide ${name}`}
+                        side="right"
                       >
-                        <span
+                        <button
+                          aria-pressed={!hidden}
+                          onClick={() => toggleEfhSpecies(name)}
                           style={{
-                            display: "inline-block",
-                            width: 10,
-                            height: 10,
-                            borderRadius: 2,
-                            background: color,
-                            flexShrink: 0,
-                            border: "1px solid rgba(255,255,255,0.18)",
-                          }}
-                        />
-                        <span
-                          style={{
+                            width: "100%",
+                            textAlign: "left",
+                            background: hidden ? "transparent" : "rgba(0,10,20,0.45)",
+                            border: `1px solid ${hidden ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.12)"}`,
+                            borderRadius: 3,
+                            color: hidden ? "#334155" : "#cbd5e1",
                             fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 9,
+                            fontSize: 10,
+                            padding: "3px 8px",
+                            cursor: "pointer",
                             letterSpacing: "0.08em",
-                            color: hidden ? "#64748b" : "#cbd5e1",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            transition: "all 0.12s ease",
+                            opacity: hidden ? 0.5 : 1,
                           }}
                         >
-                          {commonName.toUpperCase()}
-                        </span>
-                      </button>
+                          <span
+                            style={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: 2,
+                              background: hidden ? "transparent" : color,
+                              border: `1px solid ${color}`,
+                              flexShrink: 0,
+                              transition: "background 0.12s ease",
+                            }}
+                          />
+                          <span
+                            style={{
+                              textDecoration: hidden ? "line-through" : "none",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {name}
+                          </span>
+                        </button>
+                      </ViewscreenTooltip>
                     );
                   })}
                 </div>
               )}
             </>
-          )}
-
-          {hasEfh && efhOverlayEnabled && efhSpeciesEntries.length > 0 && (
-            <div
-              style={{
-                marginTop: 2,
-                paddingLeft: 8,
-                display: "flex",
-                flexDirection: "column",
-                gap: 2,
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 9,
-                  letterSpacing: "0.12em",
-                  color: "#475569",
-                  textTransform: "uppercase",
-                  paddingBottom: 2,
-                }}
-              >
-                Filter by species
-              </span>
-              {efhSpeciesEntries.map(([name, color]) => {
-                const hidden = hiddenEfhSpecies.has(name);
-                return (
-                  <ViewscreenTooltip
-                    key={name}
-                    label={hidden ? `Show ${name}` : `Hide ${name}`}
-                    side="right"
-                  >
-                    <button
-                      aria-pressed={!hidden}
-                      onClick={() => toggleEfhSpecies(name)}
-                      style={{
-                        width: "100%",
-                        textAlign: "left",
-                        background: hidden ? "transparent" : "rgba(0,10,20,0.45)",
-                        border: `1px solid ${hidden ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.12)"}`,
-                        borderRadius: 3,
-                        color: hidden ? "#334155" : "#cbd5e1",
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 10,
-                        padding: "3px 8px",
-                        cursor: "pointer",
-                        letterSpacing: "0.08em",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        transition: "all 0.12s ease",
-                        opacity: hidden ? 0.5 : 1,
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: 2,
-                          background: hidden ? "transparent" : color,
-                          border: `1px solid ${color}`,
-                          flexShrink: 0,
-                          transition: "background 0.12s ease",
-                        }}
-                      />
-                      <span
-                        style={{
-                          textDecoration: hidden ? "line-through" : "none",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {name}
-                      </span>
-                    </button>
-                  </ViewscreenTooltip>
-                );
-              })}
-            </div>
           )}
         </div>
       )}
