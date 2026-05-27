@@ -9,7 +9,7 @@
     "typecheck:libs": "tsc --build",
     "check:codegen": "pnpm --filter @workspace/api-spec run check:codegen",
     "typecheck": "pnpm --filter @workspace/api-spec run codegen:generate && pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
-    "lint": "eslint artifacts/bathyscan/src artifacts/api-server/src",
+    "lint": "eslint artifacts/bathyscan/src artifacts/api-server/src tests/e2e",
     "test:unit": "pnpm -r --if-present run test:unit",
     "test:e2e": "playwright test",
     "capture:help-screenshots": "node scripts/capture-help-screenshots.mjs",

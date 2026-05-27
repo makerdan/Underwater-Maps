@@ -13,6 +13,30 @@ export default [
     ],
   },
   {
+    files: ["tests/e2e/**/*.spec.ts"],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        ecmaVersion: 2022,
+        sourceType: "module",
+      },
+    },
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@playwright/test",
+              message:
+                "Import `test` and `expect` from './fixtures' instead of '@playwright/test' so the auto-reset fixture is always active.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["artifacts/bathyscan/src/**/*.{ts,tsx}", "artifacts/api-server/src/**/*.{ts,tsx}"],
     languageOptions: {
       parser: tsParser,
