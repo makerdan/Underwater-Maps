@@ -7,7 +7,7 @@
  * when substrate-tint mode is active, replacing its old bottom-right
  * floating placement.
  */
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
 import { useSettingsStore } from "@/lib/settingsStore";
@@ -18,6 +18,7 @@ import {
   useGetEfh,
   getGetEfhQueryKey,
 } from "@workspace/api-client-react";
+import type { EfhFeature } from "@workspace/api-client-react";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { SubstrateLegend } from "@/components/SubstrateLegend";
@@ -149,8 +150,9 @@ export const OverlaysToolsPanel: React.FC = () => {
     error: surfaceError,
   } = useSurfaceConditions(anyConditionsActive);
 
-  // EFH loading/error state — mirrors the enabled condition in EfhZoneLayer.
-  const { isLoading: efhLoading, isError: efhError } = useGetEfh(
+  // EFH loading/error state + feature data — mirrors the enabled condition in EfhZoneLayer.
+  // We also capture the feature data here to derive the per-species legend.
+  const { isLoading: efhLoading, isError: efhError, data: efhData } = useGetEfh(
     { datasetId },
     {
       query: {
@@ -159,6 +161,21 @@ export const OverlaysToolsPanel: React.FC = () => {
       },
     },
   );
+
+  // Derive unique species entries for the per-species filter legend.
+  // Prefer embedded polygons (user-saved datasets) over fetched preset data.
+  const activeEfhFeatures: EfhFeature[] = useMemo(
+    () => (embeddedPolygons?.features as EfhFeature[] | undefined) ?? efhData?.features ?? [],
+    [embeddedPolygons, efhData],
+  );
+  const efhSpeciesEntries = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const f of activeEfhFeatures) {
+      const { commonName, color } = f.properties;
+      if (!seen.has(commonName)) seen.set(commonName, color);
+    }
+    return Array.from(seen.entries());
+  }, [activeEfhFeatures]);
 
   // --- Error recovery: revert overlays to inactive on fetch failure ---
   // Use refs to detect false→true transitions only (avoid re-triggering on
@@ -395,6 +412,85 @@ export const OverlaysToolsPanel: React.FC = () => {
                 </div>
               )}
             </>
+          )}
+
+          {hasEfh && efhOverlayEnabled && efhSpeciesEntries.length > 0 && (
+            <div
+              style={{
+                marginTop: 2,
+                paddingLeft: 8,
+                display: "flex",
+                flexDirection: "column",
+                gap: 2,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 9,
+                  letterSpacing: "0.12em",
+                  color: "#475569",
+                  textTransform: "uppercase",
+                  paddingBottom: 2,
+                }}
+              >
+                Filter by species
+              </span>
+              {efhSpeciesEntries.map(([name, color]) => {
+                const hidden = hiddenEfhSpecies.has(name);
+                return (
+                  <ViewscreenTooltip
+                    key={name}
+                    label={hidden ? `Show ${name}` : `Hide ${name}`}
+                    side="right"
+                  >
+                    <button
+                      aria-pressed={!hidden}
+                      onClick={() => toggleEfhSpecies(name)}
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        background: hidden ? "transparent" : "rgba(0,10,20,0.45)",
+                        border: `1px solid ${hidden ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.12)"}`,
+                        borderRadius: 3,
+                        color: hidden ? "#334155" : "#cbd5e1",
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 10,
+                        padding: "3px 8px",
+                        cursor: "pointer",
+                        letterSpacing: "0.08em",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        transition: "all 0.12s ease",
+                        opacity: hidden ? 0.5 : 1,
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 2,
+                          background: hidden ? "transparent" : color,
+                          border: `1px solid ${color}`,
+                          flexShrink: 0,
+                          transition: "background 0.12s ease",
+                        }}
+                      />
+                      <span
+                        style={{
+                          textDecoration: hidden ? "line-through" : "none",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {name}
+                      </span>
+                    </button>
+                  </ViewscreenTooltip>
+                );
+              })}
+            </div>
           )}
         </div>
       )}

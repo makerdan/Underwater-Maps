@@ -129,6 +129,42 @@ export const THORNE_BAY_EFH: EfhFeatureCollection = {
     {
       type: "Feature",
       properties: {
+        species: "gadus_chalcogrammus",
+        commonName: "Walleye Pollock",
+        fmp: "Gulf of Alaska Groundfish FMP",
+        depthRangeM: [30, 400],
+        habitatDescription:
+          "Walleye pollock are abundant throughout the water column in Clarence Strait at 30–400 m. " +
+          "Juveniles school in surface waters; adults aggregate near bottom for spawning (Jan–Apr).",
+        lifeStage: "All life stages",
+        season: "Year-round; spawning Jan–Apr",
+        source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+        creditUrl: NOAA_EFH_URL,
+        color: "#84cc16",
+      },
+      geometry: { type: "Polygon", coordinates: bboxRing(-133.4, 55.1, -131.6, 56.3) },
+    },
+    {
+      type: "Feature",
+      properties: {
+        species: "atheresthes_stomias",
+        commonName: "Arrowtooth Flounder",
+        fmp: "Gulf of Alaska Groundfish FMP",
+        depthRangeM: [50, 500],
+        habitatDescription:
+          "Arrowtooth flounder are one of the most abundant flatfish in SE Alaska at 50–500 m, " +
+          "preferring soft mud and sand substrates in the deeper Clarence Strait channel.",
+        lifeStage: "Juveniles & Adults",
+        season: "Year-round",
+        source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+        creditUrl: NOAA_EFH_URL,
+        color: "#f97316",
+      },
+      geometry: { type: "Polygon", coordinates: bboxRing(-133.45, 55.05, -131.65, 56.35) },
+    },
+    {
+      type: "Feature",
+      properties: {
         species: "metacarcinus_magister",
         commonName: "Dungeness Crab",
         fmp: "Alaska Dungeness Crab FMP",
@@ -278,6 +314,34 @@ export const GLACIER_BAY_EFH: EfhFeatureCollection = buildRegion(
       inset: 0.05,
     },
     {
+      species: "gadus_chalcogrammus",
+      commonName: "Walleye Pollock",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [50, 600],
+      habitatDescription:
+        "Walleye pollock school throughout the water column in Glacier Bay approaches and Icy Strait at 50–600 m. " +
+        "Juveniles are abundant in surface and mid-water; adults concentrate near bottom for spawning.",
+      lifeStage: "All life stages",
+      season: "Year-round; spawning Jan–Apr",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#84cc16",
+      inset: 0.2,
+    },
+    {
+      species: "atheresthes_stomias",
+      commonName: "Arrowtooth Flounder",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [100, 700],
+      habitatDescription:
+        "Arrowtooth flounder are the dominant large flatfish in the deep glacial basins of Glacier Bay " +
+        "at 100–700 m, favouring soft mud-bottom habitat.",
+      lifeStage: "Juveniles & Adults",
+      season: "Year-round",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#f97316",
+      inset: 0.25,
+    },
+    {
       species: "chionoecetes_bairdi",
       commonName: "Tanner Crab",
       fmp: "Gulf of Alaska King & Tanner Crab FMP",
@@ -288,7 +352,7 @@ export const GLACIER_BAY_EFH: EfhFeatureCollection = buildRegion(
       season: "Year-round",
       source: "NOAA NMFS Alaska Region EFH — GOA Crab FMP",
       color: "#10b981",
-      inset: 0.15,
+      inset: 0.3,
     },
   ],
 );
@@ -353,6 +417,34 @@ export const ICY_STRAIT_EFH: EfhFeatureCollection = buildRegion(
       color: "#6366f1",
       inset: 0.15,
     },
+    {
+      species: "gadus_chalcogrammus",
+      commonName: "Walleye Pollock",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [30, 350],
+      habitatDescription:
+        "Walleye pollock are highly abundant in Icy Strait and Cross Sound, forming large mid-water " +
+        "schools at 30–350 m that concentrate near the sill at the strait's western end.",
+      lifeStage: "All life stages",
+      season: "Year-round; spawning Jan–Apr",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#84cc16",
+      inset: 0.2,
+    },
+    {
+      species: "atheresthes_stomias",
+      commonName: "Arrowtooth Flounder",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [80, 500],
+      habitatDescription:
+        "Arrowtooth flounder use the soft-mud bottom of the deeper Icy Strait channels at 80–500 m " +
+        "and are common bycatch in the Icy Strait trawl fishery.",
+      lifeStage: "Juveniles & Adults",
+      season: "Year-round",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#f97316",
+      inset: 0.25,
+    },
   ],
 );
 
@@ -416,6 +508,34 @@ export const SITKA_SOUND_EFH: EfhFeatureCollection = buildRegion(
       inset: 0.15,
     },
     {
+      species: "gadus_chalcogrammus",
+      commonName: "Walleye Pollock",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [30, 400],
+      habitatDescription:
+        "Walleye pollock form large aggregations on the outer Baranof Island shelf and in Sitka Sound " +
+        "proper at 30–400 m, supporting both commercial and recreational fisheries.",
+      lifeStage: "All life stages",
+      season: "Year-round; spawning Jan–Apr",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#84cc16",
+      inset: 0.2,
+    },
+    {
+      species: "atheresthes_stomias",
+      commonName: "Arrowtooth Flounder",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [100, 700],
+      habitatDescription:
+        "Arrowtooth flounder are one of the most abundant groundfish on the outer Sitka Sound shelf " +
+        "at 100–700 m, often the dominant flatfish in trawl surveys.",
+      lifeStage: "Juveniles & Adults",
+      season: "Year-round",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#f97316",
+      inset: 0.25,
+    },
+    {
       species: "oncorhynchus_tshawytscha",
       commonName: "Chinook Salmon",
       fmp: "Pacific Coast Salmon FMP",
@@ -426,7 +546,7 @@ export const SITKA_SOUND_EFH: EfhFeatureCollection = buildRegion(
       season: "Year-round; peak May–Aug",
       source: "NOAA NMFS Pacific Salmon EFH",
       color: "#3b82f6",
-      inset: 0.2,
+      inset: 0.3,
     },
   ],
 );
@@ -491,6 +611,34 @@ export const JUNEAU_APPROACHES_EFH: EfhFeatureCollection = buildRegion(
       inset: 0.15,
     },
     {
+      species: "gadus_chalcogrammus",
+      commonName: "Walleye Pollock",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [50, 400],
+      habitatDescription:
+        "Walleye pollock are an important commercial species in Stephens Passage and Frederick Sound, " +
+        "congregating at 50–400 m with large winter spawning aggregations in the main channel.",
+      lifeStage: "All life stages",
+      season: "Year-round; spawning Jan–Apr",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#84cc16",
+      inset: 0.2,
+    },
+    {
+      species: "atheresthes_stomias",
+      commonName: "Arrowtooth Flounder",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [100, 470],
+      habitatDescription:
+        "Arrowtooth flounder are abundant in the deeper portions of Stephens Passage and Lynn Canal " +
+        "at 100–470 m, using the soft-mud substrate as primary feeding habitat.",
+      lifeStage: "Juveniles & Adults",
+      season: "Year-round",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#f97316",
+      inset: 0.25,
+    },
+    {
       species: "metacarcinus_magister",
       commonName: "Dungeness Crab",
       fmp: "Alaska Dungeness Crab FMP",
@@ -501,7 +649,7 @@ export const JUNEAU_APPROACHES_EFH: EfhFeatureCollection = buildRegion(
       season: "Year-round",
       source: "ADF&G / NOAA NMFS Alaska Region EFH",
       color: "#10b981",
-      inset: 0.2,
+      inset: 0.3,
     },
   ],
 );
@@ -564,6 +712,34 @@ export const KETCHIKAN_EFH: EfhFeatureCollection = buildRegion(
       source: "NOAA NMFS Pacific Salmon EFH",
       color: "#22d3ee",
       inset: 0.15,
+    },
+    {
+      species: "gadus_chalcogrammus",
+      commonName: "Walleye Pollock",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [30, 350],
+      habitatDescription:
+        "Walleye pollock are common in Revillagigedo Channel and Clarence Strait at 30–350 m, " +
+        "with important over-wintering aggregations in the deeper channel reaches.",
+      lifeStage: "All life stages",
+      season: "Year-round; spawning Jan–Apr",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#84cc16",
+      inset: 0.15,
+    },
+    {
+      species: "atheresthes_stomias",
+      commonName: "Arrowtooth Flounder",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [80, 400],
+      habitatDescription:
+        "Arrowtooth flounder are abundant on the soft-bottom shelves of Revillagigedo Channel " +
+        "and around Annette Island at 80–400 m.",
+      lifeStage: "Juveniles & Adults",
+      season: "Year-round",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#f97316",
+      inset: 0.2,
     },
     {
       species: "metacarcinus_magister",
