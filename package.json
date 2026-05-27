@@ -8,7 +8,7 @@
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "check:codegen": "pnpm --filter @workspace/api-spec run check:codegen",
-    "typecheck": "pnpm run check:codegen && pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "typecheck": "pnpm --filter @workspace/api-spec run codegen:generate && pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "lint": "eslint artifacts/bathyscan/src artifacts/api-server/src",
     "test:unit": "pnpm -r --if-present run test:unit",
     "test:e2e": "playwright test",

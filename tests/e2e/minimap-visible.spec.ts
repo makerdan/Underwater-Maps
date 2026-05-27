@@ -5,7 +5,7 @@ test.describe("BathyScan — minimap visibility", () => {
     // Reset the toggle that the "disabled" test below flips, so a prior
     // failure can't leave the minimap hidden for this run (or for other
     // specs sharing the dev-user-bypass user).
-    await request.put("http://localhost:3151/api/settings", {
+    await request.put("http://127.0.0.1:3151/api/settings", {
       headers: { "x-e2e-user-id": "dev-user-bypass" },
       data: { showCompassMinimap: true },
     });

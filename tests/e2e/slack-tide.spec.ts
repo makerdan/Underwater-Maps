@@ -73,7 +73,7 @@ test.describe("Slack-tide visuals", () => {
     });
     // Ensure showTidePanel / autoLoadTidal are enabled on the server so they
     // don't get overwritten by a prior test that disabled them.
-    await page.request.put("http://localhost:3151/api/settings", {
+    await page.request.put("http://127.0.0.1:3151/api/settings", {
       headers: { "x-e2e-user-id": "dev-user-bypass" },
       data: { showTidePanel: true, autoLoadTidal: true },
     });

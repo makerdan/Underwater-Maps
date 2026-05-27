@@ -168,7 +168,7 @@ test.describe("Help-icon deep links", () => {
     test.setTimeout(60_000);
     // Reset showTidePanel and autoLoadTidal so a prior test that disabled them
     // cannot prevent TidePanel from mounting in this test.
-    await page.request.put("http://localhost:3151/api/settings", {
+    await page.request.put("http://127.0.0.1:3151/api/settings", {
       headers: { "x-e2e-user-id": "dev-user-bypass" },
       data: { showTidePanel: true, autoLoadTidal: true },
     });
