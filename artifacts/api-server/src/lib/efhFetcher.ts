@@ -61,6 +61,30 @@ const GOA_BASE_URL =
 const FETCH_TIMEOUT_MS = 25_000;
 const PAGE_SIZE = 1000; // matches server maxRecordCount
 
+const DEFAULT_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+/**
+ * Maximum age for an on-disk EFH cache entry before it is treated as a cache
+ * miss and a fresh fetch is triggered.  Defaults to 7 days.  Override via the
+ * EFH_CACHE_MAX_AGE_MS environment variable for testing or ops purposes.
+ *
+ * The env value is validated: non-numeric, NaN, non-finite, or non-positive
+ * values fall back to the 7-day default and emit a warning.
+ */
+export const MAX_CACHE_AGE_MS: number = (() => {
+  const raw = process.env["EFH_CACHE_MAX_AGE_MS"];
+  if (raw === undefined) return DEFAULT_CACHE_AGE_MS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    console.warn(
+      `[efh-fetcher] EFH_CACHE_MAX_AGE_MS="${raw}" is not a positive finite number; ` +
+      `falling back to default ${DEFAULT_CACHE_AGE_MS}ms (7 days).`,
+    );
+    return DEFAULT_CACHE_AGE_MS;
+  }
+  return parsed;
+})();
+
 // ---------------------------------------------------------------------------
 // Layer specification table
 //
@@ -419,6 +443,14 @@ async function readDiskCache(): Promise<EfhFeature[] | null> {
     if ((parsed.version ?? 0) < EFH_CACHE_VERSION) {
       console.info(
         `[efh-fetcher] Discarding stale EFH cache (v${parsed.version} < v${EFH_CACHE_VERSION})`,
+      );
+      fsPromises.unlink(file).catch(() => {});
+      return null;
+    }
+    const ageMs = Date.now() - new Date(parsed.fetchedAt).getTime();
+    if (ageMs > MAX_CACHE_AGE_MS) {
+      console.info(
+        `[efh-fetcher] Discarding expired EFH disk cache (age ${Math.round(ageMs / 86_400_000)}d > max ${Math.round(MAX_CACHE_AGE_MS / 86_400_000)}d); will re-fetch.`,
       );
       fsPromises.unlink(file).catch(() => {});
       return null;
