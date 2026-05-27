@@ -566,6 +566,7 @@ function Main() {
             style={{
               maxHeight: "calc(100vh - 7rem)",
               paddingRight: 4,
+              paddingBottom: "2in",
               scrollbarWidth: "thin",
               scrollbarColor: "rgba(0,229,255,0.35) transparent",
             }}
