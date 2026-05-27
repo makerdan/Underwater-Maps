@@ -45,6 +45,51 @@ const FIXTURES: CatalogSeedEntry[] = [
     waterType: "saltwater",
   },
   {
+    id: "noaa-efh-alaska-pollock",
+    name: "NOAA EFH — Walleye Pollock (Gulf of Alaska)",
+    sourceAgency: "NOAA Fisheries / NMFS Alaska Region",
+    dataType: "habitat",
+    resolutionMMin: null,
+    resolutionMMax: null,
+    coverageBbox: { minLon: -170, minLat: 47, maxLon: -130, maxLat: 72 },
+    endpointUrl: "https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles",
+    accessNotes: "Freely available GeoJSON/Shapefile download.",
+    description: "Essential Fish Habitat for Walleye Pollock in the Gulf of Alaska.",
+    keywords: "EFH,essential fish habitat,pollock,walleye pollock,Gadus chalcogrammus,Theragra,Alaska,GOA,groundfish,NOAA,NMFS,midwater,demersal",
+    lastUpdated: "2023-01-01",
+    waterType: "saltwater",
+  },
+  {
+    id: "noaa-efh-alaska-sablefish",
+    name: "NOAA EFH — Sablefish (Gulf of Alaska)",
+    sourceAgency: "NOAA Fisheries / NMFS Alaska Region",
+    dataType: "habitat",
+    resolutionMMin: null,
+    resolutionMMax: null,
+    coverageBbox: { minLon: -170, minLat: 47, maxLon: -130, maxLat: 72 },
+    endpointUrl: "https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles",
+    accessNotes: "Freely available GeoJSON/Shapefile download.",
+    description: "Essential Fish Habitat for Sablefish (black cod) in the Gulf of Alaska.",
+    keywords: "EFH,essential fish habitat,sablefish,black cod,Anoplopoma fimbria,Alaska,GOA,groundfish,deepwater,slope,NOAA,NMFS",
+    lastUpdated: "2023-01-01",
+    waterType: "saltwater",
+  },
+  {
+    id: "noaa-efh-alaska-arrowtooth",
+    name: "NOAA EFH — Arrowtooth Flounder (Gulf of Alaska)",
+    sourceAgency: "NOAA Fisheries / NMFS Alaska Region",
+    dataType: "habitat",
+    resolutionMMin: null,
+    resolutionMMax: null,
+    coverageBbox: { minLon: -170, minLat: 47, maxLon: -130, maxLat: 72 },
+    endpointUrl: "https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles",
+    accessNotes: "Freely available GeoJSON/Shapefile download.",
+    description: "Essential Fish Habitat for Arrowtooth Flounder in the Gulf of Alaska.",
+    keywords: "EFH,essential fish habitat,arrowtooth flounder,Atheresthes stomias,Alaska,GOA,flatfish,flounder,groundfish,shelf,slope,NOAA,NMFS",
+    lastUpdated: "2023-01-01",
+    waterType: "saltwater",
+  },
+  {
     id: "gebco-2024-global",
     name: "GEBCO 2024 Global Bathymetric Grid",
     sourceAgency: "GEBCO / BODC",
@@ -116,7 +161,8 @@ describe("scoreEntry", () => {
   });
 
   it("is case-insensitive", () => {
-    const score = scoreEntry(FIXTURES[2]!, ["GEBCO", "GLOBAL"]);
+    const gebco = FIXTURES.find((f) => f.id === "gebco-2024-global")!;
+    const score = scoreEntry(gebco, ["GEBCO", "GLOBAL"]);
     expect(score).toBe(1);
   });
 
@@ -140,8 +186,11 @@ describe("searchCatalog", () => {
   it("filters by dataType", async () => {
     const results = await searchCatalog({ dataType: "habitat" }, FIXTURES);
     expect(results.every((r) => r.dataType === "habitat")).toBe(true);
-    expect(results.length).toBe(1);
-    expect(results[0]!.id).toBe("noaa-efh-alaska-rockfish");
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-efh-alaska-rockfish");
+    expect(ids).toContain("noaa-efh-alaska-pollock");
+    expect(ids).toContain("noaa-efh-alaska-sablefish");
+    expect(ids).toContain("noaa-efh-alaska-arrowtooth");
   });
 
   it("filters by waterType", async () => {
@@ -208,5 +257,46 @@ describe("searchCatalog", () => {
     const results = await searchCatalog({ q: "lidar" }, FIXTURES);
     const ids = results.map((r) => r.id);
     expect(ids).toContain("usgs-coned-lidar-alaska");
+  });
+
+  it("returns the walleye pollock EFH entry when searching 'pollock'", async () => {
+    const results = await searchCatalog({ q: "pollock" }, FIXTURES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-efh-alaska-pollock");
+  });
+
+  it("returns the sablefish EFH entry when searching 'sablefish'", async () => {
+    const results = await searchCatalog({ q: "sablefish" }, FIXTURES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-efh-alaska-sablefish");
+  });
+
+  it("returns the arrowtooth flounder EFH entry when searching 'arrowtooth'", async () => {
+    const results = await searchCatalog({ q: "arrowtooth" }, FIXTURES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-efh-alaska-arrowtooth");
+  });
+
+  it("returns new groundfish entries when searching 'groundfish'", async () => {
+    const results = await searchCatalog({ q: "groundfish" }, FIXTURES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-efh-alaska-pollock");
+    expect(ids).toContain("noaa-efh-alaska-sablefish");
+    expect(ids).toContain("noaa-efh-alaska-arrowtooth");
+  });
+
+  it("returns the sablefish entry when searching 'black cod'", async () => {
+    const results = await searchCatalog({ q: "black cod" }, FIXTURES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-efh-alaska-sablefish");
+  });
+
+  it("filters habitat dataType to include all three new groundfish entries", async () => {
+    const results = await searchCatalog({ dataType: "habitat" }, FIXTURES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-efh-alaska-pollock");
+    expect(ids).toContain("noaa-efh-alaska-sablefish");
+    expect(ids).toContain("noaa-efh-alaska-arrowtooth");
+    expect(results.every((r) => r.dataType === "habitat")).toBe(true);
   });
 });

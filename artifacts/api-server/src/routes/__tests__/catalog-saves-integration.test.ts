@@ -337,6 +337,26 @@ const H = vi.hoisted(() => {
     lastUpdated: "2024",
     waterType: "saltwater" as const,
   };
+  // Sablefish EFH entry — one of the three new groundfish species added to
+  // the catalog. Sablefish (anoplopoma_fimbria) has polygon features in the
+  // bundled SE Alaska EFH data, so the materializer produces a non-empty
+  // overlay without needing a live NOAA fetch.
+  const SABLEFISH_EFH_CATALOG_ENTRY = {
+    id: "noaa-efh-alaska-sablefish",
+    name: "NOAA EFH — Sablefish (Gulf of Alaska)",
+    sourceAgency: "NOAA Fisheries / NMFS Alaska Region",
+    dataType: "habitat" as const,
+    resolutionMMin: null,
+    resolutionMMax: null,
+    coverageBbox: { minLon: -170, minLat: 47, maxLon: -130, maxLat: 72 },
+    endpointUrl:
+      "https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles",
+    accessNotes: null,
+    description: null,
+    keywords: "EFH,essential fish habitat,sablefish,black cod,Anoplopoma fimbria,Alaska,GOA,groundfish,deepwater,slope,NOAA,NMFS",
+    lastUpdated: "2023-01-01",
+    waterType: "saltwater" as const,
+  };
   // Non-preset GEBCO catalog entry used to exercise the GEBCO WCS branch of
   // `buildCatalogGrids` end-to-end (catalog → materialize → user dataset).
   const GEBCO_CATALOG_ENTRY = {
@@ -406,6 +426,7 @@ const H = vi.hoisted(() => {
     NCEI_BAG_CATALOG_ENTRY,
     NCEI_COMMUNITY_DEM_CATALOG_ENTRY,
     EFH_CATALOG_ENTRY,
+    SABLEFISH_EFH_CATALOG_ENTRY,
   };
 });
 
@@ -499,6 +520,7 @@ vi.mock("../../lib/catalogSeeder.js", () => ({
     H.NCEI_BAG_CATALOG_ENTRY,
     H.NCEI_COMMUNITY_DEM_CATALOG_ENTRY,
     H.EFH_CATALOG_ENTRY,
+    H.SABLEFISH_EFH_CATALOG_ENTRY,
   ],
   searchCatalog: async () => [],
   scoreEntry: () => 1,
@@ -771,6 +793,64 @@ describe("catalog save → materialize → fetch round trip", () => {
       expect(terrainJson.habitatPolygons!.features.length).toBeGreaterThan(0);
       for (const f of terrainJson.habitatPolygons!.features) {
         expect(f.properties.species.startsWith("sebastes_")).toBe(true);
+      }
+    },
+    15_000,
+  );
+
+  it(
+    "smoke test: saves the sablefish EFH entry, materializes the polygon overlay, and serves it back",
+    async () => {
+      const sablefishId = H.SABLEFISH_EFH_CATALOG_ENTRY.id;
+
+      // 1. Kick off the save for the sablefish catalog entry.
+      const saveRes = await request(app)
+        .post(`/api/datasets/catalog/${sablefishId}/save`)
+        .set("x-e2e-user-id", E2E_USER)
+        .send({});
+      expect(saveRes.status).toBe(201);
+      expect(saveRes.body).toMatchObject({
+        catalogId: sablefishId,
+        status: "processing",
+      });
+      const saveId = saveRes.body.id as string;
+
+      // 2. Wait for materialization to reach a terminal state.
+      const ready = await pollUntilReady(saveId);
+      expect(ready.status).toBe("ready");
+      expect(ready.datasetId).toBeTruthy();
+      const datasetId = ready.datasetId!;
+
+      // 3. Terrain grid is a flat EFH overlay surface.
+      const terrainRes = await request(app)
+        .get(`/api/user/datasets/${datasetId}/terrain`)
+        .set("x-e2e-user-id", E2E_USER);
+      expect(terrainRes.status).toBe(200);
+      expect(terrainRes.body.datasetId).toBe(datasetId);
+      expect(terrainRes.body.resolution).toBe(256);
+      expect(terrainRes.body.depths).toHaveLength(256 * 256);
+      expect(terrainRes.body.waterType).toBe("saltwater");
+
+      // 4. Overview grid is the same surface at lower resolution.
+      const overviewRes = await request(app)
+        .get(`/api/user/datasets/${datasetId}/overview`)
+        .set("x-e2e-user-id", E2E_USER);
+      expect(overviewRes.status).toBe(200);
+      expect(overviewRes.body.resolution).toBe(64);
+      expect(overviewRes.body.depths).toHaveLength(64 * 64);
+
+      // 5. The stored jsonb must contain the sablefish habitat polygon overlay
+      //    so the viewer can render the EFH zones when this dataset is loaded.
+      const datasetRow = H.dbState.datasets.find((d) => d["id"] === datasetId);
+      expect(datasetRow).toBeDefined();
+      const terrainJson = datasetRow!["terrainJson"] as {
+        habitatPolygons?: { type: string; features: Array<{ properties: { species: string } }> };
+      };
+      expect(terrainJson.habitatPolygons).toBeDefined();
+      expect(terrainJson.habitatPolygons!.type).toBe("FeatureCollection");
+      expect(terrainJson.habitatPolygons!.features.length).toBeGreaterThan(0);
+      for (const f of terrainJson.habitatPolygons!.features) {
+        expect(f.properties.species).toBe("anoplopoma_fimbria");
       }
     },
     15_000,

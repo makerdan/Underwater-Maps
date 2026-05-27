@@ -111,6 +111,82 @@ describe("buildCatalogGrids", () => {
     }
   });
 
+  it("materializes the Walleye Pollock EFH entry and produces a valid overlay grid", async () => {
+    const entry = makeEntry({
+      id: "noaa-efh-alaska-pollock",
+      name: "NOAA EFH — Walleye Pollock (Gulf of Alaska)",
+      dataType: "habitat",
+      coverageBbox: { minLon: -170, minLat: 47, maxLon: -130, maxLat: 72 },
+    });
+    const result = await buildCatalogGrids(entry);
+    expect(result).not.toBeNull();
+    expect(result!.terrain.datasetId).toBe(entry.id);
+    expect(result!.overview.datasetId).toBe(entry.id);
+    expect(result!.terrain.depths).toHaveLength(256 * 256);
+    expect(result!.overview.depths).toHaveLength(64 * 64);
+    // All features in the overlay (if any) must be walleye pollock.
+    const terrainWithHabitat = result!.terrain as unknown as {
+      habitatPolygons?: { type: string; features: Array<{ properties: { species: string } }> };
+    };
+    const collection = terrainWithHabitat.habitatPolygons;
+    expect(collection).toBeDefined();
+    expect(collection!.type).toBe("FeatureCollection");
+    for (const f of collection!.features) {
+      expect(f.properties.species).toBe("gadus_chalcogrammus");
+    }
+  });
+
+  it("materializes the Sablefish EFH entry and filters to sablefish-only polygons", async () => {
+    const entry = makeEntry({
+      id: "noaa-efh-alaska-sablefish",
+      name: "NOAA EFH — Sablefish (Gulf of Alaska)",
+      dataType: "habitat",
+      coverageBbox: { minLon: -170, minLat: 47, maxLon: -130, maxLat: 72 },
+    });
+    const result = await buildCatalogGrids(entry);
+    expect(result).not.toBeNull();
+    expect(result!.terrain.datasetId).toBe(entry.id);
+    expect(result!.overview.datasetId).toBe(entry.id);
+    expect(result!.terrain.depths).toHaveLength(256 * 256);
+    expect(result!.overview.depths).toHaveLength(64 * 64);
+    const terrainWithHabitat = result!.terrain as unknown as {
+      habitatPolygons?: { type: string; features: Array<{ properties: { species: string } }> };
+    };
+    const collection = terrainWithHabitat.habitatPolygons;
+    expect(collection).toBeDefined();
+    expect(collection!.type).toBe("FeatureCollection");
+    // Sablefish (anoplopoma_fimbria) is present in the bundled SE Alaska EFH data.
+    expect(collection!.features.length).toBeGreaterThan(0);
+    for (const f of collection!.features) {
+      expect(f.properties.species).toBe("anoplopoma_fimbria");
+    }
+  });
+
+  it("materializes the Arrowtooth Flounder EFH entry and produces a valid overlay grid", async () => {
+    const entry = makeEntry({
+      id: "noaa-efh-alaska-arrowtooth",
+      name: "NOAA EFH — Arrowtooth Flounder (Gulf of Alaska)",
+      dataType: "habitat",
+      coverageBbox: { minLon: -170, minLat: 47, maxLon: -130, maxLat: 72 },
+    });
+    const result = await buildCatalogGrids(entry);
+    expect(result).not.toBeNull();
+    expect(result!.terrain.datasetId).toBe(entry.id);
+    expect(result!.overview.datasetId).toBe(entry.id);
+    expect(result!.terrain.depths).toHaveLength(256 * 256);
+    expect(result!.overview.depths).toHaveLength(64 * 64);
+    const terrainWithHabitat = result!.terrain as unknown as {
+      habitatPolygons?: { type: string; features: Array<{ properties: { species: string } }> };
+    };
+    const collection = terrainWithHabitat.habitatPolygons;
+    expect(collection).toBeDefined();
+    expect(collection!.type).toBe("FeatureCollection");
+    // All features in the overlay (if any) must be arrowtooth flounder.
+    for (const f of collection!.features) {
+      expect(f.properties.species).toBe("atheresthes_stomias");
+    }
+  });
+
   it("returns no habitat features when the coverage bbox is outside the bundled regions", async () => {
     const entry = makeEntry({
       id: "noaa-efh-alaska-halibut",
