@@ -594,19 +594,7 @@ function Main() {
             </div>
             <OverlaysToolsPanel />
 
-            {/* Scrollable section column — sits between the OverlaysTools
-                block and the pinned footer so long content can scroll
-                without pushing the footer off-screen. */}
-            <div
-              className="flex flex-col gap-2 overflow-y-auto overscroll-contain"
-              style={{
-                flex: 1,
-                minHeight: 0,
-                paddingRight: 2,
-                scrollbarWidth: "thin",
-                scrollbarColor: "rgba(0,229,255,0.35) transparent",
-              }}
-            >
+            <div className="flex flex-col gap-2">
               {/* ── Grouped sections: Map & Data + Conditions ──
                   Rendered inside one shared bordered shell so the two
                   top-level sections read as siblings of a single panel
