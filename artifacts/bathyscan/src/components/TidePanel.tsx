@@ -314,7 +314,10 @@ export const TidePanel: React.FC<TidePanelProps> = ({
       {!collapsed && (
         <div className="px-2 py-2 space-y-2">
           {loading && !data.available && (
-            <div style={{ ...DIM, fontSize: 11 }}>Fetching tidal data…</div>
+            <div style={{ ...DIM, fontSize: 11, display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <Spinner className="size-3 text-cyan-400" aria-label="Fetching tidal data" />
+              Fetching tidal data…
+            </div>
           )}
 
           {!data.available && !loading && (
