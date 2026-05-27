@@ -105,6 +105,28 @@ export function buildTerrainMenuItems(
       disabled: !datasetId,
     },
     {
+      label: "Save view as bookmark…",
+      icon: "🔖",
+      onClick: () => {
+        if (!datasetId) return;
+        const cam = useCameraStore.getState();
+        const camLon = cam.cameraLon;
+        const camLat = cam.cameraLat;
+        const camDepth = cam.cameraDepth;
+        if (camLon === null || camLat === null || camDepth === null) return;
+        const name = window.prompt("Bookmark name:", "My view");
+        if (!name || !name.trim()) return;
+        useSettingsStore.getState().addBookmark(datasetId, {
+          name: name.trim(),
+          lon: camLon,
+          lat: camLat,
+          depth: camDepth,
+          heading: cam.heading,
+        });
+      },
+      disabled: !datasetId,
+    },
+    {
       label: profileAnchor
         ? "End depth profile here"
         : "Start depth profile here",

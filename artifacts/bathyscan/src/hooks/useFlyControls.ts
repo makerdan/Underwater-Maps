@@ -721,17 +721,15 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
     // 1. Drop-in receiver
     const pendingDropIn = useUiStore.getState().pendingDropIn;
     if (pendingDropIn) {
-      const { worldX, worldZ, headingDeg, worldY: targetWorldY } = pendingDropIn;
+      const { worldX, worldZ, worldY, heading, headingDeg } = pendingDropIn;
 
-      let finalY: number;
-      if (targetWorldY !== undefined) {
-        // Depth-based Y was pre-computed from the encoded depth; use it
-        // directly with the standard hover offset so the camera appears just
-        // above the seafloor at the correct depth.
-        finalY = targetWorldY + 3;
+      // Place camera at explicit Y when provided (bookmark or share-link);
+      // otherwise raycast down to terrain and hover 3 units above.
+      let targetY: number;
+      if (worldY !== undefined) {
+        targetY = worldY;
       } else {
-        // No depth hint — raycast the terrain mesh and hover 3 units above.
-        let surfaceY = 3;
+        targetY = 3;
         const mesh = terrainMeshRef.current;
         if (mesh) {
           downRaycaster.current.set(
@@ -739,18 +737,19 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
             downDir.current,
           );
           const hits = downRaycaster.current.intersectObject(mesh, false);
-          if (hits[0]) surfaceY = hits[0].point.y + 3;
+          if (hits[0]) targetY = hits[0].point.y + 3;
         }
-        finalY = surfaceY;
       }
 
-      camera.position.set(worldX, finalY, worldZ);
-      // Restore compass heading if provided (e.g. from a share link).
-      // Convert compass degrees (0=north, CW) to Three.js Y-rotation (0=south, CCW).
-      const yaw =
-        headingDeg !== undefined
-          ? -(headingDeg * (Math.PI / 180)) + Math.PI
-          : 0;
+      camera.position.set(worldX, targetY, worldZ);
+      // `heading` (bookmark): cameraStore convention → euler.y = heading * PI/180.
+      // `headingDeg` (share link): share-link convention → yaw = -(deg * PI/180) + PI.
+      let yaw = 0;
+      if (heading !== undefined) {
+        yaw = (heading * Math.PI) / 180;
+      } else if (headingDeg !== undefined) {
+        yaw = -(headingDeg * (Math.PI / 180)) + Math.PI;
+      }
       euler.current.set(-0.2, yaw, 0);
       camera.quaternion.setFromEuler(euler.current);
       useUiStore.getState().clearPendingDropIn();

@@ -37,6 +37,15 @@ export interface DatasetHomePosition {
   depth: number;
 }
 
+export interface CameraBookmark {
+  id: string;
+  name: string;
+  lon: number;
+  lat: number;
+  depth: number;
+  heading: number;
+}
+
 export type WaterType = "saltwater" | "freshwater";
 export type ParticleDensity = "off" | "sparse" | "dense";
 export type TextureQuality = "off" | "low" | "high";
@@ -229,6 +238,9 @@ export interface SettingsState {
   /** Per-dataset saved camera spawn positions (set via "Set as home" context menu). */
   datasetHomePositions: Record<string, DatasetHomePosition>;
 
+  /** Per-dataset saved camera bookmarks, keyed by dataset id. */
+  bookmarks: Record<string, CameraBookmark[]>;
+
   /** Expand/collapse state for dataset library folders, keyed by folder id. */
   datasetFolderExpanded: Record<string, boolean>;
 
@@ -384,6 +396,11 @@ interface SettingsActions {
   // Dataset home positions
   setDatasetHome: (datasetId: string, pos: DatasetHomePosition) => void;
   clearDatasetHome: (datasetId: string) => void;
+
+  // Bookmarks
+  addBookmark: (datasetId: string, bookmark: Omit<CameraBookmark, "id">) => void;
+  renameBookmark: (datasetId: string, bookmarkId: string, name: string) => void;
+  deleteBookmark: (datasetId: string, bookmarkId: string) => void;
 
   setWaterType: (v: WaterType) => void;
 
@@ -604,6 +621,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
 
   datasetHomePositions: {},
   datasetFolderExpanded: {},
+  bookmarks: {},
 
   waterType: "saltwater",
 
@@ -665,8 +683,9 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
 
 /**
  * Keys whose values should be snapshotted/synced. Excludes function-typed
- * actions and the snapshot itself; `datasetHomePositions` is excluded too
- * since it is mutated outside the per-section editors.
+ * actions and the snapshot itself; `datasetHomePositions` is excluded since
+ * it is mutated outside the per-section editors (bookmarks uses the same
+ * server-settings round-trip and IS included so cross-device sync works).
  */
 const DATA_KEYS: (keyof SettingsState)[] = (Object.keys(DEFAULT_SETTINGS) as (keyof SettingsState)[])
   .filter((k) => k !== "datasetHomePositions" && k !== "lastSyncedAt");
@@ -845,6 +864,41 @@ export const useSettingsStore = create<SettingsStore>()(
             return { datasetHomePositions: next };
           }),
 
+        // Bookmarks
+        addBookmark: (datasetId, bookmark) =>
+          set((state) => {
+            const existing = state.bookmarks[datasetId] ?? [];
+            const id = `bk_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+            return {
+              bookmarks: {
+                ...state.bookmarks,
+                [datasetId]: [...existing, { id, ...bookmark }],
+              },
+            };
+          }),
+        renameBookmark: (datasetId, bookmarkId, name) =>
+          set((state) => {
+            const existing = state.bookmarks[datasetId] ?? [];
+            return {
+              bookmarks: {
+                ...state.bookmarks,
+                [datasetId]: existing.map((b) =>
+                  b.id === bookmarkId ? { ...b, name } : b,
+                ),
+              },
+            };
+          }),
+        deleteBookmark: (datasetId, bookmarkId) =>
+          set((state) => {
+            const existing = state.bookmarks[datasetId] ?? [];
+            return {
+              bookmarks: {
+                ...state.bookmarks,
+                [datasetId]: existing.filter((b) => b.id !== bookmarkId),
+              },
+            };
+          }),
+
         setWaterType: setter("waterType"),
 
         // Shortcuts
@@ -923,8 +977,9 @@ export const useSettingsStore = create<SettingsStore>()(
           const current = get();
           set({
             ...DEFAULT_SETTINGS,
-            // Preserve per-dataset home positions across "Reset all"
+            // Preserve per-dataset home positions and bookmarks across "Reset all"
             datasetHomePositions: current.datasetHomePositions,
+            bookmarks: current.bookmarks,
           });
         },
 

@@ -25,11 +25,12 @@ import { useAppState } from "@/lib/context";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { useTerrainStore, VISIBLE_DATASETS_CAP } from "@/lib/terrainStore";
 import { useUiStore } from "@/lib/uiStore";
-import { lonLatToWorldXZ } from "@/lib/terrain";
+import { lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
 import { MARKER_COLOR, MARKER_ICON } from "@/lib/markerConstants";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import { useSettingsStore } from "@/lib/settingsStore";
+import type { CameraBookmark } from "@/lib/settingsStore";
 
 // Auto-retry backoff schedule for transient save-to-account failures.
 // Module-scope so reading it inside the upload callback doesn't require
@@ -716,6 +717,40 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   );
   const [gpsImportOpen, setGpsImportOpen] = useState(false);
   const [gpsExportOpen, setGpsExportOpen] = useState(false);
+
+  // ─── Bookmarks ─────────────────────────────────────────────────────────────
+  const [bookmarksOpen, setBookmarksOpen] = useState(false);
+  const bookmarkDatasetId = terrain?.datasetId ?? "";
+  const bookmarks: CameraBookmark[] = useSettingsStore(
+    (s) => (bookmarkDatasetId ? (s.bookmarks[bookmarkDatasetId] ?? []) : []),
+  );
+  const renameBookmark = useSettingsStore((s) => s.renameBookmark);
+  const deleteBookmark = useSettingsStore((s) => s.deleteBookmark);
+
+  const handleFlyToBookmark = (bk: CameraBookmark) => {
+    if (!terrain) return;
+    const { x, z } = lonLatToWorldXZ(bk.lon, bk.lat, terrain);
+    const depthRange = terrain.maxDepth - terrain.minDepth;
+    const t = depthRange > 0 ? (bk.depth - terrain.minDepth) / depthRange : 0;
+    const worldY = -Math.max(0, Math.min(1, t)) * MAX_DEPTH_WORLD;
+    useUiStore.getState().setPendingDropIn({
+      worldX: x,
+      worldZ: z,
+      worldY,
+      heading: bk.heading,
+    });
+  };
+
+  const handleRenameBookmark = (bk: CameraBookmark) => {
+    const name = window.prompt("Rename bookmark:", bk.name);
+    if (!name || !name.trim()) return;
+    renameBookmark(bookmarkDatasetId, bk.id, name.trim());
+  };
+
+  const handleDeleteBookmark = (e: React.MouseEvent, bk: CameraBookmark) => {
+    e.stopPropagation();
+    deleteBookmark(bookmarkDatasetId, bk.id);
+  };
   const markerDatasetId = terrain?.datasetId ?? "";
   const { data: markers } = useGetMarkers(
     { datasetId: markerDatasetId },
@@ -1129,6 +1164,107 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       </button>
                     );
                   })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Bookmarks section ── */}
+          {bookmarkDatasetId && (
+            <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}>
+              <button
+                onClick={() => setBookmarksOpen((o) => !o)}
+                className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
+                style={{ cursor: "pointer" }}
+              >
+                <span style={{ fontSize: 10, letterSpacing: "0.12em", color: "#cbd5e1" }}>
+                  🔖 BOOKMARKS {bookmarks.length ? `(${bookmarks.length})` : ""}
+                </span>
+                <span style={{ color: "#cbd5e1", fontSize: 11 }}>{bookmarksOpen ? "−" : "+"}</span>
+              </button>
+
+              {bookmarksOpen && (
+                <div style={{ paddingBottom: 4 }}>
+                  {!bookmarks.length && (
+                    <div style={{ fontSize: 10, color: "#cbd5e1", padding: "4px 12px 6px" }}>
+                      No bookmarks yet — right-click terrain and choose &ldquo;Save view as bookmark…&rdquo;
+                    </div>
+                  )}
+                  {bookmarks.map((bk) => (
+                    <div
+                      key={bk.id}
+                      className="flex items-center gap-1 px-3 py-1 hover:bg-white/5 transition-colors group"
+                    >
+                      <span
+                        style={{
+                          flex: 1,
+                          fontSize: 10,
+                          color: "#cbd5e1",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {bk.name}
+                      </span>
+                      <ViewscreenTooltip label="Fly to this bookmark" side="left">
+                        <button
+                          onClick={() => handleFlyToBookmark(bk)}
+                          style={{
+                            fontSize: 9,
+                            padding: "1px 5px",
+                            background: "rgba(0,229,255,0.08)",
+                            border: "1px solid rgba(0,229,255,0.25)",
+                            borderRadius: 3,
+                            color: "#00e5ff",
+                            cursor: "pointer",
+                            letterSpacing: "0.08em",
+                            flexShrink: 0,
+                          }}
+                        >
+                          FLY
+                        </button>
+                      </ViewscreenTooltip>
+                      <ViewscreenTooltip label="Rename bookmark" side="left">
+                        <button
+                          onClick={() => handleRenameBookmark(bk)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          style={{
+                            fontSize: 10,
+                            color: "#94a3b8",
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            lineHeight: 1,
+                            padding: "0 2px",
+                            flexShrink: 0,
+                          }}
+                          aria-label="Rename bookmark"
+                        >
+                          ✎
+                        </button>
+                      </ViewscreenTooltip>
+                      <ViewscreenTooltip label="Delete bookmark" side="left">
+                        <button
+                          onClick={(e) => handleDeleteBookmark(e, bk)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          style={{
+                            fontSize: 11,
+                            color: "#cbd5e1",
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            lineHeight: 1,
+                            padding: "0 2px",
+                            flexShrink: 0,
+                          }}
+                          aria-label="Delete bookmark"
+                        >
+                          ×
+                        </button>
+                      </ViewscreenTooltip>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

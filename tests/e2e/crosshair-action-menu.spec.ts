@@ -114,7 +114,7 @@ test.describe("BathyScan — Crosshair action menu (desktop / Q key)", () => {
     await resetCrosshairState(page);
   });
 
-  test("Q opens the crosshair menu over the reticle with all five items", async ({
+  test("Q opens the crosshair menu over the reticle with all seven items", async ({
     page,
   }) => {
     await seedTerrainAndCrosshair(page);
@@ -122,17 +122,18 @@ test.describe("BathyScan — Crosshair action menu (desktop / Q key)", () => {
 
     const menu = page.locator('[data-testid="context-menu"]');
 
-    // Six action items: Drop pin / Measure / Set home / Depth profile /
-    // Copy coords / Copy share link. The separator above "Copy coordinates"
-    // renders as a non-menuitem <li role="separator">.
+    // Seven action items: Drop pin / Measure / Set home / Save bookmark /
+    // Depth profile / Copy coords / Copy share link. The separator above
+    // "Copy coordinates" renders as a non-menuitem <li role="separator">.
     const items = menu.locator('[role="menuitem"]');
-    await expect(items).toHaveCount(6);
+    await expect(items).toHaveCount(7);
     await expect(items.nth(0)).toContainText("Drop GPS pin here");
     await expect(items.nth(1)).toContainText("Measure from here");
     await expect(items.nth(2)).toContainText("Set as home position");
-    await expect(items.nth(3)).toContainText("Start depth profile here");
-    await expect(items.nth(4)).toContainText("Copy coordinates");
-    await expect(items.nth(5)).toContainText("Copy share link");
+    await expect(items.nth(3)).toContainText("Save view as bookmark");
+    await expect(items.nth(4)).toContainText("Start depth profile here");
+    await expect(items.nth(5)).toContainText("Copy coordinates");
+    await expect(items.nth(6)).toContainText("Copy share link");
     await expect(menu.locator('[role="separator"]')).toHaveCount(1);
 
     // Menu should be anchored at (roughly) the viewport centre — that's
@@ -283,7 +284,7 @@ test.describe("BathyScan — Crosshair action menu (desktop / Q key)", () => {
     const itemsAfter = page.locator(
       '[data-testid="context-menu"] [role="menuitem"]',
     );
-    await expect(itemsAfter.nth(3)).toContainText("End depth profile here");
+    await expect(itemsAfter.nth(4)).toContainText("End depth profile here");
     await expect(itemsAfter).toContainText(["Cancel depth profile"]);
   });
 
@@ -392,7 +393,7 @@ test.describe(
       await resetCrosshairState(page);
     });
 
-    test("tapping the HUD ⋯ ACTIONS button opens the crosshair menu with all five items", async ({
+    test("tapping the HUD ⋯ ACTIONS button opens the crosshair menu with all seven items", async ({
       page,
     }) => {
       await seedTerrainAndCrosshair(page);
@@ -408,13 +409,14 @@ test.describe(
       await expect(menu).toBeVisible();
 
       const items = menu.locator('[role="menuitem"]');
-      await expect(items).toHaveCount(6);
+      await expect(items).toHaveCount(7);
       await expect(items.nth(0)).toContainText("Drop GPS pin here");
       await expect(items.nth(1)).toContainText("Measure from here");
       await expect(items.nth(2)).toContainText("Set as home position");
-      await expect(items.nth(3)).toContainText("Start depth profile here");
-      await expect(items.nth(4)).toContainText("Copy coordinates");
-      await expect(items.nth(5)).toContainText("Copy share link");
+      await expect(items.nth(3)).toContainText("Save view as bookmark");
+      await expect(items.nth(4)).toContainText("Start depth profile here");
+      await expect(items.nth(5)).toContainText("Copy coordinates");
+      await expect(items.nth(6)).toContainText("Copy share link");
     });
 
     test('touch flow: "Drop GPS pin here" opens the marker form pre-filled', async ({
