@@ -7,16 +7,24 @@
  * when substrate-tint mode is active, replacing its old bottom-right
  * floating placement.
  */
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
-import { useGetDatasets, getGetDatasetsQueryKey } from "@workspace/api-client-react";
+import {
+  useGetDatasets,
+  getGetDatasetsQueryKey,
+  useGetEfh,
+  getGetEfhQueryKey,
+} from "@workspace/api-client-react";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { SubstrateLegend } from "@/components/SubstrateLegend";
 import { ShoreZoneCredit } from "@/components/ShoreZoneCredit";
+import { Spinner } from "@/components/ui/spinner";
+import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
+import { useToast } from "@/hooks/use-toast";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(2,8,18,0.94)",
@@ -45,6 +53,7 @@ interface ToggleButtonProps {
   activeBorder: string;
   activeColor: string;
   activeGlow?: string;
+  isLoading?: boolean;
 }
 
 const ToggleButton: React.FC<ToggleButtonProps> = ({
@@ -57,6 +66,7 @@ const ToggleButton: React.FC<ToggleButtonProps> = ({
   activeBorder,
   activeColor,
   activeGlow,
+  isLoading = false,
 }) => (
   <ViewscreenTooltip label={tooltip} side="right">
     <button
@@ -77,15 +87,26 @@ const ToggleButton: React.FC<ToggleButtonProps> = ({
         letterSpacing: "0.12em",
         textShadow: active && activeGlow ? activeGlow : "none",
         transition: "all 0.15s ease",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 4,
       }}
     >
-      {label}
+      <span>{label}</span>
+      {isLoading && (
+        <Spinner
+          className="size-3 shrink-0"
+          style={{ color: active ? activeColor : "#94a3b8", opacity: 0.85 }}
+        />
+      )}
     </button>
   </ViewscreenTooltip>
 );
 
 export const OverlaysToolsPanel: React.FC = () => {
   const { terrain } = useAppState();
+  const { toast } = useToast();
   const collapsed = usePanelCollapseStore((s) => s.collapsed.overlaysTools);
   const toggle = usePanelCollapseStore((s) => s.toggle);
 
@@ -109,9 +130,75 @@ export const OverlaysToolsPanel: React.FC = () => {
     { waterType },
     { query: { queryKey: getGetDatasetsQueryKey({ waterType }) } },
   );
+
+  const datasetId = terrain?.datasetId ?? "";
+  const embeddedPolygons = terrain?.habitatPolygons ?? null;
   const hasEfh =
-    !!datasets?.find((d) => d.id === (terrain?.datasetId ?? ""))?.hasEfh ||
-    !!terrain?.habitatPolygons;
+    !!datasets?.find((d) => d.id === datasetId)?.hasEfh ||
+    !!embeddedPolygons;
+
+  // Surface conditions loading/error state — shared across Wind, Tide, Current.
+  // React Query dedupes with ConditionsOverlays so no extra network request.
+  const anyConditionsActive =
+    windOverlayActive || tideOverlayActive || currentOverlayActive;
+  const {
+    loading: surfaceLoading,
+    error: surfaceError,
+  } = useSurfaceConditions(anyConditionsActive);
+
+  // EFH loading/error state — mirrors the enabled condition in EfhZoneLayer.
+  const { isLoading: efhLoading, isError: efhError } = useGetEfh(
+    { datasetId },
+    {
+      query: {
+        enabled: hasEfh && efhOverlayEnabled && !embeddedPolygons && !!datasetId,
+        queryKey: getGetEfhQueryKey({ datasetId }),
+      },
+    },
+  );
+
+  // --- Error recovery: revert overlays to inactive on fetch failure ---
+  // Use refs to detect false→true transitions only (avoid re-triggering on
+  // every render while the error persists).
+  const prevSurfaceError = useRef(false);
+  useEffect(() => {
+    if (surfaceError && !prevSurfaceError.current) {
+      // Revert every active surface-condition overlay.
+      const affected: string[] = [];
+      if (windOverlayActive) { setWindOverlayActive(false); affected.push("Wind"); }
+      if (tideOverlayActive) { setTideOverlayActive(false); affected.push("Tide"); }
+      if (currentOverlayActive) { setCurrentOverlayActive(false); affected.push("Current"); }
+      if (affected.length > 0) {
+        toast({
+          title: `${affected.join(" / ")} overlay failed`,
+          description: "Could not fetch conditions data. The overlay has been turned off.",
+          variant: "destructive",
+        });
+      }
+    }
+    prevSurfaceError.current = surfaceError;
+  }, [
+    surfaceError,
+    windOverlayActive, setWindOverlayActive,
+    tideOverlayActive, setTideOverlayActive,
+    currentOverlayActive, setCurrentOverlayActive,
+    toast,
+  ]);
+
+  const prevEfhError = useRef(false);
+  useEffect(() => {
+    if (efhError && !prevEfhError.current) {
+      if (efhOverlayEnabled) {
+        setEfhOverlayEnabled(false);
+        toast({
+          title: "EFH overlay failed",
+          description: "Could not fetch Essential Fish Habitat data. The overlay has been turned off.",
+          variant: "destructive",
+        });
+      }
+    }
+    prevEfhError.current = efhError;
+  }, [efhError, efhOverlayEnabled, setEfhOverlayEnabled, toast]);
 
   return (
     <div
@@ -198,6 +285,7 @@ export const OverlaysToolsPanel: React.FC = () => {
             activeBorder="rgba(125,211,252,0.5)"
             activeColor="#7dd3fc"
             activeGlow="0 0 6px rgba(125,211,252,0.5)"
+            isLoading={windOverlayActive && surfaceLoading}
           />
 
           <ToggleButton
@@ -210,6 +298,7 @@ export const OverlaysToolsPanel: React.FC = () => {
             activeBorder="rgba(52,211,153,0.5)"
             activeColor="#34d399"
             activeGlow="0 0 6px rgba(52,211,153,0.5)"
+            isLoading={tideOverlayActive && surfaceLoading}
           />
 
           <ToggleButton
@@ -222,6 +311,7 @@ export const OverlaysToolsPanel: React.FC = () => {
             activeBorder="rgba(34,211,238,0.5)"
             activeColor="#22d3ee"
             activeGlow="0 0 6px rgba(34,211,238,0.5)"
+            isLoading={currentOverlayActive && surfaceLoading}
           />
 
           {hasEfh && (
@@ -233,6 +323,7 @@ export const OverlaysToolsPanel: React.FC = () => {
               activeBg="rgba(34,197,94,0.15)"
               activeBorder="rgba(34,197,94,0.5)"
               activeColor="#4ade80"
+              isLoading={efhOverlayEnabled && efhLoading}
             />
           )}
         </div>

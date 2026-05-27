@@ -14,6 +14,14 @@ import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 vi.mock("@workspace/api-client-react", () => ({
   useGetDatasets: () => ({ data: [] }),
   getGetDatasetsQueryKey: () => ["datasets"],
+  useGetSurfaceConditions: () => ({ data: undefined, isLoading: false, isError: false, refetch: vi.fn() }),
+  getGetSurfaceConditionsQueryKey: () => ["surface-conditions"],
+  useGetEfh: () => ({ data: undefined, isLoading: false, isError: false }),
+  getGetEfhQueryKey: () => ["efh"],
+}));
+
+vi.mock("@/hooks/use-toast", () => ({
+  useToast: () => ({ toast: vi.fn() }),
 }));
 
 vi.mock("@/lib/context", () => ({
