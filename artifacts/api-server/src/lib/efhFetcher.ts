@@ -435,7 +435,7 @@ interface DiskCache {
   features: EfhFeature[];
 }
 
-async function readDiskCache(): Promise<EfhFeature[] | null> {
+export async function readDiskCache(): Promise<EfhFeature[] | null> {
   try {
     const file = path.join(CACHE_DIR, `${CACHE_KEY}.json`);
     const raw = await fsPromises.readFile(file, "utf8");

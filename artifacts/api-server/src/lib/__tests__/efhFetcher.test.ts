@@ -22,8 +22,10 @@
  * EfhFeature so the full official EFH footprint is preserved.
  */
 
-import { describe, it, expect } from "vitest";
-import { expandFeature } from "../efhFetcher.js";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { expandFeature, readDiskCache, EFH_CACHE_VERSION } from "../efhFetcher.js";
+import { promises as fs } from "fs";
+import path from "path";
 
 // ---------------------------------------------------------------------------
 // Minimal LayerSpec fixture matching layer 56 (Pacific Halibut Adults Summer)
@@ -202,5 +204,132 @@ describe("expandFeature — edge cases", () => {
       properties: { EFH_NAME: "ignored" },
     };
     expect(expandFeature(raw as never, HALIBUT_SPEC)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// readDiskCache — TTL expiry, version eviction, and error handling
+//
+// The cache file lives at /tmp/efh-cache/alaska-efh-species.json.
+// TTL is controlled via the EFH_CACHE_MAX_AGE_MS env override so tests do
+// not need real clock delays or Date.now() mocking.
+// ---------------------------------------------------------------------------
+
+const CACHE_DIR = "/tmp/efh-cache";
+const CACHE_FILE = path.join(CACHE_DIR, "alaska-efh-species.json");
+
+const MINIMAL_FEATURE = {
+  type: "Feature" as const,
+  properties: {
+    species: "hippoglossus_stenolepis",
+    commonName: "Pacific Halibut",
+    fmp: "Pacific Halibut (IPHC)",
+    depthRangeM: [20, 500] as [number, number],
+    habitatDescription: "test",
+    source: "test",
+    creditUrl: "test",
+    color: "#f59e0b",
+  },
+  geometry: { type: "Polygon" as const, coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+};
+
+async function writeCacheFile(payload: object): Promise<void> {
+  await fs.mkdir(CACHE_DIR, { recursive: true });
+  await fs.writeFile(CACHE_FILE, JSON.stringify(payload), "utf8");
+}
+
+afterEach(async () => {
+  try { await fs.unlink(CACHE_FILE); } catch { /* file may not exist */ }
+  vi.unstubAllEnvs();
+});
+
+describe("readDiskCache — fresh cache hit", () => {
+  it("returns the cached features when version and age are both valid", async () => {
+    await writeCacheFile({
+      version: EFH_CACHE_VERSION,
+      fetchedAt: new Date().toISOString(),
+      features: [MINIMAL_FEATURE],
+    });
+
+    const result = await readDiskCache();
+
+    expect(result).not.toBeNull();
+    expect(result).toHaveLength(1);
+    expect(result![0]!.properties.commonName).toBe("Pacific Halibut");
+  });
+});
+
+describe("readDiskCache — expired cache eviction (EFH_CACHE_MAX_AGE_MS override)", () => {
+  it("returns null when the cache is older than MAX_CACHE_AGE_MS", async () => {
+    vi.stubEnv("EFH_CACHE_MAX_AGE_MS", "1000");
+    vi.resetModules();
+    const { readDiskCache: readFresh, EFH_CACHE_VERSION: VERSION } = await import(
+      "../efhFetcher.js"
+    );
+
+    const TWO_SECONDS_AGO = new Date(Date.now() - 2_000).toISOString();
+    await writeCacheFile({
+      version: VERSION,
+      fetchedAt: TWO_SECONDS_AGO,
+      features: [MINIMAL_FEATURE],
+    });
+
+    const result = await readFresh();
+
+    expect(result).toBeNull();
+  });
+
+  it("returns features when the cache is younger than MAX_CACHE_AGE_MS", async () => {
+    vi.stubEnv("EFH_CACHE_MAX_AGE_MS", "60000");
+    vi.resetModules();
+    const { readDiskCache: readFresh, EFH_CACHE_VERSION: VERSION } = await import(
+      "../efhFetcher.js"
+    );
+
+    const TEN_SECONDS_AGO = new Date(Date.now() - 10_000).toISOString();
+    await writeCacheFile({
+      version: VERSION,
+      fetchedAt: TEN_SECONDS_AGO,
+      features: [MINIMAL_FEATURE],
+    });
+
+    const result = await readFresh();
+
+    expect(result).not.toBeNull();
+    expect(result).toHaveLength(1);
+  });
+});
+
+describe("readDiskCache — version-stale eviction", () => {
+  it("returns null and deletes the file when the cached version is below EFH_CACHE_VERSION", async () => {
+    await writeCacheFile({
+      version: EFH_CACHE_VERSION - 1,
+      fetchedAt: new Date().toISOString(),
+      features: [MINIMAL_FEATURE],
+    });
+
+    const result = await readDiskCache();
+
+    expect(result).toBeNull();
+    await expect(fs.access(CACHE_FILE)).rejects.toThrow();
+  });
+});
+
+describe("readDiskCache — corrupt or missing file", () => {
+  it("returns null when the cache file contains invalid JSON", async () => {
+    await fs.mkdir(CACHE_DIR, { recursive: true });
+    await fs.writeFile(CACHE_FILE, "{ not valid json %%%", "utf8");
+
+    const result = await readDiskCache();
+
+    expect(result).toBeNull();
+  });
+
+  it("returns null when the cache file does not exist", async () => {
+    try { await fs.unlink(CACHE_FILE); } catch { /* already absent */ }
+
+    const result = await readDiskCache();
+
+    expect(result).toBeNull();
   });
 });
