@@ -164,6 +164,7 @@ export const EfhZoneLayer: React.FC = () => {
   const efhOverlayEnabled = useUiStore((s) => s.efhOverlayEnabled);
   const setSelectedEfh = useUiStore((s) => s.setSelectedEfh);
   const hiddenEfhSpecies = useUiStore((s) => s.hiddenEfhSpecies);
+  const clearHiddenEfhSpecies = useUiStore((s) => s.clearHiddenEfhSpecies);
 
   const datasetId = terrain?.datasetId ?? "";
 
@@ -199,6 +200,12 @@ export const EfhZoneLayer: React.FC = () => {
       terrain.minLat, terrain.maxLat,
     );
   }, [activeFeatures, terrain, hiddenEfhSpecies]);
+
+  // When the active dataset changes, reset the hidden-species set so stale
+  // toggle state from the previous dataset doesn't bleed into the new one.
+  useEffect(() => {
+    clearHiddenEfhSpecies();
+  }, [datasetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Free GPU buffers when zones change or the component unmounts
   useEffect(() => {

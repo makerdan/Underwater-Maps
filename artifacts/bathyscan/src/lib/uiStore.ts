@@ -202,7 +202,9 @@ export const useUiStore = create<UiStore>((set) => ({
   clearHiddenSubstrateClasses: () => set({ hiddenSubstrateClasses: new Set<string>() }),
   efhOverlayEnabled: false,
   setEfhOverlayEnabled: (enabled) =>
-    set(enabled ? { efhOverlayEnabled: true } : { efhOverlayEnabled: false, selectedEfh: null }),
+    set(enabled
+      ? { efhOverlayEnabled: true }
+      : { efhOverlayEnabled: false, selectedEfh: null, hiddenEfhSpecies: new Set<string>() }),
   selectedEfh: null,
   setSelectedEfh: (p) => set({ selectedEfh: p }),
   hiddenEfhSpecies: new Set<string>(),
