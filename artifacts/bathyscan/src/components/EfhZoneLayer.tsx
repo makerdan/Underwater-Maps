@@ -17,7 +17,7 @@
  *   worldX = ((lon - minLon) / lonRange) * WORLD_SIZE - WORLD_SIZE / 2
  *   worldZ = ((lat - minLat) / latRange) * WORLD_SIZE - WORLD_SIZE / 2
  */
-import React, { useCallback, useEffect, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
@@ -31,6 +31,7 @@ import {
 import type { EfhFeature, EfhSpeciesProperties } from "@workspace/api-client-react";
 import { useSettingsStore } from "@/lib/settingsStore";
 import type { ThreeEvent } from "@react-three/fiber";
+import { toast } from "@/hooks/use-toast";
 /** Y elevation for EFH filled polygons — just above ocean surface (Y=0). */
 const EFH_FILL_Y = 1.0;
 /** Y elevation for EFH outlines — slightly above the fill so they are not z-fought. */
@@ -42,6 +43,62 @@ function lonToWorldX(lon: number, minLon: number, lonRange: number): number {
 
 function latToWorldZ(lat: number, minLat: number, latRange: number): number {
   return ((lat - minLat) / latRange) * WORLD_SIZE - WORLD_SIZE / 2;
+}
+
+interface Bbox {
+  minLon: number;
+  maxLon: number;
+  minLat: number;
+  maxLat: number;
+}
+
+/**
+ * Returns true if the polygon ring (outer ring of a GeoJSON Polygon)
+ * intersects the given bounding box.
+ *
+ * Two checks cover all cases:
+ *   1. Any polygon vertex falls inside the bbox (polygon overlaps or is contained).
+ *   2. Any bbox corner falls inside the ring via ray-casting (bbox is fully
+ *      contained by the polygon).
+ */
+function polygonIntersectsBbox(ring: number[][], bbox: Bbox): boolean {
+  const { minLon, maxLon, minLat, maxLat } = bbox;
+
+  for (const pt of ring) {
+    const lon = pt[0] ?? 0;
+    const lat = pt[1] ?? 0;
+    if (lon >= minLon && lon <= maxLon && lat >= minLat && lat <= maxLat) {
+      return true;
+    }
+  }
+
+  const corners: [number, number][] = [
+    [minLon, minLat],
+    [maxLon, minLat],
+    [maxLon, maxLat],
+    [minLon, maxLat],
+  ];
+  for (const [cx, cy] of corners) {
+    if (pointInRing(cx, cy, ring)) return true;
+  }
+
+  return false;
+}
+
+/** Ray-casting point-in-polygon test for a single ring. */
+function pointInRing(x: number, y: number, ring: number[][]): boolean {
+  let inside = false;
+  const n = ring.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = ring[i]?.[0] ?? 0;
+    const yi = ring[i]?.[1] ?? 0;
+    const xj = ring[j]?.[0] ?? 0;
+    const yj = ring[j]?.[1] ?? 0;
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }
 
 /** Converts one GeoJSON Polygon ring to a closed THREE.BufferGeometry line loop. */
@@ -191,9 +248,40 @@ export const EfhZoneLayer: React.FC = () => {
 
   const zones = useMemo(() => {
     if (!activeFeatures || !terrain) return [];
-    const visibleFeatures = activeFeatures.filter(
-      (f) => !hiddenEfhSpecies.has(f.properties.commonName ?? ""),
-    );
+
+    const bbox: Bbox = {
+      minLon: terrain.minLon,
+      maxLon: terrain.maxLon,
+      minLat: terrain.minLat,
+      maxLat: terrain.maxLat,
+    };
+    const hasBbox =
+      bbox.minLon !== bbox.maxLon && bbox.minLat !== bbox.maxLat;
+
+    const visibleFeatures = activeFeatures.filter((f) => {
+      if (hiddenEfhSpecies.has(f.properties.commonName ?? "")) return false;
+      if (!hasBbox) return true;
+
+      const geom = f.geometry as {
+        type?: string;
+        coordinates?: number[][][] | number[][][][];
+      };
+
+      if (geom.type === "Polygon") {
+        const outerRing = (geom.coordinates as number[][][] | undefined)?.[0];
+        return outerRing ? polygonIntersectsBbox(outerRing, bbox) : false;
+      } else if (geom.type === "MultiPolygon") {
+        const polys = geom.coordinates as number[][][][] | undefined;
+        return (
+          polys?.some((rings) => {
+            const outerRing = rings[0];
+            return outerRing ? polygonIntersectsBbox(outerRing, bbox) : false;
+          }) ?? false
+        );
+      }
+      return false;
+    });
+
     return buildZoneRenders(
       visibleFeatures,
       terrain.minLon, terrain.maxLon,
@@ -206,6 +294,29 @@ export const EfhZoneLayer: React.FC = () => {
   useEffect(() => {
     clearHiddenEfhSpecies();
   }, [datasetId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fire a one-shot toast when the EFH overlay is enabled over synthetic terrain.
+  // A ref guards against re-firing on every render: it is set to the datasetId
+  // at the moment the toast fires, and cleared whenever the overlay turns off.
+  const syntheticToastFiredForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!efhOverlayEnabled) {
+      syntheticToastFiredForRef.current = null;
+      return;
+    }
+    if (!terrain) return;
+    const isSynthetic =
+      terrain.dataSource === "synthetic" || terrain.synthetic === true;
+    if (!isSynthetic) return;
+    if (syntheticToastFiredForRef.current === datasetId) return;
+    syntheticToastFiredForRef.current = datasetId;
+    toast({
+      title: "No bathymetric data available",
+      description:
+        "This area uses procedurally generated terrain — the EFH overlay may be incomplete or inaccurate.",
+      variant: "destructive",
+    });
+  }, [efhOverlayEnabled, terrain, datasetId]);
 
   // Free GPU buffers when zones change or the component unmounts
   useEffect(() => {
