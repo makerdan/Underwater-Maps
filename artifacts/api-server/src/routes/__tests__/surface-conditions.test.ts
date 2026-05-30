@@ -50,6 +50,18 @@ describe("buildSinusoidalTidalHours", () => {
       expect(Math.abs(h.tidalDegrees)).toBeLessThan(360);
     }
   });
+
+  it("returns exactly 48 entries when count=48", () => {
+    const hrs = buildSinusoidalTidalHours(40, -74, Date.now(), 48);
+    expect(hrs).toHaveLength(48);
+    for (const h of hrs) {
+      expect(h.tidalSpeedKnots).toBeGreaterThanOrEqual(0);
+      expect(h.tidalSpeedKnots).toBeLessThanOrEqual(1.2);
+      expect(Math.abs(h.tidalDegrees)).toBeLessThan(360);
+      expect(typeof h.isSlack).toBe("boolean");
+      expect(["flooding", "ebbing", "slack-high", "slack-low"]).toContain(h.phase);
+    }
+  });
 });
 
 describe("findNearestStation", () => {
@@ -247,5 +259,135 @@ describe("GET /surface-conditions — integration with mocked NOAA + Open-Meteo"
     const res = await request(makeApp()).get("/surface-conditions?lat=abc&lon=xyz");
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("invalid_params");
+  });
+
+  // ------------------------------------------------------------------
+  // forecast48h tests
+  // ------------------------------------------------------------------
+
+  function makeForecast48hFetchMock(windHours = 48, waveHours = 48) {
+    return (url: string) => {
+      if (url.startsWith(NOAA_STATIONS_URL)) {
+        return Promise.resolve(
+          jsonResponse({ stations: [{ id: "ST999", name: "Far", lat: 0, lng: 0 }] }),
+        );
+      }
+      if (url.includes("api.open-meteo.com/v1/forecast")) {
+        return Promise.resolve(
+          jsonResponse({
+            hourly: {
+              wind_speed_10m: Array.from({ length: windHours }, (_, h) => h + 1),
+              wind_direction_10m: Array.from({ length: windHours }, (_, h) => (h * 7) % 360),
+            },
+          }),
+        );
+      }
+      if (url.includes("marine-api.open-meteo.com")) {
+        return Promise.resolve(
+          jsonResponse({
+            hourly: {
+              wave_height: Array.from({ length: waveHours }, (_, h) => 0.1 + h * 0.01),
+            },
+          }),
+        );
+      }
+      return Promise.reject(new Error(`unexpected url ${url}`));
+    };
+  }
+
+  it("forecast48h has exactly 48 entries", async () => {
+    fetchMock.mockImplementation(makeForecast48hFetchMock());
+    const res = await request(makeApp()).get("/surface-conditions?lat=40.7&lon=-74.0");
+    expect(res.status).toBe(200);
+    expect(res.body.forecast48h).toHaveLength(48);
+  });
+
+  it("each forecast48h entry has all required ForecastHour fields", async () => {
+    fetchMock.mockImplementation(makeForecast48hFetchMock());
+    const res = await request(makeApp()).get("/surface-conditions?lat=40.7&lon=-74.0");
+    expect(res.status).toBe(200);
+    const VALID_PHASES = ["flooding", "ebbing", "slack-high", "slack-low"];
+    for (const entry of res.body.forecast48h) {
+      expect(typeof entry.relHour).toBe("number");
+      expect(typeof entry.isoTime).toBe("string");
+      expect(typeof entry.windSpeedKnots).toBe("number");
+      expect(typeof entry.windDegrees).toBe("number");
+      expect(typeof entry.waveHeightM).toBe("number");
+      expect(typeof entry.tidalSpeedKnots).toBe("number");
+      expect(typeof entry.tidalDegrees).toBe("number");
+      expect(typeof entry.isSlack).toBe("boolean");
+      expect(VALID_PHASES).toContain(entry.phase);
+    }
+  });
+
+  it("forecast48h relHour runs 0–47 in order", async () => {
+    fetchMock.mockImplementation(makeForecast48hFetchMock());
+    const res = await request(makeApp()).get("/surface-conditions?lat=40.7&lon=-74.0");
+    expect(res.status).toBe(200);
+    res.body.forecast48h.forEach((entry: { relHour: number }, i: number) => {
+      expect(entry.relHour).toBe(i);
+    });
+  });
+
+  it("forecast48h isoTime is a valid ISO 8601 UTC timestamp spaced 1 hour apart", async () => {
+    fetchMock.mockImplementation(makeForecast48hFetchMock());
+    const res = await request(makeApp()).get("/surface-conditions?lat=40.7&lon=-74.0");
+    expect(res.status).toBe(200);
+    const times: number[] = res.body.forecast48h.map((e: { isoTime: string }) =>
+      new Date(e.isoTime).getTime(),
+    );
+    for (let i = 0; i < times.length; i++) {
+      expect(isNaN(times[i]!)).toBe(false);
+      if (i > 0) {
+        expect(times[i]! - times[i - 1]!).toBe(3600 * 1000);
+      }
+    }
+  });
+
+  it("forecast48h uses real wind/wave data for the first 48 slots when available", async () => {
+    fetchMock.mockImplementation(makeForecast48hFetchMock());
+    const res = await request(makeApp()).get("/surface-conditions?lat=40.7&lon=-74.0");
+    expect(res.status).toBe(200);
+    // With our mock, wind speed at hour h is h+1 knots — verify a few slots
+    expect(res.body.forecast48h[0].windSpeedKnots).toBeCloseTo(1, 1);
+    expect(res.body.forecast48h[23].windSpeedKnots).toBeCloseTo(24, 1);
+    expect(res.body.forecast48h[47].windSpeedKnots).toBeCloseTo(48, 1);
+  });
+
+  it("forecast48h falls back to default wind/wave values when Open-Meteo returns <48 hours", async () => {
+    // Provide only 24 hours of Open-Meteo data so slots 24–47 use defaults
+    fetchMock.mockImplementation(makeForecast48hFetchMock(24, 24));
+    const res = await request(makeApp()).get("/surface-conditions?lat=40.7&lon=-74.0");
+    expect(res.status).toBe(200);
+    expect(res.body.forecast48h).toHaveLength(48);
+    // Hours beyond what Open-Meteo supplied fall back to hardcoded defaults
+    expect(res.body.forecast48h[24].windSpeedKnots).toBe(8);
+    expect(res.body.forecast48h[47].windSpeedKnots).toBe(8);
+    expect(res.body.forecast48h[24].waveHeightM).toBeCloseTo(0.3, 5);
+  });
+
+  it("existing hours array still has exactly 24 entries alongside forecast48h", async () => {
+    fetchMock.mockImplementation(makeForecast48hFetchMock());
+    const res = await request(makeApp()).get("/surface-conditions?lat=40.7&lon=-74.0");
+    expect(res.status).toBe(200);
+    expect(res.body.hours).toHaveLength(24);
+    expect(res.body.forecast48h).toHaveLength(48);
+  });
+
+  it("hours[h] and forecast48h[h] share the same wind/wave/tidal values for h 0–23", async () => {
+    fetchMock.mockImplementation(makeForecast48hFetchMock());
+    const res = await request(makeApp()).get("/surface-conditions?lat=40.7&lon=-74.0");
+    expect(res.status).toBe(200);
+    for (let h = 0; h < 24; h++) {
+      const leg = res.body.hours[h];
+      const f = res.body.forecast48h[h];
+      expect(f.windSpeedKnots).toBe(leg.windSpeedKnots);
+      expect(f.windDegrees).toBe(leg.windDegrees);
+      expect(f.waveHeightM).toBe(leg.waveHeightM);
+      expect(f.tidalSpeedKnots).toBe(leg.tidalSpeedKnots);
+      expect(f.tidalDegrees).toBe(leg.tidalDegrees);
+      expect(f.isSlack).toBe(leg.isSlack);
+      expect(f.phase).toBe(leg.phase);
+    }
   });
 });
