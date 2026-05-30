@@ -9,7 +9,7 @@
  *   Pre-fills all fields from the existing marker stored in markerEditStore.
  *   On submit, calls usePatchMarkersId and invalidates the markers query.
  */
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { set as idbSet } from "idb-keyval";
 import { useCameraStore } from "@/lib/cameraStore";
@@ -50,6 +50,8 @@ const PANEL: React.CSSProperties = {
 export const MarkerForm: React.FC = () => {
   const editMarker = useMarkerEditStore((s) => s.marker);
   const closeEdit = useMarkerEditStore((s) => s.close);
+  const requestClose = useMarkerEditStore((s) => s.requestClose);
+  const setBeforeClose = useMarkerEditStore((s) => s.setBeforeClose);
   const isEditMode = editMarker !== null;
 
   const gps = useCameraStore((s) => s.lastClickedGps);
@@ -119,9 +121,50 @@ export const MarkerForm: React.FC = () => {
   const isOnline = useOfflineStore((s) => s.isOnline);
   const [savedOffline, setSavedOffline] = useState(false);
 
+  // Stable ref so the guard always reads the latest form state without
+  // needing to re-register itself on every keystroke.
+  const isDirtyRef = useRef(false);
+  useEffect(() => {
+    if (!isEditMode || !editMarker) {
+      isDirtyRef.current = false;
+      return;
+    }
+    let dirty = label !== editMarker.label || markerType !== editMarker.type;
+    if (!dirty) {
+      if (markerType === "depth_pole") {
+        let savedColour = DEPTH_POLE_DEFAULT_COLOUR;
+        if (editMarker.notes) {
+          try {
+            const parsed = JSON.parse(editMarker.notes) as { colour?: string };
+            savedColour = parsed.colour ?? DEPTH_POLE_DEFAULT_COLOUR;
+          } catch { /* ignore */ }
+        }
+        dirty = poleColour !== savedColour;
+      } else {
+        dirty = notes !== (editMarker.notes ?? "");
+      }
+    }
+    isDirtyRef.current = dirty;
+  });
+
+  // Register a beforeClose guard while the form is in edit mode.
+  // The guard reads isDirtyRef so it always sees the latest values.
+  useEffect(() => {
+    if (!isEditMode) {
+      setBeforeClose(null);
+      return;
+    }
+    setBeforeClose(() => {
+      if (!isDirtyRef.current) return true;
+      return window.confirm("Discard unsaved changes to this marker?");
+    });
+    return () => setBeforeClose(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode]);
+
   const handleClose = () => {
     if (isEditMode) {
-      closeEdit();
+      requestClose();
     } else {
       setMarkerFormOpen(false);
     }
