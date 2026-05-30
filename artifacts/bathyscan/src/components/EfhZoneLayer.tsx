@@ -47,6 +47,7 @@ function latToWorldZ(lat: number, minLat: number, latRange: number): number {
   return ((lat - minLat) / latRange) * WORLD_SIZE - WORLD_SIZE / 2;
 }
 
+
 /** Converts one GeoJSON Polygon ring to a closed THREE.BufferGeometry line loop. */
 function ringToLineGeometry(
   ring: number[][],
