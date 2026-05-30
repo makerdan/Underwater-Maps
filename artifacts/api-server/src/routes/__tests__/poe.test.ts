@@ -311,7 +311,7 @@ describe("POST /api/poe/classify", () => {
   });
 
   it.skip("reconciles AI output against surveyed substrate for covered datasets (skipped: preset datasets retired in Task #403)", async () => {
-    // glacier-bay is bundled with real ShoreZone substrate coverage. The AI
+    // thorne-bay is bundled with real ShoreZone substrate coverage. The AI
     // mock returns the freshwater label "aquatic_vegetation" everywhere — a
     // value that's not even in the saltwater enum — so any cell that comes
     // back as a valid saltwater substrate label MUST have been overwritten by
@@ -329,7 +329,7 @@ describe("POST /api/poe/classify", () => {
       .send({
         gridBase64: GRID_BASE64,
         waterType: "saltwater",
-        datasetId: "glacier-bay",
+        datasetId: "thorne-bay",
       });
 
     expect(res.status).toBe(200);

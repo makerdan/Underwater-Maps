@@ -305,16 +305,8 @@ export type ShoreZoneDatasetCoverage = SubstrateDatasetCoverage;
  * for unknown ids.
  */
 const DATASET_REGION_LABELS: Record<string, string> = {
-  "glacier-bay":       "Glacier Bay (Alaska ShoreZone + NOAA ENC)",
-  "icy-strait":        "Icy Strait / Cross Sound (Alaska ShoreZone + NOAA ENC)",
-  "thorne-bay":        "Thorne Bay / Clarence Strait (NOAA ENC seabed)",
-  "sitka-sound":       "Sitka Sound (NOAA ENC seabed)",
-  "juneau-approaches": "Juneau approaches — Stephens Passage / Lynn Canal (NOAA ENC seabed)",
-  "ketchikan":         "Ketchikan / Revillagigedo Channel (NOAA ENC seabed)",
-  "lake-fork":         "Lake Fork Reservoir (NHD outline + TPWD/TWDB lake-bottom survey)",
-  "sam-rayburn":       "Sam Rayburn Reservoir (NHD outline + TPWD/TWDB lake-bottom survey)",
-  "lake-ray-roberts":  "Lake Ray Roberts (NHD outline + TPWD/TWDB lake-bottom survey)",
-  "toledo-bend":       "Toledo Bend Reservoir (NHD outline + TPWD/TWDB lake-bottom survey)",
+  "thorne-bay":       "Thorne Bay / Clarence Strait (NOAA ENC seabed)",
+  "lake-ray-roberts": "Lake Ray Roberts (NHD outline + TPWD/TWDB lake-bottom survey)",
 };
 
 function tightBbox(features: ShoreZoneFeature[]): [number, number, number, number] | null {

@@ -55,12 +55,10 @@ describe("DATASET_SOURCE_PRIORITY", () => {
     expect(Object.keys(DATASET_SOURCE_PRIORITY).length).toBeGreaterThan(0);
     expect(DATASET_SOURCE_PRIORITY["thorne-bay"]).toBeDefined();
     expect(DATASET_SOURCE_PRIORITY["lake-ray-roberts"]).toBeDefined();
-    expect(DATASET_SOURCE_PRIORITY["lake-texoma"]).toBeDefined();
   });
 
-  it("registers the inland TX reservoirs with bundled-survey first", () => {
+  it("registers the inland TX reservoir with bundled-survey first", () => {
     expect(DATASET_SOURCE_PRIORITY["lake-ray-roberts"]?.[0]).toBe("bundled-survey");
-    expect(DATASET_SOURCE_PRIORITY["lake-texoma"]?.[0]).toBe("bundled-survey");
   });
 
   it("only references source ids that exist in BATHYMETRY_SOURCES", () => {
@@ -158,7 +156,7 @@ describe("resolveBathymetrySource — ranked fallback", () => {
 describe("BUNDLED_TERRAIN — bundle file presence and resample integrity", () => {
   it("registers exactly the expected bundled dataset ids", () => {
     expect(Object.keys(BUNDLED_TERRAIN).sort()).toEqual(
-      ["lake-ray-roberts", "lake-texoma"].sort(),
+      ["lake-ray-roberts"].sort(),
     );
   });
 

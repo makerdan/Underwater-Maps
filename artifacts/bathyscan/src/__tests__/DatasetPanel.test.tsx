@@ -71,11 +71,11 @@ const datasets = [
     waterType: "saltwater",
   },
   {
-    id: "lake-fork",
-    name: "Lake Fork Reservoir — East Texas",
-    description: "Trophy largemouth bass reservoir",
+    id: "lake-ray-roberts",
+    name: "Lake Ray Roberts (TX)",
+    description: "Lake Ray Roberts, Denton County, TX",
     minDepth: 0,
-    maxDepth: 21,
+    maxDepth: 28,
     waterType: "freshwater",
   },
 ];

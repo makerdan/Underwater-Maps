@@ -127,8 +127,8 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
     }
   });
 
-  test("TOPO badge appears for Hawaii (dataset with topography)", async ({ page }) => {
-    // Stub the Poe classify endpoint so that seeding glacier-bay with
+  test("TOPO badge appears for Thorne Bay (seeded, dataset with topography)", async ({ page }) => {
+    // Stub the Poe classify endpoint so that seeding thorne-bay with
     // hasTopography=true is not overwritten by the async depth-heuristic
     // fallback (which would take ~9 s and return false for all-below-water depths).
     await page.route("**/api/poe/classify", (route) =>
@@ -142,8 +142,8 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
     // new active dataset doesn't overwrite the seed.
     const topography = makeTopography();
     const fixture = {
-      datasetId: "glacier-bay",
-      name: "Glacier Bay",
+      datasetId: "thorne-bay",
+      name: "Thorne Bay — SE Alaska",
       resolution: RESOLUTION,
       width: RESOLUTION,
       height: RESOLUTION,
@@ -151,7 +151,7 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
       topography,
       hasTopography: true,
     };
-    await page.route("**/datasets/glacier-bay/terrain*", (route) =>
+    await page.route("**/datasets/thorne-bay/terrain*", (route) =>
       route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -168,8 +168,8 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
     await page.evaluate(
       ({ resolution, topo }) =>
         window.__bathyTest!.seedTerrain({
-          datasetId: "glacier-bay",
-          name: "Glacier Bay",
+          datasetId: "thorne-bay",
+          name: "Thorne Bay — SE Alaska",
           resolution,
           width: resolution,
           height: resolution,
@@ -189,7 +189,7 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
           await page.evaluate(() => window.__bathyTest!.getTerrainSummary()),
         { timeout: 15_000 },
       )
-      .toEqual({ datasetId: "glacier-bay", hasTopography: true });
+      .toEqual({ datasetId: "thorne-bay", hasTopography: true });
 
     await expect(page.locator('[data-testid="topo-badge"]').first()).toBeVisible({
       timeout: 10_000,
@@ -265,8 +265,8 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
     // response, which would overwrite our seed via `setTerrain(data)`.
     const topography = makeTopography();
     const fixture = {
-      datasetId: "glacier-bay",
-      name: "Glacier Bay",
+      datasetId: "thorne-bay",
+      name: "Thorne Bay — SE Alaska",
       waterType: "saltwater",
       resolution: RESOLUTION,
       width: RESOLUTION,
@@ -283,7 +283,7 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
       topography,
       hasTopography: true,
     };
-    await page.route("**/datasets/glacier-bay/terrain*", (route) =>
+    await page.route("**/datasets/thorne-bay/terrain*", (route) =>
       route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -307,9 +307,9 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
           await page.evaluate(() => window.__bathyTest!.getTerrainSummary()),
         { timeout: 15_000 },
       )
-      .toEqual({ datasetId: "glacier-bay", hasTopography: true });
+      .toEqual({ datasetId: "thorne-bay", hasTopography: true });
 
-    // Confirm the seeded TOPO badge actually mounted on the Hawaii row
+    // Confirm the seeded TOPO badge actually mounted on the Thorne Bay row
     // before we try to expand its panel — otherwise terrain was overwritten
     // by a late effect and the download button would never appear.
     await expect(page.locator('[data-testid="topo-badge"]').first()).toBeAttached({
@@ -330,6 +330,6 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
       page.waitForEvent("download", { timeout: 10_000 }),
       downloadBtn.dispatchEvent("click"),
     ]);
-    expect(download.suggestedFilename()).toBe("glacier-bay-topography.json");
+    expect(download.suggestedFilename()).toBe("thorne-bay-topography.json");
   });
 });

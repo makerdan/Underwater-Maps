@@ -24,10 +24,10 @@ test.describe("dataset row loading dial", () => {
       return;
     }
 
-    // Pick a non-default dataset so a real load runs. Lake Fork is a small
+    // Pick a non-default dataset so a real load runs. Lake Ray Roberts is a
     // freshwater preset present in the seed catalog and always different
     // from whatever the page boots with.
-    const other = page.locator('[data-testid="btn-dataset-lake-fork"]');
+    const other = page.locator('[data-testid="btn-dataset-lake-ray-roberts"]');
     const otherVisible = await other.isVisible({ timeout: 5_000 }).catch(() => false);
     const trigger = otherVisible ? other : target;
 

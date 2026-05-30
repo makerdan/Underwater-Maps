@@ -762,9 +762,4 @@ export const KETCHIKAN_EFH: EfhFeatureCollection = buildRegion(
 // ---------------------------------------------------------------------------
 export const SALTWATER_EFH_BY_DATASET: Record<string, EfhFeatureCollection> = {
   "thorne-bay": THORNE_BAY_EFH,
-  "glacier-bay": GLACIER_BAY_EFH,
-  "icy-strait": ICY_STRAIT_EFH,
-  "sitka-sound": SITKA_SOUND_EFH,
-  "juneau-approaches": JUNEAU_APPROACHES_EFH,
-  "ketchikan": KETCHIKAN_EFH,
 };

@@ -330,22 +330,22 @@ async function runEfhCase(page: Page, plan: CasePlan): Promise<void> {
 }
 
 test.describe("EFH overlay — Task #314 dataset coverage", () => {
-  test("Lake Fork (TPWD) — overview paints polygons and detail panel shows the TPWD disclaimer", async ({
+  test("Lake Ray Roberts (TPWD) — overview paints polygons and detail panel shows the TPWD disclaimer", async ({
     page,
   }) => {
     await runEfhCase(page, {
       waterType: "freshwater",
-      datasetId: "lake-fork",
+      datasetId: "lake-ray-roberts",
       sourceFamily: "tpwd",
     });
   });
 
-  test("Sitka Sound (NOAA) — overview paints polygons and detail panel shows the NOAA EFH credit (no TPWD line)", async ({
+  test("Thorne Bay (NOAA) — overview paints polygons and detail panel shows the NOAA EFH credit (no TPWD line)", async ({
     page,
   }) => {
     await runEfhCase(page, {
       waterType: "saltwater",
-      datasetId: "sitka-sound",
+      datasetId: "thorne-bay",
       sourceFamily: "noaa",
     });
   });

@@ -20,7 +20,7 @@ import { test, expect, API_URL, E2E_USER_ID } from "./fixtures";
  */
 
 const SALTWATER_DATASET = "btn-dataset-thorne-bay";
-const FRESHWATER_DATASET = "btn-dataset-lake-fork";
+const FRESHWATER_DATASET = "btn-dataset-lake-ray-roberts";
 
 test.describe("Water-type toggle", () => {
   test("switching to freshwater and back updates UI, datasets, and colormap", async ({ page }) => {
