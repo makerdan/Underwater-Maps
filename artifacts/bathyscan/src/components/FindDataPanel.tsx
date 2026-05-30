@@ -13,7 +13,7 @@
  * direct catalog search so the user always gets results.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetDatasetsCatalogSearch,
@@ -462,7 +462,9 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   } = useGetDatasetsMySaves({
     query: {
       queryKey: getGetDatasetsMySavesQueryKey(),
-      enabled: tab === "saves" && !!isSignedIn,
+      // Always fetch when signed in so the search tab can reflect already-saved
+      // entries without requiring the user to visit the saves tab first.
+      enabled: !!isSignedIn,
       // Materialization runs server-side after POST /save returns. Poll so
       // status (queued → processing → ready/failed) and the resulting
       // datasetId become visible without forcing the user to refresh.
@@ -495,6 +497,14 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
       void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
     }
   }, [mySaves, qc, isSignedIn]);
+
+  // Catalog IDs that are already saved (any non-failed status). Used to disable
+  // the Save button on search results when a save already exists, preventing
+  // duplicate saves and greying out "ready" entries across panel re-opens.
+  const savedCatalogIds = useMemo(
+    () => new Set(mySaves.filter((s) => s.status !== "failed").map((s) => s.catalogId)),
+    [mySaves],
+  );
 
   const saveMutation = usePostDatasetsCatalogIdSave();
   const retryMutation = usePostDatasetsMySavesIdRetry();
@@ -796,7 +806,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                   entry={entry}
                   onSave={handleSave}
                   saving={savingIds.has(entry.id)}
-                  saved={savedIds.has(entry.id)}
+                  saved={savedIds.has(entry.id) || savedCatalogIds.has(entry.id)}
                   canSave={!!isSignedIn}
                   presetId={presetId}
                   onLoad={handleLoad}
