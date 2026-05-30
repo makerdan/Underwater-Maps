@@ -62,7 +62,7 @@ import type {
   SubstrateFeatureCollection,
 } from "@workspace/api-client-react";
 import { useHabitatStore } from "@/lib/habitatStore";
-import { filterEfhByBbox } from "@/lib/efhBboxFilter";
+import { filterEfhByBbox, getVisibleEfhFeatures } from "@/lib/efhBboxFilter";
 import { HabitatLegend } from "@/components/HabitatLegend";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useTrailStore } from "@/lib/trailStore";
@@ -522,7 +522,12 @@ export const OverviewMap: React.FC = () => {
 
       // EFH overlay (dashed species polygon outlines + legend)
       if (showEfhRef.current && efhFeaturesRef.current.length > 0) {
-        renderEfhOverlay(ctx, efhFeaturesRef.current, grid, t, hiddenEfhSpeciesRef.current);
+        const visibleEfhFeatures = getVisibleEfhFeatures(
+          efhFeaturesRef.current,
+          { minLon: grid.minLon, maxLon: grid.maxLon, minLat: grid.minLat, maxLat: grid.maxLat },
+          hiddenEfhSpeciesRef.current,
+        );
+        renderEfhOverlay(ctx, visibleEfhFeatures, grid, t);
         efhLegendLayoutRef.current = renderEfhLegend(ctx, efhFeaturesRef.current, cW, cH, hiddenEfhSpeciesRef.current);
       } else {
         efhLegendLayoutRef.current = null;
@@ -881,11 +886,14 @@ export const OverviewMap: React.FC = () => {
 
       // EFH zone takes priority when the overlay is visible and the click
       // lands inside a polygon — open the species info panel instead of
-      // dropping into the 3D scene. Hidden species are excluded so clicks
-      // on filtered-out polygons fall through to the drop-in handler.
+      // dropping into the 3D scene. Hidden species and out-of-bbox polygons
+      // are excluded via getVisibleEfhFeatures so clicks on filtered-out
+      // polygons fall through to the drop-in handler.
       if (showEfhRef.current && efhFeaturesRef.current.length > 0) {
-        const visibleEfh = efhFeaturesRef.current.filter(
-          (f) => !hiddenEfhSpeciesRef.current.has(f.properties.commonName ?? ""),
+        const visibleEfh = getVisibleEfhFeatures(
+          efhFeaturesRef.current,
+          { minLon: overviewGrid.minLon, maxLon: overviewGrid.maxLon, minLat: overviewGrid.minLat, maxLat: overviewGrid.maxLat },
+          hiddenEfhSpeciesRef.current,
         );
         const hit = hitTestEfh(lon, lat, visibleEfh);
         if (hit) {

@@ -93,3 +93,20 @@ export function filterEfhByBbox(features: EfhFeature[], bbox: Bbox): EfhFeature[
     return false;
   });
 }
+
+/**
+ * Returns the subset of EFH features that are both within the given bbox and
+ * not suppressed by the hidden-species filter.  This is the single source of
+ * truth for "what the user can currently see and interact with", used by both
+ * the 2D render loop and the 2D click/hit-test path so they can never drift
+ * apart.
+ */
+export function getVisibleEfhFeatures(
+  features: EfhFeature[],
+  bbox: Bbox,
+  hiddenSpecies: ReadonlySet<string>,
+): EfhFeature[] {
+  return filterEfhByBbox(features, bbox).filter(
+    (f) => !hiddenSpecies.has(f.properties.commonName ?? ""),
+  );
+}
