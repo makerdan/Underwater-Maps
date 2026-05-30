@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ClerkProvider, SignIn, SignUp, Show, useClerk } from "@/lib/clerkCompat";
+import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from "@/lib/clerkCompat";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 import { Switch, Route, useLocation, Router as WouterRouter } from "wouter";
@@ -7,7 +7,7 @@ import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { useGetDatasets, getGetDatasetsQueryKey } from "@workspace/api-client-react";
+import { useGetDatasets, useGetUserDatasets, getGetDatasetsQueryKey, getGetUserDatasetsQueryKey } from "@workspace/api-client-react";
 import { AppProvider, useAppState } from "@/lib/context";
 import { registerTestBridge, registerTestCameraPosRef } from "@/lib/testHelpers";
 import { useTerrainStore } from "@/lib/terrainStore";
@@ -217,6 +217,7 @@ function Main() {
   const {
     datasetId, setDatasetId, terrain, tidalOverlay, setTidalOverlay,
     realisticMode, setRealisticMode,
+    pendingExternalUserDatasetId, setPendingExternalUserDatasetId,
   } = useAppState();
   const markerFormOpen = useUiStore((s) => s.markerFormOpen);
   const markerEditOpen = useMarkerEditStore((s) => s.marker !== null);
@@ -226,6 +227,16 @@ function Main() {
   const driftPlannerActive = useDriftStore((s) => s.driftPlannerActive);
   const setDriftPlannerActive = useDriftStore((s) => s.setDriftPlannerActive);
   const gpsActive = useGpsStore((s) => s.active);
+  const defaultMapLoad = useSettingsStore((st) => st.defaultMapLoad);
+  const { isSignedIn } = useUser();
+  // Fetch user datasets so we can verify a stored upload default still exists.
+  const { data: userDatasets } = useGetUserDatasets({
+    query: {
+      enabled: !!isSignedIn && defaultMapLoad?.kind === "upload",
+      queryKey: getGetUserDatasetsQueryKey(),
+      staleTime: 60_000,
+    },
+  });
   // Settings-driven UI visibility + tidal defaults
   const autoLoadTidal = useSettingsStore((st) => st.autoLoadTidal);
   const defaultTidalDepthLayer = useSettingsStore((st) => st.defaultTidalDepthLayer);
@@ -301,6 +312,14 @@ function Main() {
   useEffect(() => {
     if (hasAutoSelectedRef.current) return;
     if (datasets?.length && !datasetId) {
+      // For upload defaults, wait until the userDatasets query settles so we
+      // can verify existence before committing. If the query is disabled (no
+      // sign-in or no upload preference), userDatasets is undefined and we
+      // proceed immediately — preset and "no preference" cases don't wait.
+      const needsUploadCheck =
+        defaultMapLoad?.kind === "upload" && !!isSignedIn && userDatasets === undefined;
+      if (needsUploadCheck) return;
+
       hasAutoSelectedRef.current = true;
 
       // Prefer the dataset encoded in the share URL if it exists in the list.
@@ -308,8 +327,59 @@ function Main() {
       const urlMatch = urlDatasetId
         ? datasets.find((d) => d.id === urlDatasetId)
         : undefined;
-      const target = urlMatch ?? datasets[0];
 
+      if (urlMatch) {
+        // URL share link always wins.
+        void requestDatasetSwitch({
+          datasetId: urlMatch.id,
+          datasetName: urlMatch.name,
+          onConfirm: () => setDatasetId(urlMatch.id),
+        });
+        return;
+      }
+
+      // Apply the user's stored default, falling back gracefully if the dataset
+      // no longer exists (e.g. a deleted upload or renamed preset).
+      if (defaultMapLoad) {
+        if (defaultMapLoad.kind === "preset") {
+          const preferred = datasets.find((d) => d.id === defaultMapLoad.id);
+          const target = preferred ?? datasets[0];
+          if (target?.id) {
+            void requestDatasetSwitch({
+              datasetId: target.id,
+              datasetName: target.name,
+              onConfirm: () => setDatasetId(target.id),
+            });
+          } else {
+            setDatasetId(null);
+          }
+          return;
+        }
+
+        if (defaultMapLoad.kind === "upload") {
+          const uploadExists = userDatasets?.some((d) => d.id === defaultMapLoad.id) ?? false;
+          if (uploadExists && !pendingExternalUserDatasetId) {
+            // Trigger DatasetPanel's user-dataset load pipeline.
+            setPendingExternalUserDatasetId(defaultMapLoad.id);
+          }
+          // Fall through to the hardcoded default for the preset list so the
+          // scene isn't blank while the upload pipeline loads in the background.
+          const target = datasets[0];
+          if (target?.id) {
+            void requestDatasetSwitch({
+              datasetId: target.id,
+              datasetName: target.name,
+              onConfirm: () => setDatasetId(target.id),
+            });
+          } else {
+            setDatasetId(null);
+          }
+          return;
+        }
+      }
+
+      // No stored preference — fall back to the first available dataset.
+      const target = datasets[0];
       if (target?.id) {
         void requestDatasetSwitch({
           datasetId: target.id,
@@ -322,7 +392,8 @@ function Main() {
         setDatasetId(null);
       }
     }
-  }, [datasets, datasetId, setDatasetId]);
+  }, [datasets, datasetId, setDatasetId, defaultMapLoad, isSignedIn, userDatasets,
+      pendingExternalUserDatasetId, setPendingExternalUserDatasetId]);
 
   // Side-effects on water-type switch (see useWaterTypeSideEffects):
   //   1) Clear derived state computed for the previous environment

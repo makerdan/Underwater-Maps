@@ -48,6 +48,7 @@ import { usePaletteStore, DEFAULT_SHALLOW, DEFAULT_DEEP, PALETTE_PRESETS, MID1_H
 import { colormapCanvas, colormapCssGradient } from "@/lib/colormap";
 import type { ColormapTheme } from "@/lib/settingsStore";
 import { HelpIcon } from "@/components/help/HelpButton";
+import { DefaultMapLoadPicker } from "@/components/DefaultMapLoadPicker";
 
 /**
  * Format an ISO timestamp into a short human-readable "last synced" label.
@@ -1944,6 +1945,16 @@ function DatasetSection() {
       <SectionActionsRow section="data" />
       <div style={S.card}>
         <div style={S.cardHeader}>DEFAULTS</div>
+        <div style={S.row}>
+          <div>
+            <div style={S.label}>Default Map Load</div>
+            <div style={S.sublabel}>Dataset that opens automatically on every launch</div>
+          </div>
+          <DefaultMapLoadPicker
+            value={s.defaultMapLoad}
+            onChange={s.setDefaultMapLoad}
+          />
+        </div>
         <SelectRow
           label="Default Region"
           value={s.defaultRegion}

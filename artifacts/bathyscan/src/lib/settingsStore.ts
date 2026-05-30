@@ -17,7 +17,7 @@ import {
   type ShortcutActionId,
 } from "./keyBindings";
 
-export const SETTINGS_SCHEMA_VERSION = 11;
+export const SETTINGS_SCHEMA_VERSION = 12;
 
 /**
  * Standard-mapping gamepad button index used to trigger the crosshair
@@ -68,6 +68,16 @@ export type TemperatureUnit = "auto" | "celsius" | "fahrenheit";
 export type CameraSpawnBehaviour = "deepest" | "home" | "last";
 export type MarkerType = "fish" | "shipwreck" | "coral" | "vent" | "custom" | "depth_pole" | "log" | "vegetation" | "sample" | "bass" | "trout" | "pike" | "walleye" | "crayfish";
 export type JoystickMode = "auto" | "always" | "off";
+
+/**
+ * The dataset that should load automatically when the app starts.
+ * `kind: 'preset'` refers to a built-in dataset from /api/datasets.
+ * `kind: 'upload'` refers to a user-uploaded dataset from /api/user/datasets.
+ */
+export interface DefaultMapLoad {
+  kind: "preset" | "upload";
+  id: string;
+}
 export type QualityPreset = "low" | "medium" | "high" | "ultra" | "custom";
 export type TimeFormat = "utc" | "local" | "12h" | "24h";
 export type CurrentArrowDensity = "sparse" | "normal" | "dense";
@@ -219,6 +229,12 @@ export interface SettingsState {
   // ── Data & Storage ───────────────────────────────────────────────────
   defaultRegion: string;
   autoLoadLastDataset: boolean;
+  /**
+   * Dataset to load automatically on every app start.
+   * `null` means "no preference — use the built-in default".
+   * Persisted and synced cross-device like all other settings.
+   */
+  defaultMapLoad: DefaultMapLoad | null;
 
   // ── Accessibility ────────────────────────────────────────────────────
   reducedMotion: boolean;
@@ -379,6 +395,7 @@ interface SettingsActions {
   // Data
   setDefaultRegion: (v: string) => void;
   setAutoLoadLastDataset: (v: boolean) => void;
+  setDefaultMapLoad: (v: DefaultMapLoad | null) => void;
 
   // Accessibility
   setReducedMotion: (v: boolean) => void;
@@ -608,6 +625,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   // Data
   defaultRegion: "",
   autoLoadLastDataset: true,
+  defaultMapLoad: null,
 
   // Accessibility
   reducedMotion: false,
@@ -672,7 +690,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   gps: [
     "autoStartTrailRecording", "defaultTrailColor", "gpsRecordingInterval", "trailRetention",
   ],
-  data: ["defaultRegion", "autoLoadLastDataset"],
+  data: ["defaultRegion", "autoLoadLastDataset", "defaultMapLoad"],
   accessibility: [
     "reducedMotion", "colorBlindSafePalette", "largeHudText", "highContrastHud",
   ],
@@ -838,6 +856,7 @@ export const useSettingsStore = create<SettingsStore>()(
         // Data
         setDefaultRegion: setter("defaultRegion"),
         setAutoLoadLastDataset: setter("autoLoadLastDataset"),
+        setDefaultMapLoad: setter("defaultMapLoad"),
 
         // Accessibility
         setReducedMotion: setter("reducedMotion"),
