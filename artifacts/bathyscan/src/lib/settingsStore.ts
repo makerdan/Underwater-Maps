@@ -120,6 +120,7 @@ export interface SettingsState {
   touchpadZoomSensitivity: number;
   pinchZoomSensitivity: number;
   joystickMode: JoystickMode;
+  showJoystickInOrbit: boolean;
   fieldOfView: number;
   renderDistance: number;
   cameraSpawnBehaviour: CameraSpawnBehaviour;
@@ -313,6 +314,7 @@ interface SettingsActions {
   setTouchpadZoomSensitivity: (v: number) => void;
   setPinchZoomSensitivity: (v: number) => void;
   setJoystickMode: (v: JoystickMode) => void;
+  setShowJoystickInOrbit: (v: boolean) => void;
   setFieldOfView: (v: number) => void;
   setRenderDistance: (v: number) => void;
   setCameraSpawnBehaviour: (v: CameraSpawnBehaviour) => void;
@@ -547,6 +549,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   touchpadZoomSensitivity: 1.0,
   pinchZoomSensitivity: 1.0,
   joystickMode: "auto",
+  showJoystickInOrbit: false,
   fieldOfView: 45,
   renderDistance: 400,
   cameraSpawnBehaviour: "deepest",
@@ -670,7 +673,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   camera: [
     "defaultSpeedTier", "mouseSensitivity", "invertMouseY",
     "mouseZoomSensitivity", "touchpadZoomSensitivity", "pinchZoomSensitivity",
-    "joystickMode", "fieldOfView", "renderDistance", "cameraSpawnBehaviour",
+    "joystickMode", "showJoystickInOrbit", "fieldOfView", "renderDistance", "cameraSpawnBehaviour",
   ],
   visuals: [
     "qualityPreset", "terrainExaggeration", "enableMarineSnow", "particleDensity",
@@ -777,6 +780,7 @@ export const useSettingsStore = create<SettingsStore>()(
         setTouchpadZoomSensitivity: setter("touchpadZoomSensitivity"),
         setPinchZoomSensitivity: setter("pinchZoomSensitivity"),
         setJoystickMode: setter("joystickMode"),
+        setShowJoystickInOrbit: setter("showJoystickInOrbit"),
         setFieldOfView: setter("fieldOfView"),
         setRenderDistance: setter("renderDistance"),
         setCameraSpawnBehaviour: setter("cameraSpawnBehaviour"),

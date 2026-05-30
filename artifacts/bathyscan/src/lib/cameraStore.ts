@@ -25,6 +25,9 @@ interface CameraStore {
     heading: number;
   }) => void;
   setSpeedIndex: (speedIndex: number) => void;
+  /** True while the user has two fingers down and is performing a touch orbit. */
+  isOrbitingTouch: boolean;
+  setIsOrbitingTouch: (v: boolean) => void;
 }
 
 export const useCameraStore = create<CameraStore>((set) => ({
@@ -42,4 +45,6 @@ export const useCameraStore = create<CameraStore>((set) => ({
   setCameraGeo: ({ lon, lat, depth, heading }) =>
     set({ cameraLon: lon, cameraLat: lat, cameraDepth: depth, heading }),
   setSpeedIndex: (speedIndex) => set({ speedIndex }),
+  isOrbitingTouch: false,
+  setIsOrbitingTouch: (v) => set({ isOrbitingTouch: v }),
 }));

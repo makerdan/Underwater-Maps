@@ -138,6 +138,9 @@ interface UiStore {
    */
   scrubDatetime: Date | null;
   setScrubDatetime: (d: Date | null) => void;
+  /** Whether the user has already seen the one-time two-finger orbit hint toast. */
+  hasSeenOrbitTouchHint: boolean;
+  setHasSeenOrbitTouchHint: (seen: boolean) => void;
 }
 
 function readLocalBool(key: string, fallback: boolean): boolean {
@@ -269,6 +272,11 @@ export const useUiStore = create<UiStore>((set) => ({
   },
   scrubDatetime: null,
   setScrubDatetime: (d) => set({ scrubDatetime: d }),
+  hasSeenOrbitTouchHint: readLocalBool("bathyscan:hasSeenOrbitTouchHint", false),
+  setHasSeenOrbitTouchHint: (seen) => {
+    writeLocalBool("bathyscan:hasSeenOrbitTouchHint", seen);
+    set({ hasSeenOrbitTouchHint: seen });
+  },
   toggleCurrentDepthLayer: (layer) => set((state) => {
     const has = state.currentDepthLayers.includes(layer);
     let next = has

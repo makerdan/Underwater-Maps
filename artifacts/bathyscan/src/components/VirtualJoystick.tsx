@@ -6,9 +6,15 @@
  *  - Right half: look (mouse drag equivalent)
  *
  * Writes normalised [-1,1] values to joystickStore which useFlyControls reads.
+ *
+ * Props:
+ *  - forceVisible: render even on non-touch devices (e.g. in Settings preview)
+ *  - showInOrbit: also render while a two-finger touch orbit gesture is active
+ *    (reads isOrbitingTouch from cameraStore; requires actual touch device)
  */
 import React, { useEffect, useRef } from "react";
 import { create } from "zustand";
+import { useCameraStore } from "@/lib/cameraStore";
 
 // ---------------------------------------------------------------------------
 // Shared joystick state — read by useFlyControls via getState()
@@ -41,10 +47,25 @@ interface TouchState {
 
 const RADIUS = 50;
 
-export const VirtualJoystick: React.FC<{ forceVisible?: boolean }> = ({ forceVisible = false }) => {
-  const isTouchDevice =
-    forceVisible ||
-    (typeof window !== "undefined" && "ontouchstart" in window);
+export const VirtualJoystick: React.FC<{ forceVisible?: boolean; showInOrbit?: boolean }> = ({
+  forceVisible = false,
+  showInOrbit = false,
+}) => {
+  // Actual device capability — gates event listener registration.
+  const isActualTouchDevice =
+    typeof window !== "undefined" &&
+    ("ontouchstart" in window || navigator.maxTouchPoints > 0);
+
+  // Whether touch orbit is currently active (two fingers on the screen).
+  const isOrbitingTouch = useCameraStore((s) => s.isOrbitingTouch);
+
+  // Event listeners register when we're on a real touch device or force mode.
+  const shouldRegisterListeners = forceVisible || isActualTouchDevice;
+
+  // Render whenever listeners are active, OR when the showInOrbit option is
+  // set and the user actually has two fingers down performing a touch orbit.
+  const shouldRender = shouldRegisterListeners || (showInOrbit && isOrbitingTouch);
+
   const leftRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
   const touches = useRef<Map<number, TouchState>>(new Map());
@@ -52,7 +73,7 @@ export const VirtualJoystick: React.FC<{ forceVisible?: boolean }> = ({ forceVis
   const rightPos = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
-    if (!isTouchDevice) return;
+    if (!shouldRegisterListeners) return;
 
     const updateStore = () => {
       let moveX = 0, moveY = 0, lookX = 0, lookY = 0;
@@ -146,9 +167,9 @@ export const VirtualJoystick: React.FC<{ forceVisible?: boolean }> = ({ forceVis
       window.removeEventListener("touchend", onEnd);
       window.removeEventListener("touchcancel", onEnd);
     };
-  }, [isTouchDevice]);
+  }, [shouldRegisterListeners]);
 
-  if (!isTouchDevice) return null;
+  if (!shouldRender) return null;
 
   const baseStyle: React.CSSProperties = {
     position: "absolute",

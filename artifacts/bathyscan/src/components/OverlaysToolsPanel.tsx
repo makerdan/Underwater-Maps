@@ -57,6 +57,9 @@ interface ToggleButtonProps {
   isLoading?: boolean;
 }
 
+const IS_TOUCH = typeof window !== "undefined" &&
+  ("ontouchstart" in window || (navigator?.maxTouchPoints ?? 0) > 0);
+
 const ToggleButton: React.FC<ToggleButtonProps> = ({
   testId,
   active,
@@ -92,6 +95,7 @@ const ToggleButton: React.FC<ToggleButtonProps> = ({
         alignItems: "center",
         justifyContent: "space-between",
         gap: 4,
+        ...(IS_TOUCH ? { minHeight: 44 } : {}),
       }}
     >
       <span>{label}</span>

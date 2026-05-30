@@ -1010,6 +1010,12 @@ function NavigationSection() {
             ]}
             sublabel="Virtual joystick visibility"
           />
+          <ToggleRow
+            label="Show Joystick in Orbit Mode"
+            value={s.showJoystickInOrbit}
+            onChange={s.setShowJoystickInOrbit}
+            sublabel="Keep joystick visible during two-finger orbit gestures on touch"
+          />
         </div>
       </AdvancedDisclosure>
     </>

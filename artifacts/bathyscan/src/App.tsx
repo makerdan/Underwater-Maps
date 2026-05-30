@@ -50,6 +50,7 @@ import { useGpsStore } from "@/lib/gpsStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { useToast } from "@/hooks/use-toast";
 import { getBoundKey } from "@/lib/keyBindings";
 import {
   flushPendingTrails,
@@ -253,6 +254,7 @@ function Main() {
   const showDatasetPanel = useSettingsStore((st) => st.showDatasetPanel);
   const showQueryPanel = useSettingsStore((st) => st.showQueryPanel);
   const joystickMode = useSettingsStore((st) => st.joystickMode);
+  const showJoystickInOrbit = useSettingsStore((st) => st.showJoystickInOrbit);
 
   const [depthLayer, setDepthLayer] = useState<DepthLayer>(defaultTidalDepthLayer as DepthLayer);
 
@@ -270,7 +272,10 @@ function Main() {
   const [queryOpen, setQueryOpen] = useState(false);
   const sidePaneCollapsed = useUiStore((s) => s.sidePaneCollapsed);
   const setSidePaneCollapsed = useUiStore((s) => s.setSidePaneCollapsed);
+  const hasSeenOrbitTouchHint = useUiStore((s) => s.hasSeenOrbitTouchHint);
+  const setHasSeenOrbitTouchHint = useUiStore((s) => s.setHasSeenOrbitTouchHint);
   const prevOverviewOpenRef = useRef(false);
+  const { toast } = useToast();
 
   const centerLat = terrain
     ? (terrain.minLat + terrain.maxLat) / 2
@@ -501,6 +506,78 @@ function Main() {
     return () => window.removeEventListener("online", onlineHandler);
   }, []);
 
+  // Swipe-to-close/open side pane on touch devices.
+  // Left-swipe anywhere on the side pane closes it.
+  // Right-swipe from within 32px of the left screen edge opens it.
+  useEffect(() => {
+    const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+    if (!isTouchDevice) return;
+
+    let startX = 0;
+    let startY = 0;
+    let tracking = false;
+
+    // Approximate width of the open side pane in pixels. Gestures that start
+    // outside this region cannot be intended to close it.
+    const SIDE_PANE_WIDTH = 280;
+
+    const onTouchStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (!t) return;
+      startX = t.clientX;
+      startY = t.clientY;
+      tracking = true;
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (!tracking) return;
+      tracking = false;
+      const t = e.changedTouches[0];
+      if (!t) return;
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      if (Math.abs(dy) > Math.abs(dx) * 1.5) return;
+      if (Math.abs(dx) < 40) return;
+
+      const collapsed = useUiStore.getState().sidePaneCollapsed;
+      // Close: only trigger if the gesture started within the side pane area.
+      if (dx < -40 && !collapsed && startX <= SIDE_PANE_WIDTH) {
+        useUiStore.getState().setSidePaneCollapsed(true);
+      // Open: only trigger from the left screen edge (collapsed handle zone).
+      } else if (dx > 40 && collapsed && startX <= 32) {
+        useUiStore.getState().setSidePaneCollapsed(false);
+      }
+    };
+
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchend", onTouchEnd);
+    };
+  }, []);
+
+  // One-time orbit-touch hint: show a toast the first time a user on a touch
+  // device places two fingers down (i.e. starts a two-finger orbit gesture),
+  // explaining two-finger orbit navigation.
+  useEffect(() => {
+    const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+    if (!isTouchDevice || hasSeenOrbitTouchHint) return;
+
+    const onTwoFingerTouch = (e: TouchEvent) => {
+      if (e.touches.length < 2) return;
+      setHasSeenOrbitTouchHint(true);
+      window.removeEventListener("touchstart", onTwoFingerTouch);
+      toast({
+        title: "Two-finger orbit",
+        description: "Drag with two fingers to orbit around a point. Pinch to zoom.",
+        duration: 5000,
+      });
+    };
+    window.addEventListener("touchstart", onTwoFingerTouch, { passive: true });
+    return () => window.removeEventListener("touchstart", onTwoFingerTouch);
+  }, [hasSeenOrbitTouchHint, setHasSeenOrbitTouchHint, toast]);
+
   // O key — toggle overview map
   // Slash key — open query panel
   // Comma key — open settings
@@ -635,6 +712,7 @@ function Main() {
               paddingRight: 4,
               scrollbarWidth: "thin",
               scrollbarColor: "rgba(0,229,255,0.35) transparent",
+              touchAction: "pan-y",
             }}
           >
             <div className="flex justify-end" style={{ minWidth: 220, maxWidth: 260 }}>
@@ -945,10 +1023,13 @@ function Main() {
         )}
 
         {/* Virtual joystick — gated by settings (auto/always/off), z-30 */}
-        {joystickMode !== "off" && (
+        {(joystickMode !== "off" || showJoystickInOrbit) && (
           <div className="absolute inset-0 z-30 pointer-events-none">
             <div style={{ pointerEvents: "none", width: "100%", height: "100%", position: "relative" }}>
-              <VirtualJoystick forceVisible={joystickMode === "always"} />
+              <VirtualJoystick
+                forceVisible={joystickMode === "always"}
+                showInOrbit={showJoystickInOrbit}
+              />
             </div>
           </div>
         )}

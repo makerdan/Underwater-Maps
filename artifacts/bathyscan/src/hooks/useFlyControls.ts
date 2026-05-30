@@ -429,6 +429,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         lastPinchMid = { x: midX, y: midY };
         touchOrbitTarget.copy(computeOrbitTargetAt(midX, midY));
         touchOrbitActive = true;
+        useCameraStore.getState().setIsOrbitingTouch(true);
         // Second finger down → no longer a long-press candidate
         cancelLongPress();
         return;
@@ -505,6 +506,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       if (activePointers.size < 2) {
         touchOrbitActive = false;
         lastPinchMid = null;
+        useCameraStore.getState().setIsOrbitingTouch(false);
       }
       if (longPressStart && e.pointerId === longPressStart.pointerId) {
         cancelLongPress();

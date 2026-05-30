@@ -393,6 +393,7 @@ export const HUD: React.FC = () => {
                 borderRadius: 4,
                 cursor: "pointer",
                 letterSpacing: "0.1em",
+                ...(IS_TOUCH_DEVICE ? { minWidth: 44, minHeight: 44 } : {}),
               }}
             >
               📍 DIVE TO GPS
