@@ -1047,6 +1047,34 @@ export interface HourlySurfaceCondition {
   phase?: HourlySurfaceConditionPhase;
 }
 
+export type ForecastHourPhase = typeof ForecastHourPhase[keyof typeof ForecastHourPhase];
+
+
+export const ForecastHourPhase = {
+  flooding: 'flooding',
+  ebbing: 'ebbing',
+  'slack-high': 'slack-high',
+  'slack-low': 'slack-low',
+} as const;
+
+export interface ForecastHour {
+  /**
+     * Relative hours from the fetch time (0–47).
+     * @minimum 0
+     * @maximum 47
+     */
+  relHour: number;
+  /** ISO 8601 UTC timestamp of this hour. */
+  isoTime: string;
+  windSpeedKnots: number;
+  windDegrees: number;
+  waveHeightM: number;
+  tidalSpeedKnots: number;
+  tidalDegrees: number;
+  isSlack: boolean;
+  phase: ForecastHourPhase;
+}
+
 export interface SurfaceConditions {
   available: boolean;
   lat: number;
@@ -1063,6 +1091,8 @@ export interface SurfaceConditions {
   /** True when actual data was unavailable and defaults were substituted */
   estimatedConditions?: boolean;
   hours: HourlySurfaceCondition[];
+  /** 48-hour hourly forecast strip, anchored at the current UTC hour (relHour 0 = now). */
+  forecast48h?: ForecastHour[];
 }
 
 export interface WaterTemperature {

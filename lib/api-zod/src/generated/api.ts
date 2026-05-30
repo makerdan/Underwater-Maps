@@ -1677,10 +1677,12 @@ export const PostDatasetsMySavesIdRetryResponse = zod.object({
 
 
 /**
- * Returns 24 hours of hourly wind, tidal current, and wave data for a given
+ * Returns 48 hours of hourly wind, tidal current, and wave data for a given
 lat/lon from Open-Meteo. Tidal current is approximated via a sinusoidal
 model when live data is unavailable. Returns estimatedConditions=true when
-Open-Meteo is unreachable and default values are substituted.
+Open-Meteo is unreachable and default values are substituted. The `hours`
+array contains the first 24 hours (backward-compatible); `forecast48h`
+contains all 48 hours with ISO timestamps and relative hour indices.
 
  * @summary Fetch hourly surface weather and tidal conditions for drift planning
  */
@@ -1691,6 +1693,9 @@ export const GetSurfaceConditionsQueryParams = zod.object({
 
 export const getSurfaceConditionsResponseHoursItemHourMin = 0;
 export const getSurfaceConditionsResponseHoursItemHourMax = 23;
+
+export const getSurfaceConditionsResponseForecast48hItemRelHourMin = 0;
+export const getSurfaceConditionsResponseForecast48hItemRelHourMax = 47;
 
 
 
@@ -1713,7 +1718,18 @@ export const GetSurfaceConditionsResponse = zod.object({
   "waveHeightM": zod.number(),
   "isSlack": zod.boolean().optional().describe('True when the modeled tidal current is below the slack threshold (~0.1 kn)'),
   "phase": zod.enum(['flooding', 'ebbing', 'slack-high', 'slack-low']).optional().describe('Tidal phase for this hour')
-}))
+})),
+  "forecast48h": zod.array(zod.object({
+  "relHour": zod.number().min(getSurfaceConditionsResponseForecast48hItemRelHourMin).max(getSurfaceConditionsResponseForecast48hItemRelHourMax).describe('Relative hours from the fetch time (0–47).'),
+  "isoTime": zod.string().describe('ISO 8601 UTC timestamp of this hour.'),
+  "windSpeedKnots": zod.number(),
+  "windDegrees": zod.number(),
+  "waveHeightM": zod.number(),
+  "tidalSpeedKnots": zod.number(),
+  "tidalDegrees": zod.number(),
+  "isSlack": zod.boolean(),
+  "phase": zod.enum(['flooding', 'ebbing', 'slack-high', 'slack-low'])
+})).optional().describe('48-hour hourly forecast strip, anchored at the current UTC hour (relHour 0 = now).')
 })
 
 

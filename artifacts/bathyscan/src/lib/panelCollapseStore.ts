@@ -11,6 +11,7 @@ export type PanelId =
   | "overlaysTools"
   | "mapData"
   | "conditions"
+  | "forecast"
   | "markersAccordion"
   | "uploadTerrainAccordion";
 
@@ -30,6 +31,7 @@ export const DEFAULTS: Record<PanelId, boolean> = {
   overlaysTools: false,
   mapData: false,
   conditions: false,
+  forecast: false,
   markersAccordion: true,
   uploadTerrainAccordion: true,
 };

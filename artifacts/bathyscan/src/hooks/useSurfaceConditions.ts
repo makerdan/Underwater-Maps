@@ -16,9 +16,12 @@ import {
   useGetSurfaceConditions,
   getGetSurfaceConditionsQueryKey,
   type SurfaceConditions,
+  type ForecastHour,
 } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { useDriftStore } from "@/lib/driftStore";
+
+export type { ForecastHour };
 
 export interface SurfaceSnapshot {
   hour: number;
@@ -36,6 +39,8 @@ export interface SurfaceConditionsResult {
   data: SurfaceConditions | undefined;
   snapshot: SurfaceSnapshot | null;
   hours: SurfaceSnapshot[];
+  /** 48-hour forecast strip. Empty array when data is not yet loaded. */
+  forecast48h: ForecastHour[];
   centerLat: number | null;
   centerLon: number | null;
   loading: boolean;
@@ -133,10 +138,13 @@ export function useSurfaceConditions(
       return d.toISOString();
     })();
 
+    const forecast48h: ForecastHour[] = data?.forecast48h ?? [];
+
     return {
       data,
       snapshot,
       hours,
+      forecast48h,
       centerLat,
       centerLon,
       loading: isLoading,

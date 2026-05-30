@@ -69,6 +69,7 @@ import { HelpButton } from "@/components/help/HelpButton";
 import { HelpWindow } from "@/components/help/HelpWindow";
 import "@/components/help/help.css";
 import { ConditionsLegend } from "@/components/ConditionsLegend";
+import { ForecastStrip } from "@/components/ForecastStrip";
 import { SimulatedDataConfirmDialog } from "@/components/SimulatedDataConfirmDialog";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { initialViewParams } from "@/lib/viewUrl";
@@ -686,6 +687,13 @@ function Main() {
                     />
                   ) : null}
                   <CurrentsPanel embedded />
+                </SidebarSection>
+              </SidebarSectionGroup>
+
+              {/* ── Forecast section ── */}
+              <SidebarSectionGroup>
+                <SidebarSection id="forecast" title="Forecast">
+                  <ForecastStrip />
                 </SidebarSection>
               </SidebarSectionGroup>
             </div>

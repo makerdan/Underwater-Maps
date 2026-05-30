@@ -70,6 +70,7 @@ export function buildSinusoidalTidalHours(
   lat: number,
   lon: number,
   startMs: number = nowTopOfHourMs(),
+  count = 24,
 ): TidalHour[] {
   const peakSpeed = 1.2;
   const floodBearing = ((lat + lon) * 73.1 + 360) % 360;
@@ -83,7 +84,7 @@ export function buildSinusoidalTidalHours(
   // distorting the speeds away from the events themselves.
   const SLACK_SNAP_MIN = 30;
 
-  return Array.from({ length: 24 }, (_, h) => {
+  return Array.from({ length: count }, (_, h) => {
     const t = startMs + h * 3600 * 1000;
     const s = computeSlackSample({
       events,
@@ -338,6 +339,24 @@ async function resolveTidal(lat: number, lon: number, startMs: number): Promise<
 }
 
 // ---------------------------------------------------------------------------
+// ForecastHour — one slot in the 48-hour forecast strip
+// ---------------------------------------------------------------------------
+
+export interface ForecastHour {
+  /** Relative hours from startMs (0–47). */
+  relHour: number;
+  /** ISO 8601 UTC timestamp of this hour. */
+  isoTime: string;
+  windSpeedKnots: number;
+  windDegrees: number;
+  waveHeightM: number;
+  tidalSpeedKnots: number;
+  tidalDegrees: number;
+  isSlack: boolean;
+  phase: TidePhase;
+}
+
+// ---------------------------------------------------------------------------
 // GET /surface-conditions
 // ---------------------------------------------------------------------------
 
@@ -353,11 +372,21 @@ router.get("/surface-conditions", async (req, res): Promise<void> => {
     return;
   }
 
-  // Anchor the 24-hour series at the top of the current UTC hour so each
+  // Anchor the 48-hour series at the top of the current UTC hour so each
   // index aligns with a wall-clock hour.
   const startMs = nowTopOfHourMs();
 
   const tidal = await resolveTidal(lat, lon, startMs);
+
+  // Build a 48-hour sinusoidal tidal baseline for the forecast strip.
+  // Hours 0–23 will be overridden by NOAA data when available.
+  const tidal48 = buildSinusoidalTidalHours(lat, lon, startMs, 48);
+  if (tidal.source === "noaa-coops") {
+    for (let h = 0; h < 24; h++) {
+      const noaaHour = tidal.hours[h];
+      if (noaaHour) tidal48[h] = noaaHour;
+    }
+  }
 
   let windData: { windSpeedKnots: number; windDegrees: number }[] | null = null;
   let waveData: { waveHeightM: number }[] | null = null;
@@ -366,10 +395,10 @@ router.get("/surface-conditions", async (req, res): Promise<void> => {
   try {
     const [forecastRes, marineRes] = await Promise.allSettled([
       fetchWithTimeout(
-        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=kn&forecast_days=1&timezone=UTC`,
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=kn&forecast_days=2&timezone=UTC`,
       ),
       fetchWithTimeout(
-        `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=wave_height,wave_direction&forecast_days=1&timezone=UTC`,
+        `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=wave_height,wave_direction&forecast_days=2&timezone=UTC`,
       ),
     ]);
 
@@ -380,7 +409,7 @@ router.get("/surface-conditions", async (req, res): Promise<void> => {
       const speeds = json.hourly?.wind_speed_10m ?? [];
       const dirs = json.hourly?.wind_direction_10m ?? [];
       if (speeds.length >= 24) {
-        windData = Array.from({ length: 24 }, (_, h) => ({
+        windData = Array.from({ length: speeds.length }, (_, h) => ({
           windSpeedKnots: Math.round((speeds[h] ?? 0) * 10) / 10,
           windDegrees: Math.round(dirs[h] ?? 0),
         }));
@@ -393,7 +422,7 @@ router.get("/surface-conditions", async (req, res): Promise<void> => {
       };
       const heights = json.hourly?.wave_height ?? [];
       if (heights.length >= 24) {
-        waveData = Array.from({ length: 24 }, (_, h) => ({
+        waveData = Array.from({ length: heights.length }, (_, h) => ({
           waveHeightM: Math.round((heights[h] ?? 0) * 100) / 100,
         }));
       }
@@ -417,6 +446,22 @@ router.get("/surface-conditions", async (req, res): Promise<void> => {
     phase: tidal.hours[h]!.phase,
   }));
 
+  const forecast48h: ForecastHour[] = Array.from({ length: 48 }, (_, h) => {
+    const slotMs = startMs + h * 3600_000;
+    const tidalH = tidal48[h]!;
+    return {
+      relHour: h,
+      isoTime: new Date(slotMs).toISOString(),
+      windSpeedKnots: windData?.[h]?.windSpeedKnots ?? 8,
+      windDegrees: windData?.[h]?.windDegrees ?? 225,
+      waveHeightM: waveData?.[h]?.waveHeightM ?? 0.3,
+      tidalSpeedKnots: tidalH.tidalSpeedKnots,
+      tidalDegrees: tidalH.tidalDegrees,
+      isSlack: tidalH.isSlack,
+      phase: tidalH.phase,
+    };
+  });
+
   res.json({
     available: true,
     lat,
@@ -428,6 +473,7 @@ router.get("/surface-conditions", async (req, res): Promise<void> => {
     ...(typeof tidal.distanceKm === "number" ? { tidalStationDistanceKm: tidal.distanceKm } : {}),
     estimatedConditions,
     hours,
+    forecast48h,
   });
 });
 

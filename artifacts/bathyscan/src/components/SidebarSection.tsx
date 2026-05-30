@@ -57,7 +57,7 @@ const GroupContext = React.createContext<GroupContextValue>({
 });
 
 interface SidebarSectionProps {
-  id: Extract<PanelId, "mapData" | "conditions">;
+  id: Extract<PanelId, "mapData" | "conditions" | "forecast">;
   title: string;
   children: React.ReactNode;
   testId?: string;

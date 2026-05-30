@@ -3981,10 +3981,12 @@ export const getGetSurfaceConditionsUrl = (params: GetSurfaceConditionsParams,) 
 }
 
 /**
- * Returns 24 hours of hourly wind, tidal current, and wave data for a given
+ * Returns 48 hours of hourly wind, tidal current, and wave data for a given
 lat/lon from Open-Meteo. Tidal current is approximated via a sinusoidal
 model when live data is unavailable. Returns estimatedConditions=true when
-Open-Meteo is unreachable and default values are substituted.
+Open-Meteo is unreachable and default values are substituted. The `hours`
+array contains the first 24 hours (backward-compatible); `forecast48h`
+contains all 48 hours with ISO timestamps and relative hour indices.
 
  * @summary Fetch hourly surface weather and tidal conditions for drift planning
  */

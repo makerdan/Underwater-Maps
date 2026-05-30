@@ -1631,10 +1631,12 @@ paths:
       tags: [drift-planner]
       summary: Fetch hourly surface weather and tidal conditions for drift planning
       description: |
-        Returns 24 hours of hourly wind, tidal current, and wave data for a given
+        Returns 48 hours of hourly wind, tidal current, and wave data for a given
         lat/lon from Open-Meteo. Tidal current is approximated via a sinusoidal
         model when live data is unavailable. Returns estimatedConditions=true when
-        Open-Meteo is unreachable and default values are substituted.
+        Open-Meteo is unreachable and default values are substituted. The `hours`
+        array contains the first 24 hours (backward-compatible); `forecast48h`
+        contains all 48 hours with ISO timestamps and relative hour indices.
       parameters:
         - name: lat
           in: query
@@ -2976,11 +2978,53 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/HourlySurfaceCondition"
+        forecast48h:
+          type: array
+          description: 48-hour hourly forecast strip, anchored at the current UTC hour (relHour 0 = now).
+          items:
+            $ref: "#/components/schemas/ForecastHour"
       required:
         - available
         - lat
         - lon
         - hours
+
+    ForecastHour:
+      type: object
+      properties:
+        relHour:
+          type: integer
+          minimum: 0
+          maximum: 47
+          description: Relative hours from the fetch time (0–47).
+        isoTime:
+          type: string
+          description: ISO 8601 UTC timestamp of this hour.
+        windSpeedKnots:
+          type: number
+        windDegrees:
+          type: number
+        waveHeightM:
+          type: number
+        tidalSpeedKnots:
+          type: number
+        tidalDegrees:
+          type: number
+        isSlack:
+          type: boolean
+        phase:
+          type: string
+          enum: [flooding, ebbing, slack-high, slack-low]
+      required:
+        - relHour
+        - isoTime
+        - windSpeedKnots
+        - windDegrees
+        - waveHeightM
+        - tidalSpeedKnots
+        - tidalDegrees
+        - isSlack
+        - phase
 
     WaterTemperature:
       type: object
