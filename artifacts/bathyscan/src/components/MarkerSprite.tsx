@@ -122,7 +122,7 @@ export const MarkerSprite: React.FC<Props> = ({ marker, terrain, showLabel = tru
           </Text>
         )}
         {/* Note preview — second line, dimmer and smaller than the label */}
-        {showLabel && marker.notes && (marker.type as string) !== "depth_pole" && (() => {
+        {showLabel && marker.notes && (() => {
           const preview = marker.notes.length > 40
             ? marker.notes.slice(0, 40) + "…"
             : marker.notes;

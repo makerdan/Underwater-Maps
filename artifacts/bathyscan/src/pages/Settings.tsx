@@ -45,6 +45,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getGetMarkersQueryKey } from "@workspace/api-client-react";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { usePaletteStore, DEFAULT_SHALLOW, DEFAULT_DEEP, PALETTE_PRESETS, MID1_HEX, MID2_HEX, customStopsFromPreset, type CustomStop } from "@/lib/paletteStore";
+import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { colormapCanvas, colormapCssGradient } from "@/lib/colormap";
 import type { ColormapTheme } from "@/lib/settingsStore";
 import { HelpIcon } from "@/components/help/HelpButton";
@@ -2797,6 +2798,9 @@ export function Settings() {
     dataOnly.paletteShallow = palette.shallow;
     dataOnly.paletteDeep = palette.deep;
     dataOnly.customStops = palette.customStops;
+    // Panel collapse state lives in a separate store; include it so the
+    // server stores the current layout and can restore it on other devices.
+    dataOnly.panelCollapse = usePanelCollapseStore.getState().collapsed;
     return dataOnly;
   }, []);
 
@@ -2845,15 +2849,18 @@ export function Settings() {
 
   // Subscribe to data-only changes (ignore syncedSnapshot updates) to avoid
   // an infinite save loop once markAllSaved fires inside flushSync. Also
-  // watch the separate paletteStore so palette edits ride the same debounced
-  // PUT /api/settings as the rest of the visual preferences.
+  // watch the separate paletteStore and panelCollapseStore so their edits
+  // ride the same debounced PUT /api/settings as the rest of the preferences.
   useEffect(() => {
     const palSnap = () => {
       const p = usePaletteStore.getState();
       return JSON.stringify({ s: p.shallow, d: p.deep, c: p.customStops });
     };
+    const panelSnap = () =>
+      JSON.stringify(usePanelCollapseStore.getState().collapsed);
     let lastSettings = JSON.stringify(getDataSnapshot());
     let lastPalette = palSnap();
+    let lastPanel = panelSnap();
     const unsubSettings = useSettingsStore.subscribe(() => {
       const cur = JSON.stringify(getDataSnapshot());
       if (cur !== lastSettings) {
@@ -2868,9 +2875,17 @@ export function Settings() {
         scheduleSync();
       }
     });
+    const unsubPanel = usePanelCollapseStore.subscribe(() => {
+      const cur = panelSnap();
+      if (cur !== lastPanel) {
+        lastPanel = cur;
+        scheduleSync();
+      }
+    });
     return () => {
       unsubSettings();
       unsubPalette();
+      unsubPanel();
       if (debounceRef.current) clearTimeout(debounceRef.current);
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
     };

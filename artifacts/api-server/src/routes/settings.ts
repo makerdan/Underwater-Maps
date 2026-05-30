@@ -7,6 +7,7 @@ import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAu
 const router = Router();
 
 const DEFAULT_SETTINGS = {
+  panelCollapse: {} as Record<string, boolean>,
   textureQuality: "high",
   enableCaustics: false,
   particleDensity: "sparse",

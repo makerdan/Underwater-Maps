@@ -828,6 +828,7 @@ export const getSettingsResponseGpsRecordingIntervalMax = 60000;
 
 export const getSettingsResponseWaterTypeDefault = `saltwater`;
 export const getSettingsResponseShowUiTooltipsDefault = true;
+export const getSettingsResponsePanelCollapseDefault = {  };
 
 export const GetSettingsResponse = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(getSettingsResponseTextureQualityDefault),
@@ -866,7 +867,8 @@ export const GetSettingsResponse = zod.object({
   "defaultRegion": zod.string().default(getSettingsResponseDefaultRegionDefault),
   "gpsRecordingInterval": zod.number().min(getSettingsResponseGpsRecordingIntervalMin).max(getSettingsResponseGpsRecordingIntervalMax).default(getSettingsResponseGpsRecordingIntervalDefault),
   "waterType": zod.enum(['saltwater', 'freshwater']).default(getSettingsResponseWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter'),
-  "showUiTooltips": zod.boolean().default(getSettingsResponseShowUiTooltipsDefault).describe('Show hover\/focus tooltips on viewscreen controls and HUD readouts.')
+  "showUiTooltips": zod.boolean().default(getSettingsResponseShowUiTooltipsDefault).describe('Show hover\/focus tooltips on viewscreen controls and HUD readouts.'),
+  "panelCollapse": zod.record(zod.string(), zod.boolean()).default(getSettingsResponsePanelCollapseDefault).describe('Panel expand\/collapse state keyed by panel id. Synced cross-device for signed-in users.')
 }).describe('Per-user application settings with sensible defaults')
 
 
@@ -936,6 +938,7 @@ export const putSettingsBodyGpsRecordingIntervalMax = 60000;
 
 export const putSettingsBodyWaterTypeDefault = `saltwater`;
 export const putSettingsBodyShowUiTooltipsDefault = true;
+export const putSettingsBodyPanelCollapseDefault = {  };
 
 export const PutSettingsBody = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsBodyTextureQualityDefault),
@@ -974,7 +977,8 @@ export const PutSettingsBody = zod.object({
   "defaultRegion": zod.string().default(putSettingsBodyDefaultRegionDefault),
   "gpsRecordingInterval": zod.number().min(putSettingsBodyGpsRecordingIntervalMin).max(putSettingsBodyGpsRecordingIntervalMax).default(putSettingsBodyGpsRecordingIntervalDefault),
   "waterType": zod.enum(['saltwater', 'freshwater']).default(putSettingsBodyWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter'),
-  "showUiTooltips": zod.boolean().default(putSettingsBodyShowUiTooltipsDefault).describe('Show hover\/focus tooltips on viewscreen controls and HUD readouts.')
+  "showUiTooltips": zod.boolean().default(putSettingsBodyShowUiTooltipsDefault).describe('Show hover\/focus tooltips on viewscreen controls and HUD readouts.'),
+  "panelCollapse": zod.record(zod.string(), zod.boolean()).default(putSettingsBodyPanelCollapseDefault).describe('Panel expand\/collapse state keyed by panel id. Synced cross-device for signed-in users.')
 }).describe('Per-user application settings with sensible defaults')
 
 export const putSettingsResponseTextureQualityDefault = `high`;
@@ -1039,6 +1043,7 @@ export const putSettingsResponseGpsRecordingIntervalMax = 60000;
 
 export const putSettingsResponseWaterTypeDefault = `saltwater`;
 export const putSettingsResponseShowUiTooltipsDefault = true;
+export const putSettingsResponsePanelCollapseDefault = {  };
 
 export const PutSettingsResponse = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsResponseTextureQualityDefault),
@@ -1077,7 +1082,8 @@ export const PutSettingsResponse = zod.object({
   "defaultRegion": zod.string().default(putSettingsResponseDefaultRegionDefault),
   "gpsRecordingInterval": zod.number().min(putSettingsResponseGpsRecordingIntervalMin).max(putSettingsResponseGpsRecordingIntervalMax).default(putSettingsResponseGpsRecordingIntervalDefault),
   "waterType": zod.enum(['saltwater', 'freshwater']).default(putSettingsResponseWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter'),
-  "showUiTooltips": zod.boolean().default(putSettingsResponseShowUiTooltipsDefault).describe('Show hover\/focus tooltips on viewscreen controls and HUD readouts.')
+  "showUiTooltips": zod.boolean().default(putSettingsResponseShowUiTooltipsDefault).describe('Show hover\/focus tooltips on viewscreen controls and HUD readouts.'),
+  "panelCollapse": zod.record(zod.string(), zod.boolean()).default(putSettingsResponsePanelCollapseDefault).describe('Panel expand\/collapse state keyed by panel id. Synced cross-device for signed-in users.')
 }).describe('Per-user application settings with sensible defaults')
 
 

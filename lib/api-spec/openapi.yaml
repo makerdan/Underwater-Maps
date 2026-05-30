@@ -2150,6 +2150,12 @@ components:
           type: boolean
           default: true
           description: Show hover/focus tooltips on viewscreen controls and HUD readouts.
+        panelCollapse:
+          type: object
+          additionalProperties:
+            type: boolean
+          default: {}
+          description: Panel expand/collapse state keyed by panel id. Synced cross-device for signed-in users.
 
     ApiError:
       type: object

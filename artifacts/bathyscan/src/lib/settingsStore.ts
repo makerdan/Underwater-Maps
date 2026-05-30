@@ -16,6 +16,7 @@ import {
   resolveKeyBindings,
   type ShortcutActionId,
 } from "./keyBindings";
+import { usePanelCollapseStore, type PanelId } from "./panelCollapseStore";
 
 export const SETTINGS_SCHEMA_VERSION = 12;
 
@@ -974,6 +975,24 @@ export const useSettingsStore = create<SettingsStore>()(
               if (!dataKeySet.has(k)) continue;
               applied[k] = serverVal;
               nextSnap[k] = serverVal;
+            }
+
+            // Apply the server's panel collapse map to panelCollapseStore.
+            // Server keys win; keys absent from the server map keep their
+            // local localStorage value (additive merge, never destructive).
+            if (
+              typeof partialRec.panelCollapse === "object" &&
+              partialRec.panelCollapse !== null
+            ) {
+              const serverCollapse = partialRec.panelCollapse as Record<string, boolean>;
+              const { collapsed, setCollapsed } = usePanelCollapseStore.getState();
+              // Start from local state so localStorage-only keys are preserved.
+              const merged = { ...collapsed, ...serverCollapse };
+              for (const [panelId, value] of Object.entries(merged)) {
+                if (collapsed[panelId as PanelId] !== value) {
+                  setCollapsed(panelId as PanelId, value);
+                }
+              }
             }
 
             return {

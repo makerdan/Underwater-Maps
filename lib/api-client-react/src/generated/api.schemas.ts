@@ -291,6 +291,11 @@ export const UserSettingsWaterType = {
 } as const;
 
 /**
+ * Panel expand/collapse state keyed by panel id. Synced cross-device for signed-in users.
+ */
+export type UserSettingsPanelCollapse = {[key: string]: boolean};
+
+/**
  * Per-user application settings with sensible defaults
  */
 export interface UserSettings {
@@ -372,6 +377,8 @@ export interface UserSettings {
   waterType?: UserSettingsWaterType;
   /** Show hover/focus tooltips on viewscreen controls and HUD readouts. */
   showUiTooltips?: boolean;
+  /** Panel expand/collapse state keyed by panel id. Synced cross-device for signed-in users. */
+  panelCollapse?: UserSettingsPanelCollapse;
 }
 
 export interface ApiError {
