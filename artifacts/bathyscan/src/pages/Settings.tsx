@@ -188,7 +188,7 @@ const S = {
     gap: 12,
   } as React.CSSProperties,
 
-  label: { color: "#e2e8f0", flexShrink: 0 } as React.CSSProperties,
+  label: { color: "#ffffff", flexShrink: 0 } as React.CSSProperties,
 
   sublabel: {
     fontSize: 9,
