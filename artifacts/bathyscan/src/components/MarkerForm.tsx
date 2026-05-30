@@ -296,7 +296,7 @@ export const MarkerForm: React.FC = () => {
   const selectedType = visibleMarkerTypes.find((t) => t.value === markerType);
 
   return (
-    <div style={PANEL}>
+    <div className="marker-form-panel" style={PANEL}>
       {/* Header */}
       <div
         style={{

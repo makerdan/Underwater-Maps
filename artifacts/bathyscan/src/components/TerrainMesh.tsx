@@ -51,6 +51,13 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     // Subscribe to AI zone map (updates when classification completes)
     const zoneMap = useClassificationStore((s) => s.zoneMap);
     const colormapTheme = useSettingsStore((s) => s.colormapTheme);
+    const brightDaylight = useSettingsStore((s) => s.brightDaylight);
+    const colormapUserSet = useSettingsStore((s) => s.colormapUserSet);
+    // In Bright Daylight mode, promote the terrain to grayscale — it provides
+    // the strongest depth contrast in sunlight. If the user has explicitly
+    // chosen a colormap (colormapUserSet === true) their choice is always
+    // respected, no matter which theme they selected.
+    const effectiveColormapTheme = brightDaylight && !colormapUserSet ? "grayscale" : colormapTheme;
     const paintMode = useUiStore((s) => s.zonePaintMode);
 
     // Brush radius in grid cells. Scales gently with resolution so it feels
@@ -120,13 +127,13 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     // Initial zone weights are depth-based; they'll be upgraded by the zoneMap effect below.
     // Slope attribute is computed once per grid and never changes.
     const geometry = useMemo(() => {
-      const geo = buildTerrainGeometry(grid, colormapTheme);
+      const geo = buildTerrainGeometry(grid, effectiveColormapTheme);
       const weights = computeZoneWeights(grid);
       geo.setAttribute("zoneWeight", new THREE.BufferAttribute(weights, 4));
       const slopes = computeSlopeAttribute(grid);
       geo.setAttribute("slope", new THREE.BufferAttribute(slopes, 1));
       return geo;
-    }, [grid, colormapTheme]);
+    }, [grid, effectiveColormapTheme]);
 
     // Material is created once (textures never change).
     const material = useMemo(() => {
@@ -209,7 +216,7 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       const depthRange = (maxDepth - minDepth) || 1;
       const colorAttr = geometry.getAttribute("color") as THREE.BufferAttribute | undefined;
       if (!colorAttr) return;
-      const toColor = getColormap(colormapTheme);
+      const toColor = getColormap(effectiveColormapTheme);
       const colors = colorAttr.array as Float32Array;
       for (let i = 0; i < depths.length; i++) {
         const depth = depths[i] ?? 0;
@@ -220,7 +227,7 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
         colors[i * 3 + 2] = c.b;
       }
       colorAttr.needsUpdate = true;
-    }, [paletteShallow, paletteDeep, customStops, colormapTheme, grid, geometry]);
+    }, [paletteShallow, paletteDeep, customStops, effectiveColormapTheme, grid, geometry]);
 
     // Substrate colour mode no longer recolours the mesh from slope-derived
     // heuristics. The real ShoreZone polygons are drawn as a draped overlay

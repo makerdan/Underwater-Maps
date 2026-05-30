@@ -264,6 +264,15 @@ export interface SettingsState {
   colorBlindSafePalette: boolean;
   largeHudText: boolean;
   highContrastHud: boolean;
+  /** Outdoor display mode: opaque panels, bold text, cobalt accent for direct-sunlight use. */
+  brightDaylight: boolean;
+  /**
+   * True when the user has explicitly chosen a depth colormap via the
+   * Settings UI. False when still on the water-type default. Used by the
+   * Bright Daylight mode to decide whether to auto-switch to the
+   * high-contrast grayscale colormap for improved depth legibility outdoors.
+   */
+  colormapUserSet: boolean;
 
   // ── Account & Privacy ────────────────────────────────────────────────
   telemetryOptIn: boolean;
@@ -355,6 +364,7 @@ interface SettingsActions {
   setAntialiasing: (v: boolean) => void;
   setTextureQuality: (v: TextureQuality) => void;
   setColormapTheme: (v: ColormapTheme) => void;
+  setColormapThemeByUser: (v: ColormapTheme) => void;
   setSmoothTerrainSpikes: (v: boolean) => void;
   setShowWaterSurface: (v: boolean) => void;
   setShowLandmass: (v: boolean) => void;
@@ -434,6 +444,8 @@ interface SettingsActions {
   setColorBlindSafePalette: (v: boolean) => void;
   setLargeHudText: (v: boolean) => void;
   setHighContrastHud: (v: boolean) => void;
+  setBrightDaylight: (v: boolean) => void;
+  setColormapUserSet: (v: boolean) => void;
 
   // Account
   setTelemetryOptIn: (v: boolean) => void;
@@ -672,6 +684,8 @@ export const DEFAULT_SETTINGS: SettingsState = {
   colorBlindSafePalette: false,
   largeHudText: false,
   highContrastHud: false,
+  brightDaylight: false,
+  colormapUserSet: false,
 
   // Account
   telemetryOptIn: false,
@@ -704,7 +718,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "enableCaustics", "fogDensity", "fogColor", "ambientLightIntensity",
     "directionalLightIntensity", "lampIntensity", "lampRange", "antialiasing",
     "textureQuality", "colormapTheme", "smoothTerrainSpikes",
-    "showWaterSurface", "showLandmass", "landmassStyle",
+    "showWaterSurface", "showLandmass", "landmassStyle", "colormapUserSet",
   ],
   hud: [
     "hudOpacity", "showCrosshairGps", "showCameraPosition",
@@ -735,7 +749,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   ],
   data: ["defaultRegion", "autoLoadLastDataset", "defaultMapLoad"],
   accessibility: [
-    "reducedMotion", "colorBlindSafePalette", "largeHudText", "highContrastHud",
+    "reducedMotion", "colorBlindSafePalette", "largeHudText", "highContrastHud", "brightDaylight",
   ],
   account: ["telemetryOptIn", "llmDisclosureAcknowledged"],
   environment: ["waterType"],
@@ -828,6 +842,7 @@ export const useSettingsStore = create<SettingsStore>()(
         setAntialiasing: (v) => set({ antialiasing: v, qualityPreset: "custom" }),
         setTextureQuality: (v) => set({ textureQuality: v, qualityPreset: "custom" }),
         setColormapTheme: setter("colormapTheme"),
+        setColormapThemeByUser: (v) => set({ colormapTheme: v, colormapUserSet: true }),
         setSmoothTerrainSpikes: setter("smoothTerrainSpikes"),
         setShowWaterSurface: setter("showWaterSurface"),
         setShowLandmass: setter("showLandmass"),
@@ -908,6 +923,8 @@ export const useSettingsStore = create<SettingsStore>()(
         setColorBlindSafePalette: setter("colorBlindSafePalette"),
         setLargeHudText: setter("largeHudText"),
         setHighContrastHud: setter("highContrastHud"),
+        setBrightDaylight: setter("brightDaylight"),
+        setColormapUserSet: setter("colormapUserSet"),
 
         // Account
         setTelemetryOptIn: setter("telemetryOptIn"),

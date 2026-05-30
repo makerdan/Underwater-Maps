@@ -74,7 +74,7 @@ export const DriftTimeline: React.FC = () => {
   const legLabel = targetIdx === -1 ? "→ START" : typeof targetIdx === "number" ? `→ WP${targetIdx + 1}` : "";
 
   return (
-    <div style={PANEL_STYLE}>
+    <div className="drift-timeline" style={PANEL_STYLE}>
       {/* Mode banner */}
       <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
         <span

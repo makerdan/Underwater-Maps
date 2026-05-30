@@ -472,6 +472,7 @@ export const DepthProfilePanel: React.FC = () => {
     <div
       ref={panelRef}
       data-testid="depth-profile-panel"
+      className="depth-profile-panel"
       style={panelStyle}
     >
       {/* Header / drag handle */}

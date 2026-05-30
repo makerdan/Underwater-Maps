@@ -123,6 +123,130 @@ body.bs-cb-palette {
 }
 
 /* ---------------------------------------------------------------------------
+   Bright Daylight display mode — opaque panels, bold text, cobalt accent
+   Purpose-built for outdoor / direct-sunlight use on boats and docks.
+   Toggled via .bs-daylight on <body> from settingsStore.brightDaylight.
+   --------------------------------------------------------------------------- */
+body.bs-daylight {
+  /* ── Surface colours — fully opaque, high-luminance ── */
+  --background: 210 20% 96%;
+  --foreground: 0 0% 4%;
+  --border: 220 15% 60%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 4%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 4%;
+  /* Cobalt blue accent — readable against sky-bright backgrounds */
+  --primary: 224 75% 40%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 15% 88%;
+  --secondary-foreground: 0 0% 4%;
+  --muted: 210 15% 92%;
+  --muted-foreground: 220 10% 30%;
+  --accent: 224 75% 40%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 84% 42%;
+  --destructive-foreground: 0 0% 100%;
+  --input: 210 15% 88%;
+  --ring: 224 75% 40%;
+
+  /* ── Typography — step up one weight level for outdoor legibility ── */
+  font-weight: 500;
+  font-size: 17px;
+}
+
+/* Bump an extra pixel on touch / tablet devices */
+@media (pointer: coarse) {
+  body.bs-daylight {
+    font-size: 18px;
+  }
+
+  /* Expand touch hit targets to 52px minimum */
+  body.bs-daylight button,
+  body.bs-daylight [role="switch"],
+  body.bs-daylight input[type="range"] {
+    min-height: 52px !important;
+    min-width: 52px !important;
+  }
+}
+
+/* ── Global daylight overrides: disable ALL blur; force near-black text.
+   Three.js renders into <canvas> via WebGL so CSS color has no effect there.
+   Every HTML panel, HUD, popover, and label gets near-black text and no
+   text-shadow, overriding hardcoded inline cyan/gray style= values. ── */
+body.bs-daylight *,
+body.bs-daylight *::before,
+body.bs-daylight *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  color: #0a0a0a !important;
+  text-shadow: none !important;
+}
+
+/* ── Fully opaque white surfaces for ALL floating panels, popovers, HUD,
+   and Radix UI overlay content. CSS !important overrides inline-style
+   rgba dark backgrounds since inline styles lack their own !important. ── */
+body.bs-daylight .habitat-panel,
+body.bs-daylight .dataset-panel,
+body.bs-daylight .controls-legend,
+body.bs-daylight .query-panel,
+body.bs-daylight .hud-top-left,
+body.bs-daylight .hud-top-right,
+body.bs-daylight .overview-map-header,
+body.bs-daylight .depth-profile-panel,
+body.bs-daylight .tide-panel,
+body.bs-daylight .currents-panel,
+body.bs-daylight .weather-panel,
+body.bs-daylight .marker-detail-card,
+body.bs-daylight .marker-form-panel,
+body.bs-daylight .drift-timeline,
+body.bs-daylight .sidebar-section-header,
+body.bs-daylight [data-radix-popper-content-wrapper] > *,
+body.bs-daylight [role="dialog"],
+body.bs-daylight [role="tooltip"] {
+  background: #ffffff !important;
+  color: #0a0a0a !important;
+  border-width: 2px !important;
+  border-style: solid !important;
+  border-color: rgba(30, 58, 130, 0.4) !important;
+}
+
+/* ── 2px solid borders on interactive controls ── */
+body.bs-daylight button,
+body.bs-daylight input,
+body.bs-daylight select,
+body.bs-daylight textarea,
+body.bs-daylight [role="switch"],
+body.bs-daylight [role="combobox"],
+body.bs-daylight [role="listbox"] {
+  border-width: 2px !important;
+  border-style: solid !important;
+  border-color: rgba(30, 58, 130, 0.35) !important;
+}
+
+/* ── Cobalt borders inside all daylight panels — overrides inline cyan rgba ── */
+body.bs-daylight .habitat-panel *,
+body.bs-daylight .dataset-panel *,
+body.bs-daylight .controls-legend *,
+body.bs-daylight .query-panel *,
+body.bs-daylight .hud-top-left *,
+body.bs-daylight .hud-top-right *,
+body.bs-daylight .depth-profile-panel *,
+body.bs-daylight .tide-panel *,
+body.bs-daylight .currents-panel *,
+body.bs-daylight .weather-panel *,
+body.bs-daylight .marker-detail-card *,
+body.bs-daylight .marker-form-panel *,
+body.bs-daylight .drift-timeline *,
+body.bs-daylight .sidebar-section-header *,
+body.bs-daylight .overview-map-header *,
+body.bs-daylight [role="dialog"] *,
+body.bs-daylight [role="tooltip"] *,
+body.bs-daylight [data-radix-popper-content-wrapper] * {
+  border-color: rgba(30, 58, 130, 0.35) !important;
+}
+
+/* ---------------------------------------------------------------------------
    Sidebar sections — base (desktop) styles (SidebarSection.tsx)
    --------------------------------------------------------------------------- */
 .sidebar-section-header {

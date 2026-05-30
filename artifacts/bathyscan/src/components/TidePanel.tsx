@@ -288,7 +288,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
   }, [schedule, scrubDay, today]);
 
   return (
-    <div style={embedded ? { width: "100%" } : PANEL}>
+    <div className="tide-panel" style={embedded ? { width: "100%" } : PANEL}>
       {/* Header — hidden when embedded inside a SidebarSection */}
       {!embedded && (
       <ViewscreenTooltip label={collapsed ? "Expand tide panel" : "Collapse tide panel"} side="left">

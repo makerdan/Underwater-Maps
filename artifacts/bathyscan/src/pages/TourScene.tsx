@@ -307,6 +307,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
   const waterType = useSettingsStore((s) => s.waterType);
   const showWaterSurface = useSettingsStore((s) => s.showWaterSurface);
   const showLandmass = useSettingsStore((s) => s.showLandmass);
+  const brightDaylight = useSettingsStore((s) => s.brightDaylight);
 
   // Freshwater environments are clearer and brighter than the open ocean —
   // shift the background/fog hue toward green-teal, thin the fog, and warm
@@ -317,15 +318,25 @@ const SceneContents: React.FC<SceneContentsProps> = ({
   const ambientHue = isFresh ? "#a8d8c8" : "#7aa8c8";
   const directionalHue = isFresh ? "#dfffe8" : "#d0eeff";
 
+  // Bright Daylight mode: boost ambient/directional lighting for an
+  // outdoor high-luminance scene. Colormap override is handled inside
+  // TerrainMesh which reads brightDaylight directly from settingsStore.
+  const effectiveAmbientIntensity = brightDaylight
+    ? Math.max(ambientIntensity, 0.35)
+    : ambientIntensity;
+  const effectiveDirectionalIntensity = brightDaylight
+    ? Math.max(directionalIntensity, 0.75)
+    : directionalIntensity;
+
   return (
     <>
       <color attach="background" args={[effectiveFogColor]} />
       <fogExp2 args={[effectiveFogColor, effectiveFogDensity]} />
 
-      {/* Ambient fill — hue tracks water type */}
-      <ambientLight intensity={ambientIntensity} color={ambientHue} />
-      {/* Distant key light */}
-      <directionalLight position={[10, 30, 20]} intensity={directionalIntensity} color={directionalHue} />
+      {/* Ambient fill — hue tracks water type; boosted in Bright Daylight */}
+      <ambientLight intensity={effectiveAmbientIntensity} color={ambientHue} />
+      {/* Distant key light — also boosted in Bright Daylight */}
+      <directionalLight position={[10, 30, 20]} intensity={effectiveDirectionalIntensity} color={directionalHue} />
 
       <TestCameraBridge />
       <Particles />

@@ -1425,13 +1425,15 @@ function AccessibilityClassesEffect() {
   const largeHudText = useSettingsStore((st) => st.largeHudText);
   const highContrastHud = useSettingsStore((st) => st.highContrastHud);
   const colorBlindSafePalette = useSettingsStore((st) => st.colorBlindSafePalette);
+  const brightDaylight = useSettingsStore((st) => st.brightDaylight);
   useEffect(() => {
     const b = document.body;
     b.classList.toggle("bs-reduced-motion", reducedMotion);
     b.classList.toggle("bs-large-hud", largeHudText);
     b.classList.toggle("bs-high-contrast-hud", highContrastHud);
     b.classList.toggle("bs-cb-palette", colorBlindSafePalette);
-  }, [reducedMotion, largeHudText, highContrastHud, colorBlindSafePalette]);
+    b.classList.toggle("bs-daylight", brightDaylight);
+  }, [reducedMotion, largeHudText, highContrastHud, colorBlindSafePalette, brightDaylight]);
   return null;
 }
 

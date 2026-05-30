@@ -788,7 +788,7 @@ function VisualsSection() {
         <ColormapSelectRow
           label="Depth Colormap"
           value={s.colormapTheme}
-          onChange={s.setColormapTheme}
+          onChange={s.setColormapThemeByUser}
           options={[
             { value: "ocean", label: "Ocean (blue)" },
             { value: "freshwater", label: "Freshwater (green)" },
@@ -1526,6 +1526,12 @@ function AccessibilitySection() {
           value={s.highContrastHud}
           onChange={s.setHighContrastHud}
           sublabel="Stronger text/background contrast"
+        />
+        <ToggleRow
+          label="Bright Daylight"
+          value={s.brightDaylight}
+          onChange={s.setBrightDaylight}
+          sublabel="Opaque panels, bold text, and high contrast for outdoor use in direct sunlight"
         />
       </div>
     </>

@@ -49,6 +49,7 @@ export const MarkerDetailCard: React.FC = () => {
   return (
     <div
       data-testid="marker-detail-card"
+      className="marker-detail-card"
       style={{
         position: "absolute",
         top: 60,
