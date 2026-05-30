@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { fireEvent } from "@testing-library/react";
 import { renderWithProviders as render } from "./setup";
-import { Minimap } from "@/components/Minimap";
+import { Minimap, drawArrow } from "@/components/Minimap";
 import { useUiStore } from "@/lib/uiStore";
 import { WORLD_SIZE } from "@/lib/terrain";
 
@@ -77,5 +77,38 @@ describe("Minimap", () => {
     const { getByText } = render(<Minimap />);
     fireEvent.click(getByText(/OVERVIEW/));
     expect(useUiStore.getState().overviewOpen).toBe(true);
+  });
+});
+
+describe("drawArrow cardinal directions", () => {
+  function makeCtx() {
+    return {
+      save: vi.fn(),
+      restore: vi.fn(),
+      translate: vi.fn(),
+      rotate: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      closePath: vi.fn(),
+      fill: vi.fn(),
+      shadowColor: "",
+      shadowBlur: 0,
+      fillStyle: "",
+    } as unknown as CanvasRenderingContext2D;
+  }
+
+  const cases: [string, number][] = [
+    ["South (heading 0)", 0],
+    ["East (heading 90)", 90],
+    ["North (heading 180)", 180],
+    ["West (heading 270)", 270],
+  ];
+
+  it.each(cases)("rotate is called with heading * π/180 for %s", (_label, heading) => {
+    const ctx = makeCtx();
+    drawArrow(ctx, 0, 0, heading);
+    const expected = heading * (Math.PI / 180);
+    expect(ctx.rotate).toHaveBeenCalledWith(expected);
   });
 });

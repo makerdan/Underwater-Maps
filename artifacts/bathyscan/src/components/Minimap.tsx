@@ -43,13 +43,13 @@ function drawHeatmap(
   ctx.putImageData(imageData, 0, 0);
 }
 
-function drawArrow(
+export function drawArrow(
   ctx: CanvasRenderingContext2D,
   px: number,
   py: number,
   heading: number,
 ) {
-  const rad = (heading - 90) * (Math.PI / 180);
+  const rad = heading * (Math.PI / 180);
   const size = 7;
 
   ctx.save();
