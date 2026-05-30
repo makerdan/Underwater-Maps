@@ -155,6 +155,9 @@ export const HUD: React.FC = () => {
     return formatDepth(metres, { units }).toUpperCase();
   };
 
+  const gpsFollowMode = useCameraStore((s) => s.gpsFollowMode);
+  const setGpsFollowMode = useCameraStore((s) => s.setGpsFollowMode);
+
   const gpsInBounds = gpsActive && gpsPosition && overviewGrid &&
     gpsPosition.latitude >= overviewGrid.minLat &&
     gpsPosition.latitude <= overviewGrid.maxLat &&
@@ -425,6 +428,48 @@ export const HUD: React.FC = () => {
               }}
             >
               {isNarrow ? "📍" : "📍 DIVE TO GPS"}
+            </button>
+          </ViewscreenTooltip>
+        )}
+
+        {/* Follow Me toggle — shown when GPS is active, enabled only when in bounds */}
+        {gpsActive && (
+          <ViewscreenTooltip
+            label={
+              gpsInBounds
+                ? gpsFollowMode
+                  ? "Following your GPS position — click to stop"
+                  : "Lock camera to your live GPS position"
+                : "GPS position is outside the current dataset"
+            }
+            side="bottom"
+          >
+            <button
+              data-testid="hud-gps-follow-toggle"
+              aria-pressed={gpsFollowMode}
+              disabled={!gpsInBounds}
+              onClick={() => setGpsFollowMode(!gpsFollowMode)}
+              style={{
+                ...PANEL,
+                pointerEvents: "auto",
+                background: gpsFollowMode
+                  ? "rgba(59,130,246,0.30)"
+                  : "rgba(59,130,246,0.08)",
+                border: gpsFollowMode
+                  ? "1px solid rgba(59,130,246,0.80)"
+                  : "1px solid rgba(59,130,246,0.30)",
+                color: gpsInBounds ? (gpsFollowMode ? "#93c5fd" : "#60a5fa") : "#475569",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10,
+                padding: "4px 10px",
+                borderRadius: 4,
+                cursor: gpsInBounds ? "pointer" : "not-allowed",
+                letterSpacing: "0.1em",
+                opacity: gpsInBounds ? 1 : 0.5,
+                ...(IS_TOUCH_DEVICE ? { minWidth: 44, minHeight: 44 } : {}),
+              }}
+            >
+              {isNarrow ? (gpsFollowMode ? "🔵" : "🎯") : (gpsFollowMode ? "🔵 FOLLOWING" : "🎯 FOLLOW ME")}
             </button>
           </ViewscreenTooltip>
         )}

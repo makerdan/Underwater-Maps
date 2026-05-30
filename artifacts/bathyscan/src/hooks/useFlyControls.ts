@@ -30,6 +30,18 @@ import {
   applyOrbitDolly,
   ORBIT_CLICK_VS_DRAG_PX,
 } from "@/lib/orbitMath";
+import { toast } from "@/hooks/use-toast";
+
+/** Exit GPS follow mode with a toast. No-op when already off. */
+function exitFollowMode(): void {
+  if (!useCameraStore.getState().gpsFollowMode) return;
+  useCameraStore.getState().setGpsFollowMode(false);
+  toast({
+    title: "Follow mode off",
+    description: "Camera control returned to you.",
+    duration: 3000,
+  });
+}
 
 // Module-level tracker: the dataset ID for which the initial camera spawn was
 // last applied. Used to gate `resetCamera` so that WebGL context-recovery
@@ -273,6 +285,19 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         }
       }
 
+      // Exit GPS follow mode on any movement key so the user isn't trapped.
+      const movementCodes = [
+        getBoundKey(bindings, "moveForward"),
+        getBoundKey(bindings, "moveBackward"),
+        getBoundKey(bindings, "strafeLeft"),
+        getBoundKey(bindings, "strafeRight"),
+        getBoundKey(bindings, "ascend"),
+        getBoundKey(bindings, "descend"),
+        "ShiftRight",
+        "KeyW", "KeyA", "KeyS", "KeyD",
+      ];
+      if (movementCodes.includes(e.code)) exitFollowMode();
+
       // Drop GPS pin: open the marker form pinned at the crosshair.
       if (e.code === getBoundKey(bindings, "dropGpsPin")) {
         const gps = useCameraStore.getState().crosshairGps;
@@ -375,6 +400,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
           orbitState.current.active = true;
         }
         if (orbitState.current.active) {
+          exitFollowMode();
           applyOrbitDrag(camera, orbitState.current.target, dx, dy, {
             sensitivity: sensitivityRef.current,
             invertY: invertMouseYRef.current,
@@ -383,8 +409,13 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         return;
       }
       if (!isLocked.current) return;
+      // Pointer-locked mouse look exits follow mode on first real movement.
       const dx = e.movementX ?? 0;
       const dy = e.movementY ?? 0;
+      if ((Math.abs(dx) > 0 || Math.abs(dy) > 0) && useCameraStore.getState().gpsFollowMode) {
+        exitFollowMode();
+        return;
+      }
       const sens = sensitivityRef.current * 0.002;
       const dyScaled = invertMouseYRef.current ? -dy : dy;
       euler.current.setFromQuaternion(camera.quaternion);
@@ -801,8 +832,21 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       useUiStore.getState().clearPendingDropIn();
     }
 
-    // 2. WASD movement (suspended during an active orbit gesture)
-    if (!orbitState.current.active) {
+    // 2a. Joystick exit-follow-mode gate — sampled before the movement guard
+    // so that any non-deadzone joystick input can exit follow mode even while
+    // follow mode is active (the movement gate below would otherwise prevent
+    // the exitFollowMode() calls from being reached).
+    const joy = useJoystickStore.getState();
+    const DEAD = 0.05;
+    if (
+      Math.abs(joy.moveX) > DEAD || Math.abs(joy.moveY) > DEAD ||
+      Math.abs(joy.lookX) > DEAD || Math.abs(joy.lookY) > DEAD
+    ) {
+      exitFollowMode();
+    }
+
+    // 2. WASD movement (suspended during an active orbit gesture or GPS follow mode)
+    if (!orbitState.current.active && !useCameraStore.getState().gpsFollowMode) {
       let scaledSpeed: number;
       if (realisticModeRef.current && terrainRef.current) {
         const mpu = computeMetersPerWorldUnit(terrainRef.current);
@@ -838,8 +882,6 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       }
 
       // 2b. Virtual joystick (touch devices)
-      const joy = useJoystickStore.getState();
-      const DEAD = 0.05;
       if (Math.abs(joy.moveX) > DEAD || Math.abs(joy.moveY) > DEAD) {
         camera.position.addScaledVector(rightDir.current, joy.moveX * scaledSpeed);
         camera.position.addScaledVector(moveDir.current, -joy.moveY * scaledSpeed);

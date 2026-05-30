@@ -12,6 +12,7 @@ import { SubstrateLayer } from "@/components/SubstrateLayer";
 import { Particles } from "@/components/Particles";
 import { Caustics } from "@/components/Caustics";
 import { useFlyControls } from "@/hooks/useFlyControls";
+import { useGpsFollowCamera } from "@/hooks/useGpsFollowCamera";
 import { registerTestThreeCamera } from "@/lib/testHelpers";
 import { TidalWaterPlane } from "@/components/TidalWaterPlane";
 import { TidalCurrentArrows, type DepthLayer } from "@/components/TidalCurrentArrows";
@@ -165,6 +166,7 @@ interface FlyControlsSceneProps {
 const FlyControlsScene: React.FC<FlyControlsSceneProps> = ({ terrainMeshRef }) => {
   const lightRef = useRef<THREE.PointLight>(null);
   useFlyControls({ terrainMeshRef, lightRef });
+  useGpsFollowCamera();
   const lampIntensity = useSettingsStore((s) => s.lampIntensity);
   const lampRange = useSettingsStore((s) => s.lampRange);
   const waterType = useSettingsStore((s) => s.waterType);

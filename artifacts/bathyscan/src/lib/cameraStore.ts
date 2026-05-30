@@ -28,6 +28,10 @@ interface CameraStore {
   /** True while the user has two fingers down and is performing a touch orbit. */
   isOrbitingTouch: boolean;
   setIsOrbitingTouch: (v: boolean) => void;
+
+  /** When true, the camera continuously tracks the live GPS position. */
+  gpsFollowMode: boolean;
+  setGpsFollowMode: (v: boolean) => void;
 }
 
 export const useCameraStore = create<CameraStore>((set) => ({
@@ -47,4 +51,7 @@ export const useCameraStore = create<CameraStore>((set) => ({
   setSpeedIndex: (speedIndex) => set({ speedIndex }),
   isOrbitingTouch: false,
   setIsOrbitingTouch: (v) => set({ isOrbitingTouch: v }),
+
+  gpsFollowMode: false,
+  setGpsFollowMode: (v) => set({ gpsFollowMode: v }),
 }));
