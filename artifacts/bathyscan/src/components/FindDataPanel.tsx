@@ -76,7 +76,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 const PANEL: React.CSSProperties = {
   position: "fixed",
-  top: 0,
+  top: 40,
   right: 0,
   bottom: 0,
   width: 380,
