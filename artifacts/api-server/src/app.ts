@@ -8,14 +8,25 @@ import {
   clerkProxyMiddleware,
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
+import { correlationIdMiddleware, globalTimeoutMiddleware } from "./middlewares/correlationId";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
 
+// 1. Stamp X-Request-Id first so every downstream middleware and log line
+//    carries the same correlation token.
+app.use(correlationIdMiddleware);
+
+// 2. Global 60 s ceiling — catches any route that forgets its own timeout.
+app.use(globalTimeoutMiddleware);
+
 app.use(
   pinoHttp({
     logger,
+    // Re-use the correlation ID already stamped by correlationIdMiddleware so
+    // req.id in every log line matches the X-Request-Id response header.
+    genReqId: (req) => (req as express.Request).id,
     serializers: {
       req(req) {
         return {
