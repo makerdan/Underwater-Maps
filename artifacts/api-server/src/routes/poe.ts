@@ -1620,4 +1620,141 @@ router.post("/help", async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// POST /upscale — auto-upscale a 2D heatmap PNG via the TopazLabs model on
+// Poe. Accepts a base64-encoded PNG and an upscale factor (2 or 4). Returns
+// the upscaled image as a base64 PNG. Reuses the module-level circuit breaker.
+//
+// On failure (network error, circuit open, no image in response) the endpoint
+// returns a non-200 status so the frontend can fall back silently to the
+// original bitmap. No error toast is surfaced to the user.
+// ---------------------------------------------------------------------------
+
+const TOPAZ_MODEL = "TopazLabs";
+const POE_UPSCALE_TIMEOUT_MS = 90_000;
+
+/**
+ * Strict data-URL allowlist for image extraction from Poe model responses.
+ *
+ * Only inline data URLs (`data:image/...;base64,...`) are accepted from model
+ * output. Remote URL fetching is intentionally omitted to prevent SSRF — LLM
+ * output is untrusted and must not be used as a fetch target without a strong
+ * hostname/IP allowlist enforced after DNS resolution.
+ *
+ * Returns the extracted data URL string or null if no safe image was found.
+ */
+function extractDataUrlFromModelResponse(
+  message: { content?: string | Array<{ type: string; image_url?: { url: string } }> | null } | undefined,
+): string | null {
+  if (!message) return null;
+
+  // 1. Image content blocks (some models return structured image_url blocks)
+  if (Array.isArray(message.content)) {
+    for (const block of message.content) {
+      if (block.type === "image_url" && block.image_url?.url?.startsWith("data:image/")) {
+        return block.image_url.url;
+      }
+    }
+  }
+
+  // 2. Data URL embedded in plain text content
+  if (typeof message.content === "string") {
+    const m = message.content.match(/data:image\/[^;]+;base64,[A-Za-z0-9+/=]+/);
+    if (m?.[0]) return m[0];
+  }
+
+  return null;
+}
+
+router.post("/upscale", async (req, res) => {
+  const userId = getAuthenticatedUserId(req);
+
+  // `generated` is accepted for spec alignment (reserved for future use by
+  // Topaz-specific prompting); `upscaleFactor` is the primary control (2 or 4).
+  const { imageBase64, upscaleFactor, generated: _generated } = req.body as {
+    imageBase64?: string;
+    upscaleFactor?: number;
+    generated?: boolean;
+  };
+
+  if (!imageBase64) {
+    res.status(400).json({ error: "missing_field", message: "imageBase64 is required" });
+    return;
+  }
+
+  const factor = upscaleFactor === 4 ? 4 : 2;
+
+  if (poeBreaker.isOpen()) {
+    res.status(503).json({ error: "circuit_open", message: "Upscale service temporarily unavailable" });
+    return;
+  }
+
+  const dataUrl = imageBase64.startsWith("data:")
+    ? imageBase64
+    : `data:image/png;base64,${imageBase64}`;
+
+  try {
+    const client = getPoeClient();
+
+    const completion = await withRetry(
+      () =>
+        client.chat.completions.create(
+          {
+            model: TOPAZ_MODEL,
+            messages: [
+              {
+                role: "user" as const,
+                content: [
+                  {
+                    type: "image_url" as const,
+                    image_url: { url: dataUrl },
+                  },
+                  {
+                    type: "text" as const,
+                    text: `Upscale this image by ${factor}x. Enhance sharpness and fine detail.`,
+                  },
+                ],
+              },
+            ],
+            max_tokens: 512,
+            stream: false,
+          },
+          { signal: AbortSignal.timeout(POE_UPSCALE_TIMEOUT_MS) },
+        ),
+      2,
+    );
+
+    poeBreaker.recordSuccess();
+
+    const message = completion.choices[0]?.message;
+
+    // Extract image from response — only data URLs are accepted (no remote
+    // URL fetching) to prevent SSRF from untrusted model output.
+    const resultBase64 = extractDataUrlFromModelResponse(
+      message as Parameters<typeof extractDataUrlFromModelResponse>[0],
+    );
+
+    const usage = completion.usage;
+    await logUsage(
+      userId,
+      TOPAZ_MODEL,
+      "upscale",
+      usage?.prompt_tokens ?? 0,
+      usage?.completion_tokens ?? 0,
+    );
+
+    if (!resultBase64) {
+      logger.warn({ model: TOPAZ_MODEL }, "[poe/upscale] TopazLabs returned no image in response");
+      res.status(502).json({ error: "no_image_in_response", message: "TopazLabs returned no image" });
+      return;
+    }
+
+    res.json({ imageBase64: resultBase64 });
+  } catch (err) {
+    poeBreaker.recordFailure();
+    logger.warn({ err }, "[poe/upscale] Upscale request failed");
+    handlePoeError(err, res);
+  }
+});
+
 export default router;

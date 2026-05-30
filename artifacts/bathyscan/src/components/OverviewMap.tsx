@@ -72,6 +72,7 @@ import { formatDepth, formatDistance } from "@/lib/units";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useUndoableTrailDelete } from "@/hooks/useUndoableTrailDelete";
 import { TerrainDownloadPopover } from "@/components/TerrainDownloadPopover";
+import { useUpscaledHeatmap } from "@/hooks/useUpscaledHeatmap";
 
 interface TooltipState {
   visible: boolean;
@@ -142,6 +143,23 @@ export const OverviewMap: React.FC = () => {
   const substrateLegendLayoutRef = useRef<ReturnType<typeof renderSubstrateLegend>>(null);
   const hiddenEfhSpeciesRef = useRef<ReadonlySet<string>>(new Set());
   const efhLegendLayoutRef = useRef<EfhLegendLayout | null>(null);
+
+  // Upscale hook — auto-enhances the heatmap via Topaz Labs on Poe when the
+  // rendered grid is coarser than the canvas resolution warrants.
+  const {
+    isUpscaling,
+    upscaledBitmap,
+    requestUpscaleIfNeeded,
+    invalidate: invalidateUpscale,
+  } = useUpscaledHeatmap();
+  const upscaledBitmapRef = useRef<HTMLImageElement | null>(null);
+  const isUpscalingRef = useRef(false);
+  const requestUpscaleIfNeededRef = useRef(requestUpscaleIfNeeded);
+  const invalidateUpscaleRef = useRef(invalidateUpscale);
+  useEffect(() => { upscaledBitmapRef.current = upscaledBitmap; }, [upscaledBitmap]);
+  useEffect(() => { isUpscalingRef.current = isUpscaling; }, [isUpscaling]);
+  useEffect(() => { requestUpscaleIfNeededRef.current = requestUpscaleIfNeeded; }, [requestUpscaleIfNeeded]);
+  useEffect(() => { invalidateUpscaleRef.current = invalidateUpscale; }, [invalidateUpscale]);
 
   // Drag tracking
   const isDraggingRef = useRef(false);
@@ -441,12 +459,15 @@ export const OverviewMap: React.FC = () => {
     };
   }, [trailsData]);
 
-  // Build offscreen bitmap whenever overviewGrid or palette changes
+  // Build offscreen bitmap whenever overviewGrid or palette changes.
+  // Also invalidates any cached upscaled bitmap so the new data re-triggers
+  // Topaz upscaling on the next render pass.
   const paletteShallow = usePaletteStore((s) => s.shallow);
   const paletteDeep = usePaletteStore((s) => s.deep);
   useEffect(() => {
     if (!overviewGrid) return;
     bitmapRef.current = buildHeatmapBitmap(overviewGrid);
+    invalidateUpscaleRef.current();
   }, [overviewGrid, paletteShallow, paletteDeep]);
 
   // Compute initial transform whenever the grid or canvas is ready
@@ -467,6 +488,11 @@ export const OverviewMap: React.FC = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    // Track the last view key to detect pan/zoom changes and invalidate the
+    // cached upscaled bitmap so a stale enhanced image is never shown after
+    // the user moves the map.
+    let lastViewKey: string | null = null;
+
     const loop = () => {
       const ctx = canvas.getContext("2d");
       const grid = overviewGrid;
@@ -481,12 +507,33 @@ export const OverviewMap: React.FC = () => {
       const cW = canvas.width;
       const cH = canvas.height;
 
+      // Detect view changes and invalidate stale upscaled bitmap
+      const viewKey = `${t.scale.toFixed(2)}_${t.offsetX.toFixed(0)}_${t.offsetY.toFixed(0)}`;
+      if (viewKey !== lastViewKey) {
+        if (lastViewKey !== null) {
+          invalidateUpscaleRef.current();
+        }
+        lastViewKey = viewKey;
+      }
+
       // Background
       ctx.fillStyle = "#020818";
       ctx.fillRect(0, 0, cW, cH);
 
-      // Depth heatmap
-      renderHeatmap(ctx, bitmap, grid, t);
+      // Depth heatmap — draw the Topaz-upscaled bitmap when available,
+      // otherwise fall back to the raw offscreen bitmap.
+      const upscaled = upscaledBitmapRef.current;
+      if (upscaled) {
+        const lonRange = grid.maxLon - grid.minLon || 1;
+        const latRange = grid.maxLat - grid.minLat || 1;
+        const terrainW = t.pxPerDeg * lonRange * t.scale;
+        const terrainH = t.pxPerDeg * latRange * t.scale;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(upscaled, t.offsetX, t.offsetY, terrainW, terrainH);
+        ctx.imageSmoothingEnabled = true;
+      } else {
+        renderHeatmap(ctx, bitmap, grid, t);
+      }
 
       // Lat/lon grid (gated by user setting; renderGridLines also checks scale ≥ 2 internally)
       const { overviewShowGrid, overviewShowMarkers, units } = useSettingsStore.getState();
@@ -672,6 +719,29 @@ export const OverviewMap: React.FC = () => {
       ctx.strokeStyle = "rgba(0,229,255,0.12)";
       ctx.lineWidth = 1;
       ctx.strokeRect(0.5, 0.5, cW - 1, cH - 1);
+
+      // "Enhancing…" indicator — shown while a Topaz upscale request is in
+      // flight. Drawn last so it sits on top of all other layers.
+      if (isUpscalingRef.current) {
+        ctx.save();
+        ctx.font = "9px 'JetBrains Mono', monospace";
+        const label = "✦ ENHANCING…";
+        const lw = ctx.measureText(label).width;
+        const lx = cW - lw - 10;
+        const ly = cH - 42;
+        ctx.fillStyle = "rgba(2,8,24,0.65)";
+        ctx.fillRect(lx - 5, ly - 10, lw + 10, 16);
+        ctx.fillStyle = "#00e5ff";
+        ctx.textBaseline = "top";
+        ctx.fillText(label, lx, ly - 9);
+        ctx.restore();
+      }
+
+      // Fire-and-forget upscale request. The hook's internal debounce (view-key
+      // + in-flight guard) prevents duplicate network calls on every rAF tick.
+      // We pass the offscreen heatmap bitmap (native grid resolution) so only
+      // the depth data is sent to Topaz — not the overlays drawn above it.
+      void requestUpscaleIfNeededRef.current(bitmap, t, grid);
 
       rafRef.current = requestAnimationFrame(loop);
     };
