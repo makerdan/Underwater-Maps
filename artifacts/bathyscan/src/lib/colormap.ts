@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { ColormapTheme } from "./settingsStore";
-import { usePaletteStore, MID1_HEX, MID2_HEX, DEFAULT_CUSTOM_STOPS } from "./paletteStore";
+import { usePaletteStore, DEFAULT_CUSTOM_STOPS } from "./paletteStore";
 
 interface ColorStop {
   t: number;
@@ -8,16 +8,44 @@ interface ColorStop {
 }
 
 /**
+ * Canonical depth band boundaries in feet. These define 10 visually distinct
+ * bands from near-surface through deep water (0–2000 ft total range).
+ * Used by DepthScaleBar and DepthLegend to position tick labels.
+ */
+export const DEPTH_BAND_BOUNDARIES_FT = [
+  0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000,
+] as const;
+
+/** Maximum depth of the ocean colormap scale in feet. */
+export const OCEAN_MAX_DEPTH_FT = 2000;
+
+/**
+ * Fixed interior colour stops for the 10-band ocean gradient.
+ * t values are normalised to [0, 1] relative to OCEAN_MAX_DEPTH_FT.
+ * Endpoints (t=0, t=1) come from the user's palette store.
+ */
+const OCEAN_INTERIOR_STOPS: ReadonlyArray<{ t: number; hex: string }> = [
+  { t: 50 / 2000,  hex: "#00c8de" }, //  50 ft — cyan-teal
+  { t: 100 / 2000, hex: "#00a8d0" }, // 100 ft — sky blue
+  { t: 150 / 2000, hex: "#0288d1" }, // 150 ft — ocean blue
+  { t: 200 / 2000, hex: "#0277bd" }, // 200 ft — medium blue
+  { t: 250 / 2000, hex: "#1565c0" }, // 250 ft — cobalt blue
+  { t: 300 / 2000, hex: "#0d47a1" }, // 300 ft — royal blue
+  { t: 350 / 2000, hex: "#1a237e" }, // 350 ft — indigo navy
+  { t: 450 / 2000, hex: "#283593" }, // 450 ft — deep navy
+  { t: 600 / 2000, hex: "#1e2b6e" }, // 600 ft — dark navy
+];
+
+/**
  * Build the ocean theme stops using the user-customised shallow and deep
- * endpoints from paletteStore. The two interior stops are fixed so the
- * gradient keeps its characteristic shape.
+ * endpoints from paletteStore. Nine fixed interior stops provide a
+ * 10-band gradient aligned to DEPTH_BAND_BOUNDARIES_FT.
  */
 function getOceanStops(): ColorStop[] {
   const { shallow, deep } = usePaletteStore.getState();
   return [
     { t: 0.00, color: new THREE.Color(shallow) },
-    { t: 0.30, color: new THREE.Color(MID1_HEX) },
-    { t: 0.65, color: new THREE.Color(MID2_HEX) },
+    ...OCEAN_INTERIOR_STOPS.map((s) => ({ t: s.t, color: new THREE.Color(s.hex) })),
     { t: 1.00, color: new THREE.Color(deep) },
   ];
 }

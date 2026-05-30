@@ -1,17 +1,20 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useAppState } from "@/lib/context";
-import { colormapCanvas } from "@/lib/colormap";
+import { colormapCanvas, DEPTH_BAND_BOUNDARIES_FT } from "@/lib/colormap";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { formatDepth } from "@/lib/units";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
+
+const FT_TO_M = 0.3048;
 
 /**
  * DepthScaleBar — compact, collapsible depth-colour legend pinned to the
  * top-right of the scene, just below the app header.
  *
  * Collapsed (default): a single horizontal swatch + "DEPTH" label + chevron.
- * Expanded: the full vertical depth ramp with min/mid/max depth values.
+ * Expanded: the full vertical depth ramp (200 px) with tick labels at each of
+ * the 10 band boundaries that fall within the dataset's actual depth range.
  *
  * Open/closed state is purely component-local (not persisted).
  */
@@ -42,6 +45,21 @@ export const DepthScaleBar: React.FC = () => {
   }, [colormapTheme, shallow, deep, terrain, expanded]);
 
   if (!terrain) return null;
+
+  const rampHeight = 200;
+
+  // Build tick list: convert each band boundary from feet to metres,
+  // compute its normalised position, and discard anything outside [0, 1].
+  // Guard against a flat dataset (all points at the same depth).
+  const depthSpan = terrain.maxDepth - terrain.minDepth;
+  const ticks = depthSpan <= 0
+    ? []
+    : DEPTH_BAND_BOUNDARIES_FT.flatMap((boundaryFt) => {
+        const boundaryM = boundaryFt * FT_TO_M;
+        const pos = (boundaryM - terrain.minDepth) / depthSpan;
+        if (pos < 0 || pos > 1) return [];
+        return [{ label: formatDepth(boundaryM, { units }), pos }];
+      });
 
   return (
     <div
@@ -110,37 +128,51 @@ export const DepthScaleBar: React.FC = () => {
         <div
           style={{
             display: "flex",
-            alignItems: "stretch",
-            gap: 8,
+            alignItems: "flex-start",
+            gap: 6,
             padding: "6px 10px 10px",
             borderTop: "1px solid rgba(0,229,255,0.12)",
-            height: 220,
           }}
         >
+          {/* Tick labels — absolutely positioned relative to ramp height */}
           <div
+            data-testid="depth-scale-ticks"
             style={{
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "space-between",
-              alignItems: "flex-end",
-              fontSize: 10,
-              lineHeight: 1,
-              fontFamily: "'JetBrains Mono', monospace",
-              color: "#00e5ff",
-              textShadow: "0 0 6px rgba(0,229,255,0.5)",
+              position: "relative",
+              width: 52,
+              height: rampHeight,
+              flexShrink: 0,
             }}
           >
-            <span>{formatDepth(terrain.minDepth, { units })}</span>
-            <span>{formatDepth((terrain.minDepth + terrain.maxDepth) / 2, { units })}</span>
-            <span>{formatDepth(terrain.maxDepth, { units })}</span>
+            {ticks.map(({ label, pos }) => (
+              <span
+                key={label}
+                data-testid="depth-tick"
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: pos * rampHeight,
+                  transform: "translateY(-50%)",
+                  fontSize: 9,
+                  lineHeight: 1,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  color: "#00e5ff",
+                  textShadow: "0 0 6px rgba(0,229,255,0.5)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {label}
+              </span>
+            ))}
           </div>
+
           <ViewscreenTooltip label="Colour scale for seafloor depth" side="left">
             <img
               ref={expandedImgRef}
               alt="depth colormap"
               style={{
                 width: 14,
-                height: 200,
+                height: rampHeight,
                 border: "1px solid rgba(0,229,255,0.2)",
                 borderRadius: 2,
                 display: "block",

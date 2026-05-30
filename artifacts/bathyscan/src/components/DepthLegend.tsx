@@ -1,26 +1,58 @@
 import React from "react";
 import { useAppState } from "@/lib/context";
+import { DEPTH_BAND_BOUNDARIES_FT } from "@/lib/colormap";
+import { useSettingsStore } from "@/lib/settingsStore";
+import { formatDepth } from "@/lib/units";
+
+const FT_TO_M = 0.3048;
 
 export const DepthLegend = () => {
   const { terrain } = useAppState();
+  const units = useSettingsStore((s) => s.units);
+
   if (!terrain) return null;
 
-  const markers = [0, 0.25, 0.5, 0.75, 1].map(pct => {
-    const val = terrain.minDepth + pct * (terrain.maxDepth - terrain.minDepth);
-    return Math.round(val);
-  });
+  const rampHeightPx = 256; // h-64 = 16rem = 256px
+
+  // Build tick list from band boundaries, filtered to the dataset's depth range.
+  // Guard against a flat dataset (all points at the same depth).
+  const depthSpan = terrain.maxDepth - terrain.minDepth;
+  const ticks = depthSpan <= 0
+    ? []
+    : DEPTH_BAND_BOUNDARIES_FT.flatMap((boundaryFt) => {
+        const boundaryM = boundaryFt * FT_TO_M;
+        const pos = (boundaryM - terrain.minDepth) / depthSpan;
+        if (pos < 0 || pos > 1) return [];
+        return [{ label: formatDepth(boundaryM, { units }), pos }];
+      });
 
   return (
     <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-stretch h-64 z-10 pointer-events-none">
-      <div className="flex flex-col justify-between items-end mr-3 text-xs font-mono text-muted-foreground h-full py-1">
-        {markers.map((val, i) => (
-          <span key={i}>{val}m</span>
+      {/* Tick labels column */}
+      <div
+        data-testid="depth-legend-ticks"
+        className="relative mr-3"
+        style={{ width: 56, height: rampHeightPx }}
+      >
+        {ticks.map(({ label, pos }) => (
+          <span
+            key={label}
+            className="absolute right-0 text-xs font-mono text-muted-foreground whitespace-nowrap"
+            style={{
+              top: pos * rampHeightPx,
+              transform: "translateY(-50%)",
+            }}
+          >
+            {label}
+          </span>
         ))}
       </div>
-      <div 
+
+      <div
         className="w-4 rounded-sm border border-border"
         style={{
-          background: "linear-gradient(to bottom, #2D6A9F 0%, #4B1E80 50%, #050a14 100%)"
+          background:
+            "linear-gradient(to bottom, #2D6A9F 0%, #4B1E80 50%, #050a14 100%)",
         }}
       />
     </div>

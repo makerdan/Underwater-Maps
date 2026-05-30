@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { DEPTH_BAND_BOUNDARIES_FT, OCEAN_MAX_DEPTH_FT } from "../lib/colormap";
 
 vi.mock("three", () => {
   class Color {
@@ -70,21 +71,23 @@ describe("depthToColor", () => {
     expect(c.b).toBeCloseTo(expected.b, 2);
   });
 
-  it("t=0.3 returns the second stop colour (#0d47a1)", () => {
+  it("t=0.3 (600 ft band boundary) returns the correct stop colour (#1e2b6e)", () => {
     const c = depthToColor(0.3);
-    const expected = hexToRgb("#0d47a1");
+    const expected = hexToRgb("#1e2b6e");
     expect(c.r).toBeCloseTo(expected.r, 2);
     expect(c.g).toBeCloseTo(expected.g, 2);
     expect(c.b).toBeCloseTo(expected.b, 2);
   });
 
-  it("t=0.5 returns an interpolated colour between the 2nd and 3rd stops", () => {
+  it("t=0.5 returns an interpolated colour between the 600 ft stop and the deep endpoint", () => {
     const c = depthToColor(0.5);
-    // Should be between #0d47a1 (t=0.30) and #1a237e (t=0.65)
-    const lo = hexToRgb("#0d47a1");
-    const hi = hexToRgb("#1a237e");
+    // t=0.5 lies between the 600 ft stop (t=0.30, #1e2b6e) and the deep endpoint (t=1.0)
+    const lo = hexToRgb("#1e2b6e");
+    const hi = hexToRgb("#283593"); // default deep
     expect(c.r).toBeGreaterThanOrEqual(Math.min(lo.r, hi.r) - EPSILON);
     expect(c.r).toBeLessThanOrEqual(Math.max(lo.r, hi.r) + EPSILON);
+    expect(c.g).toBeGreaterThanOrEqual(Math.min(lo.g, hi.g) - EPSILON);
+    expect(c.g).toBeLessThanOrEqual(Math.max(lo.g, hi.g) + EPSILON);
   });
 
   it("t < 0 clamps to t=0", () => {
@@ -183,9 +186,12 @@ describe("getColormap", () => {
     expect(c.b).toBeCloseTo(expected.b, 2);
   });
 
-  it("ocean theme matches depthToColor at all boundary stops", () => {
+  it("ocean theme matches depthToColor at all 10-band boundary stops", () => {
     const fn = getColormap("ocean");
-    const stops = [0, 0.3, 0.65, 1.0];
+    // Normalised t values for the 11 band boundaries (0–2000 ft)
+    const stops = DEPTH_BAND_BOUNDARIES_FT.map(
+      (ft) => ft / OCEAN_MAX_DEPTH_FT,
+    );
     for (const t of stops) {
       const a = fn(t);
       const b = depthToColor(t);
@@ -377,5 +383,68 @@ describe("depthToColor / palette sync", () => {
     expect(c0.r).toBeCloseTo(expected.r, 2);
     expect(c0.g).toBeCloseTo(expected.g, 2);
     expect(c0.b).toBeCloseTo(expected.b, 2);
+  });
+});
+
+describe("DEPTH_BAND_BOUNDARIES_FT", () => {
+  it("exports 11 boundary values (10 bands)", () => {
+    expect(DEPTH_BAND_BOUNDARIES_FT).toHaveLength(11);
+  });
+
+  it("starts at 0 ft and ends at OCEAN_MAX_DEPTH_FT (2000 ft)", () => {
+    expect(DEPTH_BAND_BOUNDARIES_FT[0]).toBe(0);
+    expect(DEPTH_BAND_BOUNDARIES_FT[DEPTH_BAND_BOUNDARIES_FT.length - 1]).toBe(
+      OCEAN_MAX_DEPTH_FT,
+    );
+  });
+
+  it("boundaries are strictly ascending", () => {
+    for (let i = 1; i < DEPTH_BAND_BOUNDARIES_FT.length; i++) {
+      expect(DEPTH_BAND_BOUNDARIES_FT[i]).toBeGreaterThan(
+        DEPTH_BAND_BOUNDARIES_FT[i - 1]!,
+      );
+    }
+  });
+
+  it("no two adjacent band boundaries share the same colour", () => {
+    const fn = getColormap("ocean");
+    // Directly compare the colour at each consecutive pair of boundaries.
+    // Adjacent stops must differ in at least one RGB channel so no two
+    // neighbouring bands collapse to the same hue.
+    const bands = DEPTH_BAND_BOUNDARIES_FT;
+    for (let i = 0; i < bands.length - 1; i++) {
+      const tA = bands[i]! / OCEAN_MAX_DEPTH_FT;
+      const tB = bands[i + 1]! / OCEAN_MAX_DEPTH_FT;
+      const cA = fn(tA);
+      const cB = fn(tB);
+      const rDiff = Math.abs(cA.r - cB.r);
+      const gDiff = Math.abs(cA.g - cB.g);
+      const bDiff = Math.abs(cA.b - cB.b);
+      expect(rDiff + gDiff + bDiff).toBeGreaterThan(0.01);
+    }
+  });
+
+  it("exact colours at key band boundaries (300 ft, 350 ft, 450 ft, 600 ft)", () => {
+    const fn = getColormap("ocean");
+    const check = (ft: number, hex: string) => {
+      const t = ft / OCEAN_MAX_DEPTH_FT;
+      const c = fn(t);
+      const exp = hexToRgb(hex);
+      expect(c.r).toBeCloseTo(exp.r, 2);
+      expect(c.g).toBeCloseTo(exp.g, 2);
+      expect(c.b).toBeCloseTo(exp.b, 2);
+    };
+    check(300, "#0d47a1"); // royal blue
+    check(350, "#1a237e"); // indigo navy
+    check(450, "#283593"); // deep navy
+    check(600, "#1e2b6e"); // dark navy
+  });
+
+  it("normalised t positions for all boundaries fall within [0, 1]", () => {
+    for (const ft of DEPTH_BAND_BOUNDARIES_FT) {
+      const t = ft / OCEAN_MAX_DEPTH_FT;
+      expect(t).toBeGreaterThanOrEqual(0);
+      expect(t).toBeLessThanOrEqual(1);
+    }
   });
 });
