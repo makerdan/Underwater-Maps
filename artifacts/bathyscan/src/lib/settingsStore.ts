@@ -38,6 +38,20 @@ export interface DatasetHomePosition {
   depth: number;
 }
 
+/**
+ * Snapshot of the camera position and active dataset saved automatically
+ * as the user flies around. Restored on next load when cameraSpawnBehaviour
+ * is "last". Written to settingsStore on a debounced interval and synced to
+ * the server so cross-device resume works for signed-in users.
+ */
+export interface LastSession {
+  lon: number;
+  lat: number;
+  depth: number;
+  heading: number;
+  datasetId: string;
+}
+
 export interface CameraBookmark {
   id: string;
   name: string;
@@ -124,6 +138,12 @@ export interface SettingsState {
   fieldOfView: number;
   renderDistance: number;
   cameraSpawnBehaviour: CameraSpawnBehaviour;
+  /**
+   * Last-known camera position + active dataset. Written on a debounced
+   * interval while the user is flying. Restored on app load when
+   * `cameraSpawnBehaviour` is "last".
+   */
+  lastSession: LastSession | null;
 
   // ── Visuals & Performance ─────────────────────────────────────────────
   qualityPreset: QualityPreset;
@@ -422,6 +442,9 @@ interface SettingsActions {
   // Onboarding
   setHasSeenOnboarding: (v: boolean) => void;
 
+  // Last session
+  setLastSession: (v: LastSession | null) => void;
+
   // Page-level
   setShowAdvancedEverywhere: (v: boolean) => void;
 
@@ -552,7 +575,8 @@ export const DEFAULT_SETTINGS: SettingsState = {
   showJoystickInOrbit: false,
   fieldOfView: 45,
   renderDistance: 400,
-  cameraSpawnBehaviour: "deepest",
+  cameraSpawnBehaviour: "last",
+  lastSession: null,
 
   // Visuals
   qualityPreset: "medium",
@@ -892,6 +916,9 @@ export const useSettingsStore = create<SettingsStore>()(
         // Onboarding
         setHasSeenOnboarding: setter("hasSeenOnboarding"),
 
+        // Last session
+        setLastSession: setter("lastSession"),
+
         // Page-level
         setShowAdvancedEverywhere: setter("showAdvancedEverywhere"),
 
@@ -1105,11 +1132,21 @@ export const useSettingsStore = create<SettingsStore>()(
           void _dropSpd;
           void _dropKey;
           void _dropNavMode;
+          // v12 → v13: `cameraSpawnBehaviour` default changed from
+          // "deepest" to "last". Migrate users who still have the old
+          // default ("deepest") so they benefit from resume-last-session
+          // automatically. Users who explicitly changed to "home" or
+          // any other value are left untouched.
+          const migratedSpawnBehaviour =
+            rest.cameraSpawnBehaviour === "deepest"
+              ? "last"
+              : (rest.cameraSpawnBehaviour ?? "last");
           return {
             ...DEFAULT_SETTINGS,
             ...rest,
             ...split,
             keyBindings: mergedBindings,
+            cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,
           };
         }

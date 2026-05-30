@@ -31,6 +31,13 @@ import {
   ORBIT_CLICK_VS_DRAG_PX,
 } from "@/lib/orbitMath";
 
+// Module-level tracker: the dataset ID for which the initial camera spawn was
+// last applied. Used to gate `resetCamera` so that WebGL context-recovery
+// remounts (same dataset, same terrain reference) do NOT re-apply spawn and
+// teleport the user back to their saved position. Reset when a genuinely new
+// dataset is loaded.
+let _lastSpawnedDatasetId: string | null = null;
+
 function copyToClipboard(text: string): void {
   if (typeof navigator === "undefined" || !navigator.clipboard) return;
   navigator.clipboard.writeText(text).catch(() => {
@@ -131,7 +138,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   const suppressNextClick = useRef(false);
 
   // ---------------------------------------------------------------------------
-  // Camera initialisation: place 10 units above deepest terrain point
+  // Camera initialisation: place camera based on cameraSpawnBehaviour setting
   // ---------------------------------------------------------------------------
   const resetCamera = useCallback(() => {
     const grid = terrainRef.current;
@@ -139,19 +146,43 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
     const { resolution: N, depths, minDepth, maxDepth } = grid;
     const depthRange = maxDepth - minDepth || 1;
 
-    // If user has set a "home position" for this dataset via the context menu,
-    // spawn there instead of at the deepest point.
-    const home = useSettingsStore.getState().datasetHomePositions[grid.datasetId];
-    if (home) {
-      const { x, z } = lonLatToWorldXZ(home.lon, home.lat, grid);
-      const t = (home.depth - minDepth) / depthRange;
-      const surfaceY = -Math.max(0, Math.min(1, t)) * MAX_DEPTH_WORLD;
-      camera.position.set(x, surfaceY + 10, z);
-      euler.current.set(-0.25, 0, 0);
-      camera.quaternion.setFromEuler(euler.current);
-      return;
+    const settings = useSettingsStore.getState();
+    const spawnBehaviour = settings.cameraSpawnBehaviour;
+
+    // "last" — resume the previously saved camera position for this dataset.
+    if (spawnBehaviour === "last") {
+      const sess = settings.lastSession;
+      if (sess && sess.datasetId === grid.datasetId) {
+        const { x, z } = lonLatToWorldXZ(sess.lon, sess.lat, grid);
+        const t = Math.max(0, Math.min(1, (sess.depth - minDepth) / depthRange));
+        const worldY = -t * MAX_DEPTH_WORLD;
+        camera.position.set(x, worldY + 10, z);
+        // Restore heading: euler.y encodes the compass heading (yaw).
+        // Convention from useFlyControls: yaw = heading * PI / 180 applied
+        // as negative euler.y (camera looks along -Z in Three.js).
+        euler.current.set(-0.25, -(sess.heading * Math.PI) / 180, 0);
+        camera.quaternion.setFromEuler(euler.current);
+        return;
+      }
+      // No saved session yet — fall through to deepest-point spawn.
     }
 
+    // "home" — spawn at the per-dataset saved home position if one is set.
+    if (spawnBehaviour === "home") {
+      const home = settings.datasetHomePositions[grid.datasetId];
+      if (home) {
+        const { x, z } = lonLatToWorldXZ(home.lon, home.lat, grid);
+        const t = (home.depth - minDepth) / depthRange;
+        const surfaceY = -Math.max(0, Math.min(1, t)) * MAX_DEPTH_WORLD;
+        camera.position.set(x, surfaceY + 10, z);
+        euler.current.set(-0.25, 0, 0);
+        camera.quaternion.setFromEuler(euler.current);
+        return;
+      }
+      // No home set — fall through to deepest-point spawn.
+    }
+
+    // "deepest" (default fallback) — place 10 units above the deepest point.
     let maxIdx = 0;
     for (let i = 1; i < depths.length; i++) {
       if ((depths[i] ?? 0) > (depths[maxIdx] ?? 0)) maxIdx = i;
@@ -170,9 +201,16 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
     camera.quaternion.setFromEuler(euler.current);
   }, [camera]);
 
-  // Reset camera each time a new terrain dataset is loaded
+  // Reset camera when a new terrain dataset is loaded for the first time.
+  // We gate on _lastSpawnedDatasetId so that WebGL context-recovery remounts
+  // (SceneContents re-keyed via recoveryKey) do NOT re-apply the spawn and
+  // teleport the user back to their saved position mid-session. Only a genuine
+  // dataset switch (new datasetId) clears the gate and triggers spawn.
   useEffect(() => {
-    if (terrain) resetCamera();
+    if (!terrain) return;
+    if (_lastSpawnedDatasetId === terrain.datasetId) return;
+    _lastSpawnedDatasetId = terrain.datasetId;
+    resetCamera();
   }, [terrain, resetCamera]);
 
   // ---------------------------------------------------------------------------

@@ -79,6 +79,7 @@ import { useUrlSync } from "@/hooks/useUrlSync";
 import { lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
 import { OnboardingOverlay } from "@/components/OnboardingOverlay";
 import { useWebglContextStore } from "@/lib/webglContextStore";
+import { useCameraStore } from "@/lib/cameraStore";
 
 
 function TestBridge(): null {
@@ -211,6 +212,49 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
+// Always-mounted hook that debounce-syncs `lastSession` to the server for
+// signed-in users. The Settings page sync only runs while Settings is open,
+// so without this hook a user who flies without ever opening Settings would
+// never persist their last session to the server (breaking cross-device resume).
+function useLastSessionServerSync(isSignedIn: boolean | undefined) {
+  const isSignedInRef = useRef(isSignedIn);
+  useEffect(() => { isSignedInRef.current = isSignedIn; }, [isSignedIn]);
+
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const flush = async () => {
+      if (!isSignedInRef.current) return;
+      const lastSession = useSettingsStore.getState().lastSession;
+      const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+      try {
+        await fetch(`${apiBase}/api/settings`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ lastSession }),
+        });
+      } catch {
+        // Best-effort — offline or session expired
+      }
+    };
+
+    const unsub = useSettingsStore.subscribe((state, prevState) => {
+      if (state.lastSession === prevState.lastSession) return;
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => { void flush(); }, 3000);
+    });
+
+    return () => {
+      unsub();
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, []);
+}
+
 function Main() {
   const [, setLocation] = useLocation();
   const waterTypeForDatasets = useSettingsStore((s) => s.waterType);
@@ -235,6 +279,9 @@ function Main() {
   const gpsActive = useGpsStore((s) => s.active);
   const defaultMapLoad = useSettingsStore((st) => st.defaultMapLoad);
   const { isSignedIn } = useUser();
+  // Always-mounted sync: debounce-flush lastSession to server when signed in,
+  // independent of whether the Settings page is currently open.
+  useLastSessionServerSync(isSignedIn);
   // Fetch user datasets so we can verify a stored upload default still exists.
   const { data: userDatasets } = useGetUserDatasets({
     query: {
@@ -319,6 +366,59 @@ function Main() {
   // terrain is loaded so we never write partial initialisation state).
   useUrlSync(datasetId, !!terrain);
 
+  // Debounced last-session save: write the camera position + active datasetId
+  // to settingsStore whenever the camera settles (2 s after the last move).
+  // This is separate from the URL sync (which throttles to 800 ms) so the
+  // two can be tuned independently. Only fires when terrain is loaded and the
+  // camera has valid geo coordinates.
+  const lastSessionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!terrain || !datasetId) return;
+
+    const saveLastSession = () => {
+      const { cameraLon, cameraLat, cameraDepth, heading } =
+        useCameraStore.getState();
+      if (cameraLon === null || cameraLat === null || cameraDepth === null) return;
+      useSettingsStore.getState().setLastSession({
+        lon: cameraLon,
+        lat: cameraLat,
+        depth: cameraDepth,
+        heading,
+        datasetId,
+      });
+    };
+
+    const schedule = () => {
+      if (lastSessionTimerRef.current !== null) {
+        clearTimeout(lastSessionTimerRef.current);
+      }
+      lastSessionTimerRef.current = setTimeout(saveLastSession, 2000);
+    };
+
+    const unsub = useCameraStore.subscribe((state, prevState) => {
+      if (
+        state.cameraLon !== prevState.cameraLon ||
+        state.cameraLat !== prevState.cameraLat ||
+        state.cameraDepth !== prevState.cameraDepth ||
+        state.heading !== prevState.heading
+      ) {
+        schedule();
+      }
+    });
+
+    // Save once immediately when terrain/dataset changes so even a user
+    // who loads a dataset and doesn't move gets their position recorded.
+    saveLastSession();
+
+    return () => {
+      unsub();
+      if (lastSessionTimerRef.current !== null) {
+        clearTimeout(lastSessionTimerRef.current);
+        lastSessionTimerRef.current = null;
+      }
+    };
+  }, [terrain, datasetId]);
+
   const hasAutoSelectedRef = useRef(false);
   useEffect(() => {
     if (hasAutoSelectedRef.current) return;
@@ -347,6 +447,22 @@ function Main() {
           onConfirm: () => setDatasetId(urlMatch.id),
         });
         return;
+      }
+
+      // Resume last session: when no URL share link is present, prefer the
+      // dataset from the last session so the user picks up where they left off.
+      const { cameraSpawnBehaviour, lastSession } = useSettingsStore.getState();
+      if (cameraSpawnBehaviour === "last" && lastSession?.datasetId) {
+        const sessionDataset = datasets.find((d) => d.id === lastSession.datasetId);
+        if (sessionDataset) {
+          void requestDatasetSwitch({
+            datasetId: sessionDataset.id,
+            datasetName: sessionDataset.name,
+            onConfirm: () => setDatasetId(sessionDataset.id),
+          });
+          return;
+        }
+        // Dataset no longer exists — fall through to defaultMapLoad / first preset.
       }
 
       // Apply the user's stored default, falling back gracefully if the dataset

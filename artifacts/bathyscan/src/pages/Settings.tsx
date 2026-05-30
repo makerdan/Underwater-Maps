@@ -988,15 +988,15 @@ function NavigationSection() {
             sublabel="Camera far clip plane"
           />
           <SelectRow
-            label="Spawn Position"
+            label="Camera Spawn"
             value={s.cameraSpawnBehaviour}
             onChange={s.setCameraSpawnBehaviour}
             options={[
+              { value: "last", label: "Resume last session" },
+              { value: "home", label: "Home position" },
               { value: "deepest", label: "Deepest point" },
-              { value: "home", label: "Saved home position" },
-              { value: "last", label: "Last position" },
             ]}
-            sublabel="Where to place camera when loading a dataset"
+            sublabel="Where to place the camera on the next visit"
           />
           <SelectRow
             label="On-Screen Joystick (touch)"
