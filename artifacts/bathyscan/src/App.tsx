@@ -291,7 +291,6 @@ function Main() {
     },
   });
   // Settings-driven UI visibility + tidal defaults
-  const autoLoadTidal = useSettingsStore((st) => st.autoLoadTidal);
   const defaultTidalDepthLayer = useSettingsStore((st) => st.defaultTidalDepthLayer);
   const showDepthScaleBar = useSettingsStore((st) => st.showDepthScaleBar);
   const showCompassMinimap = useSettingsStore((st) => st.showCompassMinimap);
@@ -305,13 +304,6 @@ function Main() {
 
   const [depthLayer, setDepthLayer] = useState<DepthLayer>(defaultTidalDepthLayer as DepthLayer);
 
-  // Apply "auto-load tidal overlay" preference once on mount.
-  const didAutoLoadTidalRef = useRef(false);
-  useEffect(() => {
-    if (didAutoLoadTidalRef.current) return;
-    didAutoLoadTidalRef.current = true;
-    if (autoLoadTidal && !tidalOverlay) setTidalOverlay(true);
-  }, [autoLoadTidal, tidalOverlay, setTidalOverlay]);
   const scrubDatetime = useUiStore((s) => s.scrubDatetime);
   const setScrubDatetime = useUiStore((s) => s.setScrubDatetime);
   const [showResumeHint, setShowResumeHint] = useState(false);
