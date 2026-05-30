@@ -10,7 +10,8 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useUser, useClerk } from "@/lib/clerkCompat";
 import { keys as idbKeys, clear as idbClear } from "idb-keyval";
-import { useGetSettings, usePutSettings, useDeleteMarkersMine, getGetSettingsQueryKey } from "@workspace/api-client-react";
+import { useDeleteMarkersMine } from "@workspace/api-client-react";
+import { flushServerSync } from "@/hooks/useServerSettingsSync";
 import type { Marker } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -24,7 +25,6 @@ import {
   useSettingsStore,
   useSectionDirty,
   useAnySectionDirty,
-  getDataSnapshot,
   SETTINGS_SCHEMA_VERSION,
   DEFAULT_SETTINGS,
   DEFAULT_CROSSHAIR_MENU_GAMEPAD_BUTTON,
@@ -45,7 +45,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getGetMarkersQueryKey } from "@workspace/api-client-react";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { usePaletteStore, DEFAULT_SHALLOW, DEFAULT_DEEP, PALETTE_PRESETS, MID1_HEX, MID2_HEX, customStopsFromPreset, type CustomStop } from "@/lib/paletteStore";
-import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { colormapCanvas, colormapCssGradient } from "@/lib/colormap";
 import type { ColormapTheme } from "@/lib/settingsStore";
 import { HelpIcon } from "@/components/help/HelpButton";
@@ -2821,73 +2820,6 @@ export function Settings() {
   const [tab, setTab] = useState<Tab>("visuals");
   const [savedMsg, setSavedMsg] = useState(false);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hydrateFromServer = useSettingsStore((s) => s.hydrateFromServer);
-
-  // Load settings from server on mount (authenticated only). Force a fresh
-  // fetch on every mount so opening Settings on a different device pulls the
-  // latest server state instead of relying on react-query's in-memory cache.
-  const { data: serverSettings } = useGetSettings({
-    query: {
-      enabled: !!isSignedIn,
-      retry: false,
-      queryKey: getGetSettingsQueryKey(),
-      refetchOnMount: "always",
-      staleTime: 0,
-    },
-  });
-
-  useEffect(() => {
-    if (!serverSettings) return;
-    // Recency check matches settingsStore.hydrateFromServer: the server wins
-    // only when its `__updatedAt` is newer than the last local sync (or when
-    // we've never synced). We evaluate it here BEFORE calling the settings
-    // hydrator (which mutates lastSyncedAt) so we can apply the same rule to
-    // the separate paletteStore.
-    const serverRec = serverSettings as Record<string, unknown>;
-    const serverUpdatedAt =
-      typeof serverRec.__updatedAt === "string" ? (serverRec.__updatedAt as string) : undefined;
-    const lastSyncedAt = useSettingsStore.getState().lastSyncedAt;
-    const serverIsNewer =
-      !lastSyncedAt || (serverUpdatedAt !== undefined && serverUpdatedAt > lastSyncedAt);
-
-    hydrateFromServer(serverSettings as Parameters<typeof hydrateFromServer>[0]);
-
-    if (serverIsNewer) {
-      usePaletteStore.getState().hydrateFromServer({
-        paletteShallow: serverRec.paletteShallow,
-        paletteDeep: serverRec.paletteDeep,
-        customStops: serverRec.customStops,
-      });
-    }
-  }, [serverSettings, hydrateFromServer]);
-
-  // Debounced PUT /api/settings
-  const { mutateAsync: saveSettingsAsync } = usePutSettings();
-  const markAllSaved = useSettingsStore((s) => s.markAllSaved);
-
-  const buildPayload = useCallback(() => {
-    const { hydrateFromServer: _h, resetSection: _rs, resetAll: _ra,
-      markAllSaved: _mas,
-      setDatasetHome: _sd, clearDatasetHome: _cd, datasetHomePositions: _dhp,
-      syncedSnapshot: _ss,
-      ...rest } = useSettingsStore.getState();
-    const dataOnly: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(rest)) {
-      if (typeof v !== "function") dataOnly[k] = v;
-    }
-    // Palette state lives in a separate zustand store but syncs through the
-    // same /api/settings endpoint so users get one canonical record of their
-    // visual preferences across devices.
-    const palette = usePaletteStore.getState();
-    dataOnly.paletteShallow = palette.shallow;
-    dataOnly.paletteDeep = palette.deep;
-    dataOnly.customStops = palette.customStops;
-    // Panel collapse state lives in a separate store; include it so the
-    // server stores the current layout and can restore it on other devices.
-    dataOnly.panelCollapse = usePanelCollapseStore.getState().collapsed;
-    return dataOnly;
-  }, []);
 
   const flashSavedMsg = useCallback(() => {
     setSavedMsg(true);
@@ -2895,86 +2827,29 @@ export function Settings() {
     savedTimerRef.current = setTimeout(() => setSavedMsg(false), 2000);
   }, []);
 
-  /**
-   * Force-flush any pending debounced sync. Returns a promise that resolves
-   * on a successful PUT (or immediately when signed out — localStorage
-   * persistence already happened synchronously via zustand). Rejects on
-   * network/server errors so the caller can show an error state.
-   */
+  const markAllSaved = useSettingsStore((s) => s.markAllSaved);
+
+  // Flush is delegated to the always-on root hook (useServerSettingsSync)
+  // which handles GET hydration, debounced PUT, and panelCollapse sync.
+  // The explicit section Save buttons here call flushServerSync() to cancel
+  // any pending debounce and immediately PUT the current state.
+  // Signed-out users get local-only persistence (zustand→localStorage); we
+  // call markAllSaved(null) directly so the dirty flag clears without a PUT.
   const flushSync = useCallback(async (): Promise<void> => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = null;
-    }
     if (!isSignedIn) {
-      // Local-only save — already persisted to localStorage by zustand.
-      // Pass `null` so the "Last synced" indicator stays empty for
-      // signed-out users (there's no server to sync with).
       markAllSaved(null);
       flashSavedMsg();
       return;
     }
-    const data = buildPayload();
-    const resp = await saveSettingsAsync({
-      data: data as Parameters<typeof saveSettingsAsync>[0]["data"],
-    });
-    const serverStamp = (resp as Record<string, unknown> | undefined)?.__updatedAt;
-    markAllSaved(typeof serverStamp === "string" ? serverStamp : undefined);
+    await flushServerSync();
     flashSavedMsg();
-  }, [isSignedIn, saveSettingsAsync, markAllSaved, flashSavedMsg, buildPayload]);
+  }, [isSignedIn, markAllSaved, flashSavedMsg]);
 
-  const scheduleSync = useCallback(() => {
-    if (!isSignedIn) return;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      // Auto-sync swallows errors here — manual Save surfaces them.
-      void flushSync().catch(() => { /* keep dirty so user sees Save button */ });
-    }, 300);
-  }, [isSignedIn, flushSync]);
-
-  // Subscribe to data-only changes (ignore syncedSnapshot updates) to avoid
-  // an infinite save loop once markAllSaved fires inside flushSync. Also
-  // watch the separate paletteStore and panelCollapseStore so their edits
-  // ride the same debounced PUT /api/settings as the rest of the preferences.
   useEffect(() => {
-    const palSnap = () => {
-      const p = usePaletteStore.getState();
-      return JSON.stringify({ s: p.shallow, d: p.deep, c: p.customStops });
-    };
-    const panelSnap = () =>
-      JSON.stringify(usePanelCollapseStore.getState().collapsed);
-    let lastSettings = JSON.stringify(getDataSnapshot());
-    let lastPalette = palSnap();
-    let lastPanel = panelSnap();
-    const unsubSettings = useSettingsStore.subscribe(() => {
-      const cur = JSON.stringify(getDataSnapshot());
-      if (cur !== lastSettings) {
-        lastSettings = cur;
-        scheduleSync();
-      }
-    });
-    const unsubPalette = usePaletteStore.subscribe(() => {
-      const cur = palSnap();
-      if (cur !== lastPalette) {
-        lastPalette = cur;
-        scheduleSync();
-      }
-    });
-    const unsubPanel = usePanelCollapseStore.subscribe(() => {
-      const cur = panelSnap();
-      if (cur !== lastPanel) {
-        lastPanel = cur;
-        scheduleSync();
-      }
-    });
     return () => {
-      unsubSettings();
-      unsubPalette();
-      unsubPanel();
-      if (debounceRef.current) clearTimeout(debounceRef.current);
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
     };
-  }, [scheduleSync]);
+  }, []);
 
   const syncCtx = React.useMemo(
     () => ({ flush: flushSync, isSignedIn: !!isSignedIn }),

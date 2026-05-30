@@ -61,7 +61,7 @@ import { useWaterTypeSideEffects } from "@/lib/useWaterTypeSideEffects";
 import { useActiveDatasetSync } from "@/lib/useActiveDatasetSync";
 import { VisibleDatasetsLoader } from "@/lib/VisibleDatasetsLoader";
 import { waterLabels } from "@/lib/waterLabels";
-import { useGetSettings, getGetSettingsQueryKey } from "@workspace/api-client-react";
+import { useServerSettingsSync } from "@/hooks/useServerSettingsSync";
 import { useDriftStore } from "@/lib/driftStore";
 import { useMarkerLayerStore } from "@/lib/markerLayerStore";
 import { WeatherPanel } from "@/components/WeatherPanel";
@@ -1198,22 +1198,12 @@ function LandingPage() {
   );
 }
 
-function SettingsHydrator() {
-  // Always refetch on mount so opening the app on a different device (or
-  // after clearing local storage) re-reads the latest server snapshot
-  // instead of trusting react-query's in-memory cache.
-  const { data: serverSettings } = useGetSettings({
-    query: {
-      enabled: true,
-      queryKey: getGetSettingsQueryKey(),
-      refetchOnMount: "always",
-      staleTime: 0,
-    },
-  });
-  const hydrateFromServer = useSettingsStore((s) => s.hydrateFromServer);
-  useEffect(() => {
-    if (serverSettings) hydrateFromServer(serverSettings);
-  }, [serverSettings, hydrateFromServer]);
+function ServerSettingsSyncMount() {
+  // Mounts the always-on GET/PUT settings sync at the app root so that
+  // panel collapse (and all other preferences) are hydrated on sign-in and
+  // pushed to the server on every change — without requiring the user to
+  // open the Settings page. See hooks/useServerSettingsSync.ts for details.
+  useServerSettingsSync();
   return null;
 }
 
@@ -1226,7 +1216,7 @@ function HomeRoute() {
   return (
     <QueryClientProvider client={queryClient}>
       <Show when="signed-in">
-        <SettingsHydrator />
+        <ServerSettingsSyncMount />
         <TooltipProvider>
           <AppProvider>
             <TestBridge />
