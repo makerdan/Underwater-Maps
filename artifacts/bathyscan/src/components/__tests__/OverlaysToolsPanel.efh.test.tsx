@@ -126,7 +126,13 @@ function resetUiStore(overrides: Partial<ReturnType<typeof useUiStore.getState>>
 
 beforeEach(() => {
   mockDatasets = [{ id: "ds-efh", hasEfh: true }];
-  mockEfhData = undefined;
+  // Default: provide all species so toggle/aria tests have buttons to query.
+  // Individual tests that need no data override this explicitly.
+  mockEfhData = {
+    features: EFH_SPECIES_PALETTE.map(({ commonName, color }) => ({
+      properties: { commonName, color },
+    })),
+  };
   resetUiStore();
 });
 
@@ -137,11 +143,11 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
     resetUiStore({ efhOverlayEnabled: true });
     render(<OverlaysToolsPanel />);
 
-    const firstSpecies = EFH_SPECIES_PALETTE[0]!.commonName.toUpperCase();
+    const firstSpecies = EFH_SPECIES_PALETTE[0]!.commonName;
     expect(screen.getByText(firstSpecies)).toBeInTheDocument();
 
     const lastSpecies =
-      EFH_SPECIES_PALETTE[EFH_SPECIES_PALETTE.length - 1]!.commonName.toUpperCase();
+      EFH_SPECIES_PALETTE[EFH_SPECIES_PALETTE.length - 1]!.commonName;
     expect(screen.getByText(lastSpecies)).toBeInTheDocument();
   });
 
@@ -149,7 +155,7 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
     resetUiStore({ efhOverlayEnabled: false });
     render(<OverlaysToolsPanel />);
 
-    const firstSpecies = EFH_SPECIES_PALETTE[0]!.commonName.toUpperCase();
+    const firstSpecies = EFH_SPECIES_PALETTE[0]!.commonName;
     expect(screen.queryByText(firstSpecies)).not.toBeInTheDocument();
   });
 
@@ -158,7 +164,7 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
     resetUiStore({ efhOverlayEnabled: true });
     render(<OverlaysToolsPanel />);
 
-    const firstSpecies = EFH_SPECIES_PALETTE[0]!.commonName.toUpperCase();
+    const firstSpecies = EFH_SPECIES_PALETTE[0]!.commonName;
     expect(screen.queryByText(firstSpecies)).not.toBeInTheDocument();
   });
 
@@ -167,7 +173,7 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
     render(<OverlaysToolsPanel />);
 
     for (const { commonName } of EFH_SPECIES_PALETTE) {
-      expect(screen.getByText(commonName.toUpperCase())).toBeInTheDocument();
+      expect(screen.getByText(commonName)).toBeInTheDocument();
     }
   });
 
@@ -235,7 +241,7 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
     const btn = screen.getByTitle(`Show ${target}`);
 
     expect(btn.getAttribute("aria-pressed")).toBe("false");
-    expect((btn as HTMLElement).style.opacity).toBe("0.38");
+    expect((btn as HTMLElement).style.opacity).toBe("0.5");
   });
 
   it("multiple hidden species all render at reduced opacity with aria-pressed='false'", () => {
@@ -249,7 +255,7 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
     for (const name of hidden) {
       const btn = screen.getByTitle(`Show ${name}`);
       expect(btn.getAttribute("aria-pressed")).toBe("false");
-      expect((btn as HTMLElement).style.opacity).toBe("0.38");
+      expect((btn as HTMLElement).style.opacity).toBe("0.5");
     }
   });
 

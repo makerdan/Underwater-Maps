@@ -62,7 +62,7 @@ describe("openCrosshairContextMenu", () => {
         "Drop GPS pin here",
         "Measure from here",
         "Set as home position",
-        "Start depth profile here",
+        "Start straight-line profile",
         "Copy coordinates",
       ]),
     );

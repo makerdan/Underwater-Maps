@@ -381,6 +381,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                       >
                         <button
                           aria-pressed={!hidden}
+                          title={hidden ? `Show ${name}` : `Hide ${name}`}
                           onClick={() => toggleEfhSpecies(name)}
                           style={{
                             width: "100%",

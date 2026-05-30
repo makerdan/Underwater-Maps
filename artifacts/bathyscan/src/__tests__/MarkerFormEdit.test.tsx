@@ -148,9 +148,11 @@ describe("MarkerForm — edit mode", () => {
     expect(labelInput.value).toBe("Coral formation");
   });
 
-  it("pre-populates notes field with the stored marker's notes", () => {
+  it("pre-populates notes field with the stored marker's notes", async () => {
     renderWithProviders(<MarkerForm />);
-    const notesField = screen.getByPlaceholderText(/Additional observations/) as HTMLTextAreaElement;
+    const notesField = await screen.findByPlaceholderText(
+      /Good rockfish spot/,
+    ) as HTMLTextAreaElement;
     expect(notesField.value).toBe("North face — steep drop");
   });
 
