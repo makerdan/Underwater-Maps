@@ -22,6 +22,7 @@ import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { TemperatureProfileChart } from "@/components/TemperatureProfileChart";
 import { openCrosshairContextMenu } from "@/lib/terrainContextMenu";
 import { toast } from "@/hooks/use-toast";
+import { useIsNarrow } from "@/hooks/use-mobile";
 
 const IS_TOUCH_DEVICE =
   typeof window !== "undefined" &&
@@ -110,6 +111,8 @@ export const HUD: React.FC = () => {
     : "0 0 8px rgba(0,229,255,0.6)";
   const baseText = highContrastHud ? "#ffffff" : "#e2e8f0";
   const fontScale = largeHudText ? 1.35 : 1;
+
+  const isNarrow = useIsNarrow();
 
   const driftPlannerActive = useDriftStore((s) => s.driftPlannerActive);
   const driftMode = useDriftStore((s) => s.driftMode);
@@ -242,7 +245,12 @@ export const HUD: React.FC = () => {
           gap. */}
       <div
         className="hud-top-left absolute flex items-center gap-2"
-        style={{ top: -72, left: 80 }}
+        style={{
+          top: -72,
+          left: 80,
+          flexWrap: "wrap",
+          maxWidth: isNarrow ? "calc(100vw - 88px)" : undefined,
+        }}
       >
         {showHeading && (
           <div style={{ ...PANEL, fontSize: 11 }}>
@@ -254,7 +262,7 @@ export const HUD: React.FC = () => {
           <HelpIcon articleId="interface-tour" label="Help: HUD overlay" />
         </div>
 
-        {/* Share / copy link button */}
+        {/* Share / copy link button — icon-only on narrow screens */}
         <ViewscreenTooltip label="Copy share link to clipboard" side="bottom">
           <button
             data-testid="hud-share-link"
@@ -293,12 +301,12 @@ export const HUD: React.FC = () => {
               cursor: "pointer",
             }}
           >
-            🔗 SHARE
+            {isNarrow ? "🔗" : "🔗 SHARE"}
           </button>
         </ViewscreenTooltip>
 
-        {/* Synthetic / simulated data warning badge */}
-        {terrain?.synthetic && (
+        {/* Synthetic / simulated data warning badge — hidden on narrow screens */}
+        {terrain?.synthetic && !isNarrow && (
           <ViewscreenTooltip
             label="Real bathymetry sources were unreachable. Depths shown are procedurally generated, not actual sonar measurements."
             side="bottom"
@@ -320,11 +328,30 @@ export const HUD: React.FC = () => {
             </div>
           </ViewscreenTooltip>
         )}
+        {/* Narrow-screen icon-only synthetic badge */}
+        {terrain?.synthetic && isNarrow && (
+          <ViewscreenTooltip
+            label="Simulated data — real bathymetry sources were unreachable."
+            side="bottom"
+          >
+            <div
+              data-testid="synthetic-data-badge"
+              style={{
+                ...PANEL,
+                fontSize: 12,
+                border: "1px solid rgba(245,158,11,0.5)",
+                background: "rgba(245,158,11,0.10)",
+                color: "#f59e0b",
+                padding: "3px 6px",
+              }}
+            >
+              ⚠
+            </div>
+          </ViewscreenTooltip>
+        )}
 
-        {/* Raw bathymetry badge — shown when terrain smoothing is disabled
-            so users can tell at a glance that on-screen noise is the real
-            sounder data, not a rendering bug. */}
-        {!smoothTerrainSpikes && (
+        {/* Raw bathymetry badge — hidden on narrow screens (non-essential) */}
+        {!smoothTerrainSpikes && !isNarrow && (
           <ViewscreenTooltip
             label="Terrain smoothing is off. You're viewing the raw sounder grid — spikes and dropouts are real data, not rendering glitches."
             side="bottom"
@@ -347,7 +374,7 @@ export const HUD: React.FC = () => {
           </ViewscreenTooltip>
         )}
 
-        {/* Drift / Trolling mode badge */}
+        {/* Drift / Trolling mode badge — abbreviated on narrow screens */}
         {driftPlannerActive && (
           <div
             data-testid="hud-drift-mode-badge"
@@ -363,6 +390,7 @@ export const HUD: React.FC = () => {
           >
             {driftMode === "trolling"
               ? (() => {
+                  if (isNarrow) return "🎣";
                   if (driftWaypoints.length > 0) {
                     const wp = driftPath?.[driftHour];
                     const target = wp?.targetWaypointIndex;
@@ -372,7 +400,7 @@ export const HUD: React.FC = () => {
                   }
                   return `🎣 TROLL ${Math.round(boatHeadingDeg).toString().padStart(3, "0")}° / ${boatSpeedKnots.toFixed(1)} KT`;
                 })()
-              : "⛵ DRIFT"}
+              : isNarrow ? "⛵" : "⛵ DRIFT"}
           </div>
         )}
 
@@ -396,7 +424,7 @@ export const HUD: React.FC = () => {
                 ...(IS_TOUCH_DEVICE ? { minWidth: 44, minHeight: 44 } : {}),
               }}
             >
-              📍 DIVE TO GPS
+              {isNarrow ? "📍" : "📍 DIVE TO GPS"}
             </button>
           </ViewscreenTooltip>
         )}
