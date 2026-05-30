@@ -32,7 +32,7 @@ import type { EfhFeature, EfhSpeciesProperties } from "@workspace/api-client-rea
 import { useSettingsStore } from "@/lib/settingsStore";
 import type { ThreeEvent } from "@react-three/fiber";
 import { toast } from "@/hooks/use-toast";
-import { polygonIntersectsBbox, pointInRing } from "@/lib/efhBboxFilter";
+import { polygonIntersectsBbox } from "@/lib/efhBboxFilter";
 import type { Bbox } from "@/lib/efhBboxFilter";
 /** Y elevation for EFH filled polygons — just above ocean surface (Y=0). */
 const EFH_FILL_Y = 1.0;

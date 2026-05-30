@@ -108,7 +108,7 @@ describe("polygonIntersectsBbox", () => {
     // a polygon that crosses bbox edges without any vertex inside and without
     // containing a bbox corner could still return false. This test documents
     // the actual behavior of the two-check algorithm for a crossing strip.
-    const crossingNSStrip = [
+    const _crossingNSStrip = [
       [-146, 50],
       [-144, 50],
       [-144, 65],
