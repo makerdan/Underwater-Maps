@@ -126,10 +126,29 @@ export const MarkerDetailCard: React.FC = () => {
           </>
         )}
       </div>
-      {marker.notes && (
-        <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid rgba(0,229,255,0.1)" }}>
-          <div style={{ color: "#94a3b8", fontSize: 9, marginBottom: 4 }}>NOTES</div>
-          <div style={{ color: "#cbd5e1", fontSize: 11, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+      {marker.notes && marker.type !== "depth_pole" && (
+        <div
+          style={{
+            marginTop: 10,
+            paddingTop: 8,
+            borderTop: `1px solid ${color}33`,
+          }}
+        >
+          <div style={{ color: "#94a3b8", fontSize: 9, letterSpacing: "0.12em", marginBottom: 5 }}>NOTES</div>
+          <div
+            style={{
+              background: "rgba(0,229,255,0.04)",
+              border: "1px solid rgba(0,229,255,0.1)",
+              borderLeft: `2px solid ${color}88`,
+              borderRadius: 3,
+              padding: "6px 9px",
+              color: "#cbd5e1",
+              fontSize: 10,
+              fontStyle: "italic",
+              lineHeight: 1.6,
+              whiteSpace: "pre-wrap",
+            }}
+          >
             {marker.notes}
           </div>
         </div>

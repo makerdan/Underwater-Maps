@@ -121,6 +121,27 @@ export const MarkerSprite: React.FC<Props> = ({ marker, terrain, showLabel = tru
             {marker.label}
           </Text>
         )}
+        {/* Note preview — second line, dimmer and smaller than the label */}
+        {showLabel && marker.notes && marker.type !== "depth_pole" && (() => {
+          const preview = marker.notes.length > 40
+            ? marker.notes.slice(0, 40) + "…"
+            : marker.notes;
+          return (
+            <Text
+              position={[0, -0.88, 0]}
+              fontSize={0.20}
+              color={color}
+              outlineColor="#000000"
+              outlineWidth={0.03}
+              anchorX="center"
+              anchorY="top"
+              maxWidth={5}
+              fillOpacity={0.7}
+            >
+              {preview}
+            </Text>
+          );
+        })()}
       </Billboard>
     </group>
   );

@@ -505,11 +505,11 @@ export const MarkerForm: React.FC = () => {
             <textarea
               value={notes}
               onChange={(e) => {
-                setNotes(e.target.value.slice(0, 500));
+                setNotes(e.target.value.slice(0, 280));
                 if (notesError) setNotesError("");
               }}
-              placeholder="Additional observations..."
-              maxLength={500}
+              placeholder="e.g. Good rockfish spot at incoming tide, 18m depth"
+              maxLength={280}
               rows={3}
               style={{
                 width: "100%",
@@ -528,7 +528,9 @@ export const MarkerForm: React.FC = () => {
             {notesError && (
               <div style={{ fontSize: 9, color: "#ef4444", marginTop: 3 }}>⚠ {notesError}</div>
             )}
-            <div style={{ fontSize: 8, color: "#1e293b", textAlign: "right" }}>{notes.length}/500</div>
+            <div style={{ fontSize: 8, color: notes.length >= 250 ? "#f59e0b" : "#475569", textAlign: "right" }}>
+              {notes.length}/280
+            </div>
           </div>
         )}
 
