@@ -27,7 +27,13 @@ export default defineConfig({
       client: "react-query",
       mode: "split",
       baseUrl: "/api",
-      clean: true,
+      // clean: false — do NOT use clean: true here. On a fresh CI checkout the
+      // generated/ directory does not exist yet; orval's internal manifest tries
+      // to unlink() the old files and throws ENOENT, aborting before any code is
+      // produced. Instead, the "precodegen:generate" npm script in api-spec's
+      // package.json removes the generated/ folders with fs.rmSync({ force: true })
+      // before orval runs — that call is a no-op when the directory is absent.
+      clean: false,
       prettier: true,
       override: {
         fetch: {
@@ -52,7 +58,8 @@ export default defineConfig({
       client: "zod",
       target: "generated",
       mode: "split",
-      clean: true,
+      // clean: false — same reason as the api-client-react output above.
+      clean: false,
       prettier: true,
       override: {
         zod: {

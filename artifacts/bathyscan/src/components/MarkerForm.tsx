@@ -9,7 +9,7 @@
  *   Pre-fills all fields from the existing marker stored in markerEditStore.
  *   On submit, calls usePatchMarkersId and invalidates the markers query.
  */
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { set as idbSet } from "idb-keyval";
 import { useCameraStore } from "@/lib/cameraStore";

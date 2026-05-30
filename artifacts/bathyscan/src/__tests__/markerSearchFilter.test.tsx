@@ -10,7 +10,7 @@
  *  - Edit button opens markerEditStore with the correct marker
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent } from "@testing-library/react";
 import { renderWithProviders } from "./setup";
 import { DatasetPanel } from "@/components/DatasetPanel";
 import { useMarkerEditStore } from "@/lib/markerEditStore";

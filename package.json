@@ -8,6 +8,7 @@
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "check:codegen": "pnpm --filter @workspace/api-spec run check:codegen",
+    "check:codegen-stale": "pnpm --filter @workspace/api-spec run codegen:generate && git diff --quiet lib/api-client-react/src/generated lib/api-zod/src/generated || (echo 'ERROR: Generated API client is stale. Run codegen:generate and commit the result.' && exit 1)",
     "typecheck": "pnpm --filter @workspace/api-spec run codegen:generate && pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "lint": "eslint artifacts/bathyscan/src artifacts/api-server/src tests/e2e",
     "test:unit": "pnpm -r --if-present run test:unit",

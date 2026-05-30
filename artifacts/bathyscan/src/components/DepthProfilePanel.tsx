@@ -83,7 +83,7 @@ function triggerDownload(blob: Blob, filename: string) {
 }
 
 /** Clamp a panel position so it can't be dragged fully off-screen. */
-function clampPos(x: number, y: number, panelW: number, panelH: number): { x: number; y: number } {
+function clampPos(x: number, y: number, panelW: number, _panelH: number): { x: number; y: number } {
   const vw = typeof window !== "undefined" ? window.innerWidth  : 1280;
   const vh = typeof window !== "undefined" ? window.innerHeight : 720;
   const MARGIN = 40; // px of panel that must stay visible
