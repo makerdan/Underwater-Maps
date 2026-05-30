@@ -2445,6 +2445,65 @@ function AccountSection() {
           sublabel="Help improve BathyScan by sharing anonymised usage events"
         />
       </div>
+      {s.showQueryPanel && (
+        <div style={S.card}>
+          <div style={S.cardHeader}>AI QUERY — DATA NOTICE</div>
+          <div style={{ padding: "12px 16px" }}>
+            <div
+              data-testid="llm-disclosure-summary"
+              style={{
+                fontSize: 10,
+                color: "#94a3b8",
+                lineHeight: 1.7,
+                letterSpacing: "0.04em",
+                marginBottom: 12,
+              }}
+            >
+              When you submit a natural-language query, the following context is sent to a
+              third-party AI service (OpenAI):{" "}
+              <strong style={{ color: "#fbbf24" }}>approximate camera location &amp; depth</strong>,{" "}
+              <strong style={{ color: "#fbbf24" }}>dataset name</strong>, dataset depth range,
+              water type, and top habitat zone names. Raw sonar grid data is{" "}
+              <strong style={{ color: "#e2e8f0" }}>not</strong> transmitted. Queries are not
+              stored after processing.
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div
+                data-testid="llm-disclosure-status"
+                style={{
+                  fontSize: 9,
+                  letterSpacing: "0.14em",
+                  color: s.llmDisclosureAcknowledged ? "#4ade80" : "#fb923c",
+                }}
+              >
+                {s.llmDisclosureAcknowledged
+                  ? "✓ NOTICE ACKNOWLEDGED"
+                  : "⚠ NOT YET ACKNOWLEDGED"}
+              </div>
+              {s.llmDisclosureAcknowledged && (
+                <button
+                  data-testid="llm-disclosure-reset-btn"
+                  onClick={() => s.setLlmDisclosureAcknowledged(false)}
+                  style={{
+                    background: "rgba(251,146,60,0.08)",
+                    border: "1px solid rgba(251,146,60,0.3)",
+                    borderRadius: 3,
+                    color: "#fb923c",
+                    fontSize: 9,
+                    letterSpacing: "0.14em",
+                    padding: "4px 12px",
+                    cursor: "pointer",
+                    fontFamily: FONT,
+                    transition: "background 0.1s",
+                  }}
+                >
+                  RESET ACKNOWLEDGMENT
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       <div style={S.card}>
         <div style={S.cardHeader}>SETTINGS BACKUP</div>
         <div style={{ padding: "14px 16px" }}>
