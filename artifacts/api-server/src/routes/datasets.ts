@@ -18,6 +18,8 @@ import {
   parseXyzCsv,
   gridPoints,
   previewDataset,
+  previewBboxForDownload,
+  buildBboxCsvRows,
 } from "../lib/terrain.js";
 import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
 import { substrateFingerprintForDataset } from "../lib/substrateGrid.js";
@@ -287,6 +289,119 @@ router.get("/datasets/:id/zones", async (req, res): Promise<void> => {
   }
 
   res.status(404).json({ error: "not_found", message: "No cached classification for this grid" });
+});
+
+// ── GET /terrain/download/info ────────────────────────────────────────────────
+// Lightweight preflight for the Overview Map download tool.  Returns the
+// resolved source name, nominal resolution, and estimated water-point count
+// for the requested bbox at a given resolution — without building the full
+// grid.  Auth-required so anonymous users cannot probe our upstream APIs.
+//
+// Max bbox: 10° × 10°.  Returns 400 for out-of-range params.
+router.get("/terrain/download/info", requireAuth, async (req, res): Promise<void> => {
+  const north = parseFloat(String(req.query["north"] ?? ""));
+  const south = parseFloat(String(req.query["south"] ?? ""));
+  const east  = parseFloat(String(req.query["east"] ?? ""));
+  const west  = parseFloat(String(req.query["west"] ?? ""));
+  const rawRes = parseInt(String(req.query["resolution"] ?? "256"), 10);
+
+  if (
+    !isFinite(north) || !isFinite(south) || !isFinite(east) || !isFinite(west) ||
+    north <= south || east <= west ||
+    north > 90 || south < -90 || east > 180 || west < -180
+  ) {
+    res.status(400).json({ error: "invalid_bbox", details: "Provide valid north, south, east, west query params." });
+    return;
+  }
+
+  const dLon = east - west;
+  const dLat = north - south;
+  if (dLon > 10 || dLat > 10) {
+    res.status(400).json({
+      error: "bbox_too_large",
+      details: `Bounding box must be at most 10° × 10° (got ${dLon.toFixed(2)}° × ${dLat.toFixed(2)}°).`,
+    });
+    return;
+  }
+
+  const resolution = [64, 256, 512].includes(rawRes) ? rawRes : 256;
+
+  try {
+    const info = await previewBboxForDownload({ north, south, east, west }, resolution);
+    res.json(info);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Preflight failed";
+    res.status(502).json({ error: "upstream_error", details: msg });
+  }
+});
+
+// ── GET /terrain/download ─────────────────────────────────────────────────────
+// Builds the full bathymetric grid for the requested bbox and resolution, then
+// streams it as a `text/csv` attachment.  Authenticated only — anonymous users
+// get a 401 from requireAuth.
+//
+// Query params: north, south, east, west (degrees), resolution (64|256|512).
+// Max bbox: 10° × 10°.
+// Only water cells (depth > 0) are emitted; land/topography is excluded.
+router.get("/terrain/download", requireAuth, async (req, res): Promise<void> => {
+  const north = parseFloat(String(req.query["north"] ?? ""));
+  const south = parseFloat(String(req.query["south"] ?? ""));
+  const east  = parseFloat(String(req.query["east"] ?? ""));
+  const west  = parseFloat(String(req.query["west"] ?? ""));
+  const rawRes = parseInt(String(req.query["resolution"] ?? "256"), 10);
+
+  if (
+    !isFinite(north) || !isFinite(south) || !isFinite(east) || !isFinite(west) ||
+    north <= south || east <= west ||
+    north > 90 || south < -90 || east > 180 || west < -180
+  ) {
+    res.status(400).json({ error: "invalid_bbox", details: "Provide valid north, south, east, west query params." });
+    return;
+  }
+
+  const dLon = east - west;
+  const dLat = north - south;
+  if (dLon > 10 || dLat > 10) {
+    res.status(400).json({
+      error: "bbox_too_large",
+      details: `Bounding box must be at most 10° × 10° (got ${dLon.toFixed(2)}° × ${dLat.toFixed(2)}°).`,
+    });
+    return;
+  }
+
+  const resolution = [64, 256, 512].includes(rawRes) ? rawRes : 256;
+  const centerLat = (north + south) / 2;
+  const centerLon = (east + west) / 2;
+
+  // Derive filename: bathyscan_<lat>N_<lon>W_<res>.csv
+  const latAbs = Math.abs(centerLat).toFixed(1);
+  const lonAbs = Math.abs(centerLon).toFixed(1);
+  const latDir = centerLat >= 0 ? "N" : "S";
+  const lonDir = centerLon >= 0 ? "E" : "W";
+  const filename = `bathyscan_${latAbs}${latDir}_${lonAbs}${lonDir}_${resolution}.csv`;
+
+  try {
+    const rows = await buildBboxCsvRows({ north, south, east, west }, resolution);
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Cache-Control", "no-store");
+
+    // Stream the CSV: header + data rows.
+    res.write("lon,lat,depth\n");
+    for (const row of rows) {
+      res.write(`${row.lon.toFixed(7)},${row.lat.toFixed(7)},${row.depth.toFixed(3)}\n`);
+    }
+    res.end();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Download failed";
+    // Only send error header if not already started
+    if (!res.headersSent) {
+      res.status(502).json({ error: "upstream_error", details: msg });
+    } else {
+      res.end();
+    }
+  }
 });
 
 // ── POST /datasets/upload (multipart/form-data via multer) ───────────────────

@@ -1444,6 +1444,115 @@ export function smoothSpikes(depths: number[], N: number, depthRange: number): v
 }
 
 // ---------------------------------------------------------------------------
+// Bbox download helpers — arbitrary-bbox terrain for user CSV exports
+// ---------------------------------------------------------------------------
+
+/**
+ * Probe an arbitrary bbox to determine which upstream data source would serve
+ * it and how many water-depth grid points a download at the chosen resolution
+ * would contain.  Uses a cheap N=32 fetch so the preflight is fast.
+ */
+export async function previewBboxForDownload(
+  bbox: { north: number; south: number; east: number; west: number },
+  resolution: number,
+): Promise<{
+  sourceName: string;
+  dataSource: TerrainDataSource;
+  nominalResolutionM: number;
+  estimatedPoints: number;
+}> {
+  const { north, south, east, west } = bbox;
+  const gBbox = { minLon: west, minLat: south, maxLon: east, maxLat: north };
+  const PROBE_N = 32;
+
+  let dataSource: TerrainDataSource = "gebco";
+  let sourceName = "GEBCO 2024 (~400 m)";
+  let nominalResolutionM = 400;
+  let probeDepths: number[] | null = null;
+
+  // Try NCEI BAG mosaic first — best quality for coastal regions.
+  try {
+    const r = await fetchNceiGrid(gBbox, PROBE_N, "bagMosaic");
+    dataSource = "ncei";
+    sourceName = "NCEI BAG Mosaic (~10 m)";
+    nominalResolutionM = 10;
+    probeDepths = r.depths;
+  } catch {
+    // Fall through to GEBCO
+    try {
+      const r = await fetchGebcoGrid(gBbox, PROBE_N);
+      dataSource = "gebco";
+      sourceName = "GEBCO 2024 (~400 m)";
+      nominalResolutionM = 400;
+      probeDepths = r.depths;
+    } catch {
+      dataSource = "synthetic";
+      sourceName = "No upstream coverage";
+      nominalResolutionM = 0;
+    }
+  }
+
+  // Estimate water point fraction from probe depths.
+  const N = Math.max(32, Math.min(512, resolution));
+  let waterFraction = 1.0;
+  if (probeDepths) {
+    const waterCells = probeDepths.filter((d) => d > 0).length;
+    waterFraction = probeDepths.length > 0 ? waterCells / probeDepths.length : 1.0;
+  }
+  const estimatedPoints = Math.round(N * N * waterFraction);
+
+  return { sourceName, dataSource, nominalResolutionM, estimatedPoints };
+}
+
+/**
+ * Fetch bathymetric data for an arbitrary bbox and return a flat array of
+ * `{ lon, lat, depth }` rows ready for CSV serialisation.  Only water cells
+ * (depth > 0) are included — land / topography is excluded.
+ *
+ * Tries NCEI BAG mosaic first; falls back to GEBCO 2024.  Throws when both
+ * upstream sources fail.
+ */
+export async function buildBboxCsvRows(
+  bbox: { north: number; south: number; east: number; west: number },
+  resolution: number,
+): Promise<{ lon: number; lat: number; depth: number }[]> {
+  const { north, south, east, west } = bbox;
+  const gBbox = { minLon: west, minLat: south, maxLon: east, maxLat: north };
+  const N = Math.max(32, Math.min(512, resolution));
+
+  let depths: number[];
+
+  try {
+    const r = await fetchNceiGrid(gBbox, N, "bagMosaic");
+    depths = r.depths;
+  } catch {
+    try {
+      const r = await fetchGebcoGrid(gBbox, N);
+      depths = r.depths;
+    } catch (err) {
+      throw new Error(
+        `No bathymetric data source available for this area: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  const lonStep = N > 1 ? (east - west) / (N - 1) : 0;
+  const latStep = N > 1 ? (north - south) / (N - 1) : 0;
+
+  const rows: { lon: number; lat: number; depth: number }[] = [];
+  for (let row = 0; row < N; row++) {
+    for (let col = 0; col < N; col++) {
+      const depth = depths[row * N + col] ?? 0;
+      if (depth <= 0) continue;
+      const lon = west + col * lonStep;
+      const lat = south + row * latStep;
+      rows.push({ lon, lat, depth });
+    }
+  }
+  return rows;
+}
+
+// ---------------------------------------------------------------------------
 // CSV / XYZ parser and gridder
 // ---------------------------------------------------------------------------
 

@@ -169,6 +169,29 @@ export function buildExportFilename(
   return `${slug}-${y}-${m}-${d}.${format}`;
 }
 
+/**
+ * Build the download filename for a bathymetric CSV export from the Overview
+ * Map download tool.
+ *
+ * Format: `bathyscan_<latDir><lat>_<lonDir><lon>_<resolution>.csv`
+ * e.g.    `bathyscan_47.6N_122.3W_256.csv`
+ *
+ * @param centerLat  Geographic centre latitude of the bounding box.
+ * @param centerLon  Geographic centre longitude of the bounding box.
+ * @param resolution Grid resolution (64 | 256 | 512).
+ */
+export function buildBathyscanDownloadFilename(
+  centerLat: number,
+  centerLon: number,
+  resolution: number,
+): string {
+  const latAbs = Math.abs(centerLat).toFixed(1);
+  const lonAbs = Math.abs(centerLon).toFixed(1);
+  const latDir = centerLat >= 0 ? "N" : "S";
+  const lonDir = centerLon >= 0 ? "E" : "W";
+  return `bathyscan_${latAbs}${latDir}_${lonAbs}${lonDir}_${resolution}.csv`;
+}
+
 function slugify(s: string): string {
   return s
     .normalize("NFKD")

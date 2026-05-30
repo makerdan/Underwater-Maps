@@ -1137,7 +1137,16 @@ export function drawSelectionRect(
   y0: number,
   x1: number,
   y1: number,
-  bboxDeg?: { width: number; height: number },
+  bboxDeg?: {
+    width: number;
+    height: number;
+    /** Override fill colour (default: "rgba(0,229,255,0.10)") */
+    fillColor?: string;
+    /** Override stroke colour (default: "rgba(0,229,255,0.9)") */
+    strokeColor?: string;
+    /** Override label text colour (default: "#00e5ff") */
+    labelColor?: string;
+  },
 ): void {
   const x = Math.min(x0, x1);
   const y = Math.min(y0, y1);
@@ -1145,11 +1154,15 @@ export function drawSelectionRect(
   const h = Math.abs(y1 - y0);
   if (w < 1 || h < 1) return;
 
+  const fillColor = bboxDeg?.fillColor ?? "rgba(0,229,255,0.10)";
+  const strokeColor = bboxDeg?.strokeColor ?? "rgba(0,229,255,0.9)";
+  const labelColor = bboxDeg?.labelColor ?? "#00e5ff";
+
   ctx.save();
-  ctx.fillStyle = "rgba(0,229,255,0.10)";
+  ctx.fillStyle = fillColor;
   ctx.fillRect(x, y, w, h);
 
-  ctx.strokeStyle = "rgba(0,229,255,0.9)";
+  ctx.strokeStyle = strokeColor;
   ctx.lineWidth = 1.5;
   ctx.setLineDash([6, 4]);
   ctx.strokeRect(x + 0.5, y + 0.5, w, h);
@@ -1161,7 +1174,7 @@ export function drawSelectionRect(
     const tw = ctx.measureText(label).width;
     ctx.fillStyle = "rgba(0,10,20,0.85)";
     ctx.fillRect(x + 4, y + 4, tw + 8, 16);
-    ctx.fillStyle = "#00e5ff";
+    ctx.fillStyle = labelColor;
     ctx.textBaseline = "top";
     ctx.fillText(label, x + 8, y + 7);
   }

@@ -71,6 +71,7 @@ import { usePaletteStore } from "@/lib/paletteStore";
 import { formatDepth, formatDistance } from "@/lib/units";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useUndoableTrailDelete } from "@/hooks/useUndoableTrailDelete";
+import { TerrainDownloadPopover } from "@/components/TerrainDownloadPopover";
 
 interface TooltipState {
   visible: boolean;
@@ -170,6 +171,22 @@ export const OverviewMap: React.FC = () => {
   const selectModeRef = useRef(false);
   useEffect(() => { selectModeRef.current = selectMode; }, [selectMode]);
 
+  // --- Download tool state --------------------------------------------------
+  // `downloadMode` is mutually exclusive with `selectMode`. When active, the
+  // rubber-band rectangle commits to a download bbox that triggers the
+  // TerrainDownloadPopover instead of the catalog search panel.
+  const [downloadMode, setDownloadMode] = useState(false);
+  const downloadModeRef = useRef(false);
+  useEffect(() => { downloadModeRef.current = downloadMode; }, [downloadMode]);
+
+  // Committed download bbox (lon/lat). React state → popover re-renders.
+  const [downloadBbox, setDownloadBbox] = useState<
+    | { north: number; south: number; east: number; west: number }
+    | null
+  >(null);
+  const downloadBboxRef = useRef<typeof downloadBbox>(null);
+  useEffect(() => { downloadBboxRef.current = downloadBbox; }, [downloadBbox]);
+
   // In-progress drag rectangle (canvas pixels). `null` when no drag.
   const dragRectRef = useRef<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
 
@@ -250,17 +267,24 @@ export const OverviewMap: React.FC = () => {
 
   // Escape behavior (capture-phase so we win against the global App handler):
   //   1. Mid-drag (drawing a rectangle): cancel the in-progress drag only.
-  //   2. Completed box (or panel showing results): clear the box + panel.
-  //   3. Otherwise: do nothing — let App.tsx's global Escape close the
+  //   2. Completed download box: clear it.
+  //   3. Completed select box (or panel showing results): clear the box + panel.
+  //   4. Otherwise: do nothing — let App.tsx's global Escape close the
   //      Overview Map as usual. We do NOT consume Escape just because
   //      select-mode is toggled on, so the map can still be closed with one
   //      key press from a "no box drawn yet" state.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (dragRectRef.current && !selectedBbox && !bboxResults) {
+      if (dragRectRef.current && !selectedBbox && !bboxResults && !downloadBbox) {
         e.stopPropagation();
         dragRectRef.current = null;
+        return;
+      }
+      if (downloadBbox) {
+        e.stopPropagation();
+        dragRectRef.current = null;
+        setDownloadBbox(null);
         return;
       }
       if (selectedBbox || bboxResults) {
@@ -271,7 +295,7 @@ export const OverviewMap: React.FC = () => {
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [selectedBbox, bboxResults, clearBbox]);
+  }, [selectedBbox, bboxResults, downloadBbox, clearBbox]);
 
   // GPS & trail state (read directly from stores in rAF — no React re-render)
   const pulseRef = useRef(0);
@@ -595,41 +619,47 @@ export const OverviewMap: React.FC = () => {
       // Scale bar
       renderScaleBar(ctx, grid, t, cH, units);
 
-      // Box-select overlay (in-progress drag + committed bbox). Painted on
-      // top of every other layer so the user can always see what they drew.
+      // Box-select / Download overlay (in-progress drag + committed bbox).
+      // Painted on top of every other layer so the user can always see it.
       const drag = dragRectRef.current;
+
+      /** Convert a committed lon/lat bbox to canvas pixel corners */
+      const bboxToCanvasCorners = (north: number, south: number, east: number, west: number) => {
+        const lonRange = grid.maxLon - grid.minLon || 1;
+        const latRange = grid.maxLat - grid.minLat || 1;
+        const terrainW = t.pxPerDeg * lonRange * t.scale;
+        const terrainH = t.pxPerDeg * latRange * t.scale;
+        const x0 = t.offsetX + ((west - grid.minLon) / lonRange) * terrainW;
+        const y0 = t.offsetY + ((north - grid.minLat) / latRange) * terrainH;
+        const x1 = t.offsetX + ((east - grid.minLon) / lonRange) * terrainW;
+        const y1 = t.offsetY + ((south - grid.minLat) / latRange) * terrainH;
+        return { x0, y0, x1, y1 };
+      };
+
       if (drag) {
         const dl = canvasToLonLat(drag.x0, drag.y0, grid, t);
         const dr = canvasToLonLat(drag.x1, drag.y1, grid, t);
+        const isDownload = downloadModeRef.current;
         drawSelectionRect(ctx, drag.x0, drag.y0, drag.x1, drag.y1, {
           width: Math.abs(dr.lon - dl.lon),
           height: Math.abs(dr.lat - dl.lat),
+          ...(isDownload ? { strokeColor: "rgba(251,191,36,0.85)", fillColor: "rgba(251,191,36,0.06)" } : {}),
         });
       } else if (selectedBboxRef.current) {
         const { north, south, east, west } = selectedBboxRef.current;
-        const [x0, y0] = (() => {
-          const lonRange = grid.maxLon - grid.minLon || 1;
-          const latRange = grid.maxLat - grid.minLat || 1;
-          const terrainW = t.pxPerDeg * lonRange * t.scale;
-          const terrainH = t.pxPerDeg * latRange * t.scale;
-          return [
-            t.offsetX + ((west - grid.minLon) / lonRange) * terrainW,
-            t.offsetY + ((north - grid.minLat) / latRange) * terrainH,
-          ];
-        })();
-        const [x1, y1] = (() => {
-          const lonRange = grid.maxLon - grid.minLon || 1;
-          const latRange = grid.maxLat - grid.minLat || 1;
-          const terrainW = t.pxPerDeg * lonRange * t.scale;
-          const terrainH = t.pxPerDeg * latRange * t.scale;
-          return [
-            t.offsetX + ((east - grid.minLon) / lonRange) * terrainW,
-            t.offsetY + ((south - grid.minLat) / latRange) * terrainH,
-          ];
-        })();
+        const { x0, y0, x1, y1 } = bboxToCanvasCorners(north, south, east, west);
         drawSelectionRect(ctx, x0, y0, x1, y1, {
           width: east - west,
           height: north - south,
+        });
+      } else if (downloadBboxRef.current) {
+        const { north, south, east, west } = downloadBboxRef.current;
+        const { x0, y0, x1, y1 } = bboxToCanvasCorners(north, south, east, west);
+        drawSelectionRect(ctx, x0, y0, x1, y1, {
+          width: east - west,
+          height: north - south,
+          strokeColor: "rgba(251,191,36,0.85)",
+          fillColor: "rgba(251,191,36,0.06)",
         });
       }
 
@@ -653,9 +683,9 @@ export const OverviewMap: React.FC = () => {
     if (!canvas) return;
 
     const handleMouseDown = (e: MouseEvent) => {
-      // Select-area tool: capture rectangle start in canvas coords and
-      // suppress pan; left-button only.
-      if (selectModeRef.current && e.button === 0) {
+      // Select-area / Download tool: capture rectangle start in canvas coords
+      // and suppress pan; left-button only.
+      if ((selectModeRef.current || downloadModeRef.current) && e.button === 0) {
         const rect = canvas.getBoundingClientRect();
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
@@ -695,8 +725,8 @@ export const OverviewMap: React.FC = () => {
       const my = e.clientY - rect.top;
       mousePosRef.current = { x: mx, y: my };
 
-      // Select-area tool: extend the drag rectangle, suppress tooltip/pan.
-      if (selectModeRef.current) {
+      // Select-area / Download tool: extend the drag rectangle, suppress tooltip/pan.
+      if (selectModeRef.current || downloadModeRef.current) {
         if (dragRectRef.current) {
           dragRectRef.current.x1 = Math.max(0, Math.min(canvas.width, mx));
           dragRectRef.current.y1 = Math.max(0, Math.min(canvas.height, my));
@@ -734,7 +764,7 @@ export const OverviewMap: React.FC = () => {
 
     const handleMouseUp = () => {
       // Commit the drawn rectangle as a bbox (if it has meaningful area).
-      if (selectModeRef.current && dragRectRef.current) {
+      if ((selectModeRef.current || downloadModeRef.current) && dragRectRef.current) {
         const r = dragRectRef.current;
         const t = transformRef.current;
         dragRectRef.current = null;
@@ -745,7 +775,12 @@ export const OverviewMap: React.FC = () => {
           const south = Math.min(a.lat, b.lat);
           const east = Math.max(a.lon, b.lon);
           const west = Math.min(a.lon, b.lon);
-          setSelectedBbox({ north, south, east, west });
+          const bbox = { north, south, east, west };
+          if (downloadModeRef.current) {
+            setDownloadBbox(bbox);
+          } else {
+            setSelectedBbox(bbox);
+          }
         }
         return;
       }
@@ -785,8 +820,8 @@ export const OverviewMap: React.FC = () => {
     };
 
     const handleClick = (e: MouseEvent) => {
-      // Select tool owns the canvas; never drop-in or open EFH while active.
-      if (selectModeRef.current) return;
+      // Select / Download tool owns the canvas; never drop-in or open EFH while active.
+      if (selectModeRef.current || downloadModeRef.current) return;
       if (hasDraggedRef.current) return;
       const t = transformRef.current;
       if (!t || !overviewGrid) return;
@@ -1097,8 +1132,10 @@ export const OverviewMap: React.FC = () => {
               data-testid="overview-select-area-toggle"
               aria-pressed={selectMode}
               onClick={() => {
-                setSelectMode((v) => !v);
-                if (selectMode) clearBbox();
+                const next = !selectMode;
+                setSelectMode(next);
+                if (next) { setDownloadMode(false); setDownloadBbox(null); }
+                if (!next) clearBbox();
               }}
               style={{
                 background: selectMode ? "rgba(0,229,255,0.15)" : "rgba(0,10,20,0.75)",
@@ -1115,6 +1152,35 @@ export const OverviewMap: React.FC = () => {
               }}
             >
               ▭ SELECT AREA
+            </button>
+          </ViewscreenTooltip>
+
+          {/* Download tool toggle — draw a rectangle to download CSV */}
+          <ViewscreenTooltip label="Draw a rectangle to download bathymetric data as CSV" side="bottom">
+            <button
+              data-testid="overview-download-toggle"
+              aria-pressed={downloadMode}
+              onClick={() => {
+                const next = !downloadMode;
+                setDownloadMode(next);
+                if (next) { setSelectMode(false); clearBbox(); }
+                if (!next) { setDownloadBbox(null); dragRectRef.current = null; }
+              }}
+              style={{
+                background: downloadMode ? "rgba(251,191,36,0.15)" : "rgba(0,10,20,0.75)",
+                border: `1px solid ${downloadMode ? "rgba(251,191,36,0.55)" : "rgba(0,229,255,0.2)"}`,
+                borderRadius: 3,
+                color: downloadMode ? "#fbbf24" : "#475569",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9,
+                padding: "2px 10px",
+                cursor: "pointer",
+                letterSpacing: "0.1em",
+                lineHeight: "20px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              ↓ DOWNLOAD
             </button>
           </ViewscreenTooltip>
 
@@ -1278,6 +1344,14 @@ export const OverviewMap: React.FC = () => {
           onSave={(id) => void handleBboxSave(id)}
           savedIds={savedCatalogIds}
           savingIds={bboxSavingIds}
+        />
+      )}
+
+      {/* Download mode confirmation popover — appears after the user commits a download bbox */}
+      {downloadBbox && (
+        <TerrainDownloadPopover
+          bbox={downloadBbox}
+          onClose={() => { setDownloadBbox(null); dragRectRef.current = null; }}
         />
       )}
 
