@@ -8,7 +8,7 @@
  *
  * Rendered inside App.tsx alongside ZoneOverlay in the top-left column.
  */
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { useQueryClient } from "@tanstack/react-query";
 import { useHabitatStore } from "@/lib/habitatStore";
@@ -31,6 +31,12 @@ import {
 import { formatDepth } from "@/lib/units";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { ShoreZoneCredit } from "@/components/ShoreZoneCredit";
+import { useTidalSchedule } from "@/hooks/useTidalSchedule";
+import {
+  computeFishingWindows,
+  formatWindowRange,
+  type FishingWindow,
+} from "@/lib/fishingWindows";
 
 // ---------------------------------------------------------------------------
 // Style constants (match ZoneOverlay.tsx)
@@ -76,6 +82,61 @@ const ScoreBar: React.FC<{ score: number }> = ({ score }) => (
       }}
     />
   </div>
+);
+
+// ---------------------------------------------------------------------------
+// StarRating — renders 1–3 filled/empty stars
+// ---------------------------------------------------------------------------
+const StarRating: React.FC<{ stars: 1 | 2 | 3 }> = ({ stars }) => (
+  <span aria-label={`${stars} out of 3 stars`} style={{ letterSpacing: 1 }}>
+    {[1, 2, 3].map((n) => (
+      <span
+        key={n}
+        style={{ color: n <= stars ? "#fb923c" : "rgba(251,146,60,0.22)", fontSize: 11 }}
+      >
+        ★
+      </span>
+    ))}
+  </span>
+);
+
+// ---------------------------------------------------------------------------
+// FishingWindowCard
+// ---------------------------------------------------------------------------
+interface FishingWindowCardProps {
+  window: FishingWindow;
+  onSnap: (d: Date) => void;
+}
+
+const FishingWindowCard: React.FC<FishingWindowCardProps> = ({ window: w, onSnap }) => (
+  <ViewscreenTooltip label="Snap tidal scrubber to this window" side="right">
+    <button
+      onClick={() => onSnap(w.scrubTarget)}
+      style={{
+        display: "block",
+        width: "100%",
+        textAlign: "left",
+        background: "rgba(251,146,60,0.05)",
+        border: "1px solid rgba(251,146,60,0.22)",
+        borderRadius: 3,
+        padding: "5px 7px",
+        marginBottom: 4,
+        cursor: "pointer",
+        fontFamily: "inherit",
+        letterSpacing: "0.04em",
+      }}
+    >
+      <div className="flex items-center justify-between" style={{ marginBottom: 2 }}>
+        <span style={{ color: "#fb923c", fontSize: 10, fontWeight: 600 }}>
+          {formatWindowRange(w.start, w.end)}
+        </span>
+        <StarRating stars={w.stars} />
+      </div>
+      <div style={{ color: "#cbd5e1", fontSize: 9, letterSpacing: "0.06em" }}>
+        {w.phaseLabel}
+      </div>
+    </button>
+  </ViewscreenTooltip>
 );
 
 // ---------------------------------------------------------------------------
@@ -185,11 +246,25 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
   const autoShowZoneOverlay = useSettingsStore((s) => s.autoShowZoneOverlay);
   const habitatOverlayIntensity = useSettingsStore((s) => s.habitatOverlayIntensity);
   const setHabitatOverlayIntensity = useSettingsStore((s) => s.setHabitatOverlayIntensity);
+  const setScrubDatetime = useUiStore((s) => s.setScrubDatetime);
 
   const storeCollapsed = usePanelCollapseStore((s) => s.collapsed.habitat);
   const collapsed = embedded ? false : storeCollapsed;
   const togglePanel = usePanelCollapseStore((s) => s.toggle);
   const [droppingIdx, setDroppingIdx] = useState<number | null>(null);
+
+  const centerLat = terrain ? (terrain.minLat + terrain.maxLat) / 2 : null;
+  const centerLon = terrain ? (terrain.minLon + terrain.maxLon) / 2 : null;
+  const { schedule } = useTidalSchedule(centerLat, centerLon, 1);
+
+  const tidalPreference = activeSpecies
+    ? (SPECIES_CONFIGS[activeSpecies]?.tidalPreference ?? "any")
+    : "any";
+
+  const fishingWindows = useMemo(
+    () => computeFishingWindows(schedule, tidalPreference),
+    [schedule, tidalPreference],
+  );
 
   const qc = useQueryClient();
   const postMarkers = usePostMarkers();
@@ -474,6 +549,51 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
                   ))}
                 </>
               )}
+            </div>
+          )}
+
+          {/* Best fishing windows today — only shown when tidal data is
+              available and the active species has a non-"any" preference. */}
+          {showOverlay && fishingWindows.length > 0 && (
+            <div
+              style={{
+                marginTop: 10,
+                paddingTop: 8,
+                borderTop: "1px solid rgba(251,146,60,0.18)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 10,
+                  color: "#fb923c",
+                  letterSpacing: "0.08em",
+                  fontWeight: 700,
+                  marginBottom: 6,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                }}
+              >
+                <span>⏱</span>
+                <span>BEST WINDOWS TODAY</span>
+              </div>
+              {fishingWindows.map((w, i) => (
+                <FishingWindowCard
+                  key={i}
+                  window={w}
+                  onSnap={setScrubDatetime}
+                />
+              ))}
+              <div
+                style={{
+                  fontSize: 9,
+                  color: "#94a3b8",
+                  letterSpacing: "0.05em",
+                  marginTop: 2,
+                }}
+              >
+                Click a window to snap the tidal scrubber
+              </div>
             </div>
           )}
 

@@ -44,6 +44,8 @@ export type FreshwaterSpeciesId =
 
 export type SpeciesId = SaltwaterSpeciesId | FreshwaterSpeciesId;
 
+export type TidalPreference = "slack" | "ebb" | "flood" | "any";
+
 export interface SpeciesConfig {
   label: string;
   waterType: "saltwater" | "freshwater";
@@ -53,6 +55,14 @@ export interface SpeciesConfig {
   slopePreference: "gentle" | "steep" | "any";
   complexityWeight: number;
   edgeWeight: number;
+  /**
+   * Tidal phase preference for fishing window computation.
+   * "slack"  — best in the ±90 min window around slack water (zero current).
+   * "ebb"    — best during mid-ebb (strongest outgoing flow).
+   * "flood"  — best during mid-flood (strongest incoming flow).
+   * "any"    — no tidal preference; windows not shown.
+   */
+  tidalPreference: TidalPreference;
   weights: {
     depth: number;
     substrate: number;
@@ -94,6 +104,7 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
     slopePreference: "gentle",
     complexityWeight: 0.2,
     edgeWeight: 0.3,
+    tidalPreference: "ebb",
     weights: { depth: 0.35, substrate: 0.30, slope: 0.15, complexity: 0.10, edge: 0.10 },
   },
 
@@ -123,6 +134,7 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
     slopePreference: "any",
     complexityWeight: 0.3,
     edgeWeight: 0.4,
+    tidalPreference: "slack",
     weights: { depth: 0.30, substrate: 0.25, slope: 0.10, complexity: 0.20, edge: 0.15 },
   },
 
@@ -152,6 +164,7 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
     slopePreference: "steep",
     complexityWeight: 0.4,
     edgeWeight: 0.3,
+    tidalPreference: "slack",
     weights: { depth: 0.25, substrate: 0.30, slope: 0.20, complexity: 0.15, edge: 0.10 },
   },
 
@@ -181,6 +194,7 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
     slopePreference: "gentle",
     complexityWeight: 0.15,
     edgeWeight: 0.35,
+    tidalPreference: "slack",
     weights: { depth: 0.35, substrate: 0.30, slope: 0.20, complexity: 0.05, edge: 0.10 },
   },
 
@@ -210,6 +224,7 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
     slopePreference: "gentle",
     complexityWeight: 0.25,
     edgeWeight: 0.35,
+    tidalPreference: "slack",
     weights: { depth: 0.35, substrate: 0.25, slope: 0.15, complexity: 0.10, edge: 0.15 },
   },
 
@@ -377,6 +392,7 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
     slopePreference: "steep",
     complexityWeight: 0.4,
     edgeWeight: 0.3,
+    tidalPreference: "any",
     weights: { depth: 0.30, substrate: 0.30, slope: 0.18, complexity: 0.12, edge: 0.10 },
   },
 
@@ -398,6 +414,7 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
     slopePreference: "gentle",
     complexityWeight: 0.25,
     edgeWeight: 0.45,
+    tidalPreference: "any",
     weights: { depth: 0.30, substrate: 0.28, slope: 0.12, complexity: 0.12, edge: 0.18 },
   },
 
@@ -419,6 +436,7 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
     slopePreference: "gentle",
     complexityWeight: 0.35,
     edgeWeight: 0.4,
+    tidalPreference: "any",
     weights: { depth: 0.30, substrate: 0.30, slope: 0.10, complexity: 0.15, edge: 0.15 },
   },
 
@@ -440,6 +458,7 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
     slopePreference: "gentle",
     complexityWeight: 0.2,
     edgeWeight: 0.3,
+    tidalPreference: "any",
     weights: { depth: 0.30, substrate: 0.35, slope: 0.10, complexity: 0.10, edge: 0.15 },
   },
 
@@ -461,6 +480,7 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
     slopePreference: "gentle",
     complexityWeight: 0.3,
     edgeWeight: 0.4,
+    tidalPreference: "any",
     weights: { depth: 0.30, substrate: 0.30, slope: 0.10, complexity: 0.15, edge: 0.15 },
   },
 
@@ -482,6 +502,7 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
     slopePreference: "any",
     complexityWeight: 0.25,
     edgeWeight: 0.4,
+    tidalPreference: "any",
     weights: { depth: 0.28, substrate: 0.28, slope: 0.12, complexity: 0.14, edge: 0.18 },
   },
 
@@ -503,6 +524,7 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
     slopePreference: "any",
     complexityWeight: 0.3,
     edgeWeight: 0.35,
+    tidalPreference: "any",
     weights: { depth: 0.28, substrate: 0.30, slope: 0.14, complexity: 0.14, edge: 0.14 },
   },
 
@@ -524,6 +546,7 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
     slopePreference: "gentle",
     complexityWeight: 0.4,
     edgeWeight: 0.35,
+    tidalPreference: "any",
     weights: { depth: 0.25, substrate: 0.35, slope: 0.10, complexity: 0.20, edge: 0.10 },
   },
 

@@ -130,6 +130,14 @@ interface UiStore {
   /** Whether the left side pane (datasets, habitat, tides…) is collapsed. */
   sidePaneCollapsed: boolean;
   setSidePaneCollapsed: (collapsed: boolean) => void;
+  /**
+   * Shared time scrubber value — drives TidePanel's time slider and the tidal
+   * data fetch. Stored here so HabitatPanel can snap the scrubber to a fishing
+   * window without requiring prop drilling through App.tsx.
+   * null = live / "now".
+   */
+  scrubDatetime: Date | null;
+  setScrubDatetime: (d: Date | null) => void;
 }
 
 function readLocalBool(key: string, fallback: boolean): boolean {
@@ -259,6 +267,8 @@ export const useUiStore = create<UiStore>((set) => ({
     writeLocalBool("bathyscan:sidePaneCollapsed", collapsed);
     set({ sidePaneCollapsed: collapsed });
   },
+  scrubDatetime: null,
+  setScrubDatetime: (d) => set({ scrubDatetime: d }),
   toggleCurrentDepthLayer: (layer) => set((state) => {
     const has = state.currentDepthLayers.includes(layer);
     let next = has

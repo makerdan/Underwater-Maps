@@ -261,7 +261,8 @@ function Main() {
     didAutoLoadTidalRef.current = true;
     if (autoLoadTidal && !tidalOverlay) setTidalOverlay(true);
   }, [autoLoadTidal, tidalOverlay, setTidalOverlay]);
-  const [scrubDatetime, setScrubDatetime] = useState<Date | null>(null);
+  const scrubDatetime = useUiStore((s) => s.scrubDatetime);
+  const setScrubDatetime = useUiStore((s) => s.setScrubDatetime);
   const [showResumeHint, setShowResumeHint] = useState(false);
   const [showIosInstallHint, setShowIosInstallHint] = useState(false);
   const [queryOpen, setQueryOpen] = useState(false);
