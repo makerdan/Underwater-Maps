@@ -446,7 +446,7 @@ function ColormapSelectRow({
             aria-label={label}
             style={{
               position: "absolute",
-              top: "calc(100% + 4px)",
+              bottom: "calc(100% + 4px)",
               right: 0,
               zIndex: 50,
               listStyle: "none",
