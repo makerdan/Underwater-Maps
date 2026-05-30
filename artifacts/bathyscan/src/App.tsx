@@ -360,11 +360,13 @@ function Main() {
         if (defaultMapLoad.kind === "upload") {
           const uploadExists = userDatasets?.some((d) => d.id === defaultMapLoad.id) ?? false;
           if (uploadExists && !pendingExternalUserDatasetId) {
-            // Trigger DatasetPanel's user-dataset load pipeline.
+            // Trigger DatasetPanel's user-dataset load pipeline and return —
+            // loading a preset here would overwrite the upload before it lands.
             setPendingExternalUserDatasetId(defaultMapLoad.id);
+            return;
           }
-          // Fall through to the hardcoded default for the preset list so the
-          // scene isn't blank while the upload pipeline loads in the background.
+          // Upload no longer exists (deleted). Fall back to first preset so
+          // the scene isn't permanently blank.
           const target = datasets[0];
           if (target?.id) {
             void requestDatasetSwitch({
