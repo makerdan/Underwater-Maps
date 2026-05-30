@@ -912,37 +912,14 @@ export async function previewDataset(datasetId: string): Promise<DatasetPreview 
   }
 
   // Probe upstream at the smallest resolution (cheap) just to learn the
-  // dataSource. Mirrors the order used in buildTerrainGrid.
-  const N = 32;
-  let dataSource: DatasetPreview["dataSource"] = "synthetic";
-  let syntheticReason: string | undefined;
-
-  const nceiCoverages = NCEI_DATASET_COVERAGES[datasetId];
-  let nceiTried = false;
-  if (nceiCoverages && nceiCoverages.length > 0) {
-    nceiTried = true;
-    for (const coverageKey of nceiCoverages) {
-      try {
-        await fetchNceiGrid(meta.bbox, N, coverageKey);
-        dataSource = "ncei";
-        break;
-      } catch {
-        // try next NCEI coverage
-      }
-    }
-  }
-
-  if (dataSource !== "ncei") {
-    try {
-      await fetchGebcoGrid(meta.bbox, N);
-      dataSource = "gebco";
-    } catch {
-      dataSource = "synthetic";
-      syntheticReason = nceiTried
-        ? "Outside NCEI coverage and GEBCO unreachable"
-        : "Upstream bathymetry services (GEBCO) unreachable";
-    }
-  }
+  // dataSource. Uses the ranked resolver so the preflight always matches
+  // what buildTerrainGrid() would produce.
+  const resolved = await resolveBathymetrySource(meta, 32);
+  const dataSource: DatasetPreview["dataSource"] = resolved ? resolved.source.dataSource : "synthetic";
+  const syntheticReason: string | undefined =
+    dataSource === "synthetic"
+      ? "Bathymetry data unavailable — terrain is procedurally generated"
+      : undefined;
 
   const result: DatasetPreview = {
     datasetId: meta.id,

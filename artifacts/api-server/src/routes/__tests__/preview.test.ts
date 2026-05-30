@@ -82,12 +82,12 @@ describe("GET /api/datasets/:id/preview", () => {
       name: "DS",
       bbox: { minLon: 0, minLat: 0, maxLon: 1, maxLat: 1 },
       dataSource: "synthetic",
-      syntheticReason: "Upstream bathymetry services (GEBCO) unreachable",
+      syntheticReason: "Bathymetry data unavailable — terrain is procedurally generated",
     });
     const res = await request(app).get("/api/datasets/ds/preview");
     expect(res.status).toBe(200);
     expect(res.body.dataSource).toBe("synthetic");
-    expect(res.body.syntheticReason).toMatch(/unreachable/);
+    expect(res.body.syntheticReason).toMatch(/Bathymetry data unavailable/);
   });
 
   it("returns 404 for unknown dataset ids", async () => {
