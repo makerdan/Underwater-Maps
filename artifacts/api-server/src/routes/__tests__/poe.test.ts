@@ -593,3 +593,90 @@ describe("POST /api/poe/classify", () => {
     expect(fakeCreate).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("POST /api/poe/upscale", () => {
+  beforeEach(() => {
+    fakeChatCreate.mockReset();
+  });
+
+  it("returns 400 when imageBase64 is missing from the request body", async () => {
+    const res = await request(app)
+      .post("/api/poe/upscale")
+      .set("x-e2e-user-id", "user-upscale-missing")
+      .send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "missing_field" });
+    expect(fakeChatCreate).not.toHaveBeenCalled();
+  });
+
+  it("returns 503 when the circuit breaker is open", async () => {
+    // Trip the breaker by recording 5 consecutive failures (failureThreshold = 5).
+    // Each request may call fakeChatCreate up to twice (withRetry(..., 2)), so
+    // reject every call unconditionally.
+    fakeChatCreate.mockRejectedValue(new Error("simulated upstream failure"));
+
+    for (let i = 0; i < 5; i++) {
+      await request(app)
+        .post("/api/poe/upscale")
+        .set("x-e2e-user-id", "user-upscale-trip")
+        .send({ imageBase64: "data:image/png;base64,abc123" });
+    }
+
+    // Breaker is now open — the next call must short-circuit to 503 without
+    // calling fakeChatCreate.
+    fakeChatCreate.mockReset();
+    const res = await request(app)
+      .post("/api/poe/upscale")
+      .set("x-e2e-user-id", "user-upscale-503")
+      .send({ imageBase64: "data:image/png;base64,abc123" });
+
+    expect(res.status).toBe(503);
+    expect(res.body).toMatchObject({ error: "circuit_open" });
+    expect(fakeChatCreate).not.toHaveBeenCalled();
+  });
+
+  it("returns 502 when Poe responds but contains no image content", async () => {
+    fakeChatCreate.mockResolvedValue({
+      choices: [{ message: { content: "I cannot upscale this image." } }],
+      usage: { prompt_tokens: 10, completion_tokens: 5 },
+    });
+
+    const res = await request(app)
+      .post("/api/poe/upscale")
+      .set("x-e2e-user-id", "user-upscale-no-image")
+      .send({ imageBase64: "data:image/png;base64,abc123" });
+
+    expect(res.status).toBe(502);
+    expect(res.body).toMatchObject({ error: "no_image_in_response" });
+  });
+
+  it("returns imageBase64 data URL on a successful upscale", async () => {
+    const fakeDataUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA";
+
+    fakeChatCreate.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: [
+              {
+                type: "image_url",
+                image_url: { url: fakeDataUrl },
+              },
+            ],
+          },
+        },
+      ],
+      usage: { prompt_tokens: 10, completion_tokens: 100 },
+    });
+
+    const res = await request(app)
+      .post("/api/poe/upscale")
+      .set("x-e2e-user-id", "user-upscale-success")
+      .send({ imageBase64: "data:image/png;base64,abc123" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("imageBase64");
+    expect(res.body.imageBase64).toBe(fakeDataUrl);
+  });
+});
