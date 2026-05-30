@@ -51,6 +51,11 @@ import { useOfflineStore } from "@/lib/offlineStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { getBoundKey } from "@/lib/keyBindings";
+import {
+  flushPendingTrails,
+  flushPendingMarkers,
+  createFlushAllWithGuard,
+} from "@/lib/offlineFlush";
 import { useWaterTypeSideEffects } from "@/lib/useWaterTypeSideEffects";
 import { useActiveDatasetSync } from "@/lib/useActiveDatasetSync";
 import { VisibleDatasetsLoader } from "@/lib/VisibleDatasetsLoader";
@@ -401,86 +406,17 @@ function Main() {
     return () => clearTimeout(t);
   }, []);
 
-  // Flush offline-buffered trails when connection is restored
+  // Flush offline-buffered trails/markers when connection is restored.
+  // The guard and flush implementations live in offlineFlush.ts so they can
+  // be unit-tested independently of the full component tree.
   useEffect(() => {
-    const flushPendingTrails = async () => {
-      const keys: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k?.startsWith("pending-trail-")) keys.push(k);
-      }
-      if (!keys.length) return;
+    const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+    const flushAll = createFlushAllWithGuard(
+      () => flushPendingTrails(apiBase),
+      () => flushPendingMarkers(apiBase),
+    );
 
-      const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
-      for (const key of keys) {
-        try {
-          const raw = localStorage.getItem(key);
-          if (!raw) continue;
-          const payload = JSON.parse(raw) as {
-            datasetId: string; name: string; colour?: string;
-            startedAt: number; endedAt: number;
-            points: { lon: number; lat: number; accuracy: number; timestamp: number; seq: number }[];
-          };
-          const res = await fetch(`${apiBase}/api/trails`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              datasetId: payload.datasetId,
-              name: payload.name,
-              colour: payload.colour ?? "#ff6600",
-              startedAt: new Date(payload.startedAt).toISOString(),
-              endedAt: new Date(payload.endedAt).toISOString(),
-              points: payload.points,
-            }),
-          });
-          if (res.ok) localStorage.removeItem(key);
-        } catch {
-          // leave key for next retry
-        }
-      }
-    };
-
-    // Flush offline-buffered markers when connection is restored
-    const flushPendingMarkers = async () => {
-      const { keys, get, del } = await import("idb-keyval");
-      const allKeys = await keys();
-      const markerKeys = allKeys.filter(
-        (k): k is string => typeof k === "string" && k.startsWith("pending-marker-")
-      );
-      if (!markerKeys.length) return;
-
-      const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
-      for (const key of markerKeys) {
-        try {
-          const payload = await get(key);
-          if (!payload) continue;
-          const res = await fetch(`${apiBase}/api/markers`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-          if (res.ok) await del(key);
-        } catch {
-          // leave for next retry
-        }
-      }
-    };
-
-    const isFlushing = { current: false };
-    const flushAll = async () => {
-      if (isFlushing.current) return;
-      isFlushing.current = true;
-      try {
-        await flushPendingTrails();
-        await flushPendingMarkers();
-      } finally {
-        isFlushing.current = false;
-      }
-    };
-
-    const onlineHandler = () => {
-      void flushAll();
-    };
+    const onlineHandler = () => { void flushAll(); };
     window.addEventListener("online", onlineHandler);
     void flushAll();
     return () => window.removeEventListener("online", onlineHandler);
