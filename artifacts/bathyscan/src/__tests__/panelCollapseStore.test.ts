@@ -1,36 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   usePanelCollapseStore,
+  DEFAULTS,
+  PANEL_IDS,
   type PanelId,
 } from "@/lib/panelCollapseStore";
-
-const PANEL_IDS: PanelId[] = [
-  "datasets",
-  "zoneOverlay",
-  "habitat",
-  "cameraCoords",
-  "keyboardShortcuts",
-  "tide",
-  "overlaysTools",
-  "mapData",
-  "conditions",
-  "markersAccordion",
-  "uploadTerrainAccordion",
-];
-
-const DEFAULTS: Record<PanelId, boolean> = {
-  datasets: false,
-  zoneOverlay: false,
-  habitat: false,
-  cameraCoords: false,
-  keyboardShortcuts: true,
-  tide: false,
-  overlaysTools: false,
-  mapData: false,
-  conditions: false,
-  markersAccordion: true,
-  uploadTerrainAccordion: true,
-};
 
 async function flush() {
   await Promise.resolve();

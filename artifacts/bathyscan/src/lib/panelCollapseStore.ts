@@ -20,7 +20,7 @@ interface PanelCollapseStore {
   setCollapsed: (id: PanelId, value: boolean) => void;
 }
 
-const DEFAULTS: Record<PanelId, boolean> = {
+export const DEFAULTS: Record<PanelId, boolean> = {
   datasets: false,
   zoneOverlay: false,
   habitat: false,
@@ -33,6 +33,8 @@ const DEFAULTS: Record<PanelId, boolean> = {
   markersAccordion: true,
   uploadTerrainAccordion: true,
 };
+
+export const PANEL_IDS = Object.keys(DEFAULTS) as PanelId[];
 
 export const usePanelCollapseStore = create<PanelCollapseStore>()(
   persist(
