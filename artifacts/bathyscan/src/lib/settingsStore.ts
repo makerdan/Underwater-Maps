@@ -645,7 +645,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   markerClusterThreshold: 25,
 
   // Tidal
-  autoLoadTidal: true,
+  autoLoadTidal: false,
   defaultTidalDepthLayer: "surface",
   currentArrowDensity: "normal",
   windOverlayStyle: "arrows",
