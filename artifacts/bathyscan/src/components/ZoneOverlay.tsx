@@ -69,9 +69,12 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
   const hasEdits = useClassificationStore((s) => s.hasEdits);
   const resetToAi = useClassificationStore((s) => s.resetToAi);
   const undoPaint = useClassificationStore((s) => s.undoPaint);
+  const redoPaint = useClassificationStore((s) => s.redoPaint);
   const clearPaintUndoStack = useClassificationStore((s) => s.clearPaintUndoStack);
-  const paintUndoStack = useClassificationStore((s) => s.paintUndoStack);
-  const canUndo = paintUndoStack.length > 0;
+  const undoCount = useClassificationStore((s) => s.paintUndoStack.length);
+  const redoCount = useClassificationStore((s) => s.paintRedoStack.length);
+  const canUndo = undoCount > 0;
+  const canRedo = redoCount > 0;
   const storeCollapsed = usePanelCollapseStore((s) => s.collapsed.zoneOverlay);
   const collapsed = embedded ? false : storeCollapsed;
   const togglePanel = usePanelCollapseStore((s) => s.toggle);
@@ -83,26 +86,33 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
     }
   }, [paintMode, clearPaintUndoStack]);
 
-  // Ctrl+Z / Cmd+Z — undo last stroke while Paint Mode is active
+  // Ctrl+Z / Cmd+Z — undo, Ctrl+Shift+Z / Cmd+Shift+Z — redo, while Paint Mode is active
   useEffect(() => {
     if (!paintMode) return;
     const handler = (e: KeyboardEvent) => {
-      if (!((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey)) return;
-      // Don't intercept undo inside text fields / contentEditable elements
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z") return;
+      // Don't intercept inside text fields / contentEditable elements
       const target = e.target as HTMLElement | null;
       if (
         target instanceof HTMLInputElement ||
         target instanceof HTMLTextAreaElement ||
         target?.isContentEditable
       ) return;
-      // Only suppress browser default undo when we have a stroke to undo
-      if (useClassificationStore.getState().paintUndoStack.length === 0) return;
-      e.preventDefault();
-      undoPaint();
+      if (e.shiftKey) {
+        // Redo
+        if (useClassificationStore.getState().paintRedoStack.length === 0) return;
+        e.preventDefault();
+        redoPaint();
+      } else {
+        // Undo
+        if (useClassificationStore.getState().paintUndoStack.length === 0) return;
+        e.preventDefault();
+        undoPaint();
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paintMode, undoPaint]);
+  }, [paintMode, undoPaint, redoPaint]);
 
   // Only show this panel when there's a terrain loaded
   if (!terrain) return null;
@@ -410,28 +420,51 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
             )}
 
             {paintMode && (
-              <div style={{ display: "flex", gap: 6 }}>
-                <button
-                  data-testid="zone-undo-paint"
-                  onClick={() => undoPaint()}
-                  disabled={!canUndo}
-                  title="Undo last stroke (Ctrl+Z)"
-                  style={{
-                    fontSize: 11,
-                    color: canUndo ? "#cbd5e1" : "#94a3b8",
-                    background: "transparent",
-                    border: `1px solid ${canUndo ? "rgba(0,229,255,0.28)" : "rgba(100,116,139,0.3)"}`,
-                    borderRadius: 3,
-                    padding: "4px 6px",
-                    cursor: canUndo ? "pointer" : "default",
-                    letterSpacing: "0.04em",
-                    flex: 1,
-                    textAlign: "left",
-                    transition: "color 0.15s, border-color 0.15s",
-                  }}
-                >
-                  ↩ Undo
-                </button>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button
+                    data-testid="zone-undo-paint"
+                    onClick={() => undoPaint()}
+                    disabled={!canUndo}
+                    title="Ctrl+Z / Cmd+Z"
+                    style={{
+                      fontSize: 11,
+                      color: canUndo ? "#cbd5e1" : "#475569",
+                      background: "transparent",
+                      border: `1px solid ${canUndo ? "rgba(0,229,255,0.28)" : "rgba(100,116,139,0.2)"}`,
+                      borderRadius: 3,
+                      padding: "4px 6px",
+                      cursor: canUndo ? "pointer" : "default",
+                      letterSpacing: "0.04em",
+                      flex: 1,
+                      textAlign: "left",
+                      transition: "color 0.15s, border-color 0.15s",
+                    }}
+                  >
+                    ↩ Undo ({undoCount})
+                  </button>
+                  <button
+                    data-testid="zone-redo-paint"
+                    onClick={() => redoPaint()}
+                    disabled={!canRedo}
+                    title="Ctrl+Shift+Z / Cmd+Shift+Z"
+                    style={{
+                      fontSize: 11,
+                      color: canRedo ? "#cbd5e1" : "#475569",
+                      background: "transparent",
+                      border: `1px solid ${canRedo ? "rgba(0,229,255,0.28)" : "rgba(100,116,139,0.2)"}`,
+                      borderRadius: 3,
+                      padding: "4px 6px",
+                      cursor: canRedo ? "pointer" : "default",
+                      letterSpacing: "0.04em",
+                      flex: 1,
+                      textAlign: "left",
+                      transition: "color 0.15s, border-color 0.15s",
+                    }}
+                  >
+                    ↪ Redo ({redoCount})
+                  </button>
+                </div>
                 {hasEdits && (
                   <button
                     data-testid="zone-reset-ai"
@@ -445,7 +478,6 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                       padding: "4px 6px",
                       cursor: "pointer",
                       letterSpacing: "0.04em",
-                      flex: 1,
                       textAlign: "left",
                     }}
                   >

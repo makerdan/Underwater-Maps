@@ -228,6 +228,8 @@ interface ClassificationState {
   source: "ai" | "heuristic" | "partial" | null;
   /** Per-stroke undo snapshots. Cleared on Paint Mode toggle-off and Reset to AI. */
   paintUndoStack: Uint8Array[];
+  /** Per-stroke redo snapshots. Cleared when a new stroke is painted. */
+  paintRedoStack: Uint8Array[];
 
   classify: (grid: TerrainData) => Promise<void>;
   clearZoneMap: () => void;
@@ -250,6 +252,8 @@ interface ClassificationState {
   clearPaintUndoStack: () => void;
   /** Undo the last brush stroke, restoring the previous zoneMap snapshot. */
   undoPaint: () => void;
+  /** Redo the last undone brush stroke. */
+  redoPaint: () => void;
 }
 
 export const useClassificationStore = create<ClassificationState>((set, get) => ({
@@ -262,9 +266,10 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
   currentSubstrateFp: null,
   source: null,
   paintUndoStack: [],
+  paintRedoStack: [],
 
   clearZoneMap: () =>
-    set({ zoneMap: null, aiZoneMap: null, hasEdits: false, error: null, currentGridHash: null, currentSubstrateFp: null, source: null, paintUndoStack: [] }),
+    set({ zoneMap: null, aiZoneMap: null, hasEdits: false, error: null, currentGridHash: null, currentSubstrateFp: null, source: null, paintUndoStack: [], paintRedoStack: [] }),
 
   paintSlot: (row, col, radius, slot, waterType, resolution) => {
     const { zoneMap, currentGridHash, paintUndoStack } = get();
@@ -312,7 +317,7 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
         // sessionStorage unavailable / quota exceeded — keep in-memory edits anyway
       }
     }
-    set({ zoneMap: next, hasEdits: true, paintUndoStack: newStack });
+    set({ zoneMap: next, hasEdits: true, paintUndoStack: newStack, paintRedoStack: [] });
   },
 
   resetToAi: () => {
@@ -329,16 +334,20 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
         // ignore
       }
     }
-    set({ zoneMap: restored, hasEdits: false, paintUndoStack: [] });
+    set({ zoneMap: restored, hasEdits: false, paintUndoStack: [], paintRedoStack: [] });
   },
 
-  clearPaintUndoStack: () => set({ paintUndoStack: [] }),
+  clearPaintUndoStack: () => set({ paintUndoStack: [], paintRedoStack: [] }),
 
   undoPaint: () => {
-    const { paintUndoStack, currentGridHash, currentSubstrateFp } = get();
+    const { paintUndoStack, paintRedoStack, zoneMap, currentGridHash, currentSubstrateFp } = get();
     if (paintUndoStack.length === 0) return;
-    const newStack = paintUndoStack.slice(0, -1);
+    const newUndoStack = paintUndoStack.slice(0, -1);
     const restored = new Uint8Array(paintUndoStack[paintUndoStack.length - 1]!);
+    // Push current zoneMap onto redo stack so it can be reapplied
+    const newRedoStack = zoneMap
+      ? [...paintRedoStack, new Uint8Array(zoneMap)]
+      : paintRedoStack;
     if (currentGridHash) {
       try {
         sessionStorage.setItem(
@@ -351,7 +360,34 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
     }
     const { aiZoneMap } = get();
     const hasEdits = !!aiZoneMap && !u8Equal(restored, aiZoneMap);
-    set({ zoneMap: restored, hasEdits, paintUndoStack: newStack });
+    set({ zoneMap: restored, hasEdits, paintUndoStack: newUndoStack, paintRedoStack: newRedoStack });
+  },
+
+  redoPaint: () => {
+    const { paintRedoStack, paintUndoStack, zoneMap, currentGridHash, currentSubstrateFp } = get();
+    if (paintRedoStack.length === 0) return;
+    const newRedoStack = paintRedoStack.slice(0, -1);
+    const restored = new Uint8Array(paintRedoStack[paintRedoStack.length - 1]!);
+    // Push current zoneMap onto undo stack so it can be undone again
+    const snapshot = zoneMap ? new Uint8Array(zoneMap) : null;
+    const newUndoStack = snapshot
+      ? (paintUndoStack.length >= UNDO_LIMIT
+          ? [...paintUndoStack.slice(paintUndoStack.length - UNDO_LIMIT + 1), snapshot]
+          : [...paintUndoStack, snapshot])
+      : paintUndoStack;
+    if (currentGridHash) {
+      try {
+        sessionStorage.setItem(
+          sessionZoneKey(currentGridHash, currentSubstrateFp ?? NO_SUBSTRATE_FP),
+          zoneMapToStorage(restored),
+        );
+      } catch {
+        // ignore
+      }
+    }
+    const { aiZoneMap } = get();
+    const hasEdits = !!aiZoneMap && !u8Equal(restored, aiZoneMap);
+    set({ zoneMap: restored, hasEdits, paintUndoStack: newUndoStack, paintRedoStack: newRedoStack });
   },
 
   classify: async (grid: TerrainData): Promise<void> => {
@@ -380,7 +416,7 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
         const zoneMap = zoneMapFromStorage(stored);
         const ai = storedAi ? zoneMapFromStorage(storedAi) : new Uint8Array(zoneMap);
         const hasEdits = !!storedAi && !u8Equal(zoneMap, ai);
-        set({ zoneMap, aiZoneMap: ai, hasEdits, loading: false, error: null, currentGridHash: gridHash, currentSubstrateFp: knownFp, source: "ai", paintUndoStack: [] });
+        set({ zoneMap, aiZoneMap: ai, hasEdits, loading: false, error: null, currentGridHash: gridHash, currentSubstrateFp: knownFp, source: "ai", paintUndoStack: [], paintRedoStack: [] });
         return Promise.resolve();
       }
     } catch {
@@ -391,7 +427,7 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
     const existing = inFlight.get(gridHash);
     if (existing) return existing;
 
-    set({ loading: true, error: null, zoneMap: null, aiZoneMap: null, hasEdits: false, currentGridHash: gridHash, currentSubstrateFp: null, source: null, paintUndoStack: [] });
+    set({ loading: true, error: null, zoneMap: null, aiZoneMap: null, hasEdits: false, currentGridHash: gridHash, currentSubstrateFp: null, source: null, paintUndoStack: [], paintRedoStack: [] });
 
     const commitFresh = (zoneMap: Uint8Array, source: ClassifyResultSource, fp: string) => {
       writeKnownSubstrateFp(datasetId, fp);
@@ -419,6 +455,7 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
         currentSubstrateFp: fp,
         source,
         paintUndoStack: [],
+        paintRedoStack: [],
       });
     };
 
