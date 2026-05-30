@@ -18,7 +18,7 @@ import {
 } from "./keyBindings";
 import { usePanelCollapseStore, type PanelId } from "./panelCollapseStore";
 
-export const SETTINGS_SCHEMA_VERSION = 12;
+export const SETTINGS_SCHEMA_VERSION = 13;
 
 /**
  * Standard-mapping gamepad button index used to trigger the crosshair
@@ -103,7 +103,8 @@ export type SettingsSection =
   | "overview"
   | "environment"
   | "currents"
-  | "shortcuts";
+  | "shortcuts"
+  | "onboarding";
 
 export interface SettingsState {
   schemaVersion: number;
@@ -251,6 +252,14 @@ export interface SettingsState {
    * and dataset name to a third-party LLM service.
    */
   llmDisclosureAcknowledged: boolean;
+
+  // ── Onboarding ───────────────────────────────────────────────────────
+  /**
+   * Set to true once the user completes or skips the first-time guided
+   * tour. Synced to the server so a signed-in user who finishes the tour
+   * on one device does not see it again on another.
+   */
+  hasSeenOnboarding: boolean;
 
   /** Per-dataset saved camera spawn positions (set via "Set as home" context menu). */
   datasetHomePositions: Record<string, DatasetHomePosition>;
@@ -407,6 +416,9 @@ interface SettingsActions {
   // Account
   setTelemetryOptIn: (v: boolean) => void;
   setLlmDisclosureAcknowledged: (v: boolean) => void;
+
+  // Onboarding
+  setHasSeenOnboarding: (v: boolean) => void;
 
   // Page-level
   setShowAdvancedEverywhere: (v: boolean) => void;
@@ -638,6 +650,9 @@ export const DEFAULT_SETTINGS: SettingsState = {
   telemetryOptIn: false,
   llmDisclosureAcknowledged: false,
 
+  // Onboarding
+  hasSeenOnboarding: false,
+
   datasetHomePositions: {},
   datasetFolderExpanded: {},
   bookmarks: {},
@@ -698,6 +713,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   account: ["telemetryOptIn", "llmDisclosureAcknowledged"],
   environment: ["waterType"],
   shortcuts: ["keyBindings", "crosshairMenuGamepadButton"],
+  onboarding: ["hasSeenOnboarding"],
 };
 
 /**
@@ -868,6 +884,9 @@ export const useSettingsStore = create<SettingsStore>()(
         // Account
         setTelemetryOptIn: setter("telemetryOptIn"),
         setLlmDisclosureAcknowledged: setter("llmDisclosureAcknowledged"),
+
+        // Onboarding
+        setHasSeenOnboarding: setter("hasSeenOnboarding"),
 
         // Page-level
         setShowAdvancedEverywhere: setter("showAdvancedEverywhere"),

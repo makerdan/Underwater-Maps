@@ -76,6 +76,8 @@ import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { initialViewParams } from "@/lib/viewUrl";
 import { useUrlSync } from "@/hooks/useUrlSync";
 import { lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
+import { OnboardingOverlay } from "@/components/OnboardingOverlay";
+import { useWebglContextStore } from "@/lib/webglContextStore";
 
 
 function TestBridge(): null {
@@ -992,8 +994,27 @@ function Main() {
           </ViewscreenTooltip>
         )}
       </div>
+
+      {/* Onboarding overlay — shown to new users after the scene is ready.
+          Suppressed while the WebGL context is lost/recovering so a recovery
+          remount doesn't re-trigger the tour mid-session. */}
+      <OnboardingGuard terrain={terrain} />
     </div>
   );
+}
+
+/**
+ * Renders the onboarding overlay once the 3D scene has a terrain loaded.
+ * The overlay is kept mounted (not unmounted) while WebGL context is lost so
+ * that the current tour step is preserved in component state — preventing the
+ * tour from restarting at step 1 after a context-loss recovery remount.
+ * Before the first terrain loads we don't mount at all so the overlay doesn't
+ * flash during the initial data-load phase.
+ */
+function OnboardingGuard({ terrain }: { terrain: unknown }) {
+  const contextLost = useWebglContextStore((s) => s.contextLost);
+  if (!terrain) return null;
+  return <OnboardingOverlay suppressed={contextLost} />;
 }
 
 /**

@@ -8,6 +8,7 @@ import {
 } from "@/lib/helpContent";
 import { Markdown } from "./Markdown";
 import { HelpQA } from "./HelpQA";
+import { useSettingsStore } from "@/lib/settingsStore";
 
 const WINDOW_W = 880;
 const WINDOW_H = 600;
@@ -31,6 +32,49 @@ function clampPosition(x: number, y: number, w: number, h: number): { x: number;
     x: Math.max(0, Math.min(x, vw - Math.min(w, vw))),
     y: Math.max(0, Math.min(y, vh - Math.min(h, vh))),
   };
+}
+
+/**
+ * "Take the tour" button rendered at the bottom of the Help sidebar nav.
+ * Resets hasSeenOnboarding so the overlay appears when the user closes Help
+ * and returns to the 3D scene.
+ */
+function TakeTourLink({ onClose }: { onClose: () => void }) {
+  const setHasSeenOnboarding = useSettingsStore((s) => s.setHasSeenOnboarding);
+
+  const handleClick = () => {
+    setHasSeenOnboarding(false);
+    onClose();
+  };
+
+  return (
+    <div
+      style={{
+        borderTop: "1px solid rgba(0,229,255,0.1)",
+        marginTop: 12,
+        paddingTop: 12,
+      }}
+    >
+      <button
+        type="button"
+        className="help-toc-item"
+        data-testid="help-take-tour-btn"
+        onClick={handleClick}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          color: "#00e5ff",
+          fontWeight: 700,
+          width: "100%",
+          textAlign: "left",
+        }}
+      >
+        <span style={{ fontSize: 12 }}>▶</span>
+        Take the tour
+      </button>
+    </div>
+  );
 }
 
 function ContactFooter() {
@@ -283,6 +327,7 @@ export const HelpWindow: React.FC = () => {
                     ))}
                   </div>
                 ))}
+                <TakeTourLink onClose={closeHelp} />
               </nav>
             )}
           </aside>

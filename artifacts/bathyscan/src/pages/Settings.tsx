@@ -2704,11 +2704,89 @@ function AccountSection() {
   );
 }
 
+// ─── Onboarding section ───────────────────────────────────────────────────────
+function OnboardingSection({ onNavigateBack }: { onNavigateBack: () => void }) {
+  const hasSeenOnboarding = useSettingsStore((s) => s.hasSeenOnboarding);
+  const setHasSeenOnboarding = useSettingsStore((s) => s.setHasSeenOnboarding);
+
+  const handleReplay = () => {
+    setHasSeenOnboarding(false);
+    onNavigateBack();
+  };
+
+  return (
+    <>
+      <SectionTitle>◈ ONBOARDING</SectionTitle>
+      <div style={S.card}>
+        <div style={S.cardHeader}>GUIDED TOUR</div>
+        <div style={S.row}>
+          <div>
+            <div style={S.label}>Replay tour</div>
+            <div style={S.sublabel}>
+              Walk through the 5 core actions — datasets, flying, markers, overlays, and AI.
+            </div>
+          </div>
+          <button
+            type="button"
+            data-testid="replay-tour-btn"
+            onClick={handleReplay}
+            style={{
+              background: "rgba(0,229,255,0.08)",
+              border: "1px solid rgba(0,229,255,0.3)",
+              borderRadius: 4,
+              color: "#00e5ff",
+              fontSize: 9,
+              letterSpacing: "0.15em",
+              padding: "6px 14px",
+              cursor: "pointer",
+              fontFamily: FONT,
+              transition: "background 0.1s",
+              flexShrink: 0,
+            }}
+          >
+            ▶ REPLAY TOUR
+          </button>
+        </div>
+        <div style={{ ...S.row, borderBottom: "none" }}>
+          <div>
+            <div style={S.label}>Tour status</div>
+            <div style={S.sublabel}>Whether you have already completed or skipped the guided tour.</div>
+          </div>
+          <span
+            style={{
+              fontSize: 9,
+              letterSpacing: "0.15em",
+              color: hasSeenOnboarding ? "#4ade80" : "#fbbf24",
+              fontFamily: FONT,
+            }}
+          >
+            {hasSeenOnboarding ? "✓ COMPLETED" : "NOT STARTED"}
+          </span>
+        </div>
+      </div>
+      <div
+        style={{
+          fontSize: 9,
+          color: "#64748b",
+          letterSpacing: "0.08em",
+          lineHeight: 1.6,
+          marginTop: 8,
+          padding: "0 2px",
+        }}
+      >
+        The tour resets automatically when you sign in on a new device (if you haven&apos;t completed
+        it there). Clicking &quot;Replay tour&quot; returns you to the 3D scene and starts the walkthrough
+        immediately.
+      </div>
+    </>
+  );
+}
+
 // ─── Nav tabs ─────────────────────────────────────────────────────────────────
 type Tab =
   | "visuals" | "navigation" | "hud" | "units" | "overview" | "markers"
   | "tidal" | "currents" | "habitat" | "gps" | "dataset" | "offline"
-  | "accessibility" | "shortcuts" | "account" | "environment";
+  | "accessibility" | "shortcuts" | "account" | "environment" | "onboarding";
 
 const NAV_TABS: { id: Tab; label: string }[] = [
   { id: "visuals", label: "VISUALS & PERF" },
@@ -2727,6 +2805,7 @@ const NAV_TABS: { id: Tab; label: string }[] = [
   { id: "accessibility", label: "ACCESSIBILITY" },
   { id: "shortcuts", label: "SHORTCUTS" },
   { id: "account", label: "ACCOUNT & PRIVACY" },
+  { id: "onboarding", label: "ONBOARDING" },
 ];
 
 // ─── Main export ──────────────────────────────────────────────────────────────
@@ -3012,9 +3091,10 @@ export function Settings() {
           {tab === "accessibility" && <AccessibilitySection />}
           {tab === "shortcuts" && <ShortcutsSection />}
           {tab === "account" && <AccountSection />}
+          {tab === "onboarding" && <OnboardingSection onNavigateBack={handleBack} />}
 
           {/* Footer: global reset */}
-          <GlobalResetFooter />
+          {tab !== "onboarding" && <GlobalResetFooter />}
         </div>
       </div>
     </div>

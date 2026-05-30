@@ -121,7 +121,9 @@ export const MarkerSprite: React.FC<Props> = ({ marker, terrain, showLabel = tru
             {marker.label}
           </Text>
         )}
-        {/* Note preview — second line, dimmer and smaller than the label */}
+        {/* Note preview — second line, dimmer and smaller than the label.
+            depth_pole markers are already excluded by the early return above,
+            so no type guard is needed here. */}
         {showLabel && marker.notes && (() => {
           const preview = marker.notes.length > 40
             ? marker.notes.slice(0, 40) + "…"
