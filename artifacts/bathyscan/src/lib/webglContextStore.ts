@@ -9,12 +9,20 @@
  *     re-uploads all GPU-owned resources (geometries, materials, textures,
  *     particle buffers, drift path, water plane) from their CPU-side state
  *     without a full page reload.
+ *
+ * After MAX_RECOVERY_ATTEMPTS consecutive losses the store stops trying to
+ * remount the scene (no more recoveryKey bumps) and sets
+ * `contextPermanentlyLost` so the overlay can show a hard "reload" prompt.
  */
 import { create } from "zustand";
+
+const MAX_RECOVERY_ATTEMPTS = 3;
 
 interface WebglContextStore {
   contextLost: boolean;
   recoveryKey: number;
+  recoveryAttempts: number;
+  contextPermanentlyLost: boolean;
   markLost: () => void;
   markRestored: () => void;
 }
@@ -22,7 +30,19 @@ interface WebglContextStore {
 export const useWebglContextStore = create<WebglContextStore>((set) => ({
   contextLost: false,
   recoveryKey: 0,
-  markLost: () => set({ contextLost: true }),
+  recoveryAttempts: 0,
+  contextPermanentlyLost: false,
+  markLost: () =>
+    set((s) => {
+      const nextAttempts = s.recoveryAttempts + 1;
+      if (nextAttempts > MAX_RECOVERY_ATTEMPTS) {
+        return { contextLost: true, contextPermanentlyLost: true };
+      }
+      return { contextLost: true, recoveryAttempts: nextAttempts };
+    }),
   markRestored: () =>
-    set((s) => ({ contextLost: false, recoveryKey: s.recoveryKey + 1 })),
+    set((s) => {
+      if (s.contextPermanentlyLost) return {};
+      return { contextLost: false, recoveryKey: s.recoveryKey + 1 };
+    }),
 }));

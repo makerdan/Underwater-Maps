@@ -466,13 +466,23 @@ function Main() {
       }
     };
 
+    const isFlushing = { current: false };
+    const flushAll = async () => {
+      if (isFlushing.current) return;
+      isFlushing.current = true;
+      try {
+        await flushPendingTrails();
+        await flushPendingMarkers();
+      } finally {
+        isFlushing.current = false;
+      }
+    };
+
     const onlineHandler = () => {
-      void flushPendingTrails();
-      void flushPendingMarkers();
+      void flushAll();
     };
     window.addEventListener("online", onlineHandler);
-    void flushPendingTrails();
-    void flushPendingMarkers();
+    void flushAll();
     return () => window.removeEventListener("online", onlineHandler);
   }, []);
 

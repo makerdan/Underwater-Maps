@@ -5,34 +5,57 @@ import { StaleWhileRevalidate } from "workbox-strategies";
 import { get as idbGet, del as idbDel, keys as idbKeys } from "idb-keyval";
 
 declare const self: ServiceWorkerGlobalScope;
+declare const __BUILD_HASH__: string;
+
+// Versioned cache prefix — updated on every build so stale terrain/marker
+// caches from previous deploys are purged automatically in the activate step.
+const CACHE_VERSION = `bathyscan-v${__BUILD_HASH__}`;
+const CACHE_PREFIX = "bathyscan-v";
 
 // Workbox injects the precache manifest here at build time
 precacheAndRoute(self.__WB_MANIFEST);
+
+// ── Lifecycle: delete caches from previous builds on activate ────────────────
+
+self.addEventListener("activate", (event: ExtendableEvent) => {
+  event.waitUntil(
+    caches.keys().then((names) =>
+      Promise.all(
+        names
+          .filter(
+            (name) =>
+              name.startsWith(CACHE_PREFIX) && name !== CACHE_VERSION,
+          )
+          .map((name) => caches.delete(name)),
+      ),
+    ),
+  );
+});
 
 // ── Runtime caching ─────────────────────────────────────────────────────────
 
 registerRoute(
   ({ url }: { url: URL }) => /\/api\/datasets$/.test(url.pathname),
-  new StaleWhileRevalidate({ cacheName: "api-datasets" }),
+  new StaleWhileRevalidate({ cacheName: `${CACHE_VERSION}-api-datasets` }),
 );
 
 registerRoute(
   ({ url }: { url: URL }) => /\/api\/datasets\/[^/]+\/terrain/.test(url.pathname),
   new StaleWhileRevalidate({
-    cacheName: "api-terrain",
+    cacheName: `${CACHE_VERSION}-api-terrain`,
   }),
 );
 
 registerRoute(
   ({ url }: { url: URL }) => /\/api\/datasets\/[^/]+\/overview/.test(url.pathname),
   new StaleWhileRevalidate({
-    cacheName: "api-overview",
+    cacheName: `${CACHE_VERSION}-api-overview`,
   }),
 );
 
 registerRoute(
   ({ url }: { url: URL }) => /\/api\/markers/.test(url.pathname),
-  new StaleWhileRevalidate({ cacheName: "api-markers" }),
+  new StaleWhileRevalidate({ cacheName: `${CACHE_VERSION}-api-markers` }),
 );
 
 // ── Background Sync: push queued markers to the API ─────────────────────────
