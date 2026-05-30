@@ -3,8 +3,7 @@
  * OverlaysToolsPanel.
  *
  * Covers:
- * - Species checklist (EFH_SPECIES_PALETTE) renders when
- *   efhOverlayEnabled=true AND hasEfh=true.
+ * - Species checklist renders when efhOverlayEnabled=true AND hasEfh=true.
  * - Checklist is absent when efhOverlayEnabled=false.
  * - Checklist is absent when hasEfh=false (no EFH dataset / no embedded
  *   polygons).
@@ -94,7 +93,22 @@ vi.mock("@workspace/api-client-react", () => ({
 
 import { OverlaysToolsPanel } from "@/components/OverlaysToolsPanel";
 import { useUiStore } from "@/lib/uiStore";
-import { EFH_SPECIES_PALETTE } from "@/lib/efhSpeciesPalette";
+
+// Inline snapshot of the GOA EFH species list used by the static checklist.
+// Kept here so tests remain self-contained after efhSpeciesPalette.ts was removed.
+const EFH_SPECIES_PALETTE = [
+  { commonName: "Pacific Halibut",     color: "#f59e0b" },
+  { commonName: "Pacific Cod",         color: "#6366f1" },
+  { commonName: "Black Rockfish",      color: "#1f2937" },
+  { commonName: "Dusky Rockfish",      color: "#7c3aed" },
+  { commonName: "Pacific Ocean Perch", color: "#dc2626" },
+  { commonName: "Quillback Rockfish",  color: "#facc15" },
+  { commonName: "Rougheye Rockfish",   color: "#92400e" },
+  { commonName: "Yelloweye Rockfish",  color: "#ef4444" },
+  { commonName: "Arrowtooth Flounder", color: "#16a34a" },
+  { commonName: "Sablefish",           color: "#0e7490" },
+  { commonName: "Walleye Pollock",     color: "#7c3aed" },
+];
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
@@ -148,7 +162,7 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
     expect(screen.queryByText(firstSpecies)).not.toBeInTheDocument();
   });
 
-  it("renders all species in EFH_SPECIES_PALETTE when the checklist is visible", () => {
+  it("renders all expected species when the checklist is visible", () => {
     resetUiStore({ efhOverlayEnabled: true });
     render(<OverlaysToolsPanel />);
 
