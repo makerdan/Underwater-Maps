@@ -137,11 +137,11 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
     resetUiStore({ efhOverlayEnabled: true });
     render(<OverlaysToolsPanel />);
 
-    const firstSpecies = EFH_SPECIES_PALETTE[0].commonName.toUpperCase();
+    const firstSpecies = EFH_SPECIES_PALETTE[0]!.commonName.toUpperCase();
     expect(screen.getByText(firstSpecies)).toBeInTheDocument();
 
     const lastSpecies =
-      EFH_SPECIES_PALETTE[EFH_SPECIES_PALETTE.length - 1].commonName.toUpperCase();
+      EFH_SPECIES_PALETTE[EFH_SPECIES_PALETTE.length - 1]!.commonName.toUpperCase();
     expect(screen.getByText(lastSpecies)).toBeInTheDocument();
   });
 
@@ -149,7 +149,7 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
     resetUiStore({ efhOverlayEnabled: false });
     render(<OverlaysToolsPanel />);
 
-    const firstSpecies = EFH_SPECIES_PALETTE[0].commonName.toUpperCase();
+    const firstSpecies = EFH_SPECIES_PALETTE[0]!.commonName.toUpperCase();
     expect(screen.queryByText(firstSpecies)).not.toBeInTheDocument();
   });
 
@@ -158,7 +158,7 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
     resetUiStore({ efhOverlayEnabled: true });
     render(<OverlaysToolsPanel />);
 
-    const firstSpecies = EFH_SPECIES_PALETTE[0].commonName.toUpperCase();
+    const firstSpecies = EFH_SPECIES_PALETTE[0]!.commonName.toUpperCase();
     expect(screen.queryByText(firstSpecies)).not.toBeInTheDocument();
   });
 
@@ -177,7 +177,7 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
     resetUiStore({ efhOverlayEnabled: true });
     render(<OverlaysToolsPanel />);
 
-    const target = EFH_SPECIES_PALETTE[0].commonName;
+    const target = EFH_SPECIES_PALETTE[0]!.commonName;
     const btn = screen.getByTitle(`Hide ${target}`);
 
     act(() => { fireEvent.click(btn); });
@@ -186,7 +186,7 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
   });
 
   it("clicking a hidden species row makes it visible (removes it from hiddenEfhSpecies)", () => {
-    const target = EFH_SPECIES_PALETTE[1].commonName;
+    const target = EFH_SPECIES_PALETTE[1]!.commonName;
     resetUiStore({
       efhOverlayEnabled: true,
       hiddenEfhSpecies: new Set([target]),
@@ -217,7 +217,7 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
     resetUiStore({ efhOverlayEnabled: true });
     render(<OverlaysToolsPanel />);
 
-    const target = EFH_SPECIES_PALETTE[2].commonName;
+    const target = EFH_SPECIES_PALETTE[2]!.commonName;
     const btn = screen.getByTitle(`Hide ${target}`);
 
     expect(btn.getAttribute("aria-pressed")).toBe("true");
@@ -225,7 +225,7 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
   });
 
   it("hidden species button has aria-pressed='false' and reduced opacity (0.38)", () => {
-    const target = EFH_SPECIES_PALETTE[2].commonName;
+    const target = EFH_SPECIES_PALETTE[2]!.commonName;
     resetUiStore({
       efhOverlayEnabled: true,
       hiddenEfhSpecies: new Set([target]),
@@ -239,7 +239,7 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
   });
 
   it("multiple hidden species all render at reduced opacity with aria-pressed='false'", () => {
-    const hidden = [EFH_SPECIES_PALETTE[0].commonName, EFH_SPECIES_PALETTE[3].commonName];
+    const hidden = [EFH_SPECIES_PALETTE[0]!.commonName, EFH_SPECIES_PALETTE[3]!.commonName];
     resetUiStore({
       efhOverlayEnabled: true,
       hiddenEfhSpecies: new Set(hidden),

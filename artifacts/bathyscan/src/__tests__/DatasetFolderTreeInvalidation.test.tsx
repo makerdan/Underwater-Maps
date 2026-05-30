@@ -101,6 +101,55 @@ const datasets = [
   { id: "d3", name: "Loose dataset", folderId: null, minDepth: 0, maxDepth: 5, updatedAt: "2025-01-03" },
 ];
 
+describe("DatasetFolderTree — undo-window flush on unmount", () => {
+  beforeEach(() => {
+    deleteDatasetMutate.mockReset();
+    invalidateQueries.mockReset();
+    removeQueries.mockReset();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("commits pending dataset delete immediately when the component unmounts mid-window", () => {
+    const onDatasetsRemoved = vi.fn();
+    const { unmount } = render(
+      <DatasetFolderTree
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        datasets={datasets as any}
+        activeUserDatasetId="d3"
+        loadingId={null}
+        onSelectDataset={vi.fn()}
+        onDatasetsRemoved={onDatasetsRemoved}
+      />,
+    );
+
+    // Start a delete — hides the row and arms the 5-second timer.
+    fireEvent.click(screen.getByTestId("btn-delete-dataset-d3"));
+    fireEvent.click(screen.getByTestId("confirm-delete-confirm"));
+
+    // Unmount *before* the undo window elapses.
+    expect(deleteDatasetMutate).not.toHaveBeenCalled();
+    act(() => { unmount(); });
+
+    // The component's cleanup effect must have flushed the commit immediately.
+    expect(deleteDatasetMutate).toHaveBeenCalledTimes(1);
+
+    // Simulate the mutation's onSuccess to verify downstream effects also fire.
+    const opts = deleteDatasetMutate.mock.calls[0]![1] as { onSuccess: () => void };
+    act(() => opts.onSuccess());
+
+    expect(removeQueries).toHaveBeenCalledWith({
+      queryKey: ["user-datasets", "d3", "terrain"],
+    });
+    expect(removeQueries).toHaveBeenCalledWith({
+      queryKey: ["user-datasets", "d3", "overview"],
+    });
+    expect(onDatasetsRemoved).toHaveBeenCalledWith(["d3"]);
+  });
+});
+
 describe("DatasetFolderTree — invalidation contract on delete", () => {
   beforeEach(() => {
     deleteDatasetMutate.mockReset();

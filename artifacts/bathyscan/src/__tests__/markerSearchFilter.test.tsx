@@ -340,7 +340,8 @@ describe("DatasetPanel — marker search/filter", () => {
     );
 
     // Click the edit button on the first marker (Big school near ridge → m1)
-    fireEvent.click(editButtons[0]);
+    expect(editButtons.length).toBeGreaterThan(0);
+    fireEvent.click(editButtons[0]!);
 
     const stored = useMarkerEditStore.getState().marker;
     expect(stored).not.toBeNull();

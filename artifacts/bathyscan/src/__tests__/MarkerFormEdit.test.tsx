@@ -7,7 +7,7 @@
  *  - Submitting in edit mode calls usePatchMarkersId (PATCH), not usePostMarkers (POST)
  *  - Closing in edit mode calls markerEditStore.close(), not setMarkerFormOpen
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { screen, fireEvent, waitFor } from "@testing-library/react";
 import { renderWithProviders } from "./setup";
 import { MarkerForm } from "@/components/MarkerForm";
