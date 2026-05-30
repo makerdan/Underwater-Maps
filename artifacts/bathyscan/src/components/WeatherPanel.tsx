@@ -114,40 +114,38 @@ interface WeatherPanelProps {
 
 export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
   const { terrain } = useAppState();
-  const {
-    driftConditions,
-    setDriftConditions,
-    setDriftPath,
-    setEstimatedConditions,
-    estimatedConditions,
-    driftHour,
-    driftStartLat,
-    driftStartLon,
-    setDriftStart,
-    lineLengthM,
-    setLineLengthM,
-    manualWindSpeedKnots,
-    setManualWindSpeedKnots,
-    manualWindDegrees,
-    setManualWindDegrees,
-    manualTidalSpeedKnots,
-    setManualTidalSpeedKnots,
-    manualTidalDegrees,
-    setManualTidalDegrees,
-    manualSlackNow,
-    setManualSlackNow,
-    driftMode,
-    setDriftMode,
-    boatHeadingDeg,
-    setBoatHeadingDeg,
-    boatSpeedKnots,
-    setBoatSpeedKnots,
-    driftWaypoints,
-    removeDriftWaypoint,
-    moveDriftWaypoint,
-    clearDriftWaypoints,
-    setDriftWaypoints,
-  } = useDriftStore();
+  const driftConditions = useDriftStore((s) => s.driftConditions);
+  const setDriftConditions = useDriftStore((s) => s.setDriftConditions);
+  const setDriftPath = useDriftStore((s) => s.setDriftPath);
+  const setEstimatedConditions = useDriftStore((s) => s.setEstimatedConditions);
+  const estimatedConditions = useDriftStore((s) => s.estimatedConditions);
+  const driftHour = useDriftStore((s) => s.driftHour);
+  const driftStartLat = useDriftStore((s) => s.driftStartLat);
+  const driftStartLon = useDriftStore((s) => s.driftStartLon);
+  const setDriftStart = useDriftStore((s) => s.setDriftStart);
+  const lineLengthM = useDriftStore((s) => s.lineLengthM);
+  const setLineLengthM = useDriftStore((s) => s.setLineLengthM);
+  const manualWindSpeedKnots = useDriftStore((s) => s.manualWindSpeedKnots);
+  const setManualWindSpeedKnots = useDriftStore((s) => s.setManualWindSpeedKnots);
+  const manualWindDegrees = useDriftStore((s) => s.manualWindDegrees);
+  const setManualWindDegrees = useDriftStore((s) => s.setManualWindDegrees);
+  const manualTidalSpeedKnots = useDriftStore((s) => s.manualTidalSpeedKnots);
+  const setManualTidalSpeedKnots = useDriftStore((s) => s.setManualTidalSpeedKnots);
+  const manualTidalDegrees = useDriftStore((s) => s.manualTidalDegrees);
+  const setManualTidalDegrees = useDriftStore((s) => s.setManualTidalDegrees);
+  const manualSlackNow = useDriftStore((s) => s.manualSlackNow);
+  const setManualSlackNow = useDriftStore((s) => s.setManualSlackNow);
+  const driftMode = useDriftStore((s) => s.driftMode);
+  const setDriftMode = useDriftStore((s) => s.setDriftMode);
+  const boatHeadingDeg = useDriftStore((s) => s.boatHeadingDeg);
+  const setBoatHeadingDeg = useDriftStore((s) => s.setBoatHeadingDeg);
+  const boatSpeedKnots = useDriftStore((s) => s.boatSpeedKnots);
+  const setBoatSpeedKnots = useDriftStore((s) => s.setBoatSpeedKnots);
+  const driftWaypoints = useDriftStore((s) => s.driftWaypoints);
+  const removeDriftWaypoint = useDriftStore((s) => s.removeDriftWaypoint);
+  const moveDriftWaypoint = useDriftStore((s) => s.moveDriftWaypoint);
+  const clearDriftWaypoints = useDriftStore((s) => s.clearDriftWaypoints);
+  const setDriftWaypoints = useDriftStore((s) => s.setDriftWaypoints);
   const units = useSettingsStore((s) => s.units);
 
   const queryClient = useQueryClient();

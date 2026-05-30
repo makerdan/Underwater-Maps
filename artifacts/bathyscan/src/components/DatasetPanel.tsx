@@ -59,6 +59,12 @@ import type { TerrainData } from "@workspace/api-client-react";
 // a hook deps entry.
 const AUTO_RETRY_DELAYS_MS = [500, 1500];
 
+// Stable empty-array fallback used by the bookmarks selector so that
+// getSnapshot always returns the same reference when there are no bookmarks.
+// A new [] literal inside the selector would cause React 18 Concurrent Mode
+// to see two different snapshot values and throw "getSnapshot should be cached".
+const EMPTY_BOOKMARKS: CameraBookmark[] = [];
+
 /**
  * Build a queryFn that streams the terrain payload via fetchJsonWithProgress
  * and pushes byte-level progress into the activeLoadStore. Used to override
@@ -733,7 +739,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const [bookmarksOpen, setBookmarksOpen] = useState(false);
   const bookmarkDatasetId = terrain?.datasetId ?? "";
   const bookmarks: CameraBookmark[] = useSettingsStore(
-    (s) => (bookmarkDatasetId ? (s.bookmarks[bookmarkDatasetId] ?? []) : []),
+    (s) => (bookmarkDatasetId ? (s.bookmarks[bookmarkDatasetId] ?? EMPTY_BOOKMARKS) : EMPTY_BOOKMARKS),
   );
   const renameBookmark = useSettingsStore((s) => s.renameBookmark);
   const deleteBookmark = useSettingsStore((s) => s.deleteBookmark);

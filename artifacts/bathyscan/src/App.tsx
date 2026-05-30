@@ -218,7 +218,8 @@ function Main() {
   const overviewOpen = useUiStore((s) => s.overviewOpen);
   const findDataPanelOpen = useUiStore((s) => s.findDataPanelOpen);
   const setFindDataPanelOpen = useUiStore((s) => s.setFindDataPanelOpen);
-  const { driftPlannerActive, setDriftPlannerActive } = useDriftStore();
+  const driftPlannerActive = useDriftStore((s) => s.driftPlannerActive);
+  const setDriftPlannerActive = useDriftStore((s) => s.setDriftPlannerActive);
   const gpsActive = useGpsStore((s) => s.active);
   // Settings-driven UI visibility + tidal defaults
   const autoLoadTidal = useSettingsStore((st) => st.autoLoadTidal);

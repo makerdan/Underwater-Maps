@@ -95,12 +95,14 @@ export const ConditionsLegend: React.FC = () => {
   const anyActive = wind || tide || cur;
   const { snapshot, estimated, timestamp, fallback } = useSurfaceConditions(anyActive);
 
-  const {
-    manualWindSpeedKnots, setManualWindSpeedKnots,
-    manualWindDegrees, setManualWindDegrees,
-    manualTidalSpeedKnots, setManualTidalSpeedKnots,
-    manualTidalDegrees, setManualTidalDegrees,
-  } = useDriftStore();
+  const manualWindSpeedKnots = useDriftStore((s) => s.manualWindSpeedKnots);
+  const setManualWindSpeedKnots = useDriftStore((s) => s.setManualWindSpeedKnots);
+  const manualWindDegrees = useDriftStore((s) => s.manualWindDegrees);
+  const setManualWindDegrees = useDriftStore((s) => s.setManualWindDegrees);
+  const manualTidalSpeedKnots = useDriftStore((s) => s.manualTidalSpeedKnots);
+  const setManualTidalSpeedKnots = useDriftStore((s) => s.setManualTidalSpeedKnots);
+  const manualTidalDegrees = useDriftStore((s) => s.manualTidalDegrees);
+  const setManualTidalDegrees = useDriftStore((s) => s.setManualTidalDegrees);
 
   if (!anyActive) return null;
 

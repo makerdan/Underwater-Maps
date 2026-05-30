@@ -87,7 +87,11 @@ const ForceArrow: React.FC<{
 };
 
 export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
-  const { driftPath, driftHour, lineLengthM, driftWaypoints, driftMode } = useDriftStore();
+  const driftPath = useDriftStore((s) => s.driftPath);
+  const driftHour = useDriftStore((s) => s.driftHour);
+  const lineLengthM = useDriftStore((s) => s.lineLengthM);
+  const driftWaypoints = useDriftStore((s) => s.driftWaypoints);
+  const driftMode = useDriftStore((s) => s.driftMode);
   const updateDriftWaypoint = useDriftStore((s) => s.updateDriftWaypoint);
   const { terrain } = useAppState();
   const { camera, gl } = useThree();

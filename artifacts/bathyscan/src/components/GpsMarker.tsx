@@ -15,7 +15,8 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { formatDepth } from "@/lib/units";
 
 export const GpsMarker: React.FC = () => {
-  const { position, active } = useGpsStore();
+  const position = useGpsStore((s) => s.position);
+  const active = useGpsStore((s) => s.active);
   const { terrain } = useAppState();
   const units = useSettingsStore((s) => s.units);
   const ringRef = useRef<THREE.Mesh>(null);

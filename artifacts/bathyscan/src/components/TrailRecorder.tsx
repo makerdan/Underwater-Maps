@@ -88,8 +88,12 @@ interface Props {
 }
 
 export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
-  const { active: gpsActive } = useGpsStore();
-  const { recording, currentPoints, startedAt, startRecording, stopRecording } = useTrailStore();
+  const gpsActive = useGpsStore((s) => s.active);
+  const recording = useTrailStore((s) => s.recording);
+  const currentPoints = useTrailStore((s) => s.currentPoints);
+  const startedAt = useTrailStore((s) => s.startedAt);
+  const startRecording = useTrailStore((s) => s.startRecording);
+  const stopRecording = useTrailStore((s) => s.stopRecording);
   const { terrain } = useAppState();
 
   const gpsRecordingInterval = useSettingsStore((s) => s.gpsRecordingInterval);

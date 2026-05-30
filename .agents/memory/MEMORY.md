@@ -1,1 +1,2 @@
-- [NOAA Alaska EFH FeatureServer](noaa-efh-featureserver.md) — confirmed org/endpoints/layer structure for the GulfOfAlaska EFH data used in BathyScan.
+- [Zustand no-selector crash](zustand-no-selector-crash.md) — useDriftStore() without a selector causes "getSnapshot should be cached" in React 18 Concurrent Mode; always use per-field selectors.
+- [Vite dedupe zustand](vite-dedupe-zustand.md) — tunnel-rat (via @react-three/drei) pulls in Zustand v4 alongside app's v5; dedupe "zustand" in vite.config.ts resolve.dedupe.

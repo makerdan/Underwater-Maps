@@ -308,7 +308,9 @@ export const DriftBoat: React.FC<{ surfaceY: number }> = ({ surfaceY }) => {
   const groupRef = useRef<THREE.Group>(null);
   const rockRef = useRef(0);
 
-  const { driftPath, driftHour, driftConditions } = useDriftStore();
+  const driftPath = useDriftStore((s) => s.driftPath);
+  const driftHour = useDriftStore((s) => s.driftHour);
+  const driftConditions = useDriftStore((s) => s.driftConditions);
 
   const { topsides, bottom, deck } = useMemo(() => buildHullGeometries(), []);
   const consoleGeo = useMemo(() => buildConsoleGeometry(), []);

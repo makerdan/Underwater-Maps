@@ -50,7 +50,15 @@ function formatHour(h: number): string {
 }
 
 export const DriftTimeline: React.FC = () => {
-  const { driftPath, driftHour, setDriftHour, driftConditions, lineLengthM, driftMode, boatHeadingDeg, boatSpeedKnots, driftWaypoints } = useDriftStore();
+  const driftPath = useDriftStore((s) => s.driftPath);
+  const driftHour = useDriftStore((s) => s.driftHour);
+  const setDriftHour = useDriftStore((s) => s.setDriftHour);
+  const driftConditions = useDriftStore((s) => s.driftConditions);
+  const lineLengthM = useDriftStore((s) => s.lineLengthM);
+  const driftMode = useDriftStore((s) => s.driftMode);
+  const boatHeadingDeg = useDriftStore((s) => s.boatHeadingDeg);
+  const boatSpeedKnots = useDriftStore((s) => s.boatSpeedKnots);
+  const driftWaypoints = useDriftStore((s) => s.driftWaypoints);
   const units = useSettingsStore((s) => s.units);
 
   if (!driftPath || driftPath.length === 0) return null;

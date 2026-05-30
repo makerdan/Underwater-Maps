@@ -60,14 +60,12 @@ export function useSurfaceConditions(
   hourOverride?: number,
 ): SurfaceConditionsResult {
   const { terrain } = useAppState();
-  const {
-    manualWindSpeedKnots,
-    manualWindDegrees,
-    manualTidalSpeedKnots,
-    manualTidalDegrees,
-    driftPlannerActive,
-    driftHour,
-  } = useDriftStore();
+  const manualWindSpeedKnots = useDriftStore((s) => s.manualWindSpeedKnots);
+  const manualWindDegrees = useDriftStore((s) => s.manualWindDegrees);
+  const manualTidalSpeedKnots = useDriftStore((s) => s.manualTidalSpeedKnots);
+  const manualTidalDegrees = useDriftStore((s) => s.manualTidalDegrees);
+  const driftPlannerActive = useDriftStore((s) => s.driftPlannerActive);
+  const driftHour = useDriftStore((s) => s.driftHour);
 
   const centerLat = terrain ? (terrain.minLat + terrain.maxLat) / 2 : null;
   const centerLon = terrain ? (terrain.minLon + terrain.maxLon) / 2 : null;

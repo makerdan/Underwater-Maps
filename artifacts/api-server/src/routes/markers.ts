@@ -7,7 +7,7 @@ import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAu
 
 const router = Router();
 
-router.get("/markers", async (req, res): Promise<void> => {
+router.get("/markers", requireAuth, async (req, res): Promise<void> => {
   const parsed = GetMarkersQueryParams.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: "datasetId query parameter is required" });
@@ -15,10 +15,11 @@ router.get("/markers", async (req, res): Promise<void> => {
   }
 
   const { datasetId } = parsed.data;
+  const userId = (req as AuthenticatedRequest).clerkUserId;
   const rows = await db
     .select()
     .from(markersTable)
-    .where(eq(markersTable.datasetId, datasetId))
+    .where(and(eq(markersTable.datasetId, datasetId), eq(markersTable.userId, userId)))
     .orderBy(markersTable.createdAt);
 
   res.json(rows);

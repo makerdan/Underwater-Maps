@@ -251,7 +251,8 @@ const CurrentsSceneContents: React.FC<{ terrain: TerrainData }> = ({ terrain }) 
 // ---------------------------------------------------------------------------
 const DriftSceneContents: React.FC = () => {
   const { terrain } = useAppState();
-  const { driftPlannerActive, driftPath } = useDriftStore();
+  const driftPlannerActive = useDriftStore((s) => s.driftPlannerActive);
+  const driftPath = useDriftStore((s) => s.driftPath);
 
   if (!driftPlannerActive || !terrain) return null;
 

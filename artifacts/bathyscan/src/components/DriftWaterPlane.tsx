@@ -70,11 +70,19 @@ interface DriftWaterPlaneProps {
 export const DriftWaterPlane: React.FC<DriftWaterPlaneProps> = ({ surfaceY, terrain }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const timeRef = useRef(0);
-  const {
-    driftConditions, driftHour, lineLengthM, lineWeightG,
-    setDriftStart, setDriftPath, driftMode, boatHeadingDeg, boatSpeedKnots,
-    driftStartLat, driftStartLon, driftWaypoints, addDriftWaypoint,
-  } = useDriftStore();
+  const driftConditions = useDriftStore((s) => s.driftConditions);
+  const driftHour = useDriftStore((s) => s.driftHour);
+  const lineLengthM = useDriftStore((s) => s.lineLengthM);
+  const lineWeightG = useDriftStore((s) => s.lineWeightG);
+  const setDriftStart = useDriftStore((s) => s.setDriftStart);
+  const setDriftPath = useDriftStore((s) => s.setDriftPath);
+  const driftMode = useDriftStore((s) => s.driftMode);
+  const boatHeadingDeg = useDriftStore((s) => s.boatHeadingDeg);
+  const boatSpeedKnots = useDriftStore((s) => s.boatSpeedKnots);
+  const driftStartLat = useDriftStore((s) => s.driftStartLat);
+  const driftStartLon = useDriftStore((s) => s.driftStartLon);
+  const driftWaypoints = useDriftStore((s) => s.driftWaypoints);
+  const addDriftWaypoint = useDriftStore((s) => s.addDriftWaypoint);
 
   const material = useMemo(() => {
     return new THREE.ShaderMaterial({

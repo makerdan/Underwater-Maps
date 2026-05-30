@@ -225,14 +225,15 @@ export const OverlaysToolsPanel: React.FC = () => {
       style={{ ...PANEL, pointerEvents: "auto" }}
       className="select-none"
     >
-      <ViewscreenTooltip
-        label={collapsed ? "Show overlays & tools" : "Hide overlays & tools"}
-        side="right"
+      <div
+        onClick={() => toggle("overlaysTools")}
+        className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors rounded-t"
+        style={{ cursor: "pointer" }}
       >
-        <button
-          onClick={() => toggle("overlaysTools")}
-          className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors rounded-t"
-          style={{ cursor: "pointer" }}
+        <ViewscreenTooltip
+          label={collapsed ? "Show overlays & tools" : "Hide overlays & tools"}
+          side="right"
+          asChild={false}
         >
           <span
             className="uppercase tracking-widest"
@@ -240,14 +241,14 @@ export const OverlaysToolsPanel: React.FC = () => {
           >
             ▼ Overlays &amp; Tools
           </span>
-          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <HelpIcon articleId="hud-overlays" label="HUD overlay toggles" />
-            <span style={{ color: "#cbd5e1", fontSize: 24, lineHeight: 1 }}>
-              {collapsed ? "▸" : "▾"}
-            </span>
+        </ViewscreenTooltip>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <HelpIcon articleId="hud-overlays" label="HUD overlay toggles" />
+          <span style={{ color: "#cbd5e1", fontSize: 24, lineHeight: 1 }}>
+            {collapsed ? "▸" : "▾"}
           </span>
-        </button>
-      </ViewscreenTooltip>
+        </span>
+      </div>
 
       {!collapsed && (
         <div

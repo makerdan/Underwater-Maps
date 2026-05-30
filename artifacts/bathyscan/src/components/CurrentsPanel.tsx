@@ -124,8 +124,25 @@ interface CurrentsPanelProps {
 }
 
 export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }) => {
-  const s = useSettingsStore();
-  const units = s.units;
+  const units = useSettingsStore((s) => s.units);
+  const currentsEnabled = useSettingsStore((s) => s.currentsEnabled);
+  const setCurrentsEnabled = useSettingsStore((s) => s.setCurrentsEnabled);
+  const currentsSource = useSettingsStore((s) => s.currentsSource);
+  const setCurrentsSource = useSettingsStore((s) => s.setCurrentsSource);
+  const currentsManualDirectionDeg = useSettingsStore((s) => s.currentsManualDirectionDeg);
+  const setCurrentsManualDirectionDeg = useSettingsStore((s) => s.setCurrentsManualDirectionDeg);
+  const currentsManualSpeedKt = useSettingsStore((s) => s.currentsManualSpeedKt);
+  const setCurrentsManualSpeedKt = useSettingsStore((s) => s.setCurrentsManualSpeedKt);
+  const currentsTidePhase = useSettingsStore((s) => s.currentsTidePhase);
+  const setCurrentsTidePhase = useSettingsStore((s) => s.setCurrentsTidePhase);
+  const currentsAutoAdvance = useSettingsStore((s) => s.currentsAutoAdvance);
+  const setCurrentsAutoAdvance = useSettingsStore((s) => s.setCurrentsAutoAdvance);
+  const currentsShowParticles = useSettingsStore((s) => s.currentsShowParticles);
+  const setCurrentsShowParticles = useSettingsStore((s) => s.setCurrentsShowParticles);
+  const currentsShowArrows = useSettingsStore((s) => s.currentsShowArrows);
+  const setCurrentsShowArrows = useSettingsStore((s) => s.setCurrentsShowArrows);
+  const currentsShowStreamlines = useSettingsStore((s) => s.currentsShowStreamlines);
+  const setCurrentsShowStreamlines = useSettingsStore((s) => s.setCurrentsShowStreamlines);
   const field = useCurrentsStore((st) => st.field);
   const noaaAmbient = useCurrentsStore((st) => st.noaaAmbient);
 
@@ -133,7 +150,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
     ? { width: "100%", color: "#94a3b8", fontFamily: FONT, fontSize: 11 }
     : card;
 
-  if (!s.currentsEnabled) {
+  if (!currentsEnabled) {
     return (
       <div style={wrapStyle} data-testid="currents-panel">
         {!embedded && <div style={header}>◈ CURRENTS</div>}
@@ -141,7 +158,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
           <button
             data-testid="currents-enable"
             style={toggleBtn(false)}
-            onClick={() => s.setCurrentsEnabled(true)}
+            onClick={() => setCurrentsEnabled(true)}
           >
             ○ ENABLE CURRENTS
           </button>
@@ -150,7 +167,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
     );
   }
 
-  const maxKt = field ? field.maxSpeed : Math.max(s.currentsManualSpeedKt, 0.5);
+  const maxKt = field ? field.maxSpeed : Math.max(currentsManualSpeedKt, 0.5);
 
   return (
     <div style={wrapStyle} data-testid="currents-panel">
@@ -160,7 +177,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
         <button
           data-testid="currents-disable"
           style={{ ...toggleBtn(true), flex: 0, padding: "2px 8px" }}
-          onClick={() => s.setCurrentsEnabled(false)}
+          onClick={() => setCurrentsEnabled(false)}
         >
           OFF
         </button>
@@ -171,7 +188,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
           <button
             data-testid="currents-disable"
             style={{ ...toggleBtn(true), flex: 0, padding: "2px 8px" }}
-            onClick={() => s.setCurrentsEnabled(false)}
+            onClick={() => setCurrentsEnabled(false)}
           >
             OFF
           </button>
@@ -181,15 +198,15 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
       <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
         <button
           data-testid="currents-source-manual"
-          style={toggleBtn(s.currentsSource === "manual")}
-          onClick={() => s.setCurrentsSource("manual")}
+          style={toggleBtn(currentsSource === "manual")}
+          onClick={() => setCurrentsSource("manual")}
         >
           MANUAL
         </button>
         <button
           data-testid="currents-source-noaa"
-          style={toggleBtn(s.currentsSource === "noaa")}
-          onClick={() => s.setCurrentsSource("noaa")}
+          style={toggleBtn(currentsSource === "noaa")}
+          onClick={() => setCurrentsSource("noaa")}
           title={
             noaaAmbient
               ? noaaAmbient.source === "noaa"
@@ -202,7 +219,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
         </button>
       </div>
 
-      {s.currentsSource === "manual" ? (
+      {currentsSource === "manual" ? (
         <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
           <div style={{ flex: 1 }}>
             <div style={label}>Dir°</div>
@@ -211,8 +228,8 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
               min={0}
               max={360}
               step={5}
-              value={Math.round(s.currentsManualDirectionDeg)}
-              onChange={(e) => s.setCurrentsManualDirectionDeg(Number(e.target.value) || 0)}
+              value={Math.round(currentsManualDirectionDeg)}
+              onChange={(e) => setCurrentsManualDirectionDeg(Number(e.target.value) || 0)}
               style={input}
               data-testid="currents-manual-dir"
             />
@@ -224,8 +241,8 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
               min={0}
               max={parseFloat(knotsToDisplay(10, units).toFixed(1))}
               step={0.1}
-              value={parseFloat(knotsToDisplay(s.currentsManualSpeedKt, units).toFixed(2))}
-              onChange={(e) => s.setCurrentsManualSpeedKt(displayToKnots(Number(e.target.value) || 0, units))}
+              value={parseFloat(knotsToDisplay(currentsManualSpeedKt, units).toFixed(2))}
+              onChange={(e) => setCurrentsManualSpeedKt(displayToKnots(Number(e.target.value) || 0, units))}
               style={input}
               data-testid="currents-manual-speed"
             />
@@ -270,44 +287,44 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
       <div style={{ marginBottom: 8 }}>
         <div style={{ ...label, display: "flex", justifyContent: "space-between" }}>
           <span>Tide Phase</span>
-          <span style={{ color: "#94a3b8" }}>{Math.round(s.currentsTidePhase * 100)}%</span>
+          <span style={{ color: "#94a3b8" }}>{Math.round(currentsTidePhase * 100)}%</span>
         </div>
         <TidePhaseSlider
-          value={s.currentsTidePhase}
-          onChange={s.setCurrentsTidePhase}
+          value={currentsTidePhase}
+          onChange={setCurrentsTidePhase}
         />
         <button
           style={{
-            ...toggleBtn(s.currentsAutoAdvance),
+            ...toggleBtn(currentsAutoAdvance),
             marginTop: 4,
             width: "100%",
             flex: 0,
           }}
-          onClick={() => s.setCurrentsAutoAdvance(!s.currentsAutoAdvance)}
+          onClick={() => setCurrentsAutoAdvance(!currentsAutoAdvance)}
           data-testid="currents-auto-advance"
         >
-          {s.currentsAutoAdvance ? "◉ AUTO-ADVANCE" : "○ AUTO-ADVANCE"}
+          {currentsAutoAdvance ? "◉ AUTO-ADVANCE" : "○ AUTO-ADVANCE"}
         </button>
       </div>
 
       <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
         <button
-          style={toggleBtn(s.currentsShowParticles)}
-          onClick={() => s.setCurrentsShowParticles(!s.currentsShowParticles)}
+          style={toggleBtn(currentsShowParticles)}
+          onClick={() => setCurrentsShowParticles(!currentsShowParticles)}
           data-testid="currents-toggle-particles"
         >
           ✦ PART
         </button>
         <button
-          style={toggleBtn(s.currentsShowArrows)}
-          onClick={() => s.setCurrentsShowArrows(!s.currentsShowArrows)}
+          style={toggleBtn(currentsShowArrows)}
+          onClick={() => setCurrentsShowArrows(!currentsShowArrows)}
           data-testid="currents-toggle-arrows"
         >
           ➤ ARR
         </button>
         <button
-          style={toggleBtn(s.currentsShowStreamlines)}
-          onClick={() => s.setCurrentsShowStreamlines(!s.currentsShowStreamlines)}
+          style={toggleBtn(currentsShowStreamlines)}
+          onClick={() => setCurrentsShowStreamlines(!currentsShowStreamlines)}
           data-testid="currents-toggle-streams"
         >
           ∿ FLOW
