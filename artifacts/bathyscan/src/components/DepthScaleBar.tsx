@@ -26,6 +26,7 @@ export const DepthScaleBar: React.FC = () => {
   const units = useSettingsStore((s) => s.units);
   const shallow = usePaletteStore((s) => s.shallow);
   const deep = usePaletteStore((s) => s.deep);
+  const bandColorsKey = usePaletteStore((s) => s.bandColors.join(","));
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
@@ -42,7 +43,7 @@ export const DepthScaleBar: React.FC = () => {
       const canvas = colormapCanvas(20, 80, colormapTheme);
       collapsedImgRef.current.src = canvas.toDataURL();
     }
-  }, [colormapTheme, shallow, deep, terrain, expanded]);
+  }, [colormapTheme, shallow, deep, bandColorsKey, terrain, expanded]);
 
   if (!terrain) return null;
 

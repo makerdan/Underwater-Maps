@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { ColormapTheme } from "./settingsStore";
-import { usePaletteStore, DEFAULT_CUSTOM_STOPS } from "./paletteStore";
+import { usePaletteStore, DEFAULT_CUSTOM_STOPS, DEFAULT_BAND_COLORS } from "./paletteStore";
 
 interface ColorStop {
   t: number;
@@ -20,34 +20,39 @@ export const DEPTH_BAND_BOUNDARIES_FT = [
 export const OCEAN_MAX_DEPTH_FT = 2000;
 
 /**
- * Fixed interior colour stops for the 10-band ocean gradient.
- * t values are normalised to [0, 1] relative to OCEAN_MAX_DEPTH_FT.
- * Endpoints (t=0, t=1) come from the user's palette store.
+ * Normalised t positions for each of the 10 band lower boundaries.
+ * Entry i = DEPTH_BAND_BOUNDARIES_FT[i] / OCEAN_MAX_DEPTH_FT for i = 0..9.
  */
-const OCEAN_INTERIOR_STOPS: ReadonlyArray<{ t: number; hex: string }> = [
-  { t: 50 / 2000,  hex: "#00c8de" }, //  50 ft — cyan-teal
-  { t: 100 / 2000, hex: "#00a8d0" }, // 100 ft — sky blue
-  { t: 150 / 2000, hex: "#0288d1" }, // 150 ft — ocean blue
-  { t: 200 / 2000, hex: "#0277bd" }, // 200 ft — medium blue
-  { t: 250 / 2000, hex: "#1565c0" }, // 250 ft — cobalt blue
-  { t: 300 / 2000, hex: "#0d47a1" }, // 300 ft — royal blue
-  { t: 350 / 2000, hex: "#1a237e" }, // 350 ft — indigo navy
-  { t: 450 / 2000, hex: "#283593" }, // 450 ft — deep navy
-  { t: 600 / 2000, hex: "#1e2b6e" }, // 600 ft — dark navy
-];
+const BAND_T: readonly number[] = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600].map(
+  (ft) => ft / OCEAN_MAX_DEPTH_FT,
+);
+
+const OCEAN_HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
 /**
- * Build the ocean theme stops using the user-customised shallow and deep
- * endpoints from paletteStore. Nine fixed interior stops provide a
- * 10-band gradient aligned to DEPTH_BAND_BOUNDARIES_FT.
+ * Build the ocean theme stops using the user-customised band colours from
+ * paletteStore. Ten band stops (at 0, 50, …, 600 ft) come from `bandColors`,
+ * plus the deep endpoint at t=1.0 from `deep`.
+ *
+ * Falls back to DEFAULT_BAND_COLORS per-entry when an individual value is
+ * missing or not a valid "#rrggbb" hex string, preventing bad data from
+ * reaching THREE.Color.
  */
 function getOceanStops(): ColorStop[] {
-  const { shallow, deep } = usePaletteStore.getState();
-  return [
-    { t: 0.00, color: new THREE.Color(shallow) },
-    ...OCEAN_INTERIOR_STOPS.map((s) => ({ t: s.t, color: new THREE.Color(s.hex) })),
-    { t: 1.00, color: new THREE.Color(deep) },
-  ];
+  const { bandColors, deep } = usePaletteStore.getState();
+  const bc = Array.isArray(bandColors) && bandColors.length === 10
+    ? bandColors
+    : DEFAULT_BAND_COLORS;
+  const stops: ColorStop[] = BAND_T.map((t, i) => {
+    const raw = bc[i];
+    const hex =
+      typeof raw === "string" && OCEAN_HEX_RE.test(raw)
+        ? raw
+        : DEFAULT_BAND_COLORS[i]!;
+    return { t, color: new THREE.Color(hex) };
+  });
+  stops.push({ t: 1.0, color: new THREE.Color(deep) });
+  return stops;
 }
 
 /**
@@ -60,14 +65,11 @@ function getOceanStops(): ColorStop[] {
 function getCustomStops(): ColorStop[] {
   const raw = usePaletteStore.getState().customStops;
   const source = raw.length >= 2 ? raw : DEFAULT_CUSTOM_STOPS;
-  // Defensive copy + sort (store already normalises, but be safe for callers
-  // that may have mutated state outside the setter).
   const sorted = [...source].sort((a, b) => a.position - b.position);
   const stops: ColorStop[] = sorted.map((s) => ({
     t: Math.max(0, Math.min(1, s.position)),
     color: new THREE.Color(s.hex),
   }));
-  // Clamp endpoints to 0 / 1 so the gradient covers the full depth range.
   if (stops[0]!.t > 0) {
     stops.unshift({ t: 0, color: stops[0]!.color.clone() });
   }
@@ -140,7 +142,7 @@ export function depthToColor(t: number): THREE.Color {
  * Returns a colour function for the given colormap theme.
  * The returned function maps t ∈ [0, 1] to a THREE.Color.
  *
- * The "ocean" theme reflects the user's customised shallow/deep palette
+ * The "ocean" theme reflects the user's customised band colours
  * (paletteStore); other themes are fixed presets.
  *
  * @example

@@ -44,8 +44,9 @@ import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMarkersQueryKey } from "@workspace/api-client-react";
 import { useTerrainStore } from "@/lib/terrainStore";
-import { usePaletteStore, DEFAULT_SHALLOW, DEFAULT_DEEP, PALETTE_PRESETS, MID1_HEX, MID2_HEX, customStopsFromPreset, type CustomStop } from "@/lib/paletteStore";
-import { colormapCanvas, colormapCssGradient } from "@/lib/colormap";
+import { usePaletteStore, DEFAULT_SHALLOW, DEFAULT_DEEP, PALETTE_PRESETS, MID1_HEX, MID2_HEX, customStopsFromPreset, bandColorsFromPreset, DEFAULT_BAND_COLORS, type CustomStop } from "@/lib/paletteStore";
+import { colormapCanvas, colormapCssGradient, DEPTH_BAND_BOUNDARIES_FT } from "@/lib/colormap";
+import { formatDepth } from "@/lib/units";
 import type { ColormapTheme } from "@/lib/settingsStore";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { DefaultMapLoadPicker } from "@/components/DefaultMapLoadPicker";
@@ -3007,6 +3008,197 @@ export function Settings() {
   );
 }
 
+const FT_TO_M_SETTINGS = 0.3048;
+
+const BAND_PRESET_SWATCHES = [
+  { hex: "#00bcd4", label: "Turquoise" },
+  { hex: "#1565c0", label: "Ocean Blue" },
+  { hex: "#1a237e", label: "Navy" },
+  { hex: "#4a148c", label: "Deep Violet" },
+  { hex: "#000000", label: "Black" },
+];
+
+const HEX_RE_SETTINGS = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * Hex text input that keeps a local draft while the user types and only
+ * commits a valid "#rrggbb" value to the store after a 300 ms debounce.
+ * Syncs back to the external `value` whenever the parent changes it (e.g.
+ * when a preset chip is clicked).
+ */
+function DebouncedHexInput({
+  value, onCommit, style, testId,
+}: {
+  value: string;
+  onCommit: (hex: string) => void;
+  style?: React.CSSProperties;
+  testId?: string;
+}) {
+  const [local, setLocal] = React.useState(value);
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(() => { setLocal(value); }, [value]);
+  React.useEffect(
+    () => () => { if (timerRef.current) clearTimeout(timerRef.current); },
+    [],
+  );
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value;
+    setLocal(v);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (HEX_RE_SETTINGS.test(v)) {
+      timerRef.current = setTimeout(() => onCommit(v), 300);
+    }
+  };
+  return (
+    <input
+      type="text"
+      value={local}
+      onChange={handleChange}
+      style={style}
+      data-testid={testId}
+      aria-label="Hex colour value"
+      maxLength={7}
+    />
+  );
+}
+
+/**
+ * Per-band depth colour editor — shows 10 rows (one per depth band) with a
+ * label, a native colour picker swatch, a debounced hex text input, and a
+ * row of quick-pick preset swatches. Only rendered when the Ocean theme is
+ * active. Edits flow through paletteStore and re-tint the terrain live.
+ */
+function DepthBandColorEditor({
+  labelStyle,
+  hexStyle,
+  colorInputStyle,
+}: {
+  labelStyle: React.CSSProperties;
+  hexStyle: React.CSSProperties;
+  colorInputStyle: React.CSSProperties;
+}) {
+  const bandColors = usePaletteStore((s) => s.bandColors);
+  const setBandColor = usePaletteStore((s) => s.setBandColor);
+  const resetBandColors = usePaletteStore((s) => s.resetBandColors);
+  const units = useSettingsStore((s) => s.units);
+
+  const allDefault = bandColors.every(
+    (c, i) => c.toLowerCase() === DEFAULT_BAND_COLORS[i]!.toLowerCase(),
+  );
+
+  return (
+    <div data-testid="depth-band-color-editor" style={{ padding: "8px 16px 4px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <div style={{ ...labelStyle, fontSize: 9, letterSpacing: "0.15em" }}>
+          DEPTH BAND COLOURS
+        </div>
+        <button
+          type="button"
+          data-testid="band-colors-reset-btn"
+          onClick={resetBandColors}
+          disabled={allDefault}
+          style={{
+            background: "none",
+            border: "1px solid rgba(0,229,255,0.2)",
+            borderRadius: 3,
+            color: allDefault ? "#64748b" : "#67e8f9",
+            fontSize: 8,
+            letterSpacing: "0.12em",
+            padding: "2px 8px",
+            cursor: allDefault ? "not-allowed" : "pointer",
+            fontFamily: "inherit",
+          }}
+        >
+          RESET BAND COLOURS
+        </button>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {bandColors.map((color, i) => {
+          const loFt = DEPTH_BAND_BOUNDARIES_FT[i]!;
+          const hiFt = DEPTH_BAND_BOUNDARIES_FT[i + 1]!;
+          const loM = loFt * FT_TO_M_SETTINGS;
+          const hiM = hiFt * FT_TO_M_SETTINGS;
+          const bandLabel = `${formatDepth(loM, { units })} – ${formatDepth(hiM, { units })}`;
+
+          return (
+            <div
+              key={i}
+              data-testid={`band-color-row-${i}`}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "90px auto 68px auto",
+                alignItems: "center",
+                gap: 8,
+                padding: "5px 0",
+                borderBottom: "1px solid rgba(0,229,255,0.05)",
+              }}
+            >
+              <span style={{ ...labelStyle, fontSize: 9, letterSpacing: "0.05em", color: "#cbd5e1", whiteSpace: "nowrap" }}>
+                {bandLabel}
+              </span>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <input
+                  type="color"
+                  data-testid={`band-color-picker-${i}`}
+                  value={color}
+                  onChange={(e) => setBandColor(i, e.target.value)}
+                  style={colorInputStyle}
+                  aria-label={`Band ${i} colour: ${bandLabel}`}
+                />
+                <DebouncedHexInput
+                  value={color}
+                  onCommit={(hex) => setBandColor(i, hex)}
+                  style={hexStyle}
+                  testId={`band-color-hex-${i}`}
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+                {BAND_PRESET_SWATCHES.map((sw) => (
+                  <button
+                    key={sw.hex}
+                    type="button"
+                    title={sw.label}
+                    aria-label={`Set ${bandLabel} to ${sw.label}`}
+                    onClick={() => setBandColor(i, sw.hex)}
+                    style={{
+                      width: 14,
+                      height: 14,
+                      background: sw.hex,
+                      border: color.toLowerCase() === sw.hex.toLowerCase()
+                        ? "2px solid #00e5ff"
+                        : "1px solid rgba(255,255,255,0.25)",
+                      borderRadius: 2,
+                      cursor: "pointer",
+                      padding: 0,
+                      flexShrink: 0,
+                    }}
+                  />
+                ))}
+              </div>
+
+              <div
+                style={{
+                  width: 14,
+                  height: 14,
+                  background: color,
+                  border: "1px solid rgba(0,229,255,0.3)",
+                  borderRadius: 2,
+                  flexShrink: 0,
+                }}
+                aria-hidden
+                title={color}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Depth Color Palette card — lets the user customise the shallow and deep
  * endpoints of the depth colormap. Changes apply live to the 3D terrain,
@@ -3025,16 +3217,20 @@ function PalettePickerCard() {
   const removeCustomStop = usePaletteStore((s) => s.removeCustomStop);
   const updateCustomStop = usePaletteStore((s) => s.updateCustomStop);
   const resetCustomStops = usePaletteStore((s) => s.resetCustomStops);
+  const setBandColors = usePaletteStore((s) => s.setBandColors);
 
   const colormapTheme = useSettingsStore((s) => s.colormapTheme);
   const isCustom = colormapTheme === "custom";
+  const isOcean = colormapTheme === "ocean";
+
+  const bandColorsKey = usePaletteStore((s) => s.bandColors.join(","));
 
   const previewRef = React.useRef<HTMLImageElement>(null);
   React.useEffect(() => {
     if (!previewRef.current) return;
     // colormapCanvas paints top→bottom; rotate -90° so shallow is on the left.
     // Render the active theme so the preview matches the 3D mesh tint
-    // (including live edits to the Custom stops).
+    // (including live edits to the Custom stops and band colours).
     const vert = colormapCanvas(14, 240, colormapTheme);
     const horiz = document.createElement("canvas");
     horiz.width = 240;
@@ -3046,7 +3242,7 @@ function PalettePickerCard() {
     hctx.drawImage(vert, 0, 0, 14, 240);
     hctx.restore();
     previewRef.current.src = horiz.toDataURL();
-  }, [shallow, deep, customStops, colormapTheme]);
+  }, [shallow, deep, customStops, colormapTheme, bandColorsKey]);
 
   const isDefault = shallow.toLowerCase() === DEFAULT_SHALLOW.toLowerCase()
     && deep.toLowerCase() === DEFAULT_DEEP.toLowerCase();
@@ -3114,8 +3310,10 @@ function PalettePickerCard() {
                 onClick={() => {
                   setShallow(preset.shallow);
                   setDeep(preset.deep);
-                  // In Custom mode, seed the editable stops with the preset's
-                  // shape so the user can fine-tune from there.
+                  // Always seed band colours from the preset so the per-band
+                  // editor and the Ocean legend look correct after one click.
+                  setBandColors(bandColorsFromPreset(preset));
+                  // In Custom mode also seed the editable stops.
                   if (isCustom) setCustomStops(customStopsFromPreset(preset));
                 }}
                 style={{
@@ -3229,6 +3427,15 @@ function PalettePickerCard() {
               />
             </div>
           </div>
+
+          {/* Per-band editor — only for Ocean theme */}
+          {isOcean && (
+            <DepthBandColorEditor
+              labelStyle={labelStyle}
+              hexStyle={hexStyle}
+              colorInputStyle={colorInputStyle}
+            />
+          )}
         </>
       )}
 

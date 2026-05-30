@@ -41,6 +41,8 @@ import {
   DEFAULT_SHALLOW,
   DEFAULT_DEEP,
   DEFAULT_CUSTOM_STOPS,
+  DEFAULT_BAND_COLORS,
+  sanitizeBandColors,
 } from "../lib/paletteStore";
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
@@ -383,6 +385,136 @@ describe("depthToColor / palette sync", () => {
     expect(c0.r).toBeCloseTo(expected.r, 2);
     expect(c0.g).toBeCloseTo(expected.g, 2);
     expect(c0.b).toBeCloseTo(expected.b, 2);
+  });
+});
+
+describe("sanitizeBandColors", () => {
+  it("returns null for non-array input", () => {
+    expect(sanitizeBandColors(null)).toBeNull();
+    expect(sanitizeBandColors("oops")).toBeNull();
+    expect(sanitizeBandColors(42)).toBeNull();
+  });
+
+  it("returns null when the array has fewer than 10 entries", () => {
+    expect(sanitizeBandColors(["#ffffff"])).toBeNull();
+  });
+
+  it("returns null when the array has more than 10 entries", () => {
+    const tooMany = Array(11).fill("#001122");
+    expect(sanitizeBandColors(tooMany)).toBeNull();
+  });
+
+  it("accepts a valid 10-entry hex array and lowercases each entry", () => {
+    const input = Array(10).fill("#AABBCC");
+    const result = sanitizeBandColors(input);
+    expect(result).not.toBeNull();
+    expect(result!.every((c) => c === "#aabbcc")).toBe(true);
+  });
+
+  it("falls back to the default colour for invalid hex entries", () => {
+    const input = Array(10).fill("#001122");
+    input[3] = "notahex";
+    const result = sanitizeBandColors(input);
+    expect(result).not.toBeNull();
+    expect(result![3]).toBe(DEFAULT_BAND_COLORS[3]);
+    expect(result![0]).toBe("#001122");
+  });
+});
+
+describe("bandColors store integration", () => {
+  beforeEach(() => { usePaletteStore.getState().reset(); });
+  afterEach(() => { usePaletteStore.getState().reset(); });
+
+  it("DEFAULT_BAND_COLORS has 10 entries", () => {
+    expect(DEFAULT_BAND_COLORS).toHaveLength(10);
+  });
+
+  it("store bandColors initialises to DEFAULT_BAND_COLORS", () => {
+    const { bandColors } = usePaletteStore.getState();
+    expect(bandColors).toHaveLength(10);
+    DEFAULT_BAND_COLORS.forEach((c, i) => {
+      expect(bandColors[i]).toBe(c);
+    });
+  });
+
+  it("setBandColor(0, hex) updates t=0 in getOceanStops via depthToColor", () => {
+    usePaletteStore.getState().setBandColor(0, "#ff0000");
+    const c = depthToColor(0);
+    const expected = hexToRgb("#ff0000");
+    expect(c.r).toBeCloseTo(expected.r, 2);
+    expect(c.g).toBeCloseTo(expected.g, 2);
+    expect(c.b).toBeCloseTo(expected.b, 2);
+  });
+
+  it("setBandColor(0, hex) also syncs the shallow field", () => {
+    usePaletteStore.getState().setBandColor(0, "#ab1234");
+    expect(usePaletteStore.getState().shallow).toBe("#ab1234");
+  });
+
+  it("setBandColors() replaces all band colours and getColormap picks them up", () => {
+    const allRed = Array(10).fill("#ff0000") as string[];
+    usePaletteStore.getState().setBandColors(allRed);
+    const fn = getColormap("ocean");
+    const c = fn(0);
+    expect(c.r).toBeCloseTo(1, 2);
+    expect(c.g).toBeCloseTo(0, 2);
+    expect(c.b).toBeCloseTo(0, 2);
+  });
+
+  it("resetBandColors() restores DEFAULT_BAND_COLORS and getColormap reverts", () => {
+    usePaletteStore.getState().setBandColor(6, "#ff0000");
+    usePaletteStore.getState().resetBandColors();
+    const fn = getColormap("ocean");
+    const t = 300 / 2000;
+    const c = fn(t);
+    const expected = hexToRgb("#0d47a1");
+    expect(c.r).toBeCloseTo(expected.r, 2);
+    expect(c.g).toBeCloseTo(expected.g, 2);
+    expect(c.b).toBeCloseTo(expected.b, 2);
+  });
+
+  it("getOceanStops falls back per-entry for invalid hex strings inside a valid-length array", () => {
+    // Simulate a corrupt entry sneaking past sanitizeBandColors
+    const corrupt = [...DEFAULT_BAND_COLORS] as string[];
+    corrupt[4] = "notvalid";
+    usePaletteStore.setState({ bandColors: corrupt });
+    const fn = getColormap("ocean");
+    // Band 4 (200 ft) should fall back to DEFAULT_BAND_COLORS[4]
+    const t = 200 / 2000;
+    const c = fn(t);
+    const expected = hexToRgb(DEFAULT_BAND_COLORS[4]!);
+    expect(c.r).toBeCloseTo(expected.r, 2);
+    expect(c.g).toBeCloseTo(expected.g, 2);
+    expect(c.b).toBeCloseTo(expected.b, 2);
+    // Other bands should still work (not NaN)
+    expect(Number.isFinite(fn(0).r)).toBe(true);
+    expect(Number.isFinite(fn(1).r)).toBe(true);
+  });
+
+  it("persist merge migration: sanitizeBandColors(undefined) returns null (migration path trigger)", () => {
+    // Old localStorage payloads written before this feature have shallow/deep but
+    // no bandColors. sanitizeBandColors(undefined) must return null so the persist
+    // merge falls into the migration guard and seeds bandColors[0] from shallow.
+    expect(sanitizeBandColors(undefined)).toBeNull();
+    expect(sanitizeBandColors(null)).toBeNull();
+
+    // Verify the store migration guard: after reset(), bandColors[0] matches
+    // DEFAULT_BAND_COLORS[0], and a custom shallow would be seeded there on load.
+    usePaletteStore.getState().reset();
+    expect(usePaletteStore.getState().bandColors[0]).toBe(DEFAULT_BAND_COLORS[0]);
+
+    // Confirm setShallow keeps bandColors[0] in sync (same migration invariant).
+    usePaletteStore.getState().setShallow("#ff0000");
+    expect(usePaletteStore.getState().bandColors[0]).toBe("#ff0000");
+  });
+
+  it("getOceanStops falls back to DEFAULT_BAND_COLORS when store is degenerate", () => {
+    usePaletteStore.setState({ bandColors: [] as unknown as string[] });
+    const c = depthToColor(0);
+    const expected = hexToRgb(DEFAULT_BAND_COLORS[0]!);
+    expect(c.r).toBeCloseTo(expected.r, 2);
+    expect(c.g).toBeCloseTo(expected.g, 2);
+    expect(c.b).toBeCloseTo(expected.b, 2);
   });
 });
 

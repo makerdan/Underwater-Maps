@@ -49,7 +49,9 @@ import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
 import {
   usePaletteStore,
   DEFAULT_CUSTOM_STOPS,
+  DEFAULT_BAND_COLORS,
   PALETTE_PRESETS,
+  bandColorsFromPreset,
 } from "@/lib/paletteStore";
 
 beforeEach(() => {
@@ -196,6 +198,71 @@ describe("PalettePickerCard — custom mode", () => {
     fireEvent.click(screen.getByTestId("palette-reset-btn"));
     await waitFor(() => {
       expect(usePaletteStore.getState().customStops).toEqual(DEFAULT_CUSTOM_STOPS);
+    });
+  });
+});
+
+describe("PalettePickerCard — ocean mode band colours", () => {
+  it("DepthBandColorEditor renders when ocean theme is active (default)", () => {
+    render(<Settings />);
+    expect(screen.getByTestId("depth-band-color-editor")).toBeInTheDocument();
+  });
+
+  it("renders 10 band colour rows", () => {
+    render(<Settings />);
+    for (let i = 0; i < 10; i++) {
+      expect(screen.getByTestId(`band-color-row-${i}`)).toBeInTheDocument();
+    }
+    expect(screen.queryByTestId("band-color-row-10")).not.toBeInTheDocument();
+  });
+
+  it("DepthBandColorEditor does not render when custom theme is active", () => {
+    useSettingsStore.getState().setColormapTheme("custom");
+    render(<Settings />);
+    expect(screen.queryByTestId("depth-band-color-editor")).not.toBeInTheDocument();
+  });
+
+  it("clicking the native colour picker updates bandColors in the store", async () => {
+    render(<Settings />);
+    const picker = screen.getByTestId("band-color-picker-3") as HTMLInputElement;
+    fireEvent.change(picker, { target: { value: "#123456" } });
+    await waitFor(() => {
+      expect(usePaletteStore.getState().bandColors[3]).toBe("#123456");
+    });
+  });
+
+  it("hex input commits to the store after a valid 6-char hex is typed", async () => {
+    render(<Settings />);
+    const hexInput = screen.getByTestId("band-color-hex-5") as HTMLInputElement;
+    fireEvent.change(hexInput, { target: { value: "#abcdef" } });
+    await waitFor(() => {
+      expect(usePaletteStore.getState().bandColors[5]).toBe("#abcdef");
+    }, { timeout: 500 });
+  });
+
+  it("Reset band colours button restores DEFAULT_BAND_COLORS", async () => {
+    act(() => { usePaletteStore.getState().setBandColor(2, "#ff0000"); });
+    render(<Settings />);
+    fireEvent.click(screen.getByTestId("band-colors-reset-btn"));
+    await waitFor(() => {
+      const bc = usePaletteStore.getState().bandColors;
+      DEFAULT_BAND_COLORS.forEach((c, i) => {
+        expect(bc[i]).toBe(c);
+      });
+    });
+  });
+
+  it("clicking a preset chip seeds bandColors with interpolated values", async () => {
+    render(<Settings />);
+    const warmPreset = PALETTE_PRESETS.find((p) => p.id === "warm")!;
+    fireEvent.click(screen.getByTestId(`palette-preset-${warmPreset.id}`));
+    const expected = bandColorsFromPreset(warmPreset);
+    await waitFor(() => {
+      const bc = usePaletteStore.getState().bandColors;
+      expect(bc).toHaveLength(10);
+      expected.forEach((c, i) => {
+        expect(bc[i]!.toLowerCase()).toBe(c.toLowerCase());
+      });
     });
   });
 });

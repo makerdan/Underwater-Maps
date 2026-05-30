@@ -10,6 +10,9 @@
  * ordered list of `{ position, hex }` stops (min 2). The 3D terrain re-tints
  * live as the stops change.
  *
+ * Users can also edit per-band colours for the Ocean theme via the
+ * `bandColors` array (10 entries indexed to DEPTH_BAND_BOUNDARIES_FT[0..9]).
+ *
  * Persisted to localStorage under "bathyscan:palette".
  */
 import { create } from "zustand";
@@ -21,6 +24,35 @@ export const DEFAULT_DEEP = "#283593";
 /** Fixed interior gradient stops for the Ocean theme. Not user-editable. */
 export const MID1_HEX = "#0d47a1";
 export const MID2_HEX = "#1a237e";
+
+/**
+ * Default per-band colours for the Ocean theme, one entry per depth band.
+ * Index i corresponds to the color at DEPTH_BAND_BOUNDARIES_FT[i] (the
+ * lower boundary of band i). There are 10 bands (11 boundaries), so the
+ * final boundary at 2000 ft uses `deep` from the palette store.
+ *
+ * Boundaries: [0, 50, 100, 150, 200, 250, 300, 350, 450, 600] ft
+ */
+export const DEFAULT_BAND_COLORS: readonly string[] = [
+  "#00e5ff", //   0 ft — cyan (matches DEFAULT_SHALLOW)
+  "#00c8de", //  50 ft — cyan-teal
+  "#00a8d0", // 100 ft — sky blue
+  "#0288d1", // 150 ft — ocean blue
+  "#0277bd", // 200 ft — medium blue
+  "#1565c0", // 250 ft — cobalt blue
+  "#0d47a1", // 300 ft — royal blue
+  "#1a237e", // 350 ft — indigo navy
+  "#283593", // 450 ft — deep navy
+  "#1e2b6e", // 600 ft — dark navy
+];
+
+/**
+ * Normalised t positions for the 10 band lower boundaries (ft / 2000).
+ * Kept here to avoid a circular import with colormap.ts.
+ */
+const BAND_T_VALUES = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600].map(
+  (ft) => ft / 2000,
+);
 
 /**
  * Curated preset palettes for one-click selection. Each preset defines a
@@ -76,6 +108,30 @@ export function customStopsFromPreset(preset: PalettePreset): CustomStop[] {
 }
 
 /**
+ * Build a 10-entry bandColors array for a preset by linearly interpolating
+ * from the preset's shallow to deep across the band lower-boundary positions.
+ * Used when the user clicks a preset chip so the per-band editor looks correct.
+ */
+export function bandColorsFromPreset(preset: PalettePreset): string[] {
+  return BAND_T_VALUES.map((t) => mixHex(preset.shallow, preset.deep, t));
+}
+
+/**
+ * Sanitise a raw bandColors value: must be an array of exactly 10 valid hex
+ * strings. Invalid entries are replaced with the corresponding default colour.
+ * Returns null if the input is not an array at all.
+ */
+export function sanitizeBandColors(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) return null;
+  if (raw.length !== 10) return null;
+  return raw.map((entry, i) =>
+    typeof entry === "string" && HEX_RE.test(entry)
+      ? entry.toLowerCase()
+      : DEFAULT_BAND_COLORS[i]!,
+  );
+}
+
+/**
  * Sanitise a raw stops array: keep only well-formed entries (valid hex, finite
  * position), clamp each position to [0, 1], and sort ascending by position.
  * Returns null when fewer than 2 valid stops remain so callers can fall back
@@ -106,6 +162,12 @@ interface PaletteStore {
   deep: string;
   /** Ordered custom-theme stops (min 2). Always sanitised on read. */
   customStops: CustomStop[];
+  /**
+   * Per-band colours for the Ocean theme. 10 entries indexed to
+   * DEPTH_BAND_BOUNDARIES_FT[0..9] (the lower boundary of each band).
+   * bandColors[0] is kept in sync with `shallow`.
+   */
+  bandColors: string[];
   setShallow: (hex: string) => void;
   setDeep: (hex: string) => void;
   setCustomStops: (stops: CustomStop[]) => void;
@@ -113,6 +175,12 @@ interface PaletteStore {
   removeCustomStop: (index: number) => void;
   updateCustomStop: (index: number, patch: Partial<CustomStop>) => void;
   resetCustomStops: () => void;
+  /** Set a single band colour by index (0–9). Syncs index 0 → shallow. */
+  setBandColor: (index: number, hex: string) => void;
+  /** Replace the full bandColors array; falls back to defaults on bad input. */
+  setBandColors: (colors: string[]) => void;
+  /** Restore all band colours to DEFAULT_BAND_COLORS. */
+  resetBandColors: () => void;
   reset: () => void;
   /**
    * Apply server-side palette values (shallow / deep / customStops) to the
@@ -149,13 +217,17 @@ export const usePaletteStore = create<PaletteStore>()(
       shallow: DEFAULT_SHALLOW,
       deep: DEFAULT_DEEP,
       customStops: DEFAULT_CUSTOM_STOPS.map((s) => ({ ...s })),
-      setShallow: (hex) => set({ shallow: hex }),
+      bandColors: [...DEFAULT_BAND_COLORS],
+
+      setShallow: (hex) => {
+        const bc = [...get().bandColors];
+        bc[0] = hex;
+        set({ shallow: hex, bandColors: bc });
+      },
       setDeep: (hex) => set({ deep: hex }),
       setCustomStops: (stops) => set({ customStops: normalizeStops(stops) }),
       addCustomStop: () => {
         const stops = get().customStops;
-        // Insert a new stop at the largest gap, coloured as the midpoint of
-        // the surrounding two stops so the gradient stays smooth.
         let bestIdx = 0;
         let bestGap = -1;
         for (let i = 0; i < stops.length - 1; i++) {
@@ -186,11 +258,29 @@ export const usePaletteStore = create<PaletteStore>()(
       },
       resetCustomStops: () =>
         set({ customStops: DEFAULT_CUSTOM_STOPS.map((s) => ({ ...s })) }),
+
+      setBandColor: (index, hex) => {
+        if (index < 0 || index >= 10) return;
+        if (!HEX_RE.test(hex)) return;
+        const bc = [...get().bandColors];
+        bc[index] = hex.toLowerCase();
+        const patch: Partial<PaletteStore> = { bandColors: bc };
+        if (index === 0) patch.shallow = hex.toLowerCase();
+        set(patch);
+      },
+      setBandColors: (colors) => {
+        const sanitized = sanitizeBandColors(colors) ?? [...DEFAULT_BAND_COLORS];
+        set({ bandColors: sanitized, shallow: sanitized[0]! });
+      },
+      resetBandColors: () =>
+        set({ bandColors: [...DEFAULT_BAND_COLORS], shallow: DEFAULT_BAND_COLORS[0]! }),
+
       reset: () =>
         set({
           shallow: DEFAULT_SHALLOW,
           deep: DEFAULT_DEEP,
           customStops: DEFAULT_CUSTOM_STOPS.map((s) => ({ ...s })),
+          bandColors: [...DEFAULT_BAND_COLORS],
         }),
       hydrateFromServer: (partial) => {
         const patch: Partial<PaletteStore> = {};
@@ -209,16 +299,25 @@ export const usePaletteStore = create<PaletteStore>()(
     }),
     {
       name: "bathyscan:palette",
-      // Guard against malformed persisted state (older app versions, manual
-      // edits, partial writes). Bad customStops fall back to defaults.
       merge: (persistedState, currentState) => {
-        const merged = { ...currentState, ...(persistedState as object) };
-        const cleaned = sanitizeCustomStops(
-          (persistedState as { customStops?: unknown } | undefined)?.customStops,
-        );
+        const ps = persistedState as Record<string, unknown> | undefined;
+        const merged = { ...currentState, ...(ps as object) };
+        const cleanedStops = sanitizeCustomStops(ps?.customStops);
+        let cleanedBands = sanitizeBandColors(ps?.bandColors);
+        // Migration guard: old persisted state has shallow/deep but no bandColors
+        // (written before this feature landed). Seed bandColors[0] from the
+        // persisted shallow so the rendered top stop immediately matches the
+        // value the user previously configured, rather than defaulting.
+        if (!cleanedBands) {
+          cleanedBands = [...DEFAULT_BAND_COLORS];
+          if (typeof ps?.shallow === "string" && HEX_RE.test(ps.shallow)) {
+            cleanedBands[0] = ps.shallow.toLowerCase();
+          }
+        }
         return {
           ...merged,
-          customStops: cleaned ?? DEFAULT_CUSTOM_STOPS.map((s) => ({ ...s })),
+          customStops: cleanedStops ?? DEFAULT_CUSTOM_STOPS.map((s) => ({ ...s })),
+          bandColors: cleanedBands,
         } as PaletteStore;
       },
     },
