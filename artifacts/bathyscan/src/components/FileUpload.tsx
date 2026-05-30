@@ -110,7 +110,7 @@ export const FileUpload = () => {
               <p className="text-[10px] text-muted-foreground">
                 Drop XYZ or CSV file here — auto-saved to your account
               </p>
-              {error && <p className="text-[10px] text-destructive mt-2">{error}</p>}
+              {error && <p className="text-[10px] text-destructive mt-2 select-text">{error}</p>}
             </>
           )}
         </div>

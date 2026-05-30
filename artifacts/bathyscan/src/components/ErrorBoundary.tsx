@@ -49,6 +49,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
             fontSize: 10,
             color: "#fca5a5",
             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            userSelect: "text",
           }}
         >
           <div style={{ marginBottom: 4 }}>

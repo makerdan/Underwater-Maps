@@ -399,7 +399,7 @@ const ErrorOverlay: React.FC<ErrorOverlayProps> = ({ message, onRetry }) => (
     <div className="font-mono text-red-400 text-lg tracking-[0.3em] uppercase mb-2">
       ⚠ Signal Lost
     </div>
-    <div className="font-mono text-red-700 text-xs tracking-wider mb-6 max-w-xs text-center">
+    <div className="font-mono text-red-700 text-xs tracking-wider mb-6 max-w-xs text-center select-text">
       {message}
     </div>
     <button

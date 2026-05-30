@@ -930,7 +930,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
               justifyContent: "space-between",
             }}
           >
-            <span>{error}</span>
+            <span style={{ userSelect: "text" }}>{error}</span>
             <button
               onClick={() => setError(null)}
               aria-label="Dismiss error"

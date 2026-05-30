@@ -1016,7 +1016,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
               >SAVE</button>
             </div>
             {presetError && (
-              <div style={{ fontSize: 8, color: "#f87171", marginTop: 2 }}>{presetError}</div>
+              <div style={{ fontSize: 8, color: "#f87171", marginTop: 2, userSelect: "text" }}>{presetError}</div>
             )}
           </div>
 

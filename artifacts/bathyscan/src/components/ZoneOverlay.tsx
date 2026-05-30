@@ -199,7 +199,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
           <div
             data-testid="zone-error"
             data-error-category={error.category}
-            style={{ fontSize: 11, color: "#fca5a5", marginBottom: 6, lineHeight: 1.4 }}
+            style={{ fontSize: 11, color: "#fca5a5", marginBottom: 6, lineHeight: 1.4, userSelect: "text" }}
           >
             {error.reason}
           </div>

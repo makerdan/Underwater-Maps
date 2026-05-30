@@ -475,6 +475,7 @@
   border-radius: 4px;
   background: rgba(239, 68, 68, 0.06);
   margin-bottom: 8px;
+  user-select: text;
 }
 .help-qa-form {
   display: flex;

@@ -632,7 +632,7 @@ function SectionSaveButton({ section }: { section: SettingsSection }) {
       {status === "error" && errMsg && (
         <span
           data-testid={`save-section-${section}-error`}
-          style={{ fontSize: 9, color: "#f87171", letterSpacing: "0.1em" }}
+          style={{ fontSize: 9, color: "#f87171", letterSpacing: "0.1em", userSelect: "text" }}
         >
           {errMsg}
         </span>
@@ -2621,7 +2621,7 @@ function AccountSection() {
             Export a copy of all your settings, markers, custom datasets, and GPS trails as JSON.
           </div>
           {accountMsg && (
-            <div style={{ fontSize: 9, color: accountMsg.startsWith("✓") ? "#4ade80" : "#f87171", letterSpacing: "0.12em", marginBottom: 8 }}>
+            <div style={{ fontSize: 9, color: accountMsg.startsWith("✓") ? "#4ade80" : "#f87171", letterSpacing: "0.12em", marginBottom: 8, userSelect: "text" }}>
               {accountMsg}
             </div>
           )}

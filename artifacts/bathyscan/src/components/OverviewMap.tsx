@@ -1807,6 +1807,7 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
               borderRadius: 3,
               color: "#fca5a5",
               fontSize: 9,
+              userSelect: "text",
             }}
           >
             ⚠ {error}
