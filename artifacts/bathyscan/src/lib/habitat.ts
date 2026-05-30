@@ -22,7 +22,12 @@ export type SaltwaterSpeciesId =
   | "demersal_fish"
   | "rockfish"
   | "halibut"
-  | "salmon_resting";
+  | "salmon_resting"
+  | "chinook_salmon"
+  | "coho_salmon"
+  | "lingcod"
+  | "cabezon"
+  | "pacific_herring";
 
 export type FreshwaterSpeciesId =
   | "lake_trout"
@@ -32,7 +37,10 @@ export type FreshwaterSpeciesId =
   | "channel_catfish"
   | "northern_pike"
   | "yellow_perch"
-  | "crayfish";
+  | "crayfish"
+  | "smallmouth_bass"
+  | "striped_bass"
+  | "brown_trout";
 
 export type SpeciesId = SaltwaterSpeciesId | FreshwaterSpeciesId;
 
@@ -205,6 +213,151 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
     weights: { depth: 0.35, substrate: 0.25, slope: 0.15, complexity: 0.10, edge: 0.15 },
   },
 
+  chinook_salmon: {
+    label: "Chinook Salmon",
+    waterType: "saltwater",
+    depthOptimal: [15, 100],
+    depthTolerance: [0, 220],
+    substratePreferences: {
+      sandy_shelf: 0.8,
+      coarse_sediment: 0.6,
+      silt_plain: 0.5,
+      basalt_rock: 0.4,
+      volcanic_vent_field: 0.1,
+      trench_wall: 0.2,
+      seamount_flank: 0.7,
+      coral_reef_potential: 0.6,
+      aquatic_vegetation: 0.4,
+      sandy_lake_bed: 0.8,
+      rocky_shoreline: 0.5,
+      silt_deep: 0.4,
+      gravel_bed: 0.7,
+      bedrock_shelf: 0.5,
+      submerged_wood: 0.4,
+      clay_flat: 0.3,
+    },
+    slopePreference: "gentle",
+    complexityWeight: 0.2,
+    edgeWeight: 0.4,
+    weights: { depth: 0.40, substrate: 0.25, slope: 0.10, complexity: 0.10, edge: 0.15 },
+  },
+
+  coho_salmon: {
+    label: "Coho Salmon",
+    waterType: "saltwater",
+    depthOptimal: [5, 60],
+    depthTolerance: [0, 130],
+    substratePreferences: {
+      sandy_shelf: 0.9,
+      coarse_sediment: 0.6,
+      silt_plain: 0.5,
+      basalt_rock: 0.4,
+      volcanic_vent_field: 0.1,
+      trench_wall: 0.2,
+      seamount_flank: 0.6,
+      coral_reef_potential: 0.7,
+      aquatic_vegetation: 0.9,
+      sandy_lake_bed: 0.9,
+      rocky_shoreline: 0.7,
+      silt_deep: 0.3,
+      gravel_bed: 0.7,
+      bedrock_shelf: 0.5,
+      submerged_wood: 0.6,
+      clay_flat: 0.3,
+    },
+    slopePreference: "gentle",
+    complexityWeight: 0.2,
+    edgeWeight: 0.4,
+    weights: { depth: 0.38, substrate: 0.27, slope: 0.10, complexity: 0.10, edge: 0.15 },
+  },
+
+  lingcod: {
+    label: "Lingcod",
+    waterType: "saltwater",
+    depthOptimal: [25, 160],
+    depthTolerance: [5, 350],
+    substratePreferences: {
+      sandy_shelf: 0.3,
+      coarse_sediment: 0.5,
+      silt_plain: 0.2,
+      basalt_rock: 1.0,
+      volcanic_vent_field: 0.5,
+      trench_wall: 0.7,
+      seamount_flank: 0.9,
+      coral_reef_potential: 0.8,
+      aquatic_vegetation: 0.2,
+      sandy_lake_bed: 0.3,
+      rocky_shoreline: 0.9,
+      silt_deep: 0.2,
+      gravel_bed: 0.7,
+      bedrock_shelf: 1.0,
+      submerged_wood: 0.4,
+      clay_flat: 0.1,
+    },
+    slopePreference: "steep",
+    complexityWeight: 0.4,
+    edgeWeight: 0.3,
+    weights: { depth: 0.25, substrate: 0.35, slope: 0.20, complexity: 0.12, edge: 0.08 },
+  },
+
+  cabezon: {
+    label: "Cabezon",
+    waterType: "saltwater",
+    depthOptimal: [5, 55],
+    depthTolerance: [0, 100],
+    substratePreferences: {
+      sandy_shelf: 0.2,
+      coarse_sediment: 0.5,
+      silt_plain: 0.1,
+      basalt_rock: 1.0,
+      volcanic_vent_field: 0.4,
+      trench_wall: 0.5,
+      seamount_flank: 0.7,
+      coral_reef_potential: 0.9,
+      aquatic_vegetation: 0.6,
+      sandy_lake_bed: 0.2,
+      rocky_shoreline: 0.9,
+      silt_deep: 0.1,
+      gravel_bed: 0.7,
+      bedrock_shelf: 0.9,
+      submerged_wood: 0.3,
+      clay_flat: 0.1,
+    },
+    slopePreference: "steep",
+    complexityWeight: 0.45,
+    edgeWeight: 0.3,
+    weights: { depth: 0.25, substrate: 0.35, slope: 0.20, complexity: 0.12, edge: 0.08 },
+  },
+
+  pacific_herring: {
+    label: "Pacific Herring",
+    waterType: "saltwater",
+    depthOptimal: [5, 80],
+    depthTolerance: [0, 220],
+    substratePreferences: {
+      sandy_shelf: 0.9,
+      coarse_sediment: 0.7,
+      silt_plain: 0.6,
+      basalt_rock: 0.3,
+      volcanic_vent_field: 0.2,
+      trench_wall: 0.2,
+      seamount_flank: 0.5,
+      coral_reef_potential: 0.6,
+      aquatic_vegetation: 0.9,
+      sandy_lake_bed: 0.9,
+      rocky_shoreline: 0.6,
+      silt_deep: 0.5,
+      gravel_bed: 0.7,
+      bedrock_shelf: 0.4,
+      submerged_wood: 0.5,
+      clay_flat: 0.4,
+    },
+    slopePreference: "gentle",
+    complexityWeight: 0.15,
+    edgeWeight: 0.35,
+    weights: { depth: 0.35, substrate: 0.25, slope: 0.15, complexity: 0.10, edge: 0.15 },
+  },
+
   // ── Freshwater ────────────────────────────────────────────────────────────
   lake_trout: {
     label: "Lake Trout",
@@ -373,6 +526,69 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
     edgeWeight: 0.35,
     weights: { depth: 0.25, substrate: 0.35, slope: 0.10, complexity: 0.20, edge: 0.10 },
   },
+
+  smallmouth_bass: {
+    label: "Smallmouth Bass",
+    waterType: "freshwater",
+    depthOptimal: [2, 10],
+    depthTolerance: [0, 22],
+    substratePreferences: {
+      aquatic_vegetation: 0.5,
+      sandy_lake_bed: 0.6,
+      rocky_shoreline: 1.0,
+      silt_deep: 0.2,
+      gravel_bed: 0.9,
+      bedrock_shelf: 0.8,
+      submerged_wood: 0.7,
+      clay_flat: 0.2,
+    },
+    slopePreference: "any",
+    complexityWeight: 0.4,
+    edgeWeight: 0.35,
+    weights: { depth: 0.28, substrate: 0.32, slope: 0.12, complexity: 0.16, edge: 0.12 },
+  },
+
+  striped_bass: {
+    label: "Striped Bass",
+    waterType: "freshwater",
+    depthOptimal: [4, 28],
+    depthTolerance: [0, 60],
+    substratePreferences: {
+      aquatic_vegetation: 0.4,
+      sandy_lake_bed: 0.8,
+      rocky_shoreline: 0.6,
+      silt_deep: 0.5,
+      gravel_bed: 0.7,
+      bedrock_shelf: 0.5,
+      submerged_wood: 0.6,
+      clay_flat: 0.4,
+    },
+    slopePreference: "gentle",
+    complexityWeight: 0.2,
+    edgeWeight: 0.45,
+    weights: { depth: 0.32, substrate: 0.28, slope: 0.10, complexity: 0.12, edge: 0.18 },
+  },
+
+  brown_trout: {
+    label: "Brown Trout",
+    waterType: "freshwater",
+    depthOptimal: [2, 18],
+    depthTolerance: [0, 45],
+    substratePreferences: {
+      aquatic_vegetation: 0.5,
+      sandy_lake_bed: 0.5,
+      rocky_shoreline: 0.9,
+      silt_deep: 0.2,
+      gravel_bed: 1.0,
+      bedrock_shelf: 0.8,
+      submerged_wood: 0.7,
+      clay_flat: 0.2,
+    },
+    slopePreference: "any",
+    complexityWeight: 0.35,
+    edgeWeight: 0.35,
+    weights: { depth: 0.28, substrate: 0.32, slope: 0.14, complexity: 0.14, edge: 0.12 },
+  },
 };
 
 export const SPECIES_IDS = Object.keys(SPECIES_CONFIGS) as SpeciesId[];
@@ -383,15 +599,25 @@ export const SALTWATER_SPECIES_IDS: SaltwaterSpeciesId[] = [
   "rockfish",
   "halibut",
   "salmon_resting",
+  "chinook_salmon",
+  "coho_salmon",
+  "lingcod",
+  "cabezon",
+  "pacific_herring",
 ];
 
 export const FRESHWATER_SPECIES_IDS: FreshwaterSpeciesId[] = [
+  "lake_trout",
   "rainbow_trout",
   "walleye",
   "largemouth_bass",
+  "channel_catfish",
   "northern_pike",
   "yellow_perch",
   "crayfish",
+  "smallmouth_bass",
+  "striped_bass",
+  "brown_trout",
 ];
 
 // ---------------------------------------------------------------------------

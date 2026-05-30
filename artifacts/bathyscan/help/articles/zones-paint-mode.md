@@ -39,3 +39,42 @@ Corrections are stored per dataset and override the AI's classification for thos
 ## Substrate colour mode
 
 The **◼ SUBSTRATE** button in the bottom-right recolours the actual terrain texture (not just an overlay) by substrate type — sand, sediment, silt, basalt. Useful for screenshots.
+
+---
+
+## Habitat species catalog
+
+The Habitat Layer panel scores the seafloor against the following species. Select a water type to see what's available.
+
+### Saltwater / Marine
+
+| Species | Typical depth | Preferred substrate |
+|---|---|---|
+| Dungeness Crab | 10–120 m (optimal) | Sandy shelf, aquatic vegetation |
+| Demersal Fish (General) | 30–300 m | Coral reef, silt plain, seamount flank |
+| Rockfish | 50–400 m | Basalt rock, rocky shoreline, seamount |
+| Halibut | 20–200 m | Silt plain, sandy shelf, clay flat |
+| Salmon (Resting) | 5–50 m | Aquatic vegetation, sandy shelf, gravel |
+| Chinook Salmon | 15–100 m | Sandy shelf, seamount flank, coarse sediment |
+| Coho Salmon | 5–60 m | Sandy shelf, aquatic vegetation, rocky shoreline |
+| Lingcod | 25–160 m | Basalt rock, bedrock shelf, seamount flank |
+| Cabezon | 5–55 m | Basalt rock, coral reef, rocky shoreline |
+| Pacific Herring | 5–80 m | Sandy shelf, aquatic vegetation, coarse sediment |
+
+### Freshwater / Lake
+
+| Species | Typical depth | Preferred substrate |
+|---|---|---|
+| Lake Trout | 30–100 m | Bedrock shelf, rocky shoreline, gravel bed |
+| Rainbow Trout | 2–25 m | Gravel bed, rocky shoreline, bedrock shelf |
+| Brown Trout | 2–18 m | Gravel bed, rocky shoreline, bedrock shelf |
+| Walleye | 5–40 m | Gravel bed, sandy lake bed, rocky shoreline |
+| Largemouth Bass | 1–8 m | Aquatic vegetation, submerged wood |
+| Smallmouth Bass | 2–10 m | Rocky shoreline, gravel bed, bedrock shelf |
+| Northern Pike | 1–6 m | Aquatic vegetation, submerged wood |
+| Striped Bass | 4–28 m | Sandy lake bed, gravel bed, rocky shoreline |
+| Yellow Perch | 3–20 m | Sandy lake bed, gravel bed, aquatic vegetation |
+| Channel Catfish | 3–25 m | Silt deep, clay flat, submerged wood |
+| Crayfish | 0.5–5 m | Rocky shoreline, gravel bed, submerged wood |
+
+Depth ranges shown are the **optimal** band (highest suitability). Each species also tolerates a wider range at reduced scores. The scoring weights depth, substrate type, slope, structural complexity, and zone-edge proximity according to published fisheries habitat data.
