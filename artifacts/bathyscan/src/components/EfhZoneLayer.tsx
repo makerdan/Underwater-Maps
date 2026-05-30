@@ -32,6 +32,8 @@ import type { EfhFeature, EfhSpeciesProperties } from "@workspace/api-client-rea
 import { useSettingsStore } from "@/lib/settingsStore";
 import type { ThreeEvent } from "@react-three/fiber";
 import { toast } from "@/hooks/use-toast";
+import { polygonIntersectsBbox, pointInRing } from "@/lib/efhBboxFilter";
+import type { Bbox } from "@/lib/efhBboxFilter";
 /** Y elevation for EFH filled polygons — just above ocean surface (Y=0). */
 const EFH_FILL_Y = 1.0;
 /** Y elevation for EFH outlines — slightly above the fill so they are not z-fought. */
@@ -43,62 +45,6 @@ function lonToWorldX(lon: number, minLon: number, lonRange: number): number {
 
 function latToWorldZ(lat: number, minLat: number, latRange: number): number {
   return ((lat - minLat) / latRange) * WORLD_SIZE - WORLD_SIZE / 2;
-}
-
-interface Bbox {
-  minLon: number;
-  maxLon: number;
-  minLat: number;
-  maxLat: number;
-}
-
-/**
- * Returns true if the polygon ring (outer ring of a GeoJSON Polygon)
- * intersects the given bounding box.
- *
- * Two checks cover all cases:
- *   1. Any polygon vertex falls inside the bbox (polygon overlaps or is contained).
- *   2. Any bbox corner falls inside the ring via ray-casting (bbox is fully
- *      contained by the polygon).
- */
-function polygonIntersectsBbox(ring: number[][], bbox: Bbox): boolean {
-  const { minLon, maxLon, minLat, maxLat } = bbox;
-
-  for (const pt of ring) {
-    const lon = pt[0] ?? 0;
-    const lat = pt[1] ?? 0;
-    if (lon >= minLon && lon <= maxLon && lat >= minLat && lat <= maxLat) {
-      return true;
-    }
-  }
-
-  const corners: [number, number][] = [
-    [minLon, minLat],
-    [maxLon, minLat],
-    [maxLon, maxLat],
-    [minLon, maxLat],
-  ];
-  for (const [cx, cy] of corners) {
-    if (pointInRing(cx, cy, ring)) return true;
-  }
-
-  return false;
-}
-
-/** Ray-casting point-in-polygon test for a single ring. */
-function pointInRing(x: number, y: number, ring: number[][]): boolean {
-  let inside = false;
-  const n = ring.length;
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    const xi = ring[i]?.[0] ?? 0;
-    const yi = ring[i]?.[1] ?? 0;
-    const xj = ring[j]?.[0] ?? 0;
-    const yj = ring[j]?.[1] ?? 0;
-    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
-      inside = !inside;
-    }
-  }
-  return inside;
 }
 
 /** Converts one GeoJSON Polygon ring to a closed THREE.BufferGeometry line loop. */

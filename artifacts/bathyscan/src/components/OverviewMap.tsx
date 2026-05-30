@@ -62,6 +62,7 @@ import type {
   SubstrateFeatureCollection,
 } from "@workspace/api-client-react";
 import { useHabitatStore } from "@/lib/habitatStore";
+import { filterEfhByBbox } from "@/lib/efhBboxFilter";
 import { HabitatLegend } from "@/components/HabitatLegend";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useTrailStore } from "@/lib/trailStore";
@@ -296,10 +297,18 @@ export const OverviewMap: React.FC = () => {
     { query: { enabled: hasEfh && !embeddedEfhPolygons, staleTime: 60_000, queryKey: getGetEfhQueryKey({ datasetId }) } },
   );
   // Prefer embedded polygons (user-saved datasets) over the fetched preset data.
-  const activeEfhFeatures = useMemo(
-    () => embeddedEfhPolygons?.features ?? efhData?.features ?? [],
-    [embeddedEfhPolygons, efhData],
-  );
+  // Apply the same bathymetric-bbox clip that EfhZoneLayer uses in 3D so both
+  // views show identical polygon sets.
+  const activeEfhFeatures = useMemo(() => {
+    const raw = embeddedEfhPolygons?.features ?? efhData?.features ?? [];
+    if (!overviewGrid) return raw;
+    return filterEfhByBbox(raw, {
+      minLon: overviewGrid.minLon,
+      maxLon: overviewGrid.maxLon,
+      minLat: overviewGrid.minLat,
+      maxLat: overviewGrid.maxLat,
+    });
+  }, [embeddedEfhPolygons, efhData, overviewGrid]);
   useEffect(() => {
     efhFeaturesRef.current = activeEfhFeatures;
   }, [activeEfhFeatures]);
