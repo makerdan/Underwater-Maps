@@ -5,6 +5,9 @@
  * Renders an SVG line chart of depth vs distance with a slim coloured strip
  * underneath each sample indicating the AI zone classification (when known).
  *
+ * The panel header is a drag handle — click-and-drag to reposition freely on
+ * screen. Position is remembered per session; resets to bottom-center on reload.
+ *
  * Independent of the marker system; dismiss via the × button.
  */
 import React from "react";
@@ -27,17 +30,13 @@ import {
   MarkerInputType,
 } from "@workspace/api-client-react";
 
-// Friendly zone labels for the hover tooltip — matches SLOT_NAMES.
 const ZONE_LABEL = ["Sand", "Sediment", "Silt", "Basalt"] as const;
 
-// Representative colours for the four terrain texture slots. Mirrors the
-// dominant RGB used by lib/textures.ts so users can tie the strip back to
-// what they see on the seafloor.
 const SLOT_COLORS = [
-  "#dabe91", // 0 sand
-  "#5c4e3e", // 1 sediment
-  "#a8afc0", // 2 silt
-  "#262120", // 3 basalt
+  "#dabe91",
+  "#5c4e3e",
+  "#a8afc0",
+  "#262120",
 ] as const;
 
 const SLOT_NAMES = [
@@ -57,6 +56,7 @@ const STRIP_HEIGHT = 8;
 const PLOT_W = WIDTH - PAD_LEFT - PAD_RIGHT;
 const PLOT_H = HEIGHT - PAD_TOP - PAD_BOTTOM - STRIP_HEIGHT;
 
+const PANEL_MIN_W = WIDTH + 24;
 
 function timestampForFilename(at: number): string {
   const d = new Date(at);
@@ -79,8 +79,18 @@ function triggerDownload(blob: Blob, filename: string) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  // Revoke on next tick to give the browser time to start the download.
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Clamp a panel position so it can't be dragged fully off-screen. */
+function clampPos(x: number, y: number, panelW: number, panelH: number): { x: number; y: number } {
+  const vw = typeof window !== "undefined" ? window.innerWidth  : 1280;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 720;
+  const MARGIN = 40; // px of panel that must stay visible
+  return {
+    x: Math.max(-panelW + MARGIN, Math.min(vw - MARGIN, x)),
+    y: Math.max(0, Math.min(vh - MARGIN, y)),
+  };
 }
 
 export const DepthProfilePanel: React.FC = () => {
@@ -94,7 +104,61 @@ export const DepthProfilePanel: React.FC = () => {
   const units = useSettingsStore((s) => s.units);
   const { datasetId } = useAppState();
   const svgRef = React.useRef<SVGSVGElement | null>(null);
+  const panelRef = React.useRef<HTMLDivElement | null>(null);
 
+  // ── Drag state ────────────────────────────────────────────────────────
+  // null = default bottom-center (absolute positioning); set = fixed position.
+  const [panelPos, setPanelPos] = React.useState<{ x: number; y: number } | null>(null);
+  const [isDragging, setIsDragging] = React.useState(false);
+  const dragOrigin = React.useRef<{ mouseX: number; mouseY: number; panelX: number; panelY: number } | null>(null);
+
+  const handleDragPointerDown = React.useCallback((e: React.PointerEvent) => {
+    // Only drag with primary mouse button or single touch.
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const panel = panelRef.current;
+    if (!panel) return;
+    const rect = panel.getBoundingClientRect();
+
+    dragOrigin.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      panelX: rect.left,
+      panelY: rect.top,
+    };
+
+    // Switch to fixed positioning at the panel's current visual position.
+    setPanelPos({ x: rect.left, y: rect.top });
+    setIsDragging(true);
+    panel.setPointerCapture(e.pointerId);
+  }, []);
+
+  const handleDragPointerMove = React.useCallback((e: React.PointerEvent) => {
+    if (!isDragging || !dragOrigin.current || !panelRef.current) return;
+    e.preventDefault();
+
+    const dx = e.clientX - dragOrigin.current.mouseX;
+    const dy = e.clientY - dragOrigin.current.mouseY;
+    const rawX = dragOrigin.current.panelX + dx;
+    const rawY = dragOrigin.current.panelY + dy;
+    const panelRect = panelRef.current.getBoundingClientRect();
+    const { x, y } = clampPos(rawX, rawY, panelRect.width, panelRect.height);
+    setPanelPos({ x, y });
+  }, [isDragging]);
+
+  const handleDragPointerUp = React.useCallback((e: React.PointerEvent) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    setIsDragging(false);
+    dragOrigin.current = null;
+    if (panelRef.current) {
+      panelRef.current.releasePointerCapture(e.pointerId);
+    }
+  }, [isDragging]);
+
+  // ── Marker creation ───────────────────────────────────────────────────
   const dropMarkerAtHover = React.useCallback(() => {
     const state = useDepthProfileStore.getState();
     const p = state.profile;
@@ -114,8 +178,6 @@ export const DepthProfilePanel: React.FC = () => {
   const postMarkers = usePostMarkers();
   const [bulkPending, setBulkPending] = React.useState(false);
 
-  // Auto-suggested features (peaks, troughs, ledges). Computed before the
-  // early return so hook order stays stable across renders.
   const features: ProfileFeature[] = React.useMemo(
     () => (profile ? detectProfileFeatures(profile) : []),
     [profile],
@@ -125,7 +187,6 @@ export const DepthProfilePanel: React.FC = () => {
 
   const { points, totalDistanceM, minDepthM, maxDepthM, start, end } = profile;
 
-  // Axis ranges — pad the depth range so the polyline doesn't kiss the edges.
   const depthRange = (maxDepthM - minDepthM) || 1;
   const padDepth = depthRange * 0.08;
   const yMin = minDepthM - padDepth;
@@ -133,11 +194,9 @@ export const DepthProfilePanel: React.FC = () => {
 
   const xOf = (distanceM: number): number =>
     PAD_LEFT + (totalDistanceM > 0 ? (distanceM / totalDistanceM) * PLOT_W : 0);
-  // Deeper (= larger depth) plots LOWER, so invert.
   const yOf = (depthM: number): number =>
     PAD_TOP + ((depthM - yMin) / (yMax - yMin || 1)) * PLOT_H;
 
-  // Polyline path
   let path = "";
   for (let i = 0; i < points.length; i++) {
     const p = points[i]!;
@@ -145,7 +204,6 @@ export const DepthProfilePanel: React.FC = () => {
     path += `${cmd}${xOf(p.distanceM).toFixed(1)},${yOf(p.depthM).toFixed(1)} `;
   }
 
-  // Area under the curve for subtle fill
   const firstP = points[0]!;
   const lastP = points[points.length - 1]!;
   const areaPath =
@@ -153,10 +211,8 @@ export const DepthProfilePanel: React.FC = () => {
     path +
     `L${xOf(lastP.distanceM).toFixed(1)},${(PAD_TOP + PLOT_H).toFixed(1)} Z`;
 
-  // Y-axis labels (4 ticks)
   const ticks = [yMin, yMin + (yMax - yMin) * 0.33, yMin + (yMax - yMin) * 0.66, yMax];
 
-  // Zone strip — one rect per sample (very thin, abuts neighbours)
   const stripY = PAD_TOP + PLOT_H + 2;
   const stripRects: React.ReactElement[] = [];
   if (points.length >= 2) {
@@ -235,7 +291,7 @@ export const DepthProfilePanel: React.FC = () => {
         queryKey: getGetMarkersQueryKey({ datasetId }),
       });
     } catch {
-      // Surface failures via mutation state; nothing else to do here.
+      // Surface failures via mutation state.
     } finally {
       setBulkPending(false);
     }
@@ -283,10 +339,7 @@ export const DepthProfilePanel: React.FC = () => {
       canvas.width = WIDTH * scale;
       canvas.height = HEIGHT * scale;
       const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        URL.revokeObjectURL(url);
-        return;
-      }
+      if (!ctx) { URL.revokeObjectURL(url); return; }
       ctx.fillStyle = "#000a14";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
@@ -311,10 +364,27 @@ export const DepthProfilePanel: React.FC = () => {
     fontFamily: "inherit",
   };
 
-  return (
-    <div
-      data-testid="depth-profile-panel"
-      style={{
+  // ── Panel positioning ─────────────────────────────────────────────────
+  // When panelPos is null, use default bottom-center (absolute).
+  // When panelPos is set (after first drag), switch to fixed.
+  const panelStyle: React.CSSProperties = panelPos
+    ? {
+        position: "fixed",
+        left: panelPos.x,
+        top: panelPos.y,
+        zIndex: 36,
+        pointerEvents: "auto",
+        background: "rgba(0,10,20,0.92)",
+        border: "1px solid rgba(0,229,255,0.3)",
+        borderRadius: 6,
+        padding: 12,
+        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+        color: "#cbd5e1",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+        backdropFilter: "blur(8px)",
+        minWidth: PANEL_MIN_W,
+      }
+    : {
         position: "absolute",
         bottom: 16,
         left: "50%",
@@ -329,16 +399,42 @@ export const DepthProfilePanel: React.FC = () => {
         color: "#cbd5e1",
         boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
         backdropFilter: "blur(8px)",
-        minWidth: WIDTH + 24,
-      }}
+        minWidth: PANEL_MIN_W,
+      };
+
+  const isPathProfile = profile.mode === "path";
+
+  return (
+    <div
+      ref={panelRef}
+      data-testid="depth-profile-panel"
+      style={panelStyle}
     >
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-        <div style={{ fontSize: 10, letterSpacing: "0.22em", color: "#00e5ff", display: "flex", alignItems: "center" }}>
-          ▼ DEPTH PROFILE
+      {/* Header / drag handle */}
+      <div
+        data-testid="depth-profile-drag-handle"
+        onPointerDown={handleDragPointerDown}
+        onPointerMove={handleDragPointerMove}
+        onPointerUp={handleDragPointerUp}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 6,
+          cursor: isDragging ? "grabbing" : "grab",
+          userSelect: "none",
+          touchAction: "none",
+        }}
+      >
+        <div style={{ fontSize: 10, letterSpacing: "0.22em", color: "#00e5ff", display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 12, color: "rgba(0,229,255,0.45)", letterSpacing: 0 }}>⠿</span>
+          {isPathProfile ? "▼ PATH PROFILE" : "▼ DEPTH PROFILE"}
           <HelpIcon articleId="depth-profile" label="Depth profile" />
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div
+          style={{ display: "flex", alignItems: "center", gap: 6 }}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
           <button
             data-testid="depth-profile-export-csv"
             aria-label="Download depth profile as CSV"
@@ -373,16 +469,11 @@ export const DepthProfilePanel: React.FC = () => {
         </div>
       </div>
 
-      {/* History tabs — only shown when more than one profile exists */}
+      {/* History tabs */}
       {profiles.length > 1 && (
         <div
           data-testid="depth-profile-history"
-          style={{
-            display: "flex",
-            gap: 4,
-            marginBottom: 8,
-            flexWrap: "wrap",
-          }}
+          style={{ display: "flex", gap: 4, marginBottom: 8, flexWrap: "wrap" }}
         >
           {profiles.map((p, i) => {
             const isActive = i === selectedIndex;
@@ -426,7 +517,7 @@ export const DepthProfilePanel: React.FC = () => {
               >
                 <span style={{ fontWeight: isActive ? 700 : 400 }}>{label}</span>
                 <span style={{ fontSize: 8, color: isActive ? "#94a3b8" : "#475569" }}>
-                  Δ{depthLabel} · {distLabel}
+                  {p.mode === "path" ? "⬡ " : ""}Δ{depthLabel} · {distLabel}
                 </span>
               </button>
             );
@@ -440,6 +531,9 @@ export const DepthProfilePanel: React.FC = () => {
         <span>MIN <span style={{ color: "#e2e8f0" }}>{formatDepth(minDepthM, { units, decimals: 1 })}</span></span>
         <span>MAX <span style={{ color: "#e2e8f0" }}>{formatDepth(maxDepthM, { units, decimals: 1 })}</span></span>
         <span>Δ <span style={{ color: "#e2e8f0" }}>{formatDepth(maxDepthM - minDepthM, { units, decimals: 1 })}</span></span>
+        {isPathProfile && profile.waypoints && (
+          <span>WPT <span style={{ color: "#e2e8f0" }}>{profile.waypoints.length}</span></span>
+        )}
       </div>
 
       {/* Chart */}
@@ -452,7 +546,6 @@ export const DepthProfilePanel: React.FC = () => {
         onMouseMove={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
           const localX = ((e.clientX - rect.left) * WIDTH) / rect.width;
-          // Map cursor X to fractional distance, then to nearest sample idx.
           const t = Math.max(0, Math.min(1, (localX - PAD_LEFT) / PLOT_W));
           const idx = Math.max(
             0,
@@ -462,10 +555,6 @@ export const DepthProfilePanel: React.FC = () => {
         }}
         onMouseLeave={() => setHoverIndex(null)}
         onClick={(e) => {
-          // Clicking the chart drops a marker at the currently hovered
-          // sample. Touch devices fire mousemove → click in sequence so
-          // the hover index will be set correctly by the time we get here;
-          // for mouse users the existing onMouseMove already tracks it.
           const rect = e.currentTarget.getBoundingClientRect();
           const localX = ((e.clientX - rect.left) * WIDTH) / rect.width;
           const t = Math.max(0, Math.min(1, (localX - PAD_LEFT) / PLOT_W));
@@ -488,7 +577,7 @@ export const DepthProfilePanel: React.FC = () => {
           stroke="rgba(0,229,255,0.12)"
         />
 
-        {/* Y-axis gridlines + labels (depth, in metres) */}
+        {/* Y-axis gridlines + labels */}
         {ticks.map((d, i) => {
           const y = yOf(d);
           return (
@@ -514,6 +603,34 @@ export const DepthProfilePanel: React.FC = () => {
           );
         })}
 
+        {/* Waypoint boundary lines for path profiles */}
+        {isPathProfile && profile.waypoints && profile.waypoints.length > 2 &&
+          profile.waypoints.slice(1, -1).map((wp, i) => {
+            // Find the sample closest to this intermediate waypoint by lon/lat.
+            let bestIdx = 0;
+            let bestDist = Infinity;
+            for (let j = 0; j < points.length; j++) {
+              const dx = points[j]!.lon - wp.lon;
+              const dy = points[j]!.lat - wp.lat;
+              const d = dx * dx + dy * dy;
+              if (d < bestDist) { bestDist = d; bestIdx = j; }
+            }
+            const x = xOf(points[bestIdx]!.distanceM);
+            return (
+              <line
+                key={i}
+                x1={x}
+                x2={x}
+                y1={PAD_TOP}
+                y2={PAD_TOP + PLOT_H}
+                stroke="rgba(0,229,255,0.25)"
+                strokeDasharray="2 4"
+                strokeWidth={1}
+              />
+            );
+          })
+        }
+
         {/* Area fill */}
         <path d={areaPath} fill="rgba(0,229,255,0.12)" />
 
@@ -537,8 +654,6 @@ export const DepthProfilePanel: React.FC = () => {
           const cx = xOf(sample.distanceM);
           const cy = yOf(sample.depthM);
           const fs = FEATURE_STYLE[f.kind];
-          // Peaks point down toward the curve from above; troughs/ledges
-          // sit just below the line.
           const above = f.kind === "peak";
           const tipY = above ? cy - 7 : cy + 7;
           return (
@@ -566,13 +681,12 @@ export const DepthProfilePanel: React.FC = () => {
           );
         })}
 
-        {/* Hover indicator — vertical guide + dot + tooltip */}
+        {/* Hover indicator */}
         {hoverIndex !== null && points[hoverIndex] ? (() => {
           const hp = points[hoverIndex]!;
           const hx = xOf(hp.distanceM);
           const hy = yOf(hp.depthM);
           const zoneName = hp.slot !== null ? (ZONE_LABEL[hp.slot] ?? "Zone") : "—";
-          // Keep the tooltip inside the plot horizontally.
           const tipW = 132;
           const tipH = 46;
           let tipX = hx + 8;
@@ -619,7 +733,7 @@ export const DepthProfilePanel: React.FC = () => {
           );
         })() : null}
 
-        {/* X-axis labels: 0 and total distance */}
+        {/* X-axis labels */}
         <text
           x={PAD_LEFT}
           y={HEIGHT - 4}
@@ -642,7 +756,7 @@ export const DepthProfilePanel: React.FC = () => {
         </text>
       </svg>
 
-      {/* Endpoint coords + zone legend */}
+      {/* Endpoint coords */}
       <div style={{ fontSize: 9, color: "#64748b", marginTop: 6, display: "flex", justifyContent: "space-between", gap: 12 }}>
         <span>A {start.lat.toFixed(4)},{start.lon.toFixed(4)}</span>
         <span>B {end.lat.toFixed(4)},{end.lon.toFixed(4)}</span>
@@ -674,9 +788,7 @@ export const DepthProfilePanel: React.FC = () => {
               data-testid="depth-profile-add-all-features"
               aria-label="Add all detected features as markers"
               disabled={bulkPending || !datasetId}
-              onClick={() => {
-                void addAllFeatures();
-              }}
+              onClick={() => { void addAllFeatures(); }}
               style={{
                 ...exportBtnStyle,
                 opacity: bulkPending || !datasetId ? 0.5 : 1,

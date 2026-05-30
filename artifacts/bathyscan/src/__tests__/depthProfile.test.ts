@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildProfile,
+  buildPathProfile,
   detectProfileFeatures,
   type DepthProfileResult,
   type ProfilePoint,
@@ -232,5 +233,87 @@ describe("detectProfileFeatures", () => {
     for (let i = 1; i < features.length; i++) {
       expect(features[i]!.index).toBeGreaterThan(features[i - 1]!.index);
     }
+  });
+});
+
+describe("buildPathProfile", () => {
+  const grid = makeRamp(32);
+
+  it("two-waypoint path matches buildProfile output approximately", () => {
+    const start = { lon: -132.5, lat: 56.0, depth: 0 };
+    const end   = { lon: -132.3, lat: 56.0, depth: 1000 };
+    const path = buildPathProfile(grid, [start, end], null);
+    const line = buildProfile(grid, start, end, null);
+    // Total distance should be the same (same haversine).
+    expect(path.totalDistanceM).toBeCloseTo(line.totalDistanceM, 0);
+    // Depth range should span the ramp.
+    expect(path.minDepthM).toBeLessThan(50);
+    expect(path.maxDepthM).toBeGreaterThan(950);
+    expect(path.mode).toBe("path");
+    expect(path.waypoints).toHaveLength(2);
+  });
+
+  it("three-waypoint path has continuous, non-decreasing distanceM", () => {
+    const wps = [
+      { lon: -132.5, lat: 56.0, depth: 0 },
+      { lon: -132.4, lat: 56.05, depth: 500 },
+      { lon: -132.3, lat: 56.0, depth: 1000 },
+    ];
+    const result = buildPathProfile(grid, wps, null);
+    expect(result.points.length).toBeGreaterThan(0);
+    expect(result.points[0]!.distanceM).toBe(0);
+    for (let i = 1; i < result.points.length; i++) {
+      expect(result.points[i]!.distanceM).toBeGreaterThanOrEqual(
+        result.points[i - 1]!.distanceM,
+      );
+    }
+    // Last point distance should be close to total.
+    expect(result.points[result.points.length - 1]!.distanceM).toBeCloseTo(
+      result.totalDistanceM,
+      0,
+    );
+  });
+
+  it("totalDistanceM equals the sum of segment haversine distances", async () => {
+    const wps = [
+      { lon: -132.5, lat: 56.0, depth: 0 },
+      { lon: -132.4, lat: 56.0, depth: 500 },
+      { lon: -132.3, lat: 56.0, depth: 1000 },
+    ];
+    const { haversineDistance } = await import("../lib/geo");
+    const seg1 = haversineDistance(wps[0]!, wps[1]!) * 1000;
+    const seg2 = haversineDistance(wps[1]!, wps[2]!) * 1000;
+    const expected = seg1 + seg2;
+    const result = buildPathProfile(grid, wps, null);
+    expect(result.totalDistanceM).toBeCloseTo(expected, 1);
+  });
+
+  it("stores all waypoints on result", () => {
+    const wps = [
+      { lon: -132.5, lat: 56.0, depth: 0 },
+      { lon: -132.4, lat: 56.05, depth: 300 },
+      { lon: -132.35, lat: 55.95, depth: 700 },
+      { lon: -132.3, lat: 56.0, depth: 1000 },
+    ];
+    const result = buildPathProfile(grid, wps, null);
+    expect(result.waypoints).toHaveLength(4);
+    expect(result.start).toEqual(wps[0]);
+    expect(result.end).toEqual(wps[3]);
+  });
+
+  it("slot is null for all points when no zoneMap provided", () => {
+    const wps = [
+      { lon: -132.5, lat: 56.0, depth: 0 },
+      { lon: -132.4, lat: 56.0, depth: 500 },
+      { lon: -132.3, lat: 56.0, depth: 1000 },
+    ];
+    const result = buildPathProfile(grid, wps, null);
+    expect(result.points.every((p) => p.slot === null)).toBe(true);
+  });
+
+  it("degenerate single-waypoint path falls back gracefully", () => {
+    const result = buildPathProfile(grid, [{ lon: -132.4, lat: 56.0, depth: 500 }], null);
+    expect(result.totalDistanceM).toBe(0);
+    expect(result.points.length).toBeGreaterThan(0);
   });
 });

@@ -2,18 +2,21 @@
  * depthProfileStore.ts — anchor + sampled cross-section for the
  * right-click depth profile feature.
  *
- * Flow:
- *   1. User right-clicks terrain → "Start depth profile here"
- *      → setAnchor({ lon, lat, depth })
- *   2. User right-clicks terrain → "End depth profile here"
- *      → pushProfile(result) prepends it to the history and shows the panel.
- *      Anchor is cleared on completion.
- *   3. <DepthProfilePanel/> reads `profile` (the active entry) and renders the
- *      chart. History tabs let the user revisit any of the last 5 profiles.
- *      The user can dismiss everything via clearProfile().
+ * Flow (straight-line mode):
+ *   1. User right-clicks → "Start depth profile here" → setAnchor(p)
+ *   2. User right-clicks → "End depth profile here"
+ *      → buildProfile() + pushProfile()
  *
- * Independent of the marker system — nothing here writes to markers,
- * cameraStore, or measureStore.
+ * Flow (path mode):
+ *   1. User right-clicks → "Start path profile here" → startPathProfile(p)
+ *   2. User right-clicks → "Add waypoint here" → addWaypoint(p)  (repeat)
+ *   3. User right-clicks → "Finish path here" (or presses Enter)
+ *      → buildPathProfile() + pushProfile()
+ *
+ * History tabs let the user revisit any of the last 5 profiles.
+ * Dismiss everything via clearProfile(). Cancel in-progress via cancelPath().
+ *
+ * Independent of the marker system.
  */
 import { create } from "zustand";
 import type { TerrainData } from "@workspace/api-client-react";
@@ -47,6 +50,13 @@ export interface ProfilePoint {
 export interface DepthProfileResult {
   start:  { lon: number; lat: number; depth: number };
   end:    { lon: number; lat: number; depth: number };
+  /**
+   * All waypoints for path profiles (start + intermediates + end).
+   * Undefined = simple straight two-point transect.
+   */
+  waypoints?: Array<{ lon: number; lat: number; depth: number }>;
+  /** 'line' = two-point transect; 'path' = multi-waypoint route */
+  mode?: "line" | "path";
   points: ProfilePoint[];
   /** Total transect length, metres. */
   totalDistanceM: number;
@@ -60,7 +70,24 @@ export interface DepthProfileResult {
 const MAX_HISTORY = 5;
 
 interface DepthProfileStore {
+  // ── straight-line mode ──────────────────────────────────────────────────
   anchor: { lon: number; lat: number; depth: number } | null;
+  setAnchor: (p: { lon: number; lat: number; depth: number }) => void;
+  clearAnchor: () => void;
+
+  // ── path mode ───────────────────────────────────────────────────────────
+  /** 'line' = waiting for an end-point; 'path' = collecting waypoints */
+  profileMode: "line" | "path";
+  /** Ordered waypoints accumulated in path mode (first = start). */
+  pathWaypoints: Array<{ lon: number; lat: number; depth: number }>;
+  /** Enter path mode and set the first waypoint. */
+  startPathProfile: (p: { lon: number; lat: number; depth: number }) => void;
+  /** Append a waypoint to the in-progress path. */
+  addWaypoint: (p: { lon: number; lat: number; depth: number }) => void;
+  /** Abort path mode without generating a profile. */
+  cancelPath: () => void;
+
+  // ── history / display ───────────────────────────────────────────────────
   /**
    * History of profiles captured this session, newest first.
    * Length is at most MAX_HISTORY (5).
@@ -68,41 +95,30 @@ interface DepthProfileStore {
   profiles: DepthProfileResult[];
   /**
    * Index into `profiles` currently shown in the panel.
-   * 0 = most recent. -1 when the panel is hidden (no profiles, or after
-   * setAnchor hides the panel while a new measurement is in progress).
+   * 0 = most recent. -1 when the panel is hidden.
    */
   selectedIndex: number;
   /**
-   * The profile currently shown in the panel:
-   * profiles[selectedIndex] ?? null.
-   * Kept as a first-class field so selectors reading only `profile` still
-   * work without subscribing to the full profiles array.
+   * The profile currently shown in the panel: profiles[selectedIndex] ?? null.
    */
   profile: DepthProfileResult | null;
   /**
-   * Index of the sample currently being hovered (by chart or 3D scene).
-   * null when nothing is hovered. Shared between DepthProfilePanel and
-   * DepthProfileLine to keep their highlights in sync.
+   * Index of the sample currently being hovered (chart or 3D scene).
+   * null when nothing is hovered.
    */
   hoverIndex: number | null;
-  setAnchor: (p: { lon: number; lat: number; depth: number }) => void;
-  clearAnchor: () => void;
-  /**
-   * Prepend a new profile to the history (max 5) and make it the active
-   * one. This is the primary way new profiles are stored.
-   */
   pushProfile: (r: DepthProfileResult) => void;
   /** @deprecated Alias for pushProfile — kept for legacy callers. */
   setProfile: (r: DepthProfileResult) => void;
-  /** Dismiss the panel and clear all profile history. */
   clearProfile: () => void;
-  /** Switch the panel to show a different history entry. */
   selectProfile: (index: number) => void;
   setHoverIndex: (i: number | null) => void;
 }
 
 export const useDepthProfileStore = create<DepthProfileStore>((set) => ({
   anchor: null,
+  profileMode: "line",
+  pathWaypoints: [],
   profiles: [],
   selectedIndex: 0,
   profile: null,
@@ -111,8 +127,8 @@ export const useDepthProfileStore = create<DepthProfileStore>((set) => ({
   setAnchor: (p) =>
     set({
       anchor: p,
-      // Hide the panel while the user is picking the endpoint. History is
-      // preserved so tabs reappear once the new profile is generated.
+      profileMode: "line",
+      pathWaypoints: [],
       profile: null,
       hoverIndex: null,
     }),
@@ -120,8 +136,30 @@ export const useDepthProfileStore = create<DepthProfileStore>((set) => ({
   clearAnchor: () =>
     set((s) => ({
       anchor: null,
-      // Restore the previously active profile if history exists, so
-      // cancelling a mid-flight measurement brings the panel back.
+      profileMode: "line",
+      pathWaypoints: [],
+      profile: s.profiles[s.selectedIndex] ?? null,
+    })),
+
+  startPathProfile: (p) =>
+    set({
+      profileMode: "path",
+      pathWaypoints: [p],
+      anchor: null,
+      profile: null,
+      hoverIndex: null,
+    }),
+
+  addWaypoint: (p) =>
+    set((s) => ({
+      pathWaypoints: [...s.pathWaypoints, p],
+    })),
+
+  cancelPath: () =>
+    set((s) => ({
+      profileMode: "line",
+      pathWaypoints: [],
+      anchor: null,
       profile: s.profiles[s.selectedIndex] ?? null,
     })),
 
@@ -133,6 +171,8 @@ export const useDepthProfileStore = create<DepthProfileStore>((set) => ({
         selectedIndex: 0,
         profile: r,
         anchor: null,
+        profileMode: "line",
+        pathWaypoints: [],
         hoverIndex: null,
       };
     }),
@@ -145,12 +185,22 @@ export const useDepthProfileStore = create<DepthProfileStore>((set) => ({
         selectedIndex: 0,
         profile: r,
         anchor: null,
+        profileMode: "line",
+        pathWaypoints: [],
         hoverIndex: null,
       };
     }),
 
   clearProfile: () =>
-    set({ profiles: [], selectedIndex: 0, profile: null, hoverIndex: null }),
+    set({
+      profiles: [],
+      selectedIndex: 0,
+      profile: null,
+      hoverIndex: null,
+      anchor: null,
+      profileMode: "line",
+      pathWaypoints: [],
+    }),
 
   selectProfile: (index) =>
     set((s) => {
@@ -162,12 +212,13 @@ export const useDepthProfileStore = create<DepthProfileStore>((set) => ({
   setHoverIndex: (i) => set({ hoverIndex: i }),
 }));
 
-/** Number of samples taken along the transect. */
+// ── Sampling helpers ──────────────────────────────────────────────────────
+
+/** Number of samples taken along a transect. */
 const SAMPLE_COUNT = 96;
 
 /**
- * Bilinear depth sample from the terrain grid at fractional grid coords.
- * Mirrors getTerrainSurfaceY but returns depth in metres directly.
+ * Bilinear depth sample from the terrain grid at world XZ.
  */
 function sampleDepthMetres(
   grid: TerrainData,
@@ -218,9 +269,8 @@ function sampleSlot(
 }
 
 /**
- * Sample SAMPLE_COUNT points along the great-circle approximation between
- * `start` and `end` (treated as planar in grid space — adequate for the
- * small extents BathyScan deals with).
+ * Sample SAMPLE_COUNT points along the straight line between `start` and
+ * `end` (the original two-point transect).
  */
 export function buildProfile(
   grid: TerrainData,
@@ -263,6 +313,7 @@ export function buildProfile(
   return {
     start,
     end,
+    mode: "line",
     points,
     totalDistanceM,
     minDepthM,
@@ -272,35 +323,122 @@ export function buildProfile(
 }
 
 /**
+ * Build a depth profile along a multi-waypoint path.
+ *
+ * The 96 samples are distributed across segments proportionally to each
+ * segment's haversine length, so shorter segments aren't over-sampled and
+ * longer ones aren't under-sampled. The distanceM on each point accumulates
+ * continuously across all segments, giving a single unbroken X-axis scale.
+ *
+ * Requires at least two waypoints; callers should guard against this.
+ */
+export function buildPathProfile(
+  grid: TerrainData,
+  waypoints: Array<{ lon: number; lat: number; depth: number }>,
+  zoneMap: Uint8Array | null,
+): DepthProfileResult {
+  if (waypoints.length < 2) {
+    const wp = waypoints[0] ?? { lon: 0, lat: 0, depth: 0 };
+    return buildProfile(grid, wp, wp, zoneMap);
+  }
+
+  // Compute per-segment lengths.
+  const segLengths: number[] = [];
+  let totalDistanceM = 0;
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    const len = haversineDistance(waypoints[i]!, waypoints[i + 1]!) * 1000;
+    segLengths.push(len);
+    totalDistanceM += len;
+  }
+
+  // Distribute SAMPLE_COUNT samples across segments proportionally.
+  // Each segment gets at least 2 samples (start + end). We compute ideal
+  // fractional counts, then round, and correct the last segment so the
+  // total is exactly SAMPLE_COUNT.
+  const segSampleCounts: number[] = [];
+  if (totalDistanceM < 1e-6) {
+    // Degenerate: all waypoints at the same spot.
+    for (let i = 0; i < segLengths.length; i++) {
+      segSampleCounts.push(i === 0 ? SAMPLE_COUNT : 0);
+    }
+  } else {
+    let allocated = 0;
+    for (let i = 0; i < segLengths.length; i++) {
+      const ideal = (segLengths[i]! / totalDistanceM) * SAMPLE_COUNT;
+      const count = i < segLengths.length - 1
+        ? Math.max(2, Math.round(ideal))
+        : Math.max(2, SAMPLE_COUNT - allocated);
+      segSampleCounts.push(count);
+      allocated += count;
+    }
+  }
+
+  const points: ProfilePoint[] = [];
+  let minDepthM = Infinity;
+  let maxDepthM = -Infinity;
+  let cumulativeDistanceM = 0;
+
+  for (let seg = 0; seg < waypoints.length - 1; seg++) {
+    const wA = waypoints[seg]!;
+    const wB = waypoints[seg + 1]!;
+    const a = lonLatToWorldXZ(wA.lon, wA.lat, grid);
+    const b = lonLatToWorldXZ(wB.lon, wB.lat, grid);
+    const segLen = segLengths[seg]!;
+    const count = segSampleCounts[seg]!;
+
+    // For segments after the first, skip sample i=0 to avoid duplicating
+    // the shared boundary point.
+    const startI = seg === 0 ? 0 : 1;
+    const denom = Math.max(1, count - 1);
+
+    for (let i = startI; i < count; i++) {
+      const t = i / denom;
+      const worldX = a.x + (b.x - a.x) * t;
+      const worldZ = a.z + (b.z - a.z) * t;
+      const depthM = sampleDepthMetres(grid, worldX, worldZ);
+      const slot   = sampleSlot(grid, zoneMap, worldX, worldZ);
+      const { lon, lat } = worldXZToLonLat(worldX, worldZ, grid);
+      const distanceM = cumulativeDistanceM + segLen * t;
+      if (depthM < minDepthM) minDepthM = depthM;
+      if (depthM > maxDepthM) maxDepthM = depthM;
+      points.push({ distanceM, depthM, slot, worldX, worldZ, lon, lat });
+    }
+
+    cumulativeDistanceM += segLen;
+  }
+
+  if (!Number.isFinite(minDepthM)) minDepthM = 0;
+  if (!Number.isFinite(maxDepthM)) maxDepthM = 0;
+
+  return {
+    start: waypoints[0]!,
+    end: waypoints[waypoints.length - 1]!,
+    waypoints: [...waypoints],
+    mode: "path",
+    points,
+    totalDistanceM,
+    minDepthM,
+    maxDepthM,
+    at: Date.now(),
+  };
+}
+
+// ── Feature detection ─────────────────────────────────────────────────────
+
+/**
  * A notable feature surfaced by detectProfileFeatures — peaks (humps),
- * troughs (holes) and ledges (sharp slope changes). The UI uses these to
- * suggest auto-markers along the transect.
+ * troughs (holes) and ledges (sharp slope changes).
  */
 export type ProfileFeatureKind = "peak" | "trough" | "ledge";
 
 export interface ProfileFeature {
-  /** Index into profile.points. */
   index: number;
   kind: ProfileFeatureKind;
-  /**
-   * For peak/trough: vertical prominence (metres) against the nearest
-   * higher/lower neighbour inside the analysis window.
-   * For ledge: absolute slope change (metres-per-metre) at that point.
-   */
   magnitude: number;
 }
 
 /**
  * Find notable peaks, troughs and ledges along the profile.
- *
- * - **peak**: shallowest sample (smallest depth) in a window with prominence
- *   ≥ max(0.5 m, 8% of profile depth range).
- * - **trough**: deepest sample in the same kind of window with the matching
- *   prominence threshold.
- * - **ledge**: large change in vertical slope between adjacent samples, away
- *   from any already-claimed peak/trough.
- *
- * Pure: no store reads, deterministic for a given DepthProfileResult.
  */
 export function detectProfileFeatures(
   profile: DepthProfileResult,
@@ -316,11 +454,6 @@ export function detectProfileFeatures(
 
   const features: ProfileFeature[] = [];
 
-  // Local extrema with prominence — skip the two endpoints, which aren't
-  // intrinsically interesting (they're where the user clicked). We require
-  // strict inequality against the immediate neighbours so that a flat
-  // plateau doesn't have every sample registered as the same extremum;
-  // the ledge detector will catch the boundary instead.
   for (let i = 1; i < n - 1; i++) {
     const d = pts[i]!.depthM;
     const dPrev = pts[i - 1]!.depthM;
@@ -345,16 +478,12 @@ export function detectProfileFeatures(
     }
   }
 
-  // Ledges — large slope changes (drop-offs, shelves) away from existing
-  // peaks/troughs.
   const slopes: number[] = new Array(n - 1);
   for (let i = 0; i < n - 1; i++) {
     const dx = pts[i + 1]!.distanceM - pts[i]!.distanceM;
     const dy = pts[i + 1]!.depthM - pts[i]!.depthM;
     slopes[i] = dx > 1e-6 ? dy / dx : 0;
   }
-  // Threshold scales with depth range vs transect length so it adapts to
-  // both tiny lake transects and ocean-scale ones.
   const meanAbsSlope =
     profile.totalDistanceM > 0 ? range / profile.totalDistanceM : 0;
   const slopeThresh = Math.max(0.02, meanAbsSlope * 3);
@@ -380,9 +509,7 @@ export function detectProfileFeatures(
 }
 
 /**
- * Convert a sampled point's world-Y position based on its measured depth.
- * Exported so the in-scene line component can hover slightly above the
- * terrain surface.
+ * Convert a depth value to a world-Y coordinate for the in-scene line.
  */
 export function depthMetresToWorldY(depthM: number, grid: TerrainData): number {
   const range = (grid.maxDepth - grid.minDepth) || 1;
@@ -390,6 +517,4 @@ export function depthMetresToWorldY(depthM: number, grid: TerrainData): number {
   return -t * MAX_DEPTH_WORLD;
 }
 
-// Re-export for components that need to convert world coords back to lon/lat
-// without importing terrain directly.
 export { worldXZToLonLat };

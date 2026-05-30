@@ -15,7 +15,11 @@ import type { TerrainData } from "@workspace/api-client-react";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useMeasureStore } from "@/lib/measureStore";
-import { useDepthProfileStore, buildProfile } from "@/lib/depthProfileStore";
+import {
+  useDepthProfileStore,
+  buildProfile,
+  buildPathProfile,
+} from "@/lib/depthProfileStore";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import {
@@ -65,7 +69,12 @@ export function buildTerrainMenuItems(
   getTerrainGrid: () => TerrainData | null,
 ): ContextMenuItem[] {
   const measureAnchor = useMeasureStore.getState().anchorGps;
-  const profileAnchor = useDepthProfileStore.getState().anchor;
+  const profileState = useDepthProfileStore.getState();
+  const profileAnchor = profileState.anchor;
+  const profileMode = profileState.profileMode;
+  const pathWaypoints = profileState.pathWaypoints;
+  const pathInProgress = profileMode === "path" && pathWaypoints.length >= 1;
+
   const items: ContextMenuItem[] = [
     {
       label: "Drop GPS pin here",
@@ -126,37 +135,88 @@ export function buildTerrainMenuItems(
       },
       disabled: !datasetId,
     },
-    {
-      label: profileAnchor
-        ? "End depth profile here"
-        : "Start depth profile here",
-      icon: "📈",
-      onClick: () => {
-        const store = useDepthProfileStore.getState();
-        const grid = getTerrainGrid();
-        if (store.anchor && grid) {
-          const zoneMap = useClassificationStore.getState().zoneMap;
-          const result = buildProfile(
-            grid,
-            store.anchor,
-            { lon, lat, depth },
-            zoneMap,
-          );
-          store.pushProfile(result);
-        } else {
-          store.setAnchor({ lon, lat, depth });
-        }
+  ];
+
+  // ── Depth profile items ───────────────────────────────────────────────
+
+  if (pathInProgress) {
+    // Path mode is active — show waypoint and finish options.
+    items.push(
+      {
+        label: "Add waypoint here",
+        icon: "➕",
+        onClick: () => {
+          useDepthProfileStore.getState().addWaypoint({ lon, lat, depth });
+        },
       },
-    },
-    ...(profileAnchor
-      ? [
-          {
-            label: "Cancel depth profile",
-            icon: "✖",
-            onClick: () => useDepthProfileStore.getState().clearAnchor(),
-          } as ContextMenuItem,
-        ]
-      : []),
+      {
+        label: "Finish path here",
+        icon: "📈",
+        onClick: () => {
+          const store = useDepthProfileStore.getState();
+          const grid = getTerrainGrid();
+          if (!grid) return;
+          const wps = [...store.pathWaypoints, { lon, lat, depth }];
+          if (wps.length < 2) return;
+          const zoneMap = useClassificationStore.getState().zoneMap;
+          const result = buildPathProfile(grid, wps, zoneMap);
+          store.pushProfile(result);
+        },
+      },
+      {
+        label: "Cancel path profile",
+        icon: "✖",
+        onClick: () => useDepthProfileStore.getState().cancelPath(),
+      },
+    );
+  } else if (profileAnchor) {
+    // Straight-line mode: waiting for end-point.
+    items.push(
+      {
+        label: "End depth profile here",
+        icon: "📈",
+        onClick: () => {
+          const store = useDepthProfileStore.getState();
+          const grid = getTerrainGrid();
+          if (store.anchor && grid) {
+            const zoneMap = useClassificationStore.getState().zoneMap;
+            const result = buildProfile(
+              grid,
+              store.anchor,
+              { lon, lat, depth },
+              zoneMap,
+            );
+            store.pushProfile(result);
+          }
+        },
+      },
+      {
+        label: "Cancel depth profile",
+        icon: "✖",
+        onClick: () => useDepthProfileStore.getState().clearAnchor(),
+      },
+    );
+  } else {
+    // Idle — offer both profile modes.
+    items.push(
+      {
+        label: "Start straight-line profile",
+        icon: "📈",
+        onClick: () => {
+          useDepthProfileStore.getState().setAnchor({ lon, lat, depth });
+        },
+      },
+      {
+        label: "Start path profile",
+        icon: "🛤️",
+        onClick: () => {
+          useDepthProfileStore.getState().startPathProfile({ lon, lat, depth });
+        },
+      },
+    );
+  }
+
+  items.push(
     { label: "", onClick: () => {}, separator: true },
     {
       label: "Copy coordinates",
@@ -168,29 +228,22 @@ export function buildTerrainMenuItems(
       icon: "🔗",
       onClick: () => copyShareLink(),
     },
-  ];
+  );
+
   return items;
 }
 
 export interface OpenCrosshairMenuOptions {
-  /** Viewport-space X to anchor the menu at (usually canvas centre). */
   centerX: number;
-  /** Viewport-space Y to anchor the menu at (usually canvas centre). */
   centerY: number;
-  /** Returns the active terrain grid, or null if no dataset is loaded. */
   getTerrainGrid: () => TerrainData | null;
-  /**
-   * Called before the menu is shown so the caller can release pointer
-   * lock (only invoked when the menu will actually open).
-   */
   exitPointerLock?: () => void;
 }
 
 /**
  * Open the terrain action menu anchored at the crosshair. No-ops (returns
  * false) when the crosshair isn't currently on terrain or no dataset is
- * loaded, so callers can wire the same helper to a key, button, or touch
- * trigger without worrying about empty-menu edge cases.
+ * loaded.
  */
 export function openCrosshairContextMenu(
   opts: OpenCrosshairMenuOptions,
