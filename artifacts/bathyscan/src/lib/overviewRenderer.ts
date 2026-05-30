@@ -507,7 +507,7 @@ export function renderEfhLegend(
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  ctx.fillStyle = "#475569";
+  ctx.fillStyle = "#94a3b8";
   ctx.fillText("EFH SPECIES", x + PAD, y + PAD + FONT_SIZE);
 
   const rows: EfhLegendRow[] = entries.map(([name, color], i) => {
@@ -743,7 +743,7 @@ export function renderSubstrateLegend(
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  ctx.fillStyle = "#475569";
+  ctx.fillStyle = "#94a3b8";
   ctx.fillText("SUBSTRATE", x + PAD, y + PAD + FONT_SIZE);
 
   const rows: SubstrateLegendRow[] = entries.map(([label, color], i) => {

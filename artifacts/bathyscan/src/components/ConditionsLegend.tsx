@@ -26,7 +26,7 @@ const PANEL: React.CSSProperties = {
   padding: "8px 10px",
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   fontSize: 10,
-  color: "#94a3b8",
+  color: "#e2e8f0",
   letterSpacing: "0.05em",
   minWidth: 210,
   maxWidth: 240,
@@ -36,7 +36,7 @@ const PANEL: React.CSSProperties = {
 };
 
 const LABEL: React.CSSProperties = {
-  color: "#475569",
+  color: "#94a3b8",
   fontSize: 8,
   letterSpacing: "0.2em",
   textTransform: "uppercase",
@@ -77,7 +77,7 @@ const Row: React.FC<RowProps> = ({ swatch, label, value, detail }) => (
       <div style={{ color: "#e2e8f0", fontSize: 10 }}>
         {value}
         {detail && (
-          <span style={{ color: "#64748b", marginLeft: 4 }}>{detail}</span>
+          <span style={{ color: "#cbd5e1", marginLeft: 4 }}>{detail}</span>
         )}
       </div>
     </div>
@@ -195,7 +195,7 @@ export const ConditionsLegend: React.FC = () => {
                     letterSpacing: "0.15em",
                     textTransform: "uppercase",
                     fontFamily: "inherit",
-                    color: selected ? "#0b1220" : "#94a3b8",
+                    color: selected ? "#0b1220" : "#e2e8f0",
                     background: selected ? LAYER_COLORS[layer] : "transparent",
                     border: `1px solid ${selected ? LAYER_COLORS[layer] : "rgba(148,163,184,0.35)"}`,
                     borderRadius: 2,

@@ -416,7 +416,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
           <button
             onClick={onClose}
             aria-label="Close"
-            style={{ background: "none", border: "none", color: "#475569", fontSize: 16, cursor: "pointer" }}
+            style={{ background: "none", border: "none", color: "#94a3b8", fontSize: 16, cursor: "pointer" }}
           >
             ×
           </button>
@@ -425,7 +425,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
         <div style={{ padding: 14 }}>
           {phase.kind === "pick" && (
             <>
-              <p style={{ margin: "0 0 10px", color: "#94a3b8", lineHeight: 1.5 }}>
+              <p style={{ margin: "0 0 10px", color: "#e2e8f0", lineHeight: 1.5 }}>
                 Pick a <strong style={{ color: "#cbd5e1" }}>.gpx, .kml, .kmz, or .csv</strong> file. Points outside this
                 dataset's bounding box will be skipped automatically.
               </p>
@@ -437,14 +437,14 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
                 onChange={handleFileInput}
                 style={{ color: "#cbd5e1" }}
               />
-              <div style={{ marginTop: 12, fontSize: 10, color: "#64748b", lineHeight: 1.5 }}>
+              <div style={{ marginTop: 12, fontSize: 10, color: "#cbd5e1", lineHeight: 1.5 }}>
                 Limit: up to 5,000 points per file. Trolling routes longer than 50 waypoints are downsampled.
               </div>
             </>
           )}
 
           {phase.kind === "parsing" && (
-            <div style={{ padding: "20px 0", textAlign: "center", color: "#94a3b8" }}>
+            <div style={{ padding: "20px 0", textAlign: "center", color: "#e2e8f0" }}>
               Parsing <strong>{phase.fileName}</strong>…
             </div>
           )}
@@ -497,7 +497,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
           )}
 
           {phase.kind === "importing" && (
-            <div style={{ padding: "20px 0", textAlign: "center", color: "#94a3b8" }}>
+            <div style={{ padding: "20px 0", textAlign: "center", color: "#e2e8f0" }}>
               Importing…
             </div>
           )}
@@ -568,7 +568,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
 
   return (
     <>
-      <div style={{ marginBottom: 10, color: "#94a3b8" }}>
+      <div style={{ marginBottom: 10, color: "#e2e8f0" }}>
         <strong style={{ color: "#cbd5e1" }}>{phase.fileName}</strong>
       </div>
 
@@ -589,19 +589,19 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
         }}
       >
         <div>
-          <div style={{ color: "#64748b" }}>Waypoints (in bounds)</div>
+          <div style={{ color: "#cbd5e1" }}>Waypoints (in bounds)</div>
           <div style={{ color: "#cbd5e1", fontSize: 13 }} data-testid="gps-import-waypoint-count">
             {insideWpCount}
           </div>
         </div>
         <div>
-          <div style={{ color: "#64748b" }}>Routes / Tracks</div>
+          <div style={{ color: "#cbd5e1" }}>Routes / Tracks</div>
           <div style={{ color: "#cbd5e1", fontSize: 13 }} data-testid="gps-import-route-count">
             {insideRouteCount}
           </div>
         </div>
         <div>
-          <div style={{ color: "#64748b" }}>Total points</div>
+          <div style={{ color: "#cbd5e1" }}>Total points</div>
           <div style={{ color: "#cbd5e1", fontSize: 13 }}>{totalInside}</div>
         </div>
         {(phase.outsideWp > 0 ||
@@ -637,7 +637,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
       {insideWpCount > 0 && importWaypoints && (
         <>
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 9, color: "#64748b", marginBottom: 4, letterSpacing: "0.12em" }}>
+            <div style={{ fontSize: 9, color: "#cbd5e1", marginBottom: 4, letterSpacing: "0.12em" }}>
               MARKER TYPE
             </div>
             <select
@@ -661,7 +661,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
             <summary
               style={{
                 cursor: "pointer",
-                color: "#94a3b8",
+                color: "#e2e8f0",
                 fontSize: 10,
                 letterSpacing: "0.1em",
                 marginBottom: 6,
@@ -675,7 +675,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
                   <span style={{ flex: 1, color: "#cbd5e1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {w.name || "(unnamed)"}
                   </span>
-                  <span style={{ color: "#64748b", fontSize: 10 }}>
+                  <span style={{ color: "#cbd5e1", fontSize: 10 }}>
                     {w.lat.toFixed(4)}, {w.lon.toFixed(4)}
                   </span>
                   <button
@@ -724,7 +724,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
             }}
           >
             <div>
-              <div style={{ fontSize: 9, color: "#64748b", marginBottom: 4, letterSpacing: "0.12em" }}>
+              <div style={{ fontSize: 9, color: "#cbd5e1", marginBottom: 4, letterSpacing: "0.12em" }}>
                 DEFAULT HEADING (°)
               </div>
               <input
@@ -743,7 +743,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
               />
             </div>
             <div>
-              <div style={{ fontSize: 9, color: "#64748b", marginBottom: 4, letterSpacing: "0.12em" }}>
+              <div style={{ fontSize: 9, color: "#cbd5e1", marginBottom: 4, letterSpacing: "0.12em" }}>
                 DEFAULT SPEED (KT)
               </div>
               <input
@@ -761,7 +761,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
                 style={numberInputStyle}
               />
             </div>
-            <div style={{ gridColumn: "1 / -1", fontSize: 9, color: "#64748b", lineHeight: 1.4 }}>
+            <div style={{ gridColumn: "1 / -1", fontSize: 9, color: "#cbd5e1", lineHeight: 1.4 }}>
               Applied to every imported route. You can fine-tune individual presets afterwards in the trolling UI.
             </div>
           </div>
@@ -770,7 +770,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
             <div
               style={{
                 fontSize: 9,
-                color: "#64748b",
+                color: "#cbd5e1",
                 letterSpacing: "0.1em",
                 marginBottom: 6,
               }}
@@ -862,7 +862,7 @@ const RouteEditor: React.FC<{
         />
         <span
           style={{
-            color: tooShort ? "#fbbf24" : "#64748b",
+            color: tooShort ? "#fbbf24" : "#cbd5e1",
             fontSize: 10,
             minWidth: 50,
             textAlign: "right",
@@ -895,7 +895,7 @@ const RouteEditor: React.FC<{
             <span style={{ flex: 1, color: "#cbd5e1", fontSize: 10 }}>
               #{pi + 1}
             </span>
-            <span style={{ color: "#64748b", fontSize: 10 }}>
+            <span style={{ color: "#cbd5e1", fontSize: 10 }}>
               {p.lat.toFixed(4)}, {p.lon.toFixed(4)}
             </span>
             <button
@@ -1061,7 +1061,7 @@ const PreviewMap: React.FC<PreviewMapProps> = ({ original, bounds }) => {
             x={MAP_WIDTH / 2}
             y={MAP_HEIGHT / 2}
             textAnchor="middle"
-            fill="#475569"
+            fill="#94a3b8"
             fontSize={10}
             fontFamily="inherit"
           >
@@ -1075,7 +1075,7 @@ const PreviewMap: React.FC<PreviewMapProps> = ({ original, bounds }) => {
           gap: 12,
           justifyContent: "flex-end",
           fontSize: 9,
-          color: "#64748b",
+          color: "#cbd5e1",
           marginTop: 4,
         }}
       >
@@ -1141,7 +1141,7 @@ const removeBtnStyle: React.CSSProperties = {
   background: "transparent",
   border: "1px solid rgba(148,163,184,0.25)",
   borderRadius: 3,
-  color: "#94a3b8",
+  color: "#e2e8f0",
   cursor: "pointer",
   fontFamily: "inherit",
   fontSize: 10,
@@ -1168,7 +1168,7 @@ function btnStyle(variant: "primary" | "ghost"): React.CSSProperties {
     background: "transparent",
     border: "1px solid rgba(148,163,184,0.3)",
     borderRadius: 3,
-    color: "#94a3b8",
+    color: "#e2e8f0",
     cursor: "pointer",
     fontFamily: "inherit",
     fontSize: 11,

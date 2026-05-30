@@ -110,12 +110,12 @@ const HotspotCard: React.FC<HotspotCardProps> = ({
         <div style={{ color: "#f1f5f9", fontSize: 11, marginBottom: 1 }}>
           <span style={{ color: "#cbd5e1", fontSize: 10 }}>#{index + 1} </span>
           <span style={{ color: "#fb923c", fontWeight: 600 }}>{Math.round(hotspot.score * 100)}%</span>
-          <span style={{ color: "#94a3b8", fontSize: 10 }}> match</span>
+          <span style={{ color: "#e2e8f0", fontSize: 10 }}> match</span>
         </div>
         <ScoreBar score={hotspot.score} />
         <div style={{ fontSize: 10, color: "#cbd5e1", marginTop: 3 }}>
           <span>{formatDepth(hotspot.depth, { units })}</span>
-          <span style={{ color: "#94a3b8", margin: "0 4px" }}>·</span>
+          <span style={{ color: "#e2e8f0", margin: "0 4px" }}>·</span>
           <span style={{ color: "#cbd5e1" }}>
             {hotspot.zoneLabel.replace(/_/g, " ")}
           </span>
@@ -154,7 +154,7 @@ const HotspotCard: React.FC<HotspotCardProps> = ({
             border: "1px solid rgba(251,146,60,0.4)",
             borderRadius: 3,
             background: "transparent",
-            color: dropping ? "#94a3b8" : "#fb923c",
+            color: dropping ? "#e2e8f0" : "#fb923c",
             cursor: dropping ? "default" : "pointer",
             fontFamily: "inherit",
           }}
@@ -439,7 +439,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
                   display: "flex",
                   justifyContent: "space-between",
                   fontSize: 9,
-                  color: "#94a3b8",
+                  color: "#e2e8f0",
                   marginTop: 2,
                   letterSpacing: "0.06em",
                 }}
@@ -454,7 +454,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
           {showOverlay && (
             <div className="hotspot-list">
               {hotspots.length === 0 ? (
-                <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                <div style={{ fontSize: 11, color: "#e2e8f0" }}>
                   No hotspots above 75% threshold
                 </div>
               ) : (
@@ -478,7 +478,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
           )}
 
           {!activeSpecies && (
-            <div style={{ fontSize: 11, color: "#94a3b8", letterSpacing: "0.05em" }}>
+            <div style={{ fontSize: 11, color: "#e2e8f0", letterSpacing: "0.05em" }}>
               Select a species to score habitat
             </div>
           )}

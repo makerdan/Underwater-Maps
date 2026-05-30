@@ -178,7 +178,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
         <ViewscreenTooltip label="Close query panel (Esc)" side="left">
           <button
             onClick={onClose}
-            style={{ fontSize: 11, color: "#475569", cursor: "pointer", background: "none", border: "none", letterSpacing: "0.1em" }}
+            style={{ fontSize: 11, color: "#94a3b8", cursor: "pointer", background: "none", border: "none", letterSpacing: "0.1em" }}
             aria-label="Close query panel"
           >
             ✕ ESC
@@ -262,7 +262,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
             background: isOnline ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.02)",
             border: `1px solid ${isOnline ? "rgba(0,229,255,0.2)" : "rgba(239,68,68,0.2)"}`,
             borderRadius: 4,
-            color: isOnline ? "#e2e8f0" : "#475569",
+            color: isOnline ? "#e2e8f0" : "#94a3b8",
             fontSize: 12,
             padding: "7px 10px",
             outline: "none",
@@ -279,7 +279,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
             background: (loading || !isOnline || !llmDisclosureAcknowledged) ? "rgba(0,229,255,0.05)" : "rgba(0,229,255,0.12)",
             border: "1px solid rgba(0,229,255,0.3)",
             borderRadius: 4,
-            color: (loading || !isOnline || !llmDisclosureAcknowledged) ? "#475569" : "#00e5ff",
+            color: (loading || !isOnline || !llmDisclosureAcknowledged) ? "#94a3b8" : "#00e5ff",
             fontSize: 10,
             letterSpacing: "0.18em",
             padding: "7px 14px",
@@ -304,7 +304,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
                 background: "rgba(0,229,255,0.07)",
                 border: "1px solid rgba(0,229,255,0.15)",
                 borderRadius: 3,
-                color: "#64748b",
+                color: "#cbd5e1",
                 fontSize: 9,
                 padding: "4px 9px",
                 cursor: "pointer",
@@ -312,8 +312,8 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
                 letterSpacing: "0.1em",
                 transition: "color 0.12s",
               }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#64748b"; }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#e2e8f0"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cbd5e1"; }}
             >
               {q}
             </button>
@@ -352,7 +352,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
             border: "1px solid rgba(100,116,139,0.3)",
             borderRadius: 4,
             fontSize: 11,
-            color: "#94a3b8",
+            color: "#e2e8f0",
             lineHeight: 1.5,
           }}
         >
@@ -363,7 +363,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
       {/* Query history */}
       {history.length > 0 && (
         <div>
-          <div style={{ fontSize: 9, color: "#334155", letterSpacing: "0.2em", marginBottom: 5 }}>
+          <div style={{ fontSize: 9, color: "#64748b", letterSpacing: "0.2em", marginBottom: 5 }}>
             RECENT
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -375,15 +375,15 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
                   textAlign: "left",
                   background: "none",
                   border: "none",
-                  color: "#475569",
+                  color: "#94a3b8",
                   fontSize: 10,
                   padding: "2px 0",
                   cursor: "pointer",
                   fontFamily: "inherit",
                   letterSpacing: "0.08em",
                 }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#64748b"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#475569"; }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cbd5e1"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}
               >
                 ▸ {h}
               </button>

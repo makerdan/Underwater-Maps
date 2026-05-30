@@ -23,7 +23,7 @@ const PANEL_STYLE: React.CSSProperties = {
   padding: "10px 14px 8px",
   fontFamily: "'JetBrains Mono', monospace",
   fontSize: 10,
-  color: "#94a3b8",
+  color: "#e2e8f0",
   letterSpacing: "0.06em",
   backdropFilter: "blur(8px)",
   pointerEvents: "auto",
@@ -130,7 +130,7 @@ export const DriftTimeline: React.FC = () => {
                 ...CHIP_BASE,
                 background: isActive ? "rgba(0,229,255,0.15)" : "rgba(0,10,20,0.75)",
                 border: `1px solid ${isActive ? "rgba(0,229,255,0.5)" : "rgba(0,229,255,0.08)"}`,
-                color: isActive ? "#00e5ff" : "#475569",
+                color: isActive ? "#00e5ff" : "#94a3b8",
               }}
             >
               <span>{formatHour(h)}</span>
@@ -154,7 +154,7 @@ export const DriftTimeline: React.FC = () => {
       {wp && (
         <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
           <div>
-            <div style={{ color: "#475569", fontSize: 8, letterSpacing: "0.18em" }}>
+            <div style={{ color: "#94a3b8", fontSize: 8, letterSpacing: "0.18em" }}>
               {isTrolling ? "TOTAL SPEED" : "DRIFT SPEED"}
             </div>
             <div data-testid="drift-speed-value" style={{ color: "#00e5ff", fontWeight: 700 }}>{formatSpeedFromKnots(wp.driftSpeedKnots, { units })}</div>
@@ -162,16 +162,16 @@ export const DriftTimeline: React.FC = () => {
               <div
                 data-testid="drift-breakdown"
                 title="Boat propulsion and wind+tide drift are vectors; the total combines their directions, so it may be less than the sum."
-                style={{ fontSize: 8, color: "#94a3b8", marginTop: 2, letterSpacing: "0.04em", cursor: "help" }}
+                style={{ fontSize: 8, color: "#e2e8f0", marginTop: 2, letterSpacing: "0.04em", cursor: "help" }}
               >
                 <span style={{ color: "#fbbf24" }}>boat: {formatSpeedFromKnots(wp.boatContributionKnots, { units })}</span>
-                <span style={{ color: "#475569" }}> + </span>
+                <span style={{ color: "#94a3b8" }}> + </span>
                 <span style={{ color: "#7dd3fc" }}>drift: {formatSpeedFromKnots(wp.driftContributionKnots, { units })}</span>
               </div>
             )}
           </div>
           <div>
-            <div style={{ color: "#475569", fontSize: 8, letterSpacing: "0.18em" }}>LINE ANGLE</div>
+            <div style={{ color: "#94a3b8", fontSize: 8, letterSpacing: "0.18em" }}>LINE ANGLE</div>
             {wp.isSlack ? (
               <div style={{ color: "#c084fc", fontWeight: 700 }}>
                 Line vertical — slack tide
@@ -183,18 +183,18 @@ export const DriftTimeline: React.FC = () => {
             )}
           </div>
           <div>
-            <div style={{ color: "#475569", fontSize: 8, letterSpacing: "0.18em" }}>HOOK DEPTH</div>
+            <div style={{ color: "#94a3b8", fontSize: 8, letterSpacing: "0.18em" }}>HOOK DEPTH</div>
             <div style={{ color: "#7dd3fc", fontWeight: 700 }}>{wp.hookDepthM.toFixed(0)} m</div>
           </div>
           <div>
-            <div style={{ color: "#475569", fontSize: 8, letterSpacing: "0.18em" }}>BOTTOM {lineLengthM}m LINE</div>
+            <div style={{ color: "#94a3b8", fontSize: 8, letterSpacing: "0.18em" }}>BOTTOM {lineLengthM}m LINE</div>
             <div style={{ fontWeight: 700, color: wp.bottomReached ? "#4ade80" : "#ef4444" }}>
               {wp.bottomReached ? "✓ IN REACH" : "✗ TOO DEEP"}
             </div>
           </div>
           {cond && (
             <div>
-              <div style={{ color: "#475569", fontSize: 8, letterSpacing: "0.18em" }}>WIND</div>
+              <div style={{ color: "#94a3b8", fontSize: 8, letterSpacing: "0.18em" }}>WIND</div>
               <div style={{ color: "#93c5fd", fontWeight: 700 }}>{formatSpeedFromKnots(cond.windSpeedKnots, { units })}</div>
             </div>
           )}
@@ -266,7 +266,7 @@ const LegendRow: React.FC<{
         boxShadow: faint ? "none" : `0 0 4px ${color}`,
       }}
     />
-    <span style={{ color: "#94a3b8", fontWeight: 600 }}>{label}</span>
+    <span style={{ color: "#e2e8f0", fontWeight: 600 }}>{label}</span>
     {typeof valueKt === "number" && (
       <span style={{ color, opacity: faint ? 0.8 : 1, fontWeight: 700 }}>
         {formatSpeedFromKnots(valueKt, { units })}

@@ -1081,7 +1081,7 @@ export const OverviewMap: React.FC = () => {
             fontFamily: "'JetBrains Mono', monospace",
             fontSize: 9,
             letterSpacing: "0.12em",
-            color: "#334155",
+            color: "#64748b",
           }}
         >
           SCROLL TO ZOOM · DRAG TO PAN · CLICK TO DROP IN · [O] CLOSE
@@ -1149,7 +1149,7 @@ export const OverviewMap: React.FC = () => {
                 background: selectMode ? "rgba(0,229,255,0.15)" : "rgba(0,10,20,0.75)",
                 border: `1px solid ${selectMode ? "rgba(0,229,255,0.6)" : "rgba(0,229,255,0.2)"}`,
                 borderRadius: 3,
-                color: selectMode ? "#00e5ff" : "#475569",
+                color: selectMode ? "#00e5ff" : "#94a3b8",
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: 9,
                 padding: "2px 10px",
@@ -1178,7 +1178,7 @@ export const OverviewMap: React.FC = () => {
                 background: downloadMode ? "rgba(251,191,36,0.15)" : "rgba(0,10,20,0.75)",
                 border: `1px solid ${downloadMode ? "rgba(251,191,36,0.55)" : "rgba(0,229,255,0.2)"}`,
                 borderRadius: 3,
-                color: downloadMode ? "#fbbf24" : "#475569",
+                color: downloadMode ? "#fbbf24" : "#94a3b8",
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: 9,
                 padding: "2px 10px",
@@ -1202,7 +1202,7 @@ export const OverviewMap: React.FC = () => {
                 background: showEfh ? "rgba(34,197,94,0.15)" : "rgba(0,10,20,0.75)",
                 border: `1px solid ${showEfh ? "rgba(34,197,94,0.5)" : "rgba(0,229,255,0.2)"}`,
                 borderRadius: 3,
-                color: showEfh ? "#4ade80" : "#475569",
+                color: showEfh ? "#4ade80" : "#94a3b8",
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: 9,
                 padding: "2px 10px",
@@ -1226,7 +1226,7 @@ export const OverviewMap: React.FC = () => {
                 background: showTrailList ? "rgba(251,146,60,0.15)" : "rgba(0,10,20,0.75)",
                 border: `1px solid ${showTrailList ? "rgba(251,146,60,0.5)" : "rgba(0,229,255,0.2)"}`,
                 borderRadius: 3,
-                color: showTrailList ? "#fb923c" : "#475569",
+                color: showTrailList ? "#fb923c" : "#94a3b8",
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: 9,
                 padding: "2px 10px",
@@ -1250,7 +1250,7 @@ export const OverviewMap: React.FC = () => {
               background: gpsActive ? "rgba(59,130,246,0.15)" : "rgba(0,10,20,0.75)",
               border: `1px solid ${gpsActive ? "rgba(59,130,246,0.5)" : "rgba(0,229,255,0.2)"}`,
               borderRadius: 3,
-              color: gpsActive ? "#60a5fa" : "#475569",
+              color: gpsActive ? "#60a5fa" : "#94a3b8",
               fontFamily: "'JetBrains Mono', monospace",
               fontSize: 9,
               padding: "2px 10px",
@@ -1271,7 +1271,7 @@ export const OverviewMap: React.FC = () => {
               pointerEvents: "auto",
               background: "none",
               border: "1px solid rgba(0,229,255,0.2)",
-              color: "#475569",
+              color: "#94a3b8",
               fontFamily: "'JetBrains Mono', monospace",
               fontSize: 11,
               padding: "1px 10px",
@@ -1333,7 +1333,7 @@ export const OverviewMap: React.FC = () => {
           <div style={{ color: "#00e5ff", marginBottom: 1 }}>
             {tooltip.lon.toFixed(4)}° &nbsp;{tooltip.lat.toFixed(4)}°
           </div>
-          <div style={{ color: "#64748b" }}>{formatDepth(tooltip.depth, { units: unitsForUi })} depth</div>
+          <div style={{ color: "#cbd5e1" }}>{formatDepth(tooltip.depth, { units: unitsForUi })} depth</div>
         </div>
       )}
 
@@ -1453,7 +1453,7 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef,
           {selectedTrail && (
             <button
               onClick={() => setSelectedId(null)}
-              style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 12, padding: 0 }}
+              style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 12, padding: 0 }}
             >
               ←
             </button>
@@ -1467,7 +1467,7 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef,
           style={{
             background: "none",
             border: "none",
-            color: "#475569",
+            color: "#94a3b8",
             cursor: "pointer",
             fontSize: 13,
             lineHeight: 1,
@@ -1526,8 +1526,8 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef,
               },
             ].map(({ label, value }) => (
               <div key={label}>
-                <div style={{ ...MONO, fontSize: 9, color: "#475569", marginBottom: 1 }}>{label}</div>
-                <div style={{ ...MONO, color: "#94a3b8" }}>{value as React.ReactNode}</div>
+                <div style={{ ...MONO, fontSize: 9, color: "#94a3b8", marginBottom: 1 }}>{label}</div>
+                <div style={{ ...MONO, color: "#e2e8f0" }}>{value as React.ReactNode}</div>
               </div>
             ))}
           </div>
@@ -1604,7 +1604,7 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef,
                 >
                   {trail.name}
                 </div>
-                <div style={{ ...MONO, fontSize: 9, color: "#475569", marginTop: 2 }}>
+                <div style={{ ...MONO, fontSize: 9, color: "#94a3b8", marginTop: 2 }}>
                   {trail.pointCount} pts
                   {durationMin > 0 ? ` · ${durationMin} min` : ""}
                   {distKm !== null
@@ -1614,7 +1614,7 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef,
               </div>
 
               {/* Arrow */}
-              <span style={{ color: "#334155", fontSize: 11 }}>›</span>
+              <span style={{ color: "#64748b", fontSize: 11 }}>›</span>
             </button>
           );
         })
@@ -1714,7 +1714,7 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
           style={{
             background: "none",
             border: "none",
-            color: "#475569",
+            color: "#94a3b8",
             cursor: "pointer",
             fontSize: 14,
             lineHeight: 1,
@@ -1726,19 +1726,19 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
 
       <div style={{ padding: "10px 12px", fontSize: 10, color: "#cbd5e1" }}>
         <div data-testid="overview-bbox-metrics" style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 8px" }}>
-          <span style={{ color: "#475569" }}>N</span>
+          <span style={{ color: "#94a3b8" }}>N</span>
           <span>{bbox.north.toFixed(5)}°</span>
-          <span style={{ color: "#475569" }}>S</span>
+          <span style={{ color: "#94a3b8" }}>S</span>
           <span>{bbox.south.toFixed(5)}°</span>
-          <span style={{ color: "#475569" }}>E</span>
+          <span style={{ color: "#94a3b8" }}>E</span>
           <span>{bbox.east.toFixed(5)}°</span>
-          <span style={{ color: "#475569" }}>W</span>
+          <span style={{ color: "#94a3b8" }}>W</span>
           <span>{bbox.west.toFixed(5)}°</span>
-          <span style={{ color: "#475569" }}>SIZE</span>
+          <span style={{ color: "#94a3b8" }}>SIZE</span>
           <span data-testid="overview-bbox-size-deg">{widthDeg.toFixed(4)}° × {heightDeg.toFixed(4)}°</span>
-          <span style={{ color: "#475569" }}>SPAN</span>
+          <span style={{ color: "#94a3b8" }}>SPAN</span>
           <span data-testid="overview-bbox-size-km">{fmtKm(widthKm)} × {fmtKm(heightKm)}</span>
-          <span style={{ color: "#475569" }}>AREA</span>
+          <span style={{ color: "#94a3b8" }}>AREA</span>
           <span data-testid="overview-bbox-area-km">~{fmtArea(areaKm2)}</span>
         </div>
 
@@ -1819,12 +1819,12 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
         style={{ flex: 1, overflowY: "auto", padding: "0 12px 12px", minHeight: 0 }}
       >
         {results === null && !loading && !error && (
-          <div style={{ fontSize: 9, color: "#475569", textAlign: "center", padding: "16px 0" }}>
+          <div style={{ fontSize: 9, color: "#94a3b8", textAlign: "center", padding: "16px 0" }}>
             Click "Request bathymetry" to see matching datasets.
           </div>
         )}
         {results && results.length === 0 && (
-          <div style={{ fontSize: 9, color: "#475569", textAlign: "center", padding: "16px 0" }}>
+          <div style={{ fontSize: 9, color: "#94a3b8", textAlign: "center", padding: "16px 0" }}>
             No datasets cover this area.
           </div>
         )}
@@ -1844,7 +1844,7 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
               }}
             >
               <div style={{ fontSize: 10, color: "#e2e8f0", fontWeight: 600 }}>{entry.name}</div>
-              <div style={{ fontSize: 8, color: "#64748b", marginTop: 2, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              <div style={{ fontSize: 8, color: "#cbd5e1", marginTop: 2, letterSpacing: "0.08em", textTransform: "uppercase" }}>
                 {entry.dataType} · {entry.sourceAgency}
               </div>
               <div style={{ display: "flex", gap: 6, marginTop: 6 }}>

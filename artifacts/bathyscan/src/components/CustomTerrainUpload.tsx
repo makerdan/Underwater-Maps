@@ -246,7 +246,7 @@ export const CustomTerrainUpload: React.FC = () => {
                 <div style={{ fontSize: 11, color: "#cbd5e1", marginBottom: 3, fontWeight: 600 }}>
                   Drop .xyz or .csv here, or click to browse
                 </div>
-                <div style={{ fontSize: 10, color: "#64748b" }}>
+                <div style={{ fontSize: 10, color: "#cbd5e1" }}>
                   up to 50 MB{isSignedIn ? " · auto-saved to your account" : ""}
                 </div>
                 {uploadError && (

@@ -86,7 +86,7 @@ export const EfhDetailPanel: React.FC = () => {
           <div style={{ fontSize: 12, color: "#f8fafc", fontWeight: 600, letterSpacing: "0.04em" }}>
             {p.commonName}
           </div>
-          <div style={{ fontSize: 9, color: "#64748b", fontStyle: "italic", marginTop: 2 }}>
+          <div style={{ fontSize: 9, color: "#cbd5e1", fontStyle: "italic", marginTop: 2 }}>
             {p.species?.replace(/_/g, " ")}
           </div>
         </div>
@@ -96,7 +96,7 @@ export const EfhDetailPanel: React.FC = () => {
           style={{
             background: "transparent",
             border: "none",
-            color: "#64748b",
+            color: "#cbd5e1",
             cursor: "pointer",
             fontSize: 16,
             lineHeight: 1,
@@ -115,7 +115,7 @@ export const EfhDetailPanel: React.FC = () => {
 
       {p.habitatDescription && (
         <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: 8, color: "#475569", letterSpacing: "0.15em", marginBottom: 4 }}>
+          <div style={{ fontSize: 8, color: "#94a3b8", letterSpacing: "0.15em", marginBottom: 4 }}>
             HABITAT
           </div>
           <div style={{ fontSize: 10, lineHeight: 1.5, color: "#cbd5e1" }}>
@@ -125,10 +125,10 @@ export const EfhDetailPanel: React.FC = () => {
       )}
 
       <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(0,229,255,0.1)" }}>
-        <div style={{ fontSize: 8, color: "#475569", letterSpacing: "0.15em", marginBottom: 4 }}>
+        <div style={{ fontSize: 8, color: "#94a3b8", letterSpacing: "0.15em", marginBottom: 4 }}>
           SOURCE
         </div>
-        <div style={{ fontSize: 9, color: "#94a3b8", marginBottom: 4 }}>{p.source}</div>
+        <div style={{ fontSize: 9, color: "#e2e8f0", marginBottom: 4 }}>{p.source}</div>
         {p.source?.startsWith("TPWD") && (
           <div
             style={{
@@ -163,7 +163,7 @@ export const EfhDetailPanel: React.FC = () => {
 
 const DetailRow: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   <div style={{ display: "flex", gap: 8, fontSize: 10, marginTop: 4 }}>
-    <span style={{ color: "#64748b", minWidth: 72, fontSize: 9, letterSpacing: "0.08em" }}>
+    <span style={{ color: "#cbd5e1", minWidth: 72, fontSize: 9, letterSpacing: "0.08em" }}>
       {label.toUpperCase()}
     </span>
     <span style={{ color: "#e2e8f0", flex: 1 }}>{value}</span>

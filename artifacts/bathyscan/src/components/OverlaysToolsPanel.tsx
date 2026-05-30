@@ -80,7 +80,7 @@ const ToggleButton: React.FC<ToggleButtonProps> = ({
         background: active ? activeBg : "rgba(0,10,20,0.55)",
         border: `1px solid ${active ? activeBorder : "rgba(0,229,255,0.15)"}`,
         borderRadius: 4,
-        color: active ? activeColor : "#94a3b8",
+        color: active ? activeColor : "#e2e8f0",
         fontFamily: "'JetBrains Mono', monospace",
         fontSize: 10,
         padding: "5px 10px",
@@ -98,7 +98,7 @@ const ToggleButton: React.FC<ToggleButtonProps> = ({
       {isLoading && (
         <Spinner
           className="size-3 shrink-0"
-          style={{ color: active ? activeColor : "#94a3b8", opacity: 0.85 }}
+          style={{ color: active ? activeColor : "#e2e8f0", opacity: 0.85 }}
         />
       )}
     </button>
@@ -360,7 +360,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                     style={{
                       fontSize: 9,
                       letterSpacing: "0.12em",
-                      color: "#475569",
+                      color: "#94a3b8",
                       textTransform: "uppercase",
                       paddingBottom: 2,
                     }}
@@ -384,7 +384,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                             background: hidden ? "transparent" : "rgba(0,10,20,0.45)",
                             border: `1px solid ${hidden ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.12)"}`,
                             borderRadius: 3,
-                            color: hidden ? "#334155" : "#cbd5e1",
+                            color: hidden ? "#64748b" : "#cbd5e1",
                             fontFamily: "'JetBrains Mono', monospace",
                             fontSize: 10,
                             padding: "3px 8px",

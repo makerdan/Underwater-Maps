@@ -893,7 +893,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
         {/* Header with "+ New folder" */}
         <div
           className="px-3 py-1 flex items-center justify-between gap-2"
-          style={{ fontSize: 9, letterSpacing: "0.12em", color: "#334155" }}
+          style={{ fontSize: 9, letterSpacing: "0.12em", color: "#64748b" }}
         >
           <span>▲ MY LIBRARY</span>
           <button
@@ -937,7 +937,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
               style={{
                 background: "transparent",
                 border: "none",
-                color: "#64748b",
+                color: "#cbd5e1",
                 cursor: "pointer",
                 fontSize: 10,
               }}
@@ -954,7 +954,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
         {tree.rootDatasets.map((d) => renderDatasetRow(d, 0))}
 
         {tree.roots.length === 0 && tree.rootDatasets.length === 0 && (
-          <div style={{ fontSize: 9, color: "#334155", padding: "4px 12px 8px" }}>
+          <div style={{ fontSize: 9, color: "#64748b", padding: "4px 12px 8px" }}>
             No saved terrains yet
           </div>
         )}
@@ -1095,7 +1095,7 @@ const FolderRow: React.FC<FolderRowProps> = ({
         userSelect: "none",
       }}
     >
-      <span style={{ color: "#64748b", width: 20, textAlign: "center", fontSize: 20, lineHeight: 1 }}>
+      <span style={{ color: "#cbd5e1", width: 20, textAlign: "center", fontSize: 20, lineHeight: 1 }}>
         {isExpanded ? "▾" : "▸"}
       </span>
       <span style={{ color: "#00e5ff" }}>▣</span>
@@ -1221,7 +1221,7 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
             style={{
               fontSize: 11,
               fontWeight: active ? 700 : 400,
-              color: active ? "#00e5ff" : "#94a3b8",
+              color: active ? "#00e5ff" : "#e2e8f0",
               textShadow: active ? "0 0 6px rgba(0,229,255,0.3)" : "none",
               flex: 1,
               minWidth: 0,
@@ -1247,7 +1247,7 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
       <div
         style={{
           fontSize: 9,
-          color: "#334155",
+          color: "#64748b",
           marginTop: 1,
           letterSpacing: "0.05em",
           display: "flex",
@@ -1300,7 +1300,7 @@ const RowDeleteButton: React.FC<{
         background: "transparent",
         border: "none",
         cursor: "pointer",
-        color: hover ? "#f87171" : "#475569",
+        color: hover ? "#f87171" : "#94a3b8",
         fontSize: 12,
         lineHeight: 1,
         padding: 0,
@@ -1338,7 +1338,7 @@ const UserDatasetVisibilityToggle: React.FC<{ datasetId: string }> = ({
         background: "transparent",
         border: "none",
         cursor: "pointer",
-        color: visible ? (isPrimary ? "#00e5ff" : "#7dd3fc") : "#475569",
+        color: visible ? (isPrimary ? "#00e5ff" : "#7dd3fc") : "#94a3b8",
         fontSize: 11,
         lineHeight: 1,
         padding: 0,
@@ -1363,7 +1363,7 @@ const RootDropZone: React.FC<{ enabled: boolean }> = ({ enabled }) => {
         borderRadius: 3,
         textAlign: "center",
         fontSize: 9,
-        color: isOver ? "#00e5ff" : "#475569",
+        color: isOver ? "#00e5ff" : "#94a3b8",
         background: isOver ? "rgba(0,229,255,0.06)" : "transparent",
       }}
     >
@@ -1512,7 +1512,7 @@ const MoveToDialog: React.FC<{
         <div style={{ fontWeight: 700, marginBottom: 4, color: "#00e5ff" }}>
           Move "{target.name}" to…
         </div>
-        <div style={{ fontSize: 10, color: "#64748b", marginBottom: 10 }}>
+        <div style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 10 }}>
           Choose a destination folder
         </div>
         <div
@@ -1556,7 +1556,7 @@ const MoveToDialog: React.FC<{
                   fontSize: 11,
                   cursor: opt.disabled ? "not-allowed" : "pointer",
                   color: opt.disabled
-                    ? "#475569"
+                    ? "#94a3b8"
                     : sel
                       ? "#00e5ff"
                       : "#cbd5e1",
@@ -1568,7 +1568,7 @@ const MoveToDialog: React.FC<{
                   gap: 6,
                 }}
               >
-                <span style={{ color: opt.disabled ? "#334155" : "#64748b" }}>
+                <span style={{ color: opt.disabled ? "#64748b" : "#cbd5e1" }}>
                   {opt.id === null ? "/" : "▣"}
                 </span>
                 <span
@@ -1582,7 +1582,7 @@ const MoveToDialog: React.FC<{
                   {opt.label}
                 </span>
                 {opt.disabled && opt.disabledReason && (
-                  <span style={{ fontSize: 9, color: "#475569" }}>
+                  <span style={{ fontSize: 9, color: "#94a3b8" }}>
                     {opt.disabledReason}
                   </span>
                 )}
@@ -1598,7 +1598,7 @@ const MoveToDialog: React.FC<{
             style={{
               background: "transparent",
               border: "1px solid rgba(148,163,184,0.4)",
-              color: "#94a3b8",
+              color: "#e2e8f0",
               padding: "4px 12px",
               borderRadius: 3,
               cursor: isPending ? "not-allowed" : "pointer",
@@ -1619,7 +1619,7 @@ const MoveToDialog: React.FC<{
                   : "rgba(0,229,255,0.18)"
                 : "rgba(100,116,139,0.12)",
               border: `1px solid ${canConfirm ? "rgba(0,229,255,0.55)" : "rgba(100,116,139,0.3)"}`,
-              color: canConfirm ? "#00e5ff" : "#475569",
+              color: canConfirm ? "#00e5ff" : "#94a3b8",
               padding: "4px 12px",
               borderRadius: 3,
               cursor: isPending
@@ -1701,7 +1701,7 @@ const ConfirmDialog: React.FC<{
         }}
       >
         <div style={{ fontWeight: 700, marginBottom: 8, color: "#fca5a5" }}>{title}</div>
-        <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 14 }}>{message}</div>
+        <div style={{ fontSize: 11, color: "#e2e8f0", marginBottom: 14 }}>{message}</div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button
             onClick={onCancel}
@@ -1710,7 +1710,7 @@ const ConfirmDialog: React.FC<{
             style={{
               background: "transparent",
               border: "1px solid rgba(148,163,184,0.4)",
-              color: "#94a3b8",
+              color: "#e2e8f0",
               padding: "4px 12px",
               borderRadius: 3,
               cursor: isPending ? "not-allowed" : "pointer",

@@ -50,7 +50,7 @@ export const SubstrateDetailPanel: React.FC = () => {
         minWidth: 220,
         fontFamily: MONO,
         fontSize: 10,
-        color: "#94a3b8",
+        color: "#e2e8f0",
         zIndex: 60,
         boxShadow: "0 4px 20px rgba(0,0,0,0.6)",
       }}
@@ -63,7 +63,7 @@ export const SubstrateDetailPanel: React.FC = () => {
           marginBottom: 6,
         }}
       >
-        <span style={{ color: "#475569", fontSize: 9, letterSpacing: "0.2em" }}>
+        <span style={{ color: "#94a3b8", fontSize: 9, letterSpacing: "0.2em" }}>
           SUBSTRATE FEATURE
         </span>
         <button
@@ -72,7 +72,7 @@ export const SubstrateDetailPanel: React.FC = () => {
           style={{
             background: "transparent",
             border: "none",
-            color: "#64748b",
+            color: "#cbd5e1",
             cursor: "pointer",
             fontSize: 14,
             lineHeight: 1,
@@ -83,27 +83,27 @@ export const SubstrateDetailPanel: React.FC = () => {
         </button>
       </div>
       <div style={{ marginBottom: 4 }}>
-        <span style={{ color: "#475569" }}>CLASS </span>
+        <span style={{ color: "#94a3b8" }}>CLASS </span>
         <span style={{ color: "#00e5ff", fontWeight: 700 }}>
           {selectedSubstrate.shoreZoneClass}
         </span>
       </div>
       <div style={{ marginBottom: 4 }}>
-        <span style={{ color: "#475569" }}>SUBSTRATE </span>
+        <span style={{ color: "#94a3b8" }}>SUBSTRATE </span>
         <span style={{ color: selectedSubstrate.color, fontWeight: 700 }}>
           {selectedSubstrate.substrate.toUpperCase()}
         </span>
       </div>
       <div style={{ marginBottom: 4 }}>
-        <span style={{ color: "#475569" }}>CMECS </span>
+        <span style={{ color: "#94a3b8" }}>CMECS </span>
         <span style={{ color: "#cbd5e1" }}>{selectedSubstrate.cmecsCode}</span>
       </div>
       <div style={{ marginBottom: 4 }}>
-        <span style={{ color: "#475569" }}>UNIT </span>
+        <span style={{ color: "#94a3b8" }}>UNIT </span>
         <span style={{ color: "#cbd5e1" }}>{selectedSubstrate.unitId}</span>
       </div>
       {(selectedSubstrate.szMaterial || selectedSubstrate.szForm) && (
-        <div style={{ marginBottom: 4, color: "#94a3b8", fontSize: 9 }}>
+        <div style={{ marginBottom: 4, color: "#e2e8f0", fontSize: 9 }}>
           {selectedSubstrate.szMaterial ?? "—"}
           {" · "}
           {selectedSubstrate.szForm ?? "—"}
@@ -111,7 +111,7 @@ export const SubstrateDetailPanel: React.FC = () => {
       )}
       {typeof selectedSubstrate.areaSqM === "number" && (
         <div style={{ marginBottom: 4 }}>
-          <span style={{ color: "#475569" }}>AREA </span>
+          <span style={{ color: "#94a3b8" }}>AREA </span>
           <span style={{ color: "#cbd5e1" }}>
             {Math.round(selectedSubstrate.areaSqM).toLocaleString()} m²
           </span>
@@ -151,7 +151,7 @@ export const SubstrateDetailPanel: React.FC = () => {
           marginTop: 8,
           paddingTop: 6,
           borderTop: "1px solid rgba(148,163,184,0.2)",
-          color: "#64748b",
+          color: "#cbd5e1",
           fontSize: 9,
           lineHeight: 1.4,
         }}

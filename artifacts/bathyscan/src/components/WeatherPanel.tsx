@@ -96,7 +96,7 @@ const PANEL_STYLE: React.CSSProperties = {
   padding: "12px 14px",
   fontFamily: "'JetBrains Mono', monospace",
   fontSize: 10,
-  color: "#94a3b8",
+  color: "#e2e8f0",
   letterSpacing: "0.06em",
   backdropFilter: "blur(8px)",
   minWidth: 220,
@@ -104,7 +104,7 @@ const PANEL_STYLE: React.CSSProperties = {
   pointerEvents: "auto",
 };
 
-const LABEL: React.CSSProperties = { color: "#475569", fontSize: 9, letterSpacing: "0.18em" };
+const LABEL: React.CSSProperties = { color: "#94a3b8", fontSize: 9, letterSpacing: "0.18em" };
 const VALUE: React.CSSProperties = { color: "#00e5ff", fontWeight: 700 };
 const DIVIDER: React.CSSProperties = { borderTop: "1px solid rgba(0,229,255,0.1)", margin: "8px 0" };
 
@@ -653,7 +653,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
         <span style={{ ...VALUE, fontSize: 11, letterSpacing: "0.15em" }}>⛵ DRIFT PLANNER</span>
         <button
           onClick={onClose}
-          style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 14, padding: "0 2px" }}
+          style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 14, padding: "0 2px" }}
         >×</button>
       </div>
 
@@ -676,7 +676,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
             <div>
               <div style={LABEL}>WIND</div>
               <div style={{ ...VALUE, color: "#7dd3fc" }}>{formatSpeedFromKnots(cond.windSpeedKnots, { units })}</div>
-              <div style={{ fontSize: 9, color: "#475569" }}>{degToCardinal(cond.windDegrees)} {Math.round(cond.windDegrees)}°</div>
+              <div style={{ fontSize: 9, color: "#94a3b8" }}>{degToCardinal(cond.windDegrees)} {Math.round(cond.windDegrees)}°</div>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -684,11 +684,11 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
             <div>
               <div style={LABEL}>TIDAL CURRENT</div>
               <div style={{ ...VALUE, color: "#34d399" }}>{formatSpeedFromKnots(cond.tidalSpeedKnots, { units })}</div>
-              <div style={{ fontSize: 9, color: "#475569" }}>{degToCardinal(cond.tidalDegrees)} {Math.round(cond.tidalDegrees)}°</div>
+              <div style={{ fontSize: 9, color: "#94a3b8" }}>{degToCardinal(cond.tidalDegrees)} {Math.round(cond.tidalDegrees)}°</div>
               {data?.tidalDataSource === "noaa-coops" && data.tidalStationName ? (
                 <div
                   data-testid="tidal-source"
-                  style={{ fontSize: 8, color: "#64748b", marginTop: 2, letterSpacing: "0.05em" }}
+                  style={{ fontSize: 8, color: "#cbd5e1", marginTop: 2, letterSpacing: "0.05em" }}
                   title={`NOAA CO-OPS station ${data.tidalStationId ?? ""}`}
                 >
                   NOAA: {data.tidalStationName}
@@ -699,7 +699,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
               ) : (
                 <div
                   data-testid="tidal-source"
-                  style={{ fontSize: 8, color: "#64748b", marginTop: 2, letterSpacing: "0.05em", fontStyle: "italic" }}
+                  style={{ fontSize: 8, color: "#cbd5e1", marginTop: 2, letterSpacing: "0.05em", fontStyle: "italic" }}
                 >
                   Estimated (no NOAA station nearby)
                 </div>
@@ -729,7 +729,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
                   flex: 1,
                   background: active ? "rgba(0,229,255,0.15)" : "rgba(0,10,20,0.8)",
                   border: `1px solid ${active ? "rgba(0,229,255,0.5)" : "rgba(0,229,255,0.15)"}`,
-                  color: active ? "#00e5ff" : "#475569",
+                  color: active ? "#00e5ff" : "#94a3b8",
                   fontFamily: "inherit",
                   fontSize: 9,
                   padding: "4px",
@@ -789,14 +789,14 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
                         aria-label={`Move preset ${p.name} up`}
                         disabled={isFirst}
                         onClick={() => void handleMovePresetInFolder(folderId, p.id, -1)}
-                        style={{ background: "none", border: "1px solid rgba(0,229,255,0.2)", color: isFirst ? "#334155" : "#00e5ff", cursor: isFirst ? "default" : "pointer", fontSize: 8, padding: "0 3px", borderRadius: 2, lineHeight: 1.2 }}
+                        style={{ background: "none", border: "1px solid rgba(0,229,255,0.2)", color: isFirst ? "#64748b" : "#00e5ff", cursor: isFirst ? "default" : "pointer", fontSize: 8, padding: "0 3px", borderRadius: 2, lineHeight: 1.2 }}
                       >▲</button>
                       <button
                         title="Move down"
                         aria-label={`Move preset ${p.name} down`}
                         disabled={isLast}
                         onClick={() => void handleMovePresetInFolder(folderId, p.id, 1)}
-                        style={{ background: "none", border: "1px solid rgba(0,229,255,0.2)", color: isLast ? "#334155" : "#00e5ff", cursor: isLast ? "default" : "pointer", fontSize: 8, padding: "0 3px", borderRadius: 2, lineHeight: 1.2 }}
+                        style={{ background: "none", border: "1px solid rgba(0,229,255,0.2)", color: isLast ? "#64748b" : "#00e5ff", cursor: isLast ? "default" : "pointer", fontSize: 8, padding: "0 3px", borderRadius: 2, lineHeight: 1.2 }}
                       >▼</button>
                     </div>
                     {isEditing ? (
@@ -858,7 +858,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
               const totalPresets = trollingPresets?.length ?? 0;
               if (totalPresets === 0 && sortedFolders.length === 0) {
                 return (
-                  <div style={{ fontSize: 8, color: "#475569", marginTop: 2 }}>
+                  <div style={{ fontSize: 8, color: "#94a3b8", marginTop: 2 }}>
                     No saved presets yet
                   </div>
                 );
@@ -920,7 +920,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
                           </div>
                         )}
                         {!collapsed && inFolder.length === 0 && (
-                          <div style={{ fontSize: 8, color: "#475569", marginTop: 2, paddingLeft: 14, fontStyle: "italic" }}>
+                          <div style={{ fontSize: 8, color: "#94a3b8", marginTop: 2, paddingLeft: 14, fontStyle: "italic" }}>
                             Empty
                           </div>
                         )}
@@ -937,7 +937,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
                           title={folderRootCollapsed ? "Expand" : "Collapse"}
                           style={{ background: "none", border: "none", color: "#00e5ff", cursor: "pointer", fontSize: 10, padding: "0 4px" }}
                         >{folderRootCollapsed ? "▸" : "▾"}</button>
-                        <span style={{ flex: 1, color: "#64748b", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em" }}>
+                        <span style={{ flex: 1, color: "#cbd5e1", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em" }}>
                           UNFILED ({inRoot.length})
                         </span>
                       </div>
@@ -1044,7 +1044,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
                 style={{ ...sliderStyle, flex: 1 }}
               />
             </div>
-            <div style={{ fontSize: 8, color: "#475569", marginTop: 2 }}>
+            <div style={{ fontSize: 8, color: "#94a3b8", marginTop: 2 }}>
               Max {TROLL_MAX_KNOTS} kt · 0 kt falls back to pure drift
             </div>
           </div>
@@ -1072,7 +1072,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
               )}
             </div>
             {driftWaypoints.length === 0 ? (
-              <div style={{ fontSize: 9, color: "#475569", fontStyle: "italic" }}>
+              <div style={{ fontSize: 9, color: "#94a3b8", fontStyle: "italic" }}>
                 Click the water to drop turn points. Boat loops Start → WP1 → … → Start.
               </div>
             ) : (
@@ -1094,7 +1094,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
                     <span style={{ color: "#fbbf24", fontWeight: 700, minWidth: 24 }}>
                       WP{i + 1}
                     </span>
-                    <span style={{ color: "#94a3b8", flex: 1, fontVariantNumeric: "tabular-nums" }}>
+                    <span style={{ color: "#e2e8f0", flex: 1, fontVariantNumeric: "tabular-nums" }}>
                       {wp.lat.toFixed(4)}, {wp.lon.toFixed(4)}
                     </span>
                     <button
@@ -1104,7 +1104,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
                       style={{
                         background: "none",
                         border: "1px solid rgba(0,229,255,0.2)",
-                        color: i === 0 ? "#334155" : "#00e5ff",
+                        color: i === 0 ? "#64748b" : "#00e5ff",
                         cursor: i === 0 ? "default" : "pointer",
                         fontSize: 9,
                         padding: "0 4px",
@@ -1118,7 +1118,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
                       style={{
                         background: "none",
                         border: "1px solid rgba(0,229,255,0.2)",
-                        color: i === driftWaypoints.length - 1 ? "#334155" : "#00e5ff",
+                        color: i === driftWaypoints.length - 1 ? "#64748b" : "#00e5ff",
                         cursor: i === driftWaypoints.length - 1 ? "default" : "pointer",
                         fontSize: 9,
                         padding: "0 4px",
@@ -1173,7 +1173,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
               <div style={LABEL}>TIDAL {manualSlackNow ? "0.0 (slack)" : manualTidalSpeedKnots} kt @ {manualTidalDegrees}°</div>
               <input type="range" min={0} max={6} step={0.1} value={manualTidalSpeedKnots} disabled={manualSlackNow} onChange={(e) => setManualTidalSpeedKnots(Number(e.target.value))} style={{ ...sliderStyle, opacity: manualSlackNow ? 0.4 : 1 }} />
               <input type="range" min={0} max={359} value={manualTidalDegrees} onChange={(e) => setManualTidalDegrees(Number(e.target.value))} style={sliderStyle} />
-              <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, color: manualSlackNow ? "#c084fc" : "#64748b", cursor: "pointer", fontSize: 9, letterSpacing: "0.1em" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, color: manualSlackNow ? "#c084fc" : "#cbd5e1", cursor: "pointer", fontSize: 9, letterSpacing: "0.1em" }}>
                 <input
                   type="checkbox"
                   checked={manualSlackNow}

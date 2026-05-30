@@ -229,7 +229,7 @@ export const Minimap: React.FC = () => {
             fontFamily: "'JetBrains Mono', monospace",
             fontSize: 9,
             letterSpacing: "0.15em",
-            color: "#475569",
+            color: "#94a3b8",
             background: "rgba(0,10,20,0.75)",
             border: "1px solid rgba(0,229,255,0.15)",
             borderRadius: 3,

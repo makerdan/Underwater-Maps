@@ -46,7 +46,7 @@ export const AdvancedDisclosure: React.FC<Props> = ({
           width: "100%",
           background: "none",
           border: "none",
-          color: "#64748b",
+          color: "#cbd5e1",
           fontFamily: "'JetBrains Mono', monospace",
           fontSize: 9,
           letterSpacing: "0.2em",

@@ -67,7 +67,7 @@ export const WaterTypeToggle: React.FC<WaterTypeToggleProps> = ({ onChange }) =>
               border: "none",
               borderRight: opt.value === "saltwater" ? "1px solid rgba(0,229,255,0.12)" : "none",
               background: active ? `${opt.color}14` : "transparent",
-              color: active ? opt.color : "#475569",
+              color: active ? opt.color : "#94a3b8",
               cursor: "pointer",
               fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
               transition: "background 0.12s, color 0.12s",

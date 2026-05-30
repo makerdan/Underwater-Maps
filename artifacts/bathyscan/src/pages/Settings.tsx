@@ -92,7 +92,7 @@ const S = {
   page: {
     minHeight: "100dvh",
     background: "#040810",
-    color: "#94a3b8",
+    color: "#e2e8f0",
     fontFamily: FONT,
     display: "flex",
     flexDirection: "column",
@@ -145,7 +145,7 @@ const S = {
     padding: "8px 16px",
     fontSize: 9,
     letterSpacing: "0.2em",
-    color: active ? "#00e5ff" : "#475569",
+    color: active ? "#00e5ff" : "#94a3b8",
     cursor: "pointer",
     fontFamily: FONT,
     transition: "color 0.1s, background 0.1s",
@@ -174,7 +174,7 @@ const S = {
     borderBottom: "1px solid rgba(0,229,255,0.08)",
     fontSize: 8,
     letterSpacing: "0.2em",
-    color: "#64748b",
+    color: "#cbd5e1",
     fontWeight: 700,
   } as React.CSSProperties,
 
@@ -188,11 +188,11 @@ const S = {
     gap: 12,
   } as React.CSSProperties,
 
-  label: { color: "#94a3b8", flexShrink: 0 } as React.CSSProperties,
+  label: { color: "#e2e8f0", flexShrink: 0 } as React.CSSProperties,
 
   sublabel: {
     fontSize: 9,
-    color: "#475569",
+    color: "#94a3b8",
     marginTop: 2,
     letterSpacing: "0.05em",
   } as React.CSSProperties,
@@ -234,7 +234,7 @@ const S = {
     left: on ? 17 : 2,
     width: 14,
     height: 14,
-    background: on ? "#00e5ff" : "#475569",
+    background: on ? "#00e5ff" : "#94a3b8",
     borderRadius: "50%",
     transition: "left 0.15s, background 0.15s",
     boxShadow: on ? "0 0 6px rgba(0,229,255,0.6)" : "none",
@@ -439,7 +439,7 @@ function ColormapSelectRow({
           }}
         >
           <span style={{ color: "#e2e8f0" }}>{current.label}</span>
-          <span style={{ color: "#64748b", fontSize: 16, lineHeight: 1 }}>{open ? "▲" : "▼"}</span>
+          <span style={{ color: "#cbd5e1", fontSize: 16, lineHeight: 1 }}>{open ? "▲" : "▼"}</span>
         </button>
         {open && (
           <ul
@@ -539,7 +539,7 @@ function ColorRow({
           }}
           aria-label={label}
         />
-        <span style={{ color: "#64748b", fontSize: 10, minWidth: 64, textAlign: "right" }}>
+        <span style={{ color: "#cbd5e1", fontSize: 10, minWidth: 64, textAlign: "right" }}>
           {value.toUpperCase()}
         </span>
       </div>
@@ -675,7 +675,7 @@ function SectionActionsRow({
             background: "none",
             border: "1px solid rgba(0,229,255,0.15)",
             borderRadius: 3,
-            color: "#64748b",
+            color: "#cbd5e1",
             fontSize: 9,
             letterSpacing: "0.15em",
             padding: "3px 10px",
@@ -1542,10 +1542,10 @@ function GlobalResetFooter() {
 
   return (
     <div style={{ marginTop: 32, paddingTop: 20, borderTop: "1px solid rgba(239,68,68,0.15)" }}>
-      <div style={{ fontSize: 9, color: "#64748b", letterSpacing: "0.15em", marginBottom: 8 }}>
+      <div style={{ fontSize: 9, color: "#cbd5e1", letterSpacing: "0.15em", marginBottom: 8 }}>
         GLOBAL RESET
       </div>
-      <div style={{ fontSize: 10, color: "#475569", marginBottom: 12 }}>
+      <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 12 }}>
         Restore every setting on this page to its default value. Your saved
         dataset home positions and marker data are not affected.
       </div>
@@ -1593,7 +1593,7 @@ function GlobalResetFooter() {
               background: "none",
               border: "1px solid rgba(100,116,139,0.3)",
               borderRadius: 4,
-              color: "#64748b",
+              color: "#cbd5e1",
               fontSize: 9,
               letterSpacing: "0.15em",
               padding: "6px 14px",
@@ -1700,7 +1700,7 @@ function KeyBindingCapture({
             background: "none",
             border: "1px solid rgba(0,229,255,0.15)",
             borderRadius: 3,
-            color: isDefault ? "#334155" : "#64748b",
+            color: isDefault ? "#64748b" : "#cbd5e1",
             fontSize: 9,
             letterSpacing: "0.15em",
             padding: "3px 8px",
@@ -1789,7 +1789,7 @@ function CrosshairMenuGamepadCapture() {
             background: "none",
             border: "1px solid rgba(0,229,255,0.15)",
             borderRadius: 3,
-            color: "#64748b",
+            color: "#cbd5e1",
             fontSize: 9,
             letterSpacing: "0.15em",
             padding: "3px 8px",
@@ -1806,7 +1806,7 @@ function CrosshairMenuGamepadCapture() {
             background: "none",
             border: "1px solid rgba(0,229,255,0.15)",
             borderRadius: 3,
-            color: "#64748b",
+            color: "#cbd5e1",
             fontSize: 9,
             letterSpacing: "0.15em",
             padding: "3px 8px",
@@ -1887,7 +1887,7 @@ function ShortcutsSection() {
             background: "none",
             border: "1px solid rgba(0,229,255,0.2)",
             borderRadius: 3,
-            color: allDefault ? "#334155" : "#67e8f9",
+            color: allDefault ? "#64748b" : "#67e8f9",
             fontSize: 9,
             letterSpacing: "0.15em",
             padding: "4px 12px",
@@ -1915,7 +1915,7 @@ function ShortcutsSection() {
                 fontSize: 11,
               }}
             >
-              <span style={{ color: "#94a3b8" }}>{sh.desc}</span>
+              <span style={{ color: "#e2e8f0" }}>{sh.desc}</span>
               <kbd
                 style={{
                   background: "rgba(0,229,255,0.08)",
@@ -2006,7 +2006,7 @@ function EnvironmentSection() {
                     borderRadius: 4,
                     border: `1px solid ${active ? color : "rgba(0,229,255,0.18)"}`,
                     background: active ? `${color}14` : "transparent",
-                    color: active ? color : "#475569",
+                    color: active ? color : "#94a3b8",
                     cursor: "pointer",
                     fontFamily: FONT,
                     transition: "all 0.12s",
@@ -2021,7 +2021,7 @@ function EnvironmentSection() {
       </div>
       <div style={S.card}>
         <div style={S.cardHeader}>CURRENT MODE</div>
-        <div style={{ padding: "12px 16px", fontSize: 10, color: "#64748b", lineHeight: 1.7 }}>
+        <div style={{ padding: "12px 16px", fontSize: 10, color: "#cbd5e1", lineHeight: 1.7 }}>
           {s.waterType === "freshwater" ? (
             <>
               <div style={{ color: "#4ade80", fontWeight: 700, marginBottom: 6, fontSize: 9, letterSpacing: "0.1em" }}>
@@ -2096,9 +2096,9 @@ function OfflineSection() {
         <div style={S.cardHeader}>CACHED TERRAIN DATA</div>
         <div style={{ padding: "12px 16px" }}>
           {loading ? (
-            <div style={{ fontSize: 10, color: "#334155" }}>◌ Loading…</div>
+            <div style={{ fontSize: 10, color: "#64748b" }}>◌ Loading…</div>
           ) : cached.length === 0 ? (
-            <div data-testid="no-cache-msg" style={{ fontSize: 10, color: "#334155" }}>
+            <div data-testid="no-cache-msg" style={{ fontSize: 10, color: "#64748b" }}>
               No terrain data cached. Load a dataset to cache it.
             </div>
           ) : (
@@ -2108,9 +2108,9 @@ function OfflineSection() {
                 padding: "6px 0", borderBottom: "1px solid rgba(0,229,255,0.06)", fontSize: 10,
               }}>
                 <div>
-                  <span style={{ color: "#64748b" }}>{entry.label}</span>
+                  <span style={{ color: "#cbd5e1" }}>{entry.label}</span>
                   {entry.sizeKb !== null && (
-                    <span style={{ color: "#334155", marginLeft: 8 }}>
+                    <span style={{ color: "#64748b", marginLeft: 8 }}>
                       {entry.sizeKb >= 1024 ? `${(entry.sizeKb / 1024).toFixed(1)} MB` : `${entry.sizeKb} KB`}
                     </span>
                   )}
@@ -2128,14 +2128,14 @@ function OfflineSection() {
           )}
         </div>
         <div style={{ ...S.row, flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
-          <div style={{ fontSize: 9, letterSpacing: "0.15em", color: "#475569" }}>PENDING SYNC</div>
+          <div style={{ fontSize: 9, letterSpacing: "0.15em", color: "#94a3b8" }}>PENDING SYNC</div>
           <div style={{ fontSize: 10 }}>
-            <span style={{ color: "#64748b" }}>Markers: </span>
-            <span data-testid="pending-markers-count" style={{ color: pending.markers > 0 ? "#fbbf24" : "#334155" }}>
+            <span style={{ color: "#cbd5e1" }}>Markers: </span>
+            <span data-testid="pending-markers-count" style={{ color: pending.markers > 0 ? "#fbbf24" : "#64748b" }}>
               {pending.markers}
             </span>
-            <span style={{ color: "#64748b", marginLeft: 16 }}>Trails: </span>
-            <span style={{ color: pending.trails > 0 ? "#fbbf24" : "#334155" }}>
+            <span style={{ color: "#cbd5e1", marginLeft: 16 }}>Trails: </span>
+            <span style={{ color: pending.trails > 0 ? "#fbbf24" : "#64748b" }}>
               {pending.trails}
             </span>
           </div>
@@ -2419,7 +2419,7 @@ function AccountSection() {
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: 9,
                 letterSpacing: "0.15em",
-                color: "#94a3b8",
+                color: "#e2e8f0",
                 background: "rgba(100,116,139,0.08)",
                 border: "1px solid rgba(100,116,139,0.25)",
                 borderRadius: 3,
@@ -2435,13 +2435,13 @@ function AccountSection() {
               padding: "6px 16px 12px",
               fontSize: 9,
               letterSpacing: "0.12em",
-              color: "#64748b",
+              color: "#cbd5e1",
               fontFamily: "'JetBrains Mono', monospace",
             }}
             data-testid="last-synced-row"
           >
             LAST SYNCED:{" "}
-            <span style={{ color: lastSyncedAt ? "#94a3b8" : "#475569" }}>
+            <span style={{ color: lastSyncedAt ? "#e2e8f0" : "#94a3b8" }}>
               {lastSyncedAt ? formatLastSynced(lastSyncedAt) : "NEVER"}
             </span>
           </div>
@@ -2464,7 +2464,7 @@ function AccountSection() {
               data-testid="llm-disclosure-summary"
               style={{
                 fontSize: 10,
-                color: "#94a3b8",
+                color: "#e2e8f0",
                 lineHeight: 1.7,
                 letterSpacing: "0.04em",
                 marginBottom: 12,
@@ -2518,7 +2518,7 @@ function AccountSection() {
       <div style={S.card}>
         <div style={S.cardHeader}>SETTINGS BACKUP</div>
         <div style={{ padding: "14px 16px" }}>
-          <div style={{ fontSize: 10, color: "#64748b", marginBottom: 12 }}>
+          <div style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 12 }}>
             Save all your BathyScan settings (colormaps, sensitivity, fog, lamp,
             marker visibility, and more) to a file, or restore them from a previous export.
           </div>
@@ -2588,7 +2588,7 @@ function AccountSection() {
       <div style={S.card}>
         <div style={S.cardHeader}>YOUR DATA</div>
         <div style={{ padding: "14px 16px" }}>
-          <div style={{ fontSize: 10, color: "#64748b", marginBottom: 12 }}>
+          <div style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 12 }}>
             Export a copy of all your settings, markers, custom datasets, and GPS trails as JSON.
           </div>
           {accountMsg && (
@@ -2619,7 +2619,7 @@ function AccountSection() {
       <div style={S.dangerCard}>
         <div style={S.dangerHeader}>⚠ DANGER ZONE</div>
         <div style={{ padding: "14px 16px" }}>
-          <div style={{ fontSize: 10, color: "#64748b", marginBottom: 12 }}>
+          <div style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 12 }}>
             Permanently delete all markers you have created. This cannot be undone.
           </div>
           {deleteMsg && (
@@ -2651,7 +2651,7 @@ function AccountSection() {
                 onClick={() => setConfirmDelete(false)}
                 style={{
                   ...S.dangerBtn,
-                  color: "#64748b",
+                  color: "#cbd5e1",
                   border: "1px solid rgba(100,116,139,0.3)",
                   background: "none",
                 }}
@@ -2662,7 +2662,7 @@ function AccountSection() {
           )}
         </div>
         <div style={{ padding: "14px 16px", borderTop: "1px solid rgba(239,68,68,0.12)" }}>
-          <div style={{ fontSize: 10, color: "#64748b", marginBottom: 12 }}>
+          <div style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 12 }}>
             Permanently delete <strong style={{ color: "#f87171" }}>all</strong> of your data
             — settings, markers, custom datasets, GPS trails. This cannot be undone.
           </div>
@@ -2688,7 +2688,7 @@ function AccountSection() {
                 onClick={() => setConfirmDeleteAccount(false)}
                 style={{
                   ...S.dangerBtn,
-                  color: "#64748b",
+                  color: "#cbd5e1",
                   border: "1px solid rgba(100,116,139,0.3)",
                   background: "none",
                 }}
@@ -2925,7 +2925,7 @@ export function Settings() {
           title={shouldGuard ? "Saving unsaved changes before leaving…" : undefined}
           data-testid="settings-back-btn"
           data-unsaved={shouldGuard ? "true" : "false"}
-          style={{ background: "none", border: "none", color: shouldGuard ? "#fbbf24" : "#475569", cursor: "pointer", fontSize: 11, letterSpacing: "0.15em", padding: 0, fontFamily: FONT, display: "flex", alignItems: "center", gap: 8 }}
+          style={{ background: "none", border: "none", color: shouldGuard ? "#fbbf24" : "#94a3b8", cursor: "pointer", fontSize: 11, letterSpacing: "0.15em", padding: 0, fontFamily: FONT, display: "flex", alignItems: "center", gap: 8 }}
         >
           <span>← BACK</span>
           {shouldGuard && (
@@ -2941,7 +2941,7 @@ export function Settings() {
           SETTINGS
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 9 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#64748b", letterSpacing: "0.1em", cursor: "pointer" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#cbd5e1", letterSpacing: "0.1em", cursor: "pointer" }}>
             <span>SHOW ADVANCED</span>
             <span data-testid="show-advanced-toggle">
               <Toggle value={showAdvancedEverywhere} onChange={setShowAdvancedEverywhere} />
@@ -2956,9 +2956,9 @@ export function Settings() {
             </span>
           )}
           {isSignedIn && !savedMsg && (
-            <span style={{ color: "#334155", letterSpacing: "0.1em" }}>synced to cloud</span>
+            <span style={{ color: "#64748b", letterSpacing: "0.1em" }}>synced to cloud</span>
           )}
-          <span style={{ color: "#334155", letterSpacing: "0.1em" }} title={`schema v${SETTINGS_SCHEMA_VERSION}`}>
+          <span style={{ color: "#64748b", letterSpacing: "0.1em" }} title={`schema v${SETTINGS_SCHEMA_VERSION}`}>
             v{SETTINGS_SCHEMA_VERSION}
           </span>
         </div>
@@ -3068,7 +3068,7 @@ function PalettePickerCard() {
   const labelStyle: React.CSSProperties = {
     fontSize: 9,
     letterSpacing: "0.15em",
-    color: "#475569",
+    color: "#94a3b8",
   };
   const colorInputStyle: React.CSSProperties = {
     width: 36,
@@ -3082,7 +3082,7 @@ function PalettePickerCard() {
   const hexStyle: React.CSSProperties = {
     fontFamily: "inherit",
     fontSize: 10,
-    color: "#64748b",
+    color: "#cbd5e1",
     background: "rgba(0,0,0,0.3)",
     border: "1px solid rgba(0,229,255,0.12)",
     borderRadius: 3,
@@ -3132,7 +3132,7 @@ function PalettePickerCard() {
                   borderRadius: 3,
                   cursor: "pointer",
                   fontFamily: "inherit",
-                  color: isActive ? "#67e8f9" : "#94a3b8",
+                  color: isActive ? "#67e8f9" : "#e2e8f0",
                   fontSize: 9,
                   letterSpacing: "0.12em",
                   textTransform: "uppercase",
@@ -3257,7 +3257,7 @@ function PalettePickerCard() {
             background: "rgba(0,229,255,0.06)",
             border: "1px solid rgba(0,229,255,0.25)",
             borderRadius: 3,
-            color: (!isCustom && isDefault) ? "#334155" : "#67e8f9",
+            color: (!isCustom && isDefault) ? "#64748b" : "#67e8f9",
             fontSize: 9,
             letterSpacing: "0.15em",
             padding: "4px 12px",
@@ -3341,7 +3341,7 @@ function CustomStopsEditor({
               style={{ ...hexStyle, width: 48 }}
               aria-label={`Stop ${i + 1} position percent`}
             />
-            <span style={{ ...labelStyle, fontFamily: "inherit", color: "#64748b", minWidth: 22 }}>%</span>
+            <span style={{ ...labelStyle, fontFamily: "inherit", color: "#cbd5e1", minWidth: 22 }}>%</span>
             <button
               type="button"
               data-testid={`palette-custom-stop-${i}-remove`}
@@ -3352,7 +3352,7 @@ function CustomStopsEditor({
                 background: "transparent",
                 border: "1px solid rgba(0,229,255,0.2)",
                 borderRadius: 3,
-                color: canRemove ? "#67e8f9" : "#334155",
+                color: canRemove ? "#67e8f9" : "#64748b",
                 fontSize: 11,
                 width: 24,
                 height: 24,

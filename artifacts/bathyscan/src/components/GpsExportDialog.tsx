@@ -159,7 +159,7 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
             style={{
               background: "none",
               border: "none",
-              color: "#475569",
+              color: "#94a3b8",
               fontSize: 16,
               cursor: "pointer",
             }}
@@ -169,7 +169,7 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
         </div>
 
         <div style={{ padding: 14 }}>
-          <p style={{ margin: "0 0 10px", color: "#94a3b8", lineHeight: 1.5 }}>
+          <p style={{ margin: "0 0 10px", color: "#e2e8f0", lineHeight: 1.5 }}>
             Download this dataset's markers and your trolling routes as a
             single <strong style={{ color: "#cbd5e1" }}>.gpx</strong> or{" "}
             <strong style={{ color: "#cbd5e1" }}>.kml</strong> file. Import it
@@ -191,7 +191,7 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
             }}
           >
             <div>
-              <div style={{ color: "#64748b" }}>Markers</div>
+              <div style={{ color: "#cbd5e1" }}>Markers</div>
               <div
                 style={{ color: "#cbd5e1", fontSize: 13 }}
                 data-testid="gps-export-marker-count"
@@ -200,7 +200,7 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
               </div>
             </div>
             <div>
-              <div style={{ color: "#64748b" }}>Trolling routes</div>
+              <div style={{ color: "#cbd5e1" }}>Trolling routes</div>
               <div
                 style={{ color: "#cbd5e1", fontSize: 13 }}
                 data-testid="gps-export-route-count"
@@ -214,7 +214,7 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
             <div
               style={{
                 fontSize: 9,
-                color: "#64748b",
+                color: "#cbd5e1",
                 marginBottom: 4,
                 letterSpacing: "0.12em",
               }}
@@ -308,7 +308,7 @@ function btnStyle(variant: "primary" | "ghost"): React.CSSProperties {
     background: "transparent",
     border: "1px solid rgba(148,163,184,0.3)",
     borderRadius: 3,
-    color: "#94a3b8",
+    color: "#e2e8f0",
     cursor: "pointer",
     fontFamily: "inherit",
     fontSize: 11,

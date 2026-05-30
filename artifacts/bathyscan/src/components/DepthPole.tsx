@@ -95,7 +95,7 @@ export const DepthPole: React.FC<Props> = ({ marker, terrain }) => {
         </Text>
         <Text
           fontSize={0.32}
-          color="#94a3b8"
+          color="#e2e8f0"
           outlineColor="#000000"
           outlineWidth={0.04}
           anchorX="left"

@@ -122,7 +122,7 @@ function tabStyle(active: boolean): React.CSSProperties {
     background: "none",
     border: "none",
     borderBottom: active ? "2px solid #00e5ff" : "2px solid transparent",
-    color: active ? "#00e5ff" : "#475569",
+    color: active ? "#00e5ff" : "#94a3b8",
     cursor: "pointer",
     transition: "color 0.15s",
   };
@@ -175,7 +175,7 @@ interface CatalogCardProps {
 
 const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved, canSave, presetId, onLoad }) => {
   const icon = DATA_TYPE_ICONS[entry.dataType] ?? "📦";
-  const color = DATA_TYPE_COLORS[entry.dataType] ?? "#94a3b8";
+  const color = DATA_TYPE_COLORS[entry.dataType] ?? "#e2e8f0";
 
   return (
     <div style={CARD}>
@@ -205,13 +205,13 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
       </div>
 
       {entry.description && (
-        <div style={{ fontSize: 9, color: "#64748b", lineHeight: 1.5, marginBottom: 6 }}>
+        <div style={{ fontSize: 9, color: "#cbd5e1", lineHeight: 1.5, marginBottom: 6 }}>
           {entry.description.slice(0, 120)}
           {entry.description.length > 120 && "…"}
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 4, fontSize: 8, color: "#475569", marginBottom: 6 }}>
+      <div style={{ display: "flex", gap: 4, fontSize: 8, color: "#94a3b8", marginBottom: 6 }}>
         {entry.resolutionMMin != null && (
           <span>{entry.resolutionMMin}–{entry.resolutionMMax ?? "?"}m res</span>
         )}
@@ -260,7 +260,7 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
               background: saved ? "rgba(74,222,128,0.1)" : "rgba(255,255,255,0.04)",
               border: `1px solid ${saved ? "rgba(74,222,128,0.3)" : "rgba(255,255,255,0.1)"}`,
               borderRadius: 3,
-              color: !canSave ? "#334155" : saved ? "#4ade80" : "#64748b",
+              color: !canSave ? "#64748b" : saved ? "#4ade80" : "#cbd5e1",
               cursor: !canSave || saved ? "default" : "pointer",
               letterSpacing: "0.1em",
               textTransform: "uppercase",
@@ -289,7 +289,7 @@ const SaveCard: React.FC<{
   onDelete: (save: UserCatalogSave) => void;
   deleting: boolean;
 }> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting }) => {
-  const statusColor = STATUS_COLORS[save.status] ?? "#94a3b8";
+  const statusColor = STATUS_COLORS[save.status] ?? "#e2e8f0";
   const icon = save.catalog ? (DATA_TYPE_ICONS[save.catalog.dataType] ?? "📦") : "📦";
 
   return (
@@ -304,7 +304,7 @@ const SaveCard: React.FC<{
           <div style={{ fontSize: 10, color: "#e2e8f0", fontWeight: 600, marginBottom: 1 }}>
             {save.catalog?.name ?? save.catalogId}
           </div>
-          <div style={{ fontSize: 8, color: "#475569" }}>
+          <div style={{ fontSize: 8, color: "#94a3b8" }}>
             {save.catalog?.sourceAgency ?? "—"}
           </div>
         </div>
@@ -328,7 +328,7 @@ const SaveCard: React.FC<{
             style={{
               background: "transparent",
               border: "none",
-              color: "#64748b",
+              color: "#cbd5e1",
               cursor: deleting ? "wait" : "pointer",
               fontSize: 12,
               lineHeight: 1,
@@ -380,7 +380,7 @@ const SaveCard: React.FC<{
                 background: "rgba(248,113,113,0.1)",
                 border: "1px solid rgba(248,113,113,0.3)",
                 borderRadius: 3,
-                color: retrying ? "#64748b" : "#f87171",
+                color: retrying ? "#cbd5e1" : "#f87171",
                 cursor: retrying ? "default" : "pointer",
                 letterSpacing: "0.1em",
                 textTransform: "uppercase",
@@ -708,7 +708,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             style={{
               background: "none",
               border: "none",
-              color: "#475569",
+              color: "#94a3b8",
               cursor: "pointer",
               fontSize: 14,
               lineHeight: 1,
@@ -757,7 +757,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                     borderRadius: 3,
                     border: `1px solid ${dataTypeFilter === dt ? "rgba(0,229,255,0.4)" : "rgba(255,255,255,0.08)"}`,
                     background: dataTypeFilter === dt ? "rgba(0,229,255,0.1)" : "transparent",
-                    color: dataTypeFilter === dt ? "#00e5ff" : "#475569",
+                    color: dataTypeFilter === dt ? "#00e5ff" : "#94a3b8",
                     cursor: "pointer",
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
@@ -769,7 +769,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               ))}
             </div>
             {isSearching && (
-              <div style={{ fontSize: 8, color: "#475569", marginTop: 4 }}>Searching…</div>
+              <div style={{ fontSize: 8, color: "#94a3b8", marginTop: 4 }}>Searching…</div>
             )}
           </div>
 
@@ -779,7 +779,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             data-testid="find-data-results"
           >
             {searchResults.length === 0 && !isSearching && (
-              <div style={{ fontSize: 9, color: "#475569", textAlign: "center", paddingTop: 32 }}>
+              <div style={{ fontSize: 9, color: "#94a3b8", textAlign: "center", paddingTop: 32 }}>
                 {debouncedQuery
                   ? "No results found — try different keywords"
                   : "Type a query to discover datasets"}
@@ -821,10 +821,10 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
       {tab === "saves" && (
         <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px" }}>
           {isSaveFetching && (
-            <div style={{ fontSize: 9, color: "#475569", marginBottom: 8 }}>Loading…</div>
+            <div style={{ fontSize: 9, color: "#94a3b8", marginBottom: 8 }}>Loading…</div>
           )}
           {!isSaveFetching && visibleSaves.length === 0 && (
-            <div style={{ fontSize: 9, color: "#475569", textAlign: "center", paddingTop: 32 }}>
+            <div style={{ fontSize: 9, color: "#94a3b8", textAlign: "center", paddingTop: 32 }}>
               No saved datasets yet — search and save some above
             </div>
           )}
@@ -857,7 +857,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 style={{
                   background: "transparent",
                   border: "none",
-                  color: "#64748b",
+                  color: "#cbd5e1",
                   cursor: "pointer",
                   fontSize: 10,
                 }}
@@ -919,7 +919,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             >
               Delete &ldquo;{confirmDelete.catalog?.name ?? confirmDelete.catalogId}&rdquo;?
             </div>
-            <div style={{ fontSize: 10, color: "#94a3b8", lineHeight: 1.5, marginBottom: 14 }}>
+            <div style={{ fontSize: 10, color: "#e2e8f0", lineHeight: 1.5, marginBottom: 14 }}>
               This will remove the saved dataset and its terrain grids from your library.
               You can re-save it from the catalog later.
             </div>
@@ -933,7 +933,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                   background: "transparent",
                   border: "1px solid rgba(255,255,255,0.15)",
                   borderRadius: 3,
-                  color: "#94a3b8",
+                  color: "#e2e8f0",
                   cursor: "pointer",
                   letterSpacing: "0.1em",
                   textTransform: "uppercase",
@@ -969,7 +969,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
           padding: "8px 14px",
           borderTop: "1px solid rgba(0,229,255,0.08)",
           fontSize: 7,
-          color: "#334155",
+          color: "#64748b",
           letterSpacing: "0.05em",
         }}
       >

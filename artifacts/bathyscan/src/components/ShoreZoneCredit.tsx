@@ -16,7 +16,7 @@ export const ShoreZoneCredit: React.FC<Props> = ({ style, className }) => {
       style={{
         fontSize: 9,
         letterSpacing: "0.04em",
-        color: "#94a3b8",
+        color: "#e2e8f0",
         pointerEvents: "auto",
         ...style,
       }}
@@ -26,7 +26,7 @@ export const ShoreZoneCredit: React.FC<Props> = ({ style, className }) => {
         href={SHOREZONE_CREDIT_URL}
         target="_blank"
         rel="noopener noreferrer"
-        style={{ color: "#94a3b8", textDecoration: "underline" }}
+        style={{ color: "#e2e8f0", textDecoration: "underline" }}
       >
         Alaska ShoreZone (NOAA AKR / ADF&amp;G)
       </a>

@@ -95,7 +95,7 @@ const PANEL: React.CSSProperties = {
   border: "1px solid rgba(0,229,255,0.18)",
   borderRadius: 6,
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-  color: "#94a3b8",
+  color: "#e2e8f0",
   fontSize: 11,
   minWidth: 220,
   maxWidth: 260,
@@ -188,7 +188,7 @@ const PresetVisibilityToggle: React.FC<{
           background: "transparent",
           border: "none",
           cursor: disabled ? "not-allowed" : "pointer",
-          color: visible ? (isPrimary ? "#00e5ff" : "#7dd3fc") : "#475569",
+          color: visible ? (isPrimary ? "#00e5ff" : "#7dd3fc") : "#94a3b8",
           fontSize: 12,
           lineHeight: 1,
           padding: 0,
@@ -926,7 +926,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                         minWidth: 0,
                         fontSize: 11,
                         fontWeight: active ? 700 : 400,
-                        color: active ? "#00e5ff" : !isOnline && !cachedIds.has(ds.id) ? "#64748b" : "#e2e8f0",
+                        color: active ? "#00e5ff" : !isOnline && !cachedIds.has(ds.id) ? "#cbd5e1" : "#e2e8f0",
                         textShadow: active ? "0 0 6px rgba(0,229,255,0.4)" : "none",
                         whiteSpace: "normal",
                         overflowWrap: "anywhere",
@@ -1172,7 +1172,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                                   borderRadius: 3,
                                   border: `1px solid ${active ? t.color : "rgba(0,229,255,0.12)"}`,
                                   background: active ? `${t.color}22` : "transparent",
-                                  color: active ? t.color : "#475569",
+                                  color: active ? t.color : "#94a3b8",
                                   cursor: "pointer",
                                   lineHeight: 1,
                                   fontFamily: "inherit",
@@ -1195,7 +1195,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                               borderRadius: 3,
                               border: "1px solid rgba(0,229,255,0.15)",
                               background: "transparent",
-                              color: "#64748b",
+                              color: "#cbd5e1",
                               cursor: "pointer",
                               fontFamily: "inherit",
                               letterSpacing: "0.06em",
@@ -1214,7 +1214,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                     </div>
                   )}
                   {markers?.length && !visibleMarkers.length ? (
-                    <div style={{ fontSize: 10, color: "#475569", padding: "4px 12px 6px" }}>
+                    <div style={{ fontSize: 10, color: "#94a3b8", padding: "4px 12px 6px" }}>
                       No markers match the current filter
                     </div>
                   ) : null}
@@ -1244,7 +1244,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           >
                             {m.label}
                           </span>
-                          <span style={{ fontSize: 9, color: "#334155", flexShrink: 0 }}>
+                          <span style={{ fontSize: 9, color: "#64748b", flexShrink: 0 }}>
                             {Math.round(m.depth)}m
                           </span>
                           <ViewscreenTooltip label="Edit this marker" side="left">
@@ -1368,7 +1368,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           className="opacity-0 group-hover:opacity-100 transition-opacity"
                           style={{
                             fontSize: 10,
-                            color: "#94a3b8",
+                            color: "#e2e8f0",
                             background: "transparent",
                             border: "none",
                             cursor: "pointer",
@@ -1489,7 +1489,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                         </div>
                       ) : (
                         <>
-                          <div style={{ fontSize: 10, color: "#64748b", marginBottom: 3 }}>
+                          <div style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 3 }}>
                             Drop .xyz or .csv here
                           </div>
                           <div style={{ fontSize: 10, color: "#cbd5e1" }}>

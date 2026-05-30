@@ -180,7 +180,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
         {loading && (
           <div style={{ fontSize: 11, color: "#cbd5e1", marginBottom: 6 }}>
             <span className="animate-pulse">Analysing terrain</span>
-            <span style={{ color: "#94a3b8" }}> (3–8 s)</span>
+            <span style={{ color: "#e2e8f0" }}> (3–8 s)</span>
           </div>
         )}
 
@@ -210,7 +210,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                 width: 12,
                 height: 12,
                 borderRadius: 2,
-                border: overlayEnabled ? "1.5px solid #00e5ff" : "1.5px solid #64748b",
+                border: overlayEnabled ? "1.5px solid #00e5ff" : "1.5px solid #cbd5e1",
                 background: overlayEnabled ? "rgba(0,229,255,0.2)" : "transparent",
                 flexShrink: 0,
                 transition: "all 0.15s",
@@ -311,7 +311,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                   <span
                     style={{
                       fontSize: 11,
-                      color: overlayEnabled ? "#e2e8f0" : "#94a3b8",
+                      color: overlayEnabled ? "#e2e8f0" : "#e2e8f0",
                       letterSpacing: "0.04em",
                       transition: "color 0.15s",
                     }}
@@ -349,7 +349,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                   width: 12,
                   height: 12,
                   borderRadius: 2,
-                  border: paintMode ? "1.5px solid #00e5ff" : "1.5px solid #64748b",
+                  border: paintMode ? "1.5px solid #00e5ff" : "1.5px solid #cbd5e1",
                   background: paintMode ? "rgba(0,229,255,0.2)" : "transparent",
                   flexShrink: 0,
                   textAlign: "center",
@@ -418,7 +418,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                   title="Undo last stroke (Ctrl+Z)"
                   style={{
                     fontSize: 11,
-                    color: canUndo ? "#cbd5e1" : "#475569",
+                    color: canUndo ? "#cbd5e1" : "#94a3b8",
                     background: "transparent",
                     border: `1px solid ${canUndo ? "rgba(0,229,255,0.28)" : "rgba(100,116,139,0.3)"}`,
                     borderRadius: 3,
@@ -478,7 +478,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
 
         {/* Waiting state */}
         {!hasZoneMap && !loading && !error && (
-          <div style={{ fontSize: 11, color: "#94a3b8", letterSpacing: "0.05em" }}>
+          <div style={{ fontSize: 11, color: "#e2e8f0", letterSpacing: "0.05em" }}>
             Load a dataset to classify
           </div>
         )}

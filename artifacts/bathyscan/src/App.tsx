@@ -122,12 +122,12 @@ const clerkAppearance = {
   variables: {
     colorPrimary: "#38bdf8",
     colorForeground: "#e2e8f0",
-    colorMutedForeground: "#94a3b8",
+    colorMutedForeground: "#e2e8f0",
     colorDanger: "#f87171",
     colorBackground: "#0f172a",
     colorInput: "#1e293b",
     colorInputForeground: "#e2e8f0",
-    colorNeutral: "#334155",
+    colorNeutral: "#64748b",
     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
     borderRadius: "0.5rem",
   },
@@ -137,12 +137,12 @@ const clerkAppearance = {
     card: "!shadow-none !border-0 !bg-transparent !rounded-none",
     footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
     headerTitle: "text-[#e2e8f0] font-mono tracking-wide",
-    headerSubtitle: "text-[#94a3b8] font-mono text-sm",
+    headerSubtitle: "text-[#e2e8f0] font-mono text-sm",
     socialButtonsBlockButtonText: "text-[#e2e8f0]",
-    formFieldLabel: "text-[#94a3b8] font-mono text-xs uppercase tracking-widest",
+    formFieldLabel: "text-[#e2e8f0] font-mono text-xs uppercase tracking-widest",
     footerActionLink: "text-[#38bdf8] hover:text-[#7dd3fc]",
-    footerActionText: "text-[#64748b]",
-    dividerText: "text-[#475569]",
+    footerActionText: "text-[#cbd5e1]",
+    dividerText: "text-[#94a3b8]",
     identityPreviewEditButton: "text-[#38bdf8]",
     formFieldSuccessText: "text-[#34d399]",
     alertText: "text-[#fbbf24]",
@@ -150,11 +150,11 @@ const clerkAppearance = {
     logoImage: "h-10 w-auto",
     socialButtonsBlockButton: "border border-[#1e3a5f] bg-[#1e293b] hover:bg-[#162032] text-[#e2e8f0]",
     formButtonPrimary: "bg-[#0369a1] hover:bg-[#0284c7] text-white font-mono",
-    formFieldInput: "bg-[#1e293b] border-[#334155] text-[#e2e8f0] font-mono",
+    formFieldInput: "bg-[#1e293b] border-[#64748b] text-[#e2e8f0] font-mono",
     footerAction: "border-t border-[#1e3a5f]",
     dividerLine: "bg-[#1e3a5f]",
     alert: "border border-[#92400e] bg-[#1c1008]",
-    otpCodeFieldInput: "border-[#334155] bg-[#1e293b] text-[#e2e8f0]",
+    otpCodeFieldInput: "border-[#64748b] bg-[#1e293b] text-[#e2e8f0]",
     formFieldRow: "",
     main: "",
   },
@@ -166,7 +166,7 @@ function SignInPage() {
       <div className="absolute inset-0 bg-gradient-to-b from-[#040810] via-[#061220] to-[#040810] pointer-events-none" />
       <div className="relative z-10 text-center">
         <div className="mb-8">
-          <p className="text-[#475569] font-mono text-xs tracking-[0.3em] uppercase mb-2">Deep Sea Explorer</p>
+          <p className="text-[#94a3b8] font-mono text-xs tracking-[0.3em] uppercase mb-2">Deep Sea Explorer</p>
           <h1 className="text-4xl font-mono font-bold text-[#e2e8f0] tracking-wider mb-1">BATHYSCAN</h1>
           <div className="h-px bg-gradient-to-r from-transparent via-[#38bdf8]/40 to-transparent mt-3" />
         </div>
@@ -718,7 +718,7 @@ function Main() {
               borderRadius: 3,
               border: `1px solid ${realisticMode ? "rgba(34,211,238,0.5)" : "rgba(0,229,255,0.15)"}`,
               background: realisticMode ? "rgba(34,211,238,0.12)" : "rgba(0,10,20,0.75)",
-              color: realisticMode ? "#22d3ee" : "#475569",
+              color: realisticMode ? "#22d3ee" : "#94a3b8",
               textShadow: realisticMode ? "0 0 8px rgba(34,211,238,0.5)" : "none",
               cursor: "pointer",
               userSelect: "none",
@@ -743,7 +743,7 @@ function Main() {
               borderRadius: 3,
               border: `1px solid ${tidalOverlay ? "rgba(0,229,255,0.45)" : "rgba(0,229,255,0.15)"}`,
               background: tidalOverlay ? "rgba(0,229,255,0.1)" : "rgba(0,10,20,0.75)",
-              color: tidalOverlay ? "#00e5ff" : "#475569",
+              color: tidalOverlay ? "#00e5ff" : "#94a3b8",
               textShadow: tidalOverlay ? "0 0 8px rgba(0,229,255,0.5)" : "none",
               cursor: "pointer",
               userSelect: "none",
@@ -768,7 +768,7 @@ function Main() {
               borderRadius: 3,
               border: `1px solid ${driftPlannerActive ? "rgba(251,191,36,0.5)" : "rgba(0,229,255,0.15)"}`,
               background: driftPlannerActive ? "rgba(251,191,36,0.1)" : "rgba(0,10,20,0.75)",
-              color: driftPlannerActive ? "#fbbf24" : "#475569",
+              color: driftPlannerActive ? "#fbbf24" : "#94a3b8",
               textShadow: driftPlannerActive ? "0 0 8px rgba(251,191,36,0.5)" : "none",
               cursor: "pointer",
               userSelect: "none",
@@ -848,7 +848,7 @@ function Main() {
               padding: "12px 18px",
               fontFamily: "'JetBrains Mono', monospace",
               fontSize: 10,
-              color: "#94a3b8",
+              color: "#e2e8f0",
               letterSpacing: "0.08em",
               backdropFilter: "blur(12px)",
               boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
@@ -868,7 +868,7 @@ function Main() {
                 right: 8,
                 background: "none",
                 border: "none",
-                color: "#475569",
+                color: "#94a3b8",
                 fontSize: 14,
                 cursor: "pointer",
               }}
@@ -966,7 +966,7 @@ function Main() {
               background: "rgba(0,229,255,0.06)",
               border: "1px solid rgba(0,229,255,0.15)",
               borderRadius: 4,
-              color: "#334155",
+              color: "#64748b",
               fontFamily: "'JetBrains Mono', monospace",
               fontSize: 9,
               letterSpacing: "0.2em",
@@ -1040,7 +1040,7 @@ function MarkerSubsampleBadge() {
         style={{
           background: "none",
           border: "none",
-          color: "#64748b",
+          color: "#cbd5e1",
           cursor: "pointer",
           fontSize: 11,
           lineHeight: 1,
@@ -1059,10 +1059,10 @@ function LandingPage() {
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-[#040810] px-4 text-center">
       <div className="absolute inset-0 bg-gradient-to-b from-[#040810] via-[#061220] to-[#040810] pointer-events-none" />
       <div className="relative z-10">
-        <p className="text-[#475569] font-mono text-xs tracking-[0.3em] uppercase mb-4">Deep Sea Explorer</p>
+        <p className="text-[#94a3b8] font-mono text-xs tracking-[0.3em] uppercase mb-4">Deep Sea Explorer</p>
         <h1 className="text-5xl font-mono font-bold text-[#e2e8f0] tracking-wider mb-2">BATHYSCAN</h1>
         <div className="h-px bg-gradient-to-r from-transparent via-[#38bdf8]/40 to-transparent mb-8" />
-        <p className="text-[#64748b] font-mono text-sm mb-10 max-w-sm mx-auto leading-relaxed">
+        <p className="text-[#cbd5e1] font-mono text-sm mb-10 max-w-sm mx-auto leading-relaxed">
           Explore 3D bathymetric seafloor maps. Upload sonar data, drop markers, and dive in.
         </p>
         <button

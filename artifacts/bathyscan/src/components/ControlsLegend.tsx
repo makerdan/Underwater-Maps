@@ -39,7 +39,7 @@ export const ControlsLegend: React.FC = () => {
           style={{
             background: "rgba(0,10,20,0.90)",
             borderColor: "rgba(0,229,255,0.2)",
-            color: "#94a3b8",
+            color: "#e2e8f0",
           }}
         >
           <div className="text-[10px] uppercase tracking-widest mb-2"
@@ -73,7 +73,7 @@ export const ControlsLegend: React.FC = () => {
           style={{
             background: open ? "rgba(0,229,255,0.15)" : "rgba(0,10,20,0.80)",
             border: "1px solid rgba(0,229,255,0.3)",
-            color: open ? "#00e5ff" : "#475569",
+            color: open ? "#00e5ff" : "#94a3b8",
             boxShadow: open ? "0 0 8px rgba(0,229,255,0.2)" : "none",
           }}
         >

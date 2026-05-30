@@ -60,7 +60,7 @@ export const MeasurementBanner: React.FC = () => {
           <span style={{ color: "#00e5ff", fontWeight: 600 }}>
             {formatDistance(result.distanceKm * 1000, { units })}
           </span>
-          <span style={{ color: "#475569" }}>{"   ·   "}</span>
+          <span style={{ color: "#94a3b8" }}>{"   ·   "}</span>
           <span>Δ DEPTH </span>
           <span
             style={{

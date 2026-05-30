@@ -54,7 +54,7 @@ const PANEL_STYLE: React.CSSProperties = {
   border: "1px solid rgba(0,229,255,0.25)",
   borderRadius: 6,
   backdropFilter: "blur(6px)",
-  color: "#94a3b8",
+  color: "#e2e8f0",
   userSelect: "none",
   overflow: "hidden",
 };
@@ -172,7 +172,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
           <span style={CYAN}>{formatSpeed(boatSpeedMph, { units }).toUpperCase()}</span>
           {showSecondaryKnots && (
             <>
-              <span style={{ color: "#475569" }}>/</span>
+              <span style={{ color: "#94a3b8" }}>/</span>
               <span style={{ color: "#7dd3fc" }}>{knots.toFixed(1)} KT</span>
             </>
           )}
@@ -193,7 +193,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
           borderBottom: "1px solid rgba(0,229,255,0.1)",
         }}
       >
-        <span style={{ fontSize: 9, letterSpacing: "0.25em", color: "#475569", display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <span style={{ fontSize: 9, letterSpacing: "0.25em", color: "#94a3b8", display: "inline-flex", alignItems: "center", gap: 6 }}>
           THROTTLE
           <HelpIcon articleId="throttle" label="Throttle panel" />
         </span>
@@ -204,7 +204,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
               style={{
                 background: "none",
                 border: "none",
-                color: "#334155",
+                color: "#64748b",
                 cursor: "pointer",
                 fontSize: 10,
                 padding: "0 2px",
@@ -221,7 +221,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
                 style={{
                   background: "none",
                   border: "none",
-                  color: "#334155",
+                  color: "#64748b",
                   cursor: "pointer",
                   fontSize: 11,
                   padding: "0 2px",
@@ -241,7 +241,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
             {formatSpeed(boatSpeedMph, { units }).toUpperCase()}
           </div>
           {showSecondaryKnots && (
-            <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.15em", marginTop: 1 }}>
+            <div style={{ fontSize: 9, color: "#94a3b8", letterSpacing: "0.15em", marginTop: 1 }}>
               {knots.toFixed(1)} KT
             </div>
           )}
@@ -323,7 +323,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
             paddingBottom: LEVER_THUMB_H / 2,
             fontSize: 8,
             letterSpacing: "0.1em",
-            color: "#334155",
+            color: "#64748b",
           }}
         >
           {[...BOAT_TICK_SPEEDS].reverse().map((tick) => (
@@ -331,7 +331,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
               key={tick}
               style={{
                 cursor: "pointer",
-                color: Math.abs(tick - boatSpeedMph) < 2 ? "#00e5ff" : "#334155",
+                color: Math.abs(tick - boatSpeedMph) < 2 ? "#00e5ff" : "#64748b",
                 textShadow: Math.abs(tick - boatSpeedMph) < 2 ? "0 0 6px rgba(0,229,255,0.5)" : "none",
                 transition: "color 0.15s",
               }}
@@ -365,7 +365,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
             outline: "none",
           }}
         />
-        <span style={{ fontSize: 9, color: "#475569", whiteSpace: "nowrap" }}>{unitSuffix}</span>
+        <span style={{ fontSize: 9, color: "#94a3b8", whiteSpace: "nowrap" }}>{unitSuffix}</span>
       </div>
     </div>
   );

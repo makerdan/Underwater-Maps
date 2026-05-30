@@ -108,7 +108,7 @@ export const HUD: React.FC = () => {
   const accentGlow = colorBlindSafePalette
     ? "0 0 8px rgba(251,191,36,0.65)"
     : "0 0 8px rgba(0,229,255,0.6)";
-  const baseText = highContrastHud ? "#ffffff" : "#94a3b8";
+  const baseText = highContrastHud ? "#ffffff" : "#e2e8f0";
   const fontScale = largeHudText ? 1.35 : 1;
 
   const driftPlannerActive = useDriftStore((s) => s.driftPlannerActive);
@@ -226,7 +226,7 @@ export const HUD: React.FC = () => {
             right: 8,
             fontSize: 8,
             letterSpacing: "0.12em",
-            color: "#64748b",
+            color: "#cbd5e1",
           }}
         >
           ⚡ cached data
@@ -246,7 +246,7 @@ export const HUD: React.FC = () => {
       >
         {showHeading && (
           <div style={{ ...PANEL, fontSize: 11 }}>
-            <span style={{ color: "#475569" }}>HDG </span>
+            <span style={{ color: "#94a3b8" }}>HDG </span>
             <span style={CYAN}>{Math.round(heading).toString().padStart(3, "0")}°</span>
           </div>
         )}
@@ -453,7 +453,7 @@ export const HUD: React.FC = () => {
           <div style={{ ...PANEL, textAlign: "center", minWidth: 160 }}>
             <div
               style={{
-                color: "#475569",
+                color: "#94a3b8",
                 fontSize: 9,
                 letterSpacing: "0.2em",
                 marginBottom: 2,
@@ -503,13 +503,13 @@ export const HUD: React.FC = () => {
             {crosshairGps ? (
               <>
                 <div>
-                  <span style={{ color: "#475569" }}>LON </span>
+                  <span style={{ color: "#94a3b8" }}>LON </span>
                   <span style={CYAN}>{fmtCoord(crosshairGps.lon)}</span>
-                  <span style={{ color: "#475569" }}> LAT </span>
+                  <span style={{ color: "#94a3b8" }}> LAT </span>
                   <span style={CYAN}>{fmtCoord(crosshairGps.lat)}</span>
                 </div>
                 <div style={{ marginTop: 2 }}>
-                  <span style={{ color: "#475569" }}>▼ </span>
+                  <span style={{ color: "#94a3b8" }}>▼ </span>
                   <span style={{ ...CYAN, fontSize: 13, fontWeight: 700 }}>
                     {fmtDepth(crosshairGps.depth)}
                   </span>
@@ -550,7 +550,7 @@ export const HUD: React.FC = () => {
                           letterSpacing: "inherit",
                         }}
                       >
-                        <span style={{ color: "#475569" }}>TEMP </span>
+                        <span style={{ color: "#94a3b8" }}>TEMP </span>
                         <span style={{ color: "#fb923c", textShadow: "0 0 6px rgba(251,146,60,0.4)" }}>
                           {formatTemperature(sample.celsius).toUpperCase()}
                         </span>
@@ -573,7 +573,7 @@ export const HUD: React.FC = () => {
                           aria-hidden="true"
                           style={{
                             marginLeft: 4,
-                            color: "#64748b",
+                            color: "#cbd5e1",
                             fontSize: 18,
                             lineHeight: 1,
                           }}
@@ -615,11 +615,11 @@ export const HUD: React.FC = () => {
       <div className="absolute bottom-3 left-3 space-y-1">
         {lastClickedGps && (
           <div style={{ ...PANEL, fontSize: 10 }}>
-            <span style={{ color: "#475569" }}>PIN </span>
+            <span style={{ color: "#94a3b8" }}>PIN </span>
             <span style={{ color: "#22d3ee" }}>
               {fmtCoord(lastClickedGps.lon)}, {fmtCoord(lastClickedGps.lat)}
             </span>
-            <span style={{ color: "#475569" }}> ▼ {fmtDepth(lastClickedGps.depth)}</span>
+            <span style={{ color: "#94a3b8" }}> ▼ {fmtDepth(lastClickedGps.depth)}</span>
           </div>
         )}
       </div>

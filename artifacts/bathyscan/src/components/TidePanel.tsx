@@ -112,7 +112,7 @@ const StationSourceBadge: React.FC<StationSourceBadgeProps> = ({
         borderRadius: 2,
         background: "rgba(148,163,184,0.08)",
         border: "1px dashed rgba(148,163,184,0.4)",
-        color: "#94a3b8",
+        color: "#e2e8f0",
       };
   const content = (
     <span data-testid="tide-source-badge" data-source={isNoaa ? "noaa" : "estimated"} style={style} title={tooltip}>
@@ -552,7 +552,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                     borderRadius: 2,
                     border: `1px solid ${prevSlackMs === null ? "rgba(168,85,247,0.15)" : "rgba(168,85,247,0.5)"}`,
                     background: prevSlackMs === null ? "transparent" : "rgba(168,85,247,0.1)",
-                    color: prevSlackMs === null ? "#475569" : "#c084fc",
+                    color: prevSlackMs === null ? "#94a3b8" : "#c084fc",
                     cursor: prevSlackMs === null ? "not-allowed" : "pointer",
                     letterSpacing: "0.1em",
                     whiteSpace: "nowrap",
@@ -584,7 +584,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                     borderRadius: 2,
                     border: `1px solid ${nextSlackMs === null ? "rgba(168,85,247,0.15)" : "rgba(168,85,247,0.5)"}`,
                     background: nextSlackMs === null ? "transparent" : "rgba(168,85,247,0.1)",
-                    color: nextSlackMs === null ? "#475569" : "#c084fc",
+                    color: nextSlackMs === null ? "#94a3b8" : "#c084fc",
                     cursor: nextSlackMs === null ? "not-allowed" : "pointer",
                     letterSpacing: "0.1em",
                     whiteSpace: "nowrap",

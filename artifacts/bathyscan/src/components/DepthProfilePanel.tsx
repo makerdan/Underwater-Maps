@@ -221,7 +221,7 @@ export const DepthProfilePanel: React.FC = () => {
       const b = points[i + 1]!;
       const x0 = xOf(a.distanceM);
       const x1 = xOf(b.distanceM);
-      const color = a.slot !== null ? SLOT_COLORS[a.slot] ?? "#334155" : "#334155";
+      const color = a.slot !== null ? SLOT_COLORS[a.slot] ?? "#64748b" : "#64748b";
       stripRects.push(
         <rect
           key={i}
@@ -457,7 +457,7 @@ export const DepthProfilePanel: React.FC = () => {
             style={{
               background: "transparent",
               border: "none",
-              color: "#94a3b8",
+              color: "#e2e8f0",
               cursor: "pointer",
               fontSize: 16,
               lineHeight: 1,
@@ -502,7 +502,7 @@ export const DepthProfilePanel: React.FC = () => {
                   background: isActive
                     ? "rgba(0,229,255,0.15)"
                     : "rgba(0,229,255,0.04)",
-                  color: isActive ? "#00e5ff" : "#64748b",
+                  color: isActive ? "#00e5ff" : "#cbd5e1",
                   cursor: "pointer",
                   fontFamily: "inherit",
                   letterSpacing: "0.06em",
@@ -516,7 +516,7 @@ export const DepthProfilePanel: React.FC = () => {
                 }}
               >
                 <span style={{ fontWeight: isActive ? 700 : 400 }}>{label}</span>
-                <span style={{ fontSize: 8, color: isActive ? "#94a3b8" : "#475569" }}>
+                <span style={{ fontSize: 8, color: isActive ? "#e2e8f0" : "#94a3b8" }}>
                   {p.mode === "path" ? "⬡ " : ""}Δ{depthLabel} · {distLabel}
                 </span>
               </button>
@@ -526,7 +526,7 @@ export const DepthProfilePanel: React.FC = () => {
       )}
 
       {/* Stats row */}
-      <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 6, display: "flex", gap: 14, flexWrap: "wrap" }}>
+      <div style={{ fontSize: 10, color: "#e2e8f0", marginBottom: 6, display: "flex", gap: 14, flexWrap: "wrap" }}>
         <span>LEN <span style={{ color: "#e2e8f0" }}>{formatDistance(totalDistanceM, { units })}</span></span>
         <span>MIN <span style={{ color: "#e2e8f0" }}>{formatDepth(minDepthM, { units, decimals: 1 })}</span></span>
         <span>MAX <span style={{ color: "#e2e8f0" }}>{formatDepth(maxDepthM, { units, decimals: 1 })}</span></span>
@@ -593,7 +593,7 @@ export const DepthProfilePanel: React.FC = () => {
                 x={PAD_LEFT - 6}
                 y={y + 3}
                 fontSize={9}
-                fill="#64748b"
+                fill="#cbd5e1"
                 textAnchor="end"
                 fontFamily="'JetBrains Mono', monospace"
               >
@@ -719,13 +719,13 @@ export const DepthProfilePanel: React.FC = () => {
                   fill="rgba(0,15,25,0.96)"
                   stroke="rgba(0,229,255,0.45)"
                 />
-                <text x={6} y={13} fontSize={9} fill="#94a3b8" fontFamily="'JetBrains Mono', monospace">
+                <text x={6} y={13} fontSize={9} fill="#e2e8f0" fontFamily="'JetBrains Mono', monospace">
                   D <tspan fill="#e2e8f0">{formatDistance(hp.distanceM, { units })}</tspan>
                 </text>
-                <text x={6} y={25} fontSize={9} fill="#94a3b8" fontFamily="'JetBrains Mono', monospace">
+                <text x={6} y={25} fontSize={9} fill="#e2e8f0" fontFamily="'JetBrains Mono', monospace">
                   Z <tspan fill="#e2e8f0">{formatDepth(hp.depthM, { units, decimals: 1 })}</tspan>
                 </text>
-                <text x={6} y={37} fontSize={9} fill="#94a3b8" fontFamily="'JetBrains Mono', monospace">
+                <text x={6} y={37} fontSize={9} fill="#e2e8f0" fontFamily="'JetBrains Mono', monospace">
                   ZN <tspan fill="#e2e8f0">{zoneName}</tspan>
                 </text>
               </g>
@@ -738,7 +738,7 @@ export const DepthProfilePanel: React.FC = () => {
           x={PAD_LEFT}
           y={HEIGHT - 4}
           fontSize={9}
-          fill="#64748b"
+          fill="#cbd5e1"
           textAnchor="start"
           fontFamily="'JetBrains Mono', monospace"
         >
@@ -748,7 +748,7 @@ export const DepthProfilePanel: React.FC = () => {
           x={PAD_LEFT + PLOT_W}
           y={HEIGHT - 4}
           fontSize={9}
-          fill="#64748b"
+          fill="#cbd5e1"
           textAnchor="end"
           fontFamily="'JetBrains Mono', monospace"
         >
@@ -757,7 +757,7 @@ export const DepthProfilePanel: React.FC = () => {
       </svg>
 
       {/* Endpoint coords */}
-      <div style={{ fontSize: 9, color: "#64748b", marginTop: 6, display: "flex", justifyContent: "space-between", gap: 12 }}>
+      <div style={{ fontSize: 9, color: "#cbd5e1", marginTop: 6, display: "flex", justifyContent: "space-between", gap: 12 }}>
         <span>A {start.lat.toFixed(4)},{start.lon.toFixed(4)}</span>
         <span>B {end.lat.toFixed(4)},{end.lon.toFixed(4)}</span>
       </div>
@@ -780,7 +780,7 @@ export const DepthProfilePanel: React.FC = () => {
               marginBottom: 5,
             }}
           >
-            <div style={{ fontSize: 9, letterSpacing: "0.18em", color: "#94a3b8" }}>
+            <div style={{ fontSize: 9, letterSpacing: "0.18em", color: "#e2e8f0" }}>
               SUGGESTED ({features.length})
             </div>
             <button
@@ -835,7 +835,7 @@ export const DepthProfilePanel: React.FC = () => {
                 >
                   <span style={{ color: fs.color }}>{fs.glyph}</span>
                   {featureLabel(f)}
-                  <span style={{ color: "#64748b" }}>+</span>
+                  <span style={{ color: "#cbd5e1" }}>+</span>
                 </button>
               );
             })}
@@ -844,7 +844,7 @@ export const DepthProfilePanel: React.FC = () => {
       )}
 
       {anyClassified ? (
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6, fontSize: 9, color: "#94a3b8" }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6, fontSize: 9, color: "#e2e8f0" }}>
           {presentSlots.map((slot) => (
             <span key={slot} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
               <span
@@ -852,7 +852,7 @@ export const DepthProfilePanel: React.FC = () => {
                   display: "inline-block",
                   width: 10,
                   height: 8,
-                  background: SLOT_COLORS[slot] ?? "#334155",
+                  background: SLOT_COLORS[slot] ?? "#64748b",
                   border: "1px solid rgba(255,255,255,0.15)",
                 }}
               />
@@ -861,7 +861,7 @@ export const DepthProfilePanel: React.FC = () => {
           ))}
         </div>
       ) : (
-        <div style={{ marginTop: 6, fontSize: 9, color: "#475569" }}>
+        <div style={{ marginTop: 6, fontSize: 9, color: "#94a3b8" }}>
           Zone classification not yet available — strip shows neutral grey.
         </div>
       )}

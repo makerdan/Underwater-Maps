@@ -41,7 +41,7 @@ export const SubstrateLegend: React.FC = () => {
         maxWidth: 260,
         fontFamily: "'JetBrains Mono', monospace",
         fontSize: 9,
-        color: "#94a3b8",
+        color: "#e2e8f0",
         letterSpacing: "0.04em",
         pointerEvents: "auto",
         textAlign: "left",
@@ -75,7 +75,7 @@ export const SubstrateLegend: React.FC = () => {
             }}
           />
           <span style={{ color: r.color, fontWeight: 700, minWidth: 46 }}>{r.label}</span>
-          <span style={{ color: "#94a3b8" }}>{r.hint}</span>
+          <span style={{ color: "#e2e8f0" }}>{r.hint}</span>
         </div>
       ))}
       <div
@@ -90,7 +90,7 @@ export const SubstrateLegend: React.FC = () => {
       >
         <span style={{ color: "#b0956a", fontWeight: 700 }}>Gravel structure zones: </span>
         {GRAVEL_SUBTYPES.join(" · ")}.{" "}
-        <span style={{ color: "#64748b" }}>
+        <span style={{ color: "#cbd5e1" }}>
           Click a polygon for the lake-survey citation and TPWD lake page.
         </span>
       </div>

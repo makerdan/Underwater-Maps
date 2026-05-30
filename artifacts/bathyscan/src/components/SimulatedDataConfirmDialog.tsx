@@ -129,7 +129,7 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
             style={{
               background: "none",
               border: "none",
-              color: "#475569",
+              color: "#94a3b8",
               fontSize: 16,
               cursor: "pointer",
             }}
@@ -176,7 +176,7 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
             }}
           >
             <div>
-              <span style={{ color: "#64748b" }}>Dataset: </span>
+              <span style={{ color: "#cbd5e1" }}>Dataset: </span>
               <span
                 style={{ color: "#cbd5e1" }}
                 data-testid="simulated-data-dataset"
@@ -186,7 +186,7 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
             </div>
             {bboxLabel && (
               <div>
-                <span style={{ color: "#64748b" }}>BBox: </span>
+                <span style={{ color: "#cbd5e1" }}>BBox: </span>
                 <span style={{ color: "#cbd5e1" }}>{bboxLabel}</span>
               </div>
             )}
@@ -198,7 +198,7 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
               alignItems: "center",
               gap: 8,
               fontSize: 10,
-              color: "#94a3b8",
+              color: "#e2e8f0",
               marginBottom: 12,
               cursor: "pointer",
             }}
@@ -263,7 +263,7 @@ function btnStyle(variant: "warning" | "ghost"): React.CSSProperties {
     background: "transparent",
     border: "1px solid rgba(148,163,184,0.3)",
     borderRadius: 3,
-    color: "#94a3b8",
+    color: "#e2e8f0",
     cursor: "pointer",
     fontFamily: "inherit",
     fontSize: 11,

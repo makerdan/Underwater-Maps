@@ -91,7 +91,7 @@ export const HabitatLegend: React.FC<HabitatLegendProps> = ({ embedded = false }
           display: "flex",
           justifyContent: "space-between",
           fontSize: 9,
-          color: "#94a3b8",
+          color: "#e2e8f0",
           marginTop: 2,
           letterSpacing: "0.06em",
         }}

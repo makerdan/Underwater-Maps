@@ -94,7 +94,7 @@ export const TemperatureProfileChart: React.FC<TemperatureProfileChartProps> = (
   // X-axis ticks: min, max (and mid if there's room)
   const xTicks = xMax - xMin > 4 ? [tMin, (tMin + tMax) / 2, tMax] : [tMin, tMax];
 
-  const axisColor = "#334155";
+  const axisColor = "#64748b";
   const lineColor = "#fb923c";
   const fillColor = "rgba(251,146,60,0.15)";
 
@@ -136,7 +136,7 @@ export const TemperatureProfileChart: React.FC<TemperatureProfileChartProps> = (
             style={{
               background: "none",
               border: "1px solid rgba(251,146,60,0.3)",
-              color: "#94a3b8",
+              color: "#e2e8f0",
               padding: "0 6px",
               borderRadius: 2,
               cursor: "pointer",
@@ -175,7 +175,7 @@ export const TemperatureProfileChart: React.FC<TemperatureProfileChartProps> = (
             />
             <text
               x={PAD_LEFT - 4} y={yOf(d) + 3}
-              textAnchor="end" fontSize={9} fill="#64748b"
+              textAnchor="end" fontSize={9} fill="#cbd5e1"
               fontFamily="'JetBrains Mono', monospace"
             >
               {formatDepth(d, { units })}
@@ -188,7 +188,7 @@ export const TemperatureProfileChart: React.FC<TemperatureProfileChartProps> = (
           <text
             key={`x-${i}`}
             x={xOf(c)} y={PAD_TOP + PLOT_H + 12}
-            textAnchor="middle" fontSize={9} fill="#64748b"
+            textAnchor="middle" fontSize={9} fill="#cbd5e1"
             fontFamily="'JetBrains Mono', monospace"
           >
             {formatTemperature(c)}
@@ -217,13 +217,13 @@ export const TemperatureProfileChart: React.FC<TemperatureProfileChartProps> = (
         {/* Axis titles */}
         <text
           x={PAD_LEFT + PLOT_W / 2} y={HEIGHT - 2}
-          textAnchor="middle" fontSize={8} fill="#475569" letterSpacing="0.2em"
+          textAnchor="middle" fontSize={8} fill="#94a3b8" letterSpacing="0.2em"
         >
           TEMPERATURE ({temperatureSuffix()})
         </text>
         <text
           x={10} y={PAD_TOP + PLOT_H / 2}
-          textAnchor="middle" fontSize={8} fill="#475569" letterSpacing="0.2em"
+          textAnchor="middle" fontSize={8} fill="#94a3b8" letterSpacing="0.2em"
           transform={`rotate(-90 10 ${PAD_TOP + PLOT_H / 2})`}
         >
           DEPTH
@@ -238,7 +238,7 @@ export const TemperatureProfileChart: React.FC<TemperatureProfileChartProps> = (
           paddingTop: 4,
           borderTop: "1px solid rgba(51,65,85,0.4)",
           fontSize: 9,
-          color: "#94a3b8",
+          color: "#e2e8f0",
           lineHeight: 1.4,
         }}
       >
@@ -273,7 +273,7 @@ export const TemperatureProfileChart: React.FC<TemperatureProfileChartProps> = (
               href={sourceUrl}
               target="_blank"
               rel="noreferrer"
-              style={{ color: "#94a3b8", textDecoration: "underline" }}
+              style={{ color: "#e2e8f0", textDecoration: "underline" }}
             >
               {source}
             </a>
@@ -282,7 +282,7 @@ export const TemperatureProfileChart: React.FC<TemperatureProfileChartProps> = (
           )}
         </div>
         {timestamp && (
-          <div style={{ color: "#64748b", marginTop: 2 }}>
+          <div style={{ color: "#cbd5e1", marginTop: 2 }}>
             sampled {new Date(timestamp).toUTCString()}
           </div>
         )}

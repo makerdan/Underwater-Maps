@@ -199,7 +199,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
 
           {/* Trail colour picker */}
           <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
-            <span style={{ color: "#475569", fontSize: 9 }}>COLOUR</span>
+            <span style={{ color: "#94a3b8", fontSize: 9 }}>COLOUR</span>
             <div style={{ display: "flex", gap: 4, marginLeft: 4 }}>
               {TRAIL_COLOURS.map((col) => (
                 <ViewscreenTooltip key={col} label={`Use ${col} for this trail`} side="top">
@@ -225,7 +225,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
 
           {/* Sampling interval selector */}
           <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
-            <span style={{ color: "#475569", fontSize: 9 }}>INTERVAL</span>
+            <span style={{ color: "#94a3b8", fontSize: 9 }}>INTERVAL</span>
             <div style={{ display: "flex", gap: 3, marginLeft: 4 }}>
               {INTERVALS.map((iv) => (
                 <ViewscreenTooltip key={iv.ms} label={`Sample a GPS point every ${iv.label}`} side="top">
@@ -235,7 +235,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
                     background: gpsRecordingInterval === iv.ms ? "rgba(0,229,255,0.15)" : "none",
                     border: `1px solid ${gpsRecordingInterval === iv.ms ? "rgba(0,229,255,0.5)" : "rgba(0,229,255,0.1)"}`,
                     borderRadius: 2,
-                    color: gpsRecordingInterval === iv.ms ? "#00e5ff" : "#475569",
+                    color: gpsRecordingInterval === iv.ms ? "#00e5ff" : "#94a3b8",
                     fontSize: 9,
                     padding: "1px 5px",
                     cursor: "pointer",
@@ -272,11 +272,11 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
         </>
       ) : (
         <>
-          <div style={{ display: "flex", gap: 16, marginBottom: 2, color: "#94a3b8" }}>
+          <div style={{ display: "flex", gap: 16, marginBottom: 2, color: "#e2e8f0" }}>
             <span data-testid="trail-elapsed"><span style={{ color: "#ef4444" }}>⏺ </span>{fmtElapsed(elapsed)}</span>
             <span data-testid="trail-point-count">{currentPoints.length} pts</span>
           </div>
-          <div style={{ fontSize: 9, color: "#475569", marginBottom: 6 }}>
+          <div style={{ fontSize: 9, color: "#94a3b8", marginBottom: 6 }}>
             every {selectedInterval.label}
           </div>
           <ViewscreenTooltip label="Stop recording and save this trail" side="top">
@@ -288,7 +288,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
               background: "rgba(0,229,255,0.1)",
               border: "1px solid rgba(0,229,255,0.35)",
               borderRadius: 3,
-              color: saving ? "#475569" : "#00e5ff",
+              color: saving ? "#94a3b8" : "#00e5ff",
               fontSize: 10,
               padding: "5px 10px",
               cursor: saving ? "not-allowed" : "pointer",

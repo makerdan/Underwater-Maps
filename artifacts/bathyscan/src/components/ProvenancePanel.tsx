@@ -267,24 +267,24 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
           style={{
             marginTop: 6,
             fontSize: 10,
-            color: "#94a3b8",
+            color: "#e2e8f0",
             lineHeight: 1.5,
           }}
         >
           <p style={{ margin: "0 0 4px" }}>{src.description}</p>
 
           <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 8px" }}>
-            <span style={{ color: "#64748b" }}>Resolution:</span>
+            <span style={{ color: "#cbd5e1" }}>Resolution:</span>
             <span>
               {terrain.resolution}×{terrain.resolution} ({terrain.resolution ** 2} cells)
             </span>
 
-            <span style={{ color: "#64748b" }}>Depth range:</span>
+            <span style={{ color: "#cbd5e1" }}>Depth range:</span>
             <span>
               {terrain.minDepth} – {terrain.maxDepth} m
             </span>
 
-            <span style={{ color: "#64748b" }}>Extent:</span>
+            <span style={{ color: "#cbd5e1" }}>Extent:</span>
             <span>
               {Math.abs(terrain.maxLon - terrain.minLon).toFixed(2)}° ×{" "}
               {Math.abs(terrain.maxLat - terrain.minLat).toFixed(2)}°
@@ -292,7 +292,7 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
 
             {zoneSource && (
               <>
-                <span style={{ color: "#64748b" }}>Zones:</span>
+                <span style={{ color: "#cbd5e1" }}>Zones:</span>
                 <span style={{ color: zoneSource === "ai" ? "#cbd5e1" : "#fbbf24" }}>
                   {zoneSource === "ai"
                     ? "AI-classified from depth grid"

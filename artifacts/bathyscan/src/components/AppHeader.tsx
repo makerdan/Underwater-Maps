@@ -21,14 +21,14 @@ export function AppHeader() {
 
       {isLoaded && user && (
         <div className="flex items-center gap-3">
-          <span className="font-mono text-[#94a3b8] text-xs hidden sm:block">
+          <span className="font-mono text-[#e2e8f0] text-xs hidden sm:block">
             {user.primaryEmailAddress?.emailAddress ?? user.username ?? ""}
           </span>
           <ViewscreenTooltip label="Open Settings (preferences, HUD, layout)" side="bottom">
             <button
               data-testid="settings-link"
               onClick={() => setLocation(basePath + "/settings")}
-              className="font-mono text-[#475569] hover:text-[#94a3b8] text-xs tracking-wider uppercase transition-colors"
+              className="font-mono text-[#94a3b8] hover:text-[#e2e8f0] text-xs tracking-wider uppercase transition-colors"
             >
               Settings
             </button>
@@ -36,7 +36,7 @@ export function AppHeader() {
           <ViewscreenTooltip label="Sign out of your account" side="bottom">
             <button
               onClick={() => signOut()}
-              className="font-mono text-[#475569] hover:text-[#94a3b8] text-xs tracking-wider uppercase transition-colors"
+              className="font-mono text-[#94a3b8] hover:text-[#e2e8f0] text-xs tracking-wider uppercase transition-colors"
             >
               Sign out
             </button>

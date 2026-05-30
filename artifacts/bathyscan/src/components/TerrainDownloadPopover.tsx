@@ -216,7 +216,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
             style={{
               background: "none",
               border: "none",
-              color: "#475569",
+              color: "#94a3b8",
               fontSize: 16,
               cursor: "pointer",
               padding: 0,
@@ -261,7 +261,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
             }}
           >
             <div>
-              <div style={{ color: "#64748b", marginBottom: 2 }}>AREA</div>
+              <div style={{ color: "#cbd5e1", marginBottom: 2 }}>AREA</div>
               <div style={{ color: "#e2e8f0", fontSize: 13 }}>
                 {areaKm2 < 1
                   ? `${(areaKm2 * 1000).toFixed(0)} km²`
@@ -269,7 +269,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
               </div>
             </div>
             <div>
-              <div style={{ color: "#64748b", marginBottom: 2 }}>CENTRE</div>
+              <div style={{ color: "#cbd5e1", marginBottom: 2 }}>CENTRE</div>
               <div style={{ color: "#e2e8f0" }}>
                 {Math.abs(centerLat).toFixed(3)}°{centerLat >= 0 ? "N" : "S"}{" "}
                 {Math.abs(centerLon).toFixed(3)}°{centerLon >= 0 ? "E" : "W"}
@@ -278,9 +278,9 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
 
             {/* Source info */}
             <div style={{ gridColumn: "1 / -1" }}>
-              <div style={{ color: "#64748b", marginBottom: 2 }}>SOURCE</div>
+              <div style={{ color: "#cbd5e1", marginBottom: 2 }}>SOURCE</div>
               {infoLoading ? (
-                <div style={{ color: "#475569" }}>probing…</div>
+                <div style={{ color: "#94a3b8" }}>probing…</div>
               ) : infoError ? (
                 <div style={{ color: "#f87171", fontSize: 10 }}>{infoError}</div>
               ) : info ? (
@@ -321,9 +321,9 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
 
             {/* Estimated points */}
             <div style={{ gridColumn: "1 / -1" }}>
-              <div style={{ color: "#64748b", marginBottom: 2 }}>EST. WATER POINTS</div>
+              <div style={{ color: "#cbd5e1", marginBottom: 2 }}>EST. WATER POINTS</div>
               {infoLoading ? (
-                <div style={{ color: "#475569" }}>calculating…</div>
+                <div style={{ color: "#94a3b8" }}>calculating…</div>
               ) : info ? (
                 <div style={{ color: "#e2e8f0" }}>
                   {info.estimatedPoints.toLocaleString()} points at {resolution}×{resolution}
@@ -337,7 +337,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
             <div
               style={{
                 fontSize: 9,
-                color: "#64748b",
+                color: "#cbd5e1",
                 letterSpacing: "0.12em",
                 marginBottom: 6,
               }}
@@ -362,7 +362,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
                         : "rgba(0,229,255,0.15)"
                     }`,
                     borderRadius: 3,
-                    color: resolution === r ? "#00e5ff" : "#475569",
+                    color: resolution === r ? "#00e5ff" : "#94a3b8",
                     fontFamily: "inherit",
                     fontSize: 9,
                     letterSpacing: "0.05em",
@@ -385,7 +385,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
                 border: "1px solid rgba(255,255,255,0.06)",
                 borderRadius: 3,
                 fontSize: 9,
-                color: "#475569",
+                color: "#94a3b8",
                 marginBottom: 12,
                 letterSpacing: "0.04em",
               }}
@@ -452,7 +452,7 @@ function btnStyle(variant: "primary" | "ghost"): React.CSSProperties {
     background: "transparent",
     border: "1px solid rgba(148,163,184,0.3)",
     borderRadius: 3,
-    color: "#94a3b8",
+    color: "#e2e8f0",
     cursor: "pointer",
     fontFamily: "'JetBrains Mono', monospace",
     fontSize: 11,

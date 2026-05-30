@@ -43,7 +43,7 @@ const card: React.CSSProperties = {
   border: "1px solid rgba(0,229,255,0.25)",
   borderRadius: 4,
   padding: 10,
-  color: "#94a3b8",
+  color: "#e2e8f0",
   fontFamily: FONT,
   fontSize: 11,
   backdropFilter: "blur(6px)",
@@ -60,7 +60,7 @@ const header: React.CSSProperties = {
 const label: React.CSSProperties = {
   fontSize: 9,
   letterSpacing: "0.15em",
-  color: "#64748b",
+  color: "#cbd5e1",
   textTransform: "uppercase",
 };
 
@@ -78,7 +78,7 @@ const input: React.CSSProperties = {
 const toggleBtn = (active: boolean): React.CSSProperties => ({
   background: active ? "rgba(0,229,255,0.12)" : "rgba(15,23,42,0.5)",
   border: `1px solid ${active ? "rgba(0,229,255,0.45)" : "rgba(0,229,255,0.12)"}`,
-  color: active ? "#00e5ff" : "#475569",
+  color: active ? "#00e5ff" : "#94a3b8",
   fontFamily: FONT,
   fontSize: 9,
   letterSpacing: "0.18em",
@@ -110,7 +110,7 @@ function Legend({ units }: { units: UnitsSystem }): React.ReactElement {
           border: "1px solid rgba(0,229,255,0.18)",
         }}
       />
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#64748b", marginTop: 2 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#cbd5e1", marginTop: 2 }}>
         <span>0</span>
         <span>slow</span>
         <span>fast</span>
@@ -147,7 +147,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
   const noaaAmbient = useCurrentsStore((st) => st.noaaAmbient);
 
   const wrapStyle: React.CSSProperties = embedded
-    ? { width: "100%", color: "#94a3b8", fontFamily: FONT, fontSize: 11 }
+    ? { width: "100%", color: "#e2e8f0", fontFamily: FONT, fontSize: 11 }
     : card;
 
   if (!currentsEnabled) {
@@ -249,7 +249,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
           </div>
         </div>
       ) : (
-        <div style={{ marginBottom: 8, fontSize: 10, color: "#94a3b8" }} data-testid="currents-noaa-readout">
+        <div style={{ marginBottom: 8, fontSize: 10, color: "#e2e8f0" }} data-testid="currents-noaa-readout">
           {noaaAmbient ? (
             <>
               <div>
@@ -260,7 +260,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
               {noaaAmbient.source === "noaa" &&
               (noaaAmbient.stationName || noaaAmbient.stationId) ? (
                 <div
-                  style={{ fontSize: 9, color: "#64748b", marginTop: 2 }}
+                  style={{ fontSize: 9, color: "#cbd5e1", marginTop: 2 }}
                   data-testid="currents-noaa-station"
                 >
                   Station:{" "}
@@ -287,7 +287,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
       <div style={{ marginBottom: 8 }}>
         <div style={{ ...label, display: "flex", justifyContent: "space-between" }}>
           <span>Tide Phase</span>
-          <span style={{ color: "#94a3b8" }}>{Math.round(currentsTidePhase * 100)}%</span>
+          <span style={{ color: "#e2e8f0" }}>{Math.round(currentsTidePhase * 100)}%</span>
         </div>
         <TidePhaseSlider
           value={currentsTidePhase}
@@ -334,7 +334,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
       <Legend units={units} />
 
       {field && (
-        <div style={{ marginTop: 6, fontSize: 9, color: "#475569" }} data-testid="currents-field-stats">
+        <div style={{ marginTop: 6, fontSize: 9, color: "#94a3b8" }} data-testid="currents-field-stats">
           Field: {field.resolution}² · max {formatSpeedFromKnots(maxKt, { units, decimals: 2 })}
         </div>
       )}
