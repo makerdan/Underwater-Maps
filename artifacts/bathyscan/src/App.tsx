@@ -224,6 +224,7 @@ function Main() {
   const overviewOpen = useUiStore((s) => s.overviewOpen);
   const findDataPanelOpen = useUiStore((s) => s.findDataPanelOpen);
   const setFindDataPanelOpen = useUiStore((s) => s.setFindDataPanelOpen);
+  const openFindDataCount = useUiStore((s) => s.openFindDataCount);
   const driftPlannerActive = useDriftStore((s) => s.driftPlannerActive);
   const setDriftPlannerActive = useDriftStore((s) => s.setDriftPlannerActive);
   const gpsActive = useGpsStore((s) => s.active);
@@ -808,7 +809,7 @@ function Main() {
 
         {/* Find Data slide-in panel — z-50, right side */}
         {findDataPanelOpen && (
-          <FindDataPanel onClose={() => setFindDataPanelOpen(false)} />
+          <FindDataPanel key={openFindDataCount} onClose={() => setFindDataPanelOpen(false)} />
         )}
 
         {/* Drift Planner overlays — weather panel (top-right) + timeline (bottom-centre) */}

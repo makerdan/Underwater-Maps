@@ -108,6 +108,12 @@ interface UiStore {
   /** Controls visibility of the Find Data slide-in panel. */
   findDataPanelOpen: boolean;
   setFindDataPanelOpen: (open: boolean) => void;
+  /**
+   * Incremented each time the Find Data panel is opened. Used as the `key`
+   * prop on <FindDataPanel> so React remounts it fresh on every open,
+   * clearing stale search state automatically.
+   */
+  openFindDataCount: number;
   /** Always-on Wind arrow overlay. */
   windOverlayActive: boolean;
   setWindOverlayActive: (b: boolean) => void;
@@ -220,7 +226,13 @@ export const useUiStore = create<UiStore>((set) => ({
   }),
   clearHiddenEfhSpecies: () => set({ hiddenEfhSpecies: new Set<string>() }),
   findDataPanelOpen: false,
-  setFindDataPanelOpen: (open) => set({ findDataPanelOpen: open }),
+  openFindDataCount: 0,
+  setFindDataPanelOpen: (open) =>
+    set((state) =>
+      open
+        ? { findDataPanelOpen: true, openFindDataCount: state.openFindDataCount + 1 }
+        : { findDataPanelOpen: false },
+    ),
   windOverlayActive: readLocalBool("bathyscan:windOverlayActive", false),
   setWindOverlayActive: (b) => {
     writeLocalBool("bathyscan:windOverlayActive", b);
