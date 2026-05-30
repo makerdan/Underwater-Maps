@@ -56,4 +56,9 @@ export function hashCacheKey(...parts: string[]): string {
   return createHash("sha256").update(parts.join("|")).digest("hex");
 }
 
+/**
+ * Module-level singleton cache shared across all Poe route handlers.
+ * Must be cleared in test `beforeEach` hooks (alongside `__resetPoeBreaker()`)
+ * to prevent cache hits from one test bleeding into the next.
+ */
 export const globalPoeCache = new PoeCache();

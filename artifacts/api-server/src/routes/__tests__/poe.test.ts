@@ -58,6 +58,7 @@ vi.mock("@clerk/shared/keys", () => ({
 import app from "../../app.js";
 import { globalPoeCache } from "@workspace/poe";
 import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
+import { __resetPoeBreaker } from "../poe.js";
 
 const GRID_BASE64 = Buffer.from("fake-grid-bytes-for-testing").toString(
   "base64",
@@ -83,6 +84,7 @@ beforeEach(() => {
   vi.stubEnv("RATE_LIMIT_BACKEND", "memory");
   __resetRateLimitMemory();
   globalPoeCache.clear();
+  __resetPoeBreaker();
   fakeCreate.mockReset();
   fakeCreate.mockResolvedValue(buildOkResponse());
 });

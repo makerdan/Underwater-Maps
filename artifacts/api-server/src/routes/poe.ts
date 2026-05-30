@@ -80,6 +80,17 @@ const poeBreaker = new PoeCircuitBreaker({
   },
 });
 
+/**
+ * TEST-ONLY — resets the module-level `poeBreaker` singleton to the closed
+ * state. Must be called in `beforeEach` alongside `globalPoeCache.clear()` so
+ * test suites that accumulate AI failures (e.g. the tiled-path "all tiles
+ * return empty output_text" suite) don't leave the breaker open for later tests.
+ * Never imported or called in production code.
+ */
+export function __resetPoeBreaker(): void {
+  poeBreaker.recordSuccess();
+}
+
 /** Per-route upstream timeouts (ms) — sized to the expected upstream work. */
 const POE_MODELS_TIMEOUT_MS = 10_000;
 const POE_CLASSIFY_TIMEOUT_MS = 45_000;

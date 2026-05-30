@@ -23,15 +23,22 @@ vi.mock("@/lib/context", () => ({
   useAppState: () => ({ terrain: null }),
 }));
 
+const DRIFT_STORE_STATE = {
+  manualWindSpeedKnots: 0,
+  manualWindDegrees: 0,
+  manualTidalSpeedKnots: 0,
+  manualTidalDegrees: 0,
+  driftPlannerActive: false,
+  driftHour: 0,
+};
+
 vi.mock("@/lib/driftStore", () => ({
-  useDriftStore: () => ({
-    manualWindSpeedKnots: 0,
-    manualWindDegrees: 0,
-    manualTidalSpeedKnots: 0,
-    manualTidalDegrees: 0,
-    driftPlannerActive: false,
-    driftHour: 0,
-  }),
+  // useSurfaceConditions uses per-field selectors (e.g. useDriftStore((s) => s.driftPlannerActive)).
+  // The mock must apply the selector so each call returns the primitive, not the whole state object.
+  // Returning the whole object makes truthy checks like `driftPlannerActive ? ... : nowHour` branch
+  // incorrectly and produces NaN for activeHour.
+  useDriftStore: (sel: (s: typeof DRIFT_STORE_STATE) => unknown) =>
+    sel(DRIFT_STORE_STATE),
 }));
 
 describe("useSurfaceConditions — activeHour clock tick", () => {

@@ -88,10 +88,13 @@ export function useSurfaceConditions(
 
   // Keep `nowHour` current with a 1-minute tick so the displayed time never
   // drifts up to 30 minutes behind real time when the app sits idle.
-  const [nowHour, setNowHour] = useState(() => new Date().getUTCHours());
+  // Use Date.now() rather than new Date() so Vitest fake-timers always
+  // produce a valid timestamp — new Date() can return an invalid Date
+  // during a fake-timer–driven React render/re-render.
+  const [nowHour, setNowHour] = useState(() => new Date(Date.now()).getUTCHours());
   useEffect(() => {
     const id = setInterval(() => {
-      setNowHour(new Date().getUTCHours());
+      setNowHour(new Date(Date.now()).getUTCHours());
     }, 60_000);
     return () => clearInterval(id);
   }, []);
@@ -132,10 +135,17 @@ export function useSurfaceConditions(
     const snapshot = hours.find((h) => h.hour === activeHour) ?? hours[0] ?? null;
 
     const ts = (() => {
-      const d = new Date();
-      d.setUTCMinutes(0, 0, 0);
-      d.setUTCHours(activeHour);
-      return d.toISOString();
+      try {
+        // Use Date.now() rather than new Date() so Vitest fake-timers always
+        // produce a valid timestamp — new Date() can return an invalid Date
+        // during a fake-timer–driven React re-render.
+        const d = new Date(Date.now());
+        d.setUTCMinutes(0, 0, 0);
+        d.setUTCHours(activeHour);
+        return d.toISOString();
+      } catch {
+        return null;
+      }
     })();
 
     const forecast48h: ForecastHour[] = data?.forecast48h ?? [];
