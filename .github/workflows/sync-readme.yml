@@ -1,6 +1,11 @@
 name: Sync README from replit.md
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'replit.md'
   schedule:
     - cron: '0 0 * * 1'
   workflow_dispatch:
