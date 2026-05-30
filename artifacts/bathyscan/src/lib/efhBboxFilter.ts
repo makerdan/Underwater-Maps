@@ -28,17 +28,53 @@ export function pointInRing(x: number, y: number, ring: number[][]): boolean {
 }
 
 /**
+ * Returns true if the segment (x1,y1)→(x2,y2) crosses an axis-aligned bbox
+ * edge.  The bbox edge is identified by:
+ *   - fixedX=true  → a vertical edge at x=fixedVal, bounded by [boundMin,boundMax] in y
+ *   - fixedX=false → a horizontal edge at y=fixedVal, bounded by [boundMin,boundMax] in x
+ *
+ * Used internally by polygonIntersectsBbox to catch the "edge-crossing" gap
+ * where a thin diagonal polygon crosses bbox boundary edges without any vertex
+ * falling inside the bbox and without any bbox corner falling inside the polygon.
+ */
+function segmentCrossesBboxEdge(
+  x1: number, y1: number,
+  x2: number, y2: number,
+  fixedX: boolean,
+  fixedVal: number,
+  boundMin: number,
+  boundMax: number,
+): boolean {
+  // Rotate coordinate system so "a" is always the axis of the fixed edge value
+  // and "b" is the bounded axis.
+  const a1 = fixedX ? x1 : y1;
+  const b1 = fixedX ? y1 : x1;
+  const a2 = fixedX ? x2 : y2;
+  const b2 = fixedX ? y2 : x2;
+
+  if (a1 === a2) return false; // segment is parallel to the edge — no crossing
+  const t = (fixedVal - a1) / (a2 - a1);
+  if (t < 0 || t > 1) return false; // crossing point is outside the segment
+  const b = b1 + t * (b2 - b1);
+  return b >= boundMin && b <= boundMax;
+}
+
+/**
  * Returns true if the polygon ring (outer ring of a GeoJSON Polygon)
  * intersects the given bounding box.
  *
- * Two checks cover all cases:
+ * Three checks together cover all intersection cases:
  *   1. Any polygon vertex falls inside the bbox (polygon overlaps or is contained).
  *   2. Any bbox corner falls inside the ring via ray-casting (bbox is fully
  *      contained by the polygon).
+ *   3. Any polygon edge crosses any of the four bbox edges (edge-crossing case:
+ *      thin/diagonal polygons that cross the bbox boundary without satisfying
+ *      checks 1 or 2 — e.g. a narrow strip that threads between bbox corners).
  */
 export function polygonIntersectsBbox(ring: number[][], bbox: Bbox): boolean {
   const { minLon, maxLon, minLat, maxLat } = bbox;
 
+  // Check 1: vertex inside bbox
   for (const pt of ring) {
     const lon = pt[0] ?? 0;
     const lat = pt[1] ?? 0;
@@ -47,6 +83,7 @@ export function polygonIntersectsBbox(ring: number[][], bbox: Bbox): boolean {
     }
   }
 
+  // Check 2: bbox corner inside polygon
   const corners: [number, number][] = [
     [minLon, minLat],
     [maxLon, minLat],
@@ -55,6 +92,25 @@ export function polygonIntersectsBbox(ring: number[][], bbox: Bbox): boolean {
   ];
   for (const [cx, cy] of corners) {
     if (pointInRing(cx, cy, ring)) return true;
+  }
+
+  // Check 3: polygon edge crosses a bbox edge
+  const n = ring.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const x1 = ring[j]?.[0] ?? 0;
+    const y1 = ring[j]?.[1] ?? 0;
+    const x2 = ring[i]?.[0] ?? 0;
+    const y2 = ring[i]?.[1] ?? 0;
+    if (
+      // vertical bbox edges (left and right)
+      segmentCrossesBboxEdge(x1, y1, x2, y2, true, minLon, minLat, maxLat) ||
+      segmentCrossesBboxEdge(x1, y1, x2, y2, true, maxLon, minLat, maxLat) ||
+      // horizontal bbox edges (bottom and top)
+      segmentCrossesBboxEdge(x1, y1, x2, y2, false, minLat, minLon, maxLon) ||
+      segmentCrossesBboxEdge(x1, y1, x2, y2, false, maxLat, minLon, maxLon)
+    ) {
+      return true;
+    }
   }
 
   return false;

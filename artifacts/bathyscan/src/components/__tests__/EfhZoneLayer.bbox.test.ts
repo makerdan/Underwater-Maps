@@ -226,4 +226,103 @@ describe("polygonIntersectsBbox", () => {
     ];
     expect(polygonIntersectsBbox(justEast, BBOX)).toBe(false);
   });
+
+  // ── Edge-crossing cases (thin polygons that sneak through the two-check gap) ─
+  //
+  // The original two-check algorithm (vertex-in-bbox + bbox-corner-in-ring) has
+  // a gap: a polygon whose edges cross bbox boundary lines but whose vertices are
+  // all outside the bbox AND none of the four bbox corners fall inside the polygon
+  // returns false even though the polygon visually overlaps the bbox.
+  //
+  // These tests exercise that gap.  With the segment-vs-bbox-edge check (check 3)
+  // added to polygonIntersectsBbox they now correctly return true.
+
+  it("returns true for a thin horizontal strip that crosses the left and right bbox edges (no vertex or corner inside)", () => {
+    // A thin parallelogram at lat ~[56.5, 57.5], running west→east through the
+    // entire bbox lon range.  All four vertices are outside the bbox (lon < minLon
+    // or lon > maxLon).  No bbox corner has lat ∈ [56.5, 57.5] that would land
+    // inside the strip, so the two-check algorithm returns false without check 3.
+    //
+    // BBOX: lon ∈ [-150, -140], lat ∈ [55, 60]
+    //   P1 (-151, 56.5) — west of bbox
+    //   P2 (-151, 57.5) — west of bbox
+    //   P3 (-139, 57.5) — east of bbox
+    //   P4 (-139, 56.5) — east of bbox
+    //
+    // Bbox corners at lat 55 and lat 60 are both outside this lat band → no
+    // bbox corner is inside the polygon.  But the polygon's top and bottom edges
+    // cross the left bbox edge (lon=-150) at lat ≈ 56.5–57.5, which is inside
+    // the bbox's lat range [55, 60] → genuine overlap.
+    const horizontalStrip = [
+      [-151, 56.5],
+      [-151, 57.5],
+      [-139, 57.5],
+      [-139, 56.5],
+      [-151, 56.5],
+    ];
+    expect(polygonIntersectsBbox(horizontalStrip, BBOX)).toBe(true);
+  });
+
+  it("returns true for a thin diagonal strip that clips through the NE corner region without containing it", () => {
+    // A thin parallelogram going from SW to NE, angled so that its edges cross
+    // the top bbox edge (lat=60) and the right bbox edge (lon=-140) but the
+    // actual NE corner point (-140, 60) is NOT inside the polygon.
+    //
+    // Strip direction: roughly (+1, +0.5), so the top and right bbox edges are
+    // crossed while the corner sits just outside the narrow band.
+    //
+    // Vertices (all outside the bbox):
+    //   P1 (-153, 53.0) — SW, south of bbox
+    //   P2 (-151, 53.0) — SW, south of bbox
+    //   P3 (-137, 63.0) — NE, north+east of bbox
+    //   P4 (-139, 63.0) — NE, north+east of bbox
+    //
+    // The strip spans lon [-153, -137] and lat [53, 63], so it transects the
+    // entire bbox region.  Its edges cross both the top (lat=60) and right
+    // (lon=-140) bbox edges inside the valid bbox bounds.
+    //
+    // None of the four bbox corners (-150/−140, 55/60) fall inside this
+    // narrow ~2-degree-wide strip (the strip's lat at lon=-150 is ≈ 56, and
+    // at lon=-140 is ≈ 59 — both bbox corner lats of 55 and 60 miss the band).
+    const diagonalStrip = [
+      [-153, 53.0],
+      [-151, 53.0],
+      [-137, 63.0],
+      [-139, 63.0],
+      [-153, 53.0],
+    ];
+    expect(polygonIntersectsBbox(diagonalStrip, BBOX)).toBe(true);
+  });
+
+  it("returns false for a thin diagonal strip that passes close to the bbox but does not actually cross it", () => {
+    // Same orientation as the diagonal strip above, but shifted so its edges
+    // pass just east of the bbox's right edge — confirming no false positives.
+    const missingStrip = [
+      [-139, 53.0],
+      [-137, 53.0],
+      [-123, 63.0],
+      [-125, 63.0],
+      [-139, 53.0],
+    ];
+    expect(polygonIntersectsBbox(missingStrip, BBOX)).toBe(false);
+  });
+
+  it("returns true for a thin vertical strip that crosses the top and bottom bbox edges (no vertex or corner inside)", () => {
+    // A narrow N-S strip at lon ≈ [-146, -144], extending well beyond the bbox
+    // in latitude.  No vertex has lon ∈ [-150, -140] AND lat ∈ [55, 60]
+    // (vertices have lat outside [55, 60]).  All bbox corners have lon outside
+    // [-146, -144] (corners are at lon -150 and -140), so no corner is inside
+    // the ring.  But the strip's left and right edges cross the top/bottom bbox
+    // edges at lons that are inside the bbox lon range.
+    const verticalStrip = [
+      [-146, 50],
+      [-144, 50],
+      [-144, 65],
+      [-146, 65],
+      [-146, 50],
+    ];
+    // Note: the original crossingNSStrip test in "straddles the bbox" was an
+    // exploratory comment; this test explicitly validates the edge-crossing fix.
+    expect(polygonIntersectsBbox(verticalStrip, BBOX)).toBe(true);
+  });
 });
