@@ -246,6 +246,56 @@ body.bs-daylight [data-radix-popper-content-wrapper] * {
   border-color: rgba(30, 58, 130, 0.35) !important;
 }
 
+/* ── Settings page — Bright Daylight theme variables ─────────────────────────
+   The Settings page uses CSS custom properties (with dark fallbacks) throughout
+   its inline-style S.* object.  Defining the variables here on .bs-settings-page
+   causes them to cascade into every child automatically — no class name needed
+   on individual cards, rows, or controls.
+   --------------------------------------------------------------------------- */
+body.bs-daylight .bs-settings-page {
+  /* Surfaces */
+  --bs-s-page-bg:        #f0f4f8;
+  --bs-s-topbar-bg:      #ffffff;
+  --bs-s-card-bg:        #ffffff;
+  --bs-s-select-bg:      #ffffff;
+  --bs-s-danger-card-bg: rgba(239, 68, 68, 0.06);
+  --bs-s-danger-btn-bg:  rgba(185, 28, 28, 0.08);
+
+  /* Text */
+  --bs-s-page-fg:        #0a0a0a;
+  --bs-s-label-fg:       #0a0a0a;
+  --bs-s-sublabel-fg:    #374151;
+  --bs-s-card-header-fg: #1e3a8a;
+  --bs-s-danger-fg:      #b91c1c;
+
+  /* Accent (cobalt replaces cyan) */
+  --bs-s-accent:         #1d4ed8;
+  --bs-s-accent-shadow:  none;
+
+  /* Borders */
+  --bs-s-border:         rgba(30, 58, 130, 0.2);
+  --bs-s-card-border:    rgba(30, 58, 130, 0.18);
+  --bs-s-row-border:     rgba(30, 58, 130, 0.08);
+
+  /* Nav items */
+  --bs-s-nav-active-bg:  rgba(29, 78, 216, 0.1);
+
+  /* Toggle (on / off) */
+  --bs-s-toggle-on-bg:      rgba(29, 78, 216, 0.2);
+  --bs-s-toggle-on-border:  rgba(29, 78, 216, 0.55);
+  --bs-s-toggle-knob-on:    #1d4ed8;
+  --bs-s-toggle-off-bg:     rgba(100, 116, 139, 0.18);
+  --bs-s-toggle-off-border: rgba(100, 116, 139, 0.35);
+  --bs-s-toggle-knob-off:   #6b7280;
+}
+
+/* The global body.bs-daylight * rule forces color:#0a0a0a !important which
+   would override the cobalt accent vars for text.  Re-assert the accent on
+   the two nav/label elements where colour carries semantic meaning. */
+body.bs-daylight .bs-settings-page [data-nav-active="true"] {
+  color: var(--bs-s-accent) !important;
+}
+
 /* ---------------------------------------------------------------------------
    Sidebar sections — base (desktop) styles (SidebarSection.tsx)
    --------------------------------------------------------------------------- */
