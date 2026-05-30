@@ -77,15 +77,25 @@ import app from "../app.js";
 
 const AUTHED_HEADER = { "x-mock-clerk-user-id": "user_test123" };
 
-describe("GET /api/markers", () => {
-  it("returns 200 with an array when datasetId is provided (no auth required)", async () => {
+describe("GET /api/markers — auth required", () => {
+  it("returns 401 when no auth session is present", async () => {
     const res = await request(app).get("/api/markers?datasetId=thorne-bay");
+    expect(res.status).toBe(401);
+    expect(res.body).toHaveProperty("error", "Unauthorized");
+  });
+
+  it("returns 200 with user-scoped markers when authenticated and datasetId is provided", async () => {
+    const res = await request(app)
+      .get("/api/markers?datasetId=thorne-bay")
+      .set(AUTHED_HEADER);
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
   });
 
-  it("returns 200 even without datasetId due to zod.coerce.string() schema", async () => {
-    const res = await request(app).get("/api/markers");
+  it("returns 200 when authenticated but no datasetId (zod.coerce.string() coerces undefined)", async () => {
+    const res = await request(app)
+      .get("/api/markers")
+      .set(AUTHED_HEADER);
     expect(res.status).toBe(200);
   });
 });
