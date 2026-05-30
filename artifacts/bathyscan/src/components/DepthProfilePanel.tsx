@@ -29,6 +29,8 @@ import {
   getGetMarkersQueryKey,
   MarkerInputType,
 } from "@workspace/api-client-react";
+import { useUser } from "@/lib/clerkCompat";
+import { routesQueryKey } from "@/components/RoutesPanel";
 
 const ZONE_LABEL = ["Sand", "Sediment", "Silt", "Basalt"] as const;
 
@@ -174,9 +176,71 @@ export const DepthProfilePanel: React.FC = () => {
     useUiStore.getState().setMarkerFormOpen(true);
   }, []);
 
+  const { isSignedIn } = useUser();
   const qc = useQueryClient();
   const postMarkers = usePostMarkers();
   const [bulkPending, setBulkPending] = React.useState(false);
+
+  // ── Save as route ─────────────────────────────────────────────────────
+  const [showSaveInput, setShowSaveInput] = React.useState(false);
+  const [guestSignInPrompt, setGuestSignInPrompt] = React.useState(false);
+  const [saveName, setSaveName] = React.useState("");
+  const [saveLoading, setSaveLoading] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
+
+  const defaultRouteName = () => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `Route ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+
+  const openSaveInput = () => {
+    if (!isSignedIn) {
+      setGuestSignInPrompt(true);
+      return;
+    }
+    setSaveName(defaultRouteName());
+    setSaveError(null);
+    setShowSaveInput(true);
+  };
+
+  const cancelSave = () => {
+    setShowSaveInput(false);
+    setGuestSignInPrompt(false);
+    setSaveError(null);
+  };
+
+  const confirmSave = async () => {
+    const trimmed = saveName.trim();
+    if (!trimmed || !datasetId || !profile || !profile.waypoints || profile.waypoints.length < 2) return;
+    setSaveLoading(true);
+    setSaveError(null);
+    try {
+      const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+      const res = await fetch(`${base}/api/routes`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          datasetId,
+          name: trimmed,
+          waypoints: profile.waypoints,
+          totalDistanceM: profile.totalDistanceM,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+        setSaveError((body.details as string | undefined) ?? `Error ${res.status}`);
+        return;
+      }
+      void qc.invalidateQueries({ queryKey: routesQueryKey(datasetId) });
+      setShowSaveInput(false);
+    } catch {
+      setSaveError("Network error — please try again.");
+    } finally {
+      setSaveLoading(false);
+    }
+  };
 
   const features: ProfileFeature[] = React.useMemo(
     () => (profile ? detectProfileFeatures(profile) : []),
@@ -535,6 +599,95 @@ export const DepthProfilePanel: React.FC = () => {
           <span>WPT <span style={{ color: "#e2e8f0" }}>{profile.waypoints.length}</span></span>
         )}
       </div>
+
+      {/* Save as route — only for path profiles with ≥2 waypoints */}
+      {isPathProfile && profile.waypoints && profile.waypoints.length >= 2 && (
+        <div
+          data-testid="depth-profile-save-route"
+          style={{
+            marginBottom: 8,
+            padding: "6px 8px",
+            background: "rgba(0,229,255,0.04)",
+            border: "1px solid rgba(0,229,255,0.14)",
+            borderRadius: 4,
+          }}
+        >
+          {guestSignInPrompt ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
+              <span style={{ fontSize: 9, color: "#94a3b8" }}>
+                Sign in to save routes.
+              </span>
+              <button
+                type="button"
+                aria-label="Dismiss sign-in prompt"
+                onClick={cancelSave}
+                style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: 11, lineHeight: 1, padding: "0 2px" }}
+              >
+                ✕
+              </button>
+            </div>
+          ) : !showSaveInput ? (
+            <button
+              type="button"
+              data-testid="depth-profile-save-route-btn"
+              aria-label="Save path as a named route"
+              onClick={openSaveInput}
+              style={exportBtnStyle}
+            >
+              🛤 SAVE AS ROUTE…
+            </button>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <input
+                autoFocus
+                value={saveName}
+                onChange={(e) => setSaveName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { void confirmSave(); }
+                  if (e.key === "Escape") cancelSave();
+                }}
+                placeholder="Route name"
+                style={{
+                  background: "rgba(0,10,20,0.8)",
+                  border: "1px solid rgba(0,229,255,0.5)",
+                  color: "#e2e8f0",
+                  fontFamily: "inherit",
+                  fontSize: 10,
+                  padding: "3px 7px",
+                  borderRadius: 3,
+                  width: "100%",
+                }}
+              />
+              {saveError && (
+                <div style={{ fontSize: 9, color: "#f87171" }}>{saveError}</div>
+              )}
+              <div style={{ display: "flex", gap: 4 }}>
+                <button
+                  type="button"
+                  data-testid="depth-profile-save-route-confirm"
+                  disabled={saveLoading || !saveName.trim()}
+                  onClick={() => { void confirmSave(); }}
+                  style={{
+                    ...exportBtnStyle,
+                    opacity: saveLoading || !saveName.trim() ? 0.5 : 1,
+                    cursor: saveLoading || !saveName.trim() ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {saveLoading ? "SAVING…" : "SAVE"}
+                </button>
+                <button
+                  type="button"
+                  data-testid="depth-profile-save-route-cancel"
+                  onClick={cancelSave}
+                  style={{ ...exportBtnStyle, background: "transparent" }}
+                >
+                  CANCEL
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Chart */}
       <svg

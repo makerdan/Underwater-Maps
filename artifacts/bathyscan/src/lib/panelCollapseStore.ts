@@ -13,7 +13,8 @@ export type PanelId =
   | "conditions"
   | "forecast"
   | "markersAccordion"
-  | "uploadTerrainAccordion";
+  | "uploadTerrainAccordion"
+  | "routes";
 
 interface PanelCollapseStore {
   collapsed: Record<PanelId, boolean>;
@@ -34,6 +35,7 @@ export const DEFAULTS: Record<PanelId, boolean> = {
   forecast: false,
   markersAccordion: true,
   uploadTerrainAccordion: true,
+  routes: false,
 };
 
 export const PANEL_IDS = Object.keys(DEFAULTS) as PanelId[];

@@ -18,6 +18,7 @@ import trollingPresetsRouter from "./trolling-presets";
 import trollingPresetFoldersRouter from "./trolling-preset-folders";
 import waterTemperatureRouter from "./water-temperature";
 import temperatureProfileRouter from "./temperature-profile";
+import routesRouter from "./routes";
 
 const router: IRouter = Router();
 
@@ -40,5 +41,6 @@ router.use(trollingPresetsRouter);
 router.use(trollingPresetFoldersRouter);
 router.use(waterTemperatureRouter);
 router.use(temperatureProfileRouter);
+router.use(routesRouter);
 
 export default router;

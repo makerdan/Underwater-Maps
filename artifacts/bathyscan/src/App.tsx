@@ -67,6 +67,7 @@ import { WeatherPanel } from "@/components/WeatherPanel";
 import { DriftTimeline } from "@/components/DriftTimeline";
 import { HelpButton } from "@/components/help/HelpButton";
 import { HelpWindow } from "@/components/help/HelpWindow";
+import { RoutesPanel } from "@/components/RoutesPanel";
 import "@/components/help/help.css";
 import { ConditionsLegend } from "@/components/ConditionsLegend";
 import { ForecastStrip } from "@/components/ForecastStrip";
@@ -656,6 +657,8 @@ function Main() {
               </ViewscreenTooltip>
             </div>
             <OverlaysToolsPanel />
+
+            <RoutesPanel />
 
             <div className="flex flex-col gap-2">
               {/* ── Grouped sections: Map & Data + Conditions ──

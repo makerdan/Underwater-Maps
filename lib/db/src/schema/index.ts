@@ -9,3 +9,4 @@ export * from "./dataset-catalog.js";
 export * from "./user-catalog-saves.js";
 export * from "./trolling-preset-folders.js";
 export * from "./trolling-presets.js";
+export * from "./routes.js";

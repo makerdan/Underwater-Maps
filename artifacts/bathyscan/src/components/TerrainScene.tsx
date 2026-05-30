@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useAppState } from "@/lib/context";
 import { FlyControls } from "./FlyControls";
+import { FlyRouteAnimator } from "./FlyRouteAnimator";
 import { useSettingsStore } from "@/lib/settingsStore";
 
 const TerrainMesh = () => {
@@ -133,6 +134,7 @@ export const TerrainScene = () => {
         <Particles />
         <TerrainMesh />
         <FlyControls />
+        <FlyRouteAnimator />
       </Canvas>
     </div>
   );
