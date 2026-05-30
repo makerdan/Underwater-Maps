@@ -14,11 +14,16 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { renderWithProviders } from "./setup";
 import { DepthProfilePanel } from "@/components/DepthProfilePanel";
+import { RoutesPanel } from "@/components/RoutesPanel";
 
 // ── Shared mutable state ──────────────────────────────────────────────────────
 let isSignedIn = true;
 const invalidateQueriesSpy = vi.fn();
 const fetchSpy = vi.fn();
+
+type TerrainStub = { dataSource?: string; synthetic?: boolean } | null;
+let mockTerrain: TerrainStub = null;
+let mockDatasetId: string | null = "ds-1";
 
 // ── Profile fixtures ──────────────────────────────────────────────────────────
 const PATH_PROFILE = {
@@ -84,7 +89,19 @@ vi.mock("@/lib/clerkCompat", () => ({
 }));
 
 vi.mock("@/lib/context", () => ({
-  useAppState: () => ({ datasetId: "ds-1", terrain: null }),
+  useAppState: () => ({ datasetId: mockDatasetId, terrain: mockTerrain }),
+}));
+
+vi.mock("@/lib/panelCollapseStore", () => ({
+  usePanelCollapseStore: (sel: (s: { collapsed: Record<string, boolean>; toggle: () => void }) => unknown) =>
+    sel({ collapsed: {}, toggle: vi.fn() }),
+}));
+
+vi.mock("@/lib/flyRouteStore", () => ({
+  useFlyRouteStore: Object.assign(
+    (sel: (s: { active: boolean }) => unknown) => sel({ active: false }),
+    { getState: () => ({ startFly: vi.fn(), stopFly: vi.fn() }) },
+  ),
 }));
 
 vi.mock("@/lib/settingsStore", () => ({
@@ -117,6 +134,8 @@ vi.mock("@/components/help/HelpButton", () => ({
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: invalidateQueriesSpy }),
+  useQuery: () => ({ data: undefined, isLoading: false }),
+  useMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
@@ -134,6 +153,8 @@ beforeEach(() => {
   fetchSpy.mockClear();
   isSignedIn = true;
   activeProfile = PATH_PROFILE;
+  mockTerrain = null;
+  mockDatasetId = "ds-1";
 
   globalThis.fetch = fetchSpy;
 });
@@ -307,5 +328,64 @@ describe("DepthProfilePanel — save-as-route button — signed in", () => {
     });
 
     expect(invalidateQueriesSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ── RoutesPanel — synthetic terrain guard ─────────────────────────────────────
+
+describe("RoutesPanel — synthetic terrain guard", () => {
+  it("shows the simulated-data message when dataSource is 'synthetic' and hides the route list", () => {
+    isSignedIn = true;
+    mockDatasetId = "ds-real";
+    mockTerrain = { dataSource: "synthetic" };
+
+    renderWithProviders(<RoutesPanel />);
+
+    expect(screen.getByTestId("routes-panel-synthetic-msg")).toBeInTheDocument();
+    expect(screen.getByText(/routes are not available for simulated data/i)).toBeInTheDocument();
+    expect(screen.queryByTestId(/^route-entry-/)).not.toBeInTheDocument();
+  });
+
+  it("shows the simulated-data message when legacy synthetic flag is true", () => {
+    isSignedIn = true;
+    mockDatasetId = "ds-real";
+    mockTerrain = { synthetic: true };
+
+    renderWithProviders(<RoutesPanel />);
+
+    expect(screen.getByTestId("routes-panel-synthetic-msg")).toBeInTheDocument();
+    expect(screen.queryByTestId(/^route-entry-/)).not.toBeInTheDocument();
+  });
+
+  it("does NOT show the simulated-data message for a real dataset (dataSource = 'gebco')", () => {
+    isSignedIn = true;
+    mockDatasetId = "ds-real";
+    mockTerrain = { dataSource: "gebco" };
+
+    renderWithProviders(<RoutesPanel />);
+
+    expect(screen.queryByTestId("routes-panel-synthetic-msg")).not.toBeInTheDocument();
+  });
+
+  it("still shows sign-in message (not simulated-data message) for a signed-out user with synthetic terrain", () => {
+    isSignedIn = false;
+    mockDatasetId = "ds-real";
+    mockTerrain = { dataSource: "synthetic" };
+
+    renderWithProviders(<RoutesPanel />);
+
+    expect(screen.getByText(/sign in to save and view routes/i)).toBeInTheDocument();
+    expect(screen.queryByTestId("routes-panel-synthetic-msg")).not.toBeInTheDocument();
+  });
+
+  it("still shows 'load a dataset' message when datasetId is null regardless of terrain", () => {
+    isSignedIn = true;
+    mockDatasetId = null;
+    mockTerrain = { dataSource: "synthetic" };
+
+    renderWithProviders(<RoutesPanel />);
+
+    expect(screen.getByText(/load a dataset to view routes/i)).toBeInTheDocument();
+    expect(screen.queryByTestId("routes-panel-synthetic-msg")).not.toBeInTheDocument();
   });
 });

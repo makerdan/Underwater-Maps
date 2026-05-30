@@ -229,6 +229,10 @@ export const RoutesPanel: React.FC = () => {
             <div style={{ fontSize: 10, color: "#94a3b8" }}>
               Load a dataset to view routes.
             </div>
+          ) : (terrain?.dataSource === "synthetic" || terrain?.synthetic === true) ? (
+            <div data-testid="routes-panel-synthetic-msg" style={{ fontSize: 10, color: "#94a3b8" }}>
+              Routes are not available for simulated data. Load a real dataset to save and view routes.
+            </div>
           ) : isLoading ? (
             <div style={{ fontSize: 10, color: "#94a3b8" }}>Loading…</div>
           ) : routeList.length === 0 ? (
