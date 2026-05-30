@@ -155,4 +155,30 @@ describe("Settings page", () => {
     expect(useSettingsStore.getState().touchpadZoomSensitivity).toBe(1.0);
     expect(useSettingsStore.getState().pinchZoomSensitivity).toBe(1.0);
   });
+
+  it("Accessibility tab: Bright Daylight toggle is visible and toggleable", () => {
+    render(<Settings />);
+    fireEvent.click(screen.getByText("ACCESSIBILITY"));
+
+    const label = screen.getByText("Bright Daylight");
+    expect(label).toBeInTheDocument();
+
+    // The toggle row wraps label + switch; climb up to the row root.
+    const row = label.parentElement?.parentElement as HTMLElement;
+    const sw = within(row).getByRole("switch");
+
+    // Default is off.
+    expect(sw.getAttribute("aria-checked")).toBe("false");
+    expect(useSettingsStore.getState().brightDaylight).toBe(false);
+
+    // Toggle on.
+    fireEvent.click(sw);
+    expect(sw.getAttribute("aria-checked")).toBe("true");
+    expect(useSettingsStore.getState().brightDaylight).toBe(true);
+
+    // Toggle off again.
+    fireEvent.click(sw);
+    expect(sw.getAttribute("aria-checked")).toBe("false");
+    expect(useSettingsStore.getState().brightDaylight).toBe(false);
+  });
 });

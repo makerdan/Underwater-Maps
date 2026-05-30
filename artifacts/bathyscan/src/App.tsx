@@ -1419,8 +1419,10 @@ function ClerkProviderWithRoutes() {
  * Always-mounted effect that mirrors a few accessibility preferences from
  * settingsStore onto document.body as CSS classes so they apply immediately
  * across every route (Home, Settings, Sign-in, etc.) — not just inside Main().
+ *
+ * Exported so unit tests can mount the real component in isolation.
  */
-function AccessibilityClassesEffect() {
+export function AccessibilityClassesEffect() {
   const reducedMotion = useSettingsStore((st) => st.reducedMotion);
   const largeHudText = useSettingsStore((st) => st.largeHudText);
   const highContrastHud = useSettingsStore((st) => st.highContrastHud);

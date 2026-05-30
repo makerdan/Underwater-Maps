@@ -1234,3 +1234,23 @@ export function useAnySectionDirty(): boolean {
 export function getDataSnapshot(): Partial<SettingsState> {
   return snapshotData(useSettingsStore.getState());
 }
+
+/**
+ * Derives the effective depth colormap theme for the 3D terrain mesh.
+ *
+ * When Bright Daylight mode is active and the user has NOT explicitly chosen
+ * a colormap (colormapUserSet === false), grayscale is returned automatically
+ * because it provides the strongest depth contrast in direct sunlight.
+ * Once the user makes a manual choice (colormapUserSet === true), that choice
+ * is always honoured — even while Bright Daylight is on.
+ *
+ * Exported as a pure function so it can be tested independently of the
+ * Three.js renderer and React component lifecycle in TerrainMesh.
+ */
+export function deriveEffectiveColormapTheme(
+  brightDaylight: boolean,
+  colormapUserSet: boolean,
+  colormapTheme: ColormapTheme,
+): ColormapTheme {
+  return brightDaylight && !colormapUserSet ? "grayscale" : colormapTheme;
+}

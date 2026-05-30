@@ -9,7 +9,7 @@ import { useClassificationStore } from "@/lib/classificationStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useHighlightStore } from "@/lib/highlightStore";
 import { useHabitatStore } from "@/lib/habitatStore";
-import { useSettingsStore } from "@/lib/settingsStore";
+import { useSettingsStore, deriveEffectiveColormapTheme } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { getColormap } from "@/lib/colormap";
 
@@ -57,7 +57,7 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     // the strongest depth contrast in sunlight. If the user has explicitly
     // chosen a colormap (colormapUserSet === true) their choice is always
     // respected, no matter which theme they selected.
-    const effectiveColormapTheme = brightDaylight && !colormapUserSet ? "grayscale" : colormapTheme;
+    const effectiveColormapTheme = deriveEffectiveColormapTheme(brightDaylight, colormapUserSet, colormapTheme);
     const paintMode = useUiStore((s) => s.zonePaintMode);
 
     // Brush radius in grid cells. Scales gently with resolution so it feels

@@ -329,6 +329,47 @@ test.describe("Settings page", () => {
     await expect.poll(() => readPersisted("showMarkerLabels"), { timeout: 5_000 }).toBe(true);
   });
 
+  test("Accessibility tab: Bright Daylight toggle is visible and toggleable", async ({ page }) => {
+    await page.goto("/settings");
+    await page.waitForLoadState("networkidle");
+
+    await page.locator('button:has-text("ACCESSIBILITY")').first().click();
+    await expect(page.locator("text=◈ ACCESSIBILITY").first()).toBeVisible({ timeout: 5_000 });
+
+    // The Bright Daylight toggle row must be visible.
+    const row = page
+      .locator("div")
+      .filter({ has: page.locator('text="Bright Daylight"') })
+      .filter({ has: page.locator('[role="switch"]') })
+      .last();
+    const sw = row.locator('[role="switch"]').first();
+    await expect(sw).toBeVisible({ timeout: 5_000 });
+
+    // Default is off.
+    await expect(sw).toHaveAttribute("aria-checked", "false");
+
+    // Toggle on.
+    await sw.click();
+    await expect(sw).toHaveAttribute("aria-checked", "true");
+
+    // Verify the setting is persisted in localStorage.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const raw = window.localStorage.getItem("bathyscan:settings");
+            if (!raw) return null;
+            try { return JSON.parse(raw)?.state?.brightDaylight ?? null; } catch { return null; }
+          }),
+        { timeout: 5_000 },
+      )
+      .toBe(true);
+
+    // Toggle off again.
+    await sw.click();
+    await expect(sw).toHaveAttribute("aria-checked", "false");
+  });
+
   test("comma keyboard shortcut navigates to /settings from the main page", async ({ page }) => {
     await page.goto("/");
     await page.waitForLoadState("networkidle");
