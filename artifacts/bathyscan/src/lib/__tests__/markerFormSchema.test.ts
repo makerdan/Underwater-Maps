@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { markerLabelSchema, markerNotesSchema, markerFormSchema } from "../markerFormSchema";
+import { markerLabelSchema, markerNotesSchema, markerFormSchema, MARKER_NOTES_MAX } from "../markerFormSchema";
 
 describe("markerLabelSchema", () => {
   it("trims whitespace and accepts normal labels", () => {
@@ -33,9 +33,9 @@ describe("markerNotesSchema", () => {
     if (r.success) expect(r.data).toBe("");
   });
 
-  it("rejects notes longer than 500 chars after trimming", () => {
-    expect(markerNotesSchema.safeParse("a".repeat(501)).success).toBe(false);
-    expect(markerNotesSchema.safeParse("a".repeat(500)).success).toBe(true);
+  it("rejects notes longer than MARKER_NOTES_MAX chars after trimming", () => {
+    expect(markerNotesSchema.safeParse("a".repeat(MARKER_NOTES_MAX + 1)).success).toBe(false);
+    expect(markerNotesSchema.safeParse("a".repeat(MARKER_NOTES_MAX)).success).toBe(true);
   });
 
   it("rejects notes with control characters", () => {

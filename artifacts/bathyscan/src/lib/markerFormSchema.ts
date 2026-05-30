@@ -13,13 +13,15 @@ export const markerLabelSchema = z
       .regex(NO_CONTROL_CHARS, "Label contains invalid control characters"),
   );
 
+export const MARKER_NOTES_MAX = 280;
+
 export const markerNotesSchema = z
   .string()
   .transform((s) => s.trim())
   .pipe(
     z
       .string()
-      .max(500, "Notes must be 500 characters or fewer")
+      .max(MARKER_NOTES_MAX, `Notes must be ${MARKER_NOTES_MAX} characters or fewer`)
       .regex(NO_CONTROL_CHARS, "Notes contain invalid control characters"),
   );
 
