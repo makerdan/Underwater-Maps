@@ -25,6 +25,7 @@
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 import { pool } from "@workspace/db";
 import type { AuthenticatedRequest } from "./requireAuth.js";
+import { logger } from "../lib/logger.js";
 
 export type RateLimitKeyMode = "user" | "ip";
 
@@ -133,12 +134,15 @@ function selectBackend(): RateLimitBackend {
   return process.env["RATE_LIMIT_BACKEND"] === "memory" ? memoryBackend : pgBackend;
 }
 
+const FALLBACK_WARN_INTERVAL_MS = 60_000;
+let lastFallbackWarnAt = 0;
+
 /**
  * Wraps the Postgres backend with an in-memory fallback. Costly AI routes
  * must NOT silently bypass the limiter on a DB outage / missing table — that
  * re-exposes the paid API to abuse. Instead we degrade to per-process memory
- * limiting (still bounded, still per-user/IP) and log loudly so ops can fix
- * the underlying durable store.
+ * limiting (still bounded, still per-user/IP) and emit a throttled WARN once
+ * per minute so ops can see the degradation without flooding logs.
  */
 const fallbackBackend: RateLimitBackend = {
   async consume(key, windowMs, max) {
@@ -147,11 +151,17 @@ const fallbackBackend: RateLimitBackend = {
     try {
       return await primary.consume(key, windowMs, max);
     } catch (err) {
-      console.warn(
-        `[rate-limit] durable backend unavailable (${
-          (err as Error)?.message ?? "unknown"
-        }) — degrading to in-memory limiter`,
-      );
+      const now = Date.now();
+      if (now - lastFallbackWarnAt >= FALLBACK_WARN_INTERVAL_MS) {
+        lastFallbackWarnAt = now;
+        logger.warn(
+          {
+            code: "rate_limit_fallback_active",
+            err: (err as Error)?.message ?? "unknown",
+          },
+          "Rate limiter degraded to in-memory backend — durable Postgres store unavailable",
+        );
+      }
       return memoryBackend.consume(key, windowMs, max);
     }
   },

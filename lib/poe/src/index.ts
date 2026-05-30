@@ -9,3 +9,4 @@ export * from "./tools.js";
 export * from "./streaming.js";
 export * from "./retry.js";
 export * from "./cache.js";
+export * from "./circuitBreaker.js";

@@ -10,6 +10,8 @@ import { PoeCreditsError, PoeRateLimitError, PoeAuthError, ZoneParseError } from
 import { hashCacheKey, globalPoeCache } from "@workspace/poe";
 import { buildVisionInput } from "@workspace/poe";
 import { POE_MODELS } from "@workspace/poe";
+import { PoeCircuitBreaker } from "@workspace/poe";
+import { logger } from "../lib/logger.js";
 import { db } from "@workspace/db";
 import { poeUsageLogTable } from "@workspace/db/schema";
 import type { PoeToolSchema } from "@workspace/poe";
@@ -61,6 +63,22 @@ router.use(
     mode: "user",
   }),
 );
+
+// ---------------------------------------------------------------------------
+// Poe circuit breaker — opens after 5 consecutive failures, stays open for
+// 30 s, then half-opens to let one probe through. When open, classify routes
+// fall through immediately to heuristicClassifyByDepth. State transitions are
+// logged with distinct codes so they surface in dashboards.
+// ---------------------------------------------------------------------------
+
+const poeBreaker = new PoeCircuitBreaker({
+  failureThreshold: 5,
+  resetMs: 30_000,
+  logger: {
+    warn: (obj, msg) => logger.warn(obj, msg),
+    info: (obj, msg) => logger.info(obj, msg),
+  },
+});
 
 /** Per-route upstream timeouts (ms) — sized to the expected upstream work. */
 const POE_MODELS_TIMEOUT_MS = 10_000;
@@ -598,64 +616,75 @@ async function classifyOneTileAi(
   waterType: "saltwater" | "freshwater",
   datasetId: string,
 ): Promise<{ zones: string[]; usage: { input_tokens: number; output_tokens: number } }> {
-  const result = await withRetry(async () => {
-    const client = getPoeClient();
-    const input = buildVisionInput(
-      `Classify the seafloor/lake-bed zones in this depth map. Return exactly 1024 zone labels for the 32×32 grid.`,
-      gridBase64,
-    );
-
-    const response = await (client as unknown as {
-      responses: {
-        create: (
-          b: Record<string, unknown>,
-          opts?: { signal?: AbortSignal },
-        ) => Promise<{
-          id: string;
-          output_text: string;
-          usage?: { input_tokens?: number; output_tokens?: number };
-        }>;
-      };
-    }).responses.create(
-      {
-        model: POE_MODELS.CLASSIFY,
-        input,
-        instructions: buildClassifySystemPrompt(waterType),
-        output_format: {
-          type: "json_schema",
-          schema: buildClassifyZoneSchema(waterType),
-        },
-        max_output_tokens: 8192,
-        temperature: 0.1,
-        truncation: "auto",
-        metadata: { datasetId, waterType },
-      },
-      { signal: AbortSignal.timeout(POE_CLASSIFY_TIMEOUT_MS) },
-    );
-
-    return response;
-  }, 3);
-
-  if (!result.output_text || result.output_text.trim() === "") {
-    throw new ZoneParseError("content-filtered or empty response from Poe");
+  if (poeBreaker.isOpen()) {
+    throw new Error("poe_circuit_open");
   }
-
-  let parsed: { zones: string[] };
   try {
-    parsed = JSON.parse(result.output_text) as { zones: string[] };
-  } catch {
-    throw new ZoneParseError(
-      `Poe returned invalid JSON for zone classification: ${result.output_text.slice(0, 200)}`,
-    );
-  }
+    const result = await withRetry(async () => {
+      const client = getPoeClient();
+      const input = buildVisionInput(
+        `Classify the seafloor/lake-bed zones in this depth map. Return exactly 1024 zone labels for the 32×32 grid.`,
+        gridBase64,
+      );
 
-  return {
-    zones: parsed.zones,
-    usage: {
-      input_tokens: result.usage?.input_tokens ?? 0,
-      output_tokens: result.usage?.output_tokens ?? 0,
-    },
-  };
+      const response = await (client as unknown as {
+        responses: {
+          create: (
+            b: Record<string, unknown>,
+            opts?: { signal?: AbortSignal },
+          ) => Promise<{
+            id: string;
+            output_text: string;
+            usage?: { input_tokens?: number; output_tokens?: number };
+          }>;
+        };
+      }).responses.create(
+        {
+          model: POE_MODELS.CLASSIFY,
+          input,
+          instructions: buildClassifySystemPrompt(waterType),
+          output_format: {
+            type: "json_schema",
+            schema: buildClassifyZoneSchema(waterType),
+          },
+          max_output_tokens: 8192,
+          temperature: 0.1,
+          truncation: "auto",
+          metadata: { datasetId, waterType },
+        },
+        { signal: AbortSignal.timeout(POE_CLASSIFY_TIMEOUT_MS) },
+      );
+
+      return response;
+    }, 3);
+
+    if (!result.output_text || result.output_text.trim() === "") {
+      throw new ZoneParseError("content-filtered or empty response from Poe");
+    }
+
+    let parsed: { zones: string[] };
+    try {
+      parsed = JSON.parse(result.output_text) as { zones: string[] };
+    } catch {
+      throw new ZoneParseError(
+        `Poe returned invalid JSON for zone classification: ${result.output_text.slice(0, 200)}`,
+      );
+    }
+
+    poeBreaker.recordSuccess();
+    return {
+      zones: parsed.zones,
+      usage: {
+        input_tokens: result.usage?.input_tokens ?? 0,
+        output_tokens: result.usage?.output_tokens ?? 0,
+      },
+    };
+  } catch (err) {
+    if ((err as Error)?.message !== "poe_circuit_open") {
+      poeBreaker.recordFailure();
+    }
+    throw err;
+  }
 }
 
 /**
@@ -945,6 +974,15 @@ router.post("/classify", async (req, res) => {
 
   // ── Single-tile path (substrate-grounded) ────────────────────────────
   try {
+    // Circuit breaker — skip the Poe call immediately when the breaker is
+    // open (5 consecutive failures within the last 30 s). The error falls
+    // into the catch block below and the heuristic takes over if depths32
+    // was supplied. On half-open one probe is allowed through so the breaker
+    // can self-heal once Poe recovers.
+    if (poeBreaker.isOpen()) {
+      throw Object.assign(new Error("poe_circuit_open"), { circuitOpen: true });
+    }
+
     const result = await withRetry(async () => {
       const client = getPoeClient();
       const promptText = substratePrompt
@@ -1030,6 +1068,7 @@ router.post("/classify", async (req, res) => {
       result.usage?.output_tokens ?? 0,
     );
 
+    poeBreaker.recordSuccess();
     res.json({
       zones,
       fromCache: false,
@@ -1042,6 +1081,12 @@ router.post("/classify", async (req, res) => {
       tilesHeuristic: 0,
     });
   } catch (err) {
+    // Record Poe failures so the circuit breaker can track consecutive errors.
+    // Circuit-open errors are self-inflicted (we threw them above) — don't
+    // count those or the breaker would never close.
+    if (!(err as { circuitOpen?: boolean }).circuitOpen) {
+      poeBreaker.recordFailure();
+    }
     // Depth-based fallback — if the client supplied a 1024-length depth grid
     // we always return *some* overlay so uploads aren't left blank when the
     // AI is unavailable (missing key, rate limit, network error, malformed
