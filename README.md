@@ -2,273 +2,571 @@
 
 **A 3D seafloor and lake-bed exploration app for anglers, navigators, and marine scientists.**
 
-BathyScan turns raw bathymetry (seafloor depth data) into an interactive 3D world you can fly through, drop markers in, plan drifts on, and overlay with live tides, currents, wind, water temperature, and habitat data. It's built for places like Southeast Alaska where the right depth, the right tide, and the right structure decide whether you catch fish — or run aground.
+BathyScan turns raw bathymetry (seafloor depth data) into an interactive 3D world you can navigate, annotate, and overlay with live environmental data — tides, currents, wind, temperature, and habitat zones. It is built for places like Southeast Alaska where the right depth, the right tide, and the right structure decide whether you catch fish or run aground.
 
 ---
 
 ## Table of Contents
 
-- [Overview](#overview)
-- [Features](#features)
-- [Architecture](#architecture)
-- [Tech Stack](#tech-stack)
-- [Repository Layout](#repository-layout)
-- [Getting Started on Replit](#getting-started-on-replit)
-- [Environment Variables](#environment-variables)
-- [Development Workflows](#development-workflows)
-- [AI Assistant](#ai-assistant)
-- [Offline / PWA](#offline--pwa)
-- [Acknowledgements & Data Sources](#acknowledgements--data-sources)
+1. [Product Overview](#1-product-overview)
+2. [3D Terrain & Camera](#2-3d-terrain--camera)
+3. [HUD Elements](#3-hud-elements)
+4. [Sidebar Panels](#4-sidebar-panels)
+5. [Overlay Layers](#5-overlay-layers)
+6. [Planning Tools](#6-planning-tools)
+7. [Context Menu](#7-context-menu)
+8. [Marker System](#8-marker-system)
+9. [Overview Map](#9-overview-map)
+10. [Supported Upload Formats](#10-supported-upload-formats)
+11. [Data Processing Pipeline](#11-data-processing-pipeline)
+12. [Caching Strategy](#12-caching-strategy)
+13. [AI Assistant](#13-ai-assistant)
+14. [Authentication](#14-authentication)
+15. [Full API Route Surface](#15-full-api-route-surface)
+16. [Progressive Web App (Offline)](#16-progressive-web-app-offline)
+17. [Tech Stack](#17-tech-stack)
+18. [Repository Layout](#18-repository-layout)
+19. [Getting Started on Replit](#19-getting-started-on-replit)
+20. [Environment Variables](#20-environment-variables)
+21. [Development Workflows](#21-development-workflows)
+22. [Key Architectural Decisions](#22-key-architectural-decisions)
+23. [Data Sources & Acknowledgements](#23-data-sources--acknowledgements)
 
 ---
 
-## Overview
+## 1. Product Overview
 
-BathyScan loads a bathymetric dataset (a depth grid for a named area like Thorne Bay) and renders it as a navigable 3D terrain in the browser. On top of that terrain you can:
+BathyScan loads a bathymetric dataset for a named area (e.g. Thorne Bay, SE Alaska), renders it as a navigable 3D terrain in the browser, and lets users layer on live environmental data, personal annotations, and planning tools. It targets anglers, navigators, and marine scientists who need depth, habitat, and conditions in a single, offline-capable interface.
 
-- Drop and label personal markers (fishing spots, hazards, dive sites).
-- Plan a drift or trolling course and watch how wind + tidal current will push the boat over the next several hours.
-- Toggle live overlays for wind, tidal currents, surface temperature, and habitat zones (Essential Fish Habitat).
-- Ask the built-in AI assistant questions about what you're looking at (e.g. "where are the deepest holes near this marker?").
+The app supports two **environment modes**:
+- **Saltwater** — full overlay suite including tides, currents, Essential Fish Habitat (EFH), and ShoreZone substrate.
+- **Freshwater** — lake and river datasets; tide and current overlays are hidden; habitat layer adapts accordingly.
 
-It is delivered as a single Progressive Web App that also works offline once you've loaded a region.
+Preset datasets are sourced from NOAA NCEI BAG mosaics and the GEBCO global grid (used as a fallback). Signed-in users can upload their own terrain.
 
-## Features
+---
 
-**Terrain & navigation**
-- 3D bathymetric terrain rendered with React Three Fiber / Three.js.
-- Free-fly camera, virtual joystick (mobile), keyboard shortcuts, and minimap.
-- Depth scale bar, depth legend, and selectable depth colour palettes (Default, High-Contrast, Warm).
-- Optional smoothed vs. raw bathymetry view, with a "raw bathymetry" badge when smoothing is off.
-- Underwater caustics (toggleable for performance).
+## 2. 3D Terrain & Camera
 
-**Datasets**
-- Built-in presets (e.g. Thorne Bay, SE Alaska coverage) sourced from NCEI BAG mosaics and GEBCO, with a synthetic fallback when remote tiles are unavailable.
-- Upload your own custom terrain dataset (signed-in users).
-- Organise saved datasets into folders, with drag-and-drop, recursive delete with progress feedback, and a catalog of shareable presets.
-- Overview map with a 2D top-down view, marker layer, and right-click context menu.
+The 3D scene is built with React Three Fiber / Three.js. The terrain mesh is generated server-side from the active dataset and streamed to the client as a typed grid.
 
-**Markers, trails & drift planning**
-- Place, edit, delete, and detail-view markers; validated input (Zod) with length and control-character checks.
-- Record a GPS trail while you move, save trails per user, and replay them.
-- Drift planner: pick a launch point and watch a 24-hour trajectory under live wind + tidal current, with timeline scrubbing and per-hour speed/heading breakdown.
-- Trolling mode: simple heading-and-speed, or multi-waypoint circuits with on-water force arrows showing boat propulsion vs. drift contribution.
-- Save and reload favourite trolling presets.
+- **Free-fly camera** controlled by keyboard, mouse, and touch input.
+- **Virtual joystick** for mobile and tablet navigation.
+- **Depth colour palettes**: Default, High-Contrast, Warm — selectable in settings.
+- **Terrain smoothing toggle**: disable to view the raw sounder grid; a "Raw Bathymetry" badge appears when smoothing is off.
+- **Underwater caustics**: optional GLSL shader (controlled by `VITE_ENABLE_CAUSTICS`; toggleable per-session for performance).
+- **Progressive loading**: a 64×64 low-resolution overview grid loads instantly; the full-resolution terrain follows.
 
-**Live conditions overlays**
-- **Tides:** NOAA tide predictions for the nearest heights station, scrubbing through high/low events.
-- **Currents:** NOAA tidal currents predictions for the nearest currents station, with cached peak speeds.
-- **Wind:** surface wind direction and speed.
-- **Surface temperature:** live sea-surface temperature for the marker's coordinates.
-- Each overlay can be styled independently as **arrows** or **particles**; particles bend around terrain using the local bathymetry gradient.
+---
 
-**Habitat & substrate**
-- Essential Fish Habitat zones overlaid on the map and 3D scene.
-- Alaska ShoreZone substrate polygons (where available) with credit display.
-- Per-dataset metadata flags so the UI only offers overlays that actually have data.
+## 3. HUD Elements
 
-**Personal account**
-- Sign in with Clerk to sync settings, markers, trails, custom datasets, and trolling presets across devices.
-- Per-section settings reset, dirty-state tracking, and import/export of settings.
+The heads-up display (`HUD.tsx`) renders transparent overlays directly on the viewscreen at all times.
 
-**AI assistant**
-- Ask natural-language questions about the current view, markers, depth profiles, and conditions.
-- Powered by the Poe AI proxy with optional OpenAI integration.
+| Element | Description |
+|---|---|
+| **Crosshair Reticle** | 40×40 px centre target showing Lon/Lat and depth (▼) at the camera focus. Shortcut hint for the Action Menu (default `Q`). |
+| **Heading Indicator** | Top-left panel: current camera yaw in degrees (e.g. `HDG 045°`). |
+| **Location Badges** | Contextual panels for GPS position, dataset centre, or intertidal hotspot name. |
+| **Offline Badge** | Red ● OFFLINE indicator with a "cached data" lightning bolt when the network is unavailable. |
+| **Simulated Data Warning** | Amber ⚠ SIMULATED DATA when real bathymetry sources are unreachable and depths are procedurally generated. |
+| **Raw Bathymetry Badge** | Visible when terrain smoothing is disabled. |
+| **Follow Me Toggle** | Locks the camera to the device's live GPS position. |
+| **Dive to GPS** | Jumps the camera instantly to the current GPS coordinates. |
+| **Share Button** | Copies a deep-link URL for the current view to the clipboard. |
+| **Trail Recorder Controls** | Integrated start / stop / save buttons for live GPS breadcrumb trails. |
+| **Depth Scale Bar** | Visual indicator of the current zoom level's vertical scale. |
+| **Measurement Banner** | Displays the straight-line distance while the ruler tool is active. |
 
-**Quality-of-life**
-- PWA install + offline support for previously loaded regions.
-- Keyboard shortcuts, accessible Radix UI components, dark mode by default.
-- Depth profile chart with hover-to-highlight in the 3D scene and CSV/image export.
+---
 
-## Architecture
+## 4. Sidebar Panels
 
-BathyScan is a pnpm monorepo with three deployable artifacts and several shared libraries.
+Panels are collapsible and managed by `uiStore.ts` and `panelCollapseStore.ts`. Most panels are accessible via the icon rail on the left edge of the screen.
 
-```
-   ┌────────────────────────┐         ┌─────────────────────────┐
-   │  artifacts/bathyscan   │  HTTP   │  artifacts/api-server   │
-   │  React + Vite + R3F    │ ──────► │  Express 5 (port 5000)  │
-   │  PWA / Service Worker  │         │  Clerk auth middleware  │
-   └─────────┬──────────────┘         └─────────┬───────────────┘
-             │                                  │
-             │ Clerk SSO                        │ Drizzle ORM
-             ▼                                  ▼
-       ┌───────────┐                     ┌──────────────┐
-       │  Clerk    │                     │  PostgreSQL  │
-       └───────────┘                     └──────────────┘
-                                                │
-                              ┌─────────────────┴──────────────────┐
-                              ▼                                    ▼
-                    NOAA tides & currents,                   Poe AI / OpenAI
-                    NCEI BAG, GEBCO,                         (AI assistant)
-                    Essential Fish Habitat,
-                    ShoreZone, SST feeds
-```
+| Panel | Purpose |
+|---|---|
+| **Overlays & Tools** | Central switchboard for toggling Substrate, Wind, Tide, Current, and Weather Station overlays. |
+| **Dataset / My Library** | Manage saved datasets and preset regions. Supports folders, drag-and-drop reordering, recursive folder delete with progress feedback, and a loading dial for active downloads. |
+| **Find Data** | Global search of the NOAA NCEI bathymetry catalog by region name or species (intertidal hotspots). A rubber-band bbox tool on the overview map triggers catalog queries. |
+| **Tide** | NOAA tide predictions for the nearest heights station: full high/low schedule, a time scrubber for past and future predictions, and Slack Jump buttons to jump to each tide event. |
+| **Weather** | Wind speed/direction, tidal vectors, and wave height for the Drift Planner. Also hosts Trolling Presets and their folder management. |
+| **Habitat (EFH)** | Lists Essential Fish Habitat (EFH) species detected in the current view with colour-coded toggles. |
+| **Query ("Ask the Ocean")** | Natural-language LLM interface backed by `/api/query` (OpenAI tool-calling) or `/api/poe/query`. |
+| **Depth Profile** | Vertical chart of temperature vs. depth (thermocline), triggered by clicking the on-screen depth readout. Supports CSV and image export. |
+| **Routes** | Saved camera fly-through paths with playback and management controls. |
 
-**API contract is the single source of truth.** `lib/api-spec/openapi.yaml` defines every HTTP endpoint. Orval generates:
-- `@workspace/api-client-react` — typed React Query hooks the frontend consumes.
-- `@workspace/api-zod` — Zod schemas the server uses to validate requests and responses.
+---
 
-This means any backend route change starts in the OpenAPI spec, the codegen is rerun, and both client and server stay in lockstep.
+## 5. Overlay Layers
 
-**The third artifact, `mockup-sandbox`**, is a separate Vite dev server used for prototyping individual UI components on the workspace Canvas. It is not part of the deployed product.
+### Conditions Overlays (rendered in 3D)
 
-## Tech Stack
+All vector overlays can be styled as **arrows** or **particles**. Particle overlays bend around terrain using the local bathymetry gradient for a physically plausible appearance.
 
-**Frontend (`artifacts/bathyscan`)**
-- React 19, Vite 7, TypeScript 5.9
-- Three.js 0.184, @react-three/fiber, @react-three/drei
-- TanStack React Query (server state)
-- Zustand (client state, with localStorage persistence)
-- Tailwind CSS v4 + Radix UI primitives (shadcn-style components)
-- React Hook Form + Zod validation
-- Framer Motion, Recharts, lucide-react
-- Clerk (`@clerk/react`) for authentication
-- `vite-plugin-pwa` + Workbox for offline support
-- idb-keyval for IndexedDB caching
-- dnd-kit for drag-and-drop in the dataset library
+| Overlay | Data Source |
+|---|---|
+| Tidal currents | NOAA CO-OPS currents station nearest to the active dataset |
+| Wind | NOAA ASOS/AWOS and RAWS weather stations |
+| Surface temperature | NOAA/AOOS SST sensors |
 
-**API server (`artifacts/api-server`)**
-- Node.js 24, Express 5, TypeScript
-- Bundled with esbuild via `build.mjs`
-- Drizzle ORM on PostgreSQL
-- Clerk Express middleware + Clerk proxy for SSO
-- Pino structured logging
-- Multer for dataset uploads
-- Supertest + Vitest for route tests
+### Habitat & Substrate (rendered on the terrain surface)
 
-**Shared libraries (`lib/`)**
-- `api-spec` — OpenAPI 3.1 spec and Orval codegen pipeline.
-- `api-client-react` — generated React Query hooks (TS project reference, emits `dist/*.d.ts`).
-- `api-zod` — generated Zod schemas.
-- `db` — Drizzle schema, migration tooling, and DB client (`drizzle-kit push`).
-- `poe` — Poe AI client wrapper.
-- `integrations/openai_ai_integrations` — OpenAI AI integration helpers (server + React).
+| Overlay | Data Source |
+|---|---|
+| Essential Fish Habitat (EFH) | NOAA EFH zone polygons (`/api/efh`) |
+| ShoreZone substrate | Alaska ShoreZone sediment-type polygons (`/api/substrate/:id`); attribution shown in-app |
+| AI substrate zones | Server-side heuristic + Poe AI classification (`/api/poe/classify`, `/api/datasets/:id/zones`) |
 
-**Tooling**
-- pnpm workspaces, Node.js 24
-- ESLint, Prettier
-- Vitest (unit/integration), Playwright (e2e)
+### Planning / Classification Overlays
 
-## Repository Layout
+| Overlay | Notes |
+|---|---|
+| Intertidal Hotspots | Named locations with species and habitat metadata; shown on the overview map and the Habitat panel. |
+| Zone Paint Mode | Manually classify seabed regions by dragging colour-coded zones directly onto the 3D scene. |
+
+---
+
+## 6. Planning Tools
+
+### Drift Planner
+Select a launch point and the planner calculates where a drifting vessel will travel over the next 24 hours given current wind speed/direction and tidal current vectors. Output includes an animated trajectory on the 3D scene, per-hour speed and heading breakdown, and a timeline scrubber.
+
+### Trolling Mode
+Plot a simple heading + speed or a multi-waypoint circuit. On-water force arrows show boat propulsion vs. drift contribution at each waypoint. Users can save and reload named **Trolling Presets**, which are synced to the server per user.
+
+### Depth Profiling
+Click any point on the terrain or along a saved route to generate a vertical depth-vs-distance profile chart in the Depth Profile panel. Hover over the chart to highlight the corresponding point in the 3D scene.
+
+### Trail Recording
+Record a live GPS breadcrumb trail while moving (boat, kayak, shore walk). Trails are saved per user, displayed as a polyline on both the 3D scene and the overview map, and can be replayed or exported.
+
+---
+
+## 7. Context Menu
+
+Right-click (desktop) or long-press (mobile) opens a context menu with:
+- Drop a marker at the tapped point.
+- Start a route from here.
+- Measure distance to here (activates ruler tool).
+- Other context-sensitive actions depending on what is under the pointer (existing marker, route waypoint, substrate segment).
+
+---
+
+## 8. Marker System
+
+Markers are stored per dataset per user. Features include:
+- Place, label, edit, and delete markers.
+- Input validated with Zod (max length, no control characters).
+- Marker Detail Card shows depth, coordinates, substrate type (if available), and tidal conditions at placement time.
+- Markers appear on both the 3D scene and the 2D overview map.
+
+---
+
+## 9. Overview Map
+
+The always-visible 2D top-down canvas overlay (`OverviewMap.tsx`) mirrors the 3D scene and adds:
+- Heatmapped bathymetry with contour lines.
+- Marker, route, and GPS trail layers.
+- Substrate legend and Essential Fish Habitat (EFH) legend.
+- NOAA ASOS/AWOS weather station pins and RAWS land-weather station pins.
+- Intertidal Hotspot pins.
+- **Rubber-band selection tool**: draw a bounding box to trigger a catalog search or download a terrain tile.
+- Right-click / long-press context menu (same actions as the 3D scene).
+
+---
+
+## 10. Supported Upload Formats
+
+| Format | Extension(s) | Notes |
+|---|---|---|
+| LAS point cloud | `.las` | Binary point cloud; direct WASM parse |
+| LAZ compressed point cloud | `.laz` | `laz-perf` WASM decompressor; WASM heap is re-read per point to guard against memory growth |
+| GeoTIFF raster | `.tif`, `.tiff` | Geographic raster; sub-sampled at a 2 M point cap |
+| NetCDF grid | `.nc` | Gridded data; depth/elevation variable aliases: `bathy`, `topo`, `elevation`, etc. |
+| BAG (Bathymetric Attributed Grid) | `.bag` | HDF5-based format via `h5wasm` WASM |
+| Depth grid (delimited text) | `.csv`, `.xyz`, `.txt` | Parsed by `parseXyzCsv`; space-, comma-, or tab-separated |
+| GPX track log | `.gpx` | `<ele>` (and variant depth tags) extracted from track points |
+| NMEA depth-sounder log | `.nmea` | NMEA-0183 position + depth sentences |
+| KML waypoints | `.kml` | Point geometry extracted |
+| Gzip-compressed archive | `.gz` | Any of the above wrapped in gzip; stream-decompressed with a 200 MB safety cap |
+
+---
+
+## 11. Data Processing Pipeline
+
+Uploads flow through one of three paths depending on file size:
+
+1. **Direct upload (≤ 50 MB)** — `POST /api/datasets/upload` accepts the full file via Multer and queues it for parsing.
+
+2. **Chunked upload (> 50 MB)** — clients slice the file into 5 MB segments:
+   - `POST /api/datasets/upload/chunk` — receives one slice at a time; slices are written to `bathyscan-chunks/` on disk.
+   - `POST /api/datasets/upload/chunk/finalize` — enqueues a background job that streams all chunks into a single assembled file.
+
+3. **Direct-to-cloud (> 50 MB alternative)** — `POST /api/datasets/upload/request-gcs-url` returns a signed Google Cloud Storage URL. The client uploads directly to GCS; the server polls for completion via `GET /api/datasets/upload/gcs-job-status`.
+
+**After assembly:**
+- `.gz` files are stream-decompressed with a 200 MB cap.
+- CPU-intensive parsing (point-cloud decompression, raster sub-sampling, grid generation) is delegated to a **worker thread** (`parseWorker.ts`) to keep the Node.js event loop responsive.
+- Large raster files (GeoTIFF, NetCDF) are sub-sampled to a maximum of 2,000,000 grid points.
+- On server startup, `recoverStaleUploadJobs` marks any jobs interrupted by a crash as `"error"` so users are prompted to re-upload.
+
+---
+
+## 12. Caching Strategy
+
+BathyScan uses a layered caching approach to balance freshness, performance, and third-party API rate limits.
+
+| Layer | Mechanism | What is cached |
+|---|---|---|
+| **In-memory** (`Map`) | Module-level caches in `tidal.ts`, `ncei.ts`, `poe.ts` | Tide predictions, NCEI search results, Poe responses |
+| **Database** | `weather_station_cache`, `raws_observation_cache` tables | NOAA station metadata and RAWS observations; rows older than 24 h are pruned |
+| **Background refresher** | `weatherCacheRefresher.ts` (every 30 min) | Proactively re-fetches rows staler than 15 min before the 1-hour fallback fires |
+| **GCS/bucket monitor** | `bucketMonitor.ts` | GCS upload ACL state and dataset materialization status |
+| **Cache registry** | `cacheRegistry.ts` | Central handle for clearing all module caches during tests |
+| **Service worker** | `sw.ts` (Workbox, frontend) | Static app shell; API responses for previously visited regions |
+| **IndexedDB** | `idb-keyval` (frontend) | GPS trails; custom-uploaded dataset blobs for offline access |
+
+---
+
+## 13. AI Assistant
+
+Two AI backends are available and can be used independently or together.
+
+### Poe AI (`/api/poe/*`, `@workspace/poe`)
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/poe/classify` | Substrate zone classification from a depth grid |
+| `POST /api/poe/query` | General natural-language questions about the current scene |
+| `POST /api/poe/describe` | Narrative description of the bathymetric scene |
+| `POST /api/poe/help` | AI-driven help and documentation answers |
+| `POST /api/poe/upscale` | AI-assisted super-resolution of a substrate heatmap |
+| `GET /api/poe/models` | List available Poe model identifiers |
+
+### OpenAI (`/api/query`, `lib/integrations/openai_ai_integrations`)
+
+- Tool-calling endpoint that powers the **"Ask the Ocean"** Query Panel.
+- The model can call defined tools (depth lookup, marker search, conditions fetch) to ground answers in live data.
+
+Both backends use structured response validation. Classification errors surface as console warnings rather than crashing the UI.
+
+---
+
+## 14. Authentication
+
+Authentication is provided by **Clerk** across all surfaces.
+
+- **Frontend** (`artifacts/bathyscan`): `@clerk/react` is initialised with `VITE_CLERK_PUBLISHABLE_KEY`. The Clerk JS bundle is proxied through `${BASE_URL}clerk` to avoid ad-blocker interference.
+- **API server** (`artifacts/api-server`): Clerk Express middleware validates session tokens on all protected routes using `CLERK_SECRET_KEY`.
+- **Dev / e2e bypass**: `VITE_DEV_AUTH_BYPASS=1` skips Clerk in headless Playwright runs. This must **never** be set in production.
+
+Signed-in users get: synced settings, personal markers and trails, custom datasets, trolling presets, and catalog saves — all persisted per `userId` in PostgreSQL.
+
+---
+
+## 15. Full API Route Surface
+
+All routes are served under the `/api` prefix by the Express 5 server.
+
+### Core Datasets
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/datasets` | List preset datasets (filterable by `waterType`) |
+| GET | `/datasets/:id/terrain` | Full-resolution terrain grid |
+| GET | `/datasets/:id/preview` | Preflight metadata (source, bbox) |
+| GET | `/datasets/:id/overview` | 64×64 low-resolution overview grid |
+| GET | `/datasets/:id/zones` | Substrate/habitat zones (AI or heuristic) |
+| POST | `/datasets/upload` | Direct upload ≤ 50 MB |
+| POST | `/datasets/upload/chunk` | Receive a 5 MB chunk |
+| POST | `/datasets/upload/chunk/finalize` | Enqueue background reassembly + parse job |
+| GET | `/datasets/upload/jobs/:jobId` | Poll chunked-upload job status |
+| POST | `/datasets/upload/request-gcs-url` | Presigned URL for direct-to-GCS upload |
+| GET | `/datasets/upload/gcs-job-status` | Poll GCS upload completion |
+
+### User Datasets & Folders
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/user/datasets` | List the authenticated user's custom datasets |
+| PATCH | `/user/datasets/:id/rename` | Rename a dataset |
+| PATCH | `/user/datasets/:id/move` | Move to a different folder |
+| POST | `/user/datasets/:id/duplicate` | Duplicate a dataset |
+| DELETE | `/user/datasets/:id` | Delete a dataset and its associated data |
+| GET | `/user/folders` | List dataset folders |
+| POST | `/user/folders` | Create a folder |
+| DELETE | `/user/folders/:id` | Delete a folder (datasets moved to root) |
+
+### Catalog & Search
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/datasets/catalog` | Global preset catalog list |
+| GET | `/datasets/catalog/search` | Search catalog by name or description |
+| POST | `/datasets/bbox-query` | Find datasets intersecting a bounding box |
+| POST | `/datasets/catalog/:id/save` | Save a catalog dataset to the user's library |
+| GET | `/datasets/my-saves` | User's saved catalog datasets + materialization status |
+| DELETE | `/datasets/my-saves/:id` | Remove a saved catalog dataset |
+| GET | `/ncei/search` | Proxy search to the NOAA NCEI bathymetry API |
+| POST | `/ncei/save` | Import an NCEI dataset into the user's library |
+
+### Markers, Routes & Trails
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/markers` | List markers for a dataset |
+| POST | `/markers` | Create a marker |
+| PATCH | `/markers/:id` | Update a marker's label, position, or metadata |
+| DELETE | `/markers/:id` | Delete a marker |
+| GET | `/routes` | List saved navigation routes |
+| POST | `/routes` | Save a new route with waypoints |
+| PATCH | `/routes/:id` | Update route metadata |
+| DELETE | `/routes/:id` | Delete a route |
+| GET | `/trails` | List recorded GPS trails |
+| POST | `/trails` | Upload a GPS trail |
+| DELETE | `/trails/:id` | Delete a trail |
+
+### Trolling Presets
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/trolling-presets` | List saved trolling presets |
+| POST | `/trolling-presets` | Save a new preset |
+| PATCH | `/trolling-presets/:id` | Update a preset |
+| DELETE | `/trolling-presets/:id` | Delete a preset |
+
+### Environment & Conditions
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/tidal` | NOAA tidal heights station nearest to a location |
+| GET | `/tidal/schedule` | High/low tide prediction schedule for a station |
+| GET | `/weather-stations` | NOAA ASOS/AWOS stations near a location |
+| GET | `/raws-stations` | RAWS land weather stations near a location |
+| GET | `/raws-weather` | Current observations from a RAWS station |
+| GET | `/surface-conditions` | Real-time water temperature and conditions |
+| GET | `/water-temperature` | NOAA/AOOS SST sensor data |
+| GET | `/efh` | Essential Fish Habitat (EFH) zones for a bounding box |
+| GET | `/substrate/:id` | Authoritative substrate data (USSeabed) |
+
+### AI Assistant
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/poe/models` | List available Poe AI model identifiers |
+| POST | `/poe/classify` | Substrate zone classification |
+| POST | `/poe/query` | General natural-language query |
+| POST | `/poe/describe` | Scene description generation |
+| POST | `/poe/help` | AI-driven help answers |
+| POST | `/poe/upscale` | Substrate heatmap super-resolution |
+| POST | `/query` | OpenAI tool-calling ("Ask the Ocean") |
+
+### User, Settings & System
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/settings` | Fetch user application settings |
+| PUT | `/settings` | Update settings (units, theme, shortcuts) |
+| GET | `/me/export` | Export all user data as JSON |
+| DELETE | `/me` | Delete account and all data |
+| GET | `/healthz` | Shallow liveness probe |
+| GET | `/healthz/deep` | Deep probe (DB + Poe + AOOS connectivity) |
+| GET | `/admin/bucket-monitor` | (Admin only) GCS dataset processing status |
+| GET | `/github/repos` | List GitHub repos for data sync |
+| PUT | `/github/repos/.../contents` | Create or update a file in a GitHub repo |
+
+---
+
+## 16. Progressive Web App (Offline)
+
+BathyScan is a full Progressive Web App built with `vite-plugin-pwa` and Workbox.
+
+- The static app shell and API responses for previously visited regions are precached and available without a network connection.
+- The app can be installed to the home screen on iOS and Android.
+- Service-worker precache + runtime route caching cover the shell and recently loaded terrain/overlay data.
+- `idb-keyval` (IndexedDB) stores GPS trails and custom-uploaded dataset blobs locally so they survive offline sessions.
+
+---
+
+## 17. Tech Stack
+
+### Frontend (`artifacts/bathyscan`)
+
+| Library / Tool | Role |
+|---|---|
+| React 19, Vite 7, TypeScript 5.9 | UI framework, bundler, type system |
+| Three.js 0.184, @react-three/fiber, @react-three/drei | 3D rendering and scene management |
+| TanStack React Query | Server state (API data fetching + caching) |
+| Zustand (v5) | Client state with localStorage persistence |
+| Tailwind CSS v4 + Radix UI | Styling and accessible component primitives (shadcn-style) |
+| React Hook Form + Zod | Form state management and input validation |
+| Framer Motion | Animations and transitions |
+| Recharts | Depth profile and analytics charts |
+| lucide-react | Icon set |
+| `@clerk/react` | Authentication |
+| `vite-plugin-pwa` + Workbox | PWA manifest and service worker |
+| `idb-keyval` | IndexedDB storage for large offline assets |
+| `dnd-kit` | Drag-and-drop in the dataset library |
+
+### API Server (`artifacts/api-server`)
+
+| Library / Tool | Role |
+|---|---|
+| Node.js 24, Express 5, TypeScript | Runtime, HTTP server, type system |
+| esbuild (`build.mjs`) | CJS bundle for production |
+| Drizzle ORM | PostgreSQL schema + query builder |
+| Clerk Express middleware | Session token verification |
+| Pino | Structured logging |
+| Multer | Multipart file upload handling |
+| Vitest + Supertest | Route-level integration tests |
+
+### Shared Libraries (`lib/`)
+
+| Package | Contents |
+|---|---|
+| `api-spec` | `openapi.yaml` — the single API contract + Orval codegen pipeline |
+| `api-client-react` | Generated typed React Query hooks (TS project reference, emits `dist/*.d.ts`) |
+| `api-zod` | Generated Zod schemas for server-side request/response validation |
+| `db` | Drizzle schema, migration tooling, and the shared DB client |
+| `poe` | Poe AI proxy client (`@workspace/poe`) |
+| `integrations/openai_ai_integrations` | OpenAI integration helpers for server and React |
+
+### Tooling
+
+| Tool | Purpose |
+|---|---|
+| pnpm workspaces | Monorepo dependency management |
+| ESLint (error on `react-hooks/exhaustive-deps`) | Lint gate |
+| Prettier | Code formatting |
+| Vitest | Unit and integration test runner |
+| Playwright | End-to-end test runner |
+
+---
+
+## 18. Repository Layout
 
 ```
 .
 ├── artifacts/
-│   ├── bathyscan/        # The web app (React + Vite + R3F PWA)
-│   ├── api-server/       # Express 5 API on port 5000
-│   └── mockup-sandbox/   # Canvas component preview server (not deployed)
+│   ├── bathyscan/           # The web app (React + Vite + R3F PWA)
+│   │   ├── src/
+│   │   │   ├── components/  # Terrain, overlays, panels, HUD, markers, planner
+│   │   │   ├── pages/       # Top-level routes (TourScene, Settings, not-found)
+│   │   │   ├── hooks/       # useTidalData, useSurfaceTemperature, etc.
+│   │   │   └── lib/         # Zustand stores, drift physics, dev-auth bypass
+│   │   └── tests/e2e/       # Playwright end-to-end specs
+│   ├── api-server/          # Express 5 API on port 5000
+│   │   └── src/
+│   │       ├── routes/      # One file per route domain
+│   │       ├── lib/         # parseWorker, cacheRegistry, bucketMonitor, etc.
+│   │       └── app.ts       # Express app setup
+│   └── mockup-sandbox/      # Canvas component preview server (not deployed)
 ├── lib/
-│   ├── api-spec/         # openapi.yaml + Orval codegen
-│   ├── api-client-react/ # Generated React Query hooks
-│   ├── api-zod/          # Generated Zod schemas
-│   ├── db/               # Drizzle schema + Postgres client
-│   ├── poe/              # Poe AI proxy client
+│   ├── api-spec/            # openapi.yaml + Orval config
+│   ├── api-client-react/    # Generated React Query hooks
+│   ├── api-zod/             # Generated Zod schemas
+│   ├── db/                  # Drizzle schema (schema/*.ts) + DB client
+│   ├── poe/                 # Poe AI client wrapper
 │   └── integrations/
 │       └── openai_ai_integrations/
-├── scripts/              # Post-merge and maintenance scripts
-├── tests/                # Playwright e2e specs (under artifacts/bathyscan/tests/e2e)
-├── package.json
+├── scripts/                 # Post-merge and maintenance scripts
+├── package.json             # Root workspace scripts
 ├── pnpm-workspace.yaml
-└── replit.md
+└── replit.md                # Replit-facing project description + preferences
 ```
 
-Inside `artifacts/bathyscan/src/`:
-- `components/` — terrain, overlays, panels, HUD, marker UI, drift planner, etc.
-- `pages/` — top-level routes (`TourScene`, `Settings`, `not-found`).
-- `hooks/` — `useTidalData`, `useTidalSchedule`, `useSurfaceTemperature`, etc.
-- `lib/` — Zustand stores (`settingsStore`, `uiStore`, `driftStore`), drift physics (`computeDrift.ts`), dev-auth bypass, test helpers.
+---
 
-Inside `artifacts/api-server/src/routes/`:
-- `datasets`, `markers`, `folders`, `user-datasets`, `catalog-saves`, `trails`, `trolling-presets`
-- `tidal`, `surface-conditions`, `water-temperature`, `substrate`, `efh`
-- `settings`, `me`, `poe`, `query`, `health`
+## 19. Getting Started on Replit
 
-## Getting Started on Replit
-
-Each artifact under `artifacts/*` registers itself with the Replit artifacts system (via its own `artifact.toml`) and gets a long-lived dev process managed by the workspace. In a fresh session they typically appear as:
+Each artifact registers itself with the Replit artifacts system (via `artifact.toml`) and gets a long-lived dev process managed by the workspace.
 
 | Workflow | Command | What it does |
 |---|---|---|
-| `artifacts/api-server: API Server` | `pnpm --filter @workspace/api-server run dev` | Bundles and runs the Express API on port 5000 |
-| `artifacts/bathyscan: web` | `pnpm --filter @workspace/bathyscan run dev` | Runs the Vite dev server for the BathyScan web app |
-| `artifacts/mockup-sandbox: Component Preview Server` | `pnpm --filter @workspace/mockup-sandbox run dev` | Runs the isolated component preview server used by the Canvas |
+| `artifacts/api-server: API Server` | `pnpm --filter @workspace/api-server run dev` | Bundles and runs the Express API on the assigned port |
+| `artifacts/bathyscan: web` | `pnpm --filter @workspace/bathyscan run dev` | Runs the Vite dev server for the web app |
+| `artifacts/mockup-sandbox: Component Preview Server` | `pnpm --filter @workspace/mockup-sandbox run dev` | Isolated component preview for Canvas |
 
-If a dev process isn't running, you can start it manually with the command above. Each artifact binds to the `PORT` environment variable assigned by Replit and is exposed through the path-based preview proxy — pick which artifact to view from the dropdown in the preview pane.
+Each artifact binds to the `PORT` environment variable assigned by Replit and is exposed through the path-based preview proxy.
 
-The checked-in `.replit` file additionally declares a set of **validation workflows** (`typecheck`, `lint`, `test-unit`, `test-e2e`, `test-all`, and a parallel `Project` runner that fans out to all of them). These are on-demand checks rather than long-running services.
-
-**First-time setup checklist:**
-1. Make sure the Postgres database is provisioned (Replit creates one automatically; `DATABASE_URL` will be set).
-2. Add the required secrets (see below).
+**First-time setup:**
+1. Ensure PostgreSQL is provisioned (`DATABASE_URL` is set automatically by Replit).
+2. Add required secrets (see [Environment Variables](#20-environment-variables)).
 3. Push the schema: `pnpm --filter @workspace/db run push`.
-4. Restart the API Server workflow if you changed env vars.
+4. Restart the API Server workflow after setting env vars.
 
-## Environment Variables
+---
+
+## 20. Environment Variables
 
 | Variable | Where | Required | Purpose |
 |---|---|---|---|
-| `DATABASE_URL` | API server | Yes | Postgres connection string (provided by Replit). |
-| `CLERK_PUBLISHABLE_KEY` | API server | Yes (for auth) | Used by the Clerk proxy middleware. |
-| `CLERK_SECRET_KEY` | API server | Yes (for auth) | Server-side Clerk session verification. |
-| `VITE_CLERK_PUBLISHABLE_KEY` | Web app | Yes (for auth) | Frontend Clerk SDK init. Without it, sign-in is disabled. |
-| `VITE_CLERK_PROXY_URL` | Web app | Optional | Override the Clerk proxy URL (defaults to `${BASE_URL}clerk`). |
-| `LOG_LEVEL` | API server | Optional | Pino log level (`info`, `debug`, `warn`, `error`). |
-| `NODE_ENV` | Both | Auto | Set to `development` by dev workflows. |
-| `VITE_ENABLE_CAUSTICS` | Web app | Optional | Toggle the underwater caustics shader. |
-| `VITE_TEXTURE_TILING` | Web app | Optional | Override terrain texture tiling factor. |
-| `VITE_DEV_AUTH_BYPASS` | Web app | Dev/e2e only | When `1`, bypasses Clerk in headless Playwright runs. Never set in production. |
+| `DATABASE_URL` | API server | Yes | Postgres connection string (provided by Replit) |
+| `CLERK_PUBLISHABLE_KEY` | API server | Yes | Clerk proxy middleware |
+| `CLERK_SECRET_KEY` | API server | Yes | Server-side session token verification |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Web app | Yes | Frontend Clerk SDK initialisation |
+| `VITE_CLERK_PROXY_URL` | Web app | Optional | Override the Clerk proxy URL (default: `${BASE_URL}clerk`) |
+| `LOG_LEVEL` | API server | Optional | Pino log level (`info`, `debug`, `warn`, `error`) |
+| `NODE_ENV` | Both | Auto | Set to `development` by dev workflows |
+| `VITE_ENABLE_CAUSTICS` | Web app | Optional | Toggle the underwater caustics GLSL shader |
+| `VITE_TEXTURE_TILING` | Web app | Optional | Override terrain texture tiling factor |
+| `VITE_DEV_AUTH_BYPASS` | Web app | Dev/e2e only | Bypass Clerk in headless Playwright runs. **Never set in production.** |
 
-Secrets should be set through the Replit Secrets pane, not committed to the repo.
+All secrets should be set through the Replit Secrets pane; never commit them to the repository.
 
-## Development Workflows
+---
 
-Top-level scripts (`package.json`):
+## 21. Development Workflows
 
 | Command | Purpose |
 |---|---|
-| `pnpm run typecheck` | Codegen check + full TypeScript build across libs and artifacts. |
-| `pnpm run lint` | ESLint on the bathyscan and api-server source trees. |
-| `pnpm run test:unit` | Vitest suites in every package that defines them. |
-| `pnpm run test:e2e` | Playwright end-to-end specs. |
-| `pnpm run test-all` | typecheck + lint + test:unit (the CI gate). |
-| `pnpm run build` | typecheck + per-package builds. |
-| `pnpm --filter @workspace/api-spec run codegen` | Regenerate React Query hooks and Zod schemas from `openapi.yaml`. |
-| `pnpm --filter @workspace/db run push` | Apply Drizzle schema to the database (dev). |
+| `pnpm run typecheck` | Codegen check + full TypeScript build across all libs and artifacts |
+| `pnpm run lint` | ESLint on the bathyscan and api-server source trees |
+| `pnpm run test:unit` | Vitest suites in every package that defines them |
+| `pnpm run test:e2e` | Playwright end-to-end specs |
+| `pnpm run test-all` | typecheck + lint + test:unit (the CI gate; runs automatically after every merge) |
+| `pnpm run build` | typecheck + per-package production builds |
+| `pnpm --filter @workspace/api-spec run codegen` | Regenerate React Query hooks and Zod schemas from `openapi.yaml` |
+| `pnpm --filter @workspace/db run push` | Apply the Drizzle schema to the database (dev only) |
 
-There are also named workflows configured in Replit for `lint`, `typecheck`, `test-unit`, `test-e2e`, and `test-all` that can be started on demand.
+**Changing an API endpoint:** edit `lib/api-spec/openapi.yaml` first → run codegen → update the server route → update the frontend consumer.
 
-**When changing an API endpoint**: edit `lib/api-spec/openapi.yaml` first, run the codegen, then update the server route and the frontend consumer.
+**Changing the DB schema:** edit `lib/db/src/schema/*.ts` → run `pnpm --filter @workspace/db run push`.
 
-**When changing the DB schema**: edit `lib/db/src/schema/*.ts`, then run `pnpm --filter @workspace/db run push`.
+---
 
-## AI Assistant
+## 22. Key Architectural Decisions
 
-BathyScan ships with a built-in AI assistant for natural-language questions about the current scene, markers, depth profile, and conditions. Requests are proxied through `/api/poe/*` on the API server, which calls the Poe AI API via `@workspace/poe`. There is also an OpenAI integration available under `lib/integrations/openai_ai_integrations` for alternate models.
+### API contract is the single source of truth
+`lib/api-spec/openapi.yaml` defines every HTTP endpoint. Orval generates both the typed client hooks (`@workspace/api-client-react`) and the server-side Zod validators (`@workspace/api-zod`). A backend route change always starts with the spec.
 
-The assistant runs with safe LLM output parsing (no eval, structured response validation) and surfaces classification errors as warnings in the console rather than crashing the UI.
+### Zustand selectors are mandatory
+Calling a Zustand store hook without a per-field selector (e.g. `useDriftStore()` instead of `useDriftStore(s => s.heading)`) causes a "getSnapshot should be cached" error in React 18 Concurrent Mode. All store usages must pass a selector.
 
-## Offline / PWA
+### Vite deduplication for Zustand
+`@react-three/drei` pulls in Zustand v4 (via `tunnel-rat`) alongside the app's own Zustand v5. Without `resolve.dedupe: ["zustand"]` in `vite.config.ts`, two incompatible Zustand instances coexist, breaking all stores silently. The dedupe entry is load-bearing.
 
-The web app is a Progressive Web App built with `vite-plugin-pwa` and Workbox.
+### laz-perf WASM heap must be re-read per point
+When decompressing a `.laz` file, capturing `lp.HEAPU8` once before the decompression loop is unsafe. WASM memory can grow mid-loop, detaching the original ArrayBuffer and causing out-of-bounds reads or silent data corruption. The heap view must be re-read from `lp.HEAPU8.buffer` on every `getPoint()` call.
 
-- Once a region has been loaded, its terrain, markers, and recent settings are available offline.
-- The app can be installed to the home screen on mobile.
-- Service-worker precache + runtime route caching cover the static shell and API responses for previously visited regions.
-- IndexedDB (via `idb-keyval`) stores larger user-generated content like GPS trails and custom uploads.
+### Worker threads for heavy parsing
+All CPU-intensive upload parsing (point-cloud decompression, raster sub-sampling, HDF5 extraction) runs inside `parseWorker.ts`. This prevents large uploads from blocking the main Node.js event loop and degrading API responsiveness for concurrent users.
 
-## Acknowledgements & Data Sources
+---
 
-BathyScan stands on a lot of public data and open-source work:
+## 23. Data Sources & Acknowledgements
 
-- **Bathymetry:** NOAA NCEI BAG mosaics; GEBCO global grid as a fallback.
+BathyScan is built on a foundation of public data and open-source software:
+
+- **Bathymetry:** NOAA NCEI BAG mosaics; GEBCO global grid as a fallback when NCEI tiles are unavailable.
 - **Tides & currents:** NOAA CO-OPS (`api.tidesandcurrents.noaa.gov`).
-- **Sea-surface temperature:** public SST feeds via the API server's `water-temperature` route.
-- **Habitat:** NOAA Essential Fish Habitat zone data.
-- **Substrate:** Alaska ShoreZone substrate polygons (credit displayed in-app).
+- **Sea-surface temperature:** NOAA/AOOS SST feeds via the API server's `water-temperature` route.
+- **Habitat:** NOAA Essential Fish Habitat (EFH) zone data.
+- **Substrate:** Alaska ShoreZone substrate polygons (attribution displayed in-app).
 - **Auth:** [Clerk](https://clerk.com/).
 - **AI:** Poe AI and OpenAI.
-- **3D rendering:** Three.js, React Three Fiber, drei.
+- **3D rendering:** Three.js, React Three Fiber, @react-three/drei.
 - **UI:** Radix UI, Tailwind CSS, shadcn-style components, Framer Motion, Recharts, lucide-react.
 
-If you use BathyScan with public bathymetric data, please credit the upstream provider (NOAA / GEBCO / ShoreZone) alongside BathyScan itself.
+If you use BathyScan with public bathymetric data, please credit the upstream data provider (NOAA / GEBCO / ShoreZone) alongside BathyScan itself.
