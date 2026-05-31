@@ -227,6 +227,16 @@ interface DriftStore {
   setBoatProfileId: (id: string) => void;
 
   /**
+   * Snap-to-depth-contour for trolling waypoint drag.
+   * When enabled, dragging a waypoint snaps it to the nearest point on the
+   * seafloor contour at `snapToDepthM` metres.
+   */
+  snapToDepthEnabled: boolean;
+  setSnapToDepthEnabled: (v: boolean) => void;
+  snapToDepthM: number;
+  setSnapToDepthM: (v: number) => void;
+
+  /**
    * Return the interpolated tidal vector from `driftConditions` at the given
    * hour offset (0–23). Returns null when no conditions are loaded.
    *
@@ -391,6 +401,11 @@ export const useDriftStore = create<DriftStore>((set, get) => ({
     try { localStorage.setItem("bathyscan:boatProfileId", id); } catch {}
     set({ boatProfileId: id });
   },
+
+  snapToDepthEnabled: false,
+  setSnapToDepthEnabled: (v) => set({ snapToDepthEnabled: v }),
+  snapToDepthM: 50,
+  setSnapToDepthM: (v) => set({ snapToDepthM: Math.max(0, v) }),
 
   getTidalVectorAtHour: (hourOffset) => {
     const conditions = get().driftConditions;

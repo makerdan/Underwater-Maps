@@ -12,12 +12,17 @@
  *   (d) The reverse-drift path in amber, when reverseModeActive
  */
 
-import React, { useMemo, useRef, useEffect, useCallback } from "react";
+import React, { useMemo, useRef, useEffect, useCallback, useState } from "react";
 import { Line } from "@react-three/drei";
 import { useThree, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { useDriftStore } from "@/lib/driftStore";
-import { lonLatToWorldXZ, worldXZToLonLat } from "@/lib/terrain";
+import {
+  lonLatToWorldXZ,
+  worldXZToLonLat,
+  snapWorldXZToDepthContour,
+  traceDepthContourSegment,
+} from "@/lib/terrain";
 import { useAppState } from "@/lib/context";
 import { computeDrift } from "@/lib/computeDrift";
 import { useSettingsStore } from "@/lib/settingsStore";
@@ -184,8 +189,14 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
   const removeDriftWaypoint = useDriftStore((s) => s.removeDriftWaypoint);
   const reverseDriftPath = useDriftStore((s) => s.reverseDriftPath);
   const reverseModeActive = useDriftStore((s) => s.reverseModeActive);
+  const snapToDepthEnabled = useDriftStore((s) => s.snapToDepthEnabled);
+  const snapToDepthM = useDriftStore((s) => s.snapToDepthM);
   const { terrain } = useAppState();
   const { camera, gl } = useThree();
+
+  // While dragging with snap-to-depth enabled, we store the traced contour
+  // segment so DriftPath can render it as a visual highlight.
+  const [snapContourPoints, setSnapContourPoints] = useState<THREE.Vector3[] | null>(null);
 
   // Drag-to-fine-tune state for trolling waypoint flags. We track the drag in a
   // ref so pointer move/up listeners can read the latest index without
@@ -239,6 +250,29 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
       raycaster.setFromCamera(ndc, camera);
       const hit = new THREE.Vector3();
       if (raycaster.ray.intersectPlane(waterPlane, hit)) {
+        // Snap-to-depth-contour: when enabled, move the waypoint to the nearest
+        // point on the chosen depth contour and trace the contour for display.
+        const snapEnabled = useDriftStore.getState().snapToDepthEnabled;
+        const targetDepthM = useDriftStore.getState().snapToDepthM;
+        if (snapEnabled) {
+          const snapped = snapWorldXZToDepthContour(terrain, hit.x, hit.z, targetDepthM);
+          if (snapped) {
+            hit.x = snapped.x;
+            hit.z = snapped.z;
+            // Trace the contour around the snapped point for visual feedback.
+            const contourPts = traceDepthContourSegment(terrain, snapped.x, snapped.z, targetDepthM);
+            // surfaceY: waterPlane eq is y = surfaceY, i.e. plane.constant = -surfaceY
+            const sy = -waterPlane.constant;
+            const vec3pts = contourPts.map(
+              (p) => new THREE.Vector3(p.x, sy + 0.2, p.z),
+            );
+            setSnapContourPoints(vec3pts.length >= 2 ? vec3pts : null);
+          } else {
+            setSnapContourPoints(null);
+          }
+        } else {
+          setSnapContourPoints(null);
+        }
         const { lon, lat } = worldXZToLonLat(hit.x, hit.z, terrain);
         updateDriftWaypoint(state.index, { lat, lon });
       }
@@ -247,6 +281,7 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
       if (dragStateRef.current?.pointerId === ev.pointerId) {
         dragStateRef.current = null;
         document.body.style.cursor = "";
+        setSnapContourPoints(null);
         // Recompute the drift path now that the waypoint has been repositioned.
         recomputePath();
       }
@@ -536,6 +571,18 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
           dashed
           dashSize={0.45}
           gapSize={0.25}
+        />
+      )}
+
+      {/* Snap-to-depth contour highlight — magenta line tracing the depth
+          isoline while the user drags a waypoint with snap enabled. */}
+      {snapContourPoints && snapContourPoints.length >= 2 && (
+        <Line
+          points={snapContourPoints}
+          color={0xf0abfc}
+          lineWidth={2.5}
+          transparent
+          opacity={0.9}
         />
       )}
 

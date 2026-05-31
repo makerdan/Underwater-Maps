@@ -554,6 +554,178 @@ export function applyColormapToVertexColors(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Depth contour snapping utilities
+// ---------------------------------------------------------------------------
+
+/**
+ * Sample the seafloor depth (in metres) at a world XZ position using bilinear
+ * interpolation.  Returns a value in the terrain's [minDepth, maxDepth] range,
+ * or `minDepth` when the position is outside the grid.
+ */
+export function sampleDepthAt(
+  grid: TerrainData,
+  worldX: number,
+  worldZ: number,
+): number {
+  const { resolution: N, depths, minDepth } = grid;
+
+  const fracCol = ((worldX + WORLD_SIZE / 2) / WORLD_SIZE) * (N - 1);
+  const fracRow = ((worldZ + WORLD_SIZE / 2) / WORLD_SIZE) * (N - 1);
+
+  if (fracCol < 0 || fracCol > N - 1 || fracRow < 0 || fracRow > N - 1) {
+    return minDepth;
+  }
+
+  const col0 = Math.max(0, Math.min(N - 2, Math.floor(fracCol)));
+  const row0 = Math.max(0, Math.min(N - 2, Math.floor(fracRow)));
+  const col1 = col0 + 1;
+  const row1 = row0 + 1;
+  const tx = fracCol - col0;
+  const tz = fracRow - row0;
+
+  const d00 = depths[row0 * N + col0] ?? minDepth;
+  const d10 = depths[row0 * N + col1] ?? minDepth;
+  const d01 = depths[row1 * N + col0] ?? minDepth;
+  const d11 = depths[row1 * N + col1] ?? minDepth;
+
+  return d00 * (1 - tx) * (1 - tz)
+    + d10 * tx * (1 - tz)
+    + d01 * (1 - tx) * tz
+    + d11 * tx * tz;
+}
+
+/**
+ * Find the nearest point on the depth contour `targetDepthM` from a starting
+ * world XZ position.
+ *
+ * Algorithm:
+ *  1. Compute the numerical depth gradient at the starting point.
+ *  2. Determine which direction along the gradient leads toward the target.
+ *  3. Binary-search along that direction to find where depth = targetDepthM.
+ *
+ * Returns null when the target depth is unreachable within the search radius
+ * (e.g. the contour does not exist on this terrain), or when the gradient is
+ * too flat to determine a direction.
+ *
+ * @param maxSearchWorldUnits  Maximum world-unit radius to search (default 20).
+ */
+export function snapWorldXZToDepthContour(
+  grid: TerrainData,
+  worldX: number,
+  worldZ: number,
+  targetDepthM: number,
+  maxSearchWorldUnits: number = 20,
+): { x: number; z: number } | null {
+  const EPS = 0.15; // step size for gradient estimation
+  const depthAt = (x: number, z: number) => sampleDepthAt(grid, x, z);
+
+  const d0 = depthAt(worldX, worldZ);
+  const dX = depthAt(worldX + EPS, worldZ) - depthAt(worldX - EPS, worldZ);
+  const dZ = depthAt(worldX, worldZ + EPS) - depthAt(worldX, worldZ - EPS);
+  const gradLen = Math.sqrt(dX * dX + dZ * dZ);
+
+  // If the terrain is perfectly flat here we can't determine a useful direction.
+  if (gradLen < 1e-6) return null;
+
+  // Normalised gradient (points toward deeper water).
+  const gx = dX / gradLen;
+  const gz = dZ / gradLen;
+
+  // Walk toward target depth: if current < target we need deeper (follow +gradient).
+  const sign = d0 < targetDepthM ? 1 : -1;
+  const ex = worldX + gx * sign * maxSearchWorldUnits;
+  const ez = worldZ + gz * sign * maxSearchWorldUnits;
+
+  // Check that the far endpoint is on the other side of the contour.
+  const dEnd = depthAt(ex, ez);
+  const crossesContour =
+    (d0 - targetDepthM) * (dEnd - targetDepthM) <= 0;
+
+  if (!crossesContour) return null;
+
+  // Binary search between (worldX, worldZ) and (ex, ez).
+  let lo = 0;
+  let hi = 1;
+  for (let iter = 0; iter < 32; iter++) {
+    const mid = (lo + hi) / 2;
+    const mx = worldX + (ex - worldX) * mid;
+    const mz = worldZ + (ez - worldZ) * mid;
+    const dm = depthAt(mx, mz);
+    if ((d0 - targetDepthM) * (dm - targetDepthM) <= 0) {
+      hi = mid;
+    } else {
+      lo = mid;
+    }
+  }
+
+  const t = (lo + hi) / 2;
+  return {
+    x: worldX + (ex - worldX) * t,
+    z: worldZ + (ez - worldZ) * t,
+  };
+}
+
+/**
+ * Trace a segment of the depth contour at `targetDepthM`, starting from
+ * `startX/startZ` (which should already lie on or very near the contour).
+ *
+ * Walks in both directions perpendicular to the gradient, collecting sample
+ * points by repeatedly stepping and snapping back to the contour.
+ *
+ * @param stepWorldUnits   World-unit distance between successive sample points.
+ * @param numSteps         Number of steps to collect in each direction.
+ */
+export function traceDepthContourSegment(
+  grid: TerrainData,
+  startX: number,
+  startZ: number,
+  targetDepthM: number,
+  stepWorldUnits: number = 0.6,
+  numSteps: number = 24,
+): Array<{ x: number; z: number }> {
+  const EPS = 0.15;
+  const depthAt = (x: number, z: number) => sampleDepthAt(grid, x, z);
+  const half = WORLD_SIZE / 2;
+
+  const snapToContour = (px: number, pz: number): { x: number; z: number } | null =>
+    snapWorldXZToDepthContour(grid, px, pz, targetDepthM, stepWorldUnits * 3);
+
+  const getPerp = (x: number, z: number): { px: number; pz: number } => {
+    const dX = depthAt(x + EPS, z) - depthAt(x - EPS, z);
+    const dZ = depthAt(x, z + EPS) - depthAt(x, z - EPS);
+    const len = Math.sqrt(dX * dX + dZ * dZ) || 1;
+    // Perpendicular to gradient (rotate 90°): (-dZ, dX)
+    return { px: -dZ / len, pz: dX / len };
+  };
+
+  const inBounds = (x: number, z: number) =>
+    x > -half && x < half && z > -half && z < half;
+
+  const walkDir = (dirSign: 1 | -1): Array<{ x: number; z: number }> => {
+    const pts: Array<{ x: number; z: number }> = [];
+    let cx = startX;
+    let cz = startZ;
+    for (let i = 0; i < numSteps; i++) {
+      const { px, pz } = getPerp(cx, cz);
+      const nx = cx + px * stepWorldUnits * dirSign;
+      const nz = cz + pz * stepWorldUnits * dirSign;
+      if (!inBounds(nx, nz)) break;
+      const snapped = snapToContour(nx, nz);
+      if (!snapped) break;
+      pts.push(snapped);
+      cx = snapped.x;
+      cz = snapped.z;
+    }
+    return pts;
+  };
+
+  const backward = walkDir(-1).reverse();
+  const forward = walkDir(1);
+
+  return [...backward, { x: startX, z: startZ }, ...forward];
+}
+
 /**
  * Convert geographic longitude/latitude to world-space XZ coordinates.
  */

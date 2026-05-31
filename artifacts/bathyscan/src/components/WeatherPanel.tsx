@@ -188,6 +188,10 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
   const setBoatSpeedKnots = useDriftStore((s) => s.setBoatSpeedKnots);
   const backtroll = useDriftStore((s) => s.backtroll);
   const toggleBacktroll = useDriftStore((s) => s.toggleBacktroll);
+  const snapToDepthEnabled = useDriftStore((s) => s.snapToDepthEnabled);
+  const setSnapToDepthEnabled = useDriftStore((s) => s.setSnapToDepthEnabled);
+  const snapToDepthM = useDriftStore((s) => s.snapToDepthM);
+  const setSnapToDepthM = useDriftStore((s) => s.setSnapToDepthM);
   const driftWaypoints = useDriftStore((s) => s.driftWaypoints);
   const removeDriftWaypoint = useDriftStore((s) => s.removeDriftWaypoint);
   const moveDriftWaypoint = useDriftStore((s) => s.moveDriftWaypoint);
@@ -1048,6 +1052,80 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
           >
             {backtroll ? "⛵ BACKTROLL ON" : "BACKTROLL"}
           </button>
+
+          {/* Snap-to-depth toggle — snaps dragged waypoints to a depth contour */}
+          <button
+            data-testid="snap-to-depth-toggle"
+            onClick={() => setSnapToDepthEnabled(!snapToDepthEnabled)}
+            title={snapToDepthEnabled
+              ? `Snap to depth ON: dragging waypoints snaps to the ${Math.round(snapToDepthM)} m contour. Click to disable.`
+              : "Enable snap to depth: drag waypoints snap to the chosen depth contour."}
+            style={{
+              display: "block",
+              width: "100%",
+              marginBottom: snapToDepthEnabled ? 0 : 4,
+              padding: "4px 0",
+              background: snapToDepthEnabled ? "rgba(240,171,252,0.12)" : "rgba(0,229,255,0.04)",
+              border: `1px solid ${snapToDepthEnabled ? "rgba(240,171,252,0.55)" : "rgba(0,229,255,0.2)"}`,
+              borderRadius: snapToDepthEnabled ? "3px 3px 0 0" : 3,
+              color: snapToDepthEnabled ? "#f0abfc" : "#64748b",
+              fontFamily: "inherit",
+              fontSize: 9,
+              letterSpacing: "0.18em",
+              cursor: "pointer",
+              textTransform: "uppercase",
+              fontWeight: snapToDepthEnabled ? 700 : 400,
+              transition: "all 0.15s",
+            }}
+          >
+            {snapToDepthEnabled ? "📍 SNAP TO DEPTH ON" : "SNAP TO DEPTH"}
+          </button>
+
+          {/* Depth target input — shown when snap is enabled */}
+          {snapToDepthEnabled && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "4px 8px",
+                marginBottom: 4,
+                background: "rgba(240,171,252,0.06)",
+                border: "1px solid rgba(240,171,252,0.35)",
+                borderTop: "none",
+                borderRadius: "0 0 3px 3px",
+              }}
+            >
+              <span style={{ fontSize: 8, color: "#c084fc", letterSpacing: "0.12em", flex: 1 }}>
+                TARGET DEPTH
+              </span>
+              <input
+                data-testid="snap-to-depth-input"
+                type="number"
+                min={0}
+                max={2000}
+                step={5}
+                value={Math.round(snapToDepthM)}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  if (!isNaN(v)) setSnapToDepthM(v);
+                }}
+                style={{
+                  width: 52,
+                  background: "rgba(240,171,252,0.08)",
+                  border: "1px solid rgba(240,171,252,0.35)",
+                  borderRadius: 3,
+                  color: "#f0abfc",
+                  fontFamily: "inherit",
+                  fontSize: 10,
+                  textAlign: "center",
+                  padding: "2px 4px",
+                  outline: "none",
+                }}
+              />
+              <span style={{ fontSize: 8, color: "#94a3b8" }}>m</span>
+            </div>
+          )}
 
           <div style={{ marginBottom: 6 }}>
             <div style={LABEL}>PRESETS</div>
