@@ -607,17 +607,20 @@ function buildLaz() {
 /**
  * Build a realistic GPX track-log fixture that exercises all parser edge cases:
  *
- *  Track segment (10 trkpt with <ele>, 1 missing <ele>, 1 out-of-range lat):
+ *  Track segment (10 trkpt with <ele>, 1 with <extensions><depth>, 1 missing
+ *  <ele>, 1 out-of-range lat):
  *    - 10 valid trkpts near -132.5°E, 55.2°N with negative <ele> values
  *      (below sea level → parser flips to positive depth)
- *    - 1 trkpt whose <ele> is absent → skipped by parseGpxTerrain
+ *    - 1 trkpt with no <ele> but <extensions><depth>1750.0</depth></extensions>
+ *      → parsed via extension tag at lat=55.211, lon=-132.511
+ *    - 1 trkpt whose <ele> is absent and no extensions → skipped by parseGpxTerrain
  *    - 1 trkpt with lat=95 (out of geographic range) → skipped by isValidCoord
  *
  *  Waypoints (2 wpt with <ele>, 1 missing <ele>):
  *    - 2 valid wpts — one with negative ele, one with positive ele (both → depth)
  *    - 1 wpt without <ele> → skipped
  *
- *  Expected output: 12 valid RawPoints (10 trkpts + 2 wpts)
+ *  Expected output: 13 valid RawPoints (11 trkpts + 2 wpts)
  */
 function buildGpx() {
   const trkpts = [];
@@ -632,7 +635,14 @@ function buildGpx() {
       `</trkpt>`,
     );
   }
-  // Edge case 1: trkpt with no <ele> → should be skipped
+  // Extension-depth trkpt: no <ele>, depth in <extensions><depth> (Garmin echoMAP style)
+  trkpts.push(
+    `      <trkpt lat="55.211000" lon="-132.511000">` +
+    `<time>2024-06-01T00:10:30Z</time>` +
+    `<extensions><depth>1750.0</depth></extensions>` +
+    `</trkpt>`,
+  );
+  // Edge case 1: trkpt with no <ele> and no extensions → should be skipped
   trkpts.push(
     `      <trkpt lat="55.210000" lon="-132.510000">` +
     `<time>2024-06-01T00:10:00Z</time></trkpt>`,

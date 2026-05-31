@@ -339,12 +339,12 @@ describe("BAG (HDF5) — realistic NOAA hydrographic survey fixture", () => {
 // ---------------------------------------------------------------------------
 
 describe("GPX — realistic survey track fixture", () => {
-  it("parses the fixture and returns 12 valid depth points", () => {
+  it("parses the fixture and returns 13 valid depth points", () => {
     const pts = parseGpxTerrain(gpxBuf.toString("utf8"));
-    // 10 trkpts + 2 wpts with valid <ele>; 1 trkpt missing <ele>, 1 out-of-range lat,
-    // and 1 wpt missing <ele> are all skipped.
-    expect(pts.length).toBe(12);
-    assertValidBathyPoints(pts, 12);
+    // 10 trkpts with <ele> + 1 trkpt with <extensions><depth> + 2 wpts with <ele> = 13.
+    // Skipped: 1 trkpt missing <ele>/extensions, 1 trkpt with lat=95, 1 wpt missing <ele>.
+    expect(pts.length).toBe(13);
+    assertValidBathyPoints(pts, 13);
   });
 
   it("skips <trkpt> elements that have no <ele> child", () => {
@@ -408,10 +408,21 @@ describe("GPX — realistic survey track fixture", () => {
     expect(Math.max(...depths)).toBeCloseTo(2150, 0);
   });
 
+  it("reads depth from <extensions><depth> when <ele> is absent", () => {
+    const pts = parseGpxTerrain(gpxBuf.toString("utf8"));
+    // Fixture trkpt at lat=55.211, lon=-132.511 has no <ele> but carries
+    // <extensions><depth>1750.0</depth></extensions> (Garmin echoMAP style).
+    const extPt = pts.find(
+      (p) => Math.abs(p.lat - 55.211) < 0.00001 && Math.abs(p.lon - -132.511) < 0.00001,
+    );
+    expect(extPt).toBeDefined();
+    expect(extPt!.depth).toBeCloseTo(1750.0, 1);
+  });
+
   it("routes through parseUploadedFile dispatcher for .gpx", async () => {
     const pts = await parseUploadedFile(gpxBuf, "survey.gpx");
     assertValidBathyPoints(pts, 10);
-    expect(pts.length).toBe(12);
+    expect(pts.length).toBe(13);
   });
 });
 

@@ -702,6 +702,32 @@ export function parseGpxTerrain(content: string): RawPoint[] {
   const trkptRe =
     /<trkpt\s+[^>]*lat=["']([^"']+)["'][^>]*lon=["']([^"']+)["'][^>]*>([\s\S]*?)<\/trkpt>/gi;
   const eleRe = /<ele>([\s\S]*?)<\/ele>/i;
+  // Echo-sounder loggers (Garmin echoMAP, Lowrance ActiveTarget, etc.) embed
+  // depth inside <extensions> instead of <ele>.  We check common tag names
+  // case-insensitively: <gpxx:Depth>, <nmea:depth>, and plain <depth>.
+  const extBlockRe = /<extensions>([\s\S]*?)<\/extensions>/i;
+  const extDepthRe =
+    /<(?:gpxx:Depth|nmea:depth|depth)\b[^>]*>([\s\S]*?)<\/(?:gpxx:Depth|nmea:depth|depth)>/i;
+
+  /** Extract depth (metres, positive-downward) from a trkpt/wpt inner block. */
+  function extractDepth(inner: string): number | null {
+    // 1. Try <extensions> depth tags first.
+    const extBlock = extBlockRe.exec(inner);
+    if (extBlock) {
+      const extDepthMatch = extDepthRe.exec(extBlock[1]!);
+      if (extDepthMatch) {
+        const val = parseFloat(extDepthMatch[1]!);
+        if (Number.isFinite(val) && val !== 0) return Math.abs(val);
+      }
+    }
+    // 2. Fall back to <ele> (elevation in metres, positive above sea level).
+    const eleMatch = eleRe.exec(inner);
+    if (!eleMatch) return null;
+    const ele = parseFloat(eleMatch[1]!);
+    if (!Number.isFinite(ele)) return null;
+    const d = ele < 0 ? -ele : ele;
+    return d === 0 ? null : d;
+  }
 
   let m: RegExpExecArray | null;
   while ((m = trkptRe.exec(content)) !== null) {
@@ -709,20 +735,12 @@ export function parseGpxTerrain(content: string): RawPoint[] {
     const lon = parseFloat(m[2]!);
     const inner = m[3]!;
     if (!isValidCoord(lon, lat)) continue;
-
-    const eleMatch = eleRe.exec(inner);
-    if (!eleMatch) continue;
-    const ele = parseFloat(eleMatch[1]!);
-    if (!Number.isFinite(ele)) continue;
-
-    // GPX <ele> is elevation in metres (positive above sea level). For
-    // bathymetric purposes we flip the sign so depth is positive-downward.
-    const depth = ele < 0 ? -ele : ele;
-    if (depth === 0) continue;
+    const depth = extractDepth(inner);
+    if (depth === null) continue;
     points.push({ lon, lat, depth });
   }
 
-  // Also match <wpt lat="..." lon="..."> ... <ele> ... </ele>
+  // Also match <wpt lat="..." lon="..."> ... </wpt>
   const wptRe =
     /<wpt\s+[^>]*lat=["']([^"']+)["'][^>]*lon=["']([^"']+)["'][^>]*>([\s\S]*?)<\/wpt>/gi;
   while ((m = wptRe.exec(content)) !== null) {
@@ -730,19 +748,16 @@ export function parseGpxTerrain(content: string): RawPoint[] {
     const lon = parseFloat(m[2]!);
     const inner = m[3]!;
     if (!isValidCoord(lon, lat)) continue;
-    const eleMatch = eleRe.exec(inner);
-    if (!eleMatch) continue;
-    const ele = parseFloat(eleMatch[1]!);
-    if (!Number.isFinite(ele)) continue;
-    const depth = ele < 0 ? -ele : ele;
-    if (depth === 0) continue;
+    const depth = extractDepth(inner);
+    if (depth === null) continue;
     points.push({ lon, lat, depth });
   }
 
   if (points.length === 0) {
     throw new Error(
       "GPX file contains no track points with elevation data. " +
-        "Ensure the file has <trkpt> or <wpt> elements with <ele> children.",
+        "Ensure the file has <trkpt> or <wpt> elements with <ele> or " +
+        "<extensions> depth children (<gpxx:Depth>, <nmea:depth>, <depth>).",
     );
   }
   return points;
