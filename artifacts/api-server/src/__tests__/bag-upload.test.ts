@@ -218,9 +218,9 @@ describe("POST /api/datasets/upload — .bag upload", () => {
 
       expect(res.status).toBe(422);
       expect(res.body).toHaveProperty("error", "parse_error");
-      expect(res.body).toHaveProperty("detail");
-      expect(typeof res.body.detail).toBe("string");
-      expect(res.body.detail.length).toBeGreaterThan(0);
+      expect(res.body).toHaveProperty("details");
+      expect(typeof res.body.details).toBe("string");
+      expect(res.body.details.length).toBeGreaterThan(0);
     },
     15_000,
   );
