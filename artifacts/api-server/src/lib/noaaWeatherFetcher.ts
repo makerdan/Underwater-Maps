@@ -132,26 +132,32 @@ async function fetchNearbyStations(
   lat: number,
   lon: number,
   limit: number,
-): Promise<{ id: string; name: string; lat: number; lon: number }[]> {
+): Promise<{ id: string; name: string; lat: number; lon: number }[] | null> {
   const url =
     `${NOAA_API_BASE}/stations?point=${lat.toFixed(4)},${lon.toFixed(4)}&limit=${limit}`;
-  const res = await fetchWithTimeout(url, FETCH_TIMEOUT_MS);
-  if (!res.ok) {
-    throw new Error(`NOAA stations HTTP ${res.status}`);
+  try {
+    const res = await fetchWithTimeout(url, FETCH_TIMEOUT_MS);
+    if (!res.ok) {
+      console.error(`[noaaWeatherFetcher] NOAA stations HTTP ${res.status} for point=${lat.toFixed(4)},${lon.toFixed(4)}`);
+      return null;
+    }
+    const json = (await res.json()) as { features?: RawStation[] };
+    return (json.features ?? [])
+      .filter((f) => f.properties?.stationIdentifier)
+      .map((f) => {
+        const coords =
+          f.geometry?.coordinates ?? f.properties?.geometry?.coordinates;
+        return {
+          id: f.properties.stationIdentifier!,
+          name: f.properties.name ?? f.properties.stationIdentifier!,
+          lon: coords?.[0] ?? lon,
+          lat: coords?.[1] ?? lat,
+        };
+      });
+  } catch (err) {
+    console.error(`[noaaWeatherFetcher] NOAA stations fetch error for point=${lat.toFixed(4)},${lon.toFixed(4)}:`, (err as Error).message);
+    return null;
   }
-  const json = (await res.json()) as { features?: RawStation[] };
-  return (json.features ?? [])
-    .filter((f) => f.properties?.stationIdentifier)
-    .map((f) => {
-      const coords =
-        f.geometry?.coordinates ?? f.properties?.geometry?.coordinates;
-      return {
-        id: f.properties.stationIdentifier!,
-        name: f.properties.name ?? f.properties.stationIdentifier!,
-        lon: coords?.[0] ?? lon,
-        lat: coords?.[1] ?? lat,
-      };
-    });
 }
 
 // ---------------------------------------------------------------------------
@@ -278,11 +284,17 @@ export async function fetchWeatherStations(
     return cached.result;
   }
 
-  // Resolve state + nearby stations in parallel (propagate station fetch failure)
+  // Resolve state + nearby stations in parallel
   const [stateCode, rawStations] = await Promise.all([
     resolveStateCode(lat, lon),
     fetchNearbyStations(lat, lon, 20),
   ]);
+
+  // If the station list fetch failed, return a safe empty result (no 502)
+  if (rawStations === null) {
+    const emptyResult: WeatherStationsResult = { stations: [], stateCode: null, faaWeatherCamsUrl: null };
+    return emptyResult;
+  }
 
   // Filter by actual distance using haversine
   const filteredStations = rawStations.filter(
