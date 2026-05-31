@@ -1953,7 +1953,8 @@ export const GetWeatherStationsResponse = zod.object({
   "observedAt": zod.string().nullish().describe('ISO 8601 UTC timestamp of the observation')
 }).describe('A NOAA ASOS\/AWOS aviation weather observation station with its latest obs')).describe('Nearby ASOS\/AWOS stations with live observations'),
   "stateCode": zod.string().nullish().describe('Two-letter US state code derived from the query point (null outside US)'),
-  "faaWeatherCamsUrl": zod.string().nullish().describe('FAA WeatherCams page URL for the derived state (null if state unknown)')
+  "faaWeatherCamsUrl": zod.string().nullish().describe('FAA WeatherCams page URL for the derived state (null if state unknown)'),
+  "stale": zod.boolean().optional().describe('True when the response is served from the DB fallback cache due to a NOAA API error. The data may be up to 1 hour old.\n')
 })
 
 

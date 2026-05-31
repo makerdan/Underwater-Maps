@@ -1277,6 +1277,9 @@ export interface WeatherStationsResponse {
   stateCode?: string | null;
   /** FAA WeatherCams page URL for the derived state (null if state unknown) */
   faaWeatherCamsUrl?: string | null;
+  /** True when the response is served from the DB fallback cache due to a NOAA API error. The data may be up to 1 hour old.
+   */
+  stale?: boolean;
 }
 
 /**

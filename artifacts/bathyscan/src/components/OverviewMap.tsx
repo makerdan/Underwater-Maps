@@ -460,6 +460,7 @@ export const OverviewMap: React.FC = () => {
   const {
     stations: weatherStations,
     faaWeatherCamsUrl,
+    stale: weatherStationsStale,
   } = useWeatherStations();
   useEffect(() => {
     weatherStationActiveRef.current = weatherStationsActive;
@@ -1697,6 +1698,7 @@ export const OverviewMap: React.FC = () => {
           pinY={selectedWeatherStationPos.cy}
           containerWidth={canvasRef.current.width}
           faaWeatherCamsUrl={faaWeatherCamsUrl}
+          stale={weatherStationsStale}
           onClose={() => {
             weatherStationSelectedIdRef.current = null;
             setSelectedWeatherStation(null);

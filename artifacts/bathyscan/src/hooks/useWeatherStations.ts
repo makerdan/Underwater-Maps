@@ -16,6 +16,8 @@ export interface WeatherStationsResult {
   stations: WeatherStation[];
   faaWeatherCamsUrl: string | null;
   stateCode: string | null;
+  /** True when the API returned stale DB-cached data due to a NOAA outage. */
+  stale: boolean;
   isLoading: boolean;
   isFetching: boolean;
   isError: boolean;
@@ -49,6 +51,7 @@ export function useWeatherStations(): WeatherStationsResult {
     stations: data?.stations ?? [],
     faaWeatherCamsUrl: data?.faaWeatherCamsUrl ?? null,
     stateCode: data?.stateCode ?? null,
+    stale: data?.stale ?? false,
     isLoading,
     isFetching,
     isError,

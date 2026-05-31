@@ -3,7 +3,9 @@
  *
  * Uses the NOAA Weather API (api.weather.gov) to find nearby ASOS/AWOS stations
  * and fetch their latest observations. Results are cached in-memory for 10 minutes
- * since NOAA updates hourly.
+ * since NOAA updates hourly. Successful results are also persisted to the
+ * `weather_station_cache` DB table so the API can serve stale-but-valid data
+ * during NOAA outages or server restarts (fallback window: 1 hour).
  *
  * Flow:
  *   1. GET /points/{lat},{lon}             → resolve US state code
@@ -14,11 +16,14 @@
  */
 
 import { registerCache } from "./cacheRegistry.js";
+import { db, weatherStationCacheTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const NOAA_API_BASE = "https://api.weather.gov";
 const FETCH_TIMEOUT_MS = 12_000;
 const OBS_TIMEOUT_MS = 8_000;
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const DB_STALE_FALLBACK_MS = 60 * 60 * 1000; // 1 hour
 
 export interface WeatherStation {
   id: string;
@@ -43,6 +48,8 @@ export interface WeatherStationsResult {
   stations: WeatherStation[];
   stateCode: string | null;
   faaWeatherCamsUrl: string | null;
+  /** True when serving cached data due to a NOAA API error. */
+  stale?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -261,6 +268,51 @@ async function fetchStationObs(stationId: string): Promise<Omit<WeatherStation, 
 }
 
 // ---------------------------------------------------------------------------
+// DB helpers
+// ---------------------------------------------------------------------------
+
+/** Persist a successful result to the DB (fire-and-forget). */
+async function persistToDb(key: string, result: WeatherStationsResult): Promise<void> {
+  try {
+    await db
+      .insert(weatherStationCacheTable)
+      .values({
+        cacheKey: key,
+        result: result as unknown as Record<string, unknown>,
+        fetchedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: weatherStationCacheTable.cacheKey,
+        set: {
+          result: result as unknown as Record<string, unknown>,
+          fetchedAt: new Date(),
+        },
+      });
+  } catch (err) {
+    console.warn("[noaa-weather] Failed to persist to DB:", (err as Error).message);
+  }
+}
+
+/** Try to load a DB-cached result. Returns null if missing or too old. */
+async function loadFromDb(key: string): Promise<WeatherStationsResult | null> {
+  try {
+    const rows = await db
+      .select()
+      .from(weatherStationCacheTable)
+      .where(eq(weatherStationCacheTable.cacheKey, key))
+      .limit(1);
+    const row = rows[0];
+    if (!row) return null;
+    const ageMs = Date.now() - row.fetchedAt.getTime();
+    if (ageMs > DB_STALE_FALLBACK_MS) return null;
+    return row.result as unknown as WeatherStationsResult;
+  } catch (err) {
+    console.warn("[noaa-weather] Failed to load from DB:", (err as Error).message);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -272,6 +324,8 @@ async function fetchStationObs(stationId: string): Promise<Omit<WeatherStation, 
  * @param radiusMiles - Search radius (informational; NOAA API returns closest
  *   stations regardless; we fetch 20 and the API limits by its own proximity).
  * @returns Normalized station list + state code + FAA WeatherCams URL.
+ *   `stale: true` is set when the result comes from the DB fallback cache
+ *   due to a NOAA API error.
  */
 export async function fetchWeatherStations(
   lat: number,
@@ -279,58 +333,95 @@ export async function fetchWeatherStations(
   radiusMiles = 75,
 ): Promise<WeatherStationsResult> {
   const key = cacheKey(lat, lon, radiusMiles);
+
+  // 1. In-memory cache (hot path)
   const cached = cache.get(key);
   if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
     return cached.result;
   }
 
-  // Resolve state + nearby stations in parallel
-  const [stateCode, rawStations] = await Promise.all([
-    resolveStateCode(lat, lon),
-    fetchNearbyStations(lat, lon, 20),
-  ]);
+  // 2. Try live NOAA fetch
+  try {
+    // Resolve state + nearby stations in parallel
+    const [stateCode, rawStations] = await Promise.all([
+      resolveStateCode(lat, lon),
+      fetchNearbyStations(lat, lon, 20),
+    ]);
 
-  // If the station list fetch failed, return a safe empty result (no 502)
-  if (rawStations === null) {
-    const emptyResult: WeatherStationsResult = { stations: [], stateCode: null, faaWeatherCamsUrl: null };
-    return emptyResult;
+    // fetchNearbyStations returns null on error — treat as NOAA failure so the
+    // DB fallback is attempted instead of silently returning empty data.
+    if (rawStations === null) {
+      throw new Error("NOAA stations fetch failed — triggering DB fallback");
+    }
+
+    // Filter by actual distance using haversine
+    const filteredStations = rawStations.filter(
+      (s) => haversineKm(lat, lon, s.lat, s.lon) <= radiusMiles * 1.60934,
+    );
+
+    // Fetch observations for all stations in parallel (failures return null)
+    const obsResults = await Promise.all(
+      filteredStations.map((s) => fetchStationObs(s.id)),
+    );
+
+    const stations: WeatherStation[] = filteredStations
+      .map((s, i) => {
+        const obs = obsResults[i];
+        if (!obs) return null;
+        return {
+          id: s.id,
+          name: s.name,
+          lat: s.lat,
+          lon: s.lon,
+          ...obs,
+        };
+      })
+      .filter((s): s is WeatherStation => s !== null);
+
+    // If stations were within range but every observation fetch failed, that
+    // signals NOAA's obs endpoint is degraded — trigger DB fallback.
+    if (filteredStations.length > 0 && stations.length === 0) {
+      throw new Error(
+        `All ${filteredStations.length} station observation fetch(es) failed — NOAA obs endpoint degraded`,
+      );
+    }
+
+    const faaWeatherCamsUrl = stateCode
+      ? `https://weathercams.faa.gov/cameras/state/${stateCode}`
+      : null;
+
+    const result: WeatherStationsResult = { stations, stateCode, faaWeatherCamsUrl };
+
+    // Store in memory cache unconditionally.
+    cache.set(key, { result, fetchedAt: Date.now() });
+    // Only persist to DB when we have real station data — prevents overwriting
+    // a previously good row with an outage-shaped empty result.
+    if (stations.length > 0) {
+      void persistToDb(key, result);
+    }
+
+    console.info(
+      `[noaa-weather] Fetched ${stations.length} stations near ${lat.toFixed(3)},${lon.toFixed(3)} ` +
+      `(state=${stateCode ?? "unknown"})`,
+    );
+
+    return result;
+  } catch (err) {
+    // 3. NOAA failed — try DB fallback (up to 1 hour old)
+    console.warn(
+      `[noaa-weather] Live fetch failed (${(err as Error).message}), trying DB fallback`,
+    );
+    const dbResult = await loadFromDb(key);
+    if (dbResult) {
+      console.info(
+        `[noaa-weather] Serving stale DB cache for ${key}`,
+      );
+      const staleResult: WeatherStationsResult = { ...dbResult, stale: true };
+      // Warm the in-memory cache too so concurrent requests don't all hit the DB
+      cache.set(key, { result: staleResult, fetchedAt: Date.now() - CACHE_TTL_MS + 60_000 });
+      return staleResult;
+    }
+    // No DB fallback available — re-throw so the route can return 502
+    throw err;
   }
-
-  // Filter by actual distance using haversine
-  const filteredStations = rawStations.filter(
-    (s) => haversineKm(lat, lon, s.lat, s.lon) <= radiusMiles * 1.60934,
-  );
-
-  // Fetch observations for all stations in parallel (failures return null)
-  const obsResults = await Promise.all(
-    filteredStations.map((s) => fetchStationObs(s.id)),
-  );
-
-  const stations: WeatherStation[] = filteredStations
-    .map((s, i) => {
-      const obs = obsResults[i];
-      if (!obs) return null;
-      return {
-        id: s.id,
-        name: s.name,
-        lat: s.lat,
-        lon: s.lon,
-        ...obs,
-      };
-    })
-    .filter((s): s is WeatherStation => s !== null);
-
-  const faaWeatherCamsUrl = stateCode
-    ? `https://weathercams.faa.gov/cameras/state/${stateCode}`
-    : null;
-
-  const result: WeatherStationsResult = { stations, stateCode, faaWeatherCamsUrl };
-
-  cache.set(key, { result, fetchedAt: Date.now() });
-  console.info(
-    `[noaa-weather] Fetched ${stations.length} stations near ${lat.toFixed(3)},${lon.toFixed(3)} ` +
-    `(state=${stateCode ?? "unknown"})`,
-  );
-
-  return result;
 }

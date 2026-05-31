@@ -70,6 +70,8 @@ interface Props {
   /** Width of the canvas container, used to flip card left when near the right edge. */
   containerWidth: number;
   faaWeatherCamsUrl: string | null;
+  /** True when the data is served from the DB fallback cache due to a NOAA outage. */
+  stale?: boolean;
   onClose: () => void;
 }
 
@@ -83,6 +85,7 @@ export const WeatherStationPopover: React.FC<Props> = ({
   pinY,
   containerWidth,
   faaWeatherCamsUrl,
+  stale = false,
   onClose,
 }) => {
   const units = useSettingsStore((s) => s.units);
@@ -135,8 +138,29 @@ export const WeatherStationPopover: React.FC<Props> = ({
         }}
       >
         <div>
-          <div style={{ color: "#00e5ff", fontWeight: 700, fontSize: 11, letterSpacing: "0.1em" }}>
-            {station.id}
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ color: "#00e5ff", fontWeight: 700, fontSize: 11, letterSpacing: "0.1em" }}>
+              {station.id}
+            </span>
+            {stale && (
+              <span
+                title="Data served from cache — NOAA API is temporarily unavailable"
+                style={{
+                  background: "rgba(251,191,36,0.15)",
+                  border: "1px solid rgba(251,191,36,0.5)",
+                  color: "#fbbf24",
+                  fontSize: 8,
+                  fontWeight: 700,
+                  letterSpacing: "0.12em",
+                  padding: "1px 4px",
+                  borderRadius: 3,
+                  lineHeight: 1.4,
+                  flexShrink: 0,
+                }}
+              >
+                STALE
+              </span>
+            )}
           </div>
           <div
             style={{

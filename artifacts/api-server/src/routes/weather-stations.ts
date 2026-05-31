@@ -8,6 +8,8 @@
  *
  * Data source: NOAA Weather API (api.weather.gov) — public, no key required.
  * Observations cached in-memory for 10 minutes (NOAA updates hourly).
+ * On NOAA error, falls back to the last-good DB row (up to 1 hour old) and
+ * sets `stale: true` in the response so callers can indicate degraded data.
  */
 
 import { Router } from "express";
