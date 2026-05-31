@@ -3,6 +3,8 @@ import * as zlib from "zlib";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import { Worker } from "worker_threads";
+import { fileURLToPath } from "url";
 import multer from "multer";
 import { eq, and, inArray, or } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
@@ -26,6 +28,7 @@ import {
   previewDataset,
   previewBboxForDownload,
   buildBboxCsvRows,
+  type TerrainGrid,
 } from "../lib/terrain.js";
 import { parseUploadedFile } from "../lib/uploadParsers.js";
 import { fetchCopernicusDem } from "../lib/copernicusDem.js";
@@ -225,17 +228,94 @@ async function streamGunzipToFile(
   });
 }
 
+// ---------------------------------------------------------------------------
+// Worker-thread path — resolved relative to this bundle at runtime.
+// esbuild preserves the src/ directory structure relative to the common
+// ancestor of all entry points (src/), so:
+//   src/index.ts          → dist/index.mjs           (the main bundle)
+//   src/lib/parseWorker.ts → dist/lib/parseWorker.mjs (the worker bundle)
+// ---------------------------------------------------------------------------
+const PARSE_WORKER_PATH = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "lib",
+  "parseWorker.mjs",
+);
+
+interface ParseWorkerResult {
+  terrain: TerrainGrid;
+  overview: TerrainGrid;
+}
+
 /**
- * Yields control back to the Node.js event loop so that other pending I/O
- * callbacks (HTTP responses, keep-alives, timer ticks) are not starved while
- * a CPU-intensive parsing or gridding step runs synchronously.
+ * Spawns a dedicated worker thread to run the CPU-intensive parse + gridPoints
+ * steps for a single upload job.  The main HTTP thread is never blocked: only
+ * lightweight progress-update messages cross the thread boundary until the
+ * worker finishes and posts its structured result.
  *
- * Using setImmediate instead of setTimeout(0) ensures the yield happens after
- * the current I/O poll phase but before the next check phase — the lightest
- * possible pause that still gives the event loop a chance to breathe.
+ * Progress milestones posted by the worker (matching the old inline values):
+ *   40 → file read complete
+ *   55 → parse complete
+ *   60 → terrain grid starting
+ *   80 → terrain grid done / overview grid starting
+ *   88 → overview grid done
+ *
+ * @param filePath   Assembled (and decompressed) file on disk.
+ * @param fileName   Original filename (used for extension detection).
+ * @param resolution Grid resolution for the terrain (32–512).
+ * @param gridId     UUID assigned to this dataset.
+ * @param datasetName Display name derived from the filename.
+ * @param smoothing  Whether to run the spike-smoothing pass.
+ * @param onProgress Callback invoked with each progress milestone.
  */
-function yieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve));
+function runParseWorker(params: {
+  filePath: string;
+  fileName: string;
+  resolution: number;
+  gridId: string;
+  datasetName: string;
+  smoothing: boolean;
+  onProgress: (progress: number) => void;
+}): Promise<ParseWorkerResult> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+
+    const worker = new Worker(PARSE_WORKER_PATH, {
+      workerData: {
+        filePath: params.filePath,
+        fileName: params.fileName,
+        resolution: params.resolution,
+        gridId: params.gridId,
+        datasetName: params.datasetName,
+        smoothing: params.smoothing,
+      },
+    });
+
+    worker.on("message", (msg: { type: string; progress?: number; terrain?: unknown; overview?: unknown; message?: string }) => {
+      if (msg.type === "progress" && typeof msg.progress === "number") {
+        params.onProgress(msg.progress);
+      } else if (msg.type === "result") {
+        if (settled) return;
+        settled = true;
+        resolve({ terrain: msg.terrain as ParseWorkerResult["terrain"], overview: msg.overview as ParseWorkerResult["overview"] });
+      } else if (msg.type === "error" && typeof msg.message === "string") {
+        if (settled) return;
+        settled = true;
+        reject(new Error(msg.message));
+      }
+    });
+
+    worker.on("error", (err) => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    });
+
+    worker.on("exit", (code) => {
+      if (settled) return;
+      settled = true;
+      reject(new Error(`Parse worker exited unexpectedly with code ${code}`));
+    });
+  });
 }
 
 async function processUploadJob(
@@ -284,44 +364,23 @@ async function processUploadJob(
     }
     job.progress = 35;
 
-    // Read the processed file for parsing. String-based XYZ/CSV parsers
-    // require full content; binary parsers get a Buffer.
-    const TEXT_EXTENSIONS = new Set(["csv", "xyz", "txt"]);
+    // Derive names before spawning the worker (cheap, main-thread-safe).
     const baseFileName = fileName.toLowerCase().endsWith(".gz") ? fileName.slice(0, -3) : fileName;
-    const fileExt = baseFileName.split(".").pop() ?? "";
-
-    let points;
-    if (TEXT_EXTENSIONS.has(fileExt)) {
-      const fileContent = await fs.promises.readFile(processPath, "utf8");
-      job.progress = 40;
-      // Yield before the synchronous parse so in-flight HTTP responses are
-      // not delayed by this CPU-bound step.
-      await yieldToEventLoop();
-      points = parseXyzCsv(fileContent, fileName);
-    } else {
-      const raw = await fs.promises.readFile(processPath);
-      job.progress = 40;
-      await yieldToEventLoop();
-      points = await parseUploadedFile(raw, fileName);
-    }
-    job.progress = 55;
-
-    if (points.length < 10) {
-      throw new Error("File must contain at least 10 valid (lon, lat, depth) rows");
-    }
-
     const datasetName = baseFileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
-
-    job.progress = 60;
     const gridId = crypto.randomUUID();
-    // Yield between the two gridPoints calls — each call is O(n log n) and
-    // blocks the event loop for hundreds of ms on large point clouds.
-    await yieldToEventLoop();
-    const terrain = gridPoints(points, resolution, gridId, datasetName, { smoothing });
-    job.progress = 80;
-    await yieldToEventLoop();
-    const overview = gridPoints(points, 64, gridId, datasetName, { smoothing });
-    job.progress = 88;
+
+    // Delegate parse + gridPoints to a dedicated worker thread.
+    // The main event loop is completely free during this await — the worker
+    // runs in its own OS thread and posts progress milestones back here.
+    const { terrain, overview } = await runParseWorker({
+      filePath: processPath,
+      fileName,
+      resolution,
+      gridId,
+      datasetName,
+      smoothing,
+      onProgress: (p) => { job.progress = p; },
+    });
 
     const [saved] = await db
       .insert(customDatasetsTable)
