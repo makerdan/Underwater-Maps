@@ -345,6 +345,45 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
   };
 
   if (tidalStatus === "loading") {
+    if (noaaAmbient) {
+      return (
+        <div style={{ marginBottom: 8, fontSize: 10, color: "#e2e8f0" }} data-testid="currents-noaa-readout">
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span>
+              {noaaAmbient.source === "noaa" ? "NOAA" : "Estimated"}:{" "}
+              {noaaAmbient.directionDeg.toFixed(0)}°{" "}
+              {cardinal(noaaAmbient.directionDeg)} @{" "}
+              {formatSpeedFromKnots(noaaAmbient.speedKt, { units, decimals: 2 })}
+            </span>
+            <span
+              data-testid="currents-noaa-refreshing"
+              style={{
+                fontSize: 8,
+                letterSpacing: "0.15em",
+                color: "#94a3b8",
+                border: "1px solid rgba(148,163,184,0.3)",
+                borderRadius: 2,
+                padding: "1px 4px",
+              }}
+            >
+              REFRESHING…
+            </span>
+          </div>
+          {noaaAmbient.source === "noaa" &&
+          (noaaAmbient.stationName || noaaAmbient.stationId) ? (
+            <div style={{ fontSize: 9, color: "#cbd5e1", marginTop: 2 }} data-testid="currents-noaa-station">
+              Station:{" "}
+              {noaaAmbient.stationName ?? "—"}
+              {noaaAmbient.stationId ? ` (${noaaAmbient.stationId})` : ""}
+            </div>
+          ) : noaaAmbient.source === "estimated" ? (
+            <div style={{ fontSize: 9, color: "#fbbf24", marginTop: 2 }} data-testid="currents-noaa-estimated">
+              No NOAA station in range — using tide-derived estimate.
+            </div>
+          ) : null}
+        </div>
+      );
+    }
     return (
       <div style={{ marginBottom: 8, fontSize: 10, color: "#94a3b8" }} data-testid="currents-noaa-readout">
         <span data-testid="currents-noaa-loading">⟳ Fetching NOAA data…</span>
