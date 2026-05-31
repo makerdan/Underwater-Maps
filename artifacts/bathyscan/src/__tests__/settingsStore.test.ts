@@ -8,6 +8,7 @@ import {
   DEFAULT_SETTINGS,
   SETTINGS_SCHEMA_VERSION,
   QUALITY_PRESETS,
+  SECTION_KEYS,
 } from "@/lib/settingsStore";
 
 function resetStore() {
@@ -253,5 +254,14 @@ describe("settingsStore", () => {
     const ts = Date.parse(stamped as string);
     expect(ts).toBeGreaterThanOrEqual(before);
     expect(ts).toBeLessThanOrEqual(Date.now());
+  });
+
+  it("defaultMapLoad is included in SECTION_KEYS['data']", () => {
+    expect(SECTION_KEYS["data"]).toContain("defaultMapLoad");
+  });
+
+  it("defaultMapLoad defaults to null in DEFAULT_SETTINGS", () => {
+    expect(DEFAULT_SETTINGS.defaultMapLoad).toBeNull();
+    expect(useSettingsStore.getState().defaultMapLoad).toBeNull();
   });
 });

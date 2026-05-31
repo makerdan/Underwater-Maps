@@ -75,6 +75,7 @@ import { ForecastStrip } from "@/components/ForecastStrip";
 import { SimulatedDataConfirmDialog } from "@/components/SimulatedDataConfirmDialog";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { initialViewParams } from "@/lib/viewUrl";
+import { resolveDefaultDataset } from "@/lib/defaultMapLoadLogic";
 import { useUrlSync } from "@/hooks/useUrlSync";
 import { lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
 import { OnboardingOverlay } from "@/components/OnboardingOverlay";
@@ -495,102 +496,37 @@ function Main() {
   useEffect(() => {
     if (hasAutoSelectedRef.current) return;
     if (datasets?.length && !datasetId) {
-      // For upload defaults, wait until the userDatasets query settles so we
-      // can verify existence before committing. If the query is disabled (no
-      // sign-in or no upload preference), userDatasets is undefined and we
-      // proceed immediately — preset and "no preference" cases don't wait.
-      const needsUploadCheck =
-        defaultMapLoad?.kind === "upload" && !!isSignedIn && userDatasets === undefined;
-      if (needsUploadCheck) return;
+      const { cameraSpawnBehaviour, lastSession } = useSettingsStore.getState();
+      const action = resolveDefaultDataset({
+        datasets,
+        defaultMapLoad,
+        userDatasets,
+        isSignedIn,
+        urlDatasetId: initialViewParams?.datasetId,
+        pendingExternalUserDatasetId,
+        cameraSpawnBehaviour,
+        lastSession,
+      });
+
+      if (action.type === "wait") return;
 
       hasAutoSelectedRef.current = true;
 
-      // Prefer the dataset encoded in the share URL if it exists in the list.
-      const urlDatasetId = initialViewParams?.datasetId;
-      const urlMatch = urlDatasetId
-        ? datasets.find((d) => d.id === urlDatasetId)
-        : undefined;
-
-      if (urlMatch) {
-        // URL share link always wins.
-        void requestDatasetSwitch({
-          datasetId: urlMatch.id,
-          datasetName: urlMatch.name,
-          onConfirm: () => setDatasetId(urlMatch.id),
-        });
-        return;
-      }
-
-      // Resume last session: when no URL share link is present, prefer the
-      // dataset from the last session so the user picks up where they left off.
-      const { cameraSpawnBehaviour, lastSession } = useSettingsStore.getState();
-      if (cameraSpawnBehaviour === "last" && lastSession?.datasetId) {
-        const sessionDataset = datasets.find((d) => d.id === lastSession.datasetId);
-        if (sessionDataset) {
+      switch (action.type) {
+        case "url-switch":
+        case "switch":
           void requestDatasetSwitch({
-            datasetId: sessionDataset.id,
-            datasetName: sessionDataset.name,
-            onConfirm: () => setDatasetId(sessionDataset.id),
+            datasetId: action.datasetId,
+            datasetName: action.name,
+            onConfirm: () => setDatasetId(action.datasetId),
           });
-          return;
-        }
-        // Dataset no longer exists — fall through to defaultMapLoad / first preset.
-      }
-
-      // Apply the user's stored default, falling back gracefully if the dataset
-      // no longer exists (e.g. a deleted upload or renamed preset).
-      if (defaultMapLoad) {
-        if (defaultMapLoad.kind === "preset") {
-          const preferred = datasets.find((d) => d.id === defaultMapLoad.id);
-          const target = preferred ?? datasets[0];
-          if (target?.id) {
-            void requestDatasetSwitch({
-              datasetId: target.id,
-              datasetName: target.name,
-              onConfirm: () => setDatasetId(target.id),
-            });
-          } else {
-            setDatasetId(null);
-          }
-          return;
-        }
-
-        if (defaultMapLoad.kind === "upload") {
-          const uploadExists = userDatasets?.some((d) => d.id === defaultMapLoad.id) ?? false;
-          if (uploadExists && !pendingExternalUserDatasetId) {
-            // Trigger DatasetPanel's user-dataset load pipeline and return —
-            // loading a preset here would overwrite the upload before it lands.
-            setPendingExternalUserDatasetId(defaultMapLoad.id);
-            return;
-          }
-          // Upload no longer exists (deleted). Fall back to first preset so
-          // the scene isn't permanently blank.
-          const target = datasets[0];
-          if (target?.id) {
-            void requestDatasetSwitch({
-              datasetId: target.id,
-              datasetName: target.name,
-              onConfirm: () => setDatasetId(target.id),
-            });
-          } else {
-            setDatasetId(null);
-          }
-          return;
-        }
-      }
-
-      // No stored preference — fall back to the first available dataset.
-      const target = datasets[0];
-      if (target?.id) {
-        void requestDatasetSwitch({
-          datasetId: target.id,
-          datasetName: target.name,
-          onConfirm: () => setDatasetId(target.id),
-          // On cancel, leave datasetId as-is (mount-time has no previous
-          // dataset to preserve; user can pick from the panel manually).
-        });
-      } else {
-        setDatasetId(null);
+          break;
+        case "upload-pending":
+          setPendingExternalUserDatasetId(action.uploadId);
+          break;
+        case "none":
+          setDatasetId(null);
+          break;
       }
     }
   }, [datasets, datasetId, setDatasetId, defaultMapLoad, isSignedIn, userDatasets,
