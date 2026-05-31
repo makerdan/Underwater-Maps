@@ -12,6 +12,23 @@ import { useAppState } from "@/lib/context";
 
 export type { WeatherStation };
 
+/**
+ * Returns true when the error is a 503 noaa_unavailable response.
+ *
+ * Errors from customFetch are `ApiError` instances with:
+ *   - `error.status`  — the HTTP status code
+ *   - `error.data`    — the parsed JSON body (e.g. { error: "noaa_unavailable" })
+ * The native `Response` object lives at `error.response` but carries no `.data`.
+ */
+function detectNoaaUnavailable(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as { status?: number; data?: unknown };
+  if (err.status !== 503) return false;
+  const data = err.data;
+  if (!data || typeof data !== "object") return false;
+  return (data as { error?: string }).error === "noaa_unavailable";
+}
+
 export interface WeatherStationsResult {
   stations: WeatherStation[];
   faaWeatherCamsUrl: string | null;
@@ -21,6 +38,12 @@ export interface WeatherStationsResult {
   isLoading: boolean;
   isFetching: boolean;
   isError: boolean;
+  /**
+   * True when NOAA is unreachable and there is no cached fallback data.
+   * The API returns 503 with error:"noaa_unavailable" in this case.
+   * This is a known, recoverable condition distinct from unexpected errors.
+   */
+  noaaUnavailable: boolean;
   centerLat: number | null;
   centerLon: number | null;
 }
@@ -37,7 +60,7 @@ export function useWeatherStations(): WeatherStationsResult {
     radiusMiles: 75,
   };
 
-  const { data, isLoading, isFetching, isError } = useGetWeatherStations(params, {
+  const { data, isLoading, isFetching, isError, error } = useGetWeatherStations(params, {
     query: {
       queryKey: getGetWeatherStationsQueryKey(params),
       // Always fetch when terrain is loaded — FAA button works independently of the pin toggle
@@ -47,6 +70,8 @@ export function useWeatherStations(): WeatherStationsResult {
     },
   });
 
+  const noaaUnavailable = isError && detectNoaaUnavailable(error);
+
   return {
     stations: data?.stations ?? [],
     faaWeatherCamsUrl: data?.faaWeatherCamsUrl ?? null,
@@ -55,6 +80,7 @@ export function useWeatherStations(): WeatherStationsResult {
     isLoading,
     isFetching,
     isError,
+    noaaUnavailable,
     centerLat,
     centerLon,
   };

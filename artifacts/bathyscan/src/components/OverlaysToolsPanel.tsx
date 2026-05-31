@@ -167,6 +167,7 @@ export const OverlaysToolsPanel: React.FC = () => {
   const {
     isLoading: wxLoading,
     isError: wxError,
+    noaaUnavailable: wxNoaaUnavailable,
     faaWeatherCamsUrl,
   } = useWeatherStations();
 
@@ -243,7 +244,10 @@ export const OverlaysToolsPanel: React.FC = () => {
   const prevWxError = useRef(false);
   useEffect(() => {
     if (wxError && !prevWxError.current) {
-      if (weatherStationsActive) {
+      // noaa_unavailable is a known, recoverable outage — keep the overlay on
+      // so the user can retry without re-enabling it. Only unexpected errors
+      // (network failures, server crashes, etc.) should disable the overlay.
+      if (!wxNoaaUnavailable && weatherStationsActive) {
         setWeatherStationsActive(false);
         toast({
           title: "Weather stations failed",
@@ -253,7 +257,7 @@ export const OverlaysToolsPanel: React.FC = () => {
       }
     }
     prevWxError.current = wxError;
-  }, [wxError, weatherStationsActive, setWeatherStationsActive, toast]);
+  }, [wxError, wxNoaaUnavailable, weatherStationsActive, setWeatherStationsActive, toast]);
 
   return (
     <div
@@ -472,6 +476,24 @@ export const OverlaysToolsPanel: React.FC = () => {
                   )}
                 </button>
               </ViewscreenTooltip>
+
+              {wxNoaaUnavailable && (
+                <div
+                  data-testid="wx-noaa-unavailable-notice"
+                  style={{
+                    fontSize: 9,
+                    letterSpacing: "0.06em",
+                    color: "#fbbf24",
+                    background: "rgba(251,191,36,0.08)",
+                    border: "1px solid rgba(251,191,36,0.25)",
+                    borderRadius: 4,
+                    padding: "5px 8px",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  ⚠ Weather data temporarily unavailable — try again in a few minutes.
+                </div>
+              )}
 
               <ViewscreenTooltip
                 label={
