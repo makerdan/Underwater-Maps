@@ -645,7 +645,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
   };
 
   return (
-    <div style={PANEL_STYLE}>
+    <div data-testid="weather-panel" style={PANEL_STYLE}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <span style={{ ...VALUE, fontSize: 11, letterSpacing: "0.15em" }}>⛵ DRIFT PLANNER</span>
         <button
