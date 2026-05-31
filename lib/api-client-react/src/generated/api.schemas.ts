@@ -295,6 +295,12 @@ export const UserSettingsWaterType = {
  */
 export type UserSettingsPanelCollapse = {[key: string]: boolean};
 
+export type UserSettingsZoneOverlaySlotsItem = {
+  /** @pattern ^#[0-9a-fA-F]{6}$ */
+  color: string;
+  visible: boolean;
+};
+
 /**
  * Per-user application settings with sensible defaults
  */
@@ -385,6 +391,12 @@ export interface UserSettings {
   showUiTooltips?: boolean;
   /** Panel expand/collapse state keyed by panel id. Synced cross-device for signed-in users. */
   panelCollapse?: UserSettingsPanelCollapse;
+  /**
+     * Per-slot zone colour and visibility for the four terrain texture slots (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.
+     * @minItems 4
+     * @maxItems 4
+     */
+  zoneOverlaySlots?: UserSettingsZoneOverlaySlotsItem[];
 }
 
 export interface ApiError {

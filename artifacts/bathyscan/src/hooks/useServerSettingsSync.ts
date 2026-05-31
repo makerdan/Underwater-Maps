@@ -27,6 +27,7 @@ import {
 import { useSettingsStore, getDataSnapshot } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { usePanelCollapseStore, type PanelId } from "@/lib/panelCollapseStore";
+import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
 
 // ─── Module-level flush ref ───────────────────────────────────────────────────
 // Populated by the hook on every render so Settings can always call the most
@@ -66,6 +67,7 @@ function buildPayload(): Record<string, unknown> {
   dataOnly.customStops = palette.customStops;
   dataOnly.bandColors = palette.bandColors;
   dataOnly.panelCollapse = usePanelCollapseStore.getState().collapsed;
+  dataOnly.zoneOverlaySlots = useZoneOverlayStore.getState().slots;
   return dataOnly;
 }
 
@@ -122,6 +124,11 @@ export function useServerSettingsSync(): void {
           }
         }
       }
+
+      // Restore zone overlay colours and visibility from the server.
+      if (Array.isArray(serverRec.zoneOverlaySlots)) {
+        useZoneOverlayStore.getState().hydrateFromServer(serverRec.zoneOverlaySlots);
+      }
     }
   }, [serverSettings, hydrateFromServer]);
 
@@ -162,10 +169,13 @@ export function useServerSettingsSync(): void {
     };
     const panelSnap = () =>
       JSON.stringify(usePanelCollapseStore.getState().collapsed);
+    const zoneSnap = () =>
+      JSON.stringify(useZoneOverlayStore.getState().slots);
 
     let lastSettings = JSON.stringify(getDataSnapshot());
     let lastPalette = palSnap();
     let lastPanel = panelSnap();
+    let lastZone = zoneSnap();
 
     const unsubSettings = useSettingsStore.subscribe(() => {
       const cur = JSON.stringify(getDataSnapshot());
@@ -188,11 +198,19 @@ export function useServerSettingsSync(): void {
         scheduleSync();
       }
     });
+    const unsubZone = useZoneOverlayStore.subscribe(() => {
+      const cur = zoneSnap();
+      if (cur !== lastZone) {
+        lastZone = cur;
+        scheduleSync();
+      }
+    });
 
     return () => {
       unsubSettings();
       unsubPalette();
       unsubPanel();
+      unsubZone();
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [scheduleSync]);

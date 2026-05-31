@@ -74,6 +74,7 @@ interface ZoneOverlayStore {
   setSlotColor: (index: 0 | 1 | 2 | 3, color: string) => void;
   setSlotVisible: (index: 0 | 1 | 2 | 3, visible: boolean) => void;
   resetToDefaults: () => void;
+  hydrateFromServer: (slots: unknown) => void;
 }
 
 export const useZoneOverlayStore = create<ZoneOverlayStore>((set) => ({
@@ -101,6 +102,26 @@ export const useZoneOverlayStore = create<ZoneOverlayStore>((set) => ({
     const next = buildDefaultSlots();
     saveSlots(next);
     return set({ slots: next });
+  },
+
+  hydrateFromServer: (raw: unknown) => {
+    if (!Array.isArray(raw) || raw.length !== 4) return;
+    const current = useZoneOverlayStore.getState().slots;
+    const next = raw.map((item: unknown, i: number) => {
+      const def = current[i]!;
+      const color =
+        typeof (item as Record<string, unknown>)["color"] === "string" &&
+        /^#[0-9a-fA-F]{6}$/i.test((item as Record<string, unknown>)["color"] as string)
+          ? ((item as Record<string, unknown>)["color"] as string)
+          : def.color;
+      const visible =
+        typeof (item as Record<string, unknown>)["visible"] === "boolean"
+          ? ((item as Record<string, unknown>)["visible"] as boolean)
+          : def.visible;
+      return { color, visible };
+    }) as [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot];
+    saveSlots(next);
+    set({ slots: next });
   },
 }));
 

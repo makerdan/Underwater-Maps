@@ -2175,6 +2175,25 @@ components:
             type: boolean
           default: {}
           description: Panel expand/collapse state keyed by panel id. Synced cross-device for signed-in users.
+        zoneOverlaySlots:
+          type: array
+          minItems: 4
+          maxItems: 4
+          description: Per-slot zone colour and visibility for the four terrain texture slots (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.
+          items:
+            type: object
+            properties:
+              color:
+                type: string
+                pattern: '^#[0-9a-fA-F]{6}$'
+              visible:
+                type: boolean
+            required: [color, visible]
+          default:
+            - { color: '#f5d58a', visible: true }
+            - { color: '#c49a6c', visible: true }
+            - { color: '#8ab4d0', visible: true }
+            - { color: '#b06060', visible: true }
 
     ApiError:
       type: object

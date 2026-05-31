@@ -834,6 +834,12 @@ export const getSettingsResponseGpsRecordingIntervalMax = 60000;
 export const getSettingsResponseWaterTypeDefault = `saltwater`;
 export const getSettingsResponseShowUiTooltipsDefault = true;
 export const getSettingsResponsePanelCollapseDefault = {  };
+export const getSettingsResponseZoneOverlaySlotsItemColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const getSettingsResponseZoneOverlaySlotsDefault = [{ color: `#f5d58a`, visible: true, }, { color: `#c49a6c`, visible: true, }, { color: `#8ab4d0`, visible: true, }, { color: `#b06060`, visible: true, }];
+export const getSettingsResponseZoneOverlaySlotsMin = 4;
+export const getSettingsResponseZoneOverlaySlotsMax = 4;
+
+
 
 export const GetSettingsResponse = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(getSettingsResponseTextureQualityDefault),
@@ -874,7 +880,11 @@ export const GetSettingsResponse = zod.object({
   "gpsRecordingInterval": zod.number().min(getSettingsResponseGpsRecordingIntervalMin).max(getSettingsResponseGpsRecordingIntervalMax).default(getSettingsResponseGpsRecordingIntervalDefault),
   "waterType": zod.enum(['saltwater', 'freshwater']).default(getSettingsResponseWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter'),
   "showUiTooltips": zod.boolean().default(getSettingsResponseShowUiTooltipsDefault).describe('Show hover\/focus tooltips on viewscreen controls and HUD readouts.'),
-  "panelCollapse": zod.record(zod.string(), zod.boolean()).default(getSettingsResponsePanelCollapseDefault).describe('Panel expand\/collapse state keyed by panel id. Synced cross-device for signed-in users.')
+  "panelCollapse": zod.record(zod.string(), zod.boolean()).default(getSettingsResponsePanelCollapseDefault).describe('Panel expand\/collapse state keyed by panel id. Synced cross-device for signed-in users.'),
+  "zoneOverlaySlots": zod.array(zod.object({
+  "color": zod.string().regex(getSettingsResponseZoneOverlaySlotsItemColorRegExp),
+  "visible": zod.boolean()
+})).min(getSettingsResponseZoneOverlaySlotsMin).max(getSettingsResponseZoneOverlaySlotsMax).default(getSettingsResponseZoneOverlaySlotsDefault).describe('Per-slot zone colour and visibility for the four terrain texture slots (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.')
 }).describe('Per-user application settings with sensible defaults')
 
 
@@ -950,6 +960,12 @@ export const putSettingsBodyGpsRecordingIntervalMax = 60000;
 export const putSettingsBodyWaterTypeDefault = `saltwater`;
 export const putSettingsBodyShowUiTooltipsDefault = true;
 export const putSettingsBodyPanelCollapseDefault = {  };
+export const putSettingsBodyZoneOverlaySlotsItemColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsBodyZoneOverlaySlotsDefault = [{ color: `#f5d58a`, visible: true, }, { color: `#c49a6c`, visible: true, }, { color: `#8ab4d0`, visible: true, }, { color: `#b06060`, visible: true, }];
+export const putSettingsBodyZoneOverlaySlotsMin = 4;
+export const putSettingsBodyZoneOverlaySlotsMax = 4;
+
+
 
 export const PutSettingsBody = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsBodyTextureQualityDefault),
@@ -990,7 +1006,11 @@ export const PutSettingsBody = zod.object({
   "gpsRecordingInterval": zod.number().min(putSettingsBodyGpsRecordingIntervalMin).max(putSettingsBodyGpsRecordingIntervalMax).default(putSettingsBodyGpsRecordingIntervalDefault),
   "waterType": zod.enum(['saltwater', 'freshwater']).default(putSettingsBodyWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter'),
   "showUiTooltips": zod.boolean().default(putSettingsBodyShowUiTooltipsDefault).describe('Show hover\/focus tooltips on viewscreen controls and HUD readouts.'),
-  "panelCollapse": zod.record(zod.string(), zod.boolean()).default(putSettingsBodyPanelCollapseDefault).describe('Panel expand\/collapse state keyed by panel id. Synced cross-device for signed-in users.')
+  "panelCollapse": zod.record(zod.string(), zod.boolean()).default(putSettingsBodyPanelCollapseDefault).describe('Panel expand\/collapse state keyed by panel id. Synced cross-device for signed-in users.'),
+  "zoneOverlaySlots": zod.array(zod.object({
+  "color": zod.string().regex(putSettingsBodyZoneOverlaySlotsItemColorRegExp),
+  "visible": zod.boolean()
+})).min(putSettingsBodyZoneOverlaySlotsMin).max(putSettingsBodyZoneOverlaySlotsMax).default(putSettingsBodyZoneOverlaySlotsDefault).describe('Per-slot zone colour and visibility for the four terrain texture slots (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.')
 }).describe('Per-user application settings with sensible defaults')
 
 export const putSettingsResponseTextureQualityDefault = `high`;
@@ -1061,6 +1081,12 @@ export const putSettingsResponseGpsRecordingIntervalMax = 60000;
 export const putSettingsResponseWaterTypeDefault = `saltwater`;
 export const putSettingsResponseShowUiTooltipsDefault = true;
 export const putSettingsResponsePanelCollapseDefault = {  };
+export const putSettingsResponseZoneOverlaySlotsItemColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsResponseZoneOverlaySlotsDefault = [{ color: `#f5d58a`, visible: true, }, { color: `#c49a6c`, visible: true, }, { color: `#8ab4d0`, visible: true, }, { color: `#b06060`, visible: true, }];
+export const putSettingsResponseZoneOverlaySlotsMin = 4;
+export const putSettingsResponseZoneOverlaySlotsMax = 4;
+
+
 
 export const PutSettingsResponse = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsResponseTextureQualityDefault),
@@ -1101,7 +1127,11 @@ export const PutSettingsResponse = zod.object({
   "gpsRecordingInterval": zod.number().min(putSettingsResponseGpsRecordingIntervalMin).max(putSettingsResponseGpsRecordingIntervalMax).default(putSettingsResponseGpsRecordingIntervalDefault),
   "waterType": zod.enum(['saltwater', 'freshwater']).default(putSettingsResponseWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter'),
   "showUiTooltips": zod.boolean().default(putSettingsResponseShowUiTooltipsDefault).describe('Show hover\/focus tooltips on viewscreen controls and HUD readouts.'),
-  "panelCollapse": zod.record(zod.string(), zod.boolean()).default(putSettingsResponsePanelCollapseDefault).describe('Panel expand\/collapse state keyed by panel id. Synced cross-device for signed-in users.')
+  "panelCollapse": zod.record(zod.string(), zod.boolean()).default(putSettingsResponsePanelCollapseDefault).describe('Panel expand\/collapse state keyed by panel id. Synced cross-device for signed-in users.'),
+  "zoneOverlaySlots": zod.array(zod.object({
+  "color": zod.string().regex(putSettingsResponseZoneOverlaySlotsItemColorRegExp),
+  "visible": zod.boolean()
+})).min(putSettingsResponseZoneOverlaySlotsMin).max(putSettingsResponseZoneOverlaySlotsMax).default(putSettingsResponseZoneOverlaySlotsDefault).describe('Per-slot zone colour and visibility for the four terrain texture slots (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.')
 }).describe('Per-user application settings with sensible defaults')
 
 

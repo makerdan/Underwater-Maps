@@ -39,6 +39,12 @@ const DEFAULT_SETTINGS = {
   gpsRecordingInterval: 10000,
   waterType: "saltwater",
   showUiTooltips: true,
+  zoneOverlaySlots: [
+    { color: "#f5d58a", visible: true },
+    { color: "#c49a6c", visible: true },
+    { color: "#8ab4d0", visible: true },
+    { color: "#b06060", visible: true },
+  ],
   paletteShallow: "#00e5ff",
   paletteDeep: "#283593",
   customStops: [
