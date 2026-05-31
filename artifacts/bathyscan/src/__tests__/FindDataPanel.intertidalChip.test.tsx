@@ -22,7 +22,7 @@ import { FindDataPanel, INTERTIDAL_CATALOG_IDS } from "@/components/FindDataPane
 const makeApiClientMock = vi.hoisted(() => {
   function noop() {}
   function queryHook() {
-    return { data: [], isFetching: false, isLoading: false, isError: false };
+    return { data: undefined, isFetching: false, isLoading: false, isError: false };
   }
   function mutationHook() {
     return {
@@ -88,6 +88,11 @@ const INTERTIDAL_ENTRY = {
   lastUpdated: null,
 };
 
+// Mutable pointer read by the catalog mock below.  Parameterized tests swap
+// this before rendering so every ID in INTERTIDAL_CATALOG_IDS gets its own
+// chip-filter verification without touching the mock definition.
+let dynamicIntertidalEntry = INTERTIDAL_ENTRY;
+
 const HABITAT_ENTRY = {
   id: "pacific-kelp-habitat",
   name: "Pacific Kelp Habitat",
@@ -138,13 +143,13 @@ vi.mock(
         if (params?.dataType === "habitat") {
           // Server returns all habitat-typed entries, including the intertidal one.
           return {
-            data: [INTERTIDAL_ENTRY, HABITAT_ENTRY],
+            data: [dynamicIntertidalEntry, HABITAT_ENTRY],
             isFetching: false,
           };
         }
         // No server-side filter → return everything.
         return {
-          data: [INTERTIDAL_ENTRY, HABITAT_ENTRY, BATHY_ENTRY],
+          data: [dynamicIntertidalEntry, HABITAT_ENTRY, BATHY_ENTRY],
           isFetching: false,
         };
       },
@@ -180,6 +185,10 @@ vi.mock("@/components/help/HelpButton", () => ({
   HelpIcon: () => null,
 }));
 
+vi.mock("@/components/ViewscreenTooltip", () => ({
+  ViewscreenTooltip: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -201,6 +210,9 @@ describe("FindDataPanel — Intertidal / Shoreline filter chip", () => {
   beforeEach(() => {
     onClose.mockClear();
     catalogSearchParams = {};
+    // Always reset to the primary fixture so tests that don't call
+    // describe.each never accidentally inherit a sibling's entry.
+    dynamicIntertidalEntry = INTERTIDAL_ENTRY;
   });
 
   it("renders the Intertidal / Shoreline chip in the filter bar", () => {
@@ -277,3 +289,53 @@ describe("FindDataPanel — Intertidal / Shoreline filter chip", () => {
     expect(screen.getByText("Alaska Bathymetry 2024")).toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Parameterized coverage — one sub-suite per catalog ID
+//
+// Adding a new ID to INTERTIDAL_CATALOG_IDS automatically creates a failing
+// test here that the developer must address, ensuring no dataset ever ships
+// without chip-filter verification.
+// ---------------------------------------------------------------------------
+describe.each([...INTERTIDAL_CATALOG_IDS])(
+  "FindDataPanel — intertidal chip narrows to catalog ID %s",
+  (catalogId) => {
+    beforeEach(() => {
+      onClose.mockClear();
+      catalogSearchParams = {};
+      // Swap the mock's intertidal entry to the ID under test.
+      dynamicIntertidalEntry = {
+        id: catalogId,
+        name: `Intertidal Dataset (${catalogId})`,
+        dataType: "habitat",
+        sourceAgency: "Test Agency",
+        waterType: "saltwater",
+        description: `Parameterised fixture for ${catalogId}.`,
+        relevanceScore: 0.9,
+        resolutionMMin: null,
+        resolutionMMax: null,
+        lastUpdated: null,
+      };
+    });
+
+    it("chip is active → only this entry is shown", () => {
+      renderPanel();
+      fireEvent.click(getChip(/Intertidal \/ Shoreline/i));
+
+      // The entry for this specific ID must be visible.
+      expect(
+        screen.getByText(`Intertidal Dataset (${catalogId})`),
+      ).toBeInTheDocument();
+
+      // Non-intertidal entries must be hidden by the client-side filter.
+      expect(screen.queryByText("Pacific Kelp Habitat")).not.toBeInTheDocument();
+      expect(screen.queryByText("Alaska Bathymetry 2024")).not.toBeInTheDocument();
+    });
+
+    it("chip is active → dataType=intertidal is never sent to the API", () => {
+      renderPanel();
+      fireEvent.click(getChip(/Intertidal \/ Shoreline/i));
+      expect(catalogSearchParams.dataType).toBeUndefined();
+    });
+  },
+);
