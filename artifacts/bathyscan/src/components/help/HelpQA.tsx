@@ -3,6 +3,12 @@ import { useOfflineStore } from "@/lib/offlineStore";
 
 const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+export function validateHelpInput(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  return trimmed;
+}
+
 interface QAMessage {
   role: "user" | "assistant";
   content: string;
@@ -32,7 +38,7 @@ export const HelpQA: React.FC = () => {
 
   async function ask(question: string) {
     if (!isOnline) return;
-    const q = question.trim();
+    const q = validateHelpInput(question);
     if (!q || loading) return;
     setError(null);
     setMessages((m) => [...m, { role: "user", content: q }]);

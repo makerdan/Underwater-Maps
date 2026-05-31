@@ -1602,7 +1602,12 @@ export interface MarkerInput {
   lat: number;
   depth: number;
   type?: MarkerInputType;
+  /**
+     * @minLength 1
+     * @maxLength 60
+     */
   label: string;
+  /** @maxLength 280 */
   notes?: string | null;
 }
 
@@ -1765,13 +1770,29 @@ export const PostDatasetsBboxQueryBodyWaterType = {
 } as const;
 
 export type PostDatasetsBboxQueryBody = {
-  /** Northern latitude in decimal degrees */
+  /**
+     * Northern latitude in decimal degrees
+     * @minimum -90
+     * @maximum 90
+     */
   north: number;
-  /** Southern latitude in decimal degrees */
+  /**
+     * Southern latitude in decimal degrees
+     * @minimum -90
+     * @maximum 90
+     */
   south: number;
-  /** Eastern longitude in decimal degrees */
+  /**
+     * Eastern longitude in decimal degrees
+     * @minimum -180
+     * @maximum 180
+     */
   east: number;
-  /** Western longitude in decimal degrees */
+  /**
+     * Western longitude in decimal degrees
+     * @minimum -180
+     * @maximum 180
+     */
   west: number;
   dataType?: PostDatasetsBboxQueryBodyDataType;
   waterType?: PostDatasetsBboxQueryBodyWaterType;

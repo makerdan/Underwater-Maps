@@ -2,6 +2,8 @@ import { z } from "zod";
 
 const NO_CONTROL_CHARS = /^[^\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]*$/u;
 
+export const MARKER_LABEL_MAX = 60;
+
 export const markerLabelSchema = z
   .string()
   .transform((s) => s.trim())
@@ -9,7 +11,7 @@ export const markerLabelSchema = z
     z
       .string()
       .min(1, "Label is required")
-      .max(60, "Label must be 60 characters or fewer")
+      .max(MARKER_LABEL_MAX, `Label must be ${MARKER_LABEL_MAX} characters or fewer`)
       .regex(NO_CONTROL_CHARS, "Label contains invalid control characters"),
   );
 

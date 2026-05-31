@@ -611,6 +611,11 @@ export const GetMarkersResponse = zod.array(GetMarkersResponseItem)
  * @summary Create a new marker
  */
 export const postMarkersBodyTypeDefault = `custom`;
+export const postMarkersBodyLabelMax = 60;
+
+export const postMarkersBodyNotesMax = 280;
+
+
 
 export const PostMarkersBody = zod.object({
   "datasetId": zod.string(),
@@ -618,8 +623,8 @@ export const PostMarkersBody = zod.object({
   "lat": zod.number(),
   "depth": zod.number(),
   "type": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'depth_pole', 'log', 'vegetation', 'sample', 'bass', 'trout', 'pike', 'walleye', 'crayfish']).default(postMarkersBodyTypeDefault),
-  "label": zod.string(),
-  "notes": zod.string().nullish()
+  "label": zod.string().min(1).max(postMarkersBodyLabelMax),
+  "notes": zod.string().max(postMarkersBodyNotesMax).nullish()
 })
 
 
@@ -1713,11 +1718,25 @@ Validation rules:
 
  * @summary Find catalog datasets whose coverage intersects a bounding box
  */
+export const postDatasetsBboxQueryBodyNorthMin = -90;
+export const postDatasetsBboxQueryBodyNorthMax = 90;
+
+export const postDatasetsBboxQueryBodySouthMin = -90;
+export const postDatasetsBboxQueryBodySouthMax = 90;
+
+export const postDatasetsBboxQueryBodyEastMin = -180;
+export const postDatasetsBboxQueryBodyEastMax = 180;
+
+export const postDatasetsBboxQueryBodyWestMin = -180;
+export const postDatasetsBboxQueryBodyWestMax = 180;
+
+
+
 export const PostDatasetsBboxQueryBody = zod.object({
-  "north": zod.number().describe('Northern latitude in decimal degrees'),
-  "south": zod.number().describe('Southern latitude in decimal degrees'),
-  "east": zod.number().describe('Eastern longitude in decimal degrees'),
-  "west": zod.number().describe('Western longitude in decimal degrees'),
+  "north": zod.number().min(postDatasetsBboxQueryBodyNorthMin).max(postDatasetsBboxQueryBodyNorthMax).describe('Northern latitude in decimal degrees'),
+  "south": zod.number().min(postDatasetsBboxQueryBodySouthMin).max(postDatasetsBboxQueryBodySouthMax).describe('Southern latitude in decimal degrees'),
+  "east": zod.number().min(postDatasetsBboxQueryBodyEastMin).max(postDatasetsBboxQueryBodyEastMax).describe('Eastern longitude in decimal degrees'),
+  "west": zod.number().min(postDatasetsBboxQueryBodyWestMin).max(postDatasetsBboxQueryBodyWestMax).describe('Western longitude in decimal degrees'),
   "dataType": zod.enum(['bathymetry', 'substrate', 'habitat', 'lidar', 'chart']).optional(),
   "waterType": zod.enum(['saltwater', 'freshwater']).optional()
 })
