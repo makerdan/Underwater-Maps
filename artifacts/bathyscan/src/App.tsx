@@ -1387,6 +1387,7 @@ function SettingsRoute() {
   return (
     <QueryClientProvider client={queryClient}>
       <Show when="signed-in">
+        <ServerSettingsSyncMount />
         <Settings />
       </Show>
       <Show when="signed-out">
