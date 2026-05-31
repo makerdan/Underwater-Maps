@@ -497,7 +497,7 @@ async function getSmoothingPreference(req: import("express").Request): Promise<b
 }
 
 // ── GET /datasets ─────────────────────────────────────────────────────────────
-router.get("/datasets", async (req, res): Promise<void> => {
+router.get("/datasets", asyncHandler(async (req, res): Promise<void> => {
   const rawWaterType = req.query["waterType"];
   const waterTypeFilter =
     rawWaterType === "freshwater" || rawWaterType === "saltwater"
@@ -522,7 +522,7 @@ router.get("/datasets", async (req, res): Promise<void> => {
     ...(d.hasEfh === true ? { hasEfh: true as const } : {}),
   }));
   res.json(GetDatasetsResponse.parse(list));
-});
+}));
 
 // ── GET /datasets/:id/terrain ─────────────────────────────────────────────────
 router.get("/datasets/:id/terrain", async (req, res): Promise<void> => {
@@ -942,7 +942,7 @@ router.post(
   requireAuth,
   upload.single("file"),
   multerErrorHandler,
-  async (req: Request, res: Response): Promise<void> => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const file = req.file;
   if (!file) {
     res.status(400).json({ error: "missing_file", details: "No file uploaded. Send the XYZ/CSV/.gz as the 'file' field in a multipart/form-data request." });
@@ -1105,7 +1105,7 @@ router.post(
       saveError,
     }),
   );
-});
+}));
 
 // ── POST /datasets/upload/chunk ───────────────────────────────────────────────
 // Receives one 5 MB slice of a large file. Fields (all required):
@@ -1120,7 +1120,7 @@ router.post(
   "/datasets/upload/chunk",
   requireAuth,
   uploadChunkMiddleware.single("file"),
-  async (req: Request, res: Response): Promise<void> => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const file = req.file;
     if (!file) {
       res.status(400).json({ error: "missing_file", details: "No chunk data received." });
@@ -1178,7 +1178,7 @@ router.post(
     }
 
     res.json({ received: chunkIndex });
-  },
+  }),
 );
 
 // ── POST /datasets/upload/chunk/finalize ──────────────────────────────────────
@@ -1189,7 +1189,7 @@ router.post(
 router.post(
   "/datasets/upload/chunk/finalize",
   requireAuth,
-  async (req: Request, res: Response): Promise<void> => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const FinalizeSchema = z.object({
       uploadId: z.string().regex(/^[a-zA-Z0-9_-]{8,64}$/, "Invalid uploadId"),
       fileName: z.string().min(1).max(255),
@@ -1247,7 +1247,7 @@ router.post(
     void processUploadJob(jobId, uploadId, totalChunks, fileName, resolution, userId, smoothing);
 
     res.json({ jobId });
-  },
+  }),
 );
 
 // ── POST /datasets/upload/request-gcs-url ────────────────────────────────────

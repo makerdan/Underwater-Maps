@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, userSettingsTable } from "@workspace/db";
 import { GetSettingsResponse, PutSettingsBody } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 
 const router = Router();
 
@@ -94,7 +95,7 @@ function mergeForResponse(
   return { ...validated, ...extras };
 }
 
-router.get("/settings", requireAuth, async (req, res): Promise<void> => {
+router.get("/settings", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
   const [row] = await db
@@ -141,9 +142,9 @@ router.get("/settings", requireAuth, async (req, res): Promise<void> => {
 
   const validated = GetSettingsResponse.parse(merged) as Record<string, unknown>;
   res.json(mergeForResponse(stored, validated));
-});
+}));
 
-router.put("/settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const body = (req.body ?? {}) as Record<string, unknown>;
   const parsed = PutSettingsBody.safeParse(body);
@@ -210,6 +211,6 @@ router.put("/settings", requireAuth, async (req, res): Promise<void> => {
     });
 
   res.json(merged);
-});
+}));
 
 export default router;

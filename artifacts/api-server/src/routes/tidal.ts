@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { logger } from "../lib/logger.js";
 import { registerCache } from "../lib/cacheRegistry.js";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 import {
   buildSyntheticEvents,
   computeSlackSample,
@@ -427,7 +428,7 @@ router.post("/tidal/admin/refresh-stations", (req, res): void => {
 });
 
 // GET /tidal?lat=&lon=&datetime=
-router.get("/tidal", async (req, res): Promise<void> => {
+router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
   const lat = parseFloat(String(req.query["lat"] ?? ""));
   const lon = parseFloat(String(req.query["lon"] ?? ""));
   const datetimeStr = String(req.query["datetime"] ?? "");
@@ -527,12 +528,12 @@ router.get("/tidal", async (req, res): Promise<void> => {
     slack: sample.slack,
   };
   res.json(body);
-});
+}));
 
 // GET /tidal/schedule?lat=&lon=&days=N&start=ISO
 // Returns the next N days of predicted high/low events plus derived
 // slack windows (when current speed crosses below the slack threshold).
-router.get("/tidal/schedule", async (req, res): Promise<void> => {
+router.get("/tidal/schedule", asyncHandler(async (req, res): Promise<void> => {
   const lat = parseFloat(String(req.query["lat"] ?? ""));
   const lon = parseFloat(String(req.query["lon"] ?? ""));
   const days = Math.min(14, Math.max(1, parseInt(String(req.query["days"] ?? "7"), 10) || 7));
@@ -649,6 +650,6 @@ router.get("/tidal/schedule", async (req, res): Promise<void> => {
     rangeEnd: new Date(endMs).toISOString(),
     events: scheduleEvents,
   });
-});
+}));
 
 export default router;

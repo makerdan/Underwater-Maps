@@ -30,6 +30,7 @@ import { eq, and, lt } from "drizzle-orm";
 import { z } from "zod";
 import { db, userCatalogSavesTable, customDatasetsTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 import {
   getCatalogEntries,
   searchCatalog,
@@ -260,7 +261,7 @@ router.post("/datasets/bbox-query", async (req, res): Promise<void> => {
 // POST /datasets/catalog/:id/save  (auth-gated)
 // ---------------------------------------------------------------------------
 
-router.post("/datasets/catalog/:id/save", requireAuth, async (req, res): Promise<void> => {
+router.post("/datasets/catalog/:id/save", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const catalogId = String(req.params["id"] ?? "");
 
@@ -311,7 +312,7 @@ router.post("/datasets/catalog/:id/save", requireAuth, async (req, res): Promise
   void materializeSave(created.id, userId, entry);
 
   res.status(201).json(formatSaveRow(created, entry));
-});
+}));
 
 /**
  * Background materialization: builds the terrain + overview grids for the
@@ -720,7 +721,7 @@ function nceiCoverageForEntry(
 // or ready, returns the current row unchanged.
 // ---------------------------------------------------------------------------
 
-router.post("/datasets/my-saves/:id/retry", requireAuth, async (req, res): Promise<void> => {
+router.post("/datasets/my-saves/:id/retry", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const saveId = String(req.params["id"] ?? "");
 
@@ -766,13 +767,13 @@ router.post("/datasets/my-saves/:id/retry", requireAuth, async (req, res): Promi
   void materializeSave(updated.id, userId, entry);
 
   res.status(200).json(formatSaveRow(updated, entry));
-});
+}));
 
 // ---------------------------------------------------------------------------
 // GET /datasets/my-saves  (auth-gated)
 // ---------------------------------------------------------------------------
 
-router.get("/datasets/my-saves", requireAuth, async (req, res): Promise<void> => {
+router.get("/datasets/my-saves", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
   const rows = await db
@@ -789,13 +790,13 @@ router.get("/datasets/my-saves", requireAuth, async (req, res): Promise<void> =>
   });
 
   res.json(result);
-});
+}));
 
 // ---------------------------------------------------------------------------
 // GET /datasets/my-saves/:id/status  (auth-gated)
 // ---------------------------------------------------------------------------
 
-router.get("/datasets/my-saves/:id/status", requireAuth, async (req, res): Promise<void> => {
+router.get("/datasets/my-saves/:id/status", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const saveId = String(req.params["id"] ?? "");
 
@@ -812,7 +813,7 @@ router.get("/datasets/my-saves/:id/status", requireAuth, async (req, res): Promi
   const entries = await getCatalogEntries();
   const entry = entries.find((e) => e.id === rows[0]!.catalogId) ?? null;
   res.json(formatSaveRow(rows[0], entry));
-});
+}));
 
 // ---------------------------------------------------------------------------
 // DELETE /datasets/my-saves/:id  (auth-gated)
@@ -823,7 +824,7 @@ router.get("/datasets/my-saves/:id/status", requireAuth, async (req, res): Promi
 // delete another user's save or the dataset it points to.
 // ---------------------------------------------------------------------------
 
-router.delete("/datasets/my-saves/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/datasets/my-saves/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const saveId = String(req.params["id"] ?? "");
 
@@ -857,7 +858,7 @@ router.delete("/datasets/my-saves/:id", requireAuth, async (req, res): Promise<v
   }
 
   res.status(204).send();
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Shared formatter
