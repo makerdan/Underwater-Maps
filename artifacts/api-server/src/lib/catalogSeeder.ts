@@ -14,7 +14,7 @@
  *   - NOAA Electronic Navigational Charts (ENC) — bathymetric chart type
  */
 
-import { db, datasetCatalogTable } from "@workspace/db";
+import { db, datasetCatalogTable, disabledPresetsTable } from "@workspace/db";
 import { inArray, notInArray, sql } from "drizzle-orm";
 import { ALL_PRESET_DATASETS, NCEI_DATASET_COVERAGES } from "./terrain.js";
 
@@ -729,10 +729,25 @@ export async function seedDatasetCatalog(opts: { force?: boolean } = {}): Promis
   }
 
   try {
+    // Load disabled preset IDs so suppressed presets are not (re-)inserted.
+    let disabledPresetIds = new Set<string>();
+    try {
+      const disabledRows = await db.select({ id: disabledPresetsTable.id }).from(disabledPresetsTable);
+      disabledPresetIds = new Set(disabledRows.map((r) => r.id));
+    } catch {
+      // Table may not exist during initial boot — safe to ignore.
+    }
+
     // Reconcile preset-* rows against the current registry on every boot so
     // that newly-added preset datasets show up in Find Data search for
-    // existing deployments, and retired presets stop showing up.
-    const presetEntries = buildPresetCatalogEntries();
+    // existing deployments, and retired presets stop showing up. Suppress
+    // disabled presets so they do not re-appear after a server restart.
+    const allPresetEntries = buildPresetCatalogEntries();
+    const presetEntries = allPresetEntries.filter((e) => {
+      // e.id has the form "preset-<datasetId>"
+      const datasetId = e.id.startsWith("preset-") ? e.id.slice(7) : e.id;
+      return !disabledPresetIds.has(datasetId);
+    });
     const desiredPresetIds = presetEntries.map((e) => e.id);
 
     const purged = await db

@@ -9,7 +9,7 @@ import multer from "multer";
 import { eq, and, inArray, or } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { z } from "zod";
-import { db, customDatasetsTable, userSettingsTable, uploadJobsTable } from "@workspace/db";
+import { db, customDatasetsTable, userSettingsTable, uploadJobsTable, disabledPresetsTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
@@ -578,9 +578,19 @@ router.get("/datasets", asyncHandler(async (req, res): Promise<void> => {
       ? rawWaterType
       : null;
 
-  const source = waterTypeFilter
+  // Load suppressed preset IDs so they are excluded from the response.
+  let disabledIds = new Set<string>();
+  try {
+    const rows = await db.select({ id: disabledPresetsTable.id }).from(disabledPresetsTable);
+    disabledIds = new Set(rows.map((r) => r.id));
+  } catch {
+    // Non-fatal: if the table doesn't exist yet, serve all presets.
+  }
+
+  const source = (waterTypeFilter
     ? ALL_PRESET_DATASETS.filter((d) => d.waterType === waterTypeFilter)
-    : ALL_PRESET_DATASETS;
+    : ALL_PRESET_DATASETS
+  ).filter((d) => !disabledIds.has(d.id));
 
   const list = source.map((d) => ({
     id: d.id,
@@ -596,6 +606,32 @@ router.get("/datasets", asyncHandler(async (req, res): Promise<void> => {
     ...(d.hasEfh === true ? { hasEfh: true as const } : {}),
   }));
   res.json(GetDatasetsResponse.parse(list));
+}));
+
+// ── DELETE /datasets/presets/:id ──────────────────────────────────────────────
+// Globally suppresses a preset dataset for all users by inserting its ID into
+// the disabled_presets table. The next GET /datasets response will omit it.
+// Returns 204 on success, 404 if the id is not a known preset.
+const PresetIdParamSchema = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[a-zA-Z0-9_-]+$/, "Preset id must contain only alphanumeric characters, hyphens, or underscores");
+
+router.delete("/datasets/presets/:id", asyncHandler(async (req, res): Promise<void> => {
+  const idParsed = PresetIdParamSchema.safeParse(req.params["id"]);
+  if (!idParsed.success) {
+    res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid preset id" });
+    return;
+  }
+  const id = idParsed.data;
+  const known = ALL_PRESET_DATASETS.find((d) => d.id === id);
+  if (!known) {
+    res.status(404).json({ error: "not_found", details: `'${id}' is not a known preset dataset` });
+    return;
+  }
+  await db.insert(disabledPresetsTable).values({ id }).onConflictDoNothing();
+  res.sendStatus(204);
 }));
 
 // ── GET /datasets/:id/terrain ─────────────────────────────────────────────────

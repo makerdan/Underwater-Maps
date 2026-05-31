@@ -488,6 +488,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     });
   }, []);
 
+  const [exampleDatasetsFolderExpanded, setExampleDatasetsFolderExpanded] = useState(true);
+  const [presetDeleteConfirm, setPresetDeleteConfirm] = useState(false);
+
   // ─── User dataset pending + active tracking ────────────────────────────────
   const [pendingUserDatasetId, setPendingUserDatasetId] = useState<string | null>(null);
   const [activeUserDatasetId, setActiveUserDatasetId] = useState<string | null>(null);
@@ -1464,10 +1467,34 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   }, [presetSelectedIds, librarySelectedIds]);
 
   const handleActionDelete = useCallback(() => {
+    if (presetSelectedIds.size > 0) {
+      setPresetDeleteConfirm(true);
+      return;
+    }
     if (librarySelectedIds.size === 0) return;
     setLibraryBulkDeleteSignal((s) => s + 1);
+  }, [librarySelectedIds.size, presetSelectedIds.size]);
+
+  const handleConfirmPresetDelete = useCallback(async () => {
+    setPresetDeleteConfirm(false);
+    const ids = [...presetSelectedIds];
+    for (const id of ids) {
+      try {
+        await fetch(`/api/datasets/presets/${encodeURIComponent(id)}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+      } catch {
+        // best-effort; server already guards against duplicates
+      }
+    }
     setPresetSelectedIds(new Set());
-  }, [librarySelectedIds.size]);
+    void qc.invalidateQueries({ queryKey: getGetDatasetsQueryKey() });
+    void qc.invalidateQueries({ queryKey: getGetDatasetsQueryKey({ waterType }) });
+    if (librarySelectedIds.size > 0) {
+      setLibraryBulkDeleteSignal((s) => s + 1);
+    }
+  }, [presetSelectedIds, librarySelectedIds.size, qc, waterType]);
 
   const handleActionCopy = useCallback(() => {
     toast({ title: "Coming soon", description: "Copy is not yet available." });
@@ -1635,7 +1662,98 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                   ]}
                 />
 
-                {(datasets ?? []).map((ds) => {
+                {isSignedIn && (
+                  <>
+                    {userLoadError && (
+                      <div
+                        data-testid="user-dataset-load-error"
+                        style={{
+                          margin: "4px 8px 8px",
+                          padding: "6px 8px",
+                          background: "rgba(239,68,68,0.08)",
+                          border: "1px solid rgba(239,68,68,0.35)",
+                          borderRadius: 4, fontSize: 10, color: "#fca5a5",
+                          display: "flex", alignItems: "center",
+                          justifyContent: "space-between", gap: 8,
+                        }}
+                      >
+                        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+                          Failed to load "{userLoadError.name}"
+                        </span>
+                        <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
+                          <button
+                            data-testid="btn-retry-user-dataset"
+                            onClick={handleRetryUserDataset}
+                            disabled={!!pendingUserDatasetId}
+                            style={{
+                              fontSize: 10, color: "#00e5ff", background: "transparent",
+                              border: "1px solid rgba(0,229,255,0.35)", borderRadius: 3,
+                              padding: "1px 6px",
+                              cursor: !!pendingUserDatasetId ? "not-allowed" : "pointer",
+                              opacity: !!pendingUserDatasetId ? 0.5 : 1,
+                            }}
+                          >
+                            {!!pendingUserDatasetId ? "Loading…" : "Retry"}
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setUserLoadError(null); }}
+                            style={{
+                              fontSize: 10, color: "#cbd5e1", background: "transparent",
+                              border: "none", cursor: "pointer", padding: "1px 4px",
+                            }}
+                            aria-label="Dismiss error"
+                          >×</button>
+                        </div>
+                      </div>
+                    )}
+                    <ErrorBoundary label="the dataset library">
+                      <DatasetFolderTree
+                        datasets={userDatasets ?? []}
+                        activeUserDatasetId={pendingUserDatasetId ? null : activeUserDatasetId}
+                        loadingId={loadingId}
+                        onSelectDataset={handleSelectUserDataset}
+                        onDatasetsRemoved={handleDatasetsRemoved}
+                        onSelectionChange={setLibrarySelectedIds}
+                        bulkDeleteSignal={libraryBulkDeleteSignal}
+                        externalMoveSignal={libraryMoveSignal}
+                        externalRenameSignal={libraryRenameSignal}
+                      />
+                    </ErrorBoundary>
+                  </>
+                )}
+
+                {/* ── Example Datasets virtual folder (always below user library) ── */}
+                <div>
+                  <button
+                    type="button"
+                    data-testid="example-datasets-folder-toggle"
+                    onClick={() => setExampleDatasetsFolderExpanded((v) => !v)}
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "4px 12px 4px 8px",
+                      background: "transparent",
+                      border: "none",
+                      borderTop: "1px solid rgba(0,229,255,0.08)",
+                      cursor: "pointer",
+                      color: "#7dd3fc",
+                      fontSize: 10,
+                      letterSpacing: "0.08em",
+                      textAlign: "left",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    <span style={{ fontSize: 9 }}>{exampleDatasetsFolderExpanded ? "▾" : "▸"}</span>
+                    <span style={{ fontSize: 11 }}>📁</span>
+                    <span style={{ flex: 1 }}>Example Datasets</span>
+                    {(datasets ?? []).length > 0 && (
+                      <span style={{ fontSize: 9, color: "#64748b" }}>{(datasets ?? []).length}</span>
+                    )}
+                  </button>
+
+                  {exampleDatasetsFolderExpanded && (datasets ?? []).map((ds) => {
                   const active = ds.id === datasetId && !pendingId && !activeUserDatasetId;
                   const loading = ds.id === loadingId;
                   const isChecked = presetSelectedIds.has(ds.id);
@@ -1648,6 +1766,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                         background: active ? "rgba(0,229,255,0.07)" : "transparent",
                         borderLeft: active ? "2px solid #00e5ff" : "2px solid transparent",
                         opacity: !isOnline && !cachedIds.has(ds.id) ? 0.4 : 1,
+                        paddingLeft: 8,
                       }}
                     >
                       <span
@@ -1751,66 +1870,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                     </ViewscreenTooltip>
                   );
                 })}
-
-                {isSignedIn && (
-                  <>
-                    {userLoadError && (
-                      <div
-                        data-testid="user-dataset-load-error"
-                        style={{
-                          margin: "4px 8px 8px",
-                          padding: "6px 8px",
-                          background: "rgba(239,68,68,0.08)",
-                          border: "1px solid rgba(239,68,68,0.35)",
-                          borderRadius: 4, fontSize: 10, color: "#fca5a5",
-                          display: "flex", alignItems: "center",
-                          justifyContent: "space-between", gap: 8,
-                        }}
-                      >
-                        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
-                          Failed to load "{userLoadError.name}"
-                        </span>
-                        <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
-                          <button
-                            data-testid="btn-retry-user-dataset"
-                            onClick={handleRetryUserDataset}
-                            disabled={!!pendingUserDatasetId}
-                            style={{
-                              fontSize: 10, color: "#00e5ff", background: "transparent",
-                              border: "1px solid rgba(0,229,255,0.35)", borderRadius: 3,
-                              padding: "1px 6px",
-                              cursor: !!pendingUserDatasetId ? "not-allowed" : "pointer",
-                              opacity: !!pendingUserDatasetId ? 0.5 : 1,
-                            }}
-                          >
-                            {!!pendingUserDatasetId ? "Loading…" : "Retry"}
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setUserLoadError(null); }}
-                            style={{
-                              fontSize: 10, color: "#cbd5e1", background: "transparent",
-                              border: "none", cursor: "pointer", padding: "1px 4px",
-                            }}
-                            aria-label="Dismiss error"
-                          >×</button>
-                        </div>
-                      </div>
-                    )}
-                    <ErrorBoundary label="the dataset library">
-                      <DatasetFolderTree
-                        datasets={userDatasets ?? []}
-                        activeUserDatasetId={pendingUserDatasetId ? null : activeUserDatasetId}
-                        loadingId={loadingId}
-                        onSelectDataset={handleSelectUserDataset}
-                        onDatasetsRemoved={handleDatasetsRemoved}
-                        onSelectionChange={setLibrarySelectedIds}
-                        bulkDeleteSignal={libraryBulkDeleteSignal}
-                        externalMoveSignal={libraryMoveSignal}
-                        externalRenameSignal={libraryRenameSignal}
-                      />
-                    </ErrorBoundary>
-                  </>
-                )}
+                </div>
+                {/* ── end Example Datasets folder ── */}
 
                 {(presetSelectedIds.size + librarySelectedIds.size > 0) && (
                   <div
@@ -1836,8 +1897,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                     <button
                       data-testid="btn-action-delete"
                       onClick={handleActionDelete}
-                      disabled={librarySelectedIds.size === 0}
-                      style={{ ...ACTION_BTN_STYLE, opacity: librarySelectedIds.size === 0 ? 0.35 : 1, color: "#fca5a5", borderColor: "rgba(239,68,68,0.4)" }}
+                      disabled={librarySelectedIds.size === 0 && presetSelectedIds.size === 0}
+                      style={{ ...ACTION_BTN_STYLE, opacity: (librarySelectedIds.size === 0 && presetSelectedIds.size === 0) ? 0.35 : 1, color: "#fca5a5", borderColor: "rgba(239,68,68,0.4)" }}
                     >Delete</button>
                     <button data-testid="btn-action-copy" onClick={handleActionCopy} style={ACTION_BTN_STYLE}>Copy</button>
                     <button
@@ -2456,6 +2517,90 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {presetDeleteConfirm && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="preset-delete-dialog-title"
+          data-testid="preset-delete-confirm-dialog"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(0,0,0,0.55)",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPresetDeleteConfirm(false);
+          }}
+        >
+          <div
+            style={{
+              background: "rgba(0,10,20,0.92)",
+              border: "1px solid rgba(239,68,68,0.45)",
+              borderRadius: 6,
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              padding: "20px 24px",
+              maxWidth: 340,
+              width: "90%",
+              backdropFilter: "blur(8px)",
+              boxShadow: "0 0 24px rgba(239,68,68,0.12)",
+            }}
+          >
+            <div
+              id="preset-delete-dialog-title"
+              style={{
+                fontSize: 11,
+                letterSpacing: "0.12em",
+                color: "#fca5a5",
+                textShadow: "0 0 6px rgba(239,68,68,0.4)",
+                marginBottom: 12,
+                textTransform: "uppercase",
+              }}
+            >
+              Remove Example Dataset{presetSelectedIds.size !== 1 ? "s" : ""}
+            </div>
+            <p style={{ fontSize: 11, color: "#e2e8f0", lineHeight: 1.5, marginBottom: 16 }}>
+              Remove {presetSelectedIds.size === 1 ? "this preset" : `${presetSelectedIds.size} presets`} from the app for all users? This cannot be undone from the UI.
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                data-testid="preset-delete-cancel"
+                onClick={() => setPresetDeleteConfirm(false)}
+                style={{
+                  fontSize: 10,
+                  padding: "5px 14px",
+                  background: "transparent",
+                  border: "1px solid rgba(148,163,184,0.4)",
+                  borderRadius: 3,
+                  color: "#94a3b8",
+                  cursor: "pointer",
+                  letterSpacing: "0.08em",
+                  fontFamily: "inherit",
+                }}
+              >Cancel</button>
+              <button
+                data-testid="preset-delete-confirm"
+                onClick={() => { void handleConfirmPresetDelete(); }}
+                style={{
+                  fontSize: 10,
+                  padding: "5px 14px",
+                  background: "rgba(239,68,68,0.12)",
+                  border: "1px solid rgba(239,68,68,0.5)",
+                  borderRadius: 3,
+                  color: "#fca5a5",
+                  cursor: "pointer",
+                  letterSpacing: "0.08em",
+                  fontFamily: "inherit",
+                }}
+              >Remove</button>
+            </div>
           </div>
         </div>
       )}
