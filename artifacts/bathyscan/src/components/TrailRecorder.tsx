@@ -6,12 +6,13 @@
  * Trail colour is user-selectable from a fixed palette.
  * On stop: saves trail to server (or buffers to localStorage if offline).
  */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useTrailStore } from "@/lib/trailStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useAppState } from "@/lib/context";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
+import { toast } from "@/hooks/use-toast";
 
 const FONT: React.CSSProperties = {
   fontFamily: "'JetBrains Mono', monospace",
@@ -102,13 +103,19 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
 
   const [elapsed, setElapsed] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
   const [trailName, setTrailName] = useState("");
   // Seed from the user's persisted default; fall back to the first palette
   // colour so the swatch row still shows a selected dot.
   const [trailColour, setTrailColour] = useState(
     defaultTrailColor || TRAIL_COLOURS[0]!,
   );
+
+  // Track mount state so async save callbacks never write to state after unmount.
+  const isMounted = useRef(true);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
 
   // When the user changes their default trail colour in Settings while the
   // recorder is idle, reflect that change immediately. We deliberately do NOT
@@ -138,22 +145,35 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
 
     const endedAt = Date.now();
     const name = trailName.trim() || `Trail ${new Date().toLocaleDateString()}`;
-    setSaving(true);
-    setSaveError(null);
+
+    if (isMounted.current) {
+      setSaving(true);
+    }
 
     try {
       if (!navigator.onLine) {
         bufferTrailOffline(terrain.datasetId, name, trailColour, startedAt, endedAt, points);
+        toast({ title: "Trail buffered", description: "Saved locally — will sync when online." });
       } else {
         await saveTrailToServer(terrain.datasetId, name, trailColour, startedAt, endedAt, points);
+        // onTrailSaved callback only makes sense if the parent still cares;
+        // fire it unconditionally since it's a store/query action, not state.
         onTrailSaved?.();
+        toast({ title: "Trail saved", description: `"${name}" saved successfully.` });
       }
-      setTrailName("");
+      if (isMounted.current) setTrailName("");
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Failed to save trail");
+      const msg = err instanceof Error ? err.message : "Failed to save trail";
       bufferTrailOffline(terrain.datasetId, name, trailColour, startedAt, endedAt, points);
+      // Fire the error toast via the imperative API so it shows even if the
+      // panel was closed before the network response arrived.
+      toast({
+        title: "Trail save failed",
+        description: `${msg} — buffered locally.`,
+        variant: "destructive",
+      });
     } finally {
-      setSaving(false);
+      if (isMounted.current) setSaving(false);
     }
   };
 
@@ -301,12 +321,6 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
           </button>
           </ViewscreenTooltip>
         </>
-      )}
-
-      {saveError && (
-        <div style={{ color: "#ef4444", fontSize: 9, marginTop: 4 }}>
-          ⚠ {saveError} (buffered offline)
-        </div>
       )}
 
       {!navigator.onLine && (

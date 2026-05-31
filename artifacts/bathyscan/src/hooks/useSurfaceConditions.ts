@@ -10,6 +10,12 @@
  *   - Otherwise the snapshot tracks the current UTC hour, updated on a
  *     1-minute interval so the displayed time never drifts behind real time.
  *   - Callers can pin a specific hour via the `hourOverride` argument.
+ *
+ * Interval deduplication:
+ *   A module-level singleton drives `nowHour` updates. The first consumer
+ *   starts the interval; subsequent mounts only increment a reference count.
+ *   The interval is cleared only when the last consumer unmounts, so exactly
+ *   one timer is ever active regardless of how many components use this hook.
  */
 import { useState, useEffect, useMemo } from "react";
 import {
@@ -64,6 +70,44 @@ export interface SurfaceConditionsResult {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Module-level singleton interval for nowHour
+// ---------------------------------------------------------------------------
+// All consumers share a single interval. A listener set lets each hook
+// instance subscribe to tick updates without spawning its own timer.
+//
+// Each hook instance still initialises its own `nowHour` state from
+// Date.now() at render time (so Vitest fake-timers are respected in tests);
+// the singleton only propagates subsequent ticks.
+type NowHourListener = (hour: number) => void;
+
+let _intervalId: ReturnType<typeof setInterval> | null = null;
+let _refCount = 0;
+const _listeners = new Set<NowHourListener>();
+
+function _subscribeNowHour(listener: NowHourListener): () => void {
+  _listeners.add(listener);
+  _refCount++;
+
+  if (_intervalId === null) {
+    _intervalId = setInterval(() => {
+      const h = new Date(Date.now()).getUTCHours();
+      _listeners.forEach((fn) => fn(h));
+    }, 60_000);
+  }
+
+  return () => {
+    _listeners.delete(listener);
+    _refCount--;
+    if (_refCount === 0 && _intervalId !== null) {
+      clearInterval(_intervalId);
+      _intervalId = null;
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
+
 export function useSurfaceConditions(
   enabled = true,
   hourOverride?: number,
@@ -90,17 +134,17 @@ export function useSurfaceConditions(
     },
   });
 
-  // Keep `nowHour` current with a 1-minute tick so the displayed time never
-  // drifts up to 30 minutes behind real time when the app sits idle.
+  // Each instance initialises from Date.now() at render time so Vitest
+  // fake-timers are respected. The shared singleton interval then pushes
+  // subsequent ticks to all subscribers without running multiple timers.
   // Use Date.now() rather than new Date() so Vitest fake-timers always
   // produce a valid timestamp — new Date() can return an invalid Date
   // during a fake-timer–driven React render/re-render.
-  const [nowHour, setNowHour] = useState(() => new Date(Date.now()).getUTCHours());
+  const [nowHour, setNowHour] = useState<number>(() => new Date(Date.now()).getUTCHours());
   useEffect(() => {
-    const id = setInterval(() => {
-      setNowHour(new Date(Date.now()).getUTCHours());
-    }, 60_000);
-    return () => clearInterval(id);
+    // Re-read on mount in case the system time changed between render and effect.
+    setNowHour(new Date(Date.now()).getUTCHours());
+    return _subscribeNowHour(setNowHour);
   }, []);
 
   return useMemo(() => {
