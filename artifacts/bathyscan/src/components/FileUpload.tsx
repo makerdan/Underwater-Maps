@@ -26,6 +26,9 @@ export const FileUpload = () => {
   const { isSignedIn } = useAuth();
   const postDatasetsUpload = usePostDatasetsUpload();
   const [error, setError] = useState<string | null>(null);
+  const [gzWarning, setGzWarning] = useState<string | null>(null);
+
+  const GZ_WARNING_THRESHOLD_MB = 30;
 
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
@@ -37,6 +40,16 @@ export const FileUpload = () => {
       if (!file) return;
 
       setError(null);
+
+      const isGz = file.name.toLowerCase().endsWith(".gz");
+      const sizeMb = file.size / (1024 * 1024);
+      if (isGz && sizeMb > GZ_WARNING_THRESHOLD_MB) {
+        setGzWarning(
+          "This file may be large when decompressed. If upload fails, try a smaller area.",
+        );
+      } else {
+        setGzWarning(null);
+      }
       postDatasetsUpload.mutate(
         { data: { file, resolution: 256 } },
         {
@@ -113,6 +126,11 @@ export const FileUpload = () => {
             <div className="flex flex-col items-center gap-2">
               <Spinner className="w-5 h-5 text-primary" />
               <p className="text-xs text-muted-foreground">Parsing grid...</p>
+              {gzWarning && (
+                <p className="text-[10px] text-amber-400 select-text">
+                  ⚠ {gzWarning}
+                </p>
+              )}
             </div>
           ) : !isSignedIn ? (
             <>
@@ -130,6 +148,11 @@ export const FileUpload = () => {
               <p className="text-[9px] text-muted-foreground/70 mt-1">
                 {SUPPORTED_EXTENSIONS}
               </p>
+              {gzWarning && (
+                <p className="text-[10px] text-amber-400 mt-2 select-text">
+                  ⚠ {gzWarning}
+                </p>
+              )}
               {error && <p className="text-[10px] text-destructive mt-2 select-text">{error}</p>}
             </>
           )}
