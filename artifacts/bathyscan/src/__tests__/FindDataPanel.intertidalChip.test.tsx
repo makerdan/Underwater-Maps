@@ -245,6 +245,21 @@ describe("FindDataPanel — Intertidal / Shoreline filter chip", () => {
     expect(screen.queryByText("Alaska Bathymetry 2024")).not.toBeInTheDocument();
   });
 
+  it("excludes a habitat-typed entry whose id is NOT in INTERTIDAL_CATALOG_IDS when the chip is active", () => {
+    // HABITAT_ENTRY has dataType='habitat' but its id ('pacific-kelp-habitat')
+    // is not in INTERTIDAL_CATALOG_IDS.  The chip must filter by ID membership
+    // only — dataType alone must never be enough to pass the guard.
+    renderPanel();
+
+    fireEvent.click(getChip(/Intertidal \/ Shoreline/i));
+
+    // The intertidal entry (id in set) should appear.
+    expect(screen.getByText("ADF&G Intertidal Clam Habitat")).toBeInTheDocument();
+    // The habitat entry (id NOT in set) must be absent even though its
+    // dataType is 'habitat' — same type as the intertidal entry above.
+    expect(screen.queryByText("Pacific Kelp Habitat")).not.toBeInTheDocument();
+  });
+
   it("clicking Intertidal then All restores the full result list", () => {
     renderPanel();
 
