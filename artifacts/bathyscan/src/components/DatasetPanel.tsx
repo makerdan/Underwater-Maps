@@ -2073,6 +2073,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       <ViewscreenTooltip label="Fly to this saved view" side="left">
                         <button
                           onClick={() => handleFlyToBookmark(bk)}
+                          aria-label="Fly to this saved view"
                           style={{
                             fontSize: 9,
                             padding: "1px 5px",
