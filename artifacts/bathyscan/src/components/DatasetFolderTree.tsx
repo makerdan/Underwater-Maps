@@ -86,6 +86,9 @@ const INDENT_PX = 12;
 // Extra left offset applied to every root-level item so folders and datasets
 // are visually inset under the "MY LIBRARY" section header.
 const ROOT_INDENT_PX = 8;
+// Minimum horizontal space (px) reserved for the label + action icons so the
+// row remains legible even when the panel is very narrow.
+const MIN_LABEL_PX = 80;
 
 export const DatasetFolderTree: React.FC<Props> = ({
   datasets,
@@ -985,6 +988,21 @@ export const DatasetFolderTree: React.FC<Props> = ({
   // ─── Render helpers ──────────────────────────────────────────────────────
   const containerRef = useRef<HTMLDivElement | null>(null);
 
+  // Track panel width so indentation can scale down on narrow panels.
+  const [panelWidth, setPanelWidth] = useState<number>(300);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    // Seed with the current width immediately so the first render is correct.
+    setPanelWidth(el.getBoundingClientRect().width || 300);
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w !== undefined && w > 0) setPanelWidth(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   // React-managed ordered list of focusable rows + a ref-map for keyboard
   // navigation. Built during render so it always reflects the current
   // expanded/collapsed state and stays in lock-step with React reconciliation
@@ -1126,6 +1144,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
         selectionMode={selectionMode}
         isSelected={selectedIds.has(node.folder.id)}
         onToggleSelect={() => toggleFolderSelection(node.folder.id)}
+        panelWidth={panelWidth}
       />
     );
   };
@@ -1163,6 +1182,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
         registerRow={registerRow}
         selectionMode={selectionMode}
         isSelected={selectedIds.has(ds.id)}
+        panelWidth={panelWidth}
       />
     );
   };
@@ -1415,6 +1435,7 @@ interface FolderRowProps {
   selectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: () => void;
+  panelWidth: number;
 }
 
 const FolderRow: React.FC<FolderRowProps> = ({
@@ -1432,8 +1453,13 @@ const FolderRow: React.FC<FolderRowProps> = ({
   selectionMode = false,
   isSelected = false,
   onToggleSelect,
+  panelWidth,
 }) => {
-  const indent = ROOT_INDENT_PX + node.depth * INDENT_PX;
+  const indentRaw = ROOT_INDENT_PX + node.depth * INDENT_PX;
+  const indent = Math.min(
+    indentRaw,
+    Math.max(ROOT_INDENT_PX, panelWidth - ROW_PADDING_X * 2 - MIN_LABEL_PX),
+  );
   const dragData: DragData = {
     kind: "folder",
     id: node.folder.id,
@@ -1569,6 +1595,7 @@ interface DatasetRowProps {
   registerRow: (kind: "folder" | "dataset", id: string, el: HTMLElement | null) => void;
   selectionMode?: boolean;
   isSelected?: boolean;
+  panelWidth: number;
 }
 
 const DatasetRow: React.FC<DatasetRowProps> = ({
@@ -1587,8 +1614,13 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
   registerRow,
   selectionMode = false,
   isSelected = false,
+  panelWidth,
 }) => {
-  const indent = ROOT_INDENT_PX + depth * INDENT_PX;
+  const indentRaw = ROOT_INDENT_PX + depth * INDENT_PX;
+  const indent = Math.min(
+    indentRaw,
+    Math.max(ROOT_INDENT_PX, panelWidth - ROW_PADDING_X * 2 - MIN_LABEL_PX),
+  );
   const units = useSettingsStore((s) => s.units);
   const date = new Date(ds.createdAt).toLocaleDateString(undefined, {
     month: "short",
