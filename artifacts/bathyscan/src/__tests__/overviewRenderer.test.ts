@@ -38,11 +38,15 @@ vi.mock("three", () => {
   return { Color };
 });
 
-import type { TerrainData } from "@workspace/api-client-react";
+import type { TerrainData, Marker, EfhFeature } from "@workspace/api-client-react";
+import { MarkerType, EfhFeatureType } from "@workspace/api-client-react";
 import {
   buildHeatmapBitmap,
   lonLatToCanvas,
   canvasToLonLat,
+  renderCameraArrow,
+  renderMarkers,
+  renderEfhOverlay,
 } from "../lib/overviewRenderer";
 import { usePaletteStore } from "../lib/paletteStore";
 
@@ -418,6 +422,339 @@ describe("canvasToLonLat — round-trip fidelity with antimeridian-crossing bbox
     expect(lat2).toBeCloseTo(lat, 8);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Shared ctx mock for renderer tests
+// ---------------------------------------------------------------------------
+
+function makeCtx() {
+  return {
+    save: vi.fn(),
+    restore: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    closePath: vi.fn(),
+    fill: vi.fn(),
+    stroke: vi.fn(),
+    arc: vi.fn(),
+    fillText: vi.fn(),
+    translate: vi.fn(),
+    rotate: vi.fn(),
+    setLineDash: vi.fn(),
+    fillStyle: "" as string | CanvasGradient | CanvasPattern,
+    strokeStyle: "" as string | CanvasGradient | CanvasPattern,
+    shadowColor: "",
+    shadowBlur: 0,
+    lineWidth: 1,
+    font: "",
+    textBaseline: "alphabetic" as CanvasTextBaseline,
+    globalAlpha: 1,
+    imageSmoothingEnabled: true,
+    measureText: vi.fn(() => ({ width: 50 })),
+    roundRect: vi.fn(),
+    fillRect: vi.fn(),
+    strokeRect: vi.fn(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// renderCameraArrow — North-up coordinate placement
+// ---------------------------------------------------------------------------
+
+describe("renderCameraArrow — North-up coordinate placement", () => {
+  const grid = makeGrid({ minLon: -120, maxLon: -119, minLat: 47, maxLat: 48 });
+  const t = makeTransform({ pxPerDeg: 200, offsetX: 0, offsetY: 0 });
+  const latRange = grid.maxLat - grid.minLat;
+  const lonRange = grid.maxLon - grid.minLon;
+  const terrainH = t.pxPerDeg * latRange * t.scale;
+  const terrainW = t.pxPerDeg * lonRange * t.scale;
+
+  it("camera at the northern edge (maxLat) translates to Y ≈ offsetY — not the bottom", () => {
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderCameraArrow(ctx, -119.5, grid.maxLat, 180, grid, t);
+    const [, cy] = (ctx.translate as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number];
+    expect(cy).toBeCloseTo(t.offsetY, 3);
+  });
+
+  it("camera at the southern edge (minLat) translates to Y ≈ offsetY + terrainH — not the top", () => {
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderCameraArrow(ctx, -119.5, grid.minLat, 180, grid, t);
+    const [, cy] = (ctx.translate as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number];
+    expect(cy).toBeCloseTo(t.offsetY + terrainH, 3);
+  });
+
+  it("northern camera Y is strictly less than southern camera Y (North-up)", () => {
+    const ctxN = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderCameraArrow(ctxN, -119.5, grid.maxLat, 180, grid, t);
+    const [, cyN] = (ctxN.translate as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number];
+
+    const ctxS = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderCameraArrow(ctxS, -119.5, grid.minLat, 180, grid, t);
+    const [, cyS] = (ctxS.translate as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number];
+
+    expect(cyN).toBeLessThan(cyS);
+  });
+
+  it("camera at the western edge (minLon) translates to X ≈ offsetX (left edge)", () => {
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderCameraArrow(ctx, grid.minLon, 47.5, 180, grid, t);
+    const [cx] = (ctx.translate as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number];
+    expect(cx).toBeCloseTo(t.offsetX, 3);
+  });
+
+  it("camera at the eastern edge (maxLon) translates to X ≈ offsetX + terrainW (right edge)", () => {
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderCameraArrow(ctx, grid.maxLon, 47.5, 180, grid, t);
+    const [cx] = (ctx.translate as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number];
+    expect(cx).toBeCloseTo(t.offsetX + terrainW, 3);
+  });
+
+  it("heading 180° (North-facing) produces rotate angle ≈ 0 rad", () => {
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderCameraArrow(ctx, -119.5, 47.5, 180, grid, t);
+    const [rad] = (ctx.rotate as ReturnType<typeof vi.fn>).mock.calls[0] as [number];
+    expect(rad).toBeCloseTo(0, 5);
+  });
+
+  it("heading 0° (South-facing) produces rotate angle ≈ π rad", () => {
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderCameraArrow(ctx, -119.5, 47.5, 0, grid, t);
+    const [rad] = (ctx.rotate as ReturnType<typeof vi.fn>).mock.calls[0] as [number];
+    expect(rad).toBeCloseTo(Math.PI, 5);
+  });
+
+  it("heading 90° (East-facing) produces rotate angle ≈ π/2 rad", () => {
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderCameraArrow(ctx, -119.5, 47.5, 90, grid, t);
+    const [rad] = (ctx.rotate as ReturnType<typeof vi.fn>).mock.calls[0] as [number];
+    expect(rad).toBeCloseTo(Math.PI / 2, 5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// renderMarkers — coordinate placement
+// ---------------------------------------------------------------------------
+
+describe("renderMarkers — coordinate placement", () => {
+  const grid = makeGrid({ minLon: -120, maxLon: -119, minLat: 47, maxLat: 48 });
+  const t = makeTransform({ pxPerDeg: 200, offsetX: 0, offsetY: 0 });
+  const CANVAS_W = 400;
+  const CANVAS_H = 400;
+  const latRange = grid.maxLat - grid.minLat;
+  const lonRange = grid.maxLon - grid.minLon;
+  const terrainH = t.pxPerDeg * latRange * t.scale;
+  const terrainW = t.pxPerDeg * lonRange * t.scale;
+
+  function makeMarker(lon: number, lat: number, id = "m1"): Marker {
+    return {
+      id,
+      datasetId: "test",
+      lon,
+      lat,
+      depth: 10,
+      type: MarkerType.fish,
+      label: "Test",
+      createdAt: "2024-01-01T00:00:00Z",
+    };
+  }
+
+  it("a northern marker draws its arc at a smaller Y than a southern marker (North-up)", () => {
+    const ctxN = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderMarkers(ctxN, [makeMarker(-119.5, grid.maxLat)], grid, t, CANVAS_W, CANVAS_H);
+    const [, cyN] = (ctxN.arc as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number, number, number, number];
+
+    const ctxS = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderMarkers(ctxS, [makeMarker(-119.5, grid.minLat)], grid, t, CANVAS_W, CANVAS_H);
+    const [, cyS] = (ctxS.arc as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number, number, number, number];
+
+    expect(cyN).toBeLessThan(cyS);
+  });
+
+  it("a marker at maxLat draws its arc at Y ≈ offsetY (top edge)", () => {
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderMarkers(ctx, [makeMarker(-119.5, grid.maxLat)], grid, t, CANVAS_W, CANVAS_H);
+    const [, cy] = (ctx.arc as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number, number, number, number];
+    expect(cy).toBeCloseTo(t.offsetY, 3);
+  });
+
+  it("a marker at minLat draws its arc at Y ≈ offsetY + terrainH (bottom edge)", () => {
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderMarkers(ctx, [makeMarker(-119.5, grid.minLat)], grid, t, CANVAS_W, CANVAS_H);
+    const [, cy] = (ctx.arc as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number, number, number, number];
+    expect(cy).toBeCloseTo(t.offsetY + terrainH, 3);
+  });
+
+  it("an eastern marker has greater X than a western marker (West-to-East left-to-right)", () => {
+    const ctxW = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderMarkers(ctxW, [makeMarker(grid.minLon, 47.5)], grid, t, CANVAS_W, CANVAS_H);
+    const [cxW] = (ctxW.arc as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number, number, number, number];
+
+    const ctxE = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderMarkers(ctxE, [makeMarker(grid.maxLon, 47.5)], grid, t, CANVAS_W, CANVAS_H);
+    const [cxE] = (ctxE.arc as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number, number, number, number];
+
+    expect(cxE).toBeGreaterThan(cxW);
+  });
+
+  it("a marker at minLon draws at X ≈ offsetX (left edge)", () => {
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderMarkers(ctx, [makeMarker(grid.minLon, 47.5)], grid, t, CANVAS_W, CANVAS_H);
+    const [cx] = (ctx.arc as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number, number, number, number];
+    expect(cx).toBeCloseTo(t.offsetX, 3);
+  });
+
+  it("a marker at maxLon draws at X ≈ offsetX + terrainW (right edge)", () => {
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderMarkers(ctx, [makeMarker(grid.maxLon, 47.5)], grid, t, CANVAS_W, CANVAS_H);
+    const [cx] = (ctx.arc as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number, number, number, number];
+    expect(cx).toBeCloseTo(t.offsetX + terrainW, 3);
+  });
+
+  it("a marker far outside the canvas bounds is clipped — arc is not called", () => {
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderMarkers(ctx, [makeMarker(0, 47.5)], grid, t, CANVAS_W, CANVAS_H);
+    expect((ctx.arc as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
+  });
+
+  it("two in-bounds markers both produce an arc call each", () => {
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderMarkers(
+      ctx,
+      [makeMarker(-119.8, 47.5, "m1"), makeMarker(-119.2, 47.5, "m2")],
+      grid, t, CANVAS_W, CANVAS_H,
+    );
+    expect((ctx.arc as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// renderEfhOverlay — coordinate placement and hidden-species gate
+// ---------------------------------------------------------------------------
+
+describe("renderEfhOverlay — coordinate placement and hidden-species gate", () => {
+  const grid = makeGrid({ minLon: -120, maxLon: -119, minLat: 47, maxLat: 48 });
+  const t = makeTransform({ pxPerDeg: 200, offsetX: 0, offsetY: 0 });
+  const latRange = grid.maxLat - grid.minLat;
+  const terrainH = t.pxPerDeg * latRange * t.scale;
+
+  function makePolygonFeature(
+    ring: [number, number][],
+    commonName: string,
+    color = "#00e5ff",
+  ): EfhFeature {
+    return {
+      type: EfhFeatureType.Feature,
+      properties: {
+        species: "test_species",
+        commonName,
+        fmp: "Test FMP",
+        depthRangeM: [0, 100],
+        habitatDescription: "Test",
+        source: "test",
+        creditUrl: "https://example.com",
+        color,
+      },
+      geometry: {
+        type: "Polygon",
+        coordinates: [ring.map(([lon, lat]) => [lon, lat])],
+      },
+    };
+  }
+
+  it("polygon at the northern edge produces moveTo with Y ≈ offsetY (top)", () => {
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    const feature = makePolygonFeature(
+      [[-119.5, grid.maxLat], [-119.4, grid.maxLat], [-119.4, grid.maxLat - 0.1], [-119.5, grid.maxLat]],
+      "Pollock",
+    );
+    renderEfhOverlay(ctx, [feature], grid, t);
+    const moveCalls = (ctx.moveTo as ReturnType<typeof vi.fn>).mock.calls;
+    expect(moveCalls.length).toBeGreaterThan(0);
+    const [, firstY] = moveCalls[0] as [number, number];
+    expect(firstY).toBeCloseTo(t.offsetY, 3);
+  });
+
+  it("polygon at the southern edge produces moveTo with Y ≈ offsetY + terrainH (bottom)", () => {
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    const feature = makePolygonFeature(
+      [[-119.5, grid.minLat], [-119.4, grid.minLat], [-119.4, grid.minLat + 0.1], [-119.5, grid.minLat]],
+      "Rockfish",
+    );
+    renderEfhOverlay(ctx, [feature], grid, t);
+    const moveCalls = (ctx.moveTo as ReturnType<typeof vi.fn>).mock.calls;
+    expect(moveCalls.length).toBeGreaterThan(0);
+    const [, firstY] = moveCalls[0] as [number, number];
+    expect(firstY).toBeCloseTo(t.offsetY + terrainH, 3);
+  });
+
+  it("northern polygon vertices have smaller Y than southern polygon vertices (North-up)", () => {
+    const ctxN = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderEfhOverlay(ctxN, [makePolygonFeature(
+      [[-119.5, grid.maxLat], [-119.4, grid.maxLat], [-119.4, grid.maxLat - 0.05], [-119.5, grid.maxLat]],
+      "Pollock",
+    )], grid, t);
+    const [, northY] = (ctxN.moveTo as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number];
+
+    const ctxS = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderEfhOverlay(ctxS, [makePolygonFeature(
+      [[-119.5, grid.minLat], [-119.4, grid.minLat], [-119.4, grid.minLat + 0.05], [-119.5, grid.minLat]],
+      "Rockfish",
+    )], grid, t);
+    const [, southY] = (ctxS.moveTo as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number];
+
+    expect(northY).toBeLessThan(southY);
+  });
+
+  it("hidden species are skipped — moveTo is never called for a fully-hidden feature", () => {
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    const feature = makePolygonFeature(
+      [[-119.5, 47.5], [-119.4, 47.5], [-119.4, 47.6], [-119.5, 47.5]],
+      "Halibut",
+    );
+    renderEfhOverlay(ctx, [feature], grid, t, new Set(["Halibut"]));
+    expect((ctx.moveTo as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
+  });
+
+  it("visible species are drawn even when another species is hidden", () => {
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    const visible = makePolygonFeature(
+      [[-119.5, 47.5], [-119.4, 47.5], [-119.4, 47.6], [-119.5, 47.5]],
+      "Pollock",
+    );
+    const hidden = makePolygonFeature(
+      [[-119.5, 47.7], [-119.4, 47.7], [-119.4, 47.8], [-119.5, 47.7]],
+      "Halibut",
+    );
+    renderEfhOverlay(ctx, [visible, hidden], grid, t, new Set(["Halibut"]));
+    expect((ctx.moveTo as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1);
+  });
+
+  it("two visible features each produce a separate beginPath call", () => {
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderEfhOverlay(ctx, [
+      makePolygonFeature(
+        [[-119.5, 47.5], [-119.4, 47.5], [-119.4, 47.6], [-119.5, 47.5]],
+        "Pollock",
+      ),
+      makePolygonFeature(
+        [[-119.9, 47.2], [-119.8, 47.2], [-119.8, 47.3], [-119.9, 47.2]],
+        "Rockfish",
+      ),
+    ], grid, t);
+    expect((ctx.beginPath as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2);
+  });
+
+  it("empty features array draws nothing — beginPath is never called", () => {
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderEfhOverlay(ctx, [], grid, t);
+    expect((ctx.beginPath as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildHeatmapBitmap — northernmost data row in top canvas row
+// ---------------------------------------------------------------------------
 
 describe("buildHeatmapBitmap — northernmost data row in top canvas row", () => {
   beforeEach(() => {
