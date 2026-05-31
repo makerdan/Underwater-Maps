@@ -11,6 +11,7 @@ BathyScan turns raw bathymetry (seafloor and lake-bed depth data) into an intera
 - `pnpm run docs` — regenerate the API route tables in README.md and replit.md from openapi.yaml
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - Required env: `DATABASE_URL` — Postgres connection string
+- **GitHub sync** — `scripts/post-merge.sh` automatically pushes to the GitHub mirror after every successful merge. The push is skipped (with a log message) if `GITHUB_TOKEN` or `GITHUB_REPO_URL` is not set, so contributors without those secrets are unaffected. Set both secrets to keep the GitHub mirror current with no manual effort.
 
 ## Stack
 

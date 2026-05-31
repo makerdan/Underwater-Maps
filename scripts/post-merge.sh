@@ -17,3 +17,14 @@ pnpm run test:unit || echo "[post-merge] Unit tests have pre-existing failures (
 # Guardrail: fail immediately if the generated API route tables in README.md
 # or replit.md are out of sync with lib/api-spec/openapi.yaml.
 pnpm run check:docs-stale
+# Sync to GitHub mirror. Skipped (with a log message) if either secret is
+# absent so contributors without the GitHub secret don't break CI.
+if [ -n "${GITHUB_TOKEN}" ] && [ -n "${GITHUB_REPO_URL}" ]; then
+  echo "[post-merge] Pushing to GitHub mirror…"
+  # Push directly to the authenticated URL — no remote mutation, so the
+  # credential never persists in .git/config even if the push fails.
+  git push "https://x-access-token:${GITHUB_TOKEN}@${GITHUB_REPO_URL#https://}" HEAD:main
+  echo "[post-merge] GitHub mirror up to date."
+else
+  echo "[post-merge] GITHUB_TOKEN or GITHUB_REPO_URL not set — skipping GitHub sync."
+fi
