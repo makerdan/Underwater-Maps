@@ -287,6 +287,59 @@ describe("persist merge hook", () => {
     usePaletteStore.persist.rehydrate();
     expect(usePaletteStore.getState().customStops).toEqual(good);
   });
+
+  it("keeps well-formed bandBoundaries through rehydration", () => {
+    const good = [0, 40, 90, 140, 190, 240, 290, 340, 440, 590, 2000];
+    localStorage.setItem(
+      "bathyscan:palette",
+      JSON.stringify({
+        state: { shallow: DEFAULT_SHALLOW, deep: DEFAULT_DEEP, bandBoundaries: good },
+        version: 0,
+      }),
+    );
+    usePaletteStore.persist.rehydrate();
+    expect(usePaletteStore.getState().bandBoundaries).toEqual(good);
+  });
+
+  it("falls back to DEFAULT_BAND_BOUNDARIES when persisted bandBoundaries is malformed", () => {
+    localStorage.setItem(
+      "bathyscan:palette",
+      JSON.stringify({
+        state: {
+          shallow: DEFAULT_SHALLOW,
+          deep: DEFAULT_DEEP,
+          bandBoundaries: [0, 50, 50, 150, 200, 250, 300, 350, 450, 600, 2000],
+        },
+        version: 0,
+      }),
+    );
+    usePaletteStore.persist.rehydrate();
+    expect(usePaletteStore.getState().bandBoundaries).toEqual([...DEFAULT_BAND_BOUNDARIES]);
+  });
+
+  it("falls back to DEFAULT_BAND_BOUNDARIES when persisted bandBoundaries is absent (legacy row)", () => {
+    localStorage.setItem(
+      "bathyscan:palette",
+      JSON.stringify({
+        state: { shallow: DEFAULT_SHALLOW, deep: DEFAULT_DEEP, customStops: DEFAULT_CUSTOM_STOPS },
+        version: 0,
+      }),
+    );
+    usePaletteStore.persist.rehydrate();
+    expect(usePaletteStore.getState().bandBoundaries).toEqual([...DEFAULT_BAND_BOUNDARIES]);
+  });
+
+  it("falls back to DEFAULT_BAND_BOUNDARIES when persisted bandBoundaries is not an array", () => {
+    localStorage.setItem(
+      "bathyscan:palette",
+      JSON.stringify({
+        state: { shallow: DEFAULT_SHALLOW, deep: DEFAULT_DEEP, bandBoundaries: "corrupt" },
+        version: 0,
+      }),
+    );
+    usePaletteStore.persist.rehydrate();
+    expect(usePaletteStore.getState().bandBoundaries).toEqual([...DEFAULT_BAND_BOUNDARIES]);
+  });
 });
 
 describe("paletteStore.hydrateFromServer", () => {
@@ -409,6 +462,64 @@ describe("paletteStore.hydrateFromServer", () => {
     expect(st.shallow).toBe("#010203");
     expect(st.deep).toBe("#aabbcc");
     expect(st.customStops).toEqual(seededStops);
+  });
+
+  it("applies a valid bandBoundaries payload from the server", () => {
+    const incoming = [0, 40, 90, 140, 190, 240, 290, 340, 440, 590, 2000];
+    usePaletteStore.getState().hydrateFromServer({ bandBoundaries: incoming });
+    expect(usePaletteStore.getState().bandBoundaries).toEqual(incoming);
+  });
+
+  it("leaves bandBoundaries untouched when the payload is not an array", () => {
+    const before = [...usePaletteStore.getState().bandBoundaries];
+    usePaletteStore.getState().hydrateFromServer({
+      bandBoundaries: "not an array" as unknown,
+    });
+    expect(usePaletteStore.getState().bandBoundaries).toEqual(before);
+  });
+
+  it("leaves bandBoundaries untouched when the payload has wrong length", () => {
+    const before = [...usePaletteStore.getState().bandBoundaries];
+    usePaletteStore.getState().hydrateFromServer({
+      bandBoundaries: [0, 50, 100, 150, 200, 250, 300, 350, 450, 2000],
+    });
+    expect(usePaletteStore.getState().bandBoundaries).toEqual(before);
+  });
+
+  it("leaves bandBoundaries untouched when the payload is not strictly increasing", () => {
+    const before = [...usePaletteStore.getState().bandBoundaries];
+    usePaletteStore.getState().hydrateFromServer({
+      bandBoundaries: [0, 50, 50, 150, 200, 250, 300, 350, 450, 600, 2000],
+    });
+    expect(usePaletteStore.getState().bandBoundaries).toEqual(before);
+  });
+
+  it("leaves bandBoundaries untouched when the payload does not start at 0 or end at 2000", () => {
+    const before = [...usePaletteStore.getState().bandBoundaries];
+    usePaletteStore.getState().hydrateFromServer({
+      bandBoundaries: [10, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000],
+    });
+    expect(usePaletteStore.getState().bandBoundaries).toEqual(before);
+
+    usePaletteStore.getState().hydrateFromServer({
+      bandBoundaries: [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 1999],
+    });
+    expect(usePaletteStore.getState().bandBoundaries).toEqual(before);
+  });
+
+  it("applies only bandBoundaries when it is the sole field present; other fields survive", () => {
+    const seededBoundaries = [0, 60, 110, 160, 210, 260, 310, 360, 460, 610, 2000];
+    usePaletteStore.getState().setBandBoundaries(seededBoundaries);
+    usePaletteStore.getState().setShallow("#aabbcc");
+    usePaletteStore.getState().setDeep("#112233");
+
+    const newBoundaries = [0, 40, 90, 140, 190, 240, 290, 340, 440, 590, 2000];
+    usePaletteStore.getState().hydrateFromServer({ bandBoundaries: newBoundaries });
+
+    const st = usePaletteStore.getState();
+    expect(st.bandBoundaries).toEqual(newBoundaries);
+    expect(st.shallow).toBe("#aabbcc");
+    expect(st.deep).toBe("#112233");
   });
 });
 
