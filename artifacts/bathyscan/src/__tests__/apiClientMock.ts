@@ -13,6 +13,9 @@
  * // ---- paste at the TOP of your test file (before other imports) ----
  * const makeApiClientMock = vi.hoisted(() => {
  *   function noop() {}
+ *   // NOTE: keep data:undefined — never use data:[] here.
+ *   // An array literal creates a new reference on every call, which causes
+ *   // useEffect([data]) loops that make act() hang forever in tests.
  *   function queryHook()    { return { data: undefined, isLoading: false, isError: false }; }
  *   function mutationHook() { return { mutate: noop, mutateAsync: noop, isPending: false, isSuccess: false, variables: undefined }; }
  *   return (overrides: Record<string, unknown> = {}) =>
@@ -71,6 +74,21 @@ export type ApiClientOverrides = Record<string, AnyFn | unknown>;
 
 function noop() {}
 
+/**
+ * IMPORTANT: must return `data: undefined`, never `data: []` (or any empty
+ * array / object literal).
+ *
+ * Why: components like FindDataPanel accumulate paginated results with a
+ * `useEffect([data])` that appends each new page into local state.  When
+ * `data` is an array literal, every call to this function returns a *new*
+ * reference, so React sees a changed dependency on every render, schedules
+ * another setState, and the component re-renders forever — causing `act()`
+ * in tests to hang indefinitely and never settle.
+ *
+ * `undefined` is a stable identity (same value every call) so the effect
+ * runs exactly once (on mount), the state is never updated, and the test
+ * exits cleanly.
+ */
 function defaultQueryHook() {
   return { data: undefined, isLoading: false, isError: false };
 }
