@@ -285,14 +285,14 @@ function Main() {
   const setDriftPlannerActive = useDriftStore((s) => s.setDriftPlannerActive);
   const gpsActive = useGpsStore((s) => s.active);
   const defaultMapLoad = useSettingsStore((st) => st.defaultMapLoad);
-  const { isSignedIn } = useUser();
+  const { isSignedIn, isLoaded } = useUser();
   // Always-mounted sync: debounce-flush lastSession to server when signed in,
   // independent of whether the Settings page is currently open.
   useLastSessionServerSync(isSignedIn);
   // Fetch user datasets so we can verify a stored upload default still exists.
   const { data: userDatasets } = useGetUserDatasets({
     query: {
-      enabled: !!isSignedIn && defaultMapLoad?.kind === "upload",
+      enabled: isLoaded && isSignedIn === true && defaultMapLoad?.kind === "upload",
       queryKey: getGetUserDatasetsQueryKey(),
       staleTime: 60_000,
     },

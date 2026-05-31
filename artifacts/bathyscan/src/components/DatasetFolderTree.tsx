@@ -37,6 +37,7 @@ import {
   getGetUserDatasetsIdOverviewQueryKey,
 } from "@workspace/api-client-react";
 import type { UserDatasetMeta } from "@workspace/api-client-react";
+import { useAuth } from "@/lib/clerkCompat";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { formatDepthRange } from "@/lib/units";
@@ -102,9 +103,10 @@ export const DatasetFolderTree: React.FC<Props> = ({
   const set = useSettingsStore.setState;
   const myLibraryCollapsed = usePanelCollapseStore((s) => s.collapsed.myLibrary);
   const toggleMyLibrary = usePanelCollapseStore((s) => s.toggle);
+  const { isSignedIn, isLoaded } = useAuth();
 
   const { data: folders } = useGetUserFolders({
-    query: { queryKey: getGetUserFoldersQueryKey() },
+    query: { enabled: isLoaded && isSignedIn === true, queryKey: getGetUserFoldersQueryKey() },
   });
 
   // ─── Soft-delete (undo) state ────────────────────────────────────────────

@@ -1,6 +1,7 @@
 /**
  * Tests that the global QueryCache / MutationCache onError handler surfaces
- * API failures to the user via toast instead of failing silently.
+ * API failures to the user via toast instead of failing silently, and that
+ * transient 401 errors are suppressed so they never show the red error banner.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -64,5 +65,29 @@ describe("queryClient — global onError toast", () => {
         variant: "destructive",
       }),
     );
+  });
+
+  it("does NOT show the error banner for a 401 API error (queryCache)", () => {
+    const cache = queryClient.getQueryCache();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (cache as any).config.onError({ status: 401, message: "Unauthorized" });
+
+    expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  it("does NOT show the error banner for a 401 API error (mutationCache)", () => {
+    const cache = queryClient.getMutationCache();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (cache as any).config.onError({ status: 401, message: "Unauthorized" });
+
+    expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  it("still shows the error banner for a 403 API error (not suppressed)", () => {
+    const cache = queryClient.getQueryCache();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (cache as any).config.onError({ status: 403, message: "Forbidden" });
+
+    expect(mockToast).toHaveBeenCalledOnce();
   });
 });

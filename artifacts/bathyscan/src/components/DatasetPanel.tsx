@@ -444,7 +444,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     pendingExternalUserDatasetId,
     setPendingExternalUserDatasetId,
   } = useAppState();
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, isLoaded } = useAuth();
   const qc = useQueryClient();
   const isOnline = useOfflineStore((s) => s.isOnline);
   const { toast } = useToast();
@@ -533,7 +533,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     { query: { queryKey: getGetDatasetsQueryKey({ waterType }) } },
   );
   const { data: userDatasets, isLoading: userDatasetsLoading } = useGetUserDatasets({
-    query: { enabled: !!isSignedIn, queryKey: getGetUserDatasetsQueryKey() },
+    query: { enabled: isLoaded && isSignedIn === true, queryKey: getGetUserDatasetsQueryKey() },
   });
 
   // ─── Parallel fetch for pending PRESET dataset ─────────────────────────────

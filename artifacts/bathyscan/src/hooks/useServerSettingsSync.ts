@@ -105,7 +105,7 @@ function buildPayload(): Record<string, unknown> {
  * dataset so the user's saved default preference is always respected.
  */
 export function useServerSettingsSync(): { settingsReady: boolean } {
-  const { isSignedIn } = useUser();
+  const { isSignedIn, isLoaded } = useUser();
   const hydrateFromServer = useSettingsStore((s) => s.hydrateFromServer);
   const markAllSaved = useSettingsStore((s) => s.markAllSaved);
   const { mutateAsync: saveSettingsAsync } = usePutSettings();
@@ -123,7 +123,7 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
   // ── GET hydration ──────────────────────────────────────────────────────────
   const { data: serverSettings, isError: settingsFetchError } = useGetSettings({
     query: {
-      enabled: !!isSignedIn,
+      enabled: isLoaded && isSignedIn === true,
       queryKey: getGetSettingsQueryKey(),
       refetchOnMount: "always",
       staleTime: 0,
