@@ -29,6 +29,7 @@ import { MarkerForm } from "@/components/MarkerForm";
 import { useMarkerEditStore } from "@/lib/markerEditStore";
 import { ContextMenu } from "@/components/ContextMenu";
 import { MeasurementBanner } from "@/components/MeasurementBanner";
+import { LandTerrainStatusBanner } from "@/components/LandTerrainStatusBanner";
 import { DepthProfilePanel } from "@/components/DepthProfilePanel";
 import { MarkerDetailCard } from "@/components/MarkerDetailCard";
 import { OverviewMap } from "@/components/OverviewMap";
@@ -1409,6 +1410,7 @@ function HomeRoute() {
         window.__bathyTest helper.
       */}
       <ContextMenu />
+      <LandTerrainStatusBanner />
       <MeasurementBanner />
       <MarkerDetailCard />
     </QueryClientProvider>

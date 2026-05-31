@@ -12,6 +12,7 @@ import type { TerrainData } from "@workspace/api-client-react";
 import { triggerBlobDownload } from "@/lib/blobDownload";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useClassificationStore } from "@/lib/classificationStore";
+import { useLandTerrainStore } from "@/lib/landTerrainStore";
 
 interface ProvenancePanelProps {
   terrain: TerrainData;
@@ -80,6 +81,9 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
   const zoneSource = useClassificationStore((s) => s.source);
   const substrateFp = useClassificationStore((s) => s.currentSubstrateFp);
   const substrateGrounded = !!substrateFp && substrateFp !== "00000000";
+
+  const landGridLoaded = useLandTerrainStore((s) => s.landGrid !== null);
+  const showCopernicusBadge = terrain.hasTopography || landGridLoaded;
 
   const sourceKey: DataSource =
     (terrain.dataSource as DataSource | undefined) ??
@@ -246,6 +250,39 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
           >
             TOPO
           </span>
+          </ViewscreenTooltip>
+        )}
+
+        {showCopernicusBadge && (
+          <ViewscreenTooltip
+            label="Land elevation: Copernicus DEM GLO-90 (CC-BY 4.0) — 90 m global land surface model"
+            side="top"
+          >
+            <a
+              data-testid="copernicus-dem-badge"
+              href="https://spacedata.copernicus.eu/collections/copernicus-digital-elevation-model"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 3,
+                background: "rgba(52,211,153,0.10)",
+                border: "1px solid rgba(52,211,153,0.38)",
+                borderRadius: 3,
+                padding: "1px 6px",
+                fontSize: 9,
+                color: "#34d399",
+                fontWeight: 700,
+                letterSpacing: "0.05em",
+                textTransform: "uppercase",
+                textDecoration: "none",
+                cursor: "pointer",
+              }}
+            >
+              Land: Copernicus DEM 90 m (CC-BY)
+            </a>
           </ViewscreenTooltip>
         )}
 
