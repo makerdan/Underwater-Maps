@@ -88,7 +88,8 @@ function makeProgressTerrainFetcher(
     });
 }
 
-const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+const CHUNKED_THRESHOLD = 10 * 1024 * 1024; // files above 10 MB use chunked path
+const CHUNK_SIZE = 5 * 1024 * 1024;          // 5 MB per chunk
 
 const PANEL: React.CSSProperties = {
   background: "rgba(0,10,20,0.82)",
@@ -262,6 +263,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     if (autoRetryTimer.current) clearTimeout(autoRetryTimer.current);
   }, []);
 
+  // Chunked upload session refs — stable across renders, used by retry logic
+  const chunkedUploadIdRef = useRef<string | null>(null);
+  // Index of the chunk that failed (null = not failed yet, >= totalChunks = finalize failed)
+  const chunkedFailedAtRef = useRef<number | null>(null);
+
   // ─── Preset dataset pending fetch ─────────────────────────────────────────
   const [pendingId, setPendingId] = useState<string | null>(null);
 
@@ -271,8 +277,16 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const [userLoadError, setUserLoadError] = useState<{ id: string; name: string } | null>(null);
   const [presetLoadError, setPresetLoadError] = useState<{ id: string; name: string } | null>(null);
 
-  // ─── Upload progress (simulated) ──────────────────────────────────────────
+  // ─── Upload progress (simulated, small-file path) ─────────────────────────
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  // ─── Chunked-upload state (large-file path > CHUNKED_THRESHOLD) ───────────
+  type ChunkedPhase = "idle" | "uploading" | "processing" | "error";
+  const [chunkedPhase, setChunkedPhase] = useState<ChunkedPhase>("idle");
+  const [chunkedUploadProgress, setChunkedUploadProgress] = useState(0);
+  const [chunkedJobId, setChunkedJobId] = useState<string | null>(null);
+  const [chunkedError, setChunkedError] = useState<string | null>(null);
+  const [lastChunkedFile, setLastChunkedFile] = useState<File | null>(null);
 
   const waterType = useSettingsStore((s) => s.waterType);
   const units = useSettingsStore((s) => s.units);
@@ -566,6 +580,46 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     [activeUserDatasetId, pendingUserDatasetId, setTerrain],
   );
 
+  // ─── Chunked-upload job polling ───────────────────────────────────────────
+  useEffect(() => {
+    if (!chunkedJobId) return;
+    const poll = async () => {
+      try {
+        const resp = await fetch(`/api/datasets/upload/jobs/${chunkedJobId}`, {
+          credentials: "include",
+        });
+        if (!resp.ok) return;
+        const data = await resp.json() as {
+          status: string;
+          progress: number;
+          error?: string;
+          datasetId?: string;
+        };
+        if (data.status === "done" && data.datasetId) {
+          setChunkedJobId(null);
+          setChunkedPhase("idle");
+          setLastChunkedFile(null);
+          setChunkedError(null);
+          void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+          setActiveUserDatasetId(data.datasetId);
+          setLoadingId(data.datasetId);
+          setPendingUserDatasetId(data.datasetId);
+          setPendingId(null);
+          setUploadOpen(false);
+        } else if (data.status === "error") {
+          setChunkedJobId(null);
+          setChunkedPhase("error");
+          setChunkedError(data.error ?? "Server-side processing failed.");
+        }
+      } catch {
+        // transient network error; will retry on next interval tick
+      }
+    };
+    void poll();
+    const timer = setInterval(() => { void poll(); }, 2000);
+    return () => clearInterval(timer);
+  }, [chunkedJobId, qc, setUploadOpen]);
+
   // ─── Upload ────────────────────────────────────────────────────────────────
   const postDatasetsUpload = usePostDatasetsUpload();
 
@@ -676,15 +730,97 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     [postDatasetsUpload, setDatasetId, setTerrain, qc, setUploadOpen],
   );
 
+  // ─── Chunked upload helpers ────────────────────────────────────────────────
+  // doSendChunks sends slices [fromIndex, totalChunks) for the given uploadId.
+  // Returns true on success; on any chunk failure sets error state and returns false,
+  // storing the failed chunk index in chunkedFailedAtRef so a retry can resume there.
+  const doSendChunks = useCallback(async (
+    file: File,
+    uploadId: string,
+    fromIndex: number,
+  ): Promise<boolean> => {
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    for (let i = fromIndex; i < totalChunks; i++) {
+      const start = i * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, file.size);
+      const chunk = file.slice(start, end);
+
+      const fd = new FormData();
+      fd.append("uploadId", uploadId);
+      fd.append("chunkIndex", String(i));
+      fd.append("totalChunks", String(totalChunks));
+      fd.append("file", chunk, file.name);
+
+      const resp = await fetch("/api/datasets/upload/chunk", {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      });
+
+      if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({})) as { details?: string; error?: string };
+        chunkedFailedAtRef.current = i;
+        setChunkedPhase("error");
+        setChunkedError(errBody.details ?? errBody.error ?? `Upload failed at chunk ${i + 1} of ${totalChunks}`);
+        return false;
+      }
+      setChunkedUploadProgress(Math.round(((i + 1) / totalChunks) * 100));
+    }
+    return true;
+  }, []);
+
+  // doFinalizeChunks asks the server to assemble chunks and queue the job.
+  // Returns true on success; sets error state and returns false otherwise.
+  const doFinalizeChunks = useCallback(async (file: File, uploadId: string): Promise<boolean> => {
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    const finalResp = await fetch("/api/datasets/upload/chunk/finalize", {
+      method: "POST",
+      body: JSON.stringify({ uploadId, fileName: file.name, totalChunks, resolution: 256 }),
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (!finalResp.ok) {
+      const errBody = await finalResp.json().catch(() => ({})) as { details?: string; error?: string };
+      // Use totalChunks as sentinel: all chunks are present, only finalize failed
+      chunkedFailedAtRef.current = totalChunks;
+      setChunkedPhase("error");
+      setChunkedError(errBody.details ?? errBody.error ?? "Failed to start server processing");
+      return false;
+    }
+
+    const { jobId } = await finalResp.json() as { jobId: string };
+    setChunkedPhase("processing");
+    setChunkedJobId(jobId);
+    return true;
+  }, []);
+
+  // ─── Chunked upload entry-point (new upload, starts from chunk 0) ─────────
+  const chunkedUploadFile = useCallback(async (file: File) => {
+    setLastChunkedFile(file);
+    setChunkedPhase("uploading");
+    setChunkedUploadProgress(0);
+    setChunkedError(null);
+    setChunkedJobId(null);
+
+    const uploadId = crypto.randomUUID();
+    chunkedUploadIdRef.current = uploadId;
+    chunkedFailedAtRef.current = null;
+
+    const chunksOk = await doSendChunks(file, uploadId, 0);
+    if (!chunksOk) return;
+    await doFinalizeChunks(file, uploadId);
+  }, [doSendChunks, doFinalizeChunks]);
+
   const onDrop = useCallback(
     (accepted: File[], rejected: FileRejection[]) => {
       setUploadError(null);
       setSaveError(null);
+      setChunkedPhase("idle");
+      setChunkedError(null);
       if (rejected.length) {
         const code = rejected[0]?.errors[0]?.code;
-        if (code === "file-too-large") {
-          setUploadError("File exceeds 50 MB limit");
-        } else if (code === "file-invalid-type") {
+        if (code === "file-invalid-type") {
           setUploadError("Only .xyz or .csv files accepted");
         } else {
           setUploadError("Invalid file");
@@ -698,9 +834,13 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         autoRetryTimer.current = null;
       }
       setSavingToAccount(false);
-      uploadFile(file);
+      if (file.size > CHUNKED_THRESHOLD) {
+        void chunkedUploadFile(file);
+      } else {
+        uploadFile(file);
+      }
     },
-    [uploadFile],
+    [uploadFile, chunkedUploadFile],
   );
 
   const handleRetrySave = useCallback(() => {
@@ -708,12 +848,43 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     uploadFile(lastUploadedFile, { isRetry: true });
   }, [lastUploadedFile, postDatasetsUpload.isPending, uploadFile]);
 
+  // ─── Chunked upload retry — resumes from the failed chunk, same uploadId ──
+  // If a chunk transfer failed: resend from that chunk index onwards.
+  // If all chunks arrived but finalize failed: skip straight to finalize.
+  // Never restarts the whole upload unnecessarily.
+  const handleRetryChunked = useCallback(async () => {
+    if (!lastChunkedFile || chunkedPhase === "uploading" || chunkedPhase === "processing") return;
+    const uploadId = chunkedUploadIdRef.current;
+    if (!uploadId) return;
+
+    const totalChunks = Math.ceil(lastChunkedFile.size / CHUNK_SIZE);
+    const failedAt = chunkedFailedAtRef.current ?? 0;
+
+    setChunkedPhase("uploading");
+    setChunkedError(null);
+    // Show progress from where we are — don't reset to 0 if early chunks already landed
+    setChunkedUploadProgress(Math.round((Math.min(failedAt, totalChunks) / totalChunks) * 100));
+
+    if (failedAt >= totalChunks) {
+      // All chunks were already received; only the finalize call failed. Retry it directly.
+      await doFinalizeChunks(lastChunkedFile, uploadId);
+    } else {
+      // Resume chunk transfer from the failed index, then finalize.
+      const chunksOk = await doSendChunks(lastChunkedFile, uploadId, failedAt);
+      if (!chunksOk) return;
+      await doFinalizeChunks(lastChunkedFile, uploadId);
+    }
+  }, [lastChunkedFile, chunkedPhase, doSendChunks, doFinalizeChunks]);
+
+  const isAnyUploadBusy = postDatasetsUpload.isPending || chunkedPhase === "uploading" || chunkedPhase === "processing";
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { "text/csv": [".csv"], "text/plain": [".xyz"] },
     maxFiles: 1,
-    maxSize: MAX_UPLOAD_BYTES,
-    disabled: postDatasetsUpload.isPending,
+    // No maxSize — large files (> 10 MB) route to the chunked path automatically.
+    // Files ≤ 50 MB use the regular multer path; the server enforces limits there.
+    disabled: isAnyUploadBusy,
   });
 
   // ─── Markers ──────────────────────────────────────────────────────────────
@@ -1450,7 +1621,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                   </div>
                 ) : (
                   <>
-                    {postDatasetsUpload.isPending && (
+                    {(postDatasetsUpload.isPending || chunkedPhase === "uploading") && (
                       <div
                         style={{
                           height: 3, background: "rgba(0,229,255,0.1)",
@@ -1459,7 +1630,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       >
                         <div
                           style={{
-                            height: "100%", width: `${uploadProgress}%`,
+                            height: "100%",
+                            width: `${chunkedPhase === "uploading" ? chunkedUploadProgress : uploadProgress}%`,
                             background: "linear-gradient(90deg, #0d47a1, #00e5ff)",
                             borderRadius: 2, transition: "width 0.1s linear",
                             boxShadow: "0 0 6px rgba(0,229,255,0.6)",
@@ -1476,7 +1648,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                         border: `1px dashed ${isDragActive ? "#00e5ff" : "rgba(0,229,255,0.2)"}`,
                         background: isDragActive ? "rgba(0,229,255,0.06)" : "rgba(0,0,0,0.2)",
                         padding: "12px 8px",
-                        opacity: postDatasetsUpload.isPending ? 0.6 : 1,
+                        opacity: isAnyUploadBusy ? 0.6 : 1,
                       }}
                     >
                       <input {...getInputProps()} />
@@ -1487,20 +1659,57 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           </div>
                           <div style={{ fontSize: 10, color: "#cbd5e1" }}>{Math.round(uploadProgress)}%</div>
                         </div>
+                      ) : chunkedPhase === "uploading" ? (
+                        <div>
+                          <div className="animate-pulse" style={{ ...CYAN, fontSize: 10, marginBottom: 2 }}>
+                            ◌ Uploading in chunks...
+                          </div>
+                          <div style={{ fontSize: 10, color: "#cbd5e1" }}>{chunkedUploadProgress}%</div>
+                        </div>
+                      ) : chunkedPhase === "processing" ? (
+                        <div>
+                          <div className="animate-pulse" style={{ ...CYAN, fontSize: 10, marginBottom: 2 }}>
+                            ◌ Processing on server...
+                          </div>
+                          <div style={{ fontSize: 10, color: "#94a3b8" }}>Dataset will appear when ready</div>
+                        </div>
                       ) : (
                         <>
                           <div style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 3 }}>
                             Drop .xyz or .csv here
                           </div>
                           <div style={{ fontSize: 10, color: "#cbd5e1" }}>
-                            up to 50 MB{isSignedIn ? " · auto-saved to account" : ""}
+                            any size · large files upload in chunks{isSignedIn ? " · auto-saved" : ""}
                           </div>
+                          {chunkedPhase === "error" && chunkedError && (
+                            <div style={{ fontSize: 9, color: "#f87171", marginTop: 4 }}>⚠ {chunkedError}</div>
+                          )}
                           {uploadError && (
                             <div style={{ fontSize: 9, color: "#f87171", marginTop: 4 }}>⚠ {uploadError}</div>
                           )}
                         </>
                       )}
                     </div>
+
+                    {chunkedPhase === "error" && lastChunkedFile && (
+                      <div style={{ marginTop: 6, display: "flex", justifyContent: "flex-end" }}>
+                        <button
+                          data-testid="btn-retry-chunked-upload"
+                          onClick={() => { void handleRetryChunked(); }}
+                          style={{
+                            fontSize: 10,
+                            color: "#00e5ff",
+                            background: "transparent",
+                            border: "1px solid rgba(0,229,255,0.35)",
+                            borderRadius: 3,
+                            padding: "2px 8px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Retry upload
+                        </button>
+                      </div>
+                    )}
                     {savingToAccount && !saveError && (
                       <div
                         data-testid="upload-saving-to-account"

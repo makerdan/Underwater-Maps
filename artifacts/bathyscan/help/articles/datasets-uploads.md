@@ -21,14 +21,26 @@ Click **Upload** at the bottom of the Datasets panel and drop in a `.xyz` or `.c
 
 **Format:** three columns — longitude, latitude, depth (in metres, positive down). Comma or whitespace separated. First-row header optional.
 
-**Limits:**
-
-- Max file size: 50 MB
-- Resolution: auto-binned to a 256×256 grid
-
 After upload the app builds a terrain mesh, runs zone classification, and saves it under **Your saved datasets** so you can come back to it later.
 
 ![Upload drop-zone](/help/upload-dropzone.png)
+
+## Large files
+
+Files larger than **10 MB** are uploaded using **chunked transfer** automatically — no extra steps required on your part.
+
+What happens:
+
+1. The file is split into 5 MB slices and each slice is sent to the server one at a time. A progress bar shows transfer progress (0–100%).
+2. Once all slices arrive, the server assembles the file and starts processing it in the background (decompressing if needed, parsing coordinates, building the terrain grid). The progress bar switches to a **"Processing on server…"** spinner.
+3. When processing is complete the dataset appears in **Your saved datasets** automatically. You can navigate away or leave the upload panel open — the result will show up either way.
+
+You do not need to keep the upload panel open while the server processes.
+
+**Limits:**
+
+- Resolution: auto-binned to a 256×256 grid
+- Processing: up to **200 MB** of uncompressed data. If your file is larger, gzip-compress it first — `.xyz.gz` files are typically 5–10× smaller and are handled automatically.
 
 ## My saved datasets
 

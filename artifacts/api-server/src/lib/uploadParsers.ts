@@ -390,8 +390,7 @@ export async function parseLasLaz(buffer: Buffer, fileName: string): Promise<Raw
     // Try laz-perf for LAZ decompression
     let lazPerf: Record<string, unknown>;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      lazPerf = (await import("laz-perf" as string)) as Record<string, unknown>;
+        lazPerf = (await import("laz-perf" as string)) as Record<string, unknown>;
     } catch {
       throw new Error(
         "LAZ decompression requires the laz-perf library which could not be loaded in this environment. " +
@@ -481,7 +480,6 @@ function lasPointsToRaw(points: { x: number; y: number; z: number }[]): RawPoint
 export async function parseBag(buffer: Buffer): Promise<RawPoint[]> {
   let h5wasm: Record<string, unknown>;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     h5wasm = (await import("h5wasm" as string)) as Record<string, unknown>;
   } catch {
     throw new Error(

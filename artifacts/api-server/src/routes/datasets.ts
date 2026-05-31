@@ -1,5 +1,8 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import * as zlib from "zlib";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
 import multer from "multer";
 import { eq, and } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
@@ -27,6 +30,224 @@ import { fetchCopernicusDem } from "../lib/copernicusDem.js";
 import { fetchSatelliteTile } from "../lib/satelliteTile.js";
 import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
 import { substrateFingerprintForDataset } from "../lib/substrateGrid.js";
+import { registerCache } from "../lib/cacheRegistry.js";
+
+// ─── Chunked-upload session + job stores ──────────────────────────────────────
+// Sessions: keyed by uploadId, created on the first chunk, used to enforce
+// that only the originating user can send subsequent chunks, finalize, or poll.
+interface UploadSession {
+  userId: string;
+}
+const uploadSessions = new Map<string, UploadSession>();
+registerCache(() => uploadSessions.clear());
+
+interface JobState {
+  status: "queued" | "processing" | "done" | "error";
+  progress: number;
+  error?: string;
+  datasetId?: string;
+  userId: string; // enforced on poll — only the owner can read job status
+}
+const uploadJobs = new Map<string, JobState>();
+registerCache(() => uploadJobs.clear());
+
+// Temp directory for received chunks: <tmpdir>/bathyscan-chunks/<uploadId>-chunk-<index>
+const CHUNK_BASE_DIR = path.join(os.tmpdir(), "bathyscan-chunks");
+
+// Disk-storage multer for chunk files. Each chunk lands as a temp file; the
+// route handler renames it into the canonical <uploadId>-chunk-<index> name.
+const chunkStorage = multer.diskStorage({
+  destination(_req, _file, cb) {
+    fs.mkdir(CHUNK_BASE_DIR, { recursive: true }, (err) => cb(err as Error | null, CHUNK_BASE_DIR));
+  },
+  filename(_req, _file, cb) {
+    cb(null, `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  },
+});
+// 6 MB limit per chunk (client sends 5 MB slices; a little headroom for overhead).
+const uploadChunkMiddleware = multer({
+  storage: chunkStorage,
+  limits: { fileSize: 6 * 1024 * 1024 },
+});
+
+async function cleanupChunks(uploadId: string, totalChunks: number): Promise<void> {
+  for (let i = 0; i < totalChunks; i++) {
+    const p = path.join(CHUNK_BASE_DIR, `${uploadId}-chunk-${i}`);
+    await fs.promises.unlink(p).catch(() => undefined);
+  }
+}
+
+/**
+ * Stream-appends each chunk file to `destPath` one at a time, respecting
+ * write-stream backpressure. Peak RAM = one 5 MB chunk at a time.
+ */
+async function streamChunksToFile(
+  uploadId: string,
+  totalChunks: number,
+  destPath: string,
+): Promise<void> {
+  const out = fs.createWriteStream(destPath);
+  try {
+    for (let i = 0; i < totalChunks; i++) {
+      const chunkPath = path.join(CHUNK_BASE_DIR, `${uploadId}-chunk-${i}`);
+      for await (const chunk of fs.createReadStream(chunkPath)) {
+        const ok = out.write(chunk as Buffer);
+        if (!ok) await new Promise<void>((r) => out.once("drain", r));
+      }
+    }
+    await new Promise<void>((resolve, reject) => {
+      out.end((err?: Error | null) => { if (err) reject(err); else resolve(); });
+    });
+  } catch (err) {
+    out.destroy();
+    throw err;
+  }
+}
+
+/**
+ * Stream-decompresses a gzip file to destPath with a hard cap on output size.
+ * Destroys both streams and rejects with DECOMPRESS_TOO_LARGE if cap is hit.
+ * Peak RAM = one zlib internal chunk (~64 KB) at a time.
+ */
+async function streamGunzipToFile(
+  srcPath: string,
+  destPath: string,
+  maxBytes: number,
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    function fail(err: Error) {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    }
+
+    const src = fs.createReadStream(srcPath);
+    const gunzip = zlib.createGunzip();
+    const dest = fs.createWriteStream(destPath);
+    let total = 0;
+
+    gunzip.on("data", (chunk: Buffer) => {
+      total += chunk.length;
+      if (total > maxBytes) {
+        const err = Object.assign(new Error("DECOMPRESS_TOO_LARGE"), { code: "DECOMPRESS_TOO_LARGE" });
+        gunzip.destroy(err);
+        dest.destroy();
+        fail(err);
+      }
+    });
+
+    src.on("error", fail);
+    gunzip.on("error", fail);
+    dest.on("error", fail);
+    dest.on("finish", () => { if (!settled) { settled = true; resolve(); } });
+
+    src.pipe(gunzip).pipe(dest);
+  });
+}
+
+async function processUploadJob(
+  jobId: string,
+  uploadId: string,
+  totalChunks: number,
+  fileName: string,
+  resolution: number,
+  userId: string,
+  smoothing: boolean,
+): Promise<void> {
+  const job = uploadJobs.get(jobId);
+  if (!job) return;
+
+  const assembledPath = path.join(CHUNK_BASE_DIR, `${uploadId}-assembled`);
+  const decompressedPath = `${assembledPath}-decompressed`;
+
+  try {
+    job.status = "processing";
+    job.progress = 5;
+
+    // Stream chunks one-at-a-time into a single assembled file.
+    // Peak RAM: one 5 MB chunk. No Buffer.concat across all chunks.
+    await streamChunksToFile(uploadId, totalChunks, assembledPath);
+    job.progress = 20;
+
+    let processPath = assembledPath;
+
+    if (fileName.toLowerCase().endsWith(".gz")) {
+      // Stream-decompress with size guard; avoids full gz buffer in RAM.
+      await streamGunzipToFile(assembledPath, decompressedPath, DECOMPRESS_MAX_BYTES);
+      await fs.promises.unlink(assembledPath).catch(() => undefined);
+      processPath = decompressedPath;
+    } else {
+      // Enforce the same 200 MB cap for uncompressed files before reading.
+      const { size } = await fs.promises.stat(assembledPath);
+      if (size > DECOMPRESS_MAX_BYTES) {
+        throw new Error(
+          `File is ${Math.round(size / 1024 / 1024)} MB which exceeds the ` +
+          `${Math.round(DECOMPRESS_MAX_BYTES / 1024 / 1024)} MB processing limit. ` +
+          `Compress it as .gz before uploading (typically 5–10× smaller).`,
+        );
+      }
+    }
+    job.progress = 35;
+
+    // Read the processed file for parsing. String-based XYZ/CSV parsers
+    // require full content; binary parsers get a Buffer.
+    const TEXT_EXTENSIONS = new Set(["csv", "xyz", "txt"]);
+    const baseFileName = fileName.toLowerCase().endsWith(".gz") ? fileName.slice(0, -3) : fileName;
+    const fileExt = baseFileName.split(".").pop() ?? "";
+
+    let points;
+    if (TEXT_EXTENSIONS.has(fileExt)) {
+      const fileContent = await fs.promises.readFile(processPath, "utf8");
+      job.progress = 40;
+      points = parseXyzCsv(fileContent, fileName);
+    } else {
+      const raw = await fs.promises.readFile(processPath);
+      job.progress = 40;
+      points = await parseUploadedFile(raw, fileName);
+    }
+    job.progress = 55;
+
+    if (points.length < 10) {
+      throw new Error("File must contain at least 10 valid (lon, lat, depth) rows");
+    }
+
+    const datasetName = baseFileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
+
+    job.progress = 60;
+    const gridId = crypto.randomUUID();
+    const terrain = gridPoints(points, resolution, gridId, datasetName, { smoothing });
+    job.progress = 80;
+    const overview = gridPoints(points, 64, gridId, datasetName, { smoothing });
+    job.progress = 88;
+
+    const [saved] = await db
+      .insert(customDatasetsTable)
+      .values({
+        id: gridId,
+        userId,
+        name: datasetName,
+        minDepth: terrain.minDepth,
+        maxDepth: terrain.maxDepth,
+        terrainJson: terrain as unknown as Record<string, unknown>,
+        overviewJson: overview as unknown as Record<string, unknown>,
+      })
+      .returning({ id: customDatasetsTable.id });
+
+    job.progress = 100;
+    job.status = "done";
+    job.datasetId = saved?.id ?? gridId;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Processing failed";
+    job.status = "error";
+    job.error = msg;
+    console.error(`[chunk-job:${jobId}] failed:`, err);
+  } finally {
+    await cleanupChunks(uploadId, totalChunks);
+    await fs.promises.unlink(assembledPath).catch(() => undefined);
+    await fs.promises.unlink(decompressedPath).catch(() => undefined);
+  }
+}
 
 const DECOMPRESS_MAX_BYTES = 200 * 1024 * 1024;
 
@@ -757,5 +978,171 @@ router.post(
     }),
   );
 });
+
+// ── POST /datasets/upload/chunk ───────────────────────────────────────────────
+// Receives one 5 MB slice of a large file. Fields (all required):
+//   uploadId    — stable UUID chosen by the client for this upload session
+//   chunkIndex  — 0-based index of this slice
+//   totalChunks — total number of slices the client will send
+//   file        — the binary slice (multipart/form-data)
+// The first chunk (chunkIndex === 0) creates the upload session bound to the
+// caller's userId. Subsequent chunks must come from the same authenticated user.
+// Returns { received: chunkIndex }.
+router.post(
+  "/datasets/upload/chunk",
+  requireAuth,
+  uploadChunkMiddleware.single("file"),
+  async (req: Request, res: Response): Promise<void> => {
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: "missing_file", details: "No chunk data received." });
+      return;
+    }
+
+    const uploadId = String(req.body["uploadId"] ?? "").trim();
+    const chunkIndex = parseInt(String(req.body["chunkIndex"] ?? ""), 10);
+    const totalChunks = parseInt(String(req.body["totalChunks"] ?? ""), 10);
+
+    if (!uploadId || !/^[a-zA-Z0-9_-]{8,64}$/.test(uploadId)) {
+      await fs.promises.unlink(file.path).catch(() => undefined);
+      res.status(400).json({ error: "invalid_param", details: "uploadId must be 8–64 alphanumeric characters." });
+      return;
+    }
+    if (!isFinite(chunkIndex) || chunkIndex < 0) {
+      await fs.promises.unlink(file.path).catch(() => undefined);
+      res.status(400).json({ error: "invalid_param", details: "chunkIndex must be a non-negative integer." });
+      return;
+    }
+    if (!isFinite(totalChunks) || totalChunks < 1 || totalChunks > 4096) {
+      await fs.promises.unlink(file.path).catch(() => undefined);
+      res.status(400).json({ error: "invalid_param", details: "totalChunks must be between 1 and 4096." });
+      return;
+    }
+
+    const userId = (req as AuthenticatedRequest).clerkUserId;
+
+    if (chunkIndex === 0) {
+      // First chunk: create the upload session bound to this user.
+      uploadSessions.set(uploadId, { userId });
+    } else {
+      // Subsequent chunks: verify ownership.
+      const session = uploadSessions.get(uploadId);
+      if (!session) {
+        await fs.promises.unlink(file.path).catch(() => undefined);
+        res.status(404).json({ error: "session_not_found", details: "Upload session not found. Start from chunk 0." });
+        return;
+      }
+      if (session.userId !== userId) {
+        await fs.promises.unlink(file.path).catch(() => undefined);
+        res.status(403).json({ error: "forbidden", details: "Upload session belongs to a different user." });
+        return;
+      }
+    }
+
+    // Rename the temp file to its canonical <uploadId>-chunk-<index> path
+    const dest = path.join(CHUNK_BASE_DIR, `${uploadId}-chunk-${chunkIndex}`);
+    try {
+      await fs.promises.rename(file.path, dest);
+    } catch {
+      await fs.promises.unlink(file.path).catch(() => undefined);
+      res.status(500).json({ error: "chunk_write_error", details: "Failed to store chunk." });
+      return;
+    }
+
+    res.json({ received: chunkIndex });
+  },
+);
+
+// ── POST /datasets/upload/chunk/finalize ──────────────────────────────────────
+// Called after all chunks have been sent. Enqueues an async job that reassembles
+// the chunks, parses the file, builds the terrain grid, and saves to DB.
+// Body (JSON): { uploadId, fileName, totalChunks, resolution? }
+// Returns { jobId }.
+router.post(
+  "/datasets/upload/chunk/finalize",
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    const FinalizeSchema = z.object({
+      uploadId: z.string().regex(/^[a-zA-Z0-9_-]{8,64}$/, "Invalid uploadId"),
+      fileName: z.string().min(1).max(255),
+      totalChunks: z.coerce.number().int().min(1).max(4096),
+      resolution: z.coerce.number().int().min(32).max(512).default(256),
+    });
+    const parsed = FinalizeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "invalid_param",
+        details: parsed.error.issues.map((i) => `${i.path.join(".") || "param"}: ${i.message}`).join("; "),
+      });
+      return;
+    }
+
+    const { uploadId, fileName, totalChunks, resolution } = parsed.data;
+
+    // Verify that all chunks are present before queuing
+    for (let i = 0; i < totalChunks; i++) {
+      const chunkPath = path.join(CHUNK_BASE_DIR, `${uploadId}-chunk-${i}`);
+      const exists = await fs.promises.access(chunkPath).then(() => true).catch(() => false);
+      if (!exists) {
+        res.status(409).json({
+          error: "missing_chunks",
+          details: `Chunk ${i} of ${totalChunks} not yet received. Re-upload missing chunks and retry.`,
+        });
+        return;
+      }
+    }
+
+    const userId = (req as AuthenticatedRequest).clerkUserId;
+
+    // Verify session ownership before queuing
+    const session = uploadSessions.get(uploadId);
+    if (!session) {
+      res.status(404).json({ error: "session_not_found", details: "Upload session not found. Re-upload from chunk 0." });
+      return;
+    }
+    if (session.userId !== userId) {
+      res.status(403).json({ error: "forbidden", details: "Upload session belongs to a different user." });
+      return;
+    }
+
+    const smoothing = await getSmoothingPreference(req);
+    const jobId = crypto.randomUUID();
+
+    uploadJobs.set(jobId, { status: "queued", progress: 0, userId });
+
+    // Fire-and-forget — the client polls /jobs/:jobId
+    void processUploadJob(jobId, uploadId, totalChunks, fileName, resolution, userId, smoothing);
+
+    res.json({ jobId });
+  },
+);
+
+// ── GET /datasets/upload/jobs/:jobId ─────────────────────────────────────────
+// Returns the current state of a background upload-processing job.
+// Only the user who created the job (via /chunk/finalize) can poll it.
+// Response: { status, progress, error?, datasetId? }
+router.get(
+  "/datasets/upload/jobs/:jobId",
+  requireAuth,
+  (req: Request, res: Response): void => {
+    const jobId = String(req.params["jobId"] ?? "");
+    const job = uploadJobs.get(jobId);
+    if (!job) {
+      res.status(404).json({ error: "not_found", details: "Job not found or already expired." });
+      return;
+    }
+    const userId = (req as AuthenticatedRequest).clerkUserId;
+    if (job.userId !== userId) {
+      res.status(403).json({ error: "forbidden", details: "This job belongs to a different user." });
+      return;
+    }
+    res.json({
+      status: job.status,
+      progress: job.progress,
+      ...(job.error !== undefined ? { error: job.error } : {}),
+      ...(job.datasetId !== undefined ? { datasetId: job.datasetId } : {}),
+    });
+  },
+);
 
 export default router;

@@ -22,10 +22,27 @@ Some browsers block pointer lock if you have just navigated. Click the scene aga
 
 ## My upload failed
 
-- File must be `.xyz` or `.csv` and under 50 MB.
+- File must be `.xyz` or `.csv`.
 - The first non-comment row may be a header.
 - Each row needs at least three numbers (longitude, latitude, depth).
 - Depths should be in metres, positive down. If your data is positive-up, multiply by −1 before uploading.
+
+## Upload stopped at X% mid-transfer
+
+This usually means a network drop interrupted the chunked transfer. The progress bar resets because v1 does not resume mid-way.
+
+**Fix:** Re-upload the file. The whole transfer restarts from the beginning — chunks sent before the drop are discarded.
+
+## My upload is stuck on "Processing on server…"
+
+After all chunks arrive, the server processes the file in the background (decompression, parsing, grid build, save). This normally takes under a minute even for large files.
+
+If the spinner has been showing for more than a few minutes:
+
+1. Refresh the page and check **Your saved datasets** — the dataset may have finished while you were waiting.
+2. If it is not there, re-upload the file. A retry starts a fresh job.
+
+A server restart while your job was running will clear it. Jobs do not survive server restarts in v1.
 
 ## A saved dataset shows "Failed to load"
 
