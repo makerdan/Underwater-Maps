@@ -152,24 +152,6 @@ router.put("/settings", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  // Extra validation for bandBoundaries: the generated Zod schema only checks
-  // array length (11) and item range [0, 2000]. The spec also requires strictly
-  // increasing values, first element 0, and last element 2000 — enforce these
-  // here since orval does not emit superRefine calls from plain descriptions.
-  if ("bandBoundaries" in body) {
-    const bb = parsed.data.bandBoundaries as number[];
-    const first = bb[0];
-    const last = bb[bb.length - 1];
-    const notStrictlyIncreasing = bb.slice(1).some((v, i) => v <= (bb[i] as number));
-    if (first !== 0 || last !== 2000 || notStrictlyIncreasing) {
-      res.status(400).json({
-        error: "invalid_request",
-        details: "bandBoundaries must be strictly increasing, start at 0, and end at 2000",
-      });
-      return;
-    }
-  }
-
   // PUT is a partial update: only the fields the client actually included in
   // the request body should overwrite stored state. The generated zod schema
   // has `.default(...)` on every field, so `parsed.data` always contains every
