@@ -1504,24 +1504,30 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     >
       {/* Header — hidden when embedded inside a SidebarSection */}
       {!embedded && (
-      <ViewscreenTooltip label={collapsed ? "Expand datasets panel" : "Collapse datasets panel"} side="right">
-        <button
-          onClick={() => togglePanel("datasets")}
-          className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors rounded-t"
-          style={{ cursor: "pointer" }}
-        >
-          <span className="uppercase tracking-widest" style={{ fontSize: 10, ...CYAN, fontWeight: 700 }}>
-            Datasets
-          </span>
-          <div className="flex items-center gap-2">
-            {anyLoading && (
-              <span className="animate-spin" style={{ fontSize: 10 }}>◌</span>
-            )}
-            <HelpIcon articleId="datasets-uploads" label="Datasets and uploads" />
-            <span style={{ color: "#cbd5e1", fontSize: 24, lineHeight: 1 }}>{collapsed ? "▸" : "▾"}</span>
-          </div>
-        </button>
-      </ViewscreenTooltip>
+      <div className="w-full flex items-center px-3 py-2 hover:bg-white/5 transition-colors rounded-t">
+        {/*
+         * HelpIcon is a <button> and must be a sibling of the toggle <button>,
+         * not a descendant — nested <button> elements are invalid HTML.
+         */}
+        <ViewscreenTooltip label={collapsed ? "Expand datasets panel" : "Collapse datasets panel"} side="right">
+          <button
+            onClick={() => togglePanel("datasets")}
+            className="flex-1 flex items-center justify-between"
+            style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", fontFamily: "inherit", padding: 0, textAlign: "left" }}
+          >
+            <span className="uppercase tracking-widest" style={{ fontSize: 10, ...CYAN, fontWeight: 700 }}>
+              Datasets
+            </span>
+            <div className="flex items-center gap-2">
+              {anyLoading && (
+                <span className="animate-spin" style={{ fontSize: 10 }}>◌</span>
+              )}
+              <span style={{ color: "#cbd5e1", fontSize: 24, lineHeight: 1 }}>{collapsed ? "▸" : "▾"}</span>
+            </div>
+          </button>
+        </ViewscreenTooltip>
+        <HelpIcon articleId="datasets-uploads" label="Datasets and uploads" />
+      </div>
       )}
 
       {!collapsed && (

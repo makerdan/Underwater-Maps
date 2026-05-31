@@ -273,7 +273,6 @@ export const OverlaysToolsPanel: React.FC = () => {
         <ViewscreenTooltip
           label={collapsed ? "Show overlays & tools" : "Hide overlays & tools"}
           side="right"
-          asChild={false}
         >
           <span
             className="uppercase tracking-widest"

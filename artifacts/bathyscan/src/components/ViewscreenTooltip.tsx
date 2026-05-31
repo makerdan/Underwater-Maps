@@ -7,6 +7,27 @@
  *
  * A single <TooltipProvider> is mounted high in the viewscreen tree
  * (see App.tsx) so individual usages don't need their own provider.
+ *
+ * ── asChild contract ────────────────────────────────────────────────────────
+ * `asChild` defaults to `true`. With asChild=true, Radix renders the
+ * TooltipTrigger AS the child element (via the Slot primitive) rather than
+ * wrapping it in an extra <button>. This is essential when the child is
+ * already a <button> or <a> — without it the browser logs:
+ *   "Warning: <button> cannot appear as a descendant of <button>"
+ *
+ * Rules for callers:
+ *   • Child is a single <button>, <a>, or other focusable element
+ *     → use the default (asChild=true). The trigger renders AS that element.
+ *   • Child contains or IS another interactive element (e.g. HelpIcon which
+ *     renders a <button>) → move the tooltip to the outermost interactive
+ *     element only; keep HelpIcon as a sibling, not a descendant.
+ *   • Child is a non-interactive element (e.g. <span>, <div>) inside a
+ *     clickable ancestor → asChild=true still works; Radix merges only
+ *     tooltip event handlers into the child, no extra DOM node is added.
+ *   • Only use asChild={false} when the child genuinely cannot receive event
+ *     handlers (e.g. a string or fragment) — in that case wrap it in a
+ *     <span> first and leave asChild=true.
+ * ────────────────────────────────────────────────────────────────────────────
  */
 import React from "react";
 import {

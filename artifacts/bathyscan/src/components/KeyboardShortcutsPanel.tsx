@@ -49,26 +49,32 @@ export const KeyboardShortcutsPanel: React.FC = () => {
 
   return (
     <div style={{ ...PANEL, pointerEvents: "auto" }} className="select-none">
-      <ViewscreenTooltip label={collapsed ? "Show keyboard shortcuts" : "Hide keyboard shortcuts"} side="right">
-      <button
-        onClick={() => toggle("keyboardShortcuts")}
-        className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors rounded-t"
-        style={{ cursor: "pointer" }}
-      >
-        <span
-          className="uppercase tracking-widest"
-          style={{ fontSize: 11, ...CYAN, fontWeight: 700 }}
-        >
-          Keyboard
-        </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <HelpIcon articleId="keyboard-shortcuts" label="Keyboard shortcuts" />
-          <span style={{ color: "#cbd5e1", fontSize: 24, lineHeight: 1 }}>
-            {collapsed ? "▸" : "▾"}
-          </span>
-        </span>
-      </button>
-      </ViewscreenTooltip>
+      {/*
+       * asChild contract: ViewscreenTooltip's child must be a single focusable
+       * element — the TooltipTrigger renders AS that element (no extra wrapper).
+       * HelpIcon is a <button>, so it must live OUTSIDE the toggle <button> to
+       * prevent a nested <button> HTML-validity violation.
+       */}
+      <div className="w-full flex items-center px-3 py-2 hover:bg-white/5 transition-colors rounded-t">
+        <ViewscreenTooltip label={collapsed ? "Show keyboard shortcuts" : "Hide keyboard shortcuts"} side="right">
+          <button
+            onClick={() => toggle("keyboardShortcuts")}
+            className="flex-1 flex items-center justify-between"
+            style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", fontFamily: "inherit", padding: 0, textAlign: "left" }}
+          >
+            <span
+              className="uppercase tracking-widest"
+              style={{ fontSize: 11, ...CYAN, fontWeight: 700 }}
+            >
+              Keyboard
+            </span>
+            <span style={{ color: "#cbd5e1", fontSize: 24, lineHeight: 1 }}>
+              {collapsed ? "▸" : "▾"}
+            </span>
+          </button>
+        </ViewscreenTooltip>
+        <HelpIcon articleId="keyboard-shortcuts" label="Keyboard shortcuts" />
+      </div>
 
       {!collapsed && (
         <div
