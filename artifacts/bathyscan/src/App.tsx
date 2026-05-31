@@ -960,8 +960,9 @@ function Main() {
             {realisticMode ? "◉" : "○"} DRIVE BOAT
           </button>
           </ViewscreenTooltip>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <ViewscreenTooltip
-            label={tidalOverlay ? "Hide tidal currents and water-level overlay" : "Show tidal currents and water-level overlay"}
+            label={tidalOverlay ? "Hide 3D water plane, NOAA station data, and tidal panel" : "Show 3D water plane, NOAA station data, and tidal panel"}
             side="bottom"
           >
           <button
@@ -984,9 +985,34 @@ function Main() {
               transition: "all 0.15s ease",
             }}
           >
-            {tidalOverlay ? "◉" : "○"} TIDAL
+            {tidalOverlay ? "◉" : "○"} TIDAL 3D DATA
           </button>
           </ViewscreenTooltip>
+          <ViewscreenTooltip
+            label="Enables the animated 3D water plane, fetches NOAA station data, and opens the Tide Panel (height, time scrubber, slack jumps, depth-layer arrows). Distinct from the 🌊 TIDE overlay in the left panel, which draws surface-conditions flow arrows."
+            side="bottom"
+          >
+          <button
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "#64748b",
+              fontSize: 11,
+              padding: "2px 3px",
+              lineHeight: 1,
+              userSelect: "none",
+              transition: "color 0.15s ease",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "#64748b"; }}
+            onClick={e => e.stopPropagation()}
+            aria-label="About TIDAL 3D DATA"
+          >
+            ℹ
+          </button>
+          </ViewscreenTooltip>
+          </div>
           <ViewscreenTooltip
             label={driftPlannerActive ? "Disable Drift Planner" : "Enable Drift Planner — boat drift, line angle, tidal path"}
             side="bottom"

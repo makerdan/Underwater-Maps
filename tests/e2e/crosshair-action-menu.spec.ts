@@ -123,9 +123,9 @@ test.describe("BathyScan — Crosshair action menu (desktop / Q key)", () => {
     const menu = page.locator('[data-testid="context-menu"]');
 
     // Eight action items: Drop pin / Measure / Set home / Save bookmark /
-    // Start straight-line profile / Start path profile /
-    // Copy coords / Copy share link. The separator above
-    // "Copy coordinates" renders as a non-menuitem <li role="separator">.
+    // Start straight-line profile / Start path profile / Copy coords /
+    // Copy share link. The separator above "Copy coordinates" renders as
+    // a non-menuitem <li role="separator">.
     const items = menu.locator('[role="menuitem"]');
     await expect(items).toHaveCount(8);
     await expect(items.nth(0)).toContainText("Drop GPS pin here");

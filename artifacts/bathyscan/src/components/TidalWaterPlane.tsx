@@ -59,7 +59,7 @@ export const TidalWaterPlane: React.FC<TidalWaterPlaneProps> = ({ tideHeight, te
         emissive="#0369a1"
         emissiveIntensity={0.15}
         transparent
-        opacity={0.32}
+        opacity={0.42}
         side={THREE.DoubleSide}
         depthWrite={false}
         roughness={0.1}

@@ -312,18 +312,47 @@ export const OverlaysToolsPanel: React.FC = () => {
             isLoading={windOverlayActive && surfaceLoading}
           />
 
-          <ToggleButton
-            testId="overlay-toggle-tide"
-            active={tideOverlayActive}
-            onClick={() => setTideOverlayActive(!tideOverlayActive)}
-            label="🌊 TIDE"
-            tooltip="Toggle tidal flow arrows overlay"
-            activeBg="rgba(0,229,255,0.10)"
-            activeBorder="rgba(52,211,153,0.5)"
-            activeColor="#34d399"
-            activeGlow="0 0 6px rgba(52,211,153,0.5)"
-            isLoading={tideOverlayActive && surfaceLoading}
-          />
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <ToggleButton
+                testId="overlay-toggle-tide"
+                active={tideOverlayActive}
+                onClick={() => setTideOverlayActive(!tideOverlayActive)}
+                label="🌊 TIDE"
+                tooltip="Toggle tidal flow arrows overlay"
+                activeBg="rgba(0,229,255,0.10)"
+                activeBorder="rgba(52,211,153,0.5)"
+                activeColor="#34d399"
+                activeGlow="0 0 6px rgba(52,211,153,0.5)"
+                isLoading={tideOverlayActive && surfaceLoading}
+              />
+            </div>
+            <ViewscreenTooltip
+              label="Draws tidal flow arrows using the surface-conditions feed (shared with Wind and Current). Does not open the Tide data panel — use the TIDAL 3D DATA button in the top bar for the animated water plane, NOAA station data, and depth-layer selector."
+              side="right"
+            >
+              <button
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "#64748b",
+                  fontSize: 11,
+                  padding: "2px 3px",
+                  lineHeight: 1,
+                  userSelect: "none",
+                  flexShrink: 0,
+                  transition: "color 0.15s ease",
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "#64748b"; }}
+                onClick={e => e.stopPropagation()}
+                aria-label="About TIDE overlay"
+              >
+                ℹ
+              </button>
+            </ViewscreenTooltip>
+          </div>
 
           <ToggleButton
             testId="overlay-toggle-current"

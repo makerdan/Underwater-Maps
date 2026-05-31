@@ -22,9 +22,21 @@ interface TidalCurrentArrowsProps {
 }
 
 const DENSITY_MAP: Record<string, number> = {
-  sparse: 4,
-  normal: 6,
-  dense: 10,
+  sparse: 6,
+  normal: 10,
+  dense: 16,
+};
+
+const LAYER_OPACITY: Record<DepthLayer, number> = {
+  surface: 0.75,
+  mid: 0.88,
+  "near-bottom": 0.92,
+};
+
+const LAYER_BASE_SCALE: Record<DepthLayer, number> = {
+  surface: 1.2,
+  mid: 1.45,
+  "near-bottom": 1.6,
 };
 
 export const LAYER_OFFSETS: Record<DepthLayer, number> = {
@@ -61,7 +73,9 @@ export const TidalCurrentArrows: React.FC<TidalCurrentArrowsProps> = ({
   const yOffset = LAYER_OFFSETS[depthLayer] ?? 0;
   const attenuate = LAYER_SPEED_ATTENUATE[depthLayer] ?? 1.0;
   const arrowDensity = useSettingsStore((s) => s.currentArrowDensity);
-  const density = DENSITY_MAP[arrowDensity] ?? 6;
+  const density = DENSITY_MAP[arrowDensity] ?? 10;
+  const layerOpacity = LAYER_OPACITY[depthLayer] ?? 0.75;
+  const layerBaseScale = LAYER_BASE_SCALE[depthLayer] ?? 1.2;
 
   return (
     <DirectionArrowField
@@ -71,9 +85,9 @@ export const TidalCurrentArrows: React.FC<TidalCurrentArrowsProps> = ({
       color="#38bdf8"
       layerY={surfaceY + yOffset}
       density={density}
-      baseScale={1.2}
+      baseScale={layerBaseScale}
       animate
-      opacity={0.75}
+      opacity={layerOpacity}
       renderOrder={3}
     />
   );
