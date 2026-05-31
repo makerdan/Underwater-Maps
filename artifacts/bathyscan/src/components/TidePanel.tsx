@@ -291,7 +291,13 @@ export const TidePanel: React.FC<TidePanelProps> = ({
   }, [schedule, scrubDay, today]);
 
   return (
-    <div className="tide-panel" style={embedded ? { width: "100%" } : PANEL}>
+    <div className="tide-panel" data-testid="tide-panel" style={embedded ? { width: "100%" } : PANEL}>
+      {/* When embedded, render just the HelpIcon so deep-link tests can find it */}
+      {embedded && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 2 }}>
+          <HelpIcon articleId="tidal-overlay" label="Tidal overlay" />
+        </div>
+      )}
       {/* Header — hidden when embedded inside a SidebarSection */}
       {!embedded && (
       <ViewscreenTooltip label={collapsed ? "Expand tide panel" : "Collapse tide panel"} side="left">

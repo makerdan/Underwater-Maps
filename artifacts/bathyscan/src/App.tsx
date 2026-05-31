@@ -965,6 +965,8 @@ function Main() {
             side="bottom"
           >
           <button
+            data-testid="tidal-overlay-toggle"
+            aria-pressed={tidalOverlay}
             onClick={() => setTidalOverlay(!tidalOverlay)}
             style={{
               fontFamily: "'JetBrains Mono', 'Fira Code', monospace",

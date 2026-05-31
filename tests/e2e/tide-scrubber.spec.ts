@@ -19,14 +19,27 @@ async function appIsSignedIn(page: Page): Promise<boolean> {
     .catch(() => false);
 }
 
-/** Enable the Tidal overlay if it isn't already on. The top-bar toggle
- *  renders "◉ TIDAL" when active and "○ TIDAL" when inactive, so clicking
- *  when already on would *disable* the overlay and unmount the panel. */
+/** Enable the Tidal overlay if it isn't already on.
+ *  Uses the stable data-testid + aria-pressed strategy (rename-proof) so a
+ *  future button-label change (e.g. Task #836) doesn't silently break this.
+ *  Clicking when already-on would *disable* the overlay and unmount TidePanel,
+ *  so we always check aria-pressed before dispatching the click. */
 async function ensureTidalOverlayEnabled(page: Page): Promise<void> {
-  const btn = page.locator("button:has-text('TIDAL')").first();
+  const btn = page.locator("[data-testid='tidal-overlay-toggle']").first();
   await expect(btn).toBeVisible({ timeout: 10_000 });
-  const text = (await btn.innerText()).trim();
-  if (!text.startsWith("◉")) {
+  // autoLoadTidal may fire a useEffect that enables the overlay shortly after
+  // mount — wait for it to settle before reading state.
+  await page
+    .waitForFunction(
+      () =>
+        document
+          .querySelector("[data-testid='tidal-overlay-toggle']")
+          ?.getAttribute("aria-pressed") === "true",
+      { timeout: 5_000 },
+    )
+    .catch(() => {});
+  const ariaPressed = await btn.getAttribute("aria-pressed").catch(() => null);
+  if (ariaPressed !== "true") {
     // Use dispatchEvent to bypass any canvas element that may intercept
     // the click in headless mode (z-order overlap with HUD).
     await btn.dispatchEvent("click");
@@ -174,8 +187,10 @@ test.describe("Tide HUD scrubber slack visuals", () => {
 
     await ensureTidalOverlayEnabled(page);
 
-    // Wait for the TidePanel header to mount.
-    await expect(page.locator("text=TIDAL OVERLAY")).toBeVisible({ timeout: 20_000 });
+    // Wait for the TidePanel to mount. TidePanel is always rendered embedded
+    // inside the sidebar so its standalone "TIDAL OVERLAY" header is never
+    // shown — check the root element (data-testid="tide-panel") instead.
+    await expect(page.locator("[data-testid='tide-panel']")).toBeVisible({ timeout: 20_000 });
 
     // The "Time scrub" section is always rendered, even if the station data
     // itself is unavailable, so the day-badge + band assertions below don't

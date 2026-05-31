@@ -220,15 +220,20 @@ test.describe("Help-icon deep links", () => {
     }
 
     // Enable the tidal overlay via the top-right toolbar so <TidePanel /> mounts.
-    const tidalBtn = page.locator("[data-testid='overlay-toggle-tide']");
+    // NOTE: The sidebar's [data-testid="overlay-toggle-tide"] controls the
+    // surface-current-arrows overlay (useUiStore.tideOverlayActive) which is
+    // independent from TidePanel mounting. TidePanel mounts when
+    // `tidalOverlay` (context) is true — that state is toggled by the
+    // top-bar TIDAL button [data-testid="tidal-overlay-toggle"].
+    const tidalBtn = page.locator("[data-testid='tidal-overlay-toggle']");
     await expect(tidalBtn).toBeVisible({ timeout: 10_000 });
-    // `autoLoadTidal` causes a useEffect to set aria-pressed="true" shortly
-    // after mount. Wait for that effect to settle before reading the value so
-    // we don't accidentally click the button off just as the effect enables it.
+    // `autoLoadTidal` may cause a useEffect to enable the overlay shortly
+    // after mount. Wait for aria-pressed="true" to settle before reading so
+    // we don't accidentally click the button off just as it auto-enables.
     await page
       .waitForFunction(
         () => {
-          const btn = document.querySelector("[data-testid='overlay-toggle-tide']");
+          const btn = document.querySelector("[data-testid='tidal-overlay-toggle']");
           return btn?.getAttribute("aria-pressed") === "true";
         },
         { timeout: 5_000 },

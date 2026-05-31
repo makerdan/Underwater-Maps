@@ -154,21 +154,33 @@ test.describe("Slack-tide visuals", () => {
     }
 
     // Enable the Tidal Overlay only if it is not already on.
-    // autoLoadTidal:true causes the app to activate the overlay on first
-    // render; clicking an already-active button would toggle it *off* and
-    // prevent TidePanel from ever mounting.
-    const tidalBtn = page.locator("button:has-text('TIDAL')").first();
+    // Use the stable data-testid (rename-proof) rather than button text.
+    // autoLoadTidal:true may set aria-pressed="true" shortly after mount —
+    // wait for that effect to settle before reading so we don't accidentally
+    // click the button off just as the effect enables it.
+    const tidalBtn = page.locator("[data-testid='tidal-overlay-toggle']").first();
     await expect(tidalBtn).toBeVisible({ timeout: 10_000 });
-    const tidalBtnText = (await tidalBtn.innerText()).trim();
-    if (!tidalBtnText.startsWith("◉")) {
+    await page
+      .waitForFunction(
+        () =>
+          document
+            .querySelector("[data-testid='tidal-overlay-toggle']")
+            ?.getAttribute("aria-pressed") === "true",
+        { timeout: 5_000 },
+      )
+      .catch(() => {});
+    const ariaPressed = await tidalBtn.getAttribute("aria-pressed").catch(() => null);
+    if (ariaPressed !== "true") {
       await tidalBtn.dispatchEvent("click");
     }
 
     // Wait for the TidePanel to mount. It only renders once tidal data is
-    // available for the dataset centre.
-    const tidalHeader = page.locator("text=TIDAL OVERLAY").first();
+    // available for the dataset centre. TidePanel is always rendered embedded
+    // inside the sidebar, so its standalone header is never shown — check the
+    // root element (data-testid="tide-panel") instead.
+    const tidalMounted = page.locator("[data-testid='tide-panel']").first();
     const noDataMessage = page.locator("text=/No tidal station within/").first();
-    await expect(tidalHeader.or(noDataMessage)).toBeVisible({ timeout: 30_000 });
+    await expect(tidalMounted).toBeVisible({ timeout: 30_000 });
 
     if (await noDataMessage.isVisible().catch(() => false)) {
       test.skip(true, "No tidal station available for the default dataset in this env");
