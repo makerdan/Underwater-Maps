@@ -167,6 +167,7 @@ describe("QueryPanel — LLM disclosure notice", () => {
     expect(queryLLMMock).toHaveBeenCalledWith(
       "how deep is it?",
       expect.objectContaining({ datasetName: expect.any(String) }),
+      expect.any(AbortSignal),
     );
   });
 
