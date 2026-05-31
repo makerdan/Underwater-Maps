@@ -26,8 +26,23 @@ export const MID1_HEX = "#0d47a1";
 export const MID2_HEX = "#1a237e";
 
 /**
+ * Default depth band boundaries in feet. 11 values define 10 bands spanning
+ * 0 → 2000 ft. The first (0) and last (2000) are always fixed; the 9 interior
+ * values are user-editable from the Settings page.
+ */
+export const DEFAULT_BAND_BOUNDARIES: readonly number[] = [
+  0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000,
+];
+
+/** Maximum depth of the ocean colormap scale in feet (mirrors colormap.ts). */
+const OCEAN_MAX_DEPTH_FT_PALETTE = 2000;
+
+/** Minimum gap in feet that must be maintained between adjacent band boundaries. */
+export const MIN_BOUNDARY_GAP_FT = 5;
+
+/**
  * Default per-band colours for the Ocean theme, one entry per depth band.
- * Index i corresponds to the color at DEPTH_BAND_BOUNDARIES_FT[i] (the
+ * Index i corresponds to the color at DEFAULT_BAND_BOUNDARIES[i] (the
  * lower boundary of band i). There are 10 bands (11 boundaries), so the
  * final boundary at 2000 ft uses `deep` from the palette store.
  *
@@ -117,6 +132,26 @@ export function bandColorsFromPreset(preset: PalettePreset): string[] {
 }
 
 /**
+ * Sanitise a raw bandBoundaries value. Must be an array of exactly 11
+ * finite integers, strictly increasing, starting at 0 and ending at
+ * OCEAN_MAX_DEPTH_FT. Returns null if the input fails any check so callers
+ * can fall back to DEFAULT_BAND_BOUNDARIES.
+ */
+export function sanitizeBandBoundaries(raw: unknown): number[] | null {
+  if (!Array.isArray(raw)) return null;
+  if (raw.length !== 11) return null;
+  const parsed = (raw as unknown[]).map((v) =>
+    typeof v === "number" && Number.isFinite(v) ? Math.round(v) : NaN,
+  );
+  if (parsed.some((v) => isNaN(v))) return null;
+  if (parsed[0] !== 0 || parsed[10] !== OCEAN_MAX_DEPTH_FT_PALETTE) return null;
+  for (let i = 1; i < parsed.length; i++) {
+    if (parsed[i]! <= parsed[i - 1]!) return null;
+  }
+  return parsed as number[];
+}
+
+/**
  * Sanitise a raw bandColors value: must be an array of exactly 10 valid hex
  * strings. Invalid entries are replaced with the corresponding default colour.
  * Returns null if the input is not an array at all.
@@ -164,10 +199,16 @@ interface PaletteStore {
   customStops: CustomStop[];
   /**
    * Per-band colours for the Ocean theme. 10 entries indexed to
-   * DEPTH_BAND_BOUNDARIES_FT[0..9] (the lower boundary of each band).
+   * bandBoundaries[0..9] (the lower boundary of each band).
    * bandColors[0] is kept in sync with `shallow`.
    */
   bandColors: string[];
+  /**
+   * Depth band boundaries in feet. 11 values: first is always 0, last is
+   * always OCEAN_MAX_DEPTH_FT (2000). Interior 9 values are user-editable.
+   * Persisted alongside bandColors.
+   */
+  bandBoundaries: number[];
   setShallow: (hex: string) => void;
   setDeep: (hex: string) => void;
   setCustomStops: (stops: CustomStop[]) => void;
@@ -181,6 +222,16 @@ interface PaletteStore {
   setBandColors: (colors: string[]) => void;
   /** Restore all band colours to DEFAULT_BAND_COLORS. */
   resetBandColors: () => void;
+  /**
+   * Set a single interior boundary by index (1–9) in feet. Clamps the value
+   * to [prev + MIN_BOUNDARY_GAP_FT, next - MIN_BOUNDARY_GAP_FT]. No-ops if
+   * index is 0 or 10 (the fixed endpoints).
+   */
+  setBandBoundary: (index: number, ft: number) => void;
+  /** Replace the full bandBoundaries array; falls back to defaults on bad input. */
+  setBandBoundaries: (boundaries: number[]) => void;
+  /** Restore all band boundaries to DEFAULT_BAND_BOUNDARIES. */
+  resetBandBoundaries: () => void;
   reset: () => void;
   /**
    * Apply server-side palette values (shallow / deep / customStops) to the
@@ -218,6 +269,7 @@ export const usePaletteStore = create<PaletteStore>()(
       deep: DEFAULT_DEEP,
       customStops: DEFAULT_CUSTOM_STOPS.map((s) => ({ ...s })),
       bandColors: [...DEFAULT_BAND_COLORS],
+      bandBoundaries: [...DEFAULT_BAND_BOUNDARIES],
 
       setShallow: (hex) => {
         const bc = [...get().bandColors];
@@ -275,12 +327,32 @@ export const usePaletteStore = create<PaletteStore>()(
       resetBandColors: () =>
         set({ bandColors: [...DEFAULT_BAND_COLORS], shallow: DEFAULT_BAND_COLORS[0]! }),
 
+      setBandBoundary: (index, ft) => {
+        if (index < 1 || index > 9) return;
+        const bb = [...get().bandBoundaries];
+        const prev = bb[index - 1]!;
+        const next = bb[index + 1]!;
+        const clamped = Math.max(
+          prev + MIN_BOUNDARY_GAP_FT,
+          Math.min(next - MIN_BOUNDARY_GAP_FT, Math.round(ft)),
+        );
+        bb[index] = clamped;
+        set({ bandBoundaries: bb });
+      },
+      setBandBoundaries: (boundaries) => {
+        const sanitized = sanitizeBandBoundaries(boundaries) ?? [...DEFAULT_BAND_BOUNDARIES];
+        set({ bandBoundaries: sanitized });
+      },
+      resetBandBoundaries: () =>
+        set({ bandBoundaries: [...DEFAULT_BAND_BOUNDARIES] }),
+
       reset: () =>
         set({
           shallow: DEFAULT_SHALLOW,
           deep: DEFAULT_DEEP,
           customStops: DEFAULT_CUSTOM_STOPS.map((s) => ({ ...s })),
           bandColors: [...DEFAULT_BAND_COLORS],
+          bandBoundaries: [...DEFAULT_BAND_BOUNDARIES],
         }),
       hydrateFromServer: (partial) => {
         const patch: Partial<PaletteStore> = {};
@@ -314,10 +386,12 @@ export const usePaletteStore = create<PaletteStore>()(
             cleanedBands[0] = ps.shallow.toLowerCase();
           }
         }
+        const cleanedBoundaries = sanitizeBandBoundaries(ps?.bandBoundaries) ?? [...DEFAULT_BAND_BOUNDARIES];
         return {
           ...merged,
           customStops: cleanedStops ?? DEFAULT_CUSTOM_STOPS.map((s) => ({ ...s })),
           bandColors: cleanedBands,
+          bandBoundaries: cleanedBoundaries,
         } as PaletteStore;
       },
     },

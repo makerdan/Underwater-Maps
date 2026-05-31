@@ -467,11 +467,12 @@ export const OverviewMap: React.FC = () => {
   const paletteDeep = usePaletteStore((s) => s.deep);
   const paletteBandColors = usePaletteStore((s) => s.bandColors);
   const paletteCustomStops = usePaletteStore((s) => s.customStops);
+  const paletteBandBoundaries = usePaletteStore((s) => s.bandBoundaries);
   useEffect(() => {
     if (!overviewGrid) return;
     bitmapRef.current = buildHeatmapBitmap(overviewGrid, colormapTheme);
     invalidateUpscaleRef.current();
-  }, [overviewGrid, colormapTheme, paletteShallow, paletteDeep, paletteBandColors, paletteCustomStops]);
+  }, [overviewGrid, colormapTheme, paletteShallow, paletteDeep, paletteBandColors, paletteCustomStops, paletteBandBoundaries]);
 
   // Compute initial transform whenever the grid or canvas is ready
   const initTransform = useCallback(() => {

@@ -44,8 +44,8 @@ import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMarkersQueryKey } from "@workspace/api-client-react";
 import { useTerrainStore } from "@/lib/terrainStore";
-import { usePaletteStore, DEFAULT_SHALLOW, DEFAULT_DEEP, PALETTE_PRESETS, MID1_HEX, MID2_HEX, customStopsFromPreset, bandColorsFromPreset, DEFAULT_BAND_COLORS, type CustomStop } from "@/lib/paletteStore";
-import { colormapCanvas, colormapCssGradient, DEPTH_BAND_BOUNDARIES_FT } from "@/lib/colormap";
+import { usePaletteStore, DEFAULT_SHALLOW, DEFAULT_DEEP, PALETTE_PRESETS, MID1_HEX, MID2_HEX, customStopsFromPreset, bandColorsFromPreset, DEFAULT_BAND_COLORS, DEFAULT_BAND_BOUNDARIES, MIN_BOUNDARY_GAP_FT, type CustomStop } from "@/lib/paletteStore";
+import { colormapCanvas, colormapCssGradient, OCEAN_MAX_DEPTH_FT } from "@/lib/colormap";
 import { formatDepth } from "@/lib/units";
 import type { ColormapTheme } from "@/lib/settingsStore";
 import { HelpIcon } from "@/components/help/HelpButton";
@@ -371,7 +371,9 @@ function ToggleRow({
 function ColormapSwatch({
   theme, width, height, title,
 }: { theme: ColormapTheme; width: number; height: number; title?: string }) {
-  const paletteVersion = usePaletteStore((s) => `${s.shallow}|${s.deep}`);
+  const paletteVersion = usePaletteStore(
+    (s) => `${s.shallow}|${s.deep}|${s.bandColors.join(",")}|${s.bandBoundaries.join(",")}`,
+  );
   const background = React.useMemo(
     () => colormapCssGradient(theme, "to right", 16),
     // Re-sample when the user's palette changes (affects the "ocean" theme).
@@ -3080,14 +3082,31 @@ function DepthBandColorEditor({
   const bandColors = usePaletteStore((s) => s.bandColors);
   const setBandColor = usePaletteStore((s) => s.setBandColor);
   const resetBandColors = usePaletteStore((s) => s.resetBandColors);
+  const bandBoundaries = usePaletteStore((s) => s.bandBoundaries);
+  const setBandBoundary = usePaletteStore((s) => s.setBandBoundary);
+  const resetBandBoundaries = usePaletteStore((s) => s.resetBandBoundaries);
   const units = useSettingsStore((s) => s.units);
 
-  const allDefault = bandColors.every(
+  const allColorsDefault = bandColors.every(
     (c, i) => c.toLowerCase() === DEFAULT_BAND_COLORS[i]!.toLowerCase(),
   );
+  const allBoundariesDefault = bandBoundaries.every(
+    (b, i) => b === DEFAULT_BAND_BOUNDARIES[i],
+  );
+
+  // Convert a feet value to the current display unit for the boundary inputs.
+  const isMetric = units === "metric";
+  const ftToDisplay = (ft: number) =>
+    isMetric ? +(ft * FT_TO_M_SETTINGS).toFixed(1) : ft;
+  // Convert a display-unit value back to feet (integer).
+  const displayToFt = (v: number) =>
+    Math.round(isMetric ? v / FT_TO_M_SETTINGS : v);
+
+  const inputUnit = isMetric ? "m" : "ft";
 
   return (
     <div data-testid="depth-band-color-editor" style={{ padding: "8px 16px 4px" }}>
+      {/* ── Colour rows ───────────────────────────────────────────── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <div style={{ ...labelStyle, fontSize: 9, letterSpacing: "0.15em" }}>
           DEPTH BAND COLOURS
@@ -3096,27 +3115,27 @@ function DepthBandColorEditor({
           type="button"
           data-testid="band-colors-reset-btn"
           onClick={resetBandColors}
-          disabled={allDefault}
+          disabled={allColorsDefault}
           style={{
             background: "none",
             border: "1px solid rgba(0,229,255,0.2)",
             borderRadius: 3,
-            color: allDefault ? "#64748b" : "#67e8f9",
+            color: allColorsDefault ? "#64748b" : "#67e8f9",
             fontSize: 8,
             letterSpacing: "0.12em",
             padding: "2px 8px",
-            cursor: allDefault ? "not-allowed" : "pointer",
+            cursor: allColorsDefault ? "not-allowed" : "pointer",
             fontFamily: "inherit",
           }}
         >
-          RESET BAND COLOURS
+          RESET COLOURS
         </button>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         {bandColors.map((color, i) => {
-          const loFt = DEPTH_BAND_BOUNDARIES_FT[i]!;
-          const hiFt = DEPTH_BAND_BOUNDARIES_FT[i + 1]!;
+          const loFt = bandBoundaries[i] ?? DEFAULT_BAND_BOUNDARIES[i]!;
+          const hiFt = bandBoundaries[i + 1] ?? DEFAULT_BAND_BOUNDARIES[i + 1]!;
           const loM = loFt * FT_TO_M_SETTINGS;
           const hiM = hiFt * FT_TO_M_SETTINGS;
           const bandLabel = `${formatDepth(loM, { units })} – ${formatDepth(hiM, { units })}`;
@@ -3195,6 +3214,153 @@ function DepthBandColorEditor({
           );
         })}
       </div>
+
+      {/* ── Band Boundaries ───────────────────────────────────────── */}
+      <div style={{ marginTop: 14, borderTop: "1px solid rgba(0,229,255,0.08)", paddingTop: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <div style={{ ...labelStyle, fontSize: 9, letterSpacing: "0.15em" }}>
+            BAND BOUNDARIES
+          </div>
+          <button
+            type="button"
+            data-testid="band-boundaries-reset-btn"
+            onClick={resetBandBoundaries}
+            disabled={allBoundariesDefault}
+            style={{
+              background: "none",
+              border: "1px solid rgba(0,229,255,0.2)",
+              borderRadius: 3,
+              color: allBoundariesDefault ? "#64748b" : "#67e8f9",
+              fontSize: 8,
+              letterSpacing: "0.12em",
+              padding: "2px 8px",
+              cursor: allBoundariesDefault ? "not-allowed" : "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            RESET BOUNDARIES
+          </button>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          {/* Fixed start boundary (read-only) */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "90px 1fr auto",
+              alignItems: "center",
+              gap: 8,
+              padding: "3px 0",
+            }}
+          >
+            <span style={{ ...labelStyle, fontSize: 9, color: "#64748b", whiteSpace: "nowrap" }}>
+              START (FIXED)
+            </span>
+            <span style={{ fontSize: 9, color: "#64748b", fontFamily: "inherit" }}>
+              {formatDepth(0, { units })}
+            </span>
+            <span style={{ fontSize: 9, color: "#475569", minWidth: 20 }} />
+          </div>
+
+          {/* Editable interior boundaries (indices 1–9) */}
+          {Array.from({ length: 9 }, (_, idx) => {
+            const bIdx = idx + 1;
+            const currentFt = bandBoundaries[bIdx] ?? DEFAULT_BAND_BOUNDARIES[bIdx]!;
+            const prevFt = bandBoundaries[bIdx - 1] ?? DEFAULT_BAND_BOUNDARIES[bIdx - 1]!;
+            const nextFt = bandBoundaries[bIdx + 1] ?? DEFAULT_BAND_BOUNDARIES[bIdx + 1]!;
+            const minDisplay = ftToDisplay(prevFt + MIN_BOUNDARY_GAP_FT);
+            const maxDisplay = ftToDisplay(nextFt - MIN_BOUNDARY_GAP_FT);
+            const stepDisplay = isMetric ? 0.5 : 5;
+            const displayVal = ftToDisplay(currentFt);
+            const changed = currentFt !== DEFAULT_BAND_BOUNDARIES[bIdx];
+
+            return (
+              <div
+                key={bIdx}
+                data-testid={`band-boundary-row-${bIdx}`}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "90px 1fr auto",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "3px 0",
+                  borderBottom: "1px solid rgba(0,229,255,0.04)",
+                }}
+              >
+                <span style={{ ...labelStyle, fontSize: 9, color: "#94a3b8", whiteSpace: "nowrap" }}>
+                  BOUNDARY {bIdx}
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <input
+                    type="range"
+                    data-testid={`band-boundary-slider-${bIdx}`}
+                    min={minDisplay}
+                    max={maxDisplay}
+                    step={stepDisplay}
+                    value={displayVal}
+                    onChange={(e) => setBandBoundary(bIdx, displayToFt(Number(e.target.value)))}
+                    style={{ ...S.slider, width: "100%" }}
+                    aria-label={`Band boundary ${bIdx} depth`}
+                  />
+                  <input
+                    type="number"
+                    data-testid={`band-boundary-input-${bIdx}`}
+                    min={minDisplay}
+                    max={maxDisplay}
+                    step={stepDisplay}
+                    value={displayVal}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (Number.isFinite(v)) setBandBoundary(bIdx, displayToFt(v));
+                    }}
+                    style={{
+                      ...hexStyle,
+                      width: 58,
+                      textAlign: "right",
+                      color: changed ? "#00e5ff" : "#cbd5e1",
+                    }}
+                    aria-label={`Band boundary ${bIdx} value in ${inputUnit}`}
+                  />
+                  <span style={{ ...labelStyle, fontSize: 9, color: "#475569", minWidth: 14 }}>
+                    {inputUnit}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: changed ? "#00e5ff" : "transparent",
+                    border: changed ? "none" : "1px solid rgba(0,229,255,0.15)",
+                    flexShrink: 0,
+                  }}
+                  title={changed ? "Modified" : "Default"}
+                  aria-hidden
+                />
+              </div>
+            );
+          })}
+
+          {/* Fixed end boundary (read-only) */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "90px 1fr auto",
+              alignItems: "center",
+              gap: 8,
+              padding: "3px 0",
+            }}
+          >
+            <span style={{ ...labelStyle, fontSize: 9, color: "#64748b", whiteSpace: "nowrap" }}>
+              END (FIXED)
+            </span>
+            <span style={{ fontSize: 9, color: "#64748b", fontFamily: "inherit" }}>
+              {formatDepth(OCEAN_MAX_DEPTH_FT * FT_TO_M_SETTINGS, { units })}
+            </span>
+            <span style={{ fontSize: 9, color: "#475569", minWidth: 20 }} />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -3224,13 +3390,14 @@ function PalettePickerCard() {
   const isOcean = colormapTheme === "ocean";
 
   const bandColorsKey = usePaletteStore((s) => s.bandColors.join(","));
+  const bandBoundariesKey = usePaletteStore((s) => s.bandBoundaries.join(","));
 
   const previewRef = React.useRef<HTMLImageElement>(null);
   React.useEffect(() => {
     if (!previewRef.current) return;
     // colormapCanvas paints top→bottom; rotate -90° so shallow is on the left.
     // Render the active theme so the preview matches the 3D mesh tint
-    // (including live edits to the Custom stops and band colours).
+    // (including live edits to the Custom stops, band colours, and band boundaries).
     const vert = colormapCanvas(14, 240, colormapTheme);
     const horiz = document.createElement("canvas");
     horiz.width = 240;
@@ -3242,7 +3409,7 @@ function PalettePickerCard() {
     hctx.drawImage(vert, 0, 0, 14, 240);
     hctx.restore();
     previewRef.current.src = horiz.toDataURL();
-  }, [shallow, deep, customStops, colormapTheme, bandColorsKey]);
+  }, [shallow, deep, customStops, colormapTheme, bandColorsKey, bandBoundariesKey]);
 
   const isDefault = shallow.toLowerCase() === DEFAULT_SHALLOW.toLowerCase()
     && deep.toLowerCase() === DEFAULT_DEEP.toLowerCase();

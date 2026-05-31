@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useAppState } from "@/lib/context";
-import { colormapCanvas, DEPTH_BAND_BOUNDARIES_FT } from "@/lib/colormap";
+import { colormapCanvas } from "@/lib/colormap";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { formatDepth } from "@/lib/units";
@@ -27,6 +27,7 @@ export const DepthScaleBar: React.FC = () => {
   const shallow = usePaletteStore((s) => s.shallow);
   const deep = usePaletteStore((s) => s.deep);
   const bandColorsKey = usePaletteStore((s) => s.bandColors.join(","));
+  const bandBoundaries = usePaletteStore((s) => s.bandBoundaries);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
@@ -43,7 +44,7 @@ export const DepthScaleBar: React.FC = () => {
       const canvas = colormapCanvas(20, 80, colormapTheme);
       collapsedImgRef.current.src = canvas.toDataURL();
     }
-  }, [colormapTheme, shallow, deep, bandColorsKey, terrain, expanded]);
+  }, [colormapTheme, shallow, deep, bandColorsKey, bandBoundaries, terrain, expanded]);
 
   if (!terrain) return null;
 
@@ -52,10 +53,13 @@ export const DepthScaleBar: React.FC = () => {
   // Build tick list: convert each band boundary from feet to metres,
   // compute its normalised position, and discard anything outside [0, 1].
   // Guard against a flat dataset (all points at the same depth).
+  const activeBoundaries = Array.isArray(bandBoundaries) && bandBoundaries.length === 11
+    ? bandBoundaries
+    : [];
   const depthSpan = terrain.maxDepth - terrain.minDepth;
   const ticks = depthSpan <= 0
     ? []
-    : DEPTH_BAND_BOUNDARIES_FT.flatMap((boundaryFt) => {
+    : activeBoundaries.flatMap((boundaryFt) => {
         const boundaryM = boundaryFt * FT_TO_M;
         const pos = (boundaryM - terrain.minDepth) / depthSpan;
         if (pos < 0 || pos > 1) return [];

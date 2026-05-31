@@ -1,7 +1,7 @@
 import React from "react";
 import { useAppState } from "@/lib/context";
-import { DEPTH_BAND_BOUNDARIES_FT } from "@/lib/colormap";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { usePaletteStore } from "@/lib/paletteStore";
 import { formatDepth } from "@/lib/units";
 
 const FT_TO_M = 0.3048;
@@ -9,17 +9,22 @@ const FT_TO_M = 0.3048;
 export const DepthLegend = () => {
   const { terrain } = useAppState();
   const units = useSettingsStore((s) => s.units);
+  const bandBoundaries = usePaletteStore((s) => s.bandBoundaries);
 
   if (!terrain) return null;
 
   const rampHeightPx = 256; // h-64 = 16rem = 256px
+
+  const activeBoundaries = Array.isArray(bandBoundaries) && bandBoundaries.length === 11
+    ? bandBoundaries
+    : [];
 
   // Build tick list from band boundaries, filtered to the dataset's depth range.
   // Guard against a flat dataset (all points at the same depth).
   const depthSpan = terrain.maxDepth - terrain.minDepth;
   const ticks = depthSpan <= 0
     ? []
-    : DEPTH_BAND_BOUNDARIES_FT.flatMap((boundaryFt) => {
+    : activeBoundaries.flatMap((boundaryFt) => {
         const boundaryM = boundaryFt * FT_TO_M;
         const pos = (boundaryM - terrain.minDepth) / depthSpan;
         if (pos < 0 || pos > 1) return [];

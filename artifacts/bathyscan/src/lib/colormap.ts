@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { ColormapTheme } from "./settingsStore";
-import { usePaletteStore, DEFAULT_CUSTOM_STOPS, DEFAULT_BAND_COLORS } from "./paletteStore";
+import { usePaletteStore, DEFAULT_CUSTOM_STOPS, DEFAULT_BAND_COLORS, DEFAULT_BAND_BOUNDARIES } from "./paletteStore";
 
 interface ColorStop {
   t: number;
@@ -19,37 +19,32 @@ export const DEPTH_BAND_BOUNDARIES_FT = [
 /** Maximum depth of the ocean colormap scale in feet. */
 export const OCEAN_MAX_DEPTH_FT = 2000;
 
-/**
- * Normalised t positions for each of the 10 band lower boundaries.
- * Entry i = DEPTH_BAND_BOUNDARIES_FT[i] / OCEAN_MAX_DEPTH_FT for i = 0..9.
- */
-const BAND_T: readonly number[] = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600].map(
-  (ft) => ft / OCEAN_MAX_DEPTH_FT,
-);
-
 const OCEAN_HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
 /**
- * Build the ocean theme stops using the user-customised band colours from
- * paletteStore. Ten band stops (at 0, 50, …, 600 ft) come from `bandColors`,
- * plus the deep endpoint at t=1.0 from `deep`.
+ * Build the ocean theme stops using the user-customised band colours and band
+ * boundaries from paletteStore. Ten band stops come from `bandColors` at the
+ * positions defined by `bandBoundaries[0..9]`, plus the deep endpoint at
+ * t=1.0 from `deep`.
  *
- * Falls back to DEFAULT_BAND_COLORS per-entry when an individual value is
- * missing or not a valid "#rrggbb" hex string, preventing bad data from
- * reaching THREE.Color.
+ * Falls back to DEFAULT_BAND_COLORS per-entry and DEFAULT_BAND_BOUNDARIES
+ * when stored values are missing or malformed.
  */
 function getOceanStops(): ColorStop[] {
-  const { bandColors, deep } = usePaletteStore.getState();
+  const { bandColors, deep, bandBoundaries } = usePaletteStore.getState();
   const bc = Array.isArray(bandColors) && bandColors.length === 10
     ? bandColors
     : DEFAULT_BAND_COLORS;
-  const stops: ColorStop[] = BAND_T.map((t, i) => {
+  const bb = Array.isArray(bandBoundaries) && bandBoundaries.length === 11
+    ? bandBoundaries
+    : DEFAULT_BAND_BOUNDARIES;
+  const stops: ColorStop[] = (bb.slice(0, 10) as number[]).map((ft, i) => {
     const raw = bc[i];
     const hex =
       typeof raw === "string" && OCEAN_HEX_RE.test(raw)
         ? raw
         : DEFAULT_BAND_COLORS[i]!;
-    return { t, color: new THREE.Color(hex) };
+    return { t: ft / OCEAN_MAX_DEPTH_FT, color: new THREE.Color(hex) };
   });
   stops.push({ t: 1.0, color: new THREE.Color(deep) });
   return stops;

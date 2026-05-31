@@ -114,6 +114,7 @@ export const Minimap: React.FC = () => {
   const deep = usePaletteStore((s) => s.deep);
   const bandColors = usePaletteStore((s) => s.bandColors);
   const customStops = usePaletteStore((s) => s.customStops);
+  const bandBoundaries = usePaletteStore((s) => s.bandBoundaries);
 
   const datasetId = terrain?.datasetId ?? "";
   const { data: markers } = useGetMarkers(
@@ -143,7 +144,7 @@ export const Minimap: React.FC = () => {
       colormapTheme,
     );
     heatmapRef.current = ctx.getImageData(0, 0, W, H);
-  }, [terrain, colormapTheme, shallow, deep, bandColors, customStops]);
+  }, [terrain, colormapTheme, shallow, deep, bandColors, customStops, bandBoundaries]);
 
   // Subscribe to cameraStore and update arrow + marker dots imperatively
   useEffect(() => {
