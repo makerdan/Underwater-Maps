@@ -81,6 +81,13 @@ const CASES: BundleCase[] = [
     refreshCommand:
       "pnpm --filter @workspace/scripts run build-tx-freshwater-efh",
   },
+  {
+    name: "AOOS Intertidal PoW (aoosIntertidalPow.gen.json)",
+    builderPath: "scripts/src/build-aoos-intertidal-pow.ts",
+    bundlePath: "artifacts/api-server/src/lib/aoosIntertidalPow.gen.json",
+    refreshCommand:
+      "pnpm --filter @workspace/scripts run build-aoos-intertidal-pow",
+  },
 ];
 
 function sha256Files(paths: string[]): string {

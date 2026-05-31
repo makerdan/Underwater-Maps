@@ -888,7 +888,19 @@ export const GetSettingsResponse = zod.object({
   "showHeading": zod.boolean().default(getSettingsResponseShowHeadingDefault),
   "coordinateFormat": zod.enum(['decimal', 'dms']).default(getSettingsResponseCoordinateFormatDefault),
   "depthUnit": zod.enum(['metres', 'feet']).default(getSettingsResponseDepthUnitDefault),
-  "units": zod.enum(['metric', 'imperial', 'nautical']).default(getSettingsResponseUnitsDefault).describe('Global units system applied to depths, distances, speeds and temperatures throughout the app. \"nautical\" shows speeds in knots and depths\/distances in imperial-style feet\/miles, for boaters who think in nautical units.'),
+  "units": zod.enum(['metric', 'imperial', 'nautical']).default(getSettingsResponseUnitsDefault).describe('Global units system applied to depths, distances, speeds and temperatures throughout the app. \"nautical\" shows speeds in knots and depths\/distances in imperial-style feet\/miles, for boaters who think in nautical units.').superRefine((arr, ctx) => {
+  if (arr[0] !== 0) {
+    ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries first element must be 0", path: [0] });
+  }
+  if (arr[arr.length - 1] !== 2000) {
+    ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries last element must be 2000", path: [arr.length - 1] });
+  }
+  for (let i = 1; i < arr.length; i++) {
+    if ((arr[i] as number) <= (arr[i - 1] as number)) {
+      ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries must be strictly increasing", path: [i] });
+    }
+  }
+}),
   "hudOpacity": zod.number().min(getSettingsResponseHudOpacityMin).max(getSettingsResponseHudOpacityMax).default(getSettingsResponseHudOpacityDefault),
   "overviewDefaultZoom": zod.number().min(getSettingsResponseOverviewDefaultZoomMin).max(getSettingsResponseOverviewDefaultZoomMax).default(getSettingsResponseOverviewDefaultZoomDefault),
   "overviewShowGrid": zod.boolean().default(getSettingsResponseOverviewShowGridDefault),
@@ -1043,7 +1055,19 @@ export const PutSettingsBody = zod.object({
   "showHeading": zod.boolean().default(putSettingsBodyShowHeadingDefault),
   "coordinateFormat": zod.enum(['decimal', 'dms']).default(putSettingsBodyCoordinateFormatDefault),
   "depthUnit": zod.enum(['metres', 'feet']).default(putSettingsBodyDepthUnitDefault),
-  "units": zod.enum(['metric', 'imperial', 'nautical']).default(putSettingsBodyUnitsDefault).describe('Global units system applied to depths, distances, speeds and temperatures throughout the app. \"nautical\" shows speeds in knots and depths\/distances in imperial-style feet\/miles, for boaters who think in nautical units.'),
+  "units": zod.enum(['metric', 'imperial', 'nautical']).default(putSettingsBodyUnitsDefault).describe('Global units system applied to depths, distances, speeds and temperatures throughout the app. \"nautical\" shows speeds in knots and depths\/distances in imperial-style feet\/miles, for boaters who think in nautical units.').superRefine((arr, ctx) => {
+  if (arr[0] !== 0) {
+    ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries first element must be 0", path: [0] });
+  }
+  if (arr[arr.length - 1] !== 2000) {
+    ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries last element must be 2000", path: [arr.length - 1] });
+  }
+  for (let i = 1; i < arr.length; i++) {
+    if ((arr[i] as number) <= (arr[i - 1] as number)) {
+      ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries must be strictly increasing", path: [i] });
+    }
+  }
+}),
   "hudOpacity": zod.number().min(putSettingsBodyHudOpacityMin).max(putSettingsBodyHudOpacityMax).default(putSettingsBodyHudOpacityDefault),
   "overviewDefaultZoom": zod.number().min(putSettingsBodyOverviewDefaultZoomMin).max(putSettingsBodyOverviewDefaultZoomMax).default(putSettingsBodyOverviewDefaultZoomDefault),
   "overviewShowGrid": zod.boolean().default(putSettingsBodyOverviewShowGridDefault),
@@ -1193,7 +1217,19 @@ export const PutSettingsResponse = zod.object({
   "showHeading": zod.boolean().default(putSettingsResponseShowHeadingDefault),
   "coordinateFormat": zod.enum(['decimal', 'dms']).default(putSettingsResponseCoordinateFormatDefault),
   "depthUnit": zod.enum(['metres', 'feet']).default(putSettingsResponseDepthUnitDefault),
-  "units": zod.enum(['metric', 'imperial', 'nautical']).default(putSettingsResponseUnitsDefault).describe('Global units system applied to depths, distances, speeds and temperatures throughout the app. \"nautical\" shows speeds in knots and depths\/distances in imperial-style feet\/miles, for boaters who think in nautical units.'),
+  "units": zod.enum(['metric', 'imperial', 'nautical']).default(putSettingsResponseUnitsDefault).describe('Global units system applied to depths, distances, speeds and temperatures throughout the app. \"nautical\" shows speeds in knots and depths\/distances in imperial-style feet\/miles, for boaters who think in nautical units.').superRefine((arr, ctx) => {
+  if (arr[0] !== 0) {
+    ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries first element must be 0", path: [0] });
+  }
+  if (arr[arr.length - 1] !== 2000) {
+    ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries last element must be 2000", path: [arr.length - 1] });
+  }
+  for (let i = 1; i < arr.length; i++) {
+    if ((arr[i] as number) <= (arr[i - 1] as number)) {
+      ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries must be strictly increasing", path: [i] });
+    }
+  }
+}),
   "hudOpacity": zod.number().min(putSettingsResponseHudOpacityMin).max(putSettingsResponseHudOpacityMax).default(putSettingsResponseHudOpacityDefault),
   "overviewDefaultZoom": zod.number().min(putSettingsResponseOverviewDefaultZoomMin).max(putSettingsResponseOverviewDefaultZoomMax).default(putSettingsResponseOverviewDefaultZoomDefault),
   "overviewShowGrid": zod.boolean().default(putSettingsResponseOverviewShowGridDefault),
