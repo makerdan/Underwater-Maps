@@ -1727,6 +1727,82 @@ export function renderWeatherStations(
 }
 
 // ---------------------------------------------------------------------------
+// Intertidal mode legend
+// ---------------------------------------------------------------------------
+
+/**
+ * Draw a compact intertidal mode legend in the top-right area of the canvas
+ * (above the EFH legend when EFH is also visible). Shows a colour swatch and
+ * label for the active intertidalScoreMode so users can see which mode the
+ * pin colours correspond to without opening the side panel.
+ *
+ * Returns the [x, y, w, h] bounding box so callers can position other
+ * legends below it.
+ */
+export function renderIntertidalModeLegend(
+  ctx: CanvasRenderingContext2D,
+  mode: 'tidepool' | 'beachcombing',
+  cW: number,
+  cH: number,
+  /** Optional y-offset from the bottom of the canvas (default 8). */
+  bottomOffset: number = 8,
+): [number, number, number, number] {
+  const FONT = "'JetBrains Mono', monospace";
+  const FONT_SIZE = 9;
+  const PAD = 7;
+  const SWATCH = 8;
+
+  ctx.save();
+  ctx.font = `${FONT_SIZE}px ${FONT}`;
+
+  const isTidepool = mode === 'tidepool';
+  const color = isTidepool ? '#0d9488' : '#d97706';
+  const label = isTidepool ? 'TIDEPOOL' : 'BEACHCOMBING';
+  const header = 'INTERTIDAL';
+
+  const headerW = ctx.measureText(header).width;
+  const labelW = ctx.measureText(label).width;
+  const innerW = Math.max(headerW, SWATCH + 5 + labelW);
+  const boxW = PAD * 2 + innerW;
+  const boxH = PAD * 2 + FONT_SIZE + 2 + FONT_SIZE + 1;
+  const x = cW - boxW - 8;
+  const y = cH - boxH - bottomOffset;
+
+  // Background
+  ctx.fillStyle = 'rgba(2,8,24,0.85)';
+  ctx.beginPath();
+  ctx.roundRect(x, y, boxW, boxH, 3);
+  ctx.fill();
+  ctx.strokeStyle = isTidepool
+    ? 'rgba(13,148,136,0.35)'
+    : 'rgba(217,119,6,0.35)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Header
+  ctx.fillStyle = '#94a3b8';
+  ctx.textBaseline = 'top';
+  ctx.fillText(header, x + PAD, y + PAD);
+
+  // Swatch + mode label
+  const rowY = y + PAD + FONT_SIZE + 3;
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 4;
+  ctx.beginPath();
+  ctx.arc(x + PAD + SWATCH / 2, rowY + SWATCH / 2, SWATCH / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = color;
+  ctx.fillText(label, x + PAD + SWATCH + 5, rowY);
+
+  ctx.restore();
+
+  return [x, y, boxW, boxH];
+}
+
+// ---------------------------------------------------------------------------
 // Intertidal Hotspot pins
 // ---------------------------------------------------------------------------
 

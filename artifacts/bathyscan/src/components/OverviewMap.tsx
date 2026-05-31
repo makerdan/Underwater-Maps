@@ -58,6 +58,7 @@ import {
   renderRawsStations,
   renderIntertidalHotspotPins,
   buildIntertidalHotspotDescriptors,
+  renderIntertidalModeLegend,
 } from "@/lib/overviewRenderer";
 import type { OverviewTransform, CanvasSavedTrail, EfhLegendLayout, ContourSegment, WeatherStationPin, RawsStationPin, IntertidalHotspotPin } from "@/lib/overviewRenderer";
 import { useWeatherStations } from "@/hooks/useWeatherStations";
@@ -572,7 +573,11 @@ export const OverviewMap: React.FC = () => {
   useEffect(() => {
     intertidalSelectedUnitIdRef.current = selectedHotspot?.unitId ?? null;
   }, [selectedHotspot]);
-  const intertidalSpotsParams = { type: intertidalScoreMode, minScore: 10 };
+  // Always fetch with type="both" so the query key stays stable when
+  // intertidalScoreMode changes. The frontend builds pins using whichever
+  // score column is active (tidepoolScore / beachcombingScore), so we never
+  // need a separate network round-trip when the user toggles the mode.
+  const intertidalSpotsParams = { type: "both" as const, minScore: 10 };
   const { data: intertidalSpotsData } = useGetIntertidalSpots(
     datasetId,
     intertidalSpotsParams,
@@ -1008,6 +1013,15 @@ export const OverviewMap: React.FC = () => {
           grid,
           t,
           intertidalSelectedUnitIdRef.current,
+        );
+        // Mode legend — always visible alongside pins so users know which
+        // colour corresponds to which mode without opening the side panel.
+        renderIntertidalModeLegend(
+          ctx,
+          intertidalScoreModeRef.current,
+          cW,
+          cH,
+          30,
         );
       } else {
         intertidalCanvasPositionsRef.current = [];
