@@ -15,7 +15,7 @@ import { flushServerSync } from "@/hooks/useServerSettingsSync";
 import type { Marker } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
-import { clearUpscaleCache } from "@/hooks/useUpscaledHeatmap";
+import { clearUpscaleCache, getUpscaleCacheInfo } from "@/hooks/useUpscaledHeatmap";
 
 // Undo window for "soft" bulk-marker deletes (ms). The active dataset's
 // marker list is cleared from the cache immediately and the actual DELETE
@@ -2377,6 +2377,12 @@ function EnvironmentSection() {
   );
 }
 
+function formatCacheSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
+
 function OfflineSection() {
   const [cached, setCached] = useState<CachedDataset[]>([]);
   const [pending, setPending] = useState({ markers: 0, trails: 0 });
@@ -2384,7 +2390,13 @@ function OfflineSection() {
   const [clearing, setClearing] = useState<string | null>(null);
   const [allClearedMsg, setAllClearedMsg] = useState(false);
   const [upscaleClearMsg, setUpscaleClearMsg] = useState(false);
+  const [upscaleInfo, setUpscaleInfo] = useState<{ count: number; bytes: number } | null>(null);
   const { toast } = useToast();
+
+  const refreshUpscaleInfo = useCallback(async () => {
+    const info = await getUpscaleCacheInfo();
+    setUpscaleInfo(info);
+  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -2395,6 +2407,7 @@ function OfflineSection() {
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => { void refreshUpscaleInfo(); }, [refreshUpscaleInfo]);
 
   const handleClearEntry = async (url: string) => {
     setClearing(url);
@@ -2422,6 +2435,7 @@ function OfflineSection() {
   const handleClearUpscaleCache = async () => {
     setClearing("upscale");
     await clearUpscaleCache();
+    await refreshUpscaleInfo();
     setClearing(null);
     setUpscaleClearMsg(true);
     setTimeout(() => setUpscaleClearMsg(false), 3000);
@@ -2502,6 +2516,16 @@ function OfflineSection() {
             AI-upscaled heatmap images are stored locally (IndexedDB) for up to 7 days to avoid
             repeat processing. Clear this if you suspect a stale image is being shown or want to
             free up browser storage.
+          </div>
+          <div
+            data-testid="upscale-cache-size"
+            style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 10 }}
+          >
+            {upscaleInfo === null
+              ? "◌ Calculating…"
+              : upscaleInfo.count === 0
+                ? "Empty (0 entries)"
+                : `${upscaleInfo.count} ${upscaleInfo.count === 1 ? "entry" : "entries"} · ${formatCacheSize(upscaleInfo.bytes)}`}
           </div>
           {upscaleClearMsg && (
             <div style={{ fontSize: 9, color: "#4ade80", letterSpacing: "0.12em", marginBottom: 8 }}>

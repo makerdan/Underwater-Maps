@@ -100,6 +100,40 @@ async function idbDelete(key: string): Promise<void> {
 }
 
 /**
+ * Return the number of entries and the approximate total byte size of the
+ * IndexedDB upscale cache.  Size is estimated by summing the character length
+ * of each `src` data URL (1 char ≈ 1 byte for base-64 ASCII).
+ *
+ * Returns `{ count: 0, bytes: 0 }` on any error so the UI degrades gracefully.
+ */
+export async function getUpscaleCacheInfo(): Promise<{ count: number; bytes: number }> {
+  try {
+    const db = await openIdb();
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE, "readonly");
+      const store = tx.objectStore(IDB_STORE);
+      const cursorReq = store.openCursor() as IDBRequest<IDBCursorWithValue | null>;
+      let count = 0;
+      let bytes = 0;
+
+      cursorReq.onsuccess = () => {
+        const cursor = cursorReq.result;
+        if (!cursor) return; // tx.oncomplete fires next
+        const entry = cursor.value as IdbEntry;
+        count += 1;
+        bytes += entry.src.length;
+        cursor.continue();
+      };
+
+      tx.oncomplete = () => { db.close(); resolve({ count, bytes }); };
+      tx.onerror = () => { db.close(); resolve({ count: 0, bytes: 0 }); };
+    });
+  } catch {
+    return { count: 0, bytes: 0 };
+  }
+}
+
+/**
  * Clear every entry from both the module-level in-memory cache and the
  * IndexedDB store.  Useful when the user wants to free browser storage or
  * suspects a stale enhanced image is being shown.
