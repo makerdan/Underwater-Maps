@@ -907,12 +907,14 @@ function VisualsSection() {
             value={s.particleDensity}
             onChange={s.setParticleDensity}
             options={[{ value: "off", label: "Off" }, { value: "sparse", label: "Sparse (500)" }, { value: "dense", label: "Dense (2000)" }]}
+            sublabel="Controls the particle count of the floating marine snow effect; Off, 500, or 2000 particles."
           />
           <SelectRow
             label="Texture Quality"
             value={s.textureQuality}
             onChange={s.setTextureQuality}
             options={[{ value: "off", label: "Off" }, { value: "low", label: "Low" }, { value: "high", label: "High" }]}
+            sublabel="Resolution of surface textures draped over the terrain mesh."
           />
           <ToggleRow
             label="Antialiasing"
@@ -943,6 +945,7 @@ function VisualsSection() {
             min={0} max={1} step={0.01}
             format={(v) => v.toFixed(2)}
             onChange={s.setAmbientLightIntensity}
+            sublabel="Uniform baseline brightness applied to the entire underwater scene."
           />
           <SliderRow
             label="Directional Light Intensity"
@@ -950,6 +953,7 @@ function VisualsSection() {
             min={0} max={1.5} step={0.01}
             format={(v) => v.toFixed(2)}
             onChange={s.setDirectionalLightIntensity}
+            sublabel="Brightness of the sun-like light that casts shading and depth shadows across terrain."
           />
           <SliderRow
             label="Lamp Intensity"
@@ -965,6 +969,7 @@ function VisualsSection() {
             min={10} max={150} step={5}
             format={(v) => `${v} m`}
             onChange={s.setLampRange}
+            sublabel="Radius in metres of the camera-attached point light that illuminates nearby terrain."
           />
         </div>
         <div style={S.card}>
@@ -1158,12 +1163,12 @@ function HUDSection() {
           <div style={S.cardHeader}>PANELS</div>
           <ToggleRow label="Depth Legend" value={s.showDepthLegend} onChange={s.setShowDepthLegend} sublabel="Floating depth/altitude legend" />
           <ToggleRow label="Depth Scale Bar" value={s.showDepthScaleBar} onChange={s.setShowDepthScaleBar} sublabel="Vertical gradient bar" />
-          <ToggleRow label="Compass / Minimap" value={s.showCompassMinimap} onChange={s.setShowCompassMinimap} />
+          <ToggleRow label="Compass / Minimap" value={s.showCompassMinimap} onChange={s.setShowCompassMinimap} sublabel="Small compass rose and orientation indicator shown in the corner of the viewport." />
           <ToggleRow label="Controls Legend" value={s.showControlsLegend} onChange={s.setShowControlsLegend} sublabel="Keyboard/mouse cheat sheet overlay" />
-          <ToggleRow label="Tide &amp; Currents Panel" value={s.showTidePanel} onChange={s.setShowTidePanel} />
-          <ToggleRow label="Habitat Panel" value={s.showHabitatPanel} onChange={s.setShowHabitatPanel} />
-          <ToggleRow label="Dataset Selector" value={s.showDatasetPanel} onChange={s.setShowDatasetPanel} />
-          <ToggleRow label="Natural-Language Query" value={s.showQueryPanel} onChange={s.setShowQueryPanel} />
+          <ToggleRow label="Tide &amp; Currents Panel" value={s.showTidePanel} onChange={s.setShowTidePanel} sublabel="Floating panel with live tide height, current speed, and a short-range forecast graph." />
+          <ToggleRow label="Habitat Panel" value={s.showHabitatPanel} onChange={s.setShowHabitatPanel} sublabel="Side panel listing predicted habitat zones and species at the current camera position." />
+          <ToggleRow label="Dataset Selector" value={s.showDatasetPanel} onChange={s.setShowDatasetPanel} sublabel="Panel for switching between loaded datasets and viewing dataset metadata." />
+          <ToggleRow label="Natural-Language Query" value={s.showQueryPanel} onChange={s.setShowQueryPanel} sublabel="AI-powered search bar that answers plain-English questions about the seafloor." />
           <ToggleRow
             label="Show UI tooltips"
             value={s.showUiTooltips}
@@ -1183,6 +1188,7 @@ function HUDSection() {
               { value: "12h", label: "12-hour" },
               { value: "24h", label: "24-hour" },
             ]}
+            sublabel="Clock format used for tide predictions, overlay timestamps, and the tidal panel."
           />
         </div>
       </AdvancedDisclosure>
@@ -1509,16 +1515,19 @@ function CurrentsSection() {
             label="Animated Particles"
             value={s.currentsShowParticles}
             onChange={s.setCurrentsShowParticles}
+            sublabel="Flowing dots that visualise current direction and speed across the seafloor surface."
           />
           <ToggleRow
             label="Speed-Coloured Arrows"
             value={s.currentsShowArrows}
             onChange={s.setCurrentsShowArrows}
+            sublabel="Vector arrows colour-coded from slow (blue) to fast (red) showing local current velocity."
           />
           <ToggleRow
             label="Streamlines"
             value={s.currentsShowStreamlines}
             onChange={s.setCurrentsShowStreamlines}
+            sublabel="Continuous flow lines tracing the path water follows as it moves across the terrain."
           />
           <ToggleRow
             label="Auto-Advance Tide Phase"
