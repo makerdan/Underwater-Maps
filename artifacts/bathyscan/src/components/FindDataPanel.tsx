@@ -684,6 +684,10 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const [nceiQuery, setNceiQuery] = useState("");
   const [debouncedNceiQuery, setDebouncedNceiQuery] = useState("");
   const [nceiSavingIds, setNceiSavingIds] = useState<Set<string>>(new Set());
+  const [nceiFrom, setNceiFrom] = useState(1);
+  const nceiFromRef = useRef(1);
+  const [nceiAccumulated, setNceiAccumulated] = useState<NceiPortalResult[]>([]);
+  const prevNceiPageRef = useRef<NceiPortalResult[] | undefined>(undefined);
   const { setDatasetId, setPendingExternalUserDatasetId, datasetId: currentDatasetId } = useAppState();
   const { isSignedIn } = useAuth();
   const qc = useQueryClient();
@@ -796,15 +800,24 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     return `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat}`;
   }, [currentDatasetId, mySaves]);
 
+  // Reset NCEI pagination whenever the query or bbox seed changes
+  useEffect(() => {
+    nceiFromRef.current = 1;
+    setNceiFrom(1);
+    setNceiAccumulated([]);
+    prevNceiPageRef.current = undefined;
+  }, [debouncedNceiQuery, viewportBboxString]);
+
   // NCEI Portal search
   const nceiSearchParams = {
     q: debouncedNceiQuery || undefined,
     // When no query is typed, send the viewport bbox so results are
     // pre-filtered to the area the user is currently exploring.
     bbox: debouncedNceiQuery ? undefined : viewportBboxString,
+    from: nceiFrom > 1 ? nceiFrom : undefined,
   };
   const {
-    data: nceiResults = [],
+    data: nceiPage,
     isFetching: isNceiSearching,
     error: nceiError,
   } = useGetNceiSearch(nceiSearchParams, {
@@ -814,6 +827,32 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
       staleTime: 10 * 60 * 1000,
     },
   });
+
+  // Accumulate pages as they arrive. When nceiFrom is 1 we replace;
+  // on subsequent pages we append. Early-return when data is undefined
+  // (initial load / tab not active) to avoid acting on stale references.
+  // prevNceiPageRef guards against re-processing the same React Query
+  // result object on unrelated re-renders.
+  useEffect(() => {
+    if (nceiPage === undefined) return;
+    if (nceiPage === prevNceiPageRef.current) return;
+    prevNceiPageRef.current = nceiPage;
+    if (nceiFromRef.current === 1) {
+      setNceiAccumulated(nceiPage);
+    } else {
+      setNceiAccumulated((prev) => [...prev, ...nceiPage]);
+    }
+  }, [nceiPage]);
+
+  const handleNceiLoadMore = useCallback(() => {
+    const nextFrom = nceiFromRef.current + 20;
+    nceiFromRef.current = nextFrom;
+    setNceiFrom(nextFrom);
+  }, []);
+
+  // Show "Load more" when the last page returned exactly 20 results,
+  // meaning there may be more records beyond this page.
+  const nceiMayHaveMore = !isNceiSearching && (nceiPage?.length ?? 0) === 20;
 
   const nceiSaveMutation = usePostNceiSave();
 
@@ -1284,7 +1323,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 Sign in to save NCEI datasets to your library.
               </div>
             )}
-            {nceiResults.length === 0 && !isNceiSearching && !nceiError && (
+            {nceiAccumulated.length === 0 && !isNceiSearching && !nceiError && (
               <div
                 style={{ fontSize: 9, color: "#94a3b8", textAlign: "center", paddingTop: 32 }}
               >
@@ -1293,7 +1332,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                   : "Type a keyword to search the NCEI Bathymetry Geoportal"}
               </div>
             )}
-            {nceiResults.map((result) => (
+            {nceiAccumulated.map((result) => (
               <NceiResultCard
                 key={result.id}
                 result={result}
@@ -1303,6 +1342,34 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 canSave={!!isSignedIn}
               />
             ))}
+            {isNceiSearching && nceiFrom > 1 && (
+              <div style={{ fontSize: 9, color: "#94a3b8", textAlign: "center", padding: "8px 0" }}>
+                Loading more…
+              </div>
+            )}
+            {nceiMayHaveMore && (
+              <button
+                onClick={handleNceiLoadMore}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  marginTop: 4,
+                  padding: "7px 0",
+                  background: "rgba(0,229,255,0.06)",
+                  border: "1px solid rgba(0,229,255,0.2)",
+                  borderRadius: 4,
+                  color: "#00e5ff",
+                  fontSize: 9,
+                  letterSpacing: "0.15em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}
+                data-testid="ncei-load-more"
+              >
+                Load more
+              </button>
+            )}
           </div>
         </div>
       )}

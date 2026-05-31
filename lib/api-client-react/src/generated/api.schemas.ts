@@ -1798,6 +1798,17 @@ q?: string;
  * Spatial filter as "minLon,minLat,maxLon,maxLat"
  */
 bbox?: string;
+/**
+ * 1-based result offset for pagination (default 1)
+ * @minimum 1
+ */
+from?: number;
+/**
+ * Maximum number of results to return per page (default 20)
+ * @minimum 1
+ * @maximum 100
+ */
+max?: number;
 };
 
 export type GetSurfaceConditionsParams = {

@@ -61,7 +61,8 @@ const NCEI_GEOPORTAL_URL =
   "https://www.ncei.noaa.gov/metadata/geoportal/rest/metadata/search";
 const NCEI_CACHE_TTL_MS = 10 * 60 * 1000;
 const NCEI_REQUEST_TIMEOUT_MS = 12_000;
-const NCEI_MAX_RESULTS = 20;
+const NCEI_DEFAULT_MAX = 20;
+const NCEI_MAX_RESULTS_CAP = 100;
 
 // ---------------------------------------------------------------------------
 // NCEI WCS mosaic coverage footprints
@@ -386,8 +387,8 @@ interface SearchCacheEntry {
 const searchCache = new Map<string, SearchCacheEntry>();
 registerCache(() => searchCache.clear());
 
-function makeCacheKey(q: string, bbox: string): string {
-  return `${q.toLowerCase().trim()}|${bbox.trim()}`;
+function makeCacheKey(q: string, bbox: string, from: number, max: number): string {
+  return `${q.toLowerCase().trim()}|${bbox.trim()}|${from}|${max}`;
 }
 
 function getCachedResults(cacheKey: string): NceiPortalResult[] | null {
@@ -410,8 +411,12 @@ function setCachedResults(cacheKey: string, results: NceiPortalResult[]): void {
 router.get("/ncei/search", async (req, res): Promise<void> => {
   const q = String(req.query["q"] ?? "").trim();
   const bbox = String(req.query["bbox"] ?? "").trim();
+  const fromRaw = parseInt(String(req.query["from"] ?? "1"), 10);
+  const maxRaw = parseInt(String(req.query["max"] ?? String(NCEI_DEFAULT_MAX)), 10);
+  const from = Number.isFinite(fromRaw) && fromRaw >= 1 ? fromRaw : 1;
+  const max = Number.isFinite(maxRaw) && maxRaw >= 1 ? Math.min(maxRaw, NCEI_MAX_RESULTS_CAP) : NCEI_DEFAULT_MAX;
 
-  const cacheKey = makeCacheKey(q, bbox);
+  const cacheKey = makeCacheKey(q, bbox, from, max);
   const cached = getCachedResults(cacheKey);
   if (cached) {
     res.json(cached);
@@ -421,8 +426,8 @@ router.get("/ncei/search", async (req, res): Promise<void> => {
   const params = new URLSearchParams({
     q: q || "bathymetry",
     f: "json",
-    max: String(NCEI_MAX_RESULTS),
-    from: "1",
+    max: String(max),
+    from: String(from),
   });
   if (bbox) params.set("bbox", bbox);
 
