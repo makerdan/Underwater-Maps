@@ -27,9 +27,15 @@ import {
 // ---------------------------------------------------------------------------
 
 describe("BATHYMETRY_SOURCES registry", () => {
-  it("declares the four expected sources", () => {
+  it("declares the five expected sources", () => {
     expect(Object.keys(BATHYMETRY_SOURCES).sort()).toEqual(
-      ["bundled-survey", "gebco", "ncei-bag-mosaic", "ncei-dem-global-mosaic"].sort(),
+      [
+        "bundled-survey",
+        "gebco",
+        "ncei-bag-mosaic",
+        "ncei-crm-s-alaska",
+        "ncei-dem-global-mosaic",
+      ].sort(),
     );
   });
 
@@ -218,6 +224,76 @@ describe("BUNDLED_TERRAIN — bundle file presence and resample integrity", () =
         priority?.[0],
         `DATASET_SOURCE_PRIORITY["${id}"] must lead with 'bundled-survey'`,
       ).toBe("bundled-survey");
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NCEI Southern Alaska CRM source (Task #987)
+// ---------------------------------------------------------------------------
+
+describe("ncei-crm-s-alaska source", () => {
+  it("is registered in BATHYMETRY_SOURCES with expected shape", () => {
+    const src = BATHYMETRY_SOURCES["ncei-crm-s-alaska"];
+    expect(src).toBeDefined();
+    expect(src.id).toBe("ncei-crm-s-alaska");
+    expect(src.scope).toBe("regional");
+    expect(src.dataSource).toBe("ncei");
+    expect(src.creditUrl).toMatch(/^https?:\/\//);
+    expect(typeof src.fetch).toBe("function");
+  });
+
+  it("is the top-ranked source for kodiak-island", () => {
+    expect(DATASET_SOURCE_PRIORITY["kodiak-island"]?.[0]).toBe("ncei-crm-s-alaska");
+  });
+
+  it("is the top-ranked source for kachemak-bay", () => {
+    expect(DATASET_SOURCE_PRIORITY["kachemak-bay"]?.[0]).toBe("ncei-crm-s-alaska");
+  });
+
+  it("is the top-ranked source for resurrection-bay", () => {
+    expect(DATASET_SOURCE_PRIORITY["resurrection-bay"]?.[0]).toBe("ncei-crm-s-alaska");
+  });
+
+  it("is the top-ranked source for prince-william-sound", () => {
+    expect(DATASET_SOURCE_PRIORITY["prince-william-sound"]?.[0]).toBe("ncei-crm-s-alaska");
+  });
+
+  it("does NOT appear in the lake-ray-roberts (freshwater) priority list", () => {
+    const lrrPriority = DATASET_SOURCE_PRIORITY["lake-ray-roberts"] ?? [];
+    expect(lrrPriority).not.toContain("ncei-crm-s-alaska");
+  });
+
+  it("all four Southern Alaska AOIs include ncei-bag-mosaic after ncei-crm-s-alaska", () => {
+    const southAlaskaAois = [
+      "kodiak-island",
+      "kachemak-bay",
+      "resurrection-bay",
+      "prince-william-sound",
+    ] as const;
+    for (const aoi of southAlaskaAois) {
+      const priority = DATASET_SOURCE_PRIORITY[aoi] ?? [];
+      const crmIdx = priority.indexOf("ncei-crm-s-alaska");
+      const bagIdx = priority.indexOf("ncei-bag-mosaic");
+      expect(crmIdx, `${aoi}: ncei-crm-s-alaska must be present`).toBeGreaterThanOrEqual(0);
+      expect(bagIdx, `${aoi}: ncei-bag-mosaic must be present`).toBeGreaterThanOrEqual(0);
+      expect(crmIdx, `${aoi}: CRM must rank above BAG`).toBeLessThan(bagIdx);
+    }
+  });
+
+  it("all four Southern Alaska AOIs end with gebco as final upstream fallback", () => {
+    const southAlaskaAois = [
+      "kodiak-island",
+      "kachemak-bay",
+      "resurrection-bay",
+      "prince-william-sound",
+    ] as const;
+    for (const aoi of southAlaskaAois) {
+      const priority = DATASET_SOURCE_PRIORITY[aoi] ?? [];
+      expect(
+        priority[priority.length - 1],
+        `${aoi}: last ranked source must be gebco`,
+      ).toBe("gebco");
     }
   });
 });

@@ -99,8 +99,13 @@ export interface TerrainGrid {
  *       `DATASET_SOURCE_PRIORITY` ranked list (local → regional/state →
  *       national → global → synthetic). Source ordering may differ from
  *       the v5 hard-coded chain, so previously cached grids are flushed.
+ *   7 — Task #987: NCEI Southern Alaska Coastal Relief Model (CRM, DEM ID 703)
+ *       added as `ncei-crm-s-alaska`; four new Southern Alaska AOIs added
+ *       (Kodiak Island, Kachemak Bay, Resurrection Bay, Prince William Sound)
+ *       with CRM ranked first. Previously cached grids for those AOIs must
+ *       be rebuilt with the new regional source.
  */
-export const TERRAIN_CACHE_VERSION = 6;
+export const TERRAIN_CACHE_VERSION = 7;
 
 export interface DatasetMeta {
   id: string;
@@ -142,6 +147,63 @@ export const PRESET_DATASETS: DatasetMeta[] = [
     bbox: { minLon: -133.5, minLat: 55.0, maxLon: -131.5, maxLat: 56.5 },
     hasTopography: true,
     hasEfh: true,
+  },
+  // -------------------------------------------------------------------------
+  // Southern Alaska AOIs — NCEI Southern Alaska CRM (DEM ID 703) footprint
+  // ~130 °W to ~170 °W, 54 °N to 62 °N: Gulf of Alaska, Kodiak, Cook Inlet,
+  // Prince William Sound, Resurrection Bay.
+  // -------------------------------------------------------------------------
+  {
+    id: "kodiak-island",
+    name: "Kodiak Island — Gulf of Alaska",
+    description:
+      "Kodiak Island and Chiniak Bay — premier halibut and rockfish grounds on the eastern Gulf of Alaska shelf; rocky headlands, kelp-studded passages, and deep submarine canyons reaching 300+ m",
+    waterType: "saltwater",
+    minDepth: 5,
+    maxDepth: 360,
+    centerLon: -152.5,
+    centerLat: 57.8,
+    bbox: { minLon: -153.5, minLat: 57.0, maxLon: -151.5, maxLat: 58.6 },
+    hasTopography: true,
+  },
+  {
+    id: "kachemak-bay",
+    name: "Kachemak Bay — Homer / Cook Inlet",
+    description:
+      "Homer Spit, Kachemak Bay, and lower Cook Inlet approaches — one of Alaska's most productive inshore fisheries, featuring halibut flats, salmon staging corridors, and steep-walled fjord arms to 180 m",
+    waterType: "saltwater",
+    minDepth: 2,
+    maxDepth: 200,
+    centerLon: -151.5,
+    centerLat: 59.6,
+    bbox: { minLon: -152.5, minLat: 59.0, maxLon: -150.5, maxLat: 60.2 },
+    hasTopography: true,
+  },
+  {
+    id: "resurrection-bay",
+    name: "Resurrection Bay — Seward / Kenai Fjords",
+    description:
+      "Seward, Resurrection Bay, and Kenai Fjords approaches — glacially carved fjord reaching 275 m depth; renowned halibut, salmon, and lingcod fishery at the mouth of the Gulf of Alaska",
+    waterType: "saltwater",
+    minDepth: 5,
+    maxDepth: 280,
+    centerLon: -149.5,
+    centerLat: 60.0,
+    bbox: { minLon: -150.5, minLat: 59.4, maxLon: -148.5, maxLat: 60.6 },
+    hasTopography: true,
+  },
+  {
+    id: "prince-william-sound",
+    name: "Prince William Sound — Valdez / Western Approaches",
+    description:
+      "Valdez Arm, Port Valdez, and western Prince William Sound approaches — sheltered deep-water fjord system (sill depth ~175 m, basin to 750 m) with strong salmon, halibut, and shrimp fisheries among forested islands",
+    waterType: "saltwater",
+    minDepth: 10,
+    maxDepth: 760,
+    centerLon: -147.5,
+    centerLat: 60.8,
+    bbox: { minLon: -148.5, minLat: 60.2, maxLon: -146.5, maxLat: 61.4 },
+    hasTopography: true,
   },
 ];
 
@@ -272,6 +334,17 @@ const NCEI_COVERAGES = {
     coverage: "1",
     label: "NCEI DEM Global Mosaic",
   },
+  /** NOAA Southern Alaska Coastal Relief Model (DEM ID 703).
+   *  Purpose-built ~3 arc-second (~90 m) regional grid covering the Gulf of
+   *  Alaska, Kodiak Island, Cook Inlet / Kachemak Bay, Prince William Sound,
+   *  Resurrection Bay, and Yakutat Bay (~130 °W – 170 °W, 54 °N – 62 °N).
+   *  Verified endpoint: NCEI geoportal metadata item gov.noaa.ngdc.mgg.dem:703.
+   */
+  southAlaskaCrm: {
+    url: "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/NOAA_Coastal_Relief_Model_Southern_Alaska/ImageServer/WCSServer",
+    coverage: "1",
+    label: "NCEI Southern Alaska Coastal Relief Model",
+  },
 } as const satisfies Record<string, NceiCoverage>;
 
 type NceiCoverageKey = keyof typeof NCEI_COVERAGES;
@@ -342,6 +415,21 @@ export const BATHYMETRY_SOURCES = {
       return { ...r };
     },
   },
+  /** NCEI Southern Alaska Coastal Relief Model (DEM ID 703) — purpose-built
+   *  ~3 arc-second (~90 m) regional grid for the Gulf of Alaska coastline
+   *  (~130 °W – 170 °W, 54 °N – 62 °N). Higher-quality and more consistently
+   *  populated than the general DEM Global Mosaic for this region. */
+  "ncei-crm-s-alaska": {
+    id: "ncei-crm-s-alaska",
+    label: NCEI_COVERAGES.southAlaskaCrm.label,
+    scope: "regional",
+    dataSource: "ncei",
+    creditUrl: "https://www.ncei.noaa.gov/metadata/geoportal/rest/metadata/item/gov.noaa.ngdc.mgg.dem:703/html",
+    async fetch(meta: DatasetMeta, N: number): Promise<SourceFetchResult> {
+      const r = await fetchNceiGrid(meta.bbox, N, "southAlaskaCrm");
+      return { ...r };
+    },
+  },
   /** GEBCO 2024 global grid (~400 m). Last-resort upstream before
    *  synthetic — covers everywhere on the ocean but is too coarse for
    *  most inshore fishing-grade detail. */
@@ -372,6 +460,9 @@ export type BathymetrySourceId = keyof typeof BATHYMETRY_SOURCES;
 export const DATASET_SOURCE_PRIORITY: Record<string, BathymetrySourceId[]> = {
   // SE Alaska multibeam-first corridor — Thorne Bay has strong NCEI BAG
   // (multibeam, 1–50 m) coverage. BAG first, global DEM next, GEBCO last.
+  // Thorne Bay (132.5 °W) is east of the Southern Alaska CRM footprint
+  // (~130 °W western edge of SE Alaska / Inside Passage), so the CRM is
+  // not ranked here.
   "thorne-bay": ["ncei-bag-mosaic", "ncei-dem-global-mosaic", "gebco"],
   // Inland TX reservoir ships with a pre-built TWDB/USACE/3DEP bundle
   // (see scripts/src/build-lake-ray-roberts-terrain.ts). The bundle is the
@@ -379,6 +470,33 @@ export const DATASET_SOURCE_PRIORITY: Record<string, BathymetrySourceId[]> = {
   // freshwater coverage — so it sits at the top of the list and the
   // synthetic terminal fallback handles the (rare) load-failure case.
   "lake-ray-roberts": ["bundled-survey", "gebco"],
+  // Southern Alaska CRM AOIs — CRM (purpose-built ~90 m regional grid) is
+  // ranked first, multibeam BAG second (documented survey coverage for all
+  // four sub-areas), global DEM mosaic third, GEBCO last.
+  "kodiak-island": [
+    "ncei-crm-s-alaska",
+    "ncei-bag-mosaic",
+    "ncei-dem-global-mosaic",
+    "gebco",
+  ],
+  "kachemak-bay": [
+    "ncei-crm-s-alaska",
+    "ncei-bag-mosaic",
+    "ncei-dem-global-mosaic",
+    "gebco",
+  ],
+  "resurrection-bay": [
+    "ncei-crm-s-alaska",
+    "ncei-bag-mosaic",
+    "ncei-dem-global-mosaic",
+    "gebco",
+  ],
+  "prince-william-sound": [
+    "ncei-crm-s-alaska",
+    "ncei-bag-mosaic",
+    "ncei-dem-global-mosaic",
+    "gebco",
+  ],
 };
 
 /** Default ranked list for AOIs without an explicit entry. */
@@ -407,7 +525,9 @@ export const NCEI_DATASET_COVERAGES: Record<string, NceiCoverageKey[]> =
               ? ("bagMosaic" as NceiCoverageKey)
               : s === "ncei-dem-global-mosaic"
                 ? ("demGlobalMosaic" as NceiCoverageKey)
-                : null,
+                : s === "ncei-crm-s-alaska"
+                  ? ("southAlaskaCrm" as NceiCoverageKey)
+                  : null,
           )
           .filter((v): v is NceiCoverageKey => v !== null);
         return [id, ncei];
