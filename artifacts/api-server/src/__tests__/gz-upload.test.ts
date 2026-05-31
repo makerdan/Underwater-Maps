@@ -146,6 +146,52 @@ function makeValidGzLas(): Buffer {
   return zlib.gzipSync(lasBuffer);
 }
 
+/**
+ * Builds a gzip-compressed GPX file with `pointCount` track points.
+ * Each trkpt has a negative <ele> value so parseGpxTerrain produces valid
+ * positive-downward depth points (≥10 required by the upload handler).
+ */
+function makeValidGzGpx(pointCount = 12): Buffer {
+  const trkpts = Array.from({ length: pointCount }, (_, i) => {
+    const lat = (11.0 + i * 0.01).toFixed(4);
+    const lon = (142.0 + i * 0.01).toFixed(4);
+    const ele = -(1000 + i * 50);
+    return `      <trkpt lat="${lat}" lon="${lon}"><ele>${ele}.0</ele></trkpt>`;
+  }).join("\n");
+
+  const gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <trkseg>
+${trkpts}
+    </trkseg>
+  </trk>
+</gpx>`;
+  return zlib.gzipSync(Buffer.from(gpx, "utf8"));
+}
+
+/**
+ * Builds a gzip-compressed NMEA file with `pointCount` paired position+depth
+ * sentences.  No checksums are appended — the validator accepts checksum-free
+ * sentences — so we can keep the fixture straightforward.
+ */
+function makeValidGzNmea(pointCount = 12): Buffer {
+  const lines: string[] = [];
+  for (let i = 0; i < pointCount; i++) {
+    // GPGGA: lat 4807.038+i N, lon 01131.000+i E
+    const latDeg = 48 + i;
+    const latMins = "07.038";
+    const lonDeg = String(11 + i).padStart(3, "0");
+    const lonMins = "31.000";
+    lines.push(
+      `$GPGGA,12${String(i).padStart(2, "0")}00,${latDeg}${latMins},N,${lonDeg}${lonMins},E,1,08,0.9,0.0,M,0.0,M,,`,
+    );
+    const depthM = (50 + i * 10).toFixed(1);
+    lines.push(`$SDDBT,164.0,f,${depthM},M,27.0,F`);
+  }
+  return zlib.gzipSync(Buffer.from(lines.join("\n"), "utf8"));
+}
+
 afterEach(() => {
   zlibMockState.useOversized = false;
 });
@@ -189,6 +235,52 @@ describe("POST /api/datasets/upload — .gz upload", () => {
         .field("resolution", "32")
         .attach("file", gzBuf, {
           filename: "survey.las.gz",
+          contentType: "application/gzip",
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("terrain");
+      expect(res.body.terrain).toHaveProperty("depths");
+      expect(Array.isArray(res.body.terrain.depths)).toBe(true);
+      expect(res.body).toHaveProperty("overview");
+    },
+    15_000,
+  );
+
+  it(
+    "accepts a valid gzip-compressed GPX file and returns 200 with terrain data",
+    async () => {
+      const gzBuf = makeValidGzGpx();
+
+      const res = await request(app)
+        .post("/api/datasets/upload")
+        .set(AUTHED_HEADER)
+        .field("resolution", "32")
+        .attach("file", gzBuf, {
+          filename: "survey.gpx.gz",
+          contentType: "application/gzip",
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("terrain");
+      expect(res.body.terrain).toHaveProperty("depths");
+      expect(Array.isArray(res.body.terrain.depths)).toBe(true);
+      expect(res.body).toHaveProperty("overview");
+    },
+    15_000,
+  );
+
+  it(
+    "accepts a valid gzip-compressed NMEA file and returns 200 with terrain data",
+    async () => {
+      const gzBuf = makeValidGzNmea();
+
+      const res = await request(app)
+        .post("/api/datasets/upload")
+        .set(AUTHED_HEADER)
+        .field("resolution", "32")
+        .attach("file", gzBuf, {
+          filename: "survey.nmea.gz",
           contentType: "application/gzip",
         });
 
