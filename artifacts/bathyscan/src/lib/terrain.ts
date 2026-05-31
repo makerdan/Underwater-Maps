@@ -18,7 +18,7 @@ export const MAX_DEPTH_WORLD = 50;
  * - Rotates the plane to lie flat in XZ.
  * - Displaces each vertex's Y by  −t × MAX_DEPTH_WORLD  where t is the
  *   normalised depth (depth − minDepth) / (maxDepth − minDepth).
- * - Assigns per-vertex colour from depthToColor(t).
+ * - Assigns per-vertex colour from getColormap(theme)(t).
  * - Recomputes vertex normals for correct lighting.
  */
 export function buildTerrainGeometry(grid: TerrainData, theme: ColormapTheme = "ocean"): THREE.BufferGeometry {

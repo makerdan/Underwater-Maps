@@ -123,17 +123,6 @@ function interpolateStops(stops: ColorStop[], t: number): THREE.Color {
 }
 
 /**
- * Map a normalised depth t ∈ [0, 1] to a THREE.Color using the ocean theme
- * with the user's current shallow/deep palette overrides.
- * t = 0 → shallowest, t = 1 → deepest.
- *
- * @deprecated Prefer getColormap(theme)(t) for theme-aware colouring.
- */
-export function depthToColor(t: number): THREE.Color {
-  return interpolateStops(getOceanStops(), t);
-}
-
-/**
  * Returns a colour function for the given colormap theme.
  * The returned function maps t ∈ [0, 1] to a THREE.Color.
  *

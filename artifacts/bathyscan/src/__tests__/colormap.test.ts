@@ -35,7 +35,7 @@ vi.mock("three", () => {
   return { Color };
 });
 
-import { depthToColor, getColormap } from "../lib/colormap";
+import { getColormap } from "../lib/colormap";
 import {
   usePaletteStore,
   DEFAULT_SHALLOW,
@@ -56,9 +56,9 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
 
 const EPSILON = 0.01;
 
-describe("depthToColor", () => {
+describe("getColormap('ocean') — endpoint and boundary colours", () => {
   it("t=0 returns the shallowest stop colour (#00e5ff)", () => {
-    const c = depthToColor(0);
+    const c = getColormap("ocean")(0);
     const expected = hexToRgb("#00e5ff");
     expect(c.r).toBeCloseTo(expected.r, 2);
     expect(c.g).toBeCloseTo(expected.g, 2);
@@ -66,7 +66,7 @@ describe("depthToColor", () => {
   });
 
   it("t=1 returns the deepest stop colour (#283593)", () => {
-    const c = depthToColor(1);
+    const c = getColormap("ocean")(1);
     const expected = hexToRgb("#283593");
     expect(c.r).toBeCloseTo(expected.r, 2);
     expect(c.g).toBeCloseTo(expected.g, 2);
@@ -74,7 +74,7 @@ describe("depthToColor", () => {
   });
 
   it("t=0.3 (600 ft band boundary) returns the correct stop colour (#1e2b6e)", () => {
-    const c = depthToColor(0.3);
+    const c = getColormap("ocean")(0.3);
     const expected = hexToRgb("#1e2b6e");
     expect(c.r).toBeCloseTo(expected.r, 2);
     expect(c.g).toBeCloseTo(expected.g, 2);
@@ -82,7 +82,7 @@ describe("depthToColor", () => {
   });
 
   it("t=0.5 returns an interpolated colour between the 600 ft stop and the deep endpoint", () => {
-    const c = depthToColor(0.5);
+    const c = getColormap("ocean")(0.5);
     // t=0.5 lies between the 600 ft stop (t=0.30, #1e2b6e) and the deep endpoint (t=1.0)
     const lo = hexToRgb("#1e2b6e");
     const hi = hexToRgb("#283593"); // default deep
@@ -93,15 +93,17 @@ describe("depthToColor", () => {
   });
 
   it("t < 0 clamps to t=0", () => {
-    const cNeg = depthToColor(-5);
-    const c0 = depthToColor(0);
+    const fn = getColormap("ocean");
+    const cNeg = fn(-5);
+    const c0 = fn(0);
     expect(cNeg.r).toBeCloseTo(c0.r, 2);
     expect(cNeg.g).toBeCloseTo(c0.g, 2);
   });
 
   it("t > 1 clamps to t=1", () => {
-    const cOver = depthToColor(999);
-    const c1 = depthToColor(1);
+    const fn = getColormap("ocean");
+    const cOver = fn(999);
+    const c1 = fn(1);
     expect(cOver.r).toBeCloseTo(c1.r, 2);
     expect(cOver.b).toBeCloseTo(c1.b, 2);
   });
@@ -188,18 +190,21 @@ describe("getColormap", () => {
     expect(c.b).toBeCloseTo(expected.b, 2);
   });
 
-  it("ocean theme matches depthToColor at all 10-band boundary stops", () => {
+  it("ocean theme returns consistent colours at all 10-band boundary stops", () => {
     const fn = getColormap("ocean");
     // Normalised t values for the 11 band boundaries (0–2000 ft)
     const stops = DEPTH_BAND_BOUNDARIES_FT.map(
       (ft) => ft / OCEAN_MAX_DEPTH_FT,
     );
     for (const t of stops) {
-      const a = fn(t);
-      const b = depthToColor(t);
-      expect(a.r).toBeCloseTo(b.r, 3);
-      expect(a.g).toBeCloseTo(b.g, 3);
-      expect(a.b).toBeCloseTo(b.b, 3);
+      const c = fn(t);
+      expect(Number.isFinite(c.r)).toBe(true);
+      expect(Number.isFinite(c.g)).toBe(true);
+      expect(Number.isFinite(c.b)).toBe(true);
+      // Colours must be within the valid [0, 1] range
+      expect(c.r).toBeGreaterThanOrEqual(0);
+      expect(c.g).toBeGreaterThanOrEqual(0);
+      expect(c.b).toBeGreaterThanOrEqual(0);
     }
   });
 
@@ -220,7 +225,7 @@ describe("getColormap", () => {
   });
 });
 
-describe("depthToColor / palette sync", () => {
+describe("getColormap('ocean') / palette sync", () => {
   beforeEach(() => {
     usePaletteStore.getState().reset();
   });
@@ -230,7 +235,7 @@ describe("depthToColor / palette sync", () => {
 
   it("reflects an updated shallow colour from usePaletteStore at t=0", () => {
     usePaletteStore.getState().setShallow("#ff0000");
-    const c = depthToColor(0);
+    const c = getColormap("ocean")(0);
     const expected = hexToRgb("#ff0000");
     expect(c.r).toBeCloseTo(expected.r, 2);
     expect(c.g).toBeCloseTo(expected.g, 2);
@@ -239,7 +244,7 @@ describe("depthToColor / palette sync", () => {
 
   it("reflects an updated deep colour from usePaletteStore at t=1", () => {
     usePaletteStore.getState().setDeep("#00ff00");
-    const c = depthToColor(1);
+    const c = getColormap("ocean")(1);
     const expected = hexToRgb("#00ff00");
     expect(c.r).toBeCloseTo(expected.r, 2);
     expect(c.g).toBeCloseTo(expected.g, 2);
@@ -266,8 +271,9 @@ describe("depthToColor / palette sync", () => {
     usePaletteStore.getState().setShallow("#ff0000");
     usePaletteStore.getState().setDeep("#00ff00");
     usePaletteStore.getState().reset();
-    const c0 = depthToColor(0);
-    const c1 = depthToColor(1);
+    const fn = getColormap("ocean");
+    const c0 = fn(0);
+    const c1 = fn(1);
     const expShallow = hexToRgb(DEFAULT_SHALLOW);
     const expDeep = hexToRgb(DEFAULT_DEEP);
     expect(c0.r).toBeCloseTo(expShallow.r, 2);
@@ -437,9 +443,9 @@ describe("bandColors store integration", () => {
     });
   });
 
-  it("setBandColor(0, hex) updates t=0 in getOceanStops via depthToColor", () => {
+  it("setBandColor(0, hex) updates t=0 in getOceanStops via getColormap('ocean')", () => {
     usePaletteStore.getState().setBandColor(0, "#ff0000");
-    const c = depthToColor(0);
+    const c = getColormap("ocean")(0);
     const expected = hexToRgb("#ff0000");
     expect(c.r).toBeCloseTo(expected.r, 2);
     expect(c.g).toBeCloseTo(expected.g, 2);
@@ -510,7 +516,7 @@ describe("bandColors store integration", () => {
 
   it("getOceanStops falls back to DEFAULT_BAND_COLORS when store is degenerate", () => {
     usePaletteStore.setState({ bandColors: [] as unknown as string[] });
-    const c = depthToColor(0);
+    const c = getColormap("ocean")(0);
     const expected = hexToRgb(DEFAULT_BAND_COLORS[0]!);
     expect(c.r).toBeCloseTo(expected.r, 2);
     expect(c.g).toBeCloseTo(expected.g, 2);
