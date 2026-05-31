@@ -18,8 +18,8 @@ import { Spinner } from "@/components/ui/spinner";
  * upload that would be rejected with a 401.
  */
 
-const SUPPORTED_EXTENSIONS =
-  ".csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .nmea";
+export const SUPPORTED_EXTENSIONS =
+  ".csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .nmea, .gz";
 
 const GZ_WARNING_THRESHOLD_MB = 30;
 const UPLOAD_LIMIT_MB = 50;

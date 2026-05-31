@@ -45,6 +45,7 @@ import { useUndoableMarkerDelete } from "@/hooks/useUndoableMarkerDelete";
 import { GpsImportDialog } from "@/components/GpsImportDialog";
 import { GpsExportDialog } from "@/components/GpsExportDialog";
 import { LoadingDial } from "@/components/LoadingDial";
+import { SUPPORTED_EXTENSIONS } from "@/components/FileUpload";
 import { useActiveLoadStore } from "@/lib/activeLoadStore";
 import { fetchJsonWithProgress } from "@/lib/fetchWithProgress";
 import { useToast } from "@/hooks/use-toast";
@@ -2250,6 +2251,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           </div>
                           <div style={{ fontSize: 10, color: "#cbd5e1" }}>
                             any size · large files upload in chunks{isSignedIn ? " · auto-saved" : ""}
+                          </div>
+                          <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 4 }}>
+                            {SUPPORTED_EXTENSIONS}
                           </div>
                           {gcsPhase === "error" && gcsError && (
                             <div style={{ fontSize: 9, color: "#f87171", marginTop: 4 }}>⚠ {gcsError}</div>
