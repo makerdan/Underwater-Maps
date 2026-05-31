@@ -189,8 +189,8 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
   const removeDriftWaypoint = useDriftStore((s) => s.removeDriftWaypoint);
   const reverseDriftPath = useDriftStore((s) => s.reverseDriftPath);
   const reverseModeActive = useDriftStore((s) => s.reverseModeActive);
-  const snapToDepthEnabled = useDriftStore((s) => s.snapToDepthEnabled);
-  const snapToDepthM = useDriftStore((s) => s.snapToDepthM);
+  const _snapToDepthEnabled = useDriftStore((s) => s.snapToDepthEnabled);
+  const _snapToDepthM = useDriftStore((s) => s.snapToDepthM);
   const { terrain } = useAppState();
   const { camera, gl } = useThree();
 
