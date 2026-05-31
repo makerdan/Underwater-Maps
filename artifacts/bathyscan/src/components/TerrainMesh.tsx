@@ -123,17 +123,18 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     // Textures are a lazy singleton — computed once, shared forever.
     const textures = useMemo(() => getTerrainTextures(), []);
 
-    // Geometry rebuild whenever the grid or colormap theme changes.
+    // Geometry rebuild whenever the grid changes.
+    // Colours are not baked here — the useEffect below owns all per-vertex tinting.
     // Initial zone weights are depth-based; they'll be upgraded by the zoneMap effect below.
     // Slope attribute is computed once per grid and never changes.
     const geometry = useMemo(() => {
-      const geo = buildTerrainGeometry(grid, effectiveColormapTheme);
+      const geo = buildTerrainGeometry(grid);
       const weights = computeZoneWeights(grid);
       geo.setAttribute("zoneWeight", new THREE.BufferAttribute(weights, 4));
       const slopes = computeSlopeAttribute(grid);
       geo.setAttribute("slope", new THREE.BufferAttribute(slopes, 1));
       return geo;
-    }, [grid, effectiveColormapTheme]);
+    }, [grid]);
 
     // Material is created once (textures never change).
     const material = useMemo(() => {

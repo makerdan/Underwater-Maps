@@ -1,7 +1,5 @@
 import * as THREE from "three";
 import type { TerrainData } from "@workspace/api-client-react";
-import { getColormap } from "./colormap";
-import type { ColormapTheme } from "./settingsStore";
 import { SALTWATER_ZONE_TO_SLOT, FRESHWATER_ZONE_TO_SLOT } from "./zoneMap";
 
 /** Physical size of the terrain mesh in world units (X and Z axes). */
@@ -18,13 +16,14 @@ export const MAX_DEPTH_WORLD = 50;
  * - Rotates the plane to lie flat in XZ.
  * - Displaces each vertex's Y by  −t × MAX_DEPTH_WORLD  where t is the
  *   normalised depth (depth − minDepth) / (maxDepth − minDepth).
- * - Assigns per-vertex colour from getColormap(theme)(t).
+ * - Initialises the colour buffer to a neutral mid-grey placeholder.
+ *   All real per-vertex tinting is applied by the useEffect in TerrainMesh.tsx
+ *   immediately after mount, so baking colours here would be wasted work.
  * - Recomputes vertex normals for correct lighting.
  */
-export function buildTerrainGeometry(grid: TerrainData, theme: ColormapTheme = "ocean"): THREE.BufferGeometry {
+export function buildTerrainGeometry(grid: TerrainData): THREE.BufferGeometry {
   const { resolution: N, depths, minDepth, maxDepth } = grid;
   const depthRange = (maxDepth - minDepth) || 1;
-  const toColor = getColormap(theme);
 
   const geometry = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, N - 1, N - 1);
   geometry.rotateX(-Math.PI / 2);
@@ -40,10 +39,10 @@ export function buildTerrainGeometry(grid: TerrainData, theme: ColormapTheme = "
     // After rotateX(-PI/2), index 1 of each vertex triplet is world Y (up/down)
     positions[i * 3 + 1] = -clampedT * MAX_DEPTH_WORLD;
 
-    const c = toColor(clampedT);
-    colors[i * 3]     = c.r;
-    colors[i * 3 + 1] = c.g;
-    colors[i * 3 + 2] = c.b;
+    // Neutral mid-grey placeholder — overwritten by the TerrainMesh colour effect.
+    colors[i * 3]     = 0.5;
+    colors[i * 3 + 1] = 0.5;
+    colors[i * 3 + 2] = 0.5;
   }
 
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
