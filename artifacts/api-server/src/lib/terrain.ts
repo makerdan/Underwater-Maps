@@ -1454,12 +1454,11 @@ export function smoothSpikes(depths: number[], N: number, depthRange: number): v
  */
 export async function previewBboxForDownload(
   bbox: { north: number; south: number; east: number; west: number },
-  resolution: number,
 ): Promise<{
   sourceName: string;
   dataSource: TerrainDataSource;
   nominalResolutionM: number;
-  estimatedPoints: number;
+  waterFraction: number;
 }> {
   const { north, south, east, west } = bbox;
   const gBbox = { minLon: west, minLat: south, maxLon: east, maxLat: north };
@@ -1492,16 +1491,16 @@ export async function previewBboxForDownload(
     }
   }
 
-  // Estimate water point fraction from probe depths.
-  const N = Math.max(32, Math.min(512, resolution));
+  // Compute water-cell fraction from the probe grid. Exposed to the client so
+  // it can derive estimatedPoints = resolution² × waterFraction locally
+  // without an extra round-trip when the user switches resolution.
   let waterFraction = 1.0;
   if (probeDepths) {
     const waterCells = probeDepths.filter((d) => d > 0).length;
     waterFraction = probeDepths.length > 0 ? waterCells / probeDepths.length : 1.0;
   }
-  const estimatedPoints = Math.round(N * N * waterFraction);
 
-  return { sourceName, dataSource, nominalResolutionM, estimatedPoints };
+  return { sourceName, dataSource, nominalResolutionM, waterFraction };
 }
 
 /**

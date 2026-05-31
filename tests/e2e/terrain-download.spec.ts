@@ -160,7 +160,10 @@ test.describe("BathyScan — Terrain Download API auth gate", () => {
       expect(typeof body["sourceName"]).toBe("string");
       expect(typeof body["dataSource"]).toBe("string");
       expect(typeof body["nominalResolutionM"]).toBe("number");
-      expect(typeof body["estimatedPoints"]).toBe("number");
+      // waterFraction replaced estimatedPoints — clients derive point count locally
+      expect(typeof body["waterFraction"]).toBe("number");
+      expect(body["waterFraction"] as number).toBeGreaterThanOrEqual(0);
+      expect(body["waterFraction"] as number).toBeLessThanOrEqual(1);
     }
   });
 

@@ -30,7 +30,10 @@ interface InfoResult {
   sourceName: string;
   dataSource: string;
   nominalResolutionM: number;
-  estimatedPoints: number;
+  /** Fraction of N×N grid cells that contain water (0–1). Used to derive
+   *  estimatedPoints = resolution² × waterFraction client-side so resolution
+   *  switching is instant and does not trigger a new preflight fetch. */
+  waterFraction: number;
 }
 
 interface Props {
@@ -77,7 +80,9 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
   const centerLat = (bbox.north + bbox.south) / 2;
   const centerLon = (bbox.east + bbox.west) / 2;
 
-  // Fetch preflight info whenever bbox or resolution changes
+  // Fetch preflight info once per bbox (resolution is excluded — the server
+  // always probes at N=32 and returns waterFraction; estimatedPoints is
+  // derived locally so resolution switching is instant with no extra fetch).
   const fetchInfo = useCallback(async () => {
     if (!isSignedIn) return;
     setInfoLoading(true);
@@ -89,7 +94,6 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
         south: String(bbox.south),
         east: String(bbox.east),
         west: String(bbox.west),
-        resolution: String(resolution),
       });
       const resp = await fetch(`/api/terrain/download/info?${params.toString()}`);
       if (!resp.ok) {
@@ -103,7 +107,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
     } finally {
       setInfoLoading(false);
     }
-  }, [bbox, resolution, isSignedIn]);
+  }, [bbox, isSignedIn]);
 
   useEffect(() => {
     void fetchInfo();
@@ -139,9 +143,10 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       }, 1000);
+      const pts = info ? Math.round(resolution * resolution * info.waterFraction) : null;
       toast({
         title: "Download ready",
-        description: `Saved as ${filename} (${info?.estimatedPoints?.toLocaleString() ?? "?"} points).`,
+        description: `Saved as ${filename} (${pts?.toLocaleString() ?? "?"} points).`,
       });
       onClose();
     } catch (err) {
@@ -322,14 +327,14 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
               ) : null}
             </div>
 
-            {/* Estimated points */}
+            {/* Estimated points — derived locally so resolution switching is instant */}
             <div style={{ gridColumn: "1 / -1" }}>
               <div style={{ color: "#cbd5e1", marginBottom: 2 }}>EST. WATER POINTS</div>
               {infoLoading ? (
                 <div style={{ color: "#94a3b8" }}>calculating…</div>
               ) : info ? (
                 <div style={{ color: "#e2e8f0" }}>
-                  {info.estimatedPoints.toLocaleString()} points at {resolution}×{resolution}
+                  {Math.round(resolution * resolution * info.waterFraction).toLocaleString()} points at {resolution}×{resolution}
                 </div>
               ) : null}
             </div>

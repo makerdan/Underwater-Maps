@@ -293,9 +293,11 @@ router.get("/datasets/:id/zones", async (req, res): Promise<void> => {
 
 // ── GET /terrain/download/info ────────────────────────────────────────────────
 // Lightweight preflight for the Overview Map download tool.  Returns the
-// resolved source name, nominal resolution, and estimated water-point count
-// for the requested bbox at a given resolution — without building the full
-// grid.  Auth-required so anonymous users cannot probe our upstream APIs.
+// resolved source name, nominal resolution, and waterFraction (fraction of
+// the N=32 probe grid that contains water cells, 0–1) for the requested bbox.
+// The client derives estimatedPoints = resolution² × waterFraction locally so
+// resolution switching is instant without an extra round-trip.
+// Auth-required so anonymous users cannot probe our upstream APIs.
 //
 // Max bbox: 10° × 10°.  Returns 400 for out-of-range params.
 router.get("/terrain/download/info", requireAuth, async (req, res): Promise<void> => {
@@ -303,7 +305,6 @@ router.get("/terrain/download/info", requireAuth, async (req, res): Promise<void
   const south = parseFloat(String(req.query["south"] ?? ""));
   const east  = parseFloat(String(req.query["east"] ?? ""));
   const west  = parseFloat(String(req.query["west"] ?? ""));
-  const rawRes = parseInt(String(req.query["resolution"] ?? "256"), 10);
 
   if (
     !isFinite(north) || !isFinite(south) || !isFinite(east) || !isFinite(west) ||
@@ -324,10 +325,8 @@ router.get("/terrain/download/info", requireAuth, async (req, res): Promise<void
     return;
   }
 
-  const resolution = [64, 256, 512].includes(rawRes) ? rawRes : 256;
-
   try {
-    const info = await previewBboxForDownload({ north, south, east, west }, resolution);
+    const info = await previewBboxForDownload({ north, south, east, west });
     res.json(info);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Preflight failed";
