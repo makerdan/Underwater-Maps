@@ -38,6 +38,7 @@ import {
 } from "@workspace/api-client-react";
 import type { UserDatasetMeta } from "@workspace/api-client-react";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { formatDepthRange } from "@/lib/units";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { LoadingDial } from "@/components/LoadingDial";
@@ -96,6 +97,8 @@ export const DatasetFolderTree: React.FC<Props> = ({
   const qc = useQueryClient();
   const expanded = useSettingsStore((s) => s.datasetFolderExpanded);
   const set = useSettingsStore.setState;
+  const myLibraryCollapsed = usePanelCollapseStore((s) => s.collapsed.myLibrary);
+  const toggleMyLibrary = usePanelCollapseStore((s) => s.toggle);
 
   const { data: folders } = useGetUserFolders({
     query: { queryKey: getGetUserFoldersQueryKey() },
@@ -1192,7 +1195,23 @@ export const DatasetFolderTree: React.FC<Props> = ({
           className="px-3 py-1 flex items-center justify-between gap-2"
           style={{ fontSize: 9, letterSpacing: "0.12em", color: "#64748b" }}
         >
-          <span>▲ MY LIBRARY</span>
+          <button
+            type="button"
+            onClick={() => toggleMyLibrary("myLibrary")}
+            aria-expanded={!myLibraryCollapsed}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "#64748b",
+              fontSize: 9,
+              letterSpacing: "0.12em",
+              padding: 0,
+              fontFamily: "inherit",
+            }}
+          >
+            {myLibraryCollapsed ? "▾ MY LIBRARY" : "▲ MY LIBRARY"}
+          </button>
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
             {selectionMode ? (
               <button

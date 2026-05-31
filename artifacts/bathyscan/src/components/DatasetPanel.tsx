@@ -474,6 +474,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const storeCollapsed = usePanelCollapseStore((s) => s.collapsed.datasets);
   const collapsed = embedded ? false : storeCollapsed;
   const togglePanel = usePanelCollapseStore((s) => s.toggle);
+  const myLibraryCollapsed = usePanelCollapseStore((s) => s.collapsed.myLibrary);
   const setPanelCollapsed = usePanelCollapseStore((s) => s.setCollapsed);
   const uploadOpen = !usePanelCollapseStore((s) => s.collapsed.uploadTerrainAccordion);
   const setUploadOpen = useCallback(
@@ -1652,17 +1653,28 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           {/* ── My Library (folders + uploads), signed-in only ── */}
           {isSignedIn && (
             <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}>
-              <div
-                className="px-3 py-1 flex items-center gap-2"
-                style={{ fontSize: 10, letterSpacing: "0.12em", color: "#cbd5e1" }}
+              <button
+                type="button"
+                onClick={() => togglePanel("myLibrary")}
+                aria-expanded={!myLibraryCollapsed}
+                className="px-3 py-1 flex items-center gap-2 w-full hover:bg-white/5 transition-colors"
+                style={{
+                  fontSize: 10,
+                  letterSpacing: "0.12em",
+                  color: "#cbd5e1",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
               >
-                <span>▲ MY LIBRARY</span>
+                <span>{myLibraryCollapsed ? "▾ MY LIBRARY" : "▲ MY LIBRARY"}</span>
                 {userDatasetsLoading && (
                   <span className="animate-spin" style={{ fontSize: 9, color: "#cbd5e1" }}>◌</span>
                 )}
-              </div>
+              </button>
 
-              {userLoadError && (
+              {!myLibraryCollapsed && userLoadError && (
                 <div
                   data-testid="user-dataset-load-error"
                   style={{
@@ -1721,15 +1733,17 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                 </div>
               )}
 
-              <ErrorBoundary label="the dataset library">
-                <DatasetFolderTree
-                  datasets={userDatasets ?? []}
-                  activeUserDatasetId={pendingUserDatasetId ? null : activeUserDatasetId}
-                  loadingId={loadingId}
-                  onSelectDataset={handleSelectUserDataset}
-                  onDatasetsRemoved={handleDatasetsRemoved}
-                />
-              </ErrorBoundary>
+              {!myLibraryCollapsed && (
+                <ErrorBoundary label="the dataset library">
+                  <DatasetFolderTree
+                    datasets={userDatasets ?? []}
+                    activeUserDatasetId={pendingUserDatasetId ? null : activeUserDatasetId}
+                    loadingId={loadingId}
+                    onSelectDataset={handleSelectUserDataset}
+                    onDatasetsRemoved={handleDatasetsRemoved}
+                  />
+                </ErrorBoundary>
+              )}
             </div>
           )}
 
