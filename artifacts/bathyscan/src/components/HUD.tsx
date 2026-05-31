@@ -5,7 +5,7 @@ import { useGpsStore } from "@/lib/gpsStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useOfflineStore } from "@/lib/offlineStore";
-import { useSettingsStore } from "@/lib/settingsStore";
+import { useSettingsStore, FONT_SIZE_SCALE } from "@/lib/settingsStore";
 import { getBoundKey } from "@/lib/keyBindings";
 import { formatKeyCode } from "@/lib/keyLabel";
 import { useDriftStore } from "@/lib/driftStore";
@@ -96,7 +96,7 @@ export const HUD: React.FC = () => {
   // flips the per-temperature override without touching the global units.
   useSettingsStore((s) => s.temperatureUnit);
   const hudOpacity = useSettingsStore((s) => s.hudOpacity);
-  const largeHudText = useSettingsStore((s) => s.largeHudText);
+  const globalFontSize = useSettingsStore((s) => s.globalFontSize);
   const highContrastHud = useSettingsStore((s) => s.highContrastHud);
   const colorBlindSafePalette = useSettingsStore((s) => s.colorBlindSafePalette);
   const smoothTerrainSpikes = useSettingsStore((s) => s.smoothTerrainSpikes);
@@ -110,7 +110,7 @@ export const HUD: React.FC = () => {
     ? "0 0 8px rgba(251,191,36,0.65)"
     : "0 0 8px rgba(0,229,255,0.6)";
   const baseText = highContrastHud ? "#ffffff" : "#e2e8f0";
-  const fontScale = largeHudText ? 1.35 : 1;
+  const fontScale = FONT_SIZE_SCALE[globalFontSize] ?? 1;
 
   const isNarrow = useIsNarrow();
 

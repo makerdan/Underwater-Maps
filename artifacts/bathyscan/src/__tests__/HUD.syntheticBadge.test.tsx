@@ -65,34 +65,35 @@ vi.mock("@/lib/offlineStore", () => ({
     sel({ isOnline: true }),
 }));
 
-vi.mock("@/lib/settingsStore", () => ({
-  useSettingsStore: (
-    sel: (s: {
-      showCrosshairGps: boolean;
-      showCameraPosition: boolean;
-      showHeading: boolean;
-      coordinateFormat: "decimal";
-      depthUnit: "metres";
-      units: "metric";
-      hudOpacity: number;
-      largeHudText: boolean;
-      highContrastHud: boolean;
-      colorBlindSafePalette: boolean;
-    }) => unknown,
-  ) =>
-    sel({
-      showCrosshairGps: true,
-      showCameraPosition: true,
-      showHeading: true,
-      coordinateFormat: "decimal",
-      depthUnit: "metres",
-      units: "metric",
-      hudOpacity: 1,
-      largeHudText: false,
-      highContrastHud: false,
-      colorBlindSafePalette: false,
-    }),
-}));
+vi.mock("@/lib/settingsStore", () => {
+  const defaults = {
+    showCrosshairGps: true,
+    showCameraPosition: true,
+    showHeading: true,
+    coordinateFormat: "decimal" as const,
+    depthUnit: "metres" as const,
+    units: "metric" as const,
+    hudOpacity: 1,
+    globalFontSize: "medium" as const,
+    highContrastHud: false,
+    colorBlindSafePalette: false,
+  };
+  const useSettingsStore = Object.assign(
+    (sel: (s: typeof defaults) => unknown) => sel(defaults),
+    { getState: () => defaults },
+  );
+  return {
+    useSettingsStore,
+    FONT_SIZE_SCALE: {
+      smallest: 0.80,
+      small: 0.875,
+      medium: 1.0,
+      large: 1.15,
+      "x-large": 1.30,
+      largest: 1.45,
+    },
+  };
+});
 
 function makeTerrain(synthetic: boolean): TerrainData {
   return {

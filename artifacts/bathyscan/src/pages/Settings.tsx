@@ -1910,12 +1910,24 @@ function AccessibilitySection() {
           onChange={s.setColorBlindSafePalette}
           sublabel="Switch markers to a high-contrast palette"
         />
-        <ToggleRow
-          label="Large HUD Text"
-          value={s.largeHudText}
-          onChange={s.setLargeHudText}
-          sublabel="Increase HUD font size"
-        />
+        <div style={S.row}>
+          <div>
+            <div style={S.label}>Text Size</div>
+            <div style={S.sublabel}>Scales all panel and HUD text</div>
+          </div>
+          <Select
+            value={s.globalFontSize}
+            onChange={s.setGlobalFontSize}
+            options={[
+              { value: "smallest", label: "Smallest" },
+              { value: "small", label: "Small" },
+              { value: "medium", label: "Medium" },
+              { value: "large", label: "Large" },
+              { value: "x-large", label: "X-Large" },
+              { value: "largest", label: "Largest" },
+            ]}
+          />
+        </div>
         <ToggleRow
           label="High-Contrast HUD"
           value={s.highContrastHud}

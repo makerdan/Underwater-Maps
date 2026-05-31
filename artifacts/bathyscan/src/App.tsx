@@ -1517,20 +1517,43 @@ function ClerkProviderWithRoutes() {
  *
  * Exported so unit tests can mount the real component in isolation.
  */
+/** Maps each FontSizeLevel to a `--bs-font-scale` multiplier value. */
+const FONT_SCALE_VALUES: Record<import("@/lib/settingsStore").FontSizeLevel, number> = {
+  smallest: 0.80,
+  small: 0.875,
+  medium: 1.0,
+  large: 1.15,
+  "x-large": 1.30,
+  largest: 1.45,
+};
+
+/** Maps each FontSizeLevel to a body font-size in px (base 14 px). */
+const FONT_SIZE_PX: Record<import("@/lib/settingsStore").FontSizeLevel, string> = {
+  smallest: "11px",
+  small: "12px",
+  medium: "",
+  large: "16px",
+  "x-large": "18px",
+  largest: "20px",
+};
+
 export function AccessibilityClassesEffect() {
   const reducedMotion = useSettingsStore((st) => st.reducedMotion);
-  const largeHudText = useSettingsStore((st) => st.largeHudText);
+  const globalFontSize = useSettingsStore((st) => st.globalFontSize);
   const highContrastHud = useSettingsStore((st) => st.highContrastHud);
   const colorBlindSafePalette = useSettingsStore((st) => st.colorBlindSafePalette);
   const brightDaylight = useSettingsStore((st) => st.brightDaylight);
   useEffect(() => {
     const b = document.body;
     b.classList.toggle("bs-reduced-motion", reducedMotion);
-    b.classList.toggle("bs-large-hud", largeHudText);
     b.classList.toggle("bs-high-contrast-hud", highContrastHud);
     b.classList.toggle("bs-cb-palette", colorBlindSafePalette);
     b.classList.toggle("bs-daylight", brightDaylight);
-  }, [reducedMotion, largeHudText, highContrastHud, colorBlindSafePalette, brightDaylight]);
+    const scale = FONT_SCALE_VALUES[globalFontSize] ?? 1;
+    const sizePx = FONT_SIZE_PX[globalFontSize] ?? "";
+    b.style.setProperty("--bs-font-scale", String(scale));
+    b.style.fontSize = sizePx;
+  }, [reducedMotion, globalFontSize, highContrastHud, colorBlindSafePalette, brightDaylight]);
   return null;
 }
 

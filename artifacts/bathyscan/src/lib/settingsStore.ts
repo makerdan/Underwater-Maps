@@ -52,7 +52,7 @@ import {
 } from "./keyBindings";
 import { usePanelCollapseStore, type PanelId } from "./panelCollapseStore";
 
-export const SETTINGS_SCHEMA_VERSION = 15;
+export const SETTINGS_SCHEMA_VERSION = 16;
 
 /**
  * Standard-mapping gamepad button index used to trigger the crosshair
@@ -117,6 +117,23 @@ export type TemperatureUnit = "auto" | "celsius" | "fahrenheit";
 export type CameraSpawnBehaviour = "deepest" | "home" | "last";
 export type MarkerType = "fish" | "shipwreck" | "coral" | "vent" | "custom" | "depth_pole" | "log" | "vegetation" | "sample" | "bass" | "trout" | "pike" | "walleye" | "crayfish";
 export type JoystickMode = "auto" | "always" | "off";
+
+export type FontSizeLevel = "smallest" | "small" | "medium" | "large" | "x-large" | "largest";
+
+/**
+ * Maps each FontSizeLevel to a CSS scale multiplier applied via
+ * `--bs-font-scale` on <body>. "medium" (1.0) matches the pre-existing
+ * default appearance. Components that inline-style their font size (HUD,
+ * panels) multiply their base px value by this factor.
+ */
+export const FONT_SIZE_SCALE: Record<FontSizeLevel, number> = {
+  smallest: 0.80,
+  small: 0.875,
+  medium: 1.0,
+  large: 1.15,
+  "x-large": 1.30,
+  largest: 1.45,
+};
 
 /**
  * The dataset that should load automatically when the app starts.
@@ -312,8 +329,11 @@ export interface SettingsState {
   // ── Accessibility ────────────────────────────────────────────────────
   reducedMotion: boolean;
   colorBlindSafePalette: boolean;
+  /** @deprecated replaced by globalFontSize — kept for v15→v16 migration only */
   largeHudText: boolean;
   highContrastHud: boolean;
+  /** 6-level global text size selector. "medium" = current default appearance. */
+  globalFontSize: FontSizeLevel;
   /** Outdoor display mode: opaque panels, bold text, cobalt accent for direct-sunlight use. */
   brightDaylight: boolean;
   /**
@@ -543,6 +563,7 @@ interface SettingsActions {
   setHighContrastHud: (v: boolean) => void;
   setBrightDaylight: (v: boolean) => void;
   setColormapUserSet: (v: boolean) => void;
+  setGlobalFontSize: (v: FontSizeLevel) => void;
 
   // Account
   setTelemetryOptIn: (v: boolean) => void;
@@ -814,6 +835,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   highContrastHud: false,
   brightDaylight: false,
   colormapUserSet: false,
+  globalFontSize: "medium",
 
   // Account
   telemetryOptIn: false,
@@ -906,7 +928,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   data: ["defaultRegion", "autoLoadLastDataset", "defaultMapLoad"],
   accessibility: [
     "reducedMotion", "colorBlindSafePalette", "largeHudText", "highContrastHud", "brightDaylight",
-    "colormapUserSet",
+    "colormapUserSet", "globalFontSize",
   ],
   account: ["telemetryOptIn", "llmDisclosureAcknowledged"],
   environment: ["waterType"],
@@ -1089,6 +1111,7 @@ export const useSettingsStore = create<SettingsStore>()(
         setHighContrastHud: setter("highContrastHud"),
         setBrightDaylight: setter("brightDaylight"),
         setColormapUserSet: setter("colormapUserSet"),
+        setGlobalFontSize: setter("globalFontSize"),
 
         // Account
         setTelemetryOptIn: setter("telemetryOptIn"),
@@ -1390,12 +1413,21 @@ export const useSettingsStore = create<SettingsStore>()(
               (migratedOverlays as Record<string, unknown>)[key] = DEFAULT_SETTINGS[key];
             }
           }
+          // v15 → v16: replace binary largeHudText with 6-level globalFontSize.
+          // Users who had largeHudText: true → "large"; everyone else → "medium".
+          const migratedFontSize: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).globalFontSize === undefined) {
+            migratedFontSize.globalFontSize = (rest as Record<string, unknown>).largeHudText === true
+              ? "large"
+              : "medium";
+          }
           return {
             ...DEFAULT_SETTINGS,
             ...rest,
             ...split,
             ...migratedContours,
             ...migratedOverlays,
+            ...migratedFontSize,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,

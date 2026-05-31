@@ -34,8 +34,10 @@ interface MockTerrainState {
 
 let mockGps: MockGpsState = { active: false, position: null };
 let mockTerrain: MockTerrainState = { overviewGrid: null };
-/** Toggled per-test; controls whether ViewscreenTooltip renders its Radix wrapper. */
-let mockShowUiTooltips = false;
+/** Mutable ref hoisted before vi.mock so the factory can read its .value reactively. */
+const showUiTooltipsRef = vi.hoisted(() => ({ value: false }));
+/** Convenience alias used by test bodies. */
+const setShowUiTooltips = (v: boolean) => { showUiTooltipsRef.value = v; };
 
 const makeApiClientMock = vi.hoisted(() => {
   function noop() {}
@@ -92,38 +94,34 @@ vi.mock("@/lib/offlineStore", () => ({
     sel({ isOnline: true }),
 }));
 
-vi.mock("@/lib/settingsStore", () => ({
-  useSettingsStore: (
-    sel: (s: {
-      showCrosshairGps: boolean;
-      showHeading: boolean;
-      coordinateFormat: "decimal";
-      units: "metric";
-      temperatureUnit: "celsius";
-      hudOpacity: number;
-      largeHudText: boolean;
-      highContrastHud: boolean;
-      colorBlindSafePalette: boolean;
-      smoothTerrainSpikes: boolean;
-      showUiTooltips: boolean;
-      keyBindings: Record<string, string>;
-    }) => unknown,
-  ) =>
-    sel({
-      showCrosshairGps: false,
-      showHeading: false,
-      coordinateFormat: "decimal",
-      units: "metric",
-      temperatureUnit: "celsius",
-      hudOpacity: 1,
-      largeHudText: false,
-      highContrastHud: false,
-      colorBlindSafePalette: false,
-      smoothTerrainSpikes: true,
-      showUiTooltips: mockShowUiTooltips,
-      keyBindings: {},
-    }),
-}));
+vi.mock("@/lib/settingsStore", () => {
+  type S = {
+    showCrosshairGps: boolean; showHeading: boolean;
+    coordinateFormat: "decimal"; units: "metric"; temperatureUnit: "celsius";
+    hudOpacity: number; globalFontSize: "medium"; highContrastHud: boolean;
+    colorBlindSafePalette: boolean; smoothTerrainSpikes: boolean;
+    showUiTooltips: boolean; keyBindings: Record<string, string>;
+  };
+  const getState = (): S => ({
+    showCrosshairGps: false, showHeading: false,
+    coordinateFormat: "decimal", units: "metric", temperatureUnit: "celsius",
+    hudOpacity: 1, globalFontSize: "medium", highContrastHud: false,
+    colorBlindSafePalette: false, smoothTerrainSpikes: true,
+    showUiTooltips: showUiTooltipsRef.value,
+    keyBindings: {},
+  });
+  const useSettingsStore = Object.assign(
+    (sel: (s: S) => unknown) => sel(getState()),
+    { getState },
+  );
+  return {
+    useSettingsStore,
+    FONT_SIZE_SCALE: {
+      smallest: 0.80, small: 0.875, medium: 1.0,
+      large: 1.15, "x-large": 1.30, largest: 1.45,
+    },
+  };
+});
 
 /** A grid that covers 0–10 lat, 0–10 lon. */
 const GRID_IN: MockOverviewGrid = { minLat: 0, maxLat: 10, minLon: 0, maxLon: 10 };
@@ -160,7 +158,7 @@ describe("HUD — GPS Follow Mode button", () => {
     });
     mockGps = { active: false, position: null };
     mockTerrain = { overviewGrid: null };
-    mockShowUiTooltips = false;
+    setShowUiTooltips(false);
   });
 
   it("does not render the Follow Me button when GPS is inactive", () => {
@@ -210,7 +208,7 @@ describe("HUD — GPS Follow Mode button", () => {
   });
 
   it("shows the out-of-bounds tooltip text when GPS is active but outside the dataset", async () => {
-    mockShowUiTooltips = true;
+    setShowUiTooltips(true);
     mockGps = { active: true, position: POS_OUT };
     mockTerrain = { overviewGrid: GRID_IN };
 

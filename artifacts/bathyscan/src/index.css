@@ -50,6 +50,7 @@
 }
 
 :root, .dark {
+  --bs-font-scale: 1;
   --background: 221 60% 4%;
   --foreground: 210 30% 88%;
   --border: 221 30% 18%;
@@ -96,13 +97,6 @@ body.bs-reduced-motion *::after {
   animation-iteration-count: 1 !important;
   transition-duration: 0.001ms !important;
   scroll-behavior: auto !important;
-}
-
-/* Larger HUD text — base font bump applies to anything using inherited
-   sizing; individual components (HUD, TidePanel, HabitatPanel) inflate
-   their inline font-size by reading `largeHudText` from settings. */
-body.bs-large-hud {
-  font-size: 17px;
 }
 
 /* High contrast HUD: brighter text + darker panel backgrounds. Components

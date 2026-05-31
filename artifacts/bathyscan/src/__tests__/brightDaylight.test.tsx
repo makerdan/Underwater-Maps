@@ -22,8 +22,8 @@ import { render, act } from "@testing-library/react";
 
 // ---- Real production exports under test ----
 import { AccessibilityClassesEffect } from "@/App";
-import { useSettingsStore, DEFAULT_SETTINGS, deriveEffectiveColormapTheme } from "@/lib/settingsStore";
-import type { ColormapTheme } from "@/lib/settingsStore";
+import { useSettingsStore, DEFAULT_SETTINGS, deriveEffectiveColormapTheme, FONT_SIZE_SCALE } from "@/lib/settingsStore";
+import type { ColormapTheme, FontSizeLevel } from "@/lib/settingsStore";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -32,6 +32,8 @@ import type { ColormapTheme } from "@/lib/settingsStore";
 function resetStore() {
   try { localStorage.clear(); } catch { /* ignore */ }
   useSettingsStore.setState({ ...useSettingsStore.getState(), ...DEFAULT_SETTINGS });
+  document.body.style.removeProperty("--bs-font-scale");
+  document.body.style.fontSize = "";
 }
 
 // ---------------------------------------------------------------------------
@@ -99,7 +101,6 @@ describe("AccessibilityClassesEffect — body.bs-daylight", () => {
 
     act(() => { useSettingsStore.getState().setBrightDaylight(true); });
     expect(document.body.classList.contains("bs-reduced-motion")).toBe(false);
-    expect(document.body.classList.contains("bs-large-hud")).toBe(false);
     expect(document.body.classList.contains("bs-high-contrast-hud")).toBe(false);
     expect(document.body.classList.contains("bs-cb-palette")).toBe(false);
     expect(document.body.classList.contains("bs-daylight")).toBe(true);
@@ -375,5 +376,63 @@ describe("CSS cascade — custom properties change on-screen when bs-daylight is
 
     document.body.classList.add("bs-daylight");
     expect(getComputedStyle(child).getPropertyValue("--accent").trim()).toBe("224 75% 40%");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// globalFontSize — AccessibilityClassesEffect sets --bs-font-scale correctly
+// ---------------------------------------------------------------------------
+
+describe("AccessibilityClassesEffect — globalFontSize applies --bs-font-scale", () => {
+  beforeEach(() => {
+    resetStore();
+    document.body.style.removeProperty("--bs-font-scale");
+    document.body.style.fontSize = "";
+  });
+
+  afterEach(() => {
+    document.body.style.removeProperty("--bs-font-scale");
+    document.body.style.fontSize = "";
+  });
+
+  const LEVELS: FontSizeLevel[] = ["smallest", "small", "medium", "large", "x-large", "largest"];
+
+  for (const level of LEVELS) {
+    it(`sets --bs-font-scale to ${FONT_SIZE_SCALE[level]} for level "${level}"`, () => {
+      useSettingsStore.getState().setGlobalFontSize(level);
+      render(<AccessibilityClassesEffect />);
+      const cssVar = document.body.style.getPropertyValue("--bs-font-scale");
+      expect(Number(cssVar)).toBeCloseTo(FONT_SIZE_SCALE[level], 3);
+    });
+  }
+
+  it("defaults to --bs-font-scale 1 for medium (no font-size override)", () => {
+    render(<AccessibilityClassesEffect />);
+    expect(useSettingsStore.getState().globalFontSize).toBe("medium");
+    const cssVar = document.body.style.getPropertyValue("--bs-font-scale");
+    expect(Number(cssVar)).toBe(1);
+    expect(document.body.style.fontSize).toBe("");
+  });
+
+  it("sets a non-empty font-size for levels other than medium", () => {
+    const nonMedium: FontSizeLevel[] = ["smallest", "small", "large", "x-large", "largest"];
+    for (const level of nonMedium) {
+      act(() => { useSettingsStore.getState().setGlobalFontSize(level); });
+    }
+    render(<AccessibilityClassesEffect />);
+    expect(document.body.style.fontSize).not.toBe("");
+  });
+
+  it("updates --bs-font-scale reactively when globalFontSize changes after mount", () => {
+    render(<AccessibilityClassesEffect />);
+
+    act(() => { useSettingsStore.getState().setGlobalFontSize("largest"); });
+    expect(Number(document.body.style.getPropertyValue("--bs-font-scale"))).toBeCloseTo(1.45, 3);
+
+    act(() => { useSettingsStore.getState().setGlobalFontSize("smallest"); });
+    expect(Number(document.body.style.getPropertyValue("--bs-font-scale"))).toBeCloseTo(0.80, 3);
+
+    act(() => { useSettingsStore.getState().setGlobalFontSize("medium"); });
+    expect(Number(document.body.style.getPropertyValue("--bs-font-scale"))).toBe(1);
   });
 });
