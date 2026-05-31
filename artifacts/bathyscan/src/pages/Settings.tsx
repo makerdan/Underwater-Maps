@@ -1473,7 +1473,7 @@ function CurrentsSection() {
           label="Enable Currents Simulation"
           value={s.currentsEnabled}
           onChange={s.setCurrentsEnabled}
-          sublabel="Bathymetry-shaped flow field with particles, arrows, and streamlines"
+          sublabel="Physics simulation shaped by the seafloor terrain — powers Drift Planner and differs from the NOAA surface overlay in the left panel"
         />
         <SelectRow
           label="Ambient Source"

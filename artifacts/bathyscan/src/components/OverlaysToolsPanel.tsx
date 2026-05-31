@@ -382,7 +382,7 @@ export const OverlaysToolsPanel: React.FC = () => {
             active={currentOverlayActive}
             onClick={() => setCurrentOverlayActive(!currentOverlayActive)}
             label="↬ CURRENT"
-            tooltip="Toggle sub-surface current arrows overlay"
+            tooltip="Show real-time NOAA tidal current arrows — live surface-conditions data, not the seafloor simulation"
             activeBg="rgba(0,229,255,0.10)"
             activeBorder="rgba(34,211,238,0.5)"
             activeColor="#22d3ee"
