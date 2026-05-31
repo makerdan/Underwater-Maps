@@ -46,7 +46,7 @@ import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMarkersQueryKey } from "@workspace/api-client-react";
 import { useTerrainStore } from "@/lib/terrainStore";
-import { usePaletteStore, DEFAULT_SHALLOW, DEFAULT_DEEP, PALETTE_PRESETS, MID1_HEX, MID2_HEX, customStopsFromPreset, bandColorsFromPreset, DEFAULT_BAND_COLORS, DEFAULT_BAND_BOUNDARIES, MIN_BOUNDARY_GAP_FT, type CustomStop } from "@/lib/paletteStore";
+import { usePaletteStore, DEFAULT_SHALLOW, DEFAULT_DEEP, PALETTE_PRESETS, MID1_HEX, MID2_HEX, bandColorsFromPreset, DEFAULT_BAND_COLORS, DEFAULT_BAND_BOUNDARIES, MIN_BOUNDARY_GAP_FT } from "@/lib/paletteStore";
 import { colormapCanvas, colormapCssGradient, OCEAN_MAX_DEPTH_FT } from "@/lib/colormap";
 import { formatDepth } from "@/lib/units";
 import type { ColormapTheme } from "@/lib/settingsStore";
@@ -3642,12 +3642,6 @@ function PalettePickerCard() {
   const setShallow = usePaletteStore((s) => s.setShallow);
   const setDeep = usePaletteStore((s) => s.setDeep);
   const reset = usePaletteStore((s) => s.reset);
-  const customStops = usePaletteStore((s) => s.customStops);
-  const setCustomStops = usePaletteStore((s) => s.setCustomStops);
-  const addCustomStop = usePaletteStore((s) => s.addCustomStop);
-  const removeCustomStop = usePaletteStore((s) => s.removeCustomStop);
-  const updateCustomStop = usePaletteStore((s) => s.updateCustomStop);
-  const resetCustomStops = usePaletteStore((s) => s.resetCustomStops);
   const setBandColors = usePaletteStore((s) => s.setBandColors);
 
   const colormapTheme = useSettingsStore((s) => s.colormapTheme);
@@ -3674,7 +3668,7 @@ function PalettePickerCard() {
     hctx.drawImage(vert, 0, 0, 14, 240);
     hctx.restore();
     previewRef.current.src = horiz.toDataURL();
-  }, [shallow, deep, customStops, colormapTheme, bandColorsKey, bandBoundariesKey]);
+  }, [shallow, deep, colormapTheme, bandColorsKey, bandBoundariesKey]);
 
   const isDefault = shallow.toLowerCase() === DEFAULT_SHALLOW.toLowerCase()
     && deep.toLowerCase() === DEFAULT_DEEP.toLowerCase();
@@ -3744,9 +3738,9 @@ function PalettePickerCard() {
                   setDeep(preset.deep);
                   // Always seed band colours from the preset so the per-band
                   // editor and the Ocean legend look correct after one click.
+                  // Custom mode now also renders from bandColors, so one call
+                  // covers both themes.
                   setBandColors(bandColorsFromPreset(preset));
-                  // In Custom mode also seed the editable stops.
-                  if (isCustom) setCustomStops(customStopsFromPreset(preset));
                 }}
                 style={{
                   display: "flex",
@@ -3872,11 +3866,7 @@ function PalettePickerCard() {
       )}
 
       {isCustom && (
-        <CustomStopsEditor
-          stops={customStops}
-          onUpdate={updateCustomStop}
-          onRemove={removeCustomStop}
-          onAdd={addCustomStop}
+        <CustomBandColorEditor
           labelStyle={labelStyle}
           hexStyle={hexStyle}
           colorInputStyle={colorInputStyle}
@@ -3887,10 +3877,7 @@ function PalettePickerCard() {
       <div style={{ padding: "10px 16px 14px", display: "flex", justifyContent: "flex-end" }}>
         <button
           data-testid="palette-reset-btn"
-          onClick={() => {
-            if (isCustom) resetCustomStops();
-            else reset();
-          }}
+          onClick={() => { reset(); }}
           disabled={!isCustom && isDefault}
           style={{
             background: "rgba(0,229,255,0.06)",
@@ -3912,118 +3899,77 @@ function PalettePickerCard() {
 }
 
 /**
- * Custom palette stop editor — list of rows with colour swatch + position
- * slider + remove button, plus an "Add stop" button. Edits flow through
- * paletteStore and re-tint the 3D mesh and preview gradient live.
+ * Custom palette band-colour editor — 10 fixed rows, one per depth band,
+ * labelled with their depth range and each holding a colour picker. Edits
+ * flow through paletteStore.setBandColor and re-tint the 3D mesh live.
+ *
+ * Boundaries are the same fixed DEFAULT_BAND_BOUNDARIES used by the Ocean
+ * theme; only the colour for each band is user-editable here.
  */
-function CustomStopsEditor({
-  stops, onUpdate, onRemove, onAdd, labelStyle, hexStyle, colorInputStyle,
+function CustomBandColorEditor({
+  labelStyle,
+  hexStyle,
+  colorInputStyle,
 }: {
-  stops: CustomStop[];
-  onUpdate: (i: number, patch: Partial<CustomStop>) => void;
-  onRemove: (i: number) => void;
-  onAdd: () => void;
   labelStyle: React.CSSProperties;
   hexStyle: React.CSSProperties;
   colorInputStyle: React.CSSProperties;
 }) {
-  const canRemove = stops.length > 2;
+  const bandColors = usePaletteStore((s) => s.bandColors);
+  const setBandColor = usePaletteStore((s) => s.setBandColor);
+  const units = useSettingsStore((s) => s.units);
+
   return (
     <div style={{ padding: "6px 16px 8px" }} data-testid="palette-custom-editor">
-      <div style={{ ...labelStyle, marginBottom: 6 }}>STOPS ({stops.length})</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {stops.map((stop, i) => (
-          <div
-            key={i}
-            data-testid={`palette-custom-stop-${i}`}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "auto 1fr auto auto auto",
-              alignItems: "center",
-              gap: 8,
-              padding: "6px 0",
-              borderBottom: "1px solid rgba(0,229,255,0.06)",
-            }}
-          >
-            <input
-              type="color"
-              data-testid={`palette-custom-stop-${i}-color`}
-              value={stop.hex}
-              onChange={(e) => onUpdate(i, { hex: e.target.value })}
-              style={colorInputStyle}
-              aria-label={`Stop ${i + 1} colour`}
-            />
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.01}
-              data-testid={`palette-custom-stop-${i}-position`}
-              value={stop.position}
-              onChange={(e) => onUpdate(i, { position: Number(e.target.value) })}
-              style={{ width: "100%" }}
-              aria-label={`Stop ${i + 1} position`}
-            />
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={1}
-              data-testid={`palette-custom-stop-${i}-percent`}
-              value={Math.round(stop.position * 100)}
-              onChange={(e) => {
-                const pct = Number(e.target.value);
-                if (Number.isFinite(pct)) {
-                  onUpdate(i, { position: Math.max(0, Math.min(1, pct / 100)) });
-                }
-              }}
-              style={{ ...hexStyle, width: 48 }}
-              aria-label={`Stop ${i + 1} position percent`}
-            />
-            <span style={{ ...labelStyle, fontFamily: "inherit", color: "#cbd5e1", minWidth: 22 }}>%</span>
-            <button
-              type="button"
-              data-testid={`palette-custom-stop-${i}-remove`}
-              onClick={() => onRemove(i)}
-              disabled={!canRemove}
-              title={canRemove ? "Remove stop" : "Minimum of 2 stops"}
+      <div style={{ ...labelStyle, marginBottom: 6 }}>DEPTH BAND COLOURS</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {bandColors.map((color, i) => {
+          const loFt = DEFAULT_BAND_BOUNDARIES[i]!;
+          const hiFt = DEFAULT_BAND_BOUNDARIES[i + 1]!;
+          const loM = loFt * FT_TO_M_SETTINGS;
+          const hiM = hiFt * FT_TO_M_SETTINGS;
+          const bandLabel = `${formatDepth(loM, { units })} – ${formatDepth(hiM, { units })}`;
+          return (
+            <div
+              key={i}
+              data-testid={`palette-custom-band-${i}`}
               style={{
-                background: "transparent",
-                border: "1px solid rgba(0,229,255,0.2)",
-                borderRadius: 3,
-                color: canRemove ? "#67e8f9" : "#64748b",
-                fontSize: 11,
-                width: 24,
-                height: 24,
-                cursor: canRemove ? "pointer" : "not-allowed",
-                fontFamily: "inherit",
+                display: "grid",
+                gridTemplateColumns: "90px auto 1fr",
+                alignItems: "center",
+                gap: 8,
+                padding: "5px 0",
+                borderBottom: "1px solid rgba(0,229,255,0.05)",
               }}
-              aria-label={`Remove stop ${i + 1}`}
             >
-              ×
-            </button>
-          </div>
-        ))}
-      </div>
-      <div style={{ display: "flex", justifyContent: "flex-start", marginTop: 8 }}>
-        <button
-          type="button"
-          data-testid="palette-custom-add"
-          onClick={onAdd}
-          style={{
-            background: "rgba(0,229,255,0.06)",
-            border: "1px solid rgba(0,229,255,0.25)",
-            borderRadius: 3,
-            color: "#67e8f9",
-            fontSize: 9,
-            letterSpacing: "0.15em",
-            padding: "4px 12px",
-            cursor: "pointer",
-            fontFamily: "inherit",
-          }}
-        >
-          + ADD STOP
-        </button>
+              <span
+                style={{
+                  ...labelStyle,
+                  fontSize: 9,
+                  letterSpacing: "0.05em",
+                  color: "#cbd5e1",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {bandLabel}
+              </span>
+              <input
+                type="color"
+                data-testid={`palette-custom-band-${i}-color`}
+                value={color}
+                onChange={(e) => setBandColor(i, e.target.value)}
+                style={colorInputStyle}
+                aria-label={`Band ${i + 1} colour: ${bandLabel}`}
+              />
+              <DebouncedHexInput
+                value={color}
+                onCommit={(hex) => setBandColor(i, hex)}
+                style={hexStyle}
+                testId={`palette-custom-band-${i}-hex`}
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );

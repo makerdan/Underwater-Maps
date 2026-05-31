@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { ColormapTheme } from "./settingsStore";
-import { usePaletteStore, DEFAULT_CUSTOM_STOPS, DEFAULT_BAND_COLORS, DEFAULT_BAND_BOUNDARIES } from "./paletteStore";
+import { usePaletteStore, DEFAULT_BAND_COLORS, DEFAULT_BAND_BOUNDARIES } from "./paletteStore";
 
 interface ColorStop {
   t: number;
@@ -51,27 +51,18 @@ function getOceanStops(): ColorStop[] {
 }
 
 /**
- * Build the user's Custom palette stops from paletteStore. Endpoints are
- * pinned to t=0 and t=1 if the persisted stops don't already span the full
- * range, and identical positions are nudged apart so the interpolator never
- * divides by zero. Returns the Default Ocean stops if the persisted data
- * has fewer than 2 usable entries.
+ * Build the Custom theme colour stops from paletteStore. The Custom theme
+ * now shares the same `bandColors` and `bandBoundaries` data as the Ocean
+ * theme, so this function delegates directly to `getOceanStops()`. Both
+ * themes therefore render the same per-band colour gradient; the only
+ * difference is which UI controls the user sees in Settings.
+ *
+ * Old `customStops`-based rendering has been removed. Persisted `customStops`
+ * in localStorage are retained in the store's merge guard to avoid hydration
+ * crashes on upgrade, but they no longer affect the rendered output.
  */
 function getCustomStops(): ColorStop[] {
-  const raw = usePaletteStore.getState().customStops;
-  const source = raw.length >= 2 ? raw : DEFAULT_CUSTOM_STOPS;
-  const sorted = [...source].sort((a, b) => a.position - b.position);
-  const stops: ColorStop[] = sorted.map((s) => ({
-    t: Math.max(0, Math.min(1, s.position)),
-    color: new THREE.Color(s.hex),
-  }));
-  if (stops[0]!.t > 0) {
-    stops.unshift({ t: 0, color: stops[0]!.color.clone() });
-  }
-  if (stops[stops.length - 1]!.t < 1) {
-    stops.push({ t: 1, color: stops[stops.length - 1]!.color.clone() });
-  }
-  return stops;
+  return getOceanStops();
 }
 
 const FIXED_THEME_STOPS: Record<Exclude<ColormapTheme, "ocean" | "custom">, ColorStop[]> = {

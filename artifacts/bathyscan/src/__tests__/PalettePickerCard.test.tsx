@@ -48,7 +48,6 @@ import { Settings } from "@/pages/Settings";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
 import {
   usePaletteStore,
-  DEFAULT_CUSTOM_STOPS,
   DEFAULT_BAND_COLORS,
   PALETTE_PRESETS,
   bandColorsFromPreset,
@@ -77,86 +76,42 @@ describe("PalettePickerCard — custom mode", () => {
     useSettingsStore.getState().setColormapTheme("custom");
   });
 
-  it("reveals the custom stops editor and hides shallow/deep inputs", () => {
+  it("reveals the custom band editor and hides shallow/deep inputs", () => {
     render(<Settings />);
     expect(screen.getByTestId("palette-custom-editor")).toBeInTheDocument();
     expect(screen.queryByTestId("palette-shallow-hex")).not.toBeInTheDocument();
     expect(screen.queryByTestId("palette-deep-hex")).not.toBeInTheDocument();
   });
 
-  it("renders one row per stop matching paletteStore state", () => {
+  it("renders exactly 10 band-colour rows", () => {
     render(<Settings />);
-    const initial = usePaletteStore.getState().customStops.length;
-    for (let i = 0; i < initial; i++) {
-      expect(screen.getByTestId(`palette-custom-stop-${i}`)).toBeInTheDocument();
+    for (let i = 0; i < 10; i++) {
+      expect(screen.getByTestId(`palette-custom-band-${i}`)).toBeInTheDocument();
     }
-    expect(
-      screen.queryByTestId(`palette-custom-stop-${initial}`),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("palette-custom-band-10")).not.toBeInTheDocument();
   });
 
-  it("adding a stop adds a new row and grows paletteStore", async () => {
+  it("each band row shows a colour picker bound to bandColors[i]", () => {
     render(<Settings />);
-    const before = usePaletteStore.getState().customStops.length;
-    fireEvent.click(screen.getByTestId("palette-custom-add"));
+    const bc = usePaletteStore.getState().bandColors;
+    for (let i = 0; i < 10; i++) {
+      const picker = screen.getByTestId(`palette-custom-band-${i}-color`) as HTMLInputElement;
+      expect(picker.value.toLowerCase()).toBe(bc[i]!.toLowerCase());
+    }
+  });
+
+  it("editing a band colour picker updates paletteStore.bandColors", async () => {
+    render(<Settings />);
+    const colorInput = screen.getByTestId("palette-custom-band-0-color") as HTMLInputElement;
+    fireEvent.change(colorInput, { target: { value: "#ff00aa" } });
     await waitFor(() => {
-      expect(usePaletteStore.getState().customStops.length).toBe(before + 1);
-    });
-    expect(screen.getByTestId(`palette-custom-stop-${before}`)).toBeInTheDocument();
-  });
-
-  it("removing a stop shrinks paletteStore and re-renders the editor", async () => {
-    render(<Settings />);
-    const before = usePaletteStore.getState().customStops.length;
-    expect(before).toBeGreaterThan(2);
-    fireEvent.click(screen.getByTestId("palette-custom-stop-1-remove"));
-    await waitFor(() => {
-      expect(usePaletteStore.getState().customStops.length).toBe(before - 1);
+      expect(usePaletteStore.getState().bandColors[0]).toBe("#ff00aa");
     });
   });
 
-  it("remove buttons are disabled when only 2 stops remain", () => {
-    // Reduce to exactly 2 stops before render so all remove buttons are disabled.
-    // Done before render() so no mounted component re-renders from this update.
-    usePaletteStore.setState({
-      customStops: [
-        { position: 0, hex: "#aabbcc" },
-        { position: 1, hex: "#001122" },
-      ],
-    });
-    render(<Settings />);
-    const remove0 = screen.getByTestId("palette-custom-stop-0-remove") as HTMLButtonElement;
-    const remove1 = screen.getByTestId("palette-custom-stop-1-remove") as HTMLButtonElement;
-    expect(remove0.disabled).toBe(true);
-    expect(remove1.disabled).toBe(true);
-  });
-
-  it("editing a stop's colour updates paletteStore", async () => {
-    render(<Settings />);
-    const colorInput = screen.getByTestId("palette-custom-stop-0-color") as HTMLInputElement;
-    fireEvent.input(colorInput, { target: { value: "#ff00aa" } });
-    await waitFor(() => {
-      expect(usePaletteStore.getState().customStops[0]!.hex).toBe("#ff00aa");
-    });
-  });
-
-  it("editing a stop's position updates paletteStore (and may resort)", async () => {
-    render(<Settings />);
-    const pct = screen.getByTestId("palette-custom-stop-0-percent") as HTMLInputElement;
-    fireEvent.change(pct, { target: { value: "80" } });
-    await waitFor(() => {
-      const stops = usePaletteStore.getState().customStops;
-      // 0.8 must now exist somewhere in the (resorted) list.
-      expect(stops.some((s) => Math.abs(s.position - 0.8) < 0.001)).toBe(true);
-    });
-  });
-
-  it("preview image's src is re-assigned after stops are mutated", async () => {
+  it("preview image's src is re-assigned after a band colour changes", async () => {
     render(<Settings />);
     const preview = screen.getByTestId("palette-preview") as HTMLImageElement;
-    // The preview effect runs on mount and again on every store change. In
-    // jsdom the mocked canvas returns no real data, but we can still verify
-    // the effect re-fires by spying on the src setter.
     const setSrc = vi.fn();
     Object.defineProperty(preview, "src", {
       configurable: true,
@@ -164,40 +119,39 @@ describe("PalettePickerCard — custom mode", () => {
       set: setSrc,
     });
     setSrc.mockClear();
-    fireEvent.click(screen.getByTestId("palette-custom-add"));
+    act(() => {
+      usePaletteStore.getState().setBandColor(2, "#aabbcc");
+    });
     await waitFor(() => {
-      expect(usePaletteStore.getState().customStops.length).toBeGreaterThan(
-        DEFAULT_CUSTOM_STOPS.length - 1,
-      );
       expect(setSrc).toHaveBeenCalled();
     });
   });
 
-  it("clicking a preset chip in Custom mode seeds the editable stops", async () => {
+  it("clicking a preset chip in Custom mode seeds bandColors with interpolated values", async () => {
     render(<Settings />);
     const highContrast = PALETTE_PRESETS.find((p) => p.id === "high-contrast")!;
     fireEvent.click(screen.getByTestId(`palette-preset-${highContrast.id}`));
+    const expected = bandColorsFromPreset(highContrast);
     await waitFor(() => {
-      const stops = usePaletteStore.getState().customStops;
-      expect(stops).toHaveLength(4);
-      expect(stops[0]!.hex.toLowerCase()).toBe(highContrast.shallow.toLowerCase());
-      expect(stops[stops.length - 1]!.hex.toLowerCase()).toBe(
-        highContrast.deep.toLowerCase(),
-      );
+      const bc = usePaletteStore.getState().bandColors;
+      expect(bc).toHaveLength(10);
+      expected.forEach((c, i) => {
+        expect(bc[i]!.toLowerCase()).toBe(c.toLowerCase());
+      });
     });
   });
 
-  it("Reset to defaults restores the default custom stops", async () => {
+  it("Reset to defaults restores DEFAULT_BAND_COLORS", async () => {
     render(<Settings />);
     act(() => {
-      usePaletteStore.getState().setCustomStops([
-        { position: 0, hex: "#abcdef" },
-        { position: 1, hex: "#fedcba" },
-      ]);
+      usePaletteStore.getState().setBandColor(3, "#abcdef");
     });
     fireEvent.click(screen.getByTestId("palette-reset-btn"));
     await waitFor(() => {
-      expect(usePaletteStore.getState().customStops).toEqual(DEFAULT_CUSTOM_STOPS);
+      const bc = usePaletteStore.getState().bandColors;
+      DEFAULT_BAND_COLORS.forEach((c, i) => {
+        expect(bc[i]).toBe(c);
+      });
     });
   });
 });

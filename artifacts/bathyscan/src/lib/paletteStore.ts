@@ -223,10 +223,18 @@ interface PaletteStore {
   bandBoundaries: number[];
   setShallow: (hex: string) => void;
   setDeep: (hex: string) => void;
+  /**
+   * @deprecated Custom theme now renders from `bandColors`/`bandBoundaries`.
+   * These actions are retained for localStorage hydration safety only.
+   */
   setCustomStops: (stops: CustomStop[]) => void;
+  /** @deprecated See `setCustomStops`. */
   addCustomStop: () => void;
+  /** @deprecated See `setCustomStops`. */
   removeCustomStop: (index: number) => void;
+  /** @deprecated See `setCustomStops`. */
   updateCustomStop: (index: number, patch: Partial<CustomStop>) => void;
+  /** @deprecated See `setCustomStops`. */
   resetCustomStops: () => void;
   /** Set a single band colour by index (0–9). Syncs index 0 → shallow. */
   setBandColor: (index: number, hex: string) => void;

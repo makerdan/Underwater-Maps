@@ -40,7 +40,6 @@ import {
   usePaletteStore,
   DEFAULT_SHALLOW,
   DEFAULT_DEEP,
-  DEFAULT_CUSTOM_STOPS,
   DEFAULT_BAND_COLORS,
   DEFAULT_BAND_BOUNDARIES,
   sanitizeBandColors,
@@ -283,26 +282,26 @@ describe("getColormap('ocean') / palette sync", () => {
     expect(c1.b).toBeCloseTo(expDeep.b, 2);
   });
 
-  it("custom theme t=0 returns the first stop and t=1 returns the last", () => {
-    usePaletteStore.getState().setCustomStops([
-      { position: 0, hex: "#ff0000" },
-      { position: 0.5, hex: "#00ff00" },
-      { position: 1, hex: "#0000ff" },
-    ]);
+  it("custom theme t=0 returns bandColors[0] (same as ocean t=0)", () => {
+    usePaletteStore.getState().setBandColor(0, "#ff0000");
     const fn = getColormap("custom");
     const c0 = fn(0);
-    const c1 = fn(1);
     expect(c0.r).toBeCloseTo(1, 2);
     expect(c0.g).toBeCloseTo(0, 2);
+    expect(c0.b).toBeCloseTo(0, 2);
+  });
+
+  it("custom theme t=1 returns deep (same as ocean t=1)", () => {
+    usePaletteStore.getState().setDeep("#0000ff");
+    const fn = getColormap("custom");
+    const c1 = fn(1);
     expect(c1.b).toBeCloseTo(1, 2);
     expect(c1.r).toBeCloseTo(0, 2);
   });
 
   it("custom theme clamps t < 0 and t > 1 to endpoints", () => {
-    usePaletteStore.getState().setCustomStops([
-      { position: 0, hex: "#ff0000" },
-      { position: 1, hex: "#0000ff" },
-    ]);
+    usePaletteStore.getState().setBandColor(0, "#ff0000");
+    usePaletteStore.getState().setDeep("#0000ff");
     const fn = getColormap("custom");
     const cNeg = fn(-2);
     const cOver = fn(5);
@@ -312,56 +311,26 @@ describe("getColormap('ocean') / palette sync", () => {
     expect(cOver.b).toBeCloseTo(1, 2);
   });
 
-  it("custom theme pins endpoints to 0/1 even when stops don't span the range", () => {
-    // Stops covering only 0.25–0.75; getCustomStops should pad with the
-    // nearest endpoint colours so t=0 and t=1 stay sensible.
-    usePaletteStore.getState().setCustomStops([
-      { position: 0.25, hex: "#ff0000" },
-      { position: 0.75, hex: "#0000ff" },
-    ]);
-    const fn = getColormap("custom");
-    const c0 = fn(0);
-    const c1 = fn(1);
-    expect(c0.r).toBeCloseTo(1, 2);
-    expect(c0.g).toBeCloseTo(0, 2);
-    expect(c0.b).toBeCloseTo(0, 2);
-    expect(c1.r).toBeCloseTo(0, 2);
-    expect(c1.b).toBeCloseTo(1, 2);
-  });
-
-  it("custom theme does not divide by zero when two stops share a position", () => {
-    // Two stops at the same position — the interpolator must not produce NaN.
-    // (The store sanitises before storing, so write through the raw setter
-    // path by calling setCustomStops, which keeps duplicates after sort.)
-    usePaletteStore.getState().setCustomStops([
-      { position: 0, hex: "#ff0000" },
-      { position: 0.5, hex: "#00ff00" },
-      { position: 0.5, hex: "#0000ff" },
-      { position: 1, hex: "#ffffff" },
-    ]);
-    const fn = getColormap("custom");
+  it("custom theme produces identical output to ocean theme at all t values", () => {
+    const customFn = getColormap("custom");
+    const oceanFn = getColormap("ocean");
     for (let i = 0; i <= 10; i++) {
-      const c = fn(i / 10);
-      expect(Number.isFinite(c.r)).toBe(true);
-      expect(Number.isFinite(c.g)).toBe(true);
-      expect(Number.isFinite(c.b)).toBe(true);
+      const t = i / 10;
+      const cc = customFn(t);
+      const co = oceanFn(t);
+      expect(cc.r).toBeCloseTo(co.r, 5);
+      expect(cc.g).toBeCloseTo(co.g, 5);
+      expect(cc.b).toBeCloseTo(co.b, 5);
     }
   });
 
-  it("custom theme picks up live edits to paletteStore", () => {
-    usePaletteStore.getState().setCustomStops([
-      { position: 0, hex: "#111111" },
-      { position: 1, hex: "#222222" },
-    ]);
+  it("custom theme picks up live band colour edits to paletteStore", () => {
+    usePaletteStore.getState().setBandColor(0, "#111111");
     let fn = getColormap("custom");
     const before = fn(0);
     expect(before.r).toBeCloseTo(hexToRgb("#111111").r, 2);
 
-    // Mutate store — a freshly-obtained colormap reflects the new stops.
-    usePaletteStore.getState().setCustomStops([
-      { position: 0, hex: "#ff8800" },
-      { position: 1, hex: "#0088ff" },
-    ]);
+    usePaletteStore.getState().setBandColor(0, "#ff8800");
     fn = getColormap("custom");
     const after = fn(0);
     const expected = hexToRgb("#ff8800");
@@ -370,14 +339,11 @@ describe("getColormap('ocean') / palette sync", () => {
     expect(after.b).toBeCloseTo(expected.b, 2);
   });
 
-  it("custom theme falls back to default stops if the store has < 2 entries", () => {
-    // Force a degenerate state by setting an array of bad entries; the store
-    // normaliser keeps the existing valid stops, so we mutate directly to
-    // exercise the colormap's defensive fallback path.
-    usePaletteStore.setState({ customStops: [] });
+  it("custom theme falls back to DEFAULT_BAND_COLORS when store bandColors is degenerate", () => {
+    usePaletteStore.setState({ bandColors: [] as unknown as string[] });
     const fn = getColormap("custom");
     const c0 = fn(0);
-    const expected = hexToRgb(DEFAULT_CUSTOM_STOPS[0]!.hex);
+    const expected = hexToRgb(DEFAULT_BAND_COLORS[0]!);
     expect(c0.r).toBeCloseTo(expected.r, 2);
     expect(c0.g).toBeCloseTo(expected.g, 2);
     expect(c0.b).toBeCloseTo(expected.b, 2);
