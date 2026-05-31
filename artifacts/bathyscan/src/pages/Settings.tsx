@@ -50,6 +50,11 @@ import { formatDepth } from "@/lib/units";
 import type { ColormapTheme } from "@/lib/settingsStore";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { DefaultMapLoadPicker } from "@/components/DefaultMapLoadPicker";
+import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
+import {
+  SLOT_NAMES_SALTWATER,
+  SLOT_NAMES_FRESHWATER,
+} from "@/lib/zoneMap";
 
 /**
  * Format an ISO timestamp into a short human-readable "last synced" label.
@@ -1414,6 +1419,114 @@ function CurrentsSection() {
   );
 }
 
+function ZoneColourSwatches() {
+  const waterType = useSettingsStore((s) => s.waterType);
+  const slots = useZoneOverlayStore((s) => s.slots);
+  const setSlotColor = useZoneOverlayStore((s) => s.setSlotColor);
+  const resetToDefaults = useZoneOverlayStore((s) => s.resetToDefaults);
+  const slotNames =
+    waterType === "freshwater" ? SLOT_NAMES_FRESHWATER : SLOT_NAMES_SALTWATER;
+  return (
+    <div style={S.card}>
+      <div
+        style={{
+          ...S.cardHeader,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <span>ZONE COLOURS</span>
+        <button
+          data-testid="settings-zone-colors-reset"
+          onClick={resetToDefaults}
+          style={{
+            fontSize: 9,
+            color: "#64748b",
+            background: "transparent",
+            border: "1px solid rgba(100,116,139,0.3)",
+            borderRadius: 3,
+            padding: "1px 6px",
+            cursor: "pointer",
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            fontFamily: FONT,
+          }}
+        >
+          Reset
+        </button>
+      </div>
+      <div style={{ padding: "10px 16px", display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {slotNames.map((name, i) => {
+          const slot = slots[i as 0 | 1 | 2 | 3];
+          const color = slot?.color ?? "#f5d58a";
+          return (
+            <label
+              key={i}
+              data-testid={`settings-zone-swatch-${i}`}
+              title={`Click to change colour — ${name}`}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 4,
+                cursor: "pointer",
+              }}
+            >
+              <span
+                style={{
+                  display: "block",
+                  width: 28,
+                  height: 28,
+                  borderRadius: 4,
+                  background: color,
+                  border: "1.5px solid rgba(255,255,255,0.15)",
+                  boxShadow: `0 0 6px ${color}55`,
+                  position: "relative",
+                  transition: "box-shadow 0.15s",
+                  flexShrink: 0,
+                }}
+              >
+                <input
+                  data-testid={`settings-zone-color-input-${i}`}
+                  type="color"
+                  value={color}
+                  onChange={(e) => setSlotColor(i as 0 | 1 | 2 | 3, e.target.value)}
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    opacity: 0,
+                    cursor: "pointer",
+                    width: "100%",
+                    height: "100%",
+                    border: "none",
+                    padding: 0,
+                  }}
+                />
+              </span>
+              <span
+                style={{
+                  fontSize: 8,
+                  color: "#94a3b8",
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  textAlign: "center",
+                  maxWidth: 52,
+                  lineHeight: 1.3,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              >
+                {name.split(" /")[0]}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function HabitatSection() {
   const s = useSettingsStore();
   return (
@@ -1439,6 +1552,7 @@ function HabitatSection() {
           sublabel="Default strength of the amber habitat tint on terrain"
         />
       </div>
+      <ZoneColourSwatches />
       <AdvancedDisclosure testId="habitat-advanced">
         <div style={S.card}>
           <div style={S.cardHeader}>DEFAULTS</div>
