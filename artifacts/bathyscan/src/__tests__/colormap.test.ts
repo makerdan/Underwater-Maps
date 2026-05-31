@@ -42,6 +42,7 @@ import {
   DEFAULT_DEEP,
   DEFAULT_CUSTOM_STOPS,
   DEFAULT_BAND_COLORS,
+  DEFAULT_BAND_BOUNDARIES,
   sanitizeBandColors,
 } from "../lib/paletteStore";
 
@@ -583,6 +584,113 @@ describe("DEPTH_BAND_BOUNDARIES_FT", () => {
       const t = ft / OCEAN_MAX_DEPTH_FT;
       expect(t).toBeGreaterThanOrEqual(0);
       expect(t).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+describe("getOceanStops respects live bandBoundaries from store", () => {
+  beforeEach(() => { usePaletteStore.getState().reset(); });
+  afterEach(() => { usePaletteStore.getState().reset(); });
+
+  it("by default, each band stop t-position matches DEFAULT_BAND_BOUNDARIES[i] / 2000", () => {
+    const fn = getColormap("ocean");
+    for (let i = 0; i < 10; i++) {
+      const ft = DEFAULT_BAND_BOUNDARIES[i]!;
+      const t = ft / OCEAN_MAX_DEPTH_FT;
+      const c = fn(t);
+      const expected = hexToRgb(DEFAULT_BAND_COLORS[i]!);
+      expect(c.r).toBeCloseTo(expected.r, 2);
+      expect(c.g).toBeCloseTo(expected.g, 2);
+      expect(c.b).toBeCloseTo(expected.b, 2);
+    }
+  });
+
+  it("after setBandBoundary, the moved stop's colour appears at the new t-position", () => {
+    usePaletteStore.getState().setBandBoundary(3, 180);
+    const updated = usePaletteStore.getState().bandBoundaries;
+    expect(updated[3]).toBe(180);
+
+    const fn = getColormap("ocean");
+    const tNew = 180 / OCEAN_MAX_DEPTH_FT;
+    const c = fn(tNew);
+    const expected = hexToRgb(usePaletteStore.getState().bandColors[3]!);
+    expect(c.r).toBeCloseTo(expected.r, 2);
+    expect(c.g).toBeCloseTo(expected.g, 2);
+    expect(c.b).toBeCloseTo(expected.b, 2);
+  });
+
+  it("after setBandBoundary, the old t-position yields an interpolated colour (stop has moved)", () => {
+    // Move boundary[2] from 100 ft → 120 ft.
+    // At the old position (t = 100/2000) the value is now between stop 1
+    // (at t = 50/2000) and the moved stop 2 (at t = 120/2000).
+    usePaletteStore.getState().setBandBoundary(2, 120);
+    const fn = getColormap("ocean");
+    const bc = usePaletteStore.getState().bandColors;
+
+    const tOld = 100 / OCEAN_MAX_DEPTH_FT;       // 0.05
+    const tStop1 = 50 / OCEAN_MAX_DEPTH_FT;       // 0.025
+    const tStop2New = 120 / OCEAN_MAX_DEPTH_FT;   // 0.06
+
+    const stop1Color = hexToRgb(bc[1]!);
+    const stop2Color = hexToRgb(bc[2]!);
+
+    // t=0.05 is between stop1 (t=0.025) and stop2 (t=0.06)
+    const alpha = (tOld - tStop1) / (tStop2New - tStop1);
+    const expectedR = stop1Color.r + (stop2Color.r - stop1Color.r) * alpha;
+    const expectedG = stop1Color.g + (stop2Color.g - stop1Color.g) * alpha;
+    const expectedB = stop1Color.b + (stop2Color.b - stop1Color.b) * alpha;
+
+    const cAtOld = fn(tOld);
+    expect(cAtOld.r).toBeCloseTo(expectedR, 2);
+    expect(cAtOld.g).toBeCloseTo(expectedG, 2);
+    expect(cAtOld.b).toBeCloseTo(expectedB, 2);
+  });
+
+  it("setBandBoundaries with a custom array makes all stop t-values reflect the new boundaries", () => {
+    const custom = [0, 60, 110, 160, 210, 260, 310, 360, 460, 620, 2000];
+    usePaletteStore.getState().setBandBoundaries(custom);
+    const fn = getColormap("ocean");
+    const bc = usePaletteStore.getState().bandColors;
+
+    for (let i = 0; i < 10; i++) {
+      const t = custom[i]! / OCEAN_MAX_DEPTH_FT;
+      const c = fn(t);
+      const expected = hexToRgb(bc[i]!);
+      expect(c.r).toBeCloseTo(expected.r, 2);
+      expect(c.g).toBeCloseTo(expected.g, 2);
+      expect(c.b).toBeCloseTo(expected.b, 2);
+    }
+  });
+
+  it("getOceanStops falls back to DEFAULT_BAND_BOUNDARIES when store has a degenerate boundaries array", () => {
+    usePaletteStore.setState({ bandBoundaries: [] as unknown as number[] });
+    const fn = getColormap("ocean");
+
+    for (let i = 0; i < 10; i++) {
+      const ft = DEFAULT_BAND_BOUNDARIES[i]!;
+      const t = ft / OCEAN_MAX_DEPTH_FT;
+      const c = fn(t);
+      const expected = hexToRgb(DEFAULT_BAND_COLORS[i]!);
+      expect(c.r).toBeCloseTo(expected.r, 2);
+      expect(c.g).toBeCloseTo(expected.g, 2);
+      expect(c.b).toBeCloseTo(expected.b, 2);
+    }
+  });
+
+  it("resetBandBoundaries() reverts to DEFAULT_BAND_BOUNDARIES in the ocean colormap", () => {
+    const custom = [0, 60, 110, 160, 210, 260, 310, 360, 460, 620, 2000];
+    usePaletteStore.getState().setBandBoundaries(custom);
+    usePaletteStore.getState().resetBandBoundaries();
+
+    const fn = getColormap("ocean");
+    for (let i = 0; i < 10; i++) {
+      const ft = DEFAULT_BAND_BOUNDARIES[i]!;
+      const t = ft / OCEAN_MAX_DEPTH_FT;
+      const c = fn(t);
+      const expected = hexToRgb(DEFAULT_BAND_COLORS[i]!);
+      expect(c.r).toBeCloseTo(expected.r, 2);
+      expect(c.g).toBeCloseTo(expected.g, 2);
+      expect(c.b).toBeCloseTo(expected.b, 2);
     }
   });
 });

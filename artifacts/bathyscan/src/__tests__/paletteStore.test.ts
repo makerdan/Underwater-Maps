@@ -6,10 +6,13 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   usePaletteStore,
   sanitizeCustomStops,
+  sanitizeBandBoundaries,
   customStopsFromPreset,
   DEFAULT_CUSTOM_STOPS,
   DEFAULT_SHALLOW,
   DEFAULT_DEEP,
+  DEFAULT_BAND_BOUNDARIES,
+  MIN_BOUNDARY_GAP_FT,
   PALETTE_PRESETS,
 } from "../lib/paletteStore";
 
@@ -419,5 +422,171 @@ describe("customStopsFromPreset", () => {
       expect(stops[0]!.position).toBe(0);
       expect(stops[3]!.position).toBe(1);
     }
+  });
+});
+
+describe("sanitizeBandBoundaries", () => {
+  it("returns null for non-array input", () => {
+    expect(sanitizeBandBoundaries(null)).toBeNull();
+    expect(sanitizeBandBoundaries(undefined)).toBeNull();
+    expect(sanitizeBandBoundaries("string")).toBeNull();
+    expect(sanitizeBandBoundaries(42)).toBeNull();
+    expect(sanitizeBandBoundaries({})).toBeNull();
+  });
+
+  it("returns null when the array has fewer than 11 entries", () => {
+    const short = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600];
+    expect(short).toHaveLength(10);
+    expect(sanitizeBandBoundaries(short)).toBeNull();
+  });
+
+  it("returns null when the array has more than 11 entries", () => {
+    const long = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000, 3000];
+    expect(sanitizeBandBoundaries(long)).toBeNull();
+  });
+
+  it("returns null when the first value is not 0", () => {
+    const wrong = [1, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000];
+    expect(sanitizeBandBoundaries(wrong)).toBeNull();
+  });
+
+  it("returns null when the last value is not 2000", () => {
+    const wrong = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 1999];
+    expect(sanitizeBandBoundaries(wrong)).toBeNull();
+  });
+
+  it("returns null when the array contains a non-number entry", () => {
+    const withString = [0, 50, 100, 150, 200, 250, 300, 350, 450, "600", 2000];
+    expect(sanitizeBandBoundaries(withString)).toBeNull();
+  });
+
+  it("returns null when the array contains Infinity or NaN", () => {
+    const withInfinity = [0, 50, 100, 150, 200, 250, 300, 350, 450, Infinity, 2000];
+    const withNaN = [0, 50, 100, 150, 200, 250, 300, 350, 450, NaN, 2000];
+    expect(sanitizeBandBoundaries(withInfinity)).toBeNull();
+    expect(sanitizeBandBoundaries(withNaN)).toBeNull();
+  });
+
+  it("returns null when values are non-monotonic (a value does not exceed its predecessor)", () => {
+    const flat = [0, 50, 100, 100, 200, 250, 300, 350, 450, 600, 2000];
+    const decreasing = [0, 50, 100, 80, 200, 250, 300, 350, 450, 600, 2000];
+    expect(sanitizeBandBoundaries(flat)).toBeNull();
+    expect(sanitizeBandBoundaries(decreasing)).toBeNull();
+  });
+
+  it("rounds float values to integers and accepts the result", () => {
+    const withFloats = [0, 50.4, 100.7, 150, 200, 250, 300, 350, 450, 600, 2000];
+    const result = sanitizeBandBoundaries(withFloats);
+    expect(result).not.toBeNull();
+    expect(result![1]).toBe(50);
+    expect(result![2]).toBe(101);
+  });
+
+  it("returns null when rounding makes values non-monotonic", () => {
+    const borderline = [0, 50, 100, 100.4, 200, 250, 300, 350, 450, 600, 2000];
+    expect(sanitizeBandBoundaries(borderline)).toBeNull();
+  });
+
+  it("accepts a valid 11-entry strictly-increasing array", () => {
+    const valid = [...DEFAULT_BAND_BOUNDARIES];
+    const result = sanitizeBandBoundaries(valid);
+    expect(result).not.toBeNull();
+    expect(result).toHaveLength(11);
+    expect(result![0]).toBe(0);
+    expect(result![10]).toBe(2000);
+    for (let i = 1; i < result!.length; i++) {
+      expect(result![i]).toBeGreaterThan(result![i - 1]!);
+    }
+  });
+});
+
+describe("paletteStore.setBandBoundary", () => {
+  beforeEach(() => { usePaletteStore.getState().reset(); });
+  afterEach(() => { usePaletteStore.getState().reset(); });
+
+  it("ignores index 0 (fixed lower endpoint)", () => {
+    const before = [...usePaletteStore.getState().bandBoundaries];
+    usePaletteStore.getState().setBandBoundary(0, 100);
+    expect(usePaletteStore.getState().bandBoundaries[0]).toBe(before[0]);
+  });
+
+  it("ignores index 10 (fixed upper endpoint)", () => {
+    const before = [...usePaletteStore.getState().bandBoundaries];
+    usePaletteStore.getState().setBandBoundary(10, 1000);
+    expect(usePaletteStore.getState().bandBoundaries[10]).toBe(before[10]);
+  });
+
+  it("updates an interior boundary to a valid value", () => {
+    usePaletteStore.getState().setBandBoundary(3, 160);
+    expect(usePaletteStore.getState().bandBoundaries[3]).toBe(160);
+  });
+
+  it("clamps the new value to at least prev + MIN_BOUNDARY_GAP_FT", () => {
+    const bb = usePaletteStore.getState().bandBoundaries;
+    const prev = bb[1]!;
+    usePaletteStore.getState().setBandBoundary(2, prev - 1);
+    const updated = usePaletteStore.getState().bandBoundaries[2]!;
+    expect(updated).toBeGreaterThanOrEqual(prev + MIN_BOUNDARY_GAP_FT);
+  });
+
+  it("clamps the new value to at most next - MIN_BOUNDARY_GAP_FT", () => {
+    const bb = usePaletteStore.getState().bandBoundaries;
+    const next = bb[3]!;
+    usePaletteStore.getState().setBandBoundary(2, next + 100);
+    const updated = usePaletteStore.getState().bandBoundaries[2]!;
+    expect(updated).toBeLessThanOrEqual(next - MIN_BOUNDARY_GAP_FT);
+  });
+
+  it("rounds the incoming value to the nearest integer", () => {
+    usePaletteStore.getState().setBandBoundary(5, 255.7);
+    expect(usePaletteStore.getState().bandBoundaries[5]).toBe(256);
+  });
+
+  it("reflects the updated boundary immediately in the store", () => {
+    usePaletteStore.getState().setBandBoundary(4, 220);
+    const bb = usePaletteStore.getState().bandBoundaries;
+    expect(bb[4]).toBe(220);
+    expect(bb[0]).toBe(0);
+    expect(bb[10]).toBe(2000);
+  });
+
+  it("leaves all other boundaries unchanged", () => {
+    const before = [...usePaletteStore.getState().bandBoundaries];
+    usePaletteStore.getState().setBandBoundary(6, 310);
+    const after = usePaletteStore.getState().bandBoundaries;
+    for (let i = 0; i < 11; i++) {
+      if (i !== 6) expect(after[i]).toBe(before[i]);
+    }
+    expect(after[6]).toBe(310);
+  });
+});
+
+describe("paletteStore.setBandBoundaries / resetBandBoundaries", () => {
+  beforeEach(() => { usePaletteStore.getState().reset(); });
+  afterEach(() => { usePaletteStore.getState().reset(); });
+
+  it("replaces all boundaries with a valid array", () => {
+    const custom = [0, 60, 110, 160, 210, 260, 310, 360, 460, 610, 2000];
+    usePaletteStore.getState().setBandBoundaries(custom);
+    expect(usePaletteStore.getState().bandBoundaries).toEqual(custom);
+  });
+
+  it("falls back to defaults when the input is invalid", () => {
+    usePaletteStore.getState().setBandBoundaries([1, 2, 3]);
+    expect(usePaletteStore.getState().bandBoundaries).toEqual([...DEFAULT_BAND_BOUNDARIES]);
+  });
+
+  it("resetBandBoundaries() restores DEFAULT_BAND_BOUNDARIES", () => {
+    const custom = [0, 60, 110, 160, 210, 260, 310, 360, 460, 610, 2000];
+    usePaletteStore.getState().setBandBoundaries(custom);
+    usePaletteStore.getState().resetBandBoundaries();
+    expect(usePaletteStore.getState().bandBoundaries).toEqual([...DEFAULT_BAND_BOUNDARIES]);
+  });
+
+  it("reset() also restores bandBoundaries to defaults", () => {
+    const custom = [0, 60, 110, 160, 210, 260, 310, 360, 460, 610, 2000];
+    usePaletteStore.getState().setBandBoundaries(custom);
+    usePaletteStore.getState().reset();
+    expect(usePaletteStore.getState().bandBoundaries).toEqual([...DEFAULT_BAND_BOUNDARIES]);
   });
 });
