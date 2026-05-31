@@ -265,6 +265,7 @@ Signed-in users get: synced settings, personal markers and trails, custom datase
 
 ---
 
+<!-- GENERATED:API-ROUTES:START -->
 ## 15. Full API Route Surface
 
 All routes are served under the `/api` prefix by the Express 5 server.
@@ -273,108 +274,119 @@ All routes are served under the `/api` prefix by the Express 5 server.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/datasets` | List preset datasets (filterable by `waterType`) |
-| GET | `/datasets/:id/terrain` | Full-resolution terrain grid |
-| GET | `/datasets/:id/preview` | Preflight metadata (source, bbox) |
-| GET | `/datasets/:id/overview` | 64×64 low-resolution overview grid |
-| GET | `/datasets/:id/zones` | Substrate/habitat zones (AI or heuristic) |
-| POST | `/datasets/upload` | Direct upload ≤ 50 MB |
-| POST | `/datasets/upload/chunk` | Receive a 5 MB chunk |
-| POST | `/datasets/upload/chunk/finalize` | Enqueue background reassembly + parse job |
-| GET | `/datasets/upload/jobs/:jobId` | Poll chunked-upload job status |
-| POST | `/datasets/upload/request-gcs-url` | Presigned URL for direct-to-GCS upload |
-| GET | `/datasets/upload/gcs-job-status` | Poll GCS upload completion |
+| GET | `/datasets` | List available pre-loaded bathymetric regions |
+| GET | `/datasets/:id/terrain` | Get gridded terrain data for a dataset |
+| GET | `/datasets/:id/preview` | Probe which upstream source would serve this dataset |
+| GET | `/datasets/:id/overview` | Get a low-resolution overview terrain for a dataset |
 
-### User Datasets & Folders
+### Upload
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/user/datasets` | List the authenticated user's custom datasets |
-| PATCH | `/user/datasets/:id/rename` | Rename a dataset |
-| PATCH | `/user/datasets/:id/move` | Move to a different folder |
-| POST | `/user/datasets/:id/duplicate` | Duplicate a dataset |
-| DELETE | `/user/datasets/:id` | Delete a dataset and its associated data |
-| GET | `/user/folders` | List dataset folders |
-| POST | `/user/folders` | Create a folder |
-| DELETE | `/user/folders/:id` | Delete a folder (datasets moved to root) |
+| POST | `/datasets/upload` | Upload an XYZ or CSV file and persist it to the user's dataset library |
 
 ### Catalog & Search
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/datasets/catalog` | Global preset catalog list |
-| GET | `/datasets/catalog/search` | Search catalog by name or description |
-| POST | `/datasets/bbox-query` | Find datasets intersecting a bounding box |
-| POST | `/datasets/catalog/:id/save` | Save a catalog dataset to the user's library |
-| GET | `/datasets/my-saves` | User's saved catalog datasets + materialization status |
-| DELETE | `/datasets/my-saves/:id` | Remove a saved catalog dataset |
-| GET | `/ncei/search` | Proxy search to the NOAA NCEI bathymetry API |
-| POST | `/ncei/save` | Import an NCEI dataset into the user's library |
+| GET | `/datasets/catalog` | List all known public data sources in the catalog |
+| GET | `/datasets/catalog/search` | Keyword search over the dataset catalog |
+| POST | `/datasets/bbox-query` | Find catalog datasets whose coverage intersects a bounding box |
+| GET | `/ncei/search` | Search the NCEI Bathymetry Geoportal |
+| POST | `/ncei/save` | Save an NCEI portal result to the user's library |
+| POST | `/datasets/catalog/:id/save` | Save a catalog dataset to the user's account |
+| GET | `/datasets/my-saves` | List the authenticated user's saved catalog datasets |
+| DELETE | `/datasets/my-saves/:id` | Delete a saved catalog dataset |
+| GET | `/datasets/my-saves/:id/status` | Poll the status of a user's save job |
+| POST | `/datasets/my-saves/:id/retry` | Retry materialization of a failed save |
 
-### Markers, Routes & Trails
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/markers` | List markers for a dataset |
-| POST | `/markers` | Create a marker |
-| PATCH | `/markers/:id` | Update a marker's label, position, or metadata |
-| DELETE | `/markers/:id` | Delete a marker |
-| GET | `/routes` | List saved navigation routes |
-| POST | `/routes` | Save a new route with waypoints |
-| PATCH | `/routes/:id` | Update route metadata |
-| DELETE | `/routes/:id` | Delete a route |
-| GET | `/trails` | List recorded GPS trails |
-| POST | `/trails` | Upload a GPS trail |
-| DELETE | `/trails/:id` | Delete a trail |
-
-### Trolling Presets
+### Habitat & Substrate
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/trolling-presets` | List saved trolling presets |
-| POST | `/trolling-presets` | Save a new preset |
-| PATCH | `/trolling-presets/:id` | Update a preset |
-| DELETE | `/trolling-presets/:id` | Delete a preset |
+| GET | `/intertidal-spots/:id` | Tidepool & beachcombing hotspot polygons scored from ShoreZone / AOOS data |
+| GET | `/substrate/:id` | Real Alaska ShoreZone substrate polygons |
+| GET | `/efh` | Essential Fish Habitat zones |
+
+### User Datasets & Folders
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/user/datasets` | List the current user's saved custom terrain datasets |
+| GET | `/user/datasets/:id/terrain` | Get full terrain grid for a saved user dataset |
+| GET | `/user/datasets/:id/overview` | Get low-resolution overview grid for a saved user dataset |
+| DELETE | `/user/datasets/:id` | Delete a saved user terrain dataset |
+| PATCH | `/user/datasets/:id/move` | Move a user dataset into a folder (or to the root) |
+| POST | `/user/datasets/:id/duplicate` | Duplicate a user dataset into the same folder |
+| PATCH | `/user/datasets/:id/rename` | Rename a user dataset |
+| GET | `/user/folders` | List all dataset folders for the current user |
+| POST | `/user/folders` | Create a new folder |
+| PATCH | `/user/folders/:id/rename` | Rename a folder |
+| PATCH | `/user/folders/:id/move` | Move a folder to a new parent |
+| POST | `/user/folders/:id/duplicate` | Duplicate a folder (recursive deep copy) |
+| DELETE | `/user/folders/:id` | Delete a folder |
+
+### Markers
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/markers` | List persisted markers for a dataset |
+| POST | `/markers` | Create a new marker |
+| DELETE | `/markers/mine` | Delete all markers created by the authenticated user |
+| PATCH | `/markers/:id` | Edit a marker's label, type, or notes |
+| DELETE | `/markers/:id` | Delete a marker by ID |
+
+### Trails
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/trails` | List GPS trails for a dataset |
+| POST | `/trails` | Create a new GPS trail |
+| DELETE | `/trails/:id` | Delete a GPS trail |
+| GET | `/trails/:id/points` | Get paginated trail points |
+
+### Trolling Presets & Folders
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/trolling-presets` | List the authenticated user's trolling presets |
+| POST | `/trolling-presets` | Save a new trolling preset |
+| PATCH | `/trolling-presets/:id` | Update a trolling preset's name or sort order |
+| DELETE | `/trolling-presets/:id` | Delete a trolling preset by ID |
+| GET | `/trolling-preset-folders` | List the authenticated user's trolling preset folders |
+| POST | `/trolling-preset-folders` | Create a new trolling preset folder |
+| PATCH | `/trolling-preset-folders/:id` | Rename a trolling preset folder |
+| DELETE | `/trolling-preset-folders/:id` | Delete a trolling preset folder (presets inside are moved to root) |
 
 ### Environment & Conditions
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/tidal` | NOAA tidal heights station nearest to a location |
-| GET | `/tidal/schedule` | High/low tide prediction schedule for a station |
-| GET | `/weather-stations` | NOAA ASOS/AWOS stations near a location |
-| GET | `/raws-stations` | RAWS land weather stations near a location |
-| GET | `/raws-weather` | Current observations from a RAWS station |
-| GET | `/surface-conditions` | Real-time water temperature and conditions |
-| GET | `/water-temperature` | NOAA/AOOS SST sensor data |
-| GET | `/efh` | Essential Fish Habitat (EFH) zones for a bounding box |
-| GET | `/substrate/:id` | Authoritative substrate data (USSeabed) |
+| GET | `/surface-conditions` | Fetch hourly surface weather and tidal conditions for drift planning |
+| GET | `/weather-stations` | Fetch nearby NOAA aviation weather station observations |
+| GET | `/raws-stations` | Fetch nearby AOOS RAWS weather station list |
+| GET | `/raws-weather` | Fetch latest observation for a single AOOS RAWS station |
+| GET | `/water-temperature` | Fetch current sea-surface temperature for a lat/lon point |
+| GET | `/temperature-profile` | Fetch a depth-resolved temperature profile for a lat/lon point |
 
-### AI Assistant
+### AI Assistant (Poe)
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/poe/models` | List available Poe AI model identifiers |
-| POST | `/poe/classify` | Substrate zone classification |
-| POST | `/poe/query` | General natural-language query |
-| POST | `/poe/describe` | Scene description generation |
-| POST | `/poe/help` | AI-driven help answers |
-| POST | `/poe/upscale` | Substrate heatmap super-resolution |
-| POST | `/query` | OpenAI tool-calling ("Ask the Ocean") |
+| POST | `/poe/classify` | Classify terrain zones via AI |
+| POST | `/poe/query` | Natural language terrain query |
+| POST | `/poe/describe` | Stream a location description via SSE |
+| GET | `/poe/models` | List available Poe models |
 
-### User, Settings & System
+### Settings & System
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/settings` | Fetch user application settings |
-| PUT | `/settings` | Update settings (units, theme, shortcuts) |
-| GET | `/me/export` | Export all user data as JSON |
-| DELETE | `/me` | Delete account and all data |
-| GET | `/healthz` | Shallow liveness probe |
-| GET | `/healthz/deep` | Deep probe (DB + Poe + AOOS connectivity) |
-| GET | `/admin/bucket-monitor` | (Admin only) GCS dataset processing status |
-| GET | `/github/repos` | List GitHub repos for data sync |
-| PUT | `/github/repos/.../contents` | Create or update a file in a GitHub repo |
+| GET | `/settings` | Get the current user's settings |
+| PUT | `/settings` | Upsert the current user's settings |
+| GET | `/healthz` | Health check |
+
+<!-- GENERATED:API-ROUTES:END -->
 
 ---
 

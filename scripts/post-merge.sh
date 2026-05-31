@@ -14,3 +14,6 @@ pnpm --filter db push
 # surfaces the output without failing the post-merge setup.
 pnpm run typecheck && pnpm run lint
 pnpm run test:unit || echo "[post-merge] Unit tests have pre-existing failures (non-blocking) — see backlog task to fix them."
+# Guardrail: fail immediately if the generated API route tables in README.md
+# or replit.md are out of sync with lib/api-spec/openapi.yaml.
+pnpm run check:docs-stale

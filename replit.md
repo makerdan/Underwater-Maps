@@ -8,6 +8,7 @@ BathyScan turns raw bathymetry (seafloor and lake-bed depth data) into an intera
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
+- `pnpm run docs` — regenerate the API route tables in README.md and replit.md from openapi.yaml
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - Required env: `DATABASE_URL` — Postgres connection string
 
@@ -258,114 +259,126 @@ Authentication is handled by **Clerk** across all surfaces:
 
 ---
 
+<!-- GENERATED:API-ROUTES:START -->
 ### Full API Route Surface
 
-**Core Datasets**
+#### Core Datasets
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/datasets` | List preset datasets (filterable by `waterType`) |
-| GET | `/api/datasets/:id/terrain` | Full-resolution terrain grid |
-| GET | `/api/datasets/:id/preview` | Preflight metadata (source, bbox) |
-| GET | `/api/datasets/:id/overview` | 64×64 low-resolution overview grid |
-| GET | `/api/datasets/:id/zones` | Substrate/habitat zones (AI or heuristic) |
-| POST | `/api/datasets/upload` | Direct upload ≤ 50 MB |
-| POST | `/api/datasets/upload/chunk` | Send a 5 MB chunk |
-| POST | `/api/datasets/upload/chunk/finalize` | Enqueue background reassembly job |
-| GET | `/api/datasets/upload/jobs/:jobId` | Poll chunked-upload job status |
-| POST | `/api/datasets/upload/request-gcs-url` | Presigned URL for direct GCS upload |
-| GET | `/api/datasets/upload/gcs-job-status` | Poll GCS upload status |
+| GET | `/datasets` | List available pre-loaded bathymetric regions |
+| GET | `/datasets/:id/terrain` | Get gridded terrain data for a dataset |
+| GET | `/datasets/:id/preview` | Probe which upstream source would serve this dataset |
+| GET | `/datasets/:id/overview` | Get a low-resolution overview terrain for a dataset |
 
-**User Datasets & Folders**
+#### Upload
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/user/datasets` | List authenticated user's custom datasets |
-| PATCH | `/api/user/datasets/:id/rename` | Rename a custom dataset |
-| PATCH | `/api/user/datasets/:id/move` | Move to a different folder |
-| POST | `/api/user/datasets/:id/duplicate` | Duplicate a dataset |
-| DELETE | `/api/user/datasets/:id` | Delete a dataset |
-| GET | `/api/user/folders` | List dataset folders |
-| POST | `/api/user/folders` | Create a folder |
-| DELETE | `/api/user/folders/:id` | Delete a folder (datasets moved to root) |
+| POST | `/datasets/upload` | Upload an XYZ or CSV file and persist it to the user's dataset library |
 
-**Catalog & Search**
+#### Catalog & Search
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/datasets/catalog` | Global preset catalog list |
-| GET | `/api/datasets/catalog/search` | Search catalog by name/description |
-| POST | `/api/datasets/bbox-query` | Find datasets intersecting a bounding box |
-| POST | `/api/datasets/catalog/:id/save` | Save a catalog dataset to the user's library |
-| GET | `/api/datasets/my-saves` | User's saved catalog datasets + materialization status |
-| DELETE | `/api/datasets/my-saves/:id` | Remove a saved catalog dataset |
-| GET | `/api/ncei/search` | Proxy search to NOAA NCEI bathymetry API |
-| POST | `/api/ncei/save` | Import an NCEI dataset into the user's library |
+| GET | `/datasets/catalog` | List all known public data sources in the catalog |
+| GET | `/datasets/catalog/search` | Keyword search over the dataset catalog |
+| POST | `/datasets/bbox-query` | Find catalog datasets whose coverage intersects a bounding box |
+| GET | `/ncei/search` | Search the NCEI Bathymetry Geoportal |
+| POST | `/ncei/save` | Save an NCEI portal result to the user's library |
+| POST | `/datasets/catalog/:id/save` | Save a catalog dataset to the user's account |
+| GET | `/datasets/my-saves` | List the authenticated user's saved catalog datasets |
+| DELETE | `/datasets/my-saves/:id` | Delete a saved catalog dataset |
+| GET | `/datasets/my-saves/:id/status` | Poll the status of a user's save job |
+| POST | `/datasets/my-saves/:id/retry` | Retry materialization of a failed save |
 
-**Markers, Routes & Trails**
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/api/markers` | List markers for a dataset |
-| POST | `/api/markers` | Create a marker |
-| PATCH | `/api/markers/:id` | Update a marker |
-| DELETE | `/api/markers/:id` | Delete a marker |
-| GET | `/api/routes` | List saved navigation routes |
-| POST | `/api/routes` | Save a new route |
-| PATCH | `/api/routes/:id` | Update route metadata |
-| DELETE | `/api/routes/:id` | Delete a route |
-| GET | `/api/trails` | List recorded GPS trails |
-| POST | `/api/trails` | Upload a GPS trail |
-| DELETE | `/api/trails/:id` | Delete a trail |
-
-**Environment & Conditions**
+#### Habitat & Substrate
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/tidal` | NOAA tidal station near a location |
-| GET | `/api/tidal/schedule` | High/low tide prediction schedule |
-| GET | `/api/weather-stations` | NOAA ASOS/AWOS stations near a location |
-| GET | `/api/raws-stations` | RAWS land weather stations |
-| GET | `/api/raws-weather` | Current RAWS observations |
-| GET | `/api/surface-conditions` | Real-time water temperature + conditions |
-| GET | `/api/water-temperature` | NOAA/AOOS SST sensor data |
-| GET | `/api/efh` | Essential Fish Habitat zones for a bbox |
-| GET | `/api/substrate/:id` | Authoritative substrate data (USSeabed) |
+| GET | `/intertidal-spots/:id` | Tidepool & beachcombing hotspot polygons scored from ShoreZone / AOOS data |
+| GET | `/substrate/:id` | Real Alaska ShoreZone substrate polygons |
+| GET | `/efh` | Essential Fish Habitat zones |
 
-**AI Assistant**
+#### User Datasets & Folders
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/poe/models` | List available Poe AI models |
-| POST | `/api/poe/classify` | Substrate zone classification |
-| POST | `/api/poe/query` | General natural-language query |
-| POST | `/api/poe/describe` | Scene description generation |
-| POST | `/api/poe/help` | AI-driven help answers |
-| POST | `/api/poe/upscale` | Substrate heatmap super-resolution |
-| POST | `/api/query` | OpenAI tool-calling ("Ask the Ocean") |
+| GET | `/user/datasets` | List the current user's saved custom terrain datasets |
+| GET | `/user/datasets/:id/terrain` | Get full terrain grid for a saved user dataset |
+| GET | `/user/datasets/:id/overview` | Get low-resolution overview grid for a saved user dataset |
+| DELETE | `/user/datasets/:id` | Delete a saved user terrain dataset |
+| PATCH | `/user/datasets/:id/move` | Move a user dataset into a folder (or to the root) |
+| POST | `/user/datasets/:id/duplicate` | Duplicate a user dataset into the same folder |
+| PATCH | `/user/datasets/:id/rename` | Rename a user dataset |
+| GET | `/user/folders` | List all dataset folders for the current user |
+| POST | `/user/folders` | Create a new folder |
+| PATCH | `/user/folders/:id/rename` | Rename a folder |
+| PATCH | `/user/folders/:id/move` | Move a folder to a new parent |
+| POST | `/user/folders/:id/duplicate` | Duplicate a folder (recursive deep copy) |
+| DELETE | `/user/folders/:id` | Delete a folder |
 
-**User, Settings & System**
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/api/settings` | Fetch user application settings |
-| PUT | `/api/settings` | Update settings (units, theme, shortcuts) |
-| GET | `/api/me/export` | Export all user data as JSON |
-| DELETE | `/api/me` | Delete account and all data |
-| GET | `/api/healthz` | Shallow liveness probe |
-| GET | `/api/healthz/deep` | Deep probe (DB + Poe + AOOS) |
-| GET | `/api/admin/bucket-monitor` | (Admin) GCS dataset processing status |
-| GET | `/api/github/repos` | List GitHub repos for data sync |
-| PUT | `/api/github/repos/.../contents` | Create/update files in a GitHub repo |
-
-**Trolling Presets**
+#### Markers
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/trolling-presets` | List saved trolling presets |
-| POST | `/api/trolling-presets` | Save a trolling preset |
-| PATCH | `/api/trolling-presets/:id` | Update a preset |
-| DELETE | `/api/trolling-presets/:id` | Delete a preset |
+| GET | `/markers` | List persisted markers for a dataset |
+| POST | `/markers` | Create a new marker |
+| DELETE | `/markers/mine` | Delete all markers created by the authenticated user |
+| PATCH | `/markers/:id` | Edit a marker's label, type, or notes |
+| DELETE | `/markers/:id` | Delete a marker by ID |
+
+#### Trails
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/trails` | List GPS trails for a dataset |
+| POST | `/trails` | Create a new GPS trail |
+| DELETE | `/trails/:id` | Delete a GPS trail |
+| GET | `/trails/:id/points` | Get paginated trail points |
+
+#### Trolling Presets & Folders
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/trolling-presets` | List the authenticated user's trolling presets |
+| POST | `/trolling-presets` | Save a new trolling preset |
+| PATCH | `/trolling-presets/:id` | Update a trolling preset's name or sort order |
+| DELETE | `/trolling-presets/:id` | Delete a trolling preset by ID |
+| GET | `/trolling-preset-folders` | List the authenticated user's trolling preset folders |
+| POST | `/trolling-preset-folders` | Create a new trolling preset folder |
+| PATCH | `/trolling-preset-folders/:id` | Rename a trolling preset folder |
+| DELETE | `/trolling-preset-folders/:id` | Delete a trolling preset folder (presets inside are moved to root) |
+
+#### Environment & Conditions
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/surface-conditions` | Fetch hourly surface weather and tidal conditions for drift planning |
+| GET | `/weather-stations` | Fetch nearby NOAA aviation weather station observations |
+| GET | `/raws-stations` | Fetch nearby AOOS RAWS weather station list |
+| GET | `/raws-weather` | Fetch latest observation for a single AOOS RAWS station |
+| GET | `/water-temperature` | Fetch current sea-surface temperature for a lat/lon point |
+| GET | `/temperature-profile` | Fetch a depth-resolved temperature profile for a lat/lon point |
+
+#### AI Assistant (Poe)
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/poe/classify` | Classify terrain zones via AI |
+| POST | `/poe/query` | Natural language terrain query |
+| POST | `/poe/describe` | Stream a location description via SSE |
+| GET | `/poe/models` | List available Poe models |
+
+#### Settings & System
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/settings` | Get the current user's settings |
+| PUT | `/settings` | Upsert the current user's settings |
+| GET | `/healthz` | Health check |
+
+<!-- GENERATED:API-ROUTES:END -->
 
 ---
 
@@ -386,7 +399,7 @@ Authentication is handled by **Clerk** across all surfaces:
 
 - `pnpm run test-all` (typecheck + lint + unit tests) is the green-bar gate. It runs automatically after every merge via `scripts/post-merge.sh`, so a regression in any of the three will fail the merge.
 - `react-hooks/exhaustive-deps` is configured as an **error** (not a warning) in `eslint.config.mjs`. Don't silence it lazily — either include the dependency or refactor; suppressions need an inline justification.
-- When changing an API endpoint: edit `lib/api-spec/openapi.yaml` first, run codegen, then update the server route and the frontend consumer.
+- When changing an API endpoint: edit `lib/api-spec/openapi.yaml` first, run codegen, then update the server route and the frontend consumer. After that run `pnpm run docs` to keep README.md and replit.md in sync (CI fails if they drift via `check:docs-stale`).
 - When changing the DB schema: edit `lib/db/src/schema/*.ts`, then run `pnpm --filter @workspace/db run push`.
 
 ## Environment Variables
