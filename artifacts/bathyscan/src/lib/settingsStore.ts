@@ -750,6 +750,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   data: ["defaultRegion", "autoLoadLastDataset", "defaultMapLoad"],
   accessibility: [
     "reducedMotion", "colorBlindSafePalette", "largeHudText", "highContrastHud", "brightDaylight",
+    "colormapUserSet",
   ],
   account: ["telemetryOptIn", "llmDisclosureAcknowledged"],
   environment: ["waterType"],

@@ -1794,7 +1794,7 @@ function AccessibilitySection() {
           label="Bright Daylight"
           value={s.brightDaylight}
           onChange={s.setBrightDaylight}
-          sublabel="Opaque panels, bold text, and high contrast for outdoor use in direct sunlight"
+          sublabel="Opaque panels, bold text, and high contrast for outdoor use in direct sunlight — automatically switches the terrain to Grayscale for maximum depth contrast while active"
         />
       </div>
     </>
