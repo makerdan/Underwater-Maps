@@ -145,11 +145,14 @@ export const ForecastStrip: React.FC = () => {
   const setDriftHour = useDriftStore((s) => s.setDriftHour);
   const setDriftPlannerActive = useDriftStore((s) => s.setDriftPlannerActive);
   const nowRef = useRef<HTMLDivElement>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
 
-  // Scroll "now" into view on mount
+  // Scroll the strip container so "now" is at the left edge.
+  // Using scrollLeft instead of scrollIntoView prevents ancestor panels
+  // from also scrolling when forecast data loads.
   useEffect(() => {
-    if (nowRef.current) {
-      nowRef.current.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
+    if (nowRef.current && stripRef.current) {
+      stripRef.current.scrollLeft = nowRef.current.offsetLeft;
     }
   }, [forecast48h.length]);
 
@@ -269,6 +272,7 @@ export const ForecastStrip: React.FC = () => {
 
       {/* Horizontally scrollable hour strip */}
       <div
+        ref={stripRef}
         style={{
           overflowX: "auto",
           overflowY: "hidden",
