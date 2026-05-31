@@ -22,8 +22,14 @@ function renderInline(text: string, highlight?: string): string {
   out = out.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
   out = out.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
-    (_m, label: string, href: string) =>
-      `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="hm-link">${label}</a>`,
+    (_m, label: string, href: string) => {
+      const articleMatch = /^#article:(.+)$/.exec(href);
+      if (articleMatch) {
+        const articleId = escapeHtml(articleMatch[1]!);
+        return `<a href="#" data-article-id="${articleId}" class="hm-link hm-article-link">${label}</a>`;
+      }
+      return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="hm-link">${label}</a>`;
+    },
   );
   if (highlight && highlight.trim()) {
     try {

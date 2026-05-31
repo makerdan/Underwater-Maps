@@ -334,7 +334,17 @@ export const HelpWindow: React.FC = () => {
             )}
           </aside>
 
-          <main className="help-content">
+          <main
+            className="help-content"
+            onClick={(e) => {
+              const target = (e.target as HTMLElement).closest("a[data-article-id]");
+              if (target) {
+                e.preventDefault();
+                const id = target.getAttribute("data-article-id");
+                if (id) setArticle(id);
+              }
+            }}
+          >
             <article className="help-article">
               <Markdown source={article.body} highlight={search.trim() || undefined} />
               {article.showQA && <HelpQA />}
