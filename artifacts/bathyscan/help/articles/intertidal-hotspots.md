@@ -2,7 +2,7 @@
 id: intertidal-hotspots
 title: Intertidal Hotspots
 section: Features
-order: 12
+order: 11.5
 ---
 
 # Intertidal Hotspots

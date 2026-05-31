@@ -56,9 +56,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [speedIndex, setSpeedIndex] = useState<number>(1);
   const [cameraPos, setCameraPos] = useState<[number, number, number]>([0, 0, 0]);
 
-  const [tidalOverlay, setTidalOverlayRaw] = useState<boolean>(() =>
-    readLocalBool("bathyscan:tidalOverlay", false),
-  );
+  const [tidalOverlay, setTidalOverlayRaw] = useState<boolean>(false);
   const [realisticMode, setRealisticModeRaw] = useState<boolean>(() =>
     readLocalBool("bathyscan:realisticMode", false),
   );
@@ -71,7 +69,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   function setTidalOverlay(b: boolean) {
     setTidalOverlayRaw(b);
-    try { localStorage.setItem("bathyscan:tidalOverlay", String(b)); } catch {}
   }
 
   function setRealisticMode(b: boolean) {

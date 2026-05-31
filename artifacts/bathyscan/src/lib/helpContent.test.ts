@@ -22,12 +22,14 @@ const EXPECTED_IDS = [
   "gps-trail-recorder",
   "hud-overlays",
   "interface-tour",
+  "intertidal-hotspots",
   "keyboard-shortcuts",
   "markers",
   "overview-map",
   "saved-routes",
   "settings",
   "substrate-layer",
+  "temperature-profile",
   "terrain-3d-scene",
   "throttle",
   "tidal-overlay",
@@ -38,7 +40,7 @@ const EXPECTED_IDS = [
 ];
 
 describe("HELP_ARTICLES — registration", () => {
-  it("parses every .md file — expects 27 articles", () => {
+  it("parses every .md file — expects 29 articles", () => {
     expect(HELP_ARTICLES.length).toBe(EXPECTED_IDS.length);
   });
 

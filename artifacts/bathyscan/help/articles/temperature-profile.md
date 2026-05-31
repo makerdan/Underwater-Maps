@@ -2,7 +2,7 @@
 id: temperature-profile
 title: Temperature Profile Chart
 section: Features
-order: 8
+order: 7.8
 ---
 
 # Temperature Profile Chart
