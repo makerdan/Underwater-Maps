@@ -29,27 +29,22 @@
 import type { HourlySurfaceCondition, DriftWaypoint, TrollWaypoint } from "./driftStore";
 import { lonLatToWorldXZ } from "./terrain";
 import { BACKTROLL_DRAG_COEFFICIENT, BACKTROLL_LEEWAY_COEFFICIENT } from "./boatSpeed";
+import {
+  currentVector,
+  shallowWaterTidalScale,
+  computeBlendedDrift,
+  KM_PER_KNOT_HOUR,
+  KM_PER_DEG_LAT,
+} from "./boatPhysics";
 import type { TerrainData } from "@workspace/api-client-react";
 import { getBoatProfile, DEFAULT_BOAT_PROFILE_ID } from "./boatProfiles";
 
 const DEG2RAD = Math.PI / 180;
-const KM_PER_KNOT_HOUR = 1.852;
-const KM_PER_DEG_LAT = 111.0;
 
 /** Threshold below which speed-over-ground is flagged as "stalled" (knots). */
 const STALL_SOG_THRESHOLD_KT = 0.05;
 
-/**
- * Reference depth (m) used for the shallow-water tidal-speed scaling.
- * Below this depth the scaling factor is effectively 1.0 (no amplification).
- */
-const TIDAL_REFERENCE_DEPTH_M = 30;
-
-/**
- * Maximum tidal amplification factor in very shallow water.
- * Prevents degenerate velocities when terrain depth approaches zero.
- */
-const TIDAL_MAX_SCALE = 3.0;
+// shallowWaterTidalScale and currentVector are imported from ./boatPhysics.
 
 function degToRad(deg: number): number {
   return deg * DEG2RAD;
@@ -63,21 +58,8 @@ function normalizeAngle(deg: number): number {
   return ((deg % 360) + 360) % 360;
 }
 
-/**
- * Convert a bearing (oceanographic "going to" convention, 0=N) + speed (knots)
- * into a velocity vector (km/h) in (dLat, dLon) per hour.
- */
-export function currentVector(speedKnots: number, bearingDeg: number, refLat: number): { dLat: number; dLon: number } {
-  const speedKmH = speedKnots * KM_PER_KNOT_HOUR;
-  const rad = degToRad(bearingDeg);
-  const dLatKm = speedKmH * Math.cos(rad);
-  const dLonKm = speedKmH * Math.sin(rad);
-  const kmPerDegLon = KM_PER_DEG_LAT * Math.cos(degToRad(refLat));
-  return {
-    dLat: dLatKm / KM_PER_DEG_LAT,
-    dLon: kmPerDegLon > 0 ? dLonKm / kmPerDegLon : 0,
-  };
-}
+// currentVector is imported from ./boatPhysics — the canonical bearing→displacement
+// formula shared by both Drift Planner and Drive Boat.
 
 /**
  * Fishing line angle from vertical (degrees) given the effective water speed.
@@ -137,24 +119,6 @@ function bearing(lat1: number, lon1: number, lat2: number, lon2: number): number
   const y = Math.sin(dLon) * Math.cos(lat2r);
   const x = Math.cos(lat1r) * Math.sin(lat2r) - Math.sin(lat1r) * Math.cos(lat2r) * Math.cos(dLon);
   return normalizeAngle(radToDeg(Math.atan2(y, x)));
-}
-
-/**
- * Shallow-water tidal speed scale factor.
- *
- * When tide height data is available, effective water depth =
- * terrainDepth + tideHeightM.  By continuity (Q = A × v), tidal speed
- * scales inversely with depth relative to the reference depth:
- *   scale = TIDAL_REFERENCE_DEPTH_M / effectiveDepth   (capped at TIDAL_MAX_SCALE)
- *
- * At depths ≥ TIDAL_REFERENCE_DEPTH_M the factor is ≤ 1 (no amplification).
- * This means the tidal current at deep-water waypoints stays unchanged and
- * only accelerates on shoals / near-reef waypoints.
- */
-function shallowWaterTidalScale(terrainDepthM: number, tideHeightM: number): number {
-  const effectiveDepth = Math.max(1, terrainDepthM + tideHeightM);
-  if (effectiveDepth >= TIDAL_REFERENCE_DEPTH_M) return 1.0;
-  return Math.min(TIDAL_MAX_SCALE, TIDAL_REFERENCE_DEPTH_M / effectiveDepth);
 }
 
 // ---------------------------------------------------------------------------
@@ -343,18 +307,19 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
         }
       }
       const leewayFactor = backtroll ? BACKTROLL_LEEWAY_COEFFICIENT : (profile.leewayFactor * profile.windageFactor);
-      const tidalVec = currentVector(tidalSpeed, tidalDir, hourStartLat);
-      const windLeewaySpeed = cond.windSpeedKnots * leewayFactor;
-      const windVec = currentVector(windLeewaySpeed, cond.windDegrees, hourStartLat);
-      const driftDLat = 0.7 * tidalVec.dLat + 0.3 * windVec.dLat;
-      const driftDLon = 0.7 * tidalVec.dLon + 0.3 * windVec.dLon;
-      const driftKmH = Math.sqrt(
-        (driftDLat * KM_PER_DEG_LAT) ** 2 +
-        (driftDLon * KM_PER_DEG_LAT * Math.cos(degToRad(hourStartLat))) ** 2,
-      );
-      driftContributionKnots = driftKmH / KM_PER_KNOT_HOUR;
-      currentMagnitudeKnots = driftContributionKnots;
-      if (driftKmH > 1e-9) {
+      const blended = computeBlendedDrift({
+        tidalSpeedKnots: tidalSpeed,
+        tidalDegrees: tidalDir,
+        windSpeedKnots: cond.windSpeedKnots,
+        windDegrees: cond.windDegrees,
+        leewayFactor,
+        refLat: hourStartLat,
+      });
+      const driftDLat = blended.dLat;
+      const driftDLon = blended.dLon;
+      driftContributionKnots = blended.speedKnots;
+      currentMagnitudeKnots = blended.speedKnots;
+      if (blended.speedKnots > 1e-9) {
         const endLat = hourStartLat + driftDLat;
         const endLon = hourStartLon + driftDLon;
         driftHeadingDeg = bearing(hourStartLat, hourStartLon, endLat, endLon);
@@ -378,23 +343,23 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
         }
       }
       const leewayFactor = backtroll ? BACKTROLL_LEEWAY_COEFFICIENT : (profile.leewayFactor * profile.windageFactor);
-      const tidalVec = currentVector(tidalSpeed, tidalDir, curLat);
-      const windLeewaySpeed = cond.windSpeedKnots * leewayFactor;
-      const windVec = currentVector(windLeewaySpeed, cond.windDegrees, curLat);
-
-      const driftDLat = 0.7 * tidalVec.dLat + 0.3 * windVec.dLat;
-      const driftDLon = 0.7 * tidalVec.dLon + 0.3 * windVec.dLon;
-      const driftKmH = Math.sqrt(
-        (driftDLat * KM_PER_DEG_LAT) ** 2 +
-        (driftDLon * KM_PER_DEG_LAT * Math.cos(degToRad(curLat))) ** 2,
-      );
-      driftContributionKnots = driftKmH / KM_PER_KNOT_HOUR;
-      currentMagnitudeKnots = driftContributionKnots;
+      const blended = computeBlendedDrift({
+        tidalSpeedKnots: tidalSpeed,
+        tidalDegrees: tidalDir,
+        windSpeedKnots: cond.windSpeedKnots,
+        windDegrees: cond.windDegrees,
+        leewayFactor,
+        refLat: curLat,
+      });
+      const driftDLat = blended.dLat;
+      const driftDLon = blended.dLon;
+      driftContributionKnots = blended.speedKnots;
+      currentMagnitudeKnots = blended.speedKnots;
 
       let resultantDLat = driftDLat;
       let resultantDLon = driftDLon;
 
-      if (driftKmH > 1e-9) {
+      if (blended.speedKnots > 1e-9) {
         const endLat = curLat + driftDLat;
         const endLon = curLon + driftDLon;
         driftHeadingDeg = bearing(curLat, curLon, endLat, endLon);
@@ -558,12 +523,16 @@ export function reverseComputeDrift(opts: ReverseComputeDriftOptions): DriftWayp
   for (let h = hours - 1; h >= 0; h--) {
     const cond = conditions[h % conditions.length]!;
 
-    // Drift vector that would have applied during hour h (forward direction)
-    const tidalVec = currentVector(cond.tidalSpeedKnots, cond.tidalDegrees, curLat);
-    const windLeewaySpeed = cond.windSpeedKnots * 0.03;
-    const windVec = currentVector(windLeewaySpeed, cond.windDegrees, curLat);
-    const driftDLat = 0.7 * tidalVec.dLat + 0.3 * windVec.dLat;
-    const driftDLon = 0.7 * tidalVec.dLon + 0.3 * windVec.dLon;
+    // Drift vector that would have applied during hour h (forward direction).
+    // Uses the canonical boatPhysics blend with the default open-skiff leeway.
+    const { dLat: driftDLat, dLon: driftDLon } = computeBlendedDrift({
+      tidalSpeedKnots: cond.tidalSpeedKnots,
+      tidalDegrees: cond.tidalDegrees,
+      windSpeedKnots: cond.windSpeedKnots,
+      windDegrees: cond.windDegrees,
+      leewayFactor: 0.03,
+      refLat: curLat,
+    });
 
     // Previous position (before this hour's drift) = current minus drift
     const prevLat = curLat - driftDLat;

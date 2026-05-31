@@ -14,6 +14,7 @@ import { useUiStore } from "@/lib/uiStore";
 import { worldXZToLonLat, worldYToMetres, lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
 import { useJoystickStore } from "@/components/VirtualJoystick";
 import { computeMetersPerWorldUnit, boatMphToWorldUnitsPerSecond, BOAT_MIN_MPH, BOAT_MAX_MPH } from "@/lib/boatSpeed";
+import { tidalToWorldVelocity } from "@/lib/boatPhysics";
 import { useDriveBoatStore } from "@/lib/driveBoatStore";
 import { useCurrentsStore } from "@/lib/currentsStore";
 import { markerGroupRef } from "@/components/MarkerLayer";
@@ -1005,16 +1006,36 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       }
 
       // ── 2d. Tidal current pushback (realistic mode) ──────────────────────
-      // Apply the NOAA tidal ambient as a lateral position offset each frame,
-      // forcing the user to correct heading to maintain course — like a real boat.
+      // When the Drift Planner is active and has conditions, read the same
+      // tidal vector that the drift physics applies at the current simulated
+      // hour (driftHour) so both features always agree on environmental forces.
+      // Falls back to the live NOAA ambient current otherwise.
       if (isRealistic && grid) {
-        const ambient = useCurrentsStore.getState().noaaAmbient;
-        if (ambient && ambient.speedKt > 0) {
-          const KT_TO_MS = 0.514444;
-          const dirRad = ambient.directionDeg * (Math.PI / 180);
-          // Standard compass: 0=N(+Z world), 90=E(+X world)
-          const worldDX = Math.sin(dirRad) * ambient.speedKt * KT_TO_MS;
-          const worldDZ = Math.cos(dirRad) * ambient.speedKt * KT_TO_MS;
+        let tidalSpeedKt = 0;
+        let tidalDirDeg = 0;
+        let hasTidal = false;
+
+        const driftState = useDriftStore.getState();
+        if (driftState.driftPlannerActive && driftState.driftConditions) {
+          const vec = driftState.getTidalVectorAtHour(driftState.driftHour);
+          if (vec && vec.speedKt > 0) {
+            tidalSpeedKt = vec.speedKt;
+            tidalDirDeg = vec.directionDeg;
+            hasTidal = true;
+          }
+        }
+
+        if (!hasTidal) {
+          const ambient = useCurrentsStore.getState().noaaAmbient;
+          if (ambient && ambient.speedKt > 0) {
+            tidalSpeedKt = ambient.speedKt;
+            tidalDirDeg = ambient.directionDeg;
+            hasTidal = true;
+          }
+        }
+
+        if (hasTidal) {
+          const { worldDX, worldDZ } = tidalToWorldVelocity(tidalSpeedKt, tidalDirDeg);
           const mpu = mpuForFrame > 0 ? mpuForFrame : computeMetersPerWorldUnit(grid);
           camera.position.x += (worldDX / mpu) * delta;
           camera.position.z += (worldDZ / mpu) * delta;

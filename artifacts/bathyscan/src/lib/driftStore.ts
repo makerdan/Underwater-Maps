@@ -225,6 +225,16 @@ interface DriftStore {
   /** Selected boat profile id (see boatProfiles.ts). Persisted to localStorage. */
   boatProfileId: string;
   setBoatProfileId: (id: string) => void;
+
+  /**
+   * Return the interpolated tidal vector from `driftConditions` at the given
+   * hour offset (0–23). Returns null when no conditions are loaded.
+   *
+   * This accessor is the single source of truth used by both the Drift Planner
+   * physics and the Drive Boat tidal pushback so that scrubbing the timeline to
+   * hour N produces the same tidal force in both features.
+   */
+  getTidalVectorAtHour: (hourOffset: number) => { speedKt: number; directionDeg: number } | null;
 }
 
 export const TROLL_MAX_KNOTS = 10;
@@ -380,5 +390,13 @@ export const useDriftStore = create<DriftStore>((set, get) => ({
   setBoatProfileId: (id) => {
     try { localStorage.setItem("bathyscan:boatProfileId", id); } catch {}
     set({ boatProfileId: id });
+  },
+
+  getTidalVectorAtHour: (hourOffset) => {
+    const conditions = get().driftConditions;
+    if (!conditions || conditions.length === 0) return null;
+    const idx = Math.max(0, Math.round(hourOffset)) % conditions.length;
+    const cond = conditions[idx]!;
+    return { speedKt: cond.tidalSpeedKnots, directionDeg: cond.tidalDegrees };
   },
 }));
