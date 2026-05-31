@@ -3,7 +3,7 @@ import type { TidalDataResult } from "@/hooks/useTidalData";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
-import { formatDistance, formatDepth, formatSpeedFromKnots } from "@/lib/units";
+import { formatDistance, formatDepth, formatSpeedFromKnots, cardinal } from "@/lib/units";
 import { useTidalSchedule, type TidalScheduleEvent } from "@/hooks/useTidalSchedule";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
@@ -30,11 +30,6 @@ const CYAN: React.CSSProperties = { color: "#00e5ff", textShadow: "0 0 6px rgba(
 const DIM: React.CSSProperties = { color: "#cbd5e1" };
 const LABEL: React.CSSProperties = { color: "#cbd5e1", fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", fontWeight: 600 };
 
-function compassLabel(deg: number): string {
-  const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-  return dirs[Math.round(deg / 45) % 8] ?? "N";
-}
-
 function timeToNext(isoStr: string, referenceTime: Date): string {
   const target = new Date(isoStr.replace(" ", "T") + (isoStr.includes("Z") ? "" : "Z"));
   const diffMs = target.getTime() - referenceTime.getTime();
@@ -47,7 +42,7 @@ function timeToNext(isoStr: string, referenceTime: Date): string {
 function floodEbbLabel(direction: number, nextEventType?: "high" | "low"): string {
   if (nextEventType === "high") return "Flooding";
   if (nextEventType === "low") return "Ebbing";
-  return compassLabel(direction);
+  return cardinal(direction);
 }
 
 interface TidePanelProps {
@@ -60,11 +55,6 @@ interface TidePanelProps {
   lat: number | null;
   lon: number | null;
   embedded?: boolean;
-}
-
-function compassLabelLocal(deg: number): string {
-  const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-  return dirs[Math.round(deg / 45) % 8] ?? "N";
 }
 
 interface StationSourceBadgeProps {
@@ -400,7 +390,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                   <div style={LABEL}>Status</div>
                   <div style={{ color: "#34d399", fontSize: 11 }}>
                     {floodEbbLabel(data.currentDirection, data.nextEvent?.type)}{" "}
-                    {compassLabel(data.currentDirection)}
+                    {cardinal(data.currentDirection)}
                   </div>
                 </div>
               </div>
@@ -410,7 +400,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                 <div>
                   <div style={LABEL}>Direction</div>
                   <div style={CYAN}>
-                    {Math.round(data.currentDirection)}° {compassLabel(data.currentDirection)}
+                    {Math.round(data.currentDirection)}° {cardinal(data.currentDirection)}
                   </div>
                 </div>
                 <div>
@@ -445,7 +435,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                   ) : (
                     <div style={{ color: "#7dd3fc", fontSize: 10 }}>
                       {data.slack.phase === "flooding" ? "Flooding" : "Ebbing"}{" "}
-                      {compassLabel(data.currentDirection)} · slack in{" "}
+                      {cardinal(data.currentDirection)} · slack in{" "}
                       {data.slack.minutesToSlack} min
                     </div>
                   )}
@@ -762,7 +752,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                     <span style={{ color: "#7dd3fc" }}>
                       {hoveredEvent.type === "high" ? "ebb" : "flood"}
                     </span>{" "}
-                    → {compassLabelLocal(hoveredEvent.nextDirectionDeg)} (
+                    → {cardinal(hoveredEvent.nextDirectionDeg)} (
                     {hoveredEvent.nextDirectionDeg}°) · height{" "}
                     {formatDepth(hoveredEvent.height, { units, decimals: 2 })}
                   </div>

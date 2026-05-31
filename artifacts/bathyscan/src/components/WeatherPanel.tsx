@@ -29,7 +29,7 @@ import { computeDrift } from "@/lib/computeDrift";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { LocationBadge } from "@/components/LocationBadge";
-import { formatSpeedFromKnots } from "@/lib/units";
+import { formatSpeedFromKnots, cardinal } from "@/lib/units";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 
@@ -81,10 +81,6 @@ const Compass: React.FC<CompassProps> = ({ degrees, size = 40, color = "#00e5ff"
   );
 };
 
-function degToCardinal(deg: number): string {
-  const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
-  return dirs[Math.round(deg / 22.5) % 16]!;
-}
 
 const PANEL_STYLE: React.CSSProperties = {
   position: "absolute",
@@ -690,7 +686,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
             <div>
               <div style={LABEL}>WIND</div>
               <div style={{ ...VALUE, color: "#7dd3fc" }}>{formatSpeedFromKnots(cond.windSpeedKnots, { units })}</div>
-              <div style={{ fontSize: 9, color: "#94a3b8" }}>{degToCardinal(cond.windDegrees)} {Math.round(cond.windDegrees)}°</div>
+              <div style={{ fontSize: 9, color: "#94a3b8" }}>{cardinal(cond.windDegrees)} {Math.round(cond.windDegrees)}°</div>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -698,7 +694,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
             <div>
               <div style={LABEL}>TIDAL CURRENT</div>
               <div style={{ ...VALUE, color: "#34d399" }}>{formatSpeedFromKnots(cond.tidalSpeedKnots, { units })}</div>
-              <div style={{ fontSize: 9, color: "#94a3b8" }}>{degToCardinal(cond.tidalDegrees)} {Math.round(cond.tidalDegrees)}°</div>
+              <div style={{ fontSize: 9, color: "#94a3b8" }}>{cardinal(cond.tidalDegrees)} {Math.round(cond.tidalDegrees)}°</div>
               {data?.tidalDataSource === "noaa-coops" && data.tidalStationName ? (
                 <div
                   data-testid="tidal-source"
@@ -767,7 +763,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
               <Compass degrees={boatHeadingDeg} size={42} color="#fbbf24" />
               <div style={{ flex: 1 }}>
                 <div style={LABEL}>BOAT HEADING</div>
-                <div style={{ ...VALUE, color: "#fbbf24" }}>{degToCardinal(boatHeadingDeg)} {Math.round(boatHeadingDeg)}°</div>
+                <div style={{ ...VALUE, color: "#fbbf24" }}>{cardinal(boatHeadingDeg)} {Math.round(boatHeadingDeg)}°</div>
                 <input
                   data-testid="boat-heading-slider"
                   type="range"
@@ -1179,12 +1175,12 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
           <div style={{ ...LABEL, marginBottom: 4 }}>MANUAL OVERRIDE</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <div>
-              <div style={LABEL}>WIND {manualWindSpeedKnots} kt @ {manualWindDegrees}°</div>
+              <div style={LABEL}>WIND {manualWindSpeedKnots} kt @ {cardinal(manualWindDegrees)} ({manualWindDegrees}°)</div>
               <input type="range" min={0} max={40} value={manualWindSpeedKnots} onChange={(e) => setManualWindSpeedKnots(Number(e.target.value))} style={sliderStyle} />
               <input type="range" min={0} max={359} value={manualWindDegrees} onChange={(e) => setManualWindDegrees(Number(e.target.value))} style={sliderStyle} />
             </div>
             <div>
-              <div style={LABEL}>TIDAL {manualSlackNow ? "0.0 (slack)" : manualTidalSpeedKnots} kt @ {manualTidalDegrees}°</div>
+              <div style={LABEL}>TIDAL {manualSlackNow ? "0.0 (slack)" : manualTidalSpeedKnots} kt @ {cardinal(manualTidalDegrees)} ({manualTidalDegrees}°)</div>
               <input type="range" min={0} max={6} step={0.1} value={manualTidalSpeedKnots} disabled={manualSlackNow} onChange={(e) => setManualTidalSpeedKnots(Number(e.target.value))} style={{ ...sliderStyle, opacity: manualSlackNow ? 0.4 : 1 }} />
               <input type="range" min={0} max={359} value={manualTidalDegrees} onChange={(e) => setManualTidalDegrees(Number(e.target.value))} style={sliderStyle} />
               <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, color: manualSlackNow ? "#c084fc" : "#cbd5e1", cursor: "pointer", fontSize: 9, letterSpacing: "0.1em" }}>

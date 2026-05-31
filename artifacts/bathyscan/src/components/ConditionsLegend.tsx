@@ -230,7 +230,7 @@ export const ConditionsLegend: React.FC = () => {
           <div style={{ ...LABEL, color: "#fbbf24", marginBottom: 4 }}>Manual Override</div>
           {wind && (
             <div style={{ marginBottom: 4 }}>
-              <div style={LABEL}>Wind {manualWindSpeedKnots} kn @ {manualWindDegrees}°</div>
+              <div style={LABEL}>Wind {manualWindSpeedKnots} kn @ {cardinal(manualWindDegrees)} ({manualWindDegrees}°)</div>
               <input type="range" min={0} max={40}
                 value={manualWindSpeedKnots}
                 onChange={(e) => setManualWindSpeedKnots(Number(e.target.value))}
@@ -243,7 +243,7 @@ export const ConditionsLegend: React.FC = () => {
           )}
           {(tide || cur) && (
             <div>
-              <div style={LABEL}>Tidal {manualTidalSpeedKnots} kn @ {manualTidalDegrees}°</div>
+              <div style={LABEL}>Tidal {manualTidalSpeedKnots} kn @ {cardinal(manualTidalDegrees)} ({manualTidalDegrees}°)</div>
               <input type="range" min={0} max={6} step={0.1}
                 value={manualTidalSpeedKnots}
                 onChange={(e) => setManualTidalSpeedKnots(Number(e.target.value))}
