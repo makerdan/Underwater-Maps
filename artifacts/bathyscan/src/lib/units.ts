@@ -190,3 +190,11 @@ export function depthSuffix(units: UnitsSystem = getUnits()): string {
 export function distanceLargeSuffix(units: UnitsSystem = getUnits()): string {
   return units === "metric" ? "km" : "mi";
 }
+
+// ── Compass ───────────────────────────────────────────────────────────────
+/** Convert a bearing in degrees to a 16-point cardinal abbreviation (N … NNW). */
+export function cardinal(deg: number): string {
+  const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+                "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+  return dirs[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16]!;
+}

@@ -10,7 +10,7 @@ import React from "react";
 import { useUiStore, CURRENT_DEPTH_LAYERS } from "@/lib/uiStore";
 import { useDriftStore } from "@/lib/driftStore";
 import { useSettingsStore } from "@/lib/settingsStore";
-import { formatSpeedFromKnots } from "@/lib/units";
+import { formatSpeedFromKnots, cardinal } from "@/lib/units";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
 import { useAppState } from "@/lib/context";
 import { windColor } from "@/components/ConditionsOverlays";
@@ -44,11 +44,6 @@ const LABEL: React.CSSProperties = {
   textTransform: "uppercase",
 };
 
-function cardinal(deg: number): string {
-  const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-                "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
-  return dirs[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16]!;
-}
 
 function fmtTime(iso: string | null): string {
   if (!iso) return "—";

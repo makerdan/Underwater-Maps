@@ -18,7 +18,7 @@ import React, { useEffect, useRef } from "react";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useCurrentsStore, type TidalStatus } from "@/lib/currentsStore";
 import { CURRENT_RAMP_STOPS, speedToColor } from "@/lib/currentColor";
-import { formatSpeedFromKnots, speedSuffix, MPH_TO_KNOTS, MPH_TO_KPH } from "@/lib/units";
+import { formatSpeedFromKnots, speedSuffix, MPH_TO_KNOTS, MPH_TO_KPH, cardinal } from "@/lib/units";
 import type { UnitsSystem } from "@/lib/settingsStore";
 
 function knotsToDisplay(kt: number, units: UnitsSystem): number {
@@ -375,7 +375,8 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
       <div style={{ marginBottom: 8, fontSize: 10, color: "#e2e8f0" }} data-testid="currents-noaa-readout">
         <div>
           {noaaAmbient.source === "noaa" ? "NOAA" : "Estimated"}:{" "}
-          {noaaAmbient.directionDeg.toFixed(0)}° @{" "}
+          {noaaAmbient.directionDeg.toFixed(0)}°{" "}
+          {cardinal(noaaAmbient.directionDeg)} @{" "}
           {formatSpeedFromKnots(noaaAmbient.speedKt, { units, decimals: 2 })}
         </div>
         {noaaAmbient.source === "noaa" &&

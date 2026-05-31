@@ -55,7 +55,7 @@ describe("CurrentsPanel — NOAA station readout (Task #167)", () => {
     render(<CurrentsPanel />);
     const readout = screen.getByTestId("currents-noaa-readout");
     expect(readout.textContent).toContain("NOAA:");
-    expect(readout.textContent).toContain("132° @ 0.74 kn");
+    expect(readout.textContent).toContain("132° SE @ 0.74 kn");
     const station = screen.getByTestId("currents-noaa-station");
     expect(station.textContent).toContain("Snow Passage");
     expect(station.textContent).toContain("PCT3026");
@@ -73,7 +73,7 @@ describe("CurrentsPanel — NOAA station readout (Task #167)", () => {
     render(<CurrentsPanel />);
     const readout = screen.getByTestId("currents-noaa-readout");
     expect(readout.textContent).toContain("Estimated:");
-    expect(readout.textContent).toContain("90° @ 0.30 kn");
+    expect(readout.textContent).toContain("90° E @ 0.30 kn");
     expect(
       screen.getByTestId("currents-noaa-estimated").textContent,
     ).toContain("No NOAA station in range");
