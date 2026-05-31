@@ -6,10 +6,6 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { getBoundKey } from "@/lib/keyBindings";
 import { computeWheelDolly, computePinchDolly } from "@/lib/zoomMath";
 
-/**
- * Legacy fly-control component used by TerrainScene.
- * The main app scene (TourScene) uses useFlyControls hook instead.
- */
 export const FlyControls = () => {
   const { speedIndex, setSpeedIndex, setCameraPos } = useAppState();
   const { camera, gl } = useThree();
