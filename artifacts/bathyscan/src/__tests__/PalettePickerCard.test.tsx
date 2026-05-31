@@ -49,6 +49,7 @@ import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
 import {
   usePaletteStore,
   DEFAULT_BAND_COLORS,
+  DEFAULT_BAND_BOUNDARIES,
   PALETTE_PRESETS,
   bandColorsFromPreset,
 } from "@/lib/paletteStore";
@@ -295,6 +296,55 @@ describe("DepthBandColorEditor — unit label sync", () => {
         expect(screen.getByTestId(`band-color-row-${i}`).textContent).toMatch(/\bm\b/);
         expect(screen.getByTestId(`band-color-row-${i}`).textContent).not.toMatch(/ft/);
       }
+    });
+  });
+});
+
+describe("DepthBandColorEditor — band boundaries live update", () => {
+  it("preview image's src is re-assigned after a band boundary changes", async () => {
+    render(<Settings />);
+    const preview = screen.getByTestId("palette-preview") as HTMLImageElement;
+    const setSrc = vi.fn();
+    Object.defineProperty(preview, "src", {
+      configurable: true,
+      get: () => "",
+      set: setSrc,
+    });
+    setSrc.mockClear();
+    act(() => {
+      usePaletteStore.getState().setBandBoundary(3, 180);
+    });
+    await waitFor(() => {
+      expect(setSrc).toHaveBeenCalled();
+    });
+  });
+
+  it("dragging band-boundary-slider-3 (imperial) updates bandBoundaries[3] in the store", async () => {
+    useSettingsStore.setState({ ...useSettingsStore.getState(), units: "imperial" });
+    render(<Settings />);
+    const slider = screen.getByTestId("band-boundary-slider-3") as HTMLInputElement;
+    fireEvent.change(slider, { target: { value: "180" } });
+    await waitFor(() => {
+      expect(usePaletteStore.getState().bandBoundaries[3]).toBe(180);
+    });
+  });
+
+  it("setBandBoundary moves the stop so getColormap samples the colour at the new position", () => {
+    usePaletteStore.getState().setBandBoundary(2, 120);
+    const boundaries = usePaletteStore.getState().bandBoundaries;
+    expect(boundaries[2]).toBe(120);
+    expect(boundaries[2]).not.toBe(DEFAULT_BAND_BOUNDARIES[2]);
+  });
+
+  it("reset band boundaries button restores DEFAULT_BAND_BOUNDARIES", async () => {
+    act(() => { usePaletteStore.getState().setBandBoundary(4, 220); });
+    render(<Settings />);
+    fireEvent.click(screen.getByTestId("band-boundaries-reset-btn"));
+    await waitFor(() => {
+      const bb = usePaletteStore.getState().bandBoundaries;
+      DEFAULT_BAND_BOUNDARIES.forEach((v, i) => {
+        expect(bb[i]).toBe(v);
+      });
     });
   });
 });

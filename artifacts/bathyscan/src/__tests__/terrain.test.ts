@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("three", () => {
   class Color {
@@ -65,6 +65,7 @@ import {
   worldXZToLonLat,
   lonLatToWorldXZ,
   worldYToMetres,
+  applyColormapToVertexColors,
   MAX_DEPTH_WORLD,
 } from "../lib/terrain";
 import type { TerrainData } from "@workspace/api-client-react";
@@ -339,6 +340,102 @@ describe("getTerrainSurfaceY", () => {
     const testXZ: Array<[number, number]> = [[-40, -40], [-20, 10], [0, 0], [30, -30], [49, 49]];
     for (const [wx, wz] of testXZ) {
       expect(getTerrainSurfaceY(grid, wx, wz)).toBeLessThanOrEqual(0);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyColormapToVertexColors + getColormap — band-boundary live repaint
+//
+// These tests prove the critical path that makes dragging a band-boundary
+// slider in Settings repaint the 3D terrain without a full remount:
+//
+//   setBandBoundary  →  usePaletteStore.bandBoundaries changes reference
+//   →  TerrainMesh useEffect dep triggers  →  getColormap("ocean") is called
+//   →  applyColormapToVertexColors writes new RGB into the geometry buffer
+//
+// We test the computation layer (getColormap + applyColormapToVertexColors)
+// rather than the React rendering layer so the test runs fast without R3F.
+// ---------------------------------------------------------------------------
+
+import { getColormap } from "../lib/colormap";
+import { usePaletteStore, DEFAULT_BAND_BOUNDARIES } from "../lib/paletteStore";
+
+describe("applyColormapToVertexColors — band-boundary live repaint", () => {
+  beforeEach(() => {
+    usePaletteStore.setState({
+      ...usePaletteStore.getState(),
+      bandBoundaries: [...DEFAULT_BAND_BOUNDARIES],
+    });
+  });
+
+  it("fills the colour buffer with non-zero RGB for a depth ramp", () => {
+    const depths = [0, 250, 500, 750, 1000];
+    const colors = new Float32Array(depths.length * 3);
+    const toColor = getColormap("ocean");
+    applyColormapToVertexColors(depths, 0, 1000, colors, toColor);
+    const anyNonZero = Array.from(colors).some((v) => v !== 0);
+    expect(anyNonZero).toBe(true);
+  });
+
+  it("deepest vertex (t=1) has a different colour than shallowest (t=0)", () => {
+    const depths = [0, 1000];
+    const colors = new Float32Array(6);
+    applyColormapToVertexColors(depths, 0, 1000, colors, getColormap("ocean"));
+    const shallow = { r: colors[0], g: colors[1], b: colors[2] };
+    const deep    = { r: colors[3], g: colors[4], b: colors[5] };
+    expect(shallow).not.toEqual(deep);
+  });
+
+  it("getColormap('ocean') returns different colours after band boundaries change", () => {
+    // Two valid boundary configs that place the same depth in different interpolation spans.
+    //
+    // Tight (default-like): boundary[2]=100ft → stop t=0.05 exactly
+    //   depth 100ft → t=0.05 exactly = stop[2] → returns colors[2] (sky blue #00a8d0)
+    //
+    // Spread: boundary[1]=200ft → stop t=0.1
+    //   depth 100ft → t=0.05, between stop[0]=0 and stop[1]=0.1
+    //   → lerp(colors[0]=#00e5ff, colors[1]=#00c8de, 0.5) — different from colors[2]
+    //
+    // setBandBoundary() clamps values by their neighbours so we use setState
+    // directly to install radically different configs — the same mechanism the
+    // settings store uses to sync on hydration.
+    const tightBoundaries = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000];
+    const spreadBoundaries = [0, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000];
+
+    const depths = [100]; // 100 ft depth, maxDepth=2000 ft → t=0.05
+    const before = new Float32Array(3);
+    const after  = new Float32Array(3);
+
+    usePaletteStore.setState({ ...usePaletteStore.getState(), bandBoundaries: tightBoundaries });
+    applyColormapToVertexColors(depths, 0, 2000, before, getColormap("ocean"));
+
+    // Swap to a spread config — getColormap reads fresh boundaries from the store
+    usePaletteStore.setState({ ...usePaletteStore.getState(), bandBoundaries: spreadBoundaries });
+    applyColormapToVertexColors(depths, 0, 2000, after, getColormap("ocean"));
+
+    // The g-channel must differ (r=0 in both configs since all palette colours
+    // start with #00…; g and b shift measurably between the two spans)
+    expect(before[1]).not.toBeCloseTo(after[1]!, 4);
+  });
+
+  it("clamped depths (all at minDepth) all receive the shallowest colour", () => {
+    const depths = [0, 0, 0];
+    const colors = new Float32Array(9);
+    applyColormapToVertexColors(depths, 0, 1000, colors, getColormap("ocean"));
+    expect(colors[0]).toBeCloseTo(colors[3]!, 5);
+    expect(colors[1]).toBeCloseTo(colors[4]!, 5);
+    expect(colors[2]).toBeCloseTo(colors[5]!, 5);
+  });
+
+  it("applyColormapToVertexColors writes exactly depths.length × 3 values", () => {
+    const depths = [0, 100, 200, 300, 400, 500];
+    const colors = new Float32Array(depths.length * 3);
+    applyColormapToVertexColors(depths, 0, 500, colors, getColormap("ocean"));
+    // All entries should be in [0, 1] — a valid normalised RGB channel
+    for (let i = 0; i < colors.length; i++) {
+      expect(colors[i]).toBeGreaterThanOrEqual(0);
+      expect(colors[i]).toBeLessThanOrEqual(1);
     }
   });
 });

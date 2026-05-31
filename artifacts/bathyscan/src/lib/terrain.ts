@@ -522,6 +522,39 @@ export function getTerrainSurfaceY(
 }
 
 /**
+ * Write per-vertex RGB values into a pre-allocated Float32Array using a
+ * colormap function. Each vertex occupies 3 consecutive entries (R, G, B).
+ *
+ * Extracted from the TerrainMesh vertex-recolor useEffect so the same logic
+ * can be unit-tested without a React or Three.js rendering context. The
+ * caller is responsible for setting `colorAttr.needsUpdate = true` after
+ * calling this function.
+ *
+ * @param depths     - depth value per vertex (metres)
+ * @param minDepth   - minimum depth in the grid (metres)
+ * @param maxDepth   - maximum depth in the grid (metres)
+ * @param colors     - Float32Array of length depths.length × 3 (mutated in-place)
+ * @param toColor    - colormap function returned by getColormap(); maps t∈[0,1] → {r,g,b}
+ */
+export function applyColormapToVertexColors(
+  depths: ArrayLike<number>,
+  minDepth: number,
+  maxDepth: number,
+  colors: Float32Array,
+  toColor: (t: number) => { r: number; g: number; b: number },
+): void {
+  const depthRange = (maxDepth - minDepth) || 1;
+  for (let i = 0; i < depths.length; i++) {
+    const depth = (depths as number[])[i] ?? 0;
+    const t = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
+    const c = toColor(t);
+    colors[i * 3]     = c.r;
+    colors[i * 3 + 1] = c.g;
+    colors[i * 3 + 2] = c.b;
+  }
+}
+
+/**
  * Convert geographic longitude/latitude to world-space XZ coordinates.
  */
 export function lonLatToWorldXZ(

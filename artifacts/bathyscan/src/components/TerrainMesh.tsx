@@ -2,7 +2,7 @@ import React, { useMemo, useEffect, useRef, useCallback } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import type { TerrainData } from "@workspace/api-client-react";
-import { buildTerrainGeometry, buildTerrainSkirtGeometry, computeZoneWeights, computeSlopeAttribute, WORLD_SIZE } from "@/lib/terrain";
+import { buildTerrainGeometry, buildTerrainSkirtGeometry, computeZoneWeights, computeSlopeAttribute, applyColormapToVertexColors, WORLD_SIZE } from "@/lib/terrain";
 import { getTerrainTextures } from "@/lib/textures";
 import { createTerrainShaderMaterial } from "@/lib/terrainShader";
 import { useClassificationStore } from "@/lib/classificationStore";
@@ -206,9 +206,13 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       };
     }, [skirtMaterial]);
 
-    // Live-update vertex colours when the user customises the depth palette
-    // (only meaningful for the "ocean" theme; other themes have fixed stops,
-    // but re-running for them is harmless and keeps the code simple).
+    // Live-update vertex colours when the user customises the depth palette.
+    // This fires for any palette change: shallow/deep endpoints, per-band
+    // colours, AND band boundary positions. Subscribing to bandBoundaries
+    // individually ensures dragging a boundary slider in Settings repaints the
+    // terrain immediately — without this the mesh would only refresh on a full
+    // remount. (Only meaningful for the "ocean" theme, but re-running for
+    // other themes is harmless and keeps the code simple.)
     const paletteShallow = usePaletteStore((s) => s.shallow);
     const paletteDeep = usePaletteStore((s) => s.deep);
     const customStops = usePaletteStore((s) => s.customStops);
@@ -216,19 +220,10 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     const bandBoundaries = usePaletteStore((s) => s.bandBoundaries);
     useEffect(() => {
       const { depths, minDepth, maxDepth } = grid;
-      const depthRange = (maxDepth - minDepth) || 1;
       const colorAttr = geometry.getAttribute("color") as THREE.BufferAttribute | undefined;
       if (!colorAttr) return;
       const toColor = getColormap(effectiveColormapTheme);
-      const colors = colorAttr.array as Float32Array;
-      for (let i = 0; i < depths.length; i++) {
-        const depth = depths[i] ?? 0;
-        const t = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
-        const c = toColor(t);
-        colors[i * 3]     = c.r;
-        colors[i * 3 + 1] = c.g;
-        colors[i * 3 + 2] = c.b;
-      }
+      applyColormapToVertexColors(depths, minDepth, maxDepth, colorAttr.array as Float32Array, toColor);
       colorAttr.needsUpdate = true;
     }, [paletteShallow, paletteDeep, customStops, effectiveColormapTheme, grid, geometry, bandColors, bandBoundaries]);
 
