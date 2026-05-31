@@ -9,6 +9,31 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import React from "react";
+
+const makeApiClientMock = vi.hoisted(() => {
+  function noop() {}
+  function queryHook() { return { data: undefined, isLoading: false, isError: false, refetch: noop }; }
+  function mutationHook() { return { mutate: noop, mutateAsync: noop, isPending: false, isSuccess: false, variables: undefined }; }
+  return (overrides: Record<string, unknown> = {}) =>
+    new Proxy(overrides, {
+      get(t, p) {
+        if (typeof p === "symbol" || p === "then" || p === "catch" || p === "finally") return undefined;
+        const k = String(p);
+        if (k in t) return t[k];
+        if (k.startsWith("useGet")) return queryHook;
+        if (/^use(Post|Put|Patch|Delete|Health|Poe)/.test(k)) return mutationHook;
+        if (k.startsWith("getGet") && k.endsWith("QueryKey")) {
+          const label = k.replace(/^getGet/, "").replace(/QueryKey$/, "");
+          return (...a: unknown[]) => [label, ...a];
+        }
+        if (/^get(Get|Post|Put|Patch|Delete).*Url$/.test(k))
+          return (...a: unknown[]) => `/api/mock/${(a as unknown[]).filter(Boolean).join("/")}`;
+        return noop;
+      },
+      has(_t, p) { return typeof p !== "symbol"; },
+    });
+});
+
 import { DatasetFolderTree } from "@/components/DatasetFolderTree";
 
 // Deletes use a 5s undo window before the actual mutation fires; fake
@@ -66,34 +91,27 @@ vi.mock("@/components/LoadingDial", () => ({
   LoadingDial: () => null,
 }));
 
-vi.mock("@workspace/api-client-react", () => ({
-  useGetUserFolders: () => ({
-    data: [
-      { id: "f1", name: "Reservoirs", parentId: null },
-    ],
+vi.mock("@workspace/api-client-react", () =>
+  makeApiClientMock({
+    useGetUserFolders: () => ({
+      data: [{ id: "f1", name: "Reservoirs", parentId: null }],
+    }),
+    useDeleteUserFoldersId: () => ({
+      mutate: deleteFolderMutate,
+      isPending: false,
+      variables: undefined,
+    }),
+    useDeleteUserDatasetsId: () => ({
+      mutate: deleteDatasetMutate,
+      isPending: false,
+      variables: undefined,
+    }),
+    getGetUserFoldersQueryKey: () => ["user-folders"],
+    getGetUserDatasetsQueryKey: () => ["user-datasets"],
+    getGetUserDatasetsIdTerrainQueryKey: (id: string) => ["user-datasets", id, "terrain"],
+    getGetUserDatasetsIdOverviewQueryKey: (id: string) => ["user-datasets", id, "overview"],
   }),
-  usePostUserFolders: () => ({ mutate: vi.fn() }),
-  usePatchUserFoldersIdRename: () => ({ mutate: vi.fn() }),
-  usePatchUserFoldersIdMove: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
-  usePostUserFoldersIdDuplicate: () => ({ mutate: vi.fn() }),
-  useDeleteUserFoldersId: () => ({
-    mutate: deleteFolderMutate,
-    isPending: false,
-    variables: undefined,
-  }),
-  useDeleteUserDatasetsId: () => ({
-    mutate: deleteDatasetMutate,
-    isPending: false,
-    variables: undefined,
-  }),
-  usePatchUserDatasetsIdMove: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
-  usePatchUserDatasetsIdRename: () => ({ mutate: vi.fn() }),
-  usePostUserDatasetsIdDuplicate: () => ({ mutate: vi.fn() }),
-  getGetUserFoldersQueryKey: () => ["user-folders"],
-  getGetUserDatasetsQueryKey: () => ["user-datasets"],
-  getGetUserDatasetsIdTerrainQueryKey: (id: string) => ["user-datasets", id, "terrain"],
-  getGetUserDatasetsIdOverviewQueryKey: (id: string) => ["user-datasets", id, "overview"],
-}));
+);
 
 const datasets = [
   { id: "d1", name: "Cove A", folderId: "f1", minDepth: 0, maxDepth: 10, updatedAt: "2025-01-01" },

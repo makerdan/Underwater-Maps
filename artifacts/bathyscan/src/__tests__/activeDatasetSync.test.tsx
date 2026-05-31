@@ -8,6 +8,30 @@ import React, { useState } from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { act, render } from "@testing-library/react";
 
+const makeApiClientMock = vi.hoisted(() => {
+  function noop() {}
+  function queryHook() { return { data: undefined, isLoading: false, isError: false, refetch: noop }; }
+  function mutationHook() { return { mutate: noop, mutateAsync: noop, isPending: false, isSuccess: false, variables: undefined }; }
+  return (overrides: Record<string, unknown> = {}) =>
+    new Proxy(overrides, {
+      get(t, p) {
+        if (typeof p === "symbol" || p === "then" || p === "catch" || p === "finally") return undefined;
+        const k = String(p);
+        if (k in t) return t[k];
+        if (k.startsWith("useGet")) return queryHook;
+        if (/^use(Post|Put|Patch|Delete|Health|Poe)/.test(k)) return mutationHook;
+        if (k.startsWith("getGet") && k.endsWith("QueryKey")) {
+          const label = k.replace(/^getGet/, "").replace(/QueryKey$/, "");
+          return (...a: unknown[]) => [label, ...a];
+        }
+        if (/^get(Get|Post|Put|Patch|Delete).*Url$/.test(k))
+          return (...a: unknown[]) => `/api/mock/${(a as unknown[]).filter(Boolean).join("/")}`;
+        return noop;
+      },
+      has(_t, p) { return typeof p !== "symbol"; },
+    });
+});
+
 const terrainFor = (id: string) => ({
   datasetId: id,
   minLat: 0, maxLat: 1, minLon: 0, maxLon: 1, resolution: 2,
@@ -20,16 +44,18 @@ const overviewFor = (id: string) => ({
 });
 
 // Mock the API client to return id-keyed data the hook can commit.
-vi.mock("@workspace/api-client-react", () => ({
-  useGetDatasetsIdTerrain: (id: string, _opts: unknown, options: { query?: { enabled?: boolean } }) => ({
-    data: options?.query?.enabled && id ? terrainFor(id) : undefined,
+vi.mock("@workspace/api-client-react", () =>
+  makeApiClientMock({
+    useGetDatasetsIdTerrain: (id: string, _opts: unknown, options: { query?: { enabled?: boolean } }) => ({
+      data: options?.query?.enabled && id ? terrainFor(id) : undefined,
+    }),
+    useGetDatasetsIdOverview: (id: string, options: { query?: { enabled?: boolean } }) => ({
+      data: options?.query?.enabled && id ? overviewFor(id) : undefined,
+    }),
+    getGetDatasetsIdTerrainQueryKey: (id: string) => ["datasets", id, "terrain"],
+    getGetDatasetsIdOverviewQueryKey: (id: string) => ["datasets", id, "overview"],
   }),
-  useGetDatasetsIdOverview: (id: string, options: { query?: { enabled?: boolean } }) => ({
-    data: options?.query?.enabled && id ? overviewFor(id) : undefined,
-  }),
-  getGetDatasetsIdTerrainQueryKey: (id: string) => ["datasets", id, "terrain"],
-  getGetDatasetsIdOverviewQueryKey: (id: string) => ["datasets", id, "overview"],
-}));
+);
 
 import { useActiveDatasetSync } from "@/lib/useActiveDatasetSync";
 import { useTerrainStore } from "@/lib/terrainStore";

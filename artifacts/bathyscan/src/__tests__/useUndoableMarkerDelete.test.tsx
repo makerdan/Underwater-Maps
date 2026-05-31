@@ -40,14 +40,37 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
 });
 
 // ─── Mutation capture ─────────────────────────────────────────────────────
+const makeApiClientMock = vi.hoisted(() => {
+  function noop() {}
+  function queryHook() { return { data: undefined, isLoading: false, isError: false, refetch: noop }; }
+  function mutationHook() { return { mutate: noop, mutateAsync: noop, isPending: false, isSuccess: false, variables: undefined }; }
+  return (overrides: Record<string, unknown> = {}) =>
+    new Proxy(overrides, {
+      get(t, p) {
+        if (typeof p === "symbol" || p === "then" || p === "catch" || p === "finally") return undefined;
+        const k = String(p);
+        if (k in t) return t[k];
+        if (k.startsWith("useGet")) return queryHook;
+        if (/^use(Post|Put|Patch|Delete|Health|Poe)/.test(k)) return mutationHook;
+        if (k.startsWith("getGet") && k.endsWith("QueryKey")) {
+          const label = k.replace(/^getGet/, "").replace(/QueryKey$/, "");
+          return (...a: unknown[]) => [label, ...a];
+        }
+        if (/^get(Get|Post|Put|Patch|Delete).*Url$/.test(k))
+          return (...a: unknown[]) => `/api/mock/${(a as unknown[]).filter(Boolean).join("/")}`;
+        return noop;
+      },
+      has(_t, p) { return typeof p !== "symbol"; },
+    });
+});
+
 const deleteMutate = vi.fn();
-vi.mock("@workspace/api-client-react", () => ({
-  useDeleteMarkersId: () => ({ mutate: deleteMutate }),
-  getGetMarkersQueryKey: ({ datasetId }: { datasetId: string }) => [
-    "markers",
-    datasetId,
-  ],
-}));
+vi.mock("@workspace/api-client-react", () =>
+  makeApiClientMock({
+    useDeleteMarkersId: () => ({ mutate: deleteMutate }),
+    getGetMarkersQueryKey: ({ datasetId }: { datasetId: string }) => ["markers", datasetId],
+  }),
+);
 
 // ─── Toast capture ────────────────────────────────────────────────────────
 const dismissFn = vi.fn();
