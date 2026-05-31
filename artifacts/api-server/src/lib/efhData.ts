@@ -1283,3 +1283,37 @@ export const SALTWATER_EFH_BY_DATASET: Record<string, EfhFeatureCollection> = {
   "juneau": JUNEAU_APPROACHES_EFH,
   "ketchikan": KETCHIKAN_EFH,
 };
+
+// ---------------------------------------------------------------------------
+// Species → catalog entry ID mapping
+//
+// Every species key that appears in any region of SALTWATER_EFH_BY_DATASET
+// must have an entry here pointing to its corresponding `id` in
+// EXTRA_CATALOG_ENTRIES (catalogSeeder.ts).
+//
+// A test in efhData.test.ts enforces this automatically: adding a new species
+// to any regional collection without updating this map causes the test to
+// fail with an actionable error.
+// ---------------------------------------------------------------------------
+export const EFH_SPECIES_TO_CATALOG_ID: Readonly<Record<string, string>> = {
+  hippoglossus_stenolepis: "noaa-efh-alaska-halibut",
+  gadus_macrocephalus: "noaa-efh-alaska-pcod",
+  sebastes_ruberrimus: "noaa-efh-alaska-rockfish",
+  gadus_chalcogrammus: "noaa-efh-alaska-pollock",
+  atheresthes_stomias: "noaa-efh-alaska-arrowtooth",
+  anoplopoma_fimbria: "noaa-efh-alaska-sablefish",
+  pandalus_platyceros: "noaa-efh-alaska-spotted-prawn",
+  reinhardtius_hippoglossoides: "noaa-efh-alaska-turbot",
+  glyptocephalus_zachirus: "noaa-efh-alaska-rex-sole",
+  microgadus_proximus: "noaa-efh-alaska-tomcod",
+  sebastes_spp_juvenile: "noaa-efh-alaska-juvenile-rockfish",
+  metacarcinus_magister: "noaa-efh-alaska-dungeness-crab",
+  oncorhynchus_tshawytscha: "noaa-efh-alaska-chinook-salmon",
+  oncorhynchus_gorbuscha: "noaa-efh-alaska-pink-salmon",
+  oncorhynchus_keta: "noaa-efh-alaska-chum-salmon",
+  oncorhynchus_nerka: "noaa-efh-alaska-sockeye-salmon",
+  oncorhynchus_kisutch: "noaa-efh-alaska-coho-salmon",
+  chionoecetes_bairdi: "noaa-efh-alaska-tanner-crab",
+  sebastes_melanops: "noaa-efh-alaska-black-rockfish",
+  sebastes_maliger: "noaa-efh-alaska-quillback-rockfish",
+};

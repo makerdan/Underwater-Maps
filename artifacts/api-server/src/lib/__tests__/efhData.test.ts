@@ -11,11 +11,15 @@
  *   - No species entry has a depth range where min >= max
  *   - No species entry is missing a required color or source
  *   - The sablefish catalog keyword alias "black cod" is present
+ *   - EFH_SPECIES_TO_CATALOG_ID covers every species key across all regions
+ *   - Every catalog ID referenced by EFH_SPECIES_TO_CATALOG_ID exists in
+ *     EXTRA_CATALOG_ENTRIES (enforces automatic sync between the two files)
  */
 
 import { describe, it, expect } from "vitest";
 import {
   SALTWATER_EFH_BY_DATASET,
+  EFH_SPECIES_TO_CATALOG_ID,
   THORNE_BAY_EFH,
   GLACIER_BAY_EFH,
   ICY_STRAIT_EFH,
@@ -176,6 +180,63 @@ describe("Catalog keyword alias — sablefish 'black cod'", () => {
     // "sablefish" search should also score > 0
     const score2 = scoreEntry(sablefishEntry, ["sablefish"]);
     expect(score2).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// EFH catalog sync — EFH_SPECIES_TO_CATALOG_ID ↔ EXTRA_CATALOG_ENTRIES
+//
+// These tests are the automated guard that prevents drift between efhData.ts
+// (species overlay definitions) and catalogSeeder.ts (Find Data entries).
+//
+// When a new species is added to any regional collection, the developer must
+// also add it to EFH_SPECIES_TO_CATALOG_ID (efhData.ts) AND add a matching
+// entry in EXTRA_CATALOG_ENTRIES (catalogSeeder.ts). Both checks fail
+// immediately with an actionable message if either side is missing.
+// ---------------------------------------------------------------------------
+
+describe("EFH catalog sync — EFH_SPECIES_TO_CATALOG_ID ↔ EXTRA_CATALOG_ENTRIES", () => {
+  it("every species key in SALTWATER_EFH_BY_DATASET has an entry in EFH_SPECIES_TO_CATALOG_ID", () => {
+    const allSpeciesKeys = new Set<string>();
+    for (const collection of Object.values(SALTWATER_EFH_BY_DATASET)) {
+      for (const feature of collection.features) {
+        allSpeciesKeys.add(feature.properties.species);
+      }
+    }
+
+    const missing: string[] = [];
+    for (const key of allSpeciesKeys) {
+      if (!(key in EFH_SPECIES_TO_CATALOG_ID)) {
+        missing.push(key);
+      }
+    }
+
+    expect(
+      missing,
+      `Species keys present in overlay data but missing from EFH_SPECIES_TO_CATALOG_ID.\n` +
+        `Add each key → catalog-id mapping to EFH_SPECIES_TO_CATALOG_ID in efhData.ts\n` +
+        `and a matching entry in EXTRA_CATALOG_ENTRIES in catalogSeeder.ts:\n` +
+        missing.map((k) => `  "${k}"`).join("\n"),
+    ).toHaveLength(0);
+  });
+
+  it("every catalog ID referenced by EFH_SPECIES_TO_CATALOG_ID exists in EXTRA_CATALOG_ENTRIES", async () => {
+    const { EXTRA_CATALOG_ENTRIES } = await import("../catalogSeeder.js");
+    const catalogIds = new Set(EXTRA_CATALOG_ENTRIES.map((e) => e.id));
+
+    const missing: Array<{ species: string; catalogId: string }> = [];
+    for (const [speciesKey, catalogId] of Object.entries(EFH_SPECIES_TO_CATALOG_ID)) {
+      if (!catalogIds.has(catalogId)) {
+        missing.push({ species: speciesKey, catalogId });
+      }
+    }
+
+    expect(
+      missing,
+      `Catalog IDs referenced in EFH_SPECIES_TO_CATALOG_ID but absent from EXTRA_CATALOG_ENTRIES.\n` +
+        `Add a matching CatalogSeedEntry for each in catalogSeeder.ts:\n` +
+        missing.map(({ species, catalogId }) => `  "${species}" → "${catalogId}"`).join("\n"),
+    ).toHaveLength(0);
   });
 });
 

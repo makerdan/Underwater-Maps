@@ -36,6 +36,16 @@ const EXTRA_IDS = [
   "noaa-efh-alaska-rex-sole",
   "noaa-efh-alaska-tomcod",
   "noaa-efh-alaska-juvenile-rockfish",
+  // EFH salmon, crab, and rockfish entries (auto-sync coverage)
+  "noaa-efh-alaska-chinook-salmon",
+  "noaa-efh-alaska-pink-salmon",
+  "noaa-efh-alaska-chum-salmon",
+  "noaa-efh-alaska-sockeye-salmon",
+  "noaa-efh-alaska-coho-salmon",
+  "noaa-efh-alaska-dungeness-crab",
+  "noaa-efh-alaska-tanner-crab",
+  "noaa-efh-alaska-black-rockfish",
+  "noaa-efh-alaska-quillback-rockfish",
   // Intertidal / shoreline catalog entries (catalog-only, not 3D overlay)
   "adfg-intertidal-clam-habitat-se-alaska",
   "noaa-shorezone-tidal-pools-se-alaska",
