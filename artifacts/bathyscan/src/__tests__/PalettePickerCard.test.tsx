@@ -221,6 +221,47 @@ describe("PalettePickerCard — ocean mode band colours", () => {
   });
 });
 
+describe("CustomBandColorEditor — unit label sync", () => {
+  beforeEach(() => {
+    useSettingsStore.getState().setColormapTheme("custom");
+  });
+
+  it("shows 'ft' in all 10 band labels when units are imperial", () => {
+    useSettingsStore.setState({ ...useSettingsStore.getState(), units: "imperial" });
+    render(<Settings />);
+    for (let i = 0; i < 10; i++) {
+      const row = screen.getByTestId(`palette-custom-band-${i}`);
+      expect(row.textContent).toMatch(/ft/);
+    }
+  });
+
+  it("shows 'm' in all 10 band labels when units are metric", () => {
+    useSettingsStore.setState({ ...useSettingsStore.getState(), units: "metric" });
+    render(<Settings />);
+    for (let i = 0; i < 10; i++) {
+      const row = screen.getByTestId(`palette-custom-band-${i}`);
+      expect(row.textContent).toMatch(/\bm\b/);
+    }
+  });
+
+  it("updates all 10 band labels when units switch from imperial to metric", async () => {
+    useSettingsStore.setState({ ...useSettingsStore.getState(), units: "imperial" });
+    render(<Settings />);
+    for (let i = 0; i < 10; i++) {
+      expect(screen.getByTestId(`palette-custom-band-${i}`).textContent).toMatch(/ft/);
+    }
+    act(() => {
+      useSettingsStore.setState({ ...useSettingsStore.getState(), units: "metric" });
+    });
+    await waitFor(() => {
+      for (let i = 0; i < 10; i++) {
+        expect(screen.getByTestId(`palette-custom-band-${i}`).textContent).toMatch(/\bm\b/);
+        expect(screen.getByTestId(`palette-custom-band-${i}`).textContent).not.toMatch(/ft/);
+      }
+    });
+  });
+});
+
 describe("DepthBandColorEditor — unit label sync", () => {
   it("shows 'ft' in all 10 band labels when units are imperial", () => {
     useSettingsStore.setState({ ...useSettingsStore.getState(), units: "imperial" });
