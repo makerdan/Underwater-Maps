@@ -4,8 +4,10 @@ import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useGetMarkers, getGetMarkersQueryKey } from "@workspace/api-client-react";
 import type { Marker } from "@workspace/api-client-react";
-import { depthToColor } from "@/lib/colormap";
+import { getColormap } from "@/lib/colormap";
 import { usePaletteStore } from "@/lib/paletteStore";
+import { useSettingsStore } from "@/lib/settingsStore";
+import type { ColormapTheme } from "@/lib/settingsStore";
 import { WORLD_SIZE } from "@/lib/terrain";
 import { MARKER_COLOR } from "@/lib/markerConstants";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
@@ -20,8 +22,10 @@ function drawHeatmap(
   height: number,
   minDepth: number,
   maxDepth: number,
+  colormapTheme: ColormapTheme = "ocean",
 ) {
   const depthRange = maxDepth - minDepth || 1;
+  const toColor = getColormap(colormapTheme);
   const imageData = ctx.createImageData(W, H);
 
   for (let py = 0; py < H; py++) {
@@ -31,7 +35,7 @@ function drawHeatmap(
       const idx = gy * width + gx;
       const depth = depths[idx] ?? minDepth;
       const t = (depth - minDepth) / depthRange;
-      const c = depthToColor(t);
+      const c = toColor(t);
       const i = (py * W + px) * 4;
       imageData.data[i] = Math.round(c.r * 255);
       imageData.data[i + 1] = Math.round(c.g * 255);
@@ -105,8 +109,11 @@ export const Minimap: React.FC = () => {
   const heatmapRef = useRef<ImageData | null>(null);
   const markersRef = useRef<Marker[]>([]);
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
+  const colormapTheme = useSettingsStore((s) => s.colormapTheme);
   const shallow = usePaletteStore((s) => s.shallow);
   const deep = usePaletteStore((s) => s.deep);
+  const bandColors = usePaletteStore((s) => s.bandColors);
+  const customStops = usePaletteStore((s) => s.customStops);
 
   const datasetId = terrain?.datasetId ?? "";
   const { data: markers } = useGetMarkers(
@@ -119,7 +126,7 @@ export const Minimap: React.FC = () => {
     markersRef.current = markers ?? [];
   }, [markers]);
 
-  // Draw heatmap when terrain changes
+  // Draw heatmap when terrain, colormap theme, or palette changes
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !terrain) return;
@@ -133,9 +140,10 @@ export const Minimap: React.FC = () => {
       terrain.height,
       terrain.minDepth,
       terrain.maxDepth,
+      colormapTheme,
     );
     heatmapRef.current = ctx.getImageData(0, 0, W, H);
-  }, [terrain, shallow, deep]);
+  }, [terrain, colormapTheme, shallow, deep, bandColors, customStops]);
 
   // Subscribe to cameraStore and update arrow + marker dots imperatively
   useEffect(() => {

@@ -10,8 +10,8 @@ import type {
   SubstrateFeature,
 } from "@workspace/api-client-react";
 import type { Marker } from "@workspace/api-client-react";
-import type { UnitsSystem } from "./settingsStore";
-import { depthToColor } from "./colormap";
+import type { UnitsSystem, ColormapTheme } from "./settingsStore";
+import { getColormap } from "./colormap";
 import { MARKER_COLOR } from "./markerConstants";
 
 // ---------------------------------------------------------------------------
@@ -130,9 +130,13 @@ export function clampTransform(
  * Pre-render the depth grid as a coloured bitmap (one pixel per data cell).
  * Result is an offscreen HTMLCanvasElement that can be scaled via drawImage.
  */
-export function buildHeatmapBitmap(grid: TerrainData): HTMLCanvasElement {
+export function buildHeatmapBitmap(
+  grid: TerrainData,
+  colormapTheme: ColormapTheme = "ocean",
+): HTMLCanvasElement {
   const { width: W, height: H, depths, minDepth, maxDepth } = grid;
   const depthRange = maxDepth - minDepth || 1;
+  const toColor = getColormap(colormapTheme);
 
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -144,7 +148,7 @@ export function buildHeatmapBitmap(grid: TerrainData): HTMLCanvasElement {
     for (let col = 0; col < W; col++) {
       const depth = depths[row * W + col] ?? minDepth;
       const t = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
-      const c = depthToColor(t);
+      const c = toColor(t);
       const i = (row * W + col) * 4;
       imageData.data[i]     = Math.round(c.r * 255);
       imageData.data[i + 1] = Math.round(c.g * 255);
