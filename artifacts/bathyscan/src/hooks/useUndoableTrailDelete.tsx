@@ -56,7 +56,7 @@ export function useUndoableTrailDelete(
           { id },
           {
             onSuccess: () => {
-              qc.invalidateQueries({ queryKey: trailsQueryKey });
+              void qc.invalidateQueries({ queryKey: trailsQueryKey });
               void refetchTrails();
             },
             onError: () => {

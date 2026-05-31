@@ -518,7 +518,7 @@ router.get("/tidal", async (req, res): Promise<void> => {
     nextEvent: nextEventFrom(events, refMs),
     stationName: legacyStationName,
     stationId: legacyStationId,
-    isPredicted: overallSource === "estimated" || !!datetime,
+    isPredicted: overallSource === "estimated",
     source: overallSource,
     heightsSource,
     currentsSource,

@@ -32,6 +32,10 @@ export function useGpsFollowCamera(): void {
 
   const targetPos = useRef(new THREE.Vector3());
   const targetLook = useRef(new THREE.Vector3());
+  const targetQuat = useRef(new THREE.Quaternion());
+  const lookMatrix = useRef(new THREE.Matrix4());
+  const upVec = useRef(new THREE.Vector3(0, 1, 0));
+  const euler = useRef(new THREE.Euler());
   const outOfBoundsToastFired = useRef(false);
 
   const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
@@ -88,16 +92,15 @@ export function useGpsFollowCamera(): void {
 
     camera.position.lerp(targetPos.current, LERP_FACTOR);
 
-    const targetQuat = new THREE.Quaternion().setFromRotationMatrix(
-      new THREE.Matrix4().lookAt(camera.position, targetLook.current, new THREE.Vector3(0, 1, 0)),
-    );
-    camera.quaternion.slerp(targetQuat, LERP_FACTOR * 4);
+    lookMatrix.current.lookAt(camera.position, targetLook.current, upVec.current);
+    targetQuat.current.setFromRotationMatrix(lookMatrix.current);
+    camera.quaternion.slerp(targetQuat.current, LERP_FACTOR * 4);
 
-    const euler = new THREE.Euler().setFromQuaternion(camera.quaternion, "YXZ");
+    euler.current.setFromQuaternion(camera.quaternion, "YXZ");
     const MAX_PITCH = -Math.PI * 0.1;
-    if (euler.x > MAX_PITCH) {
-      euler.x = MAX_PITCH;
-      camera.quaternion.setFromEuler(euler);
+    if (euler.current.x > MAX_PITCH) {
+      euler.current.x = MAX_PITCH;
+      camera.quaternion.setFromEuler(euler.current);
     }
   });
 }

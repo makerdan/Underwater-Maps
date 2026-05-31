@@ -30,7 +30,8 @@ export async function queryLLM(
   query: string,
   context: QueryContext,
 ): Promise<QueryLLMResult> {
-  const resp = await fetch("/api/query", {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const resp = await fetch(`${base}/api/query`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",

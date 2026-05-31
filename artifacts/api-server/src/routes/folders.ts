@@ -8,7 +8,7 @@
  * deleting the folder itself.
  */
 import { Router } from "express";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, inArray } from "drizzle-orm";
 import {
   db,
   datasetFoldersTable,
@@ -276,11 +276,19 @@ router.post("/user/folders/:id/duplicate", requireAuth, async (req, res): Promis
         }
       }
 
-      // Deep copy the datasets inside the duplicated tree
+      // Deep copy the datasets inside the duplicated tree.
+      // Filter by folderId in SQL so we only load the relevant rows
+      // instead of fetching every dataset the user owns.
+      const folderIdsArr = Array.from(descendantIds);
       const datasetsInside = await tx
         .select()
         .from(customDatasetsTable)
-        .where(eq(customDatasetsTable.userId, userId));
+        .where(
+          and(
+            eq(customDatasetsTable.userId, userId),
+            inArray(customDatasetsTable.folderId, folderIdsArr),
+          ),
+        );
       for (const ds of datasetsInside) {
         if (ds.folderId && newIdByOld.has(ds.folderId)) {
           const [inserted] = await tx

@@ -37,7 +37,7 @@ export function encodeViewParams(p: ViewParams): string {
   sp.set("lon", p.lon.toFixed(6));
   sp.set("lat", p.lat.toFixed(6));
   sp.set("depth", Math.round(p.depth).toString());
-  sp.set("hdg", Math.round(p.heading).toString());
+  sp.set("hdg", (Math.round(p.heading) % 360).toString());
   sp.set("ds", p.datasetId);
   return sp.toString();
 }

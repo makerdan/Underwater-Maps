@@ -256,5 +256,9 @@ export function useServerSettingsSync(): void {
   }, [scheduleSync]);
 
   // Publish the current flush function so Settings can call it synchronously.
-  _flush = flush;
+  // Done in an effect so the module-level variable is only updated after the
+  // render has committed — assigning it during render is unsafe in Concurrent Mode.
+  useEffect(() => {
+    _flush = flush;
+  }, [flush]);
 }
