@@ -281,3 +281,144 @@ describe("Settings → terrain live sync — freshwater palette", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Direct store API → terrain frame read path
+//
+// These tests simulate what TerrainMesh.useFrame does on every tick:
+//   const { slots } = useZoneOverlayStore.getState();
+// They call the store actions directly (no Settings UI) and assert that
+// getState() immediately returns the mutated value — exactly the contract
+// TerrainMesh relies on to update uZoneTint*/uZoneVisible uniforms.
+// ---------------------------------------------------------------------------
+
+describe("Direct store API → terrain frame read path — saltwater (setSlotColor)", () => {
+  it("setSlotColor(0) is immediately visible via getState().slots[0].color", () => {
+    useZoneOverlayStore.getState().setSlotColor(0, "#aabb11");
+    const { slots } = useZoneOverlayStore.getState();
+    expect(slots[0]!.color).toBe("#aabb11");
+  });
+
+  it("setSlotColor(1) is immediately visible via getState().slots[1].color", () => {
+    useZoneOverlayStore.getState().setSlotColor(1, "#aabb22");
+    expect(useZoneOverlayStore.getState().slots[1]!.color).toBe("#aabb22");
+  });
+
+  it("setSlotColor(2) is immediately visible via getState().slots[2].color", () => {
+    useZoneOverlayStore.getState().setSlotColor(2, "#aabb33");
+    expect(useZoneOverlayStore.getState().slots[2]!.color).toBe("#aabb33");
+  });
+
+  it("setSlotColor(3) is immediately visible via getState().slots[3].color", () => {
+    useZoneOverlayStore.getState().setSlotColor(3, "#aabb44");
+    expect(useZoneOverlayStore.getState().slots[3]!.color).toBe("#aabb44");
+  });
+
+  it("setSlotColor updates only the targeted slot; other slots retain their colours", () => {
+    useZoneOverlayStore.getState().setSlotColor(1, "#deadbe");
+    const { slots } = useZoneOverlayStore.getState();
+    expect(slots[0]!.color).toBe(ZONE_DEFAULT_COLORS[0]);
+    expect(slots[1]!.color).toBe("#deadbe");
+    expect(slots[2]!.color).toBe(ZONE_DEFAULT_COLORS[2]);
+    expect(slots[3]!.color).toBe(ZONE_DEFAULT_COLORS[3]);
+  });
+
+  it("successive setSlotColor calls produce the latest value on each getState() read", () => {
+    useZoneOverlayStore.getState().setSlotColor(0, "#111111");
+    expect(useZoneOverlayStore.getState().slots[0]!.color).toBe("#111111");
+    useZoneOverlayStore.getState().setSlotColor(0, "#222222");
+    expect(useZoneOverlayStore.getState().slots[0]!.color).toBe("#222222");
+    useZoneOverlayStore.getState().setSlotColor(0, "#333333");
+    expect(useZoneOverlayStore.getState().slots[0]!.color).toBe("#333333");
+  });
+});
+
+describe("Direct store API → terrain frame read path — saltwater (setSlotVisible)", () => {
+  it("setSlotVisible(0, false) is immediately visible via getState().slots[0].visible", () => {
+    useZoneOverlayStore.getState().setSlotVisible(0, false);
+    expect(useZoneOverlayStore.getState().slots[0]!.visible).toBe(false);
+  });
+
+  it("setSlotVisible(3, false) is immediately visible via getState().slots[3].visible", () => {
+    useZoneOverlayStore.getState().setSlotVisible(3, false);
+    expect(useZoneOverlayStore.getState().slots[3]!.visible).toBe(false);
+  });
+
+  it("setSlotVisible(1, false) then setSlotVisible(1, true) reflects true on next read", () => {
+    useZoneOverlayStore.getState().setSlotVisible(1, false);
+    expect(useZoneOverlayStore.getState().slots[1]!.visible).toBe(false);
+    useZoneOverlayStore.getState().setSlotVisible(1, true);
+    expect(useZoneOverlayStore.getState().slots[1]!.visible).toBe(true);
+  });
+
+  it("hiding multiple slots is reflected independently in a single getState() read", () => {
+    useZoneOverlayStore.getState().setSlotVisible(0, false);
+    useZoneOverlayStore.getState().setSlotVisible(2, false);
+    const { slots } = useZoneOverlayStore.getState();
+    expect(slots[0]!.visible).toBe(false);
+    expect(slots[1]!.visible).toBe(true);
+    expect(slots[2]!.visible).toBe(false);
+    expect(slots[3]!.visible).toBe(true);
+  });
+
+  it("setSlotVisible does not change the slot's colour in getState()", () => {
+    const before = useZoneOverlayStore.getState().slots[2]!.color;
+    useZoneOverlayStore.getState().setSlotVisible(2, false);
+    expect(useZoneOverlayStore.getState().slots[2]!.color).toBe(before);
+  });
+});
+
+describe("Direct store API → terrain frame read path — freshwater palette", () => {
+  beforeEach(() => {
+    act(() => {
+      useZoneOverlayStore.getState().setActiveWaterType("freshwater");
+    });
+  });
+
+  it("setSlotColor in freshwater mode is immediately reflected in getState().slots", () => {
+    useZoneOverlayStore.getState().setSlotColor(0, "#11ff00");
+    expect(useZoneOverlayStore.getState().slots[0]!.color).toBe("#11ff00");
+  });
+
+  it("freshwater setSlotColor is in getState().freshwater but not getState().saltwater", () => {
+    useZoneOverlayStore.getState().setSlotColor(1, "#22ff00");
+    const state = useZoneOverlayStore.getState();
+    expect(state.freshwater[1]!.color).toBe("#22ff00");
+    expect(state.saltwater[1]!.color).toBe(ZONE_DEFAULT_COLORS[1]);
+  });
+
+  it("setSlotVisible(2, false) in freshwater mode is in getState().freshwater but not saltwater", () => {
+    useZoneOverlayStore.getState().setSlotVisible(2, false);
+    const state = useZoneOverlayStore.getState();
+    expect(state.freshwater[2]!.visible).toBe(false);
+    expect(state.saltwater[2]!.visible).toBe(true);
+  });
+
+  it("switching back to saltwater makes getState().slots reflect saltwater palette", () => {
+    useZoneOverlayStore.getState().setSlotColor(0, "#33ff00");
+    useZoneOverlayStore.getState().setActiveWaterType("saltwater");
+    expect(useZoneOverlayStore.getState().slots[0]!.color).toBe(ZONE_DEFAULT_COLORS[0]);
+  });
+});
+
+describe("Direct store API → terrain frame read path — reset", () => {
+  it("resetToDefaults immediately restores all colours in getState().slots", () => {
+    useZoneOverlayStore.getState().setSlotColor(0, "#deadbe");
+    useZoneOverlayStore.getState().setSlotColor(3, "#c0ffee");
+    useZoneOverlayStore.getState().resetToDefaults();
+    const { slots } = useZoneOverlayStore.getState();
+    ZONE_DEFAULT_COLORS.forEach((color, i) => {
+      expect(slots[i as 0 | 1 | 2 | 3]!.color.toLowerCase()).toBe(color.toLowerCase());
+    });
+  });
+
+  it("resetToDefaults immediately restores all slots to visible in getState().slots", () => {
+    useZoneOverlayStore.getState().setSlotVisible(1, false);
+    useZoneOverlayStore.getState().setSlotVisible(3, false);
+    useZoneOverlayStore.getState().resetToDefaults();
+    const { slots } = useZoneOverlayStore.getState();
+    for (let i = 0; i < 4; i++) {
+      expect(slots[i as 0 | 1 | 2 | 3]!.visible).toBe(true);
+    }
+  });
+});
