@@ -53,6 +53,7 @@ const DATA_TYPE_ICONS: Record<string, string> = {
   habitat: "🐟",
   lidar: "📡",
   chart: "🗺️",
+  intertidal: "🏖️",
 };
 
 /** Catalog IDs that belong to the intertidal / shoreline category. */
@@ -482,11 +483,13 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
 
   // Catalog search
+  // "intertidal" is a client-side-only filter (not a real dataType on the API),
+  // so we don't forward it to the server — we filter results locally instead.
   const searchParams = {
     q: debouncedQuery || undefined,
-    dataType: (dataTypeFilter || undefined) as GetDatasetsCatalogSearchDataType | undefined,
+    dataType: (dataTypeFilter && dataTypeFilter !== "intertidal" ? dataTypeFilter : undefined) as GetDatasetsCatalogSearchDataType | undefined,
   };
-  const { data: searchResults = [], isFetching: isSearching } = useGetDatasetsCatalogSearch(
+  const { data: rawSearchResults = [], isFetching: isSearching } = useGetDatasetsCatalogSearch(
     searchParams,
     {
       query: {
@@ -496,6 +499,12 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
       },
     },
   );
+
+  // Client-side intertidal filter — the API doesn't know about this category,
+  // so we narrow down the raw results ourselves when that chip is active.
+  const searchResults = dataTypeFilter === "intertidal"
+    ? rawSearchResults.filter((e) => INTERTIDAL_CATALOG_IDS.has(e.id))
+    : rawSearchResults;
 
   // My Saves
   const {
@@ -790,8 +799,16 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               data-testid="find-data-search-input"
             />
             <div style={{ display: "flex", gap: 4, marginTop: 8, flexWrap: "wrap" }}>
-              {["", "bathymetry", "substrate", "habitat", "lidar", "chart"].map((dt) => (
-                <ViewscreenTooltip key={dt} label={dt === "" ? "Show all data types" : `Filter to ${dt} datasets`} side="bottom">
+              {["", "bathymetry", "substrate", "habitat", "lidar", "chart", "intertidal"].map((dt) => (
+                <ViewscreenTooltip
+                  key={dt}
+                  label={
+                    dt === "" ? "Show all data types" :
+                    dt === "intertidal" ? "Filter to intertidal / shoreline entries" :
+                    `Filter to ${dt} datasets`
+                  }
+                  side="bottom"
+                >
                 <button
                   onClick={() => setDataTypeFilter(dt)}
                   style={{
@@ -806,7 +823,9 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                     textTransform: "uppercase",
                   }}
                 >
-                  {dt === "" ? "All" : (DATA_TYPE_ICONS[dt] ?? "") + " " + dt}
+                  {dt === "" ? "All" :
+                   dt === "intertidal" ? `${DATA_TYPE_ICONS.intertidal} Intertidal / Shoreline` :
+                   (DATA_TYPE_ICONS[dt] ?? "") + " " + dt}
                 </button>
                 </ViewscreenTooltip>
               ))}
