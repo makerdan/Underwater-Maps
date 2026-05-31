@@ -7,6 +7,30 @@ import { useUiStore } from "@/lib/uiStore";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { substrateCollection } from "./substrateFixture";
 
+const makeApiClientMock = vi.hoisted(() => {
+  function noop() {}
+  function queryHook() { return { data: undefined, isLoading: false, isError: false, refetch: noop }; }
+  function mutationHook() { return { mutate: noop, mutateAsync: noop, isPending: false, isSuccess: false, variables: undefined }; }
+  return (overrides: Record<string, unknown> = {}) =>
+    new Proxy(overrides, {
+      get(t, p) {
+        if (typeof p === "symbol" || p === "then" || p === "catch" || p === "finally") return undefined;
+        const k = String(p);
+        if (k in t) return t[k];
+        if (k.startsWith("useGet")) return queryHook;
+        if (/^use(Post|Put|Patch|Delete|Health|Poe)/.test(k)) return mutationHook;
+        if (k.startsWith("getGet") && k.endsWith("QueryKey")) {
+          const label = k.replace(/^getGet/, "").replace(/QueryKey$/, "");
+          return (...a: unknown[]) => [label, ...a];
+        }
+        if (/^get(Get|Post|Put|Patch|Delete).*Url$/.test(k))
+          return (...a: unknown[]) => `/api/mock/${(a as unknown[]).filter(Boolean).join("/")}`;
+        return noop;
+      },
+      has(_t, p) { return typeof p !== "symbol"; },
+    });
+});
+
 vi.mock("@/lib/context", () => ({
   useAppState: () => ({ setDatasetId: vi.fn(), terrain: null }),
 }));
@@ -15,10 +39,8 @@ vi.mock("@/lib/simulatedDataStore", () => ({
   requestDatasetSwitch: vi.fn(),
 }));
 
-vi.mock("@workspace/api-client-react", () => {
-  const noop = () => ({ data: undefined });
-  const noopList = () => ({ data: [], refetch: vi.fn() });
-  return {
+vi.mock("@workspace/api-client-react", () =>
+  makeApiClientMock({
     useGetMarkers: () => ({ data: [] }),
     getGetMarkersQueryKey: (p: unknown) => ["markers", p],
     useGetTrails: () => ({ data: [], refetch: vi.fn() }),
@@ -28,17 +50,15 @@ vi.mock("@workspace/api-client-react", () => {
     useGetDatasets: () => ({ data: [{ id: "test-ds", hasEfh: false }] }),
     getGetDatasetsQueryKey: (p: unknown) => ["datasets", p],
     usePostDatasetsBboxQuery: () => ({ mutateAsync: vi.fn() }),
-    useGetDatasetsMySaves: noopList,
+    useGetDatasetsMySaves: () => ({ data: [], refetch: vi.fn() }),
     getGetDatasetsMySavesQueryKey: () => ["my-saves"],
     usePostDatasetsCatalogIdSave: () => ({ mutateAsync: vi.fn() }),
-    useGetEfh: noop,
+    useGetEfh: () => ({ data: undefined }),
     getGetEfhQueryKey: (p: unknown) => ["efh", p],
     useGetSubstrate: () => ({ data: substrateCollection }),
     getGetSubstrateQueryKey: (id: string) => ["substrate", id],
-    useGetWeatherStations: () => ({ data: undefined, isLoading: false, isFetching: false, isError: false }),
-    getGetWeatherStationsQueryKey: (p: unknown) => ["weather-stations", p],
-  };
-});
+  }),
+);
 
 import { OverviewMap } from "@/components/OverviewMap";
 
