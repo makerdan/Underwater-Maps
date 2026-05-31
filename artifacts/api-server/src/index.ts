@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { seedDatasetCatalog } from "./lib/catalogSeeder.js";
 import { startBucketMonitor } from "./lib/bucketMonitor.js";
 import { startWeatherCacheRefresher } from "./lib/weatherCacheRefresher.js";
+import { recoverStaleUploadJobs } from "./routes/datasets.js";
 
 // ---------------------------------------------------------------------------
 // Process-level safety nets
@@ -59,6 +60,12 @@ const server = app.listen(port, "127.0.0.1", (err) => {
   }
 
   logger.info({ port }, "Server listening on 127.0.0.1");
+
+  // Mark any upload jobs that were still queued/processing when the previous
+  // process died — turns an eternal spinner into a clear "re-upload" error.
+  void recoverStaleUploadJobs().catch((recoverErr: unknown) => {
+    logger.warn({ err: recoverErr }, "Upload job recovery failed (non-critical)");
+  });
 
   // Seed the dataset discovery catalog on startup (idempotent).
   void seedDatasetCatalog().catch((seedErr: unknown) => {

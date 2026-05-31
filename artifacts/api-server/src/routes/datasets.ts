@@ -4,10 +4,10 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import multer from "multer";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, or } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { z } from "zod";
-import { db, customDatasetsTable, userSettingsTable } from "@workspace/db";
+import { db, customDatasetsTable, userSettingsTable, uploadJobsTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
@@ -52,6 +52,83 @@ interface JobState {
 }
 const uploadJobs = new Map<string, JobState>();
 registerCache(() => uploadJobs.clear());
+
+/**
+ * Persist a job's durable fields (status, progress, error, datasetId) to the
+ * database.  Called at key milestones so that a fresh server process can
+ * reconstruct job state without the in-memory Map.
+ *
+ * Uses an upsert so it works for both initial creation and later updates.
+ */
+async function persistJobToDB(jobId: string, state: JobState): Promise<void> {
+  try {
+    await db
+      .insert(uploadJobsTable)
+      .values({
+        id: jobId,
+        userId: state.userId,
+        status: state.status,
+        progress: state.progress,
+        error: state.error ?? null,
+        datasetId: state.datasetId ?? null,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: uploadJobsTable.id,
+        set: {
+          status: state.status,
+          progress: state.progress,
+          error: state.error ?? null,
+          datasetId: state.datasetId ?? null,
+          updatedAt: new Date(),
+        },
+      });
+  } catch (err) {
+    // Persistence failure is non-fatal during processing — the in-memory state
+    // is still the source of truth for the current server process.
+    console.error(`[upload-job:${jobId}] failed to persist state to DB:`, err);
+  }
+}
+
+/**
+ * On server startup, scan the database for any upload jobs that are still
+ * queued or processing (meaning the previous process was killed mid-flight).
+ * Mark them as error so the client gets a clear "re-upload" message instead
+ * of polling forever.
+ *
+ * Called once from the server's startup sequence in index.ts.
+ */
+export async function recoverStaleUploadJobs(): Promise<void> {
+  try {
+    const staleJobs = await db
+      .select({ id: uploadJobsTable.id })
+      .from(uploadJobsTable)
+      .where(or(
+        eq(uploadJobsTable.status, "queued"),
+        eq(uploadJobsTable.status, "processing"),
+      ));
+
+    if (staleJobs.length === 0) return;
+
+    const ids = staleJobs.map((j) => j.id);
+    await db
+      .update(uploadJobsTable)
+      .set({
+        status: "error",
+        error: "Server restarted while this job was in progress — please re-upload your file.",
+        updatedAt: new Date(),
+      })
+      .where(inArray(uploadJobsTable.id, ids));
+
+    console.info(
+      `[upload-jobs] marked ${ids.length} stale job(s) as error after restart`,
+    );
+  } catch (err) {
+    // Non-fatal — the server continues; stale jobs will surface as 404 on poll
+    // (still better than an eternal spinner) if the DB update fails.
+    console.error("[upload-jobs] failed to recover stale jobs on startup:", err);
+  }
+}
 
 // Temp directory for received chunks: <tmpdir>/bathyscan-chunks/<uploadId>-chunk-<index>
 const CHUNK_BASE_DIR = path.join(os.tmpdir(), "bathyscan-chunks");
@@ -179,6 +256,8 @@ async function processUploadJob(
   try {
     job.status = "processing";
     job.progress = 5;
+    // Persist "processing" to DB so a future process knows this job started.
+    await persistJobToDB(jobId, { ...job });
 
     // Stream chunks one-at-a-time into a single assembled file.
     // Peak RAM: one 5 MB chunk. No Buffer.concat across all chunks.
@@ -260,11 +339,13 @@ async function processUploadJob(
     job.progress = 100;
     job.status = "done";
     job.datasetId = saved?.id ?? gridId;
+    await persistJobToDB(jobId, { ...job });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Processing failed";
     job.status = "error";
     job.error = msg;
     console.error(`[chunk-job:${jobId}] failed:`, err);
+    await persistJobToDB(jobId, { ...job });
   } finally {
     await cleanupChunks(uploadId, totalChunks);
     await fs.promises.unlink(assembledPath).catch(() => undefined);
@@ -1155,7 +1236,12 @@ router.post(
     const smoothing = await getSmoothingPreference(req);
     const jobId = crypto.randomUUID();
 
-    uploadJobs.set(jobId, { status: "queued", progress: 0, userId });
+    const initialState: JobState = { status: "queued", progress: 0, userId };
+    uploadJobs.set(jobId, initialState);
+
+    // Persist initial "queued" state to DB before firing the job so that if
+    // the process dies immediately the row exists and can be recovered.
+    await persistJobToDB(jobId, initialState);
 
     // Fire-and-forget — the client polls /jobs/:jobId
     void processUploadJob(jobId, uploadId, totalChunks, fileName, resolution, userId, smoothing);
@@ -1244,29 +1330,60 @@ router.get(
 // ── GET /datasets/upload/jobs/:jobId ─────────────────────────────────────────
 // Returns the current state of a background upload-processing job.
 // Only the user who created the job (via /chunk/finalize) can poll it.
+// Falls back to the database when the job is not in the in-memory map (e.g.
+// after a server restart) so the client always gets a meaningful response
+// instead of a bare 404 / eternal spinner.
 // Response: { status, progress, error?, datasetId? }
 router.get(
   "/datasets/upload/jobs/:jobId",
   requireAuth,
-  (req: Request, res: Response): void => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const jobId = String(req.params["jobId"] ?? "");
-    const job = uploadJobs.get(jobId);
-    if (!job) {
-      res.status(404).json({ error: "not_found", details: "Job not found or already expired." });
+    const userId = (req as AuthenticatedRequest).clerkUserId;
+
+    // Fast path: in-memory map (current process)
+    const memJob = uploadJobs.get(jobId);
+    if (memJob) {
+      if (memJob.userId !== userId) {
+        res.status(403).json({ error: "forbidden", details: "This job belongs to a different user." });
+        return;
+      }
+      res.json({
+        status: memJob.status,
+        progress: memJob.progress,
+        ...(memJob.error !== undefined ? { error: memJob.error } : {}),
+        ...(memJob.datasetId !== undefined ? { datasetId: memJob.datasetId } : {}),
+      });
       return;
     }
-    const userId = (req as AuthenticatedRequest).clerkUserId;
-    if (job.userId !== userId) {
+
+    // Slow path: check the database (handles server restarts / new processes)
+    const rows = await db
+      .select()
+      .from(uploadJobsTable)
+      .where(eq(uploadJobsTable.id, jobId));
+
+    const dbJob = rows[0];
+    if (!dbJob) {
+      res.status(404).json({
+        error: "not_found",
+        details: "Job not found — please re-upload your file.",
+      });
+      return;
+    }
+
+    if (dbJob.userId !== userId) {
       res.status(403).json({ error: "forbidden", details: "This job belongs to a different user." });
       return;
     }
+
     res.json({
-      status: job.status,
-      progress: job.progress,
-      ...(job.error !== undefined ? { error: job.error } : {}),
-      ...(job.datasetId !== undefined ? { datasetId: job.datasetId } : {}),
+      status: dbJob.status,
+      progress: dbJob.progress,
+      ...(dbJob.error !== null ? { error: dbJob.error } : {}),
+      ...(dbJob.datasetId !== null ? { datasetId: dbJob.datasetId } : {}),
     });
-  },
+  }),
 );
 
 export default router;

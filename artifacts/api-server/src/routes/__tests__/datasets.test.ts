@@ -6,6 +6,7 @@
  *  2. binary survey file uploads — GeoTIFF, NetCDF, LAS 1.2, LAS 1.4 uploaded via
  *     POST /api/datasets/upload and validated end-to-end through the parser stack
  *  3. hash format compatibility for GET /api/datasets/:id/zones
+ *  4. upload job poll — DB fallback and clear error messages after server restart
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
@@ -13,16 +14,33 @@ import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
+// Mutable DB row store so individual tests can control what the job-poll
+// DB fallback returns without re-mocking the entire module.
+let _mockJobRows: unknown[] = [];
+
 vi.mock("@workspace/db", () => ({
   db: {
-    select: () => ({ from: () => ({ where: () => Promise.resolve([]) }) }),
+    select: () => ({
+      from: () => ({
+        where: () => Promise.resolve(_mockJobRows),
+      }),
+    }),
     insert: () => ({
-      values: () => ({ returning: () => Promise.resolve([]) }),
+      values: () => ({
+        returning: () => Promise.resolve([]),
+        onConflictDoUpdate: () => Promise.resolve([]),
+      }),
+    }),
+    update: () => ({
+      set: () => ({
+        where: () => Promise.resolve([]),
+      }),
     }),
     transaction: async <T>(cb: (tx: unknown) => Promise<T>) => cb({}),
   },
   customDatasetsTable: {},
   userSettingsTable: {},
+  uploadJobsTable: {},
 }));
 
 vi.mock("@clerk/express", () => ({
@@ -46,6 +64,8 @@ import app from "../../app.js";
 
 beforeEach(() => {
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
+  // Reset the DB mock row store before each test.
+  _mockJobRows = [];
 });
 
 // /datasets/upload is auth-gated (task #433). All requests below carry the
@@ -225,5 +245,92 @@ describe("GET /api/datasets/:id/zones — hash format compatibility", () => {
       .query({ h: "deadbeef" });
     expect(res.status).toBe(400);
     expect(res.body).toMatchObject({ error: "invalid_param" });
+  });
+});
+
+describe("GET /api/datasets/upload/jobs/:jobId — DB fallback after server restart", () => {
+  const JOB_ID = "00000000-0000-0000-0000-000000000001";
+  const OTHER_USER_JOB_ID = "00000000-0000-0000-0000-000000000002";
+
+  it("returns 404 with a clear re-upload message when job is not found anywhere", async () => {
+    // _mockJobRows is [] (reset in beforeEach) — neither memory nor DB has the job
+    const res = await request(app)
+      .get(`/api/datasets/upload/jobs/${JOB_ID}`)
+      .set("x-e2e-user-id", E2E_USER);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ error: "not_found" });
+    expect(res.body.details).toMatch(/re-upload/i);
+  });
+
+  it("falls back to DB and returns error state for a stale job recovered after restart", async () => {
+    // Simulate recoverStaleUploadJobs having already marked this job as error
+    _mockJobRows = [
+      {
+        id: JOB_ID,
+        userId: E2E_USER,
+        status: "error",
+        progress: 5,
+        error: "Server restarted while this job was in progress — please re-upload your file.",
+        datasetId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ];
+
+    const res = await request(app)
+      .get(`/api/datasets/upload/jobs/${JOB_ID}`)
+      .set("x-e2e-user-id", E2E_USER);
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("error");
+    expect(res.body.error).toMatch(/re-upload/i);
+  });
+
+  it("returns 403 when a DB-resident job belongs to a different user", async () => {
+    _mockJobRows = [
+      {
+        id: OTHER_USER_JOB_ID,
+        userId: "user_different",
+        status: "done",
+        progress: 100,
+        error: null,
+        datasetId: "some-dataset-id",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ];
+
+    const res = await request(app)
+      .get(`/api/datasets/upload/jobs/${OTHER_USER_JOB_ID}`)
+      .set("x-e2e-user-id", E2E_USER);
+
+    expect(res.status).toBe(403);
+    expect(res.body).toMatchObject({ error: "forbidden" });
+  });
+
+  it("returns done state from DB with datasetId for a completed job", async () => {
+    const DATASET_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+    _mockJobRows = [
+      {
+        id: JOB_ID,
+        userId: E2E_USER,
+        status: "done",
+        progress: 100,
+        error: null,
+        datasetId: DATASET_ID,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ];
+
+    const res = await request(app)
+      .get(`/api/datasets/upload/jobs/${JOB_ID}`)
+      .set("x-e2e-user-id", E2E_USER);
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("done");
+    expect(res.body.datasetId).toBe(DATASET_ID);
+    expect(res.body).not.toHaveProperty("error");
   });
 });
