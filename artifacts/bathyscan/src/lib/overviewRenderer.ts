@@ -1324,6 +1324,46 @@ export function renderContourLines(
     byDepth.get(seg.depth)!.push(seg);
   }
 
+  // ---------------------------------------------------------------------------
+  // Label placement helpers
+  // ---------------------------------------------------------------------------
+  // Minimum canvas-pixel distance between any two placed labels.
+  const MIN_LABEL_GAP = 72;
+
+  // Exclusion zones — labels must not overlap these UI elements.
+  // Colormap legend: 10 px strip at top-right (x = cW-26, y = 16, h = 120).
+  // Its depth labels extend ~55 px further left, so guard to cW-80.
+  // Scale bar: 100 px wide at bottom-left (x=16, y=cH-24).
+  const cW = ctx.canvas.width;
+  const cH = ctx.canvas.height;
+  const exclusionZones = [
+    { x: cW - 80, y: 0,      w: 80,  h: 155 }, // colormap legend (top-right)
+    { x: 0,       y: cH - 50, w: 135, h: 50  }, // scale bar (bottom-left)
+  ];
+
+  const placedLabels: Array<{ x: number; y: number }> = [];
+
+  /** True if the candidate label rect (centred at lx, ly) overlaps an exclusion zone. */
+  const overlapsExclusion = (lx: number, ly: number, tw: number): boolean => {
+    const hw = tw / 2 + 4;
+    const hh = fontSize / 2 + 3;
+    for (const z of exclusionZones) {
+      if (lx + hw > z.x && lx - hw < z.x + z.w &&
+          ly + hh > z.y && ly - hh < z.y + z.h) return true;
+    }
+    return false;
+  };
+
+  /** True if the candidate position is within MIN_LABEL_GAP pixels of any placed label. */
+  const tooCloseToPlaced = (lx: number, ly: number): boolean => {
+    for (const p of placedLabels) {
+      const dx = lx - p.x;
+      const dy = ly - p.y;
+      if (dx * dx + dy * dy < MIN_LABEL_GAP * MIN_LABEL_GAP) return true;
+    }
+    return false;
+  };
+
   for (const [depth, segs] of byDepth) {
     const t01 = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
     const col = toColor(t01).clone().convertLinearToSRGB();
@@ -1344,27 +1384,49 @@ export function renderContourLines(
     }
     ctx.stroke();
 
-    // Place one depth label near the middle of the segment list
-    if (showLabels && segs.length > 0) {
-      const midSeg = segs[Math.floor(segs.length / 2)]!;
-      const mx = (midSeg.x0 + midSeg.x1) / 2;
-      const my = (midSeg.y0 + midSeg.y1) / 2;
-      const [lx, ly] = toCanvas(mx, my);
+    if (!showLabels || segs.length === 0) continue;
 
-      // Contour depths are stored in metres; labels are formatted in the active unit.
-      // Nautical uses fathoms for contour intervals (1 fathom = 1.8288 m).
-      const label =
-        units === "nautical"
-          ? `${Math.round(depth / 1.8288)} fm`
-          : formatDepth(depth, { units, decimals: 0 });
-      const tw = ctx.measureText(label).width;
+    // Contour depths are stored in metres; labels are formatted in the active unit.
+    // Nautical uses fathoms for contour intervals (1 fathom = 1.8288 m).
+    const label =
+      units === "nautical"
+        ? `${Math.round(depth / 1.8288)} fm`
+        : formatDepth(depth, { units, decimals: 0 });
+    const tw = ctx.measureText(label).width;
 
+    // A segment must be at least this long in canvas pixels to physically fit
+    // the label text with comfortable padding on each side.
+    const minSegPx = tw + 16;
+
+    // Build candidates: midpoint + pixel length for every long-enough segment.
+    type Candidate = { cx: number; cy: number; px: number };
+    const candidates: Candidate[] = [];
+    for (const seg of segs) {
+      const [cx0, cy0] = toCanvas(seg.x0, seg.y0);
+      const [cx1, cy1] = toCanvas(seg.x1, seg.y1);
+      const dx = cx1 - cx0;
+      const dy = cy1 - cy0;
+      const px = Math.sqrt(dx * dx + dy * dy);
+      if (px < minSegPx) continue;
+      candidates.push({ cx: (cx0 + cx1) / 2, cy: (cy0 + cy1) / 2, px });
+    }
+
+    // Prefer longer segments (more stable, better visual weight).
+    candidates.sort((a, b) => b.px - a.px);
+
+    // Try each candidate in order; place the first one that passes all checks.
+    for (const c of candidates) {
+      if (overlapsExclusion(c.cx, c.cy, tw)) continue;
+      if (tooCloseToPlaced(c.cx, c.cy)) continue;
+
+      placedLabels.push({ x: c.cx, y: c.cy });
       ctx.fillStyle = "rgba(2,8,24,0.65)";
-      ctx.fillRect(lx - tw / 2 - 3, ly - fontSize / 2 - 2, tw + 6, fontSize + 4);
+      ctx.fillRect(c.cx - tw / 2 - 3, c.cy - fontSize / 2 - 2, tw + 6, fontSize + 4);
       ctx.fillStyle = `rgba(${r},${g},${b},0.90)`;
       ctx.textBaseline = "middle";
       ctx.textAlign = "center";
-      ctx.fillText(label, lx, ly);
+      ctx.fillText(label, c.cx, c.cy);
+      break;
     }
   }
 
