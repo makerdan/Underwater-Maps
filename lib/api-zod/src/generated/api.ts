@@ -854,28 +854,7 @@ export const getSettingsResponseZoneOverlaySlotsFreshwaterItemColorRegExp = new 
 export const getSettingsResponseZoneOverlaySlotsFreshwaterMin = 4;
 export const getSettingsResponseZoneOverlaySlotsFreshwaterMax = 4;
 
-export const getSettingsResponseWeatherStationsActiveDefault = false;
-export const getSettingsResponseRawsOverlayActiveDefault = false;
-export const getSettingsResponseWindOverlayActiveDefault = false;
-export const getSettingsResponseTideOverlayActiveDefault = false;
-export const getSettingsResponseCurrentOverlayActiveDefault = false;
-export const getSettingsResponseSidePaneCollapsedDefault = false;
-export const getSettingsResponseZonePaintBrushRadiusDefault = 4;
-export const getSettingsResponseZonePaintBrushRadiusMax = 20;
 
-export const getSettingsResponseZoneOverlayEnabledDefault = false;
-export const getSettingsResponseZonePaintModeDefault = false;
-export const getSettingsResponseZonePaintSlotDefault = 0;
-export const getSettingsResponseZonePaintSlotMin = 0;
-export const getSettingsResponseZonePaintSlotMax = 3;
-
-export const getSettingsResponseSubstrateColorModeDefault = false;
-export const getSettingsResponseHiddenSubstrateClassesDefault = [];
-export const getSettingsResponseIntertidalHotspotsEnabledDefault = false;
-export const getSettingsResponseIntertidalScoreModeDefault = `tidepool`;
-export const getSettingsResponseEfhOverlayEnabledDefault = false;
-export const getSettingsResponseHiddenEfhSpeciesDefault = [];
-export const getSettingsResponseGlobalFontSizeDefault = `medium`;
 
 export const GetSettingsResponse = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(getSettingsResponseTextureQualityDefault),
@@ -939,25 +918,7 @@ export const GetSettingsResponse = zod.object({
   "color": zod.string().regex(getSettingsResponseZoneOverlaySlotsFreshwaterItemColorRegExp),
   "visible": zod.boolean()
 })).min(getSettingsResponseZoneOverlaySlotsFreshwaterMin).max(getSettingsResponseZoneOverlaySlotsFreshwaterMax).optional()
-}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.'),
-  "weatherStationsActive": zod.boolean().default(getSettingsResponseWeatherStationsActiveDefault).describe('Show ASOS\/AWOS weather station overlay on the overview map.'),
-  "rawsOverlayActive": zod.boolean().default(getSettingsResponseRawsOverlayActiveDefault).describe('Show RAWS (Remote Automated Weather Stations) overlay on the overview map.'),
-  "windOverlayActive": zod.boolean().default(getSettingsResponseWindOverlayActiveDefault).describe('Show wind barb overlay on the overview map.'),
-  "tideOverlayActive": zod.boolean().default(getSettingsResponseTideOverlayActiveDefault).describe('Show NOAA tidal station overlay on the overview map.'),
-  "currentOverlayActive": zod.boolean().default(getSettingsResponseCurrentOverlayActiveDefault).describe('Show NOAA ocean current overlay on the overview map.'),
-  "currentDepthLayers": zod.array(zod.enum(['surface', 'mid', 'near-bottom'])).default([`mid`]).describe('Which depth layers to display for the current overlay.'),
-  "sidePaneCollapsed": zod.boolean().default(getSettingsResponseSidePaneCollapsedDefault).describe('Whether the side panel is collapsed.'),
-  "zonePaintBrushRadius": zod.number().min(1).max(getSettingsResponseZonePaintBrushRadiusMax).default(getSettingsResponseZonePaintBrushRadiusDefault).describe('Brush radius (in grid cells) used when painting zone assignments.'),
-  "zoneOverlayEnabled": zod.boolean().default(getSettingsResponseZoneOverlayEnabledDefault).describe('Whether the zone colour overlay is visible on the terrain.'),
-  "zonePaintMode": zod.boolean().default(getSettingsResponseZonePaintModeDefault).describe('Whether the zone paint tool is active.'),
-  "zonePaintSlot": zod.number().int().min(getSettingsResponseZonePaintSlotMin).max(getSettingsResponseZonePaintSlotMax).default(getSettingsResponseZonePaintSlotDefault).describe('Currently selected zone paint slot (0–3).'),
-  "substrateColorMode": zod.boolean().default(getSettingsResponseSubstrateColorModeDefault).describe('When true, the terrain uses substrate-class colours instead of depth palette.'),
-  "hiddenSubstrateClasses": zod.array(zod.string()).default(getSettingsResponseHiddenSubstrateClassesDefault).describe('List of substrate class names hidden from the substrate overlay.'),
-  "intertidalHotspotsEnabled": zod.boolean().default(getSettingsResponseIntertidalHotspotsEnabledDefault).describe('Whether the intertidal hotspots overlay is visible.'),
-  "intertidalScoreMode": zod.enum(['tidepool', 'beachcombing']).default(getSettingsResponseIntertidalScoreModeDefault).describe('Scoring algorithm used for intertidal hotspot ranking.'),
-  "efhOverlayEnabled": zod.boolean().default(getSettingsResponseEfhOverlayEnabledDefault).describe('Whether the Essential Fish Habitat polygon overlay is visible.'),
-  "hiddenEfhSpecies": zod.array(zod.string()).default(getSettingsResponseHiddenEfhSpeciesDefault).describe('List of EFH species common names hidden from the EFH overlay.'),
-  "globalFontSize": zod.enum(['smallest', 'small', 'medium', 'large', 'x-large', 'largest']).default(getSettingsResponseGlobalFontSizeDefault).describe('Global UI font size level applied throughout the app.')
+}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.')
 }).describe('Per-user application settings with sensible defaults')
 
 
@@ -1048,28 +1009,7 @@ export const putSettingsBodyZoneOverlaySlotsFreshwaterItemColorRegExp = new RegE
 export const putSettingsBodyZoneOverlaySlotsFreshwaterMin = 4;
 export const putSettingsBodyZoneOverlaySlotsFreshwaterMax = 4;
 
-export const putSettingsBodyWeatherStationsActiveDefault = false;
-export const putSettingsBodyRawsOverlayActiveDefault = false;
-export const putSettingsBodyWindOverlayActiveDefault = false;
-export const putSettingsBodyTideOverlayActiveDefault = false;
-export const putSettingsBodyCurrentOverlayActiveDefault = false;
-export const putSettingsBodySidePaneCollapsedDefault = false;
-export const putSettingsBodyZonePaintBrushRadiusDefault = 4;
-export const putSettingsBodyZonePaintBrushRadiusMax = 20;
 
-export const putSettingsBodyZoneOverlayEnabledDefault = false;
-export const putSettingsBodyZonePaintModeDefault = false;
-export const putSettingsBodyZonePaintSlotDefault = 0;
-export const putSettingsBodyZonePaintSlotMin = 0;
-export const putSettingsBodyZonePaintSlotMax = 3;
-
-export const putSettingsBodySubstrateColorModeDefault = false;
-export const putSettingsBodyHiddenSubstrateClassesDefault = [];
-export const putSettingsBodyIntertidalHotspotsEnabledDefault = false;
-export const putSettingsBodyIntertidalScoreModeDefault = `tidepool`;
-export const putSettingsBodyEfhOverlayEnabledDefault = false;
-export const putSettingsBodyHiddenEfhSpeciesDefault = [];
-export const putSettingsBodyGlobalFontSizeDefault = `medium`;
 
 export const PutSettingsBody = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsBodyTextureQualityDefault),
@@ -1133,25 +1073,7 @@ export const PutSettingsBody = zod.object({
   "color": zod.string().regex(putSettingsBodyZoneOverlaySlotsFreshwaterItemColorRegExp),
   "visible": zod.boolean()
 })).min(putSettingsBodyZoneOverlaySlotsFreshwaterMin).max(putSettingsBodyZoneOverlaySlotsFreshwaterMax).optional()
-}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.'),
-  "weatherStationsActive": zod.boolean().default(putSettingsBodyWeatherStationsActiveDefault).describe('Show ASOS\/AWOS weather station overlay on the overview map.'),
-  "rawsOverlayActive": zod.boolean().default(putSettingsBodyRawsOverlayActiveDefault).describe('Show RAWS (Remote Automated Weather Stations) overlay on the overview map.'),
-  "windOverlayActive": zod.boolean().default(putSettingsBodyWindOverlayActiveDefault).describe('Show wind barb overlay on the overview map.'),
-  "tideOverlayActive": zod.boolean().default(putSettingsBodyTideOverlayActiveDefault).describe('Show NOAA tidal station overlay on the overview map.'),
-  "currentOverlayActive": zod.boolean().default(putSettingsBodyCurrentOverlayActiveDefault).describe('Show NOAA ocean current overlay on the overview map.'),
-  "currentDepthLayers": zod.array(zod.enum(['surface', 'mid', 'near-bottom'])).default([`mid`]).describe('Which depth layers to display for the current overlay.'),
-  "sidePaneCollapsed": zod.boolean().default(putSettingsBodySidePaneCollapsedDefault).describe('Whether the side panel is collapsed.'),
-  "zonePaintBrushRadius": zod.number().min(1).max(putSettingsBodyZonePaintBrushRadiusMax).default(putSettingsBodyZonePaintBrushRadiusDefault).describe('Brush radius (in grid cells) used when painting zone assignments.'),
-  "zoneOverlayEnabled": zod.boolean().default(putSettingsBodyZoneOverlayEnabledDefault).describe('Whether the zone colour overlay is visible on the terrain.'),
-  "zonePaintMode": zod.boolean().default(putSettingsBodyZonePaintModeDefault).describe('Whether the zone paint tool is active.'),
-  "zonePaintSlot": zod.number().int().min(putSettingsBodyZonePaintSlotMin).max(putSettingsBodyZonePaintSlotMax).default(putSettingsBodyZonePaintSlotDefault).describe('Currently selected zone paint slot (0–3).'),
-  "substrateColorMode": zod.boolean().default(putSettingsBodySubstrateColorModeDefault).describe('When true, the terrain uses substrate-class colours instead of depth palette.'),
-  "hiddenSubstrateClasses": zod.array(zod.string()).default(putSettingsBodyHiddenSubstrateClassesDefault).describe('List of substrate class names hidden from the substrate overlay.'),
-  "intertidalHotspotsEnabled": zod.boolean().default(putSettingsBodyIntertidalHotspotsEnabledDefault).describe('Whether the intertidal hotspots overlay is visible.'),
-  "intertidalScoreMode": zod.enum(['tidepool', 'beachcombing']).default(putSettingsBodyIntertidalScoreModeDefault).describe('Scoring algorithm used for intertidal hotspot ranking.'),
-  "efhOverlayEnabled": zod.boolean().default(putSettingsBodyEfhOverlayEnabledDefault).describe('Whether the Essential Fish Habitat polygon overlay is visible.'),
-  "hiddenEfhSpecies": zod.array(zod.string()).default(putSettingsBodyHiddenEfhSpeciesDefault).describe('List of EFH species common names hidden from the EFH overlay.'),
-  "globalFontSize": zod.enum(['smallest', 'small', 'medium', 'large', 'x-large', 'largest']).default(putSettingsBodyGlobalFontSizeDefault).describe('Global UI font size level applied throughout the app.')
+}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.')
 }).describe('Per-user application settings with sensible defaults')
 
 export const putSettingsResponseTextureQualityDefault = `high`;
@@ -1237,28 +1159,7 @@ export const putSettingsResponseZoneOverlaySlotsFreshwaterItemColorRegExp = new 
 export const putSettingsResponseZoneOverlaySlotsFreshwaterMin = 4;
 export const putSettingsResponseZoneOverlaySlotsFreshwaterMax = 4;
 
-export const putSettingsResponseWeatherStationsActiveDefault = false;
-export const putSettingsResponseRawsOverlayActiveDefault = false;
-export const putSettingsResponseWindOverlayActiveDefault = false;
-export const putSettingsResponseTideOverlayActiveDefault = false;
-export const putSettingsResponseCurrentOverlayActiveDefault = false;
-export const putSettingsResponseSidePaneCollapsedDefault = false;
-export const putSettingsResponseZonePaintBrushRadiusDefault = 4;
-export const putSettingsResponseZonePaintBrushRadiusMax = 20;
 
-export const putSettingsResponseZoneOverlayEnabledDefault = false;
-export const putSettingsResponseZonePaintModeDefault = false;
-export const putSettingsResponseZonePaintSlotDefault = 0;
-export const putSettingsResponseZonePaintSlotMin = 0;
-export const putSettingsResponseZonePaintSlotMax = 3;
-
-export const putSettingsResponseSubstrateColorModeDefault = false;
-export const putSettingsResponseHiddenSubstrateClassesDefault = [];
-export const putSettingsResponseIntertidalHotspotsEnabledDefault = false;
-export const putSettingsResponseIntertidalScoreModeDefault = `tidepool`;
-export const putSettingsResponseEfhOverlayEnabledDefault = false;
-export const putSettingsResponseHiddenEfhSpeciesDefault = [];
-export const putSettingsResponseGlobalFontSizeDefault = `medium`;
 
 export const PutSettingsResponse = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsResponseTextureQualityDefault),
@@ -1322,25 +1223,7 @@ export const PutSettingsResponse = zod.object({
   "color": zod.string().regex(putSettingsResponseZoneOverlaySlotsFreshwaterItemColorRegExp),
   "visible": zod.boolean()
 })).min(putSettingsResponseZoneOverlaySlotsFreshwaterMin).max(putSettingsResponseZoneOverlaySlotsFreshwaterMax).optional()
-}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.'),
-  "weatherStationsActive": zod.boolean().default(putSettingsResponseWeatherStationsActiveDefault).describe('Show ASOS\/AWOS weather station overlay on the overview map.'),
-  "rawsOverlayActive": zod.boolean().default(putSettingsResponseRawsOverlayActiveDefault).describe('Show RAWS (Remote Automated Weather Stations) overlay on the overview map.'),
-  "windOverlayActive": zod.boolean().default(putSettingsResponseWindOverlayActiveDefault).describe('Show wind barb overlay on the overview map.'),
-  "tideOverlayActive": zod.boolean().default(putSettingsResponseTideOverlayActiveDefault).describe('Show NOAA tidal station overlay on the overview map.'),
-  "currentOverlayActive": zod.boolean().default(putSettingsResponseCurrentOverlayActiveDefault).describe('Show NOAA ocean current overlay on the overview map.'),
-  "currentDepthLayers": zod.array(zod.enum(['surface', 'mid', 'near-bottom'])).default([`mid`]).describe('Which depth layers to display for the current overlay.'),
-  "sidePaneCollapsed": zod.boolean().default(putSettingsResponseSidePaneCollapsedDefault).describe('Whether the side panel is collapsed.'),
-  "zonePaintBrushRadius": zod.number().min(1).max(putSettingsResponseZonePaintBrushRadiusMax).default(putSettingsResponseZonePaintBrushRadiusDefault).describe('Brush radius (in grid cells) used when painting zone assignments.'),
-  "zoneOverlayEnabled": zod.boolean().default(putSettingsResponseZoneOverlayEnabledDefault).describe('Whether the zone colour overlay is visible on the terrain.'),
-  "zonePaintMode": zod.boolean().default(putSettingsResponseZonePaintModeDefault).describe('Whether the zone paint tool is active.'),
-  "zonePaintSlot": zod.number().int().min(putSettingsResponseZonePaintSlotMin).max(putSettingsResponseZonePaintSlotMax).default(putSettingsResponseZonePaintSlotDefault).describe('Currently selected zone paint slot (0–3).'),
-  "substrateColorMode": zod.boolean().default(putSettingsResponseSubstrateColorModeDefault).describe('When true, the terrain uses substrate-class colours instead of depth palette.'),
-  "hiddenSubstrateClasses": zod.array(zod.string()).default(putSettingsResponseHiddenSubstrateClassesDefault).describe('List of substrate class names hidden from the substrate overlay.'),
-  "intertidalHotspotsEnabled": zod.boolean().default(putSettingsResponseIntertidalHotspotsEnabledDefault).describe('Whether the intertidal hotspots overlay is visible.'),
-  "intertidalScoreMode": zod.enum(['tidepool', 'beachcombing']).default(putSettingsResponseIntertidalScoreModeDefault).describe('Scoring algorithm used for intertidal hotspot ranking.'),
-  "efhOverlayEnabled": zod.boolean().default(putSettingsResponseEfhOverlayEnabledDefault).describe('Whether the Essential Fish Habitat polygon overlay is visible.'),
-  "hiddenEfhSpecies": zod.array(zod.string()).default(putSettingsResponseHiddenEfhSpeciesDefault).describe('List of EFH species common names hidden from the EFH overlay.'),
-  "globalFontSize": zod.enum(['smallest', 'small', 'medium', 'large', 'x-large', 'largest']).default(putSettingsResponseGlobalFontSizeDefault).describe('Global UI font size level applied throughout the app.')
+}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.')
 }).describe('Per-user application settings with sensible defaults')
 
 
