@@ -652,4 +652,129 @@ router.get("/tidal/schedule", asyncHandler(async (req, res): Promise<void> => {
   });
 }));
 
+// GET /tidal/pack?lat=&lon=&days=N
+// Returns a bundled tide-prediction payload for offline use.
+// Fetches height predictions and current predictions for the full N-day window
+// and returns them in a single response object (target < 200 KB for 7 days).
+router.get("/tidal/pack", asyncHandler(async (req, res): Promise<void> => {
+  const lat = parseFloat(String(req.query["lat"] ?? ""));
+  const lon = parseFloat(String(req.query["lon"] ?? ""));
+  const days = Math.min(14, Math.max(3, parseInt(String(req.query["days"] ?? "7"), 10) || 7));
+
+  if (isNaN(lat) || isNaN(lon)) {
+    res.status(400).json({ error: "lat and lon are required numeric parameters" });
+    return;
+  }
+
+  const now = new Date();
+  const endMs = now.getTime() + days * 24 * 3600 * 1000;
+
+  // Resolve nearest stations in parallel
+  const [heightsStation, currentsStation] = await Promise.all([
+    getNearestHeightsStation(lat, lon),
+    getNearestCurrentsStation(lat, lon),
+  ]);
+
+  // Fetch height predictions: use 6-minute interval for the full window.
+  // NOAA's datagetter accepts begin_date and end_date (YYYYMMDD format).
+  let heightPredictions: TideHeightPrediction[] = [];
+  let stationId: string | null = null;
+  let stationName: string | null = null;
+
+  if (heightsStation) {
+    stationId = heightsStation.id;
+    stationName = heightsStation.name;
+    try {
+      const begin = toNoaaDateStr(now);
+      const endDate = new Date(endMs);
+      const end = toNoaaDateStr(endDate);
+      const url =
+        `${NOAA_BASE}/api/prod/datagetter?station=${heightsStation.id}&product=predictions` +
+        `&datum=MLLW&time_zone=GMT&units=metric&format=json&interval=6` +
+        `&begin_date=${begin}&end_date=${end}`;
+      const resp = await fetchJson<{
+        predictions?: Array<{ t: string; v: string }>;
+      }>(url);
+      heightPredictions = (resp.predictions ?? []).map((p) => ({
+        t: new Date(p.t.replace(" ", "T") + "Z").toISOString(),
+        v: parseFloat(p.v),
+      }));
+    } catch (err) {
+      logger.warn({ err }, "[tidal/pack] Failed to fetch height predictions");
+    }
+  }
+
+  // If no NOAA station, synthesize from hi/lo events
+  if (heightPredictions.length === 0) {
+    const syntheticEvents = buildSyntheticEvents(now.getTime(), lon, days + 1);
+    // Sample every 30 minutes
+    const step = 30 * 60 * 1000;
+    for (let t = now.getTime(); t <= endMs; t += step) {
+      heightPredictions.push({
+        t: new Date(t).toISOString(),
+        v: interpolateHeight(syntheticEvents, t),
+      });
+    }
+  }
+
+  // Fetch current predictions
+  let currentPredictions: TideCurrentPrediction[] = [];
+  if (currentsStation) {
+    try {
+      const begin = toNoaaDateStr(now);
+      const endDate = new Date(endMs);
+      const end = toNoaaDateStr(endDate);
+      const url =
+        `${NOAA_BASE}/api/prod/datagetter?station=${currentsStation.id}&product=currents_predictions` +
+        `&time_zone=GMT&units=metric&format=json&interval=MAX_SLACK` +
+        `&begin_date=${begin}&end_date=${end}`;
+      const resp = await fetchJson<{
+        current_predictions?: Array<{
+          Time: string;
+          Velocity_Major?: string | number;
+          Speed?: string | number;
+          Direction?: string | number;
+          meanFloodDir?: string | number;
+          Type?: string;
+        }>;
+      }>(url);
+      const entries = resp.current_predictions ?? [];
+      for (const cp of entries) {
+        const rawSpeed =
+          cp.Speed != null ? cp.Speed : cp.Velocity_Major != null ? cp.Velocity_Major : null;
+        const speedKnots = rawSpeed != null ? Math.abs(parseFloat(String(rawSpeed))) : 0;
+        const dir = cp.Direction != null ? parseFloat(String(cp.Direction)) : 0;
+        currentPredictions.push({
+          t: new Date((cp.Time as string).replace(" ", "T") + "Z").toISOString(),
+          speed: Number.isFinite(speedKnots) ? speedKnots : 0,
+          dir: Number.isFinite(dir) ? dir : 0,
+        });
+      }
+    } catch (err) {
+      logger.warn({ err }, "[tidal/pack] Failed to fetch current predictions");
+    }
+  }
+
+  const tidalExpiresAt = new Date(endMs).toISOString();
+
+  res.json({
+    station: stationName ?? stationId ?? null,
+    generatedAt: now.toISOString(),
+    heightPredictions,
+    currentPredictions,
+    tidalExpiresAt,
+  });
+}));
+
+interface TideHeightPrediction {
+  t: string;
+  v: number;
+}
+
+interface TideCurrentPrediction {
+  t: string;
+  speed: number;
+  dir: number;
+}
+
 export default router;

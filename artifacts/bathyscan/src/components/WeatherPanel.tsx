@@ -8,6 +8,7 @@
  */
 
 import React, { useEffect, useCallback, useRef, useState } from "react";
+import { useOfflineStore } from "@/lib/offlineStore";
 import {
   useGetTrollingPresets,
   usePostTrollingPresets,
@@ -104,6 +105,50 @@ const PANEL_STYLE: React.CSSProperties = {
 const LABEL: React.CSSProperties = { color: "#94a3b8", fontSize: 9, letterSpacing: "0.18em" };
 const VALUE: React.CSSProperties = { color: "#00e5ff", fontWeight: 700 };
 const DIVIDER: React.CSSProperties = { borderTop: "1px solid rgba(0,229,255,0.1)", margin: "8px 0" };
+
+/**
+ * Shows a subtle offline badge with the weather pack snapshot date when the
+ * device has no network connection and a weather pack is available.
+ */
+const OfflineWeatherBadge: React.FC = () => {
+  const isOnline = useOfflineStore((s) => s.isOnline);
+  const [snapshotAt, setSnapshotAt] = useState<string | null>(null);
+  const { terrain } = useAppState();
+
+  useEffect(() => {
+    if (isOnline || !terrain) return;
+    import("@/lib/offlinePackStore").then(async ({ getPackForLocation }) => {
+      const centerLat = (terrain.minLat + terrain.maxLat) / 2;
+      const centerLon = (terrain.minLon + terrain.maxLon) / 2;
+      const pack = await getPackForLocation(centerLat, centerLon);
+      setSnapshotAt(pack?.weatherPack.snapshotAt ?? null);
+    }).catch(() => undefined);
+  }, [isOnline, terrain]);
+
+  if (isOnline || !snapshotAt) return null;
+
+  const dateStr = new Date(snapshotAt).toLocaleDateString(undefined, {
+    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+
+  return (
+    <div
+      data-testid="weather-offline-badge"
+      style={{
+        fontSize: 8,
+        letterSpacing: "0.12em",
+        color: "#fbbf24",
+        background: "rgba(251,191,36,0.06)",
+        border: "1px solid rgba(251,191,36,0.2)",
+        borderRadius: 3,
+        padding: "3px 6px",
+        marginBottom: 8,
+      }}
+    >
+      ⚡ OFFLINE · AS OF {dateStr.toUpperCase()}
+    </div>
+  );
+};
 
 interface WeatherPanelProps {
   onClose: () => void;
@@ -707,6 +752,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
           ⚠ Using estimated conditions
         </div>
       )}
+      <OfflineWeatherBadge />
 
       {cond && !estimatedConditions && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

@@ -1,4 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useOfflineStore } from "@/lib/offlineStore";
+import {
+  getPackForLocation,
+  getOfflineTideValue,
+} from "@/lib/offlinePackStore";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const POLL_INTERVAL_MS = 10 * 60 * 1000;
@@ -39,17 +44,22 @@ export type TidalDataResult =
       /** NOAA water-levels station, when one was in range. */
       heightsStation?: StationRef;
       slack?: SlackBlock;
+      /** True when data is served from an offline pack rather than the network. */
+      isOfflinePack?: boolean;
+      /** ISO timestamp of the offline pack snapshot, when isOfflinePack is true. */
+      packSnapshotAt?: string;
     };
 
 export function useTidalData(
   lat: number | null,
   lon: number | null,
   scrubDatetime?: Date | null,
-): { data: TidalDataResult | null; loading: boolean; retry: () => void } {
+): { data: TidalDataResult | null; loading: boolean; retry: () => void; isOfflinePack: boolean; packSnapshotAt?: string } {
   const [data, setData] = useState<TidalDataResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isOnline = useOfflineStore((s) => s.isOnline);
 
   const retry = useCallback(() => {
     setRetryCount((c) => c + 1);
@@ -79,11 +89,60 @@ export function useTidalData(
         if (!cancelled && !controller.signal.aborted) setData(json);
       } catch (err) {
         if (controller.signal.aborted) return;
-        if (!cancelled) setData({ available: false });
+        // On network failure, try the offline pack
+        if (!cancelled) {
+          const pack = await getPackForLocation(lat, lon).catch(() => null);
+          if (pack) {
+            const dt = scrubDatetime ?? new Date();
+            const packVal = getOfflineTideValue(pack, dt);
+            setData({
+              available: true,
+              tideHeight: packVal.tideHeight,
+              currentDirection: packVal.currentDirection,
+              currentSpeed: packVal.currentSpeed,
+              stationName: pack.tidePack.station ?? "Offline Pack",
+              isPredicted: true,
+              source: "noaa",
+              isOfflinePack: true,
+              packSnapshotAt: pack.savedAt,
+            });
+          } else {
+            setData({ available: false });
+          }
+        }
         void err;
       } finally {
         if (!cancelled && !controller.signal.aborted) setLoading(false);
       }
+    }
+
+    // If offline, immediately try the pack without a network call
+    if (!isOnline) {
+      void (async () => {
+        setLoading(true);
+        const pack = await getPackForLocation(lat, lon).catch(() => null);
+        if (!cancelled) {
+          if (pack) {
+            const dt = scrubDatetime ?? new Date();
+            const packVal = getOfflineTideValue(pack, dt);
+            setData({
+              available: true,
+              tideHeight: packVal.tideHeight,
+              currentDirection: packVal.currentDirection,
+              currentSpeed: packVal.currentSpeed,
+              stationName: pack.tidePack.station ?? "Offline Pack",
+              isPredicted: true,
+              source: "noaa",
+              isOfflinePack: true,
+              packSnapshotAt: pack.savedAt,
+            });
+          } else {
+            setData({ available: false });
+          }
+          setLoading(false);
+        }
+      })();
+      return () => { cancelled = true; };
     }
 
     void fetchTidal();
@@ -100,7 +159,18 @@ export function useTidalData(
         timerRef.current = null;
       }
     };
-  }, [lat, lon, scrubDatetime, retryCount]);
+  }, [lat, lon, scrubDatetime, retryCount, isOnline]);
 
-  return { data, loading, retry };
+  const isOfflinePack =
+    data !== null &&
+    "available" in data &&
+    data.available === true &&
+    (data as { isOfflinePack?: boolean }).isOfflinePack === true;
+
+  const packSnapshotAt =
+    isOfflinePack && data && "packSnapshotAt" in data
+      ? (data as { packSnapshotAt?: string }).packSnapshotAt
+      : undefined;
+
+  return { data, loading, retry, isOfflinePack, packSnapshotAt };
 }

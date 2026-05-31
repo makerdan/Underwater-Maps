@@ -665,6 +665,24 @@ function Main() {
     return () => clearTimeout(t);
   }, []);
 
+  // On mount, warn the user about offline packs that are expiring soon (< 48 h).
+  // Runs once; the pack store is lazy-imported so it doesn't bloat the initial bundle.
+  useEffect(() => {
+    import("@/lib/offlinePackStore").then(async ({ getExpiringPacks }) => {
+      const expiring = await getExpiringPacks(48);
+      for (const p of expiring) {
+        const expiresAt = new Date(p.tidePack?.tidalExpiresAt ?? p.savedAt);
+        const hoursLeft = Math.max(0, Math.round((expiresAt.getTime() - Date.now()) / 3_600_000));
+        toast({
+          title: "Offline pack expiring soon",
+          description: `"${p.datasetName}" pack expires in ${hoursLeft}h — tap Update in Settings to refresh.`,
+          duration: 8000,
+        });
+      }
+    }).catch(() => undefined);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Flush offline-buffered trails/markers when connection is restored.
   // The guard and flush implementations live in offlineFlush.ts so they can
   // be unit-tested independently of the full component tree.

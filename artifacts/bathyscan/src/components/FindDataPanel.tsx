@@ -14,6 +14,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { OfflinePackModal } from "@/components/OfflinePackModal";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetDatasetsCatalogSearch,
@@ -397,6 +398,7 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
   const icon = DATA_TYPE_ICONS[entry.dataType] ?? "📦";
   const color = DATA_TYPE_COLORS[entry.dataType] ?? "#e2e8f0";
   const isIntertidal = INTERTIDAL_CATALOG_IDS.has(entry.id);
+  const [offlineModalOpen, setOfflineModalOpen] = useState(false);
 
   return (
     <div style={CARD}>
@@ -526,7 +528,40 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
             {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
           </button>
         </ViewscreenTooltip>
+        {presetId && (
+          <ViewscreenTooltip label="Save this area for offline field use" side="top">
+            <button
+              onClick={() => setOfflineModalOpen(true)}
+              style={{
+                fontSize: 8,
+                padding: "3px 8px",
+                background: "rgba(251,191,36,0.08)",
+                border: "1px solid rgba(251,191,36,0.3)",
+                borderRadius: 3,
+                color: "#fbbf24",
+                cursor: "pointer",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+              }}
+            >
+              ⬇ Offline
+            </button>
+          </ViewscreenTooltip>
+        )}
       </div>
+
+      {offlineModalOpen && (
+        <OfflinePackModal
+          dataset={{
+            id: entry.id,
+            name: entry.name,
+            bbox: entry.coverageBbox
+              ? { minLon: entry.coverageBbox.minLon, maxLon: entry.coverageBbox.maxLon, minLat: entry.coverageBbox.minLat, maxLat: entry.coverageBbox.maxLat }
+              : null,
+          }}
+          onClose={() => setOfflineModalOpen(false)}
+        />
+      )}
 
       <div style={scoreBarStyle(entry.relevanceScore)} />
     </div>

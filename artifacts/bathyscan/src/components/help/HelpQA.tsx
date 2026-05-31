@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { useOfflineStore } from "@/lib/offlineStore";
 
 const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -23,12 +24,14 @@ export const HelpQA: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isOnline = useOfflineStore((s) => s.isOnline);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
   async function ask(question: string) {
+    if (!isOnline) return;
     const q = question.trim();
     if (!q || loading) return;
     setError(null);
@@ -63,6 +66,34 @@ export const HelpQA: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (!isOnline) {
+    return (
+      <div className="help-qa">
+        <div className="help-qa-header">
+          <span className="help-qa-title">Ask the BathyScan assistant</span>
+        </div>
+        <div style={{
+          margin: "8px 0",
+          padding: "10px 12px",
+          background: "rgba(251,191,36,0.07)",
+          border: "1px solid rgba(251,191,36,0.3)",
+          borderRadius: 4,
+          fontSize: 11,
+          color: "#fbbf24",
+          lineHeight: 1.5,
+        }}>
+          <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 10, letterSpacing: "0.12em" }}>
+            ⚡ OFFLINE MODE
+          </div>
+          The AI assistant requires a network connection. Reconnect to the internet to ask questions.
+          <div style={{ marginTop: 6, fontSize: 10, color: "#94a3b8" }}>
+            Offline help articles and walkthroughs in the Articles tab are still available.
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

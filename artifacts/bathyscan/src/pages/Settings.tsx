@@ -16,6 +16,16 @@ import type { Marker } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { clearUpscaleCache, getUpscaleCacheInfo } from "@/hooks/useUpscaledHeatmap";
+import {
+  listOfflinePacks,
+  deleteOfflinePack,
+  type OfflinePack,
+} from "@/lib/offlinePackStore";
+import {
+  getHelpPackStatus,
+  deleteHelpPack,
+  type HelpPackStatus,
+} from "@/lib/helpPackStore";
 
 // Undo window for "soft" bulk-marker deletes (ms). The active dataset's
 // marker list is cleared from the cache immediately and the actual DELETE
@@ -2451,6 +2461,10 @@ function OfflineSection() {
   const [allClearedMsg, setAllClearedMsg] = useState(false);
   const [upscaleClearMsg, setUpscaleClearMsg] = useState(false);
   const [upscaleInfo, setUpscaleInfo] = useState<{ count: number; bytes: number } | null>(null);
+  const [offlinePacks, setOfflinePacks] = useState<OfflinePack[]>([]);
+  const [helpStatus, setHelpStatus] = useState<HelpPackStatus | null>(null);
+  const [packClearing, setPackClearing] = useState<string | null>(null);
+  const [helpClearing, setHelpClearing] = useState(false);
   const { toast } = useToast();
 
   const refreshUpscaleInfo = useCallback(async () => {
@@ -2466,8 +2480,31 @@ function OfflineSection() {
     setLoading(false);
   }, []);
 
+  const refreshPacks = useCallback(async () => {
+    const [packs, help] = await Promise.all([listOfflinePacks(), getHelpPackStatus()]);
+    setOfflinePacks(packs);
+    setHelpStatus(help);
+  }, []);
+
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => { void refreshUpscaleInfo(); }, [refreshUpscaleInfo]);
+  useEffect(() => { void refreshPacks(); }, [refreshPacks]);
+
+  const handleDeletePack = async (id: string) => {
+    setPackClearing(id);
+    await deleteOfflinePack(id);
+    await refreshPacks();
+    setPackClearing(null);
+    toast({ title: "Offline pack deleted", duration: 3000 });
+  };
+
+  const handleDeleteHelp = async () => {
+    setHelpClearing(true);
+    await deleteHelpPack();
+    await refreshPacks();
+    setHelpClearing(false);
+    toast({ title: "Help pack deleted", duration: 3000 });
+  };
 
   const handleClearEntry = async (url: string) => {
     setClearing(url);
@@ -2505,6 +2542,107 @@ function OfflineSection() {
   return (
     <>
       <SectionTitle helpId="troubleshooting" helpLabel="Offline & Storage">◈ OFFLINE &amp; STORAGE</SectionTitle>
+
+      {/* ── SAVED OFFLINE PACKS ─────────────────────────────────────── */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>SAVED OFFLINE PACKS</div>
+        <div style={{ padding: "12px 16px" }}>
+          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 10 }}>
+            Terrain, tide predictions, and weather snapshots saved for offline use.
+            Each pack covers 7 days of tide data and can be updated from the dataset panel.
+          </div>
+          {offlinePacks.length === 0 ? (
+            <div style={{ fontSize: 10, color: "#64748b" }}>
+              No offline packs saved. Load a dataset and tap "⬇ Save Offline" to create one.
+            </div>
+          ) : (
+            offlinePacks.map((pack) => {
+              const savedDate = new Date(pack.savedAt).toLocaleDateString(undefined, {
+                month: "short", day: "numeric", year: "numeric",
+              });
+              const expiresDate = new Date(pack.tidePack.tidalExpiresAt).toLocaleDateString(undefined, {
+                month: "short", day: "numeric",
+              });
+              const isExpired = new Date(pack.tidePack.tidalExpiresAt).getTime() < Date.now();
+              const sizeStr = pack.storageBytesEstimate >= 1024 * 1024
+                ? `${(pack.storageBytesEstimate / (1024 * 1024)).toFixed(1)} MB`
+                : `${Math.round(pack.storageBytesEstimate / 1024)} KB`;
+              return (
+                <div
+                  key={pack.id}
+                  data-testid={`offline-pack-${pack.id}`}
+                  style={{
+                    display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+                    padding: "8px 0", borderBottom: "1px solid rgba(0,229,255,0.06)", gap: 8,
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 10, color: "#cbd5e1", fontWeight: 600, marginBottom: 2 }}>
+                      {pack.datasetName}
+                    </div>
+                    <div style={{ fontSize: 9, color: "#64748b" }}>
+                      Saved {savedDate} · {sizeStr}
+                    </div>
+                    <div style={{ fontSize: 9, color: isExpired ? "#f87171" : "#94a3b8", marginTop: 1 }}>
+                      Tide data {isExpired ? "expired" : `expires ${expiresDate}`}
+                    </div>
+                  </div>
+                  <button
+                    data-testid={`delete-pack-${pack.id}`}
+                    onClick={() => void handleDeletePack(pack.id)}
+                    disabled={packClearing === pack.id}
+                    style={{
+                      ...S.dangerBtn,
+                      padding: "3px 8px",
+                      fontSize: 8,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {packClearing === pack.id ? "…" : "DELETE"}
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* ── HELP CONTENT ────────────────────────────────────────────── */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>HELP CONTENT</div>
+        <div style={{ padding: "12px 16px" }}>
+          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 10 }}>
+            Tutorial GIFs and images are cached for offline viewing. Download once to access
+            help articles without a network connection.
+          </div>
+          {helpStatus === null ? (
+            <div style={{ fontSize: 10, color: "#64748b" }}>◌ Loading…</div>
+          ) : helpStatus.saved ? (
+            <div>
+              <div style={{ fontSize: 10, color: "#4ade80", marginBottom: 8 }}>
+                ✓ Help content saved ·{" "}
+                {helpStatus.savedAt && new Date(helpStatus.savedAt).toLocaleDateString(undefined, {
+                  month: "short", day: "numeric", year: "numeric",
+                })}
+                {helpStatus.totalBytes != null && ` · ${(helpStatus.totalBytes / 1024).toFixed(0)} KB`}
+              </div>
+              <button
+                data-testid="delete-help-pack-btn"
+                onClick={() => void handleDeleteHelp()}
+                disabled={helpClearing}
+                style={{ ...S.dangerBtn, fontSize: 8, padding: "3px 8px" }}
+              >
+                {helpClearing ? "…" : "DELETE HELP PACK"}
+              </button>
+            </div>
+          ) : (
+            <div style={{ fontSize: 10, color: "#64748b" }}>
+              No help content saved. Use the Help panel (? button) when online to cache it.
+            </div>
+          )}
+        </div>
+      </div>
+
       <div style={S.card}>
         <div style={S.cardHeader}>CACHED TERRAIN DATA</div>
         <div style={{ padding: "12px 16px" }}>

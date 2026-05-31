@@ -48,6 +48,7 @@ import { LoadingDial } from "@/components/LoadingDial";
 import { SUPPORTED_EXTENSIONS } from "@/components/FileUpload";
 import { useActiveLoadStore } from "@/lib/activeLoadStore";
 import { fetchJsonWithProgress } from "@/lib/fetchWithProgress";
+import { OfflinePackModal } from "@/components/OfflinePackModal";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import {
@@ -1486,6 +1487,13 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     setLibraryRenameSignal({ id: ds.id, name: ds.name, seq: Date.now() });
   }, [librarySelectedIds, presetSelectedIds.size, userDatasets]);
 
+  // ─── Offline Pack modal ───────────────────────────────────────────────────
+  const [offlinePackDataset, setOfflinePackDataset] = useState<{
+    id: string;
+    name: string;
+    bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null;
+  } | null>(null);
+
   // ─── Render ────────────────────────────────────────────────────────────────
   const anyLoading = datasetsLoading || userDatasetsLoading;
 
@@ -1694,6 +1702,34 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       {active && terrain && terrain.datasetId === ds.id && (
                         <div onClick={(e) => e.stopPropagation()}>
                           <ProvenancePanel terrain={terrain} hasEfh={ds.hasEfh ?? false} />
+                          <div style={{ marginTop: 4, paddingTop: 4, borderTop: "1px solid rgba(0,229,255,0.08)" }}>
+                            <button
+                              data-testid={`btn-save-offline-${ds.id}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOfflinePackDataset({
+                                  id: ds.id,
+                                  name: ds.name,
+                                  bbox: terrain
+                                    ? { minLon: terrain.minLon, maxLon: terrain.maxLon, minLat: terrain.minLat, maxLat: terrain.maxLat }
+                                    : null,
+                                });
+                              }}
+                              style={{
+                                fontSize: 9,
+                                padding: "3px 8px",
+                                background: "rgba(251,191,36,0.08)",
+                                border: "1px solid rgba(251,191,36,0.35)",
+                                borderRadius: 3,
+                                color: "#fbbf24",
+                                cursor: "pointer",
+                                letterSpacing: "0.1em",
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              ⬇ Save Offline
+                            </button>
+                          </div>
                         </div>
                       )}
                     </button>
@@ -2408,6 +2444,13 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             )}
           </div>
         </div>
+      )}
+
+      {offlinePackDataset && (
+        <OfflinePackModal
+          dataset={offlinePackDataset}
+          onClose={() => setOfflinePackDataset(null)}
+        />
       )}
     </div>
   );

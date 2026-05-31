@@ -375,6 +375,32 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                   stationId={data.stationId}
                   stationName={data.stationName}
                 />
+                {data.isOfflinePack && (
+                  <div
+                    data-testid="tide-offline-pack-badge"
+                    style={{
+                      marginTop: 4,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      fontSize: 9,
+                      letterSpacing: "0.12em",
+                      textTransform: "uppercase",
+                      padding: "1px 5px",
+                      borderRadius: 2,
+                      background: "rgba(251,191,36,0.1)",
+                      border: "1px solid rgba(251,191,36,0.45)",
+                      color: "#fbbf24",
+                    }}
+                  >
+                    ⬇ OFFLINE PACK
+                    {data.packSnapshotAt && (
+                      <span style={{ fontSize: 8, color: "#d97706" }}>
+                        · saved {new Date(data.packSnapshotAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Tide height */}

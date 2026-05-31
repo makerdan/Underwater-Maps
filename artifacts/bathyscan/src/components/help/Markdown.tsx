@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 interface MarkdownProps {
   source: string;
@@ -149,6 +149,31 @@ function parseBlocks(src: string): Block[] {
   return blocks;
 }
 
+interface MarkdownImageProps {
+  src: string;
+  alt: string;
+}
+
+const MarkdownImage: React.FC<MarkdownImageProps> = ({ src, alt }) => {
+  const [errored, setErrored] = useState(false);
+  if (errored) {
+    return (
+      <div className="hm-image-placeholder">
+        <span className="hm-image-icon">🖼</span>
+        <span className="hm-image-alt">{alt || "Image unavailable offline"}</span>
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="hm-image"
+      onError={() => setErrored(true)}
+    />
+  );
+};
+
 export const Markdown: React.FC<MarkdownProps> = ({ source, highlight }) => {
   const blocks = React.useMemo(() => parseBlocks(source), [source]);
   return (
@@ -216,7 +241,7 @@ export const Markdown: React.FC<MarkdownProps> = ({ source, highlight }) => {
             const resolvedSrc = src.startsWith("/")
               ? `${import.meta.env.BASE_URL.replace(/\/$/, "")}${src}`
               : src;
-            return <img key={idx} src={resolvedSrc} alt={alt} className="hm-image" />;
+            return <MarkdownImage key={idx} src={resolvedSrc} alt={alt} />;
           }
           case "hr":
             return <hr key={idx} className="hm-hr" />;
