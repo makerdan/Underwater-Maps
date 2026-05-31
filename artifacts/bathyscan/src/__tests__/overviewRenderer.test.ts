@@ -24,6 +24,9 @@ vi.mock("three", () => {
       c.b = this.b;
       return c;
     }
+    convertLinearToSRGB() {
+      return this;
+    }
     lerpColors(a: Color, b: Color, alpha: number) {
       this.r = a.r + (b.r - a.r) * alpha;
       this.g = a.g + (b.g - a.g) * alpha;
