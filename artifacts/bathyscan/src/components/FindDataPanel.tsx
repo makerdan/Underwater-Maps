@@ -55,6 +55,13 @@ const DATA_TYPE_ICONS: Record<string, string> = {
   chart: "🗺️",
 };
 
+/** Catalog IDs that belong to the intertidal / shoreline category. */
+const INTERTIDAL_CATALOG_IDS = new Set([
+  "adfg-intertidal-clam-habitat-se-alaska",
+  "noaa-shorezone-tidal-pools-se-alaska",
+  "noaa-shorezone-beachcombing-se-alaska",
+]);
+
 const DATA_TYPE_COLORS: Record<string, string> = {
   bathymetry: "#00e5ff",
   substrate: "#e2d5a0",
@@ -176,11 +183,12 @@ interface CatalogCardProps {
 const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved, canSave, presetId, onLoad }) => {
   const icon = DATA_TYPE_ICONS[entry.dataType] ?? "📦";
   const color = DATA_TYPE_COLORS[entry.dataType] ?? "#e2e8f0";
+  const isIntertidal = INTERTIDAL_CATALOG_IDS.has(entry.id);
 
   return (
     <div style={CARD}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: 14 }}>{icon}</span>
+        <span style={{ fontSize: 14 }}>{isIntertidal ? "🏖️" : icon}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: "#e2e8f0", marginBottom: 2, lineHeight: 1.3 }}>
             {entry.name}
@@ -188,6 +196,24 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
           <div style={{ fontSize: 8, color, letterSpacing: "0.1em", textTransform: "uppercase" }}>
             {entry.dataType} · {entry.sourceAgency}
           </div>
+          {isIntertidal && (
+            <div style={{ marginTop: 4, display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <span
+                style={{
+                  fontSize: 8,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: "#fbbf24",
+                  border: "1px solid rgba(251,191,36,0.4)",
+                  borderRadius: 3,
+                  padding: "1px 6px",
+                  background: "rgba(251,191,36,0.08)",
+                }}
+              >
+                🏖️ Intertidal / Shoreline
+              </span>
+            </div>
+          )}
         </div>
         <span
           style={{
@@ -203,6 +229,23 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
           {entry.waterType}
         </span>
       </div>
+
+      {isIntertidal && (
+        <div
+          style={{
+            fontSize: 8,
+            color: "#94a3b8",
+            fontStyle: "italic",
+            marginBottom: 6,
+            padding: "4px 6px",
+            background: "rgba(251,191,36,0.05)",
+            border: "1px solid rgba(251,191,36,0.12)",
+            borderRadius: 3,
+          }}
+        >
+          Shoreline / intertidal feature — not rendered as a 3D viewer layer
+        </div>
+      )}
 
       {entry.description && (
         <div style={{ fontSize: 9, color: "#cbd5e1", lineHeight: 1.5, marginBottom: 6 }}>
