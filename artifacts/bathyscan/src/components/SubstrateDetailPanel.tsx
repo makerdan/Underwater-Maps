@@ -10,6 +10,7 @@
  */
 import React, { useEffect } from "react";
 import { useUiStore } from "@/lib/uiStore";
+import { HelpIcon } from "@/components/help/HelpButton";
 
 export const SubstrateDetailPanel: React.FC = () => {
   const selectedSubstrate = useUiStore((s) => s.selectedSubstrate);
@@ -66,21 +67,24 @@ export const SubstrateDetailPanel: React.FC = () => {
         <span style={{ color: "#94a3b8", fontSize: 9, letterSpacing: "0.2em" }}>
           SUBSTRATE FEATURE
         </span>
-        <button
-          onClick={() => setSelectedSubstrate(null)}
-          aria-label="Close substrate info"
-          style={{
-            background: "transparent",
-            border: "none",
-            color: "#cbd5e1",
-            cursor: "pointer",
-            fontSize: 14,
-            lineHeight: 1,
-            padding: 0,
-          }}
-        >
-          ×
-        </button>
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <HelpIcon articleId="substrate-layer" label="Substrate layer" />
+          <button
+            onClick={() => setSelectedSubstrate(null)}
+            aria-label="Close substrate info"
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "#cbd5e1",
+              cursor: "pointer",
+              fontSize: 14,
+              lineHeight: 1,
+              padding: 0,
+            }}
+          >
+            ×
+          </button>
+        </span>
       </div>
       <div style={{ marginBottom: 4 }}>
         <span style={{ color: "#94a3b8" }}>CLASS </span>

@@ -5,6 +5,7 @@
  */
 import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { HelpIcon } from "@/components/help/HelpButton";
 import { useUser } from "@/lib/clerkCompat";
 import { useAppState } from "@/lib/context";
 import { useDepthProfileStore, buildPathProfile, depthMetresToWorldY } from "@/lib/depthProfileStore";
@@ -255,19 +256,22 @@ export const RoutesPanel: React.FC = () => {
   return (
     <>
       <div data-testid="routes-panel" style={PANEL_STYLE}>
-        <button
-          type="button"
-          onClick={() => toggle("routes")}
-          aria-expanded={!collapsed}
-          style={HEADER_BTN_STYLE}
-        >
-          <span style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: "#00e5ff", textShadow: "0 0 6px rgba(0,229,255,0.5)", fontWeight: 700 }}>
-            🛤 Routes {routeList.length > 0 ? `(${routeList.length})` : ""}
-          </span>
-          <span style={{ color: "#cbd5e1", fontSize: 22, lineHeight: 1 }}>
-            {collapsed ? "▸" : "▾"}
-          </span>
-        </button>
+        <div style={{ display: "flex", alignItems: "center", paddingRight: 6 }}>
+          <button
+            type="button"
+            onClick={() => toggle("routes")}
+            aria-expanded={!collapsed}
+            style={{ ...HEADER_BTN_STYLE, width: "auto", flex: 1 }}
+          >
+            <span style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: "#00e5ff", textShadow: "0 0 6px rgba(0,229,255,0.5)", fontWeight: 700 }}>
+              🛤 Routes {routeList.length > 0 ? `(${routeList.length})` : ""}
+            </span>
+            <span style={{ color: "#cbd5e1", fontSize: 22, lineHeight: 1 }}>
+              {collapsed ? "▸" : "▾"}
+            </span>
+          </button>
+          <HelpIcon articleId="saved-routes" label="Saved routes" />
+        </div>
 
         {!collapsed && (
           <div style={{ padding: "6px 10px 10px" }}>

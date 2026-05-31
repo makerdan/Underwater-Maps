@@ -12,6 +12,7 @@ import type { EfhSpeciesProperties } from "@workspace/api-client-react";
 import { useUiStore } from "@/lib/uiStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { formatDepth } from "@/lib/units";
+import { HelpIcon } from "@/components/help/HelpButton";
 
 export const EfhDetailPanel: React.FC = () => {
   const properties = useUiStore((s) => s.selectedEfh);
@@ -90,6 +91,7 @@ export const EfhDetailPanel: React.FC = () => {
             {p.species?.replace(/_/g, " ")}
           </div>
         </div>
+        <HelpIcon articleId="essential-fish-habitat" label="Essential Fish Habitat" />
         <button
           onClick={onClose}
           aria-label="Close species details"

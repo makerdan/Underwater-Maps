@@ -13,6 +13,7 @@ import { triggerBlobDownload } from "@/lib/blobDownload";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useLandTerrainStore } from "@/lib/landTerrainStore";
+import { HelpIcon } from "@/components/help/HelpButton";
 
 interface ProvenancePanelProps {
   terrain: TerrainData;
@@ -309,6 +310,9 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
             lineHeight: 1.5,
           }}
         >
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
+            <HelpIcon articleId="data-provenance" label="Data provenance" />
+          </div>
           <p style={{ margin: "0 0 4px" }}>{src.description}</p>
 
           <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 8px" }}>

@@ -17,6 +17,7 @@
 import React, { useEffect, useRef } from "react";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useCurrentsStore, type TidalStatus } from "@/lib/currentsStore";
+import { HelpIcon } from "@/components/help/HelpButton";
 import { CURRENT_RAMP_STOPS, speedToColor } from "@/lib/currentColor";
 import { formatSpeedFromKnots, speedSuffix, MPH_TO_KNOTS, MPH_TO_KPH, cardinal } from "@/lib/units";
 import type { UnitsSystem } from "@/lib/settingsStore";
@@ -155,7 +156,12 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
   if (!currentsEnabled) {
     return (
       <div style={wrapStyle} data-testid="currents-panel">
-        {!embedded && <div style={header}>◈ CURRENTS</div>}
+        {!embedded && (
+        <div style={{ ...header, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>◈ CURRENTS</span>
+          <HelpIcon articleId="currents-simulation" label="Currents simulation" />
+        </div>
+      )}
         <div style={{ display: "flex", gap: 6 }}>
           <button
             data-testid="currents-enable"
@@ -176,13 +182,16 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
       {!embedded && (
       <div style={{ ...header, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span>◉ CURRENTS</span>
-        <button
-          data-testid="currents-disable"
-          style={{ ...toggleBtn(true), flex: 0, padding: "2px 8px" }}
-          onClick={() => setCurrentsEnabled(false)}
-        >
-          OFF
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <HelpIcon articleId="currents-simulation" label="Currents simulation" />
+          <button
+            data-testid="currents-disable"
+            style={{ ...toggleBtn(true), flex: 0, padding: "2px 8px" }}
+            onClick={() => setCurrentsEnabled(false)}
+          >
+            OFF
+          </button>
+        </div>
       </div>
       )}
       {embedded && (
