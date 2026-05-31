@@ -18,7 +18,7 @@ The panel is always visible in the left column. If the left sidebar is hidden, c
 | Button | What it does |
 | --- | --- |
 | 🗺 OVERVIEW | Opens/closes the top-down Overview Map (same as pressing **O**) |
-| 🔍 FIND DATA | Opens the dataset search and browse drawer |
+| 🔍 FIND DATA | Opens the dataset search and browse drawer — see [Find Data](#article:find-data) |
 | ◼ SUBSTRATE | Tints the seafloor by classified substrate type (sand, silt, sediment, basalt) |
 | 💨 WIND | Overlays surface wind-direction arrows; colour intensity scales with speed |
 | 🌊 TIDE | Overlays tidal-flow arrows (pair with the [Tidal Overlay](#article:tidal-overlay) panel) |

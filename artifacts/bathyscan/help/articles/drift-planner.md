@@ -29,7 +29,7 @@ The planner draws a predicted ending position and a faint trail. A **Drift Start
 
 Switch to **Trolling mode** to simulate powered movement at a constant speed:
 
-- **Speed (knots)** — your trolling speed through the water. The planner accounts for the current layer you have selected in the Tidal Overlay panel, so your speed over ground will differ from speed through water when there is a cross-current.
+- **Speed (knots)** — your trolling speed through the water. Set it precisely with the [Throttle Panel](#article:throttle). The planner accounts for the current layer you have selected in the Tidal Overlay panel, so your speed over ground will differ from speed through water when there is a cross-current.
 - **Heading (°)** — compass bearing you will hold. Set **0°** for north, **90°** for east, and so on.
 
 The scene shows your predicted track as a line on the overview map. As you adjust speed and heading the track updates in real time.

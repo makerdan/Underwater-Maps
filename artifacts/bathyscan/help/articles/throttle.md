@@ -3,6 +3,7 @@ id: throttle
 title: Throttle Panel
 section: Features
 order: 8
+showQA: true
 ---
 
 # Throttle Panel

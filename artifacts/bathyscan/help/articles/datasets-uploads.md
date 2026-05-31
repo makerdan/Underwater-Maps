@@ -73,6 +73,8 @@ The **🔍 FIND DATA** button in the Overlays panel (left sidebar) opens a slide
 
 Click **Save** on any result to add it to your saved list.
 
+See [Find Data](#article:find-data) for full details on the Search tab, the My Saves tab, and status pills.
+
 ## GPX / KML import and export
 
 You can move waypoints between BathyScan and external chart plotters and apps:

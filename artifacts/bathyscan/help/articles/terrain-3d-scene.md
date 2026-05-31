@@ -102,7 +102,7 @@ You can also drag the slider to set any value between 0.5× and 10×. Tweaking t
 
 ## Realistic speed mode
 
-You can toggle a "realistic" boat-speed mode in Settings. When on, the speed indicator shows knots instead of unitless tiers — useful for planning a real-world transect or trolling run.
+You can toggle a "realistic" boat-speed mode in Settings. When on, the speed indicator shows knots instead of unitless tiers — useful for planning a real-world transect or trolling run. Use the [Throttle Panel](#article:throttle) to set your exact speed when this mode is active.
 
 ## Substrate colour mode
 
