@@ -12,6 +12,7 @@ export type PanelId =
   | "mapData"
   | "conditions"
   | "forecast"
+  | "seafloorClassification"
   | "markersAccordion"
   | "uploadTerrainAccordion"
   | "routes"
@@ -34,6 +35,7 @@ export const DEFAULTS: Record<PanelId, boolean> = {
   mapData: false,
   conditions: false,
   forecast: false,
+  seafloorClassification: false,
   markersAccordion: true,
   uploadTerrainAccordion: true,
   routes: false,

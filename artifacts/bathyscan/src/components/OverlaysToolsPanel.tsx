@@ -21,8 +21,6 @@ import {
 import type { EfhFeature } from "@workspace/api-client-react";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
-import { SubstrateLegend } from "@/components/SubstrateLegend";
-import { ShoreZoneCredit } from "@/components/ShoreZoneCredit";
 import { Spinner } from "@/components/ui/spinner";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
 import { useWeatherStations } from "@/hooks/useWeatherStations";
@@ -120,8 +118,6 @@ export const OverlaysToolsPanel: React.FC = () => {
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
   const findDataPanelOpen = useUiStore((s) => s.findDataPanelOpen);
   const setFindDataPanelOpen = useUiStore((s) => s.setFindDataPanelOpen);
-  const substrateColorMode = useUiStore((s) => s.substrateColorMode);
-  const setSubstrateColorMode = useUiStore((s) => s.setSubstrateColorMode);
   const intertidalHotspotsEnabled = useUiStore((s) => s.intertidalHotspotsEnabled);
   const setIntertidalHotspotsEnabled = useUiStore((s) => s.setIntertidalHotspotsEnabled);
   const intertidalScoreMode = useUiStore((s) => s.intertidalScoreMode);
@@ -316,23 +312,6 @@ export const OverlaysToolsPanel: React.FC = () => {
             activeColor="#00e5ff"
             activeGlow="0 0 6px rgba(0,229,255,0.4)"
           />
-
-          <ToggleButton
-            active={substrateColorMode}
-            onClick={() => setSubstrateColorMode(!substrateColorMode)}
-            label="◼ SUBSTRATE"
-            tooltip="Tint seafloor by substrate type (sand, mud, rock)"
-            activeBg="rgba(226,213,160,0.15)"
-            activeBorder="rgba(226,213,160,0.5)"
-            activeColor="#e2d5a0"
-          />
-
-          {substrateColorMode && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <SubstrateLegend />
-              <ShoreZoneCredit style={{ textAlign: "left", maxWidth: 260 }} />
-            </div>
-          )}
 
           <ToggleButton
             testId="overlay-toggle-wind"

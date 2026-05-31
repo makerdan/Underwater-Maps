@@ -36,7 +36,7 @@ import { OverviewMap } from "@/components/OverviewMap";
 import { EfhDetailPanel } from "@/components/EfhDetailPanel";
 import { SubstrateDetailPanel } from "@/components/SubstrateDetailPanel";
 import { IntertidalHotspotCard } from "@/components/IntertidalHotspotCard";
-import { ZoneOverlay } from "@/components/ZoneOverlay";
+import { SeafloorClassificationPanel } from "@/components/SeafloorClassificationPanel";
 import { FindDataPanel } from "@/components/FindDataPanel";
 import { HabitatPanel } from "@/components/HabitatPanel";
 import { HabitatLegend } from "@/components/HabitatLegend";
@@ -944,7 +944,6 @@ function Main() {
                 {/* ── Section 1: Map & Data ── */}
                 <SidebarSection id="mapData" title="Map & Data">
                   {showDatasetPanel ? <DatasetPanel embedded /> : null}
-                  <ZoneOverlay embedded />
                   {showHabitatPanel ? <HabitatPanel embedded /> : null}
                 </SidebarSection>
 
@@ -964,6 +963,13 @@ function Main() {
                     />
                   ) : null}
                   <CurrentsPanel embedded />
+                </SidebarSection>
+              </SidebarSectionGroup>
+
+              {/* ── Seafloor Classification section ── */}
+              <SidebarSectionGroup>
+                <SidebarSection id="seafloorClassification" title="Seafloor Classification">
+                  <SeafloorClassificationPanel />
                 </SidebarSection>
               </SidebarSectionGroup>
 
