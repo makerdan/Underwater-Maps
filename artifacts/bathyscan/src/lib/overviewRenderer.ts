@@ -11,6 +11,7 @@ import type {
 } from "@workspace/api-client-react";
 import type { Marker } from "@workspace/api-client-react";
 import type { UnitsSystem, ColormapTheme } from "./settingsStore";
+import type { SelectedHotspot } from "./uiStore";
 import { getColormap } from "./colormap";
 import { MARKER_COLOR } from "./markerConstants";
 import { formatDepth } from "./units";
@@ -1797,4 +1798,106 @@ export function renderIntertidalHotspotPins(
   }
 
   return positions;
+}
+
+// ---------------------------------------------------------------------------
+// Intertidal hotspot pin-building (pure, exported for unit tests)
+// ---------------------------------------------------------------------------
+
+export interface IntertidalSpotFeature {
+  geometry: { type?: string; coordinates?: unknown };
+  properties: {
+    unitId?: string;
+    substrate?: string;
+    shoreZoneClass?: string;
+    szMaterial?: string | null;
+    szForm?: string | null;
+    tidepoolScore?: number;
+    beachcombingScore?: number;
+    scoreSignals?: {
+      tidepool?: { substrate?: string; bioband?: string | null; debris?: string | null; energy?: string | null; humanUse?: string | null; whySummary?: string };
+      beachcombing?: { substrate?: string; bioband?: string | null; debris?: string | null; energy?: string | null; humanUse?: string | null; whySummary?: string };
+    };
+  };
+}
+
+/**
+ * Build `IntertidalHotspotPin[]` and a `Map<unitId, SelectedHotspot>` from a
+ * GeoJSON-style features array.  Pure function — no side-effects, no React —
+ * so it can be exercised directly in unit tests without mounting OverviewMap.
+ *
+ * Color is teal (#0d9488) for `tidepool` mode, amber (#d97706) for
+ * `beachcombing` mode.  Score is the active-mode score (tidepoolScore when
+ * mode=tidepool, beachcombingScore when mode=beachcombing).  Features whose
+ * active-mode score is < 1, or whose geometry has no valid outer ring, are
+ * silently skipped.
+ */
+export function buildIntertidalHotspotDescriptors(
+  features: IntertidalSpotFeature[],
+  mode: 'tidepool' | 'beachcombing',
+  sourceName: string,
+  creditUrl: string,
+): { pins: IntertidalHotspotPin[]; dataMap: Map<string, SelectedHotspot> } {
+  const color = mode === 'tidepool' ? '#0d9488' : '#d97706';
+  const pins: IntertidalHotspotPin[] = [];
+  const dataMap = new Map<string, SelectedHotspot>();
+
+  for (const feature of features) {
+    const p = feature.properties;
+    const tidepoolScore = p.tidepoolScore ?? 0;
+    const beachcombingScore = p.beachcombingScore ?? 0;
+    const activeScore = mode === 'tidepool' ? tidepoolScore : beachcombingScore;
+    if (activeScore < 1) continue;
+
+    const geom = feature.geometry;
+    let outerRing: number[][] | null = null;
+    if (geom.type === 'Polygon') {
+      outerRing = (geom.coordinates as number[][][])?.[0] ?? null;
+    } else if (geom.type === 'MultiPolygon') {
+      outerRing = (geom.coordinates as number[][][][])?.[0]?.[0] ?? null;
+    }
+    if (!outerRing || outerRing.length === 0) continue;
+
+    let sumLon = 0, sumLat = 0;
+    for (const pt of outerRing) { sumLon += pt[0] ?? 0; sumLat += pt[1] ?? 0; }
+    const lon = sumLon / outerRing.length;
+    const lat = sumLat / outerRing.length;
+    const unitId = p.unitId ?? `${lon.toFixed(5)}_${lat.toFixed(5)}`;
+
+    const sig = p.scoreSignals ?? {};
+    const hotspot: SelectedHotspot = {
+      unitId,
+      substrate: p.substrate ?? "",
+      shoreZoneClass: p.shoreZoneClass ?? "",
+      tidepoolScore,
+      beachcombingScore,
+      szMaterial: p.szMaterial ?? null,
+      szForm: p.szForm ?? null,
+      signals: {
+        tidepool: {
+          substrate: sig.tidepool?.substrate ?? p.shoreZoneClass ?? "",
+          bioband: sig.tidepool?.bioband ?? null,
+          debris: sig.tidepool?.debris ?? null,
+          energy: sig.tidepool?.energy ?? null,
+          humanUse: sig.tidepool?.humanUse ?? null,
+          whySummary: sig.tidepool?.whySummary ?? "",
+        },
+        beachcombing: {
+          substrate: sig.beachcombing?.substrate ?? p.shoreZoneClass ?? "",
+          bioband: sig.beachcombing?.bioband ?? null,
+          debris: sig.beachcombing?.debris ?? null,
+          energy: sig.beachcombing?.energy ?? null,
+          humanUse: sig.beachcombing?.humanUse ?? null,
+          whySummary: sig.beachcombing?.whySummary ?? "",
+        },
+      },
+      sourceName,
+      creditUrl,
+    };
+
+    pins.push({ unitId, lon, lat, score: activeScore, color });
+    dataMap.set(unitId, hotspot);
+  }
+
+  return { pins, dataMap };
 }

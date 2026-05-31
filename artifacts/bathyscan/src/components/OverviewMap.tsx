@@ -57,6 +57,7 @@ import {
   renderWeatherStations,
   renderRawsStations,
   renderIntertidalHotspotPins,
+  buildIntertidalHotspotDescriptors,
 } from "@/lib/overviewRenderer";
 import type { OverviewTransform, CanvasSavedTrail, EfhLegendLayout, ContourSegment, WeatherStationPin, RawsStationPin, IntertidalHotspotPin } from "@/lib/overviewRenderer";
 import { useWeatherStations } from "@/hooks/useWeatherStations";
@@ -591,85 +592,16 @@ export const OverviewMap: React.FC = () => {
       return;
     }
     const mode = intertidalScoreModeRef.current;
-    const color = mode === 'tidepool' ? '#0d9488' : '#d97706';
     const meta = (intertidalSpotsData as { metadata?: { sourceName?: string; sourceCredit?: string } }).metadata;
     const sourceName = meta?.sourceName ?? "NOAA ShoreZone / AOOS";
     const creditUrl = meta?.sourceCredit ?? "https://portal.aoos.org/";
-    const pins: IntertidalHotspotPin[] = [];
-    const dataMap = new Map<string, SelectedHotspot>();
 
-    for (const feature of (intertidalSpotsData.features as Array<{
-      geometry: { type?: string; coordinates?: unknown };
-      properties: {
-        unitId?: string;
-        substrate?: string;
-        shoreZoneClass?: string;
-        szMaterial?: string | null;
-        szForm?: string | null;
-        tidepoolScore?: number;
-        beachcombingScore?: number;
-        scoreSignals?: {
-          tidepool?: { substrate?: string; bioband?: string | null; debris?: string | null; energy?: string | null; humanUse?: string | null; whySummary?: string };
-          beachcombing?: { substrate?: string; bioband?: string | null; debris?: string | null; energy?: string | null; humanUse?: string | null; whySummary?: string };
-        };
-      };
-    }>)) {
-      const p = feature.properties;
-      const tidepoolScore = p.tidepoolScore ?? 0;
-      const beachcombingScore = p.beachcombingScore ?? 0;
-      const activeScore = mode === 'tidepool' ? tidepoolScore : beachcombingScore;
-      if (activeScore < 1) continue;
-
-      // Compute centroid from the outer ring of the first polygon
-      const geom = feature.geometry;
-      let outerRing: number[][] | null = null;
-      if (geom.type === 'Polygon') {
-        outerRing = (geom.coordinates as number[][][])?.[0] ?? null;
-      } else if (geom.type === 'MultiPolygon') {
-        outerRing = (geom.coordinates as number[][][][])?.[0]?.[0] ?? null;
-      }
-      if (!outerRing || outerRing.length === 0) continue;
-
-      let sumLon = 0, sumLat = 0;
-      for (const pt of outerRing) { sumLon += pt[0] ?? 0; sumLat += pt[1] ?? 0; }
-      const lon = sumLon / outerRing.length;
-      const lat = sumLat / outerRing.length;
-      const unitId = p.unitId ?? `${lon.toFixed(5)}_${lat.toFixed(5)}`;
-
-      const sig = p.scoreSignals ?? {};
-      const hotspot: SelectedHotspot = {
-        unitId,
-        substrate: p.substrate ?? "",
-        shoreZoneClass: p.shoreZoneClass ?? "",
-        tidepoolScore,
-        beachcombingScore,
-        szMaterial: p.szMaterial ?? null,
-        szForm: p.szForm ?? null,
-        signals: {
-          tidepool: {
-            substrate: sig.tidepool?.substrate ?? p.shoreZoneClass ?? "",
-            bioband: sig.tidepool?.bioband ?? null,
-            debris: sig.tidepool?.debris ?? null,
-            energy: sig.tidepool?.energy ?? null,
-            humanUse: sig.tidepool?.humanUse ?? null,
-            whySummary: sig.tidepool?.whySummary ?? "",
-          },
-          beachcombing: {
-            substrate: sig.beachcombing?.substrate ?? p.shoreZoneClass ?? "",
-            bioband: sig.beachcombing?.bioband ?? null,
-            debris: sig.beachcombing?.debris ?? null,
-            energy: sig.beachcombing?.energy ?? null,
-            humanUse: sig.beachcombing?.humanUse ?? null,
-            whySummary: sig.beachcombing?.whySummary ?? "",
-          },
-        },
-        sourceName,
-        creditUrl,
-      };
-
-      pins.push({ unitId, lon, lat, score: activeScore, color });
-      dataMap.set(unitId, hotspot);
-    }
+    const { pins, dataMap } = buildIntertidalHotspotDescriptors(
+      intertidalSpotsData.features as Parameters<typeof buildIntertidalHotspotDescriptors>[0],
+      mode,
+      sourceName,
+      creditUrl,
+    );
 
     intertidalPinsRef.current = pins;
     intertidalHotspotDataRef.current = dataMap;
