@@ -508,7 +508,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   // Other panels can ask us to load a freshly-materialized user dataset by
   // setting `pendingExternalUserDatasetId` on the global app context. We
   // route it through the same /user/datasets/:id/{terrain,overview} pipeline
-  // as a click on a "My Uploads" row, then clear the handoff field.
+  // as a click on a "My Library" row, then clear the handoff field.
   useEffect(() => {
     if (!pendingExternalUserDatasetId) return;
     if (
@@ -700,7 +700,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             if (data.savedDatasetId) {
               setActiveUserDatasetId(data.savedDatasetId);
               // Optimistically insert the freshly-saved row into the
-              // MY UPLOADS cache so it appears immediately, without
+              // MY LIBRARY cache so it appears immediately, without
               // waiting for a refetch round-trip (Task #133).
               if (data.savedDatasetMeta) {
                 const meta = data.savedDatasetMeta;
@@ -1414,7 +1414,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                 className="px-3 py-1 flex items-center gap-2"
                 style={{ fontSize: 10, letterSpacing: "0.12em", color: "#cbd5e1" }}
               >
-                <span>▲ MY UPLOADS</span>
+                <span>▲ MY LIBRARY</span>
                 {userDatasetsLoading && (
                   <span className="animate-spin" style={{ fontSize: 9, color: "#cbd5e1" }}>◌</span>
                 )}

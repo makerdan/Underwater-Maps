@@ -82,6 +82,9 @@ interface DragData {
 
 const ROW_PADDING_X = 12;
 const INDENT_PX = 12;
+// Extra left offset applied to every root-level item so folders and datasets
+// are visually inset under the "MY LIBRARY" section header.
+const ROOT_INDENT_PX = 8;
 
 export const DatasetFolderTree: React.FC<Props> = ({
   datasets,
@@ -1067,7 +1070,7 @@ const FolderRow: React.FC<FolderRowProps> = ({
   onDelete,
   registerRow,
 }) => {
-  const indent = node.depth * INDENT_PX;
+  const indent = ROOT_INDENT_PX + node.depth * INDENT_PX;
   const dragData: DragData = {
     kind: "folder",
     id: node.folder.id,
@@ -1186,7 +1189,7 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
   onDelete,
   registerRow,
 }) => {
-  const indent = depth * INDENT_PX;
+  const indent = ROOT_INDENT_PX + depth * INDENT_PX;
   const units = useSettingsStore((s) => s.units);
   const date = new Date(ds.createdAt).toLocaleDateString(undefined, {
     month: "short",

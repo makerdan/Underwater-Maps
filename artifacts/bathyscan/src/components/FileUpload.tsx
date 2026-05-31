@@ -69,7 +69,7 @@ export const FileUpload = () => {
             setTerrain(data.terrain);
             // Hand off to DatasetPanel so the newly-saved row is loaded
             // through the unified /user/datasets read path (which also
-            // hydrates the overview map and "My Uploads" list).
+            // hydrates the overview map and "My Library" list).
             if (data.savedDatasetId) {
               setPendingExternalUserDatasetId(data.savedDatasetId);
             }

@@ -95,7 +95,7 @@ export function DefaultMapLoadPicker({ value, onChange }: DefaultMapLoadPickerPr
       )}
 
       {isSignedIn && !uploadsLoading && uploads && uploads.length > 0 && (
-        <optgroup label="My Uploads">
+        <optgroup label="My Library">
           {uploads.map((d) => (
             <option key={`upload:${d.id}`} value={`upload:${d.id}`}>
               {d.name}
