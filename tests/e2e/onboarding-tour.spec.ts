@@ -258,12 +258,12 @@ test.describe("Onboarding tour overlay", () => {
       return;
     }
 
-    // Click the "ONBOARDING" nav tab in the Settings sidebar.
-    const onboardingTab = page.locator("nav button", { hasText: "ONBOARDING" });
+    // Click the "GENERAL" nav tab in the Settings sidebar (replay tour lives there).
+    const onboardingTab = page.locator("nav button", { hasText: "GENERAL" });
     await expect(onboardingTab).toBeVisible({ timeout: 10_000 });
     await onboardingTab.dispatchEvent("click");
 
-    // Verify the Replay Tour button is present in the onboarding section.
+    // Verify the Replay Tour button is present in the General section.
     const replayBtn = page.getByTestId("replay-tour-btn");
     await expect(replayBtn).toBeVisible({ timeout: 5_000 });
 

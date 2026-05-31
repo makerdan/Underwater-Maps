@@ -34,11 +34,11 @@ import {
 const UNDO_DELETE_WINDOW_MS = 5000;
 import {
   useSettingsStore,
-  useSectionDirty,
   useAnySectionDirty,
   SETTINGS_SCHEMA_VERSION,
   DEFAULT_SETTINGS,
   DEFAULT_CROSSHAIR_MENU_GAMEPAD_BUTTON,
+  SECTION_KEYS,
   type MarkerType,
   type SettingsSection,
   type SettingsState,
@@ -596,8 +596,27 @@ const SyncContext = React.createContext<{
   isSignedIn: boolean;
 } | null>(null);
 
-function SectionSaveButton({ section }: { section: SettingsSection }) {
-  const dirty = useSectionDirty(section);
+function SectionSaveButton({
+  section,
+  sections: sectionsProp,
+}: {
+  section?: SettingsSection;
+  sections?: SettingsSection[];
+}) {
+  const allSections: SettingsSection[] = sectionsProp ?? (section ? [section] : []);
+  const dirty = useSettingsStore((s) => {
+    const snap = s.syncedSnapshot ?? {};
+    for (const sec of allSections) {
+      for (const k of SECTION_KEYS[sec]) {
+        if (!Object.is(
+          (s as unknown as Record<string, unknown>)[k],
+          (snap as Record<string, unknown>)[k],
+        )) return true;
+      }
+    }
+    return false;
+  });
+  const sectionKey = allSections[0] ?? "visuals";
   const ctx = React.useContext(SyncContext);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [errMsg, setErrMsg] = useState<string | null>(null);
@@ -651,14 +670,14 @@ function SectionSaveButton({ section }: { section: SettingsSection }) {
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       {status === "error" && errMsg && (
         <span
-          data-testid={`save-section-${section}-error`}
+          data-testid={`save-section-${sectionKey}-error`}
           style={{ fontSize: 9, color: "#f87171", letterSpacing: "0.1em", userSelect: "text" }}
         >
           {errMsg}
         </span>
       )}
       <button
-        data-testid={`save-section-${section}-btn`}
+        data-testid={`save-section-${sectionKey}-btn`}
         data-state={status}
         data-dirty={dirty ? "true" : "false"}
         onClick={() => void onClick()}
@@ -694,20 +713,24 @@ function SectionSaveButton({ section }: { section: SettingsSection }) {
 
 function SectionActionsRow({
   section,
+  sections: sectionsProp,
   withReset = true,
   withSave = true,
 }: {
-  section: SettingsSection;
+  section?: SettingsSection;
+  sections?: SettingsSection[];
   withReset?: boolean;
   withSave?: boolean;
 }) {
+  const allSections: SettingsSection[] = sectionsProp ?? (section ? [section] : []);
   const resetSection = useSettingsStore((s) => s.resetSection);
+  const resetKey = allSections[0] ?? "visuals";
   return (
     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 8 }}>
       {withReset && (
         <button
-          onClick={() => resetSection(section)}
-          data-testid={`reset-section-${section}-btn`}
+          onClick={() => allSections.forEach((sec) => resetSection(sec))}
+          data-testid={`reset-section-${resetKey}-btn`}
           style={{
             background: "none",
             border: "1px solid rgba(0,229,255,0.15)",
@@ -723,7 +746,7 @@ function SectionActionsRow({
           RESET SECTION
         </button>
       )}
-      {withSave && <SectionSaveButton section={section} />}
+      {withSave && <SectionSaveButton sections={allSections} />}
     </div>
   );
 }
@@ -784,25 +807,20 @@ function defaultContourInterval(units: "metric" | "imperial" | "nautical"): numb
   if (units === "imperial") return 50;
   return 10;
 }
-
-function ContourLinesCard() {
+/**
+ * Just the contour interval slider row — used inside the combined
+ * "Depth Display" card in VisualsSection so the toggle and slider are adjacent.
+ */
+function ContourIntervalRow() {
   const s = useSettingsStore();
   const isMetric = s.units === "metric";
   const isNautical = s.units === "nautical";
-
-  // Per-unit slider ranges and formatting:
-  //   metric   → 5–50 m,   step 5
-  //   imperial → 10–200 ft, step 10
-  //   nautical → 5–50 fm,  step 1
   const sliderMin  = isMetric ? 5  : isNautical ? 5  : 10;
   const sliderMax  = isMetric ? 50 : isNautical ? 50 : 200;
   const sliderStep = isMetric ? 5  : isNautical ? 1  : 10;
   const formatInterval = (v: number) =>
     isMetric ? `${v} m` : isNautical ? `${v} fm` : `${v} ft`;
   const unitLabel = isMetric ? "metres" : isNautical ? "fathoms" : "feet";
-
-  // When the unit system changes, snap the stored interval to the appropriate
-  // default for the new unit so the slider doesn't show a stale or out-of-range value.
   const prevUnitsRef = useRef(s.units);
   useEffect(() => {
     const prev = prevUnitsRef.current;
@@ -810,29 +828,17 @@ function ContourLinesCard() {
     if (prev === s.units) return;
     s.setContourInterval(defaultContourInterval(s.units));
   }, [s.units]); // eslint-disable-line react-hooks/exhaustive-deps
-
   return (
-    <div style={S.card}>
-      <div style={S.cardHeader}>CONTOUR LINES</div>
-      <ToggleRow
-        label="Show Contour Lines"
-        value={s.contoursEnabled}
-        onChange={s.setContoursEnabled}
-        sublabel="Iso-depth lines on the 2D overview map"
-      />
-      <div style={{ opacity: s.contoursEnabled ? 1 : 0.4, pointerEvents: s.contoursEnabled ? "auto" : "none" }}>
-        <SliderRow
-          label="Contour Interval"
-          value={Math.min(sliderMax, Math.max(sliderMin, s.contourInterval))}
-          min={sliderMin}
-          max={sliderMax}
-          step={sliderStep}
-          format={formatInterval}
-          onChange={s.setContourInterval}
-          sublabel={`Depth spacing between lines (${unitLabel})`}
-        />
-      </div>
-    </div>
+    <SliderRow
+      label="Contour Interval"
+      value={Math.min(sliderMax, Math.max(sliderMin, s.contourInterval))}
+      min={sliderMin}
+      max={sliderMax}
+      step={sliderStep}
+      format={formatInterval}
+      onChange={s.setContourInterval}
+      sublabel={`Depth spacing between lines (${unitLabel})`}
+    />
   );
 }
 
@@ -843,10 +849,29 @@ function VisualsSection() {
     <>
       <SectionTitle helpId="settings" helpLabel="Visuals & Performance">◈ VISUALS &amp; PERFORMANCE</SectionTitle>
       <SectionActionsRow section="visuals" />
-      <div style={S.card}>
-        <div style={S.cardHeader}>QUALITY PRESET</div>
-        <SelectRow
-          label="Preset"
+
+      {/* Quality Preset — full-width banner above the card grid */}
+      <div
+        style={{
+          background: "var(--bs-s-card-bg, rgba(0,10,20,0.7))",
+          border: "1px solid var(--bs-s-card-border, rgba(0,229,255,0.2))",
+          borderRadius: 8,
+          padding: "12px 16px",
+          marginBottom: 16,
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+        }}
+      >
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 9, letterSpacing: "0.2em", color: "var(--bs-s-card-header-fg, #cbd5e1)", fontWeight: 700, marginBottom: 2 }}>
+            QUALITY PRESET
+          </div>
+          <div style={{ fontSize: 9, color: "#64748b", letterSpacing: "0.05em" }}>
+            Master override — adjusts all visual controls below at once
+          </div>
+        </div>
+        <Select
           value={s.qualityPreset}
           onChange={(v) => {
             if (v === "custom") s.setQualityPreset("custom");
@@ -859,8 +884,12 @@ function VisualsSection() {
             { value: "ultra", label: "Ultra" },
             { value: "custom", label: "Custom" },
           ]}
-          sublabel="Applies a bundle of visual settings. Tweaking individual knobs switches to Custom."
         />
+      </div>
+
+      {/* Basics */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>BASICS</div>
         <SliderRow
           label="Terrain Exaggeration"
           value={s.terrainExaggeration}
@@ -875,12 +904,32 @@ function VisualsSection() {
           onChange={s.setEnableMarineSnow}
           sublabel="Floating particles around the camera"
         />
+        {s.enableMarineSnow && (
+          <div style={{ ...S.row, paddingLeft: 28, background: "rgba(0,229,255,0.02)" }}>
+            <div>
+              <div style={S.label}>Marine Snow Density</div>
+            </div>
+            <Select
+              value={s.particleDensity}
+              onChange={s.setParticleDensity}
+              options={[
+                { value: "sparse", label: "Sparse (500)" },
+                { value: "dense", label: "Dense (2000)" },
+              ]}
+            />
+          </div>
+        )}
         <ToggleRow
           label="Caustics Effect"
           value={s.enableCaustics}
           onChange={s.setEnableCaustics}
           sublabel="Light refraction pattern overlay"
         />
+      </div>
+
+      {/* Depth Display — colormap + contour lines together */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>DEPTH DISPLAY</div>
         <ColormapSelectRow
           label="Depth Colormap"
           value={s.colormapTheme}
@@ -895,20 +944,22 @@ function VisualsSection() {
           ]}
           sublabel="Terrain surface colour gradient"
         />
+        <ToggleRow
+          label="Show Contour Lines"
+          value={s.contoursEnabled}
+          onChange={s.setContoursEnabled}
+          sublabel="Iso-depth lines on the 2D overview map"
+        />
+        <div style={{ opacity: s.contoursEnabled ? 1 : 0.4, pointerEvents: s.contoursEnabled ? "auto" : "none" }}>
+          <ContourIntervalRow />
+        </div>
       </div>
-      <ContourLinesCard />
+
       <PalettePickerCard />
       <ZoneColoursCard />
       <AdvancedDisclosure testId="visuals-advanced">
         <div style={S.card}>
           <div style={S.cardHeader}>PARTICLES &amp; TEXTURES</div>
-          <SelectRow
-            label="Marine Snow Density"
-            value={s.particleDensity}
-            onChange={s.setParticleDensity}
-            options={[{ value: "off", label: "Off" }, { value: "sparse", label: "Sparse (500)" }, { value: "dense", label: "Dense (2000)" }]}
-            sublabel="Controls the particle count of the floating marine snow effect; Off, 500, or 2000 particles."
-          />
           <SelectRow
             label="Texture Quality"
             value={s.textureQuality}
@@ -924,7 +975,7 @@ function VisualsSection() {
           />
         </div>
         <div style={S.card}>
-          <div style={S.cardHeader}>LIGHTING &amp; FOG</div>
+          <div style={S.cardHeader}>ATMOSPHERE</div>
           <SliderRow
             label="Fog Density"
             value={s.fogDensity}
@@ -939,6 +990,9 @@ function VisualsSection() {
             onChange={s.setFogColor}
             sublabel="Background tint of the underwater scene"
           />
+        </div>
+        <div style={S.card}>
+          <div style={S.cardHeader}>LIGHTING</div>
           <SliderRow
             label="Ambient Light Intensity"
             value={s.ambientLightIntensity}
@@ -1107,8 +1161,23 @@ function NavigationSection() {
             ]}
             sublabel="Where to place the camera on the next visit"
           />
+        </div>
+        <div style={S.card}>
+          <div
+            style={{
+              ...S.cardHeader,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <span>TOUCH CONTROLS</span>
+            <span style={{ fontSize: 8, color: "#64748b", letterSpacing: "0.1em" }}>
+              MOBILE / TOUCH ONLY
+            </span>
+          </div>
           <SelectRow
-            label="On-Screen Joystick (touch)"
+            label="On-Screen Joystick"
             value={s.joystickMode}
             onChange={s.setJoystickMode}
             options={[
@@ -1116,7 +1185,7 @@ function NavigationSection() {
               { value: "always", label: "Always on" },
               { value: "off", label: "Off" },
             ]}
-            sublabel="Virtual joystick visibility"
+            sublabel="Virtual joystick visibility on touch devices"
           />
           <ToggleRow
             label="Show Joystick in Orbit Mode"
@@ -1195,76 +1264,6 @@ function HUDSection() {
     </>
   );
 }
-
-function UnitsSection() {
-  const s = useSettingsStore();
-
-  return (
-    <>
-      <h2 style={S.sectionTitle}>◈ UNITS</h2>
-      <SectionActionsRow section="hud" />
-      <div style={S.card}>
-        <div style={S.cardHeader}>MEASUREMENT SYSTEM</div>
-        <SelectRow
-          label="Units"
-          value={s.units}
-          onChange={s.setUnits}
-          options={[
-            { value: "metric", label: "Metric (m, km/h)" },
-            { value: "imperial", label: "Imperial (ft, mph)" },
-            { value: "nautical", label: "Nautical (ft, kn)" },
-          ]}
-          sublabel="Switching also updates depth and temperature unless overridden below"
-        />
-        <SelectRow
-          label="Depth Unit"
-          value={s.depthUnit}
-          onChange={s.setDepthUnit}
-          options={[
-            { value: "metres", label: "Metres" },
-            { value: "feet", label: "Feet" },
-          ]}
-          sublabel="Override depth display unit independently of the global units system"
-        />
-        <SelectRow
-          label="Temperature Unit"
-          value={s.temperatureUnit}
-          onChange={s.setTemperatureUnit}
-          options={[
-            { value: "auto", label: "Auto (follow Units)" },
-            { value: "celsius", label: "Celsius (°C)" },
-            { value: "fahrenheit", label: "Fahrenheit (°F)" },
-          ]}
-          sublabel="Override temperature display unit independently of the global units system"
-        />
-      </div>
-    </>
-  );
-}
-
-function OverviewSection() {
-  const s = useSettingsStore();
-  return (
-    <>
-      <h2 style={S.sectionTitle}>◈ OVERVIEW MAP</h2>
-      <SectionActionsRow section="overview" withReset={false} />
-      <div style={S.card}>
-        <div style={S.cardHeader}>MAP DISPLAY</div>
-        <ToggleRow label="Show Grid Lines" value={s.overviewShowGrid} onChange={s.setOverviewShowGrid} />
-        <ToggleRow label="Show Markers" value={s.overviewShowMarkers} onChange={s.setOverviewShowMarkers} />
-        <ToggleRow label="Open on Load" value={s.overviewOpenOnLoad} onChange={s.setOverviewOpenOnLoad} sublabel="Auto-expand when a dataset loads" />
-        <SliderRow
-          label="Default Zoom"
-          value={s.overviewDefaultZoom}
-          min={0.5} max={5.0} step={0.1}
-          format={(v) => `${v.toFixed(1)}×`}
-          onChange={s.setOverviewDefaultZoom}
-        />
-      </div>
-    </>
-  );
-}
-
 const SALTWATER_MARKER_TYPE_OPTIONS: { value: MarkerType; label: string }[] = [
   { value: "fish", label: "🐟 Fish" },
   { value: "shipwreck", label: "⚓ Shipwreck" },
@@ -1288,259 +1287,6 @@ const FRESHWATER_MARKER_TYPE_OPTIONS: { value: MarkerType; label: string }[] = [
   { value: "custom", label: "📍 Custom" },
   { value: "depth_pole", label: "📏 Depth Pole" },
 ];
-
-function MarkersSection() {
-  const s = useSettingsStore();
-  const MARKER_TYPE_OPTIONS =
-    s.waterType === "freshwater"
-      ? FRESHWATER_MARKER_TYPE_OPTIONS
-      : SALTWATER_MARKER_TYPE_OPTIONS;
-
-  const toggleMarkerType = (type: MarkerType) => {
-    const current = s.visibleMarkerTypes;
-    if (current.includes(type)) {
-      s.setVisibleMarkerTypes(current.filter((t) => t !== type));
-    } else {
-      s.setVisibleMarkerTypes([...current, type]);
-    }
-  };
-
-  return (
-    <>
-      <SectionTitle helpId="markers" helpLabel="Markers">◈ MARKERS</SectionTitle>
-      <SectionActionsRow section="markers" />
-      <div style={S.card}>
-        <div style={S.cardHeader}>VISIBILITY</div>
-        <ToggleRow label="Show Marker Labels" value={s.showMarkerLabels} onChange={s.setShowMarkerLabels} sublabel="Name text below marker sprites" />
-        <ToggleRow label="Private Markers" value={s.privateMarkers} onChange={s.setPrivateMarkers} sublabel="Only show your own markers" />
-      </div>
-      <div style={S.card}>
-        <div style={S.cardHeader}>VISIBLE TYPES</div>
-        {MARKER_TYPE_OPTIONS.map((o) => (
-          <ToggleRow
-            key={o.value}
-            label={o.label}
-            value={s.visibleMarkerTypes.includes(o.value)}
-            onChange={() => toggleMarkerType(o.value)}
-          />
-        ))}
-      </div>
-      <div style={S.card}>
-        <div style={S.cardHeader}>DEFAULTS</div>
-        <SelectRow
-          label="Default Marker Type"
-          value={s.defaultMarkerType}
-          onChange={s.setDefaultMarkerType}
-          options={MARKER_TYPE_OPTIONS}
-          sublabel="Pre-selected when opening the marker form"
-        />
-      </div>
-      <AdvancedDisclosure testId="markers-advanced">
-        <div style={S.card}>
-          <div style={S.cardHeader}>MARKER ADVANCED</div>
-          <ColorRow
-            label="Default Depth Pole Color"
-            value={s.defaultDepthPoleColor}
-            onChange={s.setDefaultDepthPoleColor}
-            sublabel="Used when creating a new depth-pole marker"
-          />
-          <SliderRow
-            label="Cluster Threshold"
-            value={s.markerClusterThreshold}
-            min={0} max={200} step={5}
-            format={(v) => v === 0 ? "Off" : `${v}`}
-            onChange={s.setMarkerClusterThreshold}
-            sublabel="Markers within this pixel distance are grouped. 0 disables clustering."
-          />
-        </div>
-      </AdvancedDisclosure>
-    </>
-  );
-}
-
-function TidalSection() {
-  const s = useSettingsStore();
-  return (
-    <>
-      <h2 style={S.sectionTitle}>◈ TIDAL DEFAULTS</h2>
-      <SectionActionsRow section="tidal" />
-      <div style={S.card}>
-        <div style={S.cardHeader}>BEHAVIOUR</div>
-        <ToggleRow
-          label="Auto-Load Tidal Data"
-          value={s.autoLoadTidal}
-          onChange={s.setAutoLoadTidal}
-          sublabel="Fetch tide &amp; current data when a dataset opens"
-        />
-        <SelectRow
-          label="Default Depth Layer"
-          value={s.defaultTidalDepthLayer}
-          onChange={s.setDefaultTidalDepthLayer}
-          options={[
-            { value: "surface", label: "Surface" },
-            { value: "mid", label: "Mid-water" },
-            { value: "near-bottom", label: "Near-bottom" },
-          ]}
-          sublabel="Which current layer is shown by default"
-        />
-      </div>
-      <AdvancedDisclosure testId="tidal-advanced">
-        <div style={S.card}>
-          <div style={S.cardHeader}>VISUALISATION</div>
-          <SelectRow
-            label="Global Arrow Density"
-            value={s.currentArrowDensity}
-            onChange={s.setCurrentArrowDensity}
-            options={[
-              { value: "sparse", label: "Sparse" },
-              { value: "normal", label: "Normal" },
-              { value: "dense", label: "Dense" },
-            ]}
-            sublabel="Default density used when no per-layer override is set"
-          />
-          <SelectRow
-            label="Surface Layer Density"
-            value={s.layerArrowDensity.surface}
-            onChange={(v) => s.setLayerArrowDensity("surface", v)}
-            options={[
-              { value: "sparse" as const, label: "Sparse" },
-              { value: "normal" as const, label: "Normal" },
-              { value: "dense" as const, label: "Dense" },
-            ]}
-            sublabel="Arrow density for the surface current layer"
-          />
-          <SelectRow
-            label="Mid-water Layer Density"
-            value={s.layerArrowDensity.mid}
-            onChange={(v) => s.setLayerArrowDensity("mid", v)}
-            options={[
-              { value: "sparse" as const, label: "Sparse" },
-              { value: "normal" as const, label: "Normal" },
-              { value: "dense" as const, label: "Dense" },
-            ]}
-            sublabel="Arrow density for the mid-water current layer"
-          />
-          <SelectRow
-            label="Near-bottom Layer Density"
-            value={s.layerArrowDensity["near-bottom"]}
-            onChange={(v) => s.setLayerArrowDensity("near-bottom", v)}
-            options={[
-              { value: "sparse" as const, label: "Sparse" },
-              { value: "normal" as const, label: "Normal" },
-              { value: "dense" as const, label: "Dense" },
-            ]}
-            sublabel="Arrow density for the near-bottom current layer"
-          />
-          <SelectRow
-            label="Wind Overlay Style"
-            value={s.windOverlayStyle}
-            onChange={s.setWindOverlayStyle}
-            options={[
-              { value: "arrows", label: "Arrows" },
-              { value: "particles", label: "Particles" },
-            ]}
-            sublabel="How the Wind overlay is drawn"
-          />
-          <SelectRow
-            label="Tide Overlay Style"
-            value={s.tideOverlayStyle}
-            onChange={s.setTideOverlayStyle}
-            options={[
-              { value: "arrows", label: "Arrows" },
-              { value: "particles", label: "Particles" },
-            ]}
-            sublabel="How the Tide overlay is drawn"
-          />
-          <SelectRow
-            label="Current Overlay Style"
-            value={s.currentOverlayStyle}
-            onChange={s.setCurrentOverlayStyle}
-            options={[
-              { value: "arrows", label: "Arrows" },
-              { value: "particles", label: "Particles" },
-            ]}
-            sublabel="How the Current overlay is drawn"
-          />
-        </div>
-      </AdvancedDisclosure>
-    </>
-  );
-}
-
-function CurrentsSection() {
-  const s = useSettingsStore();
-  return (
-    <>
-      <h2 style={S.sectionTitle}>◈ BATHYMETRIC CURRENTS</h2>
-      <SectionActionsRow section="currents" />
-      <div style={S.card}>
-        <div style={S.cardHeader}>SIMULATION</div>
-        <ToggleRow
-          label="Enable Currents Simulation"
-          value={s.currentsEnabled}
-          onChange={s.setCurrentsEnabled}
-          sublabel="Physics simulation shaped by the seafloor terrain — powers Drift Planner and differs from the NOAA surface overlay in the left panel"
-        />
-        <SelectRow
-          label="Ambient Source"
-          value={s.currentsSource}
-          onChange={s.setCurrentsSource}
-          options={[
-            { value: "manual", label: "Manual" },
-            { value: "noaa", label: "NOAA (live)" },
-          ]}
-          sublabel="Manual uses the values below; NOAA uses the active tidal station current"
-        />
-      </div>
-      <div style={S.card}>
-        <div style={S.cardHeader}>MANUAL AMBIENT</div>
-        <SliderRow
-          label="Direction (°)"
-          value={s.currentsManualDirectionDeg}
-          min={0} max={360} step={5}
-          onChange={s.setCurrentsManualDirectionDeg}
-          sublabel="Compass bearing the current flows toward (0 = south, 90 = east)"
-        />
-        <SliderRow
-          label="Speed (kt)"
-          value={s.currentsManualSpeedKt}
-          min={0} max={5} step={0.1}
-          onChange={s.setCurrentsManualSpeedKt}
-        />
-      </div>
-      <AdvancedDisclosure testId="currents-advanced">
-        <div style={S.card}>
-          <div style={S.cardHeader}>VISUALISATION LAYERS</div>
-          <ToggleRow
-            label="Animated Particles"
-            value={s.currentsShowParticles}
-            onChange={s.setCurrentsShowParticles}
-            sublabel="Flowing dots that visualise current direction and speed across the seafloor surface."
-          />
-          <ToggleRow
-            label="Speed-Coloured Arrows"
-            value={s.currentsShowArrows}
-            onChange={s.setCurrentsShowArrows}
-            sublabel="Vector arrows colour-coded from slow (blue) to fast (red) showing local current velocity."
-          />
-          <ToggleRow
-            label="Streamlines"
-            value={s.currentsShowStreamlines}
-            onChange={s.setCurrentsShowStreamlines}
-            sublabel="Continuous flow lines tracing the path water follows as it moves across the terrain."
-          />
-          <ToggleRow
-            label="Auto-Advance Tide Phase"
-            value={s.currentsAutoAdvance}
-            onChange={s.setCurrentsAutoAdvance}
-            sublabel="Slowly cycle the tide-phase scrubber for visual demo"
-          />
-        </div>
-      </AdvancedDisclosure>
-    </>
-  );
-}
-
 /**
  * Zone Colours card — shown in the Visuals tab.
  * Each of the four terrain slots gets a full row: name, colour picker,
@@ -1787,109 +1533,6 @@ function ZoneColourSwatches() {
     </div>
   );
 }
-
-function HabitatSection() {
-  const s = useSettingsStore();
-  return (
-    <>
-      <SectionTitle helpId="ai-assistant" helpLabel="Habitat Defaults">◈ HABITAT DEFAULTS</SectionTitle>
-      <SectionActionsRow section="habitat" />
-      <div style={S.card}>
-        <div style={S.cardHeader}>BEHAVIOUR</div>
-        <ToggleRow
-          label="Auto-Show Zone Overlay"
-          value={s.autoShowZoneOverlay}
-          onChange={s.setAutoShowZoneOverlay}
-          sublabel="Display habitat zones automatically on load"
-        />
-        <SliderRow
-          label="Overlay Intensity"
-          value={s.habitatOverlayIntensity}
-          min={0}
-          max={1}
-          step={0.05}
-          format={(v) => `${Math.round(v * 100)}%`}
-          onChange={s.setHabitatOverlayIntensity}
-          sublabel="Default strength of the amber habitat tint on terrain"
-        />
-      </div>
-      <ZoneColourSwatches />
-      <AdvancedDisclosure testId="habitat-advanced">
-        <div style={S.card}>
-          <div style={S.cardHeader}>DEFAULTS</div>
-          <div style={S.row}>
-            <div>
-              <div style={S.label}>Default Species</div>
-              <div style={S.sublabel}>Pre-fills the habitat species filter</div>
-            </div>
-            <input
-              type="text"
-              value={s.defaultHabitatSpecies}
-              onChange={(e) => s.setDefaultHabitatSpecies(e.target.value)}
-              placeholder="(none)"
-              style={{
-                ...S.select, width: 160, fontFamily: FONT, fontSize: 10,
-              }}
-            />
-          </div>
-        </div>
-      </AdvancedDisclosure>
-    </>
-  );
-}
-
-function GpsSection() {
-  const s = useSettingsStore();
-  return (
-    <>
-      <h2 style={S.sectionTitle}>◈ GPS &amp; TRAIL</h2>
-      <SectionActionsRow section="gps" />
-      <div style={S.card}>
-        <div style={S.cardHeader}>RECORDING</div>
-        <ToggleRow
-          label="Auto-Start Trail Recording"
-          value={s.autoStartTrailRecording}
-          onChange={s.setAutoStartTrailRecording}
-          sublabel="Begin recording the moment a dataset loads"
-        />
-        <ColorRow
-          label="Default Trail Color"
-          value={s.defaultTrailColor}
-          onChange={s.setDefaultTrailColor}
-        />
-        <SelectRow
-          label="Sample Rate"
-          value={String(s.gpsRecordingInterval) as "1000" | "2000" | "10000"}
-          onChange={(v) => s.setGpsRecordingInterval(Number(v))}
-          options={[
-            { value: "1000", label: "1 Hz (1 / sec)" },
-            { value: "2000", label: "0.5 Hz (every 2s)" },
-            { value: "10000", label: "0.1 Hz (every 10s)" },
-          ]}
-          sublabel="How often GPS track points are recorded"
-        />
-      </div>
-      <AdvancedDisclosure testId="gps-advanced">
-        <div style={S.card}>
-          <div style={S.cardHeader}>RETENTION</div>
-          <SelectRow
-            label="Keep Trails For"
-            value={s.trailRetention}
-            onChange={s.setTrailRetention}
-            options={[
-              { value: "7", label: "7 days" },
-              { value: "30", label: "30 days" },
-              { value: "90", label: "90 days" },
-              { value: "all", label: "Forever" },
-            ]}
-            sublabel="Older trails are auto-purged on next sign-in"
-          />
-        </div>
-      </AdvancedDisclosure>
-    </>
-  );
-}
-
 function AccessibilitySection() {
   const s = useSettingsStore();
   return (
@@ -2355,416 +1998,11 @@ function ShortcutsSection() {
     </>
   );
 }
-
-function DatasetSection() {
-  const s = useSettingsStore();
-  return (
-    <>
-      <SectionTitle helpId="datasets-uploads" helpLabel="Data & Storage">◈ DATA &amp; STORAGE</SectionTitle>
-      <SectionActionsRow section="data" />
-      <div style={S.card}>
-        <div style={S.cardHeader}>DEFAULTS</div>
-        <div style={S.row}>
-          <div>
-            <div style={S.label}>Default Map Load</div>
-            <div style={S.sublabel}>Dataset that opens automatically on every launch</div>
-          </div>
-          <DefaultMapLoadPicker
-            value={s.defaultMapLoad}
-            onChange={s.setDefaultMapLoad}
-          />
-        </div>
-        <SelectRow
-          label="Default Region"
-          value={s.defaultRegion}
-          onChange={s.setDefaultRegion}
-          options={[
-            { value: "", label: "None — start with no dataset loaded" },
-          ]}
-          sublabel="No bundled preset regions are available. Upload your own data or save a dataset from Find Data to use as a default."
-        />
-        <ToggleRow
-          label="Auto-Load Last Dataset"
-          value={s.autoLoadLastDataset}
-          onChange={s.setAutoLoadLastDataset}
-          sublabel="Reopen the dataset you used last session"
-        />
-      </div>
-    </>
-  );
-}
-
-function EnvironmentSection() {
-  const s = useSettingsStore();
-  return (
-    <>
-      <h2 style={S.sectionTitle}>≈ ENVIRONMENT</h2>
-      <SectionActionsRow section="environment" withReset={false} />
-      <div style={S.card}>
-        <div style={S.cardHeader}>WATER TYPE</div>
-        <div style={S.row}>
-          <div>
-            <div style={S.label}>Exploration Mode</div>
-            <div style={S.sublabel}>
-              Switches datasets, species, marker types, and AI guidance
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 6 }}>
-            {(["saltwater", "freshwater"] as const).map((wt) => {
-              const active = s.waterType === wt;
-              const color = wt === "freshwater" ? "#4ade80" : "#00e5ff";
-              return (
-                <button
-                  key={wt}
-                  data-testid={`settings-water-type-${wt}`}
-                  onClick={() => s.setWaterType(wt)}
-                  style={{
-                    fontSize: 9,
-                    letterSpacing: "0.15em",
-                    padding: "4px 12px",
-                    borderRadius: 4,
-                    border: `1px solid ${active ? color : "rgba(0,229,255,0.18)"}`,
-                    background: active ? `${color}14` : "transparent",
-                    color: active ? color : "#94a3b8",
-                    cursor: "pointer",
-                    fontFamily: FONT,
-                    transition: "all 0.12s",
-                  }}
-                >
-                  {wt === "saltwater" ? "≈ SALTWATER" : "~ FRESHWATER"}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-      <div style={S.card}>
-        <div style={S.cardHeader}>CURRENT MODE</div>
-        <div style={{ padding: "12px 16px", fontSize: 10, color: "#cbd5e1", lineHeight: 1.7 }}>
-          {s.waterType === "freshwater" ? (
-            <>
-              <div style={{ color: "#4ade80", fontWeight: 700, marginBottom: 6, fontSize: 9, letterSpacing: "0.1em" }}>
-                ~ FRESHWATER MODE
-              </div>
-              <div>Freshwater datasets (lakes, reservoirs) are shown in the dataset list.</div>
-              <div>Habitat panel shows freshwater species (Rainbow Trout, Walleye, Bass, Crayfish…).</div>
-              <div>Marker types include vegetation and submerged log options.</div>
-              <div>AI assistant uses freshwater limnology context.</div>
-            </>
-          ) : (
-            <>
-              <div style={{ color: "#00e5ff", fontWeight: 700, marginBottom: 6, fontSize: 9, letterSpacing: "0.1em" }}>
-                ≈ SALTWATER MODE
-              </div>
-              <div>Ocean datasets (trenches, ridges, basins) are shown in the dataset list.</div>
-              <div>Habitat panel shows marine species (Dungeness Crab, Rockfish…).</div>
-              <div>Marker types include coral, hydrothermal vent, and shipwreck options.</div>
-              <div>AI assistant uses marine geology context.</div>
-            </>
-          )}
-        </div>
-      </div>
-    </>
-  );
-}
-
 function formatCacheSize(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${bytes} B`;
 }
-
-function OfflineSection() {
-  const [cached, setCached] = useState<CachedDataset[]>([]);
-  const [pending, setPending] = useState({ markers: 0, trails: 0 });
-  const [loading, setLoading] = useState(true);
-  const [clearing, setClearing] = useState<string | null>(null);
-  const [allClearedMsg, setAllClearedMsg] = useState(false);
-  const [upscaleClearMsg, setUpscaleClearMsg] = useState(false);
-  const [upscaleInfo, setUpscaleInfo] = useState<{ count: number; bytes: number } | null>(null);
-  const [offlinePacks, setOfflinePacks] = useState<OfflinePack[]>([]);
-  const [helpStatus, setHelpStatus] = useState<HelpPackStatus | null>(null);
-  const [packClearing, setPackClearing] = useState<string | null>(null);
-  const [helpClearing, setHelpClearing] = useState(false);
-  const { toast } = useToast();
-
-  const refreshUpscaleInfo = useCallback(async () => {
-    const info = await getUpscaleCacheInfo();
-    setUpscaleInfo(info);
-  }, []);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    const [c, p] = await Promise.all([listCachedDatasets(), countPendingItems()]);
-    setCached(c);
-    setPending(p);
-    setLoading(false);
-  }, []);
-
-  const refreshPacks = useCallback(async () => {
-    const [packs, help] = await Promise.all([listOfflinePacks(), getHelpPackStatus()]);
-    setOfflinePacks(packs);
-    setHelpStatus(help);
-  }, []);
-
-  useEffect(() => { void refresh(); }, [refresh]);
-  useEffect(() => { void refreshUpscaleInfo(); }, [refreshUpscaleInfo]);
-  useEffect(() => { void refreshPacks(); }, [refreshPacks]);
-
-  const handleDeletePack = async (id: string) => {
-    setPackClearing(id);
-    await deleteOfflinePack(id);
-    await refreshPacks();
-    setPackClearing(null);
-    toast({ title: "Offline pack deleted", duration: 3000 });
-  };
-
-  const handleDeleteHelp = async () => {
-    setHelpClearing(true);
-    await deleteHelpPack();
-    await refreshPacks();
-    setHelpClearing(false);
-    toast({ title: "Help pack deleted", duration: 3000 });
-  };
-
-  const handleClearEntry = async (url: string) => {
-    setClearing(url);
-    await clearCacheEntry(url);
-    await refresh();
-    setClearing(null);
-  };
-
-  const handleClearAll = async () => {
-    if (!("caches" in window)) return;
-    setClearing("all");
-    const names = await caches.keys();
-    await Promise.all(names.map((n) => caches.delete(n)));
-    await idbClear();
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const k = localStorage.key(i);
-      if (k?.startsWith("pending-")) localStorage.removeItem(k!);
-    }
-    setAllClearedMsg(true);
-    await refresh();
-    setClearing(null);
-    setTimeout(() => setAllClearedMsg(false), 3000);
-  };
-
-  const handleClearUpscaleCache = async () => {
-    setClearing("upscale");
-    await clearUpscaleCache();
-    await refreshUpscaleInfo();
-    setClearing(null);
-    setUpscaleClearMsg(true);
-    setTimeout(() => setUpscaleClearMsg(false), 3000);
-    toast({ title: "Enhanced image cache cleared", duration: 3000 });
-  };
-
-  return (
-    <>
-      <SectionTitle helpId="troubleshooting" helpLabel="Offline & Storage">◈ OFFLINE &amp; STORAGE</SectionTitle>
-
-      {/* ── SAVED OFFLINE PACKS ─────────────────────────────────────── */}
-      <div style={S.card}>
-        <div style={S.cardHeader}>SAVED OFFLINE PACKS</div>
-        <div style={{ padding: "12px 16px" }}>
-          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 10 }}>
-            Terrain, tide predictions, and weather snapshots saved for offline use.
-            Each pack covers 7 days of tide data and can be updated from the dataset panel.
-          </div>
-          {offlinePacks.length === 0 ? (
-            <div style={{ fontSize: 10, color: "#64748b" }}>
-              No offline packs saved. Load a dataset and tap "⬇ Save Offline" to create one.
-            </div>
-          ) : (
-            offlinePacks.map((pack) => {
-              const savedDate = new Date(pack.savedAt).toLocaleDateString(undefined, {
-                month: "short", day: "numeric", year: "numeric",
-              });
-              const expiresDate = new Date(pack.tidePack.tidalExpiresAt).toLocaleDateString(undefined, {
-                month: "short", day: "numeric",
-              });
-              const isExpired = new Date(pack.tidePack.tidalExpiresAt).getTime() < Date.now();
-              const sizeStr = pack.storageBytesEstimate >= 1024 * 1024
-                ? `${(pack.storageBytesEstimate / (1024 * 1024)).toFixed(1)} MB`
-                : `${Math.round(pack.storageBytesEstimate / 1024)} KB`;
-              return (
-                <div
-                  key={pack.id}
-                  data-testid={`offline-pack-${pack.id}`}
-                  style={{
-                    display: "flex", alignItems: "flex-start", justifyContent: "space-between",
-                    padding: "8px 0", borderBottom: "1px solid rgba(0,229,255,0.06)", gap: 8,
-                  }}
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 10, color: "#cbd5e1", fontWeight: 600, marginBottom: 2 }}>
-                      {pack.datasetName}
-                    </div>
-                    <div style={{ fontSize: 9, color: "#64748b" }}>
-                      Saved {savedDate} · {sizeStr}
-                    </div>
-                    <div style={{ fontSize: 9, color: isExpired ? "#f87171" : "#94a3b8", marginTop: 1 }}>
-                      Tide data {isExpired ? "expired" : `expires ${expiresDate}`}
-                    </div>
-                  </div>
-                  <button
-                    data-testid={`delete-pack-${pack.id}`}
-                    onClick={() => void handleDeletePack(pack.id)}
-                    disabled={packClearing === pack.id}
-                    style={{
-                      ...S.dangerBtn,
-                      padding: "3px 8px",
-                      fontSize: 8,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {packClearing === pack.id ? "…" : "DELETE"}
-                  </button>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {/* ── HELP CONTENT ────────────────────────────────────────────── */}
-      <div style={S.card}>
-        <div style={S.cardHeader}>HELP CONTENT</div>
-        <div style={{ padding: "12px 16px" }}>
-          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 10 }}>
-            Tutorial GIFs and images are cached for offline viewing. Download once to access
-            help articles without a network connection.
-          </div>
-          {helpStatus === null ? (
-            <div style={{ fontSize: 10, color: "#64748b" }}>◌ Loading…</div>
-          ) : helpStatus.saved ? (
-            <div>
-              <div style={{ fontSize: 10, color: "#4ade80", marginBottom: 8 }}>
-                ✓ Help content saved ·{" "}
-                {helpStatus.savedAt && new Date(helpStatus.savedAt).toLocaleDateString(undefined, {
-                  month: "short", day: "numeric", year: "numeric",
-                })}
-                {helpStatus.totalBytes != null && ` · ${(helpStatus.totalBytes / 1024).toFixed(0)} KB`}
-              </div>
-              <button
-                data-testid="delete-help-pack-btn"
-                onClick={() => void handleDeleteHelp()}
-                disabled={helpClearing}
-                style={{ ...S.dangerBtn, fontSize: 8, padding: "3px 8px" }}
-              >
-                {helpClearing ? "…" : "DELETE HELP PACK"}
-              </button>
-            </div>
-          ) : (
-            <div style={{ fontSize: 10, color: "#64748b" }}>
-              No help content saved. Use the Help panel (? button) when online to cache it.
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div style={S.card}>
-        <div style={S.cardHeader}>CACHED TERRAIN DATA</div>
-        <div style={{ padding: "12px 16px" }}>
-          {loading ? (
-            <div style={{ fontSize: 10, color: "#64748b" }}>◌ Loading…</div>
-          ) : cached.length === 0 ? (
-            <div data-testid="no-cache-msg" style={{ fontSize: 10, color: "#64748b" }}>
-              No terrain data cached. Load a dataset to cache it.
-            </div>
-          ) : (
-            cached.map((entry) => (
-              <div key={entry.url} data-testid="cache-entry" style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "6px 0", borderBottom: "1px solid rgba(0,229,255,0.06)", fontSize: 10,
-              }}>
-                <div>
-                  <span style={{ color: "#cbd5e1" }}>{entry.label}</span>
-                  {entry.sizeKb !== null && (
-                    <span style={{ color: "#64748b", marginLeft: 8 }}>
-                      {entry.sizeKb >= 1024 ? `${(entry.sizeKb / 1024).toFixed(1)} MB` : `${entry.sizeKb} KB`}
-                    </span>
-                  )}
-                </div>
-                <button
-                  data-testid="clear-cache-entry-btn"
-                  onClick={() => void handleClearEntry(entry.url)}
-                  disabled={clearing === entry.url}
-                  style={S.dangerBtn}
-                >
-                  {clearing === entry.url ? "…" : "CLEAR"}
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-        <div style={{ ...S.row, flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
-          <div style={{ fontSize: 9, letterSpacing: "0.15em", color: "#94a3b8" }}>PENDING SYNC</div>
-          <div style={{ fontSize: 10 }}>
-            <span style={{ color: "#cbd5e1" }}>Markers: </span>
-            <span data-testid="pending-markers-count" style={{ color: pending.markers > 0 ? "#fbbf24" : "#64748b" }}>
-              {pending.markers}
-            </span>
-            <span style={{ color: "#cbd5e1", marginLeft: 16 }}>Trails: </span>
-            <span style={{ color: pending.trails > 0 ? "#fbbf24" : "#64748b" }}>
-              {pending.trails}
-            </span>
-          </div>
-        </div>
-        <div style={{ padding: "12px 16px" }}>
-          {allClearedMsg && (
-            <div style={{ fontSize: 9, color: "#4ade80", letterSpacing: "0.12em", marginBottom: 8 }}>
-              ✓ All cached data cleared
-            </div>
-          )}
-          <button
-            data-testid="clear-all-cache-btn"
-            onClick={() => void handleClearAll()}
-            disabled={clearing === "all"}
-            style={S.dangerBtn}
-          >
-            {clearing === "all" ? "CLEARING…" : "CLEAR ALL CACHED DATA"}
-          </button>
-        </div>
-      </div>
-      <div style={S.card}>
-        <div style={S.cardHeader}>ENHANCED IMAGE CACHE</div>
-        <div style={{ padding: "12px 16px" }}>
-          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 10 }}>
-            AI-upscaled heatmap images are stored locally (IndexedDB) for up to 7 days to avoid
-            repeat processing. Clear this if you suspect a stale image is being shown or want to
-            free up browser storage.
-          </div>
-          <div
-            data-testid="upscale-cache-size"
-            style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 10 }}
-          >
-            {upscaleInfo === null
-              ? "◌ Calculating…"
-              : upscaleInfo.count === 0
-                ? "Empty (0 entries)"
-                : `${upscaleInfo.count} ${upscaleInfo.count === 1 ? "entry" : "entries"} · ${formatCacheSize(upscaleInfo.bytes)}`}
-          </div>
-          {upscaleClearMsg && (
-            <div style={{ fontSize: 9, color: "#4ade80", letterSpacing: "0.12em", marginBottom: 8 }}>
-              ✓ Enhanced image cache cleared
-            </div>
-          )}
-          <button
-            data-testid="clear-upscale-cache-btn"
-            onClick={() => void handleClearUpscaleCache()}
-            disabled={clearing === "upscale"}
-            style={S.dangerBtn}
-          >
-            {clearing === "upscale" ? "CLEARING…" : "CLEAR ENHANCED IMAGE CACHE"}
-          </button>
-        </div>
-      </div>
-    </>
-  );
-}
-
 function AccountSection() {
   const { user } = useUser();
   const qc = useQueryClient();
@@ -3207,166 +2445,943 @@ function AccountSection() {
           </button>
         </div>
       </div>
-      <div style={S.dangerCard}>
-        <div style={S.dangerHeader}>⚠ DANGER ZONE</div>
-        <div style={{ padding: "14px 16px" }}>
-          <div style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 12 }}>
-            Permanently delete all markers you have created. This cannot be undone.
+      {/* ── DANGER ZONE ────────────────────────────────────────────────── */}
+      <div
+        style={{
+          marginTop: 8,
+          borderTop: "2px solid rgba(239,68,68,0.3)",
+          paddingTop: 16,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 12,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 9,
+              letterSpacing: "0.25em",
+              color: "#f87171",
+              fontWeight: 700,
+              fontFamily: FONT,
+            }}
+          >
+            ⚠ DANGER ZONE
+          </span>
+          <span
+            style={{
+              fontSize: 9,
+              color: "#64748b",
+              letterSpacing: "0.05em",
+            }}
+          >
+            — destructive actions, cannot be undone
+          </span>
+        </div>
+        <div style={S.dangerCard}>
+          <div style={S.dangerHeader}>DELETE ALL MY MARKERS</div>
+          <div style={{ padding: "14px 16px" }}>
+            <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 12 }}>
+              Permanently removes every marker you have created across all datasets.
+              This cannot be undone.
+            </div>
+            {deleteMsg && (
+              <div style={{ fontSize: 9, color: "#4ade80", letterSpacing: "0.12em", marginBottom: 8 }}>
+                {deleteMsg}
+              </div>
+            )}
+            {!confirmDelete ? (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                style={S.dangerBtn}
+              >
+                DELETE ALL MY MARKERS
+              </button>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 10, color: "#f87171" }}>
+                  ⚠ This will permanently delete all your markers. Are you sure?
+                </span>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={() => {
+                      requestBulkDeleteAllMarkers();
+                      setConfirmDelete(false);
+                    }}
+                    disabled={deleteAllMarkers.isPending}
+                    style={{ ...S.dangerBtn, background: "rgba(239,68,68,0.15)" }}
+                  >
+                    {deleteAllMarkers.isPending ? "DELETING…" : "YES, DELETE ALL"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    style={{
+                      ...S.dangerBtn,
+                      color: "#cbd5e1",
+                      border: "1px solid rgba(100,116,139,0.3)",
+                      background: "none",
+                    }}
+                  >
+                    CANCEL
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-          {deleteMsg && (
-            <div style={{ fontSize: 9, color: "#4ade80", letterSpacing: "0.12em", marginBottom: 8 }}>
-              {deleteMsg}
+        </div>
+        <div style={{ ...S.dangerCard, marginTop: 12 }}>
+          <div style={S.dangerHeader}>DELETE MY ACCOUNT DATA</div>
+          <div style={{ padding: "14px 16px" }}>
+            <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 12 }}>
+              Permanently deletes <strong style={{ color: "#f87171" }}>all</strong> of your data
+              — settings, markers, custom datasets, and GPS trails. This cannot be undone.
             </div>
-          )}
-          {!confirmDelete ? (
-            <button
-              onClick={() => setConfirmDelete(true)}
-              style={S.dangerBtn}
-            >
-              DELETE ALL MY MARKERS
-            </button>
+            {!confirmDeleteAccount ? (
+              <button
+                onClick={() => setConfirmDeleteAccount(true)}
+                data-testid="delete-account-btn"
+                style={S.dangerBtn}
+              >
+                DELETE MY ACCOUNT DATA
+              </button>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 10, color: "#f87171" }}>
+                  ⚠ This will permanently delete everything. Are you sure?
+                </span>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={() => { void handleDeleteAccount(); setConfirmDeleteAccount(false); }}
+                    data-testid="confirm-delete-account-btn"
+                    style={{ ...S.dangerBtn, background: "rgba(239,68,68,0.15)" }}
+                  >
+                    YES, DELETE EVERYTHING
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteAccount(false)}
+                    style={{
+                      ...S.dangerBtn,
+                      color: "#cbd5e1",
+                      border: "1px solid rgba(100,116,139,0.3)",
+                      background: "none",
+                    }}
+                  >
+                    CANCEL
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+// ─── Combined sections ─────────────────────────────────────────────────────────
+
+/**
+ * General — Environment mode (Saltwater/Freshwater) + Units in one section.
+ * Merges the old standalone "Environment" and "Units" sidebar entries.
+ */
+function GeneralSection() {
+  const s = useSettingsStore();
+  const [, setLocation] = useLocation();
+  const setHasSeenOnboarding = useSettingsStore((st) => st.setHasSeenOnboarding);
+  return (
+    <>
+      <SectionTitle>◈ GENERAL</SectionTitle>
+      <SectionActionsRow sections={["environment", "hud"]} withReset={false} />
+      {/* Environment card */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>ENVIRONMENT</div>
+        <div style={S.row}>
+          <div>
+            <div style={S.label}>Exploration Mode</div>
+            <div style={S.sublabel}>
+              Switches datasets, species, marker types, and AI guidance
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {(["saltwater", "freshwater"] as const).map((wt) => {
+              const active = s.waterType === wt;
+              const color = wt === "freshwater" ? "#4ade80" : "#00e5ff";
+              return (
+                <button
+                  key={wt}
+                  data-testid={`settings-water-type-${wt}`}
+                  onClick={() => s.setWaterType(wt)}
+                  style={{
+                    fontSize: 9,
+                    letterSpacing: "0.15em",
+                    padding: "4px 12px",
+                    borderRadius: 4,
+                    border: `1px solid ${active ? color : "rgba(0,229,255,0.18)"}`,
+                    background: active ? `${color}14` : "transparent",
+                    color: active ? color : "#94a3b8",
+                    cursor: "pointer",
+                    fontFamily: FONT,
+                    transition: "all 0.12s",
+                  }}
+                >
+                  {wt === "saltwater" ? "≈ SALTWATER" : "~ FRESHWATER"}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{ padding: "10px 16px 12px", fontSize: 10, color: "#94a3b8", lineHeight: 1.6 }}>
+          {s.waterType === "freshwater" ? (
+            <span style={{ color: "#4ade80", fontSize: 9, letterSpacing: "0.08em" }}>
+              ~ Freshwater mode: lakes, reservoirs, freshwater species, limnology AI context.
+            </span>
           ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ fontSize: 10, color: "#f87171" }}>Are you sure?</span>
-              <button
-                onClick={() => {
-                  requestBulkDeleteAllMarkers();
-                  setConfirmDelete(false);
-                }}
-                disabled={deleteAllMarkers.isPending}
-                style={{ ...S.dangerBtn, background: "rgba(239,68,68,0.15)" }}
-              >
-                {deleteAllMarkers.isPending ? "DELETING…" : "YES, DELETE ALL"}
-              </button>
-              <button
-                onClick={() => setConfirmDelete(false)}
-                style={{
-                  ...S.dangerBtn,
-                  color: "#cbd5e1",
-                  border: "1px solid rgba(100,116,139,0.3)",
-                  background: "none",
-                }}
-              >
-                CANCEL
-              </button>
-            </div>
+            <span style={{ color: "#00e5ff", fontSize: 9, letterSpacing: "0.08em" }}>
+              ≈ Saltwater mode: ocean datasets, marine species, marine geology AI context.
+            </span>
           )}
         </div>
-        <div style={{ padding: "14px 16px", borderTop: "1px solid rgba(239,68,68,0.12)" }}>
-          <div style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 12 }}>
-            Permanently delete <strong style={{ color: "#f87171" }}>all</strong> of your data
-            — settings, markers, custom datasets, GPS trails. This cannot be undone.
+      </div>
+      {/* Units card */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>UNITS</div>
+        <SelectRow
+          label="Units"
+          value={s.units}
+          onChange={s.setUnits}
+          options={[
+            { value: "metric", label: "Metric (m, km/h)" },
+            { value: "imperial", label: "Imperial (ft, mph)" },
+            { value: "nautical", label: "Nautical (ft, kn)" },
+          ]}
+          sublabel="Switching also updates depth and temperature unless overridden below"
+        />
+        <SelectRow
+          label="Depth Unit"
+          value={s.depthUnit}
+          onChange={s.setDepthUnit}
+          options={[
+            { value: "metres", label: "Metres" },
+            { value: "feet", label: "Feet" },
+          ]}
+          sublabel="Override depth display unit independently of the global units system"
+        />
+        <SelectRow
+          label="Temperature Unit"
+          value={s.temperatureUnit}
+          onChange={s.setTemperatureUnit}
+          options={[
+            { value: "auto", label: "Auto (follow Units)" },
+            { value: "celsius", label: "Celsius (°C)" },
+            { value: "fahrenheit", label: "Fahrenheit (°F)" },
+          ]}
+          sublabel="Override temperature display unit independently of the global units system"
+        />
+      </div>
+      {/* Tour card */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>GUIDED TOUR</div>
+        <div style={S.row}>
+          <div>
+            <div style={S.label}>Replay App Tour</div>
+            <div style={S.sublabel}>Reset the onboarding tour and restart it from the beginning</div>
           </div>
-          {!confirmDeleteAccount ? (
-            <button
-              onClick={() => setConfirmDeleteAccount(true)}
-              data-testid="delete-account-btn"
-              style={S.dangerBtn}
-            >
-              DELETE MY ACCOUNT DATA
-            </button>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ fontSize: 10, color: "#f87171" }}>Permanently delete everything?</span>
-              <button
-                onClick={() => { void handleDeleteAccount(); setConfirmDeleteAccount(false); }}
-                data-testid="confirm-delete-account-btn"
-                style={{ ...S.dangerBtn, background: "rgba(239,68,68,0.15)" }}
-              >
-                YES, DELETE EVERYTHING
-              </button>
-              <button
-                onClick={() => setConfirmDeleteAccount(false)}
-                style={{
-                  ...S.dangerBtn,
-                  color: "#cbd5e1",
-                  border: "1px solid rgba(100,116,139,0.3)",
-                  background: "none",
-                }}
-              >
-                CANCEL
-              </button>
-            </div>
-          )}
+          <button
+            data-testid="replay-tour-btn"
+            onClick={() => { setHasSeenOnboarding(false); setLocation("/"); }}
+            style={{
+              fontSize: 9,
+              letterSpacing: "0.15em",
+              padding: "4px 12px",
+              borderRadius: 4,
+              border: "1px solid rgba(0,229,255,0.3)",
+              background: "transparent",
+              color: "#00e5ff",
+              cursor: "pointer",
+              fontFamily: FONT,
+              whiteSpace: "nowrap",
+            }}
+          >
+            ▶ REPLAY TOUR
+          </button>
         </div>
       </div>
     </>
   );
 }
 
-// ─── Onboarding section ───────────────────────────────────────────────────────
-function OnboardingSection({ onNavigateBack }: { onNavigateBack: () => void }) {
-  const hasSeenOnboarding = useSettingsStore((s) => s.hasSeenOnboarding);
-  const setHasSeenOnboarding = useSettingsStore((s) => s.setHasSeenOnboarding);
+/**
+ * Map & Overlays — Overview Map + Habitat Defaults in one section.
+ */
+function MapOverlaysSection() {
+  const s = useSettingsStore();
+  return (
+    <>
+      <SectionTitle helpId="ai-assistant" helpLabel="Map & Overlays">◈ MAP &amp; OVERLAYS</SectionTitle>
+      <SectionActionsRow sections={["overview", "habitat"]} withReset={false} />
+      {/* Overview Map card */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>OVERVIEW MAP</div>
+        <ToggleRow label="Show Grid Lines" value={s.overviewShowGrid} onChange={s.setOverviewShowGrid} />
+        <ToggleRow label="Show Markers" value={s.overviewShowMarkers} onChange={s.setOverviewShowMarkers} />
+        <ToggleRow label="Open on Load" value={s.overviewOpenOnLoad} onChange={s.setOverviewOpenOnLoad} sublabel="Auto-expand when a dataset loads" />
+        <SliderRow
+          label="Default Zoom"
+          value={s.overviewDefaultZoom}
+          min={0.5} max={5.0} step={0.1}
+          format={(v) => `${v.toFixed(1)}×`}
+          onChange={s.setOverviewDefaultZoom}
+        />
+      </div>
+      {/* Habitat card */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>HABITAT</div>
+        <ToggleRow
+          label="Auto-Show Zone Overlay"
+          value={s.autoShowZoneOverlay}
+          onChange={s.setAutoShowZoneOverlay}
+          sublabel="Display habitat zones automatically on load"
+        />
+        <SliderRow
+          label="Overlay Intensity"
+          value={s.habitatOverlayIntensity}
+          min={0}
+          max={1}
+          step={0.05}
+          format={(v) => `${Math.round(v * 100)}%`}
+          onChange={s.setHabitatOverlayIntensity}
+          sublabel="Default strength of the amber habitat tint on terrain"
+        />
+      </div>
+      <ZoneColourSwatches />
+      <AdvancedDisclosure testId="habitat-advanced">
+        <div style={S.card}>
+          <div style={S.cardHeader}>HABITAT DEFAULTS</div>
+          <div style={S.row}>
+            <div>
+              <div style={S.label}>Default Species</div>
+              <div style={S.sublabel}>Pre-fills the habitat species filter</div>
+            </div>
+            <input
+              type="text"
+              value={s.defaultHabitatSpecies}
+              onChange={(e) => s.setDefaultHabitatSpecies(e.target.value)}
+              placeholder="(none)"
+              style={{
+                ...S.select, width: 160, fontFamily: FONT, fontSize: 10,
+              }}
+            />
+          </div>
+        </div>
+      </AdvancedDisclosure>
+    </>
+  );
+}
 
-  const handleReplay = () => {
-    setHasSeenOnboarding(false);
-    void flushServerSync().finally(() => onNavigateBack());
+/**
+ * Markers & Trails — Markers + GPS & Trail in one section.
+ */
+function MarkersTrailsSection() {
+  const s = useSettingsStore();
+  const MARKER_TYPE_OPTIONS =
+    s.waterType === "freshwater"
+      ? FRESHWATER_MARKER_TYPE_OPTIONS
+      : SALTWATER_MARKER_TYPE_OPTIONS;
+
+  const toggleMarkerType = (type: MarkerType) => {
+    const current = s.visibleMarkerTypes;
+    if (current.includes(type)) {
+      s.setVisibleMarkerTypes(current.filter((t) => t !== type));
+    } else {
+      s.setVisibleMarkerTypes([...current, type]);
+    }
   };
 
   return (
     <>
-      <SectionTitle>◈ ONBOARDING</SectionTitle>
+      <SectionTitle helpId="markers" helpLabel="Markers & Trails">◈ MARKERS &amp; TRAILS</SectionTitle>
+      <SectionActionsRow sections={["markers", "gps"]} />
+      {/* Markers card */}
       <div style={S.card}>
-        <div style={S.cardHeader}>GUIDED TOUR</div>
+        <div style={S.cardHeader}>MARKERS</div>
+        <ToggleRow label="Show Marker Labels" value={s.showMarkerLabels} onChange={s.setShowMarkerLabels} sublabel="Name text below marker sprites" />
+        <ToggleRow label="Private Markers" value={s.privateMarkers} onChange={s.setPrivateMarkers} sublabel="Only show your own markers" />
+        <SelectRow
+          label="Default Marker Type"
+          value={s.defaultMarkerType}
+          onChange={s.setDefaultMarkerType}
+          options={MARKER_TYPE_OPTIONS}
+          sublabel="Pre-selected when opening the marker form"
+        />
+      </div>
+      {/* Visible Types card */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>VISIBLE TYPES</div>
+        {MARKER_TYPE_OPTIONS.map((o) => (
+          <ToggleRow
+            key={o.value}
+            label={o.label}
+            value={s.visibleMarkerTypes.includes(o.value)}
+            onChange={() => toggleMarkerType(o.value)}
+          />
+        ))}
+      </div>
+      {/* Trails card */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>TRAILS</div>
+        <ToggleRow
+          label="Auto-Start Trail Recording"
+          value={s.autoStartTrailRecording}
+          onChange={s.setAutoStartTrailRecording}
+          sublabel="Begin recording the moment a dataset loads"
+        />
+        <ColorRow
+          label="Default Trail Color"
+          value={s.defaultTrailColor}
+          onChange={s.setDefaultTrailColor}
+        />
+        <SelectRow
+          label="Sample Rate"
+          value={String(s.gpsRecordingInterval) as "1000" | "2000" | "10000"}
+          onChange={(v) => s.setGpsRecordingInterval(Number(v))}
+          options={[
+            { value: "1000", label: "1 Hz (1 / sec)" },
+            { value: "2000", label: "0.5 Hz (every 2s)" },
+            { value: "10000", label: "0.1 Hz (every 10s)" },
+          ]}
+          sublabel="How often GPS track points are recorded"
+        />
+      </div>
+      <AdvancedDisclosure testId="markers-advanced">
+        <div style={S.card}>
+          <div style={S.cardHeader}>MARKER ADVANCED</div>
+          <ColorRow
+            label="Default Depth Pole Color"
+            value={s.defaultDepthPoleColor}
+            onChange={s.setDefaultDepthPoleColor}
+            sublabel="Used when creating a new depth-pole marker"
+          />
+          <SliderRow
+            label="Cluster Threshold"
+            value={s.markerClusterThreshold}
+            min={0} max={200} step={5}
+            format={(v) => v === 0 ? "Off" : `${v}`}
+            onChange={s.setMarkerClusterThreshold}
+            sublabel="Markers within this pixel distance are grouped. 0 disables clustering."
+          />
+        </div>
+        <div style={S.card}>
+          <div style={S.cardHeader}>TRAIL RETENTION</div>
+          <SelectRow
+            label="Keep Trails For"
+            value={s.trailRetention}
+            onChange={s.setTrailRetention}
+            options={[
+              { value: "7", label: "7 days" },
+              { value: "30", label: "30 days" },
+              { value: "90", label: "90 days" },
+              { value: "all", label: "Forever" },
+            ]}
+            sublabel="Older trails are auto-purged on next sign-in"
+          />
+        </div>
+      </AdvancedDisclosure>
+    </>
+  );
+}
+
+/**
+ * Tides & Currents — Tidal Defaults + Bathymetric Currents in one section.
+ */
+function TidesCurrentsSection() {
+  const s = useSettingsStore();
+  return (
+    <>
+      <SectionTitle helpId="settings" helpLabel="Tides & Currents">◈ TIDES &amp; CURRENTS</SectionTitle>
+      <SectionActionsRow sections={["tidal", "currents"]} />
+      {/* Behaviour card */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>BEHAVIOUR</div>
+        <ToggleRow
+          label="Auto-Load Tidal Data"
+          value={s.autoLoadTidal}
+          onChange={s.setAutoLoadTidal}
+          sublabel="Fetch tide &amp; current data when a dataset opens"
+        />
+        <SelectRow
+          label="Default Depth Layer"
+          value={s.defaultTidalDepthLayer}
+          onChange={s.setDefaultTidalDepthLayer}
+          options={[
+            { value: "surface", label: "Surface" },
+            { value: "mid", label: "Mid-water" },
+            { value: "near-bottom", label: "Near-bottom" },
+          ]}
+          sublabel="Which current layer is shown by default"
+        />
+      </div>
+      {/* Simulation card */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>SIMULATION</div>
+        <ToggleRow
+          label="Enable Currents Simulation"
+          value={s.currentsEnabled}
+          onChange={s.setCurrentsEnabled}
+          sublabel="Bathymetry-shaped flow field with particles, arrows, and streamlines"
+        />
+        <SelectRow
+          label="Ambient Source"
+          value={s.currentsSource}
+          onChange={s.setCurrentsSource}
+          options={[
+            { value: "manual", label: "Manual" },
+            { value: "noaa", label: "NOAA (live)" },
+          ]}
+          sublabel="Manual uses the values below; NOAA uses the active tidal station current"
+        />
+        <SliderRow
+          label="Direction (°)"
+          value={s.currentsManualDirectionDeg}
+          min={0} max={360} step={5}
+          onChange={s.setCurrentsManualDirectionDeg}
+          sublabel="Compass bearing the current flows toward (0 = south, 90 = east)"
+        />
+        <SliderRow
+          label="Speed (kt)"
+          value={s.currentsManualSpeedKt}
+          min={0} max={5} step={0.1}
+          onChange={s.setCurrentsManualSpeedKt}
+        />
+      </div>
+      <AdvancedDisclosure testId="tidal-advanced">
+        <div style={S.card}>
+          <div style={S.cardHeader}>VISUALISATION</div>
+          <SelectRow
+            label="Global Arrow Density"
+            value={s.currentArrowDensity}
+            onChange={s.setCurrentArrowDensity}
+            options={[
+              { value: "sparse", label: "Sparse" },
+              { value: "normal", label: "Normal" },
+              { value: "dense", label: "Dense" },
+            ]}
+            sublabel="Default density used when no per-layer override is set"
+          />
+          <SelectRow
+            label="Surface Layer Density"
+            value={s.layerArrowDensity.surface}
+            onChange={(v) => s.setLayerArrowDensity("surface", v)}
+            options={[
+              { value: "sparse" as const, label: "Sparse" },
+              { value: "normal" as const, label: "Normal" },
+              { value: "dense" as const, label: "Dense" },
+            ]}
+            sublabel="Arrow density for the surface current layer"
+          />
+          <SelectRow
+            label="Mid-water Layer Density"
+            value={s.layerArrowDensity.mid}
+            onChange={(v) => s.setLayerArrowDensity("mid", v)}
+            options={[
+              { value: "sparse" as const, label: "Sparse" },
+              { value: "normal" as const, label: "Normal" },
+              { value: "dense" as const, label: "Dense" },
+            ]}
+            sublabel="Arrow density for the mid-water current layer"
+          />
+          <SelectRow
+            label="Near-bottom Layer Density"
+            value={s.layerArrowDensity["near-bottom"]}
+            onChange={(v) => s.setLayerArrowDensity("near-bottom", v)}
+            options={[
+              { value: "sparse" as const, label: "Sparse" },
+              { value: "normal" as const, label: "Normal" },
+              { value: "dense" as const, label: "Dense" },
+            ]}
+            sublabel="Arrow density for the near-bottom current layer"
+          />
+          <SelectRow
+            label="Wind Overlay Style"
+            value={s.windOverlayStyle}
+            onChange={s.setWindOverlayStyle}
+            options={[
+              { value: "arrows", label: "Arrows" },
+              { value: "particles", label: "Particles" },
+            ]}
+            sublabel="How the Wind overlay is drawn"
+          />
+          <SelectRow
+            label="Tide Overlay Style"
+            value={s.tideOverlayStyle}
+            onChange={s.setTideOverlayStyle}
+            options={[
+              { value: "arrows", label: "Arrows" },
+              { value: "particles", label: "Particles" },
+            ]}
+            sublabel="How the Tide overlay is drawn"
+          />
+          <SelectRow
+            label="Current Overlay Style"
+            value={s.currentOverlayStyle}
+            onChange={s.setCurrentOverlayStyle}
+            options={[
+              { value: "arrows", label: "Arrows" },
+              { value: "particles", label: "Particles" },
+            ]}
+            sublabel="How the Current overlay is drawn"
+          />
+        </div>
+        <div style={S.card}>
+          <div style={S.cardHeader}>ADVANCED LAYERS</div>
+          <ToggleRow
+            label="Animated Particles"
+            value={s.currentsShowParticles}
+            onChange={s.setCurrentsShowParticles}
+          />
+          <ToggleRow
+            label="Speed-Coloured Arrows"
+            value={s.currentsShowArrows}
+            onChange={s.setCurrentsShowArrows}
+          />
+          <ToggleRow
+            label="Streamlines"
+            value={s.currentsShowStreamlines}
+            onChange={s.setCurrentsShowStreamlines}
+          />
+          <ToggleRow
+            label="Auto-Advance Tide Phase"
+            value={s.currentsAutoAdvance}
+            onChange={s.setCurrentsAutoAdvance}
+            sublabel="Slowly cycle the tide-phase scrubber for visual demo"
+          />
+        </div>
+      </AdvancedDisclosure>
+    </>
+  );
+}
+
+/**
+ * Data & Storage — Dataset Defaults + Offline/Cache in one section.
+ */
+function DataStorageSection() {
+  const s = useSettingsStore();
+  const [cached, setCached] = useState<CachedDataset[]>([]);
+  const [pending, setPending] = useState({ markers: 0, trails: 0 });
+  const [loading, setLoading] = useState(true);
+  const [clearing, setClearing] = useState<string | null>(null);
+  const [allClearedMsg, setAllClearedMsg] = useState(false);
+  const [upscaleClearMsg, setUpscaleClearMsg] = useState(false);
+  const [upscaleInfo, setUpscaleInfo] = useState<{ count: number; bytes: number } | null>(null);
+  const [offlinePacks, setOfflinePacks] = useState<OfflinePack[]>([]);
+  const [helpStatus, setHelpStatus] = useState<HelpPackStatus | null>(null);
+  const [packClearing, setPackClearing] = useState<string | null>(null);
+  const [helpClearing, setHelpClearing] = useState(false);
+  const { toast } = useToast();
+
+  const refreshUpscaleInfo = useCallback(async () => {
+    const info = await getUpscaleCacheInfo();
+    setUpscaleInfo(info);
+  }, []);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const [c, p] = await Promise.all([listCachedDatasets(), countPendingItems()]);
+    setCached(c);
+    setPending(p);
+    setLoading(false);
+  }, []);
+
+  const refreshPacks = useCallback(async () => {
+    const [packs, help] = await Promise.all([listOfflinePacks(), getHelpPackStatus()]);
+    setOfflinePacks(packs);
+    setHelpStatus(help);
+  }, []);
+
+  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => { void refreshUpscaleInfo(); }, [refreshUpscaleInfo]);
+  useEffect(() => { void refreshPacks(); }, [refreshPacks]);
+
+  const handleDeletePack = async (id: string) => {
+    setPackClearing(id);
+    await deleteOfflinePack(id);
+    await refreshPacks();
+    setPackClearing(null);
+    toast({ title: "Offline pack deleted", duration: 3000 });
+  };
+
+  const handleDeleteHelp = async () => {
+    setHelpClearing(true);
+    await deleteHelpPack();
+    await refreshPacks();
+    setHelpClearing(false);
+    toast({ title: "Help pack deleted", duration: 3000 });
+  };
+
+  const handleClearEntry = async (url: string) => {
+    setClearing(url);
+    await clearCacheEntry(url);
+    await refresh();
+    setClearing(null);
+  };
+
+  const handleClearAll = async () => {
+    if (!("caches" in window)) return;
+    setClearing("all");
+    const names = await caches.keys();
+    await Promise.all(names.map((n) => caches.delete(n)));
+    await idbClear();
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k?.startsWith("pending-")) localStorage.removeItem(k!);
+    }
+    setAllClearedMsg(true);
+    await refresh();
+    setClearing(null);
+    setTimeout(() => setAllClearedMsg(false), 3000);
+  };
+
+  const handleClearUpscaleCache = async () => {
+    setClearing("upscale");
+    await clearUpscaleCache();
+    await refreshUpscaleInfo();
+    setClearing(null);
+    setUpscaleClearMsg(true);
+    setTimeout(() => setUpscaleClearMsg(false), 3000);
+    toast({ title: "Enhanced image cache cleared", duration: 3000 });
+  };
+
+  return (
+    <>
+      <SectionTitle helpId="datasets-uploads" helpLabel="Data & Storage">◈ DATA &amp; STORAGE</SectionTitle>
+      <SectionActionsRow section="data" />
+      {/* Defaults card */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>DEFAULTS</div>
         <div style={S.row}>
           <div>
-            <div style={S.label}>Replay tour</div>
-            <div style={S.sublabel}>
-              Walk through the 5 core actions — datasets, flying, markers, overlays, and AI.
-            </div>
+            <div style={S.label}>Default Map Load</div>
+            <div style={S.sublabel}>Dataset that opens automatically on every launch</div>
           </div>
+          <DefaultMapLoadPicker
+            value={s.defaultMapLoad}
+            onChange={s.setDefaultMapLoad}
+          />
+        </div>
+        <SelectRow
+          label="Default Region"
+          value={s.defaultRegion}
+          onChange={s.setDefaultRegion}
+          options={[
+            { value: "", label: "None — start with no dataset loaded" },
+          ]}
+          sublabel="No bundled preset regions are available. Upload your own data or save a dataset from Find Data to use as a default."
+        />
+        <ToggleRow
+          label="Auto-Load Last Dataset"
+          value={s.autoLoadLastDataset}
+          onChange={s.setAutoLoadLastDataset}
+          sublabel="Reopen the dataset you used last session"
+        />
+      </div>
+      {/* Cache card */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>CACHED TERRAIN DATA</div>
+        <div style={{ padding: "12px 16px" }}>
+          {loading ? (
+            <div style={{ fontSize: 10, color: "#64748b" }}>◌ Loading…</div>
+          ) : cached.length === 0 ? (
+            <div data-testid="no-cache-msg" style={{ fontSize: 10, color: "#64748b" }}>
+              No terrain data cached. Load a dataset to cache it.
+            </div>
+          ) : (
+            cached.map((entry) => (
+              <div key={entry.url} data-testid="cache-entry" style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "6px 0", borderBottom: "1px solid rgba(0,229,255,0.06)", fontSize: 10,
+              }}>
+                <div>
+                  <span style={{ color: "#cbd5e1" }}>{entry.label}</span>
+                  {entry.sizeKb !== null && (
+                    <span style={{ color: "#64748b", marginLeft: 8 }}>
+                      {entry.sizeKb >= 1024 ? `${(entry.sizeKb / 1024).toFixed(1)} MB` : `${entry.sizeKb} KB`}
+                    </span>
+                  )}
+                </div>
+                <button
+                  data-testid="clear-cache-entry-btn"
+                  onClick={() => void handleClearEntry(entry.url)}
+                  disabled={clearing === entry.url}
+                  style={S.dangerBtn}
+                >
+                  {clearing === entry.url ? "…" : "CLEAR"}
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+        <div style={{ ...S.row, flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
+          <div style={{ fontSize: 9, letterSpacing: "0.15em", color: "#94a3b8" }}>PENDING SYNC</div>
+          <div style={{ fontSize: 10 }}>
+            <span style={{ color: "#cbd5e1" }}>Markers: </span>
+            <span data-testid="pending-markers-count" style={{ color: pending.markers > 0 ? "#fbbf24" : "#64748b" }}>
+              {pending.markers}
+            </span>
+            <span style={{ color: "#cbd5e1", marginLeft: 16 }}>Trails: </span>
+            <span style={{ color: pending.trails > 0 ? "#fbbf24" : "#64748b" }}>
+              {pending.trails}
+            </span>
+          </div>
+        </div>
+        <div style={{ padding: "12px 16px" }}>
+          {allClearedMsg && (
+            <div style={{ fontSize: 9, color: "#4ade80", letterSpacing: "0.12em", marginBottom: 8 }}>
+              ✓ All cached data cleared
+            </div>
+          )}
           <button
-            type="button"
-            data-testid="replay-tour-btn"
-            onClick={handleReplay}
-            style={{
-              background: "rgba(0,229,255,0.08)",
-              border: "1px solid rgba(0,229,255,0.3)",
-              borderRadius: 4,
-              color: "#00e5ff",
-              fontSize: 9,
-              letterSpacing: "0.15em",
-              padding: "6px 14px",
-              cursor: "pointer",
-              fontFamily: FONT,
-              transition: "background 0.1s",
-              flexShrink: 0,
-            }}
+            data-testid="clear-all-cache-btn"
+            onClick={() => void handleClearAll()}
+            disabled={clearing === "all"}
+            style={S.dangerBtn}
           >
-            ▶ REPLAY TOUR
+            {clearing === "all" ? "CLEARING…" : "CLEAR ALL CACHED DATA"}
           </button>
         </div>
-        <div style={{ ...S.row, borderBottom: "none" }}>
-          <div>
-            <div style={S.label}>Tour status</div>
-            <div style={S.sublabel}>Whether you have already completed or skipped the guided tour.</div>
+      </div>
+      {/* AI Upscale cache */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>ENHANCED IMAGE CACHE</div>
+        <div style={{ padding: "12px 16px" }}>
+          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 10 }}>
+            AI-upscaled heatmap images are stored locally (IndexedDB) for up to 7 days to avoid
+            repeat processing. Clear this if you suspect a stale image is being shown or want to
+            free up browser storage.
           </div>
-          <span
-            style={{
-              fontSize: 9,
-              letterSpacing: "0.15em",
-              color: hasSeenOnboarding ? "#4ade80" : "#fbbf24",
-              fontFamily: FONT,
-            }}
+          <div
+            data-testid="upscale-cache-size"
+            style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 10 }}
           >
-            {hasSeenOnboarding ? "✓ COMPLETED" : "NOT STARTED"}
-          </span>
+            {upscaleInfo === null
+              ? "◌ Calculating…"
+              : upscaleInfo.count === 0
+                ? "Empty (0 entries)"
+                : `${upscaleInfo.count} ${upscaleInfo.count === 1 ? "entry" : "entries"} · ${formatCacheSize(upscaleInfo.bytes)}`}
+          </div>
+          {upscaleClearMsg && (
+            <div style={{ fontSize: 9, color: "#4ade80", letterSpacing: "0.12em", marginBottom: 8 }}>
+              ✓ Enhanced image cache cleared
+            </div>
+          )}
+          <button
+            data-testid="clear-upscale-cache-btn"
+            onClick={() => void handleClearUpscaleCache()}
+            disabled={clearing === "upscale"}
+            style={S.dangerBtn}
+          >
+            {clearing === "upscale" ? "CLEARING…" : "CLEAR ENHANCED IMAGE CACHE"}
+          </button>
         </div>
       </div>
-      <div
-        style={{
-          fontSize: 9,
-          color: "#64748b",
-          letterSpacing: "0.08em",
-          lineHeight: 1.6,
-          marginTop: 8,
-          padding: "0 2px",
-        }}
-      >
-        The tour resets automatically when you sign in on a new device (if you haven&apos;t completed
-        it there). Clicking &quot;Replay tour&quot; returns you to the 3D scene and starts the walkthrough
-        immediately.
+      {/* Offline packs */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>SAVED OFFLINE PACKS</div>
+        <div style={{ padding: "12px 16px" }}>
+          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 10 }}>
+            Terrain, tide predictions, and weather snapshots saved for offline use.
+            Each pack covers 7 days of tide data and can be updated from the dataset panel.
+          </div>
+          {offlinePacks.length === 0 ? (
+            <div style={{ fontSize: 10, color: "#64748b" }}>
+              No offline packs saved. Load a dataset and tap "⬇ Save Offline" to create one.
+            </div>
+          ) : (
+            offlinePacks.map((pack) => {
+              const savedDate = new Date(pack.savedAt).toLocaleDateString(undefined, {
+                month: "short", day: "numeric", year: "numeric",
+              });
+              const expiresDate = new Date(pack.tidePack.tidalExpiresAt).toLocaleDateString(undefined, {
+                month: "short", day: "numeric",
+              });
+              const isExpired = new Date(pack.tidePack.tidalExpiresAt).getTime() < Date.now();
+              const sizeStr = pack.storageBytesEstimate >= 1024 * 1024
+                ? `${(pack.storageBytesEstimate / (1024 * 1024)).toFixed(1)} MB`
+                : `${Math.round(pack.storageBytesEstimate / 1024)} KB`;
+              return (
+                <div
+                  key={pack.id}
+                  data-testid={`offline-pack-${pack.id}`}
+                  style={{
+                    display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+                    padding: "8px 0", borderBottom: "1px solid rgba(0,229,255,0.06)", gap: 8,
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 10, color: "#cbd5e1", fontWeight: 600, marginBottom: 2 }}>
+                      {pack.datasetName}
+                    </div>
+                    <div style={{ fontSize: 9, color: "#64748b" }}>
+                      Saved {savedDate} · {sizeStr}
+                    </div>
+                    <div style={{ fontSize: 9, color: isExpired ? "#f87171" : "#94a3b8", marginTop: 1 }}>
+                      Tide data {isExpired ? "expired" : `expires ${expiresDate}`}
+                    </div>
+                  </div>
+                  <button
+                    data-testid={`delete-pack-${pack.id}`}
+                    onClick={() => void handleDeletePack(pack.id)}
+                    disabled={packClearing === pack.id}
+                    style={{
+                      ...S.dangerBtn,
+                      padding: "3px 8px",
+                      fontSize: 8,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {packClearing === pack.id ? "…" : "DELETE"}
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+      {/* Help content pack */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>HELP CONTENT</div>
+        <div style={{ padding: "12px 16px" }}>
+          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 10 }}>
+            Tutorial GIFs and images are cached for offline viewing. Download once to access
+            help articles without a network connection.
+          </div>
+          {helpStatus === null ? (
+            <div style={{ fontSize: 10, color: "#64748b" }}>◌ Loading…</div>
+          ) : helpStatus.saved ? (
+            <div>
+              <div style={{ fontSize: 10, color: "#4ade80", marginBottom: 8 }}>
+                ✓ Help content saved ·{" "}
+                {helpStatus.savedAt && new Date(helpStatus.savedAt).toLocaleDateString(undefined, {
+                  month: "short", day: "numeric", year: "numeric",
+                })}
+                {helpStatus.totalBytes != null && ` · ${(helpStatus.totalBytes / 1024).toFixed(0)} KB`}
+              </div>
+              <button
+                data-testid="delete-help-pack-btn"
+                onClick={() => void handleDeleteHelp()}
+                disabled={helpClearing}
+                style={{ ...S.dangerBtn, fontSize: 8, padding: "3px 8px" }}
+              >
+                {helpClearing ? "…" : "DELETE HELP PACK"}
+              </button>
+            </div>
+          ) : (
+            <div style={{ fontSize: 10, color: "#64748b" }}>
+              No help content saved. Use the Help panel (? button) when online to cache it.
+            </div>
+          )}
+        </div>
       </div>
     </>
   );
@@ -3374,28 +3389,22 @@ function OnboardingSection({ onNavigateBack }: { onNavigateBack: () => void }) {
 
 // ─── Nav tabs ─────────────────────────────────────────────────────────────────
 type Tab =
-  | "visuals" | "navigation" | "hud" | "units" | "overview" | "markers"
-  | "tidal" | "currents" | "habitat" | "gps" | "dataset" | "offline"
-  | "accessibility" | "shortcuts" | "account" | "environment" | "onboarding";
+  | "general" | "visuals" | "navigation" | "hud"
+  | "map-overlays" | "markers-trails" | "tides-currents"
+  | "data-storage" | "accessibility" | "shortcuts" | "account";
 
 const NAV_TABS: { id: Tab; label: string }[] = [
+  { id: "general", label: "GENERAL" },
   { id: "visuals", label: "VISUALS & PERF" },
   { id: "navigation", label: "CAMERA & CTRL" },
   { id: "hud", label: "HUD & LAYOUT" },
-  { id: "units", label: "UNITS" },
-  { id: "overview", label: "OVERVIEW MAP" },
-  { id: "markers", label: "MARKERS" },
-  { id: "tidal", label: "TIDAL" },
-  { id: "currents", label: "CURRENTS" },
-  { id: "habitat", label: "HABITAT" },
-  { id: "gps", label: "GPS & TRAIL" },
-  { id: "dataset", label: "DATA & STORAGE" },
-  { id: "environment", label: "ENVIRONMENT" },
-  { id: "offline", label: "OFFLINE CACHE" },
+  { id: "map-overlays", label: "MAP & OVERLAYS" },
+  { id: "markers-trails", label: "MARKERS & TRAILS" },
+  { id: "tides-currents", label: "TIDES & CURRENTS" },
+  { id: "data-storage", label: "DATA & STORAGE" },
   { id: "accessibility", label: "ACCESSIBILITY" },
   { id: "shortcuts", label: "SHORTCUTS" },
   { id: "account", label: "ACCOUNT & PRIVACY" },
-  { id: "onboarding", label: "ONBOARDING" },
 ];
 
 // ─── Main export ──────────────────────────────────────────────────────────────
@@ -3545,26 +3554,20 @@ export function Settings() {
 
         {/* Content */}
         <div style={S.content}>
+          {tab === "general" && <GeneralSection />}
           {tab === "visuals" && <VisualsSection />}
           {tab === "navigation" && <NavigationSection />}
           {tab === "hud" && <HUDSection />}
-          {tab === "units" && <UnitsSection />}
-          {tab === "overview" && <OverviewSection />}
-          {tab === "markers" && <MarkersSection />}
-          {tab === "tidal" && <TidalSection />}
-          {tab === "currents" && <CurrentsSection />}
-          {tab === "habitat" && <HabitatSection />}
-          {tab === "gps" && <GpsSection />}
-          {tab === "dataset" && <DatasetSection />}
-          {tab === "environment" && <EnvironmentSection />}
-          {tab === "offline" && <OfflineSection />}
+          {tab === "map-overlays" && <MapOverlaysSection />}
+          {tab === "markers-trails" && <MarkersTrailsSection />}
+          {tab === "tides-currents" && <TidesCurrentsSection />}
+          {tab === "data-storage" && <DataStorageSection />}
           {tab === "accessibility" && <AccessibilitySection />}
           {tab === "shortcuts" && <ShortcutsSection />}
           {tab === "account" && <AccountSection />}
-          {tab === "onboarding" && <OnboardingSection onNavigateBack={handleBack} />}
 
           {/* Footer: global reset */}
-          {tab !== "onboarding" && <GlobalResetFooter />}
+          <GlobalResetFooter />
         </div>
       </div>
     </div>

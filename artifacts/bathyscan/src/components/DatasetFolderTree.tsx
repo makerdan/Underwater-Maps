@@ -517,7 +517,6 @@ export const DatasetFolderTree: React.FC<Props> = ({
       name: externalMoveSignal.name,
       currentParentId: externalMoveSignal.folderId,
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalMoveSignal]);
 
   // Parent provides a rename target to begin inline rename.
@@ -526,7 +525,6 @@ export const DatasetFolderTree: React.FC<Props> = ({
     if (!externalRenameSignal || externalRenameSignal.seq === prevRenameSeq.current) return;
     prevRenameSeq.current = externalRenameSignal.seq;
     beginRename("dataset", externalRenameSignal.id, externalRenameSignal.name);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalRenameSignal]);
 
   // ─── Drag state ──────────────────────────────────────────────────────────

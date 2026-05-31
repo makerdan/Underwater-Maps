@@ -36,13 +36,15 @@ test.describe("Settings page", () => {
     // Match the NAV_TABS array in Settings.tsx. Each entry below is a
     // substring that uniquely identifies its sidebar button.
     const expectedTabs = [
-      "VISUALS",         // "VISUALS & PERF"
+      "GENERAL",
+      "VISUALS",            // "VISUALS & PERF"
       "CAMERA & CTRL",
       "HUD & LAYOUT",
-      "OVERVIEW MAP",
-      "MARKERS",
+      "MAP & OVERLAYS",
+      "MARKERS & TRAILS",
+      "TIDES & CURRENTS",
       "DATA & STORAGE",
-      "OFFLINE CACHE",
+      "ACCESSIBILITY",
       "ACCOUNT & PRIVACY",
     ];
     for (const label of expectedTabs) {
@@ -60,11 +62,11 @@ test.describe("Settings page", () => {
     await page.locator('button:has-text("HUD & LAYOUT")').first().click();
     await expect(page.locator("text=◈ HUD").first()).toBeVisible({ timeout: 5_000 });
 
-    await page.locator('button:has-text("MARKERS")').first().click();
+    await page.locator('button:has-text("MARKERS & TRAILS")').first().click();
     await expect(page.locator("text=◈ MARKERS").first()).toBeVisible({ timeout: 5_000 });
 
-    await page.locator('button:has-text("OFFLINE CACHE")').first().click();
-    await expect(page.locator("text=◈ OFFLINE").first()).toBeVisible({ timeout: 5_000 });
+    await page.locator('button:has-text("DATA & STORAGE")').first().click();
+    await expect(page.locator("text=◈ DATA").first()).toBeVisible({ timeout: 5_000 });
   });
 
   test("caustics toggle changes checked state in the Visuals tab", async ({ page }) => {
@@ -106,7 +108,7 @@ test.describe("Settings page", () => {
     await page.goto("/settings");
     await page.waitForLoadState("networkidle");
 
-    await page.locator('button:has-text("OFFLINE CACHE")').first().click();
+    await page.locator('button:has-text("DATA & STORAGE")').first().click();
     const count = page.locator("[data-testid='pending-markers-count']");
     await expect(count).toBeVisible({ timeout: 5_000 });
   });
