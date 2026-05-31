@@ -767,6 +767,65 @@ async function countPendingItems() {
   return { markers, trails };
 }
 
+// ─── Contour Lines card ───────────────────────────────────────────────────────
+/** Unit-aware default for contour interval: 10 m / 50 ft / 10 fathoms. */
+function defaultContourInterval(units: "metric" | "imperial" | "nautical"): number {
+  if (units === "nautical") return 10;
+  if (units === "imperial") return 50;
+  return 10;
+}
+
+function ContourLinesCard() {
+  const s = useSettingsStore();
+  const isMetric = s.units === "metric";
+  const isNautical = s.units === "nautical";
+
+  // Per-unit slider ranges and formatting:
+  //   metric   → 5–50 m,   step 5
+  //   imperial → 10–200 ft, step 10
+  //   nautical → 5–50 fm,  step 1
+  const sliderMin  = isMetric ? 5  : isNautical ? 5  : 10;
+  const sliderMax  = isMetric ? 50 : isNautical ? 50 : 200;
+  const sliderStep = isMetric ? 5  : isNautical ? 1  : 10;
+  const formatInterval = (v: number) =>
+    isMetric ? `${v} m` : isNautical ? `${v} fm` : `${v} ft`;
+  const unitLabel = isMetric ? "metres" : isNautical ? "fathoms" : "feet";
+
+  // When the unit system changes, snap the stored interval to the appropriate
+  // default for the new unit so the slider doesn't show a stale or out-of-range value.
+  const prevUnitsRef = useRef(s.units);
+  useEffect(() => {
+    const prev = prevUnitsRef.current;
+    prevUnitsRef.current = s.units;
+    if (prev === s.units) return;
+    s.setContourInterval(defaultContourInterval(s.units));
+  }, [s.units]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div style={S.card}>
+      <div style={S.cardHeader}>CONTOUR LINES</div>
+      <ToggleRow
+        label="Show Contour Lines"
+        value={s.contoursEnabled}
+        onChange={s.setContoursEnabled}
+        sublabel="Iso-depth lines on the 2D overview map"
+      />
+      <div style={{ opacity: s.contoursEnabled ? 1 : 0.4, pointerEvents: s.contoursEnabled ? "auto" : "none" }}>
+        <SliderRow
+          label="Contour Interval"
+          value={Math.min(sliderMax, Math.max(sliderMin, s.contourInterval))}
+          min={sliderMin}
+          max={sliderMax}
+          step={sliderStep}
+          format={formatInterval}
+          onChange={s.setContourInterval}
+          sublabel={`Depth spacing between lines (${unitLabel})`}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ─── Section components ───────────────────────────────────────────────────────
 function VisualsSection() {
   const s = useSettingsStore();
@@ -827,6 +886,7 @@ function VisualsSection() {
           sublabel="Terrain surface colour gradient"
         />
       </div>
+      <ContourLinesCard />
       <PalettePickerCard />
       <ZoneColoursCard />
       <AdvancedDisclosure testId="visuals-advanced">

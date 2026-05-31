@@ -13,6 +13,7 @@ import type { Marker } from "@workspace/api-client-react";
 import type { UnitsSystem, ColormapTheme } from "./settingsStore";
 import { getColormap } from "./colormap";
 import { MARKER_COLOR } from "./markerConstants";
+import { formatDepth } from "./units";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1172,6 +1173,200 @@ export function renderColormapLegend(
 
   ctx.textBaseline = "bottom";
   ctx.fillText(depthToLabel(maxDepth), LABEL_X, y + STRIP_H);
+
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Contour lines (marching squares)
+// ---------------------------------------------------------------------------
+
+/**
+ * One line segment belonging to a depth contour.
+ * Positions are in fractional grid coordinates (0 .. W-1 and 0 .. H-1).
+ */
+export interface ContourSegment {
+  depth: number;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/**
+ * Marching-squares edge lookup table.
+ * Index: 4-bit mask where bit3=TL, bit2=TR, bit1=BR, bit0=BL (1 = at/above iso).
+ * Value: array of [edgeA, edgeB] pairs to connect.
+ * Edges: 0=top, 1=right, 2=bottom, 3=left.
+ */
+const MARCHING_EDGES: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = [
+  [],                    // 0  0000
+  [[3, 2]],             // 1  0001 BL
+  [[2, 1]],             // 2  0010 BR
+  [[3, 1]],             // 3  0011 BR+BL
+  [[0, 1]],             // 4  0100 TR
+  [[0, 3], [1, 2]],     // 5  0101 TR+BL saddle
+  [[0, 2]],             // 6  0110 TR+BR
+  [[0, 3]],             // 7  0111 TR+BR+BL
+  [[0, 3]],             // 8  1000 TL
+  [[0, 2]],             // 9  1001 TL+BL
+  [[0, 1], [3, 2]],     // 10 1010 TL+BR saddle
+  [[0, 1]],             // 11 1011 TL+BR+BL
+  [[3, 1]],             // 12 1100 TL+TR
+  [[2, 1]],             // 13 1101 TL+TR+BL
+  [[3, 2]],             // 14 1110 TL+TR+BR
+  [],                    // 15 1111
+];
+
+/** Linear interpolation factor for where the iso-depth crosses between a and b. */
+function isoFrac(a: number, b: number, iso: number): number {
+  const d = b - a;
+  if (Math.abs(d) < 1e-10) return 0.5;
+  return Math.max(0, Math.min(1, (iso - a) / d));
+}
+
+/**
+ * Run marching-squares on a depth grid and return all iso-depth line segments.
+ *
+ * @param grid      - The terrain data (depths in metres).
+ * @param intervalMetres - Spacing between contour levels in metres.
+ */
+export function buildContourLines(
+  grid: TerrainData,
+  intervalMetres: number,
+): ContourSegment[] {
+  const { width: W, height: H, depths, minDepth, maxDepth } = grid;
+  if (W < 2 || H < 2 || intervalMetres <= 0) return [];
+
+  const firstLevel =
+    Math.ceil((minDepth + 1e-6) / intervalMetres) * intervalMetres;
+  const segments: ContourSegment[] = [];
+
+  for (
+    let isoDepth = firstLevel;
+    isoDepth < maxDepth - 1e-6;
+    isoDepth += intervalMetres
+  ) {
+    for (let row = 0; row < H - 1; row++) {
+      for (let col = 0; col < W - 1; col++) {
+        const tl = depths[row * W + col] ?? minDepth;
+        const tr = depths[row * W + (col + 1)] ?? minDepth;
+        const br = depths[(row + 1) * W + (col + 1)] ?? minDepth;
+        const bl = depths[(row + 1) * W + col] ?? minDepth;
+
+        const idx =
+          ((tl >= isoDepth ? 1 : 0) << 3) |
+          ((tr >= isoDepth ? 1 : 0) << 2) |
+          ((br >= isoDepth ? 1 : 0) << 1) |
+          (bl >= isoDepth ? 1 : 0);
+
+        if (idx === 0 || idx === 15) continue;
+
+        // Fractional grid coordinates of the four possible edge crossings
+        const edgePts: readonly [number, number][] = [
+          [col + isoFrac(tl, tr, isoDepth), row],           // top
+          [col + 1,                         row + isoFrac(tr, br, isoDepth)], // right
+          [col + isoFrac(bl, br, isoDepth), row + 1],       // bottom
+          [col,                             row + isoFrac(tl, bl, isoDepth)], // left
+        ];
+
+        for (const [eA, eB] of MARCHING_EDGES[idx]!) {
+          const [x0, y0] = edgePts[eA]!;
+          const [x1, y1] = edgePts[eB]!;
+          segments.push({ depth: isoDepth, x0, y0, x1, y1 });
+        }
+      }
+    }
+  }
+
+  return segments;
+}
+
+/**
+ * Render contour lines on the 2D overview canvas.
+ * Lines are coloured by sampling the active colormap at each depth, drawn at
+ * ~60% opacity. Depth labels are placed at sparse intervals when zoom ≥ 3.
+ */
+export function renderContourLines(
+  ctx: CanvasRenderingContext2D,
+  segments: ContourSegment[],
+  grid: TerrainData,
+  t: OverviewTransform,
+  units: UnitsSystem,
+  colormapTheme: ColormapTheme,
+): void {
+  if (!segments.length) return;
+
+  const { width: W, height: H, minDepth, maxDepth } = grid;
+  const depthRange = maxDepth - minDepth || 1;
+  const lonRange = grid.maxLon - grid.minLon || 1;
+  const latRange = grid.maxLat - grid.minLat || 1;
+  const toColor = getColormap(colormapTheme);
+
+  /** Convert fractional grid coords (col, row) to canvas pixel coords. */
+  const toCanvas = (gx: number, gy: number): [number, number] => {
+    const lon = grid.minLon + (gx / Math.max(W - 1, 1)) * lonRange;
+    const lat = grid.minLat + (gy / Math.max(H - 1, 1)) * latRange;
+    return lonLatToCanvas(lon, lat, grid, t);
+  };
+
+  const lineW = Math.max(0.5, Math.min(1.5, t.scale * 0.35));
+  const showLabels = t.scale >= 3;
+  const fontSize = Math.max(8, Math.min(11, 9 * t.scale * 0.35));
+
+  ctx.save();
+  ctx.font = `${fontSize}px 'JetBrains Mono', monospace`;
+
+  // Group by depth level so we can batch strokes and pick a label point per level.
+  const byDepth = new Map<number, ContourSegment[]>();
+  for (const seg of segments) {
+    if (!byDepth.has(seg.depth)) byDepth.set(seg.depth, []);
+    byDepth.get(seg.depth)!.push(seg);
+  }
+
+  for (const [depth, segs] of byDepth) {
+    const t01 = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
+    const col = toColor(t01).clone().convertLinearToSRGB();
+    const r = Math.max(0, Math.min(255, Math.round(col.r * 255)));
+    const g = Math.max(0, Math.min(255, Math.round(col.g * 255)));
+    const b = Math.max(0, Math.min(255, Math.round(col.b * 255)));
+
+    ctx.strokeStyle = `rgba(${r},${g},${b},0.60)`;
+    ctx.lineWidth = lineW;
+
+    // Draw all segments for this level in a single path batch
+    ctx.beginPath();
+    for (const seg of segs) {
+      const [cx0, cy0] = toCanvas(seg.x0, seg.y0);
+      const [cx1, cy1] = toCanvas(seg.x1, seg.y1);
+      ctx.moveTo(cx0, cy0);
+      ctx.lineTo(cx1, cy1);
+    }
+    ctx.stroke();
+
+    // Place one depth label near the middle of the segment list
+    if (showLabels && segs.length > 0) {
+      const midSeg = segs[Math.floor(segs.length / 2)]!;
+      const mx = (midSeg.x0 + midSeg.x1) / 2;
+      const my = (midSeg.y0 + midSeg.y1) / 2;
+      const [lx, ly] = toCanvas(mx, my);
+
+      // Contour depths are stored in metres; labels are formatted in the active unit.
+      // Nautical uses fathoms for contour intervals (1 fathom = 1.8288 m).
+      const label =
+        units === "nautical"
+          ? `${Math.round(depth / 1.8288)} fm`
+          : formatDepth(depth, { units, decimals: 0 });
+      const tw = ctx.measureText(label).width;
+
+      ctx.fillStyle = "rgba(2,8,24,0.65)";
+      ctx.fillRect(lx - tw / 2 - 3, ly - fontSize / 2 - 2, tw + 6, fontSize + 4);
+      ctx.fillStyle = `rgba(${r},${g},${b},0.90)`;
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "center";
+      ctx.fillText(label, lx, ly);
+    }
+  }
 
   ctx.restore();
 }

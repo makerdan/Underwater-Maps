@@ -195,6 +195,13 @@ export interface SettingsState {
   overviewShowGrid: boolean;
   overviewShowMarkers: boolean;
   overviewOpenOnLoad: boolean;
+  /** Draw iso-depth contour lines on the 2D overview map. */
+  contoursEnabled: boolean;
+  /**
+   * Spacing between contour lines in the user's active unit system
+   * (metres for metric, feet for imperial/nautical).
+   */
+  contourInterval: number;
 
   // ── Markers ──────────────────────────────────────────────────────────
   defaultMarkerType: MarkerType;
@@ -405,6 +412,8 @@ interface SettingsActions {
   setOverviewShowGrid: (v: boolean) => void;
   setOverviewShowMarkers: (v: boolean) => void;
   setOverviewOpenOnLoad: (v: boolean) => void;
+  setContoursEnabled: (v: boolean) => void;
+  setContourInterval: (v: number) => void;
 
   // Markers
   setDefaultMarkerType: (v: MarkerType) => void;
@@ -647,6 +656,8 @@ export const DEFAULT_SETTINGS: SettingsState = {
   overviewShowGrid: true,
   overviewShowMarkers: true,
   overviewOpenOnLoad: false,
+  contoursEnabled: true,
+  contourInterval: 10,
 
   // Markers
   defaultMarkerType: "fish",
@@ -732,6 +743,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "directionalLightIntensity", "lampIntensity", "lampRange", "antialiasing",
     "textureQuality", "colormapTheme", "smoothTerrainSpikes",
     "showWaterSurface", "showLandmass", "landmassStyle", "satelliteImagery", "colormapUserSet",
+    "contoursEnabled", "contourInterval",
   ],
   hud: [
     "hudOpacity", "showCrosshairGps", "showCameraPosition",
@@ -889,6 +901,8 @@ export const useSettingsStore = create<SettingsStore>()(
         setOverviewShowGrid: setter("overviewShowGrid"),
         setOverviewShowMarkers: setter("overviewShowMarkers"),
         setOverviewOpenOnLoad: setter("overviewOpenOnLoad"),
+        setContoursEnabled: setter("contoursEnabled"),
+        setContourInterval: setter("contourInterval"),
 
         // Markers
         setDefaultMarkerType: setter("defaultMarkerType"),
@@ -1177,10 +1191,22 @@ export const useSettingsStore = create<SettingsStore>()(
             rest.cameraSpawnBehaviour === "deepest"
               ? "last"
               : (rest.cameraSpawnBehaviour ?? "last");
+          // v13 → v14: inject contour defaults for existing stored settings.
+          const migratedContours: Partial<SettingsState> = {};
+          if (rest.contoursEnabled === undefined) {
+            migratedContours.contoursEnabled = DEFAULT_SETTINGS.contoursEnabled;
+          }
+          if (rest.contourInterval === undefined) {
+            // Default is unit-aware: 10 m (metric), 50 ft (imperial), 10 fathoms (nautical).
+            const activeUnits = rest.units ?? "metric";
+            migratedContours.contourInterval =
+              activeUnits === "metric" ? 10 : activeUnits === "nautical" ? 10 : 50;
+          }
           return {
             ...DEFAULT_SETTINGS,
             ...rest,
             ...split,
+            ...migratedContours,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,

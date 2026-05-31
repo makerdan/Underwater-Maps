@@ -25,11 +25,13 @@ import { useContextMenuStore, type ContextMenuItem } from "@/lib/contextMenuStor
 import { lonLatToWorldXZ } from "@/lib/terrain";
 import {
   buildHeatmapBitmap,
+  buildContourLines,
   computeInitialTransform,
   clampTransform,
   canvasToLonLat,
   lonLatToCanvas,
   renderHeatmap,
+  renderContourLines,
   renderGridLines,
   renderMarkers,
   renderDepthPoles,
@@ -50,7 +52,7 @@ import {
   renderSavedTrails,
   drawSelectionRect,
 } from "@/lib/overviewRenderer";
-import type { OverviewTransform, CanvasSavedTrail, EfhLegendLayout } from "@/lib/overviewRenderer";
+import type { OverviewTransform, CanvasSavedTrail, EfhLegendLayout, ContourSegment } from "@/lib/overviewRenderer";
 import {
   useGetEfh,
   getGetEfhQueryKey,
@@ -107,6 +109,8 @@ export const OverviewMap: React.FC = () => {
   }, [primaryDatasetId]);
   const unitsForUi = useSettingsStore((s) => s.units);
   const colormapTheme = useSettingsStore((s) => s.colormapTheme);
+  const contoursEnabled = useSettingsStore((s) => s.contoursEnabled);
+  const contourInterval = useSettingsStore((s) => s.contourInterval);
   const datasetId = overviewGrid?.datasetId ?? "";
   const { data: markerData } = useGetMarkers(
     { datasetId },
@@ -139,6 +143,10 @@ export const OverviewMap: React.FC = () => {
   const savedTrailsRef = useRef<CanvasSavedTrail[]>([]);
   const rafRef = useRef<number>(0);
   const efhFeaturesRef = useRef<EfhFeature[]>([]);
+  /** Pre-built contour segments, rebuilt when grid or interval changes. */
+  const contourSegmentsRef = useRef<ContourSegment[]>([]);
+  const contoursEnabledRef = useRef(contoursEnabled);
+  useEffect(() => { contoursEnabledRef.current = contoursEnabled; }, [contoursEnabled]);
   const substrateFeaturesRef = useRef<SubstrateFeature[]>([]);
   const substrateColorModeRef = useRef(false);
   const selectedSubstrateUnitIdRef = useRef<string | null>(null);
@@ -478,6 +486,23 @@ export const OverviewMap: React.FC = () => {
     };
   }, [trailsData]);
 
+  // Rebuild contour segments whenever the grid, contour interval, or units change.
+  useEffect(() => {
+    if (!overviewGrid || !contoursEnabled) {
+      contourSegmentsRef.current = [];
+      return;
+    }
+    // Convert contour interval from user units to metres (grid depths are in metres).
+    //   metric   → pass through (interval is already metres)
+    //   imperial → feet ÷ 3.28084 = metres
+    //   nautical → fathoms × 1.8288 = metres  (1 fathom = 6 ft = 1.8288 m)
+    const intervalMetres =
+      unitsForUi === "metric"   ? contourInterval :
+      unitsForUi === "nautical" ? contourInterval * 1.8288 :
+                                  contourInterval / 3.28084;
+    contourSegmentsRef.current = buildContourLines(overviewGrid, intervalMetres);
+  }, [overviewGrid, contourInterval, contoursEnabled, unitsForUi]);
+
   // Build offscreen bitmap whenever overviewGrid, palette, or colormap theme changes.
   // Also invalidates any cached upscaled bitmap so the new data re-triggers
   // Topaz upscaling on the next render pass.
@@ -574,8 +599,13 @@ export const OverviewMap: React.FC = () => {
       }
       ctx.globalAlpha = 1.0;
 
-      // Lat/lon grid (gated by user setting; renderGridLines also checks scale ≥ 2 internally)
+      // Contour lines — drawn over the heatmap, under the geographic grid and markers.
       const { overviewShowGrid, overviewShowMarkers, units, colormapTheme: activeTheme } = useSettingsStore.getState();
+      if (contoursEnabledRef.current && contourSegmentsRef.current.length > 0) {
+        renderContourLines(ctx, contourSegmentsRef.current, grid, t, units, activeTheme);
+      }
+
+      // Lat/lon grid (gated by user setting; renderGridLines also checks scale ≥ 2 internally)
       if (overviewShowGrid) {
         renderGridLines(ctx, grid, t, cW, cH);
       }
