@@ -47,6 +47,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, datasetCatalogTable, userCatalogSavesTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { invalidateCatalogCache, type CatalogSeedEntry } from "../lib/catalogSeeder.js";
 import { materializeSave, formatSaveRow } from "./catalog-saves.js";
 import { registerCache } from "../lib/cacheRegistry.js";
@@ -405,16 +406,52 @@ function setCachedResults(cacheKey: string, results: NceiPortalResult[]): void {
 }
 
 // ---------------------------------------------------------------------------
+// Zod schema for GET /ncei/search query params
+// ---------------------------------------------------------------------------
+
+const NceiSearchQuerySchema = z.object({
+  q: z.string().max(500).optional().default(""),
+  bbox: z
+    .string()
+    .max(200)
+    .optional()
+    .default("")
+    .refine(
+      (v) => {
+        if (!v) return true;
+        const parts = v.split(",");
+        if (parts.length !== 4) return false;
+        return parts.every((p) => isFinite(parseFloat(p)));
+      },
+      { message: "bbox must be 'minLon,minLat,maxLon,maxLat' with four finite numbers" },
+    ),
+  from: z
+    .string()
+    .optional()
+    .transform((v) => (v !== undefined ? parseInt(v, 10) : 1))
+    .pipe(z.number().int().min(1, "from must be >= 1")),
+  max: z
+    .string()
+    .optional()
+    .transform((v) => (v !== undefined ? parseInt(v, 10) : NCEI_DEFAULT_MAX))
+    .pipe(z.number().int().min(1, "max must be >= 1").max(NCEI_MAX_RESULTS_CAP, `max must be <= ${NCEI_MAX_RESULTS_CAP}`)),
+});
+
+// ---------------------------------------------------------------------------
 // GET /ncei/search  (public — no auth required)
 // ---------------------------------------------------------------------------
 
-router.get("/ncei/search", async (req, res): Promise<void> => {
-  const q = String(req.query["q"] ?? "").trim();
-  const bbox = String(req.query["bbox"] ?? "").trim();
-  const fromRaw = parseInt(String(req.query["from"] ?? "1"), 10);
-  const maxRaw = parseInt(String(req.query["max"] ?? String(NCEI_DEFAULT_MAX)), 10);
-  const from = Number.isFinite(fromRaw) && fromRaw >= 1 ? fromRaw : 1;
-  const max = Number.isFinite(maxRaw) && maxRaw >= 1 ? Math.min(maxRaw, NCEI_MAX_RESULTS_CAP) : NCEI_DEFAULT_MAX;
+router.get("/ncei/search", asyncHandler(async (req, res): Promise<void> => {
+  const queryParsed = NceiSearchQuerySchema.safeParse(req.query);
+  if (!queryParsed.success) {
+    res.status(400).json({
+      error: "invalid_params",
+      details: queryParsed.error.issues.map((i) => `${i.path.join(".") || "query"}: ${i.message}`).join("; "),
+    });
+    return;
+  }
+  const { q: rawQ, bbox, from, max } = queryParsed.data;
+  const q = rawQ.trim();
 
   const cacheKey = makeCacheKey(q, bbox, from, max);
   const cached = getCachedResults(cacheKey);
@@ -467,7 +504,7 @@ router.get("/ncei/search", async (req, res): Promise<void> => {
 
   setCachedResults(cacheKey, results);
   res.json(results);
-});
+}));
 
 // ---------------------------------------------------------------------------
 // POST /ncei/save  (auth-gated)
@@ -523,7 +560,7 @@ function portalResultToCatalogEntry(result: NceiPortalResult): CatalogSeedEntry 
   };
 }
 
-router.post("/ncei/save", requireAuth, async (req, res): Promise<void> => {
+router.post("/ncei/save", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
   const parsed = NceiSaveBodySchema.safeParse(req.body);
@@ -628,6 +665,6 @@ router.post("/ncei/save", requireAuth, async (req, res): Promise<void> => {
   void materializeSave(created.id, userId, entry);
 
   res.status(201).json(formatSaveRow(created, entry));
-});
+}));
 
 export default router;

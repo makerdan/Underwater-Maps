@@ -1,7 +1,13 @@
 import { Router, type Response } from "express";
+import { z } from "zod";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { getGithubClient } from "../lib/github.js";
+
+const GithubOwnerRepoSchema = z.object({
+  owner: z.string().min(1, "owner is required").max(100).regex(/^[a-zA-Z0-9_.-]+$/, "owner contains invalid characters"),
+  repo: z.string().min(1, "repo is required").max(100).regex(/^[a-zA-Z0-9_.-]+$/, "repo contains invalid characters"),
+});
 
 const router = Router();
 
@@ -55,9 +61,13 @@ router.get(
   "/repos/:owner/:repo/contents/*path",
   requireAuth,
   asyncHandler(async (req, res): Promise<void> => {
+    const paramsParsed = GithubOwnerRepoSchema.safeParse(req.params);
+    if (!paramsParsed.success) {
+      res.status(400).json({ error: "invalid_params", details: paramsParsed.error.issues.map((i) => i.message).join("; ") });
+      return;
+    }
+    const { owner, repo } = paramsParsed.data;
     const params = req.params as Record<string, string | string[]>;
-    const owner = params["owner"] as string;
-    const repo = params["repo"] as string;
     const rawPath = params["path"];
     const path = Array.isArray(rawPath) ? rawPath.join("/") : (rawPath ?? "");
     const ref = typeof req.query["ref"] === "string" ? req.query["ref"] : undefined;

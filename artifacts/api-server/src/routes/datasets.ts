@@ -584,32 +584,43 @@ router.get("/datasets", asyncHandler(async (req, res): Promise<void> => {
 }));
 
 // ── GET /datasets/:id/terrain ─────────────────────────────────────────────────
-router.get("/datasets/:id/terrain", async (req, res): Promise<void> => {
-  const id = String(req.params["id"] ?? "");
+const DatasetIdParamSchema = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[a-zA-Z0-9_-]+$/, "Dataset id must contain only alphanumeric characters, hyphens, or underscores");
+
+router.get("/datasets/:id/terrain", asyncHandler(async (req, res): Promise<void> => {
+  const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
+  if (!idParsed.success) {
+    res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid dataset id" });
+    return;
+  }
+  const id = idParsed.data;
   const rawRes = req.query["resolution"];
   const resolution = rawRes ? Math.max(32, Math.min(512, parseInt(String(rawRes), 10))) : 256;
 
-  try {
-    const smoothing = await getSmoothingPreference(req);
-    const grid = await buildTerrainGrid(id, resolution, { smoothing });
-    if (!grid) {
-      res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
-      return;
-    }
-    res.json(GetDatasetsIdTerrainResponse.parse(grid));
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Upstream fetch failed";
-    res.status(502).json({ error: "upstream_error", details: msg });
+  const smoothing = await getSmoothingPreference(req);
+  const grid = await buildTerrainGrid(id, resolution, { smoothing });
+  if (!grid) {
+    res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
+    return;
   }
-});
+  res.json(GetDatasetsIdTerrainResponse.parse(grid));
+}));
 
 // ── GET /datasets/:id/preview ─────────────────────────────────────────────────
 // Lightweight preflight: returns the resolved dataSource (ncei | gebco |
 // synthetic) for a preset dataset without transferring the full depth grid.
 // The client uses this to warn users before loading procedurally-generated
 // (synthetic) bathymetry.
-router.get("/datasets/:id/preview", async (req, res): Promise<void> => {
-  const id = String(req.params["id"] ?? "");
+router.get("/datasets/:id/preview", asyncHandler(async (req, res): Promise<void> => {
+  const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
+  if (!idParsed.success) {
+    res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid dataset id" });
+    return;
+  }
+  const id = idParsed.data;
   try {
     const preview = await previewDataset(id);
     if (!preview) {
@@ -633,25 +644,25 @@ router.get("/datasets/:id/preview", async (req, res): Promise<void> => {
       syntheticReason: `Could not verify data source: ${msg}`,
     });
   }
-});
+}));
 
 // ── GET /datasets/:id/overview ────────────────────────────────────────────────
-router.get("/datasets/:id/overview", async (req, res): Promise<void> => {
-  const id = String(req.params["id"] ?? "");
-
-  try {
-    const smoothing = await getSmoothingPreference(req);
-    const grid = await buildTerrainGrid(id, 64, { smoothing });
-    if (!grid) {
-      res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
-      return;
-    }
-    res.json(GetDatasetsIdOverviewResponse.parse(grid));
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Upstream fetch failed";
-    res.status(502).json({ error: "upstream_error", details: msg });
+router.get("/datasets/:id/overview", asyncHandler(async (req, res): Promise<void> => {
+  const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
+  if (!idParsed.success) {
+    res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid dataset id" });
+    return;
   }
-});
+  const id = idParsed.data;
+
+  const smoothing = await getSmoothingPreference(req);
+  const grid = await buildTerrainGrid(id, 64, { smoothing });
+  if (!grid) {
+    res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
+    return;
+  }
+  res.json(GetDatasetsIdOverviewResponse.parse(grid));
+}));
 
 // ── GET /datasets/:id/zones?h=<gridHash> ──────────────────────────────────────
 // Returns the cached AI classification identified by gridHash (content hash of

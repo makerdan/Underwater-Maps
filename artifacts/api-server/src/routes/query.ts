@@ -10,6 +10,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { requireAuth } from "../middlewares/requireAuth.js";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { createRateLimit, stampBaselineRateLimitHeaders } from "../middlewares/rateLimit.js";
 
 const router = Router();
@@ -210,7 +211,7 @@ router.post(
   requireAuth,
   createRateLimit({ route: "query", windowMs: QUERY_USER_WINDOW_MS, max: QUERY_USER_MAX, mode: "user" }),
   createRateLimit({ route: "query", windowMs: QUERY_IP_WINDOW_MS, max: QUERY_IP_MAX, mode: "ip" }),
-  async (req, res): Promise<void> => {
+  asyncHandler(async (req, res): Promise<void> => {
   const parsed = QueryBodySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: parsed.error.message });
@@ -294,7 +295,7 @@ router.post(
     console.error("[query] OpenAI error:", msg);
     res.status(502).json({ error: "llm_error", message: msg });
   }
-},
+  }),
 );
 
 export default router;

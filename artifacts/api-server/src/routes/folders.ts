@@ -9,6 +9,7 @@
  */
 import { Router } from "express";
 import { eq, and, isNull, inArray } from "drizzle-orm";
+import { z } from "zod";
 import {
   db,
   datasetFoldersTable,
@@ -26,6 +27,8 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+
+const FolderIdParamSchema = z.string().uuid("Folder id must be a valid UUID");
 
 const router = Router();
 
@@ -139,7 +142,12 @@ router.post("/user/folders", requireAuth, asyncHandler(async (req, res): Promise
 // ── PATCH /user/folders/:id/rename ─────────────────────────────────────────
 router.patch("/user/folders/:id/rename", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
-  const id = String(req.params["id"] ?? "");
+  const idParsed = FolderIdParamSchema.safeParse(req.params["id"]);
+  if (!idParsed.success) {
+    res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid folder id" });
+    return;
+  }
+  const id = idParsed.data;
   const parsed = PatchUserFoldersIdRenameBody.safeParse(req.body ?? {});
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: parsed.error.message });
@@ -177,7 +185,12 @@ router.patch("/user/folders/:id/rename", requireAuth, asyncHandler(async (req, r
 // ── PATCH /user/folders/:id/move ───────────────────────────────────────────
 router.patch("/user/folders/:id/move", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
-  const id = String(req.params["id"] ?? "");
+  const idParsed = FolderIdParamSchema.safeParse(req.params["id"]);
+  if (!idParsed.success) {
+    res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid folder id" });
+    return;
+  }
+  const id = idParsed.data;
   const parsed = PatchUserFoldersIdMoveBody.safeParse(req.body ?? {});
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: parsed.error.message });
