@@ -89,7 +89,11 @@ function buildPayload(): Record<string, unknown> {
   dataOnly.bandColors = palette.bandColors;
   dataOnly.bandBoundaries = palette.bandBoundaries;
   dataOnly.panelCollapse = usePanelCollapseStore.getState().collapsed;
-  dataOnly.zoneOverlaySlots = useZoneOverlayStore.getState().slots;
+  const zoneState = useZoneOverlayStore.getState();
+  dataOnly.zoneOverlaySlots = {
+    saltwater: zoneState.saltwater,
+    freshwater: zoneState.freshwater,
+  };
   return dataOnly;
 }
 
@@ -149,7 +153,9 @@ export function useServerSettingsSync(): void {
       }
 
       // Restore zone overlay colours and visibility from the server.
-      if (Array.isArray(serverRec.zoneOverlaySlots)) {
+      // Accepts both the new { saltwater, freshwater } object and the
+      // legacy flat array (treated as saltwater) for backward compatibility.
+      if (serverRec.zoneOverlaySlots != null) {
         useZoneOverlayStore.getState().hydrateFromServer(serverRec.zoneOverlaySlots);
       }
     }

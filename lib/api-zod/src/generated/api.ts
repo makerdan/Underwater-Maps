@@ -841,10 +841,13 @@ export const getSettingsResponseGpsRecordingIntervalMax = 60000;
 export const getSettingsResponseWaterTypeDefault = `saltwater`;
 export const getSettingsResponseShowUiTooltipsDefault = true;
 export const getSettingsResponsePanelCollapseDefault = {  };
-export const getSettingsResponseZoneOverlaySlotsItemColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
-export const getSettingsResponseZoneOverlaySlotsDefault = [{ color: `#f5d58a`, visible: true, }, { color: `#c49a6c`, visible: true, }, { color: `#8ab4d0`, visible: true, }, { color: `#b06060`, visible: true, }];
-export const getSettingsResponseZoneOverlaySlotsMin = 4;
-export const getSettingsResponseZoneOverlaySlotsMax = 4;
+export const getSettingsResponseZoneOverlaySlotsSaltwaterItemColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const getSettingsResponseZoneOverlaySlotsSaltwaterMin = 4;
+export const getSettingsResponseZoneOverlaySlotsSaltwaterMax = 4;
+
+export const getSettingsResponseZoneOverlaySlotsFreshwaterItemColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const getSettingsResponseZoneOverlaySlotsFreshwaterMin = 4;
+export const getSettingsResponseZoneOverlaySlotsFreshwaterMax = 4;
 
 
 
@@ -889,10 +892,16 @@ export const GetSettingsResponse = zod.object({
   "waterType": zod.enum(['saltwater', 'freshwater']).default(getSettingsResponseWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter'),
   "showUiTooltips": zod.boolean().default(getSettingsResponseShowUiTooltipsDefault).describe('Show hover\/focus tooltips on viewscreen controls and HUD readouts.'),
   "panelCollapse": zod.record(zod.string(), zod.boolean()).default(getSettingsResponsePanelCollapseDefault).describe('Panel expand\/collapse state keyed by panel id. Synced cross-device for signed-in users.'),
-  "zoneOverlaySlots": zod.array(zod.object({
-  "color": zod.string().regex(getSettingsResponseZoneOverlaySlotsItemColorRegExp),
+  "zoneOverlaySlots": zod.object({
+  "saltwater": zod.array(zod.object({
+  "color": zod.string().regex(getSettingsResponseZoneOverlaySlotsSaltwaterItemColorRegExp),
   "visible": zod.boolean()
-})).min(getSettingsResponseZoneOverlaySlotsMin).max(getSettingsResponseZoneOverlaySlotsMax).default(getSettingsResponseZoneOverlaySlotsDefault).describe('Per-slot zone colour and visibility for the four terrain texture slots (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.')
+})).min(getSettingsResponseZoneOverlaySlotsSaltwaterMin).max(getSettingsResponseZoneOverlaySlotsSaltwaterMax).optional(),
+  "freshwater": zod.array(zod.object({
+  "color": zod.string().regex(getSettingsResponseZoneOverlaySlotsFreshwaterItemColorRegExp),
+  "visible": zod.boolean()
+})).min(getSettingsResponseZoneOverlaySlotsFreshwaterMin).max(getSettingsResponseZoneOverlaySlotsFreshwaterMax).optional()
+}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.')
 }).describe('Per-user application settings with sensible defaults')
 
 
@@ -975,10 +984,13 @@ export const putSettingsBodyGpsRecordingIntervalMax = 60000;
 export const putSettingsBodyWaterTypeDefault = `saltwater`;
 export const putSettingsBodyShowUiTooltipsDefault = true;
 export const putSettingsBodyPanelCollapseDefault = {  };
-export const putSettingsBodyZoneOverlaySlotsItemColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
-export const putSettingsBodyZoneOverlaySlotsDefault = [{ color: `#f5d58a`, visible: true, }, { color: `#c49a6c`, visible: true, }, { color: `#8ab4d0`, visible: true, }, { color: `#b06060`, visible: true, }];
-export const putSettingsBodyZoneOverlaySlotsMin = 4;
-export const putSettingsBodyZoneOverlaySlotsMax = 4;
+export const putSettingsBodyZoneOverlaySlotsSaltwaterItemColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsBodyZoneOverlaySlotsSaltwaterMin = 4;
+export const putSettingsBodyZoneOverlaySlotsSaltwaterMax = 4;
+
+export const putSettingsBodyZoneOverlaySlotsFreshwaterItemColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsBodyZoneOverlaySlotsFreshwaterMin = 4;
+export const putSettingsBodyZoneOverlaySlotsFreshwaterMax = 4;
 
 
 
@@ -1023,10 +1035,16 @@ export const PutSettingsBody = zod.object({
   "waterType": zod.enum(['saltwater', 'freshwater']).default(putSettingsBodyWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter'),
   "showUiTooltips": zod.boolean().default(putSettingsBodyShowUiTooltipsDefault).describe('Show hover\/focus tooltips on viewscreen controls and HUD readouts.'),
   "panelCollapse": zod.record(zod.string(), zod.boolean()).default(putSettingsBodyPanelCollapseDefault).describe('Panel expand\/collapse state keyed by panel id. Synced cross-device for signed-in users.'),
-  "zoneOverlaySlots": zod.array(zod.object({
-  "color": zod.string().regex(putSettingsBodyZoneOverlaySlotsItemColorRegExp),
+  "zoneOverlaySlots": zod.object({
+  "saltwater": zod.array(zod.object({
+  "color": zod.string().regex(putSettingsBodyZoneOverlaySlotsSaltwaterItemColorRegExp),
   "visible": zod.boolean()
-})).min(putSettingsBodyZoneOverlaySlotsMin).max(putSettingsBodyZoneOverlaySlotsMax).default(putSettingsBodyZoneOverlaySlotsDefault).describe('Per-slot zone colour and visibility for the four terrain texture slots (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.')
+})).min(putSettingsBodyZoneOverlaySlotsSaltwaterMin).max(putSettingsBodyZoneOverlaySlotsSaltwaterMax).optional(),
+  "freshwater": zod.array(zod.object({
+  "color": zod.string().regex(putSettingsBodyZoneOverlaySlotsFreshwaterItemColorRegExp),
+  "visible": zod.boolean()
+})).min(putSettingsBodyZoneOverlaySlotsFreshwaterMin).max(putSettingsBodyZoneOverlaySlotsFreshwaterMax).optional()
+}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.')
 }).describe('Per-user application settings with sensible defaults')
 
 export const putSettingsResponseTextureQualityDefault = `high`;
@@ -1104,10 +1122,13 @@ export const putSettingsResponseGpsRecordingIntervalMax = 60000;
 export const putSettingsResponseWaterTypeDefault = `saltwater`;
 export const putSettingsResponseShowUiTooltipsDefault = true;
 export const putSettingsResponsePanelCollapseDefault = {  };
-export const putSettingsResponseZoneOverlaySlotsItemColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
-export const putSettingsResponseZoneOverlaySlotsDefault = [{ color: `#f5d58a`, visible: true, }, { color: `#c49a6c`, visible: true, }, { color: `#8ab4d0`, visible: true, }, { color: `#b06060`, visible: true, }];
-export const putSettingsResponseZoneOverlaySlotsMin = 4;
-export const putSettingsResponseZoneOverlaySlotsMax = 4;
+export const putSettingsResponseZoneOverlaySlotsSaltwaterItemColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsResponseZoneOverlaySlotsSaltwaterMin = 4;
+export const putSettingsResponseZoneOverlaySlotsSaltwaterMax = 4;
+
+export const putSettingsResponseZoneOverlaySlotsFreshwaterItemColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsResponseZoneOverlaySlotsFreshwaterMin = 4;
+export const putSettingsResponseZoneOverlaySlotsFreshwaterMax = 4;
 
 
 
@@ -1152,10 +1173,16 @@ export const PutSettingsResponse = zod.object({
   "waterType": zod.enum(['saltwater', 'freshwater']).default(putSettingsResponseWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter'),
   "showUiTooltips": zod.boolean().default(putSettingsResponseShowUiTooltipsDefault).describe('Show hover\/focus tooltips on viewscreen controls and HUD readouts.'),
   "panelCollapse": zod.record(zod.string(), zod.boolean()).default(putSettingsResponsePanelCollapseDefault).describe('Panel expand\/collapse state keyed by panel id. Synced cross-device for signed-in users.'),
-  "zoneOverlaySlots": zod.array(zod.object({
-  "color": zod.string().regex(putSettingsResponseZoneOverlaySlotsItemColorRegExp),
+  "zoneOverlaySlots": zod.object({
+  "saltwater": zod.array(zod.object({
+  "color": zod.string().regex(putSettingsResponseZoneOverlaySlotsSaltwaterItemColorRegExp),
   "visible": zod.boolean()
-})).min(putSettingsResponseZoneOverlaySlotsMin).max(putSettingsResponseZoneOverlaySlotsMax).default(putSettingsResponseZoneOverlaySlotsDefault).describe('Per-slot zone colour and visibility for the four terrain texture slots (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.')
+})).min(putSettingsResponseZoneOverlaySlotsSaltwaterMin).max(putSettingsResponseZoneOverlaySlotsSaltwaterMax).optional(),
+  "freshwater": zod.array(zod.object({
+  "color": zod.string().regex(putSettingsResponseZoneOverlaySlotsFreshwaterItemColorRegExp),
+  "visible": zod.boolean()
+})).min(putSettingsResponseZoneOverlaySlotsFreshwaterMin).max(putSettingsResponseZoneOverlaySlotsFreshwaterMax).optional()
+}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.')
 }).describe('Per-user application settings with sensible defaults')
 
 

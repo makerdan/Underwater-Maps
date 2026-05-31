@@ -39,12 +39,20 @@ const DEFAULT_SETTINGS = {
   gpsRecordingInterval: 10000,
   waterType: "saltwater",
   showUiTooltips: true,
-  zoneOverlaySlots: [
-    { color: "#f5d58a", visible: true },
-    { color: "#c49a6c", visible: true },
-    { color: "#8ab4d0", visible: true },
-    { color: "#b06060", visible: true },
-  ],
+  zoneOverlaySlots: {
+    saltwater: [
+      { color: "#f5d58a", visible: true },
+      { color: "#c49a6c", visible: true },
+      { color: "#8ab4d0", visible: true },
+      { color: "#b06060", visible: true },
+    ],
+    freshwater: [
+      { color: "#f5d58a", visible: true },
+      { color: "#c49a6c", visible: true },
+      { color: "#8ab4d0", visible: true },
+      { color: "#b06060", visible: true },
+    ],
+  },
   paletteShallow: "#00e5ff",
   paletteDeep: "#283593",
   customStops: [
@@ -119,6 +127,18 @@ router.get("/settings", requireAuth, async (req, res): Promise<void> => {
     merged.bandBoundaries = [...DEFAULT_SETTINGS.bandBoundaries];
   }
 
+  // Migration for legacy rows: stored settings from before zoneOverlaySlots
+  // was split into per-water-type palettes. If the stored value is a flat
+  // 4-element array, promote it to the new object format (saltwater = stored
+  // array, freshwater = default palette). Without this, Zod validation throws
+  // a 500 for any existing user whose row pre-dates this change.
+  if (Array.isArray(merged.zoneOverlaySlots)) {
+    merged.zoneOverlaySlots = {
+      saltwater: merged.zoneOverlaySlots,
+      freshwater: DEFAULT_SETTINGS.zoneOverlaySlots.freshwater,
+    };
+  }
+
   const validated = GetSettingsResponse.parse(merged) as Record<string, unknown>;
   res.json(mergeForResponse(stored, validated));
 });
@@ -130,6 +150,24 @@ router.put("/settings", requireAuth, async (req, res): Promise<void> => {
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: parsed.error.message });
     return;
+  }
+
+  // Extra validation for bandBoundaries: the generated Zod schema only checks
+  // array length (11) and item range [0, 2000]. The spec also requires strictly
+  // increasing values, first element 0, and last element 2000 — enforce these
+  // here since orval does not emit superRefine calls from plain descriptions.
+  if ("bandBoundaries" in body) {
+    const bb = parsed.data.bandBoundaries as number[];
+    const first = bb[0];
+    const last = bb[bb.length - 1];
+    const notStrictlyIncreasing = bb.slice(1).some((v, i) => v <= (bb[i] as number));
+    if (first !== 0 || last !== 2000 || notStrictlyIncreasing) {
+      res.status(400).json({
+        error: "invalid_request",
+        details: "bandBoundaries must be strictly increasing, start at 0, and end at 2000",
+      });
+      return;
+    }
   }
 
   // PUT is a partial update: only the fields the client actually included in
@@ -164,13 +202,22 @@ router.put("/settings", requireAuth, async (req, res): Promise<void> => {
     .where(eq(userSettingsTable.userId, userId));
   const stored = (existing?.settings ?? {}) as Record<string, unknown>;
 
-  const merged = {
+  const merged: Record<string, unknown> = {
     ...DEFAULT_SETTINGS,
     ...stored,
     ...sentValidated,
     ...extras,
     __updatedAt: updatedAt,
   };
+
+  // Migration for legacy rows: normalize a flat zoneOverlaySlots array to the
+  // new per-water-type object shape so it is stored correctly going forward.
+  if (Array.isArray(merged.zoneOverlaySlots)) {
+    merged.zoneOverlaySlots = {
+      saltwater: merged.zoneOverlaySlots,
+      freshwater: DEFAULT_SETTINGS.zoneOverlaySlots.freshwater,
+    };
+  }
 
   await db
     .insert(userSettingsTable)

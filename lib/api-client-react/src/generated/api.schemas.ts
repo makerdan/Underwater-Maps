@@ -295,10 +295,32 @@ export const UserSettingsWaterType = {
  */
 export type UserSettingsPanelCollapse = {[key: string]: boolean};
 
-export type UserSettingsZoneOverlaySlotsItem = {
+export type UserSettingsZoneOverlaySlotsSaltwaterItem = {
   /** @pattern ^#[0-9a-fA-F]{6}$ */
   color: string;
   visible: boolean;
+};
+
+export type UserSettingsZoneOverlaySlotsFreshwaterItem = {
+  /** @pattern ^#[0-9a-fA-F]{6}$ */
+  color: string;
+  visible: boolean;
+};
+
+/**
+ * Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.
+ */
+export type UserSettingsZoneOverlaySlots = {
+  /**
+     * @minItems 4
+     * @maxItems 4
+     */
+  saltwater?: UserSettingsZoneOverlaySlotsSaltwaterItem[];
+  /**
+     * @minItems 4
+     * @maxItems 4
+     */
+  freshwater?: UserSettingsZoneOverlaySlotsFreshwaterItem[];
 };
 
 /**
@@ -397,12 +419,8 @@ export interface UserSettings {
   showUiTooltips?: boolean;
   /** Panel expand/collapse state keyed by panel id. Synced cross-device for signed-in users. */
   panelCollapse?: UserSettingsPanelCollapse;
-  /**
-     * Per-slot zone colour and visibility for the four terrain texture slots (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.
-     * @minItems 4
-     * @maxItems 4
-     */
-  zoneOverlaySlots?: UserSettingsZoneOverlaySlotsItem[];
+  /** Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users. */
+  zoneOverlaySlots?: UserSettingsZoneOverlaySlots;
 }
 
 export interface ApiError {

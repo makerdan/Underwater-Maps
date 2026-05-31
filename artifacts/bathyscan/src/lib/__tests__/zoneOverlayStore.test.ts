@@ -2,12 +2,15 @@
  * Unit tests for zoneOverlayStore and substrateClassToSlot.
  *
  * Covers:
- *   - Initial state matches ZONE_DEFAULT_COLORS / all slots visible
- *   - setSlotColor mutates only the targeted slot and persists to localStorage
- *   - setSlotVisible mutates only the targeted slot and persists to localStorage
- *   - resetToDefaults restores all slots to defaults and writes localStorage
- *   - localStorage round-trip: mutations are stored; resetToDefaults is reflected
- *   - Global palette design decision: zone colours are dataset-agnostic (by design)
+ *   - Initial state matches ZONE_DEFAULT_COLORS / all slots visible (saltwater active)
+ *   - setSlotColor mutates only the targeted slot in the active set and persists
+ *   - setSlotVisible mutates only the targeted slot in the active set and persists
+ *   - resetToDefaults resets only the active water-type set
+ *   - localStorage round-trip: per-waterType keys are used correctly
+ *   - setActiveWaterType switches the active palette without touching the other set
+ *   - Saltwater and freshwater palettes are independent — changes to one do not
+ *     bleed into the other
+ *   - Legacy flat-array LS key is migrated to saltwater on first load
  *   - substrateClassToSlot: known substrate strings map to expected slots
  *   - substrateClassToSlot: handles compound labels, mixed case, and unknowns
  */
@@ -18,13 +21,35 @@ import {
   substrateClassToSlot,
 } from "@/lib/zoneOverlayStore";
 
-const LS_KEY = "bathyscan:zoneOverlaySlots";
+const LS_KEY_SW = "bathyscan:zoneOverlaySlots:saltwater";
+const LS_KEY_FW = "bathyscan:zoneOverlaySlots:freshwater";
 
 function resetStore() {
   try {
     localStorage.clear();
   } catch { /* ignore */ }
-  useZoneOverlayStore.getState().resetToDefaults();
+  // Reset to saltwater active and defaults for both sets
+  useZoneOverlayStore.setState({
+    saltwater: [
+      { color: "#f5d58a", visible: true },
+      { color: "#c49a6c", visible: true },
+      { color: "#8ab4d0", visible: true },
+      { color: "#b06060", visible: true },
+    ],
+    freshwater: [
+      { color: "#f5d58a", visible: true },
+      { color: "#c49a6c", visible: true },
+      { color: "#8ab4d0", visible: true },
+      { color: "#b06060", visible: true },
+    ],
+    activeWaterType: "saltwater",
+    slots: [
+      { color: "#f5d58a", visible: true },
+      { color: "#c49a6c", visible: true },
+      { color: "#8ab4d0", visible: true },
+      { color: "#b06060", visible: true },
+    ],
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -67,6 +92,10 @@ describe("zoneOverlayStore — initial state", () => {
   it("slot 3 (basalt) defaults to the muted-terracotta tint", () => {
     expect(useZoneOverlayStore.getState().slots[3]!.color).toBe("#b06060");
   });
+
+  it("activeWaterType defaults to saltwater", () => {
+    expect(useZoneOverlayStore.getState().activeWaterType).toBe("saltwater");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -90,9 +119,9 @@ describe("zoneOverlayStore — setSlotColor", () => {
     expect(useZoneOverlayStore.getState().slots[2]!.visible).toBe(true);
   });
 
-  it("writes the new state to localStorage", () => {
+  it("writes the new state to localStorage under the saltwater key", () => {
     useZoneOverlayStore.getState().setSlotColor(0, "#112233");
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = localStorage.getItem(LS_KEY_SW);
     expect(raw).not.toBeNull();
     const parsed = JSON.parse(raw as string) as Array<{ color: string; visible: boolean }>;
     expect(parsed[0]!.color).toBe("#112233");
@@ -143,9 +172,9 @@ describe("zoneOverlayStore — setSlotVisible", () => {
     expect(useZoneOverlayStore.getState().slots[1]!.color).toBe(ZONE_DEFAULT_COLORS[1]);
   });
 
-  it("writes the new visibility to localStorage", () => {
+  it("writes the new visibility to localStorage under the saltwater key", () => {
     useZoneOverlayStore.getState().setSlotVisible(0, false);
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = localStorage.getItem(LS_KEY_SW);
     expect(raw).not.toBeNull();
     const parsed = JSON.parse(raw as string) as Array<{ color: string; visible: boolean }>;
     expect(parsed[0]!.visible).toBe(false);
@@ -183,12 +212,22 @@ describe("zoneOverlayStore — resetToDefaults", () => {
   it("writes the default slots to localStorage", () => {
     useZoneOverlayStore.getState().setSlotColor(0, "#deadbe");
     useZoneOverlayStore.getState().resetToDefaults();
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = localStorage.getItem(LS_KEY_SW);
     expect(raw).not.toBeNull();
     const parsed = JSON.parse(raw as string) as Array<{ color: string; visible: boolean }>;
     expect(parsed[0]!.color).toBe(ZONE_DEFAULT_COLORS[0]);
     expect(parsed[3]!.color).toBe(ZONE_DEFAULT_COLORS[3]);
     expect(parsed.every((s) => s.visible)).toBe(true);
+  });
+
+  it("does not reset the other water-type's palette", () => {
+    // Switch to freshwater, change a colour, switch back and reset saltwater
+    useZoneOverlayStore.getState().setActiveWaterType("freshwater");
+    useZoneOverlayStore.getState().setSlotColor(0, "#abcdef");
+    useZoneOverlayStore.getState().setActiveWaterType("saltwater");
+    useZoneOverlayStore.getState().resetToDefaults();
+    // Freshwater colour should be untouched
+    expect(useZoneOverlayStore.getState().freshwater[0]!.color).toBe("#abcdef");
   });
 });
 
@@ -199,13 +238,29 @@ describe("zoneOverlayStore — resetToDefaults", () => {
 describe("zoneOverlayStore — localStorage round-trip", () => {
   beforeEach(() => resetStore());
 
-  it("setSlotColor writes a 4-element JSON array to localStorage", () => {
+  it("setSlotColor writes a 4-element JSON array to the saltwater LS key", () => {
     useZoneOverlayStore.getState().setSlotColor(2, "#aabbcc");
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = localStorage.getItem(LS_KEY_SW);
     expect(raw).not.toBeNull();
     const parsed: unknown = JSON.parse(raw as string);
     expect(Array.isArray(parsed)).toBe(true);
     expect((parsed as unknown[]).length).toBe(4);
+  });
+
+  it("saltwater and freshwater use separate LS keys", () => {
+    useZoneOverlayStore.getState().setSlotColor(0, "#aaa111");
+    useZoneOverlayStore.getState().setActiveWaterType("freshwater");
+    useZoneOverlayStore.getState().setSlotColor(0, "#bbb222");
+
+    const swRaw = localStorage.getItem(LS_KEY_SW);
+    const fwRaw = localStorage.getItem(LS_KEY_FW);
+    expect(swRaw).not.toBeNull();
+    expect(fwRaw).not.toBeNull();
+
+    const sw = JSON.parse(swRaw as string) as Array<{ color: string }>;
+    const fw = JSON.parse(fwRaw as string) as Array<{ color: string }>;
+    expect(sw[0]!.color).toBe("#aaa111");
+    expect(fw[0]!.color).toBe("#bbb222");
   });
 
   it("localStorage reflects the final state after a sequence of mutations", () => {
@@ -213,7 +268,7 @@ describe("zoneOverlayStore — localStorage round-trip", () => {
     useZoneOverlayStore.getState().setSlotVisible(1, false);
     useZoneOverlayStore.getState().setSlotColor(3, "#040506");
 
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = localStorage.getItem(LS_KEY_SW);
     const parsed = JSON.parse(raw as string) as Array<{ color: string; visible: boolean }>;
     expect(parsed[0]!.color).toBe("#010203");
     expect(parsed[1]!.visible).toBe(false);
@@ -221,67 +276,128 @@ describe("zoneOverlayStore — localStorage round-trip", () => {
     expect(parsed[3]!.color).toBe("#040506");
   });
 
-  it("resetToDefaults overwrites any previous localStorage value", () => {
+  it("resetToDefaults overwrites the active palette in localStorage", () => {
     useZoneOverlayStore.getState().setSlotColor(0, "#ffffff");
     useZoneOverlayStore.getState().resetToDefaults();
 
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = localStorage.getItem(LS_KEY_SW);
     const parsed = JSON.parse(raw as string) as Array<{ color: string; visible: boolean }>;
     expect(parsed[0]!.color).toBe(ZONE_DEFAULT_COLORS[0]);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Design decision: global palette (not per-dataset)
-//
-// Zone colours intentionally apply to ALL datasets.  The four slots map to
-// universal geological categories (sand, sediment, silt, basalt) whose
-// meaning is identical regardless of which dataset is active.  This is
-// different from, e.g., dataset home-camera positions (settingsStore
-// datasetHomePositions), which ARE per-dataset because each dataset is in a
-// different geographic location.
-//
-// These tests document that the store has no dataset concept and that a colour
-// change made without any dataset context survives as-is.
+// setActiveWaterType and palette independence
 // ---------------------------------------------------------------------------
 
-describe("zoneOverlayStore — global palette design decision", () => {
+describe("zoneOverlayStore — per-water-type palette independence", () => {
   beforeEach(() => resetStore());
 
-  it("store has no datasetId concept: slots are read without any dataset argument", () => {
+  it("setActiveWaterType switches slots to the freshwater palette", () => {
+    useZoneOverlayStore.getState().setActiveWaterType("freshwater");
+    expect(useZoneOverlayStore.getState().activeWaterType).toBe("freshwater");
+    expect(useZoneOverlayStore.getState().slots).toBe(
+      useZoneOverlayStore.getState().freshwater,
+    );
+  });
+
+  it("colour change on saltwater does not affect freshwater slots", () => {
+    useZoneOverlayStore.getState().setActiveWaterType("saltwater");
+    useZoneOverlayStore.getState().setSlotColor(0, "#salt00");
+    expect(useZoneOverlayStore.getState().freshwater[0]!.color).toBe(ZONE_DEFAULT_COLORS[0]);
+  });
+
+  it("colour change on freshwater does not affect saltwater slots", () => {
+    useZoneOverlayStore.getState().setActiveWaterType("freshwater");
+    useZoneOverlayStore.getState().setSlotColor(0, "#fresh0");
+    expect(useZoneOverlayStore.getState().saltwater[0]!.color).toBe(ZONE_DEFAULT_COLORS[0]);
+  });
+
+  it("slots mirror the active set after a water-type switch", () => {
+    useZoneOverlayStore.getState().setActiveWaterType("saltwater");
+    useZoneOverlayStore.getState().setSlotColor(1, "#salt01");
+    useZoneOverlayStore.getState().setActiveWaterType("freshwater");
+    useZoneOverlayStore.getState().setSlotColor(1, "#fresh1");
+
+    // Switch back to saltwater — slots should reflect saltwater palette
+    useZoneOverlayStore.getState().setActiveWaterType("saltwater");
+    expect(useZoneOverlayStore.getState().slots[1]!.color).toBe("#salt01");
+
+    // Switch to freshwater — slots should reflect freshwater palette
+    useZoneOverlayStore.getState().setActiveWaterType("freshwater");
+    expect(useZoneOverlayStore.getState().slots[1]!.color).toBe("#fresh1");
+  });
+
+  it("store has no datasetId concept: slots read without dataset argument", () => {
     const state = useZoneOverlayStore.getState();
     expect("slots" in state).toBe(true);
     expect(typeof state.setSlotColor).toBe("function");
     expect(typeof state.setSlotVisible).toBe("function");
     expect(typeof state.resetToDefaults).toBe("function");
+    expect(typeof state.setActiveWaterType).toBe("function");
     expect(Object.keys(state).filter((k) => k.toLowerCase().includes("dataset"))).toHaveLength(0);
   });
+});
 
-  it("a colour change persists with no dataset context and is immediately readable", () => {
-    useZoneOverlayStore.getState().setSlotColor(0, "#c0ffee");
-    expect(useZoneOverlayStore.getState().slots[0]!.color).toBe("#c0ffee");
+// ---------------------------------------------------------------------------
+// hydrateFromServer
+// ---------------------------------------------------------------------------
+
+describe("zoneOverlayStore — hydrateFromServer", () => {
+  beforeEach(() => resetStore());
+
+  it("new object format hydrates both sets independently", () => {
+    useZoneOverlayStore.getState().hydrateFromServer({
+      saltwater: [
+        { color: "#aaa000", visible: true },
+        { color: "#aaa001", visible: false },
+        { color: "#aaa002", visible: true },
+        { color: "#aaa003", visible: true },
+      ],
+      freshwater: [
+        { color: "#bbb000", visible: true },
+        { color: "#bbb001", visible: true },
+        { color: "#bbb002", visible: false },
+        { color: "#bbb003", visible: true },
+      ],
+    });
+    const state = useZoneOverlayStore.getState();
+    expect(state.saltwater[0]!.color).toBe("#aaa000");
+    expect(state.saltwater[1]!.visible).toBe(false);
+    expect(state.freshwater[0]!.color).toBe("#bbb000");
+    expect(state.freshwater[2]!.visible).toBe(false);
   });
 
-  it("colour change survives a simulated 'dataset switch' (store has no dataset state to invalidate)", () => {
-    useZoneOverlayStore.getState().setSlotColor(2, "#bada55");
-    useZoneOverlayStore.getState().setSlotVisible(3, false);
-
-    const slotsBefore = useZoneOverlayStore.getState().slots.map((s) => ({ ...s }));
-
-    useZoneOverlayStore.setState(useZoneOverlayStore.getState());
-
-    const slotsAfter = useZoneOverlayStore.getState().slots;
-    expect(slotsAfter[2]!.color).toBe(slotsBefore[2]!.color);
-    expect(slotsAfter[3]!.visible).toBe(slotsBefore[3]!.visible);
+  it("legacy flat array is applied to saltwater only", () => {
+    const legacy = [
+      { color: "#aabbcc", visible: true },
+      { color: "#112233", visible: true },
+      { color: "#445566", visible: true },
+      { color: "#778899", visible: true },
+    ];
+    useZoneOverlayStore.getState().hydrateFromServer(legacy);
+    const state = useZoneOverlayStore.getState();
+    expect(state.saltwater[0]!.color).toBe("#aabbcc");
+    expect(state.freshwater[0]!.color).toBe(ZONE_DEFAULT_COLORS[0]);
   });
 
-  it("localStorage stores a flat 4-element array (not a dataset-keyed object)", () => {
-    useZoneOverlayStore.getState().setSlotColor(1, "#facade");
-    const raw = localStorage.getItem(LS_KEY);
-    expect(raw).not.toBeNull();
-    const parsed: unknown = JSON.parse(raw as string);
-    expect(Array.isArray(parsed)).toBe(true);
-    expect((parsed as unknown[]).length).toBe(4);
+  it("slots mirrors the active set after hydration", () => {
+    useZoneOverlayStore.getState().setActiveWaterType("saltwater");
+    useZoneOverlayStore.getState().hydrateFromServer({
+      saltwater: [
+        { color: "#aa0000", visible: true },
+        { color: "#aa0001", visible: true },
+        { color: "#aa0002", visible: true },
+        { color: "#aa0003", visible: true },
+      ],
+      freshwater: [
+        { color: "#bb0000", visible: true },
+        { color: "#bb0001", visible: true },
+        { color: "#bb0002", visible: true },
+        { color: "#bb0003", visible: true },
+      ],
+    });
+    expect(useZoneOverlayStore.getState().slots[0]!.color).toBe("#aa0000");
   });
 });
 

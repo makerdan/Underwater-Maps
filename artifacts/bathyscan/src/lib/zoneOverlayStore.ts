@@ -1,32 +1,38 @@
 /**
- * zoneOverlayStore — per-slot zone colour and visibility state.
+ * zoneOverlayStore — per-slot zone colour and visibility state,
+ * stored independently for saltwater and freshwater environments.
  *
  * Holds a hex colour string and a `visible` boolean for each of the four
- * terrain texture slots (0=sand, 1=sediment, 2=silt, 3=basalt).  Defaults
- * match the pastel tints baked into terrainShader.ts.  State is persisted to
- * localStorage so user choices survive a page refresh.
+ * terrain texture slots (0=sand, 1=sediment, 2=silt, 3=basalt).  Two
+ * independent four-slot palettes are maintained — one for saltwater sessions
+ * and one for freshwater sessions — so customising colours for a lake map
+ * does not affect the seafloor palette, and vice versa.
  *
- * ## Design decision: global palette (not per-dataset)
+ * ## Active set selection
  *
- * Zone colours are intentionally shared across ALL datasets.  The four slots
- * map to universal geological substrate categories — sand, sediment, silt, and
- * basalt — that carry the same semantic meaning regardless of which dataset is
- * active.  A user's preference for "sandy seafloor should be warm yellow"
- * logically applies everywhere, just as a colour-blind user's custom palette
- * should not reset each time they switch maps.
+ * The active water type is tracked as `activeWaterType` in the store.
+ * Consumers that know the current water type (ZoneOverlay, Settings) sync
+ * this via `setActiveWaterType(wt)`.  The `slots` field always mirrors the
+ * active set, so components that only read `slots` require no changes.
  *
- * Contrast this with dataset home-camera positions (stored in settingsStore as
- * `datasetHomePositions`), which ARE per-dataset because each dataset occupies
- * a different geographic location.  Zone colours are a cross-dataset palette
- * choice, not a location-specific one.
+ * ## localStorage
  *
- * If a future requirement emerges where different datasets need distinct colour
- * schemes (e.g. a dedicated "Arctic" palette vs a "Tropical" palette), the
- * migration path is straightforward: change the localStorage schema from a
- * flat 4-element array to `Record<datasetId, ZoneSlot[]>` and keep a
- * `"__global__"` key as the default/fallback.  No other store changes are
- * needed because the consuming components (ZoneOverlay, TerrainMesh) read
- * slots without any dataset context.
+ * Each set is persisted under its own key:
+ *   bathyscan:zoneOverlaySlots:saltwater
+ *   bathyscan:zoneOverlaySlots:freshwater
+ *
+ * On first load the legacy flat key `bathyscan:zoneOverlaySlots` is migrated
+ * to the saltwater key and then removed, so existing user palettes are not
+ * lost.
+ *
+ * ## Design decision: per-water-type palettes (not per-dataset)
+ *
+ * Colours are scoped to water type, not to individual datasets.  A user's
+ * "sandy freshwater bottom should be light green" preference applies to every
+ * lake dataset, just as colour-blind accessibility palettes should not reset
+ * each time they switch maps within the same environment.  Per-dataset
+ * palettes would require a keyed Record<datasetId, ZoneSlot[]> schema — the
+ * migration path is straightforward if that requirement ever emerges.
  */
 import { create } from "zustand";
 
@@ -52,14 +58,20 @@ const DEFAULT_SLOTS: readonly ZoneSlot[] = ZONE_DEFAULT_COLORS.map((color) => ({
 // localStorage helpers
 // ---------------------------------------------------------------------------
 
-const LS_KEY = "bathyscan:zoneOverlaySlots";
+const LS_KEY_SALTWATER = "bathyscan:zoneOverlaySlots:saltwater";
+const LS_KEY_FRESHWATER = "bathyscan:zoneOverlaySlots:freshwater";
+/** Legacy key written by earlier versions — migrated to saltwater on first load. */
+const LS_KEY_LEGACY = "bathyscan:zoneOverlaySlots";
 
-function loadSlots(): [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot] {
+function buildDefaultSlots(): [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot] {
+  return DEFAULT_SLOTS.map((s) => ({ ...s })) as [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot];
+}
+
+function parseSlots(raw: string | null): [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot] | null {
+  if (!raw) return null;
   try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return buildDefaultSlots();
     const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length !== 4) return buildDefaultSlots();
+    if (!Array.isArray(parsed) || parsed.length !== 4) return null;
     return parsed.map((item, i) => {
       const def = DEFAULT_SLOTS[i]!;
       const color =
@@ -73,79 +85,183 @@ function loadSlots(): [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot] {
       return { color, visible };
     }) as [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot];
   } catch {
+    return null;
+  }
+}
+
+function loadSlots(key: string): [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot] {
+  try {
+    return parseSlots(localStorage.getItem(key)) ?? buildDefaultSlots();
+  } catch {
     return buildDefaultSlots();
   }
 }
 
-function buildDefaultSlots(): [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot] {
-  return DEFAULT_SLOTS.map((s) => ({ ...s })) as [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot];
-}
-
-function saveSlots(slots: [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot]): void {
+function saveSlots(
+  slots: [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot],
+  waterType: "saltwater" | "freshwater",
+): void {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(slots));
+    const key = waterType === "freshwater" ? LS_KEY_FRESHWATER : LS_KEY_SALTWATER;
+    localStorage.setItem(key, JSON.stringify(slots));
   } catch {}
 }
+
+/** One-time migration: if the legacy flat key exists, copy it to saltwater and delete it. */
+function migrateLegacyKey(): void {
+  try {
+    const legacy = localStorage.getItem(LS_KEY_LEGACY);
+    if (!legacy) return;
+    // Only migrate if the saltwater key does not yet exist
+    if (!localStorage.getItem(LS_KEY_SALTWATER)) {
+      localStorage.setItem(LS_KEY_SALTWATER, legacy);
+    }
+    localStorage.removeItem(LS_KEY_LEGACY);
+  } catch {}
+}
+
+// Run migration once at module load time
+migrateLegacyKey();
 
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
 
 interface ZoneOverlayStore {
+  /** Slots for saltwater sessions. */
+  saltwater: [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot];
+  /** Slots for freshwater sessions. */
+  freshwater: [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot];
+  /** Currently active water type — determines which set `slots` mirrors. */
+  activeWaterType: "saltwater" | "freshwater";
+  /**
+   * Convenience mirror of the active set (`state[state.activeWaterType]`).
+   * Always kept in sync; read-only by convention — mutate via the actions below.
+   */
   slots: [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot];
+
+  /** Switch the active palette.  Immediately updates `slots`. */
+  setActiveWaterType: (waterType: "saltwater" | "freshwater") => void;
+  /** Set the colour of a slot in the active palette. */
   setSlotColor: (index: 0 | 1 | 2 | 3, color: string) => void;
+  /** Toggle visibility of a slot in the active palette. */
   setSlotVisible: (index: 0 | 1 | 2 | 3, visible: boolean) => void;
+  /** Reset the active palette to its defaults. */
   resetToDefaults: () => void;
-  hydrateFromServer: (slots: unknown) => void;
+  /** Hydrate from server-persisted data (accepts new or legacy format). */
+  hydrateFromServer: (data: unknown) => void;
 }
 
-export const useZoneOverlayStore = create<ZoneOverlayStore>((set) => ({
-  slots: loadSlots(),
+export const useZoneOverlayStore = create<ZoneOverlayStore>((set, get) => {
+  const sw = loadSlots(LS_KEY_SALTWATER);
+  const fw = loadSlots(LS_KEY_FRESHWATER);
 
-  setSlotColor: (index, color) =>
-    set((state) => {
-      const next = state.slots.map((s, i) =>
-        i === index ? { ...s, color } : { ...s },
-      ) as [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot];
-      saveSlots(next);
-      return { slots: next };
-    }),
+  return {
+    saltwater: sw,
+    freshwater: fw,
+    activeWaterType: "saltwater",
+    slots: sw,
 
-  setSlotVisible: (index, visible) =>
-    set((state) => {
-      const next = state.slots.map((s, i) =>
-        i === index ? { ...s, visible } : { ...s },
-      ) as [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot];
-      saveSlots(next);
-      return { slots: next };
-    }),
+    setActiveWaterType: (waterType) =>
+      set((state) => ({
+        activeWaterType: waterType,
+        slots: state[waterType],
+      })),
 
-  resetToDefaults: () => {
-    const next = buildDefaultSlots();
-    saveSlots(next);
-    return set({ slots: next });
-  },
+    setSlotColor: (index, color) =>
+      set((state) => {
+        const wt = state.activeWaterType;
+        const next = state[wt].map((s, i) =>
+          i === index ? { ...s, color } : { ...s },
+        ) as [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot];
+        saveSlots(next, wt);
+        return { [wt]: next, slots: next };
+      }),
 
-  hydrateFromServer: (raw: unknown) => {
-    if (!Array.isArray(raw) || raw.length !== 4) return;
-    const current = useZoneOverlayStore.getState().slots;
-    const next = raw.map((item: unknown, i: number) => {
-      const def = current[i]!;
-      const color =
-        typeof (item as Record<string, unknown>)["color"] === "string" &&
-        /^#[0-9a-fA-F]{6}$/i.test((item as Record<string, unknown>)["color"] as string)
-          ? ((item as Record<string, unknown>)["color"] as string)
-          : def.color;
-      const visible =
-        typeof (item as Record<string, unknown>)["visible"] === "boolean"
-          ? ((item as Record<string, unknown>)["visible"] as boolean)
-          : def.visible;
-      return { color, visible };
-    }) as [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot];
-    saveSlots(next);
-    set({ slots: next });
-  },
-}));
+    setSlotVisible: (index, visible) =>
+      set((state) => {
+        const wt = state.activeWaterType;
+        const next = state[wt].map((s, i) =>
+          i === index ? { ...s, visible } : { ...s },
+        ) as [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot];
+        saveSlots(next, wt);
+        return { [wt]: next, slots: next };
+      }),
+
+    resetToDefaults: () => {
+      const wt = get().activeWaterType;
+      const next = buildDefaultSlots();
+      saveSlots(next, wt);
+      set({ [wt]: next, slots: next });
+    },
+
+    hydrateFromServer: (raw: unknown) => {
+      // New format: { saltwater: [...], freshwater: [...] }
+      if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+        const record = raw as Record<string, unknown>;
+        const state = get();
+
+        const parseSlotsFromRaw = (
+          arr: unknown,
+          current: [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot],
+        ): [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot] => {
+          if (!Array.isArray(arr) || arr.length !== 4) return current;
+          return arr.map((item: unknown, i: number) => {
+            const def = current[i]!;
+            const color =
+              typeof (item as Record<string, unknown>)["color"] === "string" &&
+              /^#[0-9a-fA-F]{6}$/i.test((item as Record<string, unknown>)["color"] as string)
+                ? ((item as Record<string, unknown>)["color"] as string)
+                : def.color;
+            const visible =
+              typeof (item as Record<string, unknown>)["visible"] === "boolean"
+                ? ((item as Record<string, unknown>)["visible"] as boolean)
+                : def.visible;
+            return { color, visible };
+          }) as [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot];
+        };
+
+        const nextSw = parseSlotsFromRaw(record["saltwater"], state.saltwater);
+        const nextFw = parseSlotsFromRaw(record["freshwater"], state.freshwater);
+
+        saveSlots(nextSw, "saltwater");
+        saveSlots(nextFw, "freshwater");
+
+        const wt = state.activeWaterType;
+        set({
+          saltwater: nextSw,
+          freshwater: nextFw,
+          slots: wt === "freshwater" ? nextFw : nextSw,
+        });
+        return;
+      }
+
+      // Legacy format: flat 4-element array — treat as saltwater (backward compat)
+      if (Array.isArray(raw) && raw.length === 4) {
+        const current = get().saltwater;
+        const next = raw.map((item: unknown, i: number) => {
+          const def = current[i]!;
+          const color =
+            typeof (item as Record<string, unknown>)["color"] === "string" &&
+            /^#[0-9a-fA-F]{6}$/i.test((item as Record<string, unknown>)["color"] as string)
+              ? ((item as Record<string, unknown>)["color"] as string)
+              : def.color;
+          const visible =
+            typeof (item as Record<string, unknown>)["visible"] === "boolean"
+              ? ((item as Record<string, unknown>)["visible"] as boolean)
+              : def.visible;
+          return { color, visible };
+        }) as [ZoneSlot, ZoneSlot, ZoneSlot, ZoneSlot];
+        saveSlots(next, "saltwater");
+        const wt = get().activeWaterType;
+        set({
+          saltwater: next,
+          slots: wt === "saltwater" ? next : get().slots,
+        });
+      }
+    },
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Substrate class → slot mapping (best-effort for CMECS / ShoreZone labels)

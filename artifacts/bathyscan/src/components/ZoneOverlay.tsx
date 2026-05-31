@@ -86,6 +86,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
   const setSlotColor = useZoneOverlayStore((s) => s.setSlotColor);
   const setSlotVisible = useZoneOverlayStore((s) => s.setSlotVisible);
   const resetZoneColors = useZoneOverlayStore((s) => s.resetToDefaults);
+  const setActiveWaterType = useZoneOverlayStore((s) => s.setActiveWaterType);
 
   // Clear undo stack whenever Paint Mode is turned off — any path (button, overlay toggle, etc.)
   useEffect(() => {
@@ -121,6 +122,13 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [paintMode, undoPaint, redoPaint]);
+
+  // Sync the store's active water type whenever the terrain changes.
+  // Must run before the early-return so the hook order is stable.
+  useEffect(() => {
+    if (!terrain) return;
+    setActiveWaterType(terrain.waterType as "saltwater" | "freshwater");
+  }, [terrain, setActiveWaterType]);
 
   // Only show this panel when there's a terrain loaded
   if (!terrain) return null;

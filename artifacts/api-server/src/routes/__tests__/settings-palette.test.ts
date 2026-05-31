@@ -244,7 +244,99 @@ describe("PUT /api/settings — palette round-trip", () => {
       .send({ bandBoundaries: [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 1999] });
     expect(res.status).toBe(400);
   });
+});
 
+describe("GET /api/settings — zoneOverlaySlots legacy-row migration", () => {
+  const LEGACY_SLOTS = [
+    { color: "#aabbcc", visible: true },
+    { color: "#ddeeff", visible: false },
+    { color: "#112233", visible: true },
+    { color: "#445566", visible: true },
+  ];
+
+  it("returns 200 (not 500) when the stored row has a flat legacy zoneOverlaySlots array", async () => {
+    state.userSettings = [
+      { userId: "user-test", settings: { zoneOverlaySlots: LEGACY_SLOTS } },
+    ];
+    const res = await request(app).get("/api/settings");
+    expect(res.status).toBe(200);
+  });
+
+  it("promotes the legacy flat array to saltwater, defaulting freshwater", async () => {
+    state.userSettings = [
+      { userId: "user-test", settings: { zoneOverlaySlots: LEGACY_SLOTS } },
+    ];
+    const res = await request(app).get("/api/settings");
+    expect(res.status).toBe(200);
+    expect(res.body.zoneOverlaySlots.saltwater).toEqual(LEGACY_SLOTS);
+    expect(Array.isArray(res.body.zoneOverlaySlots.freshwater)).toBe(true);
+    expect(res.body.zoneOverlaySlots.freshwater).toHaveLength(4);
+  });
+
+  it("accepts and round-trips the new object format without modification", async () => {
+    const slots = {
+      saltwater: [
+        { color: "#aabbcc", visible: true },
+        { color: "#ddeeff", visible: false },
+        { color: "#112233", visible: true },
+        { color: "#445566", visible: true },
+      ],
+      freshwater: [
+        { color: "#ff0000", visible: true },
+        { color: "#00ff00", visible: true },
+        { color: "#0000ff", visible: false },
+        { color: "#ffffff", visible: true },
+      ],
+    };
+    state.userSettings = [
+      { userId: "user-test", settings: { zoneOverlaySlots: slots } },
+    ];
+    const res = await request(app).get("/api/settings");
+    expect(res.status).toBe(200);
+    expect(res.body.zoneOverlaySlots).toEqual(slots);
+  });
+
+  it("PUT with legacy-row stored normalizes zoneOverlaySlots to object format on write", async () => {
+    state.userSettings = [
+      { userId: "user-test", settings: { zoneOverlaySlots: LEGACY_SLOTS, fogDensity: 0.02 } },
+    ];
+    // Partial PUT — does not send zoneOverlaySlots, so migration runs on the stored flat array
+    const res = await request(app).put("/api/settings").send({ fogDensity: 0.03 });
+    expect(res.status).toBe(200);
+    const persisted = state.lastInsertedSettings?.["settings"] as Record<string, unknown>;
+    const stored = persisted.zoneOverlaySlots as { saltwater: unknown; freshwater: unknown };
+    expect(Array.isArray(stored)).toBe(false);
+    expect(stored.saltwater).toEqual(LEGACY_SLOTS);
+    expect(Array.isArray(stored.freshwater)).toBe(true);
+  });
+});
+
+describe("PUT /api/settings — zoneOverlaySlots round-trip", () => {
+  it("persists and returns per-water-type zoneOverlaySlots verbatim", async () => {
+    const slots = {
+      saltwater: [
+        { color: "#aabbcc", visible: true },
+        { color: "#ddeeff", visible: false },
+        { color: "#112233", visible: true },
+        { color: "#445566", visible: true },
+      ],
+      freshwater: [
+        { color: "#ff0000", visible: true },
+        { color: "#00ff00", visible: true },
+        { color: "#0000ff", visible: false },
+        { color: "#ffffff", visible: true },
+      ],
+    };
+    const putRes = await request(app).put("/api/settings").send({ zoneOverlaySlots: slots });
+    expect(putRes.status).toBe(200);
+
+    const getRes = await request(app).get("/api/settings");
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.zoneOverlaySlots).toEqual(slots);
+  });
+});
+
+describe("PUT /api/settings — bandBoundaries (continued)", () => {
   it("partial PUT of just bandBoundaries preserves previously stored non-palette settings", async () => {
     state.userSettings = [
       {

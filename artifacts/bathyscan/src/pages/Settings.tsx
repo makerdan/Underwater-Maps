@@ -1435,8 +1435,13 @@ function ZoneColoursCard() {
   const setSlotColor = useZoneOverlayStore((s) => s.setSlotColor);
   const setSlotVisible = useZoneOverlayStore((s) => s.setSlotVisible);
   const resetToDefaults = useZoneOverlayStore((s) => s.resetToDefaults);
+  const setActiveWaterType = useZoneOverlayStore((s) => s.setActiveWaterType);
   const slotNames =
     waterType === "freshwater" ? SLOT_NAMES_FRESHWATER : SLOT_NAMES_SALTWATER;
+
+  useEffect(() => {
+    setActiveWaterType(waterType as "saltwater" | "freshwater");
+  }, [waterType, setActiveWaterType]);
 
   return (
     <div style={S.card}>
@@ -1555,8 +1560,14 @@ function ZoneColourSwatches() {
   const slots = useZoneOverlayStore((s) => s.slots);
   const setSlotColor = useZoneOverlayStore((s) => s.setSlotColor);
   const resetToDefaults = useZoneOverlayStore((s) => s.resetToDefaults);
+  const setActiveWaterType = useZoneOverlayStore((s) => s.setActiveWaterType);
   const slotNames =
     waterType === "freshwater" ? SLOT_NAMES_FRESHWATER : SLOT_NAMES_SALTWATER;
+
+  useEffect(() => {
+    setActiveWaterType(waterType as "saltwater" | "freshwater");
+  }, [waterType, setActiveWaterType]);
+
   return (
     <div style={S.card}>
       <div
