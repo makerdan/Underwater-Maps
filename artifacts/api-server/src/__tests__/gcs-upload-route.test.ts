@@ -21,6 +21,8 @@ vi.mock("../lib/bucketMonitor.js", () => ({
   signDatasetUploadUrl: vi.fn(),
   getJobByObjectKey: vi.fn(),
   getBucketStatus: vi.fn(),
+  getLifecycleApplyStatus: vi.fn(() => ({ appliedAt: null, error: null })),
+  LIFECYCLE_TTLS: { processedDays: 30, failedDays: 14 },
   startBucketMonitor: vi.fn(),
   gcsClient: {},
 }));

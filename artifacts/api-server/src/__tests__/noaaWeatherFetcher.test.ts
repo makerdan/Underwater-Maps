@@ -185,7 +185,7 @@ describe("fetchWeatherStations — DB persistence and cache fallback", () => {
     // Should return live data without the stale flag
     expect(result.stale).toBeUndefined();
     expect(result.stations).toHaveLength(1);
-    expect(result.stations[0].id).toBe("PAOM");
+    expect(result.stations[0]!.id).toBe("PAOM");
     expect(result.stateCode).toBe("AK");
 
     // Allow the fire-and-forget persistToDb promise to settle
@@ -219,7 +219,7 @@ describe("fetchWeatherStations — DB persistence and cache fallback", () => {
 
     expect(result.stale).toBe(true);
     expect(result.stations).toHaveLength(1);
-    expect(result.stations[0].id).toBe("PAOM");
+    expect(result.stations[0]!.id).toBe("PAOM");
     expect(result.stateCode).toBe("AK");
 
     // DB select should have been queried for the fallback; insert should NOT

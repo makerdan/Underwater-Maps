@@ -83,7 +83,7 @@ async function buildGeoTiff() {
  */
 function buildNetCdf() {
   // CDF-1 helpers
-  const NC_BYTE = 1, NC_CHAR = 2, NC_SHORT = 3, NC_INT = 4, NC_FLOAT = 5, NC_DOUBLE = 6; // eslint-disable-line
+  const NC_BYTE = 1, NC_CHAR = 2, NC_SHORT = 3, NC_INT = 4, NC_FLOAT = 5, NC_DOUBLE = 6;
   const NC_DIMENSION = 0x0000000a;
   const NC_ATTRIBUTE = 0x0000000c;
   const NC_VARIABLE = 0x0000000b;

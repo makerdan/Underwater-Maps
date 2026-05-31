@@ -171,7 +171,7 @@ describe("processObject — success path", () => {
     expect(dbMocks.insertMock).toHaveBeenCalledOnce();
     expect(dbMocks.valuesMock).toHaveBeenCalledOnce();
 
-    const row = dbMocks.valuesMock.mock.calls[0][0] as Record<string, unknown>;
+    const row = dbMocks.valuesMock.mock.calls[0]![0] as Record<string, unknown>;
     expect(row).toHaveProperty("userId", "user_abc");
     expect(row).toHaveProperty("name");
     expect(row).toHaveProperty("minDepth");
@@ -206,7 +206,7 @@ describe("processObject — success path", () => {
     await processObject(TEST_BUCKET, objectKey);
 
     expect(dbMocks.valuesMock).toHaveBeenCalledOnce();
-    const row = dbMocks.valuesMock.mock.calls[0][0] as Record<string, unknown>;
+    const row = dbMocks.valuesMock.mock.calls[0]![0] as Record<string, unknown>;
     expect(row["name"]).toBe("my survey 2024");
   });
 });

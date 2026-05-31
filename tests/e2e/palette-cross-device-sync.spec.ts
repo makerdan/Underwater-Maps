@@ -251,4 +251,131 @@ test.describe("Depth palette cross-device sync", () => {
       },
     });
   });
+
+  test("band colour PUT fires even when Settings page is never opened", async ({
+    page,
+  }) => {
+    // Regression guard: useServerSettingsSync subscribes to paletteStore at the
+    // app root — not inside /settings. This test confirms the debounced PUT
+    // /api/settings includes `bandColors` when setBandColor is called from
+    // the main map page (/) with /settings never visited.
+
+    const DEFAULT_BAND_COLORS = [
+      "#00e5ff",
+      "#00c8de",
+      "#00a8d0",
+      "#0288d1",
+      "#0277bd",
+      "#1565c0",
+      "#0d47a1",
+      "#1a237e",
+      "#283593",
+      "#1e2b6e",
+    ];
+    const BAND_INDEX = 5;
+    const NEW_COLOR = "#ee1177";
+
+    // ── Pre-flight: reset the server row to a known state ───────────────
+    await page.request.put(`${API_URL}/api/settings`, {
+      headers: { "x-e2e-user-id": E2E_USER_ID },
+      data: {
+        colormapTheme: "custom",
+        bandColors: DEFAULT_BAND_COLORS,
+      },
+    });
+
+    // Clear local palette/settings state so the page hydrates entirely from
+    // the server row above, not from a stale localStorage snapshot.
+    await page.addInitScript(() => {
+      try {
+        localStorage.removeItem("bathyscan:palette");
+        localStorage.removeItem("bathyscan:settings");
+      } catch {}
+    });
+
+    // ── Navigate to the main map — never /settings ──────────────────────
+    await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
+
+    // Wait for the test bridge to be installed (happens during app init when
+    // VITE_DEV_AUTH_BYPASS=1). After domcontentloaded this should already
+    // be present; the waitForFunction is a cheap safety net.
+    await page.waitForFunction(() => Boolean(window.__bathyTest?.setBandColor), {
+      timeout: 10_000,
+    });
+
+    // ── Intercept PUT /api/settings before triggering the change ────────
+    // The route continues (not stubbed) so the server also receives the
+    // write and the Device B round-trip exercises real rehydration.
+    const capturedPutBody = new Promise<Record<string, unknown>>(
+      (resolve) => {
+        void page.route("**/api/settings", async (route, request) => {
+          if (request.method() === "PUT") {
+            try {
+              const body = request.postDataJSON() as Record<string, unknown>;
+              resolve(body);
+            } catch {
+              resolve({});
+            }
+          }
+          await route.continue();
+        });
+      },
+    );
+
+    // ── Mutate paletteStore directly — no /settings page involved ───────
+    // setBandColor is the same store action the Custom band-colour editor
+    // calls when the user commits a hex edit. It mutates paletteStore, which
+    // triggers the useServerSettingsSync subscription (subscribed at the app
+    // root, not inside /settings) and schedules the 300 ms debounced PUT.
+    await page.evaluate(
+      ({ index, color }) => window.__bathyTest!.setBandColor(index, color),
+      { index: BAND_INDEX, color: NEW_COLOR },
+    );
+
+    // ── Assert the PUT payload contains the updated bandColors ───────────
+    const putBody = await Promise.race([
+      capturedPutBody,
+      page
+        .waitForTimeout(5_000)
+        .then(() => ({ _timedOut: true }) as Record<string, unknown>),
+    ]);
+
+    expect(putBody).not.toHaveProperty("_timedOut");
+    expect(putBody).toHaveProperty("bandColors");
+    const sentColors = putBody["bandColors"] as string[];
+    expect(Array.isArray(sentColors)).toBe(true);
+    expect(sentColors[BAND_INDEX]).toBe(NEW_COLOR);
+
+    // ── Device B: wipe local persistence and reload via /settings ───────
+    // Confirms the server row written above rehydrates correctly on a fresh
+    // device even though the originating device never opened /settings.
+    await page.unroute("**/api/settings");
+    await page.evaluate(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+    });
+    await page.goto("/settings");
+    await page.waitForLoadState("domcontentloaded");
+
+    // The Custom editor must be visible (colormapTheme survived the round-trip).
+    const customEditorAfter = page.locator('[data-testid="palette-custom-editor"]');
+    await expect(customEditorAfter).toBeVisible({ timeout: 10_000 });
+
+    // The modified band colour must survive the "fresh device" round-trip.
+    const bandHexAfter = page.locator(
+      `[data-testid="palette-custom-band-${BAND_INDEX}-hex"]`,
+    );
+    await expect(bandHexAfter).toBeVisible({ timeout: 5_000 });
+    await expect(bandHexAfter).toHaveValue(NEW_COLOR, { timeout: 10_000 });
+
+    // ── Cleanup: restore defaults ─────────────────────────────────────
+    await page.request.put(`${API_URL}/api/settings`, {
+      headers: { "x-e2e-user-id": E2E_USER_ID },
+      data: {
+        colormapTheme: "ocean",
+        bandColors: DEFAULT_BAND_COLORS,
+      },
+    });
+  });
 });

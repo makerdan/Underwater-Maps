@@ -80,7 +80,7 @@ vi.mock("@/lib/settingsStore", () => ({
 // does not proceed to GPU object creation, but the call is still recorded.
 // ---------------------------------------------------------------------------
 
-const buildContourLinesMock = vi.fn(() => []);
+const buildContourLinesMock = vi.fn((..._args: unknown[]) => [] as unknown[]);
 
 vi.mock("@/lib/overviewRenderer", () => ({
   buildContourLines: (...args: unknown[]) => buildContourLinesMock(...args),
