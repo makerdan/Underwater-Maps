@@ -411,6 +411,90 @@ export async function getBucketStatus(): Promise<BucketStatusSummary> {
   };
 }
 
+// ─── Lifecycle rules ──────────────────────────────────────────────────────
+
+/**
+ * TTLs for automatic GCS object deletion.
+ * Processed datasets are kept for 30 days; failed ones for 14 days.
+ */
+export const LIFECYCLE_TTLS = {
+  processedDays: 30,
+  failedDays: 14,
+} as const;
+
+/** Prefixes managed by BathyScan lifecycle rules. */
+const MANAGED_PREFIXES = ["processed-datasets/", "failed-datasets/"] as const;
+
+/** Tracks the outcome of the most recent lifecycle rule application. */
+export interface LifecycleApplyStatus {
+  appliedAt: number | null;
+  error: string | null;
+}
+
+let lifecycleApplyStatus: LifecycleApplyStatus = { appliedAt: null, error: null };
+
+export function getLifecycleApplyStatus(): LifecycleApplyStatus {
+  return { ...lifecycleApplyStatus };
+}
+
+type LifecycleRule = {
+  action: { type: "Delete" | "SetStorageClass"; storageClass?: string };
+  condition: Record<string, unknown>;
+};
+
+/**
+ * Applies (or re-applies) lifecycle delete rules to the bucket so that:
+ *   - processed-datasets/ objects are deleted after 30 days
+ *   - failed-datasets/   objects are deleted after 14 days
+ *
+ * Existing rules that do not target the managed prefixes are preserved.
+ * The call is safe to run on every deploy (idempotent merge strategy).
+ */
+export async function applyBucketLifecycleRules(): Promise<void> {
+  const bucketName = getBucketName();
+  const bucket = gcsClient.bucket(bucketName);
+
+  const [metadata] = await bucket.getMetadata();
+  const existingRules: LifecycleRule[] =
+    (metadata as { lifecycle?: { rule?: LifecycleRule[] } })?.lifecycle?.rule ?? [];
+
+  const unmanagedRules = existingRules.filter((rule) => {
+    const prefixes: unknown[] = (rule.condition["matchesPrefix"] as unknown[]) ?? [];
+    return !prefixes.some((p) => MANAGED_PREFIXES.includes(p as typeof MANAGED_PREFIXES[number]));
+  });
+
+  const managedRules: LifecycleRule[] = [
+    {
+      action: { type: "Delete" as const },
+      condition: {
+        matchesPrefix: ["processed-datasets/"],
+        age: LIFECYCLE_TTLS.processedDays,
+      },
+    },
+    {
+      action: { type: "Delete" as const },
+      condition: {
+        matchesPrefix: ["failed-datasets/"],
+        age: LIFECYCLE_TTLS.failedDays,
+      },
+    },
+  ];
+
+  await bucket.setMetadata({ lifecycle: { rule: [...unmanagedRules, ...managedRules] } });
+
+  lifecycleApplyStatus = { appliedAt: Date.now(), error: null };
+
+  logger.info(
+    {
+      bucket: bucketName,
+      processedDays: LIFECYCLE_TTLS.processedDays,
+      failedDays: LIFECYCLE_TTLS.failedDays,
+      preservedRules: unmanagedRules.length,
+    },
+    "[bucket-monitor] lifecycle rules applied",
+  );
+}
+
 // ─── Startup ──────────────────────────────────────────────────────────────
 
 const SCAN_INTERVAL_MS = 30_000;
@@ -426,6 +510,13 @@ export function startBucketMonitor(): void {
   }
 
   logger.info({ bucket: bucketId, intervalMs: SCAN_INTERVAL_MS }, "[bucket-monitor] starting");
+
+  // Apply lifecycle rules idempotently on every startup, then begin scanning.
+  applyBucketLifecycleRules().catch((err: unknown) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    lifecycleApplyStatus = { appliedAt: null, error: msg };
+    logger.warn({ err }, "[bucket-monitor] failed to apply lifecycle rules (non-fatal)");
+  });
 
   // Initial scan shortly after startup, then every 30 s
   setTimeout(() => void scan(), 5_000);

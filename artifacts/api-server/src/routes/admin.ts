@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
-import { getBucketStatus } from "../lib/bucketMonitor.js";
+import { getBucketStatus, LIFECYCLE_TTLS, getLifecycleApplyStatus } from "../lib/bucketMonitor.js";
 
 const router = Router();
 
@@ -23,6 +23,11 @@ function isAdmin(userId: string): boolean {
  * Returns a JSON summary of all objects in the GCS dataset landing bucket,
  * broken down by status: pending, processing, done, failed.
  *
+ * Also includes `lifecycle` metadata documenting the automatic-deletion TTLs
+ * configured on the bucket:
+ *   - processed-datasets/ objects are deleted after 30 days
+ *   - failed-datasets/    objects are deleted after 14 days
+ *
  * Access: auth-required; restricted to admin user IDs (ADMIN_USER_IDS env var,
  * comma-separated) or when BUCKET_MONITOR_ADMIN=1 is set.
  */
@@ -38,7 +43,17 @@ router.get(
     }
 
     const summary = await getBucketStatus();
-    res.json(summary);
+    const applyStatus = getLifecycleApplyStatus();
+    res.json({
+      ...summary,
+      lifecycle: {
+        processedDatasetsTtlDays: LIFECYCLE_TTLS.processedDays,
+        failedDatasetsTtlDays: LIFECYCLE_TTLS.failedDays,
+        note: "GCS lifecycle rules automatically delete objects in processed-datasets/ after 30 days and failed-datasets/ after 14 days.",
+        lastAppliedAt: applyStatus.appliedAt,
+        lastApplyError: applyStatus.error,
+      },
+    });
   }),
 );
 
