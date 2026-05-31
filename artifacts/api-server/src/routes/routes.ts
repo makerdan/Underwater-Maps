@@ -52,7 +52,6 @@ router.get("/routes", requireAuth, asyncHandler(async (req, res): Promise<void> 
   res.json(rows);
 }));
 
-// POST /routes
 router.post("/routes", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const parsed = PostRouteBodySchema.safeParse(req.body);
   if (!parsed.success) {

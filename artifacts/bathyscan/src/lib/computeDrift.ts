@@ -606,6 +606,7 @@ export function reverseComputeDrift(opts: ReverseComputeDriftOptions): DriftWayp
     driftSpeedKnots: 0,
     headingDeg: 0,
     isSlack: !!lastCond.isSlack || lastCond.tidalSpeedKnots < 0.1,
+    phase: lastCond.phase,
   });
 
   return waypoints;
