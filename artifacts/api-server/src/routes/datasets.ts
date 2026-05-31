@@ -1091,7 +1091,7 @@ router.post(
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Parse error";
-    res.status(422).json({ error: "parse_error", detail: msg });
+    res.status(422).json({ error: "parse_error", details: msg });
     return;
   }
 
