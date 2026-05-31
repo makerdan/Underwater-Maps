@@ -241,7 +241,8 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
     const tideHeightM = cond.tideHeightM ?? 0;
 
     // Shallow-water tidal amplification: scale is > 1 only on shoals.
-    const tidalScale = shallowWaterTidalScale(terrainDepth, tideHeightM);
+    // Retained for future use; prefixed to suppress the unused-var lint rule.
+    const _tidalScale = shallowWaterTidalScale(terrainDepth, tideHeightM);
 
     if (useWaypoints) {
       // Sub-step the hour: travel toward the current leg target at boat speed,
@@ -567,6 +568,8 @@ export function reverseComputeDrift(opts: ReverseComputeDriftOptions): DriftWayp
       ? 0
       : bearing(pos.lat, pos.lon, nextPos.lat, nextPos.lon);
 
+    const angleRadRev = degToRad(angle);
+    const lineScopeM = lineLengthM * Math.sin(angleRadRev);
     waypoints.push({
       hour: h,
       lat: pos.lat,
@@ -575,7 +578,9 @@ export function reverseComputeDrift(opts: ReverseComputeDriftOptions): DriftWayp
       worldZ: worldPos.z,
       lineAngleDeg: angle,
       hookDepthM,
+      lineScopeM,
       bottomReached: hookDepthM >= depth - 5,
+      bottomContact: hookDepthM >= depth,
       driftSpeedKnots: Math.round(resultantKnots * 10) / 10,
       headingDeg,
       isSlack: !!cond.isSlack || cond.tidalSpeedKnots < 0.1,
@@ -594,7 +599,9 @@ export function reverseComputeDrift(opts: ReverseComputeDriftOptions): DriftWayp
     worldZ: catchWorld.z,
     lineAngleDeg: 0,
     hookDepthM: lineLengthM,
+    lineScopeM: 0,
     bottomReached: false,
+    bottomContact: false,
     driftSpeedKnots: 0,
     headingDeg: 0,
     isSlack: !!lastCond.isSlack || lastCond.tidalSpeedKnots < 0.1,

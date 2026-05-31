@@ -19,6 +19,9 @@ import * as THREE from "three";
 import { useDriftStore } from "@/lib/driftStore";
 import { lonLatToWorldXZ, worldXZToLonLat } from "@/lib/terrain";
 import { useAppState } from "@/lib/context";
+import { computeDrift } from "@/lib/computeDrift";
+import { useSettingsStore } from "@/lib/settingsStore";
+import { sampleCurrentAt } from "@/lib/currentsStore";
 
 const RIBBON_COLOR = 0x22d3ee;
 const BUOY_COLOR = 0x0ea5e9;
@@ -172,7 +175,13 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
   const lineLengthM = useDriftStore((s) => s.lineLengthM);
   const driftWaypoints = useDriftStore((s) => s.driftWaypoints);
   const driftMode = useDriftStore((s) => s.driftMode);
+  // driftStartLat/Lon are read as reactive selectors so the circuit polyline
+  // re-renders when the start point changes. Other physics inputs are read via
+  // getState() inside recomputePath so we don't need extra selectors for them.
+  const driftStartLat = useDriftStore((s) => s.driftStartLat);
+  const driftStartLon = useDriftStore((s) => s.driftStartLon);
   const updateDriftWaypoint = useDriftStore((s) => s.updateDriftWaypoint);
+  const removeDriftWaypoint = useDriftStore((s) => s.removeDriftWaypoint);
   const reverseDriftPath = useDriftStore((s) => s.reverseDriftPath);
   const reverseModeActive = useDriftStore((s) => s.reverseModeActive);
   const { terrain } = useAppState();
@@ -187,6 +196,35 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
     [surfaceY],
   );
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
+
+  // Helper to recompute the drift path from the current store state.
+  // Called after a flag drag ends or a waypoint is deleted so the timeline
+  // and 3D path update immediately without requiring another canvas click.
+  const recomputePath = useCallback(() => {
+    const s = useDriftStore.getState();
+    if (!terrain || !s.driftConditions || s.driftStartLat === null || s.driftStartLon === null) return;
+    const currentsEnabled = useSettingsStore.getState().currentsEnabled;
+    const sampleFlowAt = currentsEnabled
+      ? (lat: number, lon: number) => {
+          const { x, z } = lonLatToWorldXZ(lon, lat, terrain);
+          return sampleCurrentAt(x, z);
+        }
+      : undefined;
+    const path = computeDrift({
+      conditions: s.driftConditions,
+      startLat: s.driftStartLat,
+      startLon: s.driftStartLon,
+      lineLengthM: s.lineLengthM,
+      lineWeightG: s.lineWeightG,
+      terrain,
+      mode: s.driftMode,
+      boatHeadingDeg: s.boatHeadingDeg,
+      boatSpeedKnots: s.boatSpeedKnots,
+      sampleFlowAt,
+      trollWaypoints: s.driftWaypoints,
+    });
+    s.setDriftPath(path);
+  }, [terrain]);
 
   useEffect(() => {
     if (!terrain) return;
@@ -209,6 +247,8 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
       if (dragStateRef.current?.pointerId === ev.pointerId) {
         dragStateRef.current = null;
         document.body.style.cursor = "";
+        // Recompute the drift path now that the waypoint has been repositioned.
+        recomputePath();
       }
     };
     window.addEventListener("pointermove", onMove);
@@ -225,7 +265,7 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
         document.body.style.cursor = "";
       }
     };
-  }, [terrain, camera, gl, raycaster, waterPlane, updateDriftWaypoint]);
+  }, [terrain, camera, gl, raycaster, waterPlane, updateDriftWaypoint, recomputePath]);
 
   const handleFlagPointerDown = useCallback(
     (index: number) => (e: ThreeEvent<PointerEvent>) => {
@@ -247,6 +287,20 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
     if (!dragStateRef.current) document.body.style.cursor = "";
   }, []);
 
+  // Right-click on a waypoint flag deletes it and recomputes the drift path.
+  const handleFlagContextMenu = useCallback(
+    (index: number) => (e: ThreeEvent<MouseEvent>) => {
+      e.stopPropagation();
+      // Prevent the global canvas context menu from opening.
+      e.nativeEvent?.preventDefault?.();
+      removeDriftWaypoint(index);
+      // recomputePath reads fresh store state via getState(), so the removed
+      // waypoint is already gone by the time it runs.
+      setTimeout(recomputePath, 0);
+    },
+    [removeDriftWaypoint, recomputePath],
+  );
+
   const waypointMarkers = useMemo(() => {
     if (!terrain || driftMode !== "trolling" || driftWaypoints.length === 0) return null;
     return driftWaypoints.map((wp, i) => {
@@ -254,6 +308,21 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
       return { x, z, index: i };
     });
   }, [terrain, driftMode, driftWaypoints]);
+
+  // ── Circuit preview polyline ──────────────────────────────────────────────
+  // Draws start → WP1 → WP2 → … as a dashed amber line so the angler can
+  // see the planned trolling course before/while placing waypoints.
+  const circuitLinePoints = useMemo(() => {
+    if (!terrain || driftMode !== "trolling" || driftWaypoints.length === 0) return null;
+    if (driftStartLat === null || driftStartLon === null) return null;
+    const { x: sx, z: sz } = lonLatToWorldXZ(driftStartLon, driftStartLat, terrain);
+    const pts: THREE.Vector3[] = [new THREE.Vector3(sx, surfaceY + 0.15, sz)];
+    for (const wp of driftWaypoints) {
+      const { x, z } = lonLatToWorldXZ(wp.lon, wp.lat, terrain);
+      pts.push(new THREE.Vector3(x, surfaceY + 0.15, z));
+    }
+    return pts;
+  }, [terrain, driftMode, driftWaypoints, driftStartLat, driftStartLon, surfaceY]);
 
   const activeTarget = driftPath?.[driftHour]?.targetWaypointIndex;
 
@@ -456,7 +525,21 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
         </group>
       )}
 
-      {/* User-placed trolling waypoints (cyan flags) */}
+      {/* Circuit preview polyline — start → WP1 → WP2 → … (amber dashed) */}
+      {circuitLinePoints && circuitLinePoints.length >= 2 && (
+        <Line
+          points={circuitLinePoints}
+          color={0xfbbf24}
+          lineWidth={1.8}
+          transparent
+          opacity={0.65}
+          dashed
+          dashSize={0.45}
+          gapSize={0.25}
+        />
+      )}
+
+      {/* User-placed trolling waypoints (cyan flags) — right-click to delete */}
       {waypointMarkers && waypointMarkers.map((m) => {
         const isActive = activeTarget === m.index;
         const color = isActive ? 0xfbbf24 : 0x22d3ee;
@@ -467,6 +550,7 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
             onPointerDown={handleFlagPointerDown(m.index)}
             onPointerOver={handleFlagPointerOver}
             onPointerOut={handleFlagPointerOut}
+            onContextMenu={handleFlagContextMenu(m.index)}
           >
             {/* Flag pole */}
             <mesh position={[0, 0.5, 0]}>
