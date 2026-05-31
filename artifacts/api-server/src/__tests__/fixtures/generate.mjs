@@ -8,12 +8,14 @@
  *   survey.nc        — NetCDF CDF-1 (2D depth grid, _FillValue, lon/lat coords)
  *   survey_1_2.las   — LAS 1.2, point format 0, uncompressed
  *   survey_1_4.las   — LAS 1.4, point format 6, 64-bit point count
+ *   survey.bag       — BAG/HDF5 (BAG_root/elevation float32 grid, metadata XML)
  */
 
 import { writeFile, mkdir } from "fs/promises";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { writeArrayBuffer } from "geotiff";
+import { ready as h5wasmReady, File as H5wFile } from "h5wasm";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 
@@ -405,6 +407,112 @@ function buildLas14() {
   return buf;
 }
 
+// ─── BAG (HDF5) ──────────────────────────────────────────────────────────────
+
+/**
+ * Build a synthetic BAG (Bathymetric Attributed Grid) HDF5 fixture.
+ *
+ * Structure mirrors a real NOAA-certified hydrographic survey:
+ *   BAG_root/
+ *     elevation   — Float32 2D grid [ROWS × COLS], negative = below sea level
+ *                   BAG fill value 1_000_000 injected at 3 known cells
+ *     metadata    — XML string with ISO 19115 bounding-box elements
+ *
+ * Geographic coverage (Mariana Trench area, matching the NetCDF fixture):
+ *   lon: 142.0 – 142.01°E  (10 cols × 0.001°/cell)
+ *   lat: 11.0  – 11.01°N   (10 rows × 0.001°/cell)
+ *
+ * The bounding box is deliberately sized so that extractBagGeolocation's
+ * fallback formula (Math.round((east-west)/0.001)) yields the exact grid
+ * dimensions (10×10), giving accurate per-cell coordinates in the tests.
+ *
+ * Uses h5wasm (the same WASM module the production parser uses) to write a
+ * conformant HDF5 file to the virtual FS, then reads the bytes back to disk.
+ */
+async function buildBag() {
+  const ROWS = 10;
+  const COLS = 10;
+  const FILL = 1_000_000;
+
+  // Geographic bounding box — chosen so (east-west)/0.001 = COLS exactly.
+  const WEST = 142.0;
+  const EAST = 142.01;  // 10 × 0.001
+  const SOUTH = 11.0;
+  const NORTH = 11.01;  // 10 × 0.001
+
+  // Build flat Float32 elevation grid (row-major, negative = depth below sea).
+  const elevData = new Float32Array(ROWS * COLS);
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      elevData[r * COLS + c] = -(1000 + (r * COLS + c) * 200); // –1000 to –20800 m
+    }
+  }
+  // Inject BAG fill value at three known positions to test skip logic.
+  elevData[0]               = FILL; // row=0, col=0
+  elevData[5]               = FILL; // row=0, col=5
+  elevData[ROWS * COLS - 1] = FILL; // row=9, col=9
+
+  // ISO 19115-style metadata XML — parseBag extracts the four bounding-box
+  // elements via regex; namespace prefixes are accepted by extractBagGeolocation.
+  const metaXml = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<smXML:MD_Metadata xmlns:smXML="http://metadata.dgiwg.org/smXML"',
+    '  xmlns:gmd="http://www.isotc211.org/2005/gmd">',
+    '  <gmd:identificationInfo>',
+    '    <gmd:MD_DataIdentification>',
+    '      <gmd:extent>',
+    '        <gmd:EX_Extent>',
+    '          <gmd:geographicElement>',
+    '            <gmd:EX_GeographicBoundingBox>',
+    `              <westBoundLongitude>${WEST}</westBoundLongitude>`,
+    `              <eastBoundLongitude>${EAST}</eastBoundLongitude>`,
+    `              <southBoundLatitude>${SOUTH}</southBoundLatitude>`,
+    `              <northBoundLatitude>${NORTH}</northBoundLatitude>`,
+    '            </gmd:EX_GeographicBoundingBox>',
+    '          </gmd:geographicElement>',
+    '        </gmd:EX_Extent>',
+    '      </gmd:extent>',
+    '    </gmd:MD_DataIdentification>',
+    '  </gmd:identificationInfo>',
+    '</smXML:MD_Metadata>',
+  ].join("\n");
+
+  const mod = await h5wasmReady;
+  const FS = mod.FS;
+  const tmpPath = "/tmp_survey_bag.h5";
+
+  const f = new H5wFile(tmpPath, "w");
+  const bagRoot = f.create_group("BAG_root");
+
+  // elevation: 2D float32 dataset ([ROWS, COLS])
+  bagRoot.create_dataset({
+    name: "elevation",
+    data: elevData,
+    shape: [ROWS, COLS],
+    dtype: "<f4",
+  });
+
+  // metadata: variable-length string dataset (single element)
+  // h5wasm stores string arrays as HDF5 variable-length string type.
+  // parseBag does String(ds.value), and String([xmlStr]) === xmlStr for a
+  // one-element array, so the XML is recovered correctly.
+  bagRoot.create_dataset({
+    name: "metadata",
+    data: [metaXml],
+    dtype: "S",
+  });
+
+  f.flush();
+
+  // Read back from h5wasm virtual FS
+  const bytes = FS.readFile(tmpPath);
+  f.close();
+
+  try { FS.unlink(tmpPath); } catch { /* ignore */ }
+
+  return Buffer.from(bytes);
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -425,6 +533,10 @@ async function main() {
   const las14Buf = buildLas14();
   await writeFile(join(__dir, "survey_1_4.las"), las14Buf);
   console.log(`survey_1_4.las ${las14Buf.length} bytes`);
+
+  const bagBuf = await buildBag();
+  await writeFile(join(__dir, "survey.bag"), bagBuf);
+  console.log(`survey.bag   ${bagBuf.length} bytes`);
 
   console.log("All fixtures generated.");
 }
