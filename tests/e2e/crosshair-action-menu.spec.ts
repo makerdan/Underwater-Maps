@@ -114,7 +114,7 @@ test.describe("BathyScan — Crosshair action menu (desktop / Q key)", () => {
     await resetCrosshairState(page);
   });
 
-  test("Q opens the crosshair menu over the reticle with all seven items", async ({
+  test("Q opens the crosshair menu over the reticle with all eight items", async ({
     page,
   }) => {
     await seedTerrainAndCrosshair(page);
@@ -122,18 +122,20 @@ test.describe("BathyScan — Crosshair action menu (desktop / Q key)", () => {
 
     const menu = page.locator('[data-testid="context-menu"]');
 
-    // Seven action items: Drop pin / Measure / Set home / Save bookmark /
-    // Depth profile / Copy coords / Copy share link. The separator above
+    // Eight action items: Drop pin / Measure / Set home / Save bookmark /
+    // Start straight-line profile / Start path profile /
+    // Copy coords / Copy share link. The separator above
     // "Copy coordinates" renders as a non-menuitem <li role="separator">.
     const items = menu.locator('[role="menuitem"]');
-    await expect(items).toHaveCount(7);
+    await expect(items).toHaveCount(8);
     await expect(items.nth(0)).toContainText("Drop GPS pin here");
     await expect(items.nth(1)).toContainText("Measure from here");
     await expect(items.nth(2)).toContainText("Set as home position");
     await expect(items.nth(3)).toContainText("Save view as bookmark");
-    await expect(items.nth(4)).toContainText("Start depth profile here");
-    await expect(items.nth(5)).toContainText("Copy coordinates");
-    await expect(items.nth(6)).toContainText("Copy share link");
+    await expect(items.nth(4)).toContainText("Start straight-line profile");
+    await expect(items.nth(5)).toContainText("Start path profile");
+    await expect(items.nth(6)).toContainText("Copy coordinates");
+    await expect(items.nth(7)).toContainText("Copy share link");
     await expect(menu.locator('[role="separator"]')).toHaveCount(1);
 
     // Menu should be anchored at (roughly) the viewport centre — that's
@@ -259,7 +261,7 @@ test.describe("BathyScan — Crosshair action menu (desktop / Q key)", () => {
     expect(saved).toEqual(CROSSHAIR_POINT);
   });
 
-  test('"Start depth profile here" places the profile anchor at the crosshair', async ({
+  test('"Start straight-line profile" places the profile anchor at the crosshair', async ({
     page,
   }) => {
     await seedTerrainAndCrosshair(page);
@@ -267,7 +269,7 @@ test.describe("BathyScan — Crosshair action menu (desktop / Q key)", () => {
 
     await page
       .locator('[data-testid="context-menu"] [role="menuitem"]')
-      .filter({ hasText: "Start depth profile here" })
+      .filter({ hasText: "Start straight-line profile" })
       .click();
 
     await expect(page.locator('[data-testid="context-menu"]')).toHaveCount(0);
@@ -393,7 +395,7 @@ test.describe(
       await resetCrosshairState(page);
     });
 
-    test("tapping the HUD ⋯ ACTIONS button opens the crosshair menu with all seven items", async ({
+    test("tapping the HUD ⋯ ACTIONS button opens the crosshair menu with all eight items", async ({
       page,
     }) => {
       await seedTerrainAndCrosshair(page);
@@ -409,14 +411,15 @@ test.describe(
       await expect(menu).toBeVisible();
 
       const items = menu.locator('[role="menuitem"]');
-      await expect(items).toHaveCount(7);
+      await expect(items).toHaveCount(8);
       await expect(items.nth(0)).toContainText("Drop GPS pin here");
       await expect(items.nth(1)).toContainText("Measure from here");
       await expect(items.nth(2)).toContainText("Set as home position");
       await expect(items.nth(3)).toContainText("Save view as bookmark");
-      await expect(items.nth(4)).toContainText("Start depth profile here");
-      await expect(items.nth(5)).toContainText("Copy coordinates");
-      await expect(items.nth(6)).toContainText("Copy share link");
+      await expect(items.nth(4)).toContainText("Start straight-line profile");
+      await expect(items.nth(5)).toContainText("Start path profile");
+      await expect(items.nth(6)).toContainText("Copy coordinates");
+      await expect(items.nth(7)).toContainText("Copy share link");
     });
 
     test('touch flow: "Drop GPS pin here" opens the marker form pre-filled', async ({
