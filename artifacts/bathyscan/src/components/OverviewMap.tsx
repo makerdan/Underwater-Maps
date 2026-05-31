@@ -1270,6 +1270,7 @@ export const OverviewMap: React.FC = () => {
           {(hasEfh || !!embeddedEfhPolygons) && (
             <ViewscreenTooltip label="Toggle Essential Fish Habitat zones" side="bottom">
             <button
+              data-testid="efh-overlay-toggle"
               onClick={() => setShowEfh(!showEfh)}
               aria-pressed={showEfh}
               style={{

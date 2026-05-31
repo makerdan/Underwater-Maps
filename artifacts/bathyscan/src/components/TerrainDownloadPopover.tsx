@@ -132,11 +132,13 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
       a.href = url;
       a.download = filename;
       a.rel = "noopener";
-      a.style.display = "none";
+      a.style.cssText = "position:fixed;top:-200px;left:-200px;width:1px;height:1px;";
       document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 1000);
       toast({
         title: "Download ready",
         description: `Saved as ${filename} (${info?.estimatedPoints?.toLocaleString() ?? "?"} points).`,

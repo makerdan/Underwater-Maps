@@ -193,12 +193,8 @@ async function runEfhCase(page: Page, plan: CasePlan): Promise<void> {
   // when the active dataset's `hasEfh` flag is true — so finding it at all
   // is itself a guard that the new dataset was recognised as EFH-bearing.
   // aria-pressed mirrors `efhOverlayEnabled` from uiStore.
-  // Match by visible text — the emoji glyph in the aria-name lookup isn't
-  // reliable across headless Chromium builds, but the visible
-  // "Essential Fish Habitat" label on the button is.
-  const efhToggle = page.locator(".overview-map-header button", {
-    hasText: "Essential Fish Habitat",
-  });
+  // Use data-testid for a stable locator that survives layout changes.
+  const efhToggle = page.getByTestId("efh-overlay-toggle");
   await expect(efhToggle).toBeVisible({ timeout: 5_000 });
   await expect(efhToggle).toHaveAttribute("aria-pressed", "false");
 

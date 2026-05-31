@@ -70,6 +70,12 @@ async function setTooltipsViaSettings(
     await expect(sw).toHaveAttribute("aria-checked", enabled ? "true" : "false");
   }
 
+  // Wait for the 300 ms debounced server sync to fire and complete before
+  // navigating away. Without this, the server still holds the old value and
+  // the GET /api/settings hydration on the next page would override the
+  // locally-changed setting.
+  await page.waitForTimeout(500);
+
   if (!returnHome) return;
 
   await page.goto("/");

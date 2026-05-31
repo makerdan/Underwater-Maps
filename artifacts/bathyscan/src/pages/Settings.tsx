@@ -2856,7 +2856,7 @@ function OnboardingSection({ onNavigateBack }: { onNavigateBack: () => void }) {
 
   const handleReplay = () => {
     setHasSeenOnboarding(false);
-    onNavigateBack();
+    void flushServerSync().finally(() => onNavigateBack());
   };
 
   return (
