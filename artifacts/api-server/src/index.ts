@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { seedDatasetCatalog } from "./lib/catalogSeeder.js";
 import { startBucketMonitor } from "./lib/bucketMonitor.js";
+import { startWeatherCacheRefresher } from "./lib/weatherCacheRefresher.js";
 
 // ---------------------------------------------------------------------------
 // Process-level safety nets
@@ -67,6 +68,11 @@ const server = app.listen(port, "127.0.0.1", (err) => {
   // Start the GCS bucket monitor — scans pending-datasets/ every 30 s and
   // processes any oversized dataset files uploaded via the presigned URL path.
   startBucketMonitor();
+
+  // Start the background weather cache refresher — re-fetches DB rows that are
+  // >15 min old every 30 min so the 1-hour stale fallback window is never hit.
+  // Also prunes rows older than 24 hours that no one is actively requesting.
+  startWeatherCacheRefresher();
 });
 
 // ---------------------------------------------------------------------------
