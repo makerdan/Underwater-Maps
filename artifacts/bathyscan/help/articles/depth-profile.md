@@ -75,7 +75,7 @@ Click the **Export** button in the top-right of the profile panel and choose:
 
 ## Temperature & thermocline
 
-Water column temperature data is available separately from the depth profile. Look for the **TEMP** chip in the HUD; clicking it opens the **Temperature Profile Chart** panel, which shows temperature vs depth using Argo float, CTD cast, or NCEI reanalysis data for your current location.
+Water column temperature data is available separately from the depth profile. Look for the **TEMP** chip in the HUD; clicking it opens the [Temperature Profile Chart](#article:temperature-profile) panel, which shows temperature vs depth using Argo float, CTD cast, or NCEI reanalysis data for your current location.
 
 ## Closing the profile
 

@@ -26,7 +26,7 @@ The panel is always visible in the left column. If the left sidebar is hidden, c
 | 🛩 NOAA WEATHER STATIONS | Toggles NOAA ASOS/AWOS aviation weather station pins (saltwater only) |
 | 🌿 RAWS WEATHER STATIONS | Toggles AOOS RAWS land weather station pins (saltwater only) |
 | 📷 FAA WEATHERCAMS ↗ | Opens the FAA WeatherCams page for your region in a new browser tab (saltwater only) |
-| 🌊 INTERTIDAL HOTSPOTS | Toggles scoring and pin display for tidepool and beachcombing hotspot areas |
+| 🌊 INTERTIDAL HOTSPOTS | Toggles scoring and pin display for tidepool and beachcombing hotspot areas — see [Intertidal Hotspots](#article:intertidal-hotspots) |
 | 🐟 EFH | Overlays [Essential Fish Habitat](#article:essential-fish-habitat) polygons (only on datasets that include EFH data) |
 
 ## Weather station pins (NOAA and RAWS)
