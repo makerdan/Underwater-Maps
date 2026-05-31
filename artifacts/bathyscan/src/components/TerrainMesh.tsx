@@ -61,9 +61,8 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     const effectiveColormapTheme = deriveEffectiveColormapTheme(brightDaylight, colormapUserSet, colormapTheme);
     const paintMode = useUiStore((s) => s.zonePaintMode);
 
-    // Brush radius in grid cells. Scales gently with resolution so it feels
-    // consistent across 128×128 and 512×512 grids.
-    const brushRadius = Math.max(2, Math.round(grid.resolution / 64));
+    // Brush radius in grid cells — user-configurable via the Paint Mode slider.
+    const brushRadius = useUiStore((s) => s.zonePaintBrushRadius);
 
     /**
      * Convert an R3F world-space hit point on the terrain into a (row, col)

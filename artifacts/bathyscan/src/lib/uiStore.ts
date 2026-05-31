@@ -71,6 +71,9 @@ interface UiStore {
   /** Which texture slot (0–3) the paint brush is currently set to. */
   zonePaintSlot: 0 | 1 | 2 | 3;
   setZonePaintSlot: (slot: 0 | 1 | 2 | 3) => void;
+  /** Brush radius in grid cells (1–20). Persists across sessions. */
+  zonePaintBrushRadius: number;
+  setZonePaintBrushRadius: (radius: number) => void;
   /** Show real Alaska ShoreZone substrate polygons as a draped overlay. */
   substrateColorMode: boolean;
   setSubstrateColorMode: (enabled: boolean) => void;
@@ -196,6 +199,21 @@ export const useUiStore = create<UiStore>((set) => ({
   setZonePaintMode: (enabled) => set({ zonePaintMode: enabled }),
   zonePaintSlot: 0,
   setZonePaintSlot: (slot) => set({ zonePaintSlot: slot }),
+  zonePaintBrushRadius: (() => {
+    try {
+      const raw = localStorage.getItem("bathyscan:zonePaintBrushRadius");
+      if (raw !== null) {
+        const n = parseInt(raw, 10);
+        if (Number.isFinite(n) && n >= 1 && n <= 20) return n;
+      }
+    } catch {}
+    return 4;
+  })(),
+  setZonePaintBrushRadius: (radius) => {
+    const clamped = Math.max(1, Math.min(20, Math.round(radius)));
+    try { localStorage.setItem("bathyscan:zonePaintBrushRadius", String(clamped)); } catch {}
+    set({ zonePaintBrushRadius: clamped });
+  },
   substrateColorMode: false,
   setSubstrateColorMode: (enabled) =>
     set(enabled ? { substrateColorMode: true } : { substrateColorMode: false, selectedSubstrate: null }),

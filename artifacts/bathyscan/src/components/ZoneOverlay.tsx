@@ -66,6 +66,8 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
   const setPaintMode = useUiStore((s) => s.setZonePaintMode);
   const paintSlot = useUiStore((s) => s.zonePaintSlot);
   const setPaintSlot = useUiStore((s) => s.setZonePaintSlot);
+  const brushRadius = useUiStore((s) => s.zonePaintBrushRadius);
+  const setBrushRadius = useUiStore((s) => s.setZonePaintBrushRadius);
   const hasEdits = useClassificationStore((s) => s.hasEdits);
   const resetToAi = useClassificationStore((s) => s.resetToAi);
   const undoPaint = useClassificationStore((s) => s.undoPaint);
@@ -576,6 +578,40 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                       />
                     );
                   })}
+                </div>
+
+                {/* Brush size slider */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: 10, color: "#94a3b8", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                      Brush size
+                    </span>
+                    <span
+                      data-testid="zone-brush-radius-value"
+                      style={{ fontSize: 10, color: "#00e5ff", fontVariantNumeric: "tabular-nums", minWidth: 18, textAlign: "right" }}
+                    >
+                      {brushRadius}
+                    </span>
+                  </div>
+                  <input
+                    data-testid="zone-brush-radius-slider"
+                    type="range"
+                    min={1}
+                    max={20}
+                    value={brushRadius}
+                    onChange={(e) => setBrushRadius(Number(e.target.value))}
+                    style={{
+                      width: "100%",
+                      accentColor: "#00e5ff",
+                      cursor: "pointer",
+                      height: 4,
+                    }}
+                    aria-label="Brush size"
+                  />
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: 9, color: "#475569" }}>Fine</span>
+                    <span style={{ fontSize: 9, color: "#475569" }}>Broad</span>
+                  </div>
                 </div>
               </>
             )}
