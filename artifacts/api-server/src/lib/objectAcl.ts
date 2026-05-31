@@ -10,7 +10,14 @@ const ACL_POLICY_METADATA_KEY = "custom:aclPolicy";
 // - GROUP_MEMBER: the users who are members of a specific group;
 // - SUBSCRIBER: the users who are subscribers of a specific service / content
 //   creator.
-export enum ObjectAccessGroupType {}
+export enum ObjectAccessGroupType {
+  /**
+   * Users who have been explicitly granted viewer access to a specific dataset.
+   * The `id` field on the rule's group identifies the dataset whose viewer list
+   * is checked. This is the initial concrete group type; extend as needed.
+   */
+  DATASET_VIEWERS = "DATASET_VIEWERS",
+}
 
 export interface ObjectAccessGroup {
   type: ObjectAccessGroupType;
@@ -55,15 +62,33 @@ abstract class BaseObjectAccessGroup implements ObjectAccessGroup {
   public abstract hasMember(userId: string): Promise<boolean>;
 }
 
-function createObjectAccessGroup(
+/**
+ * Represents the set of users who have been explicitly granted viewer access
+ * to a specific dataset. The `id` field is the dataset identifier whose viewer
+ * grant list should be consulted. Extend `hasMember` as the dataset-sharing
+ * feature evolves (e.g. query a `dataset_viewers` join table).
+ */
+export class DatasetViewersAccessGroup extends BaseObjectAccessGroup {
+  constructor(id: string) {
+    super(ObjectAccessGroupType.DATASET_VIEWERS, id);
+  }
+
+  async hasMember(_userId: string): Promise<boolean> {
+    // No dataset-viewer grant table exists yet. When one is created, replace
+    // this with a DB query such as:
+    //   SELECT 1 FROM dataset_viewers WHERE dataset_id = this.id AND user_id = userId
+    return false;
+  }
+}
+
+export function createObjectAccessGroup(
   group: ObjectAccessGroup,
 ): BaseObjectAccessGroup {
   switch (group.type) {
-    // Implement per access group type, e.g.:
-    // case "USER_LIST":
-    //   return new UserListAccessGroup(group.id);
+    case ObjectAccessGroupType.DATASET_VIEWERS:
+      return new DatasetViewersAccessGroup(group.id);
     default:
-      throw new Error(`Unknown access group type: ${group.type}`);
+      throw new Error(`Unknown access group type: ${group.type as string}`);
   }
 }
 

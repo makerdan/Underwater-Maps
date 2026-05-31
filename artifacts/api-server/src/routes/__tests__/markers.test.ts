@@ -112,3 +112,79 @@ describe("GET /api/markers", () => {
     expect(Array.isArray(res.body)).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// POST /api/markers — safeParse rejection (400) negative tests
+//
+// The PostMarkersBody mock always returns { success: false } so the route
+// must reply 400 with { error: "invalid_request" } for any body. These tests
+// document the expected 400 contract for each class of invalid input:
+//   • missing required field (no body at all)
+//   • wrong type (lon supplied as a string)
+//   • extra-invalid: empty object (all required fields absent)
+// ---------------------------------------------------------------------------
+
+describe("POST /api/markers — safeParse rejection (400)", () => {
+  it("returns 400 with error: invalid_request when the body is completely absent", async () => {
+    const res = await request(app)
+      .post("/api/markers")
+      .set("x-e2e-user-id", "user-markers-post-400")
+      .set("content-type", "application/json")
+      .send({});
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 400 when required field 'label' is missing from the body", async () => {
+    const res = await request(app)
+      .post("/api/markers")
+      .set("x-e2e-user-id", "user-markers-post-400")
+      .send({ datasetId: "ds-1", lon: -136.0, lat: 58.5, depth: 50 });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 400 when 'lon' is supplied as a string (wrong type)", async () => {
+    const res = await request(app)
+      .post("/api/markers")
+      .set("x-e2e-user-id", "user-markers-post-400")
+      .send({ datasetId: "ds-1", lon: "not-a-number", lat: 58.5, depth: 50, label: "Test" });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 401 when POSTing without auth (no bypass header)", async () => {
+    vi.unstubAllEnvs();
+    const res = await request(app)
+      .post("/api/markers")
+      .send({ datasetId: "ds-1", lon: -136.0, lat: 58.5, depth: 50, label: "Test" });
+    expect(res.status).toBe(401);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/markers/:id — safeParse rejection (400) negative tests
+//
+// PatchMarkersIdParams mock always returns { success: false }, so the route
+// replies 400 for any :id before even inspecting the body.
+// ---------------------------------------------------------------------------
+
+describe("PATCH /api/markers/:id — safeParse rejection (400)", () => {
+  it("returns 400 with error: invalid_request for any marker id (params validation)", async () => {
+    const res = await request(app)
+      .patch("/api/markers/not-a-uuid")
+      .set("x-e2e-user-id", "user-markers-patch-400")
+      .send({ label: "Updated" });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 400 with error: invalid_request for a well-formed UUID id (params mock rejects all)", async () => {
+    const res = await request(app)
+      .patch("/api/markers/00000000-0000-0000-0000-000000000001")
+      .set("x-e2e-user-id", "user-markers-patch-400")
+      .send({ label: "Updated" });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+});
