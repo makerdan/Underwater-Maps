@@ -78,6 +78,8 @@ const fragmentShader = /* glsl */ `
   uniform vec3  uZoneTint1;
   uniform vec3  uZoneTint2;
   uniform vec3  uZoneTint3;
+  // Per-slot visibility mask (each component 0.0=hidden or 1.0=visible)
+  uniform vec4  uZoneVisible;
 
   // Highlight overlay
   uniform float uHighlightMode;   // 0=none 1=depthRange 2=slope 3=zone
@@ -161,11 +163,18 @@ const fragmentShader = /* glsl */ `
 
     // ── Zone overlay tint ──────────────────────────────────────────────────
     if (uZoneOverlay > 0.0) {
-      vec3 zoneTint = uZoneTint0 * vZoneWeight.x
-                    + uZoneTint1 * vZoneWeight.y
-                    + uZoneTint2 * vZoneWeight.z
-                    + uZoneTint3 * vZoneWeight.w;
-      finalColor = mix(finalColor, zoneTint * lighting, uZoneOverlay * 0.50);
+      // Apply per-slot visibility mask (0.0=hidden, 1.0=visible).
+      vec4 visW = vZoneWeight * uZoneVisible;
+      float totalVisW = visW.x + visW.y + visW.z + visW.w;
+      if (totalVisW > 0.001) {
+        // Re-normalise so areas with some hidden slots don't go dark.
+        vec4 normW = visW / totalVisW;
+        vec3 zoneTint = uZoneTint0 * normW.x
+                      + uZoneTint1 * normW.y
+                      + uZoneTint2 * normW.z
+                      + uZoneTint3 * normW.w;
+        finalColor = mix(finalColor, zoneTint * lighting, uZoneOverlay * 0.50);
+      }
     }
 
     // ── Query highlight overlay ────────────────────────────────────────────
@@ -252,6 +261,8 @@ export function createTerrainShaderMaterial(
       uZoneTint1:   { value: ZONE_TINT_COLORS[1] },
       uZoneTint2:   { value: ZONE_TINT_COLORS[2] },
       uZoneTint3:   { value: ZONE_TINT_COLORS[3] },
+      // All slots visible by default (vec4: x=slot0, y=slot1, z=slot2, w=slot3)
+      uZoneVisible: { value: new THREE.Vector4(1, 1, 1, 1) },
       // Query highlight overlay
       uHighlightMode:  { value: 0 },
       uHighlightMin:   { value: 0 },

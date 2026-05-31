@@ -13,6 +13,7 @@
 import React, { useEffect } from "react";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useUiStore } from "@/lib/uiStore";
+import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { useAppState } from "@/lib/context";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
@@ -21,10 +22,9 @@ import {
   FRESHWATER_ZONES,
   SALTWATER_ZONE_TO_SLOT,
   FRESHWATER_ZONE_TO_SLOT,
+  SLOT_NAMES_SALTWATER,
+  SLOT_NAMES_FRESHWATER,
 } from "@/lib/zoneMap";
-
-// Pastel hex colours matching terrainShader.ts ZONE_TINT_COLORS (indexed by slot 0–3)
-const SLOT_COLORS = ["#f5d58a", "#c49a6c", "#8ab4d0", "#b06060"] as const;
 
 /** Human-readable label for a raw zone key. */
 function formatZoneLabel(key: string): string {
@@ -78,6 +78,12 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
   const storeCollapsed = usePanelCollapseStore((s) => s.collapsed.zoneOverlay);
   const collapsed = embedded ? false : storeCollapsed;
   const togglePanel = usePanelCollapseStore((s) => s.toggle);
+
+  // Zone colour store
+  const zoneSlots = useZoneOverlayStore((s) => s.slots);
+  const setSlotColor = useZoneOverlayStore((s) => s.setSlotColor);
+  const setSlotVisible = useZoneOverlayStore((s) => s.setSlotVisible);
+  const resetZoneColors = useZoneOverlayStore((s) => s.resetToDefaults);
 
   // Clear undo stack whenever Paint Mode is turned off — any path (button, overlay toggle, etc.)
   useEffect(() => {
@@ -303,7 +309,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
           <div className="zone-legend" style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             {zones.map((zone, i) => {
               const slot = zoneToSlot[i] ?? 0;
-              const color = SLOT_COLORS[slot] ?? SLOT_COLORS[0];
+              const slotColor = zoneSlots[slot]?.color ?? "#f5d58a";
               return (
                 <div key={zone} className="flex items-center gap-2">
                   <span
@@ -312,7 +318,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                       width: 10,
                       height: 10,
                       borderRadius: 2,
-                      background: color,
+                      background: slotColor,
                       flexShrink: 0,
                       opacity: overlayEnabled ? 1 : 0.45,
                       transition: "opacity 0.15s",
@@ -321,9 +327,8 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                   <span
                     style={{
                       fontSize: 11,
-                      color: overlayEnabled ? "#e2e8f0" : "#e2e8f0",
+                      color: "#e2e8f0",
                       letterSpacing: "0.04em",
-                      transition: "color 0.15s",
                     }}
                   >
                     {formatZoneLabel(zone)}
@@ -331,6 +336,161 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Zone Colours — colour pickers + per-slot visibility toggles */}
+        {/* Always visible when a zone map is loaded; interactions auto-enable the overlay */}
+        {hasZoneMap && !loading && (
+          <div
+            style={{
+              marginTop: 8,
+              paddingTop: 8,
+              borderTop: "1px solid rgba(0,229,255,0.08)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 2,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 9,
+                  letterSpacing: "0.12em",
+                  color: "#94a3b8",
+                  textTransform: "uppercase",
+                }}
+              >
+                Zone Colours
+              </span>
+              <button
+                data-testid="zone-colors-reset"
+                onClick={resetZoneColors}
+                style={{
+                  fontSize: 9,
+                  color: "#64748b",
+                  background: "transparent",
+                  border: "1px solid rgba(100,116,139,0.3)",
+                  borderRadius: 3,
+                  padding: "1px 5px",
+                  cursor: "pointer",
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Reset
+              </button>
+            </div>
+            {(waterType === "freshwater" ? SLOT_NAMES_FRESHWATER : SLOT_NAMES_SALTWATER).map(
+              (name, slotIndex) => {
+                const slot = zoneSlots[slotIndex as 0 | 1 | 2 | 3];
+                if (!slot) return null;
+                const visible = slot.visible;
+                return (
+                  <div
+                    key={slotIndex}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "2px 0",
+                    }}
+                  >
+                    {/* Visibility toggle */}
+                    <button
+                      data-testid={`zone-slot-visible-${slotIndex}`}
+                      aria-pressed={visible}
+                      onClick={() => {
+                        // Turning any slot back on while the global overlay is off → enable it
+                        if (!visible && !overlayEnabled) setOverlayEnabled(true);
+                        setSlotVisible(slotIndex as 0 | 1 | 2 | 3, !visible);
+                      }}
+                      title={visible ? "Hide this zone" : "Show this zone"}
+                      style={{
+                        width: 14,
+                        height: 14,
+                        borderRadius: 2,
+                        border: visible
+                          ? "1.5px solid rgba(0,229,255,0.5)"
+                          : "1.5px solid rgba(100,116,139,0.4)",
+                        background: visible ? "rgba(0,229,255,0.12)" : "transparent",
+                        cursor: "pointer",
+                        flexShrink: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: 0,
+                        transition: "all 0.12s",
+                      }}
+                    >
+                      {visible && (
+                        <span style={{ fontSize: 8, color: "#00e5ff", lineHeight: 1 }}>✓</span>
+                      )}
+                    </button>
+
+                    {/* Colour swatch / picker */}
+                    <label
+                      title="Click to change colour"
+                      style={{
+                        width: 16,
+                        height: 16,
+                        borderRadius: 3,
+                        background: slot.color,
+                        border: "1px solid rgba(255,255,255,0.15)",
+                        cursor: "pointer",
+                        flexShrink: 0,
+                        display: "inline-block",
+                        position: "relative",
+                        opacity: visible ? 1 : 0.4,
+                        transition: "opacity 0.15s",
+                      }}
+                    >
+                      <input
+                        data-testid={`zone-slot-color-${slotIndex}`}
+                        type="color"
+                        value={slot.color}
+                        onChange={(e) => {
+                          if (!overlayEnabled) setOverlayEnabled(true);
+                          setSlotColor(slotIndex as 0 | 1 | 2 | 3, e.target.value);
+                        }}
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          opacity: 0,
+                          cursor: "pointer",
+                          width: "100%",
+                          height: "100%",
+                          border: "none",
+                          padding: 0,
+                        }}
+                      />
+                    </label>
+
+                    {/* Slot name */}
+                    <span
+                      style={{
+                        fontSize: 10,
+                        color: visible ? "#cbd5e1" : "#475569",
+                        letterSpacing: "0.04em",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        transition: "color 0.15s",
+                      }}
+                    >
+                      {name}
+                    </span>
+                  </div>
+                );
+              },
+            )}
           </div>
         )}
 
@@ -390,20 +550,21 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                   data-testid="zone-paint-swatches"
                   style={{ display: "flex", gap: 6, flexWrap: "wrap" }}
                 >
-                  {SLOT_COLORS.map((color, i) => {
+                  {([0, 1, 2, 3] as const).map((i) => {
                     const active = paintSlot === i;
+                    const slotColor = zoneSlots[i]?.color ?? "#f5d58a";
                     return (
                       <button
                         key={i}
                         data-testid={`zone-paint-swatch-${i}`}
                         aria-label={`Paint slot ${i}`}
                         aria-pressed={active}
-                        onClick={() => setPaintSlot(i as 0 | 1 | 2 | 3)}
+                        onClick={() => setPaintSlot(i)}
                         style={{
                           width: 24,
                           height: 24,
                           borderRadius: 4,
-                          background: color,
+                          background: slotColor,
                           cursor: "pointer",
                           border: active
                             ? "2px solid #00e5ff"

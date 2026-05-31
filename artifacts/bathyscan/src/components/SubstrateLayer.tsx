@@ -28,6 +28,7 @@ import type { ThreeEvent } from "@react-three/fiber";
 import { useFrame } from "@react-three/fiber";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
+import { useZoneOverlayStore, substrateClassToSlot } from "@/lib/zoneOverlayStore";
 import { WORLD_SIZE } from "@/lib/terrain";
 import {
   useGetSubstrate,
@@ -232,6 +233,8 @@ interface SubstratePolyProps {
   isVisible: boolean;
   isSelected: boolean;
   onClick: (e: ThreeEvent<MouseEvent>) => void;
+  /** When provided, overrides the polygon's server-side color with a user-chosen zone color. */
+  colorOverride?: string;
 }
 
 /**
@@ -245,7 +248,9 @@ const SubstratePoly: React.FC<SubstratePolyProps> = ({
   isVisible,
   isSelected,
   onClick,
+  colorOverride,
 }) => {
+  const resolvedColor = colorOverride ?? poly.color;
   const fillRef = useRef<THREE.Mesh>(null);
   const lineRef = useRef<THREE.LineLoop>(null);
 
@@ -292,7 +297,7 @@ const SubstratePoly: React.FC<SubstratePolyProps> = ({
           onClick={isVisible ? onClick : undefined}
         >
           <meshBasicMaterial
-            color={poly.color}
+            color={resolvedColor}
             transparent
             opacity={fillOpacity}
             depthWrite={false}
@@ -307,7 +312,7 @@ const SubstratePoly: React.FC<SubstratePolyProps> = ({
         renderOrder={3}
       >
         <lineBasicMaterial
-          color={poly.color}
+          color={resolvedColor}
           transparent
           opacity={outlineOpacity}
           depthWrite={false}
@@ -321,9 +326,11 @@ const SubstratePoly: React.FC<SubstratePolyProps> = ({
 export const SubstrateLayer: React.FC = () => {
   const { terrain } = useAppState();
   const substrateColorMode = useUiStore((s) => s.substrateColorMode);
+  const zoneOverlayEnabled = useUiStore((s) => s.zoneOverlayEnabled);
   const setSelectedSubstrate = useUiStore((s) => s.setSelectedSubstrate);
   const selectedSubstrate = useUiStore((s) => s.selectedSubstrate);
   const hiddenSubstrateClasses = useUiStore((s) => s.hiddenSubstrateClasses);
+  const zoneSlots = useZoneOverlayStore((s) => s.slots);
 
   const datasetId = terrain?.datasetId ?? "";
 
@@ -382,9 +389,21 @@ export const SubstrateLayer: React.FC = () => {
       {allPolys.map((p) => {
         const isSelected =
           selectedSubstrate?.unitId === p.feature.properties.unitId;
-        const isVisible = !hiddenSubstrateClasses.has(
+        const classVisible = !hiddenSubstrateClasses.has(
           p.feature.properties.substrate.toLowerCase(),
         );
+        // When the zone overlay is active, also respect per-slot zone visibility.
+        let colorOverride: string | undefined;
+        let zoneVisible = true;
+        if (zoneOverlayEnabled) {
+          const slot = substrateClassToSlot(p.feature.properties.substrate);
+          const zoneSlot = zoneSlots[slot];
+          if (zoneSlot) {
+            colorOverride = zoneSlot.color;
+            zoneVisible = zoneSlot.visible;
+          }
+        }
+        const isVisible = classVisible && zoneVisible;
         return (
           <SubstratePoly
             key={p.stableKey}
@@ -392,6 +411,7 @@ export const SubstrateLayer: React.FC = () => {
             isVisible={isVisible}
             isSelected={isSelected}
             onClick={handleClick(p.feature)}
+            colorOverride={colorOverride}
           />
         );
       })}

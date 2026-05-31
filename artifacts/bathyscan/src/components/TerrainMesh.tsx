@@ -7,6 +7,7 @@ import { getTerrainTextures } from "@/lib/textures";
 import { createTerrainShaderMaterial } from "@/lib/terrainShader";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useUiStore } from "@/lib/uiStore";
+import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
 import { useHighlightStore } from "@/lib/highlightStore";
 import { useHabitatStore } from "@/lib/habitatStore";
 import { useSettingsStore, deriveEffectiveColormapTheme } from "@/lib/settingsStore";
@@ -322,6 +323,28 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       // Zone overlay toggle (read from store every frame for instant response)
       const overlayEnabled = useUiStore.getState().zoneOverlayEnabled;
       material.uniforms["uZoneOverlay"]!.value = overlayEnabled ? 1 : 0;
+
+      // Zone tint colours + per-slot visibility (live from zoneOverlayStore)
+      if (overlayEnabled) {
+        const { slots } = useZoneOverlayStore.getState();
+        const tintUniforms = [
+          "uZoneTint0", "uZoneTint1", "uZoneTint2", "uZoneTint3",
+        ] as ["uZoneTint0", "uZoneTint1", "uZoneTint2", "uZoneTint3"];
+        for (let i = 0; i < 4; i++) {
+          const slot = slots[i as 0 | 1 | 2 | 3];
+          const uniformName = tintUniforms[i as 0 | 1 | 2 | 3];
+          if (slot && uniformName) {
+            (material.uniforms[uniformName]!.value as THREE.Color).set(slot.color);
+          }
+        }
+        const vis = material.uniforms["uZoneVisible"]!.value as THREE.Vector4;
+        vis.set(
+          slots[0]?.visible ? 1 : 0,
+          slots[1]?.visible ? 1 : 0,
+          slots[2]?.visible ? 1 : 0,
+          slots[3]?.visible ? 1 : 0,
+        );
+      }
 
       // Highlight overlay (query panel)
       const { mode, params } = useHighlightStore.getState();
