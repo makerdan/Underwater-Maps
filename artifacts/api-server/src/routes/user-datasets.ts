@@ -1,6 +1,7 @@
 import { Router } from "express";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { db, customDatasetsTable, datasetFoldersTable } from "@workspace/db";
+import { MAX_TERRAIN_JSON_BYTES } from "../lib/constants.js";
 import {
   GetUserDatasetsResponse,
   GetUserDatasetsIdTerrainResponse,
@@ -184,6 +185,32 @@ router.post("/user/datasets/:id/duplicate", requireAuth, asyncHandler(async (req
 router.get("/user/datasets/:id/terrain", terrainFetchIpRateLimit, requireAuth, terrainFetchUserRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
+
+  // Size pre-check: read pg_column_size without loading the blob into Node.js
+  // heap. A pathologically large blob (e.g. a dense 1024×1024 grid) would
+  // spike heap twice (DB result + JSON.stringify) and could OOM the process
+  // under concurrent load. Fail fast here before touching the full column.
+  const [sizeRow] = await db
+    .select({ size: sql<number>`pg_column_size(${customDatasetsTable.terrainJson})` })
+    .from(customDatasetsTable)
+    .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, userId)));
+
+  if (!sizeRow) {
+    res.status(404).json({ error: "not_found", details: `User dataset '${id}' not found` });
+    return;
+  }
+
+  if (sizeRow.size > MAX_TERRAIN_JSON_BYTES) {
+    console.warn(
+      `[terrain] dataset ${id} terrain_json is ${sizeRow.size} bytes ` +
+      `(limit ${MAX_TERRAIN_JSON_BYTES}) — returning 413`,
+    );
+    res.status(413).json({
+      error: "payload_too_large",
+      details: "Dataset is too large to load in the browser. Please contact support.",
+    });
+    return;
+  }
 
   const [row] = await db
     .select({ terrainJson: customDatasetsTable.terrainJson })
