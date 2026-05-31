@@ -7,6 +7,7 @@
  *   - setSlotVisible mutates only the targeted slot and persists to localStorage
  *   - resetToDefaults restores all slots to defaults and writes localStorage
  *   - localStorage round-trip: mutations are stored; resetToDefaults is reflected
+ *   - Global palette design decision: zone colours are dataset-agnostic (by design)
  *   - substrateClassToSlot: known substrate strings map to expected slots
  *   - substrateClassToSlot: handles compound labels, mixed case, and unknowns
  */
@@ -227,6 +228,60 @@ describe("zoneOverlayStore — localStorage round-trip", () => {
     const raw = localStorage.getItem(LS_KEY);
     const parsed = JSON.parse(raw as string) as Array<{ color: string; visible: boolean }>;
     expect(parsed[0]!.color).toBe(ZONE_DEFAULT_COLORS[0]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Design decision: global palette (not per-dataset)
+//
+// Zone colours intentionally apply to ALL datasets.  The four slots map to
+// universal geological categories (sand, sediment, silt, basalt) whose
+// meaning is identical regardless of which dataset is active.  This is
+// different from, e.g., dataset home-camera positions (settingsStore
+// datasetHomePositions), which ARE per-dataset because each dataset is in a
+// different geographic location.
+//
+// These tests document that the store has no dataset concept and that a colour
+// change made without any dataset context survives as-is.
+// ---------------------------------------------------------------------------
+
+describe("zoneOverlayStore — global palette design decision", () => {
+  beforeEach(() => resetStore());
+
+  it("store has no datasetId concept: slots are read without any dataset argument", () => {
+    const state = useZoneOverlayStore.getState();
+    expect("slots" in state).toBe(true);
+    expect(typeof state.setSlotColor).toBe("function");
+    expect(typeof state.setSlotVisible).toBe("function");
+    expect(typeof state.resetToDefaults).toBe("function");
+    expect(Object.keys(state).filter((k) => k.toLowerCase().includes("dataset"))).toHaveLength(0);
+  });
+
+  it("a colour change persists with no dataset context and is immediately readable", () => {
+    useZoneOverlayStore.getState().setSlotColor(0, "#c0ffee");
+    expect(useZoneOverlayStore.getState().slots[0]!.color).toBe("#c0ffee");
+  });
+
+  it("colour change survives a simulated 'dataset switch' (store has no dataset state to invalidate)", () => {
+    useZoneOverlayStore.getState().setSlotColor(2, "#bada55");
+    useZoneOverlayStore.getState().setSlotVisible(3, false);
+
+    const slotsBefore = useZoneOverlayStore.getState().slots.map((s) => ({ ...s }));
+
+    useZoneOverlayStore.setState(useZoneOverlayStore.getState());
+
+    const slotsAfter = useZoneOverlayStore.getState().slots;
+    expect(slotsAfter[2]!.color).toBe(slotsBefore[2]!.color);
+    expect(slotsAfter[3]!.visible).toBe(slotsBefore[3]!.visible);
+  });
+
+  it("localStorage stores a flat 4-element array (not a dataset-keyed object)", () => {
+    useZoneOverlayStore.getState().setSlotColor(1, "#facade");
+    const raw = localStorage.getItem(LS_KEY);
+    expect(raw).not.toBeNull();
+    const parsed: unknown = JSON.parse(raw as string);
+    expect(Array.isArray(parsed)).toBe(true);
+    expect((parsed as unknown[]).length).toBe(4);
   });
 });
 

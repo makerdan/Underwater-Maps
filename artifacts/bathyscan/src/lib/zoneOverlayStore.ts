@@ -5,6 +5,28 @@
  * terrain texture slots (0=sand, 1=sediment, 2=silt, 3=basalt).  Defaults
  * match the pastel tints baked into terrainShader.ts.  State is persisted to
  * localStorage so user choices survive a page refresh.
+ *
+ * ## Design decision: global palette (not per-dataset)
+ *
+ * Zone colours are intentionally shared across ALL datasets.  The four slots
+ * map to universal geological substrate categories — sand, sediment, silt, and
+ * basalt — that carry the same semantic meaning regardless of which dataset is
+ * active.  A user's preference for "sandy seafloor should be warm yellow"
+ * logically applies everywhere, just as a colour-blind user's custom palette
+ * should not reset each time they switch maps.
+ *
+ * Contrast this with dataset home-camera positions (stored in settingsStore as
+ * `datasetHomePositions`), which ARE per-dataset because each dataset occupies
+ * a different geographic location.  Zone colours are a cross-dataset palette
+ * choice, not a location-specific one.
+ *
+ * If a future requirement emerges where different datasets need distinct colour
+ * schemes (e.g. a dedicated "Arctic" palette vs a "Tropical" palette), the
+ * migration path is straightforward: change the localStorage schema from a
+ * flat 4-element array to `Record<datasetId, ZoneSlot[]>` and keep a
+ * `"__global__"` key as the default/fallback.  No other store changes are
+ * needed because the consuming components (ZoneOverlay, TerrainMesh) read
+ * slots without any dataset context.
  */
 import { create } from "zustand";
 
