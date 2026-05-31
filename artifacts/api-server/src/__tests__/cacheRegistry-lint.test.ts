@@ -8,6 +8,9 @@
  * between test cases.  A missed registration causes silent state-leakage
  * between tests — the original problem this registry was built to prevent.
  *
+ * Both `src/routes/` and `src/lib/` are scanned **recursively**, so files
+ * in subdirectories (e.g. `src/lib/intertidal/scorer.ts`) are included.
+ *
  * ## What counts as a "module-level Map"?
  *
  * A line that starts with `const` at column 0 (no leading whitespace) and
@@ -22,8 +25,10 @@
  * 2. Call `registerCache(() => myCache.clear())` immediately after the `new Map`
  *    declaration.
  *
- * For a **lib** file:
- * 1. Import `registerCache` from `"./cacheRegistry.js"`.
+ * For a **lib** file (including subdirectories):
+ * 1. Import `registerCache` from the appropriate relative path to
+ *    `cacheRegistry.js` (e.g. `"./cacheRegistry.js"` at the top level,
+ *    `"../cacheRegistry.js"` one level deep, etc.).
  * 2. Call `registerCache(() => myCache.clear())` immediately after the `new Map`
  *    declaration.
  *
@@ -45,16 +50,18 @@ const LIB_DIR = join(__dirname, "..", "lib");
 const LIB_EXCLUDES = new Set(["cacheRegistry.ts"]);
 
 function getRouteFiles(): string[] {
-  return readdirSync(ROUTES_DIR)
+  return (readdirSync(ROUTES_DIR, { recursive: true }) as string[])
     .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
     .map((f) => join(ROUTES_DIR, f));
 }
 
 function getLibFiles(): string[] {
-  return readdirSync(LIB_DIR)
+  return (readdirSync(LIB_DIR, { recursive: true }) as string[])
     .filter(
       (f) =>
-        f.endsWith(".ts") && !f.endsWith(".test.ts") && !LIB_EXCLUDES.has(f),
+        f.endsWith(".ts") &&
+        !f.endsWith(".test.ts") &&
+        !LIB_EXCLUDES.has(f),
     )
     .map((f) => join(LIB_DIR, f));
 }
@@ -76,10 +83,14 @@ function checkFiles(files: string[], dirLabel: string): string[] {
 
     if (!hasRegisterCache) {
       const fileName = filePath.split(`/${dirLabel}/`).pop() ?? filePath;
+      const importHint =
+        dirLabel === "routes"
+          ? '"../lib/cacheRegistry.js"'
+          : "the appropriate relative path to cacheRegistry.js";
       violations.push(
         `${dirLabel}/${fileName}: has a module-level "new Map" but does not call registerCache(). ` +
           `Add "registerCache(() => yourCache.clear())" after each module-level Map declaration ` +
-          `and import registerCache from ${dirLabel === "routes" ? '"../lib/cacheRegistry.js"' : '"./cacheRegistry.js"'}.`,
+          `and import registerCache from ${importHint}.`,
       );
     }
   }
