@@ -59,6 +59,14 @@
  * Any export added to the generated client in the future is auto-covered —
  * only the hooks a test genuinely exercises need to be listed in `overrides`.
  *
+ * ## Lint guard
+ *
+ * An ESLint rule (`local/no-import-original-api-client`) in `eslint.config.mjs`
+ * at the repo root will error if any test file passes `importOriginal` as a
+ * parameter to a `vi.mock("@workspace/api-client-react", ...)` factory.
+ * That pattern is fragile because it requires every hook to be spread
+ * explicitly; this Proxy approach handles additions automatically.
+ *
  * ## Why vi.hoisted?
  *
  * `vi.mock(...)` factories are hoisted to the top of the compiled file before
