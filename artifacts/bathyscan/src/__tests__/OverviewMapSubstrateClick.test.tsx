@@ -35,6 +35,8 @@ vi.mock("@workspace/api-client-react", () => {
     getGetEfhQueryKey: (p: unknown) => ["efh", p],
     useGetSubstrate: () => ({ data: substrateCollection }),
     getGetSubstrateQueryKey: (id: string) => ["substrate", id],
+    useGetWeatherStations: () => ({ data: undefined, isLoading: false, isFetching: false, isError: false }),
+    getGetWeatherStationsQueryKey: (p: unknown) => ["weather-stations", p],
   };
 });
 
@@ -67,6 +69,9 @@ function clickAt(canvas: HTMLCanvasElement, x: number, y: number) {
 }
 
 // Mirrors computeInitialTransform / lonLatToCanvas for the 1°×1° test grid.
+// The canvas is North-up: top edge = maxLat, bottom edge = minLat.
+// canvasToLonLat uses:  lat = minLat + (1 - (cy - offsetY) / terrainH) * latRange
+// so the inverse is:    cy  = offsetY + (1 - (lat - minLat) / latRange) * terrainH
 function lonLatToPx(lon: number, lat: number): [number, number] {
   const lonRange = 1;
   const latRange = 1;
@@ -77,7 +82,7 @@ function lonLatToPx(lon: number, lat: number): [number, number] {
   const offsetY = (CANVAS_H - terrainH) / 2;
   return [
     offsetX + ((lon - -120) / lonRange) * terrainW,
-    offsetY + ((lat - 47) / latRange) * terrainH,
+    offsetY + (1 - (lat - 47) / latRange) * terrainH,
   ];
 }
 
