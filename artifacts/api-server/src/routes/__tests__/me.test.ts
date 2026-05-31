@@ -242,3 +242,139 @@ describe("PUT /api/settings passthrough", () => {
     expect(res.body.depthUnit).toBe("metres");
   });
 });
+
+describe("zoneOverlaySlots migration", () => {
+  it("GET: legacy flat array is promoted to { saltwater, freshwater } on read", async () => {
+    const legacySlots = [
+      { color: "#aabbcc", visible: true },
+      { color: "#112233", visible: false },
+      { color: "#445566", visible: true },
+      { color: "#778899", visible: true },
+    ];
+    state.userSettings = [
+      { userId: "user-test", settings: { zoneOverlaySlots: legacySlots } },
+    ];
+
+    const res = await request(app).get("/api/settings");
+    expect(res.status).toBe(200);
+
+    const zones = res.body.zoneOverlaySlots as {
+      saltwater: unknown[];
+      freshwater: unknown[];
+    };
+    // Saltwater should carry the previously-stored flat palette.
+    expect(zones.saltwater).toEqual(legacySlots);
+    // Freshwater should be filled in with the server default (4 slots).
+    expect(Array.isArray(zones.freshwater)).toBe(true);
+    expect((zones.freshwater as unknown[]).length).toBe(4);
+  });
+
+  it("GET: new { saltwater, freshwater } format is returned unchanged", async () => {
+    const saltwaterSlots = [
+      { color: "#001122", visible: true },
+      { color: "#334455", visible: true },
+      { color: "#667788", visible: false },
+      { color: "#99aabb", visible: true },
+    ];
+    const freshwaterSlots = [
+      { color: "#aabbcc", visible: true },
+      { color: "#ddeeff", visible: false },
+      { color: "#112233", visible: true },
+      { color: "#445566", visible: true },
+    ];
+    state.userSettings = [
+      {
+        userId: "user-test",
+        settings: {
+          zoneOverlaySlots: { saltwater: saltwaterSlots, freshwater: freshwaterSlots },
+        },
+      },
+    ];
+
+    const res = await request(app).get("/api/settings");
+    expect(res.status).toBe(200);
+
+    const zones = res.body.zoneOverlaySlots as {
+      saltwater: unknown[];
+      freshwater: unknown[];
+    };
+    expect(zones.saltwater).toEqual(saltwaterSlots);
+    expect(zones.freshwater).toEqual(freshwaterSlots);
+  });
+
+  it("GET: missing zoneOverlaySlots falls back to defaults for both water types", async () => {
+    state.userSettings = [
+      { userId: "user-test", settings: { fogDensity: 0.01 } },
+    ];
+
+    const res = await request(app).get("/api/settings");
+    expect(res.status).toBe(200);
+
+    const zones = res.body.zoneOverlaySlots as {
+      saltwater: unknown[];
+      freshwater: unknown[];
+    };
+    expect(Array.isArray(zones.saltwater)).toBe(true);
+    expect((zones.saltwater as unknown[]).length).toBe(4);
+    expect(Array.isArray(zones.freshwater)).toBe(true);
+    expect((zones.freshwater as unknown[]).length).toBe(4);
+  });
+
+  it("PUT: legacy flat array stored in DB is normalised to object shape on write", async () => {
+    const legacySlots = [
+      { color: "#aabbcc", visible: true },
+      { color: "#112233", visible: false },
+      { color: "#445566", visible: true },
+      { color: "#778899", visible: true },
+    ];
+    // Simulate a row that was written before the per-water-type split.
+    state.userSettings = [
+      { userId: "user-test", settings: { zoneOverlaySlots: legacySlots } },
+    ];
+
+    // Any PUT triggers the merge + migration path.
+    const res = await request(app)
+      .put("/api/settings")
+      .send({ fogDensity: 0.025 });
+    expect(res.status).toBe(200);
+
+    const persisted = state.lastInsertedSettings?.["settings"] as Record<string, unknown>;
+    const zones = persisted.zoneOverlaySlots as {
+      saltwater: unknown[];
+      freshwater: unknown[];
+    };
+    expect(zones.saltwater).toEqual(legacySlots);
+    expect(Array.isArray(zones.freshwater)).toBe(true);
+    expect((zones.freshwater as unknown[]).length).toBe(4);
+  });
+
+  it("PUT: freshwater palette sent explicitly by the client is persisted", async () => {
+    const freshwaterSlots = [
+      { color: "#ff0000", visible: true },
+      { color: "#00ff00", visible: true },
+      { color: "#0000ff", visible: false },
+      { color: "#ffff00", visible: true },
+    ];
+    const saltwaterSlots = [
+      { color: "#001122", visible: true },
+      { color: "#334455", visible: true },
+      { color: "#667788", visible: true },
+      { color: "#99aabb", visible: true },
+    ];
+
+    const res = await request(app)
+      .put("/api/settings")
+      .send({
+        zoneOverlaySlots: { saltwater: saltwaterSlots, freshwater: freshwaterSlots },
+      });
+    expect(res.status).toBe(200);
+
+    const persisted = state.lastInsertedSettings?.["settings"] as Record<string, unknown>;
+    const zones = persisted.zoneOverlaySlots as {
+      saltwater: unknown[];
+      freshwater: unknown[];
+    };
+    expect(zones.saltwater).toEqual(saltwaterSlots);
+    expect(zones.freshwater).toEqual(freshwaterSlots);
+  });
+});
