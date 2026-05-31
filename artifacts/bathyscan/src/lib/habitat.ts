@@ -624,6 +624,57 @@ export const SPECIES_CONFIGS: Record<SpeciesId, SpeciesConfig> = {
 
 export const SPECIES_IDS = Object.keys(SPECIES_CONFIGS) as SpeciesId[];
 
+// ---------------------------------------------------------------------------
+// Habitat summary helper
+// ---------------------------------------------------------------------------
+
+/** Short human-readable names for substrate zone keys. */
+const SUBSTRATE_SHORT_LABELS: Partial<Record<string, string>> = {
+  sandy_shelf: "sandy shelf",
+  coarse_sediment: "coarse sediment",
+  silt_plain: "silt plain",
+  basalt_rock: "basalt rock",
+  volcanic_vent_field: "vent field",
+  trench_wall: "trench wall",
+  seamount_flank: "seamount flank",
+  coral_reef_potential: "coral reef",
+  aquatic_vegetation: "vegetation",
+  sandy_lake_bed: "sandy bottom",
+  rocky_shoreline: "rocky reef",
+  silt_deep: "deep silt",
+  gravel_bed: "gravel",
+  bedrock_shelf: "bedrock",
+  submerged_wood: "structure / wood",
+  clay_flat: "clay flat",
+};
+
+/**
+ * Returns a one-line habitat summary for a species derived entirely from its
+ * SpeciesConfig — no hardcoded strings.
+ *
+ * Format: "<top substrates> · <optimal depth range> · <slope preference>"
+ * e.g. "rocky reef / bedrock · 25–160 m · steep slope"
+ */
+export function getHabitatSummary(id: SpeciesId): string {
+  const cfg = SPECIES_CONFIGS[id];
+  if (!cfg) return "";
+
+  // Top substrates with score ≥ 0.7, sorted descending, capped at 3
+  const topSubs = Object.entries(cfg.substratePreferences)
+    .filter(([, score]) => (score ?? 0) >= 0.7)
+    .sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))
+    .slice(0, 3)
+    .map(([key]) => SUBSTRATE_SHORT_LABELS[key] ?? key.replace(/_/g, " "));
+
+  const [optMin, optMax] = cfg.depthOptimal;
+  const depthPart = `${optMin}–${optMax} m`;
+  const slopePart =
+    cfg.slopePreference !== "any" ? ` · ${cfg.slopePreference} slope` : "";
+  const subPart = topSubs.length > 0 ? `${topSubs.join(" / ")} · ` : "";
+
+  return `${subPart}${depthPart}${slopePart}`;
+}
+
 export const SALTWATER_SPECIES_IDS: SaltwaterSpeciesId[] = [
   "dungeness_crab",
   "demersal_fish",

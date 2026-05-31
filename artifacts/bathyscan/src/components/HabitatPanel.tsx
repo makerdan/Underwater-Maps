@@ -22,6 +22,7 @@ import {
   SPECIES_CONFIGS,
   SALTWATER_SPECIES_IDS,
   FRESHWATER_SPECIES_IDS,
+  getHabitatSummary,
 } from "@/lib/habitat";
 import type { SpeciesId, FreshwaterSpeciesId, SaltwaterSpeciesId, HotspotCandidate } from "@/lib/habitat";
 import {
@@ -431,11 +432,33 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
             >
               <option value="">— disabled —</option>
               {speciesIds.map((id) => (
-                <option key={id} value={id}>
+                <option key={id} value={id} title={getHabitatSummary(id)}>
                   {SPECIES_CONFIGS[id]?.label ?? id}
                 </option>
               ))}
             </select>
+
+            {/* Inline habitat summary — shown when a species is selected.
+                Updates on selection so it works on both desktop and mobile. */}
+            {activeSpecies && (
+              <div
+                aria-label={`Habitat: ${getHabitatSummary(activeSpecies)}`}
+                style={{
+                  marginTop: 5,
+                  padding: "4px 6px",
+                  background: "rgba(251,146,60,0.06)",
+                  border: "1px solid rgba(251,146,60,0.18)",
+                  borderRadius: 3,
+                  fontSize: 9.5,
+                  color: "#94a3b8",
+                  letterSpacing: "0.04em",
+                  lineHeight: 1.4,
+                }}
+              >
+                <span style={{ color: "rgba(251,146,60,0.7)", marginRight: 4 }}>◈</span>
+                {getHabitatSummary(activeSpecies)}
+              </div>
+            )}
           </div>
 
           {/* Overlay intensity slider */}
