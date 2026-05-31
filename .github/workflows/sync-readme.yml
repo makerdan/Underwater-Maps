@@ -6,12 +6,16 @@ on:
       - main
     paths:
       - 'replit.md'
+  pull_request:
+    paths:
+      - 'replit.md'
   schedule:
     - cron: '0 0 * * 1'
   workflow_dispatch:
 
 jobs:
   sync:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -34,3 +38,68 @@ jobs:
             git commit -m "chore: sync README.md from replit.md" &&
             git push
           )
+
+  check-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check if README.md is in sync with replit.md
+        id: diff
+        run: |
+          if diff -q replit.md README.md > /dev/null 2>&1; then
+            echo "in_sync=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "in_sync=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post comment if out of sync
+        if: steps.diff.outputs.in_sync == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = [
+              '### ⚠️ README.md is out of sync with replit.md',
+              '',
+              'This PR edits `replit.md` but `README.md` does not match.',
+              'When this PR is merged into `main`, the sync workflow will automatically',
+              'update `README.md`. No action is required — this comment is for reviewer awareness.',
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(
+              c => c.user.login === 'github-actions[bot]' &&
+                   c.body.includes('README.md is out of sync with replit.md')
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Annotate check if out of sync
+        if: steps.diff.outputs.in_sync == 'false'
+        run: |
+          echo "::warning file=README.md::README.md is out of sync with replit.md. It will be updated automatically when this PR is merged."
