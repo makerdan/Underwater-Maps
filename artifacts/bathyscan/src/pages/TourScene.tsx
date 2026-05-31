@@ -40,6 +40,7 @@ import { useLandTerrainStore } from "@/lib/landTerrainStore";
 import { useLandTerrain } from "@/hooks/useLandTerrain";
 import { useSatelliteTileStore } from "@/lib/satelliteTileStore";
 import { useSatelliteTile } from "@/hooks/useSatelliteTile";
+import { TerrainContourLines } from "@/components/TerrainContourLines";
 
 // One-shot WebGL availability probe. Cached at module scope so we don't
 // recreate a throwaway <canvas> on every TourScene re-render. Used by the
@@ -495,6 +496,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
       <TestCameraBridge />
       <Particles />
       {terrain && <TerrainMesh ref={terrainMeshRef} grid={terrain} />}
+      {terrain && <TerrainContourLines grid={terrain} />}
       {/* LandmassMesh is a flat-silhouette fallback; hidden once the richer
           Copernicus DEM surface (LandTerrainMesh) is loaded — never both. */}
       {terrain && showLandmass && !hasLandDem && <LandmassMesh grid={terrain} />}
