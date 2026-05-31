@@ -3,14 +3,14 @@
  *
  * Smoke-tests for the four Southern Alaska AOIs wired to the NCEI Southern
  * Alaska Coastal Relief Model (DEM ID 703):
- *   - kodiak-island   (Kodiak / Chiniak Bay)
- *   - kachemak-bay    (Homer / Cook Inlet)
- *   - resurrection-bay (Seward / Kenai Fjords)
+ *   - kodiak-island        (Kodiak / Chiniak Bay)
+ *   - kachemak-bay         (Homer / Cook Inlet)
+ *   - resurrection-bay     (Seward / Kenai Fjords)
  *   - prince-william-sound (Valdez / western PWS)
  *
  * Two complementary suites:
  *
- *   1. Unit suite (always runs) — stubs `globalThis.fetch` to return a
+ *   1. Unit suite (always runs in CI) — stubs `globalThis.fetch` to return a
  *      realistic AAIGRID response, then drives the full
  *      resolveBathymetrySource → fetchNceiGrid → SourceFetchResult path.
  *      Asserts that:
@@ -19,10 +19,16 @@
  *        • minDepth / maxDepth are finite, positive, and ordered
  *        • the depth range is > 5 m (passes fetchNceiGrid's near-flat guard)
  *
- *   2. Live WCS suite (opt-in, set TEST_LIVE_WCS=true) — hits the real NCEI
- *      Southern Alaska CRM endpoint for two AOIs (kodiak-island and
- *      resurrection-bay), asserts a valid depth range and non-zero cell count
- *      from the live grid.
+ *   2. Live WCS suite (opt-in, NOT run in CI) — hits the real NCEI Southern
+ *      Alaska CRM endpoint for all four AOIs at N=32, asserts a valid depth
+ *      range and non-zero cell count from the live grid.
+ *
+ *      To run the live suite locally:
+ *
+ *        VITEST_RUN_INTEGRATION=1 pnpm --filter @workspace/api-server \
+ *          exec vitest run src/lib/__tests__/southAlaskaCrm.smoke.test.ts
+ *
+ *      The real NCEI endpoint can take 15–30 s per tile; allow ~2 min total.
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -236,60 +242,98 @@ describe("Southern Alaska CRM — unit tests (stubbed WCS fetch)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Live WCS smoke suite — opt-in via TEST_LIVE_WCS=true
+// Live WCS smoke suite — opt-in via VITEST_RUN_INTEGRATION=1
+//
+// Run locally with:
+//   VITEST_RUN_INTEGRATION=1 pnpm --filter @workspace/api-server \
+//     exec vitest run src/lib/__tests__/southAlaskaCrm.smoke.test.ts
+//
+// These tests are intentionally excluded from CI (skipped unless the env var
+// is set) because they hit the live NCEI WCS endpoint which can be slow
+// (15–30 s per tile) and is subject to external availability.
 // ---------------------------------------------------------------------------
 
-const LIVE = process.env["TEST_LIVE_WCS"] === "true";
+const LIVE = process.env["VITEST_RUN_INTEGRATION"] === "1";
+
+const LIVE_AOIS: Array<{
+  id: string;
+  label: string;
+  minExpectedMaxDepth: number;
+}> = [
+  {
+    id: "kodiak-island",
+    label: "Kodiak Island (Chiniak Bay shelf)",
+    minExpectedMaxDepth: 10,
+  },
+  {
+    id: "kachemak-bay",
+    label: "Kachemak Bay (Homer / Cook Inlet)",
+    minExpectedMaxDepth: 10,
+  },
+  {
+    id: "resurrection-bay",
+    label: "Resurrection Bay (Seward / glacial fjord ~275 m)",
+    minExpectedMaxDepth: 10,
+  },
+  {
+    id: "prince-william-sound",
+    label: "Prince William Sound (Valdez / western PWS)",
+    minExpectedMaxDepth: 10,
+  },
+];
 
 describe.skipIf(!LIVE)(
-  "Southern Alaska CRM — live WCS smoke tests (TEST_LIVE_WCS=true)",
+  "Southern Alaska CRM — live WCS smoke tests (VITEST_RUN_INTEGRATION=1)",
   () => {
     // Generous timeout: the real NCEI endpoint can take 15–30 s per tile.
-    const LIVE_TIMEOUT = 60_000;
-    const LIVE_N = 16;
+    const LIVE_TIMEOUT = 90_000;
+    const LIVE_N = 32;
 
-    it(
-      "kodiak-island: live CRM grid has valid depth range and non-zero cell count",
-      async () => {
-        const meta = getPreset("kodiak-island");
-        const res = await resolveBathymetrySource(meta, LIVE_N);
+    for (const { id, label, minExpectedMaxDepth } of LIVE_AOIS) {
+      it(
+        `${id}: live CRM returns ncei-crm-s-alaska with valid depth range at N=${LIVE_N} — ${label}`,
+        async () => {
+          const meta = getPreset(id);
+          const res = await resolveBathymetrySource(meta, LIVE_N);
 
-        expect(res, "kodiak-island: live resolver returned null").not.toBeNull();
-        expect(res!.source.id).toBe("ncei-crm-s-alaska");
+          expect(
+            res,
+            `${id}: live resolver returned null — endpoint may be unreachable or returned an error`,
+          ).not.toBeNull();
 
-        const { depths, minDepth, maxDepth } = res!.result;
+          expect(
+            res!.source.id,
+            `${id}: expected ncei-crm-s-alaska but got '${res?.source.id}' — CRM may have fallen through to a fallback source`,
+          ).toBe("ncei-crm-s-alaska");
 
-        expect(depths.length).toBe(LIVE_N * LIVE_N);
-        expect(depths.filter((d) => d > 0).length).toBeGreaterThan(0);
-        expect(Number.isFinite(minDepth)).toBe(true);
-        expect(Number.isFinite(maxDepth)).toBe(true);
-        expect(maxDepth - minDepth).toBeGreaterThan(5);
-        // Kodiak has shelf depths to ~360 m — a live grid should exceed 10 m
-        expect(maxDepth).toBeGreaterThan(10);
-      },
-      LIVE_TIMEOUT,
-    );
+          const { depths, minDepth, maxDepth } = res!.result;
 
-    it(
-      "resurrection-bay: live CRM grid has valid depth range and non-zero cell count",
-      async () => {
-        const meta = getPreset("resurrection-bay");
-        const res = await resolveBathymetrySource(meta, LIVE_N);
+          expect(depths.length, `${id}: depths.length must equal N²`).toBe(
+            LIVE_N * LIVE_N,
+          );
 
-        expect(res, "resurrection-bay: live resolver returned null").not.toBeNull();
-        expect(res!.source.id).toBe("ncei-crm-s-alaska");
+          const nonZeroCells = depths.filter((d) => d > 0).length;
+          expect(
+            nonZeroCells,
+            `${id}: at least one non-zero depth cell expected`,
+          ).toBeGreaterThan(0);
 
-        const { depths, minDepth, maxDepth } = res!.result;
-
-        expect(depths.length).toBe(LIVE_N * LIVE_N);
-        expect(depths.filter((d) => d > 0).length).toBeGreaterThan(0);
-        expect(Number.isFinite(minDepth)).toBe(true);
-        expect(Number.isFinite(maxDepth)).toBe(true);
-        expect(maxDepth - minDepth).toBeGreaterThan(5);
-        // Resurrection Bay is a deep glacial fjord reaching ~275 m
-        expect(maxDepth).toBeGreaterThan(10);
-      },
-      LIVE_TIMEOUT,
-    );
+          expect(
+            Number.isFinite(minDepth),
+            `${id}: minDepth must be finite`,
+          ).toBe(true);
+          expect(
+            Number.isFinite(maxDepth),
+            `${id}: maxDepth must be finite`,
+          ).toBe(true);
+          expect(maxDepth - minDepth, `${id}: depth range must be > 5 m`).toBeGreaterThan(5);
+          expect(
+            maxDepth,
+            `${id}: maxDepth must exceed ${minExpectedMaxDepth} m for a real survey grid`,
+          ).toBeGreaterThan(minExpectedMaxDepth);
+        },
+        LIVE_TIMEOUT,
+      );
+    }
   },
 );
