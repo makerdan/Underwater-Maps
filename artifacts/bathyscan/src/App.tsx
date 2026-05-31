@@ -369,7 +369,7 @@ function Main() {
   // would cause this effect to re-fire whenever the user manually toggles the
   // overlay off (while still on "noaa"), immediately re-enabling it against
   // their intent.
-  const prevCurrentsSourceRef = useRef<string | null>(null);
+  const prevCurrentsSourceRef = useRef<string>(currentsSource);
   useEffect(() => {
     const prev = prevCurrentsSourceRef.current;
     prevCurrentsSourceRef.current = currentsSource;

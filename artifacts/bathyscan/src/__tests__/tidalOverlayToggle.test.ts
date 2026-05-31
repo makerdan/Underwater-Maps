@@ -71,6 +71,20 @@ describe("tidalOverlay — currentsSource-to-noaa auto-enable effect", () => {
     expect(prevRef.current).toBe("noaa");
   });
 
+  it("does NOT fire on mount when prevRef is pre-seeded with 'noaa' (startup fix)", () => {
+    // This mirrors the fixed App.tsx initialisation:
+    //   useRef<string>(currentsSource)  ← currentsSource defaults to "noaa"
+    // On the very first effect run prev === "noaa" === currentsSource, so no
+    // spurious auto-enable should occur.
+    const prevRef = { current: "noaa" as string | null };
+    const shouldEnable = applyCurrentsSourceEffect({
+      currentsSource: "noaa",
+      prevRef,
+    });
+    expect(shouldEnable).toBe(false);
+    expect(prevRef.current).toBe("noaa");
+  });
+
   it("does NOT re-fire when currentsSource is already 'noaa' (user toggled overlay OFF)", () => {
     // Simulate: source was already "noaa" on the previous render.
     const prevRef = { current: "noaa" as string | null };
