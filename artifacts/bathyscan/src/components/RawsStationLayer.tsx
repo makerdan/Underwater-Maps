@@ -140,6 +140,7 @@ export const RawsStationPopover: React.FC<Props> = ({
 
   return (
     <div
+      data-testid="raws-station-popover"
       style={{
         position: "absolute",
         left,

@@ -88,6 +88,10 @@ import { TerrainDownloadPopover } from "@/components/TerrainDownloadPopover";
 import { useUpscaledHeatmap } from "@/hooks/useUpscaledHeatmap";
 import { useSatelliteTileStore } from "@/lib/satelliteTileStore";
 import { useSatelliteTile } from "@/hooks/useSatelliteTile";
+import {
+  registerRawsPopupHandlers,
+  registerRawsCanvasPositionGetter,
+} from "@/lib/testHelpers";
 
 interface TooltipState {
   visible: boolean;
@@ -491,6 +495,13 @@ export const OverviewMap: React.FC = () => {
   // Selected RAWS pin React state (drives popover)
   const [selectedRawsDatasetId, setSelectedRawsDatasetId] = useState<string | null>(null);
   const [selectedRawsPos, setSelectedRawsPos] = useState<{ cx: number; cy: number } | null>(null);
+  // Register popup state setters and canvas-position getter so e2e tests can
+  // both open the popover via the backdoor AND dispatch real canvas clicks at
+  // the actual rendered pin coordinates.
+  useEffect(() => {
+    registerRawsPopupHandlers(setSelectedRawsDatasetId, setSelectedRawsPos);
+    registerRawsCanvasPositionGetter(() => rawsCanvasPositionsRef.current);
+  }, []);
   useEffect(() => {
     rawsActiveRef.current = rawsOverlayActive;
     if (!rawsOverlayActive) {

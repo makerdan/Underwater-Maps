@@ -81,6 +81,34 @@ function syntheticTestGrid(): TerrainData {
   } as unknown as TerrainData;
 }
 
+// RAWS popup state setters registered by OverviewMap so e2e tests can open
+// the popover without reverse-engineering canvas hit coordinates.
+let _rawsPopupSetId: ((id: string | null) => void) | null = null;
+let _rawsPopupSetPos: ((pos: { cx: number; cy: number } | null) => void) | null = null;
+
+export function registerRawsPopupHandlers(
+  setId: (id: string | null) => void,
+  setPos: (pos: { cx: number; cy: number } | null) => void,
+): void {
+  _rawsPopupSetId = setId;
+  _rawsPopupSetPos = setPos;
+}
+
+// Getter for the canvas-space positions of rendered RAWS station pins.
+// Registered by OverviewMap via registerRawsCanvasPositionGetter so tests
+// can read actual rendered coordinates and dispatch real canvas clicks.
+let _rawsCanvasPositionGetter: (() => Array<{
+  datasetId: string;
+  cx: number;
+  cy: number;
+}>) | null = null;
+
+export function registerRawsCanvasPositionGetter(
+  getter: () => Array<{ datasetId: string; cx: number; cy: number }>,
+): void {
+  _rawsCanvasPositionGetter = getter;
+}
+
 // AppContext-backed setter wired up by the in-tree <TestBridge/> component
 // mounted inside <AppProvider/>. Without this, helpers have no way to reach
 // React context state from a plain window-side call.
@@ -452,6 +480,31 @@ export interface BathyTestApi {
   setZoneSlotColor: (slot: 0 | 1 | 2 | 3, color: string) => void;
   setActiveZoneWaterType: (wt: "saltwater" | "freshwater") => void;
   getZoneDefaultColor: (slot: 0 | 1 | 2 | 3) => string;
+  /**
+   * RAWS overlay helpers (Task #1070).
+   *
+   * Enable/disable the RAWS station overlay (same uiStore slice the 🌿 RAWS
+   * toggle in OverlaysToolsPanel mutates) and directly open the RAWS popover
+   * for a known datasetId without requiring a canvas hit-test. The overview
+   * map must be open so the canvas is mounted when calling
+   * `openRawsPopupForStation`.
+   */
+  setRawsOverlayActive: (active: boolean) => void;
+  isRawsOverlayActive: () => boolean;
+  openRawsPopupForStation: (datasetId: string) => boolean;
+  closeRawsPopup: () => void;
+  /**
+   * Returns the current canvas-space positions of all rendered RAWS station
+   * pins. Populated by the OverviewMap rAF loop after the RAWS overlay is
+   * enabled and stations have been drawn. Tests can read the (cx, cy) for a
+   * given datasetId and dispatch a real click event on the canvas element at
+   * those coordinates to exercise the full pin hit-test path.
+   */
+  getRawsCanvasPositions: () => Array<{
+    datasetId: string;
+    cx: number;
+    cy: number;
+  }>;
 }
 
 declare global {
@@ -981,6 +1034,21 @@ export function installTestHelpers(): void {
       useZoneOverlayStore.getState().setActiveWaterType(wt);
     },
     getZoneDefaultColor: (slot) => ZONE_DEFAULT_COLORS[slot],
+    setRawsOverlayActive: (active) =>
+      useUiStore.getState().setRawsOverlayActive(active),
+    isRawsOverlayActive: () => useUiStore.getState().rawsOverlayActive,
+    openRawsPopupForStation: (datasetId) => {
+      if (!_rawsPopupSetId || !_rawsPopupSetPos) return false;
+      _rawsPopupSetId(datasetId);
+      _rawsPopupSetPos({ cx: 120, cy: 120 });
+      return true;
+    },
+    closeRawsPopup: () => {
+      _rawsPopupSetId?.(null);
+      _rawsPopupSetPos?.(null);
+    },
+    getRawsCanvasPositions: () =>
+      _rawsCanvasPositionGetter ? _rawsCanvasPositionGetter() : [],
     showDepthProfileTerrainMenu: (x, y, point) =>
       useContextMenuStore
         .getState()
