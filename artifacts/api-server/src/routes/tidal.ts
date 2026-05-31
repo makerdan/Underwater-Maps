@@ -2,6 +2,7 @@ import { Router } from "express";
 import { logger } from "../lib/logger.js";
 import { registerCache } from "../lib/cacheRegistry.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import {
   buildSyntheticEvents,
   computeSlackSample,
@@ -13,6 +14,16 @@ import {
 const router = Router();
 
 const NOAA_BASE = "https://api.tidesandcurrents.noaa.gov";
+
+function isAdmin(userId: string): boolean {
+  const flag = process.env["BUCKET_MONITOR_ADMIN"] ?? "";
+  if (flag === "1" || flag === "true") return true;
+  const allowedIds = (process.env["ADMIN_USER_IDS"] ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return allowedIds.includes(userId);
+}
 
 interface NoaaStation {
   id: string;
@@ -404,28 +415,26 @@ function nextEventFrom(events: TideEvent[], refMs: number):
  * empty/partial station list and the 24h TTL would otherwise pin every
  * nearby caller to "no nearby station" estimates.
  *
- * Auth: requires header `x-admin-token` matching the `TIDAL_ADMIN_TOKEN`
- * environment variable. If the env var is unset the endpoint returns 503
- * so it can never be hit unauthenticated by accident.
+ * Auth: requires a valid Clerk session (401 if unauthenticated) and admin
+ * privileges (403 if authenticated but not admin), consistent with
+ * GET /admin/bucket-monitor. Admin is determined by BUCKET_MONITOR_ADMIN=1
+ * or ADMIN_USER_IDS (comma-separated Clerk user IDs).
  */
-router.post("/tidal/admin/refresh-stations", (req, res): void => {
-  const expected = process.env["TIDAL_ADMIN_TOKEN"];
-  if (!expected) {
-    res.status(503).json({
-      error: "Admin refresh disabled: set TIDAL_ADMIN_TOKEN to enable.",
-    });
-    return;
-  }
-  const provided = req.header("x-admin-token");
-  if (provided !== expected) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-  const cleared = stationListsCache.size;
-  stationListsCache.clear();
-  logger.info({ cleared }, "NOAA station caches cleared via admin endpoint");
-  res.json({ ok: true, cleared });
-});
+router.post(
+  "/tidal/admin/refresh-stations",
+  requireAuth,
+  asyncHandler(async (req, res): Promise<void> => {
+    const userId = (req as AuthenticatedRequest).clerkUserId;
+    if (!isAdmin(userId)) {
+      res.status(403).json({ error: "forbidden", details: "Admin access required" });
+      return;
+    }
+    const cleared = stationListsCache.size;
+    stationListsCache.clear();
+    logger.info({ cleared }, "NOAA station caches cleared via admin endpoint");
+    res.json({ ok: true, cleared });
+  }),
+);
 
 // GET /tidal?lat=&lon=&datetime=
 router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {

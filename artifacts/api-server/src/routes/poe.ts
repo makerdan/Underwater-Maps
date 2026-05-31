@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { promises as fsPromises } from "fs";
 import path from "path";
 import { createHash } from "crypto";
@@ -172,7 +173,8 @@ async function logUsage(
       totalTokens,
       estimatedPoints: estimatePoints(model, totalTokens),
     });
-  } catch {
+  } catch (err) {
+    console.warn("[poe] logUsage failed:", (err as Error)?.message ?? err);
   }
 }
 
@@ -812,7 +814,7 @@ async function runTiledClassify(opts: {
   };
 }
 
-router.post("/classify", async (req, res) => {
+router.post("/classify", asyncHandler(async (req, res) => {
   const userId = getAuthenticatedUserId(req);
 
   const {
@@ -1128,7 +1130,7 @@ router.post("/classify", async (req, res) => {
     }
     handlePoeError(err, res);
   }
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Query (multi-turn, tool-calling via Responses API)
@@ -1303,7 +1305,7 @@ type ResponsesOutputItem = {
   content?: Array<{ type: string; text?: string }>;
 };
 
-router.post("/query", async (req, res) => {
+router.post("/query", asyncHandler(async (req, res) => {
   const userId = getAuthenticatedUserId(req);
 
   const { userMessage, context, history = [], previousResponseId, includeTools = true } = req.body as {
@@ -1399,13 +1401,13 @@ router.post("/query", async (req, res) => {
   } catch (err) {
     handlePoeError(err, res);
   }
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Describe (SSE streaming)
 // ---------------------------------------------------------------------------
 
-router.post("/describe", async (req, res) => {
+router.post("/describe", asyncHandler(async (req, res) => {
   const userId = getAuthenticatedUserId(req);
 
   const { lon, lat, depth, zoneName, datasetName, waterType = "saltwater" } = req.body as {
@@ -1487,7 +1489,7 @@ router.post("/describe", async (req, res) => {
       res.end();
     }
   }
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Help Q&A — answers user questions about BathyScan using in-app help
@@ -1549,7 +1551,7 @@ function loadHelpContext(): string {
 
 const HELP_SYSTEM_PROMPT = `You are the in-app help assistant for BathyScan, a 3D seafloor and lake-bed exploration web app. Answer the user's question using ONLY the help articles provided below as grounding truth. If the question is not about BathyScan or the answer is not in the articles, politely say you can only answer questions about the BathyScan app. Keep answers concise (3-6 sentences) and refer to specific features, panels, and keyboard shortcuts by name when relevant. Do not invent features that are not described in the articles.`;
 
-router.post("/help", async (req, res) => {
+router.post("/help", asyncHandler(async (req, res) => {
   const userId = getAuthenticatedUserId(req);
   const { question, history = [] } = req.body as {
     question?: string;
@@ -1618,7 +1620,7 @@ router.post("/help", async (req, res) => {
   } catch (err) {
     handlePoeError(err, res);
   }
-});
+}));
 
 // ---------------------------------------------------------------------------
 // POST /upscale — auto-upscale a 2D heatmap PNG via the TopazLabs model on
@@ -1666,7 +1668,7 @@ function extractDataUrlFromModelResponse(
   return null;
 }
 
-router.post("/upscale", async (req, res) => {
+router.post("/upscale", asyncHandler(async (req, res) => {
   const userId = getAuthenticatedUserId(req);
 
   // `generated` is accepted for spec alignment (reserved for future use by
@@ -1755,6 +1757,6 @@ router.post("/upscale", async (req, res) => {
     logger.warn({ err }, "[poe/upscale] Upscale request failed");
     handlePoeError(err, res);
   }
-});
+}));
 
 export default router;

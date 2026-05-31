@@ -2,6 +2,19 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
 
+vi.mock("@clerk/express", () => ({
+  clerkMiddleware: vi.fn(
+    () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  ),
+  getAuth: vi.fn((req: { headers: Record<string, string> }) => ({
+    userId: req.headers["x-test-user-id"] ?? null,
+  })),
+}));
+
+vi.mock("@clerk/shared/keys", () => ({
+  publishableKeyFromHost: vi.fn(() => "pk_test_mock"),
+}));
+
 import tidalRouter, { __clearHighLowEventsCacheForTests } from "../tidal";
 
 function makeApp() {
@@ -140,7 +153,7 @@ describe("GET /tidal", () => {
       lat: 55.33,
       lng: -131.63,
     };
-    process.env["TIDAL_ADMIN_TOKEN"] = "test-token";
+    process.env["ADMIN_USER_IDS"] = "user_test_admin";
 
     try {
       // First request: NOAA returns empty station lists for both networks
@@ -157,14 +170,14 @@ describe("GET /tidal", () => {
       expect(first.body.source).toBe("estimated");
       expect(first.body.heightsStation).toBeUndefined();
 
-      // Admin endpoint requires the configured token.
+      // Admin endpoint requires authentication — no session → 401.
       const unauth = await request(app).post("/tidal/admin/refresh-stations");
       expect(unauth.status).toBe(401);
 
-      // With the right token it clears the cache and reports what it cleared.
+      // Authenticated admin user clears the cache and reports what it cleared.
       const refresh = await request(app)
         .post("/tidal/admin/refresh-stations")
-        .set("x-admin-token", "test-token");
+        .set("x-test-user-id", "user_test_admin");
       expect(refresh.status).toBe(200);
       expect(refresh.body.ok).toBe(true);
       expect(refresh.body.cleared).toBe(2);
@@ -193,7 +206,7 @@ describe("GET /tidal", () => {
       expect(second.body.heightsSource).toBe("noaa");
       expect(second.body.heightsStation).toEqual({ id: station.id, name: station.name });
     } finally {
-      delete process.env["TIDAL_ADMIN_TOKEN"];
+      delete process.env["ADMIN_USER_IDS"];
     }
   });
 
@@ -310,13 +323,13 @@ describe("GET /tidal", () => {
     }
   });
 
-  it("returns 503 from the admin refresh endpoint when TIDAL_ADMIN_TOKEN is unset", async () => {
-    delete process.env["TIDAL_ADMIN_TOKEN"];
+  it("returns 403 from the admin refresh endpoint when the authenticated user is not an admin", async () => {
+    delete process.env["ADMIN_USER_IDS"];
+    delete process.env["BUCKET_MONITOR_ADMIN"];
     const res = await request(makeApp())
       .post("/tidal/admin/refresh-stations")
-      .set("x-admin-token", "anything");
-    expect(res.status).toBe(503);
-    expect(res.body.error).toMatch(/TIDAL_ADMIN_TOKEN/);
+      .set("x-test-user-id", "user_not_admin");
+    expect(res.status).toBe(403);
   });
 
   it("populates legacy stationName/stationId from the NOAA heights station when available", async () => {
@@ -354,5 +367,14 @@ describe("GET /tidal", () => {
     expect(res.body.stationName).toBe(station.name);
     expect(res.body.stationId).toBe(station.id);
     expect(res.body.heightsStation).toEqual({ id: station.id, name: station.name });
+  });
+});
+
+describe("POST /tidal/admin/refresh-stations — auth guard", () => {
+  it("returns 401 for unauthenticated callers (no session)", async () => {
+    const app = express();
+    app.use(tidalRouter);
+    const res = await request(app).post("/tidal/admin/refresh-stations");
+    expect(res.status).toBe(401);
   });
 });

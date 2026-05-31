@@ -802,7 +802,7 @@ router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> =
 //   size — integer grid resolution, clamped to [32, 256] (default 128)
 //
 // No auth required — land elevation data is public.
-router.get("/terrain/land", async (req, res): Promise<void> => {
+router.get("/terrain/land", asyncHandler(async (req, res): Promise<void> => {
   const rawBbox = String(req.query["bbox"] ?? "");
   const rawSize = req.query["size"];
 
@@ -842,7 +842,7 @@ router.get("/terrain/land", async (req, res): Promise<void> => {
     const msg = err instanceof Error ? err.message : "Land DEM fetch failed";
     res.status(502).json({ error: "upstream_error", details: msg });
   }
-});
+}));
 
 // ── GET /terrain/satellite-tile ───────────────────────────────────────────────
 // Proxies and caches a satellite/aerial imagery PNG from ESRI World Imagery
@@ -857,7 +857,7 @@ router.get("/terrain/land", async (req, res): Promise<void> => {
 // No auth required — the underlying ESRI World Imagery service is public.
 // Returns image/png on success; 502 on upstream failure (client falls back to
 // procedural colour ramp gracefully).
-router.get("/terrain/satellite-tile", async (req, res): Promise<void> => {
+router.get("/terrain/satellite-tile", asyncHandler(async (req, res): Promise<void> => {
   const rawBbox = String(req.query["bbox"] ?? "");
   const rawSize = req.query["size"];
 
@@ -905,7 +905,7 @@ router.get("/terrain/satellite-tile", async (req, res): Promise<void> => {
     const msg = err instanceof Error ? err.message : "Satellite tile fetch failed";
     res.status(502).json({ error: "upstream_error", details: msg });
   }
-});
+}));
 
 // ── GET /terrain/download/info ────────────────────────────────────────────────
 // Lightweight preflight for the Overview Map download tool.  Returns the
@@ -916,7 +916,7 @@ router.get("/terrain/satellite-tile", async (req, res): Promise<void> => {
 // Auth-required so anonymous users cannot probe our upstream APIs.
 //
 // Max bbox: 10° × 10°.  Returns 400 for out-of-range params.
-router.get("/terrain/download/info", requireAuth, async (req, res): Promise<void> => {
+router.get("/terrain/download/info", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const north = parseFloat(String(req.query["north"] ?? ""));
   const south = parseFloat(String(req.query["south"] ?? ""));
   const east  = parseFloat(String(req.query["east"] ?? ""));
@@ -948,7 +948,7 @@ router.get("/terrain/download/info", requireAuth, async (req, res): Promise<void
     const msg = err instanceof Error ? err.message : "Preflight failed";
     res.status(502).json({ error: "upstream_error", details: msg });
   }
-});
+}));
 
 // ── GET /terrain/download ─────────────────────────────────────────────────────
 // Builds the full bathymetric grid for the requested bbox and resolution, then
@@ -958,7 +958,7 @@ router.get("/terrain/download/info", requireAuth, async (req, res): Promise<void
 // Query params: north, south, east, west (degrees), resolution (64|256|512).
 // Max bbox: 10° × 10°.
 // Only water cells (depth > 0) are emitted; land/topography is excluded.
-router.get("/terrain/download", requireAuth, async (req, res): Promise<void> => {
+router.get("/terrain/download", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const north = parseFloat(String(req.query["north"] ?? ""));
   const south = parseFloat(String(req.query["south"] ?? ""));
   const east  = parseFloat(String(req.query["east"] ?? ""));
@@ -1017,7 +1017,7 @@ router.get("/terrain/download", requireAuth, async (req, res): Promise<void> => 
       res.end();
     }
   }
-});
+}));
 
 // ── POST /datasets/upload (multipart/form-data via multer) ───────────────────
 //
