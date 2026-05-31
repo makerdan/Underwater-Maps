@@ -27,8 +27,13 @@ import {
   filterVisibleSubstrateFeatures,
   buildPolyRenders,
   buildSelectedSubstrate,
+  computePolyZoneProps,
 } from "@/components/SubstrateLayer";
 import { useUiStore } from "@/lib/uiStore";
+import {
+  useZoneOverlayStore,
+  ZONE_DEFAULT_COLORS,
+} from "@/lib/zoneOverlayStore";
 
 // ---------------------------------------------------------------------------
 // Bounding box that contains all fixture polygons.
@@ -498,5 +503,206 @@ describe("SubstrateLayer click guard: hidden polygons do not set selectedSubstra
     }
 
     expect(useUiStore.getState().selectedSubstrate?.unitId).toBe("poly-sand");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Zone colour override: SubstrateLayer applies zoneOverlayStore slot colours
+//
+// These tests call computePolyZoneProps — the exact pure helper extracted
+// from SubstrateLayer's allPolys.map() loop — so a regression in the
+// component's production decision path is caught immediately.
+//
+// The function signature mirrors the component's per-polygon block:
+//   computePolyZoneProps(substrate, classVisible, zoneOverlayEnabled, zoneSlots)
+//   → { colorOverride: string | undefined; isVisible: boolean }
+// ---------------------------------------------------------------------------
+
+describe("SubstrateLayer zone colour override (zoneOverlayEnabled=true)", () => {
+  beforeEach(() => {
+    try { localStorage.clear(); } catch { /* ignore */ }
+    useZoneOverlayStore.getState().resetToDefaults();
+  });
+
+  function slots() {
+    return useZoneOverlayStore.getState().slots;
+  }
+
+  it("sand substrate receives slot-0 (default warm-yellow) colour override", () => {
+    const { colorOverride } = computePolyZoneProps("sand", true, true, slots());
+    expect(colorOverride).toBe(ZONE_DEFAULT_COLORS[0]);
+  });
+
+  it("gravel substrate receives slot-1 (default earthy-amber) colour override", () => {
+    const { colorOverride } = computePolyZoneProps("gravel", true, true, slots());
+    expect(colorOverride).toBe(ZONE_DEFAULT_COLORS[1]);
+  });
+
+  it("silt substrate receives slot-2 (default cool-blue-grey) colour override", () => {
+    const { colorOverride } = computePolyZoneProps("silt", true, true, slots());
+    expect(colorOverride).toBe(ZONE_DEFAULT_COLORS[2]);
+  });
+
+  it("bedrock substrate receives slot-3 (default terracotta) colour override", () => {
+    const { colorOverride } = computePolyZoneProps("bedrock", true, true, slots());
+    expect(colorOverride).toBe(ZONE_DEFAULT_COLORS[3]);
+  });
+
+  it("colorOverride reflects a user-set custom colour for slot 0", () => {
+    useZoneOverlayStore.getState().setSlotColor(0, "#ff1234");
+    const { colorOverride } = computePolyZoneProps("sand", true, true, slots());
+    expect(colorOverride).toBe("#ff1234");
+  });
+
+  it("custom colour on slot 2 flows through to a silt polygon", () => {
+    useZoneOverlayStore.getState().setSlotColor(2, "#00aabb");
+    const { colorOverride } = computePolyZoneProps("silt", true, true, slots());
+    expect(colorOverride).toBe("#00aabb");
+  });
+
+  it("each of the four slots carries an independent custom colour", () => {
+    useZoneOverlayStore.getState().setSlotColor(0, "#aaaa00");
+    useZoneOverlayStore.getState().setSlotColor(1, "#00aaaa");
+    useZoneOverlayStore.getState().setSlotColor(2, "#aa00aa");
+    useZoneOverlayStore.getState().setSlotColor(3, "#aaaaaa");
+    const s = slots();
+    expect(computePolyZoneProps("sand",    true, true, s).colorOverride).toBe("#aaaa00");
+    expect(computePolyZoneProps("gravel",  true, true, s).colorOverride).toBe("#00aaaa");
+    expect(computePolyZoneProps("silt",    true, true, s).colorOverride).toBe("#aa00aa");
+    expect(computePolyZoneProps("bedrock", true, true, s).colorOverride).toBe("#aaaaaa");
+  });
+
+  it("compound label 'sandy reef' resolves to the slot-0 colour", () => {
+    useZoneOverlayStore.getState().setSlotColor(0, "#beefed");
+    const { colorOverride } = computePolyZoneProps("sandy reef", true, true, slots());
+    expect(colorOverride).toBe("#beefed");
+  });
+
+  it("mixed-case substrate 'SILT' still resolves to the correct slot colour", () => {
+    const { colorOverride } = computePolyZoneProps("SILT", true, true, slots());
+    expect(colorOverride).toBe(ZONE_DEFAULT_COLORS[2]);
+  });
+});
+
+describe("SubstrateLayer zone slot visibility gate (zoneOverlayEnabled=true)", () => {
+  beforeEach(() => {
+    try { localStorage.clear(); } catch { /* ignore */ }
+    useZoneOverlayStore.getState().resetToDefaults();
+  });
+
+  function slots() {
+    return useZoneOverlayStore.getState().slots;
+  }
+
+  it("all polygons are visible by default (all slots visible)", () => {
+    expect(computePolyZoneProps("sand",    true, true, slots()).isVisible).toBe(true);
+    expect(computePolyZoneProps("gravel",  true, true, slots()).isVisible).toBe(true);
+    expect(computePolyZoneProps("silt",    true, true, slots()).isVisible).toBe(true);
+    expect(computePolyZoneProps("bedrock", true, true, slots()).isVisible).toBe(true);
+  });
+
+  it("hiding slot 0 makes sand polygons invisible", () => {
+    useZoneOverlayStore.getState().setSlotVisible(0, false);
+    expect(computePolyZoneProps("sand", true, true, slots()).isVisible).toBe(false);
+  });
+
+  it("hiding slot 1 makes gravel polygons invisible", () => {
+    useZoneOverlayStore.getState().setSlotVisible(1, false);
+    expect(computePolyZoneProps("gravel", true, true, slots()).isVisible).toBe(false);
+  });
+
+  it("hiding slot 2 makes silt polygons invisible", () => {
+    useZoneOverlayStore.getState().setSlotVisible(2, false);
+    expect(computePolyZoneProps("silt", true, true, slots()).isVisible).toBe(false);
+  });
+
+  it("hiding slot 3 makes bedrock polygons invisible", () => {
+    useZoneOverlayStore.getState().setSlotVisible(3, false);
+    expect(computePolyZoneProps("bedrock", true, true, slots()).isVisible).toBe(false);
+  });
+
+  it("hiding slot 0 does not affect polygons in slots 1–3", () => {
+    useZoneOverlayStore.getState().setSlotVisible(0, false);
+    const s = slots();
+    expect(computePolyZoneProps("gravel",  true, true, s).isVisible).toBe(true);
+    expect(computePolyZoneProps("silt",    true, true, s).isVisible).toBe(true);
+    expect(computePolyZoneProps("bedrock", true, true, s).isVisible).toBe(true);
+  });
+
+  it("re-showing a hidden slot restores polygon visibility", () => {
+    useZoneOverlayStore.getState().setSlotVisible(2, false);
+    expect(computePolyZoneProps("silt", true, true, slots()).isVisible).toBe(false);
+    useZoneOverlayStore.getState().setSlotVisible(2, true);
+    expect(computePolyZoneProps("silt", true, true, slots()).isVisible).toBe(true);
+  });
+
+  it("polygon is invisible when BOTH class is hidden AND slot is hidden", () => {
+    useZoneOverlayStore.getState().setSlotVisible(0, false);
+    expect(computePolyZoneProps("sand", false, true, slots()).isVisible).toBe(false);
+  });
+
+  it("polygon is invisible when class is hidden even if slot is visible", () => {
+    expect(computePolyZoneProps("sand", false, true, slots()).isVisible).toBe(false);
+  });
+
+  it("polygon is invisible when slot is hidden even if class filter is open", () => {
+    useZoneOverlayStore.getState().setSlotVisible(3, false);
+    expect(computePolyZoneProps("bedrock", true, true, slots()).isVisible).toBe(false);
+  });
+
+  it("resetToDefaults restores all slot visibilities", () => {
+    useZoneOverlayStore.getState().setSlotVisible(0, false);
+    useZoneOverlayStore.getState().setSlotVisible(1, false);
+    useZoneOverlayStore.getState().resetToDefaults();
+    const s = slots();
+    expect(computePolyZoneProps("sand",   true, true, s).isVisible).toBe(true);
+    expect(computePolyZoneProps("gravel", true, true, s).isVisible).toBe(true);
+  });
+
+  it("hiding all four slots makes every substrate class invisible", () => {
+    for (let i = 0; i < 4; i++) {
+      useZoneOverlayStore.getState().setSlotVisible(i as 0 | 1 | 2 | 3, false);
+    }
+    const s = slots();
+    expect(computePolyZoneProps("sand",    true, true, s).isVisible).toBe(false);
+    expect(computePolyZoneProps("gravel",  true, true, s).isVisible).toBe(false);
+    expect(computePolyZoneProps("silt",    true, true, s).isVisible).toBe(false);
+    expect(computePolyZoneProps("bedrock", true, true, s).isVisible).toBe(false);
+  });
+});
+
+describe("SubstrateLayer zone overlay disabled (zoneOverlayEnabled=false)", () => {
+  beforeEach(() => {
+    try { localStorage.clear(); } catch { /* ignore */ }
+    useZoneOverlayStore.getState().resetToDefaults();
+  });
+
+  function slots() {
+    return useZoneOverlayStore.getState().slots;
+  }
+
+  it("colorOverride is undefined when zone overlay is disabled", () => {
+    const { colorOverride } = computePolyZoneProps("sand", true, false, slots());
+    expect(colorOverride).toBeUndefined();
+  });
+
+  it("isVisible is true (classVisible=true) regardless of slot hidden state when overlay is off", () => {
+    useZoneOverlayStore.getState().setSlotVisible(0, false);
+    const { isVisible } = computePolyZoneProps("sand", true, false, slots());
+    expect(isVisible).toBe(true);
+  });
+
+  it("polygon is still invisible when class is hidden, even with overlay off", () => {
+    const { isVisible } = computePolyZoneProps("sand", false, false, slots());
+    expect(isVisible).toBe(false);
+  });
+
+  it("buildPolyRenders preserves the server-side poly.color when overlay is off", () => {
+    const feature = makePolygonFeature("poly-sand", "sand", "#server-color");
+    const polys = buildPolyRenders([feature], ...BOUNDS);
+    expect(polys[0]!.color).toBe("#server-color");
+    // And overlay disabled means no colorOverride
+    const { colorOverride } = computePolyZoneProps("sand", true, false, slots());
+    expect(colorOverride).toBeUndefined();
   });
 });

@@ -162,6 +162,38 @@ export function filterVisibleSubstrateFeatures(
 }
 
 /**
+ * Pure helper: computes the zone-overlay render props for a single polygon.
+ *
+ * Mirrors the per-polygon decision block inside SubstrateLayer's JSX map:
+ *   - When `zoneOverlayEnabled` is true, looks up the substrate's slot in
+ *     `zoneSlots` and returns the slot colour as `colorOverride` plus the
+ *     slot's `visible` flag ANDed with `classVisible` into `isVisible`.
+ *   - When `zoneOverlayEnabled` is false, `colorOverride` is `undefined` and
+ *     visibility is determined solely by `classVisible`.
+ *
+ * Exported so unit tests can exercise the exact production path without
+ * spinning up a React Three Fiber canvas.
+ */
+export function computePolyZoneProps(
+  substrate: string,
+  classVisible: boolean,
+  zoneOverlayEnabled: boolean,
+  zoneSlots: readonly import("@/lib/zoneOverlayStore").ZoneSlot[],
+): { colorOverride: string | undefined; isVisible: boolean } {
+  let colorOverride: string | undefined;
+  let zoneVisible = true;
+  if (zoneOverlayEnabled) {
+    const slot = substrateClassToSlot(substrate);
+    const zoneSlot = zoneSlots[slot];
+    if (zoneSlot) {
+      colorOverride = zoneSlot.color;
+      zoneVisible = zoneSlot.visible;
+    }
+  }
+  return { colorOverride, isVisible: classVisible && zoneVisible };
+}
+
+/**
  * Pure helper: converts an array of SubstrateFeatures (already filtered to
  * only the visible ones) into the PolyRender descriptors the 3D scene uses.
  *
@@ -393,17 +425,12 @@ export const SubstrateLayer: React.FC = () => {
           p.feature.properties.substrate.toLowerCase(),
         );
         // When the zone overlay is active, also respect per-slot zone visibility.
-        let colorOverride: string | undefined;
-        let zoneVisible = true;
-        if (zoneOverlayEnabled) {
-          const slot = substrateClassToSlot(p.feature.properties.substrate);
-          const zoneSlot = zoneSlots[slot];
-          if (zoneSlot) {
-            colorOverride = zoneSlot.color;
-            zoneVisible = zoneSlot.visible;
-          }
-        }
-        const isVisible = classVisible && zoneVisible;
+        const { colorOverride, isVisible } = computePolyZoneProps(
+          p.feature.properties.substrate,
+          classVisible,
+          zoneOverlayEnabled,
+          zoneSlots,
+        );
         return (
           <SubstratePoly
             key={p.stableKey}
