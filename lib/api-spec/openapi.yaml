@@ -3473,6 +3473,91 @@ components:
                   visible:
                     type: boolean
                 required: [color, visible]
+        weatherStationsActive:
+          type: boolean
+          default: false
+          description: Show ASOS/AWOS weather station overlay on the overview map.
+        rawsOverlayActive:
+          type: boolean
+          default: false
+          description: Show RAWS (Remote Automated Weather Stations) overlay on the overview map.
+        windOverlayActive:
+          type: boolean
+          default: false
+          description: Show wind barb overlay on the overview map.
+        tideOverlayActive:
+          type: boolean
+          default: false
+          description: Show NOAA tidal station overlay on the overview map.
+        currentOverlayActive:
+          type: boolean
+          default: false
+          description: Show NOAA ocean current overlay on the overview map.
+        currentDepthLayers:
+          type: array
+          items:
+            type: string
+            enum: [surface, mid, near-bottom]
+          default: [mid]
+          description: Which depth layers to display for the current overlay.
+        sidePaneCollapsed:
+          type: boolean
+          default: false
+          description: Whether the side panel is collapsed.
+        zonePaintBrushRadius:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 4
+          description: Brush radius (in grid cells) used when painting zone assignments.
+        zoneOverlayEnabled:
+          type: boolean
+          default: false
+          description: Whether the zone colour overlay is visible on the terrain.
+        zonePaintMode:
+          type: boolean
+          default: false
+          description: Whether the zone paint tool is active.
+        zonePaintSlot:
+          type: integer
+          minimum: 0
+          maximum: 3
+          default: 0
+          description: Currently selected zone paint slot (0–3).
+        substrateColorMode:
+          type: boolean
+          default: false
+          description: When true, the terrain uses substrate-class colours instead of depth palette.
+        hiddenSubstrateClasses:
+          type: array
+          items:
+            type: string
+          default: []
+          description: List of substrate class names hidden from the substrate overlay.
+        intertidalHotspotsEnabled:
+          type: boolean
+          default: false
+          description: Whether the intertidal hotspots overlay is visible.
+        intertidalScoreMode:
+          type: string
+          enum: [tidepool, beachcombing]
+          default: tidepool
+          description: Scoring algorithm used for intertidal hotspot ranking.
+        efhOverlayEnabled:
+          type: boolean
+          default: false
+          description: Whether the Essential Fish Habitat polygon overlay is visible.
+        hiddenEfhSpecies:
+          type: array
+          items:
+            type: string
+          default: []
+          description: List of EFH species common names hidden from the EFH overlay.
+        globalFontSize:
+          type: string
+          enum: [smallest, small, medium, large, x-large, largest]
+          default: medium
+          description: Global UI font size level applied throughout the app.
 
     ApiError:
       type: object
