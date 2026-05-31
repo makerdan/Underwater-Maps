@@ -1312,7 +1312,7 @@ function TidalSection() {
         <div style={S.card}>
           <div style={S.cardHeader}>VISUALISATION</div>
           <SelectRow
-            label="Current Arrow Density"
+            label="Global Arrow Density"
             value={s.currentArrowDensity}
             onChange={s.setCurrentArrowDensity}
             options={[
@@ -1320,6 +1320,40 @@ function TidalSection() {
               { value: "normal", label: "Normal" },
               { value: "dense", label: "Dense" },
             ]}
+            sublabel="Default density used when no per-layer override is set"
+          />
+          <SelectRow
+            label="Surface Layer Density"
+            value={s.layerArrowDensity.surface}
+            onChange={(v) => s.setLayerArrowDensity("surface", v)}
+            options={[
+              { value: "sparse" as const, label: "Sparse" },
+              { value: "normal" as const, label: "Normal" },
+              { value: "dense" as const, label: "Dense" },
+            ]}
+            sublabel="Arrow density for the surface current layer"
+          />
+          <SelectRow
+            label="Mid-water Layer Density"
+            value={s.layerArrowDensity.mid}
+            onChange={(v) => s.setLayerArrowDensity("mid", v)}
+            options={[
+              { value: "sparse" as const, label: "Sparse" },
+              { value: "normal" as const, label: "Normal" },
+              { value: "dense" as const, label: "Dense" },
+            ]}
+            sublabel="Arrow density for the mid-water current layer"
+          />
+          <SelectRow
+            label="Near-bottom Layer Density"
+            value={s.layerArrowDensity["near-bottom"]}
+            onChange={(v) => s.setLayerArrowDensity("near-bottom", v)}
+            options={[
+              { value: "sparse" as const, label: "Sparse" },
+              { value: "normal" as const, label: "Normal" },
+              { value: "dense" as const, label: "Dense" },
+            ]}
+            sublabel="Arrow density for the near-bottom current layer"
           />
           <SelectRow
             label="Wind Overlay Style"

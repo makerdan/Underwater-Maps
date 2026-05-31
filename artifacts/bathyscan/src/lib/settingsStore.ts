@@ -209,6 +209,13 @@ export interface SettingsState {
   defaultTidalDepthLayer: TidalDepthLayer;
   currentArrowDensity: CurrentArrowDensity;
   /**
+   * Per-depth-layer arrow density override. When set, overrides the global
+   * `currentArrowDensity` for that specific layer, letting users e.g. keep
+   * surface arrows sparse while boosting near-bottom density for drift
+   * planning. Defaults to "normal" for each layer on first install.
+   */
+  layerArrowDensity: Record<TidalDepthLayer, CurrentArrowDensity>;
+  /**
    * Per-overlay visual style for the always-on Wind / Tide / Current
    * overlays. "arrows" (default) keeps the directional arrow field;
    * "particles" replaces it with a streaming particle flow that emphasises
@@ -411,6 +418,7 @@ interface SettingsActions {
   setAutoLoadTidal: (v: boolean) => void;
   setDefaultTidalDepthLayer: (v: TidalDepthLayer) => void;
   setCurrentArrowDensity: (v: CurrentArrowDensity) => void;
+  setLayerArrowDensity: (layer: TidalDepthLayer, density: CurrentArrowDensity) => void;
   setWindOverlayStyle: (v: WindOverlayStyle) => void;
   setTideOverlayStyle: (v: TideOverlayStyle) => void;
   setCurrentOverlayStyle: (v: CurrentOverlayStyle) => void;
@@ -652,6 +660,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   autoLoadTidal: false,
   defaultTidalDepthLayer: "surface",
   currentArrowDensity: "normal",
+  layerArrowDensity: { surface: "normal", mid: "normal", "near-bottom": "normal" },
   windOverlayStyle: "arrows",
   tideOverlayStyle: "arrows",
   currentOverlayStyle: "arrows",
@@ -740,7 +749,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   ],
   tidal: [
     "autoLoadTidal", "defaultTidalDepthLayer", "currentArrowDensity",
-    "windOverlayStyle", "tideOverlayStyle", "currentOverlayStyle",
+    "layerArrowDensity", "windOverlayStyle", "tideOverlayStyle", "currentOverlayStyle",
   ],
   currents: [
     "currentsEnabled", "currentsSource", "currentsManualDirectionDeg",
@@ -893,6 +902,10 @@ export const useSettingsStore = create<SettingsStore>()(
         setAutoLoadTidal: setter("autoLoadTidal"),
         setDefaultTidalDepthLayer: setter("defaultTidalDepthLayer"),
         setCurrentArrowDensity: setter("currentArrowDensity"),
+        setLayerArrowDensity: (layer, density) =>
+          set((state) => ({
+            layerArrowDensity: { ...state.layerArrowDensity, [layer]: density },
+          })),
         setWindOverlayStyle: setter("windOverlayStyle"),
         setTideOverlayStyle: setter("tideOverlayStyle"),
         setCurrentOverlayStyle: setter("currentOverlayStyle"),
