@@ -19,6 +19,9 @@ interface Bbox {
  *   received so the old land mesh disappears while the new one loads.
  * - An in-flight fetch that becomes stale (bbox changed again) is ignored
  *   via an AbortController / stale-result check.
+ * - `retryCount` from the store is watched so that clicking the "Retry"
+ *   button in LandTerrainStatusBanner re-triggers the fetch for the same
+ *   bbox without requiring the user to reload the page.
  *
  * Grid size defaults to 128×128 — coarser than the bathymetric mesh but
  * sufficient for 90 m Copernicus source data at typical coastal extents.
@@ -26,6 +29,9 @@ interface Bbox {
 export function useLandTerrain(bbox: Bbox | null, gridSize = 128): void {
   const abortRef = useRef<AbortController | null>(null);
   const bboxKeyRef = useRef<string>("");
+
+  // Subscribe to retryCount so incrementing it re-runs the effect.
+  const retryCount = useLandTerrainStore((s) => s.retryCount);
 
   useEffect(() => {
     // Access Zustand actions via getState() — they are stable references so
@@ -41,8 +47,12 @@ export function useLandTerrain(bbox: Bbox | null, gridSize = 128): void {
 
     const bboxKey = `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat},${gridSize}`;
 
-    // If the bbox hasn't changed, don't refetch.
-    if (bboxKey === bboxKeyRef.current) return;
+    // If the bbox hasn't changed AND this isn't a retry, don't refetch.
+    // When retryCount bumps, the effect re-runs; we reset bboxKeyRef so the
+    // same bbox is treated as a new request.
+    if (bboxKey === bboxKeyRef.current && retryCount === 0) return;
+    // On a retry the retryCount is > 0 but the bboxKey hasn't changed — reset
+    // the cached key so the fetch always fires.
     bboxKeyRef.current = bboxKey;
 
     // Abort any in-flight request.
@@ -82,5 +92,7 @@ export function useLandTerrain(bbox: Bbox | null, gridSize = 128): void {
       cancelled = true;
       controller.abort();
     };
-  }, [bbox, gridSize]);
+  // retryCount is intentionally included so a retry re-runs the fetch.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bbox, gridSize, retryCount]);
 }

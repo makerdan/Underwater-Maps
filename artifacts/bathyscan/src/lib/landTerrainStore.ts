@@ -28,21 +28,31 @@ interface LandTerrainStore {
   isLoading: boolean;
   /** Error message from the last failed fetch. */
   error: string | null;
+  /**
+   * Incremented each time the user clicks "Retry". The useLandTerrain hook
+   * watches this value so a bump re-triggers the fetch for the current bbox
+   * even when the bbox itself hasn't changed.
+   */
+  retryCount: number;
 
   setLandGrid: (grid: LandGrid | null) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   /** Reset to the initial empty state (called when the active dataset changes). */
   clear: () => void;
+  /** Increment retryCount to signal useLandTerrain to re-fetch. */
+  retry: () => void;
 }
 
 export const useLandTerrainStore = create<LandTerrainStore>((set) => ({
   landGrid: null,
   isLoading: false,
   error: null,
+  retryCount: 0,
 
   setLandGrid: (grid) => set({ landGrid: grid, isLoading: false, error: null }),
   setLoading: (loading) => set({ isLoading: loading }),
   setError: (error) => set({ error, isLoading: false }),
   clear: () => set({ landGrid: null, isLoading: false, error: null }),
+  retry: () => set((s) => ({ retryCount: s.retryCount + 1, error: null })),
 }));

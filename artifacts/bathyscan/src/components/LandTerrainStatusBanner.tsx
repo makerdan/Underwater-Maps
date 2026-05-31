@@ -5,7 +5,8 @@
  *   • A pulsing "Loading land terrain…" pill while the Copernicus DEM fetch
  *     is in flight (isLoading === true).
  *   • A muted "Land terrain unavailable" warning when the fetch failed
- *     (error !== null). The scene falls back to a flat plane in this case.
+ *     (error !== null). A small "Retry" button lets the user re-trigger the
+ *     fetch without reloading the page.
  *
  * Nothing is rendered when the land grid has loaded successfully.
  */
@@ -15,6 +16,7 @@ import { useLandTerrainStore } from "@/lib/landTerrainStore";
 export const LandTerrainStatusBanner: React.FC = () => {
   const isLoading = useLandTerrainStore((s) => s.isLoading);
   const error = useLandTerrainStore((s) => s.error);
+  const retry = useLandTerrainStore((s) => s.retry);
 
   if (!isLoading && !error) return null;
 
@@ -38,7 +40,7 @@ export const LandTerrainStatusBanner: React.FC = () => {
         fontSize: 10,
         color: isLoading ? "#94a3b8" : "#fbbf24",
         letterSpacing: "0.08em",
-        pointerEvents: "none",
+        pointerEvents: isLoading ? "none" : "auto",
         backdropFilter: "blur(6px)",
         whiteSpace: "nowrap",
       }}
@@ -67,6 +69,26 @@ export const LandTerrainStatusBanner: React.FC = () => {
         <>
           <span style={{ fontSize: 9 }}>⚠</span>
           LAND TERRAIN UNAVAILABLE
+          <button
+            data-testid="land-terrain-retry-btn"
+            onClick={retry}
+            aria-label="Retry land terrain fetch"
+            style={{
+              marginLeft: 6,
+              padding: "1px 7px",
+              background: "rgba(251,191,36,0.12)",
+              border: "1px solid rgba(251,191,36,0.5)",
+              borderRadius: 3,
+              color: "#fbbf24",
+              fontFamily: "inherit",
+              fontSize: 9,
+              letterSpacing: "0.08em",
+              cursor: "pointer",
+              lineHeight: "16px",
+            }}
+          >
+            RETRY
+          </button>
         </>
       )}
     </div>
