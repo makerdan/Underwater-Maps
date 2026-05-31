@@ -31,6 +31,27 @@ export interface RawPoint {
 }
 
 // ---------------------------------------------------------------------------
+// Point cap — protects the event loop from OOM on large raster files.
+// Raster parsers (GeoTIFF, NetCDF) sub-sample when the pixel count exceeds
+// this limit, emitting at most RASTER_POINT_CAP points. LAS/LAZ apply a
+// simple truncation cap directly on the point-count field before the loop.
+// ---------------------------------------------------------------------------
+export const RASTER_POINT_CAP = 2_000_000;
+
+/**
+ * Yield the event loop so pending I/O callbacks are not starved by long
+ * synchronous raster-scan loops.  setImmediate fires after the current I/O
+ * poll phase, giving the Node.js HTTP layer a chance to flush responses and
+ * accept new connections before the next batch of pixels is processed.
+ */
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+/** How many sampled pixels to process between event-loop yields in parseGeoTiff. */
+const GEOTIFF_YIELD_BATCH = 200_000;
+
+// ---------------------------------------------------------------------------
 // Top-level dispatcher
 // ---------------------------------------------------------------------------
 
@@ -86,7 +107,10 @@ export async function parseUploadedFile(
  * depth.  No-data pixels (NaN, ±Infinity, or matching the TIFFTAG_GDAL_NODATA
  * value) are skipped.
  */
-export async function parseGeoTiff(buffer: Buffer): Promise<RawPoint[]> {
+export async function parseGeoTiff(
+  buffer: Buffer,
+  { pointCap = RASTER_POINT_CAP }: { pointCap?: number } = {},
+): Promise<RawPoint[]> {
   let tiff;
   try {
     tiff = await fromArrayBuffer(
@@ -168,21 +192,41 @@ export async function parseGeoTiff(buffer: Buffer): Promise<RawPoint[]> {
     );
   }
 
+  // Sub-sample large rasters so we never emit more than pointCap points.
+  // stride ≥ 2 when totalPixels exceeds the cap; stride = 1 otherwise.
+  // Iterating `flat += stride` is O(totalPixels / stride) — not O(totalPixels)
+  // — so large rasters skip the unvisited pixels entirely rather than touching
+  // every index and continuing.  Periodic setImmediate yields inside the loop
+  // keep the server responsive to HTTP keep-alives and new connections even
+  // when the sampled set is itself large.
+  const totalPixels = width * height;
+  const stride = totalPixels > pointCap ? Math.ceil(totalPixels / pointCap) : 1;
+
   const points: RawPoint[] = [];
-  for (let row = 0; row < height; row++) {
-    for (let col = 0; col < width; col++) {
-      const val = (raster as ArrayLike<number>)[row * width + col];
-      if (val === undefined || !Number.isFinite(val)) continue;
-      if (!Number.isNaN(nodata) && val === nodata) continue;
+  let iterCount = 0;
+  for (let flat = 0; flat < totalPixels; flat += stride) {
+    if (points.length >= pointCap) break;
 
-      const lon = lon0 + (col + 0.5) * dLon;
-      const lat = lat0 + (row + 0.5) * dLat;
-      if (!isValidCoord(lon, lat)) continue;
-
-      const depth = val < 0 ? -val : val;
-      if (depth === 0) continue;
-      points.push({ lon, lat, depth });
+    // Yield every GEOTIFF_YIELD_BATCH sampled pixels so HTTP callbacks are not
+    // starved during a multi-million-pixel scan.
+    iterCount++;
+    if (iterCount % GEOTIFF_YIELD_BATCH === 0) {
+      await yieldToEventLoop();
     }
+
+    const row = Math.floor(flat / width);
+    const col = flat % width;
+    const val = (raster as ArrayLike<number>)[flat];
+    if (val === undefined || !Number.isFinite(val)) continue;
+    if (!Number.isNaN(nodata) && val === nodata) continue;
+
+    const lon = lon0 + (col + 0.5) * dLon;
+    const lat = lat0 + (row + 0.5) * dLat;
+    if (!isValidCoord(lon, lat)) continue;
+
+    const depth = val < 0 ? -val : val;
+    if (depth === 0) continue;
+    points.push({ lon, lat, depth });
   }
 
   if (points.length === 0) {
@@ -213,7 +257,10 @@ const LAT_VAR_ALIASES = ["lat", "latitude", "y", "nav_lat", "LATITUDE"];
  * Missing / fill values (identified by `_FillValue` or `missing_value`
  * attributes) are skipped.
  */
-export function parseNetCdf(buffer: Buffer): RawPoint[] {
+export function parseNetCdf(
+  buffer: Buffer,
+  { pointCap = RASTER_POINT_CAP }: { pointCap?: number } = {},
+): RawPoint[] {
   let reader: NetCDFReader;
   try {
     reader = new NetCDFReader(buffer);
@@ -285,14 +332,16 @@ export function parseNetCdf(buffer: Buffer): RawPoint[] {
   const points: RawPoint[] = [];
 
   // rawDepths may be a 2D grid [lat × lon] or a flat 1D array matching rawLons.
-  // Handle both shapes:
+  // Handle both shapes, applying sub-sampling when the cell count exceeds pointCap.
   const nDepths = rawDepths.length;
   const nLons = rawLons.length;
   const nLats = rawLats.length;
 
   if (nDepths === nLons && nDepths === nLats) {
     // 1D paired arrays
-    for (let i = 0; i < nDepths; i++) {
+    const stride = nDepths > pointCap ? Math.ceil(nDepths / pointCap) : 1;
+    for (let i = 0; i < nDepths; i += stride) {
+      if (points.length >= pointCap) break;
       const z = rawDepths[i]!;
       const lon = rawLons[i]!;
       const lat = rawLats[i]!;
@@ -304,19 +353,24 @@ export function parseNetCdf(buffer: Buffer): RawPoint[] {
       points.push({ lon, lat, depth });
     }
   } else if (nDepths === nLons * nLats) {
-    // 2D grid: row = lat index, col = lon index
-    for (let ri = 0; ri < nLats; ri++) {
-      for (let ci = 0; ci < nLons; ci++) {
-        const z = rawDepths[ri * nLons + ci]!;
-        const lon = rawLons[ci]!;
-        const lat = rawLats[ri]!;
-        if (!Number.isFinite(z) || !Number.isFinite(lon) || !Number.isFinite(lat)) continue;
-        if (fillValue !== undefined && z === fillValue) continue;
-        if (!isValidCoord(lon, lat)) continue;
-        const depth = z < 0 ? -z : z;
-        if (depth === 0) continue;
-        points.push({ lon, lat, depth });
-      }
+    // 2D grid: row = lat index, col = lon index.
+    // Iterate flat += stride so only sampled indices are visited — O(total2D/stride),
+    // not O(total2D).  Derive row/col from the flat index arithmetically.
+    const total2D = nLats * nLons;
+    const stride = total2D > pointCap ? Math.ceil(total2D / pointCap) : 1;
+    for (let flatIdx = 0; flatIdx < total2D; flatIdx += stride) {
+      if (points.length >= pointCap) break;
+      const ri = Math.floor(flatIdx / nLons);
+      const ci = flatIdx % nLons;
+      const z = rawDepths[flatIdx]!;
+      const lon = rawLons[ci]!;
+      const lat = rawLats[ri]!;
+      if (!Number.isFinite(z) || !Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+      if (fillValue !== undefined && z === fillValue) continue;
+      if (!isValidCoord(lon, lat)) continue;
+      const depth = z < 0 ? -z : z;
+      if (depth === 0) continue;
+      points.push({ lon, lat, depth });
     }
   } else {
     throw new Error(
@@ -457,6 +511,8 @@ export async function parseLasLaz(buffer: Buffer, fileName: string): Promise<Raw
   // --- Uncompressed LAS: read point records directly ---
   const points: { x: number; y: number; z: number }[] = [];
   const available = Math.floor((buffer.length - pointDataOffset) / recordSize);
+  // Cap is applied HERE — before the loop — to avoid iterating millions of
+  // records before discovering the OOM limit. This mirrors the LAZ path above.
   const total = Math.min(pointCount, available, 2_000_000);
 
   for (let i = 0; i < total; i++) {

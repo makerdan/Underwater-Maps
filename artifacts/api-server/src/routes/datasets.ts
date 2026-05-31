@@ -148,6 +148,19 @@ async function streamGunzipToFile(
   });
 }
 
+/**
+ * Yields control back to the Node.js event loop so that other pending I/O
+ * callbacks (HTTP responses, keep-alives, timer ticks) are not starved while
+ * a CPU-intensive parsing or gridding step runs synchronously.
+ *
+ * Using setImmediate instead of setTimeout(0) ensures the yield happens after
+ * the current I/O poll phase but before the next check phase — the lightest
+ * possible pause that still gives the event loop a chance to breathe.
+ */
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 async function processUploadJob(
   jobId: string,
   uploadId: string,
@@ -202,10 +215,14 @@ async function processUploadJob(
     if (TEXT_EXTENSIONS.has(fileExt)) {
       const fileContent = await fs.promises.readFile(processPath, "utf8");
       job.progress = 40;
+      // Yield before the synchronous parse so in-flight HTTP responses are
+      // not delayed by this CPU-bound step.
+      await yieldToEventLoop();
       points = parseXyzCsv(fileContent, fileName);
     } else {
       const raw = await fs.promises.readFile(processPath);
       job.progress = 40;
+      await yieldToEventLoop();
       points = await parseUploadedFile(raw, fileName);
     }
     job.progress = 55;
@@ -218,8 +235,12 @@ async function processUploadJob(
 
     job.progress = 60;
     const gridId = crypto.randomUUID();
+    // Yield between the two gridPoints calls — each call is O(n log n) and
+    // blocks the event loop for hundreds of ms on large point clouds.
+    await yieldToEventLoop();
     const terrain = gridPoints(points, resolution, gridId, datasetName, { smoothing });
     job.progress = 80;
+    await yieldToEventLoop();
     const overview = gridPoints(points, 64, gridId, datasetName, { smoothing });
     job.progress = 88;
 
