@@ -3224,7 +3224,7 @@ function DepthBandColorEditor({
           <button
             type="button"
             data-testid="band-boundaries-reset-btn"
-            onClick={resetBandBoundaries}
+            onClick={() => { resetBandBoundaries(); void flushServerSync(); }}
             disabled={allBoundariesDefault}
             style={{
               background: "none",
