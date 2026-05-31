@@ -602,6 +602,169 @@ function buildLaz() {
   return buf;
 }
 
+// ─── GPX ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Build a realistic GPX track-log fixture that exercises all parser edge cases:
+ *
+ *  Track segment (10 trkpt with <ele>, 1 missing <ele>, 1 out-of-range lat):
+ *    - 10 valid trkpts near -132.5°E, 55.2°N with negative <ele> values
+ *      (below sea level → parser flips to positive depth)
+ *    - 1 trkpt whose <ele> is absent → skipped by parseGpxTerrain
+ *    - 1 trkpt with lat=95 (out of geographic range) → skipped by isValidCoord
+ *
+ *  Waypoints (2 wpt with <ele>, 1 missing <ele>):
+ *    - 2 valid wpts — one with negative ele, one with positive ele (both → depth)
+ *    - 1 wpt without <ele> → skipped
+ *
+ *  Expected output: 12 valid RawPoints (10 trkpts + 2 wpts)
+ */
+function buildGpx() {
+  const trkpts = [];
+  for (let i = 0; i < 10; i++) {
+    const lat = (55.2 + i * 0.001).toFixed(6);
+    const lon = (-132.5 - i * 0.001).toFixed(6);
+    const ele = -(1250 + i * 100); // negative = below sea level, depth = |ele|
+    trkpts.push(
+      `      <trkpt lat="${lat}" lon="${lon}">` +
+      `<ele>${ele.toFixed(1)}</ele>` +
+      `<time>2024-06-01T00:${String(i).padStart(2, "0")}:00Z</time>` +
+      `</trkpt>`,
+    );
+  }
+  // Edge case 1: trkpt with no <ele> → should be skipped
+  trkpts.push(
+    `      <trkpt lat="55.210000" lon="-132.510000">` +
+    `<time>2024-06-01T00:10:00Z</time></trkpt>`,
+  );
+  // Edge case 2: trkpt with out-of-range lat (95°) → should be skipped by isValidCoord
+  trkpts.push(
+    `      <trkpt lat="95.000000" lon="-132.511000">` +
+    `<ele>-1500.0</ele><time>2024-06-01T00:11:00Z</time></trkpt>`,
+  );
+
+  const lines = [
+    `<?xml version="1.0" encoding="UTF-8"?>`,
+    `<gpx version="1.1" creator="BathyScan Test Fixture"`,
+    `     xmlns="http://www.topografix.com/GPX/1/1">`,
+    `  <metadata><name>Survey Track GPX Fixture</name></metadata>`,
+    `  <trk>`,
+    `    <name>Multibeam Survey Run 1</name>`,
+    `    <trkseg>`,
+    ...trkpts,
+    `    </trkseg>`,
+    `  </trk>`,
+    // Waypoints: 2 valid, 1 missing ele
+    `  <wpt lat="55.220000" lon="-132.520000">`,
+    `    <ele>-2000.0</ele><name>WP01 Deep</name>`,
+    `  </wpt>`,
+    `  <wpt lat="55.221000" lon="-132.521000">`,
+    `    <ele>1800.5</ele><name>WP02 Positive Ele</name>`,
+    `  </wpt>`,
+    `  <wpt lat="55.222000" lon="-132.522000">`,
+    `    <name>WP03 No Ele</name>`,
+    `  </wpt>`,
+    `</gpx>`,
+  ];
+
+  return Buffer.from(lines.join("\n"), "utf8");
+}
+
+// ─── NMEA ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Build a realistic NMEA 0183 depth-sounder log fixture with:
+ *
+ *   - 8 GPGGA+SDDBT pairs (standard echo-sounder log interleaved with GPS fix)
+ *   - 2 GPRMC+SDDBT pairs (alternative GPS sentence type)
+ *   - 1 SDDBT before any position sentence → no position yet, skipped
+ *   - 1 GPGGA with an intentionally wrong checksum → skipped (position not updated)
+ *   - 1 SDDBT after the bad-checksum GPGGA → still uses the last valid position
+ *
+ *  Expected output: 10 valid depth+position pairs from GPGGA/GPRMC+SDDBT;
+ *  the malformed sentence leaves position unchanged so the following SDDBT
+ *  still produces a valid point (total 11 points).
+ */
+function buildNmea() {
+  /** XOR checksum of all bytes between $ and * (exclusive). */
+  const checksum = (body) => {
+    let xor = 0;
+    for (let i = 0; i < body.length; i++) xor ^= body.charCodeAt(i);
+    return xor.toString(16).toUpperCase().padStart(2, "0");
+  };
+  const nmea = (body) => `$${body}*${checksum(body)}`;
+
+  /**
+   * NMEA coord format: DDDMM.MMMM
+   * lat=55.2° → 55°12.0000' → "5512.0000"
+   * lon=132.5°W → 132°30.0000' → "13230.0000"
+   */
+  const toNmeaLat = (decDeg) => {
+    const deg = Math.floor(Math.abs(decDeg));
+    const min = (Math.abs(decDeg) - deg) * 60;
+    return [`${String(deg).padStart(2, "0")}${min.toFixed(4)}`, decDeg >= 0 ? "N" : "S"];
+  };
+  const toNmeaLon = (decDeg) => {
+    const deg = Math.floor(Math.abs(decDeg));
+    const min = (Math.abs(decDeg) - deg) * 60;
+    return [`${String(deg).padStart(3, "0")}${min.toFixed(4)}`, decDeg >= 0 ? "E" : "W"];
+  };
+
+  const lines = [];
+
+  // ── SDDBT before any position sentence (depth without position → skipped) ──
+  lines.push(nmea("SDDBT,16.4,f,5.0,M,2.7,F"));
+
+  // ── 8 GPGGA + SDDBT pairs ──────────────────────────────────────────────────
+  for (let i = 0; i < 8; i++) {
+    const lat = 55.2 + i * 0.001;
+    const lon = -132.5 - i * 0.001;
+    const depth = 1200 + i * 150; // metres
+    const depthFt = (depth / 0.3048).toFixed(1);
+    const depthFm = (depth / 1.8288).toFixed(1);
+    const utc = `12${String(30 + i).padStart(2, "0")}00.00`;
+
+    const [latStr, latH] = toNmeaLat(lat);
+    const [lonStr, lonH] = toNmeaLon(lon);
+
+    lines.push(
+      nmea(`GPGGA,${utc},${latStr},${latH},${lonStr},${lonH},1,08,0.9,10.0,M,0.0,M,,`),
+    );
+    lines.push(nmea(`SDDBT,${depthFt},f,${depth.toFixed(1)},M,${depthFm},F`));
+  }
+
+  // ── 2 GPRMC + SDDBT pairs ─────────────────────────────────────────────────
+  for (let i = 0; i < 2; i++) {
+    const lat = 55.208 + i * 0.001;
+    const lon = -132.508 - i * 0.001;
+    const depth = 2400 + i * 200;
+    const depthFt = (depth / 0.3048).toFixed(1);
+    const depthFm = (depth / 1.8288).toFixed(1);
+    const utc = `124${i}00.00`;
+    const date = "010124";
+
+    const [latStr, latH] = toNmeaLat(lat);
+    const [lonStr, lonH] = toNmeaLon(lon);
+
+    lines.push(
+      nmea(`GPRMC,${utc},A,${latStr},${latH},${lonStr},${lonH},0.0,0.0,${date},,,A`),
+    );
+    lines.push(nmea(`SDDBT,${depthFt},f,${depth.toFixed(1)},M,${depthFm},F`));
+  }
+
+  // ── Malformed sentence: GPGGA with last checksum digit corrupted ───────────
+  // Build a valid sentence first, then corrupt the checksum.
+  const goodBody = "GPGGA,125000.00,5521.0000,N,13231.0000,W,1,08,0.9,10.0,M,0.0,M,,";
+  const goodLine = nmea(goodBody);
+  const badLine = goodLine.slice(0, -1) + (goodLine.endsWith("F") ? "0" : "F");
+  lines.push(badLine); // checksum mismatch → validateNmeaChecksum returns false
+
+  // ── SDDBT after malformed GPGGA — uses last valid position (GPRMC pair #2) ─
+  lines.push(nmea("SDDBT,8858.3,f,2700.0,M,1476.4,F"));
+
+  return Buffer.from(lines.join("\r\n") + "\r\n", "utf8");
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -630,6 +793,14 @@ async function main() {
   const lazBuf = buildLaz();
   await writeFile(join(__dir, "survey.laz"), lazBuf);
   console.log(`survey.laz   ${lazBuf.length} bytes`);
+
+  const gpxBuf = buildGpx();
+  await writeFile(join(__dir, "survey.gpx"), gpxBuf);
+  console.log(`survey.gpx   ${gpxBuf.length} bytes`);
+
+  const nmeaBuf = buildNmea();
+  await writeFile(join(__dir, "survey.nmea"), nmeaBuf);
+  console.log(`survey.nmea  ${nmeaBuf.length} bytes`);
 
   console.log("All fixtures generated.");
 }

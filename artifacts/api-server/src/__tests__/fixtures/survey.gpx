@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="BathyScan Test Fixture"
+     xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata><name>Survey Track GPX Fixture</name></metadata>
+  <trk>
+    <name>Multibeam Survey Run 1</name>
+    <trkseg>
+      <trkpt lat="55.200000" lon="-132.500000"><ele>-1250.0</ele><time>2024-06-01T00:00:00Z</time></trkpt>
+      <trkpt lat="55.201000" lon="-132.501000"><ele>-1350.0</ele><time>2024-06-01T00:01:00Z</time></trkpt>
+      <trkpt lat="55.202000" lon="-132.502000"><ele>-1450.0</ele><time>2024-06-01T00:02:00Z</time></trkpt>
+      <trkpt lat="55.203000" lon="-132.503000"><ele>-1550.0</ele><time>2024-06-01T00:03:00Z</time></trkpt>
+      <trkpt lat="55.204000" lon="-132.504000"><ele>-1650.0</ele><time>2024-06-01T00:04:00Z</time></trkpt>
+      <trkpt lat="55.205000" lon="-132.505000"><ele>-1750.0</ele><time>2024-06-01T00:05:00Z</time></trkpt>
+      <trkpt lat="55.206000" lon="-132.506000"><ele>-1850.0</ele><time>2024-06-01T00:06:00Z</time></trkpt>
+      <trkpt lat="55.207000" lon="-132.507000"><ele>-1950.0</ele><time>2024-06-01T00:07:00Z</time></trkpt>
+      <trkpt lat="55.208000" lon="-132.508000"><ele>-2050.0</ele><time>2024-06-01T00:08:00Z</time></trkpt>
+      <trkpt lat="55.209000" lon="-132.509000"><ele>-2150.0</ele><time>2024-06-01T00:09:00Z</time></trkpt>
+      <trkpt lat="55.210000" lon="-132.510000"><time>2024-06-01T00:10:00Z</time></trkpt>
+      <trkpt lat="95.000000" lon="-132.511000"><ele>-1500.0</ele><time>2024-06-01T00:11:00Z</time></trkpt>
+    </trkseg>
+  </trk>
+  <wpt lat="55.220000" lon="-132.520000">
+    <ele>-2000.0</ele><name>WP01 Deep</name>
+  </wpt>
+  <wpt lat="55.221000" lon="-132.521000">
+    <ele>1800.5</ele><name>WP02 Positive Ele</name>
+  </wpt>
+  <wpt lat="55.222000" lon="-132.522000">
+    <name>WP03 No Ele</name>
+  </wpt>
+</gpx>

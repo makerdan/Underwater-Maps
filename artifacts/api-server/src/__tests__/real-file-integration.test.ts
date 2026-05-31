@@ -36,6 +36,8 @@ import {
   parseNetCdf,
   parseLasLaz,
   parseBag,
+  parseGpxTerrain,
+  parseNmea,
   parseUploadedFile,
   type RawPoint,
 } from "../lib/uploadParsers.js";
@@ -52,14 +54,18 @@ let ncBuf: Buffer;
 let las12Buf: Buffer;
 let las14Buf: Buffer;
 let bagBuf: Buffer;
+let gpxBuf: Buffer;
+let nmeaBuf: Buffer;
 
 beforeAll(async () => {
-  [tifBuf, ncBuf, las12Buf, las14Buf, bagBuf] = await Promise.all([
+  [tifBuf, ncBuf, las12Buf, las14Buf, bagBuf, gpxBuf, nmeaBuf] = await Promise.all([
     readFile(join(FIXTURE_DIR, "survey.tif")),
     readFile(join(FIXTURE_DIR, "survey.nc")),
     readFile(join(FIXTURE_DIR, "survey_1_2.las")),
     readFile(join(FIXTURE_DIR, "survey_1_4.las")),
     readFile(join(FIXTURE_DIR, "survey.bag")),
+    readFile(join(FIXTURE_DIR, "survey.gpx")),
+    readFile(join(FIXTURE_DIR, "survey.nmea")),
   ]);
 });
 
@@ -329,11 +335,165 @@ describe("BAG (HDF5) — realistic NOAA hydrographic survey fixture", () => {
 });
 
 // ---------------------------------------------------------------------------
+// GPX integration tests
+// ---------------------------------------------------------------------------
+
+describe("GPX — realistic survey track fixture", () => {
+  it("parses the fixture and returns 12 valid depth points", () => {
+    const pts = parseGpxTerrain(gpxBuf.toString("utf8"));
+    // 10 trkpts + 2 wpts with valid <ele>; 1 trkpt missing <ele>, 1 out-of-range lat,
+    // and 1 wpt missing <ele> are all skipped.
+    expect(pts.length).toBe(12);
+    assertValidBathyPoints(pts, 12);
+  });
+
+  it("skips <trkpt> elements that have no <ele> child", () => {
+    const pts = parseGpxTerrain(gpxBuf.toString("utf8"));
+    // Fixture injects one trkpt at lat=55.21, lon=-132.51 without <ele>.
+    // If it were parsed its lon would be -132.51 — assert no such point exists.
+    const noElePt = pts.find(
+      (p) => Math.abs(p.lat - 55.21) < 0.00001 && Math.abs(p.lon - -132.51) < 0.00001,
+    );
+    expect(noElePt).toBeUndefined();
+  });
+
+  it("skips <trkpt> with coordinates outside the valid geographic range", () => {
+    const pts = parseGpxTerrain(gpxBuf.toString("utf8"));
+    // Fixture injects trkpt with lat=95 (invalid) — no point should have lat > 90.
+    for (const p of pts) {
+      expect(p.lat).toBeLessThanOrEqual(90);
+      expect(p.lat).toBeGreaterThanOrEqual(-90);
+    }
+  });
+
+  it("processes <wpt> waypoint elements in addition to <trkpt> track points", () => {
+    const pts = parseGpxTerrain(gpxBuf.toString("utf8"));
+    // The two valid wpts are at lat≈55.22 and lat≈55.221 — assert both present.
+    const wptPts = pts.filter((p) => p.lat >= 55.219 && p.lat <= 55.222);
+    expect(wptPts.length).toBe(2);
+  });
+
+  it("converts negative <ele> values to positive depth", () => {
+    const pts = parseGpxTerrain(gpxBuf.toString("utf8"));
+    // All trkpts have ele < 0; parser must flip sign.
+    for (const p of pts) {
+      expect(p.depth).toBeGreaterThan(0);
+    }
+  });
+
+  it("also handles positive <ele> values (WP02 has ele=1800.5)", () => {
+    const pts = parseGpxTerrain(gpxBuf.toString("utf8"));
+    // WP02 at lat≈55.221 has ele=1800.5 (positive); depth should be 1800.5.
+    const wp2 = pts.find((p) => Math.abs(p.lat - 55.221) < 0.00001);
+    expect(wp2).toBeDefined();
+    expect(wp2!.depth).toBeCloseTo(1800.5, 1);
+  });
+
+  it("derives geographic coordinates directly from lat/lon attributes", () => {
+    const pts = parseGpxTerrain(gpxBuf.toString("utf8"));
+    // All fixture trkpts are near lon=-132.5, lat=55.2; wpts near lon=-132.52.
+    for (const p of pts) {
+      expect(p.lon).toBeGreaterThanOrEqual(-132.53);
+      expect(p.lon).toBeLessThanOrEqual(-132.49);
+      expect(p.lat).toBeGreaterThanOrEqual(55.19);
+      expect(p.lat).toBeLessThanOrEqual(55.23);
+    }
+  });
+
+  it("produces depth values spanning the fixture's survey range", () => {
+    const pts = parseGpxTerrain(gpxBuf.toString("utf8"));
+    const depths = pts.map((p) => p.depth);
+    // trkpt depths: 1250–2150 m; wpt depths: 1800.5, 2000
+    expect(Math.min(...depths)).toBeCloseTo(1250, 0);
+    expect(Math.max(...depths)).toBeCloseTo(2150, 0);
+  });
+
+  it("routes through parseUploadedFile dispatcher for .gpx", async () => {
+    const pts = await parseUploadedFile(gpxBuf, "survey.gpx");
+    assertValidBathyPoints(pts, 10);
+    expect(pts.length).toBe(12);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NMEA integration tests
+// ---------------------------------------------------------------------------
+
+describe("NMEA — realistic depth-sounder log fixture", () => {
+  it("parses the fixture and returns 11 valid depth+position pairs", () => {
+    const pts = parseNmea(nmeaBuf.toString("utf8"));
+    // 8 GPGGA+SDDBT + 2 GPRMC+SDDBT + 1 SDDBT (after malformed GPGGA, last valid pos reused)
+    // 1 leading SDDBT (no position yet) is skipped.
+    expect(pts.length).toBe(11);
+    assertValidBathyPoints(pts, 11);
+  });
+
+  it("skips the SDDBT sentence that precedes any position fix", () => {
+    const pts = parseNmea(nmeaBuf.toString("utf8"));
+    // The very first sentence is an SDDBT at depth=5.0m — if it were included,
+    // a point near depth=5 would appear; no valid point should have depth≤5.
+    for (const p of pts) {
+      expect(p.depth).toBeGreaterThan(5);
+    }
+  });
+
+  it("skips sentences whose NMEA checksum is invalid", () => {
+    const pts = parseNmea(nmeaBuf.toString("utf8"));
+    // The malformed GPGGA has coords near lat≈55.35, lon≈-132.516.
+    // If it were accepted, a point with lat≈55.35 would appear.
+    for (const p of pts) {
+      expect(p.lat).toBeLessThan(55.35);
+    }
+  });
+
+  it("accepts GPRMC sentences as a position source alongside GPGGA", () => {
+    const pts = parseNmea(nmeaBuf.toString("utf8"));
+    // GPRMC pairs produce 2 depth points at depths 2400 and 2600 m.
+    const rmc = pts.filter((p) => p.depth === 2400 || p.depth === 2600);
+    expect(rmc.length).toBe(2);
+  });
+
+  it("reuses the most recent valid position when a malformed sentence is skipped", () => {
+    const pts = parseNmea(nmeaBuf.toString("utf8"));
+    // The final SDDBT (depth=2700) is emitted after a malformed GPGGA.
+    // Parser must use the last valid GPRMC position (lat≈55.209) for that point.
+    const finalPt = pts.find((p) => p.depth === 2700);
+    expect(finalPt).toBeDefined();
+    expect(finalPt!.lat).toBeGreaterThanOrEqual(55.208);
+    expect(finalPt!.lat).toBeLessThanOrEqual(55.21);
+  });
+
+  it("covers the expected geographic region (US Pacific coast survey area)", () => {
+    const pts = parseNmea(nmeaBuf.toString("utf8"));
+    for (const p of pts) {
+      expect(p.lon).toBeGreaterThanOrEqual(-132.52);
+      expect(p.lon).toBeLessThanOrEqual(-132.499);
+      expect(p.lat).toBeGreaterThanOrEqual(55.199);
+      expect(p.lat).toBeLessThanOrEqual(55.21);
+    }
+  });
+
+  it("produces depth values spanning the fixture's survey range", () => {
+    const pts = parseNmea(nmeaBuf.toString("utf8"));
+    const depths = pts.map((p) => p.depth);
+    // Range: 1200 m (first GPGGA+SDDBT) to 2700 m (final SDDBT)
+    expect(Math.min(...depths)).toBeCloseTo(1200, 0);
+    expect(Math.max(...depths)).toBeCloseTo(2700, 0);
+  });
+
+  it("routes through parseUploadedFile dispatcher for .nmea", async () => {
+    const pts = await parseUploadedFile(nmeaBuf, "survey.nmea");
+    assertValidBathyPoints(pts, 10);
+    expect(pts.length).toBe(11);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Cross-format consistency checks
 // ---------------------------------------------------------------------------
 
 describe("Cross-format consistency", () => {
-  it("all five formats produce finite, positive depth values", async () => {
+  it("all seven formats produce finite, positive depth values", async () => {
     const [tifPts, las12Pts, las14Pts, bagPts] = await Promise.all([
       parseGeoTiff(tifBuf),
       parseLasLaz(las12Buf, "survey_1_2.las"),
@@ -341,8 +501,10 @@ describe("Cross-format consistency", () => {
       parseBag(bagBuf),
     ]);
     const ncPts = parseNetCdf(ncBuf);
+    const gpxPts = parseGpxTerrain(gpxBuf.toString("utf8"));
+    const nmeaPts = parseNmea(nmeaBuf.toString("utf8"));
 
-    for (const pts of [tifPts, ncPts, las12Pts, las14Pts, bagPts]) {
+    for (const pts of [tifPts, ncPts, las12Pts, las14Pts, bagPts, gpxPts, nmeaPts]) {
       expect(pts.length).toBeGreaterThan(0);
       for (const p of pts) {
         expect(p.depth).toBeGreaterThan(0);
@@ -351,13 +513,15 @@ describe("Cross-format consistency", () => {
     }
   });
 
-  it("parseUploadedFile handles all five fixture files without throwing", async () => {
+  it("parseUploadedFile handles all seven fixture files without throwing", async () => {
     const results = await Promise.allSettled([
       parseUploadedFile(tifBuf, "survey.tif"),
       Promise.resolve(parseUploadedFile(ncBuf, "survey.nc")),
       parseUploadedFile(las12Buf, "survey_1_2.las"),
       parseUploadedFile(las14Buf, "survey_1_4.las"),
       parseUploadedFile(bagBuf, "survey.bag"),
+      parseUploadedFile(gpxBuf, "survey.gpx"),
+      parseUploadedFile(nmeaBuf, "survey.nmea"),
     ]);
 
     for (const r of results) {
