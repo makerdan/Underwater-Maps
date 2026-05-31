@@ -235,4 +235,111 @@ router.post(
   }),
 );
 
+/**
+ * GET /api/github/repos/:owner/:repo/actions/runs
+ * Lists workflow runs for a repository.
+ * Optional query params: workflow_id, status, per_page, page.
+ */
+router.get(
+  "/repos/:owner/:repo/actions/runs",
+  requireAuth,
+  asyncHandler(async (req, res): Promise<void> => {
+    const params = req.params as Record<string, string>;
+    const owner = params["owner"] as string;
+    const repo = params["repo"] as string;
+    const workflow_id =
+      typeof req.query["workflow_id"] === "string" ? req.query["workflow_id"] : undefined;
+    const status =
+      typeof req.query["status"] === "string"
+        ? (req.query["status"] as "queued" | "in_progress" | "completed")
+        : undefined;
+    const per_page =
+      typeof req.query["per_page"] === "string"
+        ? Number(req.query["per_page"])
+        : undefined;
+    const page =
+      typeof req.query["page"] === "string" ? Number(req.query["page"]) : undefined;
+
+    let octokit;
+    try {
+      octokit = getGithubClient();
+    } catch (err) {
+      handleGithubError(res, err);
+      return;
+    }
+    try {
+      const { data } = await octokit.actions.listWorkflowRunsForRepo({
+        owner,
+        repo,
+        ...(workflow_id !== undefined ? { workflow_id } : {}),
+        ...(status !== undefined ? { status } : {}),
+        ...(per_page !== undefined ? { per_page } : {}),
+        ...(page !== undefined ? { page } : {}),
+      });
+      const runs = data.workflow_runs.map((run) => ({
+        id: run.id,
+        name: run.name,
+        status: run.status,
+        conclusion: run.conclusion,
+        created_at: run.created_at,
+        html_url: run.html_url,
+        workflow_id: run.workflow_id,
+      }));
+      res.json({ total_count: data.total_count, workflow_runs: runs });
+    } catch (err) {
+      handleGithubError(res, err);
+    }
+  }),
+);
+
+/**
+ * GET /api/github/repos/:owner/:repo/actions/runs/:run_id
+ * Returns a single workflow run by ID.
+ */
+router.get(
+  "/repos/:owner/:repo/actions/runs/:run_id",
+  requireAuth,
+  asyncHandler(async (req, res): Promise<void> => {
+    const params = req.params as Record<string, string>;
+    const owner = params["owner"] as string;
+    const repo = params["repo"] as string;
+    const run_id = Number(params["run_id"] as string);
+
+    if (isNaN(run_id)) {
+      res.status(400).json({
+        error: "invalid_request",
+        details: "'run_id' must be a numeric workflow run ID.",
+      });
+      return;
+    }
+
+    let octokit;
+    try {
+      octokit = getGithubClient();
+    } catch (err) {
+      handleGithubError(res, err);
+      return;
+    }
+    try {
+      const { data: run } = await octokit.actions.getWorkflowRun({
+        owner,
+        repo,
+        run_id,
+      });
+      res.json({
+        id: run.id,
+        name: run.name,
+        status: run.status,
+        conclusion: run.conclusion,
+        created_at: run.created_at,
+        html_url: run.html_url,
+        workflow_id: run.workflow_id,
+      });
+    } catch (err) {
+      handleGithubError(res, err);
+    }
+  }),
+);
+
 export default router;
+
