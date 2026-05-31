@@ -264,4 +264,68 @@ describe("settingsStore", () => {
     expect(DEFAULT_SETTINGS.defaultMapLoad).toBeNull();
     expect(useSettingsStore.getState().defaultMapLoad).toBeNull();
   });
+
+  describe("clearForSignOut", () => {
+    it("resets all settings to DEFAULT_SETTINGS including datasetHomePositions", () => {
+      const s = useSettingsStore.getState();
+      s.setFieldOfView(95);
+      s.setHudOpacity(0.3);
+      s.setDatasetHome("ds-1", { lon: 1, lat: 2, depth: 3 });
+
+      s.clearForSignOut();
+
+      const after = useSettingsStore.getState();
+      expect(after.fieldOfView).toBe(DEFAULT_SETTINGS.fieldOfView);
+      expect(after.hudOpacity).toBe(DEFAULT_SETTINGS.hudOpacity);
+      // Unlike resetAll, clearForSignOut also clears per-dataset positions
+      expect(after.datasetHomePositions).toEqual(DEFAULT_SETTINGS.datasetHomePositions);
+    });
+
+    it("clears lastSyncedAt and syncedSnapshot", () => {
+      useSettingsStore.getState().markAllSaved("2026-05-01T00:00:00.000Z");
+      expect(useSettingsStore.getState().lastSyncedAt).not.toBeNull();
+
+      useSettingsStore.getState().clearForSignOut();
+
+      const after = useSettingsStore.getState();
+      expect(after.lastSyncedAt).toBeNull();
+      expect(after.syncedSnapshot).toBeUndefined();
+    });
+
+    it("removes the bathyscan:settings localStorage entry", async () => {
+      useSettingsStore.getState().setFieldOfView(88);
+      // Flush Zustand's async persist write.
+      await Promise.resolve();
+      await new Promise((r) => setTimeout(r, 0));
+
+      // Entry should exist before sign-out.
+      expect(localStorage.getItem("bathyscan:settings")).not.toBeNull();
+
+      useSettingsStore.getState().clearForSignOut();
+
+      expect(localStorage.getItem("bathyscan:settings")).toBeNull();
+    });
+
+    it("sign-out then hydrateFromServer applies fresh server values (no stale local interference)", () => {
+      // Simulate a user who had custom settings and a sync timestamp.
+      useSettingsStore.getState().setFieldOfView(99);
+      useSettingsStore.getState().markAllSaved("2026-05-01T00:00:00.000Z");
+
+      // Sign-out clears everything.
+      useSettingsStore.getState().clearForSignOut();
+
+      // Simulate the next user signing in and the server returning their settings.
+      useSettingsStore.getState().hydrateFromServer({
+        fieldOfView: 55,
+        hudOpacity: 0.6,
+        __updatedAt: "2026-05-10T12:00:00.000Z",
+      } as Partial<typeof DEFAULT_SETTINGS>);
+
+      const after = useSettingsStore.getState();
+      // Server values are applied cleanly — previous user's fieldOfView (99) is gone.
+      expect(after.fieldOfView).toBe(55);
+      expect(after.hudOpacity).toBe(0.6);
+      expect(after.lastSyncedAt).toBe("2026-05-10T12:00:00.000Z");
+    });
+  });
 });

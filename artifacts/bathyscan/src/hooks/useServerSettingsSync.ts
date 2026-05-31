@@ -26,7 +26,7 @@ import {
 } from "@workspace/api-client-react";
 import { useSettingsStore, getDataSnapshot } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
-import { usePanelCollapseStore, type PanelId } from "@/lib/panelCollapseStore";
+import { usePanelCollapseStore, type PanelId, DEFAULTS as PANEL_DEFAULTS } from "@/lib/panelCollapseStore";
 import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
 import { useUiStore, CURRENT_DEPTH_LAYERS } from "@/lib/uiStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
@@ -117,10 +117,43 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
   // Signed-out users don't fetch settings, so they are immediately ready.
   const [settingsReady, setSettingsReady] = useState<boolean>(() => isSignedIn === false);
 
+  // Track the previous isSignedIn value so we can detect a sign-out transition
+  // (true → false) without firing on the initial undefined → false load.
+  const prevIsSignedInRef = useRef<boolean | null | undefined>(undefined);
+
   // When auth state resolves to "not signed in", mark ready immediately.
   useEffect(() => {
     if (isSignedIn === false) setSettingsReady(true);
   }, [isSignedIn]);
+
+  // ── Sign-out cleanup ───────────────────────────────────────────────────────
+  // When the user signs out, clear all persisted local settings so a different
+  // user logging in on the same device starts from a clean slate.
+  useEffect(() => {
+    if (!isLoaded) return;
+    const prev = prevIsSignedInRef.current;
+    prevIsSignedInRef.current = isSignedIn;
+
+    // Only act on an explicit true → false transition (not the initial load).
+    if (prev !== true || isSignedIn !== false) return;
+
+    // Clear settingsStore and its localStorage entry.
+    useSettingsStore.getState().clearForSignOut();
+
+    // Reset the colour palette and remove its localStorage entry.
+    usePaletteStore.getState().reset();
+    try { localStorage.removeItem("bathyscan:palette"); } catch { /* ignore */ }
+
+    // Reset panel collapse state and remove its localStorage entry.
+    usePanelCollapseStore.setState({ collapsed: { ...PANEL_DEFAULTS } });
+    try { localStorage.removeItem("bathyscan:panel-collapse"); } catch { /* ignore */ }
+
+    // Clear the zone-overlay colour slots (both water types).
+    try {
+      localStorage.removeItem("bathyscan:zoneOverlaySlots:saltwater");
+      localStorage.removeItem("bathyscan:zoneOverlaySlots:freshwater");
+    } catch { /* ignore */ }
+  }, [isSignedIn, isLoaded]);
 
   // ── GET hydration ──────────────────────────────────────────────────────────
   const { data: serverSettings, isError: settingsFetchError } = useGetSettings({

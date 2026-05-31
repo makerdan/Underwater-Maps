@@ -604,6 +604,13 @@ interface SettingsActions {
   resetAll: () => void;
 
   /**
+   * Fully reset all settings to defaults and remove the localStorage entry.
+   * Called on sign-out to prevent cross-account state bleed on shared devices.
+   * Unlike `resetAll`, this does NOT preserve datasetHomePositions or bookmarks.
+   */
+  clearForSignOut: () => void;
+
+  /**
    * Mark every section as saved (snapshot equals current data values).
    * Pass the server-provided ISO timestamp (from the PUT response) so the
    * "Last synced" indicator in the Account tab reflects the server's clock.
@@ -1269,6 +1276,18 @@ export const useSettingsStore = create<SettingsStore>()(
             datasetHomePositions: current.datasetHomePositions,
             bookmarks: current.bookmarks,
           });
+        },
+
+        clearForSignOut: () => {
+          // Full reset — no preservation of per-user data — to prevent cross-account
+          // state bleed when a different user signs in on the same device.
+          set({ ...DEFAULT_SETTINGS, syncedSnapshot: undefined, lastSyncedAt: null });
+          // Remove the persisted localStorage entry so the next user starts clean.
+          try {
+            localStorage.removeItem("bathyscan:settings");
+          } catch {
+            /* ignore — storage may be unavailable in some environments */
+          }
         },
 
         markAllSaved: (lastSyncedAt) =>
