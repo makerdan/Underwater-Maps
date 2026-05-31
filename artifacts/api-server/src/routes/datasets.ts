@@ -22,6 +22,7 @@ import {
   previewBboxForDownload,
   buildBboxCsvRows,
 } from "../lib/terrain.js";
+import { parseUploadedFile } from "../lib/uploadParsers.js";
 import { fetchCopernicusDem } from "../lib/copernicusDem.js";
 import { fetchSatelliteTile } from "../lib/satelliteTile.js";
 import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
@@ -663,9 +664,16 @@ router.post(
   }
   const resolution = paramsParsed.data.gridResolution ?? paramsParsed.data.resolution;
 
+  const TEXT_EXTENSIONS = new Set(["csv", "xyz", "txt"]);
+  const fileExt = fileName.toLowerCase().split(".").pop() ?? "";
+
   let points;
   try {
-    points = parseXyzCsv(fileContent, fileName);
+    if (TEXT_EXTENSIONS.has(fileExt)) {
+      points = parseXyzCsv(fileContent, fileName);
+    } else {
+      points = await parseUploadedFile(file.buffer, fileName);
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Parse error";
     res.status(400).json({ error: "parse_error", details: msg });

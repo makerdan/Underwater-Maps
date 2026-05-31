@@ -1675,7 +1675,7 @@ export async function buildBboxCsvRows(
 // CSV / XYZ parser and gridder
 // ---------------------------------------------------------------------------
 
-interface RawPoint {
+export interface RawPoint {
   lon: number;
   lat: number;
   depth: number;

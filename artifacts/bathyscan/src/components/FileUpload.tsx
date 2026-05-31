@@ -7,13 +7,20 @@ import { useAuth } from "@/lib/clerkCompat";
 import { Spinner } from "@/components/ui/spinner";
 
 /**
- * FileUpload — Drop-zone for XYZ/CSV bathymetry uploads.
+ * FileUpload — Drop-zone for bathymetric file uploads.
+ *
+ * Supports: CSV, XYZ, TXT (text grids), GeoTIFF, BAG, LAS, LAZ, NetCDF,
+ * GPX (depth tracks), and NMEA depth-sounder logs.
  *
  * Uploads are auth-gated server-side: every successful upload is persisted
  * into the user's dataset library. When the user isn't signed in we surface
  * a clear "sign in to upload" prompt instead of letting them attempt an
  * upload that would be rejected with a 401.
  */
+
+const SUPPORTED_EXTENSIONS =
+  ".csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .nmea";
+
 export const FileUpload = () => {
   const { setTerrain, setDatasetId, setPendingExternalUserDatasetId } = useAppState();
   const { isSignedIn } = useAuth();
@@ -53,7 +60,10 @@ export const FileUpload = () => {
             if (status === 401) {
               setError("Session expired — please sign in again to upload.");
             } else if (status === 413) {
-              setError(details ?? "File is too large to upload.");
+              setError(
+                details ??
+                  "File is too large to upload. The maximum file size is 50 MB.",
+              );
             } else if (details) {
               setError(details);
             } else {
@@ -70,9 +80,14 @@ export const FileUpload = () => {
     onDrop,
     accept: {
       "text/csv": [".csv"],
-      "text/plain": [".xyz", ".txt"],
+      "text/plain": [".xyz", ".txt", ".nmea"],
       "application/gzip": [".gz"],
       "application/x-gzip": [".gz"],
+      "image/tiff": [".tif", ".tiff"],
+      "application/octet-stream": [".bag", ".las", ".laz", ".nc"],
+      "application/x-netcdf": [".nc"],
+      "application/gpx+xml": [".gpx"],
+      "text/xml": [".gpx"],
     },
     maxFiles: 1,
     disabled: !isSignedIn,
@@ -103,14 +118,17 @@ export const FileUpload = () => {
             <>
               <p className="text-xs font-semibold mb-1">UPLOAD CUSTOM TERRAIN</p>
               <p className="text-[10px] text-muted-foreground">
-                Sign in to upload XYZ, CSV, or .gz files to your account
+                Sign in to upload bathymetric files to your account
               </p>
             </>
           ) : (
             <>
               <p className="text-xs font-semibold mb-1">UPLOAD CUSTOM TERRAIN</p>
               <p className="text-[10px] text-muted-foreground">
-                Drop XYZ, CSV, or .gz file here — auto-saved to your account
+                Drop file here — auto-saved to your account
+              </p>
+              <p className="text-[9px] text-muted-foreground/70 mt-1">
+                {SUPPORTED_EXTENSIONS}
               </p>
               {error && <p className="text-[10px] text-destructive mt-2 select-text">{error}</p>}
             </>
