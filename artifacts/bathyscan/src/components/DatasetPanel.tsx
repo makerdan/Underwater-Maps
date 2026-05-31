@@ -47,6 +47,7 @@ import { LoadingDial } from "@/components/LoadingDial";
 import { useActiveLoadStore } from "@/lib/activeLoadStore";
 import { fetchJsonWithProgress } from "@/lib/fetchWithProgress";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import {
   getGetDatasetsIdTerrainUrl,
   getGetDatasetsIdOverviewUrl,
@@ -901,10 +902,26 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
             setGcsPhase("idle");
             setGcsError(null);
-            setLoadingId(job.datasetId);
-            setPendingUserDatasetId(job.datasetId);
-            setPendingId(null);
-            setUploadOpen(false);
+
+            const completedDatasetId = job.datasetId;
+            const displayName = file.name.replace(/\.[^.]+$/, "");
+
+            const triggerLoad = () => {
+              setLoadingId(completedDatasetId);
+              setPendingUserDatasetId(completedDatasetId);
+              setPendingId(null);
+              setUploadOpen(false);
+            };
+
+            toast({
+              title: `Dataset ready: ${displayName}`,
+              description: "Your file has finished processing.",
+              action: (
+                <ToastAction altText="Load dataset now" onClick={triggerLoad}>
+                  Load now
+                </ToastAction>
+              ),
+            });
           } else if (job.status === "failed") {
             clearInterval(pollIntervalId);
             setGcsPhase("error");
@@ -928,7 +945,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         return prev;
       });
     }, 15 * 60 * 1000);
-  }, [qc, setUploadOpen]);
+  }, [qc, setUploadOpen, toast]);
 
   // ─── Chunked upload entry-point (new upload, starts from chunk 0) ─────────
   const chunkedUploadFile = useCallback(async (file: File) => {
