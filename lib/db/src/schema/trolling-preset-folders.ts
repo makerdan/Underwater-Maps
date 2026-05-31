@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const trollingPresetFoldersTable = pgTable(
@@ -12,6 +12,7 @@ export const trollingPresetFoldersTable = pgTable(
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => ({
+    userIdIdx: index("trolling_preset_folders_user_id_idx").on(t.userId),
     uniqUserName: uniqueIndex("trolling_preset_folders_unique_user_name")
       .on(t.userId, sql`lower(${t.name})`),
   }),

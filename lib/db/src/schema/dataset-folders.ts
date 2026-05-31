@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, uniqueIndex, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, index, uniqueIndex, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const datasetFoldersTable = pgTable(
@@ -14,6 +14,7 @@ export const datasetFoldersTable = pgTable(
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => ({
+    userIdIdx: index("dataset_folders_user_id_idx").on(t.userId),
     uniqSiblingName: uniqueIndex("dataset_folders_unique_sibling_name")
       .on(t.userId, t.parentId, sql`lower(${t.name})`),
   }),

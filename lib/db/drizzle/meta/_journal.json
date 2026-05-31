@@ -29,6 +29,13 @@
       "when": 1748960400000,
       "tag": "0003_add_upload_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1748736000000,
+      "tag": "0004_add_folder_userid_indexes",
+      "breakpoints": true
     }
   ]
 }
