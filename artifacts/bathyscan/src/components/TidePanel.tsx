@@ -351,7 +351,24 @@ export const TidePanel: React.FC<TidePanelProps> = ({
             <>
               {/* Station */}
               <div>
-                <div style={LABEL}>Station</div>
+                <div style={{ ...LABEL, display: "flex", alignItems: "center", gap: 6 }}>
+                  Station
+                  {loading && (
+                    <span
+                      data-testid="tide-refreshing"
+                      style={{
+                        fontSize: 8,
+                        letterSpacing: "0.15em",
+                        color: "#94a3b8",
+                        border: "1px solid rgba(148,163,184,0.3)",
+                        borderRadius: 2,
+                        padding: "1px 4px",
+                      }}
+                    >
+                      REFRESHING…
+                    </span>
+                  )}
+                </div>
                 <div style={{ color: "#7dd3fc", fontSize: 11 }}>{data.stationName}</div>
                 <StationSourceBadge
                   source={data.source}

@@ -684,7 +684,24 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <Compass degrees={cond.windDegrees} size={42} color="#7dd3fc" />
             <div>
-              <div style={LABEL}>WIND</div>
+              <div style={{ ...LABEL, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                WIND
+                {isFetching && (
+                  <span
+                    data-testid="wind-refreshing"
+                    style={{
+                      fontSize: 8,
+                      letterSpacing: "0.15em",
+                      color: "#94a3b8",
+                      border: "1px solid rgba(148,163,184,0.3)",
+                      borderRadius: 2,
+                      padding: "1px 4px",
+                    }}
+                  >
+                    REFRESHING…
+                  </span>
+                )}
+              </div>
               <div style={{ ...VALUE, color: "#7dd3fc" }}>{formatSpeedFromKnots(cond.windSpeedKnots, { units })}</div>
               <div style={{ fontSize: 9, color: "#94a3b8" }}>{cardinal(cond.windDegrees)} {Math.round(cond.windDegrees)}°</div>
             </div>
@@ -692,7 +709,24 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <Compass degrees={cond.tidalDegrees} size={42} color="#34d399" />
             <div>
-              <div style={LABEL}>TIDAL CURRENT</div>
+              <div style={{ ...LABEL, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                TIDAL CURRENT
+                {isFetching && (
+                  <span
+                    data-testid="tide-current-refreshing"
+                    style={{
+                      fontSize: 8,
+                      letterSpacing: "0.15em",
+                      color: "#94a3b8",
+                      border: "1px solid rgba(148,163,184,0.3)",
+                      borderRadius: 2,
+                      padding: "1px 4px",
+                    }}
+                  >
+                    REFRESHING…
+                  </span>
+                )}
+              </div>
               <div style={{ ...VALUE, color: "#34d399" }}>{formatSpeedFromKnots(cond.tidalSpeedKnots, { units })}</div>
               <div style={{ fontSize: 9, color: "#94a3b8" }}>{cardinal(cond.tidalDegrees)} {Math.round(cond.tidalDegrees)}°</div>
               {data?.tidalDataSource === "noaa-coops" && data.tidalStationName ? (
