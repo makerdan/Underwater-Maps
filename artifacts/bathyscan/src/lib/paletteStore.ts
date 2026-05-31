@@ -246,15 +246,17 @@ interface PaletteStore {
   resetBandBoundaries: () => void;
   reset: () => void;
   /**
-   * Apply server-side palette values (shallow / deep / customStops / bandColors)
-   * to the store. Values that are missing or malformed are left untouched. Used
-   * by the Settings page after a successful GET /api/settings hydration.
+   * Apply server-side palette values (shallow / deep / customStops / bandColors
+   * / bandBoundaries) to the store. Values that are missing or malformed are
+   * left untouched. Used by the Settings page after a successful GET
+   * /api/settings hydration.
    */
   hydrateFromServer: (partial: {
     paletteShallow?: unknown;
     paletteDeep?: unknown;
     customStops?: unknown;
     bandColors?: unknown;
+    bandBoundaries?: unknown;
   }) => void;
 }
 
@@ -396,6 +398,10 @@ export const usePaletteStore = create<PaletteStore>()(
             }
             patch.bandColors = bc;
           }
+        }
+        if (partial.bandBoundaries !== undefined) {
+          const cleaned = sanitizeBandBoundaries(partial.bandBoundaries);
+          if (cleaned) patch.bandBoundaries = cleaned;
         }
         if (Object.keys(patch).length > 0) set(patch);
       },

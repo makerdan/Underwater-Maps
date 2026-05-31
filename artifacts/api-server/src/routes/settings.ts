@@ -65,6 +65,7 @@ const DEFAULT_SETTINGS = {
     "#283593",
     "#1e2b6e",
   ],
+  bandBoundaries: [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000],
 };
 
 /**
@@ -109,6 +110,13 @@ router.get("/settings", requireAuth, async (req, res): Promise<void> => {
       bc[0] = legacyShallow.toLowerCase();
     }
     merged.bandColors = bc;
+  }
+
+  // Migration for legacy rows: stored settings from before bandBoundaries was
+  // persisted server-side. Fall back to the default boundaries so the schema
+  // validation always receives a valid array.
+  if (!("bandBoundaries" in stored)) {
+    merged.bandBoundaries = [...DEFAULT_SETTINGS.bandBoundaries];
   }
 
   const validated = GetSettingsResponse.parse(merged) as Record<string, unknown>;

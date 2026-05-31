@@ -2066,6 +2066,27 @@ components:
             - '#1a237e'
             - '#283593'
             - '#1e2b6e'
+        bandBoundaries:
+          type: array
+          minItems: 11
+          maxItems: 11
+          description: Depth band boundaries in feet. Exactly 11 integers, strictly increasing, first must be 0, last must be 2000. The 9 interior values are user-editable. Persisted server-side so customised boundaries survive across devices.
+          items:
+            type: integer
+            minimum: 0
+            maximum: 2000
+          default:
+            - 0
+            - 50
+            - 100
+            - 150
+            - 200
+            - 250
+            - 300
+            - 350
+            - 450
+            - 600
+            - 2000
         lampIntensity:
           type: number
           minimum: 0

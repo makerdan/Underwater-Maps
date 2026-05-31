@@ -66,6 +66,7 @@ function buildPayload(): Record<string, unknown> {
   dataOnly.paletteDeep = palette.deep;
   dataOnly.customStops = palette.customStops;
   dataOnly.bandColors = palette.bandColors;
+  dataOnly.bandBoundaries = palette.bandBoundaries;
   dataOnly.panelCollapse = usePanelCollapseStore.getState().collapsed;
   dataOnly.zoneOverlaySlots = useZoneOverlayStore.getState().slots;
   return dataOnly;
@@ -111,6 +112,7 @@ export function useServerSettingsSync(): void {
         paletteDeep: serverRec.paletteDeep,
         customStops: serverRec.customStops,
         bandColors: serverRec.bandColors,
+        bandBoundaries: serverRec.bandBoundaries,
       });
 
       // Restore panel collapse layout from the server.
@@ -165,7 +167,7 @@ export function useServerSettingsSync(): void {
   useEffect(() => {
     const palSnap = () => {
       const p = usePaletteStore.getState();
-      return JSON.stringify({ s: p.shallow, d: p.deep, c: p.customStops, b: p.bandColors });
+      return JSON.stringify({ s: p.shallow, d: p.deep, c: p.customStops, b: p.bandColors, bb: p.bandBoundaries });
     };
     const panelSnap = () =>
       JSON.stringify(usePanelCollapseStore.getState().collapsed);

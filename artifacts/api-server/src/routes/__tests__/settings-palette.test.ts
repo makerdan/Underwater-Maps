@@ -194,6 +194,85 @@ describe("PUT /api/settings — palette round-trip", () => {
     expect(res.status).toBe(400);
   });
 
+  it("persists bandBoundaries verbatim and returns them on GET", async () => {
+    const boundaries = [0, 30, 80, 130, 180, 230, 280, 330, 430, 580, 2000];
+    const putRes = await request(app)
+      .put("/api/settings")
+      .send({ bandBoundaries: boundaries });
+    expect(putRes.status).toBe(200);
+
+    const persisted = state.lastInsertedSettings?.["settings"] as Record<string, unknown>;
+    expect(persisted.bandBoundaries).toEqual(boundaries);
+
+    const getRes = await request(app).get("/api/settings");
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.bandBoundaries).toEqual(boundaries);
+  });
+
+  it("returns default bandBoundaries on GET when none were stored (legacy-row migration)", async () => {
+    // No prior PUT — state is empty, simulating a legacy row
+    const getRes = await request(app).get("/api/settings");
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.bandBoundaries).toEqual([0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000]);
+  });
+
+  it("rejects bandBoundaries with wrong count (not 11 elements) with 400", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .send({ bandBoundaries: [0, 50, 100, 150, 200, 250, 300, 350, 450, 2000] });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+  });
+
+  it("rejects bandBoundaries that are not strictly increasing with 400", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .send({ bandBoundaries: [0, 50, 50, 150, 200, 250, 300, 350, 450, 600, 2000] });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects bandBoundaries that do not start at 0 with 400", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .send({ bandBoundaries: [10, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000] });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects bandBoundaries that do not end at 2000 with 400", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .send({ bandBoundaries: [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 1999] });
+    expect(res.status).toBe(400);
+  });
+
+  it("partial PUT of just bandBoundaries preserves previously stored non-palette settings", async () => {
+    state.userSettings = [
+      {
+        userId: "user-test",
+        settings: {
+          units: "imperial",
+          depthUnit: "feet",
+          bandColors: ["#00e5ff", "#00c8de", "#00a8d0", "#0288d1", "#0277bd", "#1565c0", "#0d47a1", "#1a237e", "#283593", "#1e2b6e"],
+          bandBoundaries: [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000],
+        },
+      },
+    ];
+
+    const newBoundaries = [0, 40, 90, 140, 190, 240, 290, 340, 440, 590, 2000];
+    const res = await request(app)
+      .put("/api/settings")
+      .send({ bandBoundaries: newBoundaries });
+    expect(res.status).toBe(200);
+
+    const persisted = state.lastInsertedSettings?.["settings"] as Record<string, unknown>;
+    expect(persisted.bandBoundaries).toEqual(newBoundaries);
+    expect(persisted.units).toBe("imperial");
+    expect(persisted.depthUnit).toBe("feet");
+    // Previously stored bandColors must survive a boundaries-only PUT.
+    expect(Array.isArray(persisted.bandColors)).toBe(true);
+    expect((persisted.bandColors as string[]).length).toBe(10);
+  });
+
   it("partial PUT of just palette fields preserves previously stored non-palette settings", async () => {
     state.userSettings = [
       {

@@ -336,6 +336,12 @@ export interface UserSettings {
      */
   bandColors?: string[];
   /**
+     * Depth band boundaries in feet. Exactly 11 integers, strictly increasing, first must be 0, last must be 2000. The 9 interior values are user-editable. Persisted server-side so customised boundaries survive across devices.
+     * @minItems 11
+     * @maxItems 11
+     */
+  bandBoundaries?: number[];
+  /**
      * @minimum 0
      * @maximum 5
      */
