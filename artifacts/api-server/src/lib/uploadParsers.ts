@@ -17,6 +17,8 @@
 
 import { fromArrayBuffer } from "geotiff";
 import { NetCDFReader } from "netcdfjs";
+import { createLazPerf } from "laz-perf";
+import { ready as h5wasmReady, File as H5wFile, Group as H5Group, Dataset as H5Dataset } from "h5wasm";
 
 // ---------------------------------------------------------------------------
 // Shared type (mirrors terrain.ts RawPoint — re-exported to avoid circular dep)
@@ -387,47 +389,56 @@ export async function parseLasLaz(buffer: Buffer, fileName: string): Promise<Raw
   const recordSize = LAS_POINT_RECORD_SIZE[pointDataFormat] ?? pointDataRecordLength;
 
   if (isLaz) {
-    // Try laz-perf for LAZ decompression
-    let lazPerf: Record<string, unknown>;
+    // Initialise laz-perf WASM module and decode with the LASZip API.
+    // LASZip.open() accepts the full LAS/LAZ buffer; getPoint() iterates
+    // points in order, writing one point record at a time to WASM heap.
+    const lp = await createLazPerf();
+    const zip = new lp.LASZip();
+    // Allocate WASM heap space for the entire file buffer
+    const ptr = (lp as unknown as { _malloc: (n: number) => number })._malloc(buffer.length);
     try {
-        lazPerf = (await import("laz-perf" as string)) as Record<string, unknown>;
-    } catch {
-      throw new Error(
-        "LAZ decompression requires the laz-perf library which could not be loaded in this environment. " +
-          "Please convert your .laz file to uncompressed .las first using: las2las -i input.laz -o output.las",
+      (lp as unknown as { HEAPU8: Uint8Array }).HEAPU8.set(
+        new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength),
+        ptr,
       );
-    }
+      zip.open(ptr, buffer.length);
 
-    // Most laz-perf Node builds expose a createDecoder(buffer, header) interface
-    try {
-      const mod = lazPerf as Record<string, (...args: unknown[]) => unknown>;
-      const decoder = mod["createDecoder"]
-        ? mod["createDecoder"](
-            new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength),
-            {
-              pointDataOffset,
-              pointDataRecordLength: recordSize,
-              pointFormat: pointDataFormat,
-              scaleX, scaleY, scaleZ,
-              offsetX, offsetY, offsetZ,
-              pointCount,
-            },
-          )
-        : null;
+      const count = Math.min(zip.getCount(), 2_000_000);
+      const ptLen = zip.getPointLength();
+      const pts: { x: number; y: number; z: number }[] = [];
 
-      const getPoints = (decoder as Record<string, unknown>)["getPoints"];
-      if (decoder && typeof getPoints === "function") {
-        const pts = (getPoints as (...a: unknown[]) => unknown[])(pointCount) as Array<{ x: number; y: number; z: number }>;
-        return lasPointsToRaw(pts.map((p) => ({ x: p.x, y: p.y, z: p.z })));
+      const dest = (lp as unknown as { _malloc: (n: number) => number })._malloc(ptLen);
+      try {
+        const heap = (lp as unknown as { HEAPU8: Uint8Array }).HEAPU8;
+        for (let i = 0; i < count; i++) {
+          zip.getPoint(dest);
+          // LAS format 0+: X, Y, Z stored as int32LE at byte offsets 0, 4, 8
+          const view = new DataView(heap.buffer, dest, ptLen);
+          const xi = view.getInt32(0, true);
+          const yi = view.getInt32(4, true);
+          const zi = view.getInt32(8, true);
+          pts.push({
+            x: xi * scaleX + offsetX,
+            y: yi * scaleY + offsetY,
+            z: zi * scaleZ + offsetZ,
+          });
+        }
+      } finally {
+        (lp as unknown as { _free: (ptr: number) => void })._free(dest);
       }
-    } catch {
-      // fall through to error below
-    }
 
-    throw new Error(
-      "LAZ decompression failed. Please convert your .laz file to uncompressed .las first using: " +
-        "las2las -i input.laz -o output.las  (or: pdal translate input.laz output.las)",
-    );
+      zip.delete();
+      return lasPointsToRaw(pts);
+    } catch (err) {
+      zip.delete();
+      throw new Error(
+        `LAZ decompression failed: ${err instanceof Error ? err.message : String(err)}. ` +
+          "Please convert your .laz file to uncompressed .las first using: " +
+          "las2las -i input.laz -o output.las  (or: pdal translate input.laz output.las)",
+      );
+    } finally {
+      (lp as unknown as { _free: (ptr: number) => void })._free(ptr);
+    }
   }
 
   // --- Uncompressed LAS: read point records directly ---
@@ -478,25 +489,10 @@ function lasPointsToRaw(points: { x: number; y: number; z: number }[]): RawPoint
  * environment, a clear error is returned directing the user to convert via GDAL.
  */
 export async function parseBag(buffer: Buffer): Promise<RawPoint[]> {
-  let h5wasm: Record<string, unknown>;
+  // Await h5wasm WASM initialisation — provides the virtual filesystem (FS).
+  let mod: Awaited<typeof h5wasmReady>;
   try {
-    h5wasm = (await import("h5wasm" as string)) as Record<string, unknown>;
-  } catch {
-    throw new Error(
-      "BAG/HDF5 parsing requires the h5wasm library which could not be loaded in this environment. " +
-        "Please convert your .bag file to GeoTIFF first using GDAL: gdal_translate -of GTiff input.bag output.tif",
-    );
-  }
-
-  let FS: Record<string, unknown>;
-  let h5Module: Record<string, unknown>;
-  try {
-    const ready = typeof (h5wasm as Record<string, unknown>)["ready"] !== "undefined"
-      ? (h5wasm as Record<string, unknown>)["ready"]
-      : (h5wasm as Record<string, (...a: unknown[]) => unknown>)["default"]?.();
-    const mod = await ready as Record<string, unknown>;
-    h5Module = mod;
-    FS = (mod["FS"] ?? (h5wasm as Record<string, unknown>)["FS"]) as Record<string, unknown>;
+    mod = await h5wasmReady;
   } catch (err) {
     throw new Error(
       `h5wasm initialisation failed: ${err instanceof Error ? err.message : String(err)}. ` +
@@ -504,38 +500,33 @@ export async function parseBag(buffer: Buffer): Promise<RawPoint[]> {
     );
   }
 
+  const FS = mod.FS;
+
   // Write buffer to h5wasm virtual filesystem
   const tmpPath = "/tmp_bag_input.bag";
   try {
-    (FS["writeFile"] as (path: string, data: Uint8Array) => void)(
-      tmpPath,
-      new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength),
-    );
+    FS.writeFile(tmpPath, new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength));
   } catch (err) {
     throw new Error(`Failed to write BAG to virtual FS: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   try {
-    const File = (h5Module["File"] ?? (h5wasm as Record<string, unknown>)["File"]) as new (path: string, mode: string) => Record<string, unknown>;
-    const f = new File(tmpPath, "r");
+    const f = new H5wFile(tmpPath, "r");
 
     // Read elevation dataset
-    const bagRoot = (f["get"] as (key: string) => Record<string, unknown>)("BAG_root");
+    const bagRoot = f.get("BAG_root") as H5Group | undefined;
     if (!bagRoot) throw new Error("BAG file does not contain a 'BAG_root' group.");
 
-    const elevDs = (bagRoot["get"] as (key: string) => Record<string, unknown>)("elevation");
+    const elevDs = bagRoot.get("elevation");
     if (!elevDs) throw new Error("BAG_root/elevation dataset not found.");
 
-    const elevData = (elevDs["value"] ?? (elevDs["to_array"] as () => unknown)?.()) as number[][] | Float32Array;
+    const elevData = (elevDs as unknown as H5Dataset).value as number[][] | Float32Array;
 
     // Read metadata XML for geolocation
-    const metaDs = (bagRoot["get"] as (key: string) => Record<string, unknown>)("metadata");
-    const metaXml = metaDs
-      ? String((metaDs["value"] ?? "").toString())
-      : "";
+    const metaDs = bagRoot.get("metadata");
+    const metaXml = metaDs ? String((metaDs as unknown as H5Dataset).value ?? "") : "";
 
-    const closeF = f["close"];
-    if (typeof closeF === "function") (closeF as () => void).call(f);
+    f.close();
 
     // Parse geolocation from BAG metadata XML
     const { lon0, lat0, dLon, dLat, cols, rows } = extractBagGeolocation(metaXml, elevData);
@@ -565,7 +556,7 @@ export async function parseBag(buffer: Buffer): Promise<RawPoint[]> {
     return points;
   } finally {
     try {
-      (FS["unlink"] as (path: string) => void)(tmpPath);
+      FS.unlink(tmpPath);
     } catch {
       // ignore cleanup errors
     }

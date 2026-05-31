@@ -1,9 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { parseXyzCsv } from "../lib/terrain.js";
 import {
   parseGeoTiff,
   parseNetCdf,
   parseLasLaz,
+  parseBag,
   parseGpxTerrain,
   parseNmea,
   parseUploadedFile,
@@ -248,11 +249,106 @@ describe("parseLasLaz — LAS binary", () => {
     expect(pts.every((p) => p.depth > 0)).toBe(true);
   });
 
-  it("throws a descriptive error for .laz when laz-perf is unavailable", async () => {
-    const buf = buildLasBuffer([{ lon: 10.5, lat: 55.2, depth: 100 }]);
-    // The buffer is valid LAS, but the .laz extension triggers the laz-perf
-    // code path which will fail in this environment.
-    await expect(parseLasLaz(buf, "survey.laz")).rejects.toThrow(/laz/i);
+  it("decompresses a synthetic LAS/LAZ buffer using the LASZip decoder", async () => {
+    // LASZip.open() accepts both uncompressed LAS and compressed LAZ buffers;
+    // using a plain LAS fixture (built by buildLasBuffer) exercises the full
+    // laz-perf decode path without needing a real LAZ encoder.
+    const input = [
+      { lon: 12.3, lat: 51.4, depth: 150 },
+      { lon: 12.4, lat: 51.5, depth: 250 },
+    ];
+    const buf = buildLasBuffer(input);
+    const pts = await parseLasLaz(buf, "survey.laz");
+    expect(pts).toHaveLength(2);
+    expect(pts[0]!.lon).toBeCloseTo(12.3, 3);
+    expect(pts[0]!.lat).toBeCloseTo(51.4, 3);
+    expect(pts[0]!.depth).toBeCloseTo(150, 0);
+    expect(pts[1]!.depth).toBeCloseTo(250, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// BAG (HDF5) parser tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a minimal synthetic BAG HDF5 buffer in memory using h5wasm.
+ *
+ * Creates a BAG_root group with:
+ *   - elevation dataset: Float32Array of shape [rows × cols] with negative
+ *     elevation values (positive-depth = negative BAG convention)
+ *   - metadata dataset: XML string with bounding-box coordinates
+ *
+ * Returns the raw bytes of the resulting HDF5 file.
+ */
+async function buildBagBuffer(
+  elevations: number[],
+  bounds: { west: number; east: number; south: number; north: number },
+): Promise<Buffer> {
+  const { ready: h5ready, File: H5File } = await import("h5wasm");
+  const mod = await h5ready;
+  const FS = mod.FS;
+
+  const path = "/tmp_bag_fixture.h5";
+  const f = new H5File(path, "w");
+  f.create_group("BAG_root");
+  const root = f.get("BAG_root") as InstanceType<typeof H5File>;
+
+  root.create_dataset({
+    name: "elevation",
+    data: new Float32Array(elevations),
+  });
+
+  const { west, east, south, north } = bounds;
+  const metaXml =
+    `<BAG_Root>` +
+    `<westBoundLongitude>${west}</westBoundLongitude>` +
+    `<eastBoundLongitude>${east}</eastBoundLongitude>` +
+    `<southBoundLatitude>${south}</southBoundLatitude>` +
+    `<northBoundLatitude>${north}</northBoundLatitude>` +
+    `</BAG_Root>`;
+  root.create_dataset({ name: "metadata", data: metaXml });
+
+  f.close();
+
+  const bytes = FS.readFile(path);
+  FS.unlink(path);
+  return Buffer.from(bytes);
+}
+
+describe("parseBag — HDF5/BAG parser", () => {
+  let bagBuffer: Buffer;
+
+  // Build a 4-cell (2-conceptual-row × 2-conceptual-col) BAG fixture once.
+  // Elevations are stored as negative values (positive-up convention);
+  // parseBag flips them to positive depth.
+  beforeAll(async () => {
+    bagBuffer = await buildBagBuffer(
+      [-100.0, -200.0, -150.0, -250.0],
+      { west: 10.0, east: 10.1, south: 55.0, north: 55.1 },
+    );
+  });
+
+  it("returns depth points from a synthetic BAG buffer", async () => {
+    const pts = await parseBag(bagBuffer);
+    expect(pts.length).toBeGreaterThan(0);
+    // All points should have positive depth
+    expect(pts.every((p) => p.depth > 0)).toBe(true);
+  });
+
+  it("returns the expected set of depth values from the elevation fixture", async () => {
+    const pts = await parseBag(bagBuffer);
+    const depths = pts.map((p) => p.depth).sort((a, b) => a - b);
+    // The fixture has elevations -100, -200, -150, -250 → depths 100, 200, 150, 250
+    expect(depths).toContain(100);
+    expect(depths).toContain(150);
+    expect(depths).toContain(200);
+    expect(depths).toContain(250);
+  });
+
+  it("throws for a buffer that is not a valid HDF5 file", async () => {
+    const garbage = Buffer.from("not an hdf5 file at all");
+    await expect(parseBag(garbage)).rejects.toThrow();
   });
 });
 
@@ -417,13 +513,14 @@ describe("parseUploadedFile dispatcher", () => {
     );
   });
 
-  it("throws for .laz with a conversion hint", async () => {
-    // Use a valid LAS header so it passes the magic check before hitting
-    // the laz-perf missing path
+  it("routes .laz to LAZ parser and returns decoded points", async () => {
+    // laz-perf is now installed; LASZip.open() accepts plain LAS buffers,
+    // so this exercises the full decode path end-to-end.
     const buf = buildLasBuffer([{ lon: 10.0, lat: 55.0, depth: 50 }]);
-    await expect(parseUploadedFile(buf, "survey.laz")).rejects.toThrow(
-      /laz/i,
-    );
+    const pts = await parseUploadedFile(buf, "survey.laz");
+    expect(pts).toHaveLength(1);
+    expect(pts[0]!.lon).toBeCloseTo(10.0, 3);
+    expect(pts[0]!.depth).toBeCloseTo(50, 0);
   });
 
   it("routes .gpx to GPX parser and returns points", async () => {
