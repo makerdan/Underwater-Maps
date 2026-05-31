@@ -194,7 +194,6 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
   const setSnapToDepthM = useDriftStore((s) => s.setSnapToDepthM);
   const driftWaypoints = useDriftStore((s) => s.driftWaypoints);
   const removeDriftWaypoint = useDriftStore((s) => s.removeDriftWaypoint);
-  const moveDriftWaypoint = useDriftStore((s) => s.moveDriftWaypoint);
   const clearDriftWaypoints = useDriftStore((s) => s.clearDriftWaypoints);
   const setDriftWaypoints = useDriftStore((s) => s.setDriftWaypoints);
   const boatProfileId = useDriftStore((s) => s.boatProfileId);
@@ -1127,6 +1126,87 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
             </div>
           )}
 
+          {/* ── Waypoint list ─────────────────────────────────────────── */}
+          <div
+            data-testid="drift-waypoint-list"
+            style={{ marginBottom: 6 }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <div style={LABEL}>WAYPOINTS ({driftWaypoints.length})</div>
+              {driftWaypoints.length > 0 && (
+                <button
+                  data-testid="clear-all-waypoints"
+                  onClick={clearDriftWaypoints}
+                  title="Remove all waypoints"
+                  style={{
+                    background: "rgba(248,113,113,0.08)",
+                    border: "1px solid rgba(248,113,113,0.35)",
+                    color: "#f87171",
+                    fontFamily: "inherit",
+                    fontSize: 8,
+                    padding: "2px 6px",
+                    borderRadius: 3,
+                    cursor: "pointer",
+                    letterSpacing: "0.14em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+            {driftWaypoints.length === 0 ? (
+              <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.1em", fontStyle: "italic" }}>
+                Click the map to place waypoints
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                {driftWaypoints.map((wp, i) => (
+                  <div
+                    key={i}
+                    data-testid={`drift-waypoint-row-${i}`}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      background: "rgba(0,10,20,0.6)",
+                      border: "1px solid rgba(0,229,255,0.12)",
+                      borderRadius: 3,
+                      padding: "3px 5px",
+                    }}
+                  >
+                    <span style={{ color: "#fbbf24", fontSize: 8, minWidth: 12, textAlign: "right", flexShrink: 0 }}>
+                      {i + 1}
+                    </span>
+                    <span style={{ flex: 1, color: "#94a3b8", fontSize: 8, letterSpacing: "0.06em", fontVariantNumeric: "tabular-nums" }}>
+                      {wp.lat.toFixed(4)}°&nbsp;{wp.lon.toFixed(4)}°
+                    </span>
+                    <button
+                      data-testid={`remove-waypoint-${i}`}
+                      onClick={() => removeDriftWaypoint(i)}
+                      title={`Remove waypoint ${i + 1}`}
+                      aria-label={`Remove waypoint ${i + 1}`}
+                      style={{
+                        background: "none",
+                        border: "1px solid rgba(248,113,113,0.25)",
+                        color: "#f87171",
+                        fontFamily: "inherit",
+                        fontSize: 9,
+                        padding: "0 4px",
+                        borderRadius: 2,
+                        cursor: "pointer",
+                        lineHeight: 1.4,
+                        flexShrink: 0,
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div style={{ marginBottom: 6 }}>
             <div style={LABEL}>PRESETS</div>
             {(() => {
@@ -1406,99 +1486,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
           </div>
 
           {/* Multi-leg waypoint list */}
-          <div style={{ marginTop: 8, borderTop: "1px solid rgba(0,229,255,0.1)", paddingTop: 6 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-              <span style={LABEL}>WAYPOINTS ({driftWaypoints.length})</span>
-              {driftWaypoints.length > 0 && (
-                <button
-                  onClick={clearDriftWaypoints}
-                  data-testid="clear-waypoints"
-                  style={{
-                    background: "rgba(239,68,68,0.1)",
-                    border: "1px solid rgba(239,68,68,0.3)",
-                    color: "#f87171",
-                    fontFamily: "inherit",
-                    fontSize: 8,
-                    padding: "2px 6px",
-                    borderRadius: 3,
-                    cursor: "pointer",
-                    letterSpacing: "0.12em",
-                  }}
-                >CLEAR ALL</button>
-              )}
-            </div>
-            {driftWaypoints.length === 0 ? (
-              <div style={{ fontSize: 9, color: "#94a3b8", fontStyle: "italic" }}>
-                Click the water to drop turn points. Boat loops Start → WP1 → … → Start.
-              </div>
-            ) : (
-              <div data-testid="waypoint-list" style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                {driftWaypoints.map((wp, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 4,
-                      background: "rgba(0,10,20,0.7)",
-                      border: "1px solid rgba(0,229,255,0.12)",
-                      borderRadius: 3,
-                      padding: "2px 4px",
-                      fontSize: 9,
-                    }}
-                  >
-                    <span style={{ color: "#fbbf24", fontWeight: 700, minWidth: 24 }}>
-                      WP{i + 1}
-                    </span>
-                    <span style={{ color: "#e2e8f0", flex: 1, fontVariantNumeric: "tabular-nums" }}>
-                      {wp.lat.toFixed(4)}, {wp.lon.toFixed(4)}
-                    </span>
-                    <button
-                      title="Move up"
-                      disabled={i === 0}
-                      onClick={() => moveDriftWaypoint(i, -1)}
-                      style={{
-                        background: "none",
-                        border: "1px solid rgba(0,229,255,0.2)",
-                        color: i === 0 ? "#64748b" : "#00e5ff",
-                        cursor: i === 0 ? "default" : "pointer",
-                        fontSize: 9,
-                        padding: "0 4px",
-                        borderRadius: 2,
-                      }}
-                    >▲</button>
-                    <button
-                      title="Move down"
-                      disabled={i === driftWaypoints.length - 1}
-                      onClick={() => moveDriftWaypoint(i, 1)}
-                      style={{
-                        background: "none",
-                        border: "1px solid rgba(0,229,255,0.2)",
-                        color: i === driftWaypoints.length - 1 ? "#64748b" : "#00e5ff",
-                        cursor: i === driftWaypoints.length - 1 ? "default" : "pointer",
-                        fontSize: 9,
-                        padding: "0 4px",
-                        borderRadius: 2,
-                      }}
-                    >▼</button>
-                    <button
-                      title="Remove waypoint"
-                      onClick={() => removeDriftWaypoint(i)}
-                      style={{
-                        background: "none",
-                        border: "1px solid rgba(239,68,68,0.3)",
-                        color: "#f87171",
-                        cursor: "pointer",
-                        fontSize: 9,
-                        padding: "0 4px",
-                        borderRadius: 2,
-                      }}
-                    >×</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* Section removed: compact list above handles this */}
         </div>
       )}
 
