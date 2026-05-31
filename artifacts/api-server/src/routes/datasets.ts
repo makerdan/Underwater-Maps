@@ -477,6 +477,21 @@ const datasetUploadRateLimit = createRateLimit({
   mode: "ip",
 });
 
+const terrainFetchIpRateLimit = createRateLimit({
+  route: "terrain-fetch",
+  windowMs: 60_000,
+  max: 90,
+  mode: "ip",
+});
+
+const terrainFetchUserRateLimit = createRateLimit({
+  route: "terrain-fetch",
+  windowMs: 60_000,
+  max: 30,
+  mode: "user",
+  skipIfNoUser: true,
+});
+
 const UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -590,7 +605,7 @@ const DatasetIdParamSchema = z
   .max(128)
   .regex(/^[a-zA-Z0-9_-]+$/, "Dataset id must contain only alphanumeric characters, hyphens, or underscores");
 
-router.get("/datasets/:id/terrain", asyncHandler(async (req, res): Promise<void> => {
+router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
     res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid dataset id" });

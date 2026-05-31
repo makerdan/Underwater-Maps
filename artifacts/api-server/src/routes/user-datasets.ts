@@ -12,8 +12,23 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { createRateLimit } from "../middlewares/rateLimit.js";
 
 const router = Router();
+
+const terrainFetchIpRateLimit = createRateLimit({
+  route: "terrain-fetch",
+  windowMs: 60_000,
+  max: 90,
+  mode: "ip",
+});
+
+const terrainFetchUserRateLimit = createRateLimit({
+  route: "terrain-fetch",
+  windowMs: 60_000,
+  max: 30,
+  mode: "user",
+});
 
 function metaJson(row: {
   id: string;
@@ -166,7 +181,7 @@ router.post("/user/datasets/:id/duplicate", requireAuth, asyncHandler(async (req
 }));
 
 // ── GET /user/datasets/:id/terrain ─────────────────────────────────────────
-router.get("/user/datasets/:id/terrain", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.get("/user/datasets/:id/terrain", terrainFetchIpRateLimit, requireAuth, terrainFetchUserRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
 
