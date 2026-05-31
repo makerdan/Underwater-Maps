@@ -9,6 +9,7 @@
  *   • Keyboard navigation: ↑ ↓ select, → expand, ← collapse, Enter activate
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   DndContext,
@@ -2096,6 +2097,15 @@ const ConfirmDialog: React.FC<{
   onCancel: () => void;
   onConfirm: () => void;
 }> = ({ title, message, isPending = false, onCancel, onConfirm }) => {
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(containerRef);
+
+  useEffect(() => {
+    cancelRef.current?.focus();
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !isPending) onCancel();
@@ -2106,6 +2116,9 @@ const ConfirmDialog: React.FC<{
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-delete-dialog-title"
       data-testid="confirm-delete-dialog"
       aria-busy={isPending || undefined}
       style={{
@@ -2120,6 +2133,7 @@ const ConfirmDialog: React.FC<{
       onClick={isPending ? undefined : onCancel}
     >
       <div
+        ref={containerRef}
         onClick={(e) => e.stopPropagation()}
         style={{
           background: "rgba(0,10,20,0.95)",
@@ -2132,10 +2146,16 @@ const ConfirmDialog: React.FC<{
           fontSize: 12,
         }}
       >
-        <div style={{ fontWeight: 700, marginBottom: 8, color: "#fca5a5" }}>{title}</div>
+        <div
+          id="confirm-delete-dialog-title"
+          style={{ fontWeight: 700, marginBottom: 8, color: "#fca5a5" }}
+        >
+          {title}
+        </div>
         <div style={{ fontSize: 11, color: "#e2e8f0", marginBottom: 14 }}>{message}</div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button
+            ref={cancelRef}
             onClick={onCancel}
             disabled={isPending}
             data-testid="confirm-delete-cancel"
@@ -2156,7 +2176,6 @@ const ConfirmDialog: React.FC<{
             onClick={onConfirm}
             disabled={isPending}
             data-testid="confirm-delete-confirm"
-            autoFocus
             style={{
               background: isPending
                 ? "rgba(239,68,68,0.10)"

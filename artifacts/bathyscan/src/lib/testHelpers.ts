@@ -19,6 +19,7 @@
  *      a real production build and asserts `__bathyTest` is absent from
  *      the output, so this guard is exercised in CI.
  */
+import { useTerrainStore } from "./terrainStore";
 import { useContextMenuStore, type ContextMenuItem } from "./contextMenuStore";
 import { useMeasureStore } from "./measureStore";
 import { useMarkerDetailStore } from "./markerDetailStore";
@@ -505,6 +506,15 @@ export interface BathyTestApi {
     cx: number;
     cy: number;
   }>;
+  /**
+   * Inject one or more entries into the terrainStore visibleDatasets array so
+   * focus-trap / remove-dialog e2e tests can open the RemoveDatasetConfirmDialog
+   * without needing a real authenticated terrain fetch. The injected entries
+   * have null grids (no 3D rendering) — sufficient for the UI row to render.
+   */
+  setVisibleDatasets: (
+    items: Array<{ datasetId: string; name: string; source: "preset" | "user" }>,
+  ) => void;
 }
 
 declare global {
@@ -1071,6 +1081,16 @@ export function installTestHelpers(): void {
             maxDepthM: p.maxDepthM,
           }
         : null;
+    },
+    setVisibleDatasets: (items) => {
+      useTerrainStore.setState({
+        visibleDatasets: items.map((item) => ({
+          datasetId: item.datasetId,
+          source: item.source,
+          activeGrid: null,
+          overviewGrid: null,
+        })),
+      });
     },
   };
 }

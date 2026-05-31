@@ -42,6 +42,7 @@ import { WaterTypeToggle } from "@/components/WaterTypeToggle";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useUndoableMarkerDelete } from "@/hooks/useUndoableMarkerDelete";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { GpsImportDialog } from "@/components/GpsImportDialog";
 import { GpsExportDialog } from "@/components/GpsExportDialog";
 import { LoadingDial } from "@/components/LoadingDial";
@@ -176,17 +177,19 @@ const RemoveDatasetConfirmDialog: React.FC<{
   onConfirm: () => void;
   onCancel: () => void;
 }> = ({ datasetName, onConfirm, onCancel }) => {
-  const confirmRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(containerRef);
 
   useEffect(() => {
-    confirmRef.current?.focus();
+    cancelRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCancel();
-      if (e.key === "Enter") onConfirm();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onConfirm, onCancel]);
+  }, [onCancel]);
 
   return (
     <div
@@ -207,6 +210,7 @@ const RemoveDatasetConfirmDialog: React.FC<{
       }}
     >
       <div
+        ref={containerRef}
         style={{
           background: "rgba(0,10,20,0.92)",
           border: "1px solid rgba(0,229,255,0.35)",
@@ -246,6 +250,8 @@ const RemoveDatasetConfirmDialog: React.FC<{
         </div>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button
+            ref={cancelRef}
+            data-testid="remove-dataset-cancel"
             onClick={onCancel}
             style={{
               fontSize: 10,
@@ -262,7 +268,7 @@ const RemoveDatasetConfirmDialog: React.FC<{
             CANCEL
           </button>
           <button
-            ref={confirmRef}
+            data-testid="remove-dataset-confirm"
             onClick={onConfirm}
             style={{
               fontSize: 10,
