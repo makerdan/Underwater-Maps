@@ -71,6 +71,7 @@ const DEFAULT_SETTINGS = {
   intertidalScoreMode: "tidepool",
   efhOverlayEnabled: false,
   hiddenEfhSpecies: [] as string[],
+  globalFontSize: "medium",
   paletteShallow: "#00e5ff",
   paletteDeep: "#283593",
   customStops: [

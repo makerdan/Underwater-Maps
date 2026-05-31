@@ -333,6 +333,47 @@ describe("PUT /api/settings — hiddenEfhSpecies (new v15 field)", () => {
   });
 });
 
+describe("PUT /api/settings — globalFontSize (new v16 field)", () => {
+  it("accepts all six valid FontSizeLevel values", async () => {
+    const levels = ["smallest", "small", "medium", "large", "x-large", "largest"];
+    for (const level of levels) {
+      const res = await request(app)
+        .put("/api/settings")
+        .set(AUTH)
+        .send({ globalFontSize: level });
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("globalFontSize", level);
+    }
+  });
+
+  it("returns 400 for an unrecognised globalFontSize value", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ globalFontSize: "enormous" });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when globalFontSize is not a string", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ globalFontSize: 3 });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("defaults to 'medium' when globalFontSize is omitted from the payload", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ fogDensity: 0.012 });
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("globalFontSize", "medium");
+  });
+});
+
 describe("PUT /api/settings — combined payload with all 17 new fields", () => {
   it("accepts a full valid payload containing all 17 new v15 fields", async () => {
     const payload = {
