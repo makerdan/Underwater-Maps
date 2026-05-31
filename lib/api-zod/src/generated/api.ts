@@ -849,14 +849,6 @@ export const getSettingsResponseZoneOverlaySlotsFreshwaterItemColorRegExp = new 
 export const getSettingsResponseZoneOverlaySlotsFreshwaterMin = 4;
 export const getSettingsResponseZoneOverlaySlotsFreshwaterMax = 4;
 
-export const getSettingsResponseZonePaintBrushRadiusDefault = 4;
-export const getSettingsResponseZonePaintBrushRadiusMin = 1;
-export const getSettingsResponseZonePaintBrushRadiusMax = 20;
-
-export const getSettingsResponseZonePaintSlotDefault = 0;
-export const getSettingsResponseZonePaintSlotMin = 0;
-export const getSettingsResponseZonePaintSlotMax = 3;
-
 
 
 export const GetSettingsResponse = zod.object({
@@ -921,24 +913,7 @@ export const GetSettingsResponse = zod.object({
   "color": zod.string().regex(getSettingsResponseZoneOverlaySlotsFreshwaterItemColorRegExp),
   "visible": zod.boolean()
 })).min(getSettingsResponseZoneOverlaySlotsFreshwaterMin).max(getSettingsResponseZoneOverlaySlotsFreshwaterMax).optional()
-}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.'),
-  "weatherStationsActive": zod.boolean().default(false).describe('NOAA Aviation Weather station pins on the OverviewMap.'),
-  "rawsOverlayActive": zod.boolean().default(false).describe('AOOS RAWS land-weather station pins on the OverviewMap.'),
-  "windOverlayActive": zod.boolean().default(false).describe('Always-on Wind arrow overlay.'),
-  "tideOverlayActive": zod.boolean().default(false).describe('Always-on Tide arrow overlay.'),
-  "currentOverlayActive": zod.boolean().default(false).describe('Always-on Current arrow overlay.'),
-  "currentDepthLayers": zod.array(zod.enum(['surface', 'mid', 'near-bottom'])).default(['mid']).describe('Which depth layers the Current overlay renders (multi-select).'),
-  "sidePaneCollapsed": zod.boolean().default(false).describe('Whether the left side pane is collapsed.'),
-  "zonePaintBrushRadius": zod.number().min(getSettingsResponseZonePaintBrushRadiusMin).max(getSettingsResponseZonePaintBrushRadiusMax).default(getSettingsResponseZonePaintBrushRadiusDefault).describe('Brush radius in grid cells (1–20) for the zone-paint tool.'),
-  "zoneOverlayEnabled": zod.boolean().default(false).describe('Show real Alaska ShoreZone substrate polygons as a draped overlay.'),
-  "zonePaintMode": zod.boolean().default(false).describe('Whether the zone-paint tool is active.'),
-  "zonePaintSlot": zod.number().min(getSettingsResponseZonePaintSlotMin).max(getSettingsResponseZonePaintSlotMax).int().default(getSettingsResponseZonePaintSlotDefault).describe('Which texture slot (0–3) the paint brush is currently set to.'),
-  "substrateColorMode": zod.boolean().default(false).describe('Show substrate colour overlay.'),
-  "hiddenSubstrateClasses": zod.array(zod.string()).default([]).describe('CMECS substrate classes the user has hidden via the legend (lower-cased).'),
-  "intertidalHotspotsEnabled": zod.boolean().default(false).describe('Show intertidal hotspot polygons in the 3D scene.'),
-  "intertidalScoreMode": zod.enum(['tidepool', 'beachcombing']).default('tidepool').describe('Which score type to highlight in the Intertidal Hotspots layer.'),
-  "efhOverlayEnabled": zod.boolean().default(false).describe('Show EFH zone polygon outlines in the 3D scene.'),
-  "hiddenEfhSpecies": zod.array(zod.string()).default([]).describe('EFH species common names the user has hidden via the legend.')
+}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.')
 }).describe('Per-user application settings with sensible defaults')
 
 
@@ -1029,14 +1004,6 @@ export const putSettingsBodyZoneOverlaySlotsFreshwaterItemColorRegExp = new RegE
 export const putSettingsBodyZoneOverlaySlotsFreshwaterMin = 4;
 export const putSettingsBodyZoneOverlaySlotsFreshwaterMax = 4;
 
-export const putSettingsBodyZonePaintBrushRadiusDefault = 4;
-export const putSettingsBodyZonePaintBrushRadiusMin = 1;
-export const putSettingsBodyZonePaintBrushRadiusMax = 20;
-
-export const putSettingsBodyZonePaintSlotDefault = 0;
-export const putSettingsBodyZonePaintSlotMin = 0;
-export const putSettingsBodyZonePaintSlotMax = 3;
-
 
 
 export const PutSettingsBody = zod.object({
@@ -1101,24 +1068,7 @@ export const PutSettingsBody = zod.object({
   "color": zod.string().regex(putSettingsBodyZoneOverlaySlotsFreshwaterItemColorRegExp),
   "visible": zod.boolean()
 })).min(putSettingsBodyZoneOverlaySlotsFreshwaterMin).max(putSettingsBodyZoneOverlaySlotsFreshwaterMax).optional()
-}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.'),
-  "weatherStationsActive": zod.boolean().default(false).describe('NOAA Aviation Weather station pins on the OverviewMap.'),
-  "rawsOverlayActive": zod.boolean().default(false).describe('AOOS RAWS land-weather station pins on the OverviewMap.'),
-  "windOverlayActive": zod.boolean().default(false).describe('Always-on Wind arrow overlay.'),
-  "tideOverlayActive": zod.boolean().default(false).describe('Always-on Tide arrow overlay.'),
-  "currentOverlayActive": zod.boolean().default(false).describe('Always-on Current arrow overlay.'),
-  "currentDepthLayers": zod.array(zod.enum(['surface', 'mid', 'near-bottom'])).default(['mid']).describe('Which depth layers the Current overlay renders (multi-select).'),
-  "sidePaneCollapsed": zod.boolean().default(false).describe('Whether the left side pane is collapsed.'),
-  "zonePaintBrushRadius": zod.number().min(putSettingsBodyZonePaintBrushRadiusMin).max(putSettingsBodyZonePaintBrushRadiusMax).default(putSettingsBodyZonePaintBrushRadiusDefault).describe('Brush radius in grid cells (1–20) for the zone-paint tool.'),
-  "zoneOverlayEnabled": zod.boolean().default(false).describe('Show real Alaska ShoreZone substrate polygons as a draped overlay.'),
-  "zonePaintMode": zod.boolean().default(false).describe('Whether the zone-paint tool is active.'),
-  "zonePaintSlot": zod.number().min(putSettingsBodyZonePaintSlotMin).max(putSettingsBodyZonePaintSlotMax).int().default(putSettingsBodyZonePaintSlotDefault).describe('Which texture slot (0–3) the paint brush is currently set to.'),
-  "substrateColorMode": zod.boolean().default(false).describe('Show substrate colour overlay.'),
-  "hiddenSubstrateClasses": zod.array(zod.string()).default([]).describe('CMECS substrate classes the user has hidden via the legend (lower-cased).'),
-  "intertidalHotspotsEnabled": zod.boolean().default(false).describe('Show intertidal hotspot polygons in the 3D scene.'),
-  "intertidalScoreMode": zod.enum(['tidepool', 'beachcombing']).default('tidepool').describe('Which score type to highlight in the Intertidal Hotspots layer.'),
-  "efhOverlayEnabled": zod.boolean().default(false).describe('Show EFH zone polygon outlines in the 3D scene.'),
-  "hiddenEfhSpecies": zod.array(zod.string()).default([]).describe('EFH species common names the user has hidden via the legend.')
+}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.')
 }).describe('Per-user application settings with sensible defaults')
 
 export const putSettingsResponseTextureQualityDefault = `high`;
@@ -1204,14 +1154,6 @@ export const putSettingsResponseZoneOverlaySlotsFreshwaterItemColorRegExp = new 
 export const putSettingsResponseZoneOverlaySlotsFreshwaterMin = 4;
 export const putSettingsResponseZoneOverlaySlotsFreshwaterMax = 4;
 
-export const putSettingsResponseZonePaintBrushRadiusDefault = 4;
-export const putSettingsResponseZonePaintBrushRadiusMin = 1;
-export const putSettingsResponseZonePaintBrushRadiusMax = 20;
-
-export const putSettingsResponseZonePaintSlotDefault = 0;
-export const putSettingsResponseZonePaintSlotMin = 0;
-export const putSettingsResponseZonePaintSlotMax = 3;
-
 
 
 export const PutSettingsResponse = zod.object({
@@ -1276,24 +1218,7 @@ export const PutSettingsResponse = zod.object({
   "color": zod.string().regex(putSettingsResponseZoneOverlaySlotsFreshwaterItemColorRegExp),
   "visible": zod.boolean()
 })).min(putSettingsResponseZoneOverlaySlotsFreshwaterMin).max(putSettingsResponseZoneOverlaySlotsFreshwaterMax).optional()
-}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.'),
-  "weatherStationsActive": zod.boolean().default(false).describe('NOAA Aviation Weather station pins on the OverviewMap.'),
-  "rawsOverlayActive": zod.boolean().default(false).describe('AOOS RAWS land-weather station pins on the OverviewMap.'),
-  "windOverlayActive": zod.boolean().default(false).describe('Always-on Wind arrow overlay.'),
-  "tideOverlayActive": zod.boolean().default(false).describe('Always-on Tide arrow overlay.'),
-  "currentOverlayActive": zod.boolean().default(false).describe('Always-on Current arrow overlay.'),
-  "currentDepthLayers": zod.array(zod.enum(['surface', 'mid', 'near-bottom'])).default(['mid']).describe('Which depth layers the Current overlay renders (multi-select).'),
-  "sidePaneCollapsed": zod.boolean().default(false).describe('Whether the left side pane is collapsed.'),
-  "zonePaintBrushRadius": zod.number().min(putSettingsResponseZonePaintBrushRadiusMin).max(putSettingsResponseZonePaintBrushRadiusMax).default(putSettingsResponseZonePaintBrushRadiusDefault).describe('Brush radius in grid cells (1–20) for the zone-paint tool.'),
-  "zoneOverlayEnabled": zod.boolean().default(false).describe('Show real Alaska ShoreZone substrate polygons as a draped overlay.'),
-  "zonePaintMode": zod.boolean().default(false).describe('Whether the zone-paint tool is active.'),
-  "zonePaintSlot": zod.number().min(putSettingsResponseZonePaintSlotMin).max(putSettingsResponseZonePaintSlotMax).int().default(putSettingsResponseZonePaintSlotDefault).describe('Which texture slot (0–3) the paint brush is currently set to.'),
-  "substrateColorMode": zod.boolean().default(false).describe('Show substrate colour overlay.'),
-  "hiddenSubstrateClasses": zod.array(zod.string()).default([]).describe('CMECS substrate classes the user has hidden via the legend (lower-cased).'),
-  "intertidalHotspotsEnabled": zod.boolean().default(false).describe('Show intertidal hotspot polygons in the 3D scene.'),
-  "intertidalScoreMode": zod.enum(['tidepool', 'beachcombing']).default('tidepool').describe('Which score type to highlight in the Intertidal Hotspots layer.'),
-  "efhOverlayEnabled": zod.boolean().default(false).describe('Show EFH zone polygon outlines in the 3D scene.'),
-  "hiddenEfhSpecies": zod.array(zod.string()).default([]).describe('EFH species common names the user has hidden via the legend.')
+}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.')
 }).describe('Per-user application settings with sensible defaults')
 
 
