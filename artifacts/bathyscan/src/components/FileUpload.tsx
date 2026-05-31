@@ -21,14 +21,17 @@ import { Spinner } from "@/components/ui/spinner";
 const SUPPORTED_EXTENSIONS =
   ".csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .nmea";
 
+const GZ_WARNING_THRESHOLD_MB = 30;
+const UPLOAD_LIMIT_MB = 50;
+const NEAR_LIMIT_THRESHOLD_MB = UPLOAD_LIMIT_MB * 0.8; // 40 MB — within 20% of limit
+
 export const FileUpload = () => {
   const { setTerrain, setDatasetId, setPendingExternalUserDatasetId } = useAppState();
   const { isSignedIn } = useAuth();
   const postDatasetsUpload = usePostDatasetsUpload();
   const [error, setError] = useState<string | null>(null);
   const [gzWarning, setGzWarning] = useState<string | null>(null);
-
-  const GZ_WARNING_THRESHOLD_MB = 30;
+  const [nearLimitWarning, setNearLimitWarning] = useState<string | null>(null);
 
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
@@ -49,6 +52,14 @@ export const FileUpload = () => {
         );
       } else {
         setGzWarning(null);
+      }
+
+      if (sizeMb > NEAR_LIMIT_THRESHOLD_MB) {
+        setNearLimitWarning(
+          `This file is ${sizeMb.toFixed(1)} MB — close to the ${UPLOAD_LIMIT_MB} MB upload limit. Upload may fail for very large files.`,
+        );
+      } else {
+        setNearLimitWarning(null);
       }
       postDatasetsUpload.mutate(
         { data: { file, resolution: 256 } },
@@ -126,6 +137,11 @@ export const FileUpload = () => {
             <div className="flex flex-col items-center gap-2">
               <Spinner className="w-5 h-5 text-primary" />
               <p className="text-xs text-muted-foreground">Parsing grid...</p>
+              {nearLimitWarning && (
+                <p className="text-[10px] text-amber-500 select-text">
+                  ⚠ {nearLimitWarning}
+                </p>
+              )}
               {gzWarning && (
                 <p className="text-[10px] text-amber-400 select-text">
                   ⚠ {gzWarning}
@@ -148,6 +164,11 @@ export const FileUpload = () => {
               <p className="text-[9px] text-muted-foreground/70 mt-1">
                 {SUPPORTED_EXTENSIONS}
               </p>
+              {nearLimitWarning && (
+                <p className="text-[10px] text-amber-500 mt-2 select-text">
+                  ⚠ {nearLimitWarning}
+                </p>
+              )}
               {gzWarning && (
                 <p className="text-[10px] text-amber-400 mt-2 select-text">
                   ⚠ {gzWarning}
