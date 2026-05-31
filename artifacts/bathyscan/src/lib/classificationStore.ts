@@ -430,6 +430,11 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
     set({ loading: true, error: null, zoneMap: null, aiZoneMap: null, hasEdits: false, currentGridHash: gridHash, currentSubstrateFp: null, source: null, paintUndoStack: [], paintRedoStack: [] });
 
     const commitFresh = (zoneMap: Uint8Array, source: ClassifyResultSource, fp: string) => {
+      // Atomic TOCTOU guard: re-read currentGridHash inside the setter so a
+      // dataset switch that happened between the last caller-side check and
+      // this write cannot sneak stale labels onto the new terrain.
+      if (get().currentGridHash !== gridHash) return;
+
       writeKnownSubstrateFp(datasetId, fp);
       // Heuristic results are intentionally NOT persisted to sessionStorage so
       // a later AI success on the same grid can take over without being masked
