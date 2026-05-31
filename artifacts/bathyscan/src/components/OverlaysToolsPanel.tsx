@@ -332,20 +332,7 @@ export const OverlaysToolsPanel: React.FC = () => {
               side="right"
             >
               <button
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "#64748b",
-                  fontSize: 11,
-                  padding: "2px 3px",
-                  lineHeight: 1,
-                  userSelect: "none",
-                  flexShrink: 0,
-                  transition: "color 0.15s ease",
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "#64748b"; }}
+                className="help-inline-icon"
                 onClick={e => e.stopPropagation()}
                 aria-label="About TIDE overlay"
               >
