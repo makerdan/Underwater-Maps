@@ -925,8 +925,14 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             });
           } else if (job.status === "failed") {
             clearInterval(pollIntervalId);
+            const failMsg = job.error ?? "Processing failed. Please try uploading again.";
             setGcsPhase("error");
-            setGcsError(job.error ?? "Processing failed. Please try uploading again.");
+            setGcsError(failMsg);
+            toast({
+              title: "Upload processing failed",
+              description: failMsg,
+              variant: "destructive",
+            });
           }
         })
         .catch(() => {
@@ -940,7 +946,13 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       clearInterval(pollIntervalId);
       setGcsPhase((prev) => {
         if (prev === "processing") {
-          setGcsError("Background processing timed out. The file may still be processing — check back in a few minutes or try uploading again.");
+          const timeoutMsg = "Background processing timed out. The file may still be processing — check back in a few minutes or try uploading again.";
+          setGcsError(timeoutMsg);
+          toast({
+            title: "Upload processing timed out",
+            description: timeoutMsg,
+            variant: "destructive",
+          });
           return "error";
         }
         return prev;
