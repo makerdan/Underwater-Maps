@@ -9,6 +9,7 @@ import {
 import { Markdown } from "./Markdown";
 import { HelpQA } from "./HelpQA";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { flushServerSync } from "@/hooks/useServerSettingsSync";
 
 const WINDOW_W = 880;
 const WINDOW_H = 600;
@@ -44,6 +45,7 @@ function TakeTourLink({ onClose }: { onClose: () => void }) {
 
   const handleClick = () => {
     setHasSeenOnboarding(false);
+    void flushServerSync();
     onClose();
   };
 

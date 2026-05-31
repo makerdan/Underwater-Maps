@@ -15,6 +15,7 @@
  */
 import React, { useCallback, useEffect, useState } from "react";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { flushServerSync } from "@/hooks/useServerSettingsSync";
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 
@@ -122,6 +123,7 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
 
   const dismiss = useCallback(() => {
     setHasSeenOnboarding(true);
+    void flushServerSync();
   }, [setHasSeenOnboarding]);
 
   const handleSkip = useCallback(() => {

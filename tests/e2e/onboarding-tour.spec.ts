@@ -140,6 +140,40 @@ test.describe("Onboarding tour overlay", () => {
     await expect(dialog).toHaveCount(0, { timeout: 5_000 });
   });
 
+  // ── 1b. Skip flushes the flag to the server immediately ──────────────────
+
+  test("Skip flushes hasSeenOnboarding:true to the server immediately", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+
+    await setServerOnboardingFlag(request, false);
+    await page.addInitScript(patchOnboardingLocalStorage(false));
+    await page.goto("/");
+
+    const ok = await ensureSceneLoaded(page);
+    if (!ok) return;
+
+    const dialog = page.locator(TOUR_DIALOG_SELECTOR);
+    await expect(dialog).toBeVisible({ timeout: 10_000 });
+
+    // Dismiss the tour via Skip.
+    await dialog.locator(SKIP_BTN_SELECTOR).dispatchEvent("click");
+    await expect(dialog).toHaveCount(0, { timeout: 5_000 });
+
+    // Give the flush a moment to reach the server (it is async but not debounced).
+    await page.waitForTimeout(1_500);
+
+    // Verify the server now records hasSeenOnboarding: true.
+    const resp = await request.get(`${API_URL}/api/settings`, {
+      headers: { "x-e2e-user-id": E2E_USER_ID },
+    });
+    expect(resp.ok()).toBe(true);
+    const body = await resp.json() as Record<string, unknown>;
+    expect(body.hasSeenOnboarding).toBe(true);
+  });
+
   // ── 2. Done on last step ─────────────────────────────────────────────────
 
   test("overlay disappears after clicking Done on the final step", async ({
