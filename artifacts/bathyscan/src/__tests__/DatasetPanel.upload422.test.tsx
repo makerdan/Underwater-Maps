@@ -16,7 +16,7 @@
  * drops synchronously.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import React from "react";
 import { render, screen, act } from "@testing-library/react";
 import { DatasetPanel } from "@/components/DatasetPanel";
@@ -332,6 +332,25 @@ vi.mock(
     }),
 );
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Returns a File whose `.size` getter is overridden to the given byte count.
+ * The actual content stays small (1 byte) to keep memory usage low; the
+ * DatasetPanel only reads `.size` when deciding which upload path to use and
+ * when computing chunk counts — the actual byte payload is irrelevant because
+ * fetch is mocked in these tests.
+ */
+function makeFakeFile(name: string, type: string, fakeSize: number): File {
+  const file = new File(["x"], name, { type });
+  Object.defineProperty(file, "size", {
+    value: fakeSize,
+    configurable: true,
+    writable: false,
+  });
+  return file;
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("DatasetPanel — upload 422 error display", () => {
@@ -395,6 +414,164 @@ describe("DatasetPanel — upload 422 error display", () => {
 
     expect(
       screen.getByText(/NMEA: no depth\+position pairs found in the file\./i),
+    ).toBeInTheDocument();
+  });
+});
+
+// ── Chunked upload error tests (10 MB < file ≤ 50 MB) ────────────────────────
+//
+// The chunked path calls fetch() directly (not through the API-client mutation).
+// These tests spy on global.fetch so that we can simulate 4xx/5xx responses
+// from the chunk and finalize endpoints without hitting the network.
+
+describe("DatasetPanel — chunked upload error display", () => {
+  beforeEach(() => {
+    uploadMock.reset();
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("shows the server details string when a chunk request returns a 422", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: async () => ({
+        error: "parse_error",
+        details: "BAG file header is corrupt and cannot be parsed.",
+      }),
+    } as Response);
+
+    render(<DatasetPanel />);
+
+    // File size between CHUNKED_THRESHOLD (10 MB) and GCS_THRESHOLD (50 MB)
+    // routes to the chunked upload path.
+    const file = makeFakeFile(
+      "survey.bag",
+      "application/octet-stream",
+      15 * 1024 * 1024,
+    );
+
+    await act(async () => {
+      dropzoneMock.trigger([file]);
+    });
+
+    expect(
+      screen.getByText(/BAG file header is corrupt and cannot be parsed\./i),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the server details string when the finalize request returns a 422", async () => {
+    vi.spyOn(global, "fetch").mockImplementation(
+      async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("/chunk/finalize")) {
+          return {
+            ok: false,
+            status: 422,
+            json: async () => ({
+              error: "parse_error",
+              details: "Depth grid is empty after reassembling all chunks.",
+            }),
+          } as Response;
+        }
+        // Individual chunk uploads succeed.
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({}),
+        } as Response;
+      },
+    );
+
+    render(<DatasetPanel />);
+
+    const file = makeFakeFile(
+      "survey.bag",
+      "application/octet-stream",
+      15 * 1024 * 1024,
+    );
+
+    await act(async () => {
+      dropzoneMock.trigger([file]);
+    });
+
+    expect(
+      screen.getByText(/Depth grid is empty after reassembling all chunks\./i),
+    ).toBeInTheDocument();
+  });
+});
+
+// ── GCS upload error tests (file > 50 MB) ─────────────────────────────────────
+//
+// The GCS path also calls fetch() directly.  The first request (to obtain a
+// presigned PUT URL) is the most likely place to receive a server-side parse /
+// validation error, so that is what we test here.
+
+describe("DatasetPanel — GCS upload error display", () => {
+  beforeEach(() => {
+    uploadMock.reset();
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("shows the server details string when request-gcs-url returns a 400", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({
+        error: "unsupported_type",
+        details: "File type .xyz is not supported for GCS upload.",
+      }),
+    } as Response);
+
+    render(<DatasetPanel />);
+
+    // File size above GCS_THRESHOLD (50 MB) routes to the GCS path.
+    const file = makeFakeFile(
+      "ocean.xyz",
+      "application/octet-stream",
+      60 * 1024 * 1024,
+    );
+
+    await act(async () => {
+      dropzoneMock.trigger([file]);
+    });
+
+    expect(
+      screen.getByText(/File type \.xyz is not supported for GCS upload\./i),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the server details string when request-gcs-url returns a 422", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: async () => ({
+        error: "parse_error",
+        details: "File exceeds the maximum allowed upload size of 2 GB.",
+      }),
+    } as Response);
+
+    render(<DatasetPanel />);
+
+    const file = makeFakeFile(
+      "giant.bag",
+      "application/octet-stream",
+      60 * 1024 * 1024,
+    );
+
+    await act(async () => {
+      dropzoneMock.trigger([file]);
+    });
+
+    expect(
+      screen.getByText(/File exceeds the maximum allowed upload size of 2 GB\./i),
     ).toBeInTheDocument();
   });
 });
