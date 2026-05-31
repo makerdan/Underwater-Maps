@@ -562,14 +562,14 @@ export function reverseComputeDrift(opts: ReverseComputeDriftOptions): DriftWayp
     const resultantKnots = driftKmH / KM_PER_KNOT_HOUR;
     const angle = lineAngle(resultantKnots);
     const hookDepthM = lineLengthM * Math.cos(degToRad(angle));
+    const lineScopeM = lineLengthM * Math.sin(degToRad(angle));
     const depth = getDepthAt(pos.lat, pos.lon, terrain);
+    const effectiveDepth = depth + (cond.tideHeightM ?? 0);
     const worldPos = lonLatToWorldXZ(pos.lon, pos.lat, terrain);
     const headingDeg = (Math.abs(dLat) < 1e-12 && Math.abs(dLon) < 1e-12)
       ? 0
       : bearing(pos.lat, pos.lon, nextPos.lat, nextPos.lon);
 
-    const angleRadRev = degToRad(angle);
-    const lineScopeM = lineLengthM * Math.sin(angleRadRev);
     waypoints.push({
       hour: h,
       lat: pos.lat,
@@ -579,8 +579,8 @@ export function reverseComputeDrift(opts: ReverseComputeDriftOptions): DriftWayp
       lineAngleDeg: angle,
       hookDepthM,
       lineScopeM,
-      bottomReached: hookDepthM >= depth - 5,
-      bottomContact: hookDepthM >= depth,
+      bottomReached: hookDepthM >= effectiveDepth - 5,
+      bottomContact: hookDepthM >= effectiveDepth,
       driftSpeedKnots: Math.round(resultantKnots * 10) / 10,
       headingDeg,
       isSlack: !!cond.isSlack || cond.tidalSpeedKnots < 0.1,
@@ -591,6 +591,7 @@ export function reverseComputeDrift(opts: ReverseComputeDriftOptions): DriftWayp
   // Append the catch location itself as the final marker
   const catchWorld = lonLatToWorldXZ(endLon, endLat, terrain);
   const lastCond = conditions[(hours - 1) % conditions.length]!;
+  const catchDepth = getDepthAt(endLat, endLon, terrain) + (lastCond.tideHeightM ?? 0);
   waypoints.push({
     hour: hours,
     lat: endLat,
@@ -601,7 +602,7 @@ export function reverseComputeDrift(opts: ReverseComputeDriftOptions): DriftWayp
     hookDepthM: lineLengthM,
     lineScopeM: 0,
     bottomReached: false,
-    bottomContact: false,
+    bottomContact: lineLengthM >= catchDepth,
     driftSpeedKnots: 0,
     headingDeg: 0,
     isSlack: !!lastCond.isSlack || lastCond.tidalSpeedKnots < 0.1,

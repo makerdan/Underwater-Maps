@@ -33,6 +33,7 @@ import {
   SLACK_THRESHOLD_DEFAULT,
   type TidePhase,
 } from "../lib/slack.js";
+import { registerCache } from "../lib/cacheRegistry.js";
 
 const router = Router();
 
@@ -372,15 +373,48 @@ export function parseNoaaTideHeights(
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// In-memory cache for NOAA hourly tide-height predictions
+// ---------------------------------------------------------------------------
+
+/**
+ * Cache of NOAA hourly water-level predictions.
+ * Key: `stationId|YYYYMMDD` (UTC date string).
+ * TTL: 30 min for non-empty results; 5 min for null (no data / fetch failure).
+ * Registered with cacheRegistry so the admin clear endpoint and test setup
+ * can flush it.
+ */
+const tideHeightsPredictionsCache = new Map<string, { result: number[] | null; ts: number }>();
+const TIDE_HEIGHTS_CACHE_TTL_MS = 30 * 60 * 1000;
+const TIDE_HEIGHTS_EMPTY_CACHE_TTL_MS = 5 * 60 * 1000;
+
+registerCache(() => tideHeightsPredictionsCache.clear());
+
 async function fetchNoaaTideHeightsPredictions(stationId: string, utcDate: Date): Promise<number[] | null> {
   const yyyymmdd = `${utcDate.getUTCFullYear()}${String(utcDate.getUTCMonth() + 1).padStart(2, "0")}${String(utcDate.getUTCDate()).padStart(2, "0")}`;
+  const cacheKey = `${stationId}|${yyyymmdd}`;
+  const now = Date.now();
+  const cached = tideHeightsPredictionsCache.get(cacheKey);
+  if (cached) {
+    const ttl = cached.result !== null ? TIDE_HEIGHTS_CACHE_TTL_MS : TIDE_HEIGHTS_EMPTY_CACHE_TTL_MS;
+    if (now - cached.ts < ttl) {
+      return cached.result;
+    }
+  }
+
   const url = `${NOAA_PREDICTIONS_BASE}?product=predictions&station=${encodeURIComponent(stationId)}&begin_date=${yyyymmdd}&end_date=${yyyymmdd}&datum=MLLW&time_zone=GMT&units=metric&interval=h&format=json`;
   try {
     const res = await fetchWithTimeout(url, 8000);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      tideHeightsPredictionsCache.set(cacheKey, { result: null, ts: now });
+      return null;
+    }
     const json = (await res.json()) as { predictions?: Array<{ t?: string; v?: string | number }> };
-    return parseNoaaTideHeights(json, utcDate);
+    const result = parseNoaaTideHeights(json, utcDate);
+    tideHeightsPredictionsCache.set(cacheKey, { result, ts: now });
+    return result;
   } catch {
+    tideHeightsPredictionsCache.set(cacheKey, { result: null, ts: now });
     return null;
   }
 }

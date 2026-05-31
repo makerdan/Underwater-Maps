@@ -390,4 +390,72 @@ describe("GET /surface-conditions — integration with mocked NOAA + Open-Meteo"
       expect(f.phase).toBe(leg.phase);
     }
   });
+
+  // ------------------------------------------------------------------
+  // tideHeightsPredictionsCache tests
+  // ------------------------------------------------------------------
+
+  it("caches NOAA tide-height predictions so a second request does not re-fetch NOAA", async () => {
+    const NOAA_HEIGHTS_STATIONS_URL =
+      "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=waterlevels";
+
+    const now = new Date();
+    const yyyy = now.getUTCFullYear();
+    const mm = String(now.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(now.getUTCDate()).padStart(2, "0");
+
+    const tideHeightRows = Array.from({ length: 24 }, (_, h) => ({
+      t: `${yyyy}-${mm}-${dd} ${String(h).padStart(2, "0")}:00`,
+      v: String((1.0 + h * 0.05).toFixed(2)),
+    }));
+
+    let tideHeightsFetchCount = 0;
+
+    fetchMock.mockImplementation((url: string) => {
+      if (url.startsWith(NOAA_STATIONS_URL)) {
+        return Promise.resolve(
+          jsonResponse({ stations: [{ id: "ST999", name: "Far Current", lat: 0, lng: 0 }] }),
+        );
+      }
+      if (url.startsWith(NOAA_HEIGHTS_STATIONS_URL)) {
+        return Promise.resolve(
+          jsonResponse({
+            stations: [{ id: "TH001", name: "Heights Station", lat: 40.71, lng: -74.01 }],
+          }),
+        );
+      }
+      if (url.includes("product=predictions") && url.includes("station=TH001")) {
+        tideHeightsFetchCount++;
+        return Promise.resolve(jsonResponse({ predictions: tideHeightRows }));
+      }
+      if (url.includes("api.open-meteo.com/v1/forecast")) {
+        return Promise.resolve(
+          jsonResponse({
+            hourly: {
+              wind_speed_10m: Array.from({ length: 24 }, () => 5),
+              wind_direction_10m: Array.from({ length: 24 }, () => 90),
+            },
+          }),
+        );
+      }
+      if (url.includes("marine-api.open-meteo.com")) {
+        return Promise.resolve(
+          jsonResponse({ hourly: { wave_height: Array.from({ length: 24 }, () => 0.3) } }),
+        );
+      }
+      return Promise.reject(new Error(`unexpected url: ${url}`));
+    });
+
+    const app = makeApp();
+
+    const res1 = await request(app).get("/surface-conditions?lat=40.7&lon=-74.0");
+    expect(res1.status).toBe(200);
+    expect(res1.body.tideHeightSource).toBe("noaa-coops");
+
+    const res2 = await request(app).get("/surface-conditions?lat=40.7&lon=-74.0");
+    expect(res2.status).toBe(200);
+    expect(res2.body.tideHeightSource).toBe("noaa-coops");
+
+    expect(tideHeightsFetchCount).toBe(1);
+  });
 });
