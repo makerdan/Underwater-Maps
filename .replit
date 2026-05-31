@@ -40,6 +40,10 @@ args = "test-all"
 task = "workflow.run"
 args = "test-gpx-nmea-integration"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-fixture-freshness"
+
 [[workflows.workflow]]
 name = "typecheck"
 author = "agent"
@@ -105,6 +109,17 @@ args = "pnpm --filter @workspace/api-server exec vitest run --reporter=verbose s
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow]]
+name = "test-fixture-freshness"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bash artifacts/api-server/src/__tests__/fixtures/check-fixture-freshness.sh"
+
+[workflows.workflow.metadata]
+isValidation = true
 
 [agent]
 stack = "PNPM_WORKSPACE"
