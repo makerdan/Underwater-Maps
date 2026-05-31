@@ -5,7 +5,7 @@ import { test, expect, type Page } from "./fixtures";
  *
  * Locks down the three HUD toggle buttons added in task #116:
  *   - Each toggle reveals the Conditions Legend with the expected row.
- *   - Toggle state persists across a reload (localStorage).
+ *   - Toggle state persists across a reload (settingsStore / localStorage).
  *   - When the surface-conditions API fails, the ESTIMATED badge appears
  *     along with the manual override sliders.
  */
@@ -66,12 +66,16 @@ async function mockOkSurfaceConditions(page: Page): Promise<void> {
  */
 test.describe("Wind / Tide / Current overlays", () => {
   test.beforeEach(async ({ page }) => {
-    // Reset overlay toggle localStorage so each test starts with all three
+    // Reset overlay toggle state so each test starts with all three
     // overlays OFF. Without this, the persistence test (which saves
     // windOverlayActive=true) poisons subsequent tests: a blind click on an
     // already-ON toggle turns it OFF instead of ON, producing the wrong
     // number of manual-override sliders (2 instead of 4) and breaking
     // the ESTIMATED badge assertion.
+    //
+    // Since settingsStore v15, overlay toggles are stored as fields in the
+    // "bathyscan:settings" JSON object (not as individual localStorage keys).
+    // We patch the stored JSON directly here to reset those three fields.
     //
     // IMPORTANT: addInitScript runs before EVERY navigation including reloads.
     // To avoid clearing localStorage on the reload inside the persistence
@@ -81,6 +85,21 @@ test.describe("Wind / Tide / Current overlays", () => {
     await page.addInitScript(() => {
       if (!sessionStorage.getItem("__overlayStateCleared")) {
         sessionStorage.setItem("__overlayStateCleared", "1");
+        try {
+          const raw = localStorage.getItem("bathyscan:settings");
+          if (raw) {
+            const parsed = JSON.parse(raw) as {
+              state?: Record<string, unknown>;
+            };
+            if (parsed?.state) {
+              parsed.state.windOverlayActive = false;
+              parsed.state.tideOverlayActive = false;
+              parsed.state.currentOverlayActive = false;
+              localStorage.setItem("bathyscan:settings", JSON.stringify(parsed));
+            }
+          }
+        } catch {}
+        // Also remove any legacy individual keys left from older sessions.
         localStorage.removeItem("bathyscan:windOverlayActive");
         localStorage.removeItem("bathyscan:tideOverlayActive");
         localStorage.removeItem("bathyscan:currentOverlayActive");
@@ -157,17 +176,29 @@ test.describe("Wind / Tide / Current overlays", () => {
     await expect(tideBtn).toHaveAttribute("aria-pressed", "true");
     await expect(curBtn).toHaveAttribute("aria-pressed", "false");
 
-    // Verify the persisted keys are what the app reads on reload. The
-    // uiStore only writes when a setter is called, so the never-touched
-    // "current" key may be null (its default is `false`).
-    const stored = await page.evaluate(() => ({
-      wind: localStorage.getItem("bathyscan:windOverlayActive"),
-      tide: localStorage.getItem("bathyscan:tideOverlayActive"),
-      cur: localStorage.getItem("bathyscan:currentOverlayActive"),
-    }));
-    expect(stored.wind).toBe("true");
-    expect(stored.tide).toBe("true");
-    expect(stored.cur === null || stored.cur === "false").toBe(true);
+    // Verify the state is persisted in the settingsStore JSON under
+    // "bathyscan:settings" (since v15 these fields live in the JSON blob,
+    // not as individual localStorage keys).
+    const stored = await page.evaluate(() => {
+      try {
+        const raw = localStorage.getItem("bathyscan:settings");
+        if (!raw) return { wind: null, tide: null, cur: null };
+        const parsed = JSON.parse(raw) as {
+          state?: Record<string, unknown>;
+        };
+        const state = parsed?.state ?? {};
+        return {
+          wind: state.windOverlayActive,
+          tide: state.tideOverlayActive,
+          cur: state.currentOverlayActive,
+        };
+      } catch {
+        return { wind: null, tide: null, cur: null };
+      }
+    });
+    expect(stored.wind).toBe(true);
+    expect(stored.tide).toBe(true);
+    expect(stored.cur === null || stored.cur === false).toBe(true);
 
     await page.reload();
     // No networkidle wait — the explicit `expect(windBtn2).toBeVisible`

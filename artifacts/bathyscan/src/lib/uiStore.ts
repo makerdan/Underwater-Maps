@@ -1,6 +1,41 @@
+/**
+ * uiStore — ephemeral runtime UI state for BathyScan.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * CONVENTION: WHERE DOES NEW STATE LIVE?
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * PERSISTENT STATE → settingsStore  (cross-device, server-synced)
+ *   Any toggle, mode, overlay, or user-facing preference that should survive a
+ *   page reload or sign-in from a different device MUST be added to
+ *   settingsStore, NOT here. See settingsStore.ts for the full guide.
+ *
+ *   Fields in this store that mirror a settingsStore key:
+ *   - Read their initial value from `useSettingsStore.getState()` so they are
+ *     correct immediately on first render (localStorage is already hydrated).
+ *   - Write back via `useSettingsStore.setState({ field: value })` in every
+ *     setter so the change flows through the debounced server-sync pipeline
+ *     with no extra networking code.
+ *   - Are re-applied from settingsStore by `useServerSettingsSync` after a
+ *     server GET hydration so cross-device changes propagate automatically.
+ *
+ * INTENTIONALLY TRANSIENT STATE → here (memory-only, resets on reload)
+ *   State that should intentionally reset each session:
+ *   - Active selections (selectedSubstrate, selectedHotspot, selectedEfh)
+ *   - Open/close state of modal panels (overviewOpen, markerFormOpen,
+ *     findDataPanelOpen)
+ *   - Camera jump queue (pendingDropIn)
+ *   - Time scrubber (scrubDatetime)
+ *   - Form prefill (markerFormPrefill)
+ *
+ * DEVICE-LOCAL STATE → raw localStorage  (one-time hints, never settingsStore)
+ *   hasSeenOrbitTouchHint is intentionally device-local and stays here.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
 import { create } from "zustand";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import type { EfhSpeciesProperties } from "@workspace/api-client-react";
+import { useSettingsStore } from "./settingsStore";
 
 export const CURRENT_DEPTH_LAYERS: DepthLayer[] = ["surface", "mid", "near-bottom"];
 
@@ -101,7 +136,7 @@ interface UiStore {
   /** Which texture slot (0–3) the paint brush is currently set to. */
   zonePaintSlot: 0 | 1 | 2 | 3;
   setZonePaintSlot: (slot: 0 | 1 | 2 | 3) => void;
-  /** Brush radius in grid cells (1–20). Persists across sessions. */
+  /** Brush radius in grid cells (1–20). Persists across sessions via settingsStore. */
   zonePaintBrushRadius: number;
   setZonePaintBrushRadius: (radius: number) => void;
   /** Show real Alaska ShoreZone substrate polygons as a draped overlay. */
@@ -195,6 +230,9 @@ interface UiStore {
   setHasSeenOrbitTouchHint: (seen: boolean) => void;
 }
 
+// ── Device-local helpers (hasSeenOrbitTouchHint only) ────────────────────────
+// These are intentionally NOT promoted to settingsStore; the orbit hint is a
+// one-time device-local experience that should fire fresh on new devices.
 function readLocalBool(key: string, fallback: boolean): boolean {
   try {
     const raw = localStorage.getItem(key);
@@ -209,169 +247,226 @@ function writeLocalBool(key: string, value: boolean): void {
   try { localStorage.setItem(key, String(value)); } catch {}
 }
 
-const CURRENT_DEPTH_LAYERS_KEY = "bathyscan:currentDepthLayers";
-
-function readDepthLayers(fallback: DepthLayer[]): DepthLayer[] {
+// ── Clean up stale localStorage keys (superseded by settingsStore v15) ────────
+// These keys were written by earlier versions of uiStore directly to
+// localStorage.  They are removed on first load so they can never shadow the
+// server-synced values from settingsStore in future sessions.
+(function cleanupLegacyLocalStorageKeys() {
+  const legacy = [
+    "bathyscan:weatherStationsActive",
+    "bathyscan:rawsOverlayActive",
+    "bathyscan:windOverlayActive",
+    "bathyscan:tideOverlayActive",
+    "bathyscan:currentOverlayActive",
+    "bathyscan:currentDepthLayers",
+    "bathyscan:sidePaneCollapsed",
+    "bathyscan:zonePaintBrushRadius",
+  ];
   try {
-    const raw = localStorage.getItem(CURRENT_DEPTH_LAYERS_KEY);
-    if (!raw) return fallback;
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return fallback;
-    const valid = parsed.filter(
-      (v): v is DepthLayer => CURRENT_DEPTH_LAYERS.includes(v as DepthLayer),
-    );
-    return valid.length ? valid : fallback;
+    for (const key of legacy) {
+      localStorage.removeItem(key);
+    }
   } catch {
-    return fallback;
+    // localStorage may be unavailable (private browsing, sandboxed iframe, etc.)
   }
+})();
+
+// ── Helpers to validate depth layers from stored state ───────────────────────
+function validDepthLayers(raw: unknown): DepthLayer[] {
+  if (!Array.isArray(raw)) return ["mid"];
+  const valid = (raw as unknown[]).filter(
+    (v): v is DepthLayer => CURRENT_DEPTH_LAYERS.includes(v as DepthLayer),
+  );
+  return valid.length ? valid : ["mid"];
 }
 
-function writeDepthLayers(layers: DepthLayer[]): void {
-  try { localStorage.setItem(CURRENT_DEPTH_LAYERS_KEY, JSON.stringify(layers)); } catch {}
-}
+export const useUiStore = create<UiStore>((set) => {
+  // Read initial values from settingsStore, which is already hydrated from
+  // localStorage via Zustand persist before this module is evaluated.
+  const s = useSettingsStore.getState();
 
-export const useUiStore = create<UiStore>((set) => ({
-  pendingDropIn: null,
-  setPendingDropIn: (target) => set({ pendingDropIn: target }),
-  clearPendingDropIn: () => set({ pendingDropIn: null }),
-  overviewOpen: false,
-  setOverviewOpen: (open) => set({ overviewOpen: open }),
-  markerFormOpen: false,
-  setMarkerFormOpen: (open) =>
-    set(open ? { markerFormOpen: true } : { markerFormOpen: false, markerFormPrefill: null }),
-  markerFormPrefill: null,
-  setMarkerFormPrefill: (p) => set({ markerFormPrefill: p }),
-  zoneOverlayEnabled: false,
-  setZoneOverlayEnabled: (enabled) =>
-    set(enabled ? { zoneOverlayEnabled: true } : { zoneOverlayEnabled: false, zonePaintMode: false }),
-  zonePaintMode: false,
-  setZonePaintMode: (enabled) => set({ zonePaintMode: enabled }),
-  zonePaintSlot: 0,
-  setZonePaintSlot: (slot) => set({ zonePaintSlot: slot }),
-  zonePaintBrushRadius: (() => {
-    try {
-      const raw = localStorage.getItem("bathyscan:zonePaintBrushRadius");
-      if (raw !== null) {
-        const n = parseInt(raw, 10);
-        if (Number.isFinite(n) && n >= 1 && n <= 20) return n;
-      }
-    } catch {}
-    return 4;
-  })(),
-  setZonePaintBrushRadius: (radius) => {
-    const clamped = Math.max(1, Math.min(20, Math.round(radius)));
-    try { localStorage.setItem("bathyscan:zonePaintBrushRadius", String(clamped)); } catch {}
-    set({ zonePaintBrushRadius: clamped });
-  },
-  substrateColorMode: false,
-  setSubstrateColorMode: (enabled) =>
-    set(enabled ? { substrateColorMode: true } : { substrateColorMode: false, selectedSubstrate: null }),
-  selectedSubstrate: null,
-  setSelectedSubstrate: (s) => set({ selectedSubstrate: s }),
-  hiddenSubstrateClasses: new Set<string>(),
-  toggleSubstrateClass: (substrate) => set((state) => {
-    const key = substrate.toLowerCase();
-    const next = new Set(state.hiddenSubstrateClasses);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    // If the currently-selected polygon belongs to a class we just hid,
-    // close its info card — leaving it open would point at geometry the
-    // user can no longer see.
-    const sel = state.selectedSubstrate;
-    const clearSel = sel && next.has(sel.substrate.toLowerCase());
-    return clearSel
-      ? { hiddenSubstrateClasses: next, selectedSubstrate: null }
-      : { hiddenSubstrateClasses: next };
-  }),
-  clearHiddenSubstrateClasses: () => set({ hiddenSubstrateClasses: new Set<string>() }),
-  intertidalHotspotsEnabled: false,
-  setIntertidalHotspotsEnabled: (enabled) =>
-    set(enabled
-      ? { intertidalHotspotsEnabled: true }
-      : { intertidalHotspotsEnabled: false, selectedHotspot: null }),
-  intertidalScoreMode: 'tidepool',
-  setIntertidalScoreMode: (mode) => set({ intertidalScoreMode: mode, selectedHotspot: null }),
-  selectedHotspot: null,
-  setSelectedHotspot: (h) => set({ selectedHotspot: h }),
-  efhOverlayEnabled: false,
-  setEfhOverlayEnabled: (enabled) =>
-    set(enabled
-      ? { efhOverlayEnabled: true }
-      : { efhOverlayEnabled: false, selectedEfh: null, hiddenEfhSpecies: new Set<string>() }),
-  selectedEfh: null,
-  setSelectedEfh: (p) => set({ selectedEfh: p }),
-  hiddenEfhSpecies: new Set<string>(),
-  toggleEfhSpecies: (commonName) => set((state) => {
-    const next = new Set(state.hiddenEfhSpecies);
-    if (next.has(commonName)) next.delete(commonName);
-    else next.add(commonName);
-    const sel = state.selectedEfh;
-    const clearSel = sel && next.has(sel.commonName ?? "");
-    return clearSel
-      ? { hiddenEfhSpecies: next, selectedEfh: null }
-      : { hiddenEfhSpecies: next };
-  }),
-  clearHiddenEfhSpecies: () => set({ hiddenEfhSpecies: new Set<string>() }),
-  findDataPanelOpen: false,
-  openFindDataCount: 0,
-  setFindDataPanelOpen: (open) =>
-    set((state) =>
-      open
-        ? { findDataPanelOpen: true, openFindDataCount: state.openFindDataCount + 1 }
-        : { findDataPanelOpen: false },
-    ),
-  weatherStationsActive: readLocalBool("bathyscan:weatherStationsActive", false),
-  setWeatherStationsActive: (b) => {
-    writeLocalBool("bathyscan:weatherStationsActive", b);
-    set({ weatherStationsActive: b });
-  },
-  rawsOverlayActive: readLocalBool("bathyscan:rawsOverlayActive", false),
-  setRawsOverlayActive: (b) => {
-    writeLocalBool("bathyscan:rawsOverlayActive", b);
-    set({ rawsOverlayActive: b });
-  },
-  windOverlayActive: readLocalBool("bathyscan:windOverlayActive", false),
-  setWindOverlayActive: (b) => {
-    writeLocalBool("bathyscan:windOverlayActive", b);
-    set({ windOverlayActive: b });
-  },
-  tideOverlayActive: readLocalBool("bathyscan:tideOverlayActive", false),
-  setTideOverlayActive: (b) => {
-    writeLocalBool("bathyscan:tideOverlayActive", b);
-    set({ tideOverlayActive: b });
-  },
-  currentOverlayActive: readLocalBool("bathyscan:currentOverlayActive", false),
-  setCurrentOverlayActive: (b) => {
-    writeLocalBool("bathyscan:currentOverlayActive", b);
-    set({ currentOverlayActive: b });
-  },
-  currentDepthLayers: readDepthLayers(["mid"]),
-  setCurrentDepthLayers: (layers) => {
-    const ordered = CURRENT_DEPTH_LAYERS.filter((l) => layers.includes(l));
-    writeDepthLayers(ordered);
-    set({ currentDepthLayers: ordered });
-  },
-  sidePaneCollapsed: readLocalBool("bathyscan:sidePaneCollapsed", false),
-  setSidePaneCollapsed: (collapsed) => {
-    writeLocalBool("bathyscan:sidePaneCollapsed", collapsed);
-    set({ sidePaneCollapsed: collapsed });
-  },
-  scrubDatetime: null,
-  setScrubDatetime: (d) => set({ scrubDatetime: d }),
-  hasSeenOrbitTouchHint: readLocalBool("bathyscan:hasSeenOrbitTouchHint", false),
-  setHasSeenOrbitTouchHint: (seen) => {
-    writeLocalBool("bathyscan:hasSeenOrbitTouchHint", seen);
-    set({ hasSeenOrbitTouchHint: seen });
-  },
-  toggleCurrentDepthLayer: (layer) => set((state) => {
-    const has = state.currentDepthLayers.includes(layer);
-    let next = has
-      ? state.currentDepthLayers.filter((l) => l !== layer)
-      : [...state.currentDepthLayers, layer];
-    // Keep at least one layer selected so the overlay still has something to render.
-    if (next.length === 0) next = [layer];
-    const ordered = CURRENT_DEPTH_LAYERS.filter((l) => next.includes(l));
-    writeDepthLayers(ordered);
-    return { currentDepthLayers: ordered };
-  }),
-}));
+  return {
+    // ── Transient state (resets on reload) ─────────────────────────────────
+    pendingDropIn: null,
+    setPendingDropIn: (target) => set({ pendingDropIn: target }),
+    clearPendingDropIn: () => set({ pendingDropIn: null }),
+    overviewOpen: false,
+    setOverviewOpen: (open) => set({ overviewOpen: open }),
+    markerFormOpen: false,
+    setMarkerFormOpen: (open) =>
+      set(open ? { markerFormOpen: true } : { markerFormOpen: false, markerFormPrefill: null }),
+    markerFormPrefill: null,
+    setMarkerFormPrefill: (p) => set({ markerFormPrefill: p }),
+    selectedSubstrate: null,
+    setSelectedSubstrate: (sub) => set({ selectedSubstrate: sub }),
+    selectedHotspot: null,
+    setSelectedHotspot: (h) => set({ selectedHotspot: h }),
+    selectedEfh: null,
+    setSelectedEfh: (p) => set({ selectedEfh: p }),
+    findDataPanelOpen: false,
+    openFindDataCount: 0,
+    setFindDataPanelOpen: (open) =>
+      set((state) =>
+        open
+          ? { findDataPanelOpen: true, openFindDataCount: state.openFindDataCount + 1 }
+          : { findDataPanelOpen: false },
+      ),
+    scrubDatetime: null,
+    setScrubDatetime: (d) => set({ scrubDatetime: d }),
+
+    // ── Persistent overlay toggles (synced via settingsStore → server) ─────
+    // Initial values come from settingsStore (already hydrated from localStorage).
+    // Every setter writes back to settingsStore so the debounced PUT fires.
+
+    zoneOverlayEnabled: s.zoneOverlayEnabled,
+    setZoneOverlayEnabled: (enabled) => {
+      useSettingsStore.setState(
+        enabled ? { zoneOverlayEnabled: true } : { zoneOverlayEnabled: false, zonePaintMode: false },
+      );
+      set(enabled ? { zoneOverlayEnabled: true } : { zoneOverlayEnabled: false, zonePaintMode: false });
+    },
+
+    zonePaintMode: s.zonePaintMode,
+    setZonePaintMode: (enabled) => {
+      useSettingsStore.setState({ zonePaintMode: enabled });
+      set({ zonePaintMode: enabled });
+    },
+
+    zonePaintSlot: (s.zonePaintSlot as 0 | 1 | 2 | 3) ?? 0,
+    setZonePaintSlot: (slot) => {
+      useSettingsStore.setState({ zonePaintSlot: slot });
+      set({ zonePaintSlot: slot });
+    },
+
+    zonePaintBrushRadius: s.zonePaintBrushRadius,
+    setZonePaintBrushRadius: (radius) => {
+      const clamped = Math.max(1, Math.min(20, Math.round(radius)));
+      useSettingsStore.setState({ zonePaintBrushRadius: clamped });
+      set({ zonePaintBrushRadius: clamped });
+    },
+
+    substrateColorMode: s.substrateColorMode,
+    setSubstrateColorMode: (enabled) => {
+      useSettingsStore.setState({ substrateColorMode: enabled });
+      set(enabled ? { substrateColorMode: true } : { substrateColorMode: false, selectedSubstrate: null });
+    },
+
+    hiddenSubstrateClasses: new Set<string>(s.hiddenSubstrateClasses ?? []),
+    toggleSubstrateClass: (substrate) => set((state) => {
+      const key = substrate.toLowerCase();
+      const next = new Set(state.hiddenSubstrateClasses);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      const sel = state.selectedSubstrate;
+      const clearSel = sel && next.has(sel.substrate.toLowerCase());
+      useSettingsStore.setState({ hiddenSubstrateClasses: [...next] });
+      return clearSel
+        ? { hiddenSubstrateClasses: next, selectedSubstrate: null }
+        : { hiddenSubstrateClasses: next };
+    }),
+    clearHiddenSubstrateClasses: () => {
+      useSettingsStore.setState({ hiddenSubstrateClasses: [] });
+      set({ hiddenSubstrateClasses: new Set<string>() });
+    },
+
+    intertidalHotspotsEnabled: s.intertidalHotspotsEnabled,
+    setIntertidalHotspotsEnabled: (enabled) => {
+      useSettingsStore.setState({ intertidalHotspotsEnabled: enabled });
+      set(enabled
+        ? { intertidalHotspotsEnabled: true }
+        : { intertidalHotspotsEnabled: false, selectedHotspot: null });
+    },
+
+    intertidalScoreMode: s.intertidalScoreMode ?? 'tidepool',
+    setIntertidalScoreMode: (mode) => {
+      useSettingsStore.setState({ intertidalScoreMode: mode });
+      set({ intertidalScoreMode: mode, selectedHotspot: null });
+    },
+
+    efhOverlayEnabled: s.efhOverlayEnabled,
+    setEfhOverlayEnabled: (enabled) => {
+      useSettingsStore.setState({ efhOverlayEnabled: enabled });
+      set(enabled
+        ? { efhOverlayEnabled: true }
+        : { efhOverlayEnabled: false, selectedEfh: null, hiddenEfhSpecies: new Set<string>() });
+      if (!enabled) useSettingsStore.setState({ hiddenEfhSpecies: [] });
+    },
+
+    hiddenEfhSpecies: new Set<string>(s.hiddenEfhSpecies ?? []),
+    toggleEfhSpecies: (commonName) => set((state) => {
+      const next = new Set(state.hiddenEfhSpecies);
+      if (next.has(commonName)) next.delete(commonName);
+      else next.add(commonName);
+      const sel = state.selectedEfh;
+      const clearSel = sel && next.has(sel.commonName ?? "");
+      useSettingsStore.setState({ hiddenEfhSpecies: [...next] });
+      return clearSel
+        ? { hiddenEfhSpecies: next, selectedEfh: null }
+        : { hiddenEfhSpecies: next };
+    }),
+    clearHiddenEfhSpecies: () => {
+      useSettingsStore.setState({ hiddenEfhSpecies: [] });
+      set({ hiddenEfhSpecies: new Set<string>() });
+    },
+
+    weatherStationsActive: s.weatherStationsActive,
+    setWeatherStationsActive: (b) => {
+      useSettingsStore.setState({ weatherStationsActive: b });
+      set({ weatherStationsActive: b });
+    },
+
+    rawsOverlayActive: s.rawsOverlayActive,
+    setRawsOverlayActive: (b) => {
+      useSettingsStore.setState({ rawsOverlayActive: b });
+      set({ rawsOverlayActive: b });
+    },
+
+    windOverlayActive: s.windOverlayActive,
+    setWindOverlayActive: (b) => {
+      useSettingsStore.setState({ windOverlayActive: b });
+      set({ windOverlayActive: b });
+    },
+
+    tideOverlayActive: s.tideOverlayActive,
+    setTideOverlayActive: (b) => {
+      useSettingsStore.setState({ tideOverlayActive: b });
+      set({ tideOverlayActive: b });
+    },
+
+    currentOverlayActive: s.currentOverlayActive,
+    setCurrentOverlayActive: (b) => {
+      useSettingsStore.setState({ currentOverlayActive: b });
+      set({ currentOverlayActive: b });
+    },
+
+    currentDepthLayers: validDepthLayers(s.currentDepthLayers),
+    setCurrentDepthLayers: (layers) => {
+      const ordered = CURRENT_DEPTH_LAYERS.filter((l) => layers.includes(l));
+      useSettingsStore.setState({ currentDepthLayers: ordered });
+      set({ currentDepthLayers: ordered });
+    },
+    toggleCurrentDepthLayer: (layer) => set((state) => {
+      const has = state.currentDepthLayers.includes(layer);
+      let next = has
+        ? state.currentDepthLayers.filter((l) => l !== layer)
+        : [...state.currentDepthLayers, layer];
+      if (next.length === 0) next = [layer];
+      const ordered = CURRENT_DEPTH_LAYERS.filter((l) => next.includes(l));
+      useSettingsStore.setState({ currentDepthLayers: ordered });
+      return { currentDepthLayers: ordered };
+    }),
+
+    sidePaneCollapsed: s.sidePaneCollapsed,
+    setSidePaneCollapsed: (collapsed) => {
+      useSettingsStore.setState({ sidePaneCollapsed: collapsed });
+      set({ sidePaneCollapsed: collapsed });
+    },
+
+    // ── Device-local state (stays in raw localStorage, never synced) ────────
+    hasSeenOrbitTouchHint: readLocalBool("bathyscan:hasSeenOrbitTouchHint", false),
+    setHasSeenOrbitTouchHint: (seen) => {
+      writeLocalBool("bathyscan:hasSeenOrbitTouchHint", seen);
+      set({ hasSeenOrbitTouchHint: seen });
+    },
+  };
+});

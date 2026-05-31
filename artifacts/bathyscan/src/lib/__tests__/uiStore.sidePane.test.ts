@@ -1,10 +1,9 @@
-import { describe, it, expect, beforeEach } from "vitest";
-
-const STORAGE_KEY = "bathyscan:sidePaneCollapsed";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 describe("uiStore sidePaneCollapsed persistence", () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.resetModules();
   });
 
   it("defaults to false when no value persisted", async () => {
@@ -12,18 +11,31 @@ describe("uiStore sidePaneCollapsed persistence", () => {
     expect(useUiStore.getState().sidePaneCollapsed).toBe(false);
   });
 
-  it("persists collapsed=true to localStorage when setSidePaneCollapsed(true)", async () => {
+  it("updates uiStore state when setSidePaneCollapsed(true)", async () => {
     const { useUiStore } = await import("../uiStore");
     useUiStore.getState().setSidePaneCollapsed(true);
     expect(useUiStore.getState().sidePaneCollapsed).toBe(true);
-    expect(localStorage.getItem(STORAGE_KEY)).toBe("true");
   });
 
-  it("persists collapsed=false to localStorage when setSidePaneCollapsed(false)", async () => {
+  it("updates uiStore state when setSidePaneCollapsed(false)", async () => {
     const { useUiStore } = await import("../uiStore");
     useUiStore.getState().setSidePaneCollapsed(true);
     useUiStore.getState().setSidePaneCollapsed(false);
     expect(useUiStore.getState().sidePaneCollapsed).toBe(false);
-    expect(localStorage.getItem(STORAGE_KEY)).toBe("false");
+  });
+
+  it("also writes sidePaneCollapsed to settingsStore for server sync", async () => {
+    const { useUiStore } = await import("../uiStore");
+    const { useSettingsStore } = await import("../settingsStore");
+    useUiStore.getState().setSidePaneCollapsed(true);
+    expect(useSettingsStore.getState().sidePaneCollapsed).toBe(true);
+    useUiStore.getState().setSidePaneCollapsed(false);
+    expect(useSettingsStore.getState().sidePaneCollapsed).toBe(false);
+  });
+
+  it("stale localStorage key bathyscan:sidePaneCollapsed is removed on module load", async () => {
+    localStorage.setItem("bathyscan:sidePaneCollapsed", "true");
+    await import("../uiStore");
+    expect(localStorage.getItem("bathyscan:sidePaneCollapsed")).toBeNull();
   });
 });

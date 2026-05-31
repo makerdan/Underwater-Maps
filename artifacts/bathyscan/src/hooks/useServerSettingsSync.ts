@@ -28,6 +28,8 @@ import { useSettingsStore, getDataSnapshot } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { usePanelCollapseStore, type PanelId } from "@/lib/panelCollapseStore";
 import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
+import { useUiStore, CURRENT_DEPTH_LAYERS } from "@/lib/uiStore";
+import type { DepthLayer } from "@/components/TidalCurrentArrows";
 
 // ─── Module-level flush ref ───────────────────────────────────────────────────
 // Populated by the hook on every render so Settings can always call the most
@@ -182,6 +184,47 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       if (serverRec.zoneOverlaySlots != null) {
         useZoneOverlayStore.getState().hydrateFromServer(serverRec.zoneOverlaySlots);
       }
+
+      // Restore overlay toggles and UI state into uiStore from the freshly
+      // hydrated settingsStore values. These fields are now persisted server-side
+      // (settingsStore v15) and must be pushed into uiStore so the 3D scene and
+      // overlay controls reflect the server's state immediately.
+      // Reading from settingsStore.getState() (after hydrateFromServer has run)
+      // gives us the fully merged server values.
+      const ss = useSettingsStore.getState();
+
+      // Helper: validate depth layers array from the server payload.
+      const toDepthLayers = (raw: unknown): DepthLayer[] => {
+        if (!Array.isArray(raw)) return ["mid"];
+        const valid = (raw as unknown[]).filter(
+          (v): v is DepthLayer => CURRENT_DEPTH_LAYERS.includes(v as DepthLayer),
+        );
+        return valid.length ? valid : ["mid"];
+      };
+
+      // Patch uiStore with the server-authoritative values. We use setState
+      // directly (not the setters) to avoid re-writing the values back into
+      // settingsStore and re-triggering the debounced PUT.
+      useUiStore.setState({
+        weatherStationsActive: ss.weatherStationsActive,
+        rawsOverlayActive: ss.rawsOverlayActive,
+        windOverlayActive: ss.windOverlayActive,
+        tideOverlayActive: ss.tideOverlayActive,
+        currentOverlayActive: ss.currentOverlayActive,
+        currentDepthLayers: toDepthLayers(ss.currentDepthLayers),
+        sidePaneCollapsed: ss.sidePaneCollapsed,
+        zonePaintBrushRadius: ss.zonePaintBrushRadius,
+        // When zoneOverlay is off, ensure paint mode is also off.
+        zoneOverlayEnabled: ss.zoneOverlayEnabled,
+        zonePaintMode: ss.zoneOverlayEnabled ? ss.zonePaintMode : false,
+        zonePaintSlot: (ss.zonePaintSlot as 0 | 1 | 2 | 3),
+        substrateColorMode: ss.substrateColorMode,
+        hiddenSubstrateClasses: new Set<string>(ss.hiddenSubstrateClasses ?? []),
+        intertidalHotspotsEnabled: ss.intertidalHotspotsEnabled,
+        intertidalScoreMode: ss.intertidalScoreMode ?? 'tidepool',
+        efhOverlayEnabled: ss.efhOverlayEnabled,
+        hiddenEfhSpecies: new Set<string>(ss.hiddenEfhSpecies ?? []),
+      });
     }
   }, [serverSettings, hydrateFromServer]);
 

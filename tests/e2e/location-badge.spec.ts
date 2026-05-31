@@ -306,9 +306,26 @@ test.describe("LocationBadge on data panels", () => {
   test.describe("ConditionsLegend", () => {
     test.beforeEach(async ({ page }) => {
       // Reset overlay state so each test starts with all overlays OFF.
+      // Since settingsStore v15, overlays are stored in the "bathyscan:settings"
+      // JSON blob rather than individual localStorage keys.
       await page.addInitScript(() => {
         if (!sessionStorage.getItem("__condOverlayCleared")) {
           sessionStorage.setItem("__condOverlayCleared", "1");
+          try {
+            const raw = localStorage.getItem("bathyscan:settings");
+            if (raw) {
+              const parsed = JSON.parse(raw) as {
+                state?: Record<string, unknown>;
+              };
+              if (parsed?.state) {
+                parsed.state.windOverlayActive = false;
+                parsed.state.tideOverlayActive = false;
+                parsed.state.currentOverlayActive = false;
+                localStorage.setItem("bathyscan:settings", JSON.stringify(parsed));
+              }
+            }
+          } catch {}
+          // Remove any legacy individual keys from older sessions.
           localStorage.removeItem("bathyscan:windOverlayActive");
           localStorage.removeItem("bathyscan:tideOverlayActive");
           localStorage.removeItem("bathyscan:currentOverlayActive");

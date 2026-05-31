@@ -8,6 +8,40 @@
  *
  * Settings are grouped into named "sections" so the UI can offer
  * per-section reset and so future migrations have a stable namespace.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * CONVENTION: WHERE DOES NEW STATE LIVE?
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * PERSISTENT STATE → settingsStore (this file)
+ *   Any toggle, mode, overlay, or user-facing preference that should survive a
+ *   page reload or sign-in from a different device MUST be added here:
+ *     1. Add a typed field to `SettingsState`.
+ *     2. Add a default value to `DEFAULT_SETTINGS`.
+ *     3. Add a setter to `SettingsActions` and implement it below.
+ *     4. Add the key to the relevant section in `SECTION_KEYS`.
+ *     5. Bump `SETTINGS_SCHEMA_VERSION` by 1 and add a v(n-1)→v(n) migration
+ *        entry in the `migrate` function that injects the new default so
+ *        existing users are not broken.
+ *   uiStore reads the initial value from `useSettingsStore.getState()` and
+ *   writes back via `useSettingsStore.setState()` on every change so the
+ *   debounced server-sync pipeline fires automatically — no extra networking
+ *   code is needed.
+ *
+ * INTENTIONALLY TRANSIENT STATE → uiStore (memory-only, resets on reload)
+ *   State that should intentionally reset each session stays in uiStore and
+ *   must NOT be added here:
+ *   - Active selections (selectedSubstrate, selectedHotspot, selectedEfh)
+ *   - Open/close state of modal panels (overviewOpen, markerFormOpen,
+ *     findDataPanelOpen)
+ *   - Camera jump queue (pendingDropIn)
+ *   - Time scrubber (scrubDatetime)
+ *   - Form prefill (markerFormPrefill)
+ *
+ * DEVICE-LOCAL STATE → raw localStorage (never settingsStore)
+ *   One-time hints that should stay device-specific (e.g. hasSeenOrbitTouchHint)
+ *   remain in raw localStorage and are handled directly in uiStore.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -18,7 +52,7 @@ import {
 } from "./keyBindings";
 import { usePanelCollapseStore, type PanelId } from "./panelCollapseStore";
 
-export const SETTINGS_SCHEMA_VERSION = 14;
+export const SETTINGS_SCHEMA_VERSION = 15;
 
 /**
  * Standard-mapping gamepad button index used to trigger the crosshair
@@ -319,6 +353,49 @@ export interface SettingsState {
   // ── Environment ───────────────────────────────────────────────────────
   waterType: WaterType;
 
+  // ── Overlay & UI toggles (promoted from uiStore / localStorage to enable
+  //    cross-device sync via the server-side user profile) ─────────────────
+  /** NOAA Aviation Weather station pins on the OverviewMap. */
+  weatherStationsActive: boolean;
+  /** AOOS RAWS land-weather station pins on the OverviewMap. */
+  rawsOverlayActive: boolean;
+  /** Always-on Wind arrow overlay. */
+  windOverlayActive: boolean;
+  /** Always-on Tide arrow overlay. */
+  tideOverlayActive: boolean;
+  /** Always-on Current arrow overlay. */
+  currentOverlayActive: boolean;
+  /** Which depth layers the Current overlay renders (multi-select). */
+  currentDepthLayers: TidalDepthLayer[];
+  /** Whether the left side pane (datasets, habitat, tides…) is collapsed. */
+  sidePaneCollapsed: boolean;
+  /** Brush radius in grid cells (1–20) for the zone-paint tool. */
+  zonePaintBrushRadius: number;
+  /** Show real Alaska ShoreZone substrate polygons as a draped overlay. */
+  zoneOverlayEnabled: boolean;
+  /** Whether the zone-paint tool is active. */
+  zonePaintMode: boolean;
+  /** Which texture slot (0–3) the paint brush is currently set to. */
+  zonePaintSlot: number;
+  /** Show substrate colour overlay. */
+  substrateColorMode: boolean;
+  /**
+   * CMECS substrate classes the user has hidden via the legend (lower-cased).
+   * Stored as a plain array for JSON serialisability; uiStore converts to Set.
+   */
+  hiddenSubstrateClasses: string[];
+  /** Show intertidal hotspot polygons in the 3D scene. */
+  intertidalHotspotsEnabled: boolean;
+  /** Which score type to highlight in the Intertidal Hotspots layer. */
+  intertidalScoreMode: 'tidepool' | 'beachcombing';
+  /** Show EFH zone polygon outlines in the 3D scene. */
+  efhOverlayEnabled: boolean;
+  /**
+   * EFH species common names the user has hidden via the legend.
+   * Stored as a plain array for JSON serialisability; uiStore converts to Set.
+   */
+  hiddenEfhSpecies: string[];
+
   // ── Shortcuts (remappable bindings) ──────────────────────────────────
   /**
    * Map of action id (e.g. "moveForward", "crosshairMenu") to
@@ -491,6 +568,25 @@ interface SettingsActions {
   reorderBookmarks: (datasetId: string, orderedBookmarks: CameraBookmark[]) => void;
 
   setWaterType: (v: WaterType) => void;
+
+  // Overlay & UI toggles
+  setWeatherStationsActive: (v: boolean) => void;
+  setRawsOverlayActive: (v: boolean) => void;
+  setWindOverlayActive: (v: boolean) => void;
+  setTideOverlayActive: (v: boolean) => void;
+  setCurrentOverlayActive: (v: boolean) => void;
+  setCurrentDepthLayers: (v: TidalDepthLayer[]) => void;
+  setSidePaneCollapsed: (v: boolean) => void;
+  setZonePaintBrushRadius: (v: number) => void;
+  setZoneOverlayEnabled: (v: boolean) => void;
+  setZonePaintMode: (v: boolean) => void;
+  setZonePaintSlot: (v: number) => void;
+  setSubstrateColorMode: (v: boolean) => void;
+  setHiddenSubstrateClasses: (v: string[]) => void;
+  setIntertidalHotspotsEnabled: (v: boolean) => void;
+  setIntertidalScoreMode: (v: 'tidepool' | 'beachcombing') => void;
+  setEfhOverlayEnabled: (v: boolean) => void;
+  setHiddenEfhSpecies: (v: string[]) => void;
 
   // Shortcuts
   setKeyBinding: (action: ShortcutActionId, code: string) => void;
@@ -725,6 +821,25 @@ export const DEFAULT_SETTINGS: SettingsState = {
 
   waterType: "saltwater",
 
+  // Overlay & UI toggles
+  weatherStationsActive: false,
+  rawsOverlayActive: false,
+  windOverlayActive: false,
+  tideOverlayActive: false,
+  currentOverlayActive: false,
+  currentDepthLayers: ["mid"],
+  sidePaneCollapsed: false,
+  zonePaintBrushRadius: 4,
+  zoneOverlayEnabled: false,
+  zonePaintMode: false,
+  zonePaintSlot: 0,
+  substrateColorMode: false,
+  hiddenSubstrateClasses: [],
+  intertidalHotspotsEnabled: false,
+  intertidalScoreMode: 'tidepool',
+  efhOverlayEnabled: false,
+  hiddenEfhSpecies: [],
+
   // Shortcuts
   keyBindings: { ...DEFAULT_KEY_BINDINGS },
   crosshairMenuGamepadButton: DEFAULT_CROSSHAIR_MENU_GAMEPAD_BUTTON,
@@ -751,7 +866,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "showHeading", "showDepthLegend", "showDepthScaleBar", "showCompassMinimap",
     "showControlsLegend", "showTidePanel", "showHabitatPanel", "showDatasetPanel",
     "showQueryPanel", "showUiTooltips", "timeFormat", "coordinateFormat", "depthUnit", "units",
-    "temperatureUnit",
+    "temperatureUnit", "sidePaneCollapsed",
   ],
   overview: [
     "overviewDefaultZoom", "overviewShowGrid", "overviewShowMarkers", "overviewOpenOnLoad",
@@ -763,13 +878,21 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   tidal: [
     "autoLoadTidal", "defaultTidalDepthLayer", "currentArrowDensity",
     "layerArrowDensity", "windOverlayStyle", "tideOverlayStyle", "currentOverlayStyle",
+    "weatherStationsActive", "rawsOverlayActive", "windOverlayActive",
+    "tideOverlayActive", "currentOverlayActive", "currentDepthLayers",
   ],
   currents: [
     "currentsEnabled", "currentsSource", "currentsManualDirectionDeg",
     "currentsManualSpeedKt", "currentsTidePhase", "currentsAutoAdvance",
     "currentsShowParticles", "currentsShowArrows", "currentsShowStreamlines",
   ],
-  habitat: ["autoShowZoneOverlay", "defaultHabitatSpecies", "habitatOverlayIntensity"],
+  habitat: [
+    "autoShowZoneOverlay", "defaultHabitatSpecies", "habitatOverlayIntensity",
+    "zonePaintBrushRadius", "zoneOverlayEnabled", "zonePaintMode", "zonePaintSlot",
+    "substrateColorMode", "hiddenSubstrateClasses",
+    "intertidalHotspotsEnabled", "intertidalScoreMode",
+    "efhOverlayEnabled", "hiddenEfhSpecies",
+  ],
   gps: [
     "autoStartTrailRecording", "defaultTrailColor", "gpsRecordingInterval", "trailRetention",
   ],
@@ -1029,6 +1152,25 @@ export const useSettingsStore = create<SettingsStore>()(
 
         setWaterType: setter("waterType"),
 
+        // Overlay & UI toggles
+        setWeatherStationsActive: setter("weatherStationsActive"),
+        setRawsOverlayActive: setter("rawsOverlayActive"),
+        setWindOverlayActive: setter("windOverlayActive"),
+        setTideOverlayActive: setter("tideOverlayActive"),
+        setCurrentOverlayActive: setter("currentOverlayActive"),
+        setCurrentDepthLayers: setter("currentDepthLayers"),
+        setSidePaneCollapsed: setter("sidePaneCollapsed"),
+        setZonePaintBrushRadius: (v) => set({ zonePaintBrushRadius: Math.max(1, Math.min(20, Math.round(v))) }),
+        setZoneOverlayEnabled: setter("zoneOverlayEnabled"),
+        setZonePaintMode: setter("zonePaintMode"),
+        setZonePaintSlot: setter("zonePaintSlot"),
+        setSubstrateColorMode: setter("substrateColorMode"),
+        setHiddenSubstrateClasses: setter("hiddenSubstrateClasses"),
+        setIntertidalHotspotsEnabled: setter("intertidalHotspotsEnabled"),
+        setIntertidalScoreMode: setter("intertidalScoreMode"),
+        setEfhOverlayEnabled: setter("efhOverlayEnabled"),
+        setHiddenEfhSpecies: setter("hiddenEfhSpecies"),
+
         // Shortcuts
         setKeyBinding: (action, code) =>
           set((state) => ({
@@ -1210,11 +1352,31 @@ export const useSettingsStore = create<SettingsStore>()(
             migratedContours.contourInterval =
               activeUnits === "metric" ? 10 : activeUnits === "nautical" ? 10 : 50;
           }
+          // v14 → v15: inject overlay toggle defaults for existing stored settings.
+          // These fields were previously held only in uiStore / localStorage; they
+          // are now persisted in settingsStore so they sync cross-device. Any field
+          // already present in the stored state is preserved; absent fields get the
+          // sensible default so existing users are not broken.
+          const migratedOverlays: Partial<SettingsState> = {};
+          const overlayDefaults: (keyof SettingsState)[] = [
+            "weatherStationsActive", "rawsOverlayActive", "windOverlayActive",
+            "tideOverlayActive", "currentOverlayActive", "currentDepthLayers",
+            "sidePaneCollapsed", "zonePaintBrushRadius", "zoneOverlayEnabled",
+            "zonePaintMode", "zonePaintSlot", "substrateColorMode",
+            "hiddenSubstrateClasses", "intertidalHotspotsEnabled",
+            "intertidalScoreMode", "efhOverlayEnabled", "hiddenEfhSpecies",
+          ];
+          for (const key of overlayDefaults) {
+            if ((rest as Record<string, unknown>)[key] === undefined) {
+              (migratedOverlays as Record<string, unknown>)[key] = DEFAULT_SETTINGS[key];
+            }
+          }
           return {
             ...DEFAULT_SETTINGS,
             ...rest,
             ...split,
             ...migratedContours,
+            ...migratedOverlays,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,
