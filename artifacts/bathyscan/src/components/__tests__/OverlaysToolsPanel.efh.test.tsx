@@ -87,6 +87,10 @@ vi.mock("@workspace/api-client-react", () => ({
     data: mockEfhData,
   }),
   getGetEfhQueryKey: () => ["/api/efh"],
+  useGetWeatherStations: () => ({ data: undefined, isLoading: false, isFetching: false, isError: false }),
+  getGetWeatherStationsQueryKey: (p: unknown) => ["weather-stations", p],
+  useGetRawsStations: () => ({ data: undefined, isLoading: false, isFetching: false, isError: false }),
+  getGetRawsStationsQueryKey: (p: unknown) => ["raws-stations", p],
 }));
 
 // ── Imports under test ────────────────────────────────────────────────────────

@@ -18,6 +18,10 @@ vi.mock("@workspace/api-client-react", () => ({
   getGetSurfaceConditionsQueryKey: () => ["surface-conditions"],
   useGetEfh: () => ({ data: undefined, isLoading: false, isError: false }),
   getGetEfhQueryKey: () => ["efh"],
+  useGetWeatherStations: () => ({ data: undefined, isLoading: false, isFetching: false, isError: false }),
+  getGetWeatherStationsQueryKey: (p: unknown) => ["weather-stations", p],
+  useGetRawsStations: () => ({ data: undefined, isLoading: false, isFetching: false, isError: false }),
+  getGetRawsStationsQueryKey: (p: unknown) => ["raws-stations", p],
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
