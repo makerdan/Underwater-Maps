@@ -12,6 +12,11 @@ router.get("/healthz", (_req, res) => {
 
 const POE_PING_TIMEOUT_MS = 2_000;
 const DB_QUERY_TIMEOUT_MS = 2_000;
+const AOOS_PING_TIMEOUT_MS = 5_000;
+
+// Primary AOOS endpoint used by the intertidal-habitat bundle.
+const AOOS_PROBE_URL =
+  "https://gis.aoos.org/arcgis/rest/services/AKCoastalHabitats/IntertidHabitat/FeatureServer/0?f=json";
 
 /**
  * Deep health check — probes each critical subsystem and returns per-subsystem
@@ -21,21 +26,23 @@ const DB_QUERY_TIMEOUT_MS = 2_000;
  * load-balancer liveness probes.
  */
 router.get("/healthz/deep", async (_req, res) => {
-  const [dbResult, poeResult] = await Promise.allSettled([
+  const [dbResult, poeResult, aoosResult] = await Promise.allSettled([
     checkDb(),
     checkPoe(),
+    checkAoos(),
   ]);
 
   const db = dbResult.status === "fulfilled" ? dbResult.value : { status: "degraded" as const, error: String(dbResult.reason) };
   const poe = poeResult.status === "fulfilled" ? poeResult.value : { status: "degraded" as const, error: String(poeResult.reason) };
+  const aoos = aoosResult.status === "fulfilled" ? aoosResult.value : { status: "degraded" as const, error: String(aoosResult.reason) };
 
-  const overallStatus = db.status === "ok" && poe.status === "ok" ? "ok" : "degraded";
+  const overallStatus = db.status === "ok" && poe.status === "ok" && aoos.status === "ok" ? "ok" : "degraded";
 
   if (overallStatus === "degraded") {
-    logger.warn({ code: "healthz_deep_degraded", db, poe }, "Deep health check: degraded");
+    logger.warn({ code: "healthz_deep_degraded", db, poe, aoos }, "Deep health check: degraded");
   }
 
-  const body = DeepHealthCheckResponse.parse({ status: overallStatus, subsystems: { db, poe } });
+  const body = DeepHealthCheckResponse.parse({ status: overallStatus, subsystems: { db, poe, aoos } });
   res.status(overallStatus === "ok" ? 200 : 503).json(body);
 });
 
@@ -65,6 +72,32 @@ async function checkPoe(): Promise<{ status: "ok" | "degraded"; latencyMs?: numb
       method: "HEAD",
       headers: { Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(POE_PING_TIMEOUT_MS),
+    });
+    const latencyMs = Date.now() - start;
+    if (response.status >= 500) {
+      return { status: "degraded", latencyMs, error: `HTTP ${response.status}` };
+    }
+    return { status: "ok", latencyMs };
+  } catch (err) {
+    return { status: "degraded", latencyMs: Date.now() - start, error: (err as Error)?.message ?? "unknown" };
+  }
+}
+
+/**
+ * Probe the AOOS ArcGIS FeatureServer that backs the intertidal-habitat bundle.
+ *
+ * A "degraded" result here means gis.aoos.org is unreachable from this host,
+ * which is expected in the Replit dev container (DNS is blocked) but should be
+ * "ok" in the deployed production environment. When this returns "ok" in
+ * production, re-run `pnpm --filter @workspace/scripts run build-aoos-intertidal-pow`
+ * to replace the ENC-fallback bundle with authoritative AOOS habitat polygons.
+ */
+async function checkAoos(): Promise<{ status: "ok" | "degraded"; latencyMs?: number; error?: string }> {
+  const start = Date.now();
+  try {
+    const response = await fetch(AOOS_PROBE_URL, {
+      method: "HEAD",
+      signal: AbortSignal.timeout(AOOS_PING_TIMEOUT_MS),
     });
     const latencyMs = Date.now() - start;
     if (response.status >= 500) {

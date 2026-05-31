@@ -11,6 +11,7 @@ export const DeepHealthCheckResponse = zod.object({
   subsystems: zod.object({
     db: SubsystemStatus,
     poe: SubsystemStatus,
+    aoos: SubsystemStatus,
   }),
 });
 
