@@ -1,4 +1,4 @@
-import { pgTable, text, real, integer, timestamp, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, real, integer, timestamp, uuid, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -15,7 +15,9 @@ export const gpsTrailsTable = pgTable("gps_trails", {
   endedAt: timestamp("ended_at").notNull(),
   pointCount: integer("point_count").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("gps_trails_user_id_idx").on(table.userId),
+]);
 
 export const insertGpsTrailSchema = createInsertSchema(gpsTrailsTable).omit({
   id: true,

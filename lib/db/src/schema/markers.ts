@@ -1,4 +1,4 @@
-import { pgTable, text, real, timestamp, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, real, timestamp, uuid, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -14,9 +14,11 @@ export const markersTable = pgTable("markers", {
   type: text("type").notNull().default("custom"),
   label: text("label").notNull(),
   notes: text("notes"),
-  userId: text("user_id"),
+  userId: text("user_id").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("markers_user_id_idx").on(table.userId),
+]);
 
 export const insertMarkerSchema = createInsertSchema(markersTable).omit({
   id: true,

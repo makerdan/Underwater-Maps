@@ -1,4 +1,4 @@
-import { pgTable, text, real, timestamp, uuid, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, real, timestamp, uuid, jsonb, index } from "drizzle-orm/pg-core";
 import { datasetFoldersTable } from "./dataset-folders.js";
 
 export const customDatasetsTable = pgTable("custom_datasets", {
@@ -11,6 +11,8 @@ export const customDatasetsTable = pgTable("custom_datasets", {
   overviewJson: jsonb("overview_json").notNull(),
   folderId: uuid("folder_id").references(() => datasetFoldersTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("custom_datasets_user_id_idx").on(table.userId),
+]);
 
 export type CustomDataset = typeof customDatasetsTable.$inferSelect;

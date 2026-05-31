@@ -1,4 +1,4 @@
-import { pgTable, text, real, timestamp, uuid, jsonb, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, real, timestamp, uuid, jsonb, integer, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -17,7 +17,9 @@ export const routesTable = pgTable("routes", {
   waypointCount: integer("waypoint_count").notNull().default(0),
   totalDistanceM: real("total_distance_m").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("routes_user_id_idx").on(table.userId),
+]);
 
 export const insertRouteSchema = createInsertSchema(routesTable).omit({
   id: true,

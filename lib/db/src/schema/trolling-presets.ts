@@ -1,4 +1,4 @@
-import { pgTable, text, real, timestamp, uuid, jsonb, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, real, timestamp, uuid, jsonb, integer, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { trollingPresetFoldersTable } from "./trolling-preset-folders.js";
@@ -22,7 +22,10 @@ export const trollingPresetsTable = pgTable("trolling_presets", {
     onDelete: "set null",
   }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("trolling_presets_user_id_idx").on(table.userId),
+  index("trolling_presets_folder_id_idx").on(table.folderId),
+]);
 
 export const insertTrollingPresetSchema = createInsertSchema(trollingPresetsTable).omit({
   id: true,
