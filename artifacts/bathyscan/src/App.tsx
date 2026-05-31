@@ -346,13 +346,20 @@ function Main() {
     setTidalOverlay(true);
   }, [autoLoadTidal, terrain, setTidalOverlay]);
 
-  // Auto-enable the tidal overlay when the user selects the NOAA currents
-  // source so they don't have to toggle it manually.
+  // Tracks the previous currentsSource so we can detect the transition TO
+  // "noaa" and auto-enable the tidal overlay exactly once per transition.
+  // `tidalOverlay` is intentionally NOT in the dependency array — including it
+  // would cause this effect to re-fire whenever the user manually toggles the
+  // overlay off (while still on "noaa"), immediately re-enabling it against
+  // their intent.
+  const prevCurrentsSourceRef = useRef<string | null>(null);
   useEffect(() => {
-    if (currentsSource === "noaa" && !tidalOverlay) {
+    const prev = prevCurrentsSourceRef.current;
+    prevCurrentsSourceRef.current = currentsSource;
+    if (currentsSource === "noaa" && prev !== "noaa") {
       setTidalOverlay(true);
     }
-  }, [currentsSource, tidalOverlay, setTidalOverlay]);
+  }, [currentsSource, setTidalOverlay]);
 
   const { data: tidalData, loading: tidalLoading, retry: retryTidal } = useTidalData(
     tidalOverlay ? centerLat : null,
