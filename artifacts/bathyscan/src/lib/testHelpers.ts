@@ -43,6 +43,7 @@ import {
 } from "@workspace/api-client-react";
 import { useDepthProfileStore, buildProfile } from "./depthProfileStore";
 import { useSettingsStore } from "./settingsStore";
+import { usePaletteStore } from "./paletteStore";
 import { hasPendingOrInFlightSettingsSync } from "../hooks/useServerSettingsSync";
 import { processFlyWheel } from "./flyWheel";
 import { useZoneOverlayStore, ZONE_DEFAULT_COLORS } from "./zoneOverlayStore";
@@ -245,6 +246,17 @@ export interface BathyTestApi {
    * navigating to /settings (which would re-hydrate from the server).
    */
   getColormapTheme: () => string;
+  /**
+   * Write a single band colour into the paletteStore (same store action the
+   * Custom band-colour editor calls when the user edits a hex input). This
+   * triggers the paletteStore subscription in `useServerSettingsSync` so the
+   * 300 ms debounced PUT /api/settings fires with the updated `bandColors`
+   * array — identical to a real UI interaction.
+   *
+   * Use `waitForServerSettingsSync` after calling this to ensure the PUT has
+   * completed before making assertions on the server-side row.
+   */
+  setBandColor: (index: number, hex: string) => void;
   /**
    * Resolves once the 300 ms debounced server sync has flushed and the
    * server has acknowledged the PUT (i.e. `lastSyncedAt` in the settings
@@ -639,6 +651,7 @@ export function installTestHelpers(): void {
       (queryClient.getQueryState(getGetMarkersQueryKey({ datasetId }))
         ?.isInvalidated ?? false),
     getColormapTheme: () => useSettingsStore.getState().colormapTheme,
+    setBandColor: (index, hex) => usePaletteStore.getState().setBandColor(index, hex),
     waitForServerSettingsSync: () => {
       return new Promise<void>((resolve, reject) => {
         // Fast path: if nothing is pending/in-flight at call time the server

@@ -4098,7 +4098,16 @@ function CustomBandColorEditor({
               />
               <DebouncedHexInput
                 value={color}
-                onCommit={(hex) => setBandColor(i, hex)}
+                onCommit={(hex) => {
+                  setBandColor(i, hex);
+                  // Flush immediately so the updated bandColors reaches the
+                  // server regardless of which colormapTheme is active.
+                  // The global sync hook always includes bandColors in the
+                  // PUT /api/settings payload, but an explicit flush here
+                  // mirrors the DepthBandColorEditor reset behaviour and
+                  // makes the intent unambiguous.
+                  void flushServerSync();
+                }}
                 style={hexStyle}
                 testId={`palette-custom-band-${i}-hex`}
               />
