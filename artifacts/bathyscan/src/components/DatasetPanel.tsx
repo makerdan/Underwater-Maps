@@ -1187,6 +1187,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                   <button
                     data-testid="btn-retry-preset"
                     onClick={handleRetryPreset}
+                    disabled={!!pendingId}
                     style={{
                       fontSize: 10,
                       color: "#00e5ff",
@@ -1194,10 +1195,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       border: "1px solid rgba(0,229,255,0.35)",
                       borderRadius: 3,
                       padding: "1px 6px",
-                      cursor: "pointer",
+                      cursor: !!pendingId ? "not-allowed" : "pointer",
+                      opacity: !!pendingId ? 0.5 : 1,
                     }}
                   >
-                    Retry
+                    {!!pendingId ? "Loading…" : "Retry"}
                   </button>
                   <button
                     onClick={(e) => {
@@ -1241,11 +1243,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                 <button
                   data-testid={`btn-dataset-${ds.id}`}
                   onClick={() => (isOnline || cachedIds.has(ds.id)) && handleSelectPreset(ds)}
-                  disabled={!isOnline && !cachedIds.has(ds.id)}
+                  disabled={(!isOnline && !cachedIds.has(ds.id)) || loadingId === ds.id}
                   className="flex-1 text-left px-2 py-2"
                   style={{
                     background: "transparent",
-                    cursor: !isOnline && !cachedIds.has(ds.id) ? "not-allowed" : "pointer",
+                    cursor: (!isOnline && !cachedIds.has(ds.id)) || loadingId === ds.id ? "not-allowed" : "pointer",
                   }}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -1347,6 +1349,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                     <button
                       data-testid="btn-retry-user-dataset"
                       onClick={handleRetryUserDataset}
+                      disabled={!!pendingUserDatasetId}
                       style={{
                         fontSize: 10,
                         color: "#00e5ff",
@@ -1354,10 +1357,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                         border: "1px solid rgba(0,229,255,0.35)",
                         borderRadius: 3,
                         padding: "1px 6px",
-                        cursor: "pointer",
+                        cursor: !!pendingUserDatasetId ? "not-allowed" : "pointer",
+                        opacity: !!pendingUserDatasetId ? 0.5 : 1,
                       }}
                     >
-                      Retry
+                      {!!pendingUserDatasetId ? "Loading…" : "Retry"}
                     </button>
                     <button
                       onClick={(e) => {

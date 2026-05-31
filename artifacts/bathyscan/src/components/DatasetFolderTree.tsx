@@ -926,7 +926,8 @@ export const DatasetFolderTree: React.FC<Props> = ({
           <span>▲ MY LIBRARY</span>
           <button
             data-testid="btn-new-folder"
-            onClick={() => handleNewFolder(null)}
+            onClick={() => !postFolder.isPending && handleNewFolder(null)}
+            disabled={postFolder.isPending}
             title="New folder"
             style={{
               background: "transparent",
@@ -935,11 +936,12 @@ export const DatasetFolderTree: React.FC<Props> = ({
               fontSize: 10,
               padding: "0 6px",
               borderRadius: 2,
-              cursor: "pointer",
+              cursor: postFolder.isPending ? "not-allowed" : "pointer",
+              opacity: postFolder.isPending ? 0.5 : 1,
               lineHeight: 1.6,
             }}
           >
-            + folder
+            {postFolder.isPending ? "…" : "+ folder"}
           </button>
         </div>
 

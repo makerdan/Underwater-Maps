@@ -114,7 +114,7 @@ export const FileUpload = () => {
       "text/xml": [".gpx"],
     },
     maxFiles: 1,
-    disabled: !isSignedIn,
+    disabled: !isSignedIn || postDatasetsUpload.isPending,
   });
 
   return (
