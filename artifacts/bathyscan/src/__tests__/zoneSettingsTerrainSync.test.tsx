@@ -84,7 +84,153 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
 
+// ============================================================================
+// Capture refs + extra mocks for TerrainMesh useFrame uniform tests
+// ============================================================================
+
+const frameRef = vi.hoisted(() => ({
+  cb: null as ((state: { camera: { position: object } }, delta: number) => void) | null,
+}));
+
+const uiStateRef = vi.hoisted(() => ({
+  zoneOverlayEnabled: true as boolean,
+  zonePaintMode: false,
+  zonePaintBrushRadius: 1,
+  zonePaintSlot: 0 as 0 | 1 | 2 | 3,
+}));
+
+const mockMatHolder = vi.hoisted(() => {
+  type MockColor = { set: (v: string) => void; getHex: () => string };
+  type MockVec4 = {
+    set: (x: number, y: number, z: number, w: number) => void;
+    getVals: () => number[];
+  };
+  type MockMat = {
+    uniforms: Record<string, { value: unknown }>;
+    tint: MockColor[];
+    vis: MockVec4;
+    dispose: () => void;
+  };
+  const makeColor = (): MockColor => {
+    let h = "";
+    return { set: (v: string) => { h = v; }, getHex: () => h };
+  };
+  const makeVec4 = (): MockVec4 => {
+    let v: number[] = [0, 0, 0, 0];
+    return {
+      set: (x: number, y: number, z: number, w: number) => { v = [x, y, z, w]; },
+      getVals: () => [...v],
+    };
+  };
+  let _current: MockMat | null = null;
+  return {
+    make: (): MockMat => {
+      const tint = [makeColor(), makeColor(), makeColor(), makeColor()];
+      const vis = makeVec4();
+      const explicit: Record<string, { value: unknown }> = {
+        uOpacity: { value: 1 },
+        uLampPos: { value: { copy: () => {} } },
+        uZoneOverlay: { value: 0 },
+        uZoneTint0: { value: tint[0] },
+        uZoneTint1: { value: tint[1] },
+        uZoneTint2: { value: tint[2] },
+        uZoneTint3: { value: tint[3] },
+        uZoneVisible: { value: vis },
+        uHighlightMode: { value: 0 },
+        uHighlightMin: { value: 0 },
+        uHighlightMax: { value: 0 },
+        uShowHabitat: { value: 0 },
+        uHabitatIntensity: { value: 0 },
+        uHabitatTex: { value: null },
+        uHabitatMix: { value: 0 },
+      };
+      const uniforms: Record<string, { value: unknown }> = new Proxy(explicit, {
+        get(target, prop) {
+          const key = String(prop);
+          return key in target ? target[key] : { value: 0 };
+        },
+      });
+      _current = { uniforms, tint, vis, dispose: () => {} };
+      return _current;
+    },
+    get current() { return _current; },
+  };
+});
+
+vi.mock("@react-three/fiber", () => ({
+  useFrame: (cb: (state: { camera: { position: object } }, delta: number) => void) => {
+    frameRef.cb = cb;
+  },
+}));
+
+vi.mock("@/lib/terrainShader", () => ({
+  createTerrainShaderMaterial: () => mockMatHolder.make(),
+}));
+
+vi.mock("@/lib/terrain", () => ({
+  buildTerrainGeometry: () => ({
+    setAttribute: () => {},
+    getAttribute: () => null,
+    dispose: () => {},
+    attributes: { position: { count: 0, array: new Float32Array(0) } },
+  }),
+  buildTerrainSkirtGeometry: () => ({ setAttribute: () => {}, getAttribute: () => null, dispose: () => {} }),
+  computeZoneWeights: () => new Float32Array(0),
+  computeSlopeAttribute: () => new Float32Array(0),
+  applyColormapToVertexColors: () => {},
+  WORLD_SIZE: 100,
+}));
+
+vi.mock("@/lib/textures", () => ({
+  getTerrainTextures: () => ({ sand: null, sediment: null, silt: null, basalt: null }),
+}));
+
+vi.mock("@/lib/classificationStore", () => ({
+  useClassificationStore: (sel: (s: { zoneMap: null }) => unknown) => sel({ zoneMap: null }),
+}));
+
+vi.mock("@/lib/uiStore", () => ({
+  useUiStore: Object.assign(
+    (sel: (s: typeof uiStateRef) => unknown) => sel(uiStateRef),
+    { getState: () => uiStateRef },
+  ),
+}));
+
+vi.mock("@/lib/highlightStore", () => ({
+  useHighlightStore: Object.assign(
+    (sel: (s: { mode: string; params: { min: number; max: number } }) => unknown) =>
+      sel({ mode: "none", params: { min: 0, max: 0 } }),
+    { getState: () => ({ mode: "none", params: { min: 0, max: 0 } }) },
+  ),
+}));
+
+vi.mock("@/lib/habitatStore", () => ({
+  useHabitatStore: (sel: (s: { scores: null; activeSpecies: null }) => unknown) =>
+    sel({ scores: null, activeSpecies: null }),
+}));
+
+vi.mock("@/lib/paletteStore", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const _state = {
+    shallow: "#0077be", deep: "#000033",
+    customStops: null as null, bandColors: [] as never[], bandBoundaries: [] as never[],
+  };
+  return {
+    ...actual,
+    usePaletteStore: Object.assign(
+      (sel: (s: typeof _state) => unknown) => sel(_state),
+      { getState: () => _state },
+    ),
+  };
+});
+
+vi.mock("@/lib/webglContextStore", () => ({
+  useWebglContextStore: (sel: (s: { floatTextureLinear: boolean }) => unknown) =>
+    sel({ floatTextureLinear: true }),
+}));
+
 import { Settings } from "@/pages/Settings";
+import { TerrainMesh } from "@/components/TerrainMesh";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
 import { useZoneOverlayStore, ZONE_DEFAULT_COLORS } from "@/lib/zoneOverlayStore";
 
@@ -442,5 +588,264 @@ describe("Direct store API → terrain frame read path — reset", () => {
     for (let i = 0; i < 4; i++) {
       expect(slots[i as 0 | 1 | 2 | 3]!.visible).toBe(true);
     }
+  });
+});
+
+// ============================================================================
+// TerrainMesh useFrame → shader uniform write tests
+//
+// These tests verify that the useFrame callback in TerrainMesh.tsx actually
+// reads the latest zoneOverlayStore slots and writes them into the Three.js
+// shader uniforms (uZoneTint0–uZoneTint3 and uZoneVisible).
+//
+// Strategy:
+//   1. vi.mock("@react-three/fiber") captures the useFrame callback in frameRef.
+//   2. vi.mock("@/lib/terrainShader") makes createTerrainShaderMaterial() return
+//      a mock material (mockMatHolder) whose Color/Vec4 values record every .set() call.
+//   3. Each test: set store state → render TerrainMesh → call frameRef.cb() →
+//      assert the mock material's uniform values.
+// ============================================================================
+
+const MOCK_GRID = {
+  width: 2, height: 2, resolution: 2,
+  elevations: [-1, -2, -3, -4],
+  spacing: 10, lat: 0, lng: 0,
+  minDepth: -4, maxDepth: -1,
+  waterType: "saltwater",
+  depths: new Float32Array(4),
+} as unknown as Parameters<typeof TerrainMesh>[0]["grid"];
+
+const MOCK_FRAME_STATE = {
+  camera: { position: { x: 0, y: 0, z: 0 } },
+} as unknown as Parameters<NonNullable<typeof frameRef.cb>>[0];
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function renderTerrainAndTick() {
+  render(<TerrainMesh grid={MOCK_GRID} />);
+  frameRef.cb?.(MOCK_FRAME_STATE, 0);
+}
+
+// ---------------------------------------------------------------------------
+// uZoneTint* uniforms — saltwater palette
+// ---------------------------------------------------------------------------
+
+describe("TerrainMesh useFrame → uZoneTint uniforms reflect slot colours (saltwater)", () => {
+  beforeEach(() => {
+    resetStores();
+    uiStateRef.zoneOverlayEnabled = true;
+  });
+
+  it("writes slot 0 colour to uZoneTint0 uniform on each frame tick", () => {
+    useZoneOverlayStore.getState().setSlotColor(0, "#aabbcc");
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.tint[0]!.getHex()).toBe("#aabbcc");
+  });
+
+  it("writes slot 1 colour to uZoneTint1 uniform on each frame tick", () => {
+    useZoneOverlayStore.getState().setSlotColor(1, "#112233");
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.tint[1]!.getHex()).toBe("#112233");
+  });
+
+  it("writes slot 2 colour to uZoneTint2 uniform on each frame tick", () => {
+    useZoneOverlayStore.getState().setSlotColor(2, "#deadbe");
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.tint[2]!.getHex()).toBe("#deadbe");
+  });
+
+  it("writes slot 3 colour to uZoneTint3 uniform on each frame tick", () => {
+    useZoneOverlayStore.getState().setSlotColor(3, "#c0ffee");
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.tint[3]!.getHex()).toBe("#c0ffee");
+  });
+
+  it("writes all four tints in a single frame tick from their respective slots", () => {
+    useZoneOverlayStore.getState().setSlotColor(0, "#111111");
+    useZoneOverlayStore.getState().setSlotColor(1, "#222222");
+    useZoneOverlayStore.getState().setSlotColor(2, "#333333");
+    useZoneOverlayStore.getState().setSlotColor(3, "#444444");
+    renderTerrainAndTick();
+    const { tint } = mockMatHolder.current!;
+    expect(tint[0]!.getHex()).toBe("#111111");
+    expect(tint[1]!.getHex()).toBe("#222222");
+    expect(tint[2]!.getHex()).toBe("#333333");
+    expect(tint[3]!.getHex()).toBe("#444444");
+  });
+
+  it("a second frame tick picks up a colour change made after the first tick", () => {
+    useZoneOverlayStore.getState().setSlotColor(0, "#aaaaaa");
+    render(<TerrainMesh grid={MOCK_GRID} />);
+    frameRef.cb?.(MOCK_FRAME_STATE, 0);
+    expect(mockMatHolder.current!.tint[0]!.getHex()).toBe("#aaaaaa");
+
+    useZoneOverlayStore.getState().setSlotColor(0, "#bbbbbb");
+    frameRef.cb?.(MOCK_FRAME_STATE, 0);
+    expect(mockMatHolder.current!.tint[0]!.getHex()).toBe("#bbbbbb");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// uZoneVisible uniform — saltwater palette
+// ---------------------------------------------------------------------------
+
+describe("TerrainMesh useFrame → uZoneVisible uniform reflects slot visibility (saltwater)", () => {
+  beforeEach(() => {
+    resetStores();
+    uiStateRef.zoneOverlayEnabled = true;
+  });
+
+  it("sets uZoneVisible to (1,1,1,1) when all slots are visible", () => {
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.vis.getVals()).toEqual([1, 1, 1, 1]);
+  });
+
+  it("sets x component of uZoneVisible to 0 when slot 0 is hidden", () => {
+    useZoneOverlayStore.getState().setSlotVisible(0, false);
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.vis.getVals()).toEqual([0, 1, 1, 1]);
+  });
+
+  it("sets y component of uZoneVisible to 0 when slot 1 is hidden", () => {
+    useZoneOverlayStore.getState().setSlotVisible(1, false);
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.vis.getVals()).toEqual([1, 0, 1, 1]);
+  });
+
+  it("sets z component of uZoneVisible to 0 when slot 2 is hidden", () => {
+    useZoneOverlayStore.getState().setSlotVisible(2, false);
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.vis.getVals()).toEqual([1, 1, 0, 1]);
+  });
+
+  it("sets w component of uZoneVisible to 0 when slot 3 is hidden", () => {
+    useZoneOverlayStore.getState().setSlotVisible(3, false);
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.vis.getVals()).toEqual([1, 1, 1, 0]);
+  });
+
+  it("reflects mixed visibility correctly — slots 0 and 2 hidden", () => {
+    useZoneOverlayStore.getState().setSlotVisible(0, false);
+    useZoneOverlayStore.getState().setSlotVisible(2, false);
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.vis.getVals()).toEqual([0, 1, 0, 1]);
+  });
+
+  it("reflects mixed visibility correctly — slots 1 and 3 hidden", () => {
+    useZoneOverlayStore.getState().setSlotVisible(1, false);
+    useZoneOverlayStore.getState().setSlotVisible(3, false);
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.vis.getVals()).toEqual([1, 0, 1, 0]);
+  });
+
+  it("sets uZoneVisible to (0,0,0,0) when all slots are hidden", () => {
+    for (let i = 0; i < 4; i++) {
+      useZoneOverlayStore.getState().setSlotVisible(i as 0 | 1 | 2 | 3, false);
+    }
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.vis.getVals()).toEqual([0, 0, 0, 0]);
+  });
+
+  it("re-showing a slot on a subsequent tick updates uZoneVisible back to 1", () => {
+    useZoneOverlayStore.getState().setSlotVisible(0, false);
+    render(<TerrainMesh grid={MOCK_GRID} />);
+    frameRef.cb?.(MOCK_FRAME_STATE, 0);
+    expect(mockMatHolder.current!.vis.getVals()[0]).toBe(0);
+
+    useZoneOverlayStore.getState().setSlotVisible(0, true);
+    frameRef.cb?.(MOCK_FRAME_STATE, 0);
+    expect(mockMatHolder.current!.vis.getVals()[0]).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// overlay disabled — tint/visibility uniforms must NOT be written
+// ---------------------------------------------------------------------------
+
+describe("TerrainMesh useFrame → tint and visibility uniforms skipped when overlay disabled", () => {
+  beforeEach(() => {
+    resetStores();
+    uiStateRef.zoneOverlayEnabled = false;
+  });
+
+  it("uZoneTint0 is not updated when zoneOverlayEnabled is false", () => {
+    useZoneOverlayStore.getState().setSlotColor(0, "#ff0000");
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.tint[0]!.getHex()).not.toBe("#ff0000");
+  });
+
+  it("uZoneVisible is not updated when zoneOverlayEnabled is false", () => {
+    useZoneOverlayStore.getState().setSlotVisible(0, false);
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.vis.getVals()).toEqual([0, 0, 0, 0]);
+  });
+
+  it("uZoneOverlay uniform is 0 when overlay is disabled", () => {
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.uniforms["uZoneOverlay"]!.value).toBe(0);
+  });
+
+  it("uZoneOverlay uniform is 1 when overlay is enabled", () => {
+    uiStateRef.zoneOverlayEnabled = true;
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.uniforms["uZoneOverlay"]!.value).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// uZoneTint* and uZoneVisible — freshwater palette
+// ---------------------------------------------------------------------------
+
+describe("TerrainMesh useFrame → uniforms reflect freshwater palette when active", () => {
+  beforeEach(() => {
+    resetStores();
+    uiStateRef.zoneOverlayEnabled = true;
+    act(() => {
+      useZoneOverlayStore.getState().setActiveWaterType("freshwater");
+    });
+  });
+
+  it("uses freshwater slot 0 colour for uZoneTint0 uniform", () => {
+    useZoneOverlayStore.getState().setSlotColor(0, "#00ff99");
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.tint[0]!.getHex()).toBe("#00ff99");
+  });
+
+  it("uses freshwater slot 2 colour for uZoneTint2 uniform", () => {
+    useZoneOverlayStore.getState().setSlotColor(2, "#336699");
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.tint[2]!.getHex()).toBe("#336699");
+  });
+
+  it("does not use saltwater colours when freshwater is active", () => {
+    act(() => {
+      useZoneOverlayStore.setState((s) => ({
+        saltwater: s.saltwater.map((sl, i) =>
+          i === 0 ? { ...sl, color: "#salt00" } : { ...sl }
+        ) as typeof s.saltwater,
+        slots: s.freshwater,
+      }));
+    });
+    useZoneOverlayStore.getState().setSlotColor(0, "#freshwater");
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.tint[0]!.getHex()).toBe("#freshwater");
+    expect(mockMatHolder.current!.tint[0]!.getHex()).not.toBe("#salt00");
+  });
+
+  it("uZoneVisible reflects freshwater slot visibility — slot 1 hidden", () => {
+    useZoneOverlayStore.getState().setSlotVisible(1, false);
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.vis.getVals()).toEqual([1, 0, 1, 1]);
+  });
+
+  it("uZoneVisible reflects freshwater slot visibility — all visible after switching back", () => {
+    useZoneOverlayStore.getState().setSlotVisible(0, false);
+    act(() => {
+      useZoneOverlayStore.getState().setActiveWaterType("saltwater");
+    });
+    renderTerrainAndTick();
+    expect(mockMatHolder.current!.vis.getVals()).toEqual([1, 1, 1, 1]);
   });
 });
