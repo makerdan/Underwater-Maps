@@ -56,7 +56,8 @@ export function lonLatToCanvas(
   const terrainH = t.pxPerDeg * latRange * t.scale;
   return [
     t.offsetX + ((lon - grid.minLon) / lonRange) * terrainW,
-    t.offsetY + ((lat - grid.minLat) / latRange) * terrainH,
+    // North-up: higher latitudes (North) map to smaller Y values (top of canvas).
+    t.offsetY + (1 - (lat - grid.minLat) / latRange) * terrainH,
   ];
 }
 
@@ -73,7 +74,8 @@ export function canvasToLonLat(
   const terrainH = t.pxPerDeg * latRange * t.scale;
   return {
     lon: grid.minLon + ((cx - t.offsetX) / terrainW) * lonRange,
-    lat: grid.minLat + ((cy - t.offsetY) / terrainH) * latRange,
+    // Inverse of the North-up Y formula in lonLatToCanvas.
+    lat: grid.minLat + (1 - (cy - t.offsetY) / terrainH) * latRange,
   };
 }
 
@@ -146,7 +148,9 @@ export function buildHeatmapBitmap(
 
   for (let row = 0; row < H; row++) {
     for (let col = 0; col < W; col++) {
-      const depth = depths[row * W + col] ?? minDepth;
+      // Flip Y so row 0 (top of canvas) maps to the northernmost data row,
+      // matching Minimap.tsx's North-up convention.
+      const depth = depths[(H - 1 - row) * W + col] ?? minDepth;
       const t = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
       // Convert THREE.Color (linear-sRGB when ColorManagement is enabled) to
       // display-space sRGB bytes for 2D canvas, matching the legend strip and
@@ -276,7 +280,9 @@ export function renderCameraArrow(
 ): void {
   const [cx, cy] = lonLatToCanvas(lon, lat, grid, t);
   const size = 11;
-  const rad = (headingDeg - 90) * (Math.PI / 180);
+  // North-up convention: matches Minimap.tsx's drawArrow formula.
+  // cameraStore heading 180° = North = top of canvas = rotate(0).
+  const rad = (180 - headingDeg) * (Math.PI / 180);
 
   ctx.save();
   ctx.translate(cx, cy);
