@@ -1,0 +1,147 @@
+/**
+ * /intertidal-spots/:id — Tidepool & beachcombing hotspot polygons.
+ *
+ * Returns a GeoJSON FeatureCollection of intertidal substrate polygons that
+ * have been scored for recreational tidepool exploration and/or beachcombing.
+ * Features are sourced from SE Alaska substrate bundles (ShoreZone +
+ * AOOS Prince of Wales Island intertidal) and scored by `intertidalScorer.ts`.
+ *
+ * Only SE Alaska sources are eligible for intertidal scoring. Datasets whose
+ * substrate slice contains no SE Alaska features (e.g. TX reservoirs) receive
+ * an empty FeatureCollection rather than nonsensical freshwater scores.
+ *
+ * Query params:
+ *   type     — "tidepool" | "beachcombing" | "both" (default: "both")
+ *   minScore — integer 0–100, inclusive filter (default: 0)
+ *
+ * Each returned feature carries two additional properties:
+ *   tidepoolScore      — 0–100 integer
+ *   beachcombingScore  — 0–100 integer
+ *   scoreSignals       — { substrate, bioband, debris, energy, humanUse, whySummary }
+ */
+
+import { Router } from "express";
+import { ALL_PRESET_DATASETS } from "../lib/terrain.js";
+import {
+  getSubstrateForDataset,
+  type ShoreZoneFeature,
+  type SubstrateSource,
+} from "../lib/shoreZoneData.js";
+import { scoreTidepool, scoreBeachcombing, buildScoreSignals } from "../lib/intertidalScorer.js";
+import type { IntertidalScoringProps } from "../lib/intertidalScorer.js";
+
+const router = Router();
+
+/** SE Alaska sources that are meaningful for intertidal scoring. */
+const SE_ALASKA_SOURCES = new Set<SubstrateSource>([
+  "alaska-shorezone",
+  "noaa-enc-coastal",
+  "aoos-intertidal-pow",
+]);
+
+function featureToScoringProps(f: ShoreZoneFeature): IntertidalScoringProps {
+  const p = f.properties;
+  return {
+    substrate:   p.substrate   ?? null,
+    szMaterial:  p.szMaterial  ?? null,
+    szForm:      p.szForm      ?? null,
+    itzSubclass: p.itzSubclass ?? null,
+    rockSzLo:    p.rockSzLo    ?? null,
+    rockSzMed:   p.rockSzMed   ?? null,
+    rockSzHi:    p.rockSzHi    ?? null,
+    znRelief:    p.znRelief    ?? null,
+    znBioAlg:    p.znBioAlg    ?? null,
+    znBioInv:    p.znBioInv    ?? null,
+    znDebris:    p.znDebris    ?? null,
+    roundness:   p.roundness   ?? null,
+    znEnergy:    p.znEnergy    ?? null,
+    znDynamic:   p.znDynamic   ?? null,
+    znUse:       p.znUse       ?? null,
+  };
+}
+
+/**
+ * GET /intertidal-spots/:id
+ *
+ * Responds 404 for unknown dataset ids. For SE Alaska datasets returns a
+ * scored FeatureCollection sorted by dominant score. Non-SE-Alaska datasets
+ * (freshwater Texas reservoirs, etc.) receive an empty FeatureCollection.
+ */
+router.get("/intertidal-spots/:id", (req, res) => {
+  const datasetId = req.params["id"]!;
+  const meta = ALL_PRESET_DATASETS.find((d) => d.id === datasetId);
+  if (!meta) {
+    res.status(404).json({ error: "not_found", details: `Dataset '${datasetId}' not found` });
+    return;
+  }
+
+  const typeParam = (req.query["type"] as string | undefined) ?? "both";
+  const minScoreParam = parseInt((req.query["minScore"] as string | undefined) ?? "0", 10);
+  const minScore = Number.isFinite(minScoreParam) ? Math.max(0, Math.min(100, minScoreParam)) : 0;
+
+  if (!["tidepool", "beachcombing", "both"].includes(typeParam)) {
+    res.status(400).json({
+      error: "bad_request",
+      details: "`type` must be one of: tidepool, beachcombing, both",
+    });
+    return;
+  }
+
+  const slice = getSubstrateForDataset(datasetId, meta.bbox);
+
+  // Only include SE Alaska intertidal features — exclude freshwater / non-intertidal sources.
+  const seAlaskaFeatures = slice.features.filter((f) => SE_ALASKA_SOURCES.has(f.properties.source));
+
+  const scored = seAlaskaFeatures.map((f) => {
+    const props = featureToScoringProps(f);
+    // Use pre-computed scores when available (applied at module load by applyScoresInPlace);
+    // fall back to on-demand scoring for features that arrived without pre-scoring.
+    const tidepoolScore = f.properties.tidepoolScore ?? scoreTidepool(props);
+    const beachcombingScore = f.properties.beachcombingScore ?? scoreBeachcombing(props);
+    return { f, tidepoolScore, beachcombingScore, props };
+  });
+
+  const filtered = scored.filter(({ tidepoolScore, beachcombingScore }) => {
+    if (typeParam === "tidepool") return tidepoolScore >= minScore;
+    if (typeParam === "beachcombing") return beachcombingScore >= minScore;
+    return tidepoolScore >= minScore || beachcombingScore >= minScore;
+  });
+
+  const sortKey = typeParam === "tidepool"
+    ? (s: typeof filtered[number]) => s.tidepoolScore
+    : typeParam === "beachcombing"
+    ? (s: typeof filtered[number]) => s.beachcombingScore
+    : (s: typeof filtered[number]) => Math.max(s.tidepoolScore, s.beachcombingScore);
+
+  filtered.sort((a, b) => sortKey(b) - sortKey(a));
+
+  const features = filtered.map(({ f, tidepoolScore, beachcombingScore, props }) => ({
+    type: "Feature" as const,
+    geometry: f.geometry,
+    properties: {
+      ...f.properties,
+      tidepoolScore,
+      beachcombingScore,
+      scoreSignals: {
+        tidepool: buildScoreSignals(props, "tidepool"),
+        beachcombing: buildScoreSignals(props, "beachcombing"),
+      },
+    },
+  }));
+
+  res.json({
+    type: "FeatureCollection",
+    features,
+    metadata: {
+      datasetId,
+      type: typeParam,
+      minScore,
+      featureCount: features.length,
+      sources: slice.sources,
+      sourceCredit:
+        "Alaska ShoreZone (NOAA AKR / ADF&G) and AOOS Alaska Coastal Habitats — both public domain.",
+    },
+  });
+});
+
+export default router;

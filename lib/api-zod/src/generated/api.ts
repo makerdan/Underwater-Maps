@@ -1463,6 +1463,89 @@ export const GetPoeModelsResponse = zod.object({
 
 
 /**
+ * Returns a GeoJSON FeatureCollection of intertidal substrate polygons that have
+been rated for recreational tidepool exploration and beachcombing using the
+BathyScan Intertidal Scorer algorithm.
+
+Polygons are sourced from the Alaska ShoreZone program and (for Prince of Wales
+Island datasets) the AOOS Alaska Coastal Habitats intertidal layer.  Each feature
+carries two computed scores:
+
+  - `tidepoolScore`     — 0-100, weighted by bedrock/rubble substrate, zone
+                          relief, and invertebrate/algal bioband density.
+  - `beachcombingScore` — 0-100, weighted by sand/cobble substrate, stone
+                          roundness, debris load, and wave energy.
+
+An optional `scoreSignals` object provides the top contributing attributes plus
+a natural-language "Why this spot?" summary.
+
+The response is sorted descending by the dominant score for the requested `type`.
+Datasets outside SE Alaska return an empty FeatureCollection (no ShoreZone coverage).
+
+ * @summary Tidepool & beachcombing hotspot polygons scored from ShoreZone / AOOS data
+ */
+export const GetIntertidalSpotsParams = zod.object({
+  "id": zod.coerce.string().describe('Dataset ID (must match a known preset or uploaded dataset)')
+})
+
+export const getIntertidalSpotsQueryTypeDefault = `both`;
+export const getIntertidalSpotsQueryMinScoreDefault = 0;
+export const getIntertidalSpotsQueryMinScoreMin = 0;
+export const getIntertidalSpotsQueryMinScoreMax = 100;
+
+
+
+export const GetIntertidalSpotsQueryParams = zod.object({
+  "type": zod.enum(['tidepool', 'beachcombing', 'both']).default(getIntertidalSpotsQueryTypeDefault).describe('Filter to tidepool spots, beachcombing spots, or both'),
+  "minScore": zod.coerce.number().min(getIntertidalSpotsQueryMinScoreMin).max(getIntertidalSpotsQueryMinScoreMax).default(getIntertidalSpotsQueryMinScoreDefault).describe('Minimum score (inclusive) for the returned activity type')
+})
+
+export const getIntertidalSpotsResponseFeaturesItemPropertiesTidepoolScoreMin = 0;
+export const getIntertidalSpotsResponseFeaturesItemPropertiesTidepoolScoreMax = 100;
+
+export const getIntertidalSpotsResponseFeaturesItemPropertiesBeachcombingScoreMin = 0;
+export const getIntertidalSpotsResponseFeaturesItemPropertiesBeachcombingScoreMax = 100;
+
+
+
+export const GetIntertidalSpotsResponse = zod.object({
+  "type": zod.enum(['FeatureCollection']),
+  "features": zod.array(zod.object({
+  "type": zod.enum(['Feature']),
+  "properties": zod.object({
+  "unitId": zod.string().describe('Stable per-feature id (ShoreZone PHY_IDENT or AOOS OBJECTID)'),
+  "substrate": zod.enum(['bedrock', 'gravel', 'sand', 'mud']),
+  "shoreZoneClass": zod.string().describe('Human-readable ShoreZone class or AOOS habitat type'),
+  "tidepoolScore": zod.number().min(getIntertidalSpotsResponseFeaturesItemPropertiesTidepoolScoreMin).max(getIntertidalSpotsResponseFeaturesItemPropertiesTidepoolScoreMax).describe('Tidepool exploration hotspot score 0–100'),
+  "beachcombingScore": zod.number().min(getIntertidalSpotsResponseFeaturesItemPropertiesBeachcombingScoreMin).max(getIntertidalSpotsResponseFeaturesItemPropertiesBeachcombingScoreMax).describe('Beachcombing hotspot score 0–100'),
+  "szMaterial": zod.string().nullish(),
+  "szForm": zod.string().nullish(),
+  "scoreSignals": zod.object({
+  "tidepool": zod.object({
+  "substrate": zod.string().optional(),
+  "bioband": zod.string().nullish(),
+  "debris": zod.string().nullish(),
+  "energy": zod.string().nullish(),
+  "humanUse": zod.string().nullish(),
+  "whySummary": zod.string().optional()
+}).optional(),
+  "beachcombing": zod.object({
+  "substrate": zod.string().optional(),
+  "bioband": zod.string().nullish(),
+  "debris": zod.string().nullish(),
+  "energy": zod.string().nullish(),
+  "humanUse": zod.string().nullish(),
+  "whySummary": zod.string().optional()
+}).optional()
+}).optional().describe('Human-readable breakdown of the top contributing score factors')
+}).describe('Per-feature properties for a scored intertidal hotspot polygon.\nExtends SubstrateProperties with computed tidepool\/beachcombing scores\nand a human-readable score-signals breakdown.\n'),
+  "geometry": zod.record(zod.string(), zod.unknown())
+})),
+  "metadata": zod.record(zod.string(), zod.unknown()).optional()
+})
+
+
+/**
  * Returns a GeoJSON FeatureCollection of substrate polygons sourced from the
 Alaska ShoreZone Coastal Habitat Mapping Program (NOAA AKR / ADF&G — public
 domain, https://alaskafisheries.noaa.gov/shorezone/). Each polygon is a

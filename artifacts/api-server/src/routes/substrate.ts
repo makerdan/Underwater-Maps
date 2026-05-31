@@ -45,6 +45,7 @@ import {
   ENC_SE_ALASKA_SUBSTRATE,
   ENC_CONUS_SUBSTRATE,
   TX_LAKE_SUBSTRATE,
+  AOOS_INTERTIDAL_POW,
   getSubstrateForDataset,
   type SubstrateSource,
   type ShoreZoneFeatureCollection,
@@ -93,6 +94,16 @@ const SOURCE_PROVENANCE = {
     creditUrl:     TX_LAKE_SUBSTRATE.metadata.creditUrl,
     fetchedAt:     TX_LAKE_SUBSTRATE.metadata.fetchedAt,
     credit:        "USGS National Hydrography Dataset + Texas Parks & Wildlife / TWDB lake-bottom surveys (public domain)",
+  },
+  "aoos-intertidal-pow": {
+    sourceName:    AOOS_INTERTIDAL_POW.metadata.sourceName,
+    sourceLayer:   AOOS_INTERTIDAL_POW.metadata.sourceLayer,
+    sourceService: AOOS_INTERTIDAL_POW.metadata.sourceService,
+    sourceRegion:  AOOS_INTERTIDAL_POW.metadata.region,
+    sourceBbox:    AOOS_INTERTIDAL_POW.metadata.bbox,
+    creditUrl:     AOOS_INTERTIDAL_POW.metadata.creditUrl,
+    fetchedAt:     AOOS_INTERTIDAL_POW.metadata.fetchedAt,
+    credit:        "AOOS Alaska Coastal Habitats — Prince of Wales Island intertidal (public domain)",
   },
 } as const satisfies Record<SubstrateSource, unknown>;
 
@@ -160,10 +171,11 @@ router.get("/substrate/:id", (req, res) => {
     // contains the nearest polygon, rather than always pointing at the
     // ShoreZone bundle.
     const NEAREST_BUNDLE_BY_SOURCE: Record<SubstrateSource, ShoreZoneFeatureCollection> = {
-      "alaska-shorezone":   ALASKA_SHOREZONE,
-      "noaa-enc-coastal":   ENC_SE_ALASKA_SUBSTRATE,
-      "noaa-enc-conus":     ENC_CONUS_SUBSTRATE,
-      "tpwd-tx-reservoirs": TX_LAKE_SUBSTRATE,
+      "alaska-shorezone":    ALASKA_SHOREZONE,
+      "noaa-enc-coastal":    ENC_SE_ALASKA_SUBSTRATE,
+      "noaa-enc-conus":      ENC_CONUS_SUBSTRATE,
+      "tpwd-tx-reservoirs":  TX_LAKE_SUBSTRATE,
+      "aoos-intertidal-pow": AOOS_INTERTIDAL_POW,
     };
     const nearestBundle =
       (slice.nearestSource && NEAREST_BUNDLE_BY_SOURCE[slice.nearestSource]) ||

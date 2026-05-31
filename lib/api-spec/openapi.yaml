@@ -1271,6 +1271,74 @@ paths:
               schema:
                 $ref: "#/components/schemas/PoeError"
 
+  /intertidal-spots/{id}:
+    get:
+      operationId: getIntertidalSpots
+      tags: [datasets]
+      summary: Tidepool & beachcombing hotspot polygons scored from ShoreZone / AOOS data
+      description: |
+        Returns a GeoJSON FeatureCollection of intertidal substrate polygons that have
+        been rated for recreational tidepool exploration and beachcombing using the
+        BathyScan Intertidal Scorer algorithm.
+
+        Polygons are sourced from the Alaska ShoreZone program and (for Prince of Wales
+        Island datasets) the AOOS Alaska Coastal Habitats intertidal layer.  Each feature
+        carries two computed scores:
+
+          - `tidepoolScore`     — 0-100, weighted by bedrock/rubble substrate, zone
+                                  relief, and invertebrate/algal bioband density.
+          - `beachcombingScore` — 0-100, weighted by sand/cobble substrate, stone
+                                  roundness, debris load, and wave energy.
+
+        An optional `scoreSignals` object provides the top contributing attributes plus
+        a natural-language "Why this spot?" summary.
+
+        The response is sorted descending by the dominant score for the requested `type`.
+        Datasets outside SE Alaska return an empty FeatureCollection (no ShoreZone coverage).
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Dataset ID (must match a known preset or uploaded dataset)
+        - in: query
+          name: type
+          required: false
+          schema:
+            type: string
+            enum: [tidepool, beachcombing, both]
+            default: both
+          description: Filter to tidepool spots, beachcombing spots, or both
+        - in: query
+          name: minScore
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100
+            default: 0
+          description: Minimum score (inclusive) for the returned activity type
+      responses:
+        "200":
+          description: Scored intertidal hotspot FeatureCollection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntertidalSpotFeatureCollection"
+        "400":
+          description: Invalid query parameter value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Dataset not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /substrate/{id}:
     get:
       operationId: getSubstrate
@@ -2820,6 +2888,100 @@ components:
         - endedAt
         - pointCount
         - createdAt
+
+    IntertidalSpotProperties:
+      type: object
+      description: |
+        Per-feature properties for a scored intertidal hotspot polygon.
+        Extends SubstrateProperties with computed tidepool/beachcombing scores
+        and a human-readable score-signals breakdown.
+      properties:
+        unitId:
+          type: string
+          description: Stable per-feature id (ShoreZone PHY_IDENT or AOOS OBJECTID)
+        substrate:
+          type: string
+          enum: [bedrock, gravel, sand, mud]
+        shoreZoneClass:
+          type: string
+          description: Human-readable ShoreZone class or AOOS habitat type
+        tidepoolScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Tidepool exploration hotspot score 0–100
+        beachcombingScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Beachcombing hotspot score 0–100
+        szMaterial:
+          type: string
+          nullable: true
+        szForm:
+          type: string
+          nullable: true
+        scoreSignals:
+          type: object
+          description: Human-readable breakdown of the top contributing score factors
+          properties:
+            tidepool:
+              type: object
+              properties:
+                substrate: { type: string }
+                bioband: { type: string, nullable: true }
+                debris: { type: string, nullable: true }
+                energy: { type: string, nullable: true }
+                humanUse: { type: string, nullable: true }
+                whySummary: { type: string }
+            beachcombing:
+              type: object
+              properties:
+                substrate: { type: string }
+                bioband: { type: string, nullable: true }
+                debris: { type: string, nullable: true }
+                energy: { type: string, nullable: true }
+                humanUse: { type: string, nullable: true }
+                whySummary: { type: string }
+      required:
+        - unitId
+        - substrate
+        - shoreZoneClass
+        - tidepoolScore
+        - beachcombingScore
+
+    IntertidalSpotFeature:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [Feature]
+        properties:
+          $ref: "#/components/schemas/IntertidalSpotProperties"
+        geometry:
+          type: object
+          additionalProperties: true
+      required:
+        - type
+        - properties
+        - geometry
+
+    IntertidalSpotFeatureCollection:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [FeatureCollection]
+        features:
+          type: array
+          items:
+            $ref: "#/components/schemas/IntertidalSpotFeature"
+        metadata:
+          type: object
+          additionalProperties: true
+      required:
+        - type
+        - features
 
     SubstrateProperties:
       type: object

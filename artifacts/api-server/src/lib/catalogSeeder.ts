@@ -463,9 +463,19 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     resolutionMMax: null,
     coverageBbox: { minLon: -138, minLat: 54, maxLon: -130, maxLat: 60 },
     endpointUrl: "https://alaskafisheries.noaa.gov/shorezone/",
-    accessNotes: "General rocky intertidal habitat designation derived from ShoreZone aerial surveys and CMECS substrate mapping. Not a real-time biological survey; tidal pool communities vary by season and tidal exposure.",
-    description: "Rocky intertidal areas supporting characteristic tidal pool communities along SE Alaska's island and mainland shorelines. Habitat features include barnacle, mussel, chiton, sea star, nudibranch, hermit crab, anemone, and algae assemblages stratified by tidal zone. Mapped from NOAA ShoreZone aerial photography and CMECS substrate classification.",
-    keywords: "tidal pool,tide pool,rocky intertidal,intertidal,ShoreZone,CMECS,barnacle,mussel,sea star,starfish,chiton,anemone,urchin,Alaska,SE Alaska,NOAA,shoreline,marine invertebrate",
+    accessNotes:
+      "Rocky intertidal habitat scored for tidepool exploration quality using the BathyScan Intertidal Scorer. " +
+      "Scores 0–100 based on substrate (bedrock/rubble), zone relief, and bioband density. " +
+      "Not a real-time biological survey; tidal pool communities vary by season and tidal exposure.",
+    description:
+      "Rocky intertidal areas supporting characteristic tidal pool communities along SE Alaska's island and " +
+      "mainland shorelines. Each ShoreZone polygon is scored 0–100 for tidepool exploration quality using the " +
+      "BathyScan Intertidal Scorer — bedrock/rubble substrates with high zone relief and dense invertebrate biobands " +
+      "score highest. Habitat features include barnacle, mussel, chiton, sea star, nudibranch, hermit crab, anemone, " +
+      "and algae assemblages stratified by tidal zone. Mapped from NOAA ShoreZone aerial photography and CMECS substrate classification.",
+    keywords:
+      "tidal pool,tide pool,rocky intertidal,intertidal,ShoreZone,CMECS,barnacle,mussel,sea star,starfish,chiton," +
+      "anemone,urchin,Alaska,SE Alaska,NOAA,shoreline,marine invertebrate,intertidal scorer,hotspot",
     lastUpdated: "2022-09-01",
     waterType: "saltwater",
   },
@@ -478,10 +488,43 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     resolutionMMax: null,
     coverageBbox: { minLon: -138, minLat: 54, maxLon: -130, maxLat: 60 },
     endpointUrl: "https://alaskafisheries.noaa.gov/shorezone/",
-    accessNotes: "General habitat designation for accessible shoreline areas noted for invertebrate and marine debris observation. These represent general shoreline character — accessibility varies by tidal height, vessel access, and private land status. Always verify land ownership before landing.",
-    description: "Accessible shorelines along SE Alaska's island and mainland coast noted for marine invertebrate observation, beachcombing, and intertidal exploration. Shoreline character includes mixed gravel/cobble beaches, kelp wrack zones, log-strewn tidelines, and sandy pockets. Derived from ShoreZone aerial survey substrate mapping and Alaska DEC coastal survey data.",
-    keywords: "beachcombing,shoreline,beach,accessible,intertidal,kelp,wrack,cobble,gravel,marine debris,invertebrate,exploration,Alaska,SE Alaska,NOAA,ShoreZone,coast,tidal",
+    accessNotes:
+      "Shorelines scored 0–100 for beachcombing quality using the BathyScan Intertidal Scorer. " +
+      "Scores weight sand/cobble substrate, rounded stone, debris load, and wave energy. " +
+      "Accessibility varies by tidal height, vessel access, and private land status. Always verify land ownership before landing.",
+    description:
+      "Accessible shorelines along SE Alaska's island and mainland coast scored for beachcombing quality. " +
+      "Each ShoreZone polygon receives a 0–100 beachcombing score — sandy/cobble beaches with active debris wrack " +
+      "lines and high wave energy score highest. Shoreline character includes mixed gravel/cobble beaches, kelp wrack " +
+      "zones, log-strewn tidelines, and sandy pockets. Derived from ShoreZone aerial survey substrate mapping.",
+    keywords:
+      "beachcombing,shoreline,beach,accessible,intertidal,kelp,wrack,cobble,gravel,marine debris,invertebrate," +
+      "exploration,Alaska,SE Alaska,NOAA,ShoreZone,coast,tidal,intertidal scorer,hotspot",
     lastUpdated: "2022-09-01",
+    waterType: "saltwater",
+  },
+  {
+    id: "aoos-intertidal-pow",
+    name: "AOOS Intertidal Habitats — Prince of Wales Island",
+    sourceAgency: "Alaska Ocean Observing System (AOOS)",
+    dataType: "habitat",
+    resolutionMMin: null,
+    resolutionMMax: null,
+    coverageBbox: { minLon: -134, minLat: 54.7, maxLon: -132, maxLat: 56.3 },
+    endpointUrl: "https://portal.aoos.org/",
+    accessNotes:
+      "Intertidal habitat polygons from the AOOS Alaska Coastal Habitats service for Prince of Wales Island. " +
+      "Scored using the BathyScan Intertidal Scorer for tidepool and beachcombing quality. " +
+      "Bundle is refreshed periodically from the AOOS ArcGIS REST endpoint.",
+    description:
+      "Alaska Ocean Observing System (AOOS) intertidal habitat polygons for Prince of Wales Island (SE Alaska). " +
+      "Covers the Clarence Strait / Craig / Hydaburg shoreline area. Each polygon is scored 0–100 for " +
+      "tidepool and beachcombing quality. Data sourced from the AOOS AKCoastalHabitats FeatureServer; " +
+      "refreshed offline via the BathyScan build-aoos-intertidal-pow script.",
+    keywords:
+      "AOOS,intertidal,habitat,Prince of Wales Island,POW,SE Alaska,Craig,Hydaburg,Clarence Strait," +
+      "tidepool,beachcombing,coastal,shoreline,marine,intertidal scorer,hotspot",
+    lastUpdated: "2026-05-31",
     waterType: "saltwater",
   },
 ];

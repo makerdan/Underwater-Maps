@@ -93,6 +93,5 @@ export function useLandTerrain(bbox: Bbox | null, gridSize = 128): void {
       controller.abort();
     };
   // retryCount is intentionally included so a retry re-runs the fetch.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bbox, gridSize, retryCount]);
 }

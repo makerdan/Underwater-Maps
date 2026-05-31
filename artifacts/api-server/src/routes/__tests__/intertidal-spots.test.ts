@@ -1,0 +1,155 @@
+import { describe, it, expect, vi, beforeAll } from "vitest";
+import request from "supertest";
+import express from "express";
+import intertidalSpotsRouter from "../intertidal-spots.js";
+
+// ── Mocks ────────────────────────────────────────────────────────────────────
+
+vi.mock("../../lib/terrain.js", () => ({
+  ALL_PRESET_DATASETS: [
+    {
+      id: "thorne-bay",
+      name: "Thorne Bay, SE Alaska",
+      bbox: { minLon: -133.1, minLat: 55.6, maxLon: -132.3, maxLat: 55.9 },
+      waterType: "saltwater",
+    },
+    {
+      id: "lake-texoma",
+      name: "Lake Texoma",
+      bbox: { minLon: -97.1, minLat: 33.7, maxLon: -96.5, maxLat: 34.2 },
+      waterType: "freshwater",
+    },
+  ],
+}));
+
+const MOCK_FEATURES = [
+  {
+    type: "Feature",
+    geometry: { type: "Polygon", coordinates: [[[-131.6, 55.3], [-131.61, 55.3], [-131.61, 55.31], [-131.6, 55.3]]] },
+    properties: {
+      unitId: "SZ-001",
+      substrate: "bedrock",
+      shoreZoneClass: "Rock Platform",
+      cmecsCode: "2.1.1",
+      color: "#6b6b6b",
+      source: "alaska-shorezone",
+      szMaterial: "Rock",
+      szForm: "Platform",
+    },
+  },
+  {
+    type: "Feature",
+    geometry: { type: "Polygon", coordinates: [[[-131.7, 55.35], [-131.71, 55.35], [-131.71, 55.36], [-131.7, 55.35]]] },
+    properties: {
+      unitId: "SZ-002",
+      substrate: "sand",
+      shoreZoneClass: "Clastic Beach",
+      cmecsCode: "2.2.2",
+      color: "#e2d5a0",
+      source: "alaska-shorezone",
+      szMaterial: "Clastic",
+      szForm: "Beach",
+    },
+  },
+];
+
+vi.mock("../../lib/shoreZoneData.js", () => ({
+  getSubstrateForDataset: (_id: string, _bbox: unknown) => ({
+    features: MOCK_FEATURES,
+    sources: ["alaska-shorezone"],
+    hasCoverage: true,
+    region: "Ketchikan, SE Alaska",
+    sourceCredit: "https://alaskafisheries.noaa.gov/shorezone/",
+    sourceName: "NOAA Alaska ShoreZone",
+    creditUrl: "https://alaskafisheries.noaa.gov/shorezone/",
+  }),
+  AOOS_INTERTIDAL_POW: { features: [], metadata: { sourceName: "AOOS stub", creditUrl: "" } },
+}));
+
+// ── Setup ─────────────────────────────────────────────────────────────────────
+
+let app: express.Application;
+
+beforeAll(() => {
+  app = express();
+  app.use(express.json());
+  app.use(intertidalSpotsRouter);
+});
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+describe("GET /intertidal-spots/:id", () => {
+  it("returns 404 for unknown dataset id", async () => {
+    const res = await request(app).get("/intertidal-spots/does-not-exist");
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe("not_found");
+  });
+
+  it("returns 200 with a FeatureCollection for a known SE Alaska dataset", async () => {
+    const res = await request(app).get("/intertidal-spots/thorne-bay");
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe("FeatureCollection");
+    expect(Array.isArray(res.body.features)).toBe(true);
+  });
+
+  it("all returned features have tidepoolScore and beachcombingScore", async () => {
+    const res = await request(app).get("/intertidal-spots/thorne-bay");
+    expect(res.status).toBe(200);
+    for (const f of res.body.features) {
+      expect(typeof f.properties.tidepoolScore).toBe("number");
+      expect(typeof f.properties.beachcombingScore).toBe("number");
+      expect(f.properties.tidepoolScore).toBeGreaterThanOrEqual(0);
+      expect(f.properties.tidepoolScore).toBeLessThanOrEqual(100);
+      expect(f.properties.beachcombingScore).toBeGreaterThanOrEqual(0);
+      expect(f.properties.beachcombingScore).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it("type=tidepool only returns features with tidepoolScore >= minScore", async () => {
+    const res = await request(app).get("/intertidal-spots/thorne-bay?type=tidepool&minScore=30");
+    expect(res.status).toBe(200);
+    for (const f of res.body.features) {
+      expect(f.properties.tidepoolScore).toBeGreaterThanOrEqual(30);
+    }
+  });
+
+  it("type=beachcombing only returns features with beachcombingScore >= minScore", async () => {
+    const res = await request(app).get("/intertidal-spots/thorne-bay?type=beachcombing&minScore=10");
+    expect(res.status).toBe(200);
+    for (const f of res.body.features) {
+      expect(f.properties.beachcombingScore).toBeGreaterThanOrEqual(10);
+    }
+  });
+
+  it("minScore=100 returns only perfect-score features (likely none)", async () => {
+    const res = await request(app).get("/intertidal-spots/thorne-bay?minScore=100");
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe("FeatureCollection");
+    for (const f of res.body.features) {
+      const maxScore = Math.max(f.properties.tidepoolScore, f.properties.beachcombingScore);
+      expect(maxScore).toBe(100);
+    }
+  });
+
+  it("features are sorted descending by dominant score for type=tidepool", async () => {
+    const res = await request(app).get("/intertidal-spots/thorne-bay?type=tidepool");
+    expect(res.status).toBe(200);
+    const scores = res.body.features.map((f: { properties: { tidepoolScore: number } }) => f.properties.tidepoolScore);
+    for (let i = 1; i < scores.length; i++) {
+      expect(scores[i - 1]).toBeGreaterThanOrEqual(scores[i]);
+    }
+  });
+
+  it("returns 400 for invalid type param", async () => {
+    const res = await request(app).get("/intertidal-spots/thorne-bay?type=diving");
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("bad_request");
+  });
+
+  it("metadata includes datasetId and featureCount", async () => {
+    const res = await request(app).get("/intertidal-spots/thorne-bay");
+    expect(res.status).toBe(200);
+    expect(res.body.metadata.datasetId).toBe("thorne-bay");
+    expect(typeof res.body.metadata.featureCount).toBe("number");
+  });
+});

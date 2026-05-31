@@ -844,6 +844,102 @@ export interface GpsTrail {
   createdAt: string;
 }
 
+export type IntertidalSpotPropertiesSubstrate = typeof IntertidalSpotPropertiesSubstrate[keyof typeof IntertidalSpotPropertiesSubstrate];
+
+
+export const IntertidalSpotPropertiesSubstrate = {
+  bedrock: 'bedrock',
+  gravel: 'gravel',
+  sand: 'sand',
+  mud: 'mud',
+} as const;
+
+export type IntertidalSpotPropertiesScoreSignalsTidepool = {
+  substrate?: string;
+  bioband?: string | null;
+  debris?: string | null;
+  energy?: string | null;
+  humanUse?: string | null;
+  whySummary?: string;
+};
+
+export type IntertidalSpotPropertiesScoreSignalsBeachcombing = {
+  substrate?: string;
+  bioband?: string | null;
+  debris?: string | null;
+  energy?: string | null;
+  humanUse?: string | null;
+  whySummary?: string;
+};
+
+/**
+ * Human-readable breakdown of the top contributing score factors
+ */
+export type IntertidalSpotPropertiesScoreSignals = {
+  tidepool?: IntertidalSpotPropertiesScoreSignalsTidepool;
+  beachcombing?: IntertidalSpotPropertiesScoreSignalsBeachcombing;
+};
+
+/**
+ * Per-feature properties for a scored intertidal hotspot polygon.
+Extends SubstrateProperties with computed tidepool/beachcombing scores
+and a human-readable score-signals breakdown.
+
+ */
+export interface IntertidalSpotProperties {
+  /** Stable per-feature id (ShoreZone PHY_IDENT or AOOS OBJECTID) */
+  unitId: string;
+  substrate: IntertidalSpotPropertiesSubstrate;
+  /** Human-readable ShoreZone class or AOOS habitat type */
+  shoreZoneClass: string;
+  /**
+     * Tidepool exploration hotspot score 0–100
+     * @minimum 0
+     * @maximum 100
+     */
+  tidepoolScore: number;
+  /**
+     * Beachcombing hotspot score 0–100
+     * @minimum 0
+     * @maximum 100
+     */
+  beachcombingScore: number;
+  szMaterial?: string | null;
+  szForm?: string | null;
+  /** Human-readable breakdown of the top contributing score factors */
+  scoreSignals?: IntertidalSpotPropertiesScoreSignals;
+}
+
+export type IntertidalSpotFeatureType = typeof IntertidalSpotFeatureType[keyof typeof IntertidalSpotFeatureType];
+
+
+export const IntertidalSpotFeatureType = {
+  Feature: 'Feature',
+} as const;
+
+export type IntertidalSpotFeatureGeometry = { [key: string]: unknown };
+
+export interface IntertidalSpotFeature {
+  type: IntertidalSpotFeatureType;
+  properties: IntertidalSpotProperties;
+  geometry: IntertidalSpotFeatureGeometry;
+}
+
+export type IntertidalSpotFeatureCollectionType = typeof IntertidalSpotFeatureCollectionType[keyof typeof IntertidalSpotFeatureCollectionType];
+
+
+export const IntertidalSpotFeatureCollectionType = {
+  FeatureCollection: 'FeatureCollection',
+} as const;
+
+export type IntertidalSpotFeatureCollectionMetadata = { [key: string]: unknown };
+
+export interface IntertidalSpotFeatureCollection {
+  type: IntertidalSpotFeatureCollectionType;
+  features: IntertidalSpotFeature[];
+  metadata?: IntertidalSpotFeatureCollectionMetadata;
+}
+
 /**
  * CMECS broad substrate class
  */
@@ -1526,6 +1622,28 @@ page?: number;
  */
 pageSize?: number;
 };
+
+export type GetIntertidalSpotsParams = {
+/**
+ * Filter to tidepool spots, beachcombing spots, or both
+ */
+type?: GetIntertidalSpotsType;
+/**
+ * Minimum score (inclusive) for the returned activity type
+ * @minimum 0
+ * @maximum 100
+ */
+minScore?: number;
+};
+
+export type GetIntertidalSpotsType = typeof GetIntertidalSpotsType[keyof typeof GetIntertidalSpotsType];
+
+
+export const GetIntertidalSpotsType = {
+  tidepool: 'tidepool',
+  beachcombing: 'beachcombing',
+  both: 'both',
+} as const;
 
 export type GetDatasetsCatalogParams = {
 dataType?: GetDatasetsCatalogDataType;

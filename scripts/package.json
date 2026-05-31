@@ -21,6 +21,8 @@
     "scheduled-refresh-usseabed-substrate": "tsx ./src/scheduled-refresh-usseabed-substrate.ts",
     "scheduled-refresh-tx-lake-substrate": "tsx ./src/scheduled-refresh-tx-lake-substrate.ts",
     "scheduled-refresh-tx-freshwater-efh": "tsx ./src/scheduled-refresh-tx-freshwater-efh.ts",
+    "build-aoos-intertidal-pow": "tsx ./src/build-aoos-intertidal-pow.ts",
+    "scheduled-refresh-aoos-intertidal-pow": "tsx ./src/scheduled-refresh-aoos-intertidal-pow.ts",
     "test": "node --import tsx --test ./src/lib/scheduled-refresh.test.ts",
     "test:unit": "node --import tsx --test ./src/lib/scheduled-refresh.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"

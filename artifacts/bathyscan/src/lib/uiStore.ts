@@ -23,6 +23,36 @@ export interface DropInTarget {
   headingDeg?: number;
 }
 
+export interface SelectedHotspot {
+  unitId: string;
+  substrate: string;
+  shoreZoneClass: string;
+  tidepoolScore: number;
+  beachcombingScore: number;
+  szMaterial: string | null;
+  szForm: string | null;
+  signals: {
+    tidepool: {
+      substrate: string;
+      bioband: string | null;
+      debris: string | null;
+      energy: string | null;
+      humanUse: string | null;
+      whySummary: string;
+    };
+    beachcombing: {
+      substrate: string;
+      bioband: string | null;
+      debris: string | null;
+      energy: string | null;
+      humanUse: string | null;
+      whySummary: string;
+    };
+  };
+  sourceName: string;
+  creditUrl: string;
+}
+
 export interface SelectedSubstrate {
   unitId: string;
   substrate: string;
@@ -89,6 +119,12 @@ interface UiStore {
   hiddenSubstrateClasses: Set<string>;
   toggleSubstrateClass: (substrate: string) => void;
   clearHiddenSubstrateClasses: () => void;
+  /** Show intertidal hotspot polygons (tidepool + beachcombing scores) in the 3D scene. */
+  intertidalHotspotsEnabled: boolean;
+  setIntertidalHotspotsEnabled: (enabled: boolean) => void;
+  /** Currently selected intertidal hotspot polygon. null = card closed. */
+  selectedHotspot: SelectedHotspot | null;
+  setSelectedHotspot: (h: SelectedHotspot | null) => void;
   /** Show EFH zone polygon outlines in the 3D scene. */
   efhOverlayEnabled: boolean;
   setEfhOverlayEnabled: (enabled: boolean) => void;
@@ -241,6 +277,13 @@ export const useUiStore = create<UiStore>((set) => ({
       : { hiddenSubstrateClasses: next };
   }),
   clearHiddenSubstrateClasses: () => set({ hiddenSubstrateClasses: new Set<string>() }),
+  intertidalHotspotsEnabled: false,
+  setIntertidalHotspotsEnabled: (enabled) =>
+    set(enabled
+      ? { intertidalHotspotsEnabled: true }
+      : { intertidalHotspotsEnabled: false, selectedHotspot: null }),
+  selectedHotspot: null,
+  setSelectedHotspot: (h) => set({ selectedHotspot: h }),
   efhOverlayEnabled: false,
   setEfhOverlayEnabled: (enabled) =>
     set(enabled

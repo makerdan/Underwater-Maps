@@ -35,6 +35,7 @@ import { MarkerDetailCard } from "@/components/MarkerDetailCard";
 import { OverviewMap } from "@/components/OverviewMap";
 import { EfhDetailPanel } from "@/components/EfhDetailPanel";
 import { SubstrateDetailPanel } from "@/components/SubstrateDetailPanel";
+import { IntertidalHotspotCard } from "@/components/IntertidalHotspotCard";
 import { ZoneOverlay } from "@/components/ZoneOverlay";
 import { FindDataPanel } from "@/components/FindDataPanel";
 import { HabitatPanel } from "@/components/HabitatPanel";
@@ -1079,6 +1080,7 @@ function Main() {
             shows the same card. Reads from uiStore.selectedEfh. */}
         <EfhDetailPanel />
         <SubstrateDetailPanel />
+        <IntertidalHotspotCard />
 
         {/* Find Data slide-in panel — z-50, right side */}
         {findDataPanelOpen && (

@@ -37,6 +37,7 @@ import type {
   GetDatasetsIdTerrainParams,
   GetDatasetsParams,
   GetEfhParams,
+  GetIntertidalSpotsParams,
   GetMarkersParams,
   GetRawsStationsParams,
   GetRawsWeatherParams,
@@ -49,6 +50,7 @@ import type {
   GpsTrail,
   GpsTrailInput,
   HealthStatus,
+  IntertidalSpotFeatureCollection,
   Marker,
   MarkerInput,
   MarkerPatch,
@@ -3239,6 +3241,114 @@ export function useGetPoeModels<TData = Awaited<ReturnType<typeof getPoeModels>>
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetPoeModelsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetIntertidalSpotsUrl = (id: string,
+    params?: GetIntertidalSpotsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/intertidal-spots/${id}?${stringifiedParams}` : `/api/intertidal-spots/${id}`
+}
+
+/**
+ * Returns a GeoJSON FeatureCollection of intertidal substrate polygons that have
+been rated for recreational tidepool exploration and beachcombing using the
+BathyScan Intertidal Scorer algorithm.
+
+Polygons are sourced from the Alaska ShoreZone program and (for Prince of Wales
+Island datasets) the AOOS Alaska Coastal Habitats intertidal layer.  Each feature
+carries two computed scores:
+
+  - `tidepoolScore`     — 0-100, weighted by bedrock/rubble substrate, zone
+                          relief, and invertebrate/algal bioband density.
+  - `beachcombingScore` — 0-100, weighted by sand/cobble substrate, stone
+                          roundness, debris load, and wave energy.
+
+An optional `scoreSignals` object provides the top contributing attributes plus
+a natural-language "Why this spot?" summary.
+
+The response is sorted descending by the dominant score for the requested `type`.
+Datasets outside SE Alaska return an empty FeatureCollection (no ShoreZone coverage).
+
+ * @summary Tidepool & beachcombing hotspot polygons scored from ShoreZone / AOOS data
+ */
+export const getIntertidalSpots = async (id: string,
+    params?: GetIntertidalSpotsParams, options?: RequestInit): Promise<IntertidalSpotFeatureCollection> => {
+
+  return customFetch<IntertidalSpotFeatureCollection>(getGetIntertidalSpotsUrl(id,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetIntertidalSpotsQueryKey = (id: string,
+    params?: GetIntertidalSpotsParams,) => {
+    return [
+    `/api/intertidal-spots/${id}`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetIntertidalSpotsQueryOptions = <TData = Awaited<ReturnType<typeof getIntertidalSpots>>, TError = ErrorType<ApiError>>(id: string,
+    params?: GetIntertidalSpotsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getIntertidalSpots>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetIntertidalSpotsQueryKey(id,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getIntertidalSpots>>> = ({ signal }) => getIntertidalSpots(id,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getIntertidalSpots>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetIntertidalSpotsQueryResult = NonNullable<Awaited<ReturnType<typeof getIntertidalSpots>>>
+export type GetIntertidalSpotsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Tidepool & beachcombing hotspot polygons scored from ShoreZone / AOOS data
+ */
+
+export function useGetIntertidalSpots<TData = Awaited<ReturnType<typeof getIntertidalSpots>>, TError = ErrorType<ApiError>>(
+ id: string,
+    params?: GetIntertidalSpotsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getIntertidalSpots>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetIntertidalSpotsQueryOptions(id,params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

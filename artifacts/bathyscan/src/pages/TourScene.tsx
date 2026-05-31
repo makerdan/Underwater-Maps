@@ -9,6 +9,7 @@ import { useAppState } from "@/lib/context";
 import { TerrainMesh } from "@/components/TerrainMesh";
 import { EfhZoneLayer } from "@/components/EfhZoneLayer";
 import { SubstrateLayer } from "@/components/SubstrateLayer";
+import { IntertidalHotspotsLayer } from "@/components/IntertidalHotspotsLayer";
 import { Particles } from "@/components/Particles";
 import { Caustics } from "@/components/Caustics";
 import { useFlyControls } from "@/hooks/useFlyControls";
@@ -504,6 +505,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
       {terrain && <NonPrimaryDatasetMeshes primary={terrain} showLandmass={showLandmass} />}
       <EfhZoneLayer />
       <SubstrateLayer />
+      <IntertidalHotspotsLayer />
       <Caustics />
 
       {tidalOverlay && terrain ? (

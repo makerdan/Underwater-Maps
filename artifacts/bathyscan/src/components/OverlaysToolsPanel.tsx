@@ -122,6 +122,8 @@ export const OverlaysToolsPanel: React.FC = () => {
   const setFindDataPanelOpen = useUiStore((s) => s.setFindDataPanelOpen);
   const substrateColorMode = useUiStore((s) => s.substrateColorMode);
   const setSubstrateColorMode = useUiStore((s) => s.setSubstrateColorMode);
+  const intertidalHotspotsEnabled = useUiStore((s) => s.intertidalHotspotsEnabled);
+  const setIntertidalHotspotsEnabled = useUiStore((s) => s.setIntertidalHotspotsEnabled);
   const efhOverlayEnabled = useUiStore((s) => s.efhOverlayEnabled);
   const setEfhOverlayEnabled = useUiStore((s) => s.setEfhOverlayEnabled);
   const hiddenEfhSpecies = useUiStore((s) => s.hiddenEfhSpecies);
@@ -579,6 +581,48 @@ export const OverlaysToolsPanel: React.FC = () => {
                   <span>🌿 RAWS WEATHER STATIONS</span>
                 </button>
               </ViewscreenTooltip>
+            </div>
+          )}
+
+          <ToggleButton
+            active={intertidalHotspotsEnabled}
+            onClick={() => setIntertidalHotspotsEnabled(!intertidalHotspotsEnabled)}
+            label="🌊 INTERTIDAL HOTSPOTS"
+            tooltip="Score & display tidepool and beachcombing hotspots (SE Alaska ShoreZone)"
+            activeBg="rgba(13,148,136,0.15)"
+            activeBorder="rgba(13,148,136,0.55)"
+            activeColor="#2dd4bf"
+            activeGlow="rgba(13,148,136,0.4)"
+          />
+          {intertidalHotspotsEnabled && (
+            <div
+              style={{
+                marginTop: 2,
+                paddingLeft: 8,
+                display: "flex",
+                flexDirection: "column",
+                gap: 3,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 9,
+                  letterSpacing: "0.12em",
+                  color: "#94a3b8",
+                  textTransform: "uppercase",
+                }}
+              >
+                Score legend
+              </span>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: "#0d9488", display: "inline-block" }} />
+                <span style={{ fontSize: 10, color: "#94a3b8" }}>Tidepool</span>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: "#d97706", display: "inline-block", marginLeft: 8 }} />
+                <span style={{ fontSize: 10, color: "#94a3b8" }}>Beachcombing</span>
+              </div>
+              <span style={{ fontSize: 9, color: "#64748b", lineHeight: 1.4 }}>
+                Opacity ∝ score intensity. Click polygon for score card.
+              </span>
             </div>
           )}
 
