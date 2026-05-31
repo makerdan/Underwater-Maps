@@ -102,8 +102,15 @@ export async function parseGeoTiff(buffer: Buffer): Promise<RawPoint[]> {
   }
 
   const image = await tiff.getImage();
-  // Cast to Record to access GeoTIFF geo-transform tags not in the strict type
-  const fd = image.fileDirectory as unknown as Record<string, unknown>;
+
+  // geotiff v3 uses a lazy ImageFileDirectory class with a getValue(tagName)
+  // method rather than plain property access. Direct fd["tagName"] is always
+  // undefined in v3.  We use getValue() for all tag reads and fall back to
+  // plain property access so older versions continue to work.
+  type IFD = { getValue?: (tag: string) => unknown } & Record<string, unknown>;
+  const fd = image.fileDirectory as unknown as IFD;
+  const getTag = (tag: string): unknown =>
+    typeof fd.getValue === "function" ? fd.getValue(tag) : fd[tag];
 
   // Derive geo-transform: origin (lon0, lat0) + pixel size (dLon, dLat)
   // Prefer ModelTransformation (4×4) over ModelTiepoint+ModelPixelScale.
@@ -112,9 +119,9 @@ export async function parseGeoTiff(buffer: Buffer): Promise<RawPoint[]> {
     dLon = 1,
     dLat = -1;
 
-  const pixelScale = fd["ModelPixelScale"] as number[] | undefined;
-  const tiepoint = fd["ModelTiepoint"] as number[] | undefined;
-  const transformation = fd["ModelTransformation"] as number[] | undefined;
+  const pixelScale = getTag("ModelPixelScale") as ArrayLike<number> | undefined;
+  const tiepoint = getTag("ModelTiepoint") as ArrayLike<number> | undefined;
+  const transformation = getTag("ModelTransformation") as ArrayLike<number> | undefined;
 
   if (transformation && transformation.length >= 8) {
     // Affine: [sx, 0, tx, 0, sy, ty] — elements [0],[1],[3] of 4x4 row-major
@@ -125,12 +132,12 @@ export async function parseGeoTiff(buffer: Buffer): Promise<RawPoint[]> {
   } else if (pixelScale && tiepoint && pixelScale.length >= 2 && tiepoint.length >= 6) {
     // pixelScale = [scaleX, scaleY, scaleZ]
     // tiepoint   = [I, J, K, X, Y, Z] — pixel → world mapping
-    const [scaleX, scaleY] = pixelScale;
-    const [I, J, , X, Y] = tiepoint;
-    lon0 = X! - I! * scaleX!;
-    lat0 = Y! + J! * scaleY!; // Y is positive-up, pixel rows are top-down
-    dLon = scaleX!;
-    dLat = -scaleY!;
+    const [scaleX, scaleY] = [pixelScale[0]!, pixelScale[1]!];
+    const [I, J, , X, Y] = [tiepoint[0]!, tiepoint[1]!, tiepoint[2], tiepoint[3]!, tiepoint[4]!];
+    lon0 = X - I * scaleX;
+    lat0 = Y + J * scaleY; // Y is positive-up, pixel rows are top-down
+    dLon = scaleX;
+    dLat = -scaleY;
   } else {
     throw new Error(
       "GeoTIFF has no ModelPixelScale/ModelTiepoint or ModelTransformation tag. " +
@@ -138,9 +145,15 @@ export async function parseGeoTiff(buffer: Buffer): Promise<RawPoint[]> {
     );
   }
 
-  // GDAL no-data value (stored as string in TIFFTAG_GDAL_NODATA)
-  const nodataStr = fd["GDAL_NODATA"] as string | undefined;
-  const nodata = nodataStr !== undefined ? parseFloat(nodataStr) : NaN;
+  // GDAL no-data value (stored as string in TIFFTAG_GDAL_NODATA in the TIFF spec,
+  // but returned as a number by geotiff v3's getValue(). Handle both.
+  const nodataRaw = getTag("GDAL_NODATA");
+  const nodata =
+    nodataRaw !== undefined && nodataRaw !== null
+      ? typeof nodataRaw === "number"
+        ? nodataRaw
+        : parseFloat(String(nodataRaw))
+      : NaN;
 
   const width = image.getWidth();
   const height = image.getHeight();

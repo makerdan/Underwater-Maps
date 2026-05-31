@@ -1,12 +1,17 @@
 /**
- * datasets.test.ts (routes) — integration tests for the dataset upload
- * numeric-param validation added in task #307. A malformed `resolution`
- * (or `gridResolution`) must surface as a clean 400 instead of falling
- * through `parseInt` → `NaN` and producing a 5xx from the downstream grid
- * call.
+ * datasets.test.ts (routes) — integration tests for the dataset upload route.
+ *
+ * Test suites:
+ *  1. numeric-param validation — malformed `resolution` / `gridResolution` params
+ *  2. binary survey file uploads — GeoTIFF, NetCDF, LAS 1.2, LAS 1.4 uploaded via
+ *     POST /api/datasets/upload and validated end-to-end through the parser stack
+ *  3. hash format compatibility for GET /api/datasets/:id/zones
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
+import { readFileSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 
 vi.mock("@workspace/db", () => ({
   db: {
@@ -106,6 +111,92 @@ describe("POST /api/datasets/upload — numeric-param validation", () => {
       .attach("file", Buffer.from(csv), "small.csv");
 
     expect(res.status).toBe(401);
+  });
+});
+
+// ── Binary survey file upload tests ──────────────────────────────────────────
+//
+// These tests exercise the full POST /api/datasets/upload route using real
+// binary fixtures (GeoTIFF, NetCDF, LAS 1.2, LAS 1.4).  The DB mock returns
+// an empty array from `returning()`, so `savedDatasetId` is absent and
+// `saveError` is set — but the route still returns 200 with populated `terrain`
+// and `overview` fields generated from the parsed point cloud.
+
+const FIXTURE_DIR = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../__tests__/fixtures",
+);
+
+describe("POST /api/datasets/upload — binary survey formats (end-to-end)", () => {
+  it("accepts and parses a GeoTIFF (.tif) survey file", async () => {
+    const buf = readFileSync(join(FIXTURE_DIR, "survey.tif"));
+    const res = await request(app)
+      .post("/api/datasets/upload")
+      .set("x-e2e-user-id", E2E_USER)
+      .field("resolution", "64")
+      .attach("file", buf, { filename: "survey.tif", contentType: "image/tiff" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("terrain");
+    expect(res.body).toHaveProperty("overview");
+    expect(Array.isArray(res.body.terrain.depths)).toBe(true);
+    expect(res.body.terrain.depths.length).toBeGreaterThan(0);
+  });
+
+  it("accepts and parses a NetCDF (.nc) survey file", async () => {
+    const buf = readFileSync(join(FIXTURE_DIR, "survey.nc"));
+    const res = await request(app)
+      .post("/api/datasets/upload")
+      .set("x-e2e-user-id", E2E_USER)
+      .field("resolution", "64")
+      .attach("file", buf, { filename: "survey.nc", contentType: "application/octet-stream" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("terrain");
+    expect(res.body).toHaveProperty("overview");
+    expect(Array.isArray(res.body.terrain.depths)).toBe(true);
+    expect(res.body.terrain.depths.length).toBeGreaterThan(0);
+  });
+
+  it("accepts and parses a LAS 1.2 (.las) survey file", async () => {
+    const buf = readFileSync(join(FIXTURE_DIR, "survey_1_2.las"));
+    const res = await request(app)
+      .post("/api/datasets/upload")
+      .set("x-e2e-user-id", E2E_USER)
+      .field("resolution", "64")
+      .attach("file", buf, { filename: "survey_1_2.las", contentType: "application/octet-stream" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("terrain");
+    expect(res.body).toHaveProperty("overview");
+    expect(Array.isArray(res.body.terrain.depths)).toBe(true);
+    expect(res.body.terrain.depths.length).toBeGreaterThan(0);
+  });
+
+  it("accepts and parses a LAS 1.4 (.las) survey file", async () => {
+    const buf = readFileSync(join(FIXTURE_DIR, "survey_1_4.las"));
+    const res = await request(app)
+      .post("/api/datasets/upload")
+      .set("x-e2e-user-id", E2E_USER)
+      .field("resolution", "64")
+      .attach("file", buf, { filename: "survey_1_4.las", contentType: "application/octet-stream" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("terrain");
+    expect(res.body).toHaveProperty("overview");
+    expect(Array.isArray(res.body.terrain.depths)).toBe(true);
+    expect(res.body.terrain.depths.length).toBeGreaterThan(0);
+  });
+
+  it("returns 415 for an unsupported binary extension (.shp)", async () => {
+    const res = await request(app)
+      .post("/api/datasets/upload")
+      .set("x-e2e-user-id", E2E_USER)
+      .field("resolution", "64")
+      .attach("file", Buffer.from("fake shapefile"), { filename: "survey.shp", contentType: "application/octet-stream" });
+
+    expect(res.status).toBe(415);
+    expect(res.body).toMatchObject({ error: "unsupported_file_type" });
   });
 });
 

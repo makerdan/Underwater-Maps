@@ -294,7 +294,19 @@ function gunzipBounded(input: Buffer, maxBytes: number): Promise<Buffer> {
   });
 }
 
-const ALLOWED_UPLOAD_EXTENSIONS = new Set([".csv", ".txt", ".xyz", ".gz"]);
+const ALLOWED_UPLOAD_EXTENSIONS = new Set([
+  // Text-based formats
+  ".csv", ".txt", ".xyz",
+  // Compressed archive (wraps any of the above or binary formats)
+  ".gz",
+  // Binary / structured survey formats parsed by uploadParsers.ts
+  ".tif", ".tiff", // GeoTIFF
+  ".nc",           // NetCDF
+  ".las", ".laz",  // LAS / compressed LAS
+  ".bag",          // Bathymetric Attributed Grid (HDF5)
+  ".gpx",          // GPS Exchange (track logs with elevation)
+  ".nmea",         // NMEA-0183 depth sounder logs
+]);
 
 const datasetUploadRateLimit = createRateLimit({
   route: "dataset-upload",
@@ -313,7 +325,7 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(
-        Object.assign(new Error(`Unsupported file type. Accepted: .csv, .txt, .xyz, .gz`), {
+        Object.assign(new Error(`Unsupported file type. Accepted: .csv, .txt, .xyz, .gz, .tif, .tiff, .nc, .las, .laz, .bag, .gpx, .nmea`), {
           code: "LIMIT_UNEXPECTED_FILE",
         }) as unknown as null,
         false,
