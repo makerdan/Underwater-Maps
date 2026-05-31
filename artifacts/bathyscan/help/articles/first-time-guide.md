@@ -8,44 +8,67 @@ showQA: true
 
 # Welcome to BathyScan
 
-BathyScan is a 3D seafloor and lake-bed explorer. You can fly over real-world bathymetry (depth) data, mark interesting spots, classify zones, and even ask an AI for help understanding what you are looking at.
+BathyScan is a 3D seafloor and lake-bed explorer. You can fly over real-world bathymetry (depth) data, mark interesting spots, classify zones, run drift and trolling plans, analyse tidal currents, and ask an AI for help understanding what you are looking at.
 
 This guide walks you through your first session step by step.
 
-## 1. Pick a dataset
+## 1. Choose your water environment
 
-On the left side of the screen you will see the **Datasets** panel. It is split into two parts:
+At the very top of the **Datasets** panel on the left you will find the **Environment toggle**:
 
-- **Environment toggle** — switch between **Saltwater** and **Freshwater**. The list of datasets and the AI's vocabulary change to match.
-- **Built-in datasets** — public regions such as Thorne Bay, Monterey Bay, and several lakes. Click one to load it.
+- **Saltwater** — opens ocean and coastal datasets; the AI uses marine vocabulary and saltwater marker types.
+- **Freshwater** — opens lake and reservoir datasets; the AI switches to freshwater species and freshwater marker types.
 
-![Datasets panel with built-in regions](/help/datasets-panel.png)
+Switch this first — the entire dataset list, zone labels, habitat species, and marker types all update to match.
+
+## 2. Pick a dataset
+
+Below the environment toggle you will see **Built-in datasets** — public regions such as Thorne Bay, Monterey Canyon, and several lakes. Click one to load it.
 
 The first time you load a dataset it will fetch a depth grid and an overview tile. You will see a small spinner while it works.
 
-## 2. Look around in orbit mode
+![Datasets panel with built-in regions](/help/datasets-panel.png)
+
+## 3. Look around in orbit mode
 
 When the scene first loads you are in **Orbit mode**. Click and drag with your mouse to swing the camera around the terrain. Scroll to zoom.
 
 The status badge in the top-left says **◎ ORBIT**. The crosshair in the centre of the screen shows the longitude, latitude, and depth under your cursor.
 
-## 3. Switch to fly mode
+## 4. Switch to fly mode
 
 Click anywhere on the terrain to enter **Fly mode**. The badge changes to **● FLY** and your mouse is locked to the camera.
 
-- **W A S D** — move forward, back, and strafe
-- **Space** — go up
-- **Shift** — go down
-- **Scroll wheel** — change speed tier
-- **Esc** — release the mouse and return to orbit
+| Key | Action |
+| --- | --- |
+| W A S D | Move forward, back, and strafe |
+| Space | Ascend |
+| Shift | Descend |
+| = / - | Speed tier up / down |
+| Esc | Release the mouse and return to orbit |
 
-## 4. Drop a marker
+## 5. Use the crosshair action menu
 
-In fly mode, press **G** (or right-click) to open the **Drop Marker** form. The current crosshair location is pre-filled. Pick a type (fish, hazard, custom, etc.), give it a label, and save.
+In fly mode, press **Q** (or right-click) to open the **Crosshair Action Menu** at the current terrain point. From here you can:
 
-Markers persist between sessions and show up on the overview map.
+- **Drop GPS pin here** — opens the marker creation form at that location.
+- **Measure from here** — starts a distance or depth-profile measurement.
+- **Start straight-line / path profile** — begins a depth profile.
+- **Set as home position** — saves this location as the default spawn for this dataset.
+- **Save view as bookmark** — records the current camera state by name.
+- **Copy coordinates** — copies lat, lon, depth to the clipboard.
 
-## 5. Try the AI assistant
+## 6. Open the overview map
+
+Press **O** to toggle the **Overview Map** — a top-down minimap that shows the entire dataset, your camera position, all your markers, and (when active) tidal-arrow overlays. Press **O** again to close it.
+
+## 7. Drop a marker
+
+In fly mode, press **G** to open the **Drop Marker** form, or use the crosshair action menu (Q → Drop GPS pin here). The current crosshair location is pre-filled. Pick a type, give it a label, and click **Save Marker**.
+
+Markers persist between sessions and appear on the overview map as coloured dots.
+
+## 8. Try the AI assistant
 
 Press **`/`** to open the AI Query panel. Type something like:
 
@@ -57,7 +80,7 @@ or
 
 The AI can navigate the camera, highlight zones, change colours, and answer geology questions.
 
-## 6. Save your view
+## 9. Save your view
 
 The app remembers your last dataset, camera position, and settings between sessions. Just close the tab — when you come back you will land roughly where you left off.
 
@@ -66,6 +89,8 @@ The app remembers your last dataset, camera position, and settings between sessi
 ## Where to go next
 
 - **Interface Tour** — what every panel and badge means
-- **Workflows & Examples** — full step-by-step recipes for common tasks
+- **Overview Map** — opening the minimap, contour lines, and syncing with the 3D camera
 - **Keyboard Shortcuts** — every key the app responds to
+- **Datasets & Uploads** — upload your own bathymetry, manage folders, import GPX/KML
+- **Drift Planner** — drift prediction, trolling mode, and waypoints
 - **AI Assistant** — example prompts and what to expect

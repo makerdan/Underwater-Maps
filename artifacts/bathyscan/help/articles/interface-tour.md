@@ -11,13 +11,13 @@ A quick map of every visible part of the BathyScan screen.
 
 ## Top bar
 
-- **BATHYSCAN** logo on the left.
+- **BATHYSCAN** logo on the left — click to return to the default view.
 - **Help** button — opens this window.
-- Your email, **Settings**, and **Sign out** on the right.
+- Your email, **Settings** (or press **,**), and **Sign out** on the right.
 
-## 3D scene (the big one)
+## 3D scene
 
-The middle of the screen is the live 3D terrain. A reticle and crosshair sit in the centre to show what you are pointing at.
+The centre of the screen is the live 3D terrain. A reticle and crosshair sit in the middle to show what you are pointing at.
 
 ![Full screen with HUD overlays](/help/full-screen.png)
 
@@ -25,35 +25,65 @@ The middle of the screen is the live 3D terrain. A reticle and crosshair sit in 
 
 These float above the 3D scene and are organised by corner:
 
-- **Top-left** — Mode badge (Orbit or Fly), heading, and a Dive-to-GPS button when applicable.
-- **Top-right** — Offline indicator and cached-data badge (only when you go offline).
-- **Centre** — Crosshair, with longitude, latitude, and depth under the cursor.
-- **Bottom-left** — Camera position (depth), speed indicator, and the last pin you dropped.
-- **Bottom-right** — **Find Data**, **Substrate**, and (where available) **Essential Fish Habitat** buttons.
+- **Top-left** — Mode badge (**◎ ORBIT** or **● FLY**), compass heading (HDG), and a Dive-to-GPS button when a GPS lock is available.
+- **Top-right** — Offline indicator and cached-data badge (only when offline).
+- **Centre** — Crosshair with longitude, latitude, and depth under the cursor.
+- **Bottom-left** — Camera depth, speed indicator (dots = speed tier), and the last pin you dropped.
 
-Most of these can be turned off or made transparent under **Settings → HUD**.
+Most HUD elements can be turned off or made transparent under **Settings → HUD**.
 
-## Side pane (left column)
+## Left sidebar
 
-A vertically scrollable column with several stacked panels:
+The left side of the screen holds a vertically scrollable column with several stacked panels:
 
-- **Datasets** — pick a region, upload your own data, manage markers.
-- **Zone overlay** — toggle the AI-classified terrain zones.
-- **Habitat layer** — pick a species and see suggested hotspots.
+- **Datasets** — pick a region, upload your own data, manage the dataset folder tree, manage markers.
+- **Overlays** — all environmental overlay toggle buttons (see below).
+- **Zone overlay** — toggle the AI-classified terrain zones and enter Paint mode.
+- **Habitat layer** — pick a species and see scored hotspots.
+- **Drift Planner** — drift prediction, trolling mode, and waypoints.
 - **Camera position** — current world coordinates.
-- **Keyboard** — collapsible cheat-sheet.
-- **Tidal panel** — currents and tide height, when the overlay is on.
+- **Keyboard** — collapsible cheat-sheet of shortcuts.
+- **Tidal panel** — currents, tide height, time scrub, and per-layer arrow density.
 
-You can hide the whole column with the **◂ HIDE** button at the top to get a full unobstructed view.
+You can hide the whole column with the **◂ HIDE** button at the top to get an unobstructed view.
+
+## Overlays panel
+
+The **Overlays** panel in the left sidebar contains buttons that toggle environmental layers directly on the 3D scene:
+
+| Button | What it does |
+| --- | --- |
+| 🗺 OVERVIEW | Opens/closes the top-down Overview Map (same as **O**) |
+| 🔍 FIND DATA | Opens the dataset search and browse drawer |
+| ◼ SUBSTRATE | Tints the seafloor by classified substrate type |
+| 💨 WIND | Overlays surface wind-direction arrows |
+| 🌊 TIDE | Overlays tidal-flow arrows |
+| ↬ CURRENT | Overlays sub-surface current arrows |
+| 🛩 NOAA WEATHER STATIONS | Toggles NOAA ASOS/AWOS station pins (saltwater only) |
+| 🌿 RAWS WEATHER STATIONS | Toggles AOOS RAWS land station pins (saltwater only) |
+| 📷 FAA WEATHERCAMS ↗ | Opens the FAA WeatherCams website in a new tab (saltwater only) |
+| 🌊 INTERTIDAL HOTSPOTS | Toggles tidepool and beachcombing hotspot pins |
+| 🐟 EFH | Overlays Essential Fish Habitat polygons (dataset-dependent) |
 
 ## Floating panels
 
-- **Marker form** — opens when you press G or right-click.
-- **Depth Profile** — appears along the bottom centre after you measure a line.
-- **Find Data** — slides in from the right when you click 🔍 Find Data.
+- **Marker form** — opens when you press **G** or use the terrain context menu → Drop GPS pin here.
+- **Depth Profile** — appears along the bottom centre after you start a profile measurement.
+- **Find Data** — slides in from the right when you click 🔍 FIND DATA.
+- **Overview Map** — press **O** or click 🗺 OVERVIEW for a top-down minimap.
 
-## Bottom-right buttons
+## Crosshair action menu (Q or right-click)
 
-- **🔍 Find Data** — search the public dataset catalog.
-- **◼ Substrate** — recolour the terrain by texture (sand, sediment, silt, basalt).
-- **🐟 Essential Fish Habitat** — overlay Essential Fish Habitat polygons (only on datasets that ship with them).
+Pressing **Q** or right-clicking the terrain opens a context menu with actions at the current terrain point: Drop GPS pin, Measure, Depth Profile, Set home, Save bookmark, Copy coordinates, and Copy share link.
+
+## Status badges
+
+| Badge | Meaning |
+| --- | --- |
+| ◎ ORBIT | Camera is in orbit mode |
+| ● FLY | Camera is in fly mode, mouse is locked |
+| ◉ GPS | Camera is locked to your device's GPS position |
+| OFFLINE | No internet connection — reads from local cache |
+| PREDICTED | Tidal value is from harmonic forecast, not a live gauge |
+| SIMULATED | Tidal arrow data is modelled, not from a real station |
+| STALE | Weather observation is from cache, not a fresh fetch |

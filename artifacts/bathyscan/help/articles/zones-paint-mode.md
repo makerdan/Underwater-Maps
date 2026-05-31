@@ -7,7 +7,7 @@ order: 6
 
 # Zones & Paint Mode
 
-BathyScan classifies the seafloor into **zones** so you can quickly see what kind of bottom you are flying over.
+BathyScan classifies the seafloor into **zones** so you can quickly see what kind of bottom you are flying over. The zone overlay also drives the habitat scoring and the depth-profile zone strip.
 
 ## How zones are classified
 
@@ -21,30 +21,39 @@ When a dataset loads, the app sends a low-resolution depth image to the AI, whic
 
 The **Zone overlay** panel (left side, below Datasets) toggles a coloured tint on top of the terrain that shows the AI's classification. Each zone has its own colour swatch in the panel legend.
 
+### Habitat intensity
+
+The **Habitat Intensity** slider (inside the Zone overlay panel) controls how boldly the zone colours are rendered on the terrain:
+
+- At **0 %** the zone overlay is invisible (but still active for habitat scoring and the depth-profile strip).
+- At **50 %** (default) the zone tint blends with the depth colormap.
+- At **100 %** zone colours are fully saturated and the underlying depth shading is suppressed.
+
+Adjust intensity to balance terrain readability against zone legibility. A lower intensity is useful when you want to see fine terrain detail; a higher intensity makes zone boundaries easier to trace.
+
 ## Paint mode (correcting the AI)
 
 The AI is good but not perfect. Open the Zone overlay panel and click **Paint** to enter **Paint mode**:
 
 ![Brush sweeping across the zone grid, repainting cells](/help/paint-mode.gif)
 
-
 1. Pick a target zone from the swatch list.
-2. Move the cursor over the terrain — cells under the brush change colour.
-3. Click and drag to repaint.
-4. Use **Brush size** to adjust the radius.
-5. Click **Save** to persist your corrections.
+2. Move the cursor over the terrain — cells under the brush highlight.
+3. Click and drag to repaint cells to the chosen zone.
+4. Use the **Brush size** slider to adjust the radius (1–8 cells).
+5. Click **Save** to persist your corrections, or **Cancel** to discard them.
 
-Corrections are stored per dataset and override the AI's classification for those cells.
+Corrections are stored per dataset and override the AI's classification for those cells. They are visible in the zone overlay, the depth-profile strip, and habitat scoring.
 
 ## Substrate colour mode
 
-The **◼ SUBSTRATE** button in the bottom-right recolours the actual terrain texture (not just an overlay) by substrate type — sand, sediment, silt, basalt. Useful for screenshots.
+The **◼ SUBSTRATE** button in the Overlays panel (left sidebar) recolours the actual terrain texture (not just an overlay) by substrate type — sand, sediment, silt, basalt. Useful for screenshots. This is separate from the zone overlay and does not affect habitat scoring.
 
 ---
 
 ## Habitat species catalog
 
-The Habitat Layer panel scores the seafloor against the following species. Select a water type to see what's available.
+The Habitat Layer panel scores the seafloor against the following species. Select a water type to see what is available.
 
 ### Saltwater / Marine
 
