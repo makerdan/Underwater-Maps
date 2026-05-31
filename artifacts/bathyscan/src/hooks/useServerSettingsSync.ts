@@ -209,8 +209,10 @@ export function useServerSettingsSync(): void {
     };
     const panelSnap = () =>
       JSON.stringify(usePanelCollapseStore.getState().collapsed);
-    const zoneSnap = () =>
-      JSON.stringify(useZoneOverlayStore.getState().slots);
+    const zoneSnap = () => {
+      const s = useZoneOverlayStore.getState();
+      return JSON.stringify({ sw: s.saltwater, fw: s.freshwater });
+    };
 
     let lastSettings = JSON.stringify(getDataSnapshot());
     let lastPalette = palSnap();
