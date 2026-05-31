@@ -23,7 +23,7 @@ if [ -n "${GITHUB_TOKEN}" ] && [ -n "${GITHUB_REPO_URL}" ]; then
   echo "[post-merge] Pushing to GitHub mirror…"
   # Push directly to the authenticated URL — no remote mutation, so the
   # credential never persists in .git/config even if the push fails.
-  git push "https://x-access-token:${GITHUB_TOKEN}@${GITHUB_REPO_URL#https://}" HEAD:main
+  git push --force "https://x-access-token:${GITHUB_TOKEN}@${GITHUB_REPO_URL#https://}" HEAD:main
   echo "[post-merge] GitHub mirror up to date."
 else
   echo "[post-merge] GITHUB_TOKEN or GITHUB_REPO_URL not set — skipping GitHub sync."
