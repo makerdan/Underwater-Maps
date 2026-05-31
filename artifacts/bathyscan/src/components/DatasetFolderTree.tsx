@@ -39,9 +39,7 @@ import {
 import type { UserDatasetMeta } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/clerkCompat";
 import { useSettingsStore } from "@/lib/settingsStore";
-import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { formatDepthRange } from "@/lib/units";
-import { useTerrainStore } from "@/lib/terrainStore";
 import { LoadingDial } from "@/components/LoadingDial";
 import { useContextMenuStore } from "@/lib/contextMenuStore";
 import {
@@ -1781,42 +1779,6 @@ const RowDeleteButton: React.FC<{
       }}
     >
       ✕
-    </button>
-  );
-};
-
-// ─── Per-row eye toggle for user-uploaded datasets (Task #350) ───────────────
-const UserDatasetVisibilityToggle: React.FC<{ datasetId: string }> = ({
-  datasetId,
-}) => {
-  const visible = useTerrainStore(
-    (s) => s.visibleDatasets.some((v) => v.datasetId === datasetId),
-  );
-  const isPrimary = useTerrainStore((s) => s.primaryDatasetId === datasetId);
-  const toggleVisible = useTerrainStore((s) => s.toggleVisible);
-  return (
-    <button
-      type="button"
-      data-testid={`btn-visibility-user-${datasetId}`}
-      aria-pressed={visible}
-      onClick={(e) => {
-        e.stopPropagation();
-        toggleVisible({ datasetId, source: "user" });
-      }}
-      onPointerDown={(e) => e.stopPropagation()}
-      style={{
-        width: 18,
-        flexShrink: 0,
-        background: "transparent",
-        border: "none",
-        cursor: "pointer",
-        color: visible ? (isPrimary ? "#00e5ff" : "#7dd3fc") : "#94a3b8",
-        fontSize: 11,
-        lineHeight: 1,
-        padding: 0,
-      }}
-    >
-      {visible ? (isPrimary ? "◉" : "◎") : "○"}
     </button>
   );
 };

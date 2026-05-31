@@ -391,58 +391,6 @@ const VisibleDatasetRows: React.FC<{
   );
 };
 
-// ─── Per-row eye toggle (preset rows) ────────────────────────────────────────
-const PresetVisibilityToggle: React.FC<{
-  datasetId: string;
-  disabled: boolean;
-}> = ({ datasetId, disabled }) => {
-  const visible = useTerrainStore(
-    (s) => s.visibleDatasets.some((v) => v.datasetId === datasetId),
-  );
-  const isPrimary = useTerrainStore((s) => s.primaryDatasetId === datasetId);
-  const toggleVisible = useTerrainStore((s) => s.toggleVisible);
-  return (
-    <ViewscreenTooltip
-      label={
-        visible
-          ? isPrimary
-            ? "Primary dataset — hide to demote"
-            : "Hide from scene"
-          : "Show in scene alongside primary"
-      }
-      side="right"
-    >
-      <button
-        type="button"
-        data-testid={`btn-visibility-${datasetId}`}
-        aria-pressed={visible}
-        disabled={disabled}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (disabled) return;
-          toggleVisible({ datasetId, source: "preset" });
-        }}
-        style={{
-          width: 24,
-          flexShrink: 0,
-          background: "transparent",
-          border: "none",
-          cursor: disabled ? "not-allowed" : "pointer",
-          color: visible ? (isPrimary ? "#00e5ff" : "#7dd3fc") : "#94a3b8",
-          fontSize: 12,
-          lineHeight: 1,
-          padding: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {visible ? (isPrimary ? "◉" : "◎") : "○"}
-      </button>
-    </ViewscreenTooltip>
-  );
-};
-
 interface DatasetPanelProps {
   embedded?: boolean;
 }
