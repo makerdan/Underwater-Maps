@@ -182,7 +182,7 @@ async function moveGcsObject(
   await srcFile.delete();
 }
 
-async function processObject(bucketName: string, objectKey: string): Promise<void> {
+export async function processObject(bucketName: string, objectKey: string): Promise<void> {
   // Extract userId from path: pending-datasets/<userId>/<uuid>/<filename>
   const parts = objectKey.split("/");
   const userId = parts[1] ?? "unknown";
