@@ -1714,3 +1714,77 @@ export function renderWeatherStations(
 
   return positions;
 }
+
+// ---------------------------------------------------------------------------
+// Intertidal Hotspot pins
+// ---------------------------------------------------------------------------
+
+export interface IntertidalHotspotPin {
+  unitId: string;
+  lon: number;
+  lat: number;
+  /** Active-mode score (0–100). Drives pin radius and opacity. */
+  score: number;
+  /** Hex color: teal (#0d9488) for tidepool, amber (#d97706) for beachcombing. */
+  color: string;
+}
+
+/**
+ * Render intertidal hotspot pins on the overview canvas.
+ *
+ * Each pin is a filled circle whose radius (4–9 px) and border opacity scale
+ * with the active-mode score. Color matches intertidalScoreMode: teal for
+ * tidepool, amber for beachcombing. Returns {unitId, cx, cy} for hit-testing.
+ */
+export function renderIntertidalHotspotPins(
+  ctx: CanvasRenderingContext2D,
+  pins: IntertidalHotspotPin[],
+  grid: TerrainData,
+  t: OverviewTransform,
+  selectedUnitId: string | null,
+): Array<{ unitId: string; cx: number; cy: number }> {
+  const positions: Array<{ unitId: string; cx: number; cy: number }> = [];
+
+  for (const pin of pins) {
+    const [cx, cy] = lonLatToCanvas(pin.lon, pin.lat, grid, t);
+    positions.push({ unitId: pin.unitId, cx, cy });
+
+    const isSelected = pin.unitId === selectedUnitId;
+    const scoreFrac = Math.max(0, Math.min(100, pin.score)) / 100;
+    const R = (isSelected ? 7 : 4) + scoreFrac * 4;
+    const fillOpacity = 0.55 + scoreFrac * 0.35;
+    const borderOpacity = 0.8 + scoreFrac * 0.2;
+
+    ctx.save();
+
+    if (isSelected) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, R + 5, 0, Math.PI * 2);
+      ctx.fillStyle = hexToRgba(pin.color, 0.18);
+      ctx.fill();
+    }
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fillStyle = hexToRgba(pin.color, fillOpacity);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.strokeStyle = hexToRgba(pin.color, borderOpacity);
+    ctx.lineWidth = isSelected ? 2 : 1.5;
+    ctx.stroke();
+
+    ctx.font = `bold ${R > 6 ? 7 : 6}px sans-serif`;
+    ctx.fillStyle = "#fff";
+    ctx.globalAlpha = 0.9;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(pin.color === "#0d9488" ? "T" : "B", cx, cy + 0.5);
+    ctx.globalAlpha = 1;
+
+    ctx.restore();
+  }
+
+  return positions;
+}

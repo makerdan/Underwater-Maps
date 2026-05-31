@@ -21,6 +21,7 @@ import { useAppState } from "@/lib/context";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
+import type { SelectedHotspot } from "@/lib/uiStore";
 import { useContextMenuStore, type ContextMenuItem } from "@/lib/contextMenuStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
 import {
@@ -55,8 +56,9 @@ import {
   drawSelectionRect,
   renderWeatherStations,
   renderRawsStations,
+  renderIntertidalHotspotPins,
 } from "@/lib/overviewRenderer";
-import type { OverviewTransform, CanvasSavedTrail, EfhLegendLayout, ContourSegment, WeatherStationPin, RawsStationPin } from "@/lib/overviewRenderer";
+import type { OverviewTransform, CanvasSavedTrail, EfhLegendLayout, ContourSegment, WeatherStationPin, RawsStationPin, IntertidalHotspotPin } from "@/lib/overviewRenderer";
 import { useWeatherStations } from "@/hooks/useWeatherStations";
 import type { WeatherStation } from "@workspace/api-client-react";
 import { WeatherStationPopover } from "@/components/WeatherStationLayer";
@@ -68,6 +70,8 @@ import {
   getGetEfhQueryKey,
   useGetSubstrate,
   getGetSubstrateQueryKey,
+  useGetIntertidalSpots,
+  getGetIntertidalSpotsQueryKey,
 } from "@workspace/api-client-react";
 import type {
   EfhFeature,
@@ -201,6 +205,14 @@ export const OverviewMap: React.FC = () => {
   const rawsSelectedIdRef = useRef<string | null>(null);
   const rawsCanvasPositionsRef = useRef<Array<{ datasetId: string; cx: number; cy: number }>>([]);
   const rawsDataRef = useRef<Map<string, RawsStationItem>>(new Map());
+
+  // Intertidal hotspot pin refs (read in rAF loop without React re-render)
+  const intertidalPinsRef = useRef<IntertidalHotspotPin[]>([]);
+  const intertidalCanvasPositionsRef = useRef<Array<{ unitId: string; cx: number; cy: number }>>([]);
+  const intertidalHotspotDataRef = useRef<Map<string, SelectedHotspot>>(new Map());
+  const intertidalSelectedUnitIdRef = useRef<string | null>(null);
+  const intertidalHotspotsEnabledRef = useRef(false);
+  const intertidalScoreModeRef = useRef<'tidepool' | 'beachcombing'>('tidepool');
 
   // Upscale hook — auto-enhances the heatmap via Topaz Labs on Poe when the
   // rendered grid is coarser than the canvas resolution warrants.
@@ -538,6 +550,130 @@ export const OverviewMap: React.FC = () => {
   useEffect(() => {
     substrateFeaturesRef.current = substrateCollection?.features ?? [];
   }, [substrateCollection]);
+
+  // Intertidal hotspots overlay — mirrors intertidalHotspotsEnabled / intertidalScoreMode
+  // from uiStore so the 2D pins match what the 3D IntertidalHotspotsLayer shows.
+  const intertidalHotspotsEnabled = useUiStore((s) => s.intertidalHotspotsEnabled);
+  const intertidalScoreMode = useUiStore((s) => s.intertidalScoreMode);
+  const selectedHotspot = useUiStore((s) => s.selectedHotspot);
+  useEffect(() => {
+    intertidalHotspotsEnabledRef.current = intertidalHotspotsEnabled;
+    if (!intertidalHotspotsEnabled) {
+      intertidalPinsRef.current = [];
+      intertidalHotspotDataRef.current = new Map();
+      intertidalSelectedUnitIdRef.current = null;
+    }
+  }, [intertidalHotspotsEnabled]);
+  useEffect(() => {
+    intertidalScoreModeRef.current = intertidalScoreMode;
+  }, [intertidalScoreMode]);
+  // Keep selected-pin ref in sync with the shared selectedHotspot
+  useEffect(() => {
+    intertidalSelectedUnitIdRef.current = selectedHotspot?.unitId ?? null;
+  }, [selectedHotspot]);
+  const intertidalSpotsParams = { type: intertidalScoreMode, minScore: 10 };
+  const { data: intertidalSpotsData } = useGetIntertidalSpots(
+    datasetId,
+    intertidalSpotsParams,
+    {
+      query: {
+        enabled: !!datasetId && intertidalHotspotsEnabled,
+        queryKey: getGetIntertidalSpotsQueryKey(datasetId, intertidalSpotsParams),
+        staleTime: 5 * 60 * 1000,
+      },
+    },
+  );
+  // Build pin descriptors and hotspot data map whenever spots data / mode changes.
+  useEffect(() => {
+    if (!intertidalSpotsData || !intertidalHotspotsEnabled) {
+      intertidalPinsRef.current = [];
+      intertidalHotspotDataRef.current = new Map();
+      return;
+    }
+    const mode = intertidalScoreModeRef.current;
+    const color = mode === 'tidepool' ? '#0d9488' : '#d97706';
+    const meta = (intertidalSpotsData as { metadata?: { sourceName?: string; sourceCredit?: string } }).metadata;
+    const sourceName = meta?.sourceName ?? "NOAA ShoreZone / AOOS";
+    const creditUrl = meta?.sourceCredit ?? "https://portal.aoos.org/";
+    const pins: IntertidalHotspotPin[] = [];
+    const dataMap = new Map<string, SelectedHotspot>();
+
+    for (const feature of (intertidalSpotsData.features as Array<{
+      geometry: { type?: string; coordinates?: unknown };
+      properties: {
+        unitId?: string;
+        substrate?: string;
+        shoreZoneClass?: string;
+        szMaterial?: string | null;
+        szForm?: string | null;
+        tidepoolScore?: number;
+        beachcombingScore?: number;
+        scoreSignals?: {
+          tidepool?: { substrate?: string; bioband?: string | null; debris?: string | null; energy?: string | null; humanUse?: string | null; whySummary?: string };
+          beachcombing?: { substrate?: string; bioband?: string | null; debris?: string | null; energy?: string | null; humanUse?: string | null; whySummary?: string };
+        };
+      };
+    }>)) {
+      const p = feature.properties;
+      const tidepoolScore = p.tidepoolScore ?? 0;
+      const beachcombingScore = p.beachcombingScore ?? 0;
+      const activeScore = mode === 'tidepool' ? tidepoolScore : beachcombingScore;
+      if (activeScore < 1) continue;
+
+      // Compute centroid from the outer ring of the first polygon
+      const geom = feature.geometry;
+      let outerRing: number[][] | null = null;
+      if (geom.type === 'Polygon') {
+        outerRing = (geom.coordinates as number[][][])?.[0] ?? null;
+      } else if (geom.type === 'MultiPolygon') {
+        outerRing = (geom.coordinates as number[][][][])?.[0]?.[0] ?? null;
+      }
+      if (!outerRing || outerRing.length === 0) continue;
+
+      let sumLon = 0, sumLat = 0;
+      for (const pt of outerRing) { sumLon += pt[0] ?? 0; sumLat += pt[1] ?? 0; }
+      const lon = sumLon / outerRing.length;
+      const lat = sumLat / outerRing.length;
+      const unitId = p.unitId ?? `${lon.toFixed(5)}_${lat.toFixed(5)}`;
+
+      const sig = p.scoreSignals ?? {};
+      const hotspot: SelectedHotspot = {
+        unitId,
+        substrate: p.substrate ?? "",
+        shoreZoneClass: p.shoreZoneClass ?? "",
+        tidepoolScore,
+        beachcombingScore,
+        szMaterial: p.szMaterial ?? null,
+        szForm: p.szForm ?? null,
+        signals: {
+          tidepool: {
+            substrate: sig.tidepool?.substrate ?? p.shoreZoneClass ?? "",
+            bioband: sig.tidepool?.bioband ?? null,
+            debris: sig.tidepool?.debris ?? null,
+            energy: sig.tidepool?.energy ?? null,
+            humanUse: sig.tidepool?.humanUse ?? null,
+            whySummary: sig.tidepool?.whySummary ?? "",
+          },
+          beachcombing: {
+            substrate: sig.beachcombing?.substrate ?? p.shoreZoneClass ?? "",
+            bioband: sig.beachcombing?.bioband ?? null,
+            debris: sig.beachcombing?.debris ?? null,
+            energy: sig.beachcombing?.energy ?? null,
+            humanUse: sig.beachcombing?.humanUse ?? null,
+            whySummary: sig.beachcombing?.whySummary ?? "",
+          },
+        },
+        sourceName,
+        creditUrl,
+      };
+
+      pins.push({ unitId, lon, lat, score: activeScore, color });
+      dataMap.set(unitId, hotspot);
+    }
+
+    intertidalPinsRef.current = pins;
+    intertidalHotspotDataRef.current = dataMap;
+  }, [intertidalSpotsData, intertidalHotspotsEnabled, intertidalScoreMode]);
 
   // Fetch trail points when trails list changes; update savedTrailsRef for rAF
   useEffect(() => {
@@ -931,6 +1067,20 @@ export const OverviewMap: React.FC = () => {
         weatherStationCanvasPositionsRef.current = [];
       }
 
+      // Intertidal hotspot pins — teal (tidepool) or amber (beachcombing) scored pins.
+      // Drawn above weather/RAWS pins so they are always reachable.
+      if (intertidalHotspotsEnabledRef.current && intertidalPinsRef.current.length > 0) {
+        intertidalCanvasPositionsRef.current = renderIntertidalHotspotPins(
+          ctx,
+          intertidalPinsRef.current,
+          grid,
+          t,
+          intertidalSelectedUnitIdRef.current,
+        );
+      } else {
+        intertidalCanvasPositionsRef.current = [];
+      }
+
       // "Enhancing…" indicator — shown while a Topaz upscale request is in
       // flight. Drawn last so it sits on top of all other layers.
       if (isUpscalingRef.current) {
@@ -1168,6 +1318,29 @@ export const OverviewMap: React.FC = () => {
               rawsSelectedIdRef.current = null;
               setSelectedRawsDatasetId(null);
               setSelectedRawsPos(null);
+            }
+            return;
+          }
+        }
+      }
+
+      // Intertidal hotspot pin hit-test — before polygon overlays so pins are
+      // always reachable even when EFH / substrate are also visible.
+      if (intertidalHotspotsEnabledRef.current && intertidalCanvasPositionsRef.current.length > 0) {
+        const HIT_R = 12;
+        const hit = intertidalCanvasPositionsRef.current.find(
+          (p) => Math.hypot(p.cx - mx, p.cy - my) <= HIT_R,
+        );
+        if (hit) {
+          const hotspot = intertidalHotspotDataRef.current.get(hit.unitId) ?? null;
+          if (hotspot) {
+            const alreadySelected = intertidalSelectedUnitIdRef.current === hit.unitId;
+            if (alreadySelected) {
+              intertidalSelectedUnitIdRef.current = null;
+              useUiStore.getState().setSelectedHotspot(null);
+            } else {
+              intertidalSelectedUnitIdRef.current = hit.unitId;
+              useUiStore.getState().setSelectedHotspot(hotspot);
             }
             return;
           }
