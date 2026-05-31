@@ -785,6 +785,11 @@ export const getSettingsResponseCustomStopsItemHexRegExp = new RegExp('^#[0-9a-f
 export const getSettingsResponseCustomStopsDefault = [{ position: 0, hex: `#00e5ff`, }, { position: 0.3, hex: `#0d47a1`, }, { position: 0.65, hex: `#1a237e`, }, { position: 1, hex: `#283593`, }];
 export const getSettingsResponseCustomStopsMin = 2;
 
+export const getSettingsResponseBandColorsItemRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const getSettingsResponseBandColorsDefault = [`#00e5ff`, `#00c8de`, `#00a8d0`, `#0288d1`, `#0277bd`, `#1565c0`, `#0d47a1`, `#1a237e`, `#283593`, `#1e2b6e`];
+export const getSettingsResponseBandColorsMin = 10;
+export const getSettingsResponseBandColorsMax = 10;
+
 export const getSettingsResponseLampIntensityDefault = 2;
 export const getSettingsResponseLampIntensityMin = 0;
 export const getSettingsResponseLampIntensityMax = 5;
@@ -842,6 +847,7 @@ export const GetSettingsResponse = zod.object({
   "position": zod.number().min(getSettingsResponseCustomStopsItemPositionMin).max(getSettingsResponseCustomStopsItemPositionMax),
   "hex": zod.string().regex(getSettingsResponseCustomStopsItemHexRegExp)
 })).min(getSettingsResponseCustomStopsMin).default(getSettingsResponseCustomStopsDefault).describe('Ordered colour stops for the user\'s Custom depth palette (min 2). Positions are normalised to [0, 1] along the depth axis.'),
+  "bandColors": zod.array(zod.string().regex(getSettingsResponseBandColorsItemRegExp)).min(getSettingsResponseBandColorsMin).max(getSettingsResponseBandColorsMax).default(getSettingsResponseBandColorsDefault).describe('Per-band hex colours for the Ocean theme. Exactly 10 entries, one per depth band lower boundary (0, 50, 100, 150, 200, 250, 300, 350, 450, 600 ft). Persisted server-side so the palette is consistent across devices.'),
   "lampIntensity": zod.number().min(getSettingsResponseLampIntensityMin).max(getSettingsResponseLampIntensityMax).default(getSettingsResponseLampIntensityDefault),
   "defaultSpeedTier": zod.number().min(getSettingsResponseDefaultSpeedTierMin).max(getSettingsResponseDefaultSpeedTierMax).default(getSettingsResponseDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(getSettingsResponseInvertMouseYDefault),
@@ -894,6 +900,11 @@ export const putSettingsBodyCustomStopsItemPositionMax = 1;
 export const putSettingsBodyCustomStopsItemHexRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
 export const putSettingsBodyCustomStopsDefault = [{ position: 0, hex: `#00e5ff`, }, { position: 0.3, hex: `#0d47a1`, }, { position: 0.65, hex: `#1a237e`, }, { position: 1, hex: `#283593`, }];
 export const putSettingsBodyCustomStopsMin = 2;
+
+export const putSettingsBodyBandColorsItemRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsBodyBandColorsDefault = [`#00e5ff`, `#00c8de`, `#00a8d0`, `#0288d1`, `#0277bd`, `#1565c0`, `#0d47a1`, `#1a237e`, `#283593`, `#1e2b6e`];
+export const putSettingsBodyBandColorsMin = 10;
+export const putSettingsBodyBandColorsMax = 10;
 
 export const putSettingsBodyLampIntensityDefault = 2;
 export const putSettingsBodyLampIntensityMin = 0;
@@ -952,6 +963,7 @@ export const PutSettingsBody = zod.object({
   "position": zod.number().min(putSettingsBodyCustomStopsItemPositionMin).max(putSettingsBodyCustomStopsItemPositionMax),
   "hex": zod.string().regex(putSettingsBodyCustomStopsItemHexRegExp)
 })).min(putSettingsBodyCustomStopsMin).default(putSettingsBodyCustomStopsDefault).describe('Ordered colour stops for the user\'s Custom depth palette (min 2). Positions are normalised to [0, 1] along the depth axis.'),
+  "bandColors": zod.array(zod.string().regex(putSettingsBodyBandColorsItemRegExp)).min(putSettingsBodyBandColorsMin).max(putSettingsBodyBandColorsMax).default(putSettingsBodyBandColorsDefault).describe('Per-band hex colours for the Ocean theme. Exactly 10 entries, one per depth band lower boundary (0, 50, 100, 150, 200, 250, 300, 350, 450, 600 ft). Persisted server-side so the palette is consistent across devices.'),
   "lampIntensity": zod.number().min(putSettingsBodyLampIntensityMin).max(putSettingsBodyLampIntensityMax).default(putSettingsBodyLampIntensityDefault),
   "defaultSpeedTier": zod.number().min(putSettingsBodyDefaultSpeedTierMin).max(putSettingsBodyDefaultSpeedTierMax).default(putSettingsBodyDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(putSettingsBodyInvertMouseYDefault),
@@ -999,6 +1011,11 @@ export const putSettingsResponseCustomStopsItemPositionMax = 1;
 export const putSettingsResponseCustomStopsItemHexRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
 export const putSettingsResponseCustomStopsDefault = [{ position: 0, hex: `#00e5ff`, }, { position: 0.3, hex: `#0d47a1`, }, { position: 0.65, hex: `#1a237e`, }, { position: 1, hex: `#283593`, }];
 export const putSettingsResponseCustomStopsMin = 2;
+
+export const putSettingsResponseBandColorsItemRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsResponseBandColorsDefault = [`#00e5ff`, `#00c8de`, `#00a8d0`, `#0288d1`, `#0277bd`, `#1565c0`, `#0d47a1`, `#1a237e`, `#283593`, `#1e2b6e`];
+export const putSettingsResponseBandColorsMin = 10;
+export const putSettingsResponseBandColorsMax = 10;
 
 export const putSettingsResponseLampIntensityDefault = 2;
 export const putSettingsResponseLampIntensityMin = 0;
@@ -1057,6 +1074,7 @@ export const PutSettingsResponse = zod.object({
   "position": zod.number().min(putSettingsResponseCustomStopsItemPositionMin).max(putSettingsResponseCustomStopsItemPositionMax),
   "hex": zod.string().regex(putSettingsResponseCustomStopsItemHexRegExp)
 })).min(putSettingsResponseCustomStopsMin).default(putSettingsResponseCustomStopsDefault).describe('Ordered colour stops for the user\'s Custom depth palette (min 2). Positions are normalised to [0, 1] along the depth axis.'),
+  "bandColors": zod.array(zod.string().regex(putSettingsResponseBandColorsItemRegExp)).min(putSettingsResponseBandColorsMin).max(putSettingsResponseBandColorsMax).default(putSettingsResponseBandColorsDefault).describe('Per-band hex colours for the Ocean theme. Exactly 10 entries, one per depth band lower boundary (0, 50, 100, 150, 200, 250, 300, 350, 450, 600 ft). Persisted server-side so the palette is consistent across devices.'),
   "lampIntensity": zod.number().min(putSettingsResponseLampIntensityMin).max(putSettingsResponseLampIntensityMax).default(putSettingsResponseLampIntensityDefault),
   "defaultSpeedTier": zod.number().min(putSettingsResponseDefaultSpeedTierMin).max(putSettingsResponseDefaultSpeedTierMax).default(putSettingsResponseDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(putSettingsResponseInvertMouseYDefault),

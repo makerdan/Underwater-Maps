@@ -64,6 +64,7 @@ function buildPayload(): Record<string, unknown> {
   dataOnly.paletteShallow = palette.shallow;
   dataOnly.paletteDeep = palette.deep;
   dataOnly.customStops = palette.customStops;
+  dataOnly.bandColors = palette.bandColors;
   dataOnly.panelCollapse = usePanelCollapseStore.getState().collapsed;
   return dataOnly;
 }
@@ -107,6 +108,7 @@ export function useServerSettingsSync(): void {
         paletteShallow: serverRec.paletteShallow,
         paletteDeep: serverRec.paletteDeep,
         customStops: serverRec.customStops,
+        bandColors: serverRec.bandColors,
       });
 
       // Restore panel collapse layout from the server.
@@ -156,7 +158,7 @@ export function useServerSettingsSync(): void {
   useEffect(() => {
     const palSnap = () => {
       const p = usePaletteStore.getState();
-      return JSON.stringify({ s: p.shallow, d: p.deep, c: p.customStops });
+      return JSON.stringify({ s: p.shallow, d: p.deep, c: p.customStops, b: p.bandColors });
     };
     const panelSnap = () =>
       JSON.stringify(usePanelCollapseStore.getState().collapsed);

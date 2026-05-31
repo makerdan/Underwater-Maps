@@ -14,9 +14,21 @@
  * `bandColors` array (10 entries indexed to DEPTH_BAND_BOUNDARIES_FT[0..9]).
  *
  * Persisted to localStorage under "bathyscan:palette".
+ *
+ * Schema history (for the localStorage merge guard below):
+ *   v0 (pre-bandColors): only shallow / deep / customStops were persisted.
+ *   v1 (current): added bandColors; the merge guard seeds bandColors[0]
+ *      from the persisted shallow when upgrading from v0 state.
+ *      bandColors is also now persisted server-side via PUT /api/settings.
  */
+
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+
+/** Identifies the current palette schema version for documentation purposes.
+ *  Increment this whenever a new field is added and a migration guard is
+ *  added to the persist `merge` function below. */
+export const PALETTE_SCHEMA_VERSION = 1;
 
 export const DEFAULT_SHALLOW = "#00e5ff";
 export const DEFAULT_DEEP = "#283593";
@@ -234,14 +246,15 @@ interface PaletteStore {
   resetBandBoundaries: () => void;
   reset: () => void;
   /**
-   * Apply server-side palette values (shallow / deep / customStops) to the
-   * store. Values that are missing or malformed are left untouched. Used by
-   * the Settings page after a successful GET /api/settings hydration.
+   * Apply server-side palette values (shallow / deep / customStops / bandColors)
+   * to the store. Values that are missing or malformed are left untouched. Used
+   * by the Settings page after a successful GET /api/settings hydration.
    */
   hydrateFromServer: (partial: {
     paletteShallow?: unknown;
     paletteDeep?: unknown;
     customStops?: unknown;
+    bandColors?: unknown;
   }) => void;
 }
 
@@ -365,6 +378,24 @@ export const usePaletteStore = create<PaletteStore>()(
         if (partial.customStops !== undefined) {
           const cleaned = sanitizeCustomStops(partial.customStops);
           if (cleaned) patch.customStops = cleaned;
+        }
+        if (partial.bandColors !== undefined) {
+          const cleaned = sanitizeBandColors(partial.bandColors);
+          if (cleaned) {
+            const bc = [...cleaned];
+            // paletteShallow is the authoritative source for the top-band
+            // colour. When both paletteShallow and bandColors arrive together
+            // (e.g. from a legacy-row migration on the server), keep them
+            // consistent by forcing bc[0] to match the incoming shallow.
+            // For payloads that have bandColors but no paletteShallow, sync
+            // shallow from bc[0] so the store stays internally consistent.
+            if (patch.shallow) {
+              bc[0] = patch.shallow;
+            } else {
+              patch.shallow = bc[0]!;
+            }
+            patch.bandColors = bc;
+          }
         }
         if (Object.keys(patch).length > 0) set(patch);
       },

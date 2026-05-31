@@ -47,6 +47,18 @@ const DEFAULT_SETTINGS = {
     { position: 0.65, hex: "#1a237e" },
     { position: 1.0, hex: "#283593" },
   ],
+  bandColors: [
+    "#00e5ff",
+    "#00c8de",
+    "#00a8d0",
+    "#0288d1",
+    "#0277bd",
+    "#1565c0",
+    "#0d47a1",
+    "#1a237e",
+    "#283593",
+    "#1e2b6e",
+  ],
 };
 
 /**
@@ -76,7 +88,23 @@ router.get("/settings", requireAuth, async (req, res): Promise<void> => {
     .where(eq(userSettingsTable.userId, userId));
 
   const stored = (row?.settings ?? {}) as Record<string, unknown>;
-  const merged = { ...DEFAULT_SETTINGS, ...stored };
+  const merged: Record<string, unknown> = { ...DEFAULT_SETTINGS, ...stored };
+
+  // Migration for legacy rows: stored settings from before bandColors was
+  // persisted server-side have paletteShallow but no bandColors. Derive
+  // bandColors[0] from the stored paletteShallow so the rendered top band
+  // immediately matches the user's previously-configured shallow colour
+  // rather than reverting to the default. This mirrors the same guard that
+  // already runs in paletteStore's localStorage merge function.
+  if (!("bandColors" in stored)) {
+    const legacyShallow = merged.paletteShallow;
+    const bc = [...(DEFAULT_SETTINGS.bandColors as string[])];
+    if (typeof legacyShallow === "string" && /^#[0-9a-fA-F]{6}$/i.test(legacyShallow)) {
+      bc[0] = legacyShallow.toLowerCase();
+    }
+    merged.bandColors = bc;
+  }
+
   const validated = GetSettingsResponse.parse(merged) as Record<string, unknown>;
   res.json(mergeForResponse(stored, validated));
 });

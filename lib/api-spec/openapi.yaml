@@ -2047,6 +2047,25 @@ components:
             - { position: 0.3,  hex: '#0d47a1' }
             - { position: 0.65, hex: '#1a237e' }
             - { position: 1.0,  hex: '#283593' }
+        bandColors:
+          type: array
+          minItems: 10
+          maxItems: 10
+          description: Per-band hex colours for the Ocean theme. Exactly 10 entries, one per depth band lower boundary (0, 50, 100, 150, 200, 250, 300, 350, 450, 600 ft). Persisted server-side so the palette is consistent across devices.
+          items:
+            type: string
+            pattern: '^#[0-9a-fA-F]{6}$'
+          default:
+            - '#00e5ff'
+            - '#00c8de'
+            - '#00a8d0'
+            - '#0288d1'
+            - '#0277bd'
+            - '#1565c0'
+            - '#0d47a1'
+            - '#1a237e'
+            - '#283593'
+            - '#1e2b6e'
         lampIntensity:
           type: number
           minimum: 0

@@ -324,6 +324,12 @@ export interface UserSettings {
      */
   customStops?: UserSettingsCustomStopsItem[];
   /**
+     * Per-band hex colours for the Ocean theme. Exactly 10 entries, one per depth band lower boundary (0, 50, 100, 150, 200, 250, 300, 350, 450, 600 ft). Persisted server-side so the palette is consistent across devices.
+     * @minItems 10
+     * @maxItems 10
+     */
+  bandColors?: string[];
+  /**
      * @minimum 0
      * @maximum 5
      */
