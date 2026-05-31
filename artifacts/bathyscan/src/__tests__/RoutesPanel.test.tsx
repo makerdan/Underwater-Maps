@@ -331,6 +331,49 @@ describe("DepthProfilePanel — save-as-route button — signed in", () => {
   });
 });
 
+// ── DepthProfilePanel — synthetic terrain guard ───────────────────────────────
+
+describe("DepthProfilePanel — save-as-route section — synthetic terrain", () => {
+  it("hides the save-route section when dataSource is 'synthetic'", () => {
+    activeProfile = PATH_PROFILE;
+    mockTerrain = { dataSource: "synthetic" };
+
+    renderWithProviders(<DepthProfilePanel />);
+
+    expect(screen.queryByTestId("depth-profile-save-route")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("depth-profile-save-route-btn")).not.toBeInTheDocument();
+  });
+
+  it("hides the save-route section when legacy synthetic flag is true", () => {
+    activeProfile = PATH_PROFILE;
+    mockTerrain = { synthetic: true };
+
+    renderWithProviders(<DepthProfilePanel />);
+
+    expect(screen.queryByTestId("depth-profile-save-route")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("depth-profile-save-route-btn")).not.toBeInTheDocument();
+  });
+
+  it("shows the save-route section for real terrain (dataSource = 'gebco')", () => {
+    activeProfile = PATH_PROFILE;
+    mockTerrain = { dataSource: "gebco" };
+
+    renderWithProviders(<DepthProfilePanel />);
+
+    expect(screen.getByTestId("depth-profile-save-route")).toBeInTheDocument();
+    expect(screen.getByTestId("depth-profile-save-route-btn")).toBeInTheDocument();
+  });
+
+  it("shows the save-route section when terrain is null (no dataset loaded)", () => {
+    activeProfile = PATH_PROFILE;
+    mockTerrain = null;
+
+    renderWithProviders(<DepthProfilePanel />);
+
+    expect(screen.getByTestId("depth-profile-save-route")).toBeInTheDocument();
+  });
+});
+
 // ── RoutesPanel — synthetic terrain guard ─────────────────────────────────────
 
 describe("RoutesPanel — synthetic terrain guard", () => {
