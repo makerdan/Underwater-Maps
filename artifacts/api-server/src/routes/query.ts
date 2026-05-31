@@ -7,6 +7,7 @@
  * which executes the tools locally.
  */
 import { Router } from "express";
+import { z } from "zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { createRateLimit, stampBaselineRateLimitHeaders } from "../middlewares/rateLimit.js";
@@ -184,8 +185,24 @@ const TERRAIN_TOOLS: TerrainTool[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Route
+// Route + request schema
 // ---------------------------------------------------------------------------
+
+const QueryContextSchema = z.object({
+  datasetName: z.string().optional(),
+  waterType: z.string().optional(),
+  minDepth: z.number().optional(),
+  maxDepth: z.number().optional(),
+  cameraLon: z.number().nullable().optional(),
+  cameraLat: z.number().nullable().optional(),
+  cameraDepth: z.number().nullable().optional(),
+  topZones: z.array(z.string()).optional(),
+});
+
+const QueryBodySchema = z.object({
+  query: z.string().trim().min(1, "query is required"),
+  context: QueryContextSchema.optional(),
+});
 
 router.post(
   "/query",
@@ -194,27 +211,13 @@ router.post(
   createRateLimit({ route: "query", windowMs: QUERY_USER_WINDOW_MS, max: QUERY_USER_MAX, mode: "user" }),
   createRateLimit({ route: "query", windowMs: QUERY_IP_WINDOW_MS, max: QUERY_IP_MAX, mode: "ip" }),
   async (req, res): Promise<void> => {
-  const body = req.body as {
-    query?: string;
-    context?: {
-      datasetName?: string;
-      waterType?: string;
-      minDepth?: number;
-      maxDepth?: number;
-      cameraLon?: number | null;
-      cameraLat?: number | null;
-      cameraDepth?: number | null;
-      topZones?: string[];
-    };
-  };
-
-  const query = typeof body.query === "string" ? body.query.trim() : "";
-  if (!query) {
-    res.status(400).json({ error: "missing_field", message: "query is required" });
+  const parsed = QueryBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_request", details: parsed.error.message });
     return;
   }
 
-  const ctx = body.context ?? {};
+  const { query, context: ctx = {} } = parsed.data;
   const datasetName = ctx.datasetName ?? "unknown dataset";
   const waterType = ctx.waterType === "freshwater" ? "freshwater" : "saltwater";
   const minDepth = ctx.minDepth ?? 0;

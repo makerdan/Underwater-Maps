@@ -10,6 +10,7 @@ import { z } from "zod";
 import { db, customDatasetsTable, userSettingsTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 import {
   GetDatasetsResponse,
   GetDatasetsIdTerrainResponse,
@@ -489,7 +490,7 @@ router.get("/datasets/:id/overview", async (req, res): Promise<void> => {
 //  - Preset dataset IDs → public (no auth required)
 //  - UUID-format IDs (user-saved datasets) → require auth + ownership check
 //  - Other IDs ("upload", etc.) → require auth (no DB row to verify ownership)
-router.get("/datasets/:id/zones", async (req, res): Promise<void> => {
+router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> => {
   const { id } = req.params as { id: string };
   const gridHash = (req.query["h"] as string | undefined) ?? "";
   const waterTypeRaw = (req.query["w"] as string | undefined) ?? "";
@@ -588,7 +589,7 @@ router.get("/datasets/:id/zones", async (req, res): Promise<void> => {
   }
 
   res.status(404).json({ error: "not_found", message: "No cached classification for this grid" });
-});
+}));
 
 // ── GET /terrain/land ─────────────────────────────────────────────────────────
 // Returns above-water Copernicus DEM 90 m elevation for a given bounding box.

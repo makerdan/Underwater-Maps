@@ -1,0 +1,114 @@
+/**
+ * markers.test.ts — unit tests for /api/markers
+ *
+ * Covers:
+ *  - 400 for missing datasetId on GET /markers
+ *  - 401 for unauthenticated callers
+ *  - DB failure on GET /markers returns 500 (not a hanging request), confirming
+ *    asyncHandler correctly forwards the rejected promise to Express error
+ *    middleware instead of leaving the request open.
+ */
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import request from "supertest";
+
+const state: { throwOnSelect: boolean } = { throwOnSelect: false };
+
+vi.mock("@workspace/db", () => {
+  const markersTable = { __tableName: "markers" as const };
+
+  const select = () => ({
+    from: () => ({
+      where: () => ({
+        orderBy: () => {
+          if (state.throwOnSelect) {
+            return Promise.reject(new Error("DB connection lost"));
+          }
+          return Promise.resolve([]);
+        },
+      }),
+    }),
+  });
+
+  return {
+    db: { select },
+    markersTable,
+  };
+});
+
+vi.mock("@workspace/api-zod", () => ({
+  GetMarkersQueryParams: {
+    safeParse: (q: Record<string, unknown>) =>
+      q["datasetId"]
+        ? { success: true, data: { datasetId: q["datasetId"] } }
+        : { success: false },
+  },
+  PostMarkersBody: { safeParse: () => ({ success: false, error: { message: "noop" } }) },
+  DeleteMarkersIdParams: { safeParse: () => ({ success: false }) },
+  PatchMarkersIdParams: { safeParse: () => ({ success: false }) },
+  PatchMarkersIdBody: { safeParse: () => ({ success: false, error: { message: "noop" } }) },
+}));
+
+vi.mock("@clerk/express", () => ({
+  clerkMiddleware: vi.fn(
+    () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  ),
+  getAuth: vi.fn(() => ({ userId: null })),
+}));
+
+vi.mock("@clerk/shared/keys", () => ({
+  publishableKeyFromHost: vi.fn(() => "pk_test_mock"),
+}));
+
+vi.mock("http-proxy-middleware", () => ({
+  createProxyMiddleware: vi.fn(
+    () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  ),
+}));
+
+vi.mock("@workspace/poe", async () => {
+  const actual = await vi.importActual<typeof import("@workspace/poe")>("@workspace/poe");
+  return { ...actual, getPoeClient: vi.fn(() => ({})) };
+});
+
+vi.mock("@workspace/integrations-openai-ai-server", () => ({
+  openai: { chat: { completions: { create: vi.fn() } } },
+}));
+
+import app from "../../app.js";
+
+beforeEach(() => {
+  vi.stubEnv("E2E_AUTH_BYPASS", "1");
+  state.throwOnSelect = false;
+});
+
+describe("GET /api/markers", () => {
+  it("returns 401 when unauthenticated (no E2E bypass header)", async () => {
+    vi.unstubAllEnvs();
+    const res = await request(app).get("/api/markers?datasetId=abc");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 400 when datasetId query param is missing", async () => {
+    const res = await request(app)
+      .get("/api/markers")
+      .set("x-e2e-user-id", "user-markers-400");
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 500 (not a timeout) when the database throws", async () => {
+    state.throwOnSelect = true;
+    const res = await request(app)
+      .get("/api/markers?datasetId=test-dataset")
+      .set("x-e2e-user-id", "user-markers-db-fail");
+    expect(res.status).toBe(500);
+  });
+
+  it("returns 200 with an array when the DB succeeds", async () => {
+    const res = await request(app)
+      .get("/api/markers?datasetId=test-dataset")
+      .set("x-e2e-user-id", "user-markers-ok");
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+  });
+});

@@ -3,11 +3,12 @@ import { and, eq } from "drizzle-orm";
 import { db, markersTable } from "@workspace/db";
 import { PostMarkersBody, DeleteMarkersIdParams, GetMarkersQueryParams, PatchMarkersIdParams, PatchMarkersIdBody } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 
 
 const router = Router();
 
-router.get("/markers", requireAuth, async (req, res): Promise<void> => {
+router.get("/markers", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const parsed = GetMarkersQueryParams.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: "datasetId query parameter is required" });
@@ -23,9 +24,9 @@ router.get("/markers", requireAuth, async (req, res): Promise<void> => {
     .orderBy(markersTable.createdAt);
 
   res.json(rows);
-});
+}));
 
-router.post("/markers", requireAuth, async (req, res): Promise<void> => {
+router.post("/markers", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const parsed = PostMarkersBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: parsed.error.message });
@@ -41,9 +42,9 @@ router.post("/markers", requireAuth, async (req, res): Promise<void> => {
     .returning();
 
   res.status(201).json(created);
-});
+}));
 
-router.delete("/markers/mine", requireAuth, async (req, res): Promise<void> => {
+router.delete("/markers/mine", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const deleted = await db
     .delete(markersTable)
@@ -51,9 +52,9 @@ router.delete("/markers/mine", requireAuth, async (req, res): Promise<void> => {
     .returning({ id: markersTable.id });
 
   res.json({ deleted: deleted.length });
-});
+}));
 
-router.patch("/markers/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/markers/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const params = PatchMarkersIdParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: "invalid_request", details: "Invalid marker id" });
@@ -86,9 +87,9 @@ router.patch("/markers/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   res.json(updated);
-});
+}));
 
-router.delete("/markers/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/markers/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const parsed = DeleteMarkersIdParams.safeParse(req.params);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: "Invalid marker id" });
@@ -109,6 +110,6 @@ router.delete("/markers/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   res.status(204).send();
-});
+}));
 
 export default router;

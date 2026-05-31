@@ -25,6 +25,7 @@ import {
   DeleteUserFoldersIdBody,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 
 const router = Router();
 
@@ -92,14 +93,14 @@ export function collectDescendantIds(
 }
 
 // ── GET /user/folders ──────────────────────────────────────────────────────
-router.get("/user/folders", requireAuth, async (req, res): Promise<void> => {
+router.get("/user/folders", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const rows = await listUserFolders(userId);
   res.json(GetUserFoldersResponse.parse(rows.map(folderToJson)));
-});
+}));
 
 // ── POST /user/folders ─────────────────────────────────────────────────────
-router.post("/user/folders", requireAuth, async (req, res): Promise<void> => {
+router.post("/user/folders", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const parsed = PostUserFoldersBody.safeParse(req.body ?? {});
   if (!parsed.success) {
@@ -133,10 +134,10 @@ router.post("/user/folders", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   res.status(201).json(folderToJson(created));
-});
+}));
 
 // ── PATCH /user/folders/:id/rename ─────────────────────────────────────────
-router.patch("/user/folders/:id/rename", requireAuth, async (req, res): Promise<void> => {
+router.patch("/user/folders/:id/rename", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
   const parsed = PatchUserFoldersIdRenameBody.safeParse(req.body ?? {});
@@ -171,10 +172,10 @@ router.patch("/user/folders/:id/rename", requireAuth, async (req, res): Promise<
     return;
   }
   res.json(PatchUserFoldersIdRenameResponse.parse(folderToJson(updated)));
-});
+}));
 
 // ── PATCH /user/folders/:id/move ───────────────────────────────────────────
-router.patch("/user/folders/:id/move", requireAuth, async (req, res): Promise<void> => {
+router.patch("/user/folders/:id/move", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
   const parsed = PatchUserFoldersIdMoveBody.safeParse(req.body ?? {});
@@ -220,10 +221,10 @@ router.patch("/user/folders/:id/move", requireAuth, async (req, res): Promise<vo
     return;
   }
   res.json(PatchUserFoldersIdMoveResponse.parse(folderToJson(updated)));
-});
+}));
 
 // ── POST /user/folders/:id/duplicate ───────────────────────────────────────
-router.post("/user/folders/:id/duplicate", requireAuth, async (req, res): Promise<void> => {
+router.post("/user/folders/:id/duplicate", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
 
@@ -330,10 +331,10 @@ router.post("/user/folders/:id/duplicate", requireAuth, async (req, res): Promis
     console.error(`[folders] duplicate failed for ${id}:`, err);
     res.status(500).json({ error: "db_error", details: "Could not duplicate folder" });
   }
-});
+}));
 
 // ── DELETE /user/folders/:id ───────────────────────────────────────────────
-router.delete("/user/folders/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/user/folders/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
   const parsed = DeleteUserFoldersIdBody.safeParse(req.body ?? {});
@@ -416,7 +417,7 @@ router.delete("/user/folders/:id", requireAuth, async (req, res): Promise<void> 
   }
 
   res.status(204).send();
-});
+}));
 
 // Re-export for potential testing
 export { isNull };

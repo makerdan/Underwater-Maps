@@ -3,6 +3,7 @@ import { eq, and } from "drizzle-orm";
 import { db, gpsTrailsTable, gpsTrailPointsTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { createRateLimit } from "../middlewares/rateLimit.js";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { z } from "zod";
 
 const trailUploadRateLimit = createRateLimit({
@@ -50,7 +51,7 @@ const GetPointsQuerySchema = z.object({
 // ---------------------------------------------------------------------------
 // GET /trails?datasetId=
 // ---------------------------------------------------------------------------
-router.get("/trails", requireAuth, async (req, res): Promise<void> => {
+router.get("/trails", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const parsed = GetTrailsQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: "datasetId query parameter is required" });
@@ -72,12 +73,12 @@ router.get("/trails", requireAuth, async (req, res): Promise<void> => {
     .orderBy(gpsTrailsTable.startedAt);
 
   res.json(rows);
-});
+}));
 
 // ---------------------------------------------------------------------------
 // POST /trails
 // ---------------------------------------------------------------------------
-router.post("/trails", trailUploadRateLimit, requireAuth, async (req, res): Promise<void> => {
+router.post("/trails", trailUploadRateLimit, requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const parsed = PostTrailBodySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: parsed.error.message });
@@ -129,12 +130,12 @@ router.post("/trails", trailUploadRateLimit, requireAuth, async (req, res): Prom
   });
 
   res.status(201).json(trail);
-});
+}));
 
 // ---------------------------------------------------------------------------
 // DELETE /trails/:id
 // ---------------------------------------------------------------------------
-router.delete("/trails/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/trails/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const parsed = TrailIdParamSchema.safeParse(req.params);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: "Invalid trail id" });
@@ -155,12 +156,12 @@ router.delete("/trails/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   res.status(204).send();
-});
+}));
 
 // ---------------------------------------------------------------------------
 // GET /trails/:id/points?page=1&pageSize=200
 // ---------------------------------------------------------------------------
-router.get("/trails/:id/points", requireAuth, async (req, res): Promise<void> => {
+router.get("/trails/:id/points", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const paramParsed = TrailIdParamSchema.safeParse(req.params);
   const queryParsed = GetPointsQuerySchema.safeParse(req.query);
 
@@ -208,6 +209,6 @@ router.get("/trails/:id/points", requireAuth, async (req, res): Promise<void> =>
     page,
     pageSize,
   });
-});
+}));
 
 export default router;

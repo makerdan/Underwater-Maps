@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, routesTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 
 const router = Router();
 
@@ -32,7 +33,7 @@ const PatchRouteBodySchema = z.object({
 });
 
 // GET /routes?datasetId=
-router.get("/routes", requireAuth, async (req, res): Promise<void> => {
+router.get("/routes", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const parsed = GetRoutesQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: "datasetId query parameter is required" });
@@ -49,10 +50,10 @@ router.get("/routes", requireAuth, async (req, res): Promise<void> => {
     .orderBy(routesTable.createdAt);
 
   res.json(rows);
-});
+}));
 
 // POST /routes
-router.post("/routes", requireAuth, async (req, res): Promise<void> => {
+router.post("/routes", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const parsed = PostRouteBodySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: parsed.error.message });
@@ -75,10 +76,10 @@ router.post("/routes", requireAuth, async (req, res): Promise<void> => {
     .returning();
 
   res.status(201).json(created);
-});
+}));
 
 // PATCH /routes/:id
-router.patch("/routes/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/routes/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const params = RouteIdParamSchema.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: "invalid_request", details: "Invalid route id" });
@@ -106,10 +107,10 @@ router.patch("/routes/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   res.json(updated);
-});
+}));
 
 // DELETE /routes/:id
-router.delete("/routes/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/routes/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const parsed = RouteIdParamSchema.safeParse(req.params);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: "Invalid route id" });
@@ -130,6 +131,6 @@ router.delete("/routes/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   res.status(204).send();
-});
+}));
 
 export default router;

@@ -117,6 +117,39 @@ describe("POST /api/query", () => {
     expect(optsArg?.signal).toBeInstanceOf(AbortSignal);
   });
 
+  it("returns 400 with structured error when query field is missing", async () => {
+    const res = await request(app)
+      .post("/api/query")
+      .set("x-e2e-user-id", "user-query-no-query")
+      .send({ context: { datasetName: "test" } });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+    expect(fakeChatCompletionsCreate).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 with structured error when query is an empty string", async () => {
+    const res = await request(app)
+      .post("/api/query")
+      .set("x-e2e-user-id", "user-query-empty")
+      .send({ query: "" });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+    expect(fakeChatCompletionsCreate).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 with structured error when query is whitespace only", async () => {
+    const res = await request(app)
+      .post("/api/query")
+      .set("x-e2e-user-id", "user-query-whitespace")
+      .send({ query: "   " });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+    expect(fakeChatCompletionsCreate).not.toHaveBeenCalled();
+  });
+
   it("returns 429 once the per-user rate limit is exceeded and surfaces Retry-After", async () => {
     const userId = "user-query-ratelimit";
     // The per-user limit is 20 req/min — burn through it.

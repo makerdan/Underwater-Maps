@@ -11,6 +11,7 @@ import {
   PatchUserDatasetsIdRenameResponse,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 
 const router = Router();
 
@@ -33,7 +34,7 @@ function metaJson(row: {
 }
 
 // ── GET /user/datasets ─────────────────────────────────────────────────────
-router.get("/user/datasets", requireAuth, async (req, res): Promise<void> => {
+router.get("/user/datasets", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
   const rows = await db
@@ -50,10 +51,10 @@ router.get("/user/datasets", requireAuth, async (req, res): Promise<void> => {
     .orderBy(desc(customDatasetsTable.createdAt));
 
   res.json(GetUserDatasetsResponse.parse(rows.map(metaJson)));
-});
+}));
 
 // ── PATCH /user/datasets/:id/move ──────────────────────────────────────────
-router.patch("/user/datasets/:id/move", requireAuth, async (req, res): Promise<void> => {
+router.patch("/user/datasets/:id/move", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
   const parsed = PatchUserDatasetsIdMoveBody.safeParse(req.body ?? {});
@@ -84,10 +85,10 @@ router.patch("/user/datasets/:id/move", requireAuth, async (req, res): Promise<v
     return;
   }
   res.json(PatchUserDatasetsIdMoveResponse.parse(metaJson(updated)));
-});
+}));
 
 // ── PATCH /user/datasets/:id/rename ────────────────────────────────────────
-router.patch("/user/datasets/:id/rename", requireAuth, async (req, res): Promise<void> => {
+router.patch("/user/datasets/:id/rename", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
   const parsed = PatchUserDatasetsIdRenameBody.safeParse(req.body ?? {});
@@ -111,10 +112,10 @@ router.patch("/user/datasets/:id/rename", requireAuth, async (req, res): Promise
     return;
   }
   res.json(PatchUserDatasetsIdRenameResponse.parse(metaJson(updated)));
-});
+}));
 
 // ── POST /user/datasets/:id/duplicate ──────────────────────────────────────
-router.post("/user/datasets/:id/duplicate", requireAuth, async (req, res): Promise<void> => {
+router.post("/user/datasets/:id/duplicate", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
 
@@ -162,10 +163,10 @@ router.post("/user/datasets/:id/duplicate", requireAuth, async (req, res): Promi
     .where(eq(customDatasetsTable.id, created.id));
 
   res.status(201).json(metaJson(created));
-});
+}));
 
 // ── GET /user/datasets/:id/terrain ─────────────────────────────────────────
-router.get("/user/datasets/:id/terrain", requireAuth, async (req, res): Promise<void> => {
+router.get("/user/datasets/:id/terrain", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
 
@@ -180,10 +181,10 @@ router.get("/user/datasets/:id/terrain", requireAuth, async (req, res): Promise<
   }
 
   res.json(GetUserDatasetsIdTerrainResponse.parse(row.terrainJson));
-});
+}));
 
 // ── GET /user/datasets/:id/overview ────────────────────────────────────────
-router.get("/user/datasets/:id/overview", requireAuth, async (req, res): Promise<void> => {
+router.get("/user/datasets/:id/overview", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
 
@@ -198,10 +199,10 @@ router.get("/user/datasets/:id/overview", requireAuth, async (req, res): Promise
   }
 
   res.json(GetUserDatasetsIdOverviewResponse.parse(row.overviewJson));
-});
+}));
 
 // ── DELETE /user/datasets/:id ───────────────────────────────────────────────
-router.delete("/user/datasets/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/user/datasets/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
 
@@ -216,6 +217,6 @@ router.delete("/user/datasets/:id", requireAuth, async (req, res): Promise<void>
   }
 
   res.status(204).send();
-});
+}));
 
 export default router;
