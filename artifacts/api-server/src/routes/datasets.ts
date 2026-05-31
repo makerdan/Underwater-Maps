@@ -899,12 +899,16 @@ router.post(
   const resolution = paramsParsed.data.gridResolution ?? paramsParsed.data.resolution;
 
   const TEXT_EXTENSIONS = new Set(["csv", "xyz", "txt"]);
-  const fileExt = fileName.toLowerCase().split(".").pop() ?? "";
+  // Strip the outer .gz suffix before deriving the inner extension so that
+  // text formats (csv/xyz/txt) compressed as .gz are correctly routed to
+  // parseXyzCsv with the already-decompressed fileContent.
+  const baseFileName = fileName.toLowerCase().endsWith(".gz") ? fileName.slice(0, -3) : fileName;
+  const fileExt = baseFileName.toLowerCase().split(".").pop() ?? "";
 
   let points;
   try {
     if (TEXT_EXTENSIONS.has(fileExt)) {
-      points = parseXyzCsv(fileContent, fileName);
+      points = parseXyzCsv(fileContent, baseFileName);
     } else {
       points = await parseUploadedFile(file.buffer, fileName);
     }
@@ -921,8 +925,6 @@ router.post(
     });
     return;
   }
-
-  const baseFileName = fileName.toLowerCase().endsWith(".gz") ? fileName.slice(0, -3) : fileName;
   const datasetName = baseFileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
   const smoothing = await getSmoothingPreference(req);
 
