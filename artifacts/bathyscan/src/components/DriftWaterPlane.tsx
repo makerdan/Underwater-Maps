@@ -4,6 +4,11 @@
  * Renders a large plane at sea-surface Y with a GLSL shader that simulates
  * two scrolling wave layers driven by the resultant wind + tidal current vector.
  * Pointer events on the plane reposition the drift start point (click-to-place).
+ *
+ * Reverse drift mode:
+ *   When reverseModeActive is true, the first click instead sets the catch
+ *   location. reverseComputeDrift() is called immediately to compute the
+ *   backward path, which is stored in reverseDriftPath for DriftPath to render.
  */
 
 import React, { useRef, useMemo, useCallback } from "react";
@@ -12,7 +17,7 @@ import * as THREE from "three";
 import { WORLD_SIZE } from "@/lib/terrain";
 import { worldXZToLonLat } from "@/lib/terrain";
 import { useDriftStore } from "@/lib/driftStore";
-import { computeDrift } from "@/lib/computeDrift";
+import { computeDrift, reverseComputeDrift } from "@/lib/computeDrift";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { sampleCurrentAt } from "@/lib/currentsStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
@@ -83,6 +88,9 @@ export const DriftWaterPlane: React.FC<DriftWaterPlaneProps> = ({ surfaceY, terr
   const driftStartLon = useDriftStore((s) => s.driftStartLon);
   const driftWaypoints = useDriftStore((s) => s.driftWaypoints);
   const addDriftWaypoint = useDriftStore((s) => s.addDriftWaypoint);
+  const reverseModeActive = useDriftStore((s) => s.reverseModeActive);
+  const setCatchPoint = useDriftStore((s) => s.setCatchPoint);
+  const setReverseDriftPath = useDriftStore((s) => s.setReverseDriftPath);
 
   const material = useMemo(() => {
     return new THREE.ShaderMaterial({
@@ -130,9 +138,25 @@ export const DriftWaterPlane: React.FC<DriftWaterPlaneProps> = ({ surfaceY, terr
       const { x: worldX, z: worldZ } = e.point;
       const { lon, lat } = worldXZToLonLat(worldX, worldZ, terrain);
 
-      // In trolling mode, clicks add ordered turn-point waypoints (provided a
-      // start point already exists). The first click in trolling mode without
-      // a start still sets the start so users aren't blocked.
+      // ── Reverse drift mode ──────────────────────────────────────────────
+      // When reverseModeActive, the click sets the catch location and
+      // immediately computes the backwards drift path.
+      if (reverseModeActive) {
+        if (!driftConditions) return;
+        setCatchPoint(lat, lon);
+        const reversePath = reverseComputeDrift({
+          conditions: driftConditions,
+          endLat: lat,
+          endLon: lon,
+          terrain,
+          lineLengthM,
+          hours: 24,
+        });
+        setReverseDriftPath(reversePath);
+        return;
+      }
+
+      // ── Normal drift / trolling mode ────────────────────────────────────
       const inTrolling = driftMode === "trolling";
       const hasStart = driftStartLat !== null && driftStartLon !== null;
       let nextStartLat = driftStartLat;
@@ -179,6 +203,7 @@ export const DriftWaterPlane: React.FC<DriftWaterPlaneProps> = ({ surfaceY, terr
       terrain, driftConditions, lineLengthM, lineWeightG, setDriftStart, setDriftPath,
       driftMode, boatHeadingDeg, boatSpeedKnots,
       driftStartLat, driftStartLon, driftWaypoints, addDriftWaypoint,
+      reverseModeActive, setCatchPoint, setReverseDriftPath,
     ],
   );
 

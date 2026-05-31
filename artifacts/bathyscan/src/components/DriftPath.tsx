@@ -2,11 +2,14 @@
  * DriftPath — R3F component for drift ribbon, hourly buoys, and fishing line.
  *
  * Renders:
- *   (a) A TubeGeometry ribbon along the 24 computed drift waypoints
+ *   (a) A probability cone — a tapered tube geometry that widens with each
+ *       forecast hour, encoding the growing position uncertainty over time.
+ *       A thin centre-line tube shows the most-likely track.
  *   (b) Small sphere buoys at each hourly waypoint, numbered 1–24
  *       (active hour highlighted in yellow)
  *   (c) A fishing line descending from the active hour's waypoint at the
  *       computed angle, terminating at the estimated hook depth
+ *   (d) The reverse-drift path in amber, when reverseModeActive
  */
 
 import React, { useMemo, useRef, useEffect, useCallback } from "react";
@@ -24,9 +27,86 @@ const FISHING_LINE_COLOR = 0xfde68a;
 const BOAT_ARROW_COLOR = 0xfbbf24;
 const DRIFT_ARROW_COLOR = 0x22d3ee;
 const RESULTANT_ARROW_COLOR = 0xe2e8f0;
+const REVERSE_PATH_COLOR = 0xf97316; // orange — reverse drift
+const CATCH_MARKER_COLOR = 0xef4444; // red — catch location
 /** World units per knot for the visual force arrows. */
 const ARROW_SCALE_PER_KT = 0.55;
 const ARROW_MIN_LEN = 0.25;
+
+/**
+ * Build a tapered tube geometry along the drift path. The radius grows linearly
+ * from minRadius at hour 0 to maxRadius at the final hour, representing the
+ * widening probability envelope as forecast uncertainty accumulates over time.
+ *
+ * The axis of each ring cross-section is aligned with the local path tangent so
+ * rings always face along the direction of travel.
+ */
+function buildProbabilityCone(
+  waypoints: { worldX: number; worldZ: number }[],
+  surfaceY: number,
+  minRadius: number,
+  maxRadius: number,
+  radialSegments: number = 8,
+): THREE.BufferGeometry {
+  const N = waypoints.length;
+  if (N < 2) return new THREE.BufferGeometry();
+
+  const positions: number[] = [];
+  const indices: number[] = [];
+
+  for (let i = 0; i < N; i++) {
+    const t = i / (N - 1);
+    const radius = minRadius + t * (maxRadius - minRadius);
+    const wp = waypoints[i]!;
+
+    // Tangent direction in XZ plane
+    let tx = 0;
+    let tz = 0;
+    if (i < N - 1) {
+      tx = waypoints[i + 1]!.worldX - wp.worldX;
+      tz = waypoints[i + 1]!.worldZ - wp.worldZ;
+    } else if (i > 0) {
+      tx = wp.worldX - waypoints[i - 1]!.worldX;
+      tz = wp.worldZ - waypoints[i - 1]!.worldZ;
+    }
+    const tLen = Math.sqrt(tx * tx + tz * tz);
+    if (tLen > 1e-9) {
+      tx /= tLen;
+      tz /= tLen;
+    }
+    // Normal perpendicular to tangent in XZ
+    const nx = -tz;
+    const nz = tx;
+
+    for (let j = 0; j < radialSegments; j++) {
+      const angle = (j / radialSegments) * Math.PI * 2;
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+      // Ring vertex = centre + radius * (cosA * normal_xz + sinA * up)
+      positions.push(
+        wp.worldX + radius * cosA * nx,
+        surfaceY + 0.08 + radius * sinA,
+        wp.worldZ + radius * cosA * nz,
+      );
+    }
+  }
+
+  for (let i = 0; i < N - 1; i++) {
+    for (let j = 0; j < radialSegments; j++) {
+      const a = i * radialSegments + j;
+      const b = i * radialSegments + ((j + 1) % radialSegments);
+      const c = (i + 1) * radialSegments + ((j + 1) % radialSegments);
+      const d = (i + 1) * radialSegments + j;
+      indices.push(a, b, d, b, c, d);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
 
 function pathCurve(waypoints: { worldX: number; worldZ: number }[], surfaceY: number): THREE.CatmullRomCurve3 {
   const pts = waypoints.map((wp) => new THREE.Vector3(wp.worldX, surfaceY + 0.08, wp.worldZ));
@@ -93,6 +173,8 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
   const driftWaypoints = useDriftStore((s) => s.driftWaypoints);
   const driftMode = useDriftStore((s) => s.driftMode);
   const updateDriftWaypoint = useDriftStore((s) => s.updateDriftWaypoint);
+  const reverseDriftPath = useDriftStore((s) => s.reverseDriftPath);
+  const reverseModeActive = useDriftStore((s) => s.reverseModeActive);
   const { terrain } = useAppState();
   const { camera, gl } = useThree();
 
@@ -203,15 +285,35 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
     };
   }, [driftMode, driftPath, driftHour, surfaceY]);
 
-  const curve = useMemo(() => {
+  // ── Probability cone geometry ─────────────────────────────────────────────
+  // The cone widens from minRadius at hour 0 to maxRadius at hour 23,
+  // representing growing forecast uncertainty. A separate thin centre tube
+  // remains for the most-likely track.
+  const coneMesh = useMemo(() => {
+    if (!driftPath || driftPath.length < 2) return null;
+    return buildProbabilityCone(driftPath, surfaceY, 0.04, 0.55, 8);
+  }, [driftPath, surfaceY]);
+
+  const centerCurve = useMemo(() => {
     if (!driftPath || driftPath.length < 2) return null;
     return pathCurve(driftPath, surfaceY);
   }, [driftPath, surfaceY]);
 
-  const tubeGeo = useMemo(() => {
-    if (!curve) return null;
-    return new THREE.TubeGeometry(curve, driftPath!.length * 4, 0.06, 6, false);
-  }, [curve, driftPath]);
+  const centerTubeGeo = useMemo(() => {
+    if (!centerCurve || !driftPath) return null;
+    return new THREE.TubeGeometry(centerCurve, driftPath.length * 4, 0.035, 6, false);
+  }, [centerCurve, driftPath]);
+
+  // ── Reverse drift path geometry ────────────────────────────────────────────
+  const reverseCurve = useMemo(() => {
+    if (!reverseDriftPath || reverseDriftPath.length < 2) return null;
+    return pathCurve(reverseDriftPath, surfaceY);
+  }, [reverseDriftPath, surfaceY]);
+
+  const reverseTubeGeo = useMemo(() => {
+    if (!reverseCurve || !reverseDriftPath) return null;
+    return new THREE.TubeGeometry(reverseCurve, reverseDriftPath.length * 4, 0.05, 6, false);
+  }, [reverseCurve, reverseDriftPath]);
 
   const fishingLinePoints = useMemo(() => {
     if (!driftPath) return null;
@@ -237,15 +339,29 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
 
   return (
     <group>
-      {/* Drift ribbon */}
-      {tubeGeo && (
-        <mesh geometry={tubeGeo} renderOrder={4}>
+      {/* Probability cone — semi-transparent, widening envelope */}
+      {coneMesh && (
+        <mesh geometry={coneMesh} renderOrder={3}>
           <meshStandardMaterial
             color={RIBBON_COLOR}
             emissive={RIBBON_COLOR}
-            emissiveIntensity={0.4}
+            emissiveIntensity={0.2}
             transparent
-            opacity={0.75}
+            opacity={0.22}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      )}
+
+      {/* Centre-line tube — the most-likely track */}
+      {centerTubeGeo && (
+        <mesh geometry={centerTubeGeo} renderOrder={4}>
+          <meshStandardMaterial
+            color={RIBBON_COLOR}
+            emissive={RIBBON_COLOR}
+            emissiveIntensity={0.55}
+            transparent
+            opacity={0.85}
           />
         </mesh>
       )}
@@ -370,6 +486,48 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
           </group>
         );
       })}
+
+      {/* ── Reverse drift path ─────────────────────────────────────────────── */}
+      {reverseModeActive && reverseDriftPath && reverseDriftPath.length >= 2 && (
+        <group>
+          {/* Orange reverse-drift tube */}
+          {reverseTubeGeo && (
+            <mesh geometry={reverseTubeGeo} renderOrder={5}>
+              <meshStandardMaterial
+                color={REVERSE_PATH_COLOR}
+                emissive={REVERSE_PATH_COLOR}
+                emissiveIntensity={0.5}
+                transparent
+                opacity={0.8}
+              />
+            </mesh>
+          )}
+
+          {/* Hour markers along reverse path */}
+          {reverseDriftPath.map((wp, i) => {
+            const isCatch = i === reverseDriftPath.length - 1;
+            const radius = isCatch ? 0.36 : 0.14;
+            const color = isCatch ? CATCH_MARKER_COLOR : REVERSE_PATH_COLOR;
+            return (
+              <mesh
+                key={`rev-${i}`}
+                position={[wp.worldX, surfaceY + 0.25, wp.worldZ]}
+              >
+                {isCatch ? (
+                  <octahedronGeometry args={[0.36, 0]} />
+                ) : (
+                  <sphereGeometry args={[radius, 7, 7]} />
+                )}
+                <meshStandardMaterial
+                  color={color}
+                  emissive={color}
+                  emissiveIntensity={isCatch ? 1.0 : 0.4}
+                />
+              </mesh>
+            );
+          })}
+        </group>
+      )}
     </group>
   );
 };

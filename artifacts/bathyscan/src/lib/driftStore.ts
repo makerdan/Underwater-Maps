@@ -12,6 +12,9 @@
  *   - estimatedConditions: true when fallback data is being used
  *   - backtroll: enables backtroll mode (stern-first against current)
  *   - driveBoatReverse: Drive Boat reverse-gear flag (ThrottlePanel)
+ *   - savedDriftPlans: localStorage-persisted named plans
+ *   - reverseDriftPath: computed backwards path from a catch location
+ *   - reverseModeActive: when true, map click sets the catch point
  */
 
 import { create } from "zustand";
@@ -74,6 +77,44 @@ export interface DriftWaypoint {
 export interface TrollWaypoint {
   lat: number;
   lon: number;
+}
+
+/**
+ * A named drift plan persisted to localStorage (cloud sync is out of scope).
+ * Captures the full set of inputs needed to reproduce a drift computation.
+ */
+export interface SavedDriftPlan {
+  id: string;
+  name: string;
+  savedAt: string;
+  startLat: number | null;
+  startLon: number | null;
+  lineLengthM: number;
+  lineWeightG: number;
+  driftMode: "drift" | "trolling";
+  boatHeadingDeg: number;
+  boatSpeedKnots: number;
+  waypoints: TrollWaypoint[];
+}
+
+const SAVED_PLANS_KEY = "bathyscan:savedDriftPlans";
+
+function readSavedPlans(): SavedDriftPlan[] {
+  try {
+    const raw = localStorage.getItem(SAVED_PLANS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed as SavedDriftPlan[];
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+function writeSavedPlans(plans: SavedDriftPlan[]) {
+  try {
+    localStorage.setItem(SAVED_PLANS_KEY, JSON.stringify(plans));
+  } catch {}
 }
 
 interface DriftStore {
@@ -145,6 +186,25 @@ interface DriftStore {
   updateDriftWaypoint: (index: number, wp: TrollWaypoint) => void;
   clearDriftWaypoints: () => void;
   setDriftWaypoints: (wps: TrollWaypoint[]) => void;
+
+  // ── Saved plans (localStorage only) ────────────────────────────────────
+  savedDriftPlans: SavedDriftPlan[];
+  saveDriftPlan: (name: string) => void;
+  deleteSavedDriftPlan: (id: string) => void;
+  loadDriftPlan: (plan: SavedDriftPlan) => void;
+
+  // ── Reverse drift ───────────────────────────────────────────────────────
+  /** Backwards-computed path from a catch location. */
+  reverseDriftPath: DriftWaypoint[] | null;
+  setReverseDriftPath: (path: DriftWaypoint[] | null) => void;
+  /** When true, the next water-plane click sets the reverse-drift catch point. */
+  reverseModeActive: boolean;
+  setReverseModeActive: (b: boolean) => void;
+  /** The chosen catch location (end point for reverse drift). */
+  catchLat: number | null;
+  catchLon: number | null;
+  setCatchPoint: (lat: number, lon: number) => void;
+  clearCatchPoint: () => void;
 }
 
 export const TROLL_MAX_KNOTS = 10;
@@ -159,7 +219,7 @@ function readLocalBool(key: string, fallback: boolean): boolean {
   }
 }
 
-export const useDriftStore = create<DriftStore>((set) => ({
+export const useDriftStore = create<DriftStore>((set, get) => ({
   driftPlannerActive: readLocalBool("bathyscan:driftPlannerActive", false),
   setDriftPlannerActive: (active) => {
     try { localStorage.setItem("bathyscan:driftPlannerActive", String(active)); } catch {}
@@ -236,4 +296,57 @@ export const useDriftStore = create<DriftStore>((set) => ({
     }),
   clearDriftWaypoints: () => set({ driftWaypoints: [] }),
   setDriftWaypoints: (wps) => set({ driftWaypoints: wps }),
+
+  // ── Saved plans ─────────────────────────────────────────────────────────
+  savedDriftPlans: readSavedPlans(),
+
+  saveDriftPlan: (name) => {
+    const s = get();
+    const plan: SavedDriftPlan = {
+      id: `plan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      name: name.trim(),
+      savedAt: new Date().toISOString(),
+      startLat: s.driftStartLat,
+      startLon: s.driftStartLon,
+      lineLengthM: s.lineLengthM,
+      lineWeightG: s.lineWeightG,
+      driftMode: s.driftMode,
+      boatHeadingDeg: s.boatHeadingDeg,
+      boatSpeedKnots: s.boatSpeedKnots,
+      waypoints: s.driftWaypoints.slice(),
+    };
+    const next = [...get().savedDriftPlans, plan];
+    writeSavedPlans(next);
+    set({ savedDriftPlans: next });
+  },
+
+  deleteSavedDriftPlan: (id) => {
+    const next = get().savedDriftPlans.filter((p) => p.id !== id);
+    writeSavedPlans(next);
+    set({ savedDriftPlans: next });
+  },
+
+  loadDriftPlan: (plan) => {
+    set({
+      driftMode: plan.driftMode,
+      boatHeadingDeg: plan.boatHeadingDeg,
+      boatSpeedKnots: plan.boatSpeedKnots,
+      lineLengthM: plan.lineLengthM,
+      lineWeightG: plan.lineWeightG,
+      driftWaypoints: plan.waypoints.slice(),
+      ...(plan.startLat !== null && plan.startLon !== null
+        ? { driftStartLat: plan.startLat, driftStartLon: plan.startLon }
+        : {}),
+    });
+  },
+
+  // ── Reverse drift ────────────────────────────────────────────────────────
+  reverseDriftPath: null,
+  setReverseDriftPath: (path) => set({ reverseDriftPath: path }),
+  reverseModeActive: false,
+  setReverseModeActive: (b) => set({ reverseModeActive: b, ...(b ? {} : { catchLat: null, catchLon: null, reverseDriftPath: null }) }),
+  catchLat: null,
+  catchLon: null,
+  setCatchPoint: (lat, lon) => set({ catchLat: lat, catchLon: lon }),
+  clearCatchPoint: () => set({ catchLat: null, catchLon: null, reverseDriftPath: null }),
 }));

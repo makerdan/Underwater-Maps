@@ -192,6 +192,19 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
   const setDriftWaypoints = useDriftStore((s) => s.setDriftWaypoints);
   const units = useSettingsStore((s) => s.units);
 
+  // Saved plans
+  const savedDriftPlans = useDriftStore((s) => s.savedDriftPlans);
+  const saveDriftPlan = useDriftStore((s) => s.saveDriftPlan);
+  const deleteSavedDriftPlan = useDriftStore((s) => s.deleteSavedDriftPlan);
+  const loadDriftPlan = useDriftStore((s) => s.loadDriftPlan);
+  // Reverse drift
+  const driftPath = useDriftStore((s) => s.driftPath);
+  const reverseModeActive = useDriftStore((s) => s.reverseModeActive);
+  const setReverseModeActive = useDriftStore((s) => s.setReverseModeActive);
+  const reverseDriftPath = useDriftStore((s) => s.reverseDriftPath);
+  const catchLat = useDriftStore((s) => s.catchLat);
+  const catchLon = useDriftStore((s) => s.catchLon);
+
   const queryClient = useQueryClient();
   const presetsQueryKey = getGetTrollingPresetsQueryKey();
   const foldersQueryKey = getGetTrollingPresetFoldersQueryKey();
@@ -207,6 +220,10 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
   const postFolderMutation = usePostTrollingPresetFolders();
   const patchFolderMutation = usePatchTrollingPresetFoldersId();
   const deleteFolderMutation = useDeleteTrollingPresetFoldersId();
+  const [planNameInput, setPlanNameInput] = useState("");
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [showSavedPlans, setShowSavedPlans] = useState(false);
+
   const [presetName, setPresetName] = useState("");
   const [presetError, setPresetError] = useState<string | null>(null);
   const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
@@ -221,6 +238,46 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
   const [folderError, setFolderError] = useState<string | null>(null);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [editingFolderName, setEditingFolderName] = useState("");
+
+  // ── GPX export ────────────────────────────────────────────────────────────
+  const handleExportGpx = useCallback(() => {
+    if (!driftPath || driftPath.length === 0) return;
+    const planName = planNameInput.trim() || "Drift Plan";
+    const now = new Date().toISOString();
+    let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+    xml += `<gpx version="1.1" creator="BathyScan Drift Planner" xmlns="http://www.topografix.com/GPX/1/1">\n`;
+    xml += `  <metadata><name>${planName}</name><time>${now}</time></metadata>\n`;
+    xml += `  <trk>\n    <name>${planName}</name>\n    <trkseg>\n`;
+    for (const wp of driftPath) {
+      const time = new Date(Date.now() + wp.hour * 3600000).toISOString();
+      const desc = `Hour ${wp.hour}: ${wp.driftSpeedKnots.toFixed(1)} kt drift, line ${Math.round(wp.lineAngleDeg)}°, hook ${Math.round(wp.hookDepthM)} m${wp.isSlack ? ", slack" : ""}${wp.bottomReached ? ", BOTTOM" : ""}`;
+      xml += `      <trkpt lat="${wp.lat.toFixed(7)}" lon="${wp.lon.toFixed(7)}">\n`;
+      xml += `        <ele>${(-wp.hookDepthM).toFixed(1)}</ele>\n`;
+      xml += `        <time>${time}</time>\n`;
+      xml += `        <desc>${desc.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</desc>\n`;
+      xml += `      </trkpt>\n`;
+    }
+    xml += `    </trkseg>\n  </trk>\n</gpx>`;
+    const blob = new Blob([xml], { type: "application/gpx+xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${planName.replace(/[^a-z0-9_-]/gi, "_")}_drift.gpx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [driftPath, planNameInput]);
+
+  // ── Save plan ─────────────────────────────────────────────────────────────
+  const handleSavePlan = useCallback(() => {
+    const name = planNameInput.trim();
+    if (!name) { setPlanError("Name required"); return; }
+    setPlanError(null);
+    saveDriftPlan(name);
+    setPlanNameInput("");
+    setShowSavedPlans(true);
+  }, [planNameInput, saveDriftPlan]);
 
   const handleSavePreset = useCallback(async () => {
     const trimmed = presetName.trim();
@@ -744,6 +801,64 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
           />
         </div>
       )}
+
+      {/* ── Saved Plans section ──────────────────────────────────────────── */}
+      <div style={{ marginBottom: 8 }}>
+        <div
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", marginBottom: showSavedPlans ? 6 : 0 }}
+          onClick={() => setShowSavedPlans((v) => !v)}
+        >
+          <span style={{ ...LABEL, fontSize: 8 }}>📁 SAVED PLANS ({savedDriftPlans.length})</span>
+          <span style={{ color: "#94a3b8", fontSize: 10 }}>{showSavedPlans ? "▲" : "▼"}</span>
+        </div>
+
+        {showSavedPlans && (
+          <div style={{ background: "rgba(0,10,20,0.6)", border: "1px solid rgba(0,229,255,0.15)", borderRadius: 4, padding: "6px 8px", display: "flex", flexDirection: "column", gap: 4 }}>
+            {/* Save current plan */}
+            <div style={{ display: "flex", gap: 4 }}>
+              <input
+                type="text"
+                value={planNameInput}
+                onChange={(e) => { setPlanNameInput(e.target.value); setPlanError(null); }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSavePlan(); }}
+                placeholder="Plan name…"
+                style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#e2e8f0", fontFamily: "inherit", fontSize: 9, padding: "2px 6px", borderRadius: 3 }}
+              />
+              <button
+                onClick={handleSavePlan}
+                style={{ background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", color: "#00e5ff", fontFamily: "inherit", fontSize: 8, padding: "2px 8px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.1em", whiteSpace: "nowrap" }}
+              >SAVE</button>
+            </div>
+            {planError && <div style={{ color: "#f87171", fontSize: 8 }}>{planError}</div>}
+
+            {/* Plans list */}
+            {savedDriftPlans.length === 0 ? (
+              <div style={{ color: "#64748b", fontSize: 8, fontStyle: "italic" }}>No saved plans yet</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 3, maxHeight: 120, overflowY: "auto" }}>
+                {[...savedDriftPlans].reverse().map((plan) => (
+                  <div key={plan.id} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(0,10,20,0.5)", borderRadius: 3, padding: "2px 4px" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ color: "#e2e8f0", fontSize: 8, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{plan.name}</div>
+                      <div style={{ color: "#64748b", fontSize: 7 }}>{plan.driftMode} · {plan.lineLengthM}m · {new Date(plan.savedAt).toLocaleDateString()}</div>
+                    </div>
+                    <button
+                      onClick={() => loadDriftPlan(plan)}
+                      title="Load this plan"
+                      style={{ background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.25)", color: "#22d3ee", fontFamily: "inherit", fontSize: 7, padding: "1px 5px", borderRadius: 2, cursor: "pointer" }}
+                    >LOAD</button>
+                    <button
+                      onClick={() => deleteSavedDriftPlan(plan.id)}
+                      title="Delete plan"
+                      style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", color: "#f87171", fontFamily: "inherit", fontSize: 7, padding: "1px 5px", borderRadius: 2, cursor: "pointer" }}
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {isLoading && (
         <div style={{ color: "#22d3ee", fontSize: 9, letterSpacing: "0.12em", marginBottom: 8 }}>
@@ -1302,6 +1417,28 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
         </div>
       )}
 
+      {/* ── Reverse Drift section ─────────────────────────────────────────── */}
+      <div style={{ marginBottom: 8, padding: "6px 8px", background: reverseModeActive ? "rgba(249,115,22,0.08)" : "rgba(0,10,20,0.4)", border: `1px solid ${reverseModeActive ? "rgba(249,115,22,0.4)" : "rgba(0,229,255,0.1)"}`, borderRadius: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: reverseModeActive ? 6 : 0 }}>
+          <span style={{ ...LABEL, color: reverseModeActive ? "#fb923c" : "#94a3b8", fontSize: 8 }}>⟵ REVERSE DRIFT</span>
+          <button
+            onClick={() => setReverseModeActive(!reverseModeActive)}
+            style={{ background: reverseModeActive ? "rgba(249,115,22,0.18)" : "rgba(0,10,20,0.6)", border: `1px solid ${reverseModeActive ? "rgba(249,115,22,0.5)" : "rgba(0,229,255,0.2)"}`, color: reverseModeActive ? "#fb923c" : "#94a3b8", fontFamily: "inherit", fontSize: 8, padding: "2px 8px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.1em" }}
+          >{reverseModeActive ? "ON" : "OFF"}</button>
+        </div>
+        {reverseModeActive && (
+          <div style={{ fontSize: 8, color: "#94a3b8" }}>
+            {catchLat === null
+              ? "Click the water to mark your catch location — the backwards path will appear in orange."
+              : <>
+                  Catch: {catchLat.toFixed(4)}, {catchLon?.toFixed(4)}
+                  {reverseDriftPath && <span style={{ color: "#fb923c", marginLeft: 4 }}>→ {reverseDriftPath.length - 1}h path</span>}
+                </>
+            }
+          </div>
+        )}
+      </div>
+
       <div style={{ marginBottom: 6 }}>
         <span style={LABEL}>LINE LENGTH </span>
         <input
@@ -1348,6 +1485,34 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
       )}
 
       <div style={{ ...DIVIDER, marginTop: 8 }} />
+
+      {/* ── Plan name + GPX export ───────────────────────────────────────── */}
+      {driftPath && driftPath.length > 0 && (
+        <div style={{ marginBottom: 6 }}>
+          <div style={{ display: "flex", gap: 4 }}>
+            <input
+              type="text"
+              value={planNameInput}
+              onChange={(e) => setPlanNameInput(e.target.value)}
+              placeholder="Plan name (optional for GPX)…"
+              style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.15)", color: "#e2e8f0", fontFamily: "inherit", fontSize: 8, padding: "2px 6px", borderRadius: 3 }}
+            />
+          </div>
+          <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+            <button
+              onClick={handleSavePlan}
+              title="Save plan to local storage"
+              style={{ flex: 1, background: "rgba(0,229,255,0.06)", border: "1px solid rgba(0,229,255,0.2)", color: "#22d3ee", fontFamily: "inherit", fontSize: 8, padding: "3px 4px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.1em" }}
+            >💾 SAVE PLAN</button>
+            <button
+              onClick={handleExportGpx}
+              title="Export drift path as GPX 1.1"
+              style={{ flex: 1, background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.25)", color: "#4ade80", fontFamily: "inherit", fontSize: 8, padding: "3px 4px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.1em" }}
+            >↓ EXPORT GPX</button>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 6 }}>
         <button
           onClick={() => void refetch()}

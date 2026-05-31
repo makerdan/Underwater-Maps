@@ -32,6 +32,7 @@ import { useDriftStore } from "@/lib/driftStore";
 import { DriftWaterPlane } from "@/components/DriftWaterPlane";
 import { DriftBoat } from "@/components/DriftBoat";
 import { DriftPath } from "@/components/DriftPath";
+import { WindArrow } from "@/components/WindArrow";
 import { ConditionsOverlays } from "@/components/ConditionsOverlays";
 import { CurrentsLayer } from "@/components/CurrentsLayer";
 import { useCurrentsStore } from "@/lib/currentsStore";
@@ -414,6 +415,7 @@ const DriftSceneContents: React.FC = () => {
         <>
           <DriftBoat surfaceY={surfaceY} />
           <DriftPath surfaceY={surfaceY} />
+          <WindArrow surfaceY={surfaceY} />
         </>
       )}
     </>

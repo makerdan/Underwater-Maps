@@ -50,7 +50,7 @@ function normalizeAngle(deg: number): number {
  * into a velocity vector (km/h) in (dLat, dLon) per hour.
  * Bearing is direction the current is GOING TO (oceanographic convention used here).
  */
-function currentVector(speedKnots: number, bearingDeg: number, refLat: number): { dLat: number; dLon: number } {
+export function currentVector(speedKnots: number, bearingDeg: number, refLat: number): { dLat: number; dLon: number } {
   const speedKmH = speedKnots * KM_PER_KNOT_HOUR;
   const rad = degToRad(bearingDeg);
   const dLatKm = speedKmH * Math.cos(rad);
@@ -448,6 +448,122 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
       stallSpeedKnots,
     });
   }
+
+  return waypoints;
+}
+
+// ---------------------------------------------------------------------------
+// Reverse drift — integrate backwards from a catch location
+// ---------------------------------------------------------------------------
+
+export interface ReverseComputeDriftOptions {
+  /** The conditions array used for the forward drift (same source). */
+  conditions: HourlySurfaceCondition[];
+  /** Catch location — where a fish was caught (the end of the drift). */
+  endLat: number;
+  endLon: number;
+  terrain: TerrainData;
+  lineLengthM?: number;
+  /** How many hours to step back (default 24). */
+  hours?: number;
+}
+
+/**
+ * Compute the backwards drift path from a catch location.
+ *
+ * Starting at (endLat, endLon) — the catch location — this function integrates
+ * backwards through the current/wind model one hour at a time, revealing where
+ * the boat should have been at each earlier time step in order to present bait
+ * at that exact spot.
+ *
+ * Returns waypoints in chronological order (hour 0 = earliest, hour N-1 = 1 h
+ * before the catch). The catch location itself is appended as the final entry
+ * with hour === `hours`.
+ */
+export function reverseComputeDrift(opts: ReverseComputeDriftOptions): DriftWaypoint[] {
+  const { conditions, endLat, endLon, terrain, lineLengthM = 200, hours = 24 } = opts;
+
+  // Build positions array backwards: start at catch, subtract drift each step.
+  const positions: Array<{ lat: number; lon: number }> = [];
+  let curLat = endLat;
+  let curLon = endLon;
+
+  // Work from hour (hours-1) down to 0.
+  for (let h = hours - 1; h >= 0; h--) {
+    const cond = conditions[h % conditions.length]!;
+
+    // Drift vector that would have applied during hour h (forward direction)
+    const tidalVec = currentVector(cond.tidalSpeedKnots, cond.tidalDegrees, curLat);
+    const windLeewaySpeed = cond.windSpeedKnots * 0.03;
+    const windVec = currentVector(windLeewaySpeed, cond.windDegrees, curLat);
+    const driftDLat = 0.7 * tidalVec.dLat + 0.3 * windVec.dLat;
+    const driftDLon = 0.7 * tidalVec.dLon + 0.3 * windVec.dLon;
+
+    // Previous position (before this hour's drift) = current minus drift
+    const prevLat = curLat - driftDLat;
+    const prevLon = curLon - driftDLon;
+
+    // Record the START position of this hour (where boat was before drifting)
+    positions.unshift({ lat: prevLat, lon: prevLon });
+    curLat = prevLat;
+    curLon = prevLon;
+  }
+
+  // Build DriftWaypoint array in chronological order
+  const waypoints: DriftWaypoint[] = [];
+  for (let i = 0; i < positions.length; i++) {
+    const pos = positions[i]!;
+    const h = i; // hour index (0 = earliest)
+    const cond = conditions[h % conditions.length]!;
+
+    const nextPos = i < positions.length - 1 ? positions[i + 1]! : { lat: endLat, lon: endLon };
+    const dLat = nextPos.lat - pos.lat;
+    const dLon = nextPos.lon - pos.lon;
+    const driftKmH = Math.sqrt(
+      (dLat * KM_PER_DEG_LAT) ** 2 +
+      (dLon * KM_PER_DEG_LAT * Math.cos(degToRad(pos.lat))) ** 2,
+    );
+    const resultantKnots = driftKmH / KM_PER_KNOT_HOUR;
+    const angle = lineAngle(resultantKnots);
+    const hookDepthM = lineLengthM * Math.cos(degToRad(angle));
+    const depth = getDepthAt(pos.lat, pos.lon, terrain);
+    const worldPos = lonLatToWorldXZ(pos.lon, pos.lat, terrain);
+    const headingDeg = (Math.abs(dLat) < 1e-12 && Math.abs(dLon) < 1e-12)
+      ? 0
+      : bearing(pos.lat, pos.lon, nextPos.lat, nextPos.lon);
+
+    waypoints.push({
+      hour: h,
+      lat: pos.lat,
+      lon: pos.lon,
+      worldX: worldPos.x,
+      worldZ: worldPos.z,
+      lineAngleDeg: angle,
+      hookDepthM,
+      bottomReached: hookDepthM >= depth - 5,
+      driftSpeedKnots: Math.round(resultantKnots * 10) / 10,
+      headingDeg,
+      isSlack: !!cond.isSlack || cond.tidalSpeedKnots < 0.1,
+      phase: cond.phase,
+    });
+  }
+
+  // Append the catch location itself as the final marker
+  const catchWorld = lonLatToWorldXZ(endLon, endLat, terrain);
+  const lastCond = conditions[(hours - 1) % conditions.length]!;
+  waypoints.push({
+    hour: hours,
+    lat: endLat,
+    lon: endLon,
+    worldX: catchWorld.x,
+    worldZ: catchWorld.z,
+    lineAngleDeg: 0,
+    hookDepthM: lineLengthM,
+    bottomReached: false,
+    driftSpeedKnots: 0,
+    headingDeg: 0,
+    isSlack: !!lastCond.isSlack || lastCond.tidalSpeedKnots < 0.1,
+  });
 
   return waypoints;
 }
