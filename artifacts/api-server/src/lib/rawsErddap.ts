@@ -12,9 +12,15 @@
  *
  * Per-station metadata: GET /erddap/info/{datasetId}/index.json
  * Per-station obs:      GET /erddap/tabledap/{datasetId}.json?time,{vars}&time>=now-2hours&orderByMax("time")
+ *
+ * Resilience: successful observations are persisted to the `raws_observation_cache`
+ * DB table. When ERDDAP is unreachable the last-good observation is returned
+ * with `stale: true` so the UI can indicate the data may be outdated.
  */
 
 import { registerCache } from "./cacheRegistry.js";
+import { db, rawsObservationCacheTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const ERDDAP_BASE = "https://erddap.aoos.org/erddap";
 const FETCH_TIMEOUT_MS = 8_000;
@@ -22,6 +28,7 @@ const META_FETCH_TIMEOUT_MS = 6_000;
 const POSITIVE_TTL_MS = 10 * 60_000;
 const NEGATIVE_TTL_MS = 2 * 60_000;
 const META_TTL_MS = 60 * 60_000; // 1 hour — schema rarely changes
+const STALE_THRESHOLD_MS = 10 * 60_000; // mark stale after 10 min
 
 /**
  * Variables we want to extract, in preference order.
@@ -54,12 +61,24 @@ export interface RawsObservation {
   batteryVoltageV: number | null;
 }
 
+/**
+ * Result shape returned by `fetchRawsObservation`.
+ * `stale: true` means the observation comes from the DB fallback cache and
+ * is older than 10 minutes — ERDDAP was unreachable at request time.
+ */
+export interface RawsObservationResult {
+  observation: RawsObservation;
+  stale: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Caches
 // ---------------------------------------------------------------------------
 
 interface ObsCacheEntry {
   value: RawsObservation | null;
+  /** True when this entry was populated from the DB fallback, not a live ERDDAP fetch. */
+  stale: boolean;
   expiresAt: number;
 }
 
@@ -237,22 +256,110 @@ async function fetchObsUncached(datasetId: string): Promise<RawsObservation | nu
   }
 }
 
+// ---------------------------------------------------------------------------
+// DB helpers
+// ---------------------------------------------------------------------------
+
+/** Persist a successful observation to the DB (fire-and-forget). */
+async function persistToDb(datasetId: string, observation: RawsObservation): Promise<void> {
+  try {
+    await db
+      .insert(rawsObservationCacheTable)
+      .values({
+        datasetId,
+        observation: observation as unknown as Record<string, unknown>,
+        fetchedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: rawsObservationCacheTable.datasetId,
+        set: {
+          observation: observation as unknown as Record<string, unknown>,
+          fetchedAt: new Date(),
+        },
+      });
+  } catch (err) {
+    console.warn("[raws-erddap] Failed to persist to DB:", (err as Error).message);
+  }
+}
+
+/**
+ * Try to load the last-good observation from the DB.
+ * Returns null if no row exists for this datasetId.
+ * The caller decides whether to mark the result stale based on `fetchedAt`.
+ */
+async function loadFromDb(
+  datasetId: string,
+): Promise<{ observation: RawsObservation; fetchedAt: Date } | null> {
+  try {
+    const rows = await db
+      .select()
+      .from(rawsObservationCacheTable)
+      .where(eq(rawsObservationCacheTable.datasetId, datasetId))
+      .limit(1);
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      observation: row.observation as unknown as RawsObservation,
+      fetchedAt: row.fetchedAt,
+    };
+  } catch (err) {
+    console.warn("[raws-erddap] Failed to load from DB:", (err as Error).message);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
 /**
  * Fetch the latest observation for a RAWS station identified by `datasetId`.
- * Returns null when the station is unreachable or has no recent data.
+ *
+ * Returns null when the station is unreachable and no DB fallback exists.
+ * Returns `{ observation, stale: true }` when serving the DB fallback because
+ * ERDDAP was unreachable; `stale` is set whenever the cached data is older
+ * than 10 minutes so the UI can indicate the data may be outdated.
  */
 export async function fetchRawsObservation(
   datasetId: string,
-): Promise<RawsObservation | null> {
+): Promise<RawsObservationResult | null> {
   const now = Date.now();
+
+  // 1. In-memory cache (hot path)
   const cached = obsCache.get(datasetId);
   if (cached && cached.expiresAt > now) {
-    return cached.value;
+    if (cached.value === null) return null;
+    return { observation: cached.value, stale: cached.stale };
   }
-  const value = await fetchObsUncached(datasetId);
-  obsCache.set(datasetId, {
-    value,
-    expiresAt: now + (value ? POSITIVE_TTL_MS : NEGATIVE_TTL_MS),
-  });
-  return value;
+
+  // 2. Try live ERDDAP fetch
+  const observation = await fetchObsUncached(datasetId);
+
+  if (observation !== null) {
+    // Success — warm in-memory cache and persist to DB
+    obsCache.set(datasetId, { value: observation, stale: false, expiresAt: now + POSITIVE_TTL_MS });
+    void persistToDb(datasetId, observation);
+    return { observation, stale: false };
+  }
+
+  // 3. ERDDAP returned nothing — try DB fallback BEFORE writing anything to
+  //    the in-memory cache. Writing a null entry first would cause every
+  //    subsequent request within NEGATIVE_TTL to bypass the DB and return null.
+  const dbEntry = await loadFromDb(datasetId);
+  if (dbEntry) {
+    const ageMs = now - dbEntry.fetchedAt.getTime();
+    const stale = ageMs > STALE_THRESHOLD_MS;
+    console.info(
+      `[raws-erddap] Serving DB fallback for ${datasetId} (age=${Math.round(ageMs / 1000)}s, stale=${stale})`,
+    );
+    // Cache the fallback result (not null) so concurrent/subsequent requests
+    // also get the fallback data for the duration of NEGATIVE_TTL.
+    obsCache.set(datasetId, { value: dbEntry.observation, stale, expiresAt: now + NEGATIVE_TTL_MS });
+    return { observation: dbEntry.observation, stale };
+  }
+
+  // No live data and no DB fallback — station is truly unavailable.
+  // Cache the negative result briefly to avoid hammering ERDDAP.
+  obsCache.set(datasetId, { value: null, stale: false, expiresAt: now + NEGATIVE_TTL_MS });
+  return null;
 }

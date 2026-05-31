@@ -7,6 +7,9 @@
  * must match the pattern `raws_.*` (basic allowlist to prevent arbitrary
  * ERDDAP dataset access). Returns `{ available: false }` on failure with
  * HTTP 200 so the UI degrades gracefully.
+ *
+ * When ERDDAP is unreachable and a DB fallback exists, the response includes
+ * `stale: true` so the UI can indicate that the data may be outdated.
  */
 
 import { Router } from "express";
@@ -29,12 +32,17 @@ router.get("/raws-weather", async (req, res): Promise<void> => {
   }
 
   try {
-    const obs = await fetchRawsObservation(datasetId);
-    if (!obs) {
+    const result = await fetchRawsObservation(datasetId);
+    if (!result) {
       res.json({ available: false });
       return;
     }
-    res.json({ available: true, observation: obs, station: { datasetId } });
+    res.json({
+      available: true,
+      observation: result.observation,
+      stale: result.stale,
+      station: { datasetId },
+    });
   } catch (err) {
     logger.warn({ err, datasetId }, "raws-weather: unexpected error");
     res.json({ available: false });

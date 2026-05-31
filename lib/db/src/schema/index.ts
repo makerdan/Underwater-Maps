@@ -11,3 +11,4 @@ export * from "./trolling-preset-folders.js";
 export * from "./trolling-presets.js";
 export * from "./routes.js";
 export * from "./weather-station-cache.js";
+export * from "./raws-observation-cache.js";

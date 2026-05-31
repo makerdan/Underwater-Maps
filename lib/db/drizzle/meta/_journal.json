@@ -15,6 +15,13 @@
       "when": 1780211586732,
       "tag": "0001_add_userid_indexes_markers_notnull",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1748697600000,
+      "tag": "0002_add_raws_observation_cache",
+      "breakpoints": true
     }
   ]
 }
