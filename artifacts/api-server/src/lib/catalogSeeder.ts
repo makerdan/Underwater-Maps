@@ -503,6 +503,145 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     lastUpdated: "2022-09-01",
     waterType: "saltwater",
   },
+  // -------------------------------------------------------------------------
+  // Southern Alaska Coastal Relief Model (DEM ID 703) — source + per-AOI
+  // entries so users can discover these locations through catalog search.
+  // -------------------------------------------------------------------------
+  {
+    id: "ncei-crm-s-alaska",
+    name: "NCEI Southern Alaska Coastal Relief Model (DEM ID 703)",
+    sourceAgency: "NOAA/NCEI",
+    dataType: "bathymetry",
+    resolutionMMin: 90,
+    resolutionMMax: 90,
+    coverageBbox: { minLon: -170, minLat: 54, maxLon: -130, maxLat: 62 },
+    endpointUrl:
+      "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/NOAA_Coastal_Relief_Model_Southern_Alaska/ImageServer/WCSServer",
+    accessNotes:
+      "Accessible via WCS. Purpose-built regional grid compiled from NOAA hydrographic surveys, " +
+      "multibeam echosounder, and ship-track depth data. ~3 arc-second (~90 m) native resolution. " +
+      "WCS coverage identifier: 1. NCEI geoportal metadata: gov.noaa.ngdc.mgg.dem:703.",
+    description:
+      "NOAA/NCEI Southern Alaska Coastal Relief Model (CRM) — a purpose-built ~90 m regional " +
+      "bathymetric grid covering the Gulf of Alaska, Kodiak Island, Cook Inlet, Kachemak Bay, " +
+      "Resurrection Bay, Prince William Sound, and Yakutat Bay (~130 °W – 170 °W, 54 °N – 62 °N). " +
+      "Compiled from NOAA hydrographic surveys, multibeam echosounder composites, and supplemental " +
+      "ship-track data. Provides consistently populated depth values across the southern Alaska " +
+      "continental shelf and fjord systems where the general DEM Global Mosaic has gaps.",
+    keywords:
+      "Alaska,Southern Alaska,Gulf of Alaska,GOA,NCEI,CRM,Coastal Relief Model,DEM,bathymetry," +
+      "Kodiak,Kodiak Island,Chiniak Bay,Homer,Kachemak Bay,Cook Inlet,Seward,Resurrection Bay," +
+      "Kenai Fjords,Valdez,Prince William Sound,PWS,Yakutat,Yakutat Bay,shelf,fjord,multibeam,90m",
+    lastUpdated: "2024-06-01",
+    waterType: "saltwater",
+  },
+  {
+    id: "ncei-crm-kodiak-island",
+    name: "Kodiak Island — Bathymetry (Southern Alaska CRM)",
+    sourceAgency: "NOAA/NCEI",
+    dataType: "bathymetry",
+    resolutionMMin: 90,
+    resolutionMMax: 400,
+    coverageBbox: { minLon: -153.5, minLat: 57.0, maxLon: -151.5, maxLat: 58.6 },
+    endpointUrl:
+      "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/NOAA_Coastal_Relief_Model_Southern_Alaska/ImageServer/WCSServer",
+    accessNotes:
+      "Available in BathyScan as the 'Kodiak Island — Gulf of Alaska' preset. " +
+      "Uses the NCEI Southern Alaska CRM (DEM ID 703) as primary bathymetry source.",
+    description:
+      "Bathymetric coverage for Kodiak Island and Chiniak Bay — premier halibut and rockfish grounds " +
+      "on the eastern Gulf of Alaska shelf. The seafloor features rocky headlands, kelp-studded " +
+      "passages, and deep submarine canyons reaching 300+ m. Served from the NCEI Southern Alaska " +
+      "Coastal Relief Model (~90 m) as primary source, with NCEI BAG Mosaic and GEBCO as ranked " +
+      "fallbacks. An essential area for Pacific halibut, Pacific cod, sablefish, and rockfish.",
+    keywords:
+      "Kodiak,Kodiak Island,Chiniak Bay,Gulf of Alaska,GOA,halibut,Pacific halibut,cod,Pacific cod," +
+      "rockfish,sablefish,black cod,salmon,king crab,Tanner crab,Dungeness crab,Steller sea lion," +
+      "NCEI,CRM,Southern Alaska,bathymetry,shelf,canyon,kelp,Alaska,fishing,sport fishing,charter",
+    lastUpdated: "2024-06-01",
+    waterType: "saltwater",
+  },
+  {
+    id: "ncei-crm-kachemak-bay",
+    name: "Kachemak Bay & Homer — Bathymetry (Southern Alaska CRM)",
+    sourceAgency: "NOAA/NCEI",
+    dataType: "bathymetry",
+    resolutionMMin: 90,
+    resolutionMMax: 400,
+    coverageBbox: { minLon: -152.5, minLat: 59.0, maxLon: -150.5, maxLat: 60.2 },
+    endpointUrl:
+      "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/NOAA_Coastal_Relief_Model_Southern_Alaska/ImageServer/WCSServer",
+    accessNotes:
+      "Available in BathyScan as the 'Kachemak Bay — Homer / Cook Inlet' preset. " +
+      "Uses the NCEI Southern Alaska CRM (DEM ID 703) as primary bathymetry source.",
+    description:
+      "Bathymetric coverage for Homer Spit, Kachemak Bay, and lower Cook Inlet approaches — one of " +
+      "Alaska's most productive inshore fisheries. The seafloor includes halibut flats, salmon staging " +
+      "corridors, and steep-walled fjord arms reaching 180 m. Served from the NCEI Southern Alaska " +
+      "Coastal Relief Model (~90 m). Homer is a major charter fishing hub with world-class halibut " +
+      "fishing on the outer Kachemak Bay shelf and upper Cook Inlet.",
+    keywords:
+      "Kachemak Bay,Homer,Homer Spit,Cook Inlet,lower Cook Inlet,Kenai Peninsula,halibut,Pacific halibut," +
+      "salmon,Chinook salmon,king salmon,silver salmon,coho,pink salmon,Dungeness crab,razor clam," +
+      "NCEI,CRM,Southern Alaska,bathymetry,fjord,Alaska,fishing,sport fishing,charter,Homer charter",
+    lastUpdated: "2024-06-01",
+    waterType: "saltwater",
+  },
+  {
+    id: "ncei-crm-resurrection-bay",
+    name: "Resurrection Bay & Seward — Bathymetry (Southern Alaska CRM)",
+    sourceAgency: "NOAA/NCEI",
+    dataType: "bathymetry",
+    resolutionMMin: 90,
+    resolutionMMax: 400,
+    coverageBbox: { minLon: -150.5, minLat: 59.4, maxLon: -148.5, maxLat: 60.6 },
+    endpointUrl:
+      "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/NOAA_Coastal_Relief_Model_Southern_Alaska/ImageServer/WCSServer",
+    accessNotes:
+      "Available in BathyScan as the 'Resurrection Bay — Seward / Kenai Fjords' preset. " +
+      "Uses the NCEI Southern Alaska CRM (DEM ID 703) as primary bathymetry source.",
+    description:
+      "Bathymetric coverage for Seward, Resurrection Bay, and Kenai Fjords approaches — a glacially " +
+      "carved fjord reaching 275 m depth at the mouth of the Gulf of Alaska. Renowned for halibut, " +
+      "salmon, and lingcod fishing. Served from the NCEI Southern Alaska Coastal Relief Model (~90 m). " +
+      "Seward is the gateway to Kenai Fjords National Park; strong runs of all five Pacific salmon " +
+      "species return to the bay's tributaries seasonally.",
+    keywords:
+      "Resurrection Bay,Seward,Kenai Fjords,Kenai Fjords National Park,Gulf of Alaska,Kenai Peninsula," +
+      "halibut,Pacific halibut,lingcod,salmon,Chinook salmon,king salmon,silver salmon,coho,pink salmon," +
+      "rockfish,Dungeness crab,shrimp,spot prawn,NCEI,CRM,Southern Alaska,bathymetry,fjord,glacial fjord," +
+      "Alaska,fishing,sport fishing,charter,Seward charter,deep sea fishing",
+    lastUpdated: "2024-06-01",
+    waterType: "saltwater",
+  },
+  {
+    id: "ncei-crm-prince-william-sound",
+    name: "Prince William Sound & Valdez — Bathymetry (Southern Alaska CRM)",
+    sourceAgency: "NOAA/NCEI",
+    dataType: "bathymetry",
+    resolutionMMin: 90,
+    resolutionMMax: 400,
+    coverageBbox: { minLon: -148.5, minLat: 60.2, maxLon: -146.5, maxLat: 61.4 },
+    endpointUrl:
+      "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/NOAA_Coastal_Relief_Model_Southern_Alaska/ImageServer/WCSServer",
+    accessNotes:
+      "Available in BathyScan as the 'Prince William Sound — Valdez / Western Approaches' preset. " +
+      "Uses the NCEI Southern Alaska CRM (DEM ID 703) as primary bathymetry source.",
+    description:
+      "Bathymetric coverage for Valdez Arm, Port Valdez, and western Prince William Sound approaches — " +
+      "a sheltered deep-water fjord system with a sill depth of ~175 m and basin depths to 750 m. " +
+      "Strong salmon, halibut, and spot shrimp fisheries among forested islands and glaciated valleys. " +
+      "Served from the NCEI Southern Alaska Coastal Relief Model (~90 m). Prince William Sound supports " +
+      "important pink and sockeye salmon hatchery production, plus a commercial shrimp pot fishery.",
+    keywords:
+      "Prince William Sound,PWS,Valdez,Valdez Arm,Port Valdez,Cordova,Whittier,western approaches," +
+      "Gulf of Alaska,halibut,Pacific halibut,salmon,pink salmon,sockeye salmon,red salmon,silver salmon," +
+      "coho,Chinook salmon,king salmon,spot shrimp,prawn,Dungeness crab,Tanner crab,rockfish,lingcod," +
+      "NCEI,CRM,Southern Alaska,bathymetry,fjord,Alaska,fishing,sport fishing,charter,Valdez charter," +
+      "hatchery,shrimp pot,deep water",
+    lastUpdated: "2024-06-01",
+    waterType: "saltwater",
+  },
   {
     id: "aoos-intertidal-pow",
     name: "AOOS Intertidal Habitats — Prince of Wales Island",
