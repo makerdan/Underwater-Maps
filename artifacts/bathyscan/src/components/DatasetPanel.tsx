@@ -1404,6 +1404,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   );
   const renameBookmark = useSettingsStore((s) => s.renameBookmark);
   const deleteBookmark = useSettingsStore((s) => s.deleteBookmark);
+  const reorderBookmarks = useSettingsStore((s) => s.reorderBookmarks);
+
+  // Drag-to-reorder state (refs avoid re-renders during drag)
+  const dragIndexRef = useRef<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const handleFlyToBookmark = (bk: CameraBookmark) => {
     if (!terrain) return;
@@ -2011,11 +2016,47 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       No saved views yet — right-click terrain and choose &ldquo;Save as saved view…&rdquo;
                     </div>
                   )}
-                  {bookmarks.map((bk) => (
+                  {bookmarks.map((bk, idx) => (
                     <div
                       key={bk.id}
+                      draggable
+                      onDragStart={() => { dragIndexRef.current = idx; }}
+                      onDragOver={(e) => { e.preventDefault(); setDragOverIndex(idx); }}
+                      onDragLeave={() => { setDragOverIndex(null); }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const from = dragIndexRef.current;
+                        if (from === null || from === idx) { setDragOverIndex(null); return; }
+                        const next = [...bookmarks];
+                        const [moved] = next.splice(from, 1) as [CameraBookmark];
+                        next.splice(idx, 0, moved);
+                        reorderBookmarks(bookmarkDatasetId, next);
+                        dragIndexRef.current = null;
+                        setDragOverIndex(null);
+                      }}
+                      onDragEnd={() => { dragIndexRef.current = null; setDragOverIndex(null); }}
                       className="flex items-center gap-1 px-3 py-1 hover:bg-white/5 transition-colors group"
+                      style={{
+                        borderTop: dragOverIndex === idx ? "1px solid rgba(0,229,255,0.5)" : "1px solid transparent",
+                        cursor: "grab",
+                      }}
                     >
+                      <ViewscreenTooltip label="Drag to reorder" side="right">
+                        <span
+                          aria-hidden="true"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          style={{
+                            fontSize: 11,
+                            color: "#64748b",
+                            flexShrink: 0,
+                            lineHeight: 1,
+                            userSelect: "none",
+                            cursor: "grab",
+                          }}
+                        >
+                          ⠿
+                        </span>
+                      </ViewscreenTooltip>
                       <span
                         style={{
                           flex: 1,

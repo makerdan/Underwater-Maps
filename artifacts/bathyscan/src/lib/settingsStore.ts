@@ -488,6 +488,7 @@ interface SettingsActions {
   addBookmark: (datasetId: string, bookmark: Omit<CameraBookmark, "id">) => void;
   renameBookmark: (datasetId: string, bookmarkId: string, name: string) => void;
   deleteBookmark: (datasetId: string, bookmarkId: string) => void;
+  reorderBookmarks: (datasetId: string, orderedBookmarks: CameraBookmark[]) => void;
 
   setWaterType: (v: WaterType) => void;
 
@@ -1018,6 +1019,13 @@ export const useSettingsStore = create<SettingsStore>()(
               },
             };
           }),
+        reorderBookmarks: (datasetId, orderedBookmarks) =>
+          set((state) => ({
+            bookmarks: {
+              ...state.bookmarks,
+              [datasetId]: orderedBookmarks,
+            },
+          })),
 
         setWaterType: setter("waterType"),
 
