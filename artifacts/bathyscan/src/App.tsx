@@ -325,6 +325,25 @@ function Main() {
     : null;
 
   const currentsSource = useSettingsStore((st) => st.currentsSource);
+  const autoLoadTidal = useSettingsStore((st) => st.autoLoadTidal);
+
+  // Tracks which terrain object we last auto-enabled the tidal overlay for.
+  // Using the terrain reference as a key means the auto-enable fires exactly
+  // once per terrain load (i.e. per dataset switch), so a manual toggle-off
+  // by the user is not immediately overridden on the next render cycle.
+  const autoLoadTidalFiredForRef = useRef<typeof terrain>(null);
+
+  // Auto-enable the tidal overlay when terrain loads and the user has
+  // "Auto-Load Tidal Data" turned on in Settings.
+  // NOTE: `tidalOverlay` is intentionally NOT in the dependency array —
+  // including it would cause this effect to re-fire when the user manually
+  // turns the overlay off, immediately re-enabling it against their intent.
+  useEffect(() => {
+    if (!autoLoadTidal || !terrain) return;
+    if (autoLoadTidalFiredForRef.current === terrain) return;
+    autoLoadTidalFiredForRef.current = terrain;
+    setTidalOverlay(true);
+  }, [autoLoadTidal, terrain, setTidalOverlay]);
 
   // Auto-enable the tidal overlay when the user selects the NOAA currents
   // source so they don't have to toggle it manually.
