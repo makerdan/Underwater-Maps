@@ -2,7 +2,8 @@
  * fishingWindows.ts — Pure utility for computing tide-aware fishing windows.
  *
  * Crosses the tidal schedule (already loaded by useTidalSchedule) with a
- * species' tidalPreference to return up to 3 scored time windows for today.
+ * species' tidalPreference to return up to 3 scored time windows per day,
+ * grouped across up to 3 days.
  *
  * Rules:
  *   "slack"  — windows are the pre-computed slack windows from the schedule
@@ -33,26 +34,52 @@ export interface FishingWindow {
   scrubTarget: Date;
 }
 
+export interface DayWindows {
+  /** 0 = today, 1 = tomorrow, 2 = day after tomorrow. */
+  dayOffset: number;
+  /** "Today", "Fri May 31", "Sat Jun 1", etc. */
+  dayLabel: string;
+  /** UTC midnight of this day. */
+  date: Date;
+  /** Up to 3 windows for this day. */
+  windows: FishingWindow[];
+}
+
 /** Returns today's UTC midnight as a timestamp. */
 function todayUtcMs(): number {
   const now = new Date();
   return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
 }
 
-/** Returns tomorrow's UTC midnight as a timestamp. */
-function tomorrowUtcMs(): number {
-  return todayUtcMs() + 86_400_000;
+/** Returns the UTC day bounds {start, end} for a given offset from today. */
+function dayBoundsUtcMs(offset: number): { start: number; end: number } {
+  const start = todayUtcMs() + offset * 86_400_000;
+  return { start, end: start + 86_400_000 };
 }
 
-/** Formats a Date to a local time string like "06:30" using UTC hours/minutes. */
+/** Returns a human-readable label for the given day offset. */
+function makeDayLabel(offset: number): string {
+  if (offset === 0) return "Today";
+  const d = new Date(todayUtcMs() + offset * 86_400_000);
+  return d.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** Formats a Date to a UTC time string like "06:30". */
 function fmtTime(d: Date): string {
   return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
 }
 
-/** Slack windows for "slack" preference — pulled directly from schedule events. */
-function slackWindows(events: TidalScheduleEvent[]): FishingWindow[] {
-  const dayStart = todayUtcMs();
-  const dayEnd = tomorrowUtcMs();
+/** Slack windows for "slack" preference within a specific UTC day range. */
+function slackWindowsForDay(
+  events: TidalScheduleEvent[],
+  dayStart: number,
+  dayEnd: number,
+): FishingWindow[] {
   const out: FishingWindow[] = [];
 
   for (const e of events) {
@@ -83,17 +110,17 @@ function slackWindows(events: TidalScheduleEvent[]): FishingWindow[] {
 }
 
 /**
- * Mid-phase windows for "ebb" or "flood" preference.
+ * Mid-phase windows for "ebb" or "flood" preference within a specific UTC day range.
  *
  * Ebb:   mid-point of each high → low pair.
  * Flood: mid-point of each low → high pair.
  */
-function midPhaseWindows(
+function midPhaseWindowsForDay(
   events: TidalScheduleEvent[],
   phase: "ebb" | "flood",
+  dayStart: number,
+  dayEnd: number,
 ): FishingWindow[] {
-  const dayStart = todayUtcMs();
-  const dayEnd = tomorrowUtcMs();
   const HALF_WINDOW_MS = 45 * 60 * 1000;
   const out: FishingWindow[] = [];
 
@@ -134,18 +161,22 @@ function midPhaseWindows(
 }
 
 /**
- * Compute up to 3 fishing windows for today based on the tidal schedule
- * and the species' tidal preference.
+ * Compute up to 3 fishing windows per day for the next `numDays` days,
+ * based on the tidal schedule and the species' tidal preference.
  *
  * Returns [] when:
  *   - `schedule` is null or not available.
  *   - `preference` is "any".
- *   - No suitable events fall within today's UTC day.
+ *   - No suitable events fall within the covered range.
+ *
+ * Days with no windows are still included in the result (empty windows array)
+ * so the UI can render a "no windows" state per day if desired.
  */
-export function computeFishingWindows(
+export function computeFishingWindowsByDay(
   schedule: TidalSchedule | null,
   preference: TidalPreference,
-): FishingWindow[] {
+  numDays = 3,
+): DayWindows[] {
   if (!schedule || !schedule.available || preference === "any") return [];
   if (schedule.events.length === 0) return [];
 
@@ -153,16 +184,47 @@ export function computeFishingWindows(
     (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime(),
   );
 
-  switch (preference) {
-    case "slack":
-      return slackWindows(events);
-    case "ebb":
-      return midPhaseWindows(events, "ebb");
-    case "flood":
-      return midPhaseWindows(events, "flood");
-    default:
-      return [];
+  const result: DayWindows[] = [];
+
+  for (let offset = 0; offset < numDays; offset++) {
+    const { start, end } = dayBoundsUtcMs(offset);
+
+    let windows: FishingWindow[];
+    switch (preference) {
+      case "slack":
+        windows = slackWindowsForDay(events, start, end);
+        break;
+      case "ebb":
+        windows = midPhaseWindowsForDay(events, "ebb", start, end);
+        break;
+      case "flood":
+        windows = midPhaseWindowsForDay(events, "flood", start, end);
+        break;
+      default:
+        windows = [];
+    }
+
+    result.push({
+      dayOffset: offset,
+      dayLabel: makeDayLabel(offset),
+      date: new Date(start),
+      windows,
+    });
   }
+
+  return result;
+}
+
+/**
+ * Compute up to 3 fishing windows for today only.
+ * Kept for backward compatibility; prefer computeFishingWindowsByDay.
+ */
+export function computeFishingWindows(
+  schedule: TidalSchedule | null,
+  preference: TidalPreference,
+): FishingWindow[] {
+  const days = computeFishingWindowsByDay(schedule, preference, 1);
+  return days[0]?.windows ?? [];
 }
 
 /**

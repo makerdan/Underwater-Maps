@@ -8,7 +8,7 @@
  *
  * Rendered inside App.tsx alongside ZoneOverlay in the top-left column.
  */
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { useQueryClient } from "@tanstack/react-query";
 import { useHabitatStore } from "@/lib/habitatStore";
@@ -34,7 +34,7 @@ import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { ShoreZoneCredit } from "@/components/ShoreZoneCredit";
 import { useTidalSchedule } from "@/hooks/useTidalSchedule";
 import {
-  computeFishingWindows,
+  computeFishingWindowsByDay,
   formatWindowRange,
   isWindowActive,
   type FishingWindow,
@@ -277,16 +277,31 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
 
   const centerLat = terrain ? (terrain.minLat + terrain.maxLat) / 2 : null;
   const centerLon = terrain ? (terrain.minLon + terrain.maxLon) / 2 : null;
-  const { schedule } = useTidalSchedule(centerLat, centerLon, 1);
+  const { schedule } = useTidalSchedule(centerLat, centerLon, 3);
 
   const tidalPreference = activeSpecies
     ? (SPECIES_CONFIGS[activeSpecies]?.tidalPreference ?? "any")
     : "any";
 
-  const fishingWindows = useMemo(
-    () => computeFishingWindows(schedule, tidalPreference),
+  const fishingWindowsByDay = useMemo(
+    () => computeFishingWindowsByDay(schedule, tidalPreference, 3),
     [schedule, tidalPreference],
   );
+
+  const hasFishingWindows = fishingWindowsByDay.some((d) => d.windows.length > 0);
+
+  const [collapsedDays, setCollapsedDays] = useState<Set<number>>(
+    () => new Set([1, 2]),
+  );
+
+  const toggleDay = useCallback((offset: number) => {
+    setCollapsedDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(offset)) next.delete(offset);
+      else next.add(offset);
+      return next;
+    });
+  }, []);
 
   const qc = useQueryClient();
   const postMarkers = usePostMarkers();
@@ -596,9 +611,9 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
             </div>
           )}
 
-          {/* Best fishing windows today — only shown when tidal data is
+          {/* Best fishing windows — 3-day view, only shown when tidal data is
               available and the active species has a non-"any" preference. */}
-          {showOverlay && fishingWindows.length > 0 && (() => {
+          {showOverlay && hasFishingWindows && (() => {
             const refNow = scrubDatetime ?? new Date();
             return (
             <div
@@ -627,16 +642,52 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
                 }}
               >
                 <span>⏱</span>
-                <span>BEST WINDOWS TODAY</span>
+                <span>BEST WINDOWS</span>
               </div>
-              {fishingWindows.map((w, i) => (
-                <FishingWindowCard
-                  key={i}
-                  window={w}
-                  onSnap={setScrubDatetime}
-                  isActive={isWindowActive(w, refNow)}
-                />
-              ))}
+              {fishingWindowsByDay.map((day) => {
+                if (day.windows.length === 0) return null;
+                const isCollapsed = collapsedDays.has(day.dayOffset);
+                return (
+                  <div key={day.dayOffset} style={{ marginBottom: 6 }}>
+                    <button
+                      onClick={() => toggleDay(day.dayOffset)}
+                      aria-expanded={!isCollapsed}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        width: "100%",
+                        background: "rgba(251,146,60,0.07)",
+                        border: "1px solid rgba(251,146,60,0.18)",
+                        borderRadius: 3,
+                        padding: "4px 7px",
+                        marginBottom: isCollapsed ? 0 : 4,
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        color: "#fb923c",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: "0.08em",
+                      }}
+                    >
+                      <span style={{ textTransform: "uppercase" }}>
+                        {day.dayLabel}
+                      </span>
+                      <span style={{ fontSize: 9, opacity: 0.7 }}>
+                        {isCollapsed ? "▶" : "▼"} {day.windows.length}
+                      </span>
+                    </button>
+                    {!isCollapsed && day.windows.map((w, i) => (
+                      <FishingWindowCard
+                        key={i}
+                        window={w}
+                        onSnap={setScrubDatetime}
+                        isActive={isWindowActive(w, refNow)}
+                      />
+                    ))}
+                  </div>
+                );
+              })}
               <div
                 style={{
                   fontSize: 9,
@@ -648,7 +699,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
                 Click a window to snap the tidal scrubber
               </div>
             </div>
-          );
+            );
           })()}
 
           {!activeSpecies && (
