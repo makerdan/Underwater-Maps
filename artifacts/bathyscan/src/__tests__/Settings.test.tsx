@@ -35,19 +35,21 @@ vi.mock("@/lib/terrainStore", () => ({
   useTerrainStore: (sel: (s: { activeGrid: null }) => unknown) => sel({ activeGrid: null }),
 }));
 
+const mockIdbClear = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 vi.mock("idb-keyval", () => ({
   keys: () => Promise.resolve([]),
-  clear: () => Promise.resolve(),
+  clear: mockIdbClear,
   get: () => Promise.resolve(null),
   del: () => Promise.resolve(),
 }));
 
-const mockClearUpscaleCache = vi.fn(() => Promise.resolve());
+const mockClearUpscaleCache = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 vi.mock("@/hooks/useUpscaledHeatmap", () => ({
   clearUpscaleCache: mockClearUpscaleCache,
+  getUpscaleCacheInfo: vi.fn(() => Promise.resolve({ count: 0, bytes: 0 })),
 }));
 
-const mockToast = vi.fn();
+const mockToast = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: mockToast }),
 }));
@@ -55,6 +57,12 @@ vi.mock("@/hooks/use-toast", () => ({
 // ---- Imports under test ----
 import { Settings } from "@/pages/Settings";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
+
+const mockCachesDelete = vi.fn(() => Promise.resolve(true));
+const mockCachesKeys = vi.fn(() => Promise.resolve(["terrain-v1", "tiles-v1"]));
+const mockCachesOpen = vi.fn(() =>
+  Promise.resolve({ keys: () => Promise.resolve([]), match: () => Promise.resolve(undefined) }),
+);
 
 beforeEach(() => {
   try { localStorage.clear(); } catch { /* ignore */ }
@@ -64,6 +72,15 @@ beforeEach(() => {
   });
   mockClearUpscaleCache.mockClear();
   mockToast.mockClear();
+  mockIdbClear.mockClear();
+  mockCachesDelete.mockClear();
+  mockCachesKeys.mockClear();
+  mockCachesOpen.mockClear();
+  Object.defineProperty(window, "caches", {
+    value: { keys: mockCachesKeys, delete: mockCachesDelete, open: mockCachesOpen },
+    writable: true,
+    configurable: true,
+  });
 });
 
 describe("Settings page", () => {
@@ -234,6 +251,44 @@ describe("Settings page", () => {
       expect(mockToast).toHaveBeenCalledWith(
         expect.objectContaining({ title: "Enhanced image cache cleared" }),
       ),
+    );
+  });
+
+  it("OFFLINE CACHE section: clear-all-cache-btn is rendered", async () => {
+    render(<Settings />);
+    fireEvent.click(screen.getByText("OFFLINE CACHE"));
+    await waitFor(() =>
+      expect(screen.getByTestId("clear-all-cache-btn")).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("clear-all-cache-btn")).toHaveTextContent(
+      "CLEAR ALL CACHED DATA",
+    );
+  });
+
+  it("OFFLINE CACHE section: clicking clear-all-cache-btn calls Cache API and idb-keyval clear", async () => {
+    render(<Settings />);
+    fireEvent.click(screen.getByText("OFFLINE CACHE"));
+    const btn = await screen.findByTestId("clear-all-cache-btn");
+    fireEvent.click(btn);
+    await waitFor(() => expect(mockCachesKeys).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(mockCachesDelete).toHaveBeenCalledWith("terrain-v1"),
+    );
+    await waitFor(() =>
+      expect(mockCachesDelete).toHaveBeenCalledWith("tiles-v1"),
+    );
+    await waitFor(() => expect(mockIdbClear).toHaveBeenCalled());
+  });
+
+  it("OFFLINE CACHE section: confirmation message appears after clearing all cached data", async () => {
+    render(<Settings />);
+    fireEvent.click(screen.getByText("OFFLINE CACHE"));
+    const btn = await screen.findByTestId("clear-all-cache-btn");
+    fireEvent.click(btn);
+    await waitFor(() =>
+      expect(
+        screen.getByText("✓ All cached data cleared"),
+      ).toBeInTheDocument(),
     );
   });
 });
