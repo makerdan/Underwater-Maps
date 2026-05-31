@@ -44,6 +44,8 @@ export interface SurfaceConditionsResult {
   centerLat: number | null;
   centerLon: number | null;
   loading: boolean;
+  /** True whenever a background or foreground fetch is in-flight (superset of loading). */
+  isFetching: boolean;
   error: boolean;
   estimated: boolean;
   /** UTC ISO timestamp of the active sample (top-of-hour). */
@@ -77,7 +79,7 @@ export function useSurfaceConditions(
 
   const params = { lat: centerLat ?? 0, lon: centerLon ?? 0 };
 
-  const { data, isLoading, isError, refetch } = useGetSurfaceConditions(params, {
+  const { data, isLoading, isFetching, isError, refetch } = useGetSurfaceConditions(params, {
     query: {
       queryKey: getGetSurfaceConditionsQueryKey(params),
       enabled: enabled && centerLat !== null && centerLon !== null,
@@ -158,6 +160,7 @@ export function useSurfaceConditions(
       centerLat,
       centerLon,
       loading: isLoading,
+      isFetching,
       error: isError,
       estimated,
       timestamp: snapshot ? ts : null,
@@ -165,7 +168,7 @@ export function useSurfaceConditions(
       refetch: () => { void refetch(); },
       fallback,
     };
-  }, [data, isLoading, isError, refetch, centerLat, centerLon,
+  }, [data, isLoading, isFetching, isError, refetch, centerLat, centerLon,
       manualWindSpeedKnots, manualWindDegrees,
       manualTidalSpeedKnots, manualTidalDegrees,
       driftPlannerActive, driftHour, hourOverride, nowHour]);

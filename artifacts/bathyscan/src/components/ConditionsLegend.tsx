@@ -12,7 +12,9 @@ import { useDriftStore } from "@/lib/driftStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { formatSpeedFromKnots } from "@/lib/units";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
+import { useAppState } from "@/lib/context";
 import { windColor } from "@/components/ConditionsOverlays";
+import { LocationBadge } from "@/components/LocationBadge";
 import {
   LAYER_COLORS,
   LAYER_LABEL,
@@ -91,9 +93,10 @@ export const ConditionsLegend: React.FC = () => {
   const currentLayers = useUiStore((s) => s.currentDepthLayers);
   const toggleCurrentLayer = useUiStore((s) => s.toggleCurrentDepthLayer);
   const units = useSettingsStore((s) => s.units);
+  const { terrain } = useAppState();
 
   const anyActive = wind || tide || cur;
-  const { snapshot, estimated, timestamp, fallback } = useSurfaceConditions(anyActive);
+  const { snapshot, estimated, timestamp, fallback, centerLat, centerLon, loading, isFetching } = useSurfaceConditions(anyActive);
 
   const manualWindSpeedKnots = useDriftStore((s) => s.manualWindSpeedKnots);
   const setManualWindSpeedKnots = useDriftStore((s) => s.setManualWindSpeedKnots);
@@ -137,6 +140,19 @@ export const ConditionsLegend: React.FC = () => {
           </span>
         )}
       </div>
+
+      {/* Location context badge */}
+      {terrain && (
+        <div style={{ marginTop: 5 }}>
+          <LocationBadge
+            datasetName={terrain.name}
+            lat={centerLat}
+            lon={centerLon}
+            isLoading={loading}
+            isFetching={isFetching}
+          />
+        </div>
+      )}
 
       {wind && (
         <Row

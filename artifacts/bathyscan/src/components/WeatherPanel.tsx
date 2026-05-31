@@ -28,6 +28,7 @@ import { useDriftStore, TROLL_MAX_KNOTS } from "@/lib/driftStore";
 import { computeDrift } from "@/lib/computeDrift";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { LocationBadge } from "@/components/LocationBadge";
 import { formatSpeedFromKnots } from "@/lib/units";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -543,7 +544,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
 
   // Shared surface-conditions hook — same query key as the always-on overlays,
   // so React Query dedupes and Drift Planner stays in sync with WIND/TIDE/CURRENT.
-  const { data, hours: sharedHours, loading: isLoading, error: isError, estimated, refetch } =
+  const { data, hours: sharedHours, loading: isLoading, isFetching, error: isError, estimated, refetch, centerLat: cLat, centerLon: cLon } =
     useSurfaceConditions(!!terrain);
 
   // Single source of truth for the auto-drift recompute. Every input that
@@ -656,6 +657,19 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
           style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 14, padding: "0 2px" }}
         >×</button>
       </div>
+
+      {/* Location context badge */}
+      {terrain && (
+        <div style={{ marginBottom: 6 }}>
+          <LocationBadge
+            datasetName={terrain.name}
+            lat={cLat}
+            lon={cLon}
+            isLoading={isLoading}
+            isFetching={isFetching}
+          />
+        </div>
+      )}
 
       {isLoading && (
         <div style={{ color: "#22d3ee", fontSize: 9, letterSpacing: "0.12em", marginBottom: 8 }}>

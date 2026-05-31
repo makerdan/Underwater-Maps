@@ -8,6 +8,8 @@ import { useTidalSchedule, type TidalScheduleEvent } from "@/hooks/useTidalSched
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { Spinner } from "@/components/ui/spinner";
+import { LocationBadge } from "@/components/LocationBadge";
+import { useAppState } from "@/lib/context";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(2,8,18,0.94)",
@@ -159,6 +161,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
   const storeCollapsed = usePanelCollapseStore((s) => s.collapsed.tide);
   const collapsed = embedded ? false : storeCollapsed;
   const togglePanel = usePanelCollapseStore((s) => s.toggle);
+  const { terrain } = useAppState();
   const [hoveredEvent, setHoveredEvent] = useState<TidalScheduleEvent | null>(null);
   const units = useSettingsStore((s) => s.units);
   const { schedule } = useTidalSchedule(lat, lon, 7);
@@ -309,6 +312,28 @@ export const TidePanel: React.FC<TidePanelProps> = ({
           <span style={{ ...DIM, fontSize: 20, lineHeight: 1 }}>{collapsed ? "▲" : "▼"}</span>
         </div>
       </ViewscreenTooltip>
+      )}
+
+      {/* Location context badge — shown when panel is not fully collapsed */}
+      {!embedded && !collapsed && terrain && (
+        <div className="px-2 pt-1.5">
+          <LocationBadge
+            datasetName={terrain.name}
+            lat={lat}
+            lon={lon}
+            isLoading={loading}
+          />
+        </div>
+      )}
+      {embedded && terrain && (
+        <div style={{ marginBottom: 6 }}>
+          <LocationBadge
+            datasetName={terrain.name}
+            lat={lat}
+            lon={lon}
+            isLoading={loading}
+          />
+        </div>
       )}
 
       {!collapsed && (

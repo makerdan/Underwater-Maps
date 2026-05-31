@@ -11,6 +11,8 @@
 import React, { useEffect, useRef } from "react";
 import { useSurfaceConditions, type ForecastHour } from "@/hooks/useSurfaceConditions";
 import { useDriftStore } from "@/lib/driftStore";
+import { useAppState } from "@/lib/context";
+import { LocationBadge } from "@/components/LocationBadge";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -138,7 +140,8 @@ const ConditionIcon: React.FC<{ avgWind: number; maxWave: number }> = ({ avgWind
 // ---------------------------------------------------------------------------
 
 export const ForecastStrip: React.FC = () => {
-  const { forecast48h, loading } = useSurfaceConditions(true);
+  const { forecast48h, loading, isFetching, centerLat, centerLon } = useSurfaceConditions(true);
+  const { terrain } = useAppState();
   const setDriftHour = useDriftStore((s) => s.setDriftHour);
   const setDriftPlannerActive = useDriftStore((s) => s.setDriftPlannerActive);
   const nowRef = useRef<HTMLDivElement>(null);
@@ -185,6 +188,19 @@ export const ForecastStrip: React.FC = () => {
         paddingBottom: 6,
       }}
     >
+      {/* Location context badge */}
+      {terrain && (
+        <div style={{ padding: "6px 10px 0" }}>
+          <LocationBadge
+            datasetName={terrain.name}
+            lat={centerLat}
+            lon={centerLon}
+            isLoading={loading}
+            isFetching={isFetching}
+          />
+        </div>
+      )}
+
       {/* Day summary bar */}
       <div
         style={{
