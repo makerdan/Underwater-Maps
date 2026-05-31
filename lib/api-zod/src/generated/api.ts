@@ -1720,6 +1720,99 @@ export const PostDatasetsBboxQueryResponse = zod.object({
 
 
 /**
+ * Proxies a keyword + optional bounding-box search against the NCEI
+Bathymetry Geoportal (ncei.noaa.gov/maps/bathymetry/). Results are
+normalised, filtered to records with a valid bbox, and cached for
+10 minutes. When q is empty the proxy defaults to "bathymetry" to
+avoid returning non-ocean datasets from the NCEI catalog.
+
+ * @summary Search the NCEI Bathymetry Geoportal
+ */
+export const GetNceiSearchQueryParams = zod.object({
+  "q": zod.coerce.string().optional().describe('Free-text keyword query (e.g. \"Sitka bathymetry\", \"Alaska DEM\")'),
+  "bbox": zod.coerce.string().optional().describe('Spatial filter as \"minLon,minLat,maxLon,maxLat\"')
+})
+
+export const GetNceiSearchResponseItem = zod.object({
+  "id": zod.string().describe('NCEI Geoportal record id (e.g. \"gov.noaa.ngdc.mgg.dem:703\")'),
+  "name": zod.string().describe('Dataset title from NCEI metadata'),
+  "description": zod.string().nullish().describe('Abstract \/ dataset description from NCEI metadata'),
+  "sourceAgency": zod.string().describe('Producing agency (always \"NOAA\/NCEI\" for portal results)'),
+  "resolutionMMin": zod.number().nullish().describe('Finest resolution in metres (null when not stated in NCEI metadata)'),
+  "resolutionMMax": zod.number().nullish().describe('Coarsest resolution in metres (null when not stated in NCEI metadata)'),
+  "coverageBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}),
+  "metadataUrl": zod.string().nullish().describe('Link to the NCEI metadata record or landing page'),
+  "wcsAvailable": zod.boolean().describe('True when the result\'s bbox intersects NCEI WCS mosaic coverage\n(BAG Mosaic for US coastal high-res data, DEM Global Mosaic for\nglobal ocean coverage). False means the dataset cannot be\nmaterialised in BathyScan yet.\n')
+}).describe('A bathymetric survey dataset discovered via the NCEI Bathymetry Geoportal')
+export const GetNceiSearchResponse = zod.array(GetNceiSearchResponseItem)
+
+
+/**
+ * Upserts an NCEI portal result into the dataset catalog (with a
+`ncei-portal-{id}` slug) and queues terrain materialisation via the
+NCEI WCS mosaics. Requires authentication. Idempotent — returns the
+existing save row if one is already in progress or ready.
+
+ * @summary Save an NCEI portal result to the user's library
+ */
+export const PostNceiSaveBody = zod.object({
+  "result": zod.object({
+  "id": zod.string().describe('NCEI Geoportal record id (e.g. \"gov.noaa.ngdc.mgg.dem:703\")'),
+  "name": zod.string().describe('Dataset title from NCEI metadata'),
+  "description": zod.string().nullish().describe('Abstract \/ dataset description from NCEI metadata'),
+  "sourceAgency": zod.string().describe('Producing agency (always \"NOAA\/NCEI\" for portal results)'),
+  "resolutionMMin": zod.number().nullish().describe('Finest resolution in metres (null when not stated in NCEI metadata)'),
+  "resolutionMMax": zod.number().nullish().describe('Coarsest resolution in metres (null when not stated in NCEI metadata)'),
+  "coverageBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}),
+  "metadataUrl": zod.string().nullish().describe('Link to the NCEI metadata record or landing page'),
+  "wcsAvailable": zod.boolean().describe('True when the result\'s bbox intersects NCEI WCS mosaic coverage\n(BAG Mosaic for US coastal high-res data, DEM Global Mosaic for\nglobal ocean coverage). False means the dataset cannot be\nmaterialised in BathyScan yet.\n')
+}).describe('A bathymetric survey dataset discovered via the NCEI Bathymetry Geoportal')
+}).describe('Request body for POST \/ncei\/save')
+
+export const PostNceiSaveResponse = zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "catalogId": zod.string().describe('References the dataset_catalog.id'),
+  "status": zod.enum(['queued', 'processing', 'ready', 'failed']),
+  "requestedAt": zod.coerce.date(),
+  "readyAt": zod.coerce.date().nullish(),
+  "cacheKey": zod.string().nullish(),
+  "errorMessage": zod.string().nullish(),
+  "datasetId": zod.string().nullish().describe('UUID of the materialized `custom_datasets` row for this save, or null if materialization has not completed (status `queued`, `processing`, or `failed`).'),
+  "catalog": zod.object({
+  "id": zod.string().describe('Stable slug identifier'),
+  "name": zod.string(),
+  "sourceAgency": zod.string().describe('Organisation that produced the data (e.g. NOAA\/NCEI, GEBCO, Alaska DNR)'),
+  "dataType": zod.enum(['bathymetry', 'substrate', 'habitat', 'lidar', 'chart']),
+  "resolutionMMin": zod.number().nullish().describe('Finest resolution in metres'),
+  "resolutionMMax": zod.number().nullish().describe('Coarsest resolution in metres'),
+  "coverageBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}),
+  "endpointUrl": zod.string().nullish(),
+  "accessNotes": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "keywords": zod.string().nullish().describe('Comma-separated keyword tags'),
+  "lastUpdated": zod.string().nullish(),
+  "waterType": zod.enum(['saltwater', 'freshwater']),
+  "createdAt": zod.coerce.date()
+}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)')
+}).describe('A user\'s saved reference to a catalog dataset')
+
+
+/**
  * Queues a catalog dataset for caching and associates it with the authenticated user's account. Returns a save job record.
  * @summary Save a catalog dataset to the user's account
  */

@@ -1050,6 +1050,47 @@ export interface EfhFeatureCollection {
   metadata?: EfhFeatureCollectionMetadata;
 }
 
+export type NceiPortalResultCoverageBbox = {
+  minLon: number;
+  minLat: number;
+  maxLon: number;
+  maxLat: number;
+};
+
+/**
+ * A bathymetric survey dataset discovered via the NCEI Bathymetry Geoportal
+ */
+export interface NceiPortalResult {
+  /** NCEI Geoportal record id (e.g. "gov.noaa.ngdc.mgg.dem:703") */
+  id: string;
+  /** Dataset title from NCEI metadata */
+  name: string;
+  /** Abstract / dataset description from NCEI metadata */
+  description?: string | null;
+  /** Producing agency (always "NOAA/NCEI" for portal results) */
+  sourceAgency: string;
+  /** Finest resolution in metres (null when not stated in NCEI metadata) */
+  resolutionMMin?: number | null;
+  /** Coarsest resolution in metres (null when not stated in NCEI metadata) */
+  resolutionMMax?: number | null;
+  coverageBbox: NceiPortalResultCoverageBbox;
+  /** Link to the NCEI metadata record or landing page */
+  metadataUrl?: string | null;
+  /** True when the result's bbox intersects NCEI WCS mosaic coverage
+  (BAG Mosaic for US coastal high-res data, DEM Global Mosaic for
+  global ocean coverage). False means the dataset cannot be
+  materialised in BathyScan yet.
+   */
+  wcsAvailable: boolean;
+}
+
+/**
+ * Request body for POST /ncei/save
+ */
+export interface NceiPortalSaveBody {
+  result: NceiPortalResult;
+}
+
 export type DatasetCatalogEntryDataType = typeof DatasetCatalogEntryDataType[keyof typeof DatasetCatalogEntryDataType];
 
 
@@ -1746,6 +1787,17 @@ export type PostDatasetsBboxQuery200Bbox = {
 export type PostDatasetsBboxQuery200 = {
   bbox: PostDatasetsBboxQuery200Bbox;
   datasets: DatasetCatalogSearchResult[];
+};
+
+export type GetNceiSearchParams = {
+/**
+ * Free-text keyword query (e.g. "Sitka bathymetry", "Alaska DEM")
+ */
+q?: string;
+/**
+ * Spatial filter as "minLon,minLat,maxLon,maxLat"
+ */
+bbox?: string;
 };
 
 export type GetSurfaceConditionsParams = {

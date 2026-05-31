@@ -679,6 +679,15 @@ export async function getCatalogEntries(): Promise<CatalogSeedEntry[]> {
   return inMemoryCatalog;
 }
 
+/**
+ * Bust the in-memory catalog cache so the next call to getCatalogEntries()
+ * re-fetches from the DB. Call this after inserting or updating catalog rows
+ * (e.g. after upserting an ncei-portal-* entry from the /ncei/save endpoint).
+ */
+export function invalidateCatalogCache(): void {
+  inMemoryCatalog = null;
+}
+
 /** Simple TF-IDF-style keyword scorer. Returns 0–1 relevance. */
 export function scoreEntry(entry: CatalogSeedEntry, terms: string[]): number {
   if (terms.length === 0) return 1;

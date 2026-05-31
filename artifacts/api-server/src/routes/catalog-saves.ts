@@ -327,7 +327,7 @@ router.post("/datasets/catalog/:id/save", requireAuth, async (req, res): Promise
  *    handler itself might throw (e.g. the DB update in the catch block failing)
  *    and makes a last-ditch attempt to mark the row `failed`.
  */
-async function materializeSave(
+export async function materializeSave(
   saveId: string,
   userId: string,
   entry: CatalogSeedEntry,
@@ -701,6 +701,13 @@ function nceiCoverageForEntry(
   if (entry.id.startsWith("ncei-bag-mosaic")) return "bagMosaic";
   if (entry.id === "ncei-dem-global-mosaic") return "demGlobalMosaic";
   if (entry.id.startsWith("ncei-community-dem-")) return "demGlobalMosaic";
+  // NCEI Bathymetry Geoportal portal entries: prefer the high-resolution BAG
+  // mosaic for fine-grained surveys (≤ 50 m); fall back to the DEM Global
+  // Mosaic for coarser or unknown-resolution entries (covers global oceans).
+  if (entry.id.startsWith("ncei-portal-")) {
+    const minRes = entry.resolutionMMin ?? 100;
+    return minRes <= 50 ? "bagMosaic" : "demGlobalMosaic";
+  }
   return null;
 }
 
@@ -856,7 +863,7 @@ router.delete("/datasets/my-saves/:id", requireAuth, async (req, res): Promise<v
 // Shared formatter
 // ---------------------------------------------------------------------------
 
-function formatSaveRow(
+export function formatSaveRow(
   row: typeof userCatalogSavesTable.$inferSelect,
   entry: CatalogSeedEntry | null,
 ) {

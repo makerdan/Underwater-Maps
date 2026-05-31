@@ -21,12 +21,16 @@ import {
   usePostDatasetsCatalogIdSave,
   usePostDatasetsMySavesIdRetry,
   useDeleteDatasetsMySavesId,
+  useGetNceiSearch,
+  usePostNceiSave,
+  getGetNceiSearchQueryKey,
   getGetDatasetsCatalogSearchQueryKey,
   getGetDatasetsMySavesQueryKey,
   getGetUserDatasetsQueryKey,
   type GetDatasetsCatalogSearchDataType,
   type DatasetCatalogSearchResult,
   type UserCatalogSave,
+  type NceiPortalResult,
 } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { useAuth } from "@/lib/clerkCompat";
@@ -45,7 +49,7 @@ const UNDO_DELETE_WINDOW_MS = 5000;
 // Types
 // ---------------------------------------------------------------------------
 
-type Tab = "search" | "saves";
+type Tab = "search" | "saves" | "ncei";
 
 const DATA_TYPE_ICONS: Record<string, string> = {
   bathymetry: "🌊",
@@ -62,6 +66,20 @@ export const INTERTIDAL_CATALOG_IDS = new Set([
   "noaa-shorezone-tidal-pools-se-alaska",
   "noaa-shorezone-beachcombing-se-alaska",
 ]);
+
+/**
+ * Derive the catalog slug that the server will assign to an NCEI portal save
+ * (mirrors the sanitizeNceiId + prefix logic in ncei.ts so the client can
+ * check savedCatalogIds without a round-trip).
+ */
+function nceiPortalCatalogId(nceiId: string): string {
+  const slug = nceiId
+    .toLowerCase()
+    .replace(/[^a-z0-9:.-]/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-|-$/g, "");
+  return `ncei-portal-${slug}`;
+}
 
 const DATA_TYPE_COLORS: Record<string, string> = {
   bathymetry: "#00e5ff",
@@ -166,6 +184,200 @@ function scoreBarStyle(score: number): React.CSSProperties {
     transition: "width 0.3s",
   };
 }
+
+// ---------------------------------------------------------------------------
+// BboxPreviewMap — lightweight SVG world mini-map showing coverage bbox
+// ---------------------------------------------------------------------------
+
+const BboxPreviewMap: React.FC<{
+  bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number };
+}> = ({ bbox }) => {
+  const toX = (lon: number) => ((lon + 180) / 360) * 200;
+  const toY = (lat: number) => ((90 - lat) / 180) * 100;
+
+  const x1 = Math.min(toX(bbox.minLon), toX(bbox.maxLon));
+  const y1 = Math.min(toY(bbox.maxLat), toY(bbox.minLat));
+  const w = Math.max(2, Math.abs(toX(bbox.maxLon) - toX(bbox.minLon)));
+  const h = Math.max(2, Math.abs(toY(bbox.minLat) - toY(bbox.maxLat)));
+
+  return (
+    <svg
+      width={200}
+      height={100}
+      viewBox="0 0 200 100"
+      style={{ display: "block", borderRadius: 3, marginBottom: 6 }}
+      aria-label="Coverage map"
+    >
+      <rect width={200} height={100} fill="#050f1a" />
+      {/* Simplified continent blocks */}
+      <rect x={10} y={10} width={50} height={55} fill="#0e2b4a" rx={2} />
+      <rect x={30} y={62} width={28} height={28} fill="#0e2b4a" rx={2} />
+      <rect x={88} y={8} width={28} height={42} fill="#0e2b4a" rx={2} />
+      <rect x={91} y={50} width={22} height={35} fill="#0e2b4a" rx={2} />
+      <rect x={115} y={8} width={68} height={48} fill="#0e2b4a" rx={2} />
+      <rect x={150} y={60} width={28} height={20} fill="#0e2b4a" rx={2} />
+      {/* Coverage rect */}
+      <rect
+        x={x1} y={y1} width={w} height={h}
+        fill="rgba(0,229,255,0.2)"
+        stroke="#00e5ff"
+        strokeWidth={1}
+      />
+    </svg>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// NceiResultCard — card for a single NCEI portal search result
+// ---------------------------------------------------------------------------
+
+interface NceiResultCardProps {
+  result: NceiPortalResult;
+  onSave: (result: NceiPortalResult) => void;
+  saving: boolean;
+  saved: boolean;
+  canSave: boolean;
+}
+
+const NceiResultCard: React.FC<NceiResultCardProps> = ({
+  result,
+  onSave,
+  saving,
+  saved,
+  canSave,
+}) => (
+  <div style={CARD}>
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
+      <span style={{ fontSize: 14 }}>🌊</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            color: "#e2e8f0",
+            marginBottom: 2,
+            lineHeight: 1.3,
+          }}
+        >
+          {result.name}
+        </div>
+        <div
+          style={{
+            fontSize: 8,
+            color: "#00e5ff",
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+          }}
+        >
+          bathymetry · {result.sourceAgency}
+        </div>
+      </div>
+      {!result.wcsAvailable && (
+        <ViewscreenTooltip
+          label="No NCEI WCS coverage — cannot be materialized in BathyScan yet"
+          side="left"
+        >
+          <span style={{ fontSize: 8, color: "#f59e0b", letterSpacing: "0.06em" }}>
+            N/A
+          </span>
+        </ViewscreenTooltip>
+      )}
+    </div>
+
+    {result.description && (
+      <div
+        style={{ fontSize: 9, color: "#94a3b8", lineHeight: 1.5, marginBottom: 6 }}
+      >
+        {result.description.length > 120
+          ? result.description.slice(0, 120) + "…"
+          : result.description}
+      </div>
+    )}
+
+    <BboxPreviewMap bbox={result.coverageBbox} />
+
+    <div
+      style={{ fontSize: 8, color: "#64748b", marginBottom: 4, fontVariantNumeric: "tabular-nums" }}
+    >
+      {result.coverageBbox.minLon.toFixed(1)}°,{result.coverageBbox.minLat.toFixed(1)}° →{" "}
+      {result.coverageBbox.maxLon.toFixed(1)}°,{result.coverageBbox.maxLat.toFixed(1)}°
+    </div>
+
+    <div style={{ fontSize: 8, color: "#64748b", marginBottom: 6 }}>
+      {result.resolutionMMin != null
+        ? result.resolutionMMax != null && result.resolutionMMax !== result.resolutionMMin
+          ? `${result.resolutionMMin}–${result.resolutionMMax} m res`
+          : `${result.resolutionMMin} m res`
+        : <span style={{ fontStyle: "italic", color: "#475569" }}>resolution unknown</span>}
+    </div>
+
+    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+      {result.metadataUrl && (
+        <a
+          href={result.metadataUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            fontSize: 8,
+            padding: "3px 10px",
+            background: "transparent",
+            border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 3,
+            color: "#94a3b8",
+            textDecoration: "none",
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+          }}
+        >
+          Metadata
+        </a>
+      )}
+      <ViewscreenTooltip
+        label={
+          !result.wcsAvailable
+            ? "No NCEI WCS coverage for this dataset — cannot be materialized yet"
+            : !canSave
+              ? "Sign in to save datasets to your library"
+              : saved
+                ? "Already in your saved list"
+                : "Save to your library using the NCEI WCS mosaic"
+        }
+        side="top"
+      >
+        <button
+          onClick={() =>
+            result.wcsAvailable && canSave && !saved && !saving && onSave(result)
+          }
+          disabled={!result.wcsAvailable || !canSave || saved || saving}
+          style={{
+            fontSize: 8,
+            padding: "3px 10px",
+            background: saved
+              ? "rgba(74,222,128,0.1)"
+              : "rgba(255,255,255,0.04)",
+            border: `1px solid ${
+              saved ? "rgba(74,222,128,0.3)" : "rgba(255,255,255,0.1)"
+            }`,
+            borderRadius: 3,
+            color:
+              !result.wcsAvailable || !canSave
+                ? "#64748b"
+                : saved
+                  ? "#4ade80"
+                  : "#cbd5e1",
+            cursor:
+              !result.wcsAvailable || !canSave || saved ? "default" : "pointer",
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+            opacity: !result.wcsAvailable || !canSave ? 0.6 : 1,
+          }}
+        >
+          {saving ? "Saving…" : saved ? "Saved ✓" : "Save to Library"}
+        </button>
+      </ViewscreenTooltip>
+    </div>
+  </div>
+);
 
 // ---------------------------------------------------------------------------
 // Catalog result card
@@ -468,7 +680,11 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   );
   const { toast } = useToast();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { setDatasetId, setPendingExternalUserDatasetId } = useAppState();
+  const nceiDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [nceiQuery, setNceiQuery] = useState("");
+  const [debouncedNceiQuery, setDebouncedNceiQuery] = useState("");
+  const [nceiSavingIds, setNceiSavingIds] = useState<Set<string>>(new Set());
+  const { setDatasetId, setPendingExternalUserDatasetId, datasetId: currentDatasetId } = useAppState();
   const { isSignedIn } = useAuth();
   const qc = useQueryClient();
 
@@ -481,6 +697,14 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   }, []);
 
   useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
+  useEffect(() => () => { if (nceiDebounceRef.current) clearTimeout(nceiDebounceRef.current); }, []);
+
+  const handleNceiQueryChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setNceiQuery(val);
+    if (nceiDebounceRef.current) clearTimeout(nceiDebounceRef.current);
+    nceiDebounceRef.current = setTimeout(() => setDebouncedNceiQuery(val), 400);
+  }, []);
 
   // Catalog search
   // "intertidal" is a client-side-only filter (not a real dataType on the API),
@@ -556,6 +780,59 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const savedCatalogIds = useMemo(
     () => new Set(mySaves.filter((s) => s.status !== "failed").map((s) => s.catalogId)),
     [mySaves],
+  );
+
+  // Derive the viewport bbox from the currently loaded dataset's catalog entry.
+  // We match the active userDatasetId against the mySaves list (each save
+  // tracks the materialize output's datasetId). When a match is found we
+  // convert its coverageBbox to the "minLon,minLat,maxLon,maxLat" string
+  // format expected by GET /ncei/search. This seeds nearby NCEI results
+  // automatically without requiring the user to type a query.
+  const viewportBboxString = useMemo<string | undefined>(() => {
+    if (!currentDatasetId) return undefined;
+    const activeSave = mySaves.find((s) => s.datasetId === currentDatasetId);
+    const bbox = activeSave?.catalog?.coverageBbox;
+    if (!bbox) return undefined;
+    return `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat}`;
+  }, [currentDatasetId, mySaves]);
+
+  // NCEI Portal search
+  const nceiSearchParams = {
+    q: debouncedNceiQuery || undefined,
+    // When no query is typed, send the viewport bbox so results are
+    // pre-filtered to the area the user is currently exploring.
+    bbox: debouncedNceiQuery ? undefined : viewportBboxString,
+  };
+  const {
+    data: nceiResults = [],
+    isFetching: isNceiSearching,
+    error: nceiError,
+  } = useGetNceiSearch(nceiSearchParams, {
+    query: {
+      queryKey: getGetNceiSearchQueryKey(nceiSearchParams),
+      enabled: tab === "ncei",
+      staleTime: 10 * 60 * 1000,
+    },
+  });
+
+  const nceiSaveMutation = usePostNceiSave();
+
+  const handleNceiSave = useCallback(
+    async (result: NceiPortalResult) => {
+      if (!isSignedIn) return;
+      setNceiSavingIds((s) => new Set(s).add(result.id));
+      try {
+        await nceiSaveMutation.mutateAsync({ data: { result } });
+        void refetchSaves();
+      } finally {
+        setNceiSavingIds((s) => {
+          const next = new Set(s);
+          next.delete(result.id);
+          return next;
+        });
+      }
+    },
+    [isSignedIn, nceiSaveMutation, refetchSaves],
   );
 
   const saveMutation = usePostDatasetsCatalogIdSave();
@@ -783,6 +1060,11 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             My Saves
           </button>
         </ViewscreenTooltip>
+        <ViewscreenTooltip label="Browse the NOAA/NCEI Bathymetry Geoportal" side="bottom">
+          <button style={tabStyle(tab === "ncei")} onClick={() => setTab("ncei")}>
+            NCEI Portal
+          </button>
+        </ViewscreenTooltip>
       </div>
 
       {/* Search tab */}
@@ -939,6 +1221,89 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               deleting={deletingIds.has(save.id)}
             />
           ))}
+        </div>
+      )}
+
+      {/* NCEI Portal tab */}
+      {tab === "ncei" && (
+        <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+          {/* Search bar */}
+          <div style={{ padding: "12px 14px 8px" }}>
+            <input
+              style={INPUT_STYLE}
+              value={nceiQuery}
+              onChange={handleNceiQueryChange}
+              placeholder='e.g. "Alaska DEM", "Southeast Alaska multibeam"'
+              autoFocus
+              data-testid="ncei-search-input"
+            />
+            <div
+              style={{
+                fontSize: 8,
+                color: "#64748b",
+                marginTop: 6,
+                lineHeight: 1.5,
+              }}
+            >
+              Searches the{" "}
+              <a
+                href="https://www.ncei.noaa.gov/maps/bathymetry/"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "#00e5ff", textDecoration: "none" }}
+              >
+                NOAA/NCEI Bathymetry Geoportal
+              </a>
+              . Datasets with WCS coverage can be saved to your library.
+            </div>
+            {isNceiSearching && (
+              <div style={{ fontSize: 8, color: "#94a3b8", marginTop: 4 }}>Searching…</div>
+            )}
+            {nceiError && (
+              <div style={{ fontSize: 8, color: "#f87171", marginTop: 4 }}>
+                ⚠ Could not reach the NCEI Geoportal — try again in a moment.
+              </div>
+            )}
+          </div>
+
+          {/* Results */}
+          <div
+            style={{ flex: 1, overflowY: "auto", padding: "0 14px 14px" }}
+            data-testid="ncei-portal-results"
+          >
+            {!isSignedIn && (
+              <div
+                style={{
+                  fontSize: 9,
+                  color: "#f59e0b",
+                  textAlign: "center",
+                  padding: "8px 0 12px",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                Sign in to save NCEI datasets to your library.
+              </div>
+            )}
+            {nceiResults.length === 0 && !isNceiSearching && !nceiError && (
+              <div
+                style={{ fontSize: 9, color: "#94a3b8", textAlign: "center", paddingTop: 32 }}
+              >
+                {debouncedNceiQuery
+                  ? "No NCEI datasets matched — try different keywords"
+                  : "Type a keyword to search the NCEI Bathymetry Geoportal"}
+              </div>
+            )}
+            {nceiResults.map((result) => (
+              <NceiResultCard
+                key={result.id}
+                result={result}
+                onSave={handleNceiSave}
+                saving={nceiSavingIds.has(result.id)}
+                saved={savedCatalogIds.has(nceiPortalCatalogId(result.id))}
+                canSave={!!isSignedIn}
+              />
+            ))}
+          </div>
         </div>
       )}
 

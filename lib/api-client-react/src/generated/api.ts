@@ -39,6 +39,7 @@ import type {
   GetEfhParams,
   GetIntertidalSpotsParams,
   GetMarkersParams,
+  GetNceiSearchParams,
   GetRawsStationsParams,
   GetRawsWeatherParams,
   GetSurfaceConditionsParams,
@@ -56,6 +57,8 @@ import type {
   MarkerPatch,
   MoveDatasetBody,
   MoveDatasetFolderBody,
+  NceiPortalResult,
+  NceiPortalSaveBody,
   PoeClassifyRequest,
   PoeDescribeRequest,
   PoeError,
@@ -3703,6 +3706,172 @@ export const usePostDatasetsBboxQuery = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getPostDatasetsBboxQueryMutationOptions(options));
+    }
+
+export const getGetNceiSearchUrl = (params?: GetNceiSearchParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/ncei/search?${stringifiedParams}` : `/api/ncei/search`
+}
+
+/**
+ * Proxies a keyword + optional bounding-box search against the NCEI
+Bathymetry Geoportal (ncei.noaa.gov/maps/bathymetry/). Results are
+normalised, filtered to records with a valid bbox, and cached for
+10 minutes. When q is empty the proxy defaults to "bathymetry" to
+avoid returning non-ocean datasets from the NCEI catalog.
+
+ * @summary Search the NCEI Bathymetry Geoportal
+ */
+export const getNceiSearch = async (params?: GetNceiSearchParams, options?: RequestInit): Promise<NceiPortalResult[]> => {
+
+  return customFetch<NceiPortalResult[]>(getGetNceiSearchUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetNceiSearchQueryKey = (params?: GetNceiSearchParams,) => {
+    return [
+    `/api/ncei/search`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetNceiSearchQueryOptions = <TData = Awaited<ReturnType<typeof getNceiSearch>>, TError = ErrorType<ApiError>>(params?: GetNceiSearchParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getNceiSearch>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetNceiSearchQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getNceiSearch>>> = ({ signal }) => getNceiSearch(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getNceiSearch>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetNceiSearchQueryResult = NonNullable<Awaited<ReturnType<typeof getNceiSearch>>>
+export type GetNceiSearchQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Search the NCEI Bathymetry Geoportal
+ */
+
+export function useGetNceiSearch<TData = Awaited<ReturnType<typeof getNceiSearch>>, TError = ErrorType<ApiError>>(
+ params?: GetNceiSearchParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getNceiSearch>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetNceiSearchQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPostNceiSaveUrl = () => {
+
+
+
+
+  return `/api/ncei/save`
+}
+
+/**
+ * Upserts an NCEI portal result into the dataset catalog (with a
+`ncei-portal-{id}` slug) and queues terrain materialisation via the
+NCEI WCS mosaics. Requires authentication. Idempotent — returns the
+existing save row if one is already in progress or ready.
+
+ * @summary Save an NCEI portal result to the user's library
+ */
+export const postNceiSave = async (nceiPortalSaveBody: NceiPortalSaveBody, options?: RequestInit): Promise<UserCatalogSave> => {
+
+  return customFetch<UserCatalogSave>(getPostNceiSaveUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      nceiPortalSaveBody,)
+  }
+);}
+
+
+
+
+export const getPostNceiSaveMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postNceiSave>>, TError,{data: BodyType<NceiPortalSaveBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postNceiSave>>, TError,{data: BodyType<NceiPortalSaveBody>}, TContext> => {
+
+const mutationKey = ['postNceiSave'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postNceiSave>>, {data: BodyType<NceiPortalSaveBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  postNceiSave(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostNceiSaveMutationResult = NonNullable<Awaited<ReturnType<typeof postNceiSave>>>
+    export type PostNceiSaveMutationBody = BodyType<NceiPortalSaveBody>
+    export type PostNceiSaveMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Save an NCEI portal result to the user's library
+ */
+export const usePostNceiSave = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postNceiSave>>, TError,{data: BodyType<NceiPortalSaveBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postNceiSave>>,
+        TError,
+        {data: BodyType<NceiPortalSaveBody>},
+        TContext
+      > => {
+      return useMutation(getPostNceiSaveMutationOptions(options));
     }
 
 export const getPostDatasetsCatalogIdSaveUrl = (id: string,) => {

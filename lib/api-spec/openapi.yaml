@@ -1526,6 +1526,90 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /ncei/search:
+    get:
+      operationId: getNceiSearch
+      tags: [datasets]
+      summary: Search the NCEI Bathymetry Geoportal
+      description: |
+        Proxies a keyword + optional bounding-box search against the NCEI
+        Bathymetry Geoportal (ncei.noaa.gov/maps/bathymetry/). Results are
+        normalised, filtered to records with a valid bbox, and cached for
+        10 minutes. When q is empty the proxy defaults to "bathymetry" to
+        avoid returning non-ocean datasets from the NCEI catalog.
+      parameters:
+        - in: query
+          name: q
+          required: false
+          schema:
+            type: string
+          description: Free-text keyword query (e.g. "Sitka bathymetry", "Alaska DEM")
+        - in: query
+          name: bbox
+          required: false
+          schema:
+            type: string
+          description: Spatial filter as "minLon,minLat,maxLon,maxLat"
+      responses:
+        "200":
+          description: Normalised list of matching NCEI portal results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NceiPortalResult"
+        "503":
+          description: NCEI Geoportal is unreachable or returned an error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /ncei/save:
+    post:
+      operationId: postNceiSave
+      tags: [datasets]
+      summary: Save an NCEI portal result to the user's library
+      description: |
+        Upserts an NCEI portal result into the dataset catalog (with a
+        `ncei-portal-{id}` slug) and queues terrain materialisation via the
+        NCEI WCS mosaics. Requires authentication. Idempotent — returns the
+        existing save row if one is already in progress or ready.
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NceiPortalSaveBody"
+      responses:
+        "200":
+          description: Existing save row returned (already saved)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserCatalogSave"
+        "201":
+          description: New save job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserCatalogSave"
+        "400":
+          description: Invalid request body or dataset has no WCS coverage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /datasets/catalog/{id}/save:
     post:
       operationId: postDatasetsCatalogIdSave
@@ -3149,6 +3233,66 @@ components:
       required:
         - type
         - features
+
+    NceiPortalResult:
+      type: object
+      description: A bathymetric survey dataset discovered via the NCEI Bathymetry Geoportal
+      properties:
+        id:
+          type: string
+          description: NCEI Geoportal record id (e.g. "gov.noaa.ngdc.mgg.dem:703")
+        name:
+          type: string
+          description: Dataset title from NCEI metadata
+        description:
+          type: string
+          nullable: true
+          description: Abstract / dataset description from NCEI metadata
+        sourceAgency:
+          type: string
+          description: Producing agency (always "NOAA/NCEI" for portal results)
+        resolutionMMin:
+          type: number
+          nullable: true
+          description: Finest resolution in metres (null when not stated in NCEI metadata)
+        resolutionMMax:
+          type: number
+          nullable: true
+          description: Coarsest resolution in metres (null when not stated in NCEI metadata)
+        coverageBbox:
+          type: object
+          properties:
+            minLon: { type: number }
+            minLat: { type: number }
+            maxLon: { type: number }
+            maxLat: { type: number }
+          required: [minLon, minLat, maxLon, maxLat]
+        metadataUrl:
+          type: string
+          nullable: true
+          description: Link to the NCEI metadata record or landing page
+        wcsAvailable:
+          type: boolean
+          description: |
+            True when the result's bbox intersects NCEI WCS mosaic coverage
+            (BAG Mosaic for US coastal high-res data, DEM Global Mosaic for
+            global ocean coverage). False means the dataset cannot be
+            materialised in BathyScan yet.
+      required:
+        - id
+        - name
+        - sourceAgency
+        - coverageBbox
+        - wcsAvailable
+
+    NceiPortalSaveBody:
+      type: object
+      description: Request body for POST /ncei/save
+      properties:
+        result:
+          $ref: "#/components/schemas/NceiPortalResult"
+      required:
+        - result
 
     DatasetCatalogEntry:
       type: object
