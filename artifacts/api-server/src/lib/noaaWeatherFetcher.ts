@@ -145,6 +145,12 @@ async function fetchNearbyStations(
   try {
     const res = await fetchWithTimeout(url, FETCH_TIMEOUT_MS);
     if (!res.ok) {
+      if (res.status === 400) {
+        // NOAA returns 400 for coordinates outside its coverage area (e.g. Alaska,
+        // US territories, open ocean). This is expected — not a server error.
+        console.info(`[noaaWeatherFetcher] NOAA stations 400 (no coverage) for point=${lat.toFixed(4)},${lon.toFixed(4)}`);
+        return [];
+      }
       console.error(`[noaaWeatherFetcher] NOAA stations HTTP ${res.status} for point=${lat.toFixed(4)},${lon.toFixed(4)}`);
       return null;
     }
