@@ -317,6 +317,80 @@ async function scan(): Promise<void> {
   }
 }
 
+// ─── GCS recovery (post-restart fallback for gcs-job-status) ─────────────
+
+export interface RecoveredJobStatus {
+  status: "failed" | "complete" | "pending" | "unknown";
+  error?: string;
+}
+
+const GCS_RECOVERY_CACHE_TTL_MS = 30_000;
+const gcsRecoveryCache = new Map<string, { result: RecoveredJobStatus; ts: number }>();
+registerCache(() => gcsRecoveryCache.clear());
+
+/**
+ * When `activeJobs` has no entry for an objectKey (e.g. after a server
+ * restart), this function checks GCS prefixes in priority order:
+ *   failed-datasets/    → status "failed"  (reads x-goog-meta-error)
+ *   processed-datasets/ → status "complete"
+ *   pending-datasets/   → status "pending"  (restart before processing)
+ *   not found anywhere  → status "unknown"
+ *
+ * Results are cached for GCS_RECOVERY_CACHE_TTL_MS (30 s) to avoid
+ * hammering GCS on every client poll tick.
+ */
+export async function recoverGcsJobStatus(objectKey: string): Promise<RecoveredJobStatus> {
+  const now = Date.now();
+  const cached = gcsRecoveryCache.get(objectKey);
+  if (cached && now - cached.ts < GCS_RECOVERY_CACHE_TTL_MS) {
+    return cached.result;
+  }
+
+  const bucketName = getBucketName();
+  const bucket = gcsClient.bucket(bucketName);
+
+  // Strip the leading prefix segment ("pending-datasets/") to get the
+  // user/uuid/filename suffix that is shared across all prefixes.
+  const suffix = objectKey.replace(/^[^/]+\//, "");
+
+  // 1. failed-datasets/ — highest priority; may carry error metadata
+  const failedKey = `failed-datasets/${suffix}`;
+  try {
+    const [failedMeta] = await bucket.file(failedKey).getMetadata();
+    const errorMsg = (failedMeta as { metadata?: Record<string, string> })?.metadata?.["x-goog-meta-error"];
+    const result: RecoveredJobStatus = { status: "failed", ...(errorMsg ? { error: errorMsg } : {}) };
+    gcsRecoveryCache.set(objectKey, { result, ts: now });
+    return result;
+  } catch {
+    // object not present in failed-datasets — continue
+  }
+
+  // 2. processed-datasets/ — successfully processed
+  const processedKey = `processed-datasets/${suffix}`;
+  try {
+    await bucket.file(processedKey).getMetadata();
+    const result: RecoveredJobStatus = { status: "complete" };
+    gcsRecoveryCache.set(objectKey, { result, ts: now });
+    return result;
+  } catch {
+    // object not present in processed-datasets — continue
+  }
+
+  // 3. pending-datasets/ — server restarted before the scanner picked it up
+  try {
+    await bucket.file(objectKey).getMetadata();
+    const result: RecoveredJobStatus = { status: "pending" };
+    gcsRecoveryCache.set(objectKey, { result, ts: now });
+    return result;
+  } catch {
+    // object not present anywhere
+  }
+
+  const result: RecoveredJobStatus = { status: "unknown" };
+  gcsRecoveryCache.set(objectKey, { result, ts: now });
+  return result;
+}
+
 // ─── Admin status helper ──────────────────────────────────────────────────
 
 export interface BucketStatusSummary {

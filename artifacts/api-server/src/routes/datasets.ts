@@ -13,7 +13,7 @@ import { db, customDatasetsTable, userSettingsTable, uploadJobsTable } from "@wo
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
-import { signDatasetUploadUrl, getJobByObjectKey } from "../lib/bucketMonitor.js";
+import { signDatasetUploadUrl, getJobByObjectKey, recoverGcsJobStatus } from "../lib/bucketMonitor.js";
 import {
   GetDatasetsResponse,
   GetDatasetsIdTerrainResponse,
@@ -1382,11 +1382,20 @@ router.post(
 // Returns the status of a GCS background-processing job by objectKey.
 // The objectKey must belong to the authenticated user (userId is encoded in the
 // key path: pending-datasets/<userId>/...).
+//
+// When the job is not in the in-memory activeJobs map (e.g. after a server
+// restart), the handler falls back to checking GCS object metadata directly:
+//   failed-datasets/    → { status: "failed",  error: "<message>" }
+//   processed-datasets/ → { status: "complete" }
+//   pending-datasets/   → { status: "pending" }
+//   not found anywhere  → { status: "unknown", error: "…re-upload…" }
+//
+// Fallback results are cached for 30 s to avoid hammering GCS on every poll.
 // Response: { status, datasetId?, error? }
 router.get(
   "/datasets/upload/gcs-job-status",
   requireAuth,
-  (req: Request, res: Response): void => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const objectKey = String(req.query["objectKey"] ?? "");
     if (!objectKey) {
       res.status(400).json({ error: "invalid_param", details: "objectKey is required" });
@@ -1404,8 +1413,16 @@ router.get(
 
     const job = getJobByObjectKey(objectKey);
     if (!job) {
-      // Job not yet picked up by the scanner — report as pending
-      res.json({ status: "pending" });
+      // Not in memory — fall back to GCS metadata (handles server restarts)
+      const recovered = await recoverGcsJobStatus(objectKey);
+      if (recovered.status === "unknown") {
+        res.json({ status: "unknown", error: "Job not found — please re-upload your file." });
+      } else {
+        res.json({
+          status: recovered.status,
+          ...(recovered.error !== undefined ? { error: recovered.error } : {}),
+        });
+      }
       return;
     }
 
@@ -1414,7 +1431,7 @@ router.get(
       ...(job.datasetId !== undefined ? { datasetId: job.datasetId } : {}),
       ...(job.error !== undefined ? { error: job.error } : {}),
     });
-  },
+  }),
 );
 
 // ── GET /datasets/upload/jobs/:jobId ─────────────────────────────────────────

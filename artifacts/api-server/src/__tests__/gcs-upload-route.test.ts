@@ -20,6 +20,7 @@ import request from "supertest";
 vi.mock("../lib/bucketMonitor.js", () => ({
   signDatasetUploadUrl: vi.fn(),
   getJobByObjectKey: vi.fn(),
+  recoverGcsJobStatus: vi.fn(),
   getBucketStatus: vi.fn(),
   getLifecycleApplyStatus: vi.fn(() => ({ appliedAt: null, error: null })),
   LIFECYCLE_TTLS: { processedDays: 30, failedDays: 14 },
@@ -68,7 +69,7 @@ vi.mock("@clerk/shared/keys", () => ({
 // ── Import app after all mocks are in place ───────────────────────────────────
 
 import app from "../app.js";
-import { signDatasetUploadUrl, getBucketStatus } from "../lib/bucketMonitor.js";
+import { signDatasetUploadUrl, getBucketStatus, getJobByObjectKey, recoverGcsJobStatus } from "../lib/bucketMonitor.js";
 
 const AUTHED = { "x-mock-clerk-user-id": "user_test_gcs" };
 
@@ -285,5 +286,125 @@ describe("GET /api/admin/bucket-monitor", () => {
       .set(AUTHED);
 
     expect(res.status).toBe(500);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/datasets/upload/gcs-job-status  — GCS fallback (post-restart)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const GCS_STATUS_AUTHED = { "x-mock-clerk-user-id": "user_test_gcs" };
+const GCS_OBJECT_KEY = "pending-datasets/user_test_gcs/uuid-001/survey.csv";
+
+describe("GET /api/datasets/upload/gcs-job-status — GCS fallback", () => {
+  beforeEach(() => {
+    // No in-memory job by default — forces the GCS fallback path
+    vi.mocked(getJobByObjectKey).mockReturnValue(undefined);
+    // Reset call history between tests so "not.toHaveBeenCalled" assertions
+    // are not polluted by prior test invocations.
+    vi.mocked(recoverGcsJobStatus).mockReset();
+  });
+
+  it("returns 401 when unauthenticated", async () => {
+    const res = await request(app)
+      .get("/api/datasets/upload/gcs-job-status")
+      .query({ objectKey: GCS_OBJECT_KEY });
+
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 400 when objectKey is missing", async () => {
+    const res = await request(app)
+      .get("/api/datasets/upload/gcs-job-status")
+      .set(GCS_STATUS_AUTHED);
+
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error", "invalid_param");
+  });
+
+  it("returns 403 when objectKey belongs to a different user", async () => {
+    const res = await request(app)
+      .get("/api/datasets/upload/gcs-job-status")
+      .set(GCS_STATUS_AUTHED)
+      .query({ objectKey: "pending-datasets/other_user/uuid-999/file.csv" });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toHaveProperty("error", "forbidden");
+  });
+
+  it("returns status=failed with error when GCS fallback finds failed-datasets/ object", async () => {
+    vi.mocked(recoverGcsJobStatus).mockResolvedValueOnce({
+      status: "failed",
+      error: "File must contain at least 10 valid rows",
+    });
+
+    const res = await request(app)
+      .get("/api/datasets/upload/gcs-job-status")
+      .set(GCS_STATUS_AUTHED)
+      .query({ objectKey: GCS_OBJECT_KEY });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      status: "failed",
+      error: "File must contain at least 10 valid rows",
+    });
+    expect(vi.mocked(recoverGcsJobStatus)).toHaveBeenCalledWith(GCS_OBJECT_KEY);
+  });
+
+  it("returns status=complete when GCS fallback finds processed-datasets/ object", async () => {
+    vi.mocked(recoverGcsJobStatus).mockResolvedValueOnce({ status: "complete" });
+
+    const res = await request(app)
+      .get("/api/datasets/upload/gcs-job-status")
+      .set(GCS_STATUS_AUTHED)
+      .query({ objectKey: GCS_OBJECT_KEY });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ status: "complete" });
+  });
+
+  it("returns status=pending when GCS fallback finds object still in pending-datasets/", async () => {
+    vi.mocked(recoverGcsJobStatus).mockResolvedValueOnce({ status: "pending" });
+
+    const res = await request(app)
+      .get("/api/datasets/upload/gcs-job-status")
+      .set(GCS_STATUS_AUTHED)
+      .query({ objectKey: GCS_OBJECT_KEY });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ status: "pending" });
+  });
+
+  it("returns status=unknown with re-upload message when object is not found in any GCS prefix", async () => {
+    vi.mocked(recoverGcsJobStatus).mockResolvedValueOnce({ status: "unknown" });
+
+    const res = await request(app)
+      .get("/api/datasets/upload/gcs-job-status")
+      .set(GCS_STATUS_AUTHED)
+      .query({ objectKey: GCS_OBJECT_KEY });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("unknown");
+    expect(typeof res.body.error).toBe("string");
+    expect(res.body.error.length).toBeGreaterThan(0);
+  });
+
+  it("returns the in-memory job status directly without calling recoverGcsJobStatus", async () => {
+    vi.mocked(getJobByObjectKey).mockReturnValueOnce({
+      objectKey: GCS_OBJECT_KEY,
+      status: "done",
+      startedAt: Date.now(),
+      finishedAt: Date.now(),
+      datasetId: "dataset-abc",
+    });
+
+    const res = await request(app)
+      .get("/api/datasets/upload/gcs-job-status")
+      .set(GCS_STATUS_AUTHED)
+      .query({ objectKey: GCS_OBJECT_KEY });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ status: "done", datasetId: "dataset-abc" });
+    expect(vi.mocked(recoverGcsJobStatus)).not.toHaveBeenCalled();
   });
 });
