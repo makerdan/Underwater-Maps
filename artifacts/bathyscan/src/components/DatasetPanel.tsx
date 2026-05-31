@@ -289,6 +289,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const [chunkedPhase, setChunkedPhase] = useState<ChunkedPhase>("idle");
   const [chunkedUploadProgress, setChunkedUploadProgress] = useState(0);
   const [chunkedJobId, setChunkedJobId] = useState<string | null>(null);
+  const [chunkedJobProgress, setChunkedJobProgress] = useState(0);
   const [chunkedError, setChunkedError] = useState<string | null>(null);
   const [lastChunkedFile, setLastChunkedFile] = useState<File | null>(null);
 
@@ -952,6 +953,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     setLastChunkedFile(file);
     setChunkedPhase("uploading");
     setChunkedUploadProgress(0);
+    setChunkedJobProgress(0);
     setChunkedError(null);
     setChunkedJobId(null);
 
@@ -963,6 +965,87 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     if (!chunksOk) return;
     await doFinalizeChunks(file, uploadId);
   }, [doSendChunks, doFinalizeChunks]);
+
+  // ─── Poll job-status endpoint while chunked processing is in flight ────────
+  // Once the server queues the job (finalize returns jobId), we poll
+  // GET /api/datasets/upload/jobs/:jobId every 1.5 s to get real progress,
+  // surface the server's error message on failure, and auto-load the dataset
+  // when processing completes.
+  useEffect(() => {
+    if (chunkedPhase !== "processing" || !chunkedJobId) return;
+
+    setChunkedJobProgress(0);
+
+    let stopped = false;
+    const pollIntervalId = setInterval(() => {
+      void fetch(`/api/datasets/upload/jobs/${encodeURIComponent(chunkedJobId)}`, {
+        credentials: "include",
+      })
+        .then((r) => r.json() as Promise<{ status: string; progress: number; error?: string; datasetId?: string }>)
+        .then((job) => {
+          if (stopped) return;
+          if (typeof job.progress === "number") {
+            setChunkedJobProgress(job.progress);
+          }
+          if (job.status === "done" && job.datasetId) {
+            stopped = true;
+            clearInterval(pollIntervalId);
+            setChunkedPhase("idle");
+            setChunkedJobId(null);
+            setChunkedJobProgress(0);
+            void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+
+            const completedDatasetId = job.datasetId;
+            const displayName = lastChunkedFile?.name.replace(/\.[^.]+$/, "") ?? "Dataset";
+
+            const triggerLoad = () => {
+              setLoadingId(completedDatasetId);
+              setPendingUserDatasetId(completedDatasetId);
+              setPendingId(null);
+              setUploadOpen(false);
+            };
+
+            toast({
+              title: `Dataset ready: ${displayName}`,
+              description: "Your file has finished processing.",
+              action: (
+                <ToastAction altText="Load dataset now" onClick={triggerLoad}>
+                  Load now
+                </ToastAction>
+              ),
+            });
+          } else if (job.status === "error") {
+            stopped = true;
+            clearInterval(pollIntervalId);
+            setChunkedPhase("error");
+            setChunkedError(job.error ?? "Processing failed. Please try uploading again.");
+          }
+        })
+        .catch(() => {
+          // Transient network error — keep polling
+        });
+    }, 1_500);
+
+    // Stop polling after 10 minutes and show a timeout message
+    const timeoutId = setTimeout(() => {
+      if (stopped) return;
+      stopped = true;
+      clearInterval(pollIntervalId);
+      setChunkedPhase((prev) => {
+        if (prev === "processing") {
+          setChunkedError("Processing timed out. The file may still be processing — check back in a few minutes or try uploading again.");
+          return "error";
+        }
+        return prev;
+      });
+    }, 10 * 60 * 1000);
+
+    return () => {
+      stopped = true;
+      clearInterval(pollIntervalId);
+      clearTimeout(timeoutId);
+    };
+  }, [chunkedPhase, chunkedJobId, qc, lastChunkedFile, toast, setUploadOpen]);
 
   const onDrop = useCallback(
     (accepted: File[], rejected: FileRejection[]) => {
@@ -1783,7 +1866,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                   </div>
                 ) : (
                   <>
-                    {(postDatasetsUpload.isPending || chunkedPhase === "uploading" || gcsPhase === "uploading") && (
+                    {(postDatasetsUpload.isPending || chunkedPhase === "uploading" || chunkedPhase === "processing" || gcsPhase === "uploading") && (
                       <div
                         style={{
                           height: 3, background: "rgba(0,229,255,0.1)",
@@ -1793,9 +1876,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                         <div
                           style={{
                             height: "100%",
-                            width: `${gcsPhase === "uploading" ? gcsUploadProgress : chunkedPhase === "uploading" ? chunkedUploadProgress : uploadProgress}%`,
+                            width: `${gcsPhase === "uploading" ? gcsUploadProgress : chunkedPhase === "uploading" ? chunkedUploadProgress : chunkedPhase === "processing" ? chunkedJobProgress : uploadProgress}%`,
                             background: "linear-gradient(90deg, #0d47a1, #00e5ff)",
-                            borderRadius: 2, transition: "width 0.1s linear",
+                            borderRadius: 2, transition: "width 0.3s linear",
                             boxShadow: "0 0 6px rgba(0,229,255,0.6)",
                           }}
                         />
@@ -1833,7 +1916,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           <div className="animate-pulse" style={{ ...CYAN, fontSize: 10, marginBottom: 2 }}>
                             ◌ Processing on server...
                           </div>
-                          <div style={{ fontSize: 10, color: "#94a3b8" }}>Dataset will appear when ready</div>
+                          <div style={{ fontSize: 10, color: "#cbd5e1" }}>{Math.round(chunkedJobProgress)}%</div>
                         </div>
                       ) : gcsPhase === "uploading" ? (
                         <div>
