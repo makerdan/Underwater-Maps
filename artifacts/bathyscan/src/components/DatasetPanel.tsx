@@ -293,7 +293,7 @@ const VisibleDatasetRows: React.FC<{
 
   const handleCancel = useCallback(() => setPending(null), []);
 
-  if (count <= 1) return null;
+  if (count === 0) return null;
 
   const nameMap = new Map(allDatasets.map((d) => [d.id, d.name]));
 
