@@ -24,6 +24,7 @@ import weatherStationsRouter from "./weather-stations";
 import rawsStationsRouter from "./raws-stations";
 import rawsWeatherRouter from "./raws-weather";
 import nceiRouter from "./ncei";
+import adminRouter from "./admin";
 
 const router: IRouter = Router();
 
@@ -52,5 +53,6 @@ router.use(weatherStationsRouter);
 router.use(rawsStationsRouter);
 router.use(rawsWeatherRouter);
 router.use(nceiRouter);
+router.use(adminRouter);
 
 export default router;

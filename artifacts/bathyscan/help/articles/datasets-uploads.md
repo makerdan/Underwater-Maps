@@ -46,6 +46,19 @@ You do not need to keep the upload panel open while the server processes.
 
 Your saved datasets can be organised into **folders**. Click **+ New Folder** inside the Datasets panel, type a name, and press Enter. Drag a dataset onto a folder to move it in. Folders help when you have many uploads covering different areas or projects.
 
+## Very large files
+
+Files above **50 MB** are routed to cloud storage automatically — the file goes directly from your browser to a secure cloud bucket, bypassing the server entirely.
+
+What happens:
+
+1. BathyScan requests a secure upload link, then transfers your file straight to cloud storage while showing a real upload progress bar.
+2. Once the transfer finishes, the app shows **"Processing in background — we'll notify you when it's ready."** You can leave the panel open or navigate away.
+3. The server processes the file in the background (decompressing, parsing, building the terrain grid). This typically takes a few minutes depending on file size.
+4. When processing is complete the dataset appears in **Your saved datasets** automatically. The panel will load it for you.
+
+No extra steps are needed — the routing between regular, chunked, and cloud-storage upload paths happens automatically based on file size.
+
 ## My saved datasets
 
 Once signed in, your uploads (and any catalog datasets you have saved) appear under **Your saved datasets**. Click one to load it, or click **×** to delete it. Deleting a dataset also deletes its markers.

@@ -90,6 +90,7 @@ function makeProgressTerrainFetcher(
 
 const CHUNKED_THRESHOLD = 10 * 1024 * 1024; // files above 10 MB use chunked path
 const CHUNK_SIZE = 5 * 1024 * 1024;          // 5 MB per chunk
+const GCS_THRESHOLD = 50 * 1024 * 1024;      // files above 50 MB go straight to GCS
 
 const PANEL: React.CSSProperties = {
   background: "rgba(0,10,20,0.82)",
@@ -287,6 +288,12 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const [chunkedJobId, setChunkedJobId] = useState<string | null>(null);
   const [chunkedError, setChunkedError] = useState<string | null>(null);
   const [lastChunkedFile, setLastChunkedFile] = useState<File | null>(null);
+
+  // ─── GCS upload state (oversized files > GCS_THRESHOLD via presigned URL) ──
+  type GcsPhase = "idle" | "uploading" | "processing" | "error";
+  const [gcsPhase, setGcsPhase] = useState<GcsPhase>("idle");
+  const [gcsUploadProgress, setGcsUploadProgress] = useState(0);
+  const [gcsError, setGcsError] = useState<string | null>(null);
 
   const waterType = useSettingsStore((s) => s.waterType);
   const units = useSettingsStore((s) => s.units);
@@ -795,6 +802,114 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     return true;
   }, []);
 
+  // ─── GCS upload entry-point for oversized files (>50 MB) ─────────────────
+  // 1. Request a presigned PUT URL from the server.
+  // 2. PUT the file directly to GCS via XHR (gives real progress events).
+  // 3. Switch to "Processing in background" state.
+  // 4. Poll GET /api/user/datasets every 10 s until the new row appears.
+  const gcsUploadFile = useCallback(async (file: File) => {
+    setGcsPhase("uploading");
+    setGcsUploadProgress(0);
+    setGcsError(null);
+
+    // Step 1: get presigned URL
+    let uploadUrl: string;
+    let objectKey: string;
+    try {
+      const resp = await fetch("/api/datasets/upload/request-gcs-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ fileName: file.name }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { details?: string; error?: string };
+        throw new Error(err.details ?? err.error ?? "Failed to get upload URL");
+      }
+      const data = await resp.json() as { uploadUrl: string; objectKey: string };
+      uploadUrl = data.uploadUrl;
+      objectKey = data.objectKey;
+    } catch (err) {
+      setGcsPhase("error");
+      setGcsError(err instanceof Error ? err.message : "Failed to request upload URL");
+      return;
+    }
+
+    // Step 2: PUT directly to GCS with XHR for real progress
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", uploadUrl, true);
+        xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+        xhr.upload.addEventListener("progress", (e) => {
+          if (e.lengthComputable) {
+            setGcsUploadProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        });
+        xhr.addEventListener("load", () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`GCS upload failed with status ${xhr.status}`));
+          }
+        });
+        xhr.addEventListener("error", () => reject(new Error("Network error during upload")));
+        xhr.addEventListener("abort", () => reject(new Error("Upload aborted")));
+        xhr.send(file);
+      });
+    } catch (err) {
+      setGcsPhase("error");
+      setGcsError(err instanceof Error ? err.message : "Upload to cloud storage failed");
+      return;
+    }
+
+    // Step 3: switch to background-processing state
+    setGcsPhase("processing");
+    setGcsUploadProgress(100);
+
+    // Step 4: poll the job-status endpoint every 10 s using the specific
+    // objectKey so we resolve exactly the right dataset, even if another
+    // upload finishes concurrently.
+    const pollIntervalId = setInterval(() => {
+      void fetch(`/api/datasets/upload/gcs-job-status?objectKey=${encodeURIComponent(objectKey)}`, {
+        credentials: "include",
+      })
+        .then((r) => r.json() as Promise<{ status: string; datasetId?: string; error?: string }>)
+        .then((job) => {
+          if (job.status === "done" && job.datasetId) {
+            clearInterval(pollIntervalId);
+            void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+            setGcsPhase("idle");
+            setGcsError(null);
+            setLoadingId(job.datasetId);
+            setPendingUserDatasetId(job.datasetId);
+            setPendingId(null);
+            setUploadOpen(false);
+          } else if (job.status === "failed") {
+            clearInterval(pollIntervalId);
+            setGcsPhase("error");
+            setGcsError(job.error ?? "Processing failed. Please try uploading again.");
+          }
+        })
+        .catch(() => {
+          // Transient network error — keep polling
+        });
+    }, 10_000);
+
+    // Stop polling after 15 minutes and surface a timeout error so the panel
+    // isn't stuck in `processing` indefinitely (blocking further uploads).
+    setTimeout(() => {
+      clearInterval(pollIntervalId);
+      setGcsPhase((prev) => {
+        if (prev === "processing") {
+          setGcsError("Background processing timed out. The file may still be processing — check back in a few minutes or try uploading again.");
+          return "error";
+        }
+        return prev;
+      });
+    }, 15 * 60 * 1000);
+  }, [qc, setUploadOpen]);
+
   // ─── Chunked upload entry-point (new upload, starts from chunk 0) ─────────
   const chunkedUploadFile = useCallback(async (file: File) => {
     setLastChunkedFile(file);
@@ -818,6 +933,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       setSaveError(null);
       setChunkedPhase("idle");
       setChunkedError(null);
+      setGcsPhase("idle");
+      setGcsError(null);
       if (rejected.length) {
         const code = rejected[0]?.errors[0]?.code;
         if (code === "file-invalid-type") {
@@ -834,13 +951,17 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         autoRetryTimer.current = null;
       }
       setSavingToAccount(false);
-      if (file.size > CHUNKED_THRESHOLD) {
+      if (file.size > GCS_THRESHOLD) {
+        // Files above 50 MB bypass the API server entirely: upload directly to
+        // GCS via a presigned URL, then the bucket monitor processes them.
+        void gcsUploadFile(file);
+      } else if (file.size > CHUNKED_THRESHOLD) {
         void chunkedUploadFile(file);
       } else {
         uploadFile(file);
       }
     },
-    [uploadFile, chunkedUploadFile],
+    [uploadFile, chunkedUploadFile, gcsUploadFile],
   );
 
   const handleRetrySave = useCallback(() => {
@@ -876,7 +997,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     }
   }, [lastChunkedFile, chunkedPhase, doSendChunks, doFinalizeChunks]);
 
-  const isAnyUploadBusy = postDatasetsUpload.isPending || chunkedPhase === "uploading" || chunkedPhase === "processing";
+  const isAnyUploadBusy = postDatasetsUpload.isPending || chunkedPhase === "uploading" || chunkedPhase === "processing" || gcsPhase === "uploading" || gcsPhase === "processing";
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -1621,7 +1742,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                   </div>
                 ) : (
                   <>
-                    {(postDatasetsUpload.isPending || chunkedPhase === "uploading") && (
+                    {(postDatasetsUpload.isPending || chunkedPhase === "uploading" || gcsPhase === "uploading") && (
                       <div
                         style={{
                           height: 3, background: "rgba(0,229,255,0.1)",
@@ -1631,7 +1752,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                         <div
                           style={{
                             height: "100%",
-                            width: `${chunkedPhase === "uploading" ? chunkedUploadProgress : uploadProgress}%`,
+                            width: `${gcsPhase === "uploading" ? gcsUploadProgress : chunkedPhase === "uploading" ? chunkedUploadProgress : uploadProgress}%`,
                             background: "linear-gradient(90deg, #0d47a1, #00e5ff)",
                             borderRadius: 2, transition: "width 0.1s linear",
                             boxShadow: "0 0 6px rgba(0,229,255,0.6)",
@@ -1673,6 +1794,22 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           </div>
                           <div style={{ fontSize: 10, color: "#94a3b8" }}>Dataset will appear when ready</div>
                         </div>
+                      ) : gcsPhase === "uploading" ? (
+                        <div>
+                          <div className="animate-pulse" style={{ ...CYAN, fontSize: 10, marginBottom: 2 }}>
+                            ◌ Uploading to cloud storage...
+                          </div>
+                          <div style={{ fontSize: 10, color: "#cbd5e1" }}>{gcsUploadProgress}%</div>
+                        </div>
+                      ) : gcsPhase === "processing" ? (
+                        <div>
+                          <div className="animate-pulse" style={{ ...CYAN, fontSize: 10, marginBottom: 2 }}>
+                            ◌ Processing in background...
+                          </div>
+                          <div style={{ fontSize: 10, color: "#94a3b8" }}>
+                            We&apos;ll notify you when it&apos;s ready
+                          </div>
+                        </div>
                       ) : (
                         <>
                           <div style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 3 }}>
@@ -1681,6 +1818,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           <div style={{ fontSize: 10, color: "#cbd5e1" }}>
                             any size · large files upload in chunks{isSignedIn ? " · auto-saved" : ""}
                           </div>
+                          {gcsPhase === "error" && gcsError && (
+                            <div style={{ fontSize: 9, color: "#f87171", marginTop: 4 }}>⚠ {gcsError}</div>
+                          )}
                           {chunkedPhase === "error" && chunkedError && (
                             <div style={{ fontSize: 9, color: "#f87171", marginTop: 4 }}>⚠ {chunkedError}</div>
                           )}

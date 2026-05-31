@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { seedDatasetCatalog } from "./lib/catalogSeeder.js";
+import { startBucketMonitor } from "./lib/bucketMonitor.js";
 
 // ---------------------------------------------------------------------------
 // Process-level safety nets
@@ -62,6 +63,10 @@ const server = app.listen(port, "127.0.0.1", (err) => {
   void seedDatasetCatalog().catch((seedErr: unknown) => {
     logger.warn({ err: seedErr }, "Catalog seed failed (non-critical)");
   });
+
+  // Start the GCS bucket monitor — scans pending-datasets/ every 30 s and
+  // processes any oversized dataset files uploaded via the presigned URL path.
+  startBucketMonitor();
 });
 
 // ---------------------------------------------------------------------------

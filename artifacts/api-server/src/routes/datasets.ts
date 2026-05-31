@@ -11,6 +11,7 @@ import { db, customDatasetsTable, userSettingsTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { signDatasetUploadUrl, getJobByObjectKey } from "../lib/bucketMonitor.js";
 import {
   GetDatasetsResponse,
   GetDatasetsIdTerrainResponse,
@@ -1129,6 +1130,83 @@ router.post(
     void processUploadJob(jobId, uploadId, totalChunks, fileName, resolution, userId, smoothing);
 
     res.json({ jobId });
+  },
+);
+
+// ── POST /datasets/upload/request-gcs-url ────────────────────────────────────
+// Auth-required. Generates a presigned GCS PUT URL for oversized files (>50 MB).
+// The client uploads directly to GCS — the API server's memory is never involved.
+// Body (JSON): { fileName: string }
+// Returns: { uploadUrl, objectKey }
+router.post(
+  "/datasets/upload/request-gcs-url",
+  requireAuth,
+  datasetUploadRateLimit,
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const BodySchema = z.object({
+      fileName: z.string().min(1).max(255),
+    });
+    const parsed = BodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "invalid_param",
+        details: parsed.error.issues.map((i) => `${i.path.join(".") || "param"}: ${i.message}`).join("; "),
+      });
+      return;
+    }
+
+    const { fileName } = parsed.data;
+    const ext = fileName.slice(fileName.lastIndexOf(".")).toLowerCase();
+    if (!ALLOWED_UPLOAD_EXTENSIONS.has(ext)) {
+      res.status(415).json({
+        error: "unsupported_file_type",
+        details: `Unsupported file type. Accepted: .csv, .txt, .xyz, .gz, .tif, .tiff, .nc, .las, .laz, .bag, .gpx, .nmea`,
+      });
+      return;
+    }
+
+    const userId = (req as AuthenticatedRequest).clerkUserId;
+    const { uploadUrl, objectKey } = await signDatasetUploadUrl(userId, fileName);
+    res.json({ uploadUrl, objectKey });
+  }),
+);
+
+// ── GET /datasets/upload/gcs-job-status ──────────────────────────────────────
+// Returns the status of a GCS background-processing job by objectKey.
+// The objectKey must belong to the authenticated user (userId is encoded in the
+// key path: pending-datasets/<userId>/...).
+// Response: { status, datasetId?, error? }
+router.get(
+  "/datasets/upload/gcs-job-status",
+  requireAuth,
+  (req: Request, res: Response): void => {
+    const objectKey = String(req.query["objectKey"] ?? "");
+    if (!objectKey) {
+      res.status(400).json({ error: "invalid_param", details: "objectKey is required" });
+      return;
+    }
+
+    // Verify the objectKey belongs to this user (second path segment)
+    const userId = (req as AuthenticatedRequest).clerkUserId;
+    const parts = objectKey.split("/");
+    const ownerSegment = parts[1] ?? "";
+    if (ownerSegment !== userId) {
+      res.status(403).json({ error: "forbidden", details: "Object key does not belong to this user" });
+      return;
+    }
+
+    const job = getJobByObjectKey(objectKey);
+    if (!job) {
+      // Job not yet picked up by the scanner — report as pending
+      res.json({ status: "pending" });
+      return;
+    }
+
+    res.json({
+      status: job.status,
+      ...(job.datasetId !== undefined ? { datasetId: job.datasetId } : {}),
+      ...(job.error !== undefined ? { error: job.error } : {}),
+    });
   },
 );
 
