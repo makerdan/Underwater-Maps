@@ -1196,7 +1196,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   };
 
   const handleRenameBookmark = (bk: CameraBookmark) => {
-    const name = window.prompt("Rename bookmark:", bk.name);
+    const name = window.prompt("Rename saved view:", bk.name);
     if (!name || !name.trim()) return;
     renameBookmark(bookmarkDatasetId, bk.id, name.trim());
   };
@@ -1756,7 +1756,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                 style={{ cursor: "pointer" }}
               >
                 <span style={{ fontSize: 10, letterSpacing: "0.12em", color: "#cbd5e1" }}>
-                  🔖 BOOKMARKS {bookmarks.length ? `(${bookmarks.length})` : ""}
+                  📷 SAVED VIEWS {bookmarks.length ? `(${bookmarks.length})` : ""}
                 </span>
                 <span style={{ color: "#cbd5e1", fontSize: 11 }}>{bookmarksOpen ? "−" : "+"}</span>
               </button>
@@ -1765,7 +1765,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                 <div style={{ paddingBottom: 4 }}>
                   {!bookmarks.length && (
                     <div style={{ fontSize: 10, color: "#cbd5e1", padding: "4px 12px 6px" }}>
-                      No bookmarks yet — right-click terrain and choose &ldquo;Save view as bookmark…&rdquo;
+                      No saved views yet — right-click terrain and choose &ldquo;Save as saved view…&rdquo;
                     </div>
                   )}
                   {bookmarks.map((bk) => (
@@ -1785,7 +1785,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       >
                         {bk.name}
                       </span>
-                      <ViewscreenTooltip label="Fly to this bookmark" side="left">
+                      <ViewscreenTooltip label="Fly to this saved view" side="left">
                         <button
                           onClick={() => handleFlyToBookmark(bk)}
                           style={{
@@ -1803,7 +1803,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           FLY
                         </button>
                       </ViewscreenTooltip>
-                      <ViewscreenTooltip label="Rename bookmark" side="left">
+                      <ViewscreenTooltip label="Rename saved view" side="left">
                         <button
                           onClick={() => handleRenameBookmark(bk)}
                           className="opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1817,12 +1817,12 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                             padding: "0 2px",
                             flexShrink: 0,
                           }}
-                          aria-label="Rename bookmark"
+                          aria-label="Rename saved view"
                         >
                           ✎
                         </button>
                       </ViewscreenTooltip>
-                      <ViewscreenTooltip label="Delete bookmark" side="left">
+                      <ViewscreenTooltip label="Delete saved view" side="left">
                         <button
                           onClick={(e) => handleDeleteBookmark(e, bk)}
                           className="opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1836,7 +1836,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                             padding: "0 2px",
                             flexShrink: 0,
                           }}
-                          aria-label="Delete bookmark"
+                          aria-label="Delete saved view"
                         >
                           ×
                         </button>

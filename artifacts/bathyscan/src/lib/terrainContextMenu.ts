@@ -114,8 +114,8 @@ export function buildTerrainMenuItems(
       disabled: !datasetId,
     },
     {
-      label: "Save view as bookmark…",
-      icon: "🔖",
+      label: "Save as saved view…",
+      icon: "📷",
       onClick: () => {
         if (!datasetId) return;
         const cam = useCameraStore.getState();
@@ -123,7 +123,7 @@ export function buildTerrainMenuItems(
         const camLat = cam.cameraLat;
         const camDepth = cam.cameraDepth;
         if (camLon === null || camLat === null || camDepth === null) return;
-        const name = window.prompt("Bookmark name:", "My view");
+        const name = window.prompt("Saved view name:", "My view");
         if (!name || !name.trim()) return;
         useSettingsStore.getState().addBookmark(datasetId, {
           name: name.trim(),
