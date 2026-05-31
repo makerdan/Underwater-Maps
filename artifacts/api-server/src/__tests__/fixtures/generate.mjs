@@ -14,6 +14,7 @@
 import { writeFile, mkdir } from "fs/promises";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { execFileSync } from "child_process";
 import { writeArrayBuffer } from "geotiff";
 import { ready as h5wasmReady, File as H5wFile } from "h5wasm";
 
@@ -513,93 +514,32 @@ async function buildBag() {
   return Buffer.from(bytes);
 }
 
-// ─── LAZ (pseudo-compressed LAS) ─────────────────────────────────────────────
+// ─── LAZ (genuinely compressed LAS) ──────────────────────────────────────────
 
 /**
- * Build a synthetic LAZ fixture for testing the laz-perf decompression path.
+ * Build a genuinely LASzip-compressed LAZ fixture for testing the laz-perf
+ * decompression path in parseLasLaz.
  *
- * laz-perf v0.0.7 ships only a LASZip decoder, not an encoder — genuine LZW/
- * arithmetic-coded LAZ output requires a future version (see the "Upgrade
- * laz-perf" task).  For now this fixture is a valid LAS 1.2 file written with
- * a .laz extension.
+ * laz-perf v0.0.7 ships only a LASZip decoder, not an encoder, so we delegate
+ * encoding to the Python `laspy` library (backed by `lazrs`, a Rust LASzip
+ * implementation).  The output is a standards-conformant LAZ 1.2 file that
+ * laz-perf can decompress without any mocking.
  *
- * parseLasLaz reads scale/offset/format/pointCount from the public header (the
- * same 227-byte layout) regardless of compression.  The integration test for
- * the LAZ path mocks laz-perf so the decompressor returns synthetic points that
- * match these header parameters — the actual bytes after offset 227 are not
- * read by the mock.  This lets the test validate the entire parseLasLaz code
- * branch (createLazPerf → LASZip.open → getCount/getPointLength/getPoint →
- * lasPointsToRaw) without needing a real compressed bitstream.
+ * The Python helper script (gen_laz.py in this directory) produces a LAS 1.2
+ * file, point format 0, with:
+ *   scale XY = 1e-6°, Z = 0.001 m; offset X = -133, Y = 55, Z = 0
+ *   15 records; index 10 has depth=0 (zi=0) — parseLasLaz must skip it
+ *   14 valid points at lon ≈ -132.5, lat ≈ 55.2, depth 1250–2400 m
  *
- * Points mirror survey_1_2.las:
- *   scale XY = 1e-6°, Z = 0.001 m; offset X = -133, Y = 55, Z = 0.
- *   14 valid points at lon ≈ -132.5, lat ≈ 55.2, depth 1250–2400 m.
- *   1 zero-depth point at index 10 (parseLasLaz must skip it).
+ * Prerequisites: python3 with laspy[lazrs] installed.
+ *   pip install "laspy[lazrs]"
  */
-function buildLaz() {
-  const HEADER_SIZE = 227;
-  const RECORD_SIZE = 20; // format 0
-
-  const rawPts = [
-    { lon: -132.500000, lat: 55.200000, depth: 1250 },
-    { lon: -132.500100, lat: 55.200100, depth: 1300 },
-    { lon: -132.500200, lat: 55.200200, depth: 1420 },
-    { lon: -132.500300, lat: 55.200300, depth: 1380 },
-    { lon: -132.500400, lat: 55.200400, depth: 1500 },
-    { lon: -132.500500, lat: 55.200500, depth: 1600 },
-    { lon: -132.500600, lat: 55.200600, depth: 1750 },
-    { lon: -132.500700, lat: 55.200700, depth: 1800 },
-    { lon: -132.500800, lat: 55.200800, depth: 1900 },
-    { lon: -132.500900, lat: 55.200900, depth: 2000 },
-    { lon: -132.501000, lat: 55.201000, depth: 0 },    // depth=0 → skipped by parser
-    { lon: -132.501100, lat: 55.201100, depth: 2100 },
-    { lon: -132.501200, lat: 55.201200, depth: 2200 },
-    { lon: -132.501300, lat: 55.201300, depth: 2300 },
-    { lon: -132.501400, lat: 55.201400, depth: 2400 },
-  ];
-  const N = rawPts.length;
-  const buf = Buffer.alloc(HEADER_SIZE + N * RECORD_SIZE, 0);
-
-  buf.write("LASF", 0, "ascii");
-  buf.writeUInt8(1, 24);
-  buf.writeUInt8(2, 25);
-  buf.write("BathyScan LAZ Fixture", 26, "ascii");
-  buf.write("generate.mjs", 58, "ascii");
-  buf.writeUInt16LE(HEADER_SIZE, 94);
-  buf.writeUInt32LE(HEADER_SIZE, 96);
-  buf.writeUInt32LE(0, 100);
-  buf.writeUInt8(0, 104);
-  buf.writeUInt16LE(RECORD_SIZE, 105);
-  buf.writeUInt32LE(N, 107);
-
-  const SCALE_XY = 0.000001;
-  const SCALE_Z  = 0.001;
-  const OFFSET_X = -133.0;
-  const OFFSET_Y = 55.0;
-  const OFFSET_Z = 0.0;
-
-  buf.writeDoubleLE(SCALE_XY, 131);
-  buf.writeDoubleLE(SCALE_XY, 139);
-  buf.writeDoubleLE(SCALE_Z,  147);
-  buf.writeDoubleLE(OFFSET_X, 155);
-  buf.writeDoubleLE(OFFSET_Y, 163);
-  buf.writeDoubleLE(OFFSET_Z, 171);
-
-  for (let i = 0; i < N; i++) {
-    const base = HEADER_SIZE + i * RECORD_SIZE;
-    const { lon, lat, depth } = rawPts[i];
-    buf.writeInt32LE(Math.round((lon - OFFSET_X) / SCALE_XY), base);
-    buf.writeInt32LE(Math.round((lat - OFFSET_Y) / SCALE_XY), base + 4);
-    buf.writeInt32LE(Math.round(-depth / SCALE_Z), base + 8);
-    buf.writeUInt16LE(0, base + 12);
-    buf.writeUInt8(0, base + 14);
-    buf.writeUInt8(0, base + 15);
-    buf.writeUInt8(0, base + 16);
-    buf.writeUInt8(0, base + 17);
-    buf.writeUInt16LE(0, base + 18);
-  }
-
-  return buf;
+async function buildLaz() {
+  const pyScript = join(__dir, "gen_laz.py");
+  const outPath  = join(__dir, "survey.laz");
+  execFileSync("python3", [pyScript], { stdio: "inherit" });
+  const { readFile } = await import("fs/promises");
+  return readFile(outPath);
 }
 
 // ─── GPX ──────────────────────────────────────────────────────────────────────
@@ -823,8 +763,7 @@ async function main() {
   await writeFile(join(__dir, "survey.bag"), bagBuf);
   console.log(`survey.bag   ${bagBuf.length} bytes`);
 
-  const lazBuf = buildLaz();
-  await writeFile(join(__dir, "survey.laz"), lazBuf);
+  const lazBuf = await buildLaz();
   console.log(`survey.laz   ${lazBuf.length} bytes`);
 
   const gpxBuf = buildGpx();

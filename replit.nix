@@ -1,5 +1,6 @@
 {pkgs}: {
   deps = [
+    pkgs.laszip
     pkgs.libgbm
     pkgs.xorg.libxcb
     pkgs.xorg.libXrandr

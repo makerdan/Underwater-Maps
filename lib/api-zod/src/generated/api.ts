@@ -872,7 +872,7 @@ export const GetSettingsResponse = zod.object({
     ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries last element must be 2000", path: [arr.length - 1] });
   }
   for (let i = 1; i < arr.length; i++) {
-    if ((arr[i] as number) <= (arr[i - 1] as number)) {
+    if (arr[i]! <= arr[i - 1]!) {
       ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries must be strictly increasing", path: [i] });
     }
   }
@@ -1027,7 +1027,7 @@ export const PutSettingsBody = zod.object({
     ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries last element must be 2000", path: [arr.length - 1] });
   }
   for (let i = 1; i < arr.length; i++) {
-    if ((arr[i] as number) <= (arr[i - 1] as number)) {
+    if (arr[i]! <= arr[i - 1]!) {
       ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries must be strictly increasing", path: [i] });
     }
   }
@@ -1177,7 +1177,7 @@ export const PutSettingsResponse = zod.object({
     ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries last element must be 2000", path: [arr.length - 1] });
   }
   for (let i = 1; i < arr.length; i++) {
-    if ((arr[i] as number) <= (arr[i - 1] as number)) {
+    if (arr[i]! <= arr[i - 1]!) {
       ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries must be strictly increasing", path: [i] });
     }
   }

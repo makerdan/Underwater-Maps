@@ -489,11 +489,17 @@ export async function parseLasLaz(buffer: Buffer, fileName: string): Promise<Raw
 
       const dest = (lp as unknown as { _malloc: (n: number) => number })._malloc(ptLen);
       try {
-        const heap = (lp as unknown as { HEAPU8: Uint8Array }).HEAPU8;
         for (let i = 0; i < count; i++) {
           zip.getPoint(dest);
+          // Re-read HEAPU8 each iteration: WASM memory can grow during decompression,
+          // which detaches the previously-captured ArrayBuffer.  Reading lp.HEAPU8
+          // always yields the current (live) typed array after any memory growth.
           // LAS format 0+: X, Y, Z stored as int32LE at byte offsets 0, 4, 8
-          const view = new DataView(heap.buffer, dest, ptLen);
+          const view = new DataView(
+            (lp as unknown as { HEAPU8: Uint8Array }).HEAPU8.buffer,
+            dest,
+            ptLen,
+          );
           const xi = view.getInt32(0, true);
           const yi = view.getInt32(4, true);
           const zi = view.getInt32(8, true);
