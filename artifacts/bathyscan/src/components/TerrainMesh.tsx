@@ -13,6 +13,8 @@ import { useHabitatStore } from "@/lib/habitatStore";
 import { useSettingsStore, deriveEffectiveColormapTheme } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { getColormap } from "@/lib/colormap";
+import { useWebglContextStore } from "@/lib/webglContextStore";
+import { toast } from "@/hooks/use-toast";
 
 /**
  * Tiling scale — number of texture tile repeats across the full WORLD_SIZE.
@@ -256,6 +258,31 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     const habitatScores = useHabitatStore((s) => s.scores);
     const activeSpecies = useHabitatStore((s) => s.activeSpecies);
 
+    // Float-texture capability — set by the canvas onCreated probe in TourScene.
+    // When false, the GPU cannot linearly filter Float32 DataTextures so the
+    // habitat overlay is suppressed and the user sees a one-shot notice instead
+    // of a silent all-black scene.
+    const floatTextureLinear = useWebglContextStore((s) => s.floatTextureLinear);
+
+    // Fire a one-shot toast when the user activates the habitat overlay on a
+    // device that lacks float-texture linear filtering support.
+    const floatWarnFiredRef = useRef(false);
+    useEffect(() => {
+      if (floatTextureLinear || !activeSpecies) {
+        floatWarnFiredRef.current = false;
+        return;
+      }
+      if (floatWarnFiredRef.current) return;
+      floatWarnFiredRef.current = true;
+      toast({
+        title: "Habitat overlay unavailable on this device",
+        description:
+          "Your GPU does not support the required texture filtering. " +
+          "The habitat suitability layer has been disabled.",
+        variant: "destructive",
+      });
+    }, [floatTextureLinear, activeSpecies]);
+
     // Upload an N×N R8 DataTexture (Red channel = score) whenever the per-vertex
     // habitat scores change. We quantise the [0,1] Float32 scores to UnsignedByte
     // so the texture is linearly-filterable on all WebGL2 GPUs without requiring
@@ -348,8 +375,8 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       material.uniforms["uHighlightMin"]!.value  = params.min;
       material.uniforms["uHighlightMax"]!.value  = params.max;
 
-      // Habitat overlay
-      material.uniforms["uShowHabitat"]!.value = activeSpecies ? 1 : 0;
+      // Habitat overlay — suppressed when float-texture linear filtering is unsupported
+      material.uniforms["uShowHabitat"]!.value = (activeSpecies && floatTextureLinear) ? 1 : 0;
       material.uniforms["uHabitatIntensity"]!.value = habitatOverlayIntensity;
     });
 

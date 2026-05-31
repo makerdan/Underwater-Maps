@@ -269,8 +269,9 @@ export function createTerrainShaderMaterial(
       uHighlightMax:   { value: 0 },
       uGridMinDepth:   { value: 0 },
       uGridMaxDepth:   { value: 1000 },
-      // Habitat suitability overlay — placeholder 1×1 texture until scores arrive
-      uHabitatTex:       { value: new THREE.DataTexture(new Float32Array([0]), 1, 1, THREE.RedFormat, THREE.FloatType) },
+      // Habitat suitability overlay — placeholder 1×1 texture until scores arrive.
+      // UnsignedByteType is universally filterable without OES_texture_float_linear.
+      uHabitatTex:       { value: new THREE.DataTexture(new Uint8Array([0]), 1, 1, THREE.RedFormat, THREE.UnsignedByteType) },
       uShowHabitat:      { value: 0 },
       uHabitatIntensity: { value: 0.4 },
     },

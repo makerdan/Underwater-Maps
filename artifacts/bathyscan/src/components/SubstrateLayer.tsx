@@ -325,7 +325,7 @@ const SubstratePoly: React.FC<SubstratePolyProps> = ({
           ref={fillRef}
           geometry={poly.fillGeometry}
           visible={everVisible}
-          renderOrder={2}
+          renderOrder={4}
           onClick={isVisible ? onClick : undefined}
         >
           <meshBasicMaterial
@@ -341,7 +341,7 @@ const SubstratePoly: React.FC<SubstratePolyProps> = ({
         ref={lineRef}
         geometry={poly.outlineGeometry}
         visible={everVisible}
-        renderOrder={3}
+        renderOrder={5}
       >
         <lineBasicMaterial
           color={resolvedColor}

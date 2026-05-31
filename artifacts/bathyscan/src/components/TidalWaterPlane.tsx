@@ -51,7 +51,7 @@ export const TidalWaterPlane: React.FC<TidalWaterPlaneProps> = ({ tideHeight, te
       ref={meshRef}
       geometry={geometry}
       position={[0, currentY.current, 0]}
-      renderOrder={2}
+      renderOrder={8}
     >
       <meshStandardMaterial
         ref={matRef}

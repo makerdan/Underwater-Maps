@@ -144,7 +144,7 @@ const TerrainContourLines: React.FC<TerrainContourLinesProps> = ({ grid }) => {
 
   return (
     <group scale={[1, yScale, 1]}>
-      <lineSegments geometry={geometry} material={material} />
+      <lineSegments geometry={geometry} material={material} renderOrder={1} />
     </group>
   );
 };

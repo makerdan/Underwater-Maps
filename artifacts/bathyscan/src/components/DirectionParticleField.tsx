@@ -84,7 +84,7 @@ export const DirectionParticleField: React.FC<DirectionParticleFieldProps> = ({
   positions,
   baseSize = 0.6,
   animate = true,
-  renderOrder = 3,
+  renderOrder = 9,
   opacity = 0.85,
   terrain,
 }) => {

@@ -23,8 +23,16 @@ interface WebglContextStore {
   recoveryKey: number;
   recoveryAttempts: number;
   contextPermanentlyLost: boolean;
+  /**
+   * True when the GPU supports linear filtering of float textures
+   * (WebGL2 natively, or WebGL1 + OES_texture_float_linear extension).
+   * Set once during scene initialisation via setFloatTextureLinear().
+   * Defaults to true so behaviour is unchanged until the probe runs.
+   */
+  floatTextureLinear: boolean;
   markLost: () => void;
   markRestored: () => void;
+  setFloatTextureLinear: (supported: boolean) => void;
 }
 
 export const useWebglContextStore = create<WebglContextStore>((set) => ({
@@ -32,6 +40,9 @@ export const useWebglContextStore = create<WebglContextStore>((set) => ({
   recoveryKey: 0,
   recoveryAttempts: 0,
   contextPermanentlyLost: false,
+  floatTextureLinear: true,
+  setFloatTextureLinear: (supported: boolean) =>
+    set({ floatTextureLinear: supported }),
   markLost: () =>
     set((s) => {
       const nextAttempts = s.recoveryAttempts + 1;

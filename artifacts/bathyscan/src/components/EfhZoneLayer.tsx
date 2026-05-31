@@ -302,7 +302,7 @@ export const EfhZoneLayer: React.FC = () => {
           {zone.fillGeometry && (
             <mesh
               geometry={zone.fillGeometry}
-              renderOrder={2}
+              renderOrder={6}
               userData={{ efhProperties: zone.properties }}
               onClick={handleZoneClick}
               onPointerOver={() => { document.body.style.cursor = "pointer"; }}
@@ -317,7 +317,7 @@ export const EfhZoneLayer: React.FC = () => {
               />
             </mesh>
           )}
-          <lineLoop geometry={zone.outlineGeometry} renderOrder={3}>
+          <lineLoop geometry={zone.outlineGeometry} renderOrder={7}>
             <lineBasicMaterial
               color={zone.color}
               transparent

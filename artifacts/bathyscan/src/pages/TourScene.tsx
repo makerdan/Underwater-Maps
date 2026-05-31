@@ -614,7 +614,18 @@ export const TourScene: React.FC<TourSceneProps> = ({
   const contextCleanupRef = useRef<(() => void) | null>(null);
   const handleCanvasCreated = useCallback(
     (state: { gl: THREE.WebGLRenderer }) => {
-      const canvas = state.gl.domElement;
+      const renderer = state.gl;
+      const canvas = renderer.domElement;
+
+      // Probe float-texture linear filtering capability once at scene init.
+      // WebGL2 supports it natively; WebGL1 requires the OES_texture_float_linear
+      // extension. Without it, Float32 DataTextures with linear filters return
+      // garbage (black) on some Android WebViews and integrated GPU drivers.
+      const supported =
+        renderer.capabilities.isWebGL2 ||
+        !!renderer.extensions.get("OES_texture_float_linear");
+      useWebglContextStore.getState().setFloatTextureLinear(supported);
+
       const onLost = (e: Event) => {
         // Prevent default so the browser is willing to restore the context.
         e.preventDefault();
