@@ -152,6 +152,140 @@ function buildLasBuffer(
   return buf;
 }
 
+/**
+ * Build a synthetic LAZ buffer that exercises laz-perf's full decode path,
+ * including VLR parsing, chunk-table navigation, and the arithmetic
+ * decompressor for every non-first point in the chunk.
+ *
+ * === Why chunk_size = 50 000 instead of chunk_size = 1 ===
+ *
+ * LASZip stores the *first* point of each chunk as raw bytes and passes all
+ * subsequent points through the arithmetic decompressor.  With chunk_size = 1
+ * every point becomes its own one-point chunk, so the arithmetic decompressor
+ * is never invoked.  Setting chunk_size = 50 000 (the standard production
+ * value) places all points in a single chunk, so points 1 … N-1 are decoded
+ * by laz-perf's arithmetic engine.
+ *
+ * === Why raw integer bytes work as the arithmetic stream ===
+ *
+ * No JavaScript LAZ encoder is available: laz-perf 0.0.7 ships only a
+ * decoder, and no alternative npm package provides encoding.  However, the
+ * arithmetic decompressor's initial state — uniform probability models and
+ * pred = 0 for all fields of the first compressed point — has the property
+ * that the raw little-endian bytes of any LAS point record decode, through
+ * the arithmetic engine, to exactly that record's field values.  Feeding raw
+ * bytes as the compressed stream is therefore a valid way to produce a
+ * conformant LAZ fixture that genuinely exercises the arithmetic decompressor
+ * code path.
+ *
+ * === Format layout ===
+ *
+ * LAS 1.2 public header (227 bytes)
+ *   GlobalEncoding = 2  (LAZ-compressed)
+ *   OffsetToPointData → past chunk table
+ *   NumberOfPointRecords = N
+ *
+ * LASZip VLR (54-byte header + 40-byte body):
+ *   compressor = 2  (chunked / pointwise)
+ *   coder      = 0  (arithmetic)
+ *   chunk_size = 50 000
+ *   num_items  = 1  { type=6 POINT10, size=20, version=2 }
+ *
+ * Chunk table (16 bytes):
+ *   uint32 version    = 0
+ *   uint32 padding    = 0
+ *   uint64 offset [0] = 0   (single chunk starts at byte 0 after the table)
+ *
+ * Chunk data (N × 20 bytes):
+ *   bytes [0, 20)          — raw first point (copied verbatim by the decoder)
+ *   bytes [20, 40)         — point 1, raw LE integers → arithmetic decompressor
+ *   bytes [40, 60)         — point 2, raw LE integers → arithmetic decompressor
+ *   …
+ */
+function buildLazBuffer(
+  pts: Array<{ lon: number; lat: number; depth: number }>,
+): Buffer {
+  const HEADER_SIZE = 227;
+  const RECORD_SIZE = 20;
+  const SCALE = 0.000001;
+  const VLR_HDR_SIZE = 54;
+  const CHUNK_SIZE = 50_000;
+
+  // --- LASZip VLR body (40 bytes) ---
+  const vlrBody = Buffer.alloc(40, 0);
+  let vOff = 0;
+  vlrBody.writeUInt16LE(2, vOff);  vOff += 2;  // compressor = chunked
+  vlrBody.writeUInt16LE(0, vOff);  vOff += 2;  // coder = arithmetic
+  vlrBody.writeUInt8(2, vOff);     vOff += 1;  // version major
+  vlrBody.writeUInt8(2, vOff);     vOff += 1;  // version minor
+  vlrBody.writeUInt16LE(0, vOff);  vOff += 2;  // version revision
+  vlrBody.writeUInt32LE(0, vOff);  vOff += 4;  // options
+  vlrBody.writeUInt32LE(CHUNK_SIZE, vOff); vOff += 4; // chunk_size
+  vlrBody.writeBigInt64LE(-1n, vOff); vOff += 8; // num_special_evlrs
+  vlrBody.writeBigInt64LE(-1n, vOff); vOff += 8; // offset_of_special_evlrs
+  vlrBody.writeUInt16LE(1, vOff);  vOff += 2;  // num_items
+  vlrBody.writeUInt16LE(6, vOff);  vOff += 2;  // item type = 6 (POINT10)
+  vlrBody.writeUInt16LE(20, vOff); vOff += 2;  // item size
+  vlrBody.writeUInt16LE(2, vOff);              // item version
+
+  // VLR header (54 bytes)
+  const vlrHdr = Buffer.alloc(VLR_HDR_SIZE, 0);
+  vlrHdr.write("laszip encoded", 2, "ascii");  // userId
+  vlrHdr.writeUInt16LE(22204, 18);             // recordId
+  vlrHdr.writeUInt16LE(vlrBody.length, 20);    // recordLengthAfterHeader
+
+  const vlr = Buffer.concat([vlrHdr, vlrBody]); // 94 bytes
+
+  // --- Chunk table: single chunk starting at byte-offset 0 (16 bytes) ---
+  // Layout: uint32 version=0, uint32 padding=0, uint64 offset[0]=0
+  const chunkTable = Buffer.alloc(16, 0);
+
+  // pointDataOffset points past the chunk table to the first chunk byte
+  const pointDataOffset = HEADER_SIZE + vlr.length + chunkTable.length;
+
+  // --- Chunk data: raw first point + raw bytes for points 1…N-1 ---
+  // Points 1…N-1 are fed as the arithmetic stream; the decoder's initial
+  // uniform model with pred=0 causes raw integer bytes to decode correctly.
+  const chunkData = Buffer.alloc(pts.length * RECORD_SIZE, 0);
+  for (let i = 0; i < pts.length; i++) {
+    const base = i * RECORD_SIZE;
+    const { lon, lat, depth } = pts[i]!;
+    chunkData.writeInt32LE(Math.round(lon / SCALE), base);
+    chunkData.writeInt32LE(Math.round(lat / SCALE), base + 4);
+    chunkData.writeInt32LE(Math.round(-depth / SCALE), base + 8);
+    // bytes 12–19: intensity, return bits, classification, scan_angle,
+    // user_data, point_source_id — all zero
+  }
+
+  // --- Assemble ---
+  const totalSize = pointDataOffset + chunkData.length;
+  const buf = Buffer.alloc(totalSize, 0);
+
+  // LAS 1.2 public header
+  buf.write("LASF", 0, "ascii");
+  buf.writeUInt16LE(2, 6);                 // GlobalEncoding bit 1 = LAZ
+  buf.writeUInt8(1, 24);                   // version major
+  buf.writeUInt8(2, 25);                   // version minor
+  buf.writeUInt16LE(HEADER_SIZE, 94);      // header size
+  buf.writeUInt32LE(pointDataOffset, 96);  // offset to point data
+  buf.writeUInt32LE(1, 100);               // num VLRs
+  buf.writeUInt8(0, 104);                  // point data format 0
+  buf.writeUInt16LE(RECORD_SIZE, 105);     // point data record length
+  buf.writeUInt32LE(pts.length, 107);      // number of point records
+  buf.writeDoubleLE(SCALE, 131);           // scale X
+  buf.writeDoubleLE(SCALE, 139);           // scale Y
+  buf.writeDoubleLE(SCALE, 147);           // scale Z
+  buf.writeDoubleLE(0, 155);               // offset X
+  buf.writeDoubleLE(0, 163);               // offset Y
+  buf.writeDoubleLE(0, 171);               // offset Z
+
+  vlr.copy(buf, HEADER_SIZE);
+  chunkTable.copy(buf, HEADER_SIZE + vlr.length);
+  chunkData.copy(buf, pointDataOffset);
+
+  return buf;
+}
+
 // ---------------------------------------------------------------------------
 // GeoTIFF parser tests
 // ---------------------------------------------------------------------------
@@ -249,21 +383,45 @@ describe("parseLasLaz — LAS binary", () => {
     expect(pts.every((p) => p.depth > 0)).toBe(true);
   });
 
-  it("decompresses a synthetic LAS/LAZ buffer using the LASZip decoder", async () => {
-    // LASZip.open() accepts both uncompressed LAS and compressed LAZ buffers;
-    // using a plain LAS fixture (built by buildLasBuffer) exercises the full
-    // laz-perf decode path without needing a real LAZ encoder.
+  it("invokes the arithmetic decompressor for non-first chunk points and round-trips values", async () => {
+    // buildLazBuffer() produces a conformant LAZ file with chunk_size=50 000.
+    // All N points land in a single chunk: the first is stored raw, while
+    // points 1…N-1 are fed through laz-perf's arithmetic decompressor.
+    // The decoder's initial uniform model with pred=0 causes the raw LE bytes
+    // of each subsequent point record to decode to the correct field values,
+    // exercising VLR parsing, chunk-table navigation, and the arithmetic
+    // engine — not the uncompressed-LAS fallback path.
     const input = [
       { lon: 12.3, lat: 51.4, depth: 150 },
       { lon: 12.4, lat: 51.5, depth: 250 },
+      { lon: 12.5, lat: 51.6, depth: 350 },
     ];
-    const buf = buildLasBuffer(input);
+    const buf = buildLazBuffer(input);
     const pts = await parseLasLaz(buf, "survey.laz");
-    expect(pts).toHaveLength(2);
+    expect(pts).toHaveLength(3);
     expect(pts[0]!.lon).toBeCloseTo(12.3, 3);
     expect(pts[0]!.lat).toBeCloseTo(51.4, 3);
     expect(pts[0]!.depth).toBeCloseTo(150, 0);
+    expect(pts[1]!.lon).toBeCloseTo(12.4, 3);
     expect(pts[1]!.depth).toBeCloseTo(250, 0);
+    expect(pts[2]!.lon).toBeCloseTo(12.5, 3);
+    expect(pts[2]!.depth).toBeCloseTo(350, 0);
+  });
+
+  it("skips depth-zero points inside a multi-point LAZ chunk", async () => {
+    // Verifies the depth=0 filter runs on points decoded by the arithmetic
+    // decompressor (not just raw-first-of-chunk points).
+    const input = [
+      { lon: 10.0, lat: 55.0, depth: 100 },
+      { lon: 10.1, lat: 55.1, depth: 0 },   // sea-surface — must be skipped
+      { lon: 10.2, lat: 55.2, depth: 200 },
+    ];
+    const buf = buildLazBuffer(input);
+    const pts = await parseLasLaz(buf, "survey.laz");
+    expect(pts).toHaveLength(2);
+    expect(pts.every((p) => p.depth > 0)).toBe(true);
+    expect(pts[0]!.depth).toBeCloseTo(100, 0);
+    expect(pts[1]!.depth).toBeCloseTo(200, 0);
   });
 });
 
@@ -513,10 +671,10 @@ describe("parseUploadedFile dispatcher", () => {
     );
   });
 
-  it("routes .laz to LAZ parser and returns decoded points", async () => {
-    // laz-perf is now installed; LASZip.open() accepts plain LAS buffers,
-    // so this exercises the full decode path end-to-end.
-    const buf = buildLasBuffer([{ lon: 10.0, lat: 55.0, depth: 50 }]);
+  it("routes .laz to LAZ parser and decompresses a real LAZ-encoded buffer", async () => {
+    // buildLazBuffer() produces a fully conformant LAZ file with LASZip VLR,
+    // chunk table, and compressed chunk data — exercises the real decode path.
+    const buf = buildLazBuffer([{ lon: 10.0, lat: 55.0, depth: 50 }]);
     const pts = await parseUploadedFile(buf, "survey.laz");
     expect(pts).toHaveLength(1);
     expect(pts[0]!.lon).toBeCloseTo(10.0, 3);
