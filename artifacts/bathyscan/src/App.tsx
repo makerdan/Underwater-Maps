@@ -559,6 +559,7 @@ function Main() {
             datasetId: action.datasetId,
             datasetName: action.name,
             onConfirm: () => setDatasetId(action.datasetId),
+            silent: true,
           });
           break;
         case "upload-pending":

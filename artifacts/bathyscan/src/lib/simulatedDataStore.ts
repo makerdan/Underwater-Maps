@@ -73,6 +73,13 @@ export interface RequestSwitchArgs {
   onConfirm: () => void;
   /** Called when the user dismisses the dialog. Defaults to no-op. */
   onCancel?: () => void;
+  /**
+   * When true, skip the confirmation dialog entirely and call onConfirm
+   * directly regardless of the resolved dataSource. Abort errors from the
+   * preview fetch are also treated as "proceed" in silent mode. Use this for
+   * programmatic startup auto-loads that should never show a dialog.
+   */
+  silent?: boolean;
 }
 
 /**
@@ -80,9 +87,12 @@ export interface RequestSwitchArgs {
  * upstream data source via the preview endpoint; if synthetic (or
  * verification failed), opens the confirmation dialog. Otherwise the switch
  * happens immediately.
+ *
+ * Pass `silent: true` for startup auto-loads — the dialog is never opened
+ * and AbortErrors are treated as "proceed" rather than "unknown source".
  */
 export async function requestDatasetSwitch(args: RequestSwitchArgs): Promise<void> {
-  const { datasetId, onConfirm } = args;
+  const { datasetId, onConfirm, silent = false } = args;
   const onCancel = args.onCancel ?? (() => {});
 
   const { suppressed, setPending } = useSimulatedDataStore.getState();
@@ -95,6 +105,13 @@ export async function requestDatasetSwitch(args: RequestSwitchArgs): Promise<voi
       staleTime: 30_000,
     });
   } catch (err) {
+    if (silent) {
+      // For startup auto-loads, any preflight failure (including aborts) is
+      // treated as "proceed" — the in-scene HUD badge communicates synthetic
+      // data once the scene loads.
+      onConfirm();
+      return;
+    }
     // Treat preflight failure as worst-case (do not silently load).
     preview = {
       datasetId,
@@ -105,6 +122,12 @@ export async function requestDatasetSwitch(args: RequestSwitchArgs): Promise<voi
         err instanceof Error ? err.message : String(err)
       }`,
     };
+  }
+
+  if (silent) {
+    // Silent mode: never open the dialog regardless of dataSource.
+    onConfirm();
+    return;
   }
 
   const needsWarning = preview.dataSource === "synthetic" || preview.dataSource === "unknown";
