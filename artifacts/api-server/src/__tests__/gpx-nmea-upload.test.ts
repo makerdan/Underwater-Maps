@@ -14,6 +14,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
+import * as zlib from "zlib";
 import request from "supertest";
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
@@ -194,6 +195,59 @@ describe("POST /api/datasets/upload — GPX/NMEA 422 parse errors", () => {
       expect(res.body).toHaveProperty("details");
       // Must NOT have the old `detail` (singular) key that was a bug.
       expect(res.body).not.toHaveProperty("detail");
+    },
+    10_000,
+  );
+});
+
+// ── .gz-compressed parse-error tests ─────────────────────────────────────────
+//
+// These tests exercise the distinct gunzipBounded → parseUploadedFile code
+// branch that runs when the upload filename ends in .gz.  A valid .gz wrapping
+// a corrupt GPX/NMEA payload should still produce a 422 parse_error with a
+// meaningful `details` string — the same contract as the bare-file path above.
+
+describe("POST /api/datasets/upload — .gz-compressed GPX/NMEA 422 parse errors", () => {
+  it(
+    "returns 422 with parse_error and an elevation-related details string for a .gz-wrapped GPX with no <ele> tags",
+    async () => {
+      const gzBuf = zlib.gzipSync(makeGpxNoElevation());
+
+      const res = await request(app)
+        .post("/api/datasets/upload")
+        .set(AUTHED_HEADER)
+        .attach("file", gzBuf, {
+          filename: "track.gpx.gz",
+          contentType: "application/gzip",
+        });
+
+      expect(res.status).toBe(422);
+      expect(res.body).toHaveProperty("error", "parse_error");
+      expect(typeof res.body.details).toBe("string");
+      expect((res.body.details as string).length).toBeGreaterThan(0);
+      expect(res.body.details as string).toMatch(/elevation/i);
+    },
+    10_000,
+  );
+
+  it(
+    "returns 422 with parse_error and an NMEA-related details string for a .gz-wrapped NMEA file with no depth sentences",
+    async () => {
+      const gzBuf = zlib.gzipSync(makeNmeaNoDepth());
+
+      const res = await request(app)
+        .post("/api/datasets/upload")
+        .set(AUTHED_HEADER)
+        .attach("file", gzBuf, {
+          filename: "log.nmea.gz",
+          contentType: "application/gzip",
+        });
+
+      expect(res.status).toBe(422);
+      expect(res.body).toHaveProperty("error", "parse_error");
+      expect(typeof res.body.details).toBe("string");
+      expect((res.body.details as string).length).toBeGreaterThan(0);
+      expect(res.body.details as string).toMatch(/NMEA/i);
     },
     10_000,
   );
