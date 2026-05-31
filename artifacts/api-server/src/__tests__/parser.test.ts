@@ -65,10 +65,9 @@ describe("parseXyzCsv — XYZ format", () => {
     expect(pts[0]).toMatchObject({ lon: 142.0, lat: 11.0, depth: 3000 });
   });
 
-  it("returns an empty array when file has only a header row", () => {
+  it("throws when file has only a header row and no data rows", () => {
     const xyz = `lon lat depth`;
-    const pts = parseXyzCsv(xyz, "data.xyz");
-    expect(pts).toHaveLength(0);
+    expect(() => parseXyzCsv(xyz, "data.xyz")).toThrow(/point|row|data/i);
   });
 });
 

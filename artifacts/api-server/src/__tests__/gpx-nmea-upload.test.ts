@@ -200,7 +200,76 @@ describe("POST /api/datasets/upload — GPX/NMEA 422 parse errors", () => {
   );
 });
 
-// ── .gz-compressed parse-error tests ─────────────────────────────────────────
+// ── .gz-compressed XYZ/CSV parse-error tests ──────────────────────────────────
+//
+// These tests exercise the gunzipBounded → parseXyzCsv branch that fires when
+// the inner extension is csv/xyz/txt.  A header-only CSV (no data rows) must
+// produce a 422 parse_error with a meaningful `details` string — identical
+// contract to the GPX/NMEA parse-error path above.
+
+/**
+ * A CSV buffer with only a header row and no data rows.
+ * parseXyzCsv will throw because no numeric (lon, lat, depth) rows are found.
+ */
+function makeCsvHeaderOnly(): Buffer {
+  return Buffer.from("lon,lat,depth\n", "utf8");
+}
+
+/**
+ * An XYZ buffer with only a header row and no data rows.
+ */
+function makeXyzHeaderOnly(): Buffer {
+  return Buffer.from("lon lat depth\n", "utf8");
+}
+
+describe("POST /api/datasets/upload — .gz-compressed XYZ/CSV 422 parse errors", () => {
+  it(
+    "returns 422 with parse_error and a data-related details string for a .gz-wrapped CSV with only a header row",
+    async () => {
+      const gzBuf = zlib.gzipSync(makeCsvHeaderOnly());
+
+      const res = await request(app)
+        .post("/api/datasets/upload")
+        .set(AUTHED_HEADER)
+        .attach("file", gzBuf, {
+          filename: "survey.csv.gz",
+          contentType: "application/gzip",
+        });
+
+      expect(res.status).toBe(422);
+      expect(res.body).toHaveProperty("error", "parse_error");
+      expect(typeof res.body.details).toBe("string");
+      expect((res.body.details as string).length).toBeGreaterThan(0);
+      // parseXyzCsv throws with a message mentioning "data", "row", or "point"
+      expect(res.body.details as string).toMatch(/point|row|data/i);
+    },
+    10_000,
+  );
+
+  it(
+    "returns 422 with parse_error and a data-related details string for a .gz-wrapped XYZ file with only a header row",
+    async () => {
+      const gzBuf = zlib.gzipSync(makeXyzHeaderOnly());
+
+      const res = await request(app)
+        .post("/api/datasets/upload")
+        .set(AUTHED_HEADER)
+        .attach("file", gzBuf, {
+          filename: "survey.xyz.gz",
+          contentType: "application/gzip",
+        });
+
+      expect(res.status).toBe(422);
+      expect(res.body).toHaveProperty("error", "parse_error");
+      expect(typeof res.body.details).toBe("string");
+      expect((res.body.details as string).length).toBeGreaterThan(0);
+      expect(res.body.details as string).toMatch(/point|row|data/i);
+    },
+    10_000,
+  );
+});
+
+// ── .gz-compressed GPX/NMEA parse-error tests ─────────────────────────────────
 //
 // These tests exercise the distinct gunzipBounded → parseUploadedFile code
 // branch that runs when the upload filename ends in .gz.  A valid .gz wrapping

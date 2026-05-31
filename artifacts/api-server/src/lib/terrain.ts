@@ -1716,6 +1716,13 @@ export function parseXyzCsv(content: string, fileName: string): RawPoint[] {
     points.push({ lon, lat, depth: z });
   }
 
+  if (points.length === 0) {
+    throw new Error(
+      `${fileName}: no valid data rows found. ` +
+        `The file must contain at least one row with numeric lon, lat, and depth (z) values.`,
+    );
+  }
+
   return points;
 }
 
