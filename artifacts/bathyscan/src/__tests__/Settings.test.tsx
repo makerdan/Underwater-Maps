@@ -4,7 +4,7 @@
  * AdvancedDisclosure both expose advanced controls.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 
 // ---- Heavy module mocks (Clerk, react-query, API hooks, wouter, idb) ----
 vi.mock("@/lib/clerkCompat", () => ({
@@ -42,6 +42,16 @@ vi.mock("idb-keyval", () => ({
   del: () => Promise.resolve(),
 }));
 
+const mockClearUpscaleCache = vi.fn(() => Promise.resolve());
+vi.mock("@/hooks/useUpscaledHeatmap", () => ({
+  clearUpscaleCache: (...args: unknown[]) => mockClearUpscaleCache(...args),
+}));
+
+const mockToast = vi.fn();
+vi.mock("@/hooks/use-toast", () => ({
+  useToast: () => ({ toast: mockToast }),
+}));
+
 // ---- Imports under test ----
 import { Settings } from "@/pages/Settings";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
@@ -52,6 +62,8 @@ beforeEach(() => {
     ...useSettingsStore.getState(),
     ...DEFAULT_SETTINGS,
   });
+  mockClearUpscaleCache.mockClear();
+  mockToast.mockClear();
 });
 
 describe("Settings page", () => {
@@ -180,5 +192,48 @@ describe("Settings page", () => {
     fireEvent.click(sw);
     expect(sw.getAttribute("aria-checked")).toBe("false");
     expect(useSettingsStore.getState().brightDaylight).toBe(false);
+  });
+
+  it("OFFLINE CACHE section: clear-upscale-cache-btn is rendered", async () => {
+    render(<Settings />);
+    fireEvent.click(screen.getByText("OFFLINE CACHE"));
+    await waitFor(() =>
+      expect(screen.getByTestId("clear-upscale-cache-btn")).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("clear-upscale-cache-btn")).toHaveTextContent(
+      "CLEAR ENHANCED IMAGE CACHE",
+    );
+  });
+
+  it("OFFLINE CACHE section: clicking the button calls clearUpscaleCache", async () => {
+    render(<Settings />);
+    fireEvent.click(screen.getByText("OFFLINE CACHE"));
+    const btn = await screen.findByTestId("clear-upscale-cache-btn");
+    fireEvent.click(btn);
+    await waitFor(() => expect(mockClearUpscaleCache).toHaveBeenCalledOnce());
+  });
+
+  it("OFFLINE CACHE section: confirmation message appears after clearing", async () => {
+    render(<Settings />);
+    fireEvent.click(screen.getByText("OFFLINE CACHE"));
+    const btn = await screen.findByTestId("clear-upscale-cache-btn");
+    fireEvent.click(btn);
+    await waitFor(() =>
+      expect(
+        screen.getByText("✓ Enhanced image cache cleared"),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it("OFFLINE CACHE section: toast is fired with the correct title after clearing", async () => {
+    render(<Settings />);
+    fireEvent.click(screen.getByText("OFFLINE CACHE"));
+    const btn = await screen.findByTestId("clear-upscale-cache-btn");
+    fireEvent.click(btn);
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Enhanced image cache cleared" }),
+      ),
+    );
   });
 });
