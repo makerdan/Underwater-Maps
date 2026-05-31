@@ -24,6 +24,7 @@ import type { DatasetMeta, UserDatasetMeta } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { useTerrainStore, VISIBLE_DATASETS_CAP } from "@/lib/terrainStore";
+import type { DatasetSource } from "@/lib/terrainStore";
 import { useUiStore } from "@/lib/uiStore";
 import { lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
 import { MARKER_COLOR, MARKER_ICON, SALTWATER_MARKER_TYPES, FRESHWATER_MARKER_TYPES } from "@/lib/markerConstants";
@@ -152,6 +153,228 @@ const VisibleDatasetsHeader: React.FC = () => {
         HIDE ALL OTHERS
       </button>
     </div>
+  );
+};
+
+// ─── Remove-from-view confirmation dialog ────────────────────────────────────
+const RemoveDatasetConfirmDialog: React.FC<{
+  datasetName: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}> = ({ datasetName, onConfirm, onCancel }) => {
+  const confirmRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    confirmRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+      if (e.key === "Enter") onConfirm();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onConfirm, onCancel]);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="remove-dataset-dialog-title"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(0,0,0,0.55)",
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
+    >
+      <div
+        style={{
+          background: "rgba(0,10,20,0.92)",
+          border: "1px solid rgba(0,229,255,0.35)",
+          borderRadius: 6,
+          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+          padding: "20px 24px",
+          maxWidth: 300,
+          width: "90%",
+          backdropFilter: "blur(8px)",
+          boxShadow: "0 0 24px rgba(0,229,255,0.12)",
+        }}
+      >
+        <div
+          id="remove-dataset-dialog-title"
+          style={{
+            fontSize: 11,
+            letterSpacing: "0.12em",
+            color: "#00e5ff",
+            textShadow: "0 0 6px rgba(0,229,255,0.5)",
+            marginBottom: 12,
+          }}
+        >
+          REMOVE DATASET
+        </div>
+        <div
+          style={{
+            fontSize: 11,
+            color: "#e2e8f0",
+            marginBottom: 18,
+            lineHeight: 1.5,
+            wordBreak: "break-word",
+          }}
+        >
+          Remove{" "}
+          <span style={{ color: "#7dd3fc", fontWeight: 700 }}>{datasetName}</span>{" "}
+          from the current view?
+        </div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button
+            onClick={onCancel}
+            style={{
+              fontSize: 10,
+              letterSpacing: "0.08em",
+              color: "#94a3b8",
+              background: "transparent",
+              border: "1px solid rgba(148,163,184,0.3)",
+              borderRadius: 3,
+              padding: "4px 12px",
+              cursor: "pointer",
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            }}
+          >
+            CANCEL
+          </button>
+          <button
+            ref={confirmRef}
+            onClick={onConfirm}
+            style={{
+              fontSize: 10,
+              letterSpacing: "0.08em",
+              color: "#001a1f",
+              background: "#00e5ff",
+              border: "1px solid #00e5ff",
+              borderRadius: 3,
+              padding: "4px 12px",
+              cursor: "pointer",
+              fontWeight: 700,
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            }}
+          >
+            CONFIRM
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Compact list of visible datasets with per-row remove buttons ─────────────
+const VisibleDatasetRows: React.FC<{
+  allDatasets: Array<{ id: string; name: string }>;
+}> = ({ allDatasets }) => {
+  const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
+  const toggleVisible = useTerrainStore((s) => s.toggleVisible);
+  const count = visibleDatasets.length;
+  const [pending, setPending] = useState<{
+    datasetId: string;
+    source: DatasetSource;
+    name: string;
+  } | null>(null);
+
+  const handleConfirm = useCallback(() => {
+    if (pending) {
+      toggleVisible({ datasetId: pending.datasetId, source: pending.source });
+    }
+    setPending(null);
+  }, [pending, toggleVisible]);
+
+  const handleCancel = useCallback(() => setPending(null), []);
+
+  if (count <= 1) return null;
+
+  const nameMap = new Map(allDatasets.map((d) => [d.id, d.name]));
+
+  return (
+    <>
+      {visibleDatasets.map((vd) => {
+        const name = nameMap.get(vd.datasetId) ?? vd.datasetId;
+        return (
+          <div
+            key={vd.datasetId}
+            data-testid={`visible-dataset-row-${vd.datasetId}`}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              padding: "2px 8px 2px 20px",
+              gap: 4,
+              fontSize: 10,
+              color: "#cbd5e1",
+              borderBottom: "1px solid rgba(0,229,255,0.05)",
+              background: "rgba(0,229,255,0.02)",
+            }}
+          >
+            <span
+              style={{
+                flex: 1,
+                minWidth: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                letterSpacing: "0.04em",
+              }}
+            >
+              {name}
+            </span>
+            <ViewscreenTooltip label="Remove from view" side="right">
+              <button
+                type="button"
+                data-testid={`btn-remove-visible-${vd.datasetId}`}
+                aria-label={`Remove ${name} from view`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPending({ datasetId: vd.datasetId, source: vd.source, name });
+                }}
+                style={{
+                  flexShrink: 0,
+                  width: 18,
+                  height: 18,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "transparent",
+                  border: "none",
+                  color: "#64748b",
+                  cursor: "pointer",
+                  fontSize: 11,
+                  lineHeight: 1,
+                  padding: 0,
+                  borderRadius: 2,
+                  transition: "color 0.15s",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.color = "#ef4444";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.color = "#64748b";
+                }}
+              >
+                ✕
+              </button>
+            </ViewscreenTooltip>
+          </div>
+        );
+      })}
+      {pending && (
+        <RemoveDatasetConfirmDialog
+          datasetName={pending.name}
+          onConfirm={handleConfirm}
+          onCancel={handleCancel}
+        />
+      )}
+    </>
   );
 };
 
@@ -1330,6 +1553,12 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
               </div>
             )}
             <VisibleDatasetsHeader />
+            <VisibleDatasetRows
+              allDatasets={[
+                ...(datasets ?? []).map((d) => ({ id: d.id, name: d.name })),
+                ...(userDatasets ?? []).map((d) => ({ id: d.id, name: d.name })),
+              ]}
+            />
             {(datasets ?? []).map((ds) => {
               const active = ds.id === datasetId && !pendingId && !activeUserDatasetId;
               const loading = ds.id === loadingId;
