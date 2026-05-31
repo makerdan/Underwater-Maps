@@ -7,6 +7,33 @@ import { useUiStore } from "@/lib/uiStore";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { substrateCollection } from "./substrateFixture";
 
+/**
+ * SELF-MAINTAINING API CLIENT MOCK
+ * ─────────────────────────────────────────────────────────────────────────────
+ * This Proxy-based factory means you do NOT need to update this file when
+ * new hooks are added to OverviewMap or its child hooks.
+ *
+ * How it works:
+ *   • Any hook starting with "useGet*"       → returns a safe queryHook stub
+ *     { data: undefined, isLoading: false, isError: false, refetch: noop }
+ *   • Any hook starting with "usePost/Put/Patch/Delete/Health/Poe*"
+ *                                            → returns a safe mutationHook stub
+ *     { mutate: noop, mutateAsync: noop, isPending: false, isSuccess: false }
+ *   • getGet*QueryKey helpers               → returns a generic cache-key array
+ *   • get*Url helpers                       → returns a generic /api/mock/… URL
+ *   • Everything else                       → returns noop (silent no-op)
+ *
+ * Override specific hooks in the vi.mock("@workspace/api-client-react") call
+ * below ONLY when a test needs a particular return value (e.g. useGetSubstrate
+ * must return the substrate fixture so click-detection has data to work with).
+ *
+ * If you add a hook to OverviewMap and the test starts failing:
+ *   1. Check whether the default stub is sufficient (no test change needed).
+ *   2. If the test needs specific data, add a named override in the vi.mock block.
+ *
+ * DO NOT replace this with a plain object — doing so will cause hard vitest
+ * errors for every new hook that isn't explicitly listed (the original bug).
+ */
 const makeApiClientMock = vi.hoisted(() => {
   function noop() {}
   function queryHook() { return { data: undefined, isLoading: false, isError: false, refetch: noop }; }
