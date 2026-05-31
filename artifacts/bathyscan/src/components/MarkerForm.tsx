@@ -39,8 +39,12 @@ import {
 import {
   SALTWATER_MARKER_TYPES,
   FRESHWATER_MARKER_TYPES,
+  SALTWATER_CATEGORY_ORDER,
+  FRESHWATER_CATEGORY_ORDER,
+  MARKER_CATEGORY_LABELS,
   DEPTH_POLE_DEFAULT_COLOUR,
   type MarkerTypeValue,
+  type MarkerCategory,
 } from "@/lib/markerConstants";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { markerLabelSchema, markerNotesSchema } from "@/lib/markerFormSchema";
@@ -73,6 +77,8 @@ export const MarkerForm: React.FC = () => {
   const settingsWaterType = useSettingsStore((s) => s.waterType);
   const waterType = (terrain?.waterType as "saltwater" | "freshwater" | undefined) ?? settingsWaterType;
   const visibleMarkerTypes = waterType === "freshwater" ? FRESHWATER_MARKER_TYPES : SALTWATER_MARKER_TYPES;
+  const categoryOrder = waterType === "freshwater" ? FRESHWATER_CATEGORY_ORDER : SALTWATER_CATEGORY_ORDER;
+  const pickerRef = useRef<HTMLDivElement>(null);
 
   const [markerType, setMarkerType] = useState<MarkerTypeValue>(MarkerInputType.custom);
   const [label, setLabel] = useState("");
@@ -158,6 +164,22 @@ export const MarkerForm: React.FC = () => {
     }
     isDirtyRef.current = dirty;
   });
+
+  // Scroll the active category into view when the edit form opens.
+  useEffect(() => {
+    if (!isEditMode || !editMarker || !pickerRef.current) return;
+    const activeType = (visibleMarkerTypes as ReadonlyArray<{ value: string; category: string }>).find(
+      (t) => t.value === editMarker.type,
+    );
+    if (!activeType) return;
+    const catEl = pickerRef.current.querySelector<HTMLElement>(
+      `[data-category="${activeType.category}"]`,
+    );
+    if (catEl) {
+      catEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editMarker]);
 
   // Always clear the beforeClose guard — dirty-form protection is handled
   // locally via the AlertDialog below so we don't rely on window.confirm.
@@ -453,35 +475,66 @@ export const MarkerForm: React.FC = () => {
       </div>
 
       <form onSubmit={handleSubmit}>
-        {/* Type selector */}
+        {/* Type selector — categorised scrollable picker */}
         <div style={{ padding: "9px 14px 4px" }}>
           <div style={{ fontSize: 8, letterSpacing: "0.12em", color: "#64748b", marginBottom: 5 }}>
             TYPE
           </div>
-          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-            {visibleMarkerTypes.map((t) => {
-              const active = markerType === t.value;
+          <div
+            ref={pickerRef}
+            style={{
+              maxHeight: 140,
+              overflowY: "auto",
+              scrollbarWidth: "thin",
+              scrollbarColor: "rgba(0,229,255,0.2) transparent",
+            }}
+          >
+            {categoryOrder.map((cat) => {
+              const typesInCat = (visibleMarkerTypes as ReadonlyArray<{ value: string; label: string; color: string; icon: string; category: MarkerCategory }>).filter((t) => t.category === cat);
+              if (typesInCat.length === 0) return null;
               return (
-                <ViewscreenTooltip key={t.value} label={`Mark this point as ${t.label.toLowerCase()}`} side="top">
-                <button
-                  type="button"
-                  onClick={() => setMarkerType(t.value)}
-                  style={{
-                    fontSize: 9,
-                    padding: "3px 7px",
-                    borderRadius: 3,
-                    border: `1px solid ${active ? t.color : "rgba(0,229,255,0.12)"}`,
-                    background: active ? `${t.color}18` : "transparent",
-                    color: active ? t.color : "#94a3b8",
-                    cursor: "pointer",
-                    letterSpacing: "0.08em",
-                    transition: "all 0.1s",
-                    fontFamily: "inherit",
-                  }}
-                >
-                  {t.icon} {t.label}
-                </button>
-                </ViewscreenTooltip>
+                <div key={cat} data-category={cat}>
+                  <div
+                    style={{
+                      fontSize: 7,
+                      letterSpacing: "0.18em",
+                      color: "#475569",
+                      fontWeight: 700,
+                      padding: "5px 0 3px",
+                      marginTop: 2,
+                      borderTop: "1px solid rgba(0,229,255,0.06)",
+                    }}
+                  >
+                    {MARKER_CATEGORY_LABELS[cat]}
+                  </div>
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 3 }}>
+                    {typesInCat.map((t) => {
+                      const active = markerType === t.value;
+                      return (
+                        <ViewscreenTooltip key={t.value} label={`Mark this point as ${t.label.toLowerCase()}`} side="top">
+                          <button
+                            type="button"
+                            onClick={() => setMarkerType(t.value as MarkerTypeValue)}
+                            style={{
+                              fontSize: 9,
+                              padding: "3px 7px",
+                              borderRadius: 3,
+                              border: `1px solid ${active ? t.color : "rgba(0,229,255,0.12)"}`,
+                              background: active ? `${t.color}18` : "transparent",
+                              color: active ? t.color : "#94a3b8",
+                              cursor: "pointer",
+                              letterSpacing: "0.08em",
+                              transition: "all 0.1s",
+                              fontFamily: "inherit",
+                            }}
+                          >
+                            {t.icon} {t.label}
+                          </button>
+                        </ViewscreenTooltip>
+                      );
+                    })}
+                  </div>
+                </div>
               );
             })}
           </div>
