@@ -12,6 +12,8 @@ const STARTERS = [
   "What is the AI assistant for?",
   "How do I upload my own depth data?",
   "How do I correct a zone the AI got wrong?",
+  "How do I record my GPS track?",
+  "What does METAR mean?",
 ];
 
 export const HelpQA: React.FC = () => {
