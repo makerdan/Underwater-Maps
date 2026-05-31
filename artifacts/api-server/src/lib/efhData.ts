@@ -199,6 +199,115 @@ export const THORNE_BAY_EFH: EfhFeatureCollection = {
       },
       geometry: { type: "Polygon", coordinates: bboxRing(-133.5, 55.3, -132.0, 56.5) },
     },
+    {
+      type: "Feature",
+      properties: {
+        species: "pandalus_platyceros",
+        commonName: "Spotted Prawn",
+        fmp: "Gulf of Alaska Groundfish FMP",
+        depthRangeM: [90, 500],
+        habitatDescription:
+          "Spotted prawn inhabit rocky and mixed-substrate slopes throughout Clarence Strait at 90–500 m. " +
+          "They are a target species in the SE Alaska pot fishery, concentrated on steep walls and reef edges.",
+        lifeStage: "Juveniles & Adults",
+        season: "Year-round; peak trapping Apr–Jun",
+        source: "ADF&G / NOAA NMFS Alaska Region EFH",
+        creditUrl: NOAA_EFH_URL,
+        color: "#f472b6",
+      },
+      geometry: { type: "Polygon", coordinates: bboxRing(-133.35, 55.25, -131.75, 56.25) },
+    },
+    {
+      type: "Feature",
+      properties: {
+        species: "oncorhynchus_gorbuscha",
+        commonName: "Pink Salmon",
+        fmp: "Pacific Coast Salmon FMP",
+        depthRangeM: [0, 40],
+        habitatDescription:
+          "Pink salmon stage in Thorne Bay and the nearshore Clarence Strait corridor before ascending " +
+          "Prince of Wales Island streams in large odd-year runs.",
+        lifeStage: "Adults",
+        season: "Jul–Sep (odd-year dominant)",
+        source: "NOAA NMFS Pacific Salmon EFH",
+        creditUrl: NOAA_EFH_URL,
+        color: "#ec4899",
+      },
+      geometry: { type: "Polygon", coordinates: bboxRing(-133.45, 55.35, -132.05, 56.45) },
+    },
+    {
+      type: "Feature",
+      properties: {
+        species: "reinhardtius_hippoglossoides",
+        commonName: "Greenland Turbot",
+        fmp: "Gulf of Alaska Groundfish FMP",
+        depthRangeM: [200, 900],
+        habitatDescription:
+          "Greenland turbot (Pacific turbot) occupy the deepest soft-mud portions of Clarence Strait " +
+          "at 200–900 m, using the channel floor as feeding and overwintering habitat.",
+        lifeStage: "Adults",
+        season: "Year-round",
+        source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+        creditUrl: NOAA_EFH_URL,
+        color: "#14b8a6",
+      },
+      geometry: { type: "Polygon", coordinates: bboxRing(-133.25, 55.3, -131.8, 56.2) },
+    },
+    {
+      type: "Feature",
+      properties: {
+        species: "glyptocephalus_zachirus",
+        commonName: "Rex Sole",
+        fmp: "Gulf of Alaska Groundfish FMP",
+        depthRangeM: [50, 550],
+        habitatDescription:
+          "Rex sole are the most common small flatfish on the soft-mud bottom of Clarence Strait " +
+          "at 50–550 m, often appearing as abundant bycatch in trawl surveys.",
+        lifeStage: "Juveniles & Adults",
+        season: "Year-round",
+        source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+        creditUrl: NOAA_EFH_URL,
+        color: "#fb923c",
+      },
+      geometry: { type: "Polygon", coordinates: bboxRing(-133.3, 55.15, -131.85, 56.35) },
+    },
+    {
+      type: "Feature",
+      properties: {
+        species: "microgadus_proximus",
+        commonName: "Pacific Tomcod",
+        fmp: "Gulf of Alaska Groundfish FMP",
+        depthRangeM: [0, 200],
+        habitatDescription:
+          "Pacific tomcod are a shallow-to-mid-depth resident of Thorne Bay and nearshore Clarence Strait " +
+          "at 0–200 m, commonly found over soft substrate and eelgrass beds.",
+        lifeStage: "All life stages",
+        season: "Year-round; spawning Dec–Feb",
+        source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+        creditUrl: NOAA_EFH_URL,
+        color: "#78716c",
+      },
+      geometry: { type: "Polygon", coordinates: bboxRing(-133.45, 55.05, -132.1, 56.1) },
+    },
+    {
+      type: "Feature",
+      properties: {
+        species: "sebastes_spp_juvenile",
+        commonName: "Juvenile Rockfish",
+        fmp: "Gulf of Alaska Groundfish FMP",
+        depthRangeM: [0, 150],
+        habitatDescription:
+          "Juvenile rockfish (Sebastes spp. complex) use kelp canopy and shallow rocky reef habitat " +
+          "throughout Thorne Bay and Clarence Strait at 0–150 m as critical nursery grounds before " +
+          "recruiting to deeper adult habitat.",
+        lifeStage: "Juveniles",
+        season: "Year-round (peak recruitment May–Aug)",
+        source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+        creditUrl: NOAA_EFH_URL,
+        color: "#fbbf24",
+      },
+      geometry: { type: "Polygon", coordinates: bboxRing(-133.35, 55.35, -132.0, 56.4) },
+    },
   ],
   metadata: {
     region: "Thorne Bay / Clarence Strait — SE Alaska Inside Passage",
@@ -354,6 +463,90 @@ export const GLACIER_BAY_EFH: EfhFeatureCollection = buildRegion(
       color: "#10b981",
       inset: 0.3,
     },
+    {
+      species: "pandalus_platyceros",
+      commonName: "Spotted Prawn",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [90, 500],
+      habitatDescription:
+        "Spotted prawn colonize the rocky fjord walls and mixed-substrate slopes of Glacier Bay " +
+        "at 90–500 m, concentrated on the steep sides of Muir and Tarr inlets.",
+      lifeStage: "Juveniles & Adults",
+      season: "Year-round; peak trapping Apr–Jun",
+      source: "ADF&G / NOAA NMFS Alaska Region EFH",
+      color: "#f472b6",
+      inset: 0.33,
+    },
+    {
+      species: "oncorhynchus_gorbuscha",
+      commonName: "Pink Salmon",
+      fmp: "Pacific Coast Salmon FMP",
+      depthRangeM: [0, 40],
+      habitatDescription:
+        "Pink salmon stage along the Glacier Bay shoreline and in outer bay approaches before " +
+        "ascending Chichagof and Glacier Bay tributary streams.",
+      lifeStage: "Adults",
+      season: "Jul–Sep (odd-year dominant)",
+      source: "NOAA NMFS Pacific Salmon EFH",
+      color: "#ec4899",
+      inset: 0.35,
+    },
+    {
+      species: "reinhardtius_hippoglossoides",
+      commonName: "Greenland Turbot",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [300, 900],
+      habitatDescription:
+        "Greenland turbot occupy the deepest soft-mud troughs of Glacier Bay at 300–900 m, " +
+        "using the over-deepened glacial basins of upper inlets as overwintering habitat.",
+      lifeStage: "Adults",
+      season: "Year-round",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#14b8a6",
+      inset: 0.37,
+    },
+    {
+      species: "glyptocephalus_zachirus",
+      commonName: "Rex Sole",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [50, 550],
+      habitatDescription:
+        "Rex sole are common on the soft-mud floors throughout Glacier Bay at 50–550 m, " +
+        "often the most abundant small flatfish in bay-wide trawl surveys.",
+      lifeStage: "Juveniles & Adults",
+      season: "Year-round",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#fb923c",
+      inset: 0.39,
+    },
+    {
+      species: "microgadus_proximus",
+      commonName: "Pacific Tomcod",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [0, 200],
+      habitatDescription:
+        "Pacific tomcod are common in the shallow to mid-depth margins of Glacier Bay at 0–200 m, " +
+        "inhabiting soft-substrate bays and sheltered coves near glacial outwash areas.",
+      lifeStage: "All life stages",
+      season: "Year-round; spawning Dec–Feb",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#78716c",
+      inset: 0.41,
+    },
+    {
+      species: "sebastes_spp_juvenile",
+      commonName: "Juvenile Rockfish",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [0, 150],
+      habitatDescription:
+        "Juvenile rockfish (Sebastes spp. complex) use the kelp beds and shallow rocky shoreline " +
+        "of Glacier Bay as nursery habitat at 0–150 m before recruiting to deeper adult reef zones.",
+      lifeStage: "Juveniles",
+      season: "Year-round (peak recruitment May–Aug)",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#fbbf24",
+      inset: 0.43,
+    },
   ],
 );
 
@@ -444,6 +637,76 @@ export const ICY_STRAIT_EFH: EfhFeatureCollection = buildRegion(
       source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
       color: "#f97316",
       inset: 0.25,
+    },
+    {
+      species: "pandalus_platyceros",
+      commonName: "Spotted Prawn",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [90, 500],
+      habitatDescription:
+        "Spotted prawn are found on the rocky sill and mixed-substrate slopes of Icy Strait at 90–500 m, " +
+        "supporting a targeted pot fishery in the strait's western approaches.",
+      lifeStage: "Juveniles & Adults",
+      season: "Year-round; peak trapping Apr–Jun",
+      source: "ADF&G / NOAA NMFS Alaska Region EFH",
+      color: "#f472b6",
+      inset: 0.33,
+    },
+    {
+      species: "reinhardtius_hippoglossoides",
+      commonName: "Greenland Turbot",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [200, 800],
+      habitatDescription:
+        "Greenland turbot use the deeper soft-mud basins of Icy Strait and Cross Sound approaches " +
+        "at 200–800 m as overwintering and feeding habitat.",
+      lifeStage: "Adults",
+      season: "Year-round",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#14b8a6",
+      inset: 0.35,
+    },
+    {
+      species: "glyptocephalus_zachirus",
+      commonName: "Rex Sole",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [50, 500],
+      habitatDescription:
+        "Rex sole occupy the soft mud and sand floors of Icy Strait at 50–500 m, " +
+        "one of the most frequently encountered small flatfish in this corridor.",
+      lifeStage: "Juveniles & Adults",
+      season: "Year-round",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#fb923c",
+      inset: 0.37,
+    },
+    {
+      species: "microgadus_proximus",
+      commonName: "Pacific Tomcod",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [0, 150],
+      habitatDescription:
+        "Pacific tomcod are resident in the shallow and sheltered nearshore margins of Icy Strait " +
+        "at 0–150 m, often occurring over eelgrass and soft-bottom habitat near Chichagof Island.",
+      lifeStage: "All life stages",
+      season: "Year-round; spawning Dec–Feb",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#78716c",
+      inset: 0.39,
+    },
+    {
+      species: "sebastes_spp_juvenile",
+      commonName: "Juvenile Rockfish",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [0, 150],
+      habitatDescription:
+        "Juvenile rockfish (Sebastes spp. complex) recruit to the kelp and nearshore rocky habitat " +
+        "of Icy Strait and Point Adolphus at 0–150 m, a documented hotspot for juvenile rockfish assemblages.",
+      lifeStage: "Juveniles",
+      season: "Year-round (peak recruitment May–Aug)",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#fbbf24",
+      inset: 0.41,
     },
   ],
 );
@@ -548,6 +811,90 @@ export const SITKA_SOUND_EFH: EfhFeatureCollection = buildRegion(
       color: "#3b82f6",
       inset: 0.3,
     },
+    {
+      species: "pandalus_platyceros",
+      commonName: "Spotted Prawn",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [90, 500],
+      habitatDescription:
+        "Spotted prawn are abundant on the rocky outer-coast banks and island slopes of Sitka Sound " +
+        "at 90–500 m, supporting one of SE Alaska's most productive prawn pot fisheries.",
+      lifeStage: "Juveniles & Adults",
+      season: "Year-round; peak trapping Apr–Jun",
+      source: "ADF&G / NOAA NMFS Alaska Region EFH",
+      color: "#f472b6",
+      inset: 0.33,
+    },
+    {
+      species: "oncorhynchus_gorbuscha",
+      commonName: "Pink Salmon",
+      fmp: "Pacific Coast Salmon FMP",
+      depthRangeM: [0, 40],
+      habitatDescription:
+        "Pink salmon use Sitka Sound as a feeding and staging area before entering Baranof Island " +
+        "streams; this is one of the most productive pink salmon areas in SE Alaska.",
+      lifeStage: "Adults",
+      season: "Jul–Sep (odd-year dominant)",
+      source: "NOAA NMFS Pacific Salmon EFH",
+      color: "#ec4899",
+      inset: 0.35,
+    },
+    {
+      species: "reinhardtius_hippoglossoides",
+      commonName: "Greenland Turbot",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [300, 1000],
+      habitatDescription:
+        "Greenland turbot are present along the outer Baranof Island shelf break and canyon heads " +
+        "adjacent to Sitka Sound at 300–1000 m.",
+      lifeStage: "Adults",
+      season: "Year-round",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#14b8a6",
+      inset: 0.37,
+    },
+    {
+      species: "glyptocephalus_zachirus",
+      commonName: "Rex Sole",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [50, 550],
+      habitatDescription:
+        "Rex sole are one of the most numerically abundant flatfish on the outer Baranof Island shelf " +
+        "adjacent to Sitka Sound at 50–550 m, common on soft-sediment trawl grounds.",
+      lifeStage: "Juveniles & Adults",
+      season: "Year-round",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#fb923c",
+      inset: 0.39,
+    },
+    {
+      species: "microgadus_proximus",
+      commonName: "Pacific Tomcod",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [0, 200],
+      habitatDescription:
+        "Pacific tomcod inhabit the sheltered inner bays and estuarine margins of Sitka Sound " +
+        "at 0–200 m, frequently associated with eelgrass and soft-bottom habitat near Baranof Island.",
+      lifeStage: "All life stages",
+      season: "Year-round; spawning Dec–Feb",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#78716c",
+      inset: 0.41,
+    },
+    {
+      species: "sebastes_spp_juvenile",
+      commonName: "Juvenile Rockfish",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [0, 150],
+      habitatDescription:
+        "Juvenile rockfish (Sebastes spp. complex) recruit heavily to the exposed outer-coast kelp " +
+        "and rocky reef habitat of Sitka Sound at 0–150 m, benefiting from strong oceanic productivity.",
+      lifeStage: "Juveniles",
+      season: "Year-round (peak recruitment May–Aug)",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#fbbf24",
+      inset: 0.43,
+    },
   ],
 );
 
@@ -650,6 +997,90 @@ export const JUNEAU_APPROACHES_EFH: EfhFeatureCollection = buildRegion(
       source: "ADF&G / NOAA NMFS Alaska Region EFH",
       color: "#10b981",
       inset: 0.3,
+    },
+    {
+      species: "pandalus_platyceros",
+      commonName: "Spotted Prawn",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [90, 470],
+      habitatDescription:
+        "Spotted prawn occupy the rocky walls and mixed-substrate ledges of Stephens Passage and Lynn Canal " +
+        "at 90–470 m, and are a targeted pot fishery species near Juneau.",
+      lifeStage: "Juveniles & Adults",
+      season: "Year-round; peak trapping Apr–Jun",
+      source: "ADF&G / NOAA NMFS Alaska Region EFH",
+      color: "#f472b6",
+      inset: 0.33,
+    },
+    {
+      species: "oncorhynchus_gorbuscha",
+      commonName: "Pink Salmon",
+      fmp: "Pacific Coast Salmon FMP",
+      depthRangeM: [0, 40],
+      habitatDescription:
+        "Pink salmon migrate through Lynn Canal and Stephens Passage en route to numerous mainland " +
+        "streams draining into both waterways; Juneau area streams host significant pink salmon runs.",
+      lifeStage: "Adults",
+      season: "Jul–Sep (odd-year dominant)",
+      source: "NOAA NMFS Pacific Salmon EFH",
+      color: "#ec4899",
+      inset: 0.35,
+    },
+    {
+      species: "reinhardtius_hippoglossoides",
+      commonName: "Greenland Turbot",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [250, 470],
+      habitatDescription:
+        "Greenland turbot are present in the deepest portions of Stephens Passage and Frederick Sound " +
+        "at 250–470 m, occupying the soft-mud channel floors.",
+      lifeStage: "Adults",
+      season: "Year-round",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#14b8a6",
+      inset: 0.37,
+    },
+    {
+      species: "glyptocephalus_zachirus",
+      commonName: "Rex Sole",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [50, 470],
+      habitatDescription:
+        "Rex sole are abundant on the soft mud-bottom of Stephens Passage and Frederick Sound " +
+        "at 50–470 m, frequently encountered as bycatch in pollock and cod surveys.",
+      lifeStage: "Juveniles & Adults",
+      season: "Year-round",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#fb923c",
+      inset: 0.39,
+    },
+    {
+      species: "microgadus_proximus",
+      commonName: "Pacific Tomcod",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [0, 200],
+      habitatDescription:
+        "Pacific tomcod are common in the shallow nearshore habitat of Auke Bay and lower Lynn Canal " +
+        "at 0–200 m, associated with soft substrates and eelgrass near the Juneau waterfront.",
+      lifeStage: "All life stages",
+      season: "Year-round; spawning Dec–Feb",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#78716c",
+      inset: 0.41,
+    },
+    {
+      species: "sebastes_spp_juvenile",
+      commonName: "Juvenile Rockfish",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [0, 150],
+      habitatDescription:
+        "Juvenile rockfish (Sebastes spp. complex) use the rocky nearshore reef and kelp habitat " +
+        "of Auke Bay and outer Stephens Passage at 0–150 m as critical nursery grounds.",
+      lifeStage: "Juveniles",
+      season: "Year-round (peak recruitment May–Aug)",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#fbbf24",
+      inset: 0.43,
     },
   ],
 );
@@ -754,6 +1185,90 @@ export const KETCHIKAN_EFH: EfhFeatureCollection = buildRegion(
       color: "#10b981",
       inset: 0.2,
     },
+    {
+      species: "pandalus_platyceros",
+      commonName: "Spotted Prawn",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [90, 400],
+      habitatDescription:
+        "Spotted prawn are found along the rocky walls and mixed-substrate ledges of Revillagigedo Channel " +
+        "and Clarence Strait south of Ketchikan at 90–400 m, supporting a local pot fishery.",
+      lifeStage: "Juveniles & Adults",
+      season: "Year-round; peak trapping Apr–Jun",
+      source: "ADF&G / NOAA NMFS Alaska Region EFH",
+      color: "#f472b6",
+      inset: 0.25,
+    },
+    {
+      species: "oncorhynchus_gorbuscha",
+      commonName: "Pink Salmon",
+      fmp: "Pacific Coast Salmon FMP",
+      depthRangeM: [0, 40],
+      habitatDescription:
+        "Pink salmon stage in Tongass Narrows and Revillagigedo Channel before ascending Revillagigedo " +
+        "Island and nearby mainland streams; this region supports major odd-year pink runs.",
+      lifeStage: "Adults",
+      season: "Jul–Sep (odd-year dominant)",
+      source: "NOAA NMFS Pacific Salmon EFH",
+      color: "#ec4899",
+      inset: 0.27,
+    },
+    {
+      species: "reinhardtius_hippoglossoides",
+      commonName: "Greenland Turbot",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [200, 700],
+      habitatDescription:
+        "Greenland turbot occur in the deeper soft-mud portions of Revillagigedo Channel and southern " +
+        "Clarence Strait at 200–700 m near Ketchikan.",
+      lifeStage: "Adults",
+      season: "Year-round",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#14b8a6",
+      inset: 0.29,
+    },
+    {
+      species: "glyptocephalus_zachirus",
+      commonName: "Rex Sole",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [50, 400],
+      habitatDescription:
+        "Rex sole are abundant on the soft-mud and sand substrate of Revillagigedo Channel " +
+        "at 50–400 m, common in trawl bycatch in the Ketchikan commercial fishing area.",
+      lifeStage: "Juveniles & Adults",
+      season: "Year-round",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#fb923c",
+      inset: 0.31,
+    },
+    {
+      species: "microgadus_proximus",
+      commonName: "Pacific Tomcod",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [0, 200],
+      habitatDescription:
+        "Pacific tomcod are resident in the shallow nearshore and estuarine habitat of Tongass Narrows " +
+        "and Gravina Island margins at 0–200 m, associated with soft substrates near Ketchikan.",
+      lifeStage: "All life stages",
+      season: "Year-round; spawning Dec–Feb",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#78716c",
+      inset: 0.33,
+    },
+    {
+      species: "sebastes_spp_juvenile",
+      commonName: "Juvenile Rockfish",
+      fmp: "Gulf of Alaska Groundfish FMP",
+      depthRangeM: [0, 150],
+      habitatDescription:
+        "Juvenile rockfish (Sebastes spp. complex) use the rocky nearshore kelp and reef habitat " +
+        "around Gravina and Annette islands at 0–150 m as essential nursery grounds near Ketchikan.",
+      lifeStage: "Juveniles",
+      season: "Year-round (peak recruitment May–Aug)",
+      source: "NOAA NMFS Alaska Region EFH — GOA Groundfish FMP",
+      color: "#fbbf24",
+      inset: 0.35,
+    },
   ],
 );
 
@@ -762,4 +1277,9 @@ export const KETCHIKAN_EFH: EfhFeatureCollection = buildRegion(
 // ---------------------------------------------------------------------------
 export const SALTWATER_EFH_BY_DATASET: Record<string, EfhFeatureCollection> = {
   "thorne-bay": THORNE_BAY_EFH,
+  "glacier-bay": GLACIER_BAY_EFH,
+  "icy-strait": ICY_STRAIT_EFH,
+  "sitka-sound": SITKA_SOUND_EFH,
+  "juneau": JUNEAU_APPROACHES_EFH,
+  "ketchikan": KETCHIKAN_EFH,
 };

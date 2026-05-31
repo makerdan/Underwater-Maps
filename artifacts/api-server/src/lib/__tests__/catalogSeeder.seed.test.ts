@@ -30,6 +30,16 @@ const EXTRA_IDS = [
   "alaska-shorezone-substrate",
   "usgs-coned-lidar-alaska",
   "noaa-enc-se-alaska",
+  // New EFH species added in task-854
+  "noaa-efh-alaska-spotted-prawn",
+  "noaa-efh-alaska-turbot",
+  "noaa-efh-alaska-rex-sole",
+  "noaa-efh-alaska-tomcod",
+  "noaa-efh-alaska-juvenile-rockfish",
+  // Intertidal / shoreline catalog entries (catalog-only, not 3D overlay)
+  "adfg-intertidal-clam-habitat-se-alaska",
+  "noaa-shorezone-tidal-pools-se-alaska",
+  "noaa-shorezone-beachcombing-se-alaska",
 ];
 
 const STUB_BBOX = { minLon: -1, minLat: -1, maxLon: 1, maxLat: 1 };
