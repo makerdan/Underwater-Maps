@@ -85,6 +85,7 @@ import { useUndoableTrailDelete } from "@/hooks/useUndoableTrailDelete";
 import { TerrainDownloadPopover } from "@/components/TerrainDownloadPopover";
 import { useUpscaledHeatmap } from "@/hooks/useUpscaledHeatmap";
 import { useSatelliteTileStore } from "@/lib/satelliteTileStore";
+import { useSatelliteTile } from "@/hooks/useSatelliteTile";
 
 interface TooltipState {
   visible: boolean;
@@ -119,6 +120,22 @@ export const OverviewMap: React.FC = () => {
   const colormapTheme = useSettingsStore((s) => s.colormapTheme);
   const contoursEnabled = useSettingsStore((s) => s.contoursEnabled);
   const contourInterval = useSettingsStore((s) => s.contourInterval);
+  const satelliteImagery = useSettingsStore((s) => s.satelliteImagery);
+
+  // Derive the satellite-fetch bbox from overviewGrid so the tile is fetched
+  // whenever a valid terrain bbox is available — even when the 3D scene isn't
+  // mounted. Pass null when the setting is off to skip the network request.
+  const satelliteBbox = useMemo(() => {
+    if (!satelliteImagery || !overviewGrid) return null;
+    return {
+      minLon: overviewGrid.minLon,
+      maxLon: overviewGrid.maxLon,
+      minLat: overviewGrid.minLat,
+      maxLat: overviewGrid.maxLat,
+    };
+  }, [satelliteImagery, overviewGrid]);
+  useSatelliteTile(satelliteBbox);
+
   const datasetId = overviewGrid?.datasetId ?? "";
   const { data: markerData } = useGetMarkers(
     { datasetId },
