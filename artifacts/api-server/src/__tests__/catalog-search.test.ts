@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { scoreEntry, searchCatalog } from "../lib/catalogSeeder.js";
+import { scoreEntry, searchCatalog, EXTRA_CATALOG_ENTRIES } from "../lib/catalogSeeder.js";
 import type { CatalogSeedEntry } from "../lib/catalogSeeder.js";
 
 // ---------------------------------------------------------------------------
@@ -298,5 +298,52 @@ describe("searchCatalog", () => {
     expect(ids).toContain("noaa-efh-alaska-sablefish");
     expect(ids).toContain("noaa-efh-alaska-arrowtooth");
     expect(results.every((r) => r.dataType === "habitat")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Southern-Alaska location keyword tests — run against the real seed data so
+// any regression in EXTRA_CATALOG_ENTRIES is caught immediately.
+// ---------------------------------------------------------------------------
+
+describe("searchCatalog — Southern Alaska location keyword coverage", () => {
+  it("'halibut Kodiak' returns the noaa-efh-alaska-halibut entry", async () => {
+    const results = await searchCatalog({ q: "halibut Kodiak" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-efh-alaska-halibut");
+  });
+
+  it("'salmon Homer' returns at least one salmon EFH entry", async () => {
+    const results = await searchCatalog({ q: "salmon Homer" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    const salmonIds = [
+      "noaa-efh-alaska-chinook-salmon",
+      "noaa-efh-alaska-pink-salmon",
+      "noaa-efh-alaska-chum-salmon",
+      "noaa-efh-alaska-sockeye-salmon",
+      "noaa-efh-alaska-coho-salmon",
+    ];
+    const matched = salmonIds.filter((sid) => ids.includes(sid));
+    expect(matched.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("'pollock Prince William Sound' returns the noaa-efh-alaska-pollock entry", async () => {
+    const results = await searchCatalog({ q: "pollock Prince William Sound" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-efh-alaska-pollock");
+  });
+
+  it("'halibut Kodiak' does not return unrelated freshwater or non-Alaska entries", async () => {
+    const results = await searchCatalog({ q: "halibut Kodiak" }, EXTRA_CATALOG_ENTRIES);
+    expect(results.every((r) => r.relevanceScore > 0)).toBe(true);
+    const ids = results.map((r) => r.id);
+    expect(ids).not.toContain("alaska-shorezone-substrate");
+    expect(ids).not.toContain("usgs-coned-lidar-alaska");
+  });
+
+  it("'salmon Homer' results all have relevanceScore > 0", async () => {
+    const results = await searchCatalog({ q: "salmon Homer" }, EXTRA_CATALOG_ENTRIES);
+    expect(results.length).toBeGreaterThan(0);
+    results.forEach((r) => expect(r.relevanceScore).toBeGreaterThan(0));
   });
 });
