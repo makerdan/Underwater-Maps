@@ -1356,8 +1356,8 @@ export function renderContourLines(
   // ---------------------------------------------------------------------------
   // Label placement helpers
   // ---------------------------------------------------------------------------
-  // Minimum canvas-pixel distance between any two placed labels.
-  const MIN_LABEL_GAP = 72;
+  // Minimum gap (px) between the edges of any two label boxes.
+  const LABEL_PAD = 8;
 
   // Exclusion zones — labels must not overlap these UI elements.
   // Colormap legend: 10 px strip at top-right (x = cW-26, y = 16, h = 120).
@@ -1370,12 +1370,14 @@ export function renderContourLines(
     { x: 0,       y: cH - 50, w: 135, h: 50  }, // scale bar (bottom-left)
   ];
 
-  const placedLabels: Array<{ x: number; y: number }> = [];
+  // Each placed label stores its centre and half-extents for AABB overlap detection.
+  const placedLabels: Array<{ x: number; y: number; hw: number; hh: number }> = [];
 
-  /** True if the candidate label rect (centred at lx, ly) overlaps an exclusion zone. */
+  /** True if the candidate label rect (centred at lx, ly) overlaps an exclusion zone or the canvas edge. */
   const overlapsExclusion = (lx: number, ly: number, tw: number): boolean => {
     const hw = tw / 2 + 4;
     const hh = fontSize / 2 + 3;
+    if (lx - hw < 0 || lx + hw > cW || ly - hh < 0 || ly + hh > cH) return true;
     for (const z of exclusionZones) {
       if (lx + hw > z.x && lx - hw < z.x + z.w &&
           ly + hh > z.y && ly - hh < z.y + z.h) return true;
@@ -1383,12 +1385,20 @@ export function renderContourLines(
     return false;
   };
 
-  /** True if the candidate position is within MIN_LABEL_GAP pixels of any placed label. */
-  const tooCloseToPlaced = (lx: number, ly: number): boolean => {
+  /**
+   * True if the candidate label box (centred at lx, ly, width tw) would overlap —
+   * with LABEL_PAD margin — any already-placed label.
+   * Uses axis-aligned bounding-box (AABB) intersection rather than centre distance,
+   * so wide labels never visually collide regardless of font size or zoom level.
+   */
+  const overlapsPlaced = (lx: number, ly: number, tw: number): boolean => {
+    const hw = tw / 2 + 3;
+    const hh = fontSize / 2 + 2;
     for (const p of placedLabels) {
-      const dx = lx - p.x;
-      const dy = ly - p.y;
-      if (dx * dx + dy * dy < MIN_LABEL_GAP * MIN_LABEL_GAP) return true;
+      if (lx + hw + LABEL_PAD > p.x - p.hw &&
+          lx - hw - LABEL_PAD < p.x + p.hw &&
+          ly + hh + LABEL_PAD > p.y - p.hh &&
+          ly - hh - LABEL_PAD < p.y + p.hh) return true;
     }
     return false;
   };
@@ -1443,19 +1453,29 @@ export function renderContourLines(
     // Prefer longer segments (more stable, better visual weight).
     candidates.sort((a, b) => b.px - a.px);
 
-    // Try each candidate in order; place the first one that passes all checks.
-    for (const c of candidates) {
-      if (overlapsExclusion(c.cx, c.cy, tw)) continue;
-      if (tooCloseToPlaced(c.cx, c.cy)) continue;
+    // How many labels to place for this depth level.
+    // At higher zoom levels the contour can span the whole canvas, so allow
+    // more repetitions — but cap to prevent clutter. One label fits every
+    // ~(tw + LABEL_PAD * 2 + 16) px of canvas width; allow up to 3× that density.
+    const labelSlotWidth = tw + LABEL_PAD * 2 + 16;
+    const maxLabels = Math.max(1, Math.min(4, Math.floor(cW / labelSlotWidth)));
 
-      placedLabels.push({ x: c.cx, y: c.cy });
+    let placed = 0;
+    for (const c of candidates) {
+      if (placed >= maxLabels) break;
+      if (overlapsExclusion(c.cx, c.cy, tw)) continue;
+      if (overlapsPlaced(c.cx, c.cy, tw)) continue;
+
+      const hw = tw / 2 + 3;
+      const hh = fontSize / 2 + 2;
+      placedLabels.push({ x: c.cx, y: c.cy, hw, hh });
       ctx.fillStyle = "rgba(2,8,24,0.65)";
       ctx.fillRect(c.cx - tw / 2 - 3, c.cy - fontSize / 2 - 2, tw + 6, fontSize + 4);
       ctx.fillStyle = `rgba(${r},${g},${b},0.90)`;
       ctx.textBaseline = "middle";
       ctx.textAlign = "center";
       ctx.fillText(label, c.cx, c.cy);
-      break;
+      placed++;
     }
   }
 
