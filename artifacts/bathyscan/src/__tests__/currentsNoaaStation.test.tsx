@@ -14,14 +14,14 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { act } from "react";
-import { useCurrentsStore, type NoaaAmbient } from "@/lib/currentsStore";
+import { useCurrentsStore, type NoaaAmbient, type TidalStatus } from "@/lib/currentsStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { CurrentsPanel } from "@/components/CurrentsPanel";
 import { MPH_TO_KNOTS, MPH_TO_KPH } from "@/lib/units";
 
-function resetStores() {
+function resetStores(tidalStatus: TidalStatus = "ok") {
   act(() => {
-    useCurrentsStore.setState({ field: null, noaaAmbient: null });
+    useCurrentsStore.setState({ field: null, noaaAmbient: null, tidalStatus, retryTidal: () => {} });
     useSettingsStore.setState({
       units: "nautical",
       currentsEnabled: true,
@@ -80,11 +80,35 @@ describe("CurrentsPanel — NOAA station readout (Task #167)", () => {
     expect(screen.queryByTestId("currents-noaa-station")).toBeNull();
   });
 
-  it("shows the 'NOAA unavailable' hint when no ambient has been published at all", () => {
+  it("shows 'Processing…' when status is ok but no ambient published yet (transient race)", () => {
     render(<CurrentsPanel />);
     expect(
       screen.getByTestId("currents-noaa-readout").textContent,
-    ).toContain("NOAA unavailable");
+    ).toContain("Processing");
+  });
+
+  it("shows loading indicator when tidalStatus is 'loading'", () => {
+    resetStores("loading");
+    render(<CurrentsPanel />);
+    expect(
+      screen.getByTestId("currents-noaa-loading").textContent,
+    ).toContain("Fetching NOAA data");
+  });
+
+  it("shows unavailable message with Retry and Switch to Manual when tidalStatus is 'unavailable'", () => {
+    resetStores("unavailable");
+    render(<CurrentsPanel />);
+    const readout = screen.getByTestId("currents-noaa-readout");
+    expect(readout.textContent).toContain("No NOAA tidal station found");
+    expect(screen.getByTestId("currents-noaa-retry")).toBeDefined();
+    expect(screen.getByTestId("currents-noaa-switch-manual")).toBeDefined();
+  });
+
+  it("shows idle (empty) state when tidalStatus is 'idle'", () => {
+    resetStores("idle");
+    render(<CurrentsPanel />);
+    const readout = screen.getByTestId("currents-noaa-readout");
+    expect(readout.textContent).toBe("");
   });
 });
 

@@ -654,7 +654,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
 
   // Currents (Task #136)
   currentsEnabled: false,
-  currentsSource: "manual",
+  currentsSource: "noaa",
   currentsManualDirectionDeg: 90,
   currentsManualSpeedKt: 0.8,
   currentsTidePhase: 0,

@@ -16,7 +16,7 @@
 
 import React, { useEffect, useRef } from "react";
 import { useSettingsStore } from "@/lib/settingsStore";
-import { useCurrentsStore } from "@/lib/currentsStore";
+import { useCurrentsStore, type TidalStatus } from "@/lib/currentsStore";
 import { CURRENT_RAMP_STOPS, speedToColor } from "@/lib/currentColor";
 import { formatSpeedFromKnots, speedSuffix, MPH_TO_KNOTS, MPH_TO_KPH } from "@/lib/units";
 import type { UnitsSystem } from "@/lib/settingsStore";
@@ -145,6 +145,8 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
   const setCurrentsShowStreamlines = useSettingsStore((s) => s.setCurrentsShowStreamlines);
   const field = useCurrentsStore((st) => st.field);
   const noaaAmbient = useCurrentsStore((st) => st.noaaAmbient);
+  const tidalStatus = useCurrentsStore((st) => st.tidalStatus);
+  const retryTidal = useCurrentsStore((st) => st.retryTidal);
 
   const wrapStyle: React.CSSProperties = embedded
     ? { width: "100%", color: "#e2e8f0", fontFamily: FONT, fontSize: 11 }
@@ -212,7 +214,11 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
               ? noaaAmbient.source === "noaa"
                 ? `NOAA tidal currents${noaaAmbient.stationName ? ` — ${noaaAmbient.stationName}` : ""}`
                 : "Tide-derived estimate (no NOAA station in range)"
-              : "Enable Tidal overlay to fetch NOAA data"
+              : tidalStatus === "loading"
+                ? "Fetching NOAA data…"
+                : tidalStatus === "unavailable"
+                  ? "No NOAA tidal station found in range"
+                  : "NOAA tidal currents"
           }
         >
           NOAA
@@ -249,39 +255,13 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
           </div>
         </div>
       ) : (
-        <div style={{ marginBottom: 8, fontSize: 10, color: "#e2e8f0" }} data-testid="currents-noaa-readout">
-          {noaaAmbient ? (
-            <>
-              <div>
-                {noaaAmbient.source === "noaa" ? "NOAA" : "Estimated"}:{" "}
-                {noaaAmbient.directionDeg.toFixed(0)}° @{" "}
-                {formatSpeedFromKnots(noaaAmbient.speedKt, { units, decimals: 2 })}
-              </div>
-              {noaaAmbient.source === "noaa" &&
-              (noaaAmbient.stationName || noaaAmbient.stationId) ? (
-                <div
-                  style={{ fontSize: 9, color: "#cbd5e1", marginTop: 2 }}
-                  data-testid="currents-noaa-station"
-                >
-                  Station:{" "}
-                  {noaaAmbient.stationName ?? "—"}
-                  {noaaAmbient.stationId ? ` (${noaaAmbient.stationId})` : ""}
-                </div>
-              ) : noaaAmbient.source === "estimated" ? (
-                <div
-                  style={{ fontSize: 9, color: "#fbbf24", marginTop: 2 }}
-                  data-testid="currents-noaa-estimated"
-                >
-                  No NOAA station in range — using tide-derived estimate.
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <span style={{ color: "#fbbf24" }}>
-              NOAA unavailable — enable Tidal overlay.
-            </span>
-          )}
-        </div>
+        <NoaaReadout
+          tidalStatus={tidalStatus}
+          noaaAmbient={noaaAmbient}
+          units={units}
+          onRetry={retryTidal}
+          onSwitchToManual={() => setCurrentsSource("manual")}
+        />
       )}
 
       <div style={{ marginBottom: 8 }}>
@@ -341,6 +321,97 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
     </div>
   );
 };
+
+interface NoaaReadoutProps {
+  tidalStatus: TidalStatus;
+  noaaAmbient: { directionDeg: number; speedKt: number; source?: "noaa" | "estimated"; stationId?: string; stationName?: string } | null;
+  units: UnitsSystem;
+  onRetry: () => void;
+  onSwitchToManual: () => void;
+}
+
+function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManual }: NoaaReadoutProps): React.ReactElement {
+  const actionBtn: React.CSSProperties = {
+    background: "none",
+    border: "1px solid rgba(0,229,255,0.3)",
+    color: "#00e5ff",
+    fontFamily: FONT,
+    fontSize: 9,
+    letterSpacing: "0.15em",
+    padding: "3px 8px",
+    borderRadius: 3,
+    cursor: "pointer",
+    marginTop: 4,
+  };
+
+  if (tidalStatus === "loading") {
+    return (
+      <div style={{ marginBottom: 8, fontSize: 10, color: "#94a3b8" }} data-testid="currents-noaa-readout">
+        <span data-testid="currents-noaa-loading">⟳ Fetching NOAA data…</span>
+      </div>
+    );
+  }
+
+  if (tidalStatus === "unavailable") {
+    return (
+      <div style={{ marginBottom: 8, fontSize: 10, color: "#e2e8f0" }} data-testid="currents-noaa-readout">
+        <div style={{ color: "#fbbf24", marginBottom: 4 }} data-testid="currents-noaa-unavailable">
+          No NOAA tidal station found within 100 km of this location.
+        </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <button style={actionBtn} data-testid="currents-noaa-retry" onClick={onRetry}>
+            ↺ Retry
+          </button>
+          <button style={{ ...actionBtn, color: "#94a3b8", borderColor: "rgba(148,163,184,0.3)" }} data-testid="currents-noaa-switch-manual" onClick={onSwitchToManual}>
+            Switch to Manual
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (tidalStatus === "ok" && noaaAmbient) {
+    return (
+      <div style={{ marginBottom: 8, fontSize: 10, color: "#e2e8f0" }} data-testid="currents-noaa-readout">
+        <div>
+          {noaaAmbient.source === "noaa" ? "NOAA" : "Estimated"}:{" "}
+          {noaaAmbient.directionDeg.toFixed(0)}° @{" "}
+          {formatSpeedFromKnots(noaaAmbient.speedKt, { units, decimals: 2 })}
+        </div>
+        {noaaAmbient.source === "noaa" &&
+        (noaaAmbient.stationName || noaaAmbient.stationId) ? (
+          <div
+            style={{ fontSize: 9, color: "#cbd5e1", marginTop: 2 }}
+            data-testid="currents-noaa-station"
+          >
+            Station:{" "}
+            {noaaAmbient.stationName ?? "—"}
+            {noaaAmbient.stationId ? ` (${noaaAmbient.stationId})` : ""}
+          </div>
+        ) : noaaAmbient.source === "estimated" ? (
+          <div
+            style={{ fontSize: 9, color: "#fbbf24", marginTop: 2 }}
+            data-testid="currents-noaa-estimated"
+          >
+            No NOAA station in range — using tide-derived estimate.
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (tidalStatus === "ok" && !noaaAmbient) {
+    return (
+      <div style={{ marginBottom: 8, fontSize: 10, color: "#94a3b8" }} data-testid="currents-noaa-readout">
+        <span>Processing…</span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginBottom: 8, fontSize: 10, color: "#94a3b8" }} data-testid="currents-noaa-readout" />
+  );
+}
 
 /**
  * Range slider for the tide-phase scrubber.

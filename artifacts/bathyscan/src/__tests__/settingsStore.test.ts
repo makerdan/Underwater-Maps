@@ -99,7 +99,7 @@ describe("settingsStore", () => {
   it("currents section has all expected defaults and round-trips through resetSection", () => {
     const s = useSettingsStore.getState();
     expect(s.currentsEnabled).toBe(false);
-    expect(s.currentsSource).toBe("manual");
+    expect(s.currentsSource).toBe("noaa");
     expect(s.currentsShowParticles).toBe(true);
     expect(s.currentsShowArrows).toBe(true);
     expect(s.currentsShowStreamlines).toBe(false);

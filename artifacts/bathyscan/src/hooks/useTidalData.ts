@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const POLL_INTERVAL_MS = 10 * 60 * 1000;
@@ -45,10 +45,15 @@ export function useTidalData(
   lat: number | null,
   lon: number | null,
   scrubDatetime?: Date | null,
-): { data: TidalDataResult | null; loading: boolean } {
+): { data: TidalDataResult | null; loading: boolean; retry: () => void } {
   const [data, setData] = useState<TidalDataResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const retry = useCallback(() => {
+    setRetryCount((c) => c + 1);
+  }, []);
 
   useEffect(() => {
     if (lat === null || lon === null) return;
@@ -95,7 +100,7 @@ export function useTidalData(
         timerRef.current = null;
       }
     };
-  }, [lat, lon, scrubDatetime]);
+  }, [lat, lon, scrubDatetime, retryCount]);
 
-  return { data, loading };
+  return { data, loading, retry };
 }

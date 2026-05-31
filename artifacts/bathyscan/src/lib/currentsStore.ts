@@ -32,6 +32,9 @@ export interface NoaaAmbient {
   stationName?: string;
 }
 
+/** Status of the tidal data fetch that backs NOAA currents mode. */
+export type TidalStatus = "idle" | "loading" | "ok" | "unavailable";
+
 interface CurrentsRuntimeStore {
   /** Currently-built bathymetry-shaped flow field (null when disabled / unavailable). */
   field: FlowField | null;
@@ -40,6 +43,17 @@ interface CurrentsRuntimeStore {
   /** Cached NOAA ambient from the active tidal-data fetch. */
   noaaAmbient: NoaaAmbient | null;
   setNoaaAmbient: (a: NoaaAmbient | null) => void;
+
+  /** Status of the /api/tidal fetch used by NOAA currents mode. */
+  tidalStatus: TidalStatus;
+  setTidalStatus: (s: TidalStatus) => void;
+
+  /**
+   * Calling this function re-triggers the tidal fetch. App.tsx wires its
+   * hook's retry() into this slot. Default is a noop until wired.
+   */
+  retryTidal: () => void;
+  setRetryTidal: (fn: () => void) => void;
 }
 
 export const useCurrentsStore = create<CurrentsRuntimeStore>((set) => ({
@@ -47,6 +61,10 @@ export const useCurrentsStore = create<CurrentsRuntimeStore>((set) => ({
   setField: (f) => set({ field: f }),
   noaaAmbient: null,
   setNoaaAmbient: (a) => set({ noaaAmbient: a }),
+  tidalStatus: "idle",
+  setTidalStatus: (s) => set({ tidalStatus: s }),
+  retryTidal: () => {},
+  setRetryTidal: (fn) => set({ retryTidal: fn }),
 }));
 
 /**

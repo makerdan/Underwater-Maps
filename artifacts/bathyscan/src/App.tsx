@@ -323,7 +323,17 @@ function Main() {
     ? (terrain.minLon + terrain.maxLon) / 2
     : null;
 
-  const { data: tidalData, loading: tidalLoading } = useTidalData(
+  const currentsSource = useSettingsStore((st) => st.currentsSource);
+
+  // Auto-enable the tidal overlay when the user selects the NOAA currents
+  // source so they don't have to toggle it manually.
+  useEffect(() => {
+    if (currentsSource === "noaa" && !tidalOverlay) {
+      setTidalOverlay(true);
+    }
+  }, [currentsSource, tidalOverlay, setTidalOverlay]);
+
+  const { data: tidalData, loading: tidalLoading, retry: retryTidal } = useTidalData(
     tidalOverlay ? centerLat : null,
     tidalOverlay ? centerLon : null,
     tidalOverlay ? scrubDatetime : null,
@@ -333,6 +343,27 @@ function Main() {
   // the bathymetric currents simulation (Task #136) can use it as the
   // ambient vector when the user picks `source: "noaa"`.
   const setNoaaAmbient = useCurrentsStore((s) => s.setNoaaAmbient);
+  const setTidalStatus = useCurrentsStore((s) => s.setTidalStatus);
+  const setRetryTidal = useCurrentsStore((s) => s.setRetryTidal);
+
+  // Keep the retry function in the store in sync with the hook's retry.
+  useEffect(() => {
+    setRetryTidal(retryTidal);
+  }, [retryTidal, setRetryTidal]);
+
+  // Derive and publish tidalStatus so CurrentsPanel can show proper states.
+  useEffect(() => {
+    if (tidalLoading) {
+      setTidalStatus("loading");
+    } else if (tidalData && "available" in tidalData && tidalData.available) {
+      setTidalStatus("ok");
+    } else if (tidalData && "available" in tidalData && !tidalData.available) {
+      setTidalStatus("unavailable");
+    } else {
+      setTidalStatus("idle");
+    }
+  }, [tidalLoading, tidalData, setTidalStatus]);
+
   useEffect(() => {
     // Always publish the ambient when /api/tidal returns a usable current,
     // so the CurrentsLayer NOAA simulation mode keeps a real flow field
