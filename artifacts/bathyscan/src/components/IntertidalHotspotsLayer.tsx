@@ -3,8 +3,7 @@
  *
  * Renders each scored intertidal polygon as:
  *   - a semi-transparent filled ShapeGeometry draped above Y=0 (ocean surface), colored by
- *     score type: teal (#0d9488) for tidepool, amber (#d97706) for beachcombing, blended
- *     when both scores are high.
+ *     the active intertidalScoreMode: teal (#0d9488) for tidepool, amber (#d97706) for beachcombing.
  *   - a bright LINE_LOOP outline floating slightly above the fill.
  *
  * Opacity scales with score intensity (score/100), providing an at-a-glance heat map.
@@ -73,22 +72,6 @@ function polygonToFillGeometry(
   return geo;
 }
 
-/** Blend teal and amber based on relative score strength. */
-function blendColor(tidepoolScore: number, beachcombingScore: number): string {
-  const t = tidepoolScore / 100;
-  const b = beachcombingScore / 100;
-  if (b === 0 || t > b * 1.5) return TIDEPOOL_COLOR;
-  if (t === 0 || b > t * 1.5) return BEACHCOMBING_COLOR;
-  // Mixed — blend toward the dominant hue
-  const w = b / (t + b);
-  const tealR = 0x0d; const tealG = 0x94; const tealB = 0x88;
-  const ambR  = 0xd9; const ambG  = 0x77; const ambB  = 0x06;
-  const r = Math.round(tealR + (ambR - tealR) * w);
-  const g = Math.round(tealG + (ambG - tealG) * w);
-  const bl = Math.round(tealB + (ambB - tealB) * w);
-  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${bl.toString(16).padStart(2, "0")}`;
-}
-
 interface HotspotRender {
   fillGeometry: THREE.BufferGeometry | null;
   outlineGeometry: THREE.BufferGeometry;
@@ -132,6 +115,7 @@ function buildHotspotRenders(
   minLat: number, maxLat: number,
   sourceName: string,
   creditUrl: string,
+  mode: 'tidepool' | 'beachcombing',
 ): HotspotRender[] {
   const lonRange = maxLon - minLon || 1;
   const latRange = maxLat - minLat || 1;
@@ -141,8 +125,9 @@ function buildHotspotRenders(
     const p = feature.properties;
     const tidepoolScore = p.tidepoolScore ?? 0;
     const beachcombingScore = p.beachcombingScore ?? 0;
-    const maxScore = Math.max(tidepoolScore, beachcombingScore);
-    if (maxScore < 1) continue;
+
+    const activeScore = mode === 'tidepool' ? tidepoolScore : beachcombingScore;
+    if (activeScore < 1) continue;
 
     const geom = feature.geometry as { type?: string; coordinates?: unknown };
     let polygons: number[][][][] = [];
@@ -154,9 +139,9 @@ function buildHotspotRenders(
       if (coords) polygons = coords.filter((p) => p?.[0]);
     } else continue;
 
-    const color = blendColor(tidepoolScore, beachcombingScore);
-    const fillOpacity = Math.max(0.07, (maxScore / 100) * 0.32);
-    const outlineOpacity = Math.max(0.45, (maxScore / 100) * 0.9);
+    const color = mode === 'tidepool' ? TIDEPOOL_COLOR : BEACHCOMBING_COLOR;
+    const fillOpacity = Math.max(0.07, (activeScore / 100) * 0.32);
+    const outlineOpacity = Math.max(0.45, (activeScore / 100) * 0.9);
 
     const sig = p.scoreSignals ?? {};
     const hotspot: SelectedHotspot = {
@@ -203,11 +188,12 @@ function buildHotspotRenders(
 export const IntertidalHotspotsLayer: React.FC = () => {
   const { terrain } = useAppState();
   const intertidalHotspotsEnabled = useUiStore((s) => s.intertidalHotspotsEnabled);
+  const intertidalScoreMode = useUiStore((s) => s.intertidalScoreMode);
   const setSelectedHotspot = useUiStore((s) => s.setSelectedHotspot);
 
   const datasetId = terrain?.datasetId ?? "";
 
-  const spotsParams = { type: "both" as const, minScore: 10 };
+  const spotsParams = { type: intertidalScoreMode, minScore: 10 };
   const { data: spotsData } = useGetIntertidalSpots(
     datasetId,
     spotsParams,
@@ -228,8 +214,9 @@ export const IntertidalHotspotsLayer: React.FC = () => {
       terrain.minLat, terrain.maxLat,
       meta?.sourceName ?? "NOAA ShoreZone / AOOS",
       meta?.sourceCredit ?? "https://portal.aoos.org/",
+      intertidalScoreMode,
     );
-  }, [spotsData, terrain]);
+  }, [spotsData, terrain, intertidalScoreMode]);
 
   useEffect(() => {
     return () => {

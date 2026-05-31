@@ -122,6 +122,13 @@ interface UiStore {
   /** Show intertidal hotspot polygons (tidepool + beachcombing scores) in the 3D scene. */
   intertidalHotspotsEnabled: boolean;
   setIntertidalHotspotsEnabled: (enabled: boolean) => void;
+  /**
+   * Which score type to highlight in the Intertidal Hotspots layer.
+   * Passed as the `type` query param to the intertidal spots endpoint.
+   * 'tidepool' = teal polygons, 'beachcombing' = amber polygons.
+   */
+  intertidalScoreMode: 'tidepool' | 'beachcombing';
+  setIntertidalScoreMode: (mode: 'tidepool' | 'beachcombing') => void;
   /** Currently selected intertidal hotspot polygon. null = card closed. */
   selectedHotspot: SelectedHotspot | null;
   setSelectedHotspot: (h: SelectedHotspot | null) => void;
@@ -282,6 +289,8 @@ export const useUiStore = create<UiStore>((set) => ({
     set(enabled
       ? { intertidalHotspotsEnabled: true }
       : { intertidalHotspotsEnabled: false, selectedHotspot: null }),
+  intertidalScoreMode: 'tidepool',
+  setIntertidalScoreMode: (mode) => set({ intertidalScoreMode: mode, selectedHotspot: null }),
   selectedHotspot: null,
   setSelectedHotspot: (h) => set({ selectedHotspot: h }),
   efhOverlayEnabled: false,

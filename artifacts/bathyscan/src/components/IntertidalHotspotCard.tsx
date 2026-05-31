@@ -2,9 +2,8 @@
  * IntertidalHotspotCard — Score-card popup for a clicked intertidal hotspot.
  *
  * Shows the tidepool score (teal) and beachcombing score (amber) side-by-side
- * as circular badge dials, plus bullet-list signal chips (substrate, bioband,
- * debris, wave energy, human use) and a natural-language "Why this spot?"
- * summary from the scorer.
+ * as circular badge dials. The active intertidalScoreMode determines which dial
+ * is visually emphasized and which signals / whySummary are shown below.
  *
  * Mounted unconditionally in App.tsx — renders nothing when selectedHotspot
  * is null. Positioned bottom-center overlapping the HUD stack, z-60.
@@ -43,16 +42,23 @@ interface ScoreCircleProps {
   score: number;
   color: string;
   label: string;
+  active: boolean;
 }
 
-const ScoreCircle: React.FC<ScoreCircleProps> = ({ score, color, label }) => {
+const ScoreCircle: React.FC<ScoreCircleProps> = ({ score, color, label, active }) => {
   const radius = 22;
   const stroke = 4;
   const norm = radius - stroke / 2;
   const circ = 2 * Math.PI * norm;
   const dash = (score / 100) * circ;
   return (
-    <div style={SCORE_DIAL}>
+    <div
+      style={{
+        ...SCORE_DIAL,
+        opacity: active ? 1 : 0.35,
+        transition: "opacity 0.2s ease",
+      }}
+    >
       <svg width={52} height={52} viewBox="0 0 52 52">
         <circle cx={26} cy={26} r={norm} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={stroke} />
         <circle
@@ -63,7 +69,7 @@ const ScoreCircle: React.FC<ScoreCircleProps> = ({ score, color, label }) => {
           strokeDasharray={`${dash} ${circ - dash}`}
           strokeLinecap="round"
           transform="rotate(-90 26 26)"
-          style={{ filter: `drop-shadow(0 0 4px ${color}88)` }}
+          style={{ filter: active ? `drop-shadow(0 0 4px ${color}88)` : "none" }}
         />
         <text x={26} y={31} textAnchor="middle" fill={color} fontSize={14} fontFamily="inherit" fontWeight="bold">
           {score}
@@ -72,6 +78,11 @@ const ScoreCircle: React.FC<ScoreCircleProps> = ({ score, color, label }) => {
       <span style={{ fontSize: 9, letterSpacing: "0.1em", color: color, textTransform: "uppercase" }}>
         {label}
       </span>
+      {active && (
+        <span style={{ fontSize: 8, color: "rgba(255,255,255,0.35)", letterSpacing: "0.08em" }}>
+          ▲ active
+        </span>
+      )}
     </div>
   );
 };
@@ -100,19 +111,24 @@ const SignalChip: React.FC<SignalChipProps> = ({ text, dim }) => (
 export const IntertidalHotspotCard: React.FC = () => {
   const selectedHotspot = useUiStore((s) => s.selectedHotspot);
   const setSelectedHotspot = useUiStore((s) => s.setSelectedHotspot);
+  const intertidalScoreMode = useUiStore((s) => s.intertidalScoreMode);
 
   if (!selectedHotspot) return null;
 
   const { tidepoolScore, beachcombingScore, signals, shoreZoneClass, sourceName } = selectedHotspot;
-  const dominantType = tidepoolScore >= beachcombingScore ? "tidepool" : "beachcombing";
 
-  const sig = dominantType === "tidepool" ? signals.tidepool : signals.beachcombing;
+  const sig = signals[intertidalScoreMode];
   const chips = [
     sig.bioband,
     sig.debris,
     sig.energy,
     sig.humanUse,
   ].filter(Boolean) as string[];
+
+  const modeColor = intertidalScoreMode === "tidepool" ? "#0d9488" : "#d97706";
+  const modeBorderColor = intertidalScoreMode === "tidepool"
+    ? "rgba(13,148,136,0.3)"
+    : "rgba(217,119,6,0.3)";
 
   return (
     <div style={CARD} data-testid="intertidal-hotspot-card">
@@ -144,17 +160,27 @@ export const IntertidalHotspotCard: React.FC = () => {
         </button>
       </div>
 
-      {/* Score dials */}
+      {/* Score dials — active mode is emphasized */}
       <div style={{ display: "flex", justifyContent: "center", gap: 24, marginBottom: 10 }}>
-        <ScoreCircle score={tidepoolScore} color="#0d9488" label="Tidepool" />
-        <ScoreCircle score={beachcombingScore} color="#d97706" label="Beachcombing" />
+        <ScoreCircle
+          score={tidepoolScore}
+          color="#0d9488"
+          label="Tidepool"
+          active={intertidalScoreMode === "tidepool"}
+        />
+        <ScoreCircle
+          score={beachcombingScore}
+          color="#d97706"
+          label="Beachcombing"
+          active={intertidalScoreMode === "beachcombing"}
+        />
       </div>
 
-      {/* Why this spot? */}
+      {/* Why this spot? — driven by active mode */}
       <div
         style={{
-          background: "rgba(0,229,255,0.04)",
-          border: "1px solid rgba(0,229,255,0.12)",
+          background: `rgba(${intertidalScoreMode === "tidepool" ? "13,148,136" : "217,119,6"},0.06)`,
+          border: `1px solid ${modeBorderColor}`,
           borderRadius: 4,
           padding: "6px 9px",
           fontSize: 11,
@@ -163,10 +189,12 @@ export const IntertidalHotspotCard: React.FC = () => {
           lineHeight: 1.5,
         }}
       >
-        {dominantType === "tidepool" ? signals.tidepool.whySummary : signals.beachcombing.whySummary}
+        {sig.whySummary || (
+          <span style={{ color: "#475569", fontStyle: "italic" }}>No summary available.</span>
+        )}
       </div>
 
-      {/* Signal chips */}
+      {/* Signal chips for the active mode */}
       {chips.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
           {chips.map((c) => <SignalChip key={c} text={c} />)}
@@ -176,6 +204,11 @@ export const IntertidalHotspotCard: React.FC = () => {
       {/* Substrate label */}
       <div style={{ fontSize: 10, color: "#475569", marginTop: 2 }}>
         Substrate: {sig.substrate}
+      </div>
+
+      {/* Active mode label */}
+      <div style={{ fontSize: 9, color: modeColor, marginTop: 6, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+        ● {intertidalScoreMode === "tidepool" ? "Tidepool" : "Beachcombing"} mode active
       </div>
     </div>
   );

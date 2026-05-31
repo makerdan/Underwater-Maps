@@ -124,6 +124,8 @@ export const OverlaysToolsPanel: React.FC = () => {
   const setSubstrateColorMode = useUiStore((s) => s.setSubstrateColorMode);
   const intertidalHotspotsEnabled = useUiStore((s) => s.intertidalHotspotsEnabled);
   const setIntertidalHotspotsEnabled = useUiStore((s) => s.setIntertidalHotspotsEnabled);
+  const intertidalScoreMode = useUiStore((s) => s.intertidalScoreMode);
+  const setIntertidalScoreMode = useUiStore((s) => s.setIntertidalScoreMode);
   const efhOverlayEnabled = useUiStore((s) => s.efhOverlayEnabled);
   const setEfhOverlayEnabled = useUiStore((s) => s.setEfhOverlayEnabled);
   const hiddenEfhSpecies = useUiStore((s) => s.hiddenEfhSpecies);
@@ -601,7 +603,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                 paddingLeft: 8,
                 display: "flex",
                 flexDirection: "column",
-                gap: 3,
+                gap: 4,
               }}
             >
               <span
@@ -612,13 +614,61 @@ export const OverlaysToolsPanel: React.FC = () => {
                   textTransform: "uppercase",
                 }}
               >
-                Score legend
+                Highlight mode
               </span>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: "#0d9488", display: "inline-block" }} />
-                <span style={{ fontSize: 10, color: "#94a3b8" }}>Tidepool</span>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: "#d97706", display: "inline-block", marginLeft: 8 }} />
-                <span style={{ fontSize: 10, color: "#94a3b8" }}>Beachcombing</span>
+              <div style={{ display: "flex", gap: 3 }}>
+                <ViewscreenTooltip label="Show tidepool hotspot polygons (teal)" side="right">
+                  <button
+                    aria-pressed={intertidalScoreMode === "tidepool"}
+                    onClick={() => setIntertidalScoreMode("tidepool")}
+                    style={{
+                      flex: 1,
+                      padding: "4px 6px",
+                      borderRadius: 3,
+                      border: `1px solid ${intertidalScoreMode === "tidepool" ? "rgba(13,148,136,0.7)" : "rgba(255,255,255,0.1)"}`,
+                      background: intertidalScoreMode === "tidepool" ? "rgba(13,148,136,0.2)" : "rgba(0,10,20,0.45)",
+                      color: intertidalScoreMode === "tidepool" ? "#2dd4bf" : "#64748b",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 9,
+                      letterSpacing: "0.1em",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      transition: "all 0.15s ease",
+                      textShadow: intertidalScoreMode === "tidepool" ? "0 0 6px rgba(13,148,136,0.5)" : "none",
+                    }}
+                  >
+                    <span style={{ width: 7, height: 7, borderRadius: 1, background: "#0d9488", flexShrink: 0 }} />
+                    TIDEPOOL
+                  </button>
+                </ViewscreenTooltip>
+                <ViewscreenTooltip label="Show beachcombing hotspot polygons (amber)" side="right">
+                  <button
+                    aria-pressed={intertidalScoreMode === "beachcombing"}
+                    onClick={() => setIntertidalScoreMode("beachcombing")}
+                    style={{
+                      flex: 1,
+                      padding: "4px 6px",
+                      borderRadius: 3,
+                      border: `1px solid ${intertidalScoreMode === "beachcombing" ? "rgba(217,119,6,0.7)" : "rgba(255,255,255,0.1)"}`,
+                      background: intertidalScoreMode === "beachcombing" ? "rgba(217,119,6,0.18)" : "rgba(0,10,20,0.45)",
+                      color: intertidalScoreMode === "beachcombing" ? "#fbbf24" : "#64748b",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 9,
+                      letterSpacing: "0.1em",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      transition: "all 0.15s ease",
+                      textShadow: intertidalScoreMode === "beachcombing" ? "0 0 6px rgba(217,119,6,0.4)" : "none",
+                    }}
+                  >
+                    <span style={{ width: 7, height: 7, borderRadius: 1, background: "#d97706", flexShrink: 0 }} />
+                    BEACH
+                  </button>
+                </ViewscreenTooltip>
               </div>
               <span style={{ fontSize: 9, color: "#64748b", lineHeight: 1.4 }}>
                 Opacity ∝ score intensity. Click polygon for score card.
