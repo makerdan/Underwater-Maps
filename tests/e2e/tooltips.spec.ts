@@ -65,16 +65,20 @@ async function setTooltipsViaSettings(
     .last();
   const sw = row.locator('[role="switch"]').first();
   await expect(sw).toBeVisible({ timeout: 5_000 });
-  if (((await sw.getAttribute("aria-checked")) === "true") !== enabled) {
+  const needsClick = ((await sw.getAttribute("aria-checked")) === "true") !== enabled;
+  if (needsClick) {
     await sw.click();
     await expect(sw).toHaveAttribute("aria-checked", enabled ? "true" : "false");
   }
 
-  // Wait for the 300 ms debounced server sync to fire and complete before
-  // navigating away. Without this, the server still holds the old value and
-  // the GET /api/settings hydration on the next page would override the
-  // locally-changed setting.
-  await page.waitForTimeout(500);
+  // Only wait for server sync when the setting was actually changed. The helper
+  // polls `_pendingDebounce` / `_flushInFlight` flags (set inside
+  // useServerSettingsSync) and resolves as soon as the server acknowledges the
+  // PUT, or immediately when nothing is outstanding. This prevents the GET
+  // /api/settings hydration on the next page from reverting the change.
+  if (needsClick) {
+    await page.evaluate(() => window.__bathyTest!.waitForServerSettingsSync());
+  }
 
   if (!returnHome) return;
 

@@ -162,8 +162,11 @@ test.describe("Onboarding tour overlay", () => {
     await dialog.locator(SKIP_BTN_SELECTOR).dispatchEvent("click");
     await expect(dialog).toHaveCount(0, { timeout: 5_000 });
 
-    // Give the flush a moment to reach the server (it is async but not debounced).
-    await page.waitForTimeout(1_500);
+    // Wait for the PUT /api/settings to complete. Skip calls flushServerSync()
+    // (non-debounced), so _flushInFlight is true while the PUT is in flight.
+    // waitForServerSettingsSync resolves once _flushInFlight clears, giving a
+    // precise signal instead of a fixed sleep.
+    await page.evaluate(() => window.__bathyTest!.waitForServerSettingsSync());
 
     // Verify the server now records hasSeenOnboarding: true.
     const resp = await request.get(`${API_URL}/api/settings`, {

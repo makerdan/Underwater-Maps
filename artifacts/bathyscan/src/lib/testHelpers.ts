@@ -43,6 +43,7 @@ import {
 } from "@workspace/api-client-react";
 import { useDepthProfileStore, buildProfile } from "./depthProfileStore";
 import { useSettingsStore } from "./settingsStore";
+import { hasPendingOrInFlightSettingsSync } from "../hooks/useServerSettingsSync";
 import { processFlyWheel } from "./flyWheel";
 import { openCrosshairContextMenu } from "./terrainContextMenu";
 import { setBypassSimulateSignedOut } from "./clerkCompat";
@@ -243,6 +244,18 @@ export interface BathyTestApi {
    * navigating to /settings (which would re-hydrate from the server).
    */
   getColormapTheme: () => string;
+  /**
+   * Resolves once the 300 ms debounced server sync has flushed and the
+   * server has acknowledged the PUT (i.e. `lastSyncedAt` in the settings
+   * store moves to a new value).  E2E tests that change settings and then
+   * navigate away should await this instead of a fixed `waitForTimeout`, so
+   * that the server copy is up-to-date before GET /api/settings re-hydrates
+   * state on the next page.
+   *
+   * Rejects with a descriptive error after 5 s if the stamp never changes
+   * (which would mean the debounce never fired or the PUT failed silently).
+   */
+  waitForServerSettingsSync: () => Promise<void>;
   /**
    * Render a production-shaped marker context menu whose "Delete marker"
    * onClick fires the REAL `deleteMarkersId` request and the REAL
@@ -595,6 +608,44 @@ export function installTestHelpers(): void {
       (queryClient.getQueryState(getGetMarkersQueryKey({ datasetId }))
         ?.isInvalidated ?? false),
     getColormapTheme: () => useSettingsStore.getState().colormapTheme,
+    waitForServerSettingsSync: () => {
+      return new Promise<void>((resolve, reject) => {
+        // Fast path: if nothing is pending/in-flight at call time the server
+        // is already up-to-date (either no mutation happened, or a prior sync
+        // already completed). Resolve immediately without polling.
+        if (!hasPendingOrInFlightSettingsSync()) {
+          resolve();
+          return;
+        }
+        // Slow path: a debounce timer is armed or a PUT is in flight. Poll
+        // until lastSyncedAt changes — that is the authoritative signal that
+        // markAllSaved() fired after the server acknowledged the PUT. We do
+        // NOT resolve on !hasPendingOrInFlightSettingsSync() alone here,
+        // because a silently-failed PUT would also clear _flushInFlight while
+        // leaving the server with the old value.
+        const before = useSettingsStore.getState().lastSyncedAt;
+        const deadline = Date.now() + 5_000;
+        const poll = () => {
+          const current = useSettingsStore.getState().lastSyncedAt;
+          if (current !== before) {
+            resolve();
+            return;
+          }
+          if (Date.now() >= deadline) {
+            reject(
+              new Error(
+                "waitForServerSettingsSync: timed out after 5 s — " +
+                  "lastSyncedAt did not change. " +
+                  "The debounce may not have fired or the PUT /api/settings failed.",
+              ),
+            );
+            return;
+          }
+          setTimeout(poll, 50);
+        };
+        setTimeout(poll, 50);
+      });
+    },
     showProductionMarkerMenu: (x, y, marker, capturedDatasetId) =>
       useContextMenuStore
         .getState()

@@ -44,6 +44,27 @@ export function flushServerSync(): Promise<void> {
   return _flush ? _flush() : Promise.resolve();
 }
 
+// ─── Module-level pending / in-flight tracking ───────────────────────────────
+// These flags let E2E test helpers determine whether a sync is currently
+// outstanding without coupling to React internals.
+//
+//  _pendingDebounce — true once scheduleSync arms a debounce timer; cleared
+//                     when the timer fires and flush() takes over.
+//  _flushInFlight   — true while flush()'s async PUT is in progress; cleared
+//                     in the finally block so it resets even on error.
+//
+// Reading either flag from window.__bathyTest.waitForServerSettingsSync lets
+// the helper resolve immediately when nothing is pending (no mutation happened,
+// or the server already acknowledged the write before the helper was called)
+// rather than timing out after 5 s.
+let _pendingDebounce = false;
+let _flushInFlight = false;
+
+/** True when a debounce timer is armed OR a PUT is currently in flight. */
+export function hasPendingOrInFlightSettingsSync(): boolean {
+  return _pendingDebounce || _flushInFlight;
+}
+
 // ─── Payload builder (pure function of store state) ───────────────────────────
 function buildPayload(): Record<string, unknown> {
   const {
@@ -136,6 +157,8 @@ export function useServerSettingsSync(): void {
 
   // ── Immediate flush ────────────────────────────────────────────────────────
   const flush = useCallback(async (): Promise<void> => {
+    // Cancel any pending debounce — we're flushing now.
+    _pendingDebounce = false;
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
@@ -144,20 +167,29 @@ export function useServerSettingsSync(): void {
       markAllSaved(null);
       return;
     }
-    const data = buildPayload();
-    const resp = await saveSettingsAsync({
-      data: data as Parameters<typeof saveSettingsAsync>[0]["data"],
-    });
-    const serverStamp = (resp as Record<string, unknown> | undefined)
-      ?.__updatedAt;
-    markAllSaved(typeof serverStamp === "string" ? serverStamp : undefined);
+    _flushInFlight = true;
+    try {
+      const data = buildPayload();
+      const resp = await saveSettingsAsync({
+        data: data as Parameters<typeof saveSettingsAsync>[0]["data"],
+      });
+      const serverStamp = (resp as Record<string, unknown> | undefined)
+        ?.__updatedAt;
+      markAllSaved(typeof serverStamp === "string" ? serverStamp : undefined);
+    } finally {
+      _flushInFlight = false;
+    }
   }, [isSignedIn, saveSettingsAsync, markAllSaved]);
 
   // ── Debounced PUT subscription ─────────────────────────────────────────────
   const scheduleSync = useCallback(() => {
     if (!isSignedIn) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    // Signal that a write is outstanding so waitForServerSettingsSync knows
+    // to poll rather than resolve immediately.
+    _pendingDebounce = true;
     debounceRef.current = setTimeout(() => {
+      _pendingDebounce = false; // flush() takes over from here
       void flush().catch(() => {
         /* keep dirty so the section Save button stays active */
       });
