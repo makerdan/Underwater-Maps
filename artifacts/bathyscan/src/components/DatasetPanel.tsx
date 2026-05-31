@@ -414,6 +414,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const [cachedIds, setCachedIds] = useState<Set<string>>(new Set());
   useEffect(() => {
     if (isOnline || !("caches" in window)) return;
+    let mounted = true;
     void (async () => {
       const ids = new Set<string>();
       try {
@@ -429,8 +430,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       } catch {
         // Cache Storage not available
       }
-      setCachedIds(ids);
+      if (mounted) setCachedIds(ids);
     })();
+    return () => { mounted = false; };
   }, [isOnline]);
 
   const storeCollapsed = usePanelCollapseStore((s) => s.collapsed.datasets);

@@ -173,6 +173,8 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
   const displayPack = savedPack ?? existingPack;
   const alreadySaved = !!existingPack && areaPhase === "idle";
   const expLabel = displayPack ? expiresLabel(displayPack.tidePack.tidalExpiresAt) : null;
+  const areaDownloading = areaPhase === "downloading";
+  const helpDownloading = helpPhase === "downloading";
 
   return (
     <div
@@ -287,6 +289,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                   </div>
                   <button
                     onClick={() => void handleSaveArea(true)}
+                    disabled={areaDownloading}
                     style={{
                       background: "none",
                       border: "1px solid rgba(74,222,128,0.4)",
@@ -294,9 +297,10 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                       color: "#4ade80",
                       fontSize: 8,
                       padding: "2px 8px",
-                      cursor: "pointer",
+                      cursor: areaDownloading ? "not-allowed" : "pointer",
                       letterSpacing: "0.1em",
                       textTransform: "uppercase",
+                      opacity: areaDownloading ? 0.5 : 1,
                     }}
                   >
                     Update
@@ -366,6 +370,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
 
                   <button
                     onClick={() => void handleSaveArea(false)}
+                    disabled={areaDownloading}
                     style={{
                       width: "100%",
                       padding: "7px 12px",
@@ -376,7 +381,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                       fontSize: 10,
                       letterSpacing: "0.12em",
                       textTransform: "uppercase",
-                      cursor: "pointer",
+                      cursor: areaDownloading ? "not-allowed" : "pointer",
                     }}
                   >
                     {areaPhase === "error" ? "Retry Save Area" : alreadySaved ? "Re-download" : "Save Area"}
@@ -461,6 +466,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                   </div>
                   <button
                     onClick={() => void handleSaveHelp()}
+                    disabled={helpDownloading}
                     style={{
                       background: "none",
                       border: "1px solid rgba(74,222,128,0.4)",
@@ -468,9 +474,10 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                       color: "#4ade80",
                       fontSize: 8,
                       padding: "2px 8px",
-                      cursor: "pointer",
+                      cursor: helpDownloading ? "not-allowed" : "pointer",
                       letterSpacing: "0.1em",
                       textTransform: "uppercase",
+                      opacity: helpDownloading ? 0.5 : 1,
                     }}
                   >
                     Re-download
@@ -530,6 +537,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
               {(helpPhase === "idle" || helpPhase === "error") && !helpStatus.saved && (
                 <button
                   onClick={() => void handleSaveHelp()}
+                  disabled={helpDownloading}
                   style={{
                     width: "100%",
                     padding: "7px 12px",

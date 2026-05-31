@@ -118,12 +118,14 @@ const OfflineWeatherBadge: React.FC = () => {
 
   useEffect(() => {
     if (isOnline || !terrain) return;
+    let mounted = true;
     import("@/lib/offlinePackStore").then(async ({ getPackForLocation }) => {
       const centerLat = (terrain.minLat + terrain.maxLat) / 2;
       const centerLon = (terrain.minLon + terrain.maxLon) / 2;
       const pack = await getPackForLocation(centerLat, centerLon);
-      setSnapshotAt(pack?.weatherPack.snapshotAt ?? null);
+      if (mounted) setSnapshotAt(pack?.weatherPack.snapshotAt ?? null);
     }).catch(() => undefined);
+    return () => { mounted = false; };
   }, [isOnline, terrain]);
 
   if (isOnline || !snapshotAt) return null;

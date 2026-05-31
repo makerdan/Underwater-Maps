@@ -127,6 +127,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const [headingDeg, setHeadingDeg] = useState<number>(DEFAULT_HEADING_DEG);
   const [speedKnots, setSpeedKnots] = useState<number>(DEFAULT_SPEED_KNOTS);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const importingRef = useRef(false);
 
   const bounds = useMemo<Bounds>(
     () => ({
@@ -230,6 +231,8 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
 
   const doImport = useCallback(async () => {
     if (phase.kind !== "preview") return;
+    if (importingRef.current) return;
+    importingRef.current = true;
     const { parsed } = phase;
 
     // Routes that have been edited down to <2 points can't be imported as

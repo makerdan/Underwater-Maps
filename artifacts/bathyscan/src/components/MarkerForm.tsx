@@ -139,6 +139,13 @@ export const MarkerForm: React.FC = () => {
   const [savedOffline, setSavedOffline] = useState(false);
   const { toast } = useToast();
 
+  const offlineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (offlineTimerRef.current !== null) clearTimeout(offlineTimerRef.current);
+    };
+  }, []);
+
   // Stable ref so the guard always reads the latest form state without
   // needing to re-register itself on every keystroke.
   const isDirtyRef = useRef(false);
@@ -281,7 +288,7 @@ export const MarkerForm: React.FC = () => {
       const pendingKey = `pending-marker-${crypto.randomUUID()}`;
       void idbSet(pendingKey, markerBody).then(() => {
         setSavedOffline(true);
-        setTimeout(() => {
+        offlineTimerRef.current = setTimeout(() => {
           setSavedOffline(false);
           setMarkerFormOpen(false);
         }, 1800);
@@ -304,7 +311,7 @@ export const MarkerForm: React.FC = () => {
         }
       }
       setSavedOffline(true);
-      setTimeout(() => {
+      offlineTimerRef.current = setTimeout(() => {
         setSavedOffline(false);
         setMarkerFormOpen(false);
       }, 1800);

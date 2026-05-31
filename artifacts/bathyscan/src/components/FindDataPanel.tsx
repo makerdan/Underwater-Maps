@@ -1393,6 +1393,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             {nceiMayHaveMore && (
               <button
                 onClick={handleNceiLoadMore}
+                disabled={isNceiSearching}
                 style={{
                   display: "block",
                   width: "100%",
@@ -1405,8 +1406,9 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                   fontSize: 9,
                   letterSpacing: "0.15em",
                   textTransform: "uppercase",
-                  cursor: "pointer",
+                  cursor: isNceiSearching ? "not-allowed" : "pointer",
                   fontFamily: "'JetBrains Mono', monospace",
+                  opacity: isNceiSearching ? 0.5 : 1,
                 }}
                 data-testid="ncei-load-more"
               >
