@@ -18,7 +18,7 @@ import {
 } from "./keyBindings";
 import { usePanelCollapseStore, type PanelId } from "./panelCollapseStore";
 
-export const SETTINGS_SCHEMA_VERSION = 13;
+export const SETTINGS_SCHEMA_VERSION = 14;
 
 /**
  * Standard-mapping gamepad button index used to trigger the crosshair
@@ -167,6 +167,8 @@ export interface SettingsState {
   showLandmass: boolean;
   /** How the landmass is coloured: realistic elevation ramp or a single flat neutral colour. */
   landmassStyle: LandmassStyle;
+  /** When true, drape the ESRI World Imagery satellite photo over the land mesh (default on). When false, use the procedural green→brown→grey colour ramp instead. */
+  satelliteImagery: boolean;
 
   // ── HUD & Layout ──────────────────────────────────────────────────────
   hudOpacity: number;
@@ -369,6 +371,7 @@ interface SettingsActions {
   setShowWaterSurface: (v: boolean) => void;
   setShowLandmass: (v: boolean) => void;
   setLandmassStyle: (v: LandmassStyle) => void;
+  setSatelliteImagery: (v: boolean) => void;
 
   // HUD
   setHudOpacity: (v: number) => void;
@@ -609,6 +612,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   showWaterSurface: true,
   showLandmass: false,
   landmassStyle: "realistic",
+  satelliteImagery: true,
 
   // HUD
   hudOpacity: 0.75,
@@ -718,7 +722,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "enableCaustics", "fogDensity", "fogColor", "ambientLightIntensity",
     "directionalLightIntensity", "lampIntensity", "lampRange", "antialiasing",
     "textureQuality", "colormapTheme", "smoothTerrainSpikes",
-    "showWaterSurface", "showLandmass", "landmassStyle", "colormapUserSet",
+    "showWaterSurface", "showLandmass", "landmassStyle", "satelliteImagery", "colormapUserSet",
   ],
   hud: [
     "hudOpacity", "showCrosshairGps", "showCameraPosition",
@@ -848,6 +852,7 @@ export const useSettingsStore = create<SettingsStore>()(
         setShowWaterSurface: setter("showWaterSurface"),
         setShowLandmass: setter("showLandmass"),
         setLandmassStyle: setter("landmassStyle"),
+        setSatelliteImagery: setter("satelliteImagery"),
 
         // HUD
         setHudOpacity: setter("hudOpacity"),

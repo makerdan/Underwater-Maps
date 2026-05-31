@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import {
@@ -38,6 +38,8 @@ import { useWebglContextStore } from "@/lib/webglContextStore";
 import { WebglContextLostOverlay } from "@/components/WebglContextLostOverlay";
 import { useLandTerrainStore } from "@/lib/landTerrainStore";
 import { useLandTerrain } from "@/hooks/useLandTerrain";
+import { useSatelliteTileStore } from "@/lib/satelliteTileStore";
+import { useSatelliteTile } from "@/hooks/useSatelliteTile";
 
 // One-shot WebGL availability probe. Cached at module scope so we don't
 // recreate a throwaway <canvas> on every TourScene re-render. Used by the
@@ -90,6 +92,8 @@ const MAX_LAND_HEIGHT_WORLD = MAX_DEPTH_WORLD * 0.4; // e.g. 20 world units
 const LandTerrainMesh: React.FC = () => {
   const { terrain } = useAppState();
   const landGrid = useLandTerrainStore((s) => s.landGrid);
+  const tileUrl = useSatelliteTileStore((s) => s.tileUrl);
+  const satelliteImagery = useSettingsStore((s) => s.satelliteImagery);
 
   const bbox = useMemo(() => {
     if (!terrain) return null;
@@ -102,10 +106,13 @@ const LandTerrainMesh: React.FC = () => {
   }, [terrain]);
 
   useLandTerrain(bbox);
+  useSatelliteTile(bbox);
 
-  const { geometry, material } = useMemo(() => {
+  // Build the geometry + procedural-colour material once when landGrid changes.
+  // The satellite texture is applied separately so geometry reuse is preserved.
+  const { geometry, proceduralMaterial } = useMemo(() => {
     if (!landGrid || landGrid.maxElevation <= 0) {
-      return { geometry: null, material: null };
+      return { geometry: null, proceduralMaterial: null };
     }
 
     const { elevation, width, height, maxElevation } = landGrid;
@@ -142,15 +149,66 @@ const LandTerrainMesh: React.FC = () => {
     geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     geometry.computeVertexNormals();
 
-    const material = new THREE.MeshStandardMaterial({
+    const proceduralMaterial = new THREE.MeshStandardMaterial({
       vertexColors: true,
       roughness: 1.0,
       metalness: 0.0,
       side: THREE.DoubleSide,
     });
 
-    return { geometry, material };
+    return { geometry, proceduralMaterial };
   }, [landGrid]);
+
+  // Satellite texture — loaded from the object URL whenever tileUrl changes.
+  // Disposed when replaced or on unmount.
+  const [satelliteTexture, setSatelliteTexture] = useState<THREE.Texture | null>(null);
+
+  useEffect(() => {
+    if (!tileUrl) {
+      setSatelliteTexture((prev) => { prev?.dispose(); return null; });
+      return;
+    }
+    const loader = new THREE.TextureLoader();
+    let disposed = false;
+    loader.load(
+      tileUrl,
+      (tex) => {
+        if (disposed) { tex.dispose(); return; }
+        tex.flipY = true;
+        tex.needsUpdate = true;
+        setSatelliteTexture((prev) => { prev?.dispose(); return tex; });
+      },
+      undefined,
+      (err) => { if (!disposed) console.warn("[LandTerrainMesh] satellite texture load failed:", err); },
+    );
+    return () => { disposed = true; };
+  }, [tileUrl]);
+
+  // Dispose texture on unmount.
+  useEffect(() => () => { satelliteTexture?.dispose(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Build the final material: satellite when enabled + available, else procedural ramp.
+  const material = useMemo(() => {
+    if (!proceduralMaterial) return null;
+    if (satelliteImagery && satelliteTexture) {
+      return new THREE.MeshStandardMaterial({
+        map: satelliteTexture,
+        vertexColors: false,
+        roughness: 0.85,
+        metalness: 0.0,
+        side: THREE.DoubleSide,
+      });
+    }
+    return proceduralMaterial;
+  }, [proceduralMaterial, satelliteTexture, satelliteImagery]);
+
+  // Dispose the satellite-textured material when it is replaced.
+  const prevMaterialRef = useRef<THREE.Material | null>(null);
+  useEffect(() => {
+    const prev = prevMaterialRef.current;
+    if (prev && prev !== proceduralMaterial && material !== prev) prev.dispose();
+    prevMaterialRef.current = material;
+  }, [material, proceduralMaterial]);
 
   if (!geometry || !material) return null;
 

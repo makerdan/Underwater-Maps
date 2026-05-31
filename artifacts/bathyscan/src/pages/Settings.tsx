@@ -917,6 +917,12 @@ function VisualsSection() {
             onChange={s.setShowLandmass}
             sublabel="Render above-water terrain (islands, shorelines) when the dataset includes topography. No effect on open-ocean datasets."
           />
+          <ToggleRow
+            label="Satellite imagery"
+            value={s.satelliteImagery}
+            onChange={s.setSatelliteImagery}
+            sublabel="Drape ESRI World Imagery photo over the land mesh. Turn off to use the stylised green→brown→grey colour ramp — clearer in dark scenes."
+          />
           <SelectRow
             label="Landmass style"
             value={s.landmassStyle}
