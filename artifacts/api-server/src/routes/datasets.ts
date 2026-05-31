@@ -852,7 +852,11 @@ router.post(
   // Decompress .gz files before parsing.
   // gunzipBounded enforces the size cap *during* streaming inflate so a
   // deeply-compressed input cannot exhaust process memory before the check.
+  // decompressedBuffer retains the raw bytes so binary parsers (LAS, GeoTIFF,
+  // NetCDF, BAG) receive the decompressed Buffer, not a corrupted UTF-8
+  // re-encoding of binary data.
   let fileContent: string;
+  let decompressedBuffer: Buffer | null = null;
   if (fileName.toLowerCase().endsWith(".gz")) {
     let decompressed: Buffer;
     try {
@@ -872,6 +876,7 @@ router.post(
       }
       return;
     }
+    decompressedBuffer = decompressed;
     fileContent = decompressed.toString("utf8");
   } else {
     fileContent = file.buffer.toString("utf8");
@@ -911,7 +916,12 @@ router.post(
     if (TEXT_EXTENSIONS.has(fileExt)) {
       points = parseXyzCsv(fileContent, baseFileName);
     } else {
-      points = await parseUploadedFile(file.buffer, fileName);
+      // For .gz-wrapped binary formats (LAS, GeoTIFF, NetCDF, BAG), pass the
+      // decompressed Buffer and the inner filename (baseFileName, without the
+      // .gz suffix) so the parser routes on the real extension and receives
+      // uncorrupted binary content.
+      const bufferForParser = decompressedBuffer ?? file.buffer;
+      points = await parseUploadedFile(bufferForParser, baseFileName);
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Parse error";

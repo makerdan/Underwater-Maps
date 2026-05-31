@@ -21,7 +21,13 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import * as zlib from "zlib";
 import { Transform } from "stream";
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, resolve } from "path";
 import request from "supertest";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // ── Zlib mock (hoisted so the factory can reference the shared flag) ──────────
 //
@@ -131,6 +137,15 @@ function makeValidGzXyz(pointCount = 12): Buffer {
   return zlib.gzipSync(Buffer.from(lines.join("\n"), "utf8"));
 }
 
+/**
+ * Builds a gzip-compressed LAS file from the real survey_1_2.las fixture.
+ * The fixture contains enough points to satisfy the ≥10 point requirement.
+ */
+function makeValidGzLas(): Buffer {
+  const lasBuffer = readFileSync(resolve(__dirname, "fixtures/survey_1_2.las"));
+  return zlib.gzipSync(lasBuffer);
+}
+
 afterEach(() => {
   zlibMockState.useOversized = false;
 });
@@ -151,6 +166,29 @@ describe("POST /api/datasets/upload — .gz upload", () => {
         .field("resolution", "32")
         .attach("file", gzBuf, {
           filename: "survey.xyz.gz",
+          contentType: "application/gzip",
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("terrain");
+      expect(res.body.terrain).toHaveProperty("depths");
+      expect(Array.isArray(res.body.terrain.depths)).toBe(true);
+      expect(res.body).toHaveProperty("overview");
+    },
+    15_000,
+  );
+
+  it(
+    "accepts a valid gzip-compressed LAS file and returns 200 with terrain data",
+    async () => {
+      const gzBuf = makeValidGzLas();
+
+      const res = await request(app)
+        .post("/api/datasets/upload")
+        .set(AUTHED_HEADER)
+        .field("resolution", "32")
+        .attach("file", gzBuf, {
+          filename: "survey.las.gz",
           contentType: "application/gzip",
         });
 
