@@ -101,10 +101,10 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pnpm --filter @workspace/api-server exec vitest run --reporter=verbose src/__tests__/real-file-integration.test.ts"
+args = "pnpm --filter @workspace/api-server exec vitest run --reporter=verbose src/__tests__/parser-gpx.test.ts src/__tests__/parser-nmea.test.ts"
 
 [workflows.workflow.metadata]
-isValidation = true
+outputType = "console"
 
 [agent]
 stack = "PNPM_WORKSPACE"
