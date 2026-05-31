@@ -18,6 +18,7 @@
  */
 
 import { create } from "zustand";
+import { DEFAULT_BOAT_PROFILE_ID } from "./boatProfiles";
 
 export type TidePhase = "flooding" | "ebbing" | "slack-high" | "slack-low";
 
@@ -31,6 +32,13 @@ export interface HourlySurfaceCondition {
   waveDirectionDeg?: number;
   isSlack?: boolean;
   phase?: TidePhase;
+  /**
+   * Tide height above chart datum (m) for this hour, when available from the
+   * tidal forecast.  Used to adjust effective water depth at shallow waypoints
+   * so the shallow-water tidal scaling and bottom-contact warnings account for
+   * the state of the tide.
+   */
+  tideHeightM?: number;
 }
 
 export interface DriftWaypoint {
@@ -41,7 +49,15 @@ export interface DriftWaypoint {
   worldZ: number;
   lineAngleDeg: number;
   hookDepthM: number;
+  /** Horizontal distance (m) from the boat to where the hook/sinker hangs in the water column. */
+  lineScopeM: number;
   bottomReached: boolean;
+  /**
+   * True when the predicted sinker depth ≥ terrain depth at this waypoint — the
+   * sinker would physically drag the seafloor.  Surfaces as a warning rather
+   * than the "in reach" indicator.
+   */
+  bottomContact: boolean;
   driftSpeedKnots: number;
   headingDeg: number;
   isSlack: boolean;
@@ -205,6 +221,10 @@ interface DriftStore {
   catchLon: number | null;
   setCatchPoint: (lat: number, lon: number) => void;
   clearCatchPoint: () => void;
+
+  /** Selected boat profile id (see boatProfiles.ts). Persisted to localStorage. */
+  boatProfileId: string;
+  setBoatProfileId: (id: string) => void;
 }
 
 export const TROLL_MAX_KNOTS = 10;
@@ -349,4 +369,16 @@ export const useDriftStore = create<DriftStore>((set, get) => ({
   catchLon: null,
   setCatchPoint: (lat, lon) => set({ catchLat: lat, catchLon: lon }),
   clearCatchPoint: () => set({ catchLat: null, catchLon: null, reverseDriftPath: null }),
+
+  boatProfileId: (() => {
+    try {
+      return localStorage.getItem("bathyscan:boatProfileId") ?? DEFAULT_BOAT_PROFILE_ID;
+    } catch {
+      return DEFAULT_BOAT_PROFILE_ID;
+    }
+  })(),
+  setBoatProfileId: (id) => {
+    try { localStorage.setItem("bathyscan:boatProfileId", id); } catch {}
+    set({ boatProfileId: id });
+  },
 }));

@@ -134,34 +134,56 @@ export const DriftTimeline: React.FC = () => {
           const isActive = h === driftHour;
           const bottom = w.bottomReached;
           const stalled = !!w.isStalled;
+          const contact = w.bottomContact;
           return (
             <button
               key={h}
               onClick={() => setDriftHour(h)}
+              title={contact ? "⚠ Sinker drag — sinker contacts seafloor" : undefined}
               style={{
                 ...CHIP_BASE,
                 background: isActive
-                  ? stalled
-                    ? "rgba(251,191,36,0.15)"
-                    : "rgba(0,229,255,0.15)"
-                  : "rgba(0,10,20,0.75)",
-                border: `1px solid ${isActive
-                  ? stalled
-                    ? "rgba(251,191,36,0.6)"
-                    : "rgba(0,229,255,0.5)"
-                  : stalled
-                    ? "rgba(251,191,36,0.3)"
-                    : "rgba(0,229,255,0.08)"
+                  ? contact
+                    ? "rgba(251,113,133,0.18)"
+                    : stalled
+                      ? "rgba(251,191,36,0.15)"
+                      : "rgba(0,229,255,0.15)"
+                  : contact
+                    ? "rgba(251,113,133,0.08)"
+                    : stalled
+                      ? "rgba(251,191,36,0.08)"
+                      : "rgba(0,10,20,0.75)",
+                border: `1px solid ${
+                  contact
+                    ? isActive
+                      ? "rgba(251,113,133,0.7)"
+                      : "rgba(251,113,133,0.35)"
+                    : stalled
+                      ? isActive
+                        ? "rgba(251,191,36,0.6)"
+                        : "rgba(251,191,36,0.3)"
+                      : isActive
+                        ? "rgba(0,229,255,0.5)"
+                        : "rgba(0,229,255,0.08)"
                 }`,
                 color: isActive
-                  ? stalled ? "#fbbf24" : "#00e5ff"
+                  ? contact
+                    ? "#fb7185"
+                    : stalled
+                      ? "#fbbf24"
+                      : "#00e5ff"
                   : "#94a3b8",
               }}
             >
               <span>{formatHour(h)}</span>
-              <span style={{ fontSize: 7, color: bottom ? "#4ade80" : "#ef4444", marginTop: 1 }}>
-                {bottom ? "●" : "○"}
-              </span>
+              {contact && (
+                <span
+                  title="Sinker drags seafloor"
+                  style={{ fontSize: 7, color: "#fb7185", marginTop: 1, letterSpacing: 0 }}
+                >
+                  ⚠ DRAG
+                </span>
+              )}
               {stalled && (
                 <span
                   title="Backtroll hold — near-zero SOG at this hour"
@@ -170,7 +192,12 @@ export const DriftTimeline: React.FC = () => {
                   ⚓ HOLD
                 </span>
               )}
-              {!stalled && w.isSlack && (
+              {!contact && !stalled && (
+                <span style={{ fontSize: 7, color: bottom ? "#4ade80" : "#ef4444", marginTop: 1 }}>
+                  {bottom ? "●" : "○"}
+                </span>
+              )}
+              {w.isSlack && (
                 <span
                   title="Slack tide"
                   style={{ fontSize: 7, color: "#c084fc", marginTop: 1, letterSpacing: 0 }}
@@ -234,11 +261,36 @@ export const DriftTimeline: React.FC = () => {
             <div style={{ color: "#7dd3fc", fontWeight: 700 }}>{wp.hookDepthM.toFixed(0)} m</div>
           </div>
           <div>
+            <div style={{ color: "#94a3b8", fontSize: 8, letterSpacing: "0.18em" }}>LINE SCOPE</div>
+            <div style={{ color: "#a78bfa", fontWeight: 700 }} data-testid="line-scope-value">
+              {wp.lineScopeM.toFixed(0)} m
+            </div>
+          </div>
+          <div>
             <div style={{ color: "#94a3b8", fontSize: 8, letterSpacing: "0.18em" }}>BOTTOM {lineLengthM}m LINE</div>
             <div style={{ fontWeight: 700, color: wp.bottomReached ? "#4ade80" : "#ef4444" }}>
               {wp.bottomReached ? "✓ IN REACH" : "✗ TOO DEEP"}
             </div>
           </div>
+          {wp.bottomContact && (
+            <div
+              data-testid="bottom-contact-warning"
+              style={{
+                alignSelf: "center",
+                padding: "2px 7px",
+                borderRadius: 3,
+                border: "1px solid rgba(251,113,133,0.6)",
+                background: "rgba(251,113,133,0.12)",
+                color: "#fb7185",
+                fontWeight: 700,
+                fontSize: 9,
+                letterSpacing: "0.12em",
+                whiteSpace: "nowrap",
+              }}
+            >
+              ⚠ SINKER DRAG
+            </div>
+          )}
           {cond && (
             <div>
               <div style={{ color: "#94a3b8", fontSize: 8, letterSpacing: "0.18em" }}>WIND</div>
@@ -287,7 +339,7 @@ export const DriftTimeline: React.FC = () => {
       )}
 
       <div style={{ textAlign: "center", fontSize: 8, color: "#1e3a5f", marginTop: 6, letterSpacing: "0.1em" }}>
-        CLICK A CHIP TO SCRUB · ● = BOTTOM IN REACH · ○ = TOO DEEP{isBacktrolling ? " · ⚓ HOLD = STATION KEPT" : ""}
+        CLICK A CHIP TO SCRUB · ● = BOTTOM IN REACH · ○ = TOO DEEP · ⚠ DRAG = SINKER CONTACTS SEAFLOOR{isBacktrolling ? " · ⚓ HOLD = STATION KEPT" : ""}
       </div>
     </div>
   );

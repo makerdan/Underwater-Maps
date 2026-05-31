@@ -27,6 +27,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAppState } from "@/lib/context";
 import { useDriftStore, TROLL_MAX_KNOTS } from "@/lib/driftStore";
 import { computeDrift } from "@/lib/computeDrift";
+import { BOAT_PROFILES } from "@/lib/boatProfiles";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { LocationBadge } from "@/components/LocationBadge";
@@ -190,6 +191,8 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
   const moveDriftWaypoint = useDriftStore((s) => s.moveDriftWaypoint);
   const clearDriftWaypoints = useDriftStore((s) => s.clearDriftWaypoints);
   const setDriftWaypoints = useDriftStore((s) => s.setDriftWaypoints);
+  const boatProfileId = useDriftStore((s) => s.boatProfileId);
+  const setBoatProfileId = useDriftStore((s) => s.setBoatProfileId);
   const units = useSettingsStore((s) => s.units);
 
   // Saved plans
@@ -703,13 +706,14 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
       boatHeadingDeg,
       boatSpeedKnots,
       backtroll,
+      boatProfileId,
       trollWaypoints: driftWaypoints,
     });
     setDriftPath(path);
   }, [
     sharedHours, estimated, terrain,
     driftStartLat, driftStartLon, centerLat, centerLon,
-    lineLengthM, driftMode, boatHeadingDeg, boatSpeedKnots, backtroll, driftWaypoints,
+    lineLengthM, driftMode, boatHeadingDeg, boatSpeedKnots, backtroll, boatProfileId, driftWaypoints,
     setDriftConditions, setEstimatedConditions, setDriftStart, setDriftPath,
   ]);
 
@@ -749,6 +753,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
       boatHeadingDeg,
       boatSpeedKnots,
       backtroll,
+      boatProfileId,
       trollWaypoints: driftWaypoints,
     });
     setDriftPath(path);
@@ -757,7 +762,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     manualWindSpeedKnots, manualWindDegrees,
     manualTidalSpeedKnots, manualTidalDegrees, manualSlackNow,
     driftStartLat, driftStartLon, centerLat, centerLon,
-    lineLengthM, driftMode, boatHeadingDeg, boatSpeedKnots, backtroll, driftWaypoints,
+    lineLengthM, driftMode, boatHeadingDeg, boatSpeedKnots, backtroll, boatProfileId, driftWaypoints,
     setDriftConditions, setDriftPath,
   ]);
 
@@ -1437,6 +1442,34 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
             }
           </div>
         )}
+      </div>
+
+      {/* Boat profile selector */}
+      <div style={{ marginBottom: 6 }}>
+        <div style={{ ...LABEL, marginBottom: 3 }}>VESSEL PROFILE</div>
+        <select
+          data-testid="boat-profile-select"
+          value={boatProfileId}
+          onChange={(e) => setBoatProfileId(e.target.value)}
+          style={{
+            width: "100%",
+            background: "rgba(0,10,20,0.8)",
+            border: "1px solid rgba(0,229,255,0.2)",
+            color: "#00e5ff",
+            fontFamily: "inherit",
+            fontSize: 10,
+            padding: "3px 5px",
+            borderRadius: 3,
+            cursor: "pointer",
+          }}
+        >
+          {BOAT_PROFILES.map((p) => (
+            <option key={p.id} value={p.id}>{p.label}</option>
+          ))}
+        </select>
+        <div style={{ fontSize: 8, color: "#94a3b8", marginTop: 2, letterSpacing: "0.06em" }}>
+          Affects wind leeway coefficient used in drift model
+        </div>
       </div>
 
       <div style={{ marginBottom: 6 }}>

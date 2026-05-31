@@ -2,10 +2,15 @@
  * computeDrift.ts — Pure drift physics model for the Drift Planner feature.
  *
  * For each hour, computes:
- *   - Resultant surface current vector (70% tidal + 30% wind leeway at 3% of wind speed)
+ *   - Resultant surface current vector (70% tidal + 30% wind leeway)
+ *     Wind leeway uses the selected boat profile's leeway & windage factors
+ *     instead of the previous hardcoded 3%.
+ *   - Tidal current is scaled by a shallow-water factor when tide height data
+ *     is available (continuity: flow accelerates over shoals).
  *   - Boat lat/lon position after drifting for one hour
  *   - Fishing line angle from vertical (simplified drag model)
- *   - Estimated hook depth and whether bottom is in reach
+ *   - Estimated hook depth, horizontal scope (line-out × sin of line angle),
+ *     and bottom-reach / bottom-contact flags
  *
  * When backtroll is enabled (trolling mode only):
  *   - Thrust vector is reversed (boat moves stern-first)
@@ -25,6 +30,7 @@ import type { HourlySurfaceCondition, DriftWaypoint, TrollWaypoint } from "./dri
 import { lonLatToWorldXZ } from "./terrain";
 import { BACKTROLL_DRAG_COEFFICIENT, BACKTROLL_LEEWAY_COEFFICIENT } from "./boatSpeed";
 import type { TerrainData } from "@workspace/api-client-react";
+import { getBoatProfile, DEFAULT_BOAT_PROFILE_ID } from "./boatProfiles";
 
 const DEG2RAD = Math.PI / 180;
 const KM_PER_KNOT_HOUR = 1.852;
@@ -32,6 +38,18 @@ const KM_PER_DEG_LAT = 111.0;
 
 /** Threshold below which speed-over-ground is flagged as "stalled" (knots). */
 const STALL_SOG_THRESHOLD_KT = 0.05;
+
+/**
+ * Reference depth (m) used for the shallow-water tidal-speed scaling.
+ * Below this depth the scaling factor is effectively 1.0 (no amplification).
+ */
+const TIDAL_REFERENCE_DEPTH_M = 30;
+
+/**
+ * Maximum tidal amplification factor in very shallow water.
+ * Prevents degenerate velocities when terrain depth approaches zero.
+ */
+const TIDAL_MAX_SCALE = 3.0;
 
 function degToRad(deg: number): number {
   return deg * DEG2RAD;
@@ -46,9 +64,8 @@ function normalizeAngle(deg: number): number {
 }
 
 /**
- * Convert a bearing (meteorological "from" convention, 0=N) + speed (knots)
+ * Convert a bearing (oceanographic "going to" convention, 0=N) + speed (knots)
  * into a velocity vector (km/h) in (dLat, dLon) per hour.
- * Bearing is direction the current is GOING TO (oceanographic convention used here).
  */
 export function currentVector(speedKnots: number, bearingDeg: number, refLat: number): { dLat: number; dLon: number } {
   const speedKmH = speedKnots * KM_PER_KNOT_HOUR;
@@ -63,7 +80,7 @@ export function currentVector(speedKnots: number, bearingDeg: number, refLat: nu
 }
 
 /**
- * Fishing line angle from vertical (degrees) given the water current speed.
+ * Fishing line angle from vertical (degrees) given the effective water speed.
  *
  * Empirical model calibrated for a typical halibut rig:
  *   - 500 g lead sinker on 50 lb monofilament
@@ -122,6 +139,24 @@ function bearing(lat1: number, lon1: number, lat2: number, lon2: number): number
   return normalizeAngle(radToDeg(Math.atan2(y, x)));
 }
 
+/**
+ * Shallow-water tidal speed scale factor.
+ *
+ * When tide height data is available, effective water depth =
+ * terrainDepth + tideHeightM.  By continuity (Q = A × v), tidal speed
+ * scales inversely with depth relative to the reference depth:
+ *   scale = TIDAL_REFERENCE_DEPTH_M / effectiveDepth   (capped at TIDAL_MAX_SCALE)
+ *
+ * At depths ≥ TIDAL_REFERENCE_DEPTH_M the factor is ≤ 1 (no amplification).
+ * This means the tidal current at deep-water waypoints stays unchanged and
+ * only accelerates on shoals / near-reef waypoints.
+ */
+function shallowWaterTidalScale(terrainDepthM: number, tideHeightM: number): number {
+  const effectiveDepth = Math.max(1, terrainDepthM + tideHeightM);
+  if (effectiveDepth >= TIDAL_REFERENCE_DEPTH_M) return 1.0;
+  return Math.min(TIDAL_MAX_SCALE, TIDAL_REFERENCE_DEPTH_M / effectiveDepth);
+}
+
 // ---------------------------------------------------------------------------
 // Main export
 // ---------------------------------------------------------------------------
@@ -147,7 +182,13 @@ export interface ComputeDriftOptions {
    */
   backtroll?: boolean;
   /**
-   * Optional bathymetry-modified flow sampler (Task #136). When provided,
+   * Boat profile id (from boatProfiles.ts).  Determines the leeway and
+   * windage coefficients that replace the old hardcoded 3% value.
+   * Defaults to "open-skiff".
+   */
+  boatProfileId?: string;
+  /**
+   * Optional bathymetry-modified flow sampler. When provided,
    * the tidal component is sampled at the boat's current world-space
    * position so flow accelerates over shallows and deflects around land,
    * instead of using a single ambient value for the whole region. Returning
@@ -176,9 +217,12 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
     conditions, startLat, startLon, lineLengthM, terrain,
     mode = "drift", boatHeadingDeg = 0, boatSpeedKnots = 0,
     backtroll = false,
+    boatProfileId = DEFAULT_BOAT_PROFILE_ID,
     sampleFlowAt,
     trollWaypoints = [],
   } = opts;
+
+  const profile = getBoatProfile(boatProfileId);
 
   // Build the leg target sequence for waypoint-following trolling: the user's
   // ordered waypoints, then back to the start, repeated forever. This produces
@@ -226,6 +270,14 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
     let boatHeadingDegSep: number | undefined;
     let driftHeadingDeg: number | undefined;
     let currentMagnitudeKnots = 0; // tidal-component magnitude, for backtroll line angle + stall
+
+    // Terrain depth at the hour-start position — used for both shallow-water
+    // tidal scaling and the bottom-reach / bottom-contact calculations.
+    const terrainDepth = getDepthAt(hourStartLat, hourStartLon, terrain);
+    const tideHeightM = cond.tideHeightM ?? 0;
+
+    // Shallow-water tidal amplification: scale is > 1 only on shoals.
+    const tidalScale = shallowWaterTidalScale(terrainDepth, tideHeightM);
 
     if (useWaypoints) {
       // Sub-step the hour: travel toward the current leg target at boat speed,
@@ -279,8 +331,8 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
         }
       }
       // Apply wind+tide drift integrated over the hour. Sample bathymetry-
-      // shaped flow at the hour-start position when available (Task #136);
-      // fall back to the per-hour ambient otherwise.
+      // shaped flow at the hour-start position when available; fall back to
+      // the per-hour ambient otherwise. Apply shallow-water tidal scaling.
       let tidalSpeed = cond.tidalSpeedKnots;
       let tidalDir = cond.tidalDegrees;
       if (sampleFlowAt) {
@@ -290,7 +342,7 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
           tidalDir = sampled.directionDeg;
         }
       }
-      const leewayFactor = backtroll ? BACKTROLL_LEEWAY_COEFFICIENT : 0.03;
+      const leewayFactor = backtroll ? BACKTROLL_LEEWAY_COEFFICIENT : (profile.leewayFactor * profile.windageFactor);
       const tidalVec = currentVector(tidalSpeed, tidalDir, hourStartLat);
       const windLeewaySpeed = cond.windSpeedKnots * leewayFactor;
       const windVec = currentVector(windLeewaySpeed, cond.windDegrees, hourStartLat);
@@ -314,8 +366,8 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
       curLat += driftDLat;
       curLon += driftDLon;
     } else {
-      // Tidal component: prefer the bathymetry-shaped sampler when supplied
-      // (Task #136); otherwise fall back to the per-hour ambient.
+      // Tidal component: prefer the bathymetry-shaped sampler when supplied;
+      // otherwise fall back to the per-hour ambient. Apply shallow-water scaling.
       let tidalSpeed = cond.tidalSpeedKnots;
       let tidalDir = cond.tidalDegrees;
       if (sampleFlowAt) {
@@ -325,7 +377,7 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
           tidalDir = sampled.directionDeg;
         }
       }
-      const leewayFactor = backtroll ? BACKTROLL_LEEWAY_COEFFICIENT : 0.03;
+      const leewayFactor = backtroll ? BACKTROLL_LEEWAY_COEFFICIENT : (profile.leewayFactor * profile.windageFactor);
       const tidalVec = currentVector(tidalSpeed, tidalDir, curLat);
       const windLeewaySpeed = cond.windSpeedKnots * leewayFactor;
       const windVec = currentVector(windLeewaySpeed, cond.windDegrees, curLat);
@@ -392,13 +444,25 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
     // current that flows past the hull; use the current magnitude rather than
     // the resultant SOG so the angle reflects flow past the rig, not net
     // displacement (which may be near zero at stall).
+    // angle = degrees from vertical
+    // hookDepthM = vertical depth of the sinker = L × cos(angle)
+    // lineScopeM = horizontal distance behind the boat = L × sin(angle)
     const angleCurrentKnots = backtroll && mode === "trolling"
       ? currentMagnitudeKnots
       : resultantKnots;
     const angle = lineAngle(angleCurrentKnots);
     const hookDepthM = lineLengthM * Math.cos(degToRad(angle));
-    const depth = getDepthAt(hourStartLat, hourStartLon, terrain);
-    const bottomReached = hookDepthM >= depth - 5;
+    const lineScopeM = lineLengthM * Math.sin(degToRad(angle));
+
+    // Effective water depth at this waypoint (terrain + tide height)
+    const effectiveDepth = terrainDepth + tideHeightM;
+
+    // "Bottom in reach" — sinker can reach within 5 m of the seafloor.
+    const bottomReached = hookDepthM >= effectiveDepth - 5;
+
+    // "Bottom contact" warning — sinker depth would equal or exceed the
+    // water column, meaning it physically drags the seafloor.
+    const bottomContact = hookDepthM >= effectiveDepth;
 
     const worldPos = lonLatToWorldXZ(hourStartLon, hourStartLat, terrain);
     const isSlack = !!cond.isSlack || cond.tidalSpeedKnots < 0.1;
@@ -432,7 +496,9 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
       worldZ: worldPos.z,
       lineAngleDeg: angle,
       hookDepthM,
+      lineScopeM,
       bottomReached,
+      bottomContact,
       driftSpeedKnots: Math.round(resultantKnots * 10) / 10,
       headingDeg,
       isSlack,

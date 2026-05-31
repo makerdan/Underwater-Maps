@@ -70,11 +70,12 @@ describe("computeDrift — pure drift physics", () => {
     expect(path[0]!.hour).toBe(0);
   });
 
-  it("applies 70% tidal + 30% wind-leeway (3% of wind) blend on known vectors", () => {
+  it("applies 70% tidal + 30% wind-leeway (3.5% of wind, open-skiff default) blend on known vectors", () => {
     // Tide pushing due north at 2 kt; wind pushing due north at 10 kt.
-    // Wind leeway = 10 * 0.03 = 0.3 kt also due north.
-    // Resultant dLat/hour = 0.7 * 2 + 0.3 * 0.3 = 1.49 kt = 1.49 * 1.852 km/h
-    // dLat (deg) per hour = 1.49 * 1.852 / 111
+    // Open-skiff profile: leewayFactor=0.035, windageFactor=1.0
+    // Wind leeway = 10 * 0.035 * 1.0 = 0.35 kt also due north.
+    // Resultant = 0.7 * 2 + 0.3 * 0.35 = 1.505 kt = 1.505 * 1.852 km/h
+    // dLat (deg) per hour = 1.505 * 1.852 / 111
     const path = computeDrift({
       conditions: makeConditions({
         tidalSpeedKnots: 2,
@@ -88,15 +89,17 @@ describe("computeDrift — pure drift physics", () => {
       lineWeightG: 500,
       terrain: makeFlatGrid(100),
     });
+    // leewayFactor * windageFactor for open-skiff = 0.035 * 1.0 = 0.035
+    const LEEWAY = 0.035 * 1.0;
     const expectedDLatPerHour =
-      (0.7 * 2 + 0.3 * 0.3) * KM_PER_KNOT_HOUR / KM_PER_DEG_LAT;
+      (0.7 * 2 + 0.3 * (10 * LEEWAY)) * KM_PER_KNOT_HOUR / KM_PER_DEG_LAT;
     // Hour-1 waypoint shows position at the start of hour 1 == after 1 hour of drift.
     expect(path[1]!.lat - 0.5).toBeCloseTo(expectedDLatPerHour, 10);
     expect(path[1]!.lon).toBeCloseTo(0.5, 10);
     // Heading should be ~0° (north).
     expect(path[0]!.headingDeg).toBeCloseTo(0, 6);
-    // Drift speed (rounded to 1 dp in output) should be 1.5 kt.
-    expect(path[0]!.driftSpeedKnots).toBeCloseTo(1.5, 6);
+    // Drift speed (rounded to 1 dp in output) should be 1.5 kt (1.505 → rounds to 1.5).
+    expect(path[0]!.driftSpeedKnots).toBeCloseTo(1.5, 0);
   });
 
   it("trolling at 0 kt is identical to pure drift", () => {
@@ -285,9 +288,11 @@ describe("computeDrift — force-arrow bearings (boatHeadingDegSep, driftHeading
   });
 
   it("blends tide + wind-leeway: orthogonal tide (E) and wind (N) produce a NE-ish drift heading", () => {
-    // Tide east at 1 kt (weight 0.7) vs wind north at 10 kt × 3% = 0.3 kt (weight 0.3).
-    // East component = 0.7 * 1 = 0.70; North component = 0.3 * 0.3 = 0.09.
-    // Bearing = atan2(east, north) = atan2(0.70, 0.09) ≈ 82.7°.
+    // Tide east at 1 kt (weight 0.7) vs wind north at 10 kt.
+    // Open-skiff profile: leewayFactor=0.035, windageFactor=1.0
+    // Wind leeway = 10 * 0.035 * 1.0 = 0.35 kt north (weight 0.3).
+    // East component = 0.7 * 1 = 0.70; North component = 0.3 * 0.35 = 0.105.
+    // Bearing = atan2(east, north) = atan2(0.70, 0.105) ≈ 81.5°.
     const path = computeDrift({
       conditions: makeConditions({
         tidalSpeedKnots: 1,
@@ -301,7 +306,11 @@ describe("computeDrift — force-arrow bearings (boatHeadingDegSep, driftHeading
       lineWeightG: 500,
       terrain: makeFlatGrid(100),
     });
-    const expected = (Math.atan2(0.7, 0.09) * 180) / Math.PI;
+    // leewayFactor * windageFactor for open-skiff = 0.035 * 1.0
+    const windLeeway = 10 * 0.035 * 1.0;
+    const northComponent = 0.3 * windLeeway; // 0.105
+    const eastComponent = 0.7 * 1;           // 0.70
+    const expected = (Math.atan2(eastComponent, northComponent) * 180) / Math.PI;
     expect(path[0]!.driftHeadingDeg!).toBeCloseTo(expected, 1);
   });
 
