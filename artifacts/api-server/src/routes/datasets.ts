@@ -1,4 +1,5 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
+import * as zlib from "zlib";
 import multer from "multer";
 import { eq, and } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
@@ -26,6 +27,52 @@ import { fetchSatelliteTile } from "../lib/satelliteTile.js";
 import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
 import { substrateFingerprintForDataset } from "../lib/substrateGrid.js";
 
+const DECOMPRESS_MAX_BYTES = 200 * 1024 * 1024;
+
+/**
+ * Streaming gunzip with an early-abort size guard.
+ * Rejects with DECOMPRESS_TOO_LARGE if inflated output exceeds maxBytes
+ * *during* decompression (no full buffer is materialized beyond the limit).
+ * Rejects with the underlying zlib error if the input is not a valid gzip.
+ */
+function gunzipBounded(input: Buffer, maxBytes: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const gz = zlib.createGunzip();
+    const chunks: Buffer[] = [];
+    let total = 0;
+    let settled = false;
+
+    function abort(err: Error) {
+      if (settled) return;
+      settled = true;
+      gz.destroy();
+      reject(err);
+    }
+
+    gz.on("data", (chunk: Buffer) => {
+      total += chunk.length;
+      if (total > maxBytes) {
+        abort(Object.assign(new Error("DECOMPRESS_TOO_LARGE"), { code: "DECOMPRESS_TOO_LARGE" }));
+        return;
+      }
+      chunks.push(chunk);
+    });
+
+    gz.on("end", () => {
+      if (settled) return;
+      settled = true;
+      resolve(Buffer.concat(chunks));
+    });
+
+    gz.on("error", (err) => abort(err));
+
+    gz.write(input);
+    gz.end();
+  });
+}
+
+const ALLOWED_UPLOAD_EXTENSIONS = new Set([".csv", ".txt", ".xyz", ".gz"]);
+
 const datasetUploadRateLimit = createRateLimit({
   route: "dataset-upload",
   windowMs: 60_000,
@@ -34,7 +81,23 @@ const datasetUploadRateLimit = createRateLimit({
 });
 
 const UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: UPLOAD_MAX_BYTES } });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: UPLOAD_MAX_BYTES },
+  fileFilter(_req, file, cb) {
+    const ext = file.originalname.slice(file.originalname.lastIndexOf(".")).toLowerCase();
+    if (ALLOWED_UPLOAD_EXTENSIONS.has(ext)) {
+      cb(null, true);
+    } else {
+      cb(
+        Object.assign(new Error(`Unsupported file type. Accepted: .csv, .txt, .xyz, .gz`), {
+          code: "LIMIT_UNEXPECTED_FILE",
+        }) as unknown as null,
+        false,
+      );
+    }
+  },
+});
 
 /**
  * Translates multer errors (file too large, etc.) into the standard ApiError
@@ -55,6 +118,18 @@ function multerErrorHandler(
       return;
     }
     res.status(400).json({ error: "upload_error", details: err.message });
+    return;
+  }
+  // fileFilter rejects unsupported extensions with a plain Error tagged with
+  // code LIMIT_UNEXPECTED_FILE — surface it as a clear 415 instead of 500.
+  if (
+    err instanceof Error &&
+    (err as { code?: string }).code === "LIMIT_UNEXPECTED_FILE"
+  ) {
+    res.status(415).json({
+      error: "unsupported_file_type",
+      details: err.message,
+    });
     return;
   }
   next(err);
@@ -532,12 +607,39 @@ router.post(
   async (req: Request, res: Response): Promise<void> => {
   const file = req.file;
   if (!file) {
-    res.status(400).json({ error: "missing_file", details: "No file uploaded. Send the XYZ/CSV as the 'file' field in a multipart/form-data request." });
+    res.status(400).json({ error: "missing_file", details: "No file uploaded. Send the XYZ/CSV/.gz as the 'file' field in a multipart/form-data request." });
     return;
   }
 
-  const fileContent = file.buffer.toString("utf8");
   const fileName = file.originalname;
+
+  // Decompress .gz files before parsing.
+  // gunzipBounded enforces the size cap *during* streaming inflate so a
+  // deeply-compressed input cannot exhaust process memory before the check.
+  let fileContent: string;
+  if (fileName.toLowerCase().endsWith(".gz")) {
+    let decompressed: Buffer;
+    try {
+      decompressed = await gunzipBounded(file.buffer, DECOMPRESS_MAX_BYTES);
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === "DECOMPRESS_TOO_LARGE") {
+        res.status(422).json({
+          error: "decompressed_too_large",
+          details: "Decompressed content exceeds the 200 MB limit. Upload a smaller area or a more coarsely sampled file.",
+        });
+      } else {
+        res.status(422).json({
+          error: "decompress_error",
+          details: "Failed to decompress the .gz file. Ensure it is a valid gzip archive.",
+        });
+      }
+      return;
+    }
+    fileContent = decompressed.toString("utf8");
+  } else {
+    fileContent = file.buffer.toString("utf8");
+  }
 
   // Validate numeric body params via Zod so malformed values surface as a
   // clear 400 instead of falling through `parseInt` → `NaN` and producing a
@@ -578,7 +680,8 @@ router.post(
     return;
   }
 
-  const datasetName = fileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
+  const baseFileName = fileName.toLowerCase().endsWith(".gz") ? fileName.slice(0, -3) : fileName;
+  const datasetName = baseFileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
   const smoothing = await getSmoothingPreference(req);
 
   // Auth-gated: requireAuth above guarantees a clerkUserId is present.

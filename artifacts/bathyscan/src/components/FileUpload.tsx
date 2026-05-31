@@ -71,6 +71,8 @@ export const FileUpload = () => {
     accept: {
       "text/csv": [".csv"],
       "text/plain": [".xyz", ".txt"],
+      "application/gzip": [".gz"],
+      "application/x-gzip": [".gz"],
     },
     maxFiles: 1,
     disabled: !isSignedIn,
@@ -101,14 +103,14 @@ export const FileUpload = () => {
             <>
               <p className="text-xs font-semibold mb-1">UPLOAD CUSTOM TERRAIN</p>
               <p className="text-[10px] text-muted-foreground">
-                Sign in to upload XYZ or CSV files to your account
+                Sign in to upload XYZ, CSV, or .gz files to your account
               </p>
             </>
           ) : (
             <>
               <p className="text-xs font-semibold mb-1">UPLOAD CUSTOM TERRAIN</p>
               <p className="text-[10px] text-muted-foreground">
-                Drop XYZ or CSV file here — auto-saved to your account
+                Drop XYZ, CSV, or .gz file here — auto-saved to your account
               </p>
               {error && <p className="text-[10px] text-destructive mt-2 select-text">{error}</p>}
             </>
