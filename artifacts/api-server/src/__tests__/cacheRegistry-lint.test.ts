@@ -46,24 +46,38 @@ import { describe, it, expect } from "vitest";
 
 const ROUTES_DIR = join(__dirname, "..", "routes");
 const LIB_DIR = join(__dirname, "..", "lib");
+const FIXTURES_DIR = join(__dirname, "fixtures");
 
 const LIB_EXCLUDES = new Set(["cacheRegistry.ts"]);
 
-function getRouteFiles(): string[] {
-  return (readdirSync(ROUTES_DIR, { recursive: true }) as string[])
-    .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
-    .map((f) => join(ROUTES_DIR, f));
-}
-
-function getLibFiles(): string[] {
-  return (readdirSync(LIB_DIR, { recursive: true }) as string[])
+/**
+ * Recursively collect all `.ts` source files (excluding `.test.ts`) under
+ * `baseDir`, optionally skipping filenames listed in `excludes`.
+ *
+ * This is the shared scanner used by every lint path below — including the
+ * regression fixture test.  Changing this function to non-recursive will
+ * immediately cause the subdirectory regression test to fail.
+ */
+function getTsFilesRecursively(
+  baseDir: string,
+  excludes: Set<string> = new Set(),
+): string[] {
+  return (readdirSync(baseDir, { recursive: true }) as string[])
     .filter(
       (f) =>
         f.endsWith(".ts") &&
         !f.endsWith(".test.ts") &&
-        !LIB_EXCLUDES.has(f),
+        !excludes.has(f),
     )
-    .map((f) => join(LIB_DIR, f));
+    .map((f) => join(baseDir, f));
+}
+
+function getRouteFiles(): string[] {
+  return getTsFilesRecursively(ROUTES_DIR);
+}
+
+function getLibFiles(): string[] {
+  return getTsFilesRecursively(LIB_DIR, LIB_EXCLUDES);
 }
 
 function checkFiles(files: string[], dirLabel: string): string[] {
@@ -107,5 +121,29 @@ describe("cacheRegistry lint", () => {
   it("every lib file with a module-level new Map must call registerCache", () => {
     const violations = checkFiles(getLibFiles(), "lib");
     expect(violations).toEqual([]);
+  });
+});
+
+describe("cacheRegistry lint — recursive scanner regression", () => {
+  /**
+   * Proves that getTsFilesRecursively (the shared helper used by getRouteFiles
+   * and getLibFiles above) actually descends into subdirectories.
+   *
+   * The fixture at fixtures/fake-subdir/nested/unregistered-map.ts contains a
+   * bare module-level `new Map` with no registerCache call.  It lives inside a
+   * `nested/` child directory so that a non-recursive scan of `fake-subdir`
+   * would return zero files and the violation count would drop to 0 — failing
+   * the assertion below and catching the regression immediately.
+   */
+  it("detects an unregistered Map inside a nested subdirectory fixture", () => {
+    const fixtureSubdir = join(FIXTURES_DIR, "fake-subdir");
+    const files = getTsFilesRecursively(fixtureSubdir);
+
+    const violations = checkFiles(files, "fake-subdir");
+
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain("fake-subdir/nested/unregistered-map.ts");
+    expect(violations[0]).toContain('has a module-level "new Map"');
+    expect(violations[0]).toContain("registerCache()");
   });
 });
