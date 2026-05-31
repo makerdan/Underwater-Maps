@@ -826,6 +826,7 @@ function VisualsSection() {
         />
       </div>
       <PalettePickerCard />
+      <ZoneColoursCard />
       <AdvancedDisclosure testId="visuals-advanced">
         <div style={S.card}>
           <div style={S.cardHeader}>PARTICLES &amp; TEXTURES</div>
@@ -1416,6 +1417,134 @@ function CurrentsSection() {
         </div>
       </AdvancedDisclosure>
     </>
+  );
+}
+
+/**
+ * Zone Colours card — shown in the Visuals tab.
+ * Each of the four terrain slots gets a full row: name, colour picker,
+ * hex display, and visibility toggle.  Changes flow through zoneOverlayStore
+ * which is already subscribed to by useServerSettingsSync, so they are
+ * debounced and persisted server-side automatically.
+ */
+function ZoneColoursCard() {
+  const waterType = useSettingsStore((s) => s.waterType);
+  const slots = useZoneOverlayStore((s) => s.slots);
+  const setSlotColor = useZoneOverlayStore((s) => s.setSlotColor);
+  const setSlotVisible = useZoneOverlayStore((s) => s.setSlotVisible);
+  const resetToDefaults = useZoneOverlayStore((s) => s.resetToDefaults);
+  const slotNames =
+    waterType === "freshwater" ? SLOT_NAMES_FRESHWATER : SLOT_NAMES_SALTWATER;
+
+  return (
+    <div style={S.card}>
+      <div
+        style={{
+          ...S.cardHeader,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <span>ZONE COLOURS</span>
+        <button
+          data-testid="settings-zone-colours-reset"
+          onClick={resetToDefaults}
+          style={{
+            fontSize: 9,
+            color: "#64748b",
+            background: "transparent",
+            border: "1px solid rgba(100,116,139,0.3)",
+            borderRadius: 3,
+            padding: "1px 8px",
+            cursor: "pointer",
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+            fontFamily: FONT,
+          }}
+        >
+          RESET TO DEFAULTS
+        </button>
+      </div>
+      {slotNames.map((name, i) => {
+        const slot = slots[i as 0 | 1 | 2 | 3];
+        const color = slot?.color ?? "#f5d58a";
+        const visible = slot?.visible ?? true;
+        return (
+          <div
+            key={i}
+            data-testid={`settings-zone-row-${i}`}
+            style={{
+              ...S.row,
+              borderBottom:
+                i < slotNames.length - 1
+                  ? S.row.borderBottom
+                  : "none",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 14,
+                  height: 14,
+                  borderRadius: 3,
+                  background: color,
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  boxShadow: `0 0 5px ${color}66`,
+                  flexShrink: 0,
+                  opacity: visible ? 1 : 0.35,
+                  transition: "opacity 0.15s",
+                }}
+              />
+              <div>
+                <div style={{ ...S.label, opacity: visible ? 1 : 0.5 }}>{name}</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <label
+                data-testid={`settings-zone-colour-label-${i}`}
+                title={`Change colour — ${name}`}
+                style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}
+              >
+                <input
+                  data-testid={`settings-zone-colour-input-${i}`}
+                  type="color"
+                  value={color}
+                  onChange={(e) => setSlotColor(i as 0 | 1 | 2 | 3, e.target.value)}
+                  style={{
+                    width: 28,
+                    height: 20,
+                    border: "1px solid rgba(0,229,255,0.2)",
+                    borderRadius: 3,
+                    background: "transparent",
+                    cursor: "pointer",
+                    padding: 0,
+                  }}
+                  aria-label={`Zone colour for ${name}`}
+                />
+                <span
+                  style={{
+                    color: "#cbd5e1",
+                    fontSize: 10,
+                    minWidth: 58,
+                    textAlign: "right",
+                    fontFamily: FONT,
+                    opacity: visible ? 1 : 0.5,
+                  }}
+                >
+                  {color.toUpperCase()}
+                </span>
+              </label>
+              <Toggle
+                value={visible}
+                onChange={(v) => setSlotVisible(i as 0 | 1 | 2 | 3, v)}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
