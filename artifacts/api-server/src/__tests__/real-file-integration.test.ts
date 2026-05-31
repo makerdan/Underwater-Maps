@@ -339,12 +339,13 @@ describe("BAG (HDF5) — realistic NOAA hydrographic survey fixture", () => {
 // ---------------------------------------------------------------------------
 
 describe("GPX — realistic survey track fixture", () => {
-  it("parses the fixture and returns 13 valid depth points", () => {
+  it("parses the fixture and returns 15 valid depth points", () => {
     const pts = parseGpxTerrain(gpxBuf.toString("utf8"));
-    // 10 trkpts with <ele> + 1 trkpt with <extensions><depth> + 2 wpts with <ele> = 13.
+    // 10 trkpts with <ele> + 3 trkpts with vendor extension depth tags
+    // (<depth>, <gpxx:Depth>, <nmea:depth>) + 2 wpts with <ele> = 15.
     // Skipped: 1 trkpt missing <ele>/extensions, 1 trkpt with lat=95, 1 wpt missing <ele>.
-    expect(pts.length).toBe(13);
-    assertValidBathyPoints(pts, 13);
+    expect(pts.length).toBe(15);
+    assertValidBathyPoints(pts, 15);
   });
 
   it("skips <trkpt> elements that have no <ele> child", () => {
@@ -419,10 +420,32 @@ describe("GPX — realistic survey track fixture", () => {
     expect(extPt!.depth).toBeCloseTo(1750.0, 1);
   });
 
+  it("reads depth from <extensions><gpxx:Depth> (Garmin GPX extension)", () => {
+    const pts = parseGpxTerrain(gpxBuf.toString("utf8"));
+    // Fixture trkpt at lat=55.212, lon=-132.512 has no <ele> but carries
+    // <extensions><gpxx:Depth>1850.0</gpxx:Depth></extensions>.
+    const gpxxPt = pts.find(
+      (p) => Math.abs(p.lat - 55.212) < 0.00001 && Math.abs(p.lon - -132.512) < 0.00001,
+    );
+    expect(gpxxPt).toBeDefined();
+    expect(gpxxPt!.depth).toBeCloseTo(1850.0, 1);
+  });
+
+  it("reads depth from <extensions><nmea:depth> (NMEA-logger extension)", () => {
+    const pts = parseGpxTerrain(gpxBuf.toString("utf8"));
+    // Fixture trkpt at lat=55.213, lon=-132.513 has no <ele> but carries
+    // <extensions><nmea:depth>1950.0</nmea:depth></extensions>.
+    const nmeaPt = pts.find(
+      (p) => Math.abs(p.lat - 55.213) < 0.00001 && Math.abs(p.lon - -132.513) < 0.00001,
+    );
+    expect(nmeaPt).toBeDefined();
+    expect(nmeaPt!.depth).toBeCloseTo(1950.0, 1);
+  });
+
   it("routes through parseUploadedFile dispatcher for .gpx", async () => {
     const pts = await parseUploadedFile(gpxBuf, "survey.gpx");
     assertValidBathyPoints(pts, 10);
-    expect(pts.length).toBe(13);
+    expect(pts.length).toBe(15);
   });
 });
 

@@ -16,6 +16,8 @@
       <trkpt lat="55.208000" lon="-132.508000"><ele>-2050.0</ele><time>2024-06-01T00:08:00Z</time></trkpt>
       <trkpt lat="55.209000" lon="-132.509000"><ele>-2150.0</ele><time>2024-06-01T00:09:00Z</time></trkpt>
       <trkpt lat="55.211000" lon="-132.511000"><time>2024-06-01T00:10:30Z</time><extensions><depth>1750.0</depth></extensions></trkpt>
+      <trkpt lat="55.212000" lon="-132.512000"><time>2024-06-01T00:11:00Z</time><extensions><gpxx:Depth>1850.0</gpxx:Depth></extensions></trkpt>
+      <trkpt lat="55.213000" lon="-132.513000"><time>2024-06-01T00:11:30Z</time><extensions><nmea:depth>1950.0</nmea:depth></extensions></trkpt>
       <trkpt lat="55.210000" lon="-132.510000"><time>2024-06-01T00:10:00Z</time></trkpt>
       <trkpt lat="95.000000" lon="-132.511000"><ele>-1500.0</ele><time>2024-06-01T00:11:00Z</time></trkpt>
     </trkseg>

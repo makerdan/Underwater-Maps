@@ -607,12 +607,16 @@ function buildLaz() {
 /**
  * Build a realistic GPX track-log fixture that exercises all parser edge cases:
  *
- *  Track segment (10 trkpt with <ele>, 1 with <extensions><depth>, 1 missing
- *  <ele>, 1 out-of-range lat):
+ *  Track segment (10 trkpt with <ele>, 3 with vendor extension depth tags, 1
+ *  missing <ele>, 1 out-of-range lat):
  *    - 10 valid trkpts near -132.5°E, 55.2°N with negative <ele> values
  *      (below sea level → parser flips to positive depth)
  *    - 1 trkpt with no <ele> but <extensions><depth>1750.0</depth></extensions>
- *      → parsed via extension tag at lat=55.211, lon=-132.511
+ *      → parsed via plain extension tag at lat=55.211, lon=-132.511
+ *    - 1 trkpt with no <ele> but <extensions><gpxx:Depth>1850.0</gpxx:Depth></extensions>
+ *      → parsed via Garmin gpxx extension tag at lat=55.212, lon=-132.512
+ *    - 1 trkpt with no <ele> but <extensions><nmea:depth>1950.0</nmea:depth></extensions>
+ *      → parsed via NMEA-logger extension tag at lat=55.213, lon=-132.513
  *    - 1 trkpt whose <ele> is absent and no extensions → skipped by parseGpxTerrain
  *    - 1 trkpt with lat=95 (out of geographic range) → skipped by isValidCoord
  *
@@ -620,7 +624,7 @@ function buildLaz() {
  *    - 2 valid wpts — one with negative ele, one with positive ele (both → depth)
  *    - 1 wpt without <ele> → skipped
  *
- *  Expected output: 13 valid RawPoints (11 trkpts + 2 wpts)
+ *  Expected output: 15 valid RawPoints (13 trkpts + 2 wpts)
  */
 function buildGpx() {
   const trkpts = [];
@@ -640,6 +644,20 @@ function buildGpx() {
     `      <trkpt lat="55.211000" lon="-132.511000">` +
     `<time>2024-06-01T00:10:30Z</time>` +
     `<extensions><depth>1750.0</depth></extensions>` +
+    `</trkpt>`,
+  );
+  // Garmin gpxx:Depth extension trkpt
+  trkpts.push(
+    `      <trkpt lat="55.212000" lon="-132.512000">` +
+    `<time>2024-06-01T00:11:00Z</time>` +
+    `<extensions><gpxx:Depth>1850.0</gpxx:Depth></extensions>` +
+    `</trkpt>`,
+  );
+  // NMEA-logger nmea:depth extension trkpt
+  trkpts.push(
+    `      <trkpt lat="55.213000" lon="-132.513000">` +
+    `<time>2024-06-01T00:11:30Z</time>` +
+    `<extensions><nmea:depth>1950.0</nmea:depth></extensions>` +
     `</trkpt>`,
   );
   // Edge case 1: trkpt with no <ele> and no extensions → should be skipped
