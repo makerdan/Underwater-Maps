@@ -3114,7 +3114,7 @@ function DepthBandColorEditor({
         <button
           type="button"
           data-testid="band-colors-reset-btn"
-          onClick={resetBandColors}
+          onClick={() => { resetBandColors(); void flushServerSync(); }}
           disabled={allColorsDefault}
           style={{
             background: "none",
