@@ -216,6 +216,267 @@ export const DatasetFolderTree: React.FC<Props> = ({
     | null
   >(null);
 
+  // ─── Multi-select state ───────────────────────────────────────────────────
+  // selectedIds contains both folder IDs and dataset IDs. Clicking a folder
+  // in selection mode recursively adds/removes all descendant folders +
+  // datasets so the entire subtree appears checked.
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  // Collect every folder id + dataset id that belongs to a folder subtree.
+  const collectFolderSubtreeIds = useCallback(
+    (folderId: string): { folderIds: Set<string>; datasetIds: Set<string> } => {
+      const folderIds = new Set<string>([folderId]);
+      for (const id of descendantFolderIds(fullTree.byId, folderId)) {
+        folderIds.add(id);
+      }
+      const datasetIds = new Set<string>();
+      for (const ds of datasets) {
+        if (ds.folderId && folderIds.has(ds.folderId)) {
+          datasetIds.add(ds.id);
+        }
+      }
+      return { folderIds, datasetIds };
+    },
+    [fullTree.byId, datasets],
+  );
+
+  const toggleFolderSelection = useCallback(
+    (folderId: string) => {
+      const { folderIds, datasetIds } = collectFolderSubtreeIds(folderId);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(folderId)) {
+          for (const id of folderIds) next.delete(id);
+          for (const id of datasetIds) next.delete(id);
+        } else {
+          for (const id of folderIds) next.add(id);
+          for (const id of datasetIds) next.add(id);
+        }
+        return next;
+      });
+    },
+    [collectFolderSubtreeIds],
+  );
+
+  const toggleDatasetSelection = useCallback((dsId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(dsId)) next.delete(dsId);
+      else next.add(dsId);
+      return next;
+    });
+  }, []);
+
+  // Bulk-delete all currently selected items. Uses the same soft-delete /
+  // undo pattern as single deletes but with a single combined toast and a
+  // single timer so "Undo" cancels the entire batch at once.
+  const handleBulkDelete = useCallback(() => {
+    if (selectedIds.size === 0) return;
+
+    // Snapshot the selection before we clear state.
+    const snapshotIds = new Set(selectedIds);
+
+    // Separate folder IDs from dataset IDs.
+    const snapshotFolderIds = new Set<string>();
+    const snapshotDatasetIds = new Set<string>();
+    for (const id of snapshotIds) {
+      if (fullTree.byId.has(id)) snapshotFolderIds.add(id);
+      else snapshotDatasetIds.add(id);
+    }
+
+    // Find top-level selected folders (ancestors not also selected) so we
+    // don't issue duplicate DELETE calls for a folder and its sub-folder.
+    const topLevelFolderIds = [...snapshotFolderIds].filter((fid) => {
+      const node = fullTree.byId.get(fid);
+      if (!node) return false;
+      let parentId: string | null = node.folder.parentId ?? null;
+      while (parentId) {
+        if (snapshotFolderIds.has(parentId)) return false;
+        parentId = fullTree.byId.get(parentId)?.folder.parentId ?? null;
+      }
+      return true;
+    });
+
+    // Datasets covered by a selected folder don't need a separate mutation.
+    const coveredByFolder = new Set<string>();
+    for (const fid of snapshotFolderIds) {
+      const { datasetIds } = collectFolderSubtreeIds(fid);
+      for (const id of datasetIds) coveredByFolder.add(id);
+    }
+    const standaloneDatasetIds = [...snapshotDatasetIds].filter(
+      (id) => !coveredByFolder.has(id),
+    );
+
+    // All dataset IDs that will be gone after commit (for onDatasetsRemoved).
+    const allRemovedDatasetIds: string[] = [
+      ...snapshotDatasetIds,
+      ...datasets
+        .filter((ds) => ds.folderId && coveredByFolder.has(ds.id))
+        .map((ds) => ds.id),
+    ];
+
+    // Snapshot folder subtree info now for use inside the commit closure —
+    // the fullTree ref may have changed by the time the timer fires.
+    const folderSubtrees = new Map(
+      topLevelFolderIds.map((fid) => [fid, collectFolderSubtreeIds(fid)]),
+    );
+
+    const totalCount = snapshotIds.size;
+
+    // Hide rows immediately.
+    setPendingDeleteDatasetIds((s) => {
+      const next = new Set(s);
+      for (const id of snapshotDatasetIds) next.add(id);
+      return next;
+    });
+    setPendingDeleteFolderIds((s) => {
+      const next = new Set(s);
+      for (const id of snapshotFolderIds) next.add(id);
+      return next;
+    });
+
+    // Exit selection mode right away.
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+
+    const undoKey = `bulk:${Date.now()}`;
+    let aborted = false;
+
+    const commit = () => {
+      if (aborted) return;
+      pendingDeletesRef.current.delete(undoKey);
+
+      for (const fid of topLevelFolderIds) {
+        const subtree = folderSubtrees.get(fid);
+        deleteFolder.mutate(
+          { id: fid, data: { mode: "contents" } },
+          {
+            onSuccess: () => {
+              evictDatasetCaches([...(subtree?.datasetIds ?? [])]);
+              invalidateAll();
+              if (subtree && subtree.datasetIds.size > 0) {
+                onDatasetsRemoved?.([...subtree.datasetIds]);
+              }
+            },
+            onError: (err) => {
+              const status = (err as { response?: { status?: number } })
+                ?.response?.status;
+              if (status === 404 || status === 409) invalidateAll();
+            },
+            onSettled: () => {
+              const ids = subtree?.folderIds ?? new Set([fid]);
+              setPendingDeleteFolderIds((s) => {
+                let changed = false;
+                const next = new Set(s);
+                for (const id of ids) {
+                  if (next.delete(id)) changed = true;
+                }
+                return changed ? next : s;
+              });
+            },
+          },
+        );
+      }
+
+      for (const dsId of standaloneDatasetIds) {
+        deleteDataset.mutate(
+          { id: dsId },
+          {
+            onSuccess: () => {
+              evictDatasetCaches([dsId]);
+              invalidateAll();
+              onDatasetsRemoved?.([dsId]);
+            },
+            onError: (err) => {
+              const status = (err as { response?: { status?: number } })
+                ?.response?.status;
+              if (status === 404 || status === 409) invalidateAll();
+            },
+            onSettled: () => {
+              setPendingDeleteDatasetIds((s) => {
+                if (!s.has(dsId)) return s;
+                const next = new Set(s);
+                next.delete(dsId);
+                return next;
+              });
+            },
+          },
+        );
+      }
+
+      if (allRemovedDatasetIds.length > 0) {
+        onDatasetsRemoved?.(allRemovedDatasetIds);
+      }
+    };
+
+    const undo = () => {
+      aborted = true;
+      const entry = pendingDeletesRef.current.get(undoKey);
+      if (!entry) return;
+      clearTimeout(entry.timer);
+      pendingDeletesRef.current.delete(undoKey);
+      // Restore hidden rows and re-enter selection mode with original selection.
+      setPendingDeleteDatasetIds((s) => {
+        const next = new Set(s);
+        for (const id of snapshotDatasetIds) next.delete(id);
+        return next;
+      });
+      setPendingDeleteFolderIds((s) => {
+        const next = new Set(s);
+        for (const id of snapshotFolderIds) next.delete(id);
+        return next;
+      });
+      setSelectionMode(true);
+      setSelectedIds(snapshotIds);
+    };
+
+    const timer = setTimeout(commit, UNDO_DELETE_WINDOW_MS);
+    pendingDeletesRef.current.set(undoKey, {
+      timer,
+      commit: () => {
+        clearTimeout(timer);
+        commit();
+      },
+    });
+
+    const toastHandle = toast({
+      title: `Deleted ${totalCount} item${totalCount === 1 ? "" : "s"}`,
+      description: "Will be removed in 5s.",
+      duration: UNDO_DELETE_WINDOW_MS,
+      action: (
+        <ToastAction
+          altText="Undo bulk delete"
+          data-testid="undo-bulk-delete"
+          onClick={() => {
+            undo();
+            toastHandle.dismiss();
+          }}
+        >
+          Undo
+        </ToastAction>
+      ),
+    });
+  }, [
+    selectedIds,
+    fullTree.byId,
+    datasets,
+    collectFolderSubtreeIds,
+    setPendingDeleteDatasetIds,
+    setPendingDeleteFolderIds,
+    deleteFolder,
+    deleteDataset,
+    evictDatasetCaches,
+    invalidateAll,
+    onDatasetsRemoved,
+    toast,
+  ]);
+
   // ─── Drag state ──────────────────────────────────────────────────────────
   const [dragging, setDragging] = useState<DragData | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
@@ -842,8 +1103,8 @@ export const DatasetFolderTree: React.FC<Props> = ({
         node={node}
         isExpanded={isExpanded}
         onToggle={() => toggleExpand(node.folder.id)}
-        onContextMenu={(e) => showFolderMenu(e, node)}
-        onDoubleClick={() => beginRename("folder", node.folder.id, node.folder.name)}
+        onContextMenu={selectionMode ? undefined : (e) => showFolderMenu(e, node)}
+        onDoubleClick={selectionMode ? undefined : () => beginRename("folder", node.folder.id, node.folder.name)}
         onDelete={() => {
           const hasChildren = node.children.length > 0 || node.datasets.length > 0;
           setConfirmDelete({
@@ -859,6 +1120,9 @@ export const DatasetFolderTree: React.FC<Props> = ({
         isDraggingThis={isDraggingThis}
         deleting={deleting}
         registerRow={registerRow}
+        selectionMode={selectionMode}
+        isSelected={selectedIds.has(node.folder.id)}
+        onToggleSelect={() => toggleFolderSelection(node.folder.id)}
       />
     );
   };
@@ -884,9 +1148,9 @@ export const DatasetFolderTree: React.FC<Props> = ({
         active={active}
         loading={loading}
         deleting={deleting}
-        onClick={() => onSelectDataset(ds)}
-        onContextMenu={(e) => showDatasetMenu(e, ds)}
-        onDoubleClick={() => beginRename("dataset", ds.id, ds.name)}
+        onClick={selectionMode ? () => toggleDatasetSelection(ds.id) : () => onSelectDataset(ds)}
+        onContextMenu={selectionMode ? undefined : (e) => showDatasetMenu(e, ds)}
+        onDoubleClick={selectionMode ? undefined : () => beginRename("dataset", ds.id, ds.name)}
         onDelete={() =>
           setConfirmDelete({ kind: "dataset", id: ds.id, name: ds.name })
         }
@@ -894,6 +1158,8 @@ export const DatasetFolderTree: React.FC<Props> = ({
         renameInput={isRenaming ? renderRenameInput(ds.name) : null}
         isDragging={dragging?.kind === "dataset" && dragging.id === ds.id}
         registerRow={registerRow}
+        selectionMode={selectionMode}
+        isSelected={selectedIds.has(ds.id)}
       />
     );
   };
@@ -921,31 +1187,72 @@ export const DatasetFolderTree: React.FC<Props> = ({
         data-testid="dataset-folder-tree"
         style={{ outline: "none" }}
       >
-        {/* Header with "+ New folder" */}
+        {/* Header with "+ New folder" and "Select" toggle */}
         <div
           className="px-3 py-1 flex items-center justify-between gap-2"
           style={{ fontSize: 9, letterSpacing: "0.12em", color: "#64748b" }}
         >
           <span>▲ MY LIBRARY</span>
-          <button
-            data-testid="btn-new-folder"
-            onClick={() => !postFolder.isPending && handleNewFolder(null)}
-            disabled={postFolder.isPending}
-            title="New folder"
-            style={{
-              background: "transparent",
-              border: "1px solid rgba(0,229,255,0.3)",
-              color: "#00e5ff",
-              fontSize: 10,
-              padding: "0 6px",
-              borderRadius: 2,
-              cursor: postFolder.isPending ? "not-allowed" : "pointer",
-              opacity: postFolder.isPending ? 0.5 : 1,
-              lineHeight: 1.6,
-            }}
-          >
-            {postFolder.isPending ? "…" : "+ folder"}
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {selectionMode ? (
+              <button
+                data-testid="btn-cancel-selection"
+                onClick={exitSelectionMode}
+                title="Exit selection mode"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#94a3b8",
+                  fontSize: 10,
+                  padding: "0 4px",
+                  cursor: "pointer",
+                  lineHeight: 1.6,
+                  letterSpacing: "0.05em",
+                }}
+              >
+                ✕ Cancel
+              </button>
+            ) : (
+              <>
+                <button
+                  data-testid="btn-select-mode"
+                  onClick={() => setSelectionMode(true)}
+                  title="Select items"
+                  style={{
+                    background: "transparent",
+                    border: "1px solid rgba(0,229,255,0.3)",
+                    color: "#00e5ff",
+                    fontSize: 10,
+                    padding: "0 6px",
+                    borderRadius: 2,
+                    cursor: "pointer",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Select
+                </button>
+                <button
+                  data-testid="btn-new-folder"
+                  onClick={() => !postFolder.isPending && handleNewFolder(null)}
+                  disabled={postFolder.isPending}
+                  title="New folder"
+                  style={{
+                    background: "transparent",
+                    border: "1px solid rgba(0,229,255,0.3)",
+                    color: "#00e5ff",
+                    fontSize: 10,
+                    padding: "0 6px",
+                    borderRadius: 2,
+                    cursor: postFolder.isPending ? "not-allowed" : "pointer",
+                    opacity: postFolder.isPending ? 0.5 : 1,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {postFolder.isPending ? "…" : "+ folder"}
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {error && (
@@ -989,6 +1296,37 @@ export const DatasetFolderTree: React.FC<Props> = ({
         {tree.roots.length === 0 && tree.rootDatasets.length === 0 && (
           <div style={{ fontSize: 9, color: "#64748b", padding: "4px 12px 8px" }}>
             No saved terrains yet
+          </div>
+        )}
+
+        {/* Bulk delete bar — shown at the bottom of the section in selection mode */}
+        {selectionMode && selectedIds.size > 0 && (
+          <div
+            data-testid="bulk-delete-bar"
+            style={{
+              margin: "6px 8px 4px",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <button
+              data-testid="btn-bulk-delete"
+              onClick={handleBulkDelete}
+              style={{
+                flex: 1,
+                background: "rgba(239,68,68,0.12)",
+                border: "1px solid rgba(239,68,68,0.45)",
+                color: "#fca5a5",
+                fontSize: 10,
+                padding: "4px 8px",
+                borderRadius: 3,
+                cursor: "pointer",
+                letterSpacing: "0.05em",
+              }}
+            >
+              Delete ({selectedIds.size})
+            </button>
           </div>
         )}
 
@@ -1051,10 +1389,13 @@ interface FolderRowProps {
   deleting: boolean;
   renameInput: React.ReactNode;
   onToggle: () => void;
-  onContextMenu: (e: React.MouseEvent) => void;
-  onDoubleClick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
+  onDoubleClick?: () => void;
   onDelete: () => void;
   registerRow: (kind: "folder" | "dataset", id: string, el: HTMLElement | null) => void;
+  selectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: () => void;
 }
 
 const FolderRow: React.FC<FolderRowProps> = ({
@@ -1069,6 +1410,9 @@ const FolderRow: React.FC<FolderRowProps> = ({
   onDoubleClick,
   onDelete,
   registerRow,
+  selectionMode = false,
+  isSelected = false,
+  onToggleSelect,
 }) => {
   const indent = ROOT_INDENT_PX + node.depth * INDENT_PX;
   const dragData: DragData = {
@@ -1083,7 +1427,7 @@ const FolderRow: React.FC<FolderRowProps> = ({
   } = useDraggable({
     id: `folder:${node.folder.id}`,
     data: dragData,
-    disabled: isRenaming,
+    disabled: isRenaming || selectionMode,
   });
 
   const { setNodeRef: setDropRef, isOver } = useDroppable({
@@ -1098,6 +1442,12 @@ const FolderRow: React.FC<FolderRowProps> = ({
     registerRow("folder", node.folder.id, n);
   };
 
+  const handleClick = deleting
+    ? undefined
+    : selectionMode
+      ? onToggleSelect
+      : onToggle;
+
   return (
     <div
       ref={composedRef}
@@ -1108,11 +1458,11 @@ const FolderRow: React.FC<FolderRowProps> = ({
       data-deleting={deleting ? "true" : undefined}
       aria-busy={deleting || undefined}
       {...attributes}
-      {...listeners}
+      {...(selectionMode ? {} : listeners)}
       tabIndex={deleting ? -1 : 0}
       onContextMenu={deleting ? undefined : onContextMenu}
       onDoubleClick={deleting ? undefined : onDoubleClick}
-      onClick={deleting ? undefined : onToggle}
+      onClick={handleClick}
       style={{
         display: "flex",
         alignItems: "center",
@@ -1121,16 +1471,42 @@ const FolderRow: React.FC<FolderRowProps> = ({
         cursor: deleting ? "wait" : "pointer",
         fontSize: 11,
         color: "#cbd5e1",
-        background: isOver ? "rgba(0,229,255,0.12)" : "transparent",
+        background: isSelected
+          ? "rgba(0,229,255,0.08)"
+          : isOver && !selectionMode
+            ? "rgba(0,229,255,0.12)"
+            : "transparent",
         outline: "none",
         opacity: deleting || isDraggingThis ? 0.4 : 1,
         pointerEvents: deleting ? "none" : undefined,
         userSelect: "none",
       }}
     >
-      <span style={{ color: "#cbd5e1", width: 20, textAlign: "center", fontSize: 20, lineHeight: 1 }}>
-        {isExpanded ? "▾" : "▸"}
-      </span>
+      {selectionMode ? (
+        <span
+          aria-checked={isSelected}
+          role="checkbox"
+          style={{
+            width: 14,
+            height: 14,
+            flexShrink: 0,
+            border: `1px solid ${isSelected ? "#00e5ff" : "rgba(148,163,184,0.5)"}`,
+            borderRadius: 2,
+            background: isSelected ? "rgba(0,229,255,0.18)" : "transparent",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 10,
+            color: "#00e5ff",
+          }}
+        >
+          {isSelected ? "✓" : ""}
+        </span>
+      ) : (
+        <span style={{ color: "#cbd5e1", width: 20, textAlign: "center", fontSize: 20, lineHeight: 1 }}>
+          {isExpanded ? "▾" : "▸"}
+        </span>
+      )}
       <span style={{ color: "#00e5ff" }}>▣</span>
       {isRenaming ? (
         <div style={{ flex: 1 }}>{renameInput}</div>
@@ -1147,7 +1523,7 @@ const FolderRow: React.FC<FolderRowProps> = ({
           {node.folder.name}
         </span>
       )}
-      {!isRenaming && !deleting && (
+      {!isRenaming && !deleting && !selectionMode && (
         <RowDeleteButton
           testId={`btn-delete-folder-${node.folder.id}`}
           ariaLabel={`Delete folder ${node.folder.name}`}
@@ -1168,10 +1544,12 @@ interface DatasetRowProps {
   isDragging: boolean;
   renameInput: React.ReactNode;
   onClick: () => void;
-  onContextMenu: (e: React.MouseEvent) => void;
-  onDoubleClick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
+  onDoubleClick?: () => void;
   onDelete: () => void;
   registerRow: (kind: "folder" | "dataset", id: string, el: HTMLElement | null) => void;
+  selectionMode?: boolean;
+  isSelected?: boolean;
 }
 
 const DatasetRow: React.FC<DatasetRowProps> = ({
@@ -1188,6 +1566,8 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
   onDoubleClick,
   onDelete,
   registerRow,
+  selectionMode = false,
+  isSelected = false,
 }) => {
   const indent = ROOT_INDENT_PX + depth * INDENT_PX;
   const units = useSettingsStore((s) => s.units);
@@ -1207,7 +1587,7 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
   } = useDraggable({
     id: `dataset:${ds.id}`,
     data: dragData,
-    disabled: isRenaming,
+    disabled: isRenaming || selectionMode,
   });
 
   const composedRef = (n: HTMLDivElement | null) => {
@@ -1225,7 +1605,7 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
       data-deleting={deleting ? "true" : undefined}
       aria-busy={deleting || undefined}
       {...attributes}
-      {...listeners}
+      {...(selectionMode ? {} : listeners)}
       tabIndex={deleting ? -1 : 0}
       role="button"
       onClick={deleting ? undefined : onClick}
@@ -1234,10 +1614,16 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
       style={{
         display: "block",
         padding: `4px ${ROW_PADDING_X}px 4px ${ROW_PADDING_X + indent + 16}px`,
-        background: active ? "rgba(0,229,255,0.07)" : "transparent",
-        borderLeft: active
-          ? "2px solid rgba(0,229,255,0.6)"
-          : "2px solid transparent",
+        background: isSelected
+          ? "rgba(0,229,255,0.07)"
+          : active
+            ? "rgba(0,229,255,0.07)"
+            : "transparent",
+        borderLeft: isSelected
+          ? "2px solid rgba(0,229,255,0.4)"
+          : active
+            ? "2px solid rgba(0,229,255,0.6)"
+            : "2px solid transparent",
         cursor: deleting ? "wait" : "pointer",
         opacity: deleting || isDragging ? 0.4 : 1,
         pointerEvents: deleting ? "none" : undefined,
@@ -1246,16 +1632,38 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
       }}
     >
       <div className="flex items-center justify-between gap-1">
-        <UserDatasetVisibilityToggle datasetId={ds.id} />
+        {selectionMode ? (
+          <span
+            aria-checked={isSelected}
+            role="checkbox"
+            style={{
+              width: 14,
+              height: 14,
+              flexShrink: 0,
+              border: `1px solid ${isSelected ? "#00e5ff" : "rgba(148,163,184,0.5)"}`,
+              borderRadius: 2,
+              background: isSelected ? "rgba(0,229,255,0.18)" : "transparent",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 10,
+              color: "#00e5ff",
+            }}
+          >
+            {isSelected ? "✓" : ""}
+          </span>
+        ) : (
+          <UserDatasetVisibilityToggle datasetId={ds.id} />
+        )}
         {isRenaming ? (
           <div style={{ flex: 1 }}>{renameInput}</div>
         ) : (
           <span
             style={{
               fontSize: 11,
-              fontWeight: active ? 700 : 400,
-              color: active ? "#00e5ff" : "#e2e8f0",
-              textShadow: active ? "0 0 6px rgba(0,229,255,0.3)" : "none",
+              fontWeight: active && !selectionMode ? 700 : 400,
+              color: active && !selectionMode ? "#00e5ff" : "#e2e8f0",
+              textShadow: active && !selectionMode ? "0 0 6px rgba(0,229,255,0.3)" : "none",
               flex: 1,
               minWidth: 0,
               whiteSpace: "normal",
@@ -1266,10 +1674,10 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
             {ds.name}
           </span>
         )}
-        {loading && (
+        {loading && !selectionMode && (
           <LoadingDial datasetId={ds.id} label={ds.name} />
         )}
-        {!isRenaming && !deleting && (
+        {!isRenaming && !deleting && !selectionMode && (
           <RowDeleteButton
             testId={`btn-delete-dataset-${ds.id}`}
             ariaLabel={`Delete dataset ${ds.name}`}
