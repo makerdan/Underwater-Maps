@@ -183,6 +183,8 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
   const setBoatHeadingDeg = useDriftStore((s) => s.setBoatHeadingDeg);
   const boatSpeedKnots = useDriftStore((s) => s.boatSpeedKnots);
   const setBoatSpeedKnots = useDriftStore((s) => s.setBoatSpeedKnots);
+  const backtroll = useDriftStore((s) => s.backtroll);
+  const toggleBacktroll = useDriftStore((s) => s.toggleBacktroll);
   const driftWaypoints = useDriftStore((s) => s.driftWaypoints);
   const removeDriftWaypoint = useDriftStore((s) => s.removeDriftWaypoint);
   const moveDriftWaypoint = useDriftStore((s) => s.moveDriftWaypoint);
@@ -643,13 +645,14 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
       mode: driftMode,
       boatHeadingDeg,
       boatSpeedKnots,
+      backtroll,
       trollWaypoints: driftWaypoints,
     });
     setDriftPath(path);
   }, [
     sharedHours, estimated, terrain,
     driftStartLat, driftStartLon, centerLat, centerLon,
-    lineLengthM, driftMode, boatHeadingDeg, boatSpeedKnots, driftWaypoints,
+    lineLengthM, driftMode, boatHeadingDeg, boatSpeedKnots, backtroll, driftWaypoints,
     setDriftConditions, setEstimatedConditions, setDriftStart, setDriftPath,
   ]);
 
@@ -688,6 +691,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
       mode: driftMode,
       boatHeadingDeg,
       boatSpeedKnots,
+      backtroll,
       trollWaypoints: driftWaypoints,
     });
     setDriftPath(path);
@@ -696,7 +700,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     manualWindSpeedKnots, manualWindDegrees,
     manualTidalSpeedKnots, manualTidalDegrees, manualSlackNow,
     driftStartLat, driftStartLon, centerLat, centerLon,
-    lineLengthM, driftMode, boatHeadingDeg, boatSpeedKnots, driftWaypoints,
+    lineLengthM, driftMode, boatHeadingDeg, boatSpeedKnots, backtroll, driftWaypoints,
     setDriftConditions, setDriftPath,
   ]);
 
@@ -894,6 +898,34 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
               ⇢ Heading auto-steered to waypoints
             </div>
           )}
+
+          {/* Backtroll toggle — stern-first reverse against the current */}
+          <button
+            data-testid="backtroll-toggle"
+            onClick={toggleBacktroll}
+            title={backtroll
+              ? "Backtroll ON: boat moves stern-first against the current. Click to return to forward trolling."
+              : "Enable backtroll: run the boat stern-first against the current for slow, controlled presentations."}
+            style={{
+              display: "block",
+              width: "100%",
+              marginBottom: 4,
+              padding: "4px 0",
+              background: backtroll ? "rgba(251,191,36,0.15)" : "rgba(0,229,255,0.04)",
+              border: `1px solid ${backtroll ? "rgba(251,191,36,0.55)" : "rgba(0,229,255,0.2)"}`,
+              borderRadius: 3,
+              color: backtroll ? "#fbbf24" : "#64748b",
+              fontFamily: "inherit",
+              fontSize: 9,
+              letterSpacing: "0.18em",
+              cursor: "pointer",
+              textTransform: "uppercase",
+              fontWeight: backtroll ? 700 : 400,
+              transition: "all 0.15s",
+            }}
+          >
+            {backtroll ? "⛵ BACKTROLL ON" : "BACKTROLL"}
+          </button>
 
           <div style={{ marginBottom: 6 }}>
             <div style={LABEL}>PRESETS</div>

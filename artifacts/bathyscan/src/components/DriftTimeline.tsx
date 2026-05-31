@@ -4,6 +4,11 @@
  * Each chip shows local time (hour). Clicking advances the scrubber.
  * Below the chips, the selected hour shows drift speed, line angle,
  * hook depth, and a red/green indicator for bottom-reach.
+ *
+ * Backtroll indicators:
+ *   - ⚓ HOLD badge on chips where isStalled is true
+ *   - Stall speed detail in the expanded view when backtroll mode is active
+ *   - Mode banner shows "⛵ BTROLL" when backtroll is enabled in trolling mode
  */
 
 import React from "react";
@@ -59,6 +64,7 @@ export const DriftTimeline: React.FC = () => {
   const boatHeadingDeg = useDriftStore((s) => s.boatHeadingDeg);
   const boatSpeedKnots = useDriftStore((s) => s.boatSpeedKnots);
   const driftWaypoints = useDriftStore((s) => s.driftWaypoints);
+  const backtroll = useDriftStore((s) => s.backtroll);
   const units = useSettingsStore((s) => s.units);
 
   if (!driftPath || driftPath.length === 0) return null;
@@ -67,6 +73,7 @@ export const DriftTimeline: React.FC = () => {
   const cond = driftConditions?.[driftHour];
 
   const isTrolling = driftMode === "trolling";
+  const isBacktrolling = isTrolling && backtroll;
   const usingWaypoints = isTrolling && driftWaypoints.length > 0;
   const activeLegIdx = wp?.activeLegIndex;
   const targetIdx = wp?.targetWaypointIndex;
@@ -90,11 +97,15 @@ export const DriftTimeline: React.FC = () => {
             fontWeight: 700,
           }}
         >
-          {isTrolling
+          {isBacktrolling
             ? usingWaypoints
-              ? `🎣 TROLLING · ${driftWaypoints.length}-WP COURSE @ ${boatSpeedKnots.toFixed(1)} KT`
-              : `🎣 TROLLING · ${Math.round(boatHeadingDeg)}° @ ${boatSpeedKnots.toFixed(1)} KT`
-            : "⛵ DRIFT"}
+              ? `⛵ BTROLL · ${driftWaypoints.length}-WP COURSE @ ${boatSpeedKnots.toFixed(1)} KT`
+              : `⛵ BTROLL · ${Math.round(boatHeadingDeg)}° @ ${boatSpeedKnots.toFixed(1)} KT`
+            : isTrolling
+              ? usingWaypoints
+                ? `🎣 TROLLING · ${driftWaypoints.length}-WP COURSE @ ${boatSpeedKnots.toFixed(1)} KT`
+                : `🎣 TROLLING · ${Math.round(boatHeadingDeg)}° @ ${boatSpeedKnots.toFixed(1)} KT`
+              : "⛵ DRIFT"}
         </span>
         {usingWaypoints && typeof activeLegIdx === "number" && (
           <span
@@ -122,22 +133,44 @@ export const DriftTimeline: React.FC = () => {
         {driftPath.map((w, h) => {
           const isActive = h === driftHour;
           const bottom = w.bottomReached;
+          const stalled = !!w.isStalled;
           return (
             <button
               key={h}
               onClick={() => setDriftHour(h)}
               style={{
                 ...CHIP_BASE,
-                background: isActive ? "rgba(0,229,255,0.15)" : "rgba(0,10,20,0.75)",
-                border: `1px solid ${isActive ? "rgba(0,229,255,0.5)" : "rgba(0,229,255,0.08)"}`,
-                color: isActive ? "#00e5ff" : "#94a3b8",
+                background: isActive
+                  ? stalled
+                    ? "rgba(251,191,36,0.15)"
+                    : "rgba(0,229,255,0.15)"
+                  : "rgba(0,10,20,0.75)",
+                border: `1px solid ${isActive
+                  ? stalled
+                    ? "rgba(251,191,36,0.6)"
+                    : "rgba(0,229,255,0.5)"
+                  : stalled
+                    ? "rgba(251,191,36,0.3)"
+                    : "rgba(0,229,255,0.08)"
+                }`,
+                color: isActive
+                  ? stalled ? "#fbbf24" : "#00e5ff"
+                  : "#94a3b8",
               }}
             >
               <span>{formatHour(h)}</span>
               <span style={{ fontSize: 7, color: bottom ? "#4ade80" : "#ef4444", marginTop: 1 }}>
                 {bottom ? "●" : "○"}
               </span>
-              {w.isSlack && (
+              {stalled && (
+                <span
+                  title="Backtroll hold — near-zero SOG at this hour"
+                  style={{ fontSize: 7, color: "#fbbf24", marginTop: 1, letterSpacing: 0 }}
+                >
+                  ⚓ HOLD
+                </span>
+              )}
+              {!stalled && w.isSlack && (
                 <span
                   title="Slack tide"
                   style={{ fontSize: 7, color: "#c084fc", marginTop: 1, letterSpacing: 0 }}
@@ -157,7 +190,9 @@ export const DriftTimeline: React.FC = () => {
             <div style={{ color: "#94a3b8", fontSize: 8, letterSpacing: "0.18em" }}>
               {isTrolling ? "TOTAL SPEED" : "DRIFT SPEED"}
             </div>
-            <div data-testid="drift-speed-value" style={{ color: "#00e5ff", fontWeight: 700 }}>{formatSpeedFromKnots(wp.driftSpeedKnots, { units })}</div>
+            <div data-testid="drift-speed-value" style={{ color: wp.isStalled ? "#fbbf24" : "#00e5ff", fontWeight: 700 }}>
+              {wp.isStalled ? "⚓ HOLD" : formatSpeedFromKnots(wp.driftSpeedKnots, { units })}
+            </div>
             {isTrolling && typeof wp.boatContributionKnots === "number" && typeof wp.driftContributionKnots === "number" && (
               <div
                 data-testid="drift-breakdown"
@@ -170,6 +205,18 @@ export const DriftTimeline: React.FC = () => {
               </div>
             )}
           </div>
+          {isBacktrolling && typeof wp.stallSpeedKnots === "number" && (
+            <div>
+              <div style={{ color: "#94a3b8", fontSize: 8, letterSpacing: "0.18em" }}>STALL SPEED</div>
+              <div
+                data-testid="stall-speed-value"
+                title="Effective reverse speed needed to hold station against this hour's current"
+                style={{ color: "#fbbf24", fontWeight: 700 }}
+              >
+                {formatSpeedFromKnots(wp.stallSpeedKnots, { units })}
+              </div>
+            </div>
+          )}
           <div>
             <div style={{ color: "#94a3b8", fontSize: 8, letterSpacing: "0.18em" }}>LINE ANGLE</div>
             {wp.isSlack ? (
@@ -219,7 +266,7 @@ export const DriftTimeline: React.FC = () => {
         >
           <LegendRow
             color="#fbbf24"
-            label="Boat"
+            label={isBacktrolling ? "Reverse" : "Boat"}
             valueKt={wp.boatContributionKnots}
             units={units}
           />
@@ -240,7 +287,7 @@ export const DriftTimeline: React.FC = () => {
       )}
 
       <div style={{ textAlign: "center", fontSize: 8, color: "#1e3a5f", marginTop: 6, letterSpacing: "0.1em" }}>
-        CLICK A CHIP TO SCRUB · ● = BOTTOM IN REACH · ○ = TOO DEEP
+        CLICK A CHIP TO SCRUB · ● = BOTTOM IN REACH · ○ = TOO DEEP{isBacktrolling ? " · ⚓ HOLD = STATION KEPT" : ""}
       </div>
     </div>
   );

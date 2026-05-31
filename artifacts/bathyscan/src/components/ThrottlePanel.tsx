@@ -6,6 +6,7 @@ import {
   mphToKnots,
 } from "@/lib/boatSpeed";
 import { useAppState } from "@/lib/context";
+import { useDriftStore } from "@/lib/driftStore";
 import { useSettingsStore, type UnitsSystem } from "@/lib/settingsStore";
 import { formatSpeed, MPH_TO_KPH, MPH_TO_KNOTS, speedSuffix } from "@/lib/units";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
@@ -71,6 +72,8 @@ interface ThrottlePanelProps {
 export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
   const { boatSpeedMph, setBoatSpeedMph } = useAppState();
   const units = useSettingsStore((s) => s.units);
+  const driveBoatReverse = useDriftStore((s) => s.driveBoatReverse);
+  const setDriveBoatReverse = useDriftStore((s) => s.setDriveBoatReverse);
   const [minimized, setMinimized] = useState(false);
   const [inputVal, setInputVal] = useState<string>(formatDisplayValue(boatSpeedMph, units));
   const [dragging, setDragging] = useState(false);
@@ -145,8 +148,6 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
   };
 
   const knots = mphToKnots(boatSpeedMph);
-  // When the primary readout is already in knots, suppress the redundant
-  // secondary "KT" line so we don't show the same value twice.
   const showSecondaryKnots = units !== "nautical";
   const unitSuffix = speedSuffix(units);
   const inputMin = Math.round(mphToDisplay(BOAT_MIN_MPH, units) * 10) / 10;
@@ -168,9 +169,13 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
           }}
           onClick={() => setMinimized(false)}
         >
-          <span style={{ color: "#22d3ee", fontSize: 13 }}>⛵</span>
-          <span style={CYAN}>{formatSpeed(boatSpeedMph, { units }).toUpperCase()}</span>
-          {showSecondaryKnots && (
+          <span style={{ color: "#22d3ee", fontSize: 13 }}>{driveBoatReverse ? "⛵↩" : "⛵"}</span>
+          {driveBoatReverse ? (
+            <span style={{ color: "#fbbf24", fontWeight: 700 }}>BT {knots.toFixed(1)} KT</span>
+          ) : (
+            <span style={CYAN}>{formatSpeed(boatSpeedMph, { units }).toUpperCase()}</span>
+          )}
+          {!driveBoatReverse && showSecondaryKnots && (
             <>
               <span style={{ color: "#94a3b8" }}>/</span>
               <span style={{ color: "#7dd3fc" }}>{knots.toFixed(1)} KT</span>
@@ -235,15 +240,29 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
         </div>
       </div>
 
+      {/* Speed readout */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "10px 0 4px" }}>
         <div style={{ textAlign: "center" }}>
-          <div style={{ ...CYAN, fontSize: 15, fontWeight: 700, letterSpacing: "0.05em" }}>
-            {formatSpeed(boatSpeedMph, { units }).toUpperCase()}
-          </div>
-          {showSecondaryKnots && (
-            <div style={{ fontSize: 9, color: "#94a3b8", letterSpacing: "0.15em", marginTop: 1 }}>
-              {knots.toFixed(1)} KT
-            </div>
+          {driveBoatReverse ? (
+            <>
+              <div style={{ color: "#fbbf24", fontSize: 15, fontWeight: 700, letterSpacing: "0.05em", textShadow: "0 0 8px rgba(251,191,36,0.5)" }}>
+                BT {knots.toFixed(1)} KT
+              </div>
+              <div style={{ fontSize: 9, color: "#fbbf24", letterSpacing: "0.15em", marginTop: 1, opacity: 0.7 }}>
+                REVERSE
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ ...CYAN, fontSize: 15, fontWeight: 700, letterSpacing: "0.05em" }}>
+                {formatSpeed(boatSpeedMph, { units }).toUpperCase()}
+              </div>
+              {showSecondaryKnots && (
+                <div style={{ fontSize: 9, color: "#94a3b8", letterSpacing: "0.15em", marginTop: 1 }}>
+                  {knots.toFixed(1)} KT
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -279,7 +298,9 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
               left: "50%",
               width: 2,
               transform: "translateX(-50%)",
-              background: `linear-gradient(to top, rgba(0,229,255,0.6) ${fraction * 100}%, rgba(30,58,95,0.4) ${fraction * 100}%)`,
+              background: driveBoatReverse
+                ? `linear-gradient(to top, rgba(251,191,36,0.6) ${fraction * 100}%, rgba(30,58,95,0.4) ${fraction * 100}%)`
+                : `linear-gradient(to top, rgba(0,229,255,0.6) ${fraction * 100}%, rgba(30,58,95,0.4) ${fraction * 100}%)`,
               borderRadius: 2,
             }}
           />
@@ -296,13 +317,19 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
               height: LEVER_THUMB_H,
               transform: "translateX(-50%)",
               background: dragging
-                ? "linear-gradient(135deg, #00e5ff, #0369a1)"
-                : "linear-gradient(135deg, rgba(0,229,255,0.6), rgba(3,105,161,0.8))",
-              border: "1px solid rgba(0,229,255,0.5)",
+                ? driveBoatReverse
+                  ? "linear-gradient(135deg, #fbbf24, #b45309)"
+                  : "linear-gradient(135deg, #00e5ff, #0369a1)"
+                : driveBoatReverse
+                  ? "linear-gradient(135deg, rgba(251,191,36,0.7), rgba(180,83,9,0.8))"
+                  : "linear-gradient(135deg, rgba(0,229,255,0.6), rgba(3,105,161,0.8))",
+              border: `1px solid ${driveBoatReverse ? "rgba(251,191,36,0.6)" : "rgba(0,229,255,0.5)"}`,
               borderRadius: 4,
               cursor: dragging ? "grabbing" : "grab",
               zIndex: 2,
-              boxShadow: dragging ? "0 0 10px rgba(0,229,255,0.5)" : "0 0 4px rgba(0,229,255,0.2)",
+              boxShadow: dragging
+                ? `0 0 10px ${driveBoatReverse ? "rgba(251,191,36,0.5)" : "rgba(0,229,255,0.5)"}`
+                : `0 0 4px ${driveBoatReverse ? "rgba(251,191,36,0.2)" : "rgba(0,229,255,0.2)"}`,
               transition: dragging ? "none" : "box-shadow 0.15s",
               display: "flex",
               alignItems: "center",
@@ -331,8 +358,12 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
               key={tick}
               style={{
                 cursor: "pointer",
-                color: Math.abs(tick - boatSpeedMph) < 2 ? "#00e5ff" : "#64748b",
-                textShadow: Math.abs(tick - boatSpeedMph) < 2 ? "0 0 6px rgba(0,229,255,0.5)" : "none",
+                color: Math.abs(tick - boatSpeedMph) < 2 ? (driveBoatReverse ? "#fbbf24" : "#00e5ff") : "#64748b",
+                textShadow: Math.abs(tick - boatSpeedMph) < 2
+                  ? driveBoatReverse
+                    ? "0 0 6px rgba(251,191,36,0.5)"
+                    : "0 0 6px rgba(0,229,255,0.5)"
+                  : "none",
                 transition: "color 0.15s",
               }}
               onClick={() => applyMph(tick)}
@@ -342,6 +373,38 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
           ))}
         </div>
       </div>
+
+      {/* Reverse gear button */}
+      <ViewscreenTooltip
+        label={driveBoatReverse
+          ? "Disengage reverse — return to forward drive"
+          : "Engage reverse — backtroll stern-first against current (drag coefficient applied)"}
+        side="left"
+      >
+        <button
+          data-testid="drive-boat-reverse-button"
+          onClick={() => setDriveBoatReverse(!driveBoatReverse)}
+          style={{
+            display: "block",
+            width: "calc(100% - 24px)",
+            margin: "0 12px 10px",
+            padding: "5px 0",
+            background: driveBoatReverse ? "rgba(251,191,36,0.15)" : "rgba(0,229,255,0.04)",
+            border: `1px solid ${driveBoatReverse ? "rgba(251,191,36,0.5)" : "rgba(0,229,255,0.2)"}`,
+            borderRadius: 3,
+            color: driveBoatReverse ? "#fbbf24" : "#64748b",
+            fontFamily: "inherit",
+            fontSize: 9,
+            letterSpacing: "0.18em",
+            cursor: "pointer",
+            textTransform: "uppercase",
+            fontWeight: driveBoatReverse ? 700 : 400,
+            transition: "all 0.15s",
+          }}
+        >
+          {driveBoatReverse ? "⛵ REVERSE ON" : "REVERSE"}
+        </button>
+      </ViewscreenTooltip>
 
       <div style={{ padding: "0 12px 10px", display: "flex", alignItems: "center", gap: 6 }}>
         <input

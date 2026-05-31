@@ -121,6 +121,7 @@ export const HUD: React.FC = () => {
   const driftWaypoints = useDriftStore((s) => s.driftWaypoints);
   const driftPath = useDriftStore((s) => s.driftPath);
   const driftHour = useDriftStore((s) => s.driftHour);
+  const backtroll = useDriftStore((s) => s.backtroll);
 
   // The substrate detail card lives in <SubstrateDetailPanel /> at the App
   // root so it sits above both the HUD and the OverviewMap (z-40).
@@ -393,7 +394,10 @@ export const HUD: React.FC = () => {
           >
             {driftMode === "trolling"
               ? (() => {
-                  if (isNarrow) return "🎣";
+                  if (isNarrow) return backtroll ? "⛵↩" : "🎣";
+                  if (backtroll) {
+                    return `⛵ BTROLL ${Math.round(boatHeadingDeg).toString().padStart(3, "0")}° / ${boatSpeedKnots.toFixed(1)} KT`;
+                  }
                   if (driftWaypoints.length > 0) {
                     const wp = driftPath?.[driftHour];
                     const target = wp?.targetWaypointIndex;

@@ -10,6 +10,8 @@
  *   - lineLengthM: fishing line length (user-configurable)
  *   - lineWeightG: sinker weight in grams (user-configurable)
  *   - estimatedConditions: true when fallback data is being used
+ *   - backtroll: enables backtroll mode (stern-first against current)
+ *   - driveBoatReverse: Drive Boat reverse-gear flag (ThrottlePanel)
  */
 
 import { create } from "zustand";
@@ -55,6 +57,17 @@ export interface DriftWaypoint {
   boatHeadingDegSep?: number;
   /** Compass bearing (0=N) of the wind+tide drift vector. */
   driftHeadingDeg?: number;
+  /**
+   * True when the absolute speed over ground is below the stall threshold (< 0.05 kt).
+   * Backtroll mode only.
+   */
+  isStalled?: boolean;
+  /**
+   * Reverse throttle setting (knots) the angler needs to hold station this hour.
+   * Computed as: tidalCurrentMagnitude × BACKTROLL_DRAG_COEFFICIENT.
+   * Backtroll mode only.
+   */
+  stallSpeedKnots?: number;
 }
 
 /** User-placed turn point on the water surface for multi-leg trolling. */
@@ -107,6 +120,21 @@ interface DriftStore {
   setBoatHeadingDeg: (v: number) => void;
   boatSpeedKnots: number;
   setBoatSpeedKnots: (v: number) => void;
+
+  /**
+   * Backtroll mode: when true in trolling mode, the thrust vector is reversed
+   * (boat moves stern-first against the current).
+   */
+  backtroll: boolean;
+  toggleBacktroll: () => void;
+  setBacktroll: (v: boolean) => void;
+
+  /**
+   * Drive Boat reverse gear (ThrottlePanel). When true, the camera/boat
+   * moves opposite the current facing direction using backtroll drag physics.
+   */
+  driveBoatReverse: boolean;
+  setDriveBoatReverse: (v: boolean) => void;
 
   /** Ordered turn points for multi-leg trolling courses. */
   driftWaypoints: TrollWaypoint[];
@@ -178,6 +206,13 @@ export const useDriftStore = create<DriftStore>((set) => ({
   setBoatHeadingDeg: (v) => set({ boatHeadingDeg: ((v % 360) + 360) % 360 }),
   boatSpeedKnots: 2.5,
   setBoatSpeedKnots: (v) => set({ boatSpeedKnots: Math.max(0, Math.min(TROLL_MAX_KNOTS, v)) }),
+
+  backtroll: false,
+  toggleBacktroll: () => set((s) => ({ backtroll: !s.backtroll })),
+  setBacktroll: (v) => set({ backtroll: v }),
+
+  driveBoatReverse: false,
+  setDriveBoatReverse: (v) => set({ driveBoatReverse: v }),
 
   driftWaypoints: [],
   addDriftWaypoint: (wp) =>

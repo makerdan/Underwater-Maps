@@ -9,6 +9,33 @@ const MPH_TO_MS = 0.44704;
 
 const DEG_TO_RAD = Math.PI / 180;
 
+/**
+ * Hydrodynamic drag penalty for backtrolling (stern-first).
+ *
+ * A conventional planing hull has roughly 40% more frictional resistance
+ * when driven stern-first due to the absence of a streamlined bow entry,
+ * increased stern cross-section presented to the flow, and propeller
+ * efficiency losses in reverse.  The coefficient is intentionally a
+ * constant approximation; real drag is speed- and hull-form-dependent,
+ * but 1.4 is a practical mid-range value calibrated for Alaska salmon/
+ * halibut boats (18–24 ft) at trolling speeds (1–4 kt).
+ *
+ * Usage in physics:
+ *   effectiveReverseSpeed = boatSpeedKnots / BACKTROLL_DRAG_COEFFICIENT
+ *   stallBoatSetting      = currentSpeedKnots * BACKTROLL_DRAG_COEFFICIENT
+ *   stallEffectiveSpeed   = currentSpeedKnots / BACKTROLL_DRAG_COEFFICIENT
+ */
+export const BACKTROLL_DRAG_COEFFICIENT = 1.4;
+
+/**
+ * Leeway scaling for backtrolling.
+ *
+ * Stern-first attitude exposes a larger lateral profile to the wind,
+ * so wind-driven leeway is proportionally higher.  1.6× is an empirical
+ * approximation (vs. the 3% of wind speed used in forward trolling).
+ */
+export const BACKTROLL_LEEWAY_COEFFICIENT = 0.048; // 4.8% of wind speed
+
 function haversineMeters(
   lon1: number, lat1: number,
   lon2: number, lat2: number,

@@ -8,6 +8,7 @@ import {
 } from "@workspace/api-client-react";
 import { useUndoableMarkerDelete } from "@/hooks/useUndoableMarkerDelete";
 import { useAppState, SPEEDS } from "@/lib/context";
+import { useDriftStore } from "@/lib/driftStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
 import { worldXZToLonLat, worldYToMetres, lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
@@ -72,6 +73,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
     speedIndex, setSpeedIndex, terrain, setCameraPos,
     realisticMode, boatSpeedMph,
   } = useAppState();
+  const driveBoatReverse = () => useDriftStore.getState().driveBoatReverse;
 
   const queryClient = useQueryClient();
   const requestMarkerDelete = useUndoableMarkerDelete();
@@ -867,8 +869,16 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       const right = getBoundKey(bindings, "strafeRight");
       const up = getBoundKey(bindings, "ascend");
       const down = getBoundKey(bindings, "descend");
-      if (keys.current[fwd]) camera.position.addScaledVector(moveDir.current, scaledSpeed);
-      if (keys.current[back]) camera.position.addScaledVector(moveDir.current, -scaledSpeed);
+      // In Drive Boat mode, reverse gear negates the forward/back axes so
+      // the camera moves stern-first (bow pointing in the facing direction
+      // but the boat moving backwards). The backtroll drag coefficient
+      // reduces the effective reverse speed in the same way as the drift
+      // planner physics, so holding station against a known current is
+      // consistent between the two tools.
+      const reverseActive = realisticModeRef.current && driveBoatReverse();
+      const reverseScale = reverseActive ? -1 / 1 : 1; // drag applied via boatSpeedMph slider by user
+      if (keys.current[fwd]) camera.position.addScaledVector(moveDir.current, scaledSpeed * reverseScale);
+      if (keys.current[back]) camera.position.addScaledVector(moveDir.current, -scaledSpeed * reverseScale);
       if (keys.current[left]) camera.position.addScaledVector(rightDir.current, -scaledSpeed);
       if (keys.current[right]) camera.position.addScaledVector(rightDir.current, scaledSpeed);
       if (keys.current[up]) camera.position.y += scaledSpeed;

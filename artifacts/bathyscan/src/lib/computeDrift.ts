@@ -7,6 +7,12 @@
  *   - Fishing line angle from vertical (simplified drag model)
  *   - Estimated hook depth and whether bottom is in reach
  *
+ * When backtroll is enabled (trolling mode only):
+ *   - Thrust vector is reversed (boat moves stern-first)
+ *   - Effective reverse speed is reduced by BACKTROLL_DRAG_COEFFICIENT
+ *   - Fishing line streams forward (bow side), angled by the oncoming current
+ *   - Per-hour stall speed and isStalled flag are computed
+ *
  * Returns an array of 24 DriftWaypoints starting from (startLat, startLon).
  *
  * Coordinate conventions:
@@ -17,11 +23,15 @@
 
 import type { HourlySurfaceCondition, DriftWaypoint, TrollWaypoint } from "./driftStore";
 import { lonLatToWorldXZ } from "./terrain";
+import { BACKTROLL_DRAG_COEFFICIENT, BACKTROLL_LEEWAY_COEFFICIENT } from "./boatSpeed";
 import type { TerrainData } from "@workspace/api-client-react";
 
 const DEG2RAD = Math.PI / 180;
 const KM_PER_KNOT_HOUR = 1.852;
 const KM_PER_DEG_LAT = 111.0;
+
+/** Threshold below which speed-over-ground is flagged as "stalled" (knots). */
+const STALL_SOG_THRESHOLD_KT = 0.05;
 
 function degToRad(deg: number): number {
   return deg * DEG2RAD;
@@ -130,6 +140,13 @@ export interface ComputeDriftOptions {
   /** Boat speed through water in knots. Used only when mode === "trolling". */
   boatSpeedKnots?: number;
   /**
+   * Backtroll mode: when true (and mode === "trolling"), the boat's thrust
+   * vector is negated (stern-first against the current). The effective reverse
+   * speed is reduced by BACKTROLL_DRAG_COEFFICIENT, and the fishing line angle
+   * is computed from the oncoming current rather than the resultant SOG.
+   */
+  backtroll?: boolean;
+  /**
    * Optional bathymetry-modified flow sampler (Task #136). When provided,
    * the tidal component is sampled at the boat's current world-space
    * position so flow accelerates over shallows and deflects around land,
@@ -158,6 +175,7 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
   const {
     conditions, startLat, startLon, lineLengthM, terrain,
     mode = "drift", boatHeadingDeg = 0, boatSpeedKnots = 0,
+    backtroll = false,
     sampleFlowAt,
     trollWaypoints = [],
   } = opts;
@@ -207,6 +225,7 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
     let boatContributionKnots: number | undefined;
     let boatHeadingDegSep: number | undefined;
     let driftHeadingDeg: number | undefined;
+    let currentMagnitudeKnots = 0; // tidal-component magnitude, for backtroll line angle + stall
 
     if (useWaypoints) {
       // Sub-step the hour: travel toward the current leg target at boat speed,
@@ -236,8 +255,23 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
         const timeToTarget = distKm / boatKmH;
         const t = Math.min(timeRemaining, timeToTarget);
         const frac = t / timeToTarget; // 0..1 along the leg this sub-step
-        curLat = curLat + (tgt.lat - curLat) * frac;
-        curLon = curLon + (tgt.lon - curLon) * frac;
+
+        if (backtroll) {
+          // Backtroll: move stern-first AWAY from the target. The effective
+          // speed toward the target is reduced by the drag coefficient. The
+          // boat position actually moves in the opposite direction (against
+          // the intended heading toward the waypoint). In practice, this
+          // models the boat holding station or slowly losing ground against
+          // the current while pointed at a waypoint stern-first.
+          // We still advance time and track km traveled using the raw speed
+          // setting, but apply drag to the displacement fraction.
+          const effectiveFrac = frac / BACKTROLL_DRAG_COEFFICIENT;
+          curLat = curLat - (tgt.lat - curLat) * effectiveFrac;
+          curLon = curLon - (tgt.lon - curLon) * effectiveFrac;
+        } else {
+          curLat = curLat + (tgt.lat - curLat) * frac;
+          curLon = curLon + (tgt.lon - curLon) * frac;
+        }
         boatKmTraveled += boatKmH * t;
         timeRemaining -= t;
         if (frac >= 1 - 1e-6) {
@@ -256,8 +290,9 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
           tidalDir = sampled.directionDeg;
         }
       }
+      const leewayFactor = backtroll ? BACKTROLL_LEEWAY_COEFFICIENT : 0.03;
       const tidalVec = currentVector(tidalSpeed, tidalDir, hourStartLat);
-      const windLeewaySpeed = cond.windSpeedKnots * 0.03;
+      const windLeewaySpeed = cond.windSpeedKnots * leewayFactor;
       const windVec = currentVector(windLeewaySpeed, cond.windDegrees, hourStartLat);
       const driftDLat = 0.7 * tidalVec.dLat + 0.3 * windVec.dLat;
       const driftDLon = 0.7 * tidalVec.dLon + 0.3 * windVec.dLon;
@@ -266,6 +301,7 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
         (driftDLon * KM_PER_DEG_LAT * Math.cos(degToRad(hourStartLat))) ** 2,
       );
       driftContributionKnots = driftKmH / KM_PER_KNOT_HOUR;
+      currentMagnitudeKnots = driftContributionKnots;
       if (driftKmH > 1e-9) {
         const endLat = hourStartLat + driftDLat;
         const endLon = hourStartLon + driftDLon;
@@ -289,8 +325,9 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
           tidalDir = sampled.directionDeg;
         }
       }
+      const leewayFactor = backtroll ? BACKTROLL_LEEWAY_COEFFICIENT : 0.03;
       const tidalVec = currentVector(tidalSpeed, tidalDir, curLat);
-      const windLeewaySpeed = cond.windSpeedKnots * 0.03;
+      const windLeewaySpeed = cond.windSpeedKnots * leewayFactor;
       const windVec = currentVector(windLeewaySpeed, cond.windDegrees, curLat);
 
       const driftDLat = 0.7 * tidalVec.dLat + 0.3 * windVec.dLat;
@@ -300,6 +337,7 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
         (driftDLon * KM_PER_DEG_LAT * Math.cos(degToRad(curLat))) ** 2,
       );
       driftContributionKnots = driftKmH / KM_PER_KNOT_HOUR;
+      currentMagnitudeKnots = driftContributionKnots;
 
       let resultantDLat = driftDLat;
       let resultantDLon = driftDLon;
@@ -311,11 +349,27 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
       }
 
       if (mode === "trolling" && boatSpeedKnots > 0) {
-        const boatVec = currentVector(boatSpeedKnots, boatHeadingDeg, curLat);
-        resultantDLat += boatVec.dLat;
-        resultantDLon += boatVec.dLon;
-        boatContributionKnots = boatSpeedKnots;
-        boatHeadingDegSep = normalizeAngle(boatHeadingDeg);
+        if (backtroll) {
+          // Negate the heading so thrust opposes the boat's facing direction.
+          // The stern-first drag coefficient reduces the effective reverse
+          // speed: the boat achieves boatSpeedKnots / BACKTROLL_DRAG_COEFFICIENT
+          // of actual displacement against (or with) the current.
+          const reverseHeading = normalizeAngle(boatHeadingDeg + 180);
+          const effectiveReverseKnots = boatSpeedKnots / BACKTROLL_DRAG_COEFFICIENT;
+          const boatVec = currentVector(effectiveReverseKnots, reverseHeading, curLat);
+          resultantDLat += boatVec.dLat;
+          resultantDLon += boatVec.dLon;
+          boatContributionKnots = effectiveReverseKnots;
+          // The visual arrow still points in the configured heading (the bow direction);
+          // backtroll is indicated by mode badge / BT label, not arrow reversal.
+          boatHeadingDegSep = normalizeAngle(boatHeadingDeg);
+        } else {
+          const boatVec = currentVector(boatSpeedKnots, boatHeadingDeg, curLat);
+          resultantDLat += boatVec.dLat;
+          resultantDLon += boatVec.dLon;
+          boatContributionKnots = boatSpeedKnots;
+          boatHeadingDegSep = normalizeAngle(boatHeadingDeg);
+        }
       }
       curLat = curLat + resultantDLat;
       curLon = curLon + resultantDLon;
@@ -333,13 +387,32 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
       ? 0
       : bearing(hourStartLat, hourStartLon, curLat, curLon);
 
-    const angle = lineAngle(resultantKnots);
+    // ── Fishing line angle ────────────────────────────────────────────────
+    // In backtroll mode the bait streams forward (bow side) suspended in the
+    // current that flows past the hull; use the current magnitude rather than
+    // the resultant SOG so the angle reflects flow past the rig, not net
+    // displacement (which may be near zero at stall).
+    const angleCurrentKnots = backtroll && mode === "trolling"
+      ? currentMagnitudeKnots
+      : resultantKnots;
+    const angle = lineAngle(angleCurrentKnots);
     const hookDepthM = lineLengthM * Math.cos(degToRad(angle));
     const depth = getDepthAt(hourStartLat, hourStartLon, terrain);
     const bottomReached = hookDepthM >= depth - 5;
 
     const worldPos = lonLatToWorldXZ(hourStartLon, hourStartLat, terrain);
     const isSlack = !!cond.isSlack || cond.tidalSpeedKnots < 0.1;
+
+    // ── Backtroll stall detection ─────────────────────────────────────────
+    // stallSpeedKnots is the effective reverse speed needed to hold station
+    // (current magnitude ÷ drag coefficient). isStalled is true when the
+    // absolute SOG is below the stall threshold.
+    let isStalled: boolean | undefined;
+    let stallSpeedKnots: number | undefined;
+    if (backtroll && mode === "trolling") {
+      stallSpeedKnots = currentMagnitudeKnots / BACKTROLL_DRAG_COEFFICIENT;
+      isStalled = Math.abs(resultantKnots) < STALL_SOG_THRESHOLD_KT;
+    }
 
     let activeLegIndex: number | undefined;
     let legRemainingKm: number | undefined;
@@ -371,6 +444,8 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
       boatContributionKnots,
       boatHeadingDegSep,
       driftHeadingDeg,
+      isStalled,
+      stallSpeedKnots,
     });
   }
 

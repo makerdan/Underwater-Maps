@@ -639,3 +639,151 @@ describe("computeDrift — waypoint-following trolling circuit", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Backtroll physics
+// ---------------------------------------------------------------------------
+
+describe("computeDrift — backtroll physics", () => {
+  it("backtroll negates thrust: net displacement opposes heading when current is zero", () => {
+    // No tide, no wind — only the boat in backtroll. Heading 90° (east).
+    // The stern-first thrust pushes the boat WEST (180° from heading).
+    // effectiveReverseSpeed = 2 / 1.4 ≈ 1.429 kt west.
+    // dLon/h = -1.429 * 1.852 / (111 * cos(0.5°))
+    const startLat = 0.5;
+    const path = computeDrift({
+      conditions: makeConditions({}),
+      startLat,
+      startLon: 0.5,
+      lineLengthM: 50,
+      lineWeightG: 500,
+      terrain: makeFlatGrid(100),
+      mode: "trolling",
+      boatSpeedKnots: 2,
+      boatHeadingDeg: 90, // facing east → backtroll pushes west
+      backtroll: true,
+    });
+    // After hour 1 the boat should have moved WEST (negative dLon), not east.
+    expect(path[1]!.lon).toBeLessThan(0.5);
+    // Lat should not change (pure east/west motion).
+    expect(path[1]!.lat).toBeCloseTo(startLat, 6);
+  });
+
+  it("backtroll with zero boat speed is identical to forward trolling at zero speed", () => {
+    // Zero reverse thrust = no propulsion = same as pure drift either way.
+    const conditions = makeConditions({ tidalSpeedKnots: 1.5, tidalDegrees: 270 });
+    const forward = computeDrift({
+      conditions, startLat: 0.5, startLon: 0.5,
+      lineLengthM: 50, lineWeightG: 500, terrain: makeFlatGrid(100),
+      mode: "trolling", boatSpeedKnots: 0, boatHeadingDeg: 45,
+    });
+    const back = computeDrift({
+      conditions, startLat: 0.5, startLon: 0.5,
+      lineLengthM: 50, lineWeightG: 500, terrain: makeFlatGrid(100),
+      mode: "trolling", boatSpeedKnots: 0, boatHeadingDeg: 45, backtroll: true,
+    });
+    for (let i = 0; i < 24; i++) {
+      expect(back[i]!.lat).toBeCloseTo(forward[i]!.lat, 12);
+      expect(back[i]!.lon).toBeCloseTo(forward[i]!.lon, 12);
+    }
+  });
+
+  it("stallSpeedKnots = currentMagnitude / BACKTROLL_DRAG_COEFFICIENT on every step", () => {
+    // Tide 2 kt north, no wind. Blended drift contribution ≈ 0.7 * 2 = 1.4 kt north.
+    // Drag = 1.4, so stallSpeedKnots ≈ 1.4 / 1.4 = 1.0 kt.
+    const tidalSpeed = 2;
+    const path = computeDrift({
+      conditions: makeConditions({ tidalSpeedKnots: tidalSpeed, tidalDegrees: 0 }),
+      startLat: 0.5, startLon: 0.5,
+      lineLengthM: 50, lineWeightG: 500, terrain: makeFlatGrid(100),
+      mode: "trolling", boatSpeedKnots: 1.5, boatHeadingDeg: 0, backtroll: true,
+    });
+    for (const wp of path) {
+      expect(wp.stallSpeedKnots).toBeDefined();
+      // driftContributionKnots is the blended current magnitude; stallSpeed = that / 1.4.
+      const expected = (wp.driftContributionKnots ?? 0) / 1.4;
+      expect(wp.stallSpeedKnots!).toBeCloseTo(expected, 8);
+    }
+  });
+
+  it("isStalled when effectiveReverseSpeed ≈ current: resultant SOG < 0.05 kt", () => {
+    // Pure tidal 2 kt north, no wind. Blended drift ≈ 0.7 * 2 = 1.4 kt.
+    // effectiveReverseSpeed = boat / drag = 1.4 * 1.4 / 1.4 = 1.4 kt — exactly cancels.
+    // Setting boatSpeed = currentContribution * drag = 1.4 * 1.4 = 1.96 kt gives
+    // effectiveReverse = 1.96 / 1.4 = 1.4 kt → SOG ≈ 0 → isStalled = true.
+    const path = computeDrift({
+      conditions: makeConditions({ tidalSpeedKnots: 2, tidalDegrees: 0 }),
+      startLat: 0.5, startLon: 0.5,
+      lineLengthM: 50, lineWeightG: 500, terrain: makeFlatGrid(100),
+      mode: "trolling",
+      boatSpeedKnots: 1.96,   // ≈ blendedDrift * BACKTROLL_DRAG_COEFFICIENT
+      boatHeadingDeg: 0,      // facing north → reverse pushes south
+      backtroll: true,
+    });
+    // At stall the boat is nearly motionless; all hours should be stalled.
+    for (const wp of path) {
+      expect(wp.isStalled).toBe(true);
+    }
+  });
+
+  it("isStalled is false and undefined when backtroll is off", () => {
+    // Forward trolling should never set isStalled.
+    const path = computeDrift({
+      conditions: makeConditions({ tidalSpeedKnots: 2, tidalDegrees: 0 }),
+      startLat: 0.5, startLon: 0.5,
+      lineLengthM: 50, lineWeightG: 500, terrain: makeFlatGrid(100),
+      mode: "trolling", boatSpeedKnots: 2, boatHeadingDeg: 90,
+    });
+    for (const wp of path) {
+      expect(wp.isStalled).toBeUndefined();
+      expect(wp.stallSpeedKnots).toBeUndefined();
+    }
+  });
+
+  it("backtroll is ignored in drift mode (engine off)", () => {
+    // Passing backtroll: true in drift mode must produce identical output to
+    // backtroll: false because the boat propulsion is not active in drift mode.
+    const conditions = makeConditions({ tidalSpeedKnots: 1, tidalDegrees: 45 });
+    const driftNormal = computeDrift({
+      conditions, startLat: 0.5, startLon: 0.5,
+      lineLengthM: 50, lineWeightG: 500, terrain: makeFlatGrid(100),
+      mode: "drift",
+    });
+    const driftBacktroll = computeDrift({
+      conditions, startLat: 0.5, startLon: 0.5,
+      lineLengthM: 50, lineWeightG: 500, terrain: makeFlatGrid(100),
+      mode: "drift", backtroll: true,
+    });
+    for (let i = 0; i < 24; i++) {
+      expect(driftBacktroll[i]!.lat).toBeCloseTo(driftNormal[i]!.lat, 12);
+      expect(driftBacktroll[i]!.lon).toBeCloseTo(driftNormal[i]!.lon, 12);
+      // Drift mode never sets stall fields.
+      expect(driftBacktroll[i]!.isStalled).toBeUndefined();
+      expect(driftBacktroll[i]!.stallSpeedKnots).toBeUndefined();
+    }
+  });
+
+  it("backtroll fishing line angle uses current magnitude, not resultant SOG", () => {
+    // At stall (SOG ≈ 0) the line should still show an angle driven by the
+    // current flowing past the hull, not by the near-zero net displacement.
+    // Pure tide 3 kt north, boatSpeed set to stall exactly.
+    // lineAngle(currentMag) >> lineAngle(0) so the angle must be > 0.
+    const tidalSpeed = 3;
+    // Stall: boatSpeed = blendedDriftKt * drag ≈ (0.7 * 3) * 1.4 = 2.94 kt
+    const stallBoatSpeed = 0.7 * tidalSpeed * 1.4;
+    const path = computeDrift({
+      conditions: makeConditions({ tidalSpeedKnots: tidalSpeed, tidalDegrees: 0 }),
+      startLat: 0.5, startLon: 0.5,
+      lineLengthM: 100, lineWeightG: 500, terrain: makeFlatGrid(200),
+      mode: "trolling",
+      boatSpeedKnots: stallBoatSpeed,
+      boatHeadingDeg: 0,
+      backtroll: true,
+    });
+    // At stall, SOG ≈ 0. Without backtroll-line-flip, lineAngleDeg would be 0.
+    // With the flip, it should reflect the current magnitude (positive angle).
+    for (const wp of path) {
+      expect(wp.lineAngleDeg).toBeGreaterThan(5);
+    }
+  });
+});
