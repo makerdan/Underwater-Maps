@@ -82,7 +82,7 @@ test.describe("BathyScan — smoke suite", () => {
   test("file upload zone is present on the page", async ({ page }) => {
     await page.waitForLoadState("domcontentloaded");
     const uploadEl = page.locator(
-      "text=UPLOAD CUSTOM TERRAIN, [data-testid='upload-zone'], input[type='file']"
+      "text=UPLOAD DATASET(S), [data-testid='upload-zone'], input[type='file']"
     );
     const count = await uploadEl.count();
     if (count === 0) {

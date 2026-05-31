@@ -102,9 +102,9 @@ async function cleanupAllUploads(req: APIRequestContext): Promise<void> {
 }
 
 async function openUploadAccordion(page: Page): Promise<void> {
-  // The dataset panel is expanded by default. Click the "UPLOAD CUSTOM
-  // TERRAIN" accordion to reveal the dropzone.
-  const toggle = page.getByRole("button", { name: /UPLOAD CUSTOM TERRAIN/i });
+  // The dataset panel is expanded by default. Click the "UPLOAD DATASET(S)"
+  // accordion to reveal the dropzone.
+  const toggle = page.getByRole("button", { name: /UPLOAD DATASET\(S\)/i });
   await expect(toggle).toBeVisible();
   await toggle.dispatchEvent("click");
   await expect(page.getByTestId("dropzone-terrain")).toBeVisible();

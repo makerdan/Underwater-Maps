@@ -150,14 +150,14 @@ export const FileUpload = () => {
             </div>
           ) : !isSignedIn ? (
             <>
-              <p className="text-xs font-semibold mb-1">UPLOAD CUSTOM TERRAIN</p>
+              <p className="text-xs font-semibold mb-1">UPLOAD DATASET(S)</p>
               <p className="text-[10px] text-muted-foreground">
                 Sign in to upload bathymetric files to your account
               </p>
             </>
           ) : (
             <>
-              <p className="text-xs font-semibold mb-1">UPLOAD CUSTOM TERRAIN</p>
+              <p className="text-xs font-semibold mb-1">UPLOAD DATASET(S)</p>
               <p className="text-[10px] text-muted-foreground">
                 Drop file here — auto-saved to your account
               </p>

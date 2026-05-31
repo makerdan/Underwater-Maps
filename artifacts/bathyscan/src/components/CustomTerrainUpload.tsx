@@ -148,7 +148,7 @@ export const CustomTerrainUpload: React.FC = () => {
         if (code === "file-too-large") {
           setUploadError("File exceeds 50 MB limit");
         } else if (code === "file-invalid-type") {
-          setUploadError("Only .xyz or .csv files accepted");
+          setUploadError("Unsupported file type. Accepted: .csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .nmea, .gz");
         } else {
           setUploadError("Invalid file");
         }
@@ -173,7 +173,17 @@ export const CustomTerrainUpload: React.FC = () => {
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { "text/csv": [".csv"], "text/plain": [".xyz"] },
+    accept: {
+      "text/csv": [".csv"],
+      "text/plain": [".xyz", ".txt", ".nmea"],
+      "application/gzip": [".gz"],
+      "application/x-gzip": [".gz"],
+      "image/tiff": [".tif", ".tiff"],
+      "application/octet-stream": [".bag", ".las", ".laz", ".nc"],
+      "application/x-netcdf": [".nc"],
+      "application/gpx+xml": [".gpx"],
+      "text/xml": [".gpx"],
+    },
     maxFiles: 1,
     maxSize: MAX_UPLOAD_BYTES,
     disabled: postDatasetsUpload.isPending,
@@ -244,7 +254,7 @@ export const CustomTerrainUpload: React.FC = () => {
             ) : (
               <>
                 <div style={{ fontSize: 11, color: "#cbd5e1", marginBottom: 3, fontWeight: 600 }}>
-                  Drop .xyz or .csv here, or click to browse
+                  Drop file here, or click to browse
                 </div>
                 <div style={{ fontSize: 10, color: "#cbd5e1" }}>
                   up to 50 MB{isSignedIn ? " · auto-saved to your account" : ""}

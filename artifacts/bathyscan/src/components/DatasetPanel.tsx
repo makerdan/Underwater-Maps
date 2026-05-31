@@ -1070,7 +1070,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       if (rejected.length) {
         const code = rejected[0]?.errors[0]?.code;
         if (code === "file-invalid-type") {
-          setUploadError("Only .xyz or .csv files accepted");
+          setUploadError("Unsupported file type. Accepted: .csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .nmea, .gz");
         } else {
           setUploadError("Invalid file");
         }
@@ -1133,7 +1133,17 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { "text/csv": [".csv"], "text/plain": [".xyz"] },
+    accept: {
+      "text/csv": [".csv"],
+      "text/plain": [".xyz", ".txt", ".nmea"],
+      "application/gzip": [".gz"],
+      "application/x-gzip": [".gz"],
+      "image/tiff": [".tif", ".tiff"],
+      "application/octet-stream": [".bag", ".las", ".laz", ".nc"],
+      "application/x-netcdf": [".nc"],
+      "application/gpx+xml": [".gpx"],
+      "text/xml": [".gpx"],
+    },
     maxFiles: 1,
     // No maxSize — large files (> 10 MB) route to the chunked path automatically.
     // Files ≤ 50 MB use the regular multer path; the server enforces limits there.
@@ -1845,14 +1855,14 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
           {/* ── Upload accordion ── */}
           <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}>
-            <ViewscreenTooltip label={uploadOpen ? "Hide upload area" : "Upload your own terrain file"} side="right">
+            <ViewscreenTooltip label={uploadOpen ? "Hide upload area" : "Upload your own dataset file"} side="right">
             <button
               onClick={() => setUploadOpen(!uploadOpen)}
               className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
               style={{ cursor: "pointer" }}
             >
               <span style={{ fontSize: 10, letterSpacing: "0.15em", color: "#cbd5e1" }}>
-                ▲ UPLOAD CUSTOM TERRAIN
+                ▲ UPLOAD DATASET(S)
               </span>
               <span style={{ color: "#cbd5e1", fontSize: 11 }}>{uploadOpen ? "−" : "+"}</span>
             </button>
@@ -1949,7 +1959,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       ) : (
                         <>
                           <div style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 3 }}>
-                            Drop .xyz or .csv here
+                            Drop file here, or click to browse
                           </div>
                           <div style={{ fontSize: 10, color: "#cbd5e1" }}>
                             any size · large files upload in chunks{isSignedIn ? " · auto-saved" : ""}

@@ -224,7 +224,7 @@ describe("DatasetPanel", () => {
   it("renders the upload dropzone area after expanding the upload section", () => {
     render(<DatasetPanel />);
     expect(screen.queryByTestId("dropzone-terrain")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText(/UPLOAD CUSTOM TERRAIN/));
+    fireEvent.click(screen.getByText(/UPLOAD DATASET\(S\)/));
     expect(screen.getByTestId("dropzone-terrain")).toBeInTheDocument();
   });
 });
