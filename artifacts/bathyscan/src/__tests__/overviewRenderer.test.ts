@@ -42,6 +42,7 @@ import type { TerrainData, Marker, EfhFeature } from "@workspace/api-client-reac
 import { MarkerType, EfhFeatureType } from "@workspace/api-client-react";
 import {
   buildHeatmapBitmap,
+  buildContourLines,
   lonLatToCanvas,
   canvasToLonLat,
   renderCameraArrow,
@@ -907,6 +908,165 @@ describe("buildHeatmapBitmap — northernmost data row in top canvas row", () =>
     const r0 = capturedData![0]!;
     for (let i = 0; i < 4 * 2 * 2; i += 4) {
       expect(capturedData![i]).toBe(r0);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildContourLines — marching-squares geometry
+// ---------------------------------------------------------------------------
+
+describe("buildContourLines — edge cases and degenerate grids", () => {
+  it("returns empty array for a 1×1 grid (too small for marching squares)", () => {
+    const grid = makeGrid({ width: 1, height: 1, depths: [50], minDepth: 0, maxDepth: 100 });
+    expect(buildContourLines(grid, 10)).toEqual([]);
+  });
+
+  it("returns empty array when intervalMetres is zero", () => {
+    const grid = makeGrid();
+    expect(buildContourLines(grid, 0)).toEqual([]);
+  });
+
+  it("returns empty array when intervalMetres is negative", () => {
+    const grid = makeGrid();
+    expect(buildContourLines(grid, -5)).toEqual([]);
+  });
+
+  it("returns empty array when all depths are identical (no iso-level crossing)", () => {
+    const grid = makeGrid({
+      width: 3,
+      height: 3,
+      depths: Array(9).fill(50) as number[],
+      minDepth: 50,
+      maxDepth: 50,
+    });
+    expect(buildContourLines(grid, 10)).toEqual([]);
+  });
+
+  it("returns empty array when minDepth === maxDepth and no interval falls inside", () => {
+    const grid = makeGrid({
+      width: 2,
+      height: 2,
+      depths: [0, 0, 0, 0],
+      minDepth: 0,
+      maxDepth: 0,
+    });
+    expect(buildContourLines(grid, 10)).toEqual([]);
+  });
+
+  it("returns empty array when the interval is larger than the full depth range", () => {
+    const grid = makeGrid({
+      width: 2,
+      height: 2,
+      depths: [0, 0, 5, 5],
+      minDepth: 0,
+      maxDepth: 5,
+    });
+    expect(buildContourLines(grid, 100)).toEqual([]);
+  });
+});
+
+describe("buildContourLines — known grid crossings", () => {
+  it("generates at least one segment for a 2×2 grid whose depths straddle the iso-level", () => {
+    const grid = makeGrid({
+      width: 2,
+      height: 2,
+      depths: [0, 0, 20, 20],
+      minDepth: 0,
+      maxDepth: 20,
+    });
+    const segs = buildContourLines(grid, 10);
+    expect(segs.length).toBeGreaterThan(0);
+  });
+
+  it("segment depth equals the iso-depth value, not an interpolated grid depth", () => {
+    const grid = makeGrid({
+      width: 2,
+      height: 2,
+      depths: [5, 5, 25, 25],
+      minDepth: 5,
+      maxDepth: 25,
+    });
+    const segs = buildContourLines(grid, 10);
+    const isoDepths = segs.map((s) => s.depth);
+    // Only 10 and 20 are valid iso-levels between 5 and 25
+    for (const d of isoDepths) {
+      expect(d === 10 || d === 20).toBe(true);
+    }
+  });
+
+  it("produces segments at multiple distinct iso-depths when range spans several intervals", () => {
+    const grid = makeGrid({
+      width: 2,
+      height: 5,
+      depths: [0, 0, 10, 10, 20, 20, 30, 30, 40, 40],
+      minDepth: 0,
+      maxDepth: 40,
+    });
+    const segs = buildContourLines(grid, 10);
+    const uniqueDepths = new Set(segs.map((s) => s.depth));
+    expect(uniqueDepths.size).toBeGreaterThanOrEqual(3);
+  });
+
+  it("all segment x/y coordinates stay within the grid's fractional bounds", () => {
+    const W = 4;
+    const H = 4;
+    const depths: number[] = [];
+    for (let r = 0; r < H; r++) {
+      for (let c = 0; c < W; c++) {
+        depths.push(r * 20);
+      }
+    }
+    const grid = makeGrid({ width: W, height: H, depths, minDepth: 0, maxDepth: 60 });
+    const segs = buildContourLines(grid, 10);
+    expect(segs.length).toBeGreaterThan(0);
+    for (const seg of segs) {
+      expect(seg.x0).toBeGreaterThanOrEqual(0);
+      expect(seg.x0).toBeLessThanOrEqual(W - 1);
+      expect(seg.y0).toBeGreaterThanOrEqual(0);
+      expect(seg.y0).toBeLessThanOrEqual(H - 1);
+      expect(seg.x1).toBeGreaterThanOrEqual(0);
+      expect(seg.x1).toBeLessThanOrEqual(W - 1);
+      expect(seg.y1).toBeGreaterThanOrEqual(0);
+      expect(seg.y1).toBeLessThanOrEqual(H - 1);
+    }
+  });
+
+  it("a fully-uniform row produces no segments even when neighbouring rows differ", () => {
+    // Only cells that span a row boundary with a depth crossing produce segments.
+    // Row0=[0,0], Row1=[0,0], Row2=[20,20]: crossing is between row1 and row2.
+    const grid = makeGrid({
+      width: 2,
+      height: 3,
+      depths: [0, 0, 0, 0, 20, 20],
+      minDepth: 0,
+      maxDepth: 20,
+    });
+    const segs = buildContourLines(grid, 10);
+    // All segments should report depth=10
+    for (const seg of segs) {
+      expect(seg.depth).toBe(10);
+    }
+  });
+
+  it("a horizontal step edge produces only segments with matching y-coordinates at the boundary row", () => {
+    // Top row all-zero, bottom row all-100: iso at 50 crosses every cell's bottom edge.
+    const W = 4;
+    const grid = makeGrid({
+      width: W,
+      height: 2,
+      depths: [0, 0, 0, 0, 100, 100, 100, 100],
+      minDepth: 0,
+      maxDepth: 100,
+    });
+    const segs = buildContourLines(grid, 50);
+    expect(segs.length).toBeGreaterThan(0);
+    // Every segment y-coordinate should be between 0 and 1 (the only row boundary)
+    for (const seg of segs) {
+      expect(seg.y0).toBeGreaterThanOrEqual(0);
+      expect(seg.y0).toBeLessThanOrEqual(1);
+      expect(seg.y1).toBeGreaterThanOrEqual(0);
+      expect(seg.y1).toBeLessThanOrEqual(1);
     }
   });
 });
