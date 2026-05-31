@@ -79,6 +79,14 @@ describe("Minimap", () => {
     fireEvent.click(getByText(/OVERVIEW/));
     expect(useUiStore.getState().overviewOpen).toBe(true);
   });
+
+  it("renders N, S, E, and W direction labels", () => {
+    const { getByText, getByTestId } = render(<Minimap />);
+    expect(getByText("N")).toBeTruthy();
+    expect(getByText("S")).toBeTruthy();
+    expect(getByTestId("minimap-east").textContent).toBe("E");
+    expect(getByTestId("minimap-west").textContent).toBe("W");
+  });
 });
 
 describe("drawArrow cardinal directions", () => {

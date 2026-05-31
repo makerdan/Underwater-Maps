@@ -411,6 +411,40 @@ export const Minimap: React.FC = () => {
         >
           S
         </div>
+        {/* East indicator */}
+        <div
+          data-testid="minimap-east"
+          style={{
+            position: "absolute",
+            top: "50%",
+            right: 5,
+            transform: "translateY(-50%)",
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 8,
+            fontWeight: 700,
+            color: "rgba(0,229,255,0.45)",
+            pointerEvents: "none",
+          }}
+        >
+          E
+        </div>
+        {/* West indicator */}
+        <div
+          data-testid="minimap-west"
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: 5,
+            transform: "translateY(-50%)",
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 8,
+            fontWeight: 700,
+            color: "rgba(0,229,255,0.45)",
+            pointerEvents: "none",
+          }}
+        >
+          W
+        </div>
         {/* Colormap legend strip — bottom-left, shallow top → deep bottom */}
         <div
           style={{
