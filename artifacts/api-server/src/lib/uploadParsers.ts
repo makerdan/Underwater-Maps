@@ -459,7 +459,20 @@ export async function parseLasLaz(buffer: Buffer, fileName: string): Promise<Raw
     // Initialise laz-perf WASM module and decode with the LASZip API.
     // LASZip.open() accepts the full LAS/LAZ buffer; getPoint() iterates
     // points in order, writing one point record at a time to WASM heap.
-    const lp = await createLazPerf();
+    // The entire block (including createLazPerf initialisation) is wrapped
+    // so that WASM-load failures surface the same descriptive message as
+    // decompression errors, giving users a concrete fallback path.
+    let lp: Awaited<ReturnType<typeof createLazPerf>>;
+    try {
+      lp = await createLazPerf();
+    } catch (err) {
+      throw new Error(
+        `LAZ decompression failed: ${err instanceof Error ? err.message : String(err)}. ` +
+          "Please convert your .laz file to uncompressed .las first using: " +
+          "las2las -i input.laz -o output.las  (or: pdal translate input.laz output.las)",
+      );
+    }
+
     const zip = new lp.LASZip();
     // Allocate WASM heap space for the entire file buffer
     const ptr = (lp as unknown as { _malloc: (n: number) => number })._malloc(buffer.length);
