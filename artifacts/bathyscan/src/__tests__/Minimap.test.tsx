@@ -67,10 +67,11 @@ describe("Minimap", () => {
     expect(pending!.worldX).toBeCloseTo(0, 5);
     expect(pending!.worldZ).toBeCloseTo(0, 5);
 
-    // Click at (0,0) corner → -WORLD_SIZE/2, -WORLD_SIZE/2
+    // Click at (0,0) corner → top-left is now North-West in North-up orientation.
+    // worldX = -WORLD_SIZE/2 (west edge, unchanged), worldZ = +WORLD_SIZE/2 (north edge, flipped).
     fireEvent.click(canvas, { clientX: 0, clientY: 0 });
     expect(useUiStore.getState().pendingDropIn!.worldX).toBeCloseTo(-WORLD_SIZE / 2, 5);
-    expect(useUiStore.getState().pendingDropIn!.worldZ).toBeCloseTo(-WORLD_SIZE / 2, 5);
+    expect(useUiStore.getState().pendingDropIn!.worldZ).toBeCloseTo(WORLD_SIZE / 2, 5);
   });
 
   it("OVERVIEW button opens overview", () => {
@@ -98,6 +99,12 @@ describe("drawArrow cardinal directions", () => {
     } as unknown as CanvasRenderingContext2D;
   }
 
+  // North-up convention: cameraStore heading 180° = North = top of canvas.
+  // Arrow rotation formula: (180 - heading) * π/180
+  // heading 180 (North) → rotate(0) → arrow points up ✓
+  // heading 0  (South) → rotate(π) → arrow points down ✓
+  // heading 90 (East)  → rotate(π/2) → arrow points right ✓
+  // heading 270 (West) → rotate(-π/2) → arrow points left ✓
   const cases: [string, number][] = [
     ["South (heading 0)", 0],
     ["East (heading 90)", 90],
@@ -105,10 +112,10 @@ describe("drawArrow cardinal directions", () => {
     ["West (heading 270)", 270],
   ];
 
-  it.each(cases)("rotate is called with heading * π/180 for %s", (_label, heading) => {
+  it.each(cases)("rotate is called with (180 - heading) * π/180 for %s", (_label, heading) => {
     const ctx = makeCtx();
     drawArrow(ctx, 0, 0, heading);
-    const expected = heading * (Math.PI / 180);
+    const expected = (180 - heading) * (Math.PI / 180);
     expect(ctx.rotate).toHaveBeenCalledWith(expected);
   });
 });

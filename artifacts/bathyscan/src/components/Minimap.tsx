@@ -31,7 +31,8 @@ function drawHeatmap(
   for (let py = 0; py < H; py++) {
     for (let px = 0; px < W; px++) {
       const gx = Math.min(width - 1, Math.floor((px / W) * width));
-      const gy = Math.min(height - 1, Math.floor((py / H) * height));
+      // Flip y so that py=0 (top) maps to high-latitude rows (North-up).
+      const gy = (height - 1) - Math.min(height - 1, Math.floor((py / H) * height));
       const idx = gy * width + gx;
       const depth = depths[idx] ?? minDepth;
       const t = (depth - minDepth) / depthRange;
@@ -53,7 +54,9 @@ export function drawArrow(
   py: number,
   heading: number,
 ) {
-  const rad = heading * (Math.PI / 180);
+  // North-up convention: heading 180° = North = top of canvas = rotate(0).
+  // Formula: (180 - heading) maps the cameraStore heading to canvas rotation.
+  const rad = (180 - heading) * (Math.PI / 180);
   const size = 7;
 
   ctx.save();
@@ -88,7 +91,8 @@ function drawMarkerDots(
 
   for (const m of markers) {
     const px = ((m.lon - minLon) / lonRange) * W;
-    const py = ((m.lat - minLat) / latRange) * H;
+    // North-up: invert y so high-lat (North) is at top.
+    const py = H - ((m.lat - minLat) / latRange) * H;
     if (px < 0 || px > W || py < 0 || py > H) continue;
 
     const color = MARKER_COLOR[m.type] ?? "#e2e8f0";
@@ -172,7 +176,8 @@ export const Minimap: React.FC = () => {
       // Draw camera arrow if position is known
       if (state.cameraLon !== null && state.cameraLat !== null) {
         const px = ((state.cameraLon - terrain.minLon) / (terrain.maxLon - terrain.minLon)) * W;
-        const py = ((state.cameraLat - terrain.minLat) / (terrain.maxLat - terrain.minLat)) * H;
+        // North-up: invert y so high-lat (North) is at top.
+        const py = H - ((state.cameraLat - terrain.minLat) / (terrain.maxLat - terrain.minLat)) * H;
         if (px >= 0 && px <= W && py >= 0 && py <= H) {
           drawArrow(ctx, px, py, state.heading);
         }
@@ -203,7 +208,8 @@ export const Minimap: React.FC = () => {
     const camState = useCameraStore.getState();
     if (camState.cameraLon !== null && camState.cameraLat !== null) {
       const px = ((camState.cameraLon - terrain.minLon) / (terrain.maxLon - terrain.minLon)) * W;
-      const py = ((camState.cameraLat - terrain.minLat) / (terrain.maxLat - terrain.minLat)) * H;
+      // North-up: invert y so high-lat (North) is at top.
+      const py = H - ((camState.cameraLat - terrain.minLat) / (terrain.maxLat - terrain.minLat)) * H;
       if (px >= 0 && px <= W && py >= 0 && py <= H) {
         drawArrow(ctx, px, py, camState.heading);
       }
@@ -215,7 +221,8 @@ export const Minimap: React.FC = () => {
     const px = e.clientX - rect.left;
     const py = e.clientY - rect.top;
     const worldX = (px / W) * WORLD_SIZE - WORLD_SIZE / 2;
-    const worldZ = (py / H) * WORLD_SIZE - WORLD_SIZE / 2;
+    // North-up: top of canvas = North = high worldZ; invert y.
+    const worldZ = WORLD_SIZE / 2 - (py / H) * WORLD_SIZE;
     useUiStore.getState().setPendingDropIn({ worldX, worldZ });
   };
 
@@ -285,6 +292,36 @@ export const Minimap: React.FC = () => {
           }}
         >
           MINIMAP
+        </div>
+        {/* North indicator */}
+        <div
+          style={{
+            position: "absolute",
+            top: 3,
+            right: 5,
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 8,
+            fontWeight: 700,
+            color: "rgba(0,229,255,0.6)",
+            pointerEvents: "none",
+          }}
+        >
+          N
+        </div>
+        {/* South indicator */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: 3,
+            right: 5,
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 8,
+            fontWeight: 700,
+            color: "rgba(0,229,255,0.35)",
+            pointerEvents: "none",
+          }}
+        >
+          S
         </div>
       </div>
     </div>
