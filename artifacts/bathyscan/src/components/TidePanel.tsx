@@ -361,8 +361,8 @@ export const TidePanel: React.FC<TidePanelProps> = ({
               </div>
 
               {/* Tide height */}
-              <div className="flex gap-4 items-end">
-                <div>
+              <div className="flex gap-4 items-end" style={{ minWidth: 0 }}>
+                <div style={{ minWidth: 0, flex: "0 1 auto" }}>
                   <div style={LABEL}>Tide height</div>
                   <span style={{ ...CYAN, fontSize: 15, fontWeight: 700 }}>
                     {data.tideHeight >= 0 ? "+" : ""}
@@ -386,9 +386,9 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                     </span>
                   )}
                 </div>
-                <div>
+                <div style={{ minWidth: 0, flex: "0 1 auto" }}>
                   <div style={LABEL}>Status</div>
-                  <div style={{ color: "#34d399", fontSize: 11 }}>
+                  <div style={{ color: "#34d399", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {floodEbbLabel(data.currentDirection, data.nextEvent?.type)}{" "}
                     {cardinal(data.currentDirection)}
                   </div>
@@ -396,16 +396,19 @@ export const TidePanel: React.FC<TidePanelProps> = ({
               </div>
 
               {/* Current */}
-              <div className="flex gap-4">
-                <div>
+              <div className="flex gap-4" style={{ minWidth: 0 }}>
+                <div style={{ minWidth: 0, flex: "0 1 auto" }}>
                   <div style={LABEL}>Direction</div>
-                  <div style={CYAN}>
-                    {Math.round(data.currentDirection)}° {cardinal(data.currentDirection)}
+                  <div style={{ ...CYAN, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {Math.round(data.currentDirection)}°{" "}
+                    {cardinal(data.currentDirection)}
                   </div>
                 </div>
-                <div>
+                <div style={{ minWidth: 0, flex: "0 1 auto" }}>
                   <div style={LABEL}>Speed</div>
-                  <div style={CYAN}>{formatSpeedFromKnots(data.currentSpeed, { units, decimals: 2 })}</div>
+                  <div style={{ ...CYAN, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {formatSpeedFromKnots(data.currentSpeed, { units, decimals: 2 })}
+                  </div>
                 </div>
               </div>
 
