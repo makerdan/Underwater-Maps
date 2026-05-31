@@ -57,7 +57,7 @@ const DATA_TYPE_ICONS: Record<string, string> = {
 };
 
 /** Catalog IDs that belong to the intertidal / shoreline category. */
-const INTERTIDAL_CATALOG_IDS = new Set([
+export const INTERTIDAL_CATALOG_IDS = new Set([
   "adfg-intertidal-clam-habitat-se-alaska",
   "noaa-shorezone-tidal-pools-se-alaska",
   "noaa-shorezone-beachcombing-se-alaska",

@@ -13,7 +13,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, fireEvent } from "@testing-library/react";
 import { renderWithProviders } from "./setup";
-import { FindDataPanel } from "@/components/FindDataPanel";
+import { FindDataPanel, INTERTIDAL_CATALOG_IDS } from "@/components/FindDataPanel";
 
 // ---------------------------------------------------------------------------
 // Hoisted proxy factory — must be defined before any imports are processed.
@@ -71,8 +71,12 @@ const makeApiClientMock = vi.hoisted(() => {
 //   • kelp-habitat — a regular "habitat" entry (not intertidal)
 //   • alaska-bathy — a "bathymetry" entry (neither)
 // ---------------------------------------------------------------------------
+// Pick the first ID from the live set so this fixture stays in sync
+// automatically when new shoreline datasets are added to INTERTIDAL_CATALOG_IDS.
+const [INTERTIDAL_ID] = INTERTIDAL_CATALOG_IDS;
+
 const INTERTIDAL_ENTRY = {
-  id: "adfg-intertidal-clam-habitat-se-alaska",
+  id: INTERTIDAL_ID,
   name: "ADF&G Intertidal Clam Habitat",
   dataType: "habitat",
   sourceAgency: "ADF&G",
