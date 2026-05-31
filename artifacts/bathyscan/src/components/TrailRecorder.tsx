@@ -8,7 +8,7 @@
  */
 import React, { useEffect, useRef, useState } from "react";
 import { useGpsStore } from "@/lib/gpsStore";
-import { useTrailStore } from "@/lib/trailStore";
+import { useTrailStore, MAX_TRAIL_POINTS } from "@/lib/trailStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useAppState } from "@/lib/context";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
@@ -93,6 +93,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
   const recording = useTrailStore((s) => s.recording);
   const currentPoints = useTrailStore((s) => s.currentPoints);
   const startedAt = useTrailStore((s) => s.startedAt);
+  const isOverflowing = useTrailStore((s) => s.isOverflowing);
   const startRecording = useTrailStore((s) => s.startRecording);
   const stopRecording = useTrailStore((s) => s.stopRecording);
   const { terrain } = useAppState();
@@ -321,6 +322,15 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
           </button>
           </ViewscreenTooltip>
         </>
+      )}
+
+      {isOverflowing && (
+        <div
+          data-testid="trail-overflow-notice"
+          style={{ color: "#f59e0b", fontSize: 9, marginTop: 4 }}
+        >
+          ⚠ Recording exceeded {MAX_TRAIL_POINTS.toLocaleString()} pts — oldest points are being trimmed
+        </div>
       )}
 
       {!navigator.onLine && (
