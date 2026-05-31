@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from "react";
+import React, { useMemo, useRef, useEffect, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useAppState } from "@/lib/context";
@@ -7,6 +7,8 @@ import { FlyRouteAnimator } from "./FlyRouteAnimator";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useLandTerrainStore } from "@/lib/landTerrainStore";
 import { useLandTerrain } from "@/hooks/useLandTerrain";
+import { useSatelliteTileStore } from "@/lib/satelliteTileStore";
+import { useSatelliteTile } from "@/hooks/useSatelliteTile";
 
 /** Maximum world-Y units the highest land point is displaced above Y=0. */
 const MAX_LAND_HEIGHT = 20;
@@ -72,20 +74,29 @@ const TerrainMesh = () => {
 };
 
 /**
- * Renders above-water land terrain from the Copernicus DEM 90 m land grid.
+ * Renders above-water land terrain from the Copernicus DEM 90 m land grid,
+ * with an ESRI World Imagery satellite texture draped over the surface when
+ * available so coastlines, islands, and headlands look photo-realistic.
  *
  * The mesh shares the exact same XZ footprint (2×2 world units, PlaneGeometry)
  * as TerrainMesh so the two surfaces meet seamlessly at Y=0 (the waterline).
  * Vertices are displaced upward (positive Y) proportional to their normalised
  * elevation within the grid's own min/max range.
  *
- * Colour ramp: low elevation → forest green, mid → earthy brown, high → grey/white.
+ * Texture behaviour:
+ *   - While the satellite tile is loading, the procedural colour ramp
+ *     (green→brown→grey) is shown so there is no blank flash.
+ *   - Once the satellite PNG arrives it is loaded into a THREE.Texture and
+ *     the material's `map` is updated; vertex colours are disabled at that
+ *     point so the photo texture renders at full fidelity.
+ *   - If the fetch fails (upstream 502) the procedural ramp persists silently.
  */
 const LandTerrainMesh = () => {
   const { terrain } = useAppState();
   const landGrid = useLandTerrainStore((s) => s.landGrid);
+  const tileUrl = useSatelliteTileStore((s) => s.tileUrl);
 
-  // Derive bbox from the primary terrain for the useLandTerrain hook.
+  // Derive bbox from the primary terrain for both terrain + satellite hooks.
   const bbox = useMemo(() => {
     if (!terrain) return null;
     return {
@@ -97,39 +108,37 @@ const LandTerrainMesh = () => {
   }, [terrain]);
 
   useLandTerrain(bbox);
+  useSatelliteTile(bbox);
 
-  const { geometry, material } = useMemo(() => {
+  // Build the geometry + procedural-colour material once when landGrid changes.
+  // The satellite texture is applied separately so geometry reuse is preserved.
+  const { geometry, proceduralMaterial } = useMemo(() => {
     if (!landGrid || landGrid.maxElevation <= 0) {
-      return { geometry: null, material: null };
+      return { geometry: null, proceduralMaterial: null };
     }
 
     const { elevation, width, height, maxElevation } = landGrid;
     const N = Math.min(width, height);
-    const geometry = new THREE.PlaneGeometry(2, 2, N - 1, N - 1);
-    geometry.rotateX(-Math.PI / 2);
+    const geom = new THREE.PlaneGeometry(2, 2, N - 1, N - 1);
+    geom.rotateX(-Math.PI / 2);
 
-    const positions = geometry.attributes["position"]!.array as Float32Array;
+    const positions = geom.attributes["position"]!.array as Float32Array;
     const colors = new Float32Array(positions.length);
     const color = new THREE.Color();
 
     // Scale: map the tallest cell to MAX_LAND_HEIGHT world units above Y=0.
-    // The world space is 2 units wide (range −1 to 1) and the depth mesh
-    // displaces 0.8 units downward. We size land similarly so coastal ridges
-    // and headlands read clearly without dominating the scene.
-    const scaleY = MAX_LAND_HEIGHT / 100; // proportional to the scene unit scale
+    const scaleY = MAX_LAND_HEIGHT / 100;
 
-    const lowColor   = new THREE.Color("#2d6a4f");   // dark forest green
-    const midColor   = new THREE.Color("#8B5E3C");   // earthy brown
-    const highColor  = new THREE.Color("#d4d4d4");   // light grey/snow
+    const lowColor  = new THREE.Color("#2d6a4f");  // dark forest green
+    const midColor  = new THREE.Color("#8B5E3C");  // earthy brown
+    const highColor = new THREE.Color("#d4d4d4");  // light grey/snow
 
     for (let i = 0; i < N * N; i++) {
       const elev = elevation[i] ?? 0;
       const t = elev > 0 ? Math.min(1, elev / maxElevation) : 0;
 
-      // Displace upward for land cells; water cells (elev=0) stay at Y=0
       positions[i * 3 + 1] = elev > 0 ? t * scaleY : 0;
 
-      // Elevation colour ramp
       if (t < 0.5) {
         color.lerpColors(lowColor, midColor, t * 2);
       } else {
@@ -141,18 +150,98 @@ const LandTerrainMesh = () => {
       colors[i * 3 + 2] = color.b;
     }
 
-    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    geometry.computeVertexNormals();
+    geom.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    geom.computeVertexNormals();
 
-    const material = new THREE.MeshStandardMaterial({
+    const mat = new THREE.MeshStandardMaterial({
       vertexColors: true,
       roughness: 1.0,
       metalness: 0.0,
       side: THREE.DoubleSide,
     });
 
-    return { geometry, material };
+    return { geometry: geom, proceduralMaterial: mat };
   }, [landGrid]);
+
+  // Satellite texture — loaded from the object URL whenever tileUrl changes.
+  // The texture is disposed when it is replaced or when the component unmounts.
+  const [satelliteTexture, setSatelliteTexture] = useState<THREE.Texture | null>(null);
+
+  useEffect(() => {
+    if (!tileUrl) {
+      setSatelliteTexture((prev) => {
+        prev?.dispose();
+        return null;
+      });
+      return;
+    }
+
+    const loader = new THREE.TextureLoader();
+    let disposed = false;
+    loader.load(
+      tileUrl,
+      (tex) => {
+        if (disposed) {
+          tex.dispose();
+          return;
+        }
+        // Flip the texture vertically: THREE.js loads images with Y=0 at the
+        // bottom, but our PNG is top-to-bottom (north→south) so UVs need to
+        // be flipped to match the PlaneGeometry UV layout.
+        tex.flipY = true;
+        tex.needsUpdate = true;
+        setSatelliteTexture((prev) => {
+          prev?.dispose();
+          return tex;
+        });
+      },
+      undefined,
+      (err) => {
+        if (!disposed) {
+          console.warn("[LandTerrainMesh] Failed to load satellite texture:", err);
+        }
+      },
+    );
+
+    return () => {
+      disposed = true;
+    };
+  }, [tileUrl]);
+
+  // Dispose texture on unmount.
+  useEffect(() => {
+    return () => {
+      satelliteTexture?.dispose();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Build the final material: use satellite texture when available, else
+  // fall back to the vertex-colour procedural ramp.
+  const material = useMemo(() => {
+    if (!proceduralMaterial) return null;
+    if (satelliteTexture) {
+      return new THREE.MeshStandardMaterial({
+        map: satelliteTexture,
+        vertexColors: false,
+        roughness: 0.85,
+        metalness: 0.0,
+        side: THREE.DoubleSide,
+      });
+    }
+    return proceduralMaterial;
+  }, [proceduralMaterial, satelliteTexture]);
+
+  // Dispose the satellite material (not the procedural one — that's managed
+  // by useMemo above) when it is replaced.
+  const prevMaterialRef = useRef<THREE.Material | null>(null);
+  useEffect(() => {
+    const prev = prevMaterialRef.current;
+    if (prev && prev !== proceduralMaterial && material !== prev) {
+      prev.dispose();
+    }
+    prevMaterialRef.current = material;
+  }, [material, proceduralMaterial]);
 
   if (!geometry || !material) return null;
 

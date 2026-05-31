@@ -22,6 +22,7 @@ import {
   buildBboxCsvRows,
 } from "../lib/terrain.js";
 import { fetchCopernicusDem } from "../lib/copernicusDem.js";
+import { fetchSatelliteTile } from "../lib/satelliteTile.js";
 import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
 import { substrateFingerprintForDataset } from "../lib/substrateGrid.js";
 
@@ -341,6 +342,64 @@ router.get("/terrain/land", async (req, res): Promise<void> => {
     res.json(grid);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Land DEM fetch failed";
+    res.status(502).json({ error: "upstream_error", details: msg });
+  }
+});
+
+// ── GET /terrain/satellite-tile ───────────────────────────────────────────────
+// Proxies and caches a satellite/aerial imagery PNG from ESRI World Imagery
+// for the given bounding box. The client uses this as a texture draped over
+// the LandTerrainMesh so coastlines look photo-realistic instead of using the
+// procedural green→brown→grey colour ramp.
+//
+// Query params:
+//   bbox — comma-separated "minLon,minLat,maxLon,maxLat"
+//   size — integer image resolution, clamped to [64, 1024] (default 512)
+//
+// No auth required — the underlying ESRI World Imagery service is public.
+// Returns image/png on success; 502 on upstream failure (client falls back to
+// procedural colour ramp gracefully).
+router.get("/terrain/satellite-tile", async (req, res): Promise<void> => {
+  const rawBbox = String(req.query["bbox"] ?? "");
+  const rawSize = req.query["size"];
+
+  const parts = rawBbox.split(",").map((s) => parseFloat(s.trim()));
+  if (parts.length !== 4 || parts.some((v) => !isFinite(v))) {
+    res.status(400).json({
+      error: "invalid_param",
+      details: 'bbox must be "minLon,minLat,maxLon,maxLat" (four finite numbers)',
+    });
+    return;
+  }
+
+  const [minLon, minLat, maxLon, maxLat] = parts as [number, number, number, number];
+
+  if (
+    minLon >= maxLon ||
+    minLat >= maxLat ||
+    minLon < -180 ||
+    maxLon > 180 ||
+    minLat < -90 ||
+    maxLat > 90
+  ) {
+    res.status(400).json({
+      error: "invalid_bbox",
+      details: "bbox values out of range or min >= max",
+    });
+    return;
+  }
+
+  const rawSizeNum = rawSize !== undefined ? parseInt(String(rawSize), 10) : 512;
+  const size = Math.max(64, Math.min(1024, isNaN(rawSizeNum) ? 512 : rawSizeNum));
+
+  try {
+    const imageBuffer = await fetchSatelliteTile({ minLon, minLat, maxLon, maxLat }, size);
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=86400, immutable");
+    res.setHeader("Content-Length", String(imageBuffer.length));
+    res.end(imageBuffer);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Satellite tile fetch failed";
     res.status(502).json({ error: "upstream_error", details: msg });
   }
 });
