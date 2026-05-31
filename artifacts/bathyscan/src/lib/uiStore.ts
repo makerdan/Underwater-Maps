@@ -117,6 +117,9 @@ interface UiStore {
    * clearing stale search state automatically.
    */
   openFindDataCount: number;
+  /** NOAA Aviation Weather station pins on the OverviewMap. */
+  weatherStationsActive: boolean;
+  setWeatherStationsActive: (b: boolean) => void;
   /** Always-on Wind arrow overlay. */
   windOverlayActive: boolean;
   setWindOverlayActive: (b: boolean) => void;
@@ -262,6 +265,11 @@ export const useUiStore = create<UiStore>((set) => ({
         ? { findDataPanelOpen: true, openFindDataCount: state.openFindDataCount + 1 }
         : { findDataPanelOpen: false },
     ),
+  weatherStationsActive: readLocalBool("bathyscan:weatherStationsActive", false),
+  setWeatherStationsActive: (b) => {
+    writeLocalBool("bathyscan:weatherStationsActive", b);
+    set({ weatherStationsActive: b });
+  },
   windOverlayActive: readLocalBool("bathyscan:windOverlayActive", false),
   setWindOverlayActive: (b) => {
     writeLocalBool("bathyscan:windOverlayActive", b);

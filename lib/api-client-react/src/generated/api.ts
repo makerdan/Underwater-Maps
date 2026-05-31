@@ -43,6 +43,7 @@ import type {
   GetTrailsIdPointsParams,
   GetTrailsParams,
   GetWaterTemperatureParams,
+  GetWeatherStationsParams,
   GpsTrail,
   GpsTrailInput,
   HealthStatus,
@@ -75,7 +76,8 @@ import type {
   UserCatalogSave,
   UserDatasetMeta,
   UserSettings,
-  WaterTemperature
+  WaterTemperature,
+  WeatherStationsResponse
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -4044,6 +4046,95 @@ export function useGetSurfaceConditions<TData = Awaited<ReturnType<typeof getSur
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetSurfaceConditionsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetWeatherStationsUrl = (params: GetWeatherStationsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/weather-stations?${stringifiedParams}` : `/api/weather-stations`
+}
+
+/**
+ * Returns ASOS/AWOS station observations (wind, visibility, ceiling,
+temperature) for stations near the given lat/lon using the NOAA
+Weather API (api.weather.gov). Also returns the FAA WeatherCams URL
+for the resolved US state. Observations are cached for 10 minutes.
+
+ * @summary Fetch nearby NOAA aviation weather station observations
+ */
+export const getWeatherStations = async (params: GetWeatherStationsParams, options?: RequestInit): Promise<WeatherStationsResponse> => {
+
+  return customFetch<WeatherStationsResponse>(getGetWeatherStationsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetWeatherStationsQueryKey = (params?: GetWeatherStationsParams,) => {
+    return [
+    `/api/weather-stations`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetWeatherStationsQueryOptions = <TData = Awaited<ReturnType<typeof getWeatherStations>>, TError = ErrorType<ApiError>>(params: GetWeatherStationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWeatherStations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetWeatherStationsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWeatherStations>>> = ({ signal }) => getWeatherStations(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWeatherStations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetWeatherStationsQueryResult = NonNullable<Awaited<ReturnType<typeof getWeatherStations>>>
+export type GetWeatherStationsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Fetch nearby NOAA aviation weather station observations
+ */
+
+export function useGetWeatherStations<TData = Awaited<ReturnType<typeof getWeatherStations>>, TError = ErrorType<ApiError>>(
+ params: GetWeatherStationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWeatherStations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetWeatherStationsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

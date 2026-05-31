@@ -51,8 +51,12 @@ import {
   renderLiveTrail,
   renderSavedTrails,
   drawSelectionRect,
+  renderWeatherStations,
 } from "@/lib/overviewRenderer";
-import type { OverviewTransform, CanvasSavedTrail, EfhLegendLayout, ContourSegment } from "@/lib/overviewRenderer";
+import type { OverviewTransform, CanvasSavedTrail, EfhLegendLayout, ContourSegment, WeatherStationPin } from "@/lib/overviewRenderer";
+import { useWeatherStations } from "@/hooks/useWeatherStations";
+import type { WeatherStation } from "@workspace/api-client-react";
+import { WeatherStationPopover } from "@/components/WeatherStationLayer";
 import {
   useGetEfh,
   getGetEfhQueryKey,
@@ -155,6 +159,15 @@ export const OverviewMap: React.FC = () => {
   const hiddenEfhSpeciesRef = useRef<ReadonlySet<string>>(new Set());
   const efhLegendLayoutRef = useRef<EfhLegendLayout | null>(null);
 
+  // Weather station refs (read in rAF loop without React re-render)
+  const weatherStationPinsRef = useRef<WeatherStationPin[]>([]);
+  const weatherStationActiveRef = useRef(false);
+  const weatherStationSelectedIdRef = useRef<string | null>(null);
+  // Canvas-space positions of rendered pins (updated each rAF frame for hit-test)
+  const weatherStationCanvasPositionsRef = useRef<Array<{ id: string; cx: number; cy: number }>>([]);
+  // Full station objects keyed by id for the popover
+  const weatherStationDataRef = useRef<Map<string, WeatherStation>>(new Map());
+
   // Upscale hook — auto-enhances the heatmap via Topaz Labs on Poe when the
   // rendered grid is coarser than the canvas resolution warrants.
   const {
@@ -215,6 +228,10 @@ export const OverviewMap: React.FC = () => {
   const [selectMode, setSelectMode] = useState(false);
   const selectModeRef = useRef(false);
   useEffect(() => { selectModeRef.current = selectMode; }, [selectMode]);
+
+  // Weather station selected-pin React state (drives popover)
+  const [selectedWeatherStation, setSelectedWeatherStation] = useState<WeatherStation | null>(null);
+  const [selectedWeatherStationPos, setSelectedWeatherStationPos] = useState<{ cx: number; cy: number } | null>(null);
 
   // --- Download tool state --------------------------------------------------
   // `downloadMode` is mutually exclusive with `selectMode`. When active, the
@@ -409,6 +426,33 @@ export const OverviewMap: React.FC = () => {
   useEffect(() => {
     hiddenEfhSpeciesRef.current = hiddenEfhSpecies;
   }, [hiddenEfhSpecies]);
+
+  // Weather stations overlay — query always runs when terrain loaded so FAA button works
+  const weatherStationsActive = useUiStore((s) => s.weatherStationsActive);
+  const {
+    stations: weatherStations,
+    faaWeatherCamsUrl,
+  } = useWeatherStations();
+  useEffect(() => {
+    weatherStationActiveRef.current = weatherStationsActive;
+    if (!weatherStationsActive) {
+      weatherStationPinsRef.current = [];
+      weatherStationDataRef.current = new Map();
+      // Clear popover when the overlay is toggled off
+      weatherStationSelectedIdRef.current = null;
+      setSelectedWeatherStation(null);
+      setSelectedWeatherStationPos(null);
+    }
+  }, [weatherStationsActive]);
+  useEffect(() => {
+    if (!weatherStationsActive) return;
+    weatherStationPinsRef.current = weatherStations.map((s) => ({
+      id: s.id, lat: s.lat, lon: s.lon,
+    }));
+    const m = new Map<string, WeatherStation>();
+    for (const s of weatherStations) m.set(s.id, s);
+    weatherStationDataRef.current = m;
+  }, [weatherStations, weatherStationsActive]);
 
   const { data: substrateCollection } = useGetSubstrate(datasetId, {
     query: {
@@ -793,6 +837,19 @@ export const OverviewMap: React.FC = () => {
       ctx.lineWidth = 1;
       ctx.strokeRect(0.5, 0.5, cW - 1, cH - 1);
 
+      // Weather station pins — NOAA ASOS/AWOS stations (drawn above all other layers)
+      if (weatherStationActiveRef.current && weatherStationPinsRef.current.length > 0) {
+        weatherStationCanvasPositionsRef.current = renderWeatherStations(
+          ctx,
+          weatherStationPinsRef.current,
+          grid,
+          t,
+          weatherStationSelectedIdRef.current,
+        );
+      } else {
+        weatherStationCanvasPositionsRef.current = [];
+      }
+
       // "Enhancing…" indicator — shown while a Topaz upscale request is in
       // flight. Drawn last so it sits on top of all other layers.
       if (isUpscalingRef.current) {
@@ -977,6 +1034,32 @@ export const OverviewMap: React.FC = () => {
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
+
+      // Weather station pin hit-test — before other overlays so the pin is
+      // always clickable even when EFH/substrate polygons are also active.
+      if (weatherStationActiveRef.current && weatherStationCanvasPositionsRef.current.length > 0) {
+        const HIT_R = 10;
+        const hit = weatherStationCanvasPositionsRef.current.find(
+          (p) => Math.hypot(p.cx - mx, p.cy - my) <= HIT_R,
+        );
+        if (hit) {
+          const stationData = weatherStationDataRef.current.get(hit.id) ?? null;
+          if (stationData) {
+            const alreadySelected = weatherStationSelectedIdRef.current === hit.id;
+            if (alreadySelected) {
+              // Toggle off on second click
+              weatherStationSelectedIdRef.current = null;
+              setSelectedWeatherStation(null);
+              setSelectedWeatherStationPos(null);
+            } else {
+              weatherStationSelectedIdRef.current = hit.id;
+              setSelectedWeatherStation(stationData);
+              setSelectedWeatherStationPos({ cx: hit.cx, cy: hit.cy });
+            }
+            return;
+          }
+        }
+      }
 
       // EFH legend row click → toggle that species. Checked before polygon
       // hit-tests so the legend rows behave like buttons even when they
@@ -1504,6 +1587,22 @@ export const OverviewMap: React.FC = () => {
         <TerrainDownloadPopover
           bbox={downloadBbox}
           onClose={() => { setDownloadBbox(null); dragRectRef.current = null; }}
+        />
+      )}
+
+      {/* NOAA Weather Station popover — shown when a station pin is clicked */}
+      {selectedWeatherStation && selectedWeatherStationPos && canvasRef.current && (
+        <WeatherStationPopover
+          station={selectedWeatherStation}
+          pinX={selectedWeatherStationPos.cx}
+          pinY={selectedWeatherStationPos.cy}
+          containerWidth={canvasRef.current.width}
+          faaWeatherCamsUrl={faaWeatherCamsUrl}
+          onClose={() => {
+            weatherStationSelectedIdRef.current = null;
+            setSelectedWeatherStation(null);
+            setSelectedWeatherStationPos(null);
+          }}
         />
       )}
 

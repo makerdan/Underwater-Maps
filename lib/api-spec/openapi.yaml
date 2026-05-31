@@ -1664,6 +1664,56 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /weather-stations:
+    get:
+      operationId: getWeatherStations
+      tags: [drift-planner]
+      summary: Fetch nearby NOAA aviation weather station observations
+      description: |
+        Returns ASOS/AWOS station observations (wind, visibility, ceiling,
+        temperature) for stations near the given lat/lon using the NOAA
+        Weather API (api.weather.gov). Also returns the FAA WeatherCams URL
+        for the resolved US state. Observations are cached for 10 minutes.
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+          description: Latitude of query point
+        - name: lon
+          in: query
+          required: true
+          schema:
+            type: number
+          description: Longitude of query point
+        - name: radiusMiles
+          in: query
+          required: false
+          schema:
+            type: number
+            default: 75
+          description: Search radius in statute miles (default 75, max 500)
+      responses:
+        "200":
+          description: Nearby weather stations with live observations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeatherStationsResponse"
+        "400":
+          description: Missing or invalid lat/lon
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Upstream NOAA API error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /water-temperature:
     get:
       operationId: getWaterTemperature
@@ -3104,6 +3154,71 @@ components:
         - tidalDegrees
         - isSlack
         - phase
+
+    WeatherStation:
+      type: object
+      description: A NOAA ASOS/AWOS aviation weather observation station with its latest obs
+      properties:
+        id:
+          type: string
+          description: ICAO station identifier (e.g. "KBLI")
+        name:
+          type: string
+          description: Human-readable station name
+        lat:
+          type: number
+          description: Station latitude
+        lon:
+          type: number
+          description: Station longitude
+        windSpeedKnots:
+          type: number
+          nullable: true
+          description: Wind speed in knots (null if not reported)
+        windDirDeg:
+          type: number
+          nullable: true
+          description: Wind direction in degrees true (null if variable/calm/not reported)
+        visibilityMiles:
+          type: number
+          nullable: true
+          description: Visibility in statute miles (null if not reported)
+        ceilingFt:
+          type: number
+          nullable: true
+          description: Cloud ceiling height in feet AGL (null if unlimited/not reported)
+        tempC:
+          type: number
+          nullable: true
+          description: Temperature in degrees Celsius (null if not reported)
+        observedAt:
+          type: string
+          nullable: true
+          description: ISO 8601 UTC timestamp of the observation
+      required:
+        - id
+        - name
+        - lat
+        - lon
+
+    WeatherStationsResponse:
+      type: object
+      properties:
+        stations:
+          type: array
+          items:
+            $ref: "#/components/schemas/WeatherStation"
+          description: Nearby ASOS/AWOS stations with live observations
+        stateCode:
+          type: string
+          nullable: true
+          description: Two-letter US state code derived from the query point (null outside US)
+        faaWeatherCamsUrl:
+          type: string
+          nullable: true
+          description: FAA WeatherCams page URL for the derived state (null if state unknown)
+      required:
+        - stations
 
     WaterTemperature:
       type: object

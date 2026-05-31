@@ -1841,6 +1841,40 @@ export const GetSurfaceConditionsResponse = zod.object({
 
 
 /**
+ * Returns ASOS/AWOS station observations (wind, visibility, ceiling,
+temperature) for stations near the given lat/lon using the NOAA
+Weather API (api.weather.gov). Also returns the FAA WeatherCams URL
+for the resolved US state. Observations are cached for 10 minutes.
+
+ * @summary Fetch nearby NOAA aviation weather station observations
+ */
+export const getWeatherStationsQueryRadiusMilesDefault = 75;
+
+export const GetWeatherStationsQueryParams = zod.object({
+  "lat": zod.coerce.number().describe('Latitude of query point'),
+  "lon": zod.coerce.number().describe('Longitude of query point'),
+  "radiusMiles": zod.coerce.number().default(getWeatherStationsQueryRadiusMilesDefault).describe('Search radius in statute miles (default 75, max 500)')
+})
+
+export const GetWeatherStationsResponse = zod.object({
+  "stations": zod.array(zod.object({
+  "id": zod.string().describe('ICAO station identifier (e.g. \"KBLI\")'),
+  "name": zod.string().describe('Human-readable station name'),
+  "lat": zod.number().describe('Station latitude'),
+  "lon": zod.number().describe('Station longitude'),
+  "windSpeedKnots": zod.number().nullish().describe('Wind speed in knots (null if not reported)'),
+  "windDirDeg": zod.number().nullish().describe('Wind direction in degrees true (null if variable\/calm\/not reported)'),
+  "visibilityMiles": zod.number().nullish().describe('Visibility in statute miles (null if not reported)'),
+  "ceilingFt": zod.number().nullish().describe('Cloud ceiling height in feet AGL (null if unlimited\/not reported)'),
+  "tempC": zod.number().nullish().describe('Temperature in degrees Celsius (null if not reported)'),
+  "observedAt": zod.string().nullish().describe('ISO 8601 UTC timestamp of the observation')
+}).describe('A NOAA ASOS\/AWOS aviation weather observation station with its latest obs')).describe('Nearby ASOS\/AWOS stations with live observations'),
+  "stateCode": zod.string().nullish().describe('Two-letter US state code derived from the query point (null outside US)'),
+  "faaWeatherCamsUrl": zod.string().nullish().describe('FAA WeatherCams page URL for the derived state (null if state unknown)')
+})
+
+
+/**
  * Returns the current sea-surface temperature (°C) at the requested
 lat/lon from the Open-Meteo Marine API. Used by BathyScan's HUD
 temperature readout as the surface anchor of a thermocline model.

@@ -1148,6 +1148,41 @@ export interface SurfaceConditions {
   forecast48h?: ForecastHour[];
 }
 
+/**
+ * A NOAA ASOS/AWOS aviation weather observation station with its latest obs
+ */
+export interface WeatherStation {
+  /** ICAO station identifier (e.g. "KBLI") */
+  id: string;
+  /** Human-readable station name */
+  name: string;
+  /** Station latitude */
+  lat: number;
+  /** Station longitude */
+  lon: number;
+  /** Wind speed in knots (null if not reported) */
+  windSpeedKnots?: number | null;
+  /** Wind direction in degrees true (null if variable/calm/not reported) */
+  windDirDeg?: number | null;
+  /** Visibility in statute miles (null if not reported) */
+  visibilityMiles?: number | null;
+  /** Cloud ceiling height in feet AGL (null if unlimited/not reported) */
+  ceilingFt?: number | null;
+  /** Temperature in degrees Celsius (null if not reported) */
+  tempC?: number | null;
+  /** ISO 8601 UTC timestamp of the observation */
+  observedAt?: string | null;
+}
+
+export interface WeatherStationsResponse {
+  /** Nearby ASOS/AWOS stations with live observations */
+  stations: WeatherStation[];
+  /** Two-letter US state code derived from the query point (null outside US) */
+  stateCode?: string | null;
+  /** FAA WeatherCams page URL for the derived state (null if state unknown) */
+  faaWeatherCamsUrl?: string | null;
+}
+
 export interface WaterTemperature {
   /** True when a live sea-surface temperature was retrieved */
   available: boolean;
@@ -1541,6 +1576,21 @@ lat: number;
  * Longitude of query point
  */
 lon: number;
+};
+
+export type GetWeatherStationsParams = {
+/**
+ * Latitude of query point
+ */
+lat: number;
+/**
+ * Longitude of query point
+ */
+lon: number;
+/**
+ * Search radius in statute miles (default 75, max 500)
+ */
+radiusMiles?: number;
 };
 
 export type GetWaterTemperatureParams = {

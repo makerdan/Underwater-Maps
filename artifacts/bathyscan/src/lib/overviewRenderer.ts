@@ -1477,3 +1477,65 @@ export function drawSelectionRect(
   }
   ctx.restore();
 }
+
+// ---------------------------------------------------------------------------
+// NOAA Weather Station pins
+// ---------------------------------------------------------------------------
+
+export interface WeatherStationPin {
+  id: string;
+  lat: number;
+  lon: number;
+}
+
+/**
+ * Render NOAA ASOS/AWOS station pins on the overview canvas.
+ * Returns an array of { id, cx, cy } so the caller can hit-test clicks.
+ */
+export function renderWeatherStations(
+  ctx: CanvasRenderingContext2D,
+  stations: WeatherStationPin[],
+  grid: TerrainData,
+  t: OverviewTransform,
+  selectedId: string | null,
+): Array<{ id: string; cx: number; cy: number }> {
+  const positions: Array<{ id: string; cx: number; cy: number }> = [];
+
+  for (const s of stations) {
+    const [cx, cy] = lonLatToCanvas(s.lon, s.lat, grid, t);
+    positions.push({ id: s.id, cx, cy });
+
+    const isSelected = s.id === selectedId;
+    const R = isSelected ? 7 : 5;
+
+    ctx.save();
+
+    // Outer glow when selected
+    if (isSelected) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, R + 4, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(251,191,36,0.18)";
+      ctx.fill();
+    }
+
+    // Pin body: yellow circle
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fillStyle = isSelected ? "#fde68a" : "#fbbf24";
+    ctx.fill();
+    ctx.strokeStyle = isSelected ? "#f59e0b" : "rgba(0,0,0,0.5)";
+    ctx.lineWidth = isSelected ? 1.5 : 1;
+    ctx.stroke();
+
+    // Aviation weather "W" label
+    ctx.font = `bold ${isSelected ? 7 : 6}px sans-serif`;
+    ctx.fillStyle = isSelected ? "#78350f" : "#451a03";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("W", cx, cy + 0.5);
+
+    ctx.restore();
+  }
+
+  return positions;
+}

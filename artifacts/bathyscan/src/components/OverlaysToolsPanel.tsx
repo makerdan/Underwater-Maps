@@ -25,6 +25,7 @@ import { SubstrateLegend } from "@/components/SubstrateLegend";
 import { ShoreZoneCredit } from "@/components/ShoreZoneCredit";
 import { Spinner } from "@/components/ui/spinner";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
+import { useWeatherStations } from "@/hooks/useWeatherStations";
 import { useToast } from "@/hooks/use-toast";
 
 const PANEL: React.CSSProperties = {
@@ -131,6 +132,8 @@ export const OverlaysToolsPanel: React.FC = () => {
   const setTideOverlayActive = useUiStore((s) => s.setTideOverlayActive);
   const currentOverlayActive = useUiStore((s) => s.currentOverlayActive);
   const setCurrentOverlayActive = useUiStore((s) => s.setCurrentOverlayActive);
+  const weatherStationsActive = useUiStore((s) => s.weatherStationsActive);
+  const setWeatherStationsActive = useUiStore((s) => s.setWeatherStationsActive);
 
   const waterType = useSettingsStore((s) => s.waterType);
   const { data: datasets } = useGetDatasets(
@@ -152,6 +155,14 @@ export const OverlaysToolsPanel: React.FC = () => {
     loading: surfaceLoading,
     error: surfaceError,
   } = useSurfaceConditions(anyConditionsActive);
+
+  // Aviation weather stations — always fetch when terrain loaded so FAA button works
+  // independently of the pin-overlay toggle.
+  const {
+    isLoading: wxLoading,
+    isError: wxError,
+    faaWeatherCamsUrl,
+  } = useWeatherStations();
 
   // EFH loading/error state + feature data — mirrors the enabled condition in EfhZoneLayer.
   // We also capture the feature data here to derive the per-species legend.
@@ -222,6 +233,21 @@ export const OverlaysToolsPanel: React.FC = () => {
     }
     prevEfhError.current = efhError;
   }, [efhError, efhOverlayEnabled, setEfhOverlayEnabled, toast]);
+
+  const prevWxError = useRef(false);
+  useEffect(() => {
+    if (wxError && !prevWxError.current) {
+      if (weatherStationsActive) {
+        setWeatherStationsActive(false);
+        toast({
+          title: "Weather stations failed",
+          description: "Could not fetch NOAA station data. The overlay has been turned off.",
+          variant: "destructive",
+        });
+      }
+    }
+    prevWxError.current = wxError;
+  }, [wxError, weatherStationsActive, setWeatherStationsActive, toast]);
 
   return (
     <div
@@ -353,6 +379,144 @@ export const OverlaysToolsPanel: React.FC = () => {
             activeGlow="0 0 6px rgba(34,211,238,0.5)"
             isLoading={currentOverlayActive && surfaceLoading}
           />
+
+          {/* Aviation Weather section — saltwater only, disabled when no terrain */}
+          {waterType !== "freshwater" && (
+            <>
+              <div
+                style={{
+                  borderTop: "1px solid rgba(0,229,255,0.08)",
+                  marginTop: 4,
+                  paddingTop: 6,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 9,
+                    letterSpacing: "0.12em",
+                    color: "#64748b",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Aviation Weather
+                </span>
+              </div>
+
+              <ViewscreenTooltip
+                label={
+                  !terrain
+                    ? "Load a terrain dataset to enable weather stations"
+                    : weatherStationsActive
+                    ? "Hide NOAA ASOS/AWOS weather station pins"
+                    : "Show NOAA aviation weather station pins on the Overview Map"
+                }
+                side="right"
+              >
+                <button
+                  data-testid="overlay-toggle-weather-stations"
+                  aria-pressed={weatherStationsActive}
+                  disabled={!terrain}
+                  onClick={() => {
+                    const next = !weatherStationsActive;
+                    setWeatherStationsActive(next);
+                    // Auto-open Overview Map when enabling (matching tidal behavior)
+                    if (next) setOverviewOpen(true);
+                  }}
+                  style={{
+                    width: "100%",
+                    textAlign: "left",
+                    background: weatherStationsActive
+                      ? "rgba(251,191,36,0.12)"
+                      : "rgba(0,10,20,0.55)",
+                    border: `1px solid ${
+                      weatherStationsActive
+                        ? "rgba(251,191,36,0.5)"
+                        : "rgba(0,229,255,0.15)"
+                    }`,
+                    borderRadius: 4,
+                    color: !terrain
+                      ? "#475569"
+                      : weatherStationsActive
+                      ? "#fbbf24"
+                      : "#e2e8f0",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10,
+                    padding: "5px 10px",
+                    cursor: !terrain ? "not-allowed" : "pointer",
+                    letterSpacing: "0.12em",
+                    textShadow:
+                      weatherStationsActive
+                        ? "0 0 6px rgba(251,191,36,0.5)"
+                        : "none",
+                    transition: "all 0.15s ease",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 4,
+                    opacity: !terrain ? 0.5 : 1,
+                    ...(IS_TOUCH ? { minHeight: 44 } : {}),
+                  }}
+                >
+                  <span>🛩 NOAA WEATHER STATIONS</span>
+                  {weatherStationsActive && wxLoading && (
+                    <Spinner
+                      className="size-3 shrink-0"
+                      style={{ color: "#fbbf24", opacity: 0.85 }}
+                    />
+                  )}
+                </button>
+              </ViewscreenTooltip>
+
+              <ViewscreenTooltip
+                label={
+                  !terrain
+                    ? "Load a terrain dataset to enable FAA WeatherCams"
+                    : faaWeatherCamsUrl
+                    ? "Open FAA WeatherCams for this region in a new tab"
+                    : "FAA WeatherCams (available inside the US)"
+                }
+                side="right"
+              >
+                <a
+                  href={faaWeatherCamsUrl ?? undefined}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-disabled={!terrain || !faaWeatherCamsUrl}
+                  onClick={
+                    !terrain || !faaWeatherCamsUrl
+                      ? (e) => e.preventDefault()
+                      : undefined
+                  }
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    width: "100%",
+                    textAlign: "left",
+                    background: "rgba(0,10,20,0.55)",
+                    border: "1px solid rgba(0,229,255,0.15)",
+                    borderRadius: 4,
+                    color:
+                      !terrain || !faaWeatherCamsUrl ? "#475569" : "#7dd3fc",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10,
+                    padding: "5px 10px",
+                    cursor:
+                      !terrain || !faaWeatherCamsUrl
+                        ? "not-allowed"
+                        : "pointer",
+                    letterSpacing: "0.12em",
+                    textDecoration: "none",
+                    transition: "all 0.15s ease",
+                    opacity: !terrain || !faaWeatherCamsUrl ? 0.5 : 1,
+                    ...(IS_TOUCH ? { minHeight: 44 } : {}),
+                  }}
+                >
+                  <span>📷 FAA WEATHERCAMS ↗</span>
+                </a>
+              </ViewscreenTooltip>
+            </>
+          )}
 
           {hasEfh && (
             <>
