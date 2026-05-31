@@ -165,6 +165,18 @@ export function computeFishingWindows(
   }
 }
 
+/**
+ * Returns true when `now` falls within the window's start–end range (inclusive).
+ * Works whether `now` is a real clock time or a scrubber-snapped datetime.
+ */
+export function isWindowActive(window: FishingWindow, now: Date): boolean {
+  const startMs = new Date(window.start).getTime();
+  const endMs = new Date(window.end).getTime();
+  const nowMs = now.getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return false;
+  return nowMs >= startMs && nowMs <= endMs;
+}
+
 /** Format a UTC ISO string as "HH:MM" for display. */
 export function formatWindowTime(iso: string): string {
   const d = new Date(iso);

@@ -36,6 +36,7 @@ import { useTidalSchedule } from "@/hooks/useTidalSchedule";
 import {
   computeFishingWindows,
   formatWindowRange,
+  isWindowActive,
   type FishingWindow,
 } from "@/lib/fishingWindows";
 
@@ -107,9 +108,10 @@ const StarRating: React.FC<{ stars: 1 | 2 | 3 }> = ({ stars }) => (
 interface FishingWindowCardProps {
   window: FishingWindow;
   onSnap: (d: Date) => void;
+  isActive: boolean;
 }
 
-const FishingWindowCard: React.FC<FishingWindowCardProps> = ({ window: w, onSnap }) => (
+const FishingWindowCard: React.FC<FishingWindowCardProps> = ({ window: w, onSnap, isActive }) => (
   <ViewscreenTooltip label="Snap tidal scrubber to this window" side="right">
     <button
       onClick={() => onSnap(w.scrubTarget)}
@@ -117,21 +119,39 @@ const FishingWindowCard: React.FC<FishingWindowCardProps> = ({ window: w, onSnap
         display: "block",
         width: "100%",
         textAlign: "left",
-        background: "rgba(251,146,60,0.05)",
-        border: "1px solid rgba(251,146,60,0.22)",
+        background: isActive ? "rgba(251,146,60,0.12)" : "rgba(251,146,60,0.05)",
+        border: isActive
+          ? "1px solid rgba(251,146,60,0.75)"
+          : "1px solid rgba(251,146,60,0.22)",
         borderRadius: 3,
         padding: "5px 7px",
         marginBottom: 4,
         cursor: "pointer",
         fontFamily: "inherit",
         letterSpacing: "0.04em",
+        animation: isActive ? "fishwin-pulse 2s ease-in-out infinite" : "none",
       }}
     >
       <div className="flex items-center justify-between" style={{ marginBottom: 2 }}>
         <span style={{ color: "#fb923c", fontSize: 10, fontWeight: 600 }}>
           {formatWindowRange(w.start, w.end)}
         </span>
-        <StarRating stars={w.stars} />
+        <span className="flex items-center gap-1">
+          {isActive && (
+            <span
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                color: "#fb923c",
+                letterSpacing: "0.06em",
+                textShadow: "0 0 6px rgba(251,146,60,0.7)",
+              }}
+            >
+              ● NOW
+            </span>
+          )}
+          <StarRating stars={w.stars} />
+        </span>
       </div>
       <div style={{ color: "#cbd5e1", fontSize: 9, letterSpacing: "0.06em" }}>
         {w.phaseLabel}
@@ -248,6 +268,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
   const habitatOverlayIntensity = useSettingsStore((s) => s.habitatOverlayIntensity);
   const setHabitatOverlayIntensity = useSettingsStore((s) => s.setHabitatOverlayIntensity);
   const setScrubDatetime = useUiStore((s) => s.setScrubDatetime);
+  const scrubDatetime = useUiStore((s) => s.scrubDatetime);
 
   const storeCollapsed = usePanelCollapseStore((s) => s.collapsed.habitat);
   const collapsed = embedded ? false : storeCollapsed;
@@ -577,7 +598,9 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
 
           {/* Best fishing windows today — only shown when tidal data is
               available and the active species has a non-"any" preference. */}
-          {showOverlay && fishingWindows.length > 0 && (
+          {showOverlay && fishingWindows.length > 0 && (() => {
+            const refNow = scrubDatetime ?? new Date();
+            return (
             <div
               style={{
                 marginTop: 10,
@@ -585,6 +608,12 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
                 borderTop: "1px solid rgba(251,146,60,0.18)",
               }}
             >
+              <style>{`
+                @keyframes fishwin-pulse {
+                  0%, 100% { box-shadow: 0 0 0 0 rgba(251,146,60,0.0); }
+                  50% { box-shadow: 0 0 0 3px rgba(251,146,60,0.35); }
+                }
+              `}</style>
               <div
                 style={{
                   fontSize: 10,
@@ -605,6 +634,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
                   key={i}
                   window={w}
                   onSnap={setScrubDatetime}
+                  isActive={isWindowActive(w, refNow)}
                 />
               ))}
               <div
@@ -618,7 +648,8 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
                 Click a window to snap the tidal scrubber
               </div>
             </div>
-          )}
+          );
+          })()}
 
           {!activeSpecies && (
             <div style={{ fontSize: 11, color: "#e2e8f0", letterSpacing: "0.05em" }}>
