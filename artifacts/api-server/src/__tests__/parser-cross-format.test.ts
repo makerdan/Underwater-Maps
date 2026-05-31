@@ -51,7 +51,7 @@ describe("Cross-format consistency", () => {
     for (const pts of [tifPts, ncPts, las12Pts, las14Pts, bagPts, gpxPts, nmeaPts]) {
       expect(pts.length).toBeGreaterThan(0);
       for (const p of pts) {
-        expect(p.depth).toBeGreaterThan(0);
+        expect(p.depth).toBeGreaterThanOrEqual(0);
         expect(Number.isFinite(p.depth)).toBe(true);
       }
     }

@@ -370,16 +370,18 @@ describe("parseLasLaz — LAS binary", () => {
     expect(pts[2]!.depth).toBeCloseTo(300, 0);
   });
 
-  it("skips points with depth = 0 (sea surface / land)", async () => {
+  it("includes points with depth = 0 (intertidal / waterline measurement)", async () => {
     const input = [
       { lon: 10.5, lat: 55.2, depth: 50 },
-      { lon: 10.6, lat: 55.3, depth: 0 },  // will be skipped
+      { lon: 10.6, lat: 55.3, depth: 0 },  // valid intertidal measurement
       { lon: 10.7, lat: 55.4, depth: 150 },
     ];
     const buf = buildLasBuffer(input);
     const pts = await parseLasLaz(buf, "survey.las");
-    expect(pts).toHaveLength(2);
-    expect(pts.every((p) => p.depth > 0)).toBe(true);
+    expect(pts).toHaveLength(3);
+    const zeroPt = pts.find((p) => p.depth === 0);
+    expect(zeroPt).toBeDefined();
+    expect(pts.every((p) => p.depth >= 0)).toBe(true);
   });
 
   it("invokes the arithmetic decompressor for non-first chunk points and round-trips values", async () => {
@@ -407,20 +409,22 @@ describe("parseLasLaz — LAS binary", () => {
     expect(pts[2]!.depth).toBeCloseTo(350, 0);
   });
 
-  it("skips depth-zero points inside a multi-point LAZ chunk", async () => {
-    // Verifies the depth=0 filter runs on points decoded by the arithmetic
-    // decompressor (not just raw-first-of-chunk points).
+  it("includes depth-zero points inside a multi-point LAZ chunk", async () => {
+    // Verifies that depth=0 (a valid intertidal measurement) is retained even
+    // when decoded by the arithmetic decompressor (non-first-of-chunk points).
     const input = [
       { lon: 10.0, lat: 55.0, depth: 100 },
-      { lon: 10.1, lat: 55.1, depth: 0 },   // sea-surface — must be skipped
+      { lon: 10.1, lat: 55.1, depth: 0 },   // intertidal — must be included
       { lon: 10.2, lat: 55.2, depth: 200 },
     ];
     const buf = buildLazBuffer(input);
     const pts = await parseLasLaz(buf, "survey.laz");
-    expect(pts).toHaveLength(2);
-    expect(pts.every((p) => p.depth > 0)).toBe(true);
+    expect(pts).toHaveLength(3);
+    expect(pts.every((p) => p.depth >= 0)).toBe(true);
+    const zeroPt = pts.find((p) => p.depth === 0);
+    expect(zeroPt).toBeDefined();
     expect(pts[0]!.depth).toBeCloseTo(100, 0);
-    expect(pts[1]!.depth).toBeCloseTo(200, 0);
+    expect(pts[2]!.depth).toBeCloseTo(200, 0);
   });
 });
 

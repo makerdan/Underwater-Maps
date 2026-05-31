@@ -203,6 +203,7 @@ export async function parseGeoTiff(
   const stride = totalPixels > pointCap ? Math.ceil(totalPixels / pointCap) : 1;
 
   const points: RawPoint[] = [];
+  const rejectedCoordSample: Array<{ x: number; y: number }> = [];
   let iterCount = 0;
   for (let flat = 0; flat < totalPixels; flat += stride) {
     if (points.length >= pointCap) break;
@@ -222,16 +223,23 @@ export async function parseGeoTiff(
 
     const lon = lon0 + (col + 0.5) * dLon;
     const lat = lat0 + (row + 0.5) * dLat;
-    if (!isValidCoord(lon, lat)) continue;
+    if (!isValidCoord(lon, lat)) {
+      if (rejectedCoordSample.length < 100) {
+        rejectedCoordSample.push({ x: lon, y: lat });
+      }
+      continue;
+    }
 
     const depth = val < 0 ? -val : val;
-    if (depth === 0) continue;
     points.push({ lon, lat, depth });
   }
 
   if (points.length === 0) {
+    if (looksLikeProjectedCoords(rejectedCoordSample)) {
+      throw new Error(PROJECTED_COORD_ERROR);
+    }
     throw new Error(
-      "GeoTIFF produced no valid depth points. Check that the file contains non-zero depth/elevation values and valid geographic coordinates.",
+      "GeoTIFF produced no valid depth points. Check that the file contains depth/elevation values and valid geographic coordinates.",
     );
   }
   return points;
@@ -337,6 +345,8 @@ export function parseNetCdf(
   const nLons = rawLons.length;
   const nLats = rawLats.length;
 
+  const rejectedCoordSample: Array<{ x: number; y: number }> = [];
+
   if (nDepths === nLons && nDepths === nLats) {
     // 1D paired arrays
     const stride = nDepths > pointCap ? Math.ceil(nDepths / pointCap) : 1;
@@ -347,9 +357,11 @@ export function parseNetCdf(
       const lat = rawLats[i]!;
       if (!Number.isFinite(z) || !Number.isFinite(lon) || !Number.isFinite(lat)) continue;
       if (fillValue !== undefined && z === fillValue) continue;
-      if (!isValidCoord(lon, lat)) continue;
+      if (!isValidCoord(lon, lat)) {
+        if (rejectedCoordSample.length < 100) rejectedCoordSample.push({ x: lon, y: lat });
+        continue;
+      }
       const depth = z < 0 ? -z : z;
-      if (depth === 0) continue;
       points.push({ lon, lat, depth });
     }
   } else if (nDepths === nLons * nLats) {
@@ -367,9 +379,11 @@ export function parseNetCdf(
       const lat = rawLats[ri]!;
       if (!Number.isFinite(z) || !Number.isFinite(lon) || !Number.isFinite(lat)) continue;
       if (fillValue !== undefined && z === fillValue) continue;
-      if (!isValidCoord(lon, lat)) continue;
+      if (!isValidCoord(lon, lat)) {
+        if (rejectedCoordSample.length < 100) rejectedCoordSample.push({ x: lon, y: lat });
+        continue;
+      }
       const depth = z < 0 ? -z : z;
-      if (depth === 0) continue;
       points.push({ lon, lat, depth });
     }
   } else {
@@ -379,8 +393,11 @@ export function parseNetCdf(
   }
 
   if (points.length === 0) {
+    if (looksLikeProjectedCoords(rejectedCoordSample)) {
+      throw new Error(PROJECTED_COORD_ERROR);
+    }
     throw new Error(
-      "NetCDF file produced no valid depth points. Check that the depth variable contains non-zero, non-fill values.",
+      "NetCDF file produced no valid depth points. Check that the depth variable contains non-fill values and valid geographic coordinates.",
     );
   }
   return points;
@@ -551,15 +568,21 @@ export async function parseLasLaz(buffer: Buffer, fileName: string): Promise<Raw
 
 function lasPointsToRaw(points: { x: number; y: number; z: number }[]): RawPoint[] {
   const raw: RawPoint[] = [];
+  const rejectedCoordSample: Array<{ x: number; y: number }> = [];
   for (const { x, y, z } of points) {
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
     // LAS stores geographic coords as X=lon, Y=lat (EPSG:4326).
     // isValidCoord(lon, lat) — pass x (lon) first.
-    if (!isValidCoord(x, y)) continue;
+    if (!isValidCoord(x, y)) {
+      if (rejectedCoordSample.length < 100) rejectedCoordSample.push({ x, y });
+      continue;
+    }
     // Z is elevation positive-up; flip to positive-down depth.
     const depth = z < 0 ? -z : z;
-    if (depth === 0) continue;
     raw.push({ lon: x, lat: y, depth });
+  }
+  if (raw.length === 0 && looksLikeProjectedCoords(rejectedCoordSample)) {
+    throw new Error(PROJECTED_COORD_ERROR);
   }
   return raw;
 }
@@ -633,7 +656,6 @@ export async function parseBag(buffer: Buffer): Promise<RawPoint[]> {
         const lat = lat0 + ri * dLat;
         if (!isValidCoord(lon, lat)) continue;
         const depth = val < 0 ? -val : val;
-        if (depth === 0) continue;
         points.push({ lon, lat, depth });
       }
     }
@@ -723,7 +745,7 @@ export function parseGpxTerrain(content: string): RawPoint[] {
       const extDepthMatch = extDepthRe.exec(extBlock[1]!);
       if (extDepthMatch) {
         const val = parseFloat(extDepthMatch[1]!);
-        if (Number.isFinite(val) && val !== 0) return Math.abs(val);
+        if (Number.isFinite(val)) return Math.abs(val);
       }
     }
     // 2. Fall back to <ele> (elevation in metres, positive above sea level).
@@ -731,8 +753,7 @@ export function parseGpxTerrain(content: string): RawPoint[] {
     if (!eleMatch) return null;
     const ele = parseFloat(eleMatch[1]!);
     if (!Number.isFinite(ele)) return null;
-    const d = ele < 0 ? -ele : ele;
-    return d === 0 ? null : d;
+    return ele < 0 ? -ele : ele;
   }
 
   let m: RegExpExecArray | null;
@@ -935,4 +956,22 @@ function isValidCoord(lon: number, lat: number): boolean {
     lon >= -180 &&
     lon <= 180
   );
+}
+
+export const PROJECTED_COORD_ERROR =
+  "File appears to use projected coordinates (e.g. UTM). " +
+  "Please re-export in WGS 84 (lat/lon) format.";
+
+/**
+ * Returns true when ≥90 % of the provided sample points fail isValidCoord
+ * but have absolute X or Y values > 1000 — a strong signal that the file
+ * was exported in a projected CRS (UTM, State Plane, etc.) rather than
+ * geographic WGS 84.
+ */
+export function looksLikeProjectedCoords(sample: Array<{ x: number; y: number }>): boolean {
+  if (sample.length === 0) return false;
+  const invalid = sample.filter(({ x, y }) => !isValidCoord(x, y));
+  if (invalid.length / sample.length < 0.9) return false;
+  const projectedLike = invalid.filter(({ x, y }) => Math.abs(x) > 1000 || Math.abs(y) > 1000);
+  return projectedLike.length / invalid.length >= 0.9;
 }

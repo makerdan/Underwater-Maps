@@ -21,7 +21,7 @@ function assertValidBathyPoints(pts: RawPoint[], minCount = 1): void {
     expect(p.lon).toBeLessThanOrEqual(180);
     expect(p.lat).toBeGreaterThanOrEqual(-90);
     expect(p.lat).toBeLessThanOrEqual(90);
-    expect(p.depth).toBeGreaterThan(0);
+    expect(p.depth).toBeGreaterThanOrEqual(0);
   }
 }
 
@@ -48,19 +48,18 @@ describe("LAS 1.2 (format 0) — realistic multibeam fixture", () => {
     }
   });
 
-  it("skips the depth=0 point injected into the fixture", async () => {
+  it("includes the depth=0 point injected into the fixture (intertidal zero is valid)", async () => {
     const pts = await parseLasLaz(las12Buf, "survey_1_2.las");
-    // Fixture has 15 points total, 1 with depth=0 → should return 14
-    expect(pts.length).toBe(14);
-    for (const p of pts) {
-      expect(p.depth).toBeGreaterThan(0);
-    }
+    // Fixture has 15 points total, 1 with depth=0 — all 15 should be returned now.
+    expect(pts.length).toBe(15);
+    const zeroPt = pts.find((p) => p.depth === 0);
+    expect(zeroPt).toBeDefined();
   });
 
-  it("produces depth values matching the fixture's survey range", async () => {
+  it("produces depth values matching the fixture's survey range (including 0)", async () => {
     const pts = await parseLasLaz(las12Buf, "survey_1_2.las");
     const depths = pts.map((p) => p.depth);
-    expect(Math.min(...depths)).toBeCloseTo(1250, 0);
+    expect(Math.min(...depths)).toBe(0);
     expect(Math.max(...depths)).toBeCloseTo(2400, 0);
   });
 
