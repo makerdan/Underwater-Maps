@@ -110,6 +110,8 @@ export const ConditionsLegend: React.FC = () => {
   const tidSpd = snapshot?.tidalSpeedKnots ?? fallback.tidalSpeedKnots;
   const tidDeg = snapshot?.tidalDegrees ?? fallback.tidalDegrees;
   const rising = snapshot?.tideRising ?? true;
+  const waveHeightM = snapshot?.waveHeightM;
+  const waveDirectionDeg = snapshot?.waveDirectionDeg;
 
   const sliderStyle: React.CSSProperties = {
     width: "100%", accentColor: "#00e5ff", cursor: "pointer", height: 4,
@@ -163,6 +165,14 @@ export const ConditionsLegend: React.FC = () => {
           label="Tide"
           value={`${rising ? "Rising" : "Falling"} ${formatSpeedFromKnots(tidSpd, { units, decimals: 2 })} ${cardinal(tidDeg)}`}
           detail={`${rising ? "flood" : "ebb"}`}
+        />
+      )}
+      {waveHeightM !== undefined && (
+        <Row
+          swatch="#60a5fa"
+          label="Waves"
+          value={`${waveHeightM.toFixed(2)} m`}
+          detail={waveDirectionDeg !== undefined ? `${cardinal(waveDirectionDeg)} ${Math.round(waveDirectionDeg)}°` : undefined}
         />
       )}
       {cur && (

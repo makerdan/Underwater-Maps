@@ -23,6 +23,7 @@ export interface HourlySurfaceCondition {
   tidalSpeedKnots: number;
   tidalDegrees: number;
   waveHeightM: number;
+  waveDirectionDeg?: number;
   isSlack?: boolean;
   phase?: TidePhase;
 }

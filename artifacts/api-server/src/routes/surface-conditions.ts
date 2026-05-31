@@ -44,6 +44,7 @@ interface HourlySurfaceCondition {
   tidalSpeedKnots: number;
   tidalDegrees: number;
   waveHeightM: number;
+  waveDirectionDeg?: number;
   isSlack: boolean;
   phase: TidePhase;
 }
@@ -350,6 +351,7 @@ export interface ForecastHour {
   windSpeedKnots: number;
   windDegrees: number;
   waveHeightM: number;
+  waveDirectionDeg?: number;
   tidalSpeedKnots: number;
   tidalDegrees: number;
   isSlack: boolean;
@@ -389,7 +391,7 @@ router.get("/surface-conditions", async (req, res): Promise<void> => {
   }
 
   let windData: { windSpeedKnots: number; windDegrees: number }[] | null = null;
-  let waveData: { waveHeightM: number }[] | null = null;
+  let waveData: { waveHeightM: number; waveDirectionDeg?: number }[] | null = null;
   let estimatedConditions = false;
 
   try {
@@ -418,12 +420,16 @@ router.get("/surface-conditions", async (req, res): Promise<void> => {
 
     if (marineRes.status === "fulfilled" && marineRes.value.ok) {
       const json = await marineRes.value.json() as {
-        hourly?: { wave_height?: number[] };
+        hourly?: { wave_height?: number[]; wave_direction?: number[] };
       };
       const heights = json.hourly?.wave_height ?? [];
+      const directions = json.hourly?.wave_direction ?? [];
       if (heights.length >= 24) {
         waveData = Array.from({ length: heights.length }, (_, h) => ({
           waveHeightM: Math.round((heights[h] ?? 0) * 100) / 100,
+          ...(directions[h] !== undefined && directions[h] !== null
+            ? { waveDirectionDeg: Math.round(((directions[h]! % 360) + 360) % 360) }
+            : {}),
         }));
       }
     }
@@ -440,6 +446,9 @@ router.get("/surface-conditions", async (req, res): Promise<void> => {
     windSpeedKnots: windData?.[h]?.windSpeedKnots ?? 8,
     windDegrees: windData?.[h]?.windDegrees ?? 225,
     waveHeightM: waveData?.[h]?.waveHeightM ?? 0.3,
+    ...(waveData?.[h]?.waveDirectionDeg !== undefined
+      ? { waveDirectionDeg: waveData[h]!.waveDirectionDeg }
+      : {}),
     tidalSpeedKnots: tidal.hours[h]!.tidalSpeedKnots,
     tidalDegrees: tidal.hours[h]!.tidalDegrees,
     isSlack: tidal.hours[h]!.isSlack,
@@ -455,6 +464,9 @@ router.get("/surface-conditions", async (req, res): Promise<void> => {
       windSpeedKnots: windData?.[h]?.windSpeedKnots ?? 8,
       windDegrees: windData?.[h]?.windDegrees ?? 225,
       waveHeightM: waveData?.[h]?.waveHeightM ?? 0.3,
+      ...(waveData?.[h]?.waveDirectionDeg !== undefined
+        ? { waveDirectionDeg: waveData[h]!.waveDirectionDeg }
+        : {}),
       tidalSpeedKnots: tidalH.tidalSpeedKnots,
       tidalDegrees: tidalH.tidalDegrees,
       isSlack: tidalH.isSlack,

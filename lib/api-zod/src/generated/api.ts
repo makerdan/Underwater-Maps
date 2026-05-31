@@ -1794,6 +1794,7 @@ export const GetSurfaceConditionsResponse = zod.object({
   "tidalSpeedKnots": zod.number(),
   "tidalDegrees": zod.number(),
   "waveHeightM": zod.number(),
+  "waveDirectionDeg": zod.number().optional().describe('Swell\/wave direction in degrees (0–359) from Open-Meteo Marine API; omitted when data is unavailable.'),
   "isSlack": zod.boolean().optional().describe('True when the modeled tidal current is below the slack threshold (~0.1 kn)'),
   "phase": zod.enum(['flooding', 'ebbing', 'slack-high', 'slack-low']).optional().describe('Tidal phase for this hour')
 })),
@@ -1803,6 +1804,7 @@ export const GetSurfaceConditionsResponse = zod.object({
   "windSpeedKnots": zod.number(),
   "windDegrees": zod.number(),
   "waveHeightM": zod.number(),
+  "waveDirectionDeg": zod.number().optional().describe('Swell\/wave direction in degrees (0–359) from Open-Meteo Marine API; omitted when data is unavailable.'),
   "tidalSpeedKnots": zod.number(),
   "tidalDegrees": zod.number(),
   "isSlack": zod.boolean(),

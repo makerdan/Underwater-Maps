@@ -30,6 +30,8 @@ export interface SurfaceSnapshot {
   tidalSpeedKnots: number;
   tidalDegrees: number;
   waveHeightM: number;
+  /** Swell/wave direction in degrees (0–359); only present when Open-Meteo Marine data is available. */
+  waveDirectionDeg?: number;
   /** Best-effort flood/ebb classification from neighbouring hours (speed slope). */
   tideRising: boolean;
 }
@@ -122,6 +124,7 @@ export function useSurfaceConditions(
         tidalSpeedKnots: h.tidalSpeedKnots,
         tidalDegrees: h.tidalDegrees,
         waveHeightM: h.waveHeightM,
+        ...(h.waveDirectionDeg !== undefined ? { waveDirectionDeg: h.waveDirectionDeg } : {}),
         tideRising: rising,
       };
     });

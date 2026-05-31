@@ -3071,6 +3071,9 @@ components:
           type: number
         waveHeightM:
           type: number
+        waveDirectionDeg:
+          type: number
+          description: Swell/wave direction in degrees (0–359) from Open-Meteo Marine API; omitted when data is unavailable.
         tidalSpeedKnots:
           type: number
         tidalDegrees:
@@ -3181,6 +3184,9 @@ components:
           type: number
         waveHeightM:
           type: number
+        waveDirectionDeg:
+          type: number
+          description: Swell/wave direction in degrees (0–359) from Open-Meteo Marine API; omitted when data is unavailable.
         isSlack:
           type: boolean
           description: True when the modeled tidal current is below the slack threshold (~0.1 kn)

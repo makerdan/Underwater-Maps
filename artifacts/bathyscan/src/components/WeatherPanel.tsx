@@ -719,6 +719,11 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
           <div>
             <span style={LABEL}>WAVE HEIGHT </span>
             <span style={{ ...VALUE, color: "#60a5fa" }}>{cond.waveHeightM.toFixed(2)} m</span>
+            {cond.waveDirectionDeg !== undefined && (
+              <span style={{ fontSize: 9, color: "#94a3b8", marginLeft: 6 }}>
+                {cardinal(cond.waveDirectionDeg)} {Math.round(cond.waveDirectionDeg)}°
+              </span>
+            )}
           </div>
         </div>
       )}

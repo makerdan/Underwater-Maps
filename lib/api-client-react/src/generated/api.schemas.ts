@@ -1072,6 +1072,8 @@ export interface HourlySurfaceCondition {
   tidalSpeedKnots: number;
   tidalDegrees: number;
   waveHeightM: number;
+  /** Swell/wave direction in degrees (0–359) from Open-Meteo Marine API; omitted when data is unavailable. */
+  waveDirectionDeg?: number;
   /** True when the modeled tidal current is below the slack threshold (~0.1 kn) */
   isSlack?: boolean;
   /** Tidal phase for this hour */
@@ -1100,6 +1102,8 @@ export interface ForecastHour {
   windSpeedKnots: number;
   windDegrees: number;
   waveHeightM: number;
+  /** Swell/wave direction in degrees (0–359) from Open-Meteo Marine API; omitted when data is unavailable. */
+  waveDirectionDeg?: number;
   tidalSpeedKnots: number;
   tidalDegrees: number;
   isSlack: boolean;
