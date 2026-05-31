@@ -100,6 +100,30 @@ async function idbDelete(key: string): Promise<void> {
 }
 
 /**
+ * Clear every entry from both the module-level in-memory cache and the
+ * IndexedDB store.  Useful when the user wants to free browser storage or
+ * suspects a stale enhanced image is being shown.
+ *
+ * This is intentionally a module-level function (not inside the hook) so
+ * Settings can call it without needing a hook instance mounted in the same
+ * component tree.
+ */
+export async function clearUpscaleCache(): Promise<void> {
+  upscaleCache.clear();
+  try {
+    const db = await openIdb();
+    await new Promise<void>((resolve) => {
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      const req = tx.objectStore(IDB_STORE).clear();
+      req.onsuccess = () => { db.close(); resolve(); };
+      req.onerror = () => { db.close(); resolve(); };
+    });
+  } catch (err) {
+    console.warn("[upscale] clearUpscaleCache IDB clear failed (non-fatal):", err);
+  }
+}
+
+/**
  * On module load: open IDB, prune entries older than TTL, and pre-populate the
  * in-memory cache from surviving entries so the first render hits the fast path.
  */

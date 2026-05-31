@@ -15,6 +15,7 @@ import { flushServerSync } from "@/hooks/useServerSettingsSync";
 import type { Marker } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
+import { clearUpscaleCache } from "@/hooks/useUpscaledHeatmap";
 
 // Undo window for "soft" bulk-marker deletes (ms). The active dataset's
 // marker list is cleared from the cache immediately and the actual DELETE
@@ -2331,6 +2332,8 @@ function OfflineSection() {
   const [loading, setLoading] = useState(true);
   const [clearing, setClearing] = useState<string | null>(null);
   const [allClearedMsg, setAllClearedMsg] = useState(false);
+  const [upscaleClearMsg, setUpscaleClearMsg] = useState(false);
+  const { toast } = useToast();
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -2363,6 +2366,15 @@ function OfflineSection() {
     await refresh();
     setClearing(null);
     setTimeout(() => setAllClearedMsg(false), 3000);
+  };
+
+  const handleClearUpscaleCache = async () => {
+    setClearing("upscale");
+    await clearUpscaleCache();
+    setClearing(null);
+    setUpscaleClearMsg(true);
+    setTimeout(() => setUpscaleClearMsg(false), 3000);
+    toast({ title: "Enhanced image cache cleared", duration: 3000 });
   };
 
   return (
@@ -2429,6 +2441,29 @@ function OfflineSection() {
             style={S.dangerBtn}
           >
             {clearing === "all" ? "CLEARING…" : "CLEAR ALL CACHED DATA"}
+          </button>
+        </div>
+      </div>
+      <div style={S.card}>
+        <div style={S.cardHeader}>ENHANCED IMAGE CACHE</div>
+        <div style={{ padding: "12px 16px" }}>
+          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 10 }}>
+            AI-upscaled heatmap images are stored locally (IndexedDB) for up to 7 days to avoid
+            repeat processing. Clear this if you suspect a stale image is being shown or want to
+            free up browser storage.
+          </div>
+          {upscaleClearMsg && (
+            <div style={{ fontSize: 9, color: "#4ade80", letterSpacing: "0.12em", marginBottom: 8 }}>
+              ✓ Enhanced image cache cleared
+            </div>
+          )}
+          <button
+            data-testid="clear-upscale-cache-btn"
+            onClick={() => void handleClearUpscaleCache()}
+            disabled={clearing === "upscale"}
+            style={S.dangerBtn}
+          >
+            {clearing === "upscale" ? "CLEARING…" : "CLEAR ENHANCED IMAGE CACHE"}
           </button>
         </div>
       </div>
