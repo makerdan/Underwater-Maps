@@ -228,7 +228,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
       {currentsSource === "manual" ? (
         <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
           <div style={{ flex: 1 }}>
-            <div style={label}>Dir°</div>
+            <div style={label}>Dir° <span style={{ opacity: 0.7 }}>{cardinal(currentsManualDirectionDeg)}</span></div>
             <input
               type="number"
               min={0}
