@@ -1437,8 +1437,8 @@ export function renderContourLines(
     // the label text with comfortable padding on each side.
     const minSegPx = tw + 16;
 
-    // Build candidates: midpoint + pixel length for every long-enough segment.
-    type Candidate = { cx: number; cy: number; px: number };
+    // Build candidates: midpoint + pixel length + angle for every long-enough segment.
+    type Candidate = { cx: number; cy: number; px: number; angle: number };
     const candidates: Candidate[] = [];
     for (const seg of segs) {
       const [cx0, cy0] = toCanvas(seg.x0, seg.y0);
@@ -1447,7 +1447,10 @@ export function renderContourLines(
       const dy = cy1 - cy0;
       const px = Math.sqrt(dx * dx + dy * dy);
       if (px < minSegPx) continue;
-      candidates.push({ cx: (cx0 + cx1) / 2, cy: (cy0 + cy1) / 2, px });
+      // Compute the angle of the segment; flip if it would render text upside-down.
+      let angle = Math.atan2(dy, dx);
+      if (Math.abs(angle) > Math.PI / 2) angle += Math.PI;
+      candidates.push({ cx: (cx0 + cx1) / 2, cy: (cy0 + cy1) / 2, px, angle });
     }
 
     // Prefer longer segments (more stable, better visual weight).
@@ -1469,12 +1472,19 @@ export function renderContourLines(
       const hw = tw / 2 + 3;
       const hh = fontSize / 2 + 2;
       placedLabels.push({ x: c.cx, y: c.cy, hw, hh });
+
+      // Draw the label rotated to follow the contour line angle.
+      ctx.save();
+      ctx.translate(c.cx, c.cy);
+      ctx.rotate(c.angle);
       ctx.fillStyle = "rgba(2,8,24,0.65)";
-      ctx.fillRect(c.cx - tw / 2 - 3, c.cy - fontSize / 2 - 2, tw + 6, fontSize + 4);
+      ctx.fillRect(-hw, -hh, hw * 2, hh * 2);
       ctx.fillStyle = `rgba(${r},${g},${b},0.90)`;
       ctx.textBaseline = "middle";
       ctx.textAlign = "center";
-      ctx.fillText(label, c.cx, c.cy);
+      ctx.fillText(label, 0, 0);
+      ctx.restore();
+
       placed++;
     }
   }
