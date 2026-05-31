@@ -45,6 +45,7 @@ import { useDepthProfileStore, buildProfile } from "./depthProfileStore";
 import { useSettingsStore } from "./settingsStore";
 import { hasPendingOrInFlightSettingsSync } from "../hooks/useServerSettingsSync";
 import { processFlyWheel } from "./flyWheel";
+import { useZoneOverlayStore, ZONE_DEFAULT_COLORS } from "./zoneOverlayStore";
 import { openCrosshairContextMenu } from "./terrainContextMenu";
 import { setBypassSimulateSignedOut } from "./clerkCompat";
 import * as THREE from "three";
@@ -409,6 +410,36 @@ export interface BathyTestApi {
    * rely on being signed in are unaffected.
    */
   setSimulateSignedOut: (v: boolean) => void;
+  /**
+   * Zone-colour isolation helpers.
+   *
+   * The zoneOverlayStore maintains independent four-slot colour palettes for
+   * saltwater and freshwater.  These helpers let e2e tests drive colour
+   * mutations and water-type switches without going through the Settings page
+   * colour picker (a <input type="color"> whose native OS dialog is
+   * unreliable in headless Playwright runs).
+   *
+   * `getZoneSlotColor` reads the colour directly from the named palette in
+   * the store, regardless of which water type is currently active, so tests
+   * can assert on both palettes after a switch.
+   *
+   * `setZoneSlotColor` calls `setSlotColor` on the currently active palette
+   * — call `setActiveZoneWaterType` first to target the desired environment.
+   *
+   * `setActiveZoneWaterType` calls `setActiveWaterType` so the store's
+   * convenience `slots` mirror points at the chosen palette.  This mirrors
+   * what `ZoneColoursCard` does on mount via its `useEffect([waterType])`.
+   *
+   * `getZoneDefaultColor` returns the compile-time default hex for a slot so
+   * specs can assert "still at default" without hard-coding colour strings.
+   */
+  getZoneSlotColor: (
+    waterType: "saltwater" | "freshwater",
+    slot: 0 | 1 | 2 | 3,
+  ) => string;
+  setZoneSlotColor: (slot: 0 | 1 | 2 | 3, color: string) => void;
+  setActiveZoneWaterType: (wt: "saltwater" | "freshwater") => void;
+  getZoneDefaultColor: (slot: 0 | 1 | 2 | 3) => string;
 }
 
 declare global {
@@ -926,6 +957,17 @@ export function installTestHelpers(): void {
     setSimulateSignedOut: (v) => {
       setBypassSimulateSignedOut(v);
     },
+    getZoneSlotColor: (waterType, slot) => {
+      const state = useZoneOverlayStore.getState();
+      return state[waterType][slot]?.color ?? ZONE_DEFAULT_COLORS[slot];
+    },
+    setZoneSlotColor: (slot, color) => {
+      useZoneOverlayStore.getState().setSlotColor(slot, color);
+    },
+    setActiveZoneWaterType: (wt) => {
+      useZoneOverlayStore.getState().setActiveWaterType(wt);
+    },
+    getZoneDefaultColor: (slot) => ZONE_DEFAULT_COLORS[slot],
     showDepthProfileTerrainMenu: (x, y, point) =>
       useContextMenuStore
         .getState()
