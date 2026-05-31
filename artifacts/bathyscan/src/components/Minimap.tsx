@@ -11,6 +11,7 @@ import type { ColormapTheme } from "@/lib/settingsStore";
 import { WORLD_SIZE } from "@/lib/terrain";
 import { MARKER_COLOR } from "@/lib/markerConstants";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
+import { useSatelliteTileStore } from "@/lib/satelliteTileStore";
 
 const W = 180;
 const H = 180;
@@ -114,7 +115,10 @@ function drawMarkerDots(
 export const Minimap: React.FC = () => {
   const { terrain } = useAppState();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const heatmapRef = useRef<ImageData | null>(null);
+  // Stored as an offscreen canvas so we can drawImage with globalAlpha for
+  // satellite compositing (putImageData ignores globalAlpha).
+  const heatmapCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const satelliteImgRef = useRef<HTMLImageElement | null>(null);
   const markersRef = useRef<Marker[]>([]);
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
   const colormapTheme = useSettingsStore((s) => s.colormapTheme);
@@ -148,6 +152,34 @@ export const Minimap: React.FC = () => {
     };
   }, [terrain, units]);
 
+  const tileUrl = useSatelliteTileStore((s) => s.tileUrl);
+
+  // Load satellite image whenever the tile URL changes. Trigger an immediate
+  // redraw on load so the background appears without waiting for the next
+  // camera movement (Minimap has no continuous rAF loop unlike OverviewMap).
+  useEffect(() => {
+    if (!tileUrl) {
+      satelliteImgRef.current = null;
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      satelliteImgRef.current = img;
+      // Redraw immediately so satellite background appears on load.
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx || !heatmapCanvasRef.current) return;
+      const camState = useCameraStore.getState();
+      compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading);
+    };
+    img.onerror = () => {
+      satelliteImgRef.current = null;
+    };
+    img.src = tileUrl;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tileUrl]);
+
   const datasetId = terrain?.datasetId ?? "";
   const { data: markers } = useGetMarkers(
     { datasetId },
@@ -159,71 +191,34 @@ export const Minimap: React.FC = () => {
     markersRef.current = markers ?? [];
   }, [markers]);
 
-  // Draw heatmap when terrain, colormap theme, or palette changes
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !terrain) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+  // Composite the minimap: dark background → satellite → heatmap (semi-transparent)
+  // → marker dots → camera arrow. Using drawImage for the heatmap layer so
+  // globalAlpha compositing works (putImageData ignores globalAlpha).
+  const compositeFrame = (
+    ctx: CanvasRenderingContext2D,
+    camLon: number | null,
+    camLat: number | null,
+    heading: number,
+  ) => {
+    if (!terrain) return;
 
-    drawHeatmap(
-      ctx,
-      terrain.depths,
-      terrain.width,
-      terrain.height,
-      terrain.minDepth,
-      terrain.maxDepth,
-      colormapTheme,
-    );
-    heatmapRef.current = ctx.getImageData(0, 0, W, H);
-  }, [terrain, colormapTheme, shallow, deep, bandColors, customStops, bandBoundaries]);
+    // 1. Dark background (fallback when satellite not yet loaded)
+    ctx.fillStyle = "#020818";
+    ctx.fillRect(0, 0, W, H);
 
-  // Subscribe to cameraStore and update arrow + marker dots imperatively
-  useEffect(() => {
-    const unsub = useCameraStore.subscribe((state) => {
-      const canvas = canvasRef.current;
-      if (!canvas || !terrain) return;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
+    // 2. Satellite imagery background
+    if (satelliteImgRef.current) {
+      ctx.drawImage(satelliteImgRef.current, 0, 0, W, H);
+    }
 
-      // Restore heatmap
-      if (heatmapRef.current) {
-        ctx.putImageData(heatmapRef.current, 0, 0);
-      }
+    // 3. Depth heatmap — semi-transparent overlay so satellite shows through
+    if (heatmapCanvasRef.current) {
+      ctx.globalAlpha = satelliteImgRef.current ? 0.65 : 1.0;
+      ctx.drawImage(heatmapCanvasRef.current, 0, 0);
+      ctx.globalAlpha = 1.0;
+    }
 
-      // Draw marker dots
-      drawMarkerDots(
-        ctx,
-        markersRef.current,
-        terrain.minLon,
-        terrain.maxLon,
-        terrain.minLat,
-        terrain.maxLat,
-      );
-
-      // Draw camera arrow if position is known
-      if (state.cameraLon !== null && state.cameraLat !== null) {
-        const px = ((state.cameraLon - terrain.minLon) / (terrain.maxLon - terrain.minLon)) * W;
-        // North-up: invert y so high-lat (North) is at top.
-        const py = H - ((state.cameraLat - terrain.minLat) / (terrain.maxLat - terrain.minLat)) * H;
-        if (px >= 0 && px <= W && py >= 0 && py <= H) {
-          drawArrow(ctx, px, py, state.heading);
-        }
-      }
-    });
-
-    return () => { unsub(); };
-  }, [terrain]);
-
-  // Force a canvas redraw whenever markers change (camera may not have moved)
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !terrain) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    if (heatmapRef.current) ctx.putImageData(heatmapRef.current, 0, 0);
-
+    // 4. Marker dots
     drawMarkerDots(
       ctx,
       markersRef.current,
@@ -233,15 +228,80 @@ export const Minimap: React.FC = () => {
       terrain.maxLat,
     );
 
-    const camState = useCameraStore.getState();
-    if (camState.cameraLon !== null && camState.cameraLat !== null) {
-      const px = ((camState.cameraLon - terrain.minLon) / (terrain.maxLon - terrain.minLon)) * W;
+    // 5. Camera arrow
+    if (camLon !== null && camLat !== null) {
+      const px = ((camLon - terrain.minLon) / (terrain.maxLon - terrain.minLon)) * W;
       // North-up: invert y so high-lat (North) is at top.
-      const py = H - ((camState.cameraLat - terrain.minLat) / (terrain.maxLat - terrain.minLat)) * H;
+      const py = H - ((camLat - terrain.minLat) / (terrain.maxLat - terrain.minLat)) * H;
       if (px >= 0 && px <= W && py >= 0 && py <= H) {
-        drawArrow(ctx, px, py, camState.heading);
+        drawArrow(ctx, px, py, heading);
       }
     }
+  };
+
+  // Rebuild heatmap offscreen canvas when terrain, colormap theme, or palette changes.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !terrain) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Build offscreen heatmap canvas so it can be drawImage'd with globalAlpha.
+    const offscreen = document.createElement("canvas");
+    offscreen.width = W;
+    offscreen.height = H;
+    const offCtx = offscreen.getContext("2d");
+    if (!offCtx) return;
+    drawHeatmap(
+      offCtx,
+      terrain.depths,
+      terrain.width,
+      terrain.height,
+      terrain.minDepth,
+      terrain.maxDepth,
+      colormapTheme,
+    );
+    heatmapCanvasRef.current = offscreen;
+
+    const camState = useCameraStore.getState();
+    compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [terrain, colormapTheme, shallow, deep, bandColors, customStops, bandBoundaries]);
+
+  // Re-composite when satellite image loads (tileUrl changed)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !terrain || !heatmapCanvasRef.current) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const camState = useCameraStore.getState();
+    compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tileUrl]);
+
+  // Subscribe to cameraStore and update arrow + marker dots imperatively
+  useEffect(() => {
+    const unsub = useCameraStore.subscribe((state) => {
+      const canvas = canvasRef.current;
+      if (!canvas || !terrain) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      compositeFrame(ctx, state.cameraLon, state.cameraLat, state.heading);
+    });
+
+    return () => { unsub(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [terrain]);
+
+  // Force a canvas redraw whenever markers change (camera may not have moved)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !terrain) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const camState = useCameraStore.getState();
+    compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [markers, terrain]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {

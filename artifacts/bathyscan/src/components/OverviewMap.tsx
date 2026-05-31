@@ -74,6 +74,7 @@ import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useUndoableTrailDelete } from "@/hooks/useUndoableTrailDelete";
 import { TerrainDownloadPopover } from "@/components/TerrainDownloadPopover";
 import { useUpscaledHeatmap } from "@/hooks/useUpscaledHeatmap";
+import { useSatelliteTileStore } from "@/lib/satelliteTileStore";
 
 interface TooltipState {
   visible: boolean;
@@ -162,6 +163,22 @@ export const OverviewMap: React.FC = () => {
   useEffect(() => { isUpscalingRef.current = isUpscaling; }, [isUpscaling]);
   useEffect(() => { requestUpscaleIfNeededRef.current = requestUpscaleIfNeeded; }, [requestUpscaleIfNeeded]);
   useEffect(() => { invalidateUpscaleRef.current = invalidateUpscale; }, [invalidateUpscale]);
+
+  // Satellite imagery — read from the shared store (already populated by the
+  // 3D LandTerrainMesh via useSatelliteTile). Load into an HTMLImageElement so
+  // the rAF loop can drawImage it as a background layer.
+  const satelliteTileUrl = useSatelliteTileStore((s) => s.tileUrl);
+  const satelliteImgRef = useRef<HTMLImageElement | null>(null);
+  useEffect(() => {
+    if (!satelliteTileUrl) {
+      satelliteImgRef.current = null;
+      return;
+    }
+    const img = new Image();
+    img.onload = () => { satelliteImgRef.current = img; };
+    img.onerror = () => { satelliteImgRef.current = null; };
+    img.src = satelliteTileUrl;
+  }, [satelliteTileUrl]);
 
   // Drag tracking
   const isDraggingRef = useRef(false);
@@ -525,8 +542,24 @@ export const OverviewMap: React.FC = () => {
       ctx.fillStyle = "#020818";
       ctx.fillRect(0, 0, cW, cH);
 
+      // Satellite imagery background — draw behind the heatmap so real-world
+      // landmarks are visible. Same bounding-box extent as the terrain grid.
+      const satImg = satelliteImgRef.current;
+      if (satImg) {
+        const lonRange = grid.maxLon - grid.minLon || 1;
+        const latRange = grid.maxLat - grid.minLat || 1;
+        const terrainW = t.pxPerDeg * lonRange * t.scale;
+        const terrainH = t.pxPerDeg * latRange * t.scale;
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(satImg, t.offsetX, t.offsetY, terrainW, terrainH);
+      }
+
       // Depth heatmap — draw the Topaz-upscaled bitmap when available,
-      // otherwise fall back to the raw offscreen bitmap.
+      // otherwise fall back to the raw offscreen bitmap. When satellite
+      // imagery is showing, render the heatmap semi-transparently so the
+      // satellite context remains visible.
+      const heatmapAlpha = satImg ? 0.65 : 1.0;
+      ctx.globalAlpha = heatmapAlpha;
       const upscaled = upscaledBitmapRef.current;
       if (upscaled) {
         const lonRange = grid.maxLon - grid.minLon || 1;
@@ -539,6 +572,7 @@ export const OverviewMap: React.FC = () => {
       } else {
         renderHeatmap(ctx, bitmap, grid, t);
       }
+      ctx.globalAlpha = 1.0;
 
       // Lat/lon grid (gated by user setting; renderGridLines also checks scale ≥ 2 internally)
       const { overviewShowGrid, overviewShowMarkers, units, colormapTheme: activeTheme } = useSettingsStore.getState();
