@@ -346,6 +346,18 @@ function Main() {
     setTidalOverlay(true);
   }, [autoLoadTidal, terrain, setTidalOverlay]);
 
+  // Auto-disable the tidal overlay when "Auto-Load Tidal Data" is toggled OFF.
+  // We only fire on the true→false transition (tracked via ref) so that a user
+  // who manually turned the overlay on is not affected by unrelated re-renders.
+  const prevAutoLoadTidalRef = useRef(autoLoadTidal);
+  useEffect(() => {
+    const prev = prevAutoLoadTidalRef.current;
+    prevAutoLoadTidalRef.current = autoLoadTidal;
+    if (prev === true && autoLoadTidal === false) {
+      setTidalOverlay(false);
+    }
+  }, [autoLoadTidal, setTidalOverlay]);
+
   // Tracks the previous currentsSource so we can detect the transition TO
   // "noaa" and auto-enable the tidal overlay exactly once per transition.
   // `tidalOverlay` is intentionally NOT in the dependency array — including it

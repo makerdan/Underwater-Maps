@@ -44,7 +44,7 @@ vi.mock("idb-keyval", () => ({
 
 const mockClearUpscaleCache = vi.fn(() => Promise.resolve());
 vi.mock("@/hooks/useUpscaledHeatmap", () => ({
-  clearUpscaleCache: () => mockClearUpscaleCache(),
+  clearUpscaleCache: mockClearUpscaleCache,
 }));
 
 const mockToast = vi.fn();
