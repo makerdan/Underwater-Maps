@@ -59,6 +59,30 @@ jobs:
             echo "in_sync=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Dismiss out-of-sync comment if now in sync
+        if: steps.diff.outputs.in_sync == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(
+              c => c.user.login === 'github-actions[bot]' &&
+                   c.body.includes('README.md is out of sync with replit.md')
+            );
+
+            if (existing) {
+              await github.rest.issues.deleteComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+              });
+            }
+
       - name: Post comment if out of sync
         if: steps.diff.outputs.in_sync == 'false'
         uses: actions/github-script@v7
