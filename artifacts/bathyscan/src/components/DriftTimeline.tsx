@@ -297,6 +297,18 @@ export const DriftTimeline: React.FC = () => {
               <div style={{ color: "#93c5fd", fontWeight: 700 }}>{formatSpeedFromKnots(cond.windSpeedKnots, { units })}</div>
             </div>
           )}
+          {cond && typeof cond.tideHeightM === "number" && (
+            <div>
+              <div style={{ color: "#94a3b8", fontSize: 8, letterSpacing: "0.18em" }}>TIDE HT</div>
+              <div
+                data-testid="tide-height-value"
+                title="Predicted water level above chart datum (MLLW) — used to compute effective depth for tidal scaling"
+                style={{ color: "#34d399", fontWeight: 700, cursor: "help" }}
+              >
+                {cond.tideHeightM >= 0 ? "+" : ""}{cond.tideHeightM.toFixed(1)} m
+              </div>
+            </div>
+          )}
         </div>
       )}
 

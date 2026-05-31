@@ -13,6 +13,11 @@
  *          semi-diurnal schedule anchored on local solar noon
  *          ("sinusoidal") for points outside NOAA coverage or when the
  *          NOAA fetch fails.
+ *   - Tide height (water level):
+ *       NOAA CO-OPS hourly water-level predictions for the nearest tide
+ *       station (waterlevels network).  Cosine-interpolated from hi/lo events
+ *       when the hourly product is unavailable.  Falls back to null when no
+ *       station is within NOAA_HEIGHTS_STATION_MAX_KM.
  *
  * Either source yields per-hour `isSlack` + `phase` metadata so the UI can
  * fade arrows, halt drift, and label the timeline at slack tides.
@@ -32,8 +37,11 @@ import {
 const router = Router();
 
 const NOAA_STATION_MAX_KM = 100;
+const NOAA_HEIGHTS_STATION_MAX_KM = 100;
 const NOAA_STATIONS_URL =
   "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=currentpredictions";
+const NOAA_HEIGHTS_STATIONS_URL =
+  "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=waterlevels";
 const NOAA_PREDICTIONS_BASE =
   "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter";
 
@@ -47,6 +55,8 @@ interface HourlySurfaceCondition {
   waveDirectionDeg?: number;
   isSlack: boolean;
   phase: TidePhase;
+  /** Predicted tide height above chart datum (MLLW, metres). Omitted when no nearby NOAA water-level station is available. */
+  tideHeightM?: number;
 }
 
 interface NoaaStation {
@@ -155,9 +165,14 @@ let stationCache: NoaaStation[] | null = null;
 let stationCacheAt = 0;
 const STATION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
+let heightsStationCache: NoaaStation[] | null = null;
+let heightsStationCacheAt = 0;
+
 export function _resetNoaaStationCacheForTests(): void {
   stationCache = null;
   stationCacheAt = 0;
+  heightsStationCache = null;
+  heightsStationCacheAt = 0;
 }
 
 async function fetchNoaaStations(): Promise<NoaaStation[]> {
@@ -173,6 +188,22 @@ async function fetchNoaaStations(): Promise<NoaaStation[]> {
     .map((s) => ({ id: s.id as string, name: s.name ?? s.id as string, lat: s.lat as number, lng: s.lng as number }));
   stationCache = list;
   stationCacheAt = now;
+  return list;
+}
+
+async function fetchNoaaHeightsStations(): Promise<NoaaStation[]> {
+  const now = Date.now();
+  if (heightsStationCache && now - heightsStationCacheAt < STATION_CACHE_TTL_MS) {
+    return heightsStationCache;
+  }
+  const res = await fetchWithTimeout(NOAA_HEIGHTS_STATIONS_URL, 8000);
+  if (!res.ok) throw new Error(`noaa heights stations http ${res.status}`);
+  const json = (await res.json()) as { stations?: Array<{ id?: string; name?: string; lat?: number; lng?: number }> };
+  const list: NoaaStation[] = (json.stations ?? [])
+    .filter((s) => typeof s.id === "string" && typeof s.lat === "number" && typeof s.lng === "number")
+    .map((s) => ({ id: s.id as string, name: s.name ?? s.id as string, lat: s.lat as number, lng: s.lng as number }));
+  heightsStationCache = list;
+  heightsStationCacheAt = now;
   return list;
 }
 
@@ -292,6 +323,94 @@ async function fetchNoaaPredictions(stationId: string, utcDate: Date): Promise<T
 }
 
 // ---------------------------------------------------------------------------
+// NOAA hourly tide height (water-level predictions)
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse an hourly NOAA water-level predictions response into a 24-entry array
+ * (one number per UTC hour 0–23, metres above MLLW).
+ *
+ * NOAA returns `{ predictions: [{ t: "YYYY-MM-DD HH:mm", v: "1.234" }] }`.
+ * Missing hours are filled by carrying the last known value forward.
+ * Returns null when the payload is empty or all rows fall outside the target date.
+ */
+export function parseNoaaTideHeights(
+  raw: { predictions?: Array<{ t?: string; v?: string | number }> },
+  utcDate: Date,
+): number[] | null {
+  const rows = raw.predictions;
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+
+  const yyyy = utcDate.getUTCFullYear();
+  const mm = utcDate.getUTCMonth();
+  const dd = utcDate.getUTCDate();
+
+  const byHour = new Map<number, number>();
+  for (const row of rows) {
+    if (!row.t) continue;
+    const m = /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/.exec(row.t);
+    if (!m) continue;
+    const ry = parseInt(m[1]!, 10);
+    const rm = parseInt(m[2]!, 10) - 1;
+    const rd = parseInt(m[3]!, 10);
+    const rh = parseInt(m[4]!, 10);
+    if (ry !== yyyy || rm !== mm || rd !== dd) continue;
+    const v = typeof row.v === "string" ? parseFloat(row.v) : row.v;
+    if (typeof v !== "number" || isNaN(v)) continue;
+    byHour.set(rh, Math.round(v * 100) / 100);
+  }
+
+  if (byHour.size === 0) return null;
+
+  const out: number[] = [];
+  let last = 0;
+  for (let h = 0; h < 24; h++) {
+    const v = byHour.get(h);
+    if (v !== undefined) last = v;
+    out.push(last);
+  }
+  return out;
+}
+
+async function fetchNoaaTideHeightsPredictions(stationId: string, utcDate: Date): Promise<number[] | null> {
+  const yyyymmdd = `${utcDate.getUTCFullYear()}${String(utcDate.getUTCMonth() + 1).padStart(2, "0")}${String(utcDate.getUTCDate()).padStart(2, "0")}`;
+  const url = `${NOAA_PREDICTIONS_BASE}?product=predictions&station=${encodeURIComponent(stationId)}&begin_date=${yyyymmdd}&end_date=${yyyymmdd}&datum=MLLW&time_zone=GMT&units=metric&interval=h&format=json`;
+  try {
+    const res = await fetchWithTimeout(url, 8000);
+    if (!res.ok) return null;
+    const json = (await res.json()) as { predictions?: Array<{ t?: string; v?: string | number }> };
+    return parseNoaaTideHeights(json, utcDate);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve 24 hourly tide heights for the given position.
+ *
+ * Tries NOAA CO-OPS water-level predictions from the nearest station within
+ * NOAA_HEIGHTS_STATION_MAX_KM. Returns null for every hour when no suitable
+ * station is found or the fetch fails — the computeDrift physics already
+ * defaults tideHeightM to 0 when the field is absent.
+ */
+async function resolveTideHeights(
+  lat: number,
+  lon: number,
+  utcDate: Date,
+): Promise<{ heights: number[]; stationId: string; stationName: string } | null> {
+  try {
+    const stations = await fetchNoaaHeightsStations();
+    const nearest = findNearestStation(stations, lat, lon, NOAA_HEIGHTS_STATION_MAX_KM);
+    if (!nearest) return null;
+    const heights = await fetchNoaaTideHeightsPredictions(nearest.station.id, utcDate);
+    if (!heights) return null;
+    return { heights, stationId: nearest.station.id, stationName: nearest.station.name };
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Fetch helpers
 // ---------------------------------------------------------------------------
 
@@ -377,8 +496,12 @@ router.get("/surface-conditions", async (req, res): Promise<void> => {
   // Anchor the 48-hour series at the top of the current UTC hour so each
   // index aligns with a wall-clock hour.
   const startMs = nowTopOfHourMs();
+  const utcDate = new Date(startMs);
 
-  const tidal = await resolveTidal(lat, lon, startMs);
+  const [tidal, tideHeightsResult] = await Promise.all([
+    resolveTidal(lat, lon, startMs),
+    resolveTideHeights(lat, lon, utcDate),
+  ]);
 
   // Build a 48-hour sinusoidal tidal baseline for the forecast strip.
   // Hours 0–23 will be overridden by NOAA data when available.
@@ -453,6 +576,9 @@ router.get("/surface-conditions", async (req, res): Promise<void> => {
     tidalDegrees: tidal.hours[h]!.tidalDegrees,
     isSlack: tidal.hours[h]!.isSlack,
     phase: tidal.hours[h]!.phase,
+    ...(tideHeightsResult !== null
+      ? { tideHeightM: tideHeightsResult.heights[h] ?? 0 }
+      : {}),
   }));
 
   const forecast48h: ForecastHour[] = Array.from({ length: 48 }, (_, h) => {
@@ -483,6 +609,9 @@ router.get("/surface-conditions", async (req, res): Promise<void> => {
     ...(tidal.stationId ? { tidalStationId: tidal.stationId } : {}),
     ...(tidal.stationName ? { tidalStationName: tidal.stationName } : {}),
     ...(typeof tidal.distanceKm === "number" ? { tidalStationDistanceKm: tidal.distanceKm } : {}),
+    tideHeightSource: tideHeightsResult !== null ? "noaa-coops" : "none",
+    ...(tideHeightsResult ? { tideHeightStationId: tideHeightsResult.stationId } : {}),
+    ...(tideHeightsResult ? { tideHeightStationName: tideHeightsResult.stationName } : {}),
     estimatedConditions,
     hours,
     forecast48h,
