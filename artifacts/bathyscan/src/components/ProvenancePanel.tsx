@@ -106,6 +106,7 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
         style={{
           display: "flex",
           alignItems: "center",
+          flexWrap: "wrap",
           gap: 6,
           cursor: "pointer",
           userSelect: "none",

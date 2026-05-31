@@ -890,7 +890,7 @@ function Main() {
               touchAction: "pan-y",
             }}
           >
-            <div className="flex justify-end" style={{ minWidth: 220, maxWidth: 260 }}>
+            <div className="flex justify-end" style={{ minWidth: 268, maxWidth: 308 }}>
               <ViewscreenTooltip label="Hide side pane to free up screen space" side="right">
                 <button
                   onClick={() => setSidePaneCollapsed(true)}

@@ -103,9 +103,21 @@ const PANEL: React.CSSProperties = {
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   color: "#e2e8f0",
   fontSize: 11,
-  minWidth: 220,
-  maxWidth: 260,
+  minWidth: 268,
+  maxWidth: 308,
   backdropFilter: "blur(6px)",
+};
+
+const ACTION_BTN_STYLE: React.CSSProperties = {
+  fontSize: 9,
+  letterSpacing: "0.06em",
+  padding: "3px 7px",
+  background: "rgba(0,229,255,0.06)",
+  border: "1px solid rgba(0,229,255,0.28)",
+  borderRadius: 3,
+  color: "#00e5ff",
+  cursor: "pointer",
+  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
 };
 
 const CYAN: React.CSSProperties = {
@@ -499,6 +511,25 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
   // ─── Preset dataset pending fetch ─────────────────────────────────────────
   const [pendingId, setPendingId] = useState<string | null>(null);
+
+  // ─── MY LIBRARY multi-select action-bar state ─────────────────────────────
+  const [presetSelectedIds, setPresetSelectedIds] = useState<Set<string>>(() => new Set());
+  const [librarySelectedIds, setLibrarySelectedIds] = useState<Set<string>>(() => new Set());
+  const [libraryBulkDeleteSignal, setLibraryBulkDeleteSignal] = useState(0);
+  const [libraryMoveSignal, setLibraryMoveSignal] = useState<{
+    id: string; name: string; folderId: string | null; seq: number;
+  } | null>(null);
+  const [libraryRenameSignal, setLibraryRenameSignal] = useState<{
+    id: string; name: string; seq: number;
+  } | null>(null);
+
+  const togglePresetSelected = useCallback((id: string) => {
+    setPresetSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
 
   // ─── User dataset pending + active tracking ────────────────────────────────
   const [pendingUserDatasetId, setPendingUserDatasetId] = useState<string | null>(null);
@@ -1455,6 +1486,58 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     useUiStore.getState().setPendingDropIn({ worldX: x, worldZ: z });
   };
 
+  // ─── Action-bar handlers ─────────────────────────────────────────────────
+  const handleShowTogether = useCallback(() => {
+    const state = useTerrainStore.getState();
+    const visibleIds = new Set(state.visibleDatasets.map((v) => v.datasetId));
+    for (const id of presetSelectedIds) {
+      if (!visibleIds.has(id)) {
+        state.toggleVisible({ datasetId: id, source: "preset" });
+        visibleIds.add(id);
+      }
+    }
+    for (const id of librarySelectedIds) {
+      if (!visibleIds.has(id)) {
+        state.toggleVisible({ datasetId: id, source: "user" });
+        visibleIds.add(id);
+      }
+    }
+    setPresetSelectedIds(new Set());
+    setLibrarySelectedIds(new Set());
+  }, [presetSelectedIds, librarySelectedIds]);
+
+  const handleActionDelete = useCallback(() => {
+    if (librarySelectedIds.size === 0) return;
+    setLibraryBulkDeleteSignal((s) => s + 1);
+    setPresetSelectedIds(new Set());
+  }, [librarySelectedIds.size]);
+
+  const handleActionCopy = useCallback(() => {
+    toast({ title: "Coming soon", description: "Copy is not yet available." });
+  }, [toast]);
+
+  const handleActionMoveToFolder = useCallback(() => {
+    if (librarySelectedIds.size !== 1) return;
+    const [id] = [...librarySelectedIds];
+    if (!id) return;
+    const ds = (userDatasets ?? []).find((d) => d.id === id);
+    if (!ds) return;
+    setLibraryMoveSignal({ id: ds.id, name: ds.name, folderId: ds.folderId ?? null, seq: Date.now() });
+  }, [librarySelectedIds, userDatasets]);
+
+  const handleActionPaste = useCallback(() => {
+    toast({ title: "Coming soon", description: "Paste is not yet available." });
+  }, [toast]);
+
+  const handleActionRename = useCallback(() => {
+    if (librarySelectedIds.size !== 1 || presetSelectedIds.size > 0) return;
+    const [id] = [...librarySelectedIds];
+    if (!id) return;
+    const ds = (userDatasets ?? []).find((d) => d.id === id);
+    if (!ds) return;
+    setLibraryRenameSignal({ id: ds.id, name: ds.name, seq: Date.now() });
+  }, [librarySelectedIds, presetSelectedIds.size, userDatasets]);
+
   // ─── Render ────────────────────────────────────────────────────────────────
   const anyLoading = datasetsLoading || userDatasetsLoading;
 
@@ -1499,259 +1582,284 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             <span style={{ fontSize: 10, letterSpacing: "0.12em", color: "#cbd5e1" }}>ENVIRONMENT</span>
             <WaterTypeToggle />
           </div>
-          {/* ── Built-in dataset list ── */}
+          {/* ── MY LIBRARY section (preset datasets + user library) ── */}
           <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}>
-            {presetLoadError && (
-              <div
-                data-testid="preset-dataset-load-error"
-                style={{
-                  margin: "4px 8px",
-                  padding: "6px 8px",
-                  background: "rgba(239,68,68,0.08)",
-                  border: "1px solid rgba(239,68,68,0.35)",
-                  borderRadius: 4,
-                  fontSize: 10,
-                  color: "#fca5a5",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 8,
-                }}
-              >
-                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
-                  Failed to load "{presetLoadError.name}"
-                </span>
-                <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
-                  <button
-                    data-testid="btn-retry-preset"
-                    onClick={handleRetryPreset}
-                    disabled={!!pendingId}
+            <button
+              type="button"
+              onClick={() => togglePanel("myLibrary")}
+              aria-expanded={!myLibraryCollapsed}
+              className="px-3 py-1 flex items-center gap-2 w-full hover:bg-white/5 transition-colors"
+              style={{
+                fontSize: 10,
+                letterSpacing: "0.12em",
+                color: "#cbd5e1",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              <span>{myLibraryCollapsed ? "▾ MY LIBRARY" : "▲ MY LIBRARY"}</span>
+              {anyLoading && (
+                <span className="animate-spin" style={{ fontSize: 9, color: "#cbd5e1" }}>◌</span>
+              )}
+            </button>
+
+            {!myLibraryCollapsed && (
+              <div>
+                {presetLoadError && (
+                  <div
+                    data-testid="preset-dataset-load-error"
                     style={{
+                      margin: "4px 8px",
+                      padding: "6px 8px",
+                      background: "rgba(239,68,68,0.08)",
+                      border: "1px solid rgba(239,68,68,0.35)",
+                      borderRadius: 4,
                       fontSize: 10,
-                      color: "#00e5ff",
-                      background: "transparent",
-                      border: "1px solid rgba(0,229,255,0.35)",
-                      borderRadius: 3,
-                      padding: "1px 6px",
-                      cursor: !!pendingId ? "not-allowed" : "pointer",
-                      opacity: !!pendingId ? 0.5 : 1,
+                      color: "#fca5a5",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
                     }}
                   >
-                    {!!pendingId ? "Loading…" : "Retry"}
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPresetLoadError(null);
-                    }}
+                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+                      Failed to load "{presetLoadError.name}"
+                    </span>
+                    <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
+                      <button
+                        data-testid="btn-retry-preset"
+                        onClick={handleRetryPreset}
+                        disabled={!!pendingId}
+                        style={{
+                          fontSize: 10,
+                          color: "#00e5ff",
+                          background: "transparent",
+                          border: "1px solid rgba(0,229,255,0.35)",
+                          borderRadius: 3,
+                          padding: "1px 6px",
+                          cursor: !!pendingId ? "not-allowed" : "pointer",
+                          opacity: !!pendingId ? 0.5 : 1,
+                        }}
+                      >
+                        {!!pendingId ? "Loading…" : "Retry"}
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setPresetLoadError(null); }}
+                        style={{
+                          fontSize: 10, color: "#cbd5e1", background: "transparent",
+                          border: "none", cursor: "pointer", padding: "1px 4px",
+                        }}
+                        aria-label="Dismiss error"
+                      >×</button>
+                    </div>
+                  </div>
+                )}
+
+                <VisibleDatasetsHeader />
+                <VisibleDatasetRows
+                  allDatasets={[
+                    ...(datasets ?? []).map((d) => ({ id: d.id, name: d.name })),
+                    ...(userDatasets ?? []).map((d) => ({ id: d.id, name: d.name })),
+                  ]}
+                />
+
+                {(datasets ?? []).map((ds) => {
+                  const active = ds.id === datasetId && !pendingId && !activeUserDatasetId;
+                  const loading = ds.id === loadingId;
+                  const isChecked = presetSelectedIds.has(ds.id);
+                  return (
+                    <ViewscreenTooltip key={ds.id} label={`Load ${ds.name}`} side="right">
+                    <div
+                      data-testid={`row-dataset-${ds.id}`}
+                      className="w-full flex items-stretch transition-colors hover:bg-white/5"
+                      style={{
+                        background: active ? "rgba(0,229,255,0.07)" : "transparent",
+                        borderLeft: active ? "2px solid #00e5ff" : "2px solid transparent",
+                        opacity: !isOnline && !cachedIds.has(ds.id) ? 0.4 : 1,
+                      }}
+                    >
+                      <span
+                        role="checkbox"
+                        aria-checked={isChecked}
+                        data-testid={`chk-preset-${ds.id}`}
+                        onClick={(e) => { e.stopPropagation(); togglePresetSelected(ds.id); }}
+                        style={{
+                          width: 28, flexShrink: 0, display: "flex",
+                          alignItems: "center", justifyContent: "center", cursor: "pointer",
+                        }}
+                      >
+                        <span style={{
+                          width: 14, height: 14,
+                          border: `1px solid ${isChecked ? "#00e5ff" : "rgba(148,163,184,0.5)"}`,
+                          borderRadius: 2,
+                          background: isChecked ? "rgba(0,229,255,0.18)" : "transparent",
+                          display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 10, color: "#00e5ff",
+                        }}>
+                          {isChecked ? "✓" : ""}
+                        </span>
+                      </span>
+                    <button
+                      data-testid={`btn-dataset-${ds.id}`}
+                      onClick={() => (isOnline || cachedIds.has(ds.id)) && handleSelectPreset(ds)}
+                      disabled={(!isOnline && !cachedIds.has(ds.id)) || loadingId === ds.id}
+                      className="flex-1 text-left px-2 py-2"
+                      style={{
+                        background: "transparent",
+                        cursor: (!isOnline && !cachedIds.has(ds.id)) || loadingId === ds.id ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span
+                          style={{
+                            flex: 1, minWidth: 0, fontSize: 11,
+                            fontWeight: active ? 700 : 400,
+                            color: active ? "#00e5ff" : !isOnline && !cachedIds.has(ds.id) ? "#cbd5e1" : "#e2e8f0",
+                            textShadow: active ? "0 0 6px rgba(0,229,255,0.4)" : "none",
+                            whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word",
+                            textDecoration: "underline", textUnderlineOffset: 2,
+                          }}
+                        >
+                          {ds.name}
+                        </span>
+                        <span style={{ fontSize: 9, color: "#cbd5e1", flexShrink: 0 }}>
+                          {loading ? (
+                            <LoadingDial datasetId={ds.id} label={ds.name} />
+                          ) : !isOnline ? (
+                            cachedIds.has(ds.id) ? (
+                              <ViewscreenTooltip label="Cached — works offline" side="left">
+                                <span data-testid={`cache-badge-${ds.id}`} style={{ color: "#4ade80", letterSpacing: "0.1em" }}>✓</span>
+                              </ViewscreenTooltip>
+                            ) : (
+                              <ViewscreenTooltip label="Not cached — needs internet" side="left">
+                                <span data-testid={`unavailable-badge-${ds.id}`} style={{ color: "#ef4444", letterSpacing: "0.1em" }}>✗</span>
+                              </ViewscreenTooltip>
+                            )
+                          ) : null}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 10, color: "#cbd5e1", marginTop: 2, letterSpacing: "0.05em" }}>
+                        {formatDepthRange(ds.minDepth, ds.maxDepth, { units })}
+                      </div>
+                      {active && terrain && terrain.datasetId === ds.id && (
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <ProvenancePanel terrain={terrain} hasEfh={ds.hasEfh ?? false} />
+                        </div>
+                      )}
+                    </button>
+                    </div>
+                    </ViewscreenTooltip>
+                  );
+                })}
+
+                {isSignedIn && (
+                  <>
+                    {userLoadError && (
+                      <div
+                        data-testid="user-dataset-load-error"
+                        style={{
+                          margin: "4px 8px 8px",
+                          padding: "6px 8px",
+                          background: "rgba(239,68,68,0.08)",
+                          border: "1px solid rgba(239,68,68,0.35)",
+                          borderRadius: 4, fontSize: 10, color: "#fca5a5",
+                          display: "flex", alignItems: "center",
+                          justifyContent: "space-between", gap: 8,
+                        }}
+                      >
+                        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+                          Failed to load "{userLoadError.name}"
+                        </span>
+                        <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
+                          <button
+                            data-testid="btn-retry-user-dataset"
+                            onClick={handleRetryUserDataset}
+                            disabled={!!pendingUserDatasetId}
+                            style={{
+                              fontSize: 10, color: "#00e5ff", background: "transparent",
+                              border: "1px solid rgba(0,229,255,0.35)", borderRadius: 3,
+                              padding: "1px 6px",
+                              cursor: !!pendingUserDatasetId ? "not-allowed" : "pointer",
+                              opacity: !!pendingUserDatasetId ? 0.5 : 1,
+                            }}
+                          >
+                            {!!pendingUserDatasetId ? "Loading…" : "Retry"}
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setUserLoadError(null); }}
+                            style={{
+                              fontSize: 10, color: "#cbd5e1", background: "transparent",
+                              border: "none", cursor: "pointer", padding: "1px 4px",
+                            }}
+                            aria-label="Dismiss error"
+                          >×</button>
+                        </div>
+                      </div>
+                    )}
+                    <ErrorBoundary label="the dataset library">
+                      <DatasetFolderTree
+                        datasets={userDatasets ?? []}
+                        activeUserDatasetId={pendingUserDatasetId ? null : activeUserDatasetId}
+                        loadingId={loadingId}
+                        onSelectDataset={handleSelectUserDataset}
+                        onDatasetsRemoved={handleDatasetsRemoved}
+                        onSelectionChange={setLibrarySelectedIds}
+                        bulkDeleteSignal={libraryBulkDeleteSignal}
+                        externalMoveSignal={libraryMoveSignal}
+                        externalRenameSignal={libraryRenameSignal}
+                      />
+                    </ErrorBoundary>
+                  </>
+                )}
+
+                {(presetSelectedIds.size + librarySelectedIds.size > 0) && (
+                  <div
+                    data-testid="library-action-bar"
                     style={{
-                      fontSize: 10,
-                      color: "#cbd5e1",
-                      background: "transparent",
-                      border: "none",
-                      cursor: "pointer",
-                      padding: "1px 4px",
+                      margin: "6px 8px 4px",
+                      padding: "6px 8px",
+                      background: "rgba(0,229,255,0.06)",
+                      border: "1px solid rgba(0,229,255,0.2)",
+                      borderRadius: 4,
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 4,
                     }}
-                    aria-label="Dismiss error"
                   >
-                    ×
-                  </button>
-                </div>
+                    <span style={{
+                      fontSize: 9, color: "#7dd3fc", width: "100%",
+                      letterSpacing: "0.08em", marginBottom: 2,
+                    }}>
+                      {presetSelectedIds.size + librarySelectedIds.size} selected
+                    </span>
+                    <button data-testid="btn-action-show-together" onClick={handleShowTogether} style={ACTION_BTN_STYLE}>Show Together</button>
+                    <button
+                      data-testid="btn-action-delete"
+                      onClick={handleActionDelete}
+                      disabled={librarySelectedIds.size === 0}
+                      style={{ ...ACTION_BTN_STYLE, opacity: librarySelectedIds.size === 0 ? 0.35 : 1, color: "#fca5a5", borderColor: "rgba(239,68,68,0.4)" }}
+                    >Delete</button>
+                    <button data-testid="btn-action-copy" onClick={handleActionCopy} style={ACTION_BTN_STYLE}>Copy</button>
+                    <button
+                      data-testid="btn-action-move-to-folder"
+                      onClick={handleActionMoveToFolder}
+                      disabled={librarySelectedIds.size !== 1}
+                      style={{ ...ACTION_BTN_STYLE, opacity: librarySelectedIds.size !== 1 ? 0.35 : 1 }}
+                    >Move To Folder</button>
+                    <button data-testid="btn-action-paste" onClick={handleActionPaste} style={ACTION_BTN_STYLE}>Paste</button>
+                    <button
+                      data-testid="btn-action-rename"
+                      onClick={handleActionRename}
+                      disabled={librarySelectedIds.size !== 1 || presetSelectedIds.size > 0}
+                      style={{ ...ACTION_BTN_STYLE, opacity: (librarySelectedIds.size !== 1 || presetSelectedIds.size > 0) ? 0.35 : 1 }}
+                    >Rename</button>
+                  </div>
+                )}
               </div>
             )}
-            <VisibleDatasetsHeader />
-            <VisibleDatasetRows
-              allDatasets={[
-                ...(datasets ?? []).map((d) => ({ id: d.id, name: d.name })),
-                ...(userDatasets ?? []).map((d) => ({ id: d.id, name: d.name })),
-              ]}
-            />
-            {(datasets ?? []).map((ds) => {
-              const active = ds.id === datasetId && !pendingId && !activeUserDatasetId;
-              const loading = ds.id === loadingId;
-              return (
-                <ViewscreenTooltip key={ds.id} label={`Load ${ds.name}`} side="right">
-                <div
-                  data-testid={`row-dataset-${ds.id}`}
-                  className="w-full flex items-stretch transition-colors hover:bg-white/5"
-                  style={{
-                    background: active ? "rgba(0,229,255,0.07)" : "transparent",
-                    borderLeft: active ? "2px solid #00e5ff" : "2px solid transparent",
-                    opacity: !isOnline && !cachedIds.has(ds.id) ? 0.4 : 1,
-                  }}
-                >
-                  <PresetVisibilityToggle
-                    datasetId={ds.id}
-                    disabled={!isOnline && !cachedIds.has(ds.id)}
-                  />
-                <button
-                  data-testid={`btn-dataset-${ds.id}`}
-                  onClick={() => (isOnline || cachedIds.has(ds.id)) && handleSelectPreset(ds)}
-                  disabled={(!isOnline && !cachedIds.has(ds.id)) || loadingId === ds.id}
-                  className="flex-1 text-left px-2 py-2"
-                  style={{
-                    background: "transparent",
-                    cursor: (!isOnline && !cachedIds.has(ds.id)) || loadingId === ds.id ? "not-allowed" : "pointer",
-                  }}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span
-                      style={{
-                        flex: 1,
-                        minWidth: 0,
-                        fontSize: 11,
-                        fontWeight: active ? 700 : 400,
-                        color: active ? "#00e5ff" : !isOnline && !cachedIds.has(ds.id) ? "#cbd5e1" : "#e2e8f0",
-                        textShadow: active ? "0 0 6px rgba(0,229,255,0.4)" : "none",
-                        whiteSpace: "normal",
-                        overflowWrap: "anywhere",
-                        wordBreak: "break-word",
-                        textDecoration: "underline",
-                        textUnderlineOffset: 2,
-                      }}
-                    >
-                      {ds.name}
-                    </span>
-                    <span style={{ fontSize: 9, color: "#cbd5e1", flexShrink: 0 }}>
-                      {loading ? (
-                        <LoadingDial datasetId={ds.id} label={ds.name} />
-                      ) : !isOnline ? (
-                        cachedIds.has(ds.id) ? (
-                          <ViewscreenTooltip label="Cached — works offline" side="left">
-                            <span
-                              data-testid={`cache-badge-${ds.id}`}
-                              style={{ color: "#4ade80", letterSpacing: "0.1em" }}
-                            >
-                              ✓
-                            </span>
-                          </ViewscreenTooltip>
-                        ) : (
-                          <ViewscreenTooltip label="Not cached — needs internet" side="left">
-                            <span
-                              data-testid={`unavailable-badge-${ds.id}`}
-                              style={{ color: "#ef4444", letterSpacing: "0.1em" }}
-                            >
-                              ✗
-                            </span>
-                          </ViewscreenTooltip>
-                        )
-                      ) : null}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 10, color: "#cbd5e1", marginTop: 2, letterSpacing: "0.05em" }}>
-                    {formatDepthRange(ds.minDepth, ds.maxDepth, { units })}
-                  </div>
-                  {active && terrain && terrain.datasetId === ds.id && (
-                    <div onClick={(e) => e.stopPropagation()}>
-                      <ProvenancePanel
-                        terrain={terrain}
-                        hasEfh={ds.hasEfh ?? false}
-                      />
-                    </div>
-                  )}
-                </button>
-                </div>
-                </ViewscreenTooltip>
-              );
-            })}
           </div>
-
-          {/* ── My Library (folders + uploads), signed-in only ── */}
-          {isSignedIn && (
-            <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}>
-              <button
-                type="button"
-                onClick={() => togglePanel("myLibrary")}
-                aria-expanded={!myLibraryCollapsed}
-                className="px-3 py-1 flex items-center gap-2 w-full hover:bg-white/5 transition-colors"
-                style={{
-                  fontSize: 10,
-                  letterSpacing: "0.12em",
-                  color: "#cbd5e1",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  textAlign: "left",
-                }}
-              >
-                <span>{myLibraryCollapsed ? "▾ MY LIBRARY" : "▲ MY LIBRARY"}</span>
-                {userDatasetsLoading && (
-                  <span className="animate-spin" style={{ fontSize: 9, color: "#cbd5e1" }}>◌</span>
-                )}
-              </button>
-
-              {!myLibraryCollapsed && userLoadError && (
-                <div
-                  data-testid="user-dataset-load-error"
-                  style={{
-                    margin: "4px 8px 8px",
-                    padding: "6px 8px",
-                    background: "rgba(239,68,68,0.08)",
-                    border: "1px solid rgba(239,68,68,0.35)",
-                    borderRadius: 4,
-                    fontSize: 10,
-                    color: "#fca5a5",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 8,
-                  }}
-                >
-                  <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
-                    Failed to load "{userLoadError.name}"
-                  </span>
-                  <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
-                    <button
-                      data-testid="btn-retry-user-dataset"
-                      onClick={handleRetryUserDataset}
-                      disabled={!!pendingUserDatasetId}
-                      style={{
-                        fontSize: 10,
-                        color: "#00e5ff",
-                        background: "transparent",
-                        border: "1px solid rgba(0,229,255,0.35)",
-                        borderRadius: 3,
-                        padding: "1px 6px",
-                        cursor: !!pendingUserDatasetId ? "not-allowed" : "pointer",
-                        opacity: !!pendingUserDatasetId ? 0.5 : 1,
-                      }}
-                    >
-                      {!!pendingUserDatasetId ? "Loading…" : "Retry"}
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setUserLoadError(null);
-                      }}
-                      style={{
-                        fontSize: 10,
-                        color: "#cbd5e1",
-                        background: "transparent",
-                        border: "none",
-                        cursor: "pointer",
-                        padding: "1px 4px",
-                      }}
-                      aria-label="Dismiss error"
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {!myLibraryCollapsed && (
-                <ErrorBoundary label="the dataset library">
-                  <DatasetFolderTree
-                    datasets={userDatasets ?? []}
-                    activeUserDatasetId={pendingUserDatasetId ? null : activeUserDatasetId}
-                    loadingId={loadingId}
-                    onSelectDataset={handleSelectUserDataset}
-                    onDatasetsRemoved={handleDatasetsRemoved}
-                  />
-                </ErrorBoundary>
-              )}
-            </div>
-          )}
 
           {/* ── Markers section ── */}
           {markerDatasetId && (
