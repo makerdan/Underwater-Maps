@@ -747,10 +747,13 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           },
           onError: (err) => {
             setSavingToAccount(false);
+            const e = err as { data?: { detail?: string; details?: string; error?: string }; message?: string };
+            const detail = e?.data?.detail ?? e?.data?.details;
+            const msg = detail ?? (err instanceof Error ? err.message : "Parse failed");
             if (isRetry) {
-              setSaveError(err instanceof Error ? err.message : "Retry failed");
+              setSaveError(msg);
             } else {
-              setUploadError(err instanceof Error ? err.message : "Parse failed");
+              setUploadError(msg);
             }
           },
         },

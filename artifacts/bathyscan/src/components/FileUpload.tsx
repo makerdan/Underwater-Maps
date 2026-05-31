@@ -78,18 +78,18 @@ export const FileUpload = () => {
             }
           },
           onError: (err: unknown) => {
-            const e = err as { response?: { status?: number; data?: { error?: string; details?: string } }; message?: string };
-            const status = e?.response?.status;
-            const details = e?.response?.data?.details;
+            const e = err as { status?: number; data?: { detail?: string; details?: string; error?: string }; response?: { status?: number }; message?: string };
+            const status = e?.response?.status ?? e?.status;
+            const detail = e?.data?.detail ?? e?.data?.details;
             if (status === 401) {
               setError("Session expired — please sign in again to upload.");
             } else if (status === 413) {
               setError(
-                details ??
+                detail ??
                   "File is too large to upload. The maximum file size is 50 MB.",
               );
-            } else if (details) {
-              setError(details);
+            } else if (detail) {
+              setError(detail);
             } else {
               setError(e?.message ?? "Failed to parse terrain");
             }

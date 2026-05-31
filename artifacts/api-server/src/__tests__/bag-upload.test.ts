@@ -203,7 +203,7 @@ describe("POST /api/datasets/upload — .bag upload", () => {
   );
 
   it(
-    "returns 400 parse_error when a non-HDF5 buffer is sent with a .bag extension",
+    "returns 422 parse_error when a non-HDF5 buffer is sent with a .bag extension",
     async () => {
       const junk = Buffer.from("this is definitely not an HDF5 / BAG file at all");
 
@@ -216,8 +216,11 @@ describe("POST /api/datasets/upload — .bag upload", () => {
           contentType: "application/octet-stream",
         });
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(422);
       expect(res.body).toHaveProperty("error", "parse_error");
+      expect(res.body).toHaveProperty("detail");
+      expect(typeof res.body.detail).toBe("string");
+      expect(res.body.detail.length).toBeGreaterThan(0);
     },
     15_000,
   );
