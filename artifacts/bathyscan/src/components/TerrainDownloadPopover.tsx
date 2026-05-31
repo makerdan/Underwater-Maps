@@ -230,6 +230,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
           {/* Auth gate */}
           {!isSignedIn && (
             <div
+              data-testid="terrain-download-auth-gate"
               style={{
                 padding: "10px 12px",
                 background: "rgba(251,191,36,0.07)",

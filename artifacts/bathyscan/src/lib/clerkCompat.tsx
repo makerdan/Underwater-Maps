@@ -23,6 +23,22 @@ import {
 } from "@clerk/react";
 import { DEV_AUTH_BYPASS, FAKE_DEV_USER, FAKE_DEV_USER_ID } from "./devAuth";
 
+/**
+ * Dev/test-only: when set to `true` via `setBypassSimulateSignedOut`, the
+ * bypass hooks report the user as signed out.  Used by Playwright specs to
+ * exercise the unauthenticated UI branch (e.g. the auth-gate warning in
+ * TerrainDownloadPopover) without a real Clerk session.
+ *
+ * Only ever mutated in DEV_AUTH_BYPASS mode; Vite DCE removes the whole block
+ * in production builds (DEV_AUTH_BYPASS is a literal `false` there).
+ */
+let _bypassSimulateSignedOut = false;
+
+/** Toggle the dev-bypass auth simulation.  No-op in production builds. */
+export function setBypassSimulateSignedOut(v: boolean): void {
+  if (DEV_AUTH_BYPASS) _bypassSimulateSignedOut = v;
+}
+
 type ClerkProviderProps = React.ComponentProps<typeof RealClerkProvider>;
 
 const BypassClerkProvider: React.FC<ClerkProviderProps> = ({ children }) => (
@@ -34,14 +50,18 @@ type ShowProps = {
   children?: React.ReactNode;
 };
 
-const BypassShow: React.FC<ShowProps> = ({ when, children }) =>
-  when === "signed-in" ? <>{children}</> : null;
+const BypassShow: React.FC<ShowProps> = ({ when, children }) => {
+  if (_bypassSimulateSignedOut) {
+    return when === "signed-out" ? <>{children}</> : null;
+  }
+  return when === "signed-in" ? <>{children}</> : null;
+};
 
 const bypassUseUser = () =>
   ({
-    user: FAKE_DEV_USER,
+    user: _bypassSimulateSignedOut ? null : FAKE_DEV_USER,
     isLoaded: true,
-    isSignedIn: true,
+    isSignedIn: !_bypassSimulateSignedOut,
   }) as unknown as ReturnType<typeof realUseUser>;
 
 const bypassUseClerk = () =>
@@ -63,10 +83,10 @@ const bypassUseClerk = () =>
 
 const bypassUseAuth = () =>
   ({
-    isSignedIn: true,
+    isSignedIn: !_bypassSimulateSignedOut,
     isLoaded: true,
-    userId: FAKE_DEV_USER_ID,
-    sessionId: "dev-session",
+    userId: _bypassSimulateSignedOut ? null : FAKE_DEV_USER_ID,
+    sessionId: _bypassSimulateSignedOut ? null : "dev-session",
     orgId: null,
     getToken: async () => null,
   }) as unknown as ReturnType<typeof realUseAuth>;

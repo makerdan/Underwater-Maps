@@ -45,6 +45,7 @@ import { useDepthProfileStore, buildProfile } from "./depthProfileStore";
 import { useSettingsStore } from "./settingsStore";
 import { processFlyWheel } from "./flyWheel";
 import { openCrosshairContextMenu } from "./terrainContextMenu";
+import { setBypassSimulateSignedOut } from "./clerkCompat";
 import * as THREE from "three";
 
 /** Small synthetic terrain grid used by e2e tests when no real dataset is
@@ -385,6 +386,16 @@ export interface BathyTestApi {
   ) => EfhSpeciesProperties | null;
   openEfhDetailForFeature: (datasetId: string, index: number) => boolean;
   closeEfhDetail: () => void;
+  /**
+   * Toggle the dev-bypass auth simulation for the TerrainDownloadPopover UI
+   * test.  When `true`, `useAuth().isSignedIn` returns `false` so the
+   * unauthenticated popover branch (auth-gate warning + disabled download
+   * button) can be exercised in E2E specs without a real Clerk session.
+   *
+   * Always reset to `false` after the assertion so subsequent tests that
+   * rely on being signed in are unaffected.
+   */
+  setSimulateSignedOut: (v: boolean) => void;
 }
 
 declare global {
@@ -860,6 +871,9 @@ export function installTestHelpers(): void {
     },
     closeEfhDetail: () => {
       useUiStore.getState().setSelectedEfh(null);
+    },
+    setSimulateSignedOut: (v) => {
+      setBypassSimulateSignedOut(v);
     },
     showDepthProfileTerrainMenu: (x, y, point) =>
       useContextMenuStore
