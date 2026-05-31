@@ -787,17 +787,22 @@ router.get("/terrain/satellite-tile", async (req, res): Promise<void> => {
 
   const [minLon, minLat, maxLon, maxLat] = parts as [number, number, number, number];
 
+  // An antimeridian-crossing bbox has minLon > maxLon (e.g. Bering Sea:
+  // minLon=170, maxLon=-160). The lib/satelliteTile.ts helper handles the
+  // split-and-composite automatically, so we allow minLon > maxLon here as
+  // long as both values are valid longitudes in [-180, 180].  We only reject
+  // the degenerate case where minLon === maxLon (zero-width bbox).
   if (
-    minLon >= maxLon ||
+    minLon === maxLon ||
     minLat >= maxLat ||
-    minLon < -180 ||
-    maxLon > 180 ||
+    minLon < -180 || minLon > 180 ||
+    maxLon < -180 || maxLon > 180 ||
     minLat < -90 ||
     maxLat > 90
   ) {
     res.status(400).json({
       error: "invalid_bbox",
-      details: "bbox values out of range or min >= max",
+      details: "bbox values out of range or degenerate",
     });
     return;
   }
