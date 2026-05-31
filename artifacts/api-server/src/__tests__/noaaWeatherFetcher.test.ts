@@ -13,6 +13,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { NoaaUnavailableError } from "../lib/noaaWeatherFetcher";
 
 // ---------------------------------------------------------------------------
 // Hoist mock function refs so they are available both inside vi.mock() factory
@@ -230,11 +231,7 @@ describe("fetchWeatherStations — DB persistence and cache fallback", () => {
   // 3. NOAA down + stale DB row (>1 h) → error re-thrown
   // ─────────────────────────────────────────────────────────────────────────
 
-  it("re-throws when the DB row is older than 1 hour", async () => {
-    // When fetch rejects, fetchNearbyStations returns null which causes
-    // fetchWeatherStations to throw its own wrapper message before hitting the
-    // DB fallback path.  That wrapper is the error ultimately re-thrown when
-    // the DB row is too stale to serve.
+  it("re-throws a NoaaUnavailableError when the DB row is older than 1 hour", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connection timeout")));
 
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
@@ -242,24 +239,20 @@ describe("fetchWeatherStations — DB persistence and cache fallback", () => {
       { result: CACHED_RESULT, fetchedAt: twoHoursAgo },
     ]);
 
-    await expect(fetchWeatherStations(LAT, LON)).rejects.toThrow(
-      "NOAA stations fetch failed — triggering DB fallback",
-    );
+    await expect(fetchWeatherStations(LAT, LON)).rejects.toBeInstanceOf(NoaaUnavailableError);
   });
 
   // ─────────────────────────────────────────────────────────────────────────
   // 4. NOAA down + no DB row → error re-thrown
   // ─────────────────────────────────────────────────────────────────────────
 
-  it("re-throws when no DB row exists for the cache key", async () => {
+  it("re-throws a NoaaUnavailableError when no DB row exists for the cache key", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("DNS resolution failed")));
 
     // limitMock already defaults to [] in beforeEach
     limitMock.mockResolvedValueOnce([]);
 
-    await expect(fetchWeatherStations(LAT, LON)).rejects.toThrow(
-      "NOAA stations fetch failed — triggering DB fallback",
-    );
+    await expect(fetchWeatherStations(LAT, LON)).rejects.toBeInstanceOf(NoaaUnavailableError);
 
     // DB select should have been tried; insert should NOT
     expect(selectMock).toHaveBeenCalledTimes(1);

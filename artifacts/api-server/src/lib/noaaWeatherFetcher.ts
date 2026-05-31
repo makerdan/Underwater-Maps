@@ -427,7 +427,21 @@ export async function fetchWeatherStations(
       cache.set(key, { result: staleResult, fetchedAt: Date.now() - CACHE_TTL_MS + 60_000 });
       return staleResult;
     }
-    // No DB fallback available — re-throw so the route can return 502
-    throw err;
+    // No DB fallback available — throw a typed error so the route can return 503
+    throw new NoaaUnavailableError(
+      "NOAA weather API is unavailable and there is no cached data for this location",
+    );
+  }
+}
+
+/**
+ * Thrown by `fetchWeatherStations` when NOAA is unreachable **and** there is
+ * no DB-cached fallback result for the requested location.  Route handlers
+ * should catch this specifically and respond with HTTP 503.
+ */
+export class NoaaUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "NoaaUnavailableError";
   }
 }

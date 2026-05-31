@@ -13,7 +13,7 @@
  */
 
 import { Router } from "express";
-import { fetchWeatherStations } from "../lib/noaaWeatherFetcher.js";
+import { fetchWeatherStations, NoaaUnavailableError } from "../lib/noaaWeatherFetcher.js";
 
 const router = Router();
 
@@ -50,6 +50,14 @@ router.get("/weather-stations", async (req, res): Promise<void> => {
     const result = await fetchWeatherStations(lat, lon, radiusMiles);
     res.json(result);
   } catch (err) {
+    if (err instanceof NoaaUnavailableError) {
+      console.warn("[weather-stations] NOAA unavailable, no cached data:", (err as Error).message);
+      res.status(503).json({
+        error: "noaa_unavailable",
+        message: "NOAA weather data is currently unavailable and there is no cached data for this location. Please try again later.",
+      });
+      return;
+    }
     console.error("[weather-stations] Fetch failed:", (err as Error).message);
     res.status(502).json({
       error: "upstream_error",
