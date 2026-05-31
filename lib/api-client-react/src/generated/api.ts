@@ -20,38 +20,55 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AdminBucketMonitor200,
   ApiError,
   ClassifyResult,
   CreateDatasetFolderBody,
+  CreateRouteBody,
   CreateTrollingPresetFolderBody,
   DatasetCatalogEntry,
   DatasetCatalogSearchResult,
   DatasetFolder,
   DatasetMeta,
   DatasetPreview,
+  DeepHealthStatus,
+  DeleteAccount200,
   DeleteDatasetFolderBody,
   DeleteMarkersMine200,
   EfhFeatureCollection,
+  ExportUserData200,
+  FinalizeChunkedUpload200,
+  FinalizeChunkedUploadBody,
+  GetDatasetZonesParams,
   GetDatasetsCatalogParams,
   GetDatasetsCatalogSearchParams,
   GetDatasetsIdTerrainParams,
   GetDatasetsParams,
   GetEfhParams,
+  GetGcsJobStatus200,
+  GetGcsJobStatusParams,
   GetIntertidalSpotsParams,
   GetMarkersParams,
   GetNceiSearchParams,
   GetRawsStationsParams,
   GetRawsWeatherParams,
+  GetRoutesParams,
   GetSurfaceConditionsParams,
   GetTemperatureProfileParams,
+  GetTidal200,
+  GetTidalParams,
+  GetTidalSchedule200,
+  GetTidalScheduleParams,
   GetTrailsIdPointsParams,
   GetTrailsParams,
+  GetUploadJobStatus200,
   GetWaterTemperatureParams,
   GetWeatherStationsParams,
   GpsTrail,
   GpsTrailInput,
   HealthStatus,
   IntertidalSpotFeatureCollection,
+  ListGithubRepos200Item,
   Marker,
   MarkerInput,
   MarkerPatch,
@@ -59,19 +76,31 @@ import type {
   MoveDatasetFolderBody,
   NceiPortalResult,
   NceiPortalSaveBody,
+  PatchRouteBody,
   PoeClassifyRequest,
   PoeDescribeRequest,
   PoeError,
+  PoeHelp200,
+  PoeHelpBody,
   PoeModelList,
   PoeQueryRequest,
+  PoeUpscale200,
+  PoeUpscaleBody,
   PostDatasetsBboxQuery200,
   PostDatasetsBboxQueryBody,
   PostDatasetsUploadBody,
+  PutGithubFileContents200,
+  PutGithubFileContentsBody,
   QueryResult,
+  QueryTerrain200,
+  QueryTerrainBody,
   RawsStationsResponse,
   RawsWeatherResponse,
   RenameDatasetFolderBody,
   RenameTrollingPresetFolderBody,
+  RequestGcsUploadUrl200,
+  RequestGcsUploadUrlBody,
+  SavedRoute,
   SubstrateFeatureCollection,
   SurfaceConditions,
   TemperatureProfile,
@@ -81,6 +110,8 @@ import type {
   TrollingPresetFolder,
   TrollingPresetInput,
   TrollingPresetUpdate,
+  UploadDatasetChunk200,
+  UploadDatasetChunkBody,
   UploadResult,
   UserCatalogSave,
   UserDatasetMeta,
@@ -4878,4 +4909,1623 @@ export function useGetEfh<TData = Awaited<ReturnType<typeof getEfh>>, TError = E
 
 
 
+
+export const getGetDatasetZonesUrl = (id: string,
+    params: GetDatasetZonesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/datasets/${id}/zones?${stringifiedParams}` : `/api/datasets/${id}/zones`
+}
+
+/**
+ * Returns 1024 zone labels for the 32×32 coarse grid. Results are cached; a stable gridHash avoids redundant AI calls.
+ * @summary Get AI-classified seafloor/lake-bed zones for a dataset
+ */
+export const getDatasetZones = async (id: string,
+    params: GetDatasetZonesParams, options?: RequestInit): Promise<ClassifyResult> => {
+
+  return customFetch<ClassifyResult>(getGetDatasetZonesUrl(id,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDatasetZonesQueryKey = (id: string,
+    params?: GetDatasetZonesParams,) => {
+    return [
+    `/api/datasets/${id}/zones`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDatasetZonesQueryOptions = <TData = Awaited<ReturnType<typeof getDatasetZones>>, TError = ErrorType<ApiError>>(id: string,
+    params: GetDatasetZonesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetZones>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDatasetZonesQueryKey(id,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDatasetZones>>> = ({ signal }) => getDatasetZones(id,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDatasetZones>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDatasetZonesQueryResult = NonNullable<Awaited<ReturnType<typeof getDatasetZones>>>
+export type GetDatasetZonesQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get AI-classified seafloor/lake-bed zones for a dataset
+ */
+
+export function useGetDatasetZones<TData = Awaited<ReturnType<typeof getDatasetZones>>, TError = ErrorType<ApiError>>(
+ id: string,
+    params: GetDatasetZonesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetZones>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDatasetZonesQueryOptions(id,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUploadDatasetChunkUrl = () => {
+
+
+
+
+  return `/api/datasets/upload/chunk`
+}
+
+/**
+ * Receives a single 5 MB slice of a file. The first chunk (chunkIndex=0) opens the upload session; subsequent chunks must come from the same authenticated user.
+ * @summary Upload one chunk of a large dataset file
+ */
+export const uploadDatasetChunk = async (uploadDatasetChunkBody: UploadDatasetChunkBody, options?: RequestInit): Promise<UploadDatasetChunk200> => {
+    const formData = new FormData();
+formData.append(`uploadId`, uploadDatasetChunkBody.uploadId);
+formData.append(`chunkIndex`, uploadDatasetChunkBody.chunkIndex.toString())
+formData.append(`totalChunks`, uploadDatasetChunkBody.totalChunks.toString())
+formData.append(`file`, uploadDatasetChunkBody.file);
+
+  return customFetch<UploadDatasetChunk200>(getUploadDatasetChunkUrl(),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body:
+      formData,
+  }
+);}
+
+
+
+
+export const getUploadDatasetChunkMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadDatasetChunk>>, TError,{data: BodyType<UploadDatasetChunkBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadDatasetChunk>>, TError,{data: BodyType<UploadDatasetChunkBody>}, TContext> => {
+
+const mutationKey = ['uploadDatasetChunk'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadDatasetChunk>>, {data: BodyType<UploadDatasetChunkBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  uploadDatasetChunk(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadDatasetChunkMutationResult = NonNullable<Awaited<ReturnType<typeof uploadDatasetChunk>>>
+    export type UploadDatasetChunkMutationBody = BodyType<UploadDatasetChunkBody>
+    export type UploadDatasetChunkMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Upload one chunk of a large dataset file
+ */
+export const useUploadDatasetChunk = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadDatasetChunk>>, TError,{data: BodyType<UploadDatasetChunkBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof uploadDatasetChunk>>,
+        TError,
+        {data: BodyType<UploadDatasetChunkBody>},
+        TContext
+      > => {
+      return useMutation(getUploadDatasetChunkMutationOptions(options));
+    }
+
+export const getFinalizeChunkedUploadUrl = () => {
+
+
+
+
+  return `/api/datasets/upload/chunk/finalize`
+}
+
+/**
+ * Called after all chunks have been sent. Enqueues an async job that reassembles chunks, parses the file, builds the terrain grid, and saves to DB. Returns a jobId to poll.
+ * @summary Finalize a chunked upload and start processing
+ */
+export const finalizeChunkedUpload = async (finalizeChunkedUploadBody: FinalizeChunkedUploadBody, options?: RequestInit): Promise<FinalizeChunkedUpload200> => {
+
+  return customFetch<FinalizeChunkedUpload200>(getFinalizeChunkedUploadUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      finalizeChunkedUploadBody,)
+  }
+);}
+
+
+
+
+export const getFinalizeChunkedUploadMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof finalizeChunkedUpload>>, TError,{data: BodyType<FinalizeChunkedUploadBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof finalizeChunkedUpload>>, TError,{data: BodyType<FinalizeChunkedUploadBody>}, TContext> => {
+
+const mutationKey = ['finalizeChunkedUpload'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof finalizeChunkedUpload>>, {data: BodyType<FinalizeChunkedUploadBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  finalizeChunkedUpload(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type FinalizeChunkedUploadMutationResult = NonNullable<Awaited<ReturnType<typeof finalizeChunkedUpload>>>
+    export type FinalizeChunkedUploadMutationBody = BodyType<FinalizeChunkedUploadBody>
+    export type FinalizeChunkedUploadMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Finalize a chunked upload and start processing
+ */
+export const useFinalizeChunkedUpload = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof finalizeChunkedUpload>>, TError,{data: BodyType<FinalizeChunkedUploadBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof finalizeChunkedUpload>>,
+        TError,
+        {data: BodyType<FinalizeChunkedUploadBody>},
+        TContext
+      > => {
+      return useMutation(getFinalizeChunkedUploadMutationOptions(options));
+    }
+
+export const getGetUploadJobStatusUrl = (jobId: string,) => {
+
+
+
+
+  return `/api/datasets/upload/jobs/${jobId}`
+}
+
+/**
+ * Returns the current state of a background upload-processing job. Falls back to the database after a server restart.
+ * @summary Poll the status of a chunked-upload processing job
+ */
+export const getUploadJobStatus = async (jobId: string, options?: RequestInit): Promise<GetUploadJobStatus200> => {
+
+  return customFetch<GetUploadJobStatus200>(getGetUploadJobStatusUrl(jobId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUploadJobStatusQueryKey = (jobId: string,) => {
+    return [
+    `/api/datasets/upload/jobs/${jobId}`
+    ] as const;
+    }
+
+
+export const getGetUploadJobStatusQueryOptions = <TData = Awaited<ReturnType<typeof getUploadJobStatus>>, TError = ErrorType<ApiError>>(jobId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUploadJobStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUploadJobStatusQueryKey(jobId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUploadJobStatus>>> = ({ signal }) => getUploadJobStatus(jobId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(jobId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUploadJobStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUploadJobStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getUploadJobStatus>>>
+export type GetUploadJobStatusQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Poll the status of a chunked-upload processing job
+ */
+
+export function useGetUploadJobStatus<TData = Awaited<ReturnType<typeof getUploadJobStatus>>, TError = ErrorType<ApiError>>(
+ jobId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUploadJobStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUploadJobStatusQueryOptions(jobId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getRequestGcsUploadUrlUrl = () => {
+
+
+
+
+  return `/api/datasets/upload/request-gcs-url`
+}
+
+/**
+ * Generates a presigned GCS PUT URL for files >50 MB. The client uploads directly to GCS; the API server's memory is never involved.
+ * @summary Get a presigned GCS PUT URL for oversized file uploads
+ */
+export const requestGcsUploadUrl = async (requestGcsUploadUrlBody: RequestGcsUploadUrlBody, options?: RequestInit): Promise<RequestGcsUploadUrl200> => {
+
+  return customFetch<RequestGcsUploadUrl200>(getRequestGcsUploadUrlUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      requestGcsUploadUrlBody,)
+  }
+);}
+
+
+
+
+export const getRequestGcsUploadUrlMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestGcsUploadUrl>>, TError,{data: BodyType<RequestGcsUploadUrlBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestGcsUploadUrl>>, TError,{data: BodyType<RequestGcsUploadUrlBody>}, TContext> => {
+
+const mutationKey = ['requestGcsUploadUrl'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestGcsUploadUrl>>, {data: BodyType<RequestGcsUploadUrlBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  requestGcsUploadUrl(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestGcsUploadUrlMutationResult = NonNullable<Awaited<ReturnType<typeof requestGcsUploadUrl>>>
+    export type RequestGcsUploadUrlMutationBody = BodyType<RequestGcsUploadUrlBody>
+    export type RequestGcsUploadUrlMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Get a presigned GCS PUT URL for oversized file uploads
+ */
+export const useRequestGcsUploadUrl = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestGcsUploadUrl>>, TError,{data: BodyType<RequestGcsUploadUrlBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestGcsUploadUrl>>,
+        TError,
+        {data: BodyType<RequestGcsUploadUrlBody>},
+        TContext
+      > => {
+      return useMutation(getRequestGcsUploadUrlMutationOptions(options));
+    }
+
+export const getGetGcsJobStatusUrl = (params: GetGcsJobStatusParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/datasets/upload/gcs-job-status?${stringifiedParams}` : `/api/datasets/upload/gcs-job-status`
+}
+
+/**
+ * Returns the status of a GCS background-processing job by objectKey. The objectKey must belong to the authenticated user.
+ * @summary Check processing status for a GCS-backed upload job
+ */
+export const getGcsJobStatus = async (params: GetGcsJobStatusParams, options?: RequestInit): Promise<GetGcsJobStatus200> => {
+
+  return customFetch<GetGcsJobStatus200>(getGetGcsJobStatusUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGcsJobStatusQueryKey = (params?: GetGcsJobStatusParams,) => {
+    return [
+    `/api/datasets/upload/gcs-job-status`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetGcsJobStatusQueryOptions = <TData = Awaited<ReturnType<typeof getGcsJobStatus>>, TError = ErrorType<ApiError>>(params: GetGcsJobStatusParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGcsJobStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGcsJobStatusQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGcsJobStatus>>> = ({ signal }) => getGcsJobStatus(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGcsJobStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGcsJobStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getGcsJobStatus>>>
+export type GetGcsJobStatusQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Check processing status for a GCS-backed upload job
+ */
+
+export function useGetGcsJobStatus<TData = Awaited<ReturnType<typeof getGcsJobStatus>>, TError = ErrorType<ApiError>>(
+ params: GetGcsJobStatusParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGcsJobStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGcsJobStatusQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetTidalUrl = (params: GetTidalParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/tidal?${stringifiedParams}` : `/api/tidal`
+}
+
+/**
+ * Queries the nearest NOAA water-level and currents-prediction stations for the given coordinates and returns current conditions with slack window data.
+ * @summary Current tide height, current speed/direction, and next high/low event
+ */
+export const getTidal = async (params: GetTidalParams, options?: RequestInit): Promise<GetTidal200> => {
+
+  return customFetch<GetTidal200>(getGetTidalUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTidalQueryKey = (params?: GetTidalParams,) => {
+    return [
+    `/api/tidal`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetTidalQueryOptions = <TData = Awaited<ReturnType<typeof getTidal>>, TError = ErrorType<ApiError>>(params: GetTidalParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTidal>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTidalQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTidal>>> = ({ signal }) => getTidal(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTidal>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTidalQueryResult = NonNullable<Awaited<ReturnType<typeof getTidal>>>
+export type GetTidalQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Current tide height, current speed/direction, and next high/low event
+ */
+
+export function useGetTidal<TData = Awaited<ReturnType<typeof getTidal>>, TError = ErrorType<ApiError>>(
+ params: GetTidalParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTidal>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTidalQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetTidalScheduleUrl = (params: GetTidalScheduleParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/tidal/schedule?${stringifiedParams}` : `/api/tidal/schedule`
+}
+
+/**
+ * Returns an ordered list of high/low tide events with slack windows and current direction changes for the requested location and day range.
+ * @summary Multi-day tide schedule with slack windows
+ */
+export const getTidalSchedule = async (params: GetTidalScheduleParams, options?: RequestInit): Promise<GetTidalSchedule200> => {
+
+  return customFetch<GetTidalSchedule200>(getGetTidalScheduleUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTidalScheduleQueryKey = (params?: GetTidalScheduleParams,) => {
+    return [
+    `/api/tidal/schedule`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetTidalScheduleQueryOptions = <TData = Awaited<ReturnType<typeof getTidalSchedule>>, TError = ErrorType<ApiError>>(params: GetTidalScheduleParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTidalSchedule>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTidalScheduleQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTidalSchedule>>> = ({ signal }) => getTidalSchedule(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTidalSchedule>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTidalScheduleQueryResult = NonNullable<Awaited<ReturnType<typeof getTidalSchedule>>>
+export type GetTidalScheduleQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Multi-day tide schedule with slack windows
+ */
+
+export function useGetTidalSchedule<TData = Awaited<ReturnType<typeof getTidalSchedule>>, TError = ErrorType<ApiError>>(
+ params: GetTidalScheduleParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTidalSchedule>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTidalScheduleQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetDeepHealthzUrl = () => {
+
+
+
+
+  return `/api/healthz/deep`
+}
+
+/**
+ * Probes each critical subsystem and returns per-subsystem status. Returns HTTP 503 when any subsystem is degraded. Use the shallow /healthz for load-balancer liveness probes.
+ * @summary Deep health probe — checks DB, Poe, and AOOS subsystems
+ */
+export const getDeepHealthz = async ( options?: RequestInit): Promise<DeepHealthStatus> => {
+
+  return customFetch<DeepHealthStatus>(getGetDeepHealthzUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDeepHealthzQueryKey = () => {
+    return [
+    `/api/healthz/deep`
+    ] as const;
+    }
+
+
+export const getGetDeepHealthzQueryOptions = <TData = Awaited<ReturnType<typeof getDeepHealthz>>, TError = ErrorType<DeepHealthStatus>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDeepHealthz>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDeepHealthzQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDeepHealthz>>> = ({ signal }) => getDeepHealthz({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDeepHealthz>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDeepHealthzQueryResult = NonNullable<Awaited<ReturnType<typeof getDeepHealthz>>>
+export type GetDeepHealthzQueryError = ErrorType<DeepHealthStatus>
+
+
+/**
+ * @summary Deep health probe — checks DB, Poe, and AOOS subsystems
+ */
+
+export function useGetDeepHealthz<TData = Awaited<ReturnType<typeof getDeepHealthz>>, TError = ErrorType<DeepHealthStatus>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDeepHealthz>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDeepHealthzQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getAdminBucketMonitorUrl = () => {
+
+
+
+
+  return `/api/admin/bucket-monitor`
+}
+
+/**
+ * Returns a JSON summary of all objects in the GCS dataset landing bucket broken down by status (pending, processing, done, failed). Restricted to admin users.
+ * @summary GCS dataset landing bucket processing summary
+ */
+export const adminBucketMonitor = async ( options?: RequestInit): Promise<AdminBucketMonitor200> => {
+
+  return customFetch<AdminBucketMonitor200>(getAdminBucketMonitorUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getAdminBucketMonitorQueryKey = () => {
+    return [
+    `/api/admin/bucket-monitor`
+    ] as const;
+    }
+
+
+export const getAdminBucketMonitorQueryOptions = <TData = Awaited<ReturnType<typeof adminBucketMonitor>>, TError = ErrorType<ApiError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof adminBucketMonitor>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getAdminBucketMonitorQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof adminBucketMonitor>>> = ({ signal }) => adminBucketMonitor({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof adminBucketMonitor>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type AdminBucketMonitorQueryResult = NonNullable<Awaited<ReturnType<typeof adminBucketMonitor>>>
+export type AdminBucketMonitorQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary GCS dataset landing bucket processing summary
+ */
+
+export function useAdminBucketMonitor<TData = Awaited<ReturnType<typeof adminBucketMonitor>>, TError = ErrorType<ApiError>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof adminBucketMonitor>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getAdminBucketMonitorQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getExportUserDataUrl = () => {
+
+
+
+
+  return `/api/me/export`
+}
+
+/**
+ * Returns markers, custom datasets, GPS trails, and settings as a JSON attachment. Used by Settings → Account & Privacy.
+ * @summary Export all user data as a downloadable JSON file
+ */
+export const exportUserData = async ( options?: RequestInit): Promise<ExportUserData200> => {
+
+  return customFetch<ExportUserData200>(getExportUserDataUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExportUserDataQueryKey = () => {
+    return [
+    `/api/me/export`
+    ] as const;
+    }
+
+
+export const getExportUserDataQueryOptions = <TData = Awaited<ReturnType<typeof exportUserData>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportUserData>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportUserDataQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportUserData>>> = ({ signal }) => exportUserData({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportUserData>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExportUserDataQueryResult = NonNullable<Awaited<ReturnType<typeof exportUserData>>>
+export type ExportUserDataQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Export all user data as a downloadable JSON file
+ */
+
+export function useExportUserData<TData = Awaited<ReturnType<typeof exportUserData>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportUserData>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExportUserDataQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getDeleteAccountUrl = () => {
+
+
+
+
+  return `/api/me`
+}
+
+/**
+ * Deletes all markers, custom datasets, GPS trails, trail points, and settings for the caller. This action is irreversible.
+ * @summary Permanently delete the authenticated user's account and all associated data
+ */
+export const deleteAccount = async ( options?: RequestInit): Promise<DeleteAccount200> => {
+
+  return customFetch<DeleteAccount200>(getDeleteAccountUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteAccountMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAccount>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAccount>>, TError,void, TContext> => {
+
+const mutationKey = ['deleteAccount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAccount>>, void> = () => {
+
+
+          return  deleteAccount(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAccountMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAccount>>>
+
+    export type DeleteAccountMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Permanently delete the authenticated user's account and all associated data
+ */
+export const useDeleteAccount = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAccount>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAccount>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDeleteAccountMutationOptions(options));
+    }
+
+export const getListGithubReposUrl = () => {
+
+
+
+
+  return `/api/github/repos`
+}
+
+/**
+ * Returns up to 100 repositories for the authenticated GitHub token.
+ * @summary List GitHub repositories accessible to the configured PAT
+ */
+export const listGithubRepos = async ( options?: RequestInit): Promise<ListGithubRepos200Item[]> => {
+
+  return customFetch<ListGithubRepos200Item[]>(getListGithubReposUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGithubReposQueryKey = () => {
+    return [
+    `/api/github/repos`
+    ] as const;
+    }
+
+
+export const getListGithubReposQueryOptions = <TData = Awaited<ReturnType<typeof listGithubRepos>>, TError = ErrorType<ApiError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGithubRepos>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGithubReposQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGithubRepos>>> = ({ signal }) => listGithubRepos({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGithubRepos>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGithubReposQueryResult = NonNullable<Awaited<ReturnType<typeof listGithubRepos>>>
+export type ListGithubReposQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List GitHub repositories accessible to the configured PAT
+ */
+
+export function useListGithubRepos<TData = Awaited<ReturnType<typeof listGithubRepos>>, TError = ErrorType<ApiError>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGithubRepos>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGithubReposQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPutGithubFileContentsUrl = (owner: string,
+    repo: string,
+    path: string,) => {
+
+
+
+
+  return `/api/github/repos/${owner}/${repo}/contents/${path}`
+}
+
+/**
+ * Creates or updates a file. Requires a commit message, base64-encoded content, and optionally the current blob SHA (for updates) and a branch name.
+ * @summary Create or update a file in a GitHub repository
+ */
+export const putGithubFileContents = async (owner: string,
+    repo: string,
+    path: string,
+    putGithubFileContentsBody: PutGithubFileContentsBody, options?: RequestInit): Promise<PutGithubFileContents200> => {
+
+  return customFetch<PutGithubFileContents200>(getPutGithubFileContentsUrl(owner,repo,path),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      putGithubFileContentsBody,)
+  }
+);}
+
+
+
+
+export const getPutGithubFileContentsMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putGithubFileContents>>, TError,{owner: string;repo: string;path: string;data: BodyType<PutGithubFileContentsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof putGithubFileContents>>, TError,{owner: string;repo: string;path: string;data: BodyType<PutGithubFileContentsBody>}, TContext> => {
+
+const mutationKey = ['putGithubFileContents'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof putGithubFileContents>>, {owner: string;repo: string;path: string;data: BodyType<PutGithubFileContentsBody>}> = (props) => {
+          const {owner,repo,path,data} = props ?? {};
+
+          return  putGithubFileContents(owner,repo,path,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PutGithubFileContentsMutationResult = NonNullable<Awaited<ReturnType<typeof putGithubFileContents>>>
+    export type PutGithubFileContentsMutationBody = BodyType<PutGithubFileContentsBody>
+    export type PutGithubFileContentsMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Create or update a file in a GitHub repository
+ */
+export const usePutGithubFileContents = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putGithubFileContents>>, TError,{owner: string;repo: string;path: string;data: BodyType<PutGithubFileContentsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof putGithubFileContents>>,
+        TError,
+        {owner: string;repo: string;path: string;data: BodyType<PutGithubFileContentsBody>},
+        TContext
+      > => {
+      return useMutation(getPutGithubFileContentsMutationOptions(options));
+    }
+
+export const getQueryTerrainUrl = () => {
+
+
+
+
+  return `/api/query`
+}
+
+/**
+ * Receives a free-text query and terrain context. Sends to GPT with terrain tool schema and returns tool calls and/or a text response that the frontend executes locally. Rate-limited per user and per IP.
+ * @summary Natural-language terrain query via OpenAI tool calling ("Ask the Ocean")
+ */
+export const queryTerrain = async (queryTerrainBody: QueryTerrainBody, options?: RequestInit): Promise<QueryTerrain200> => {
+
+  return customFetch<QueryTerrain200>(getQueryTerrainUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      queryTerrainBody,)
+  }
+);}
+
+
+
+
+export const getQueryTerrainMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof queryTerrain>>, TError,{data: BodyType<QueryTerrainBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof queryTerrain>>, TError,{data: BodyType<QueryTerrainBody>}, TContext> => {
+
+const mutationKey = ['queryTerrain'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof queryTerrain>>, {data: BodyType<QueryTerrainBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  queryTerrain(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type QueryTerrainMutationResult = NonNullable<Awaited<ReturnType<typeof queryTerrain>>>
+    export type QueryTerrainMutationBody = BodyType<QueryTerrainBody>
+    export type QueryTerrainMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Natural-language terrain query via OpenAI tool calling ("Ask the Ocean")
+ */
+export const useQueryTerrain = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof queryTerrain>>, TError,{data: BodyType<QueryTerrainBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof queryTerrain>>,
+        TError,
+        {data: BodyType<QueryTerrainBody>},
+        TContext
+      > => {
+      return useMutation(getQueryTerrainMutationOptions(options));
+    }
+
+export const getPoeHelpUrl = () => {
+
+
+
+
+  return `/api/poe/help`
+}
+
+/**
+ * Receives a plain-text question (and optional conversation history) and returns a concise answer drawn from the built-in help articles.
+ * @summary Answer a BathyScan help question using Poe AI
+ */
+export const poeHelp = async (poeHelpBody: PoeHelpBody, options?: RequestInit): Promise<PoeHelp200> => {
+
+  return customFetch<PoeHelp200>(getPoeHelpUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      poeHelpBody,)
+  }
+);}
+
+
+
+
+export const getPoeHelpMutationOptions = <TError = ErrorType<ApiError | PoeError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof poeHelp>>, TError,{data: BodyType<PoeHelpBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof poeHelp>>, TError,{data: BodyType<PoeHelpBody>}, TContext> => {
+
+const mutationKey = ['poeHelp'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof poeHelp>>, {data: BodyType<PoeHelpBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  poeHelp(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PoeHelpMutationResult = NonNullable<Awaited<ReturnType<typeof poeHelp>>>
+    export type PoeHelpMutationBody = BodyType<PoeHelpBody>
+    export type PoeHelpMutationError = ErrorType<ApiError | PoeError>
+
+    /**
+ * @summary Answer a BathyScan help question using Poe AI
+ */
+export const usePoeHelp = <TError = ErrorType<ApiError | PoeError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof poeHelp>>, TError,{data: BodyType<PoeHelpBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof poeHelp>>,
+        TError,
+        {data: BodyType<PoeHelpBody>},
+        TContext
+      > => {
+      return useMutation(getPoeHelpMutationOptions(options));
+    }
+
+export const getPoeUpscaleUrl = () => {
+
+
+
+
+  return `/api/poe/upscale`
+}
+
+/**
+ * Accepts a base64-encoded PNG and an upscale factor (2 or 4). Returns the upscaled image as a base64 PNG. On failure returns a non-200 status so the frontend can fall back to the original bitmap.
+ * @summary Upscale a 2D heatmap PNG via Poe (TopazLabs model)
+ */
+export const poeUpscale = async (poeUpscaleBody: PoeUpscaleBody, options?: RequestInit): Promise<PoeUpscale200> => {
+
+  return customFetch<PoeUpscale200>(getPoeUpscaleUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      poeUpscaleBody,)
+  }
+);}
+
+
+
+
+export const getPoeUpscaleMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof poeUpscale>>, TError,{data: BodyType<PoeUpscaleBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof poeUpscale>>, TError,{data: BodyType<PoeUpscaleBody>}, TContext> => {
+
+const mutationKey = ['poeUpscale'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof poeUpscale>>, {data: BodyType<PoeUpscaleBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  poeUpscale(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PoeUpscaleMutationResult = NonNullable<Awaited<ReturnType<typeof poeUpscale>>>
+    export type PoeUpscaleMutationBody = BodyType<PoeUpscaleBody>
+    export type PoeUpscaleMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Upscale a 2D heatmap PNG via Poe (TopazLabs model)
+ */
+export const usePoeUpscale = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof poeUpscale>>, TError,{data: BodyType<PoeUpscaleBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof poeUpscale>>,
+        TError,
+        {data: BodyType<PoeUpscaleBody>},
+        TContext
+      > => {
+      return useMutation(getPoeUpscaleMutationOptions(options));
+    }
+
+export const getGetRoutesUrl = (params: GetRoutesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/routes?${stringifiedParams}` : `/api/routes`
+}
+
+/**
+ * Returns all routes belonging to the authenticated user for the given dataset, ordered by creation time.
+ * @summary List saved navigation routes for a dataset
+ */
+export const getRoutes = async (params: GetRoutesParams, options?: RequestInit): Promise<SavedRoute[]> => {
+
+  return customFetch<SavedRoute[]>(getGetRoutesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRoutesQueryKey = (params?: GetRoutesParams,) => {
+    return [
+    `/api/routes`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetRoutesQueryOptions = <TData = Awaited<ReturnType<typeof getRoutes>>, TError = ErrorType<ApiError>>(params: GetRoutesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRoutes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRoutesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRoutes>>> = ({ signal }) => getRoutes(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRoutes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRoutesQueryResult = NonNullable<Awaited<ReturnType<typeof getRoutes>>>
+export type GetRoutesQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List saved navigation routes for a dataset
+ */
+
+export function useGetRoutes<TData = Awaited<ReturnType<typeof getRoutes>>, TError = ErrorType<ApiError>>(
+ params: GetRoutesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRoutes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRoutesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateRouteUrl = () => {
+
+
+
+
+  return `/api/routes`
+}
+
+/**
+ * Saves a named waypoint sequence for the given dataset. Waypoints must contain at least 2 and at most 20 points.
+ * @summary Create a new saved navigation route
+ */
+export const createRoute = async (createRouteBody: CreateRouteBody, options?: RequestInit): Promise<SavedRoute> => {
+
+  return customFetch<SavedRoute>(getCreateRouteUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createRouteBody,)
+  }
+);}
+
+
+
+
+export const getCreateRouteMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRoute>>, TError,{data: BodyType<CreateRouteBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createRoute>>, TError,{data: BodyType<CreateRouteBody>}, TContext> => {
+
+const mutationKey = ['createRoute'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createRoute>>, {data: BodyType<CreateRouteBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createRoute(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateRouteMutationResult = NonNullable<Awaited<ReturnType<typeof createRoute>>>
+    export type CreateRouteMutationBody = BodyType<CreateRouteBody>
+    export type CreateRouteMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Create a new saved navigation route
+ */
+export const useCreateRoute = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRoute>>, TError,{data: BodyType<CreateRouteBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createRoute>>,
+        TError,
+        {data: BodyType<CreateRouteBody>},
+        TContext
+      > => {
+      return useMutation(getCreateRouteMutationOptions(options));
+    }
+
+export const getPatchRouteUrl = (id: string,) => {
+
+
+
+
+  return `/api/routes/${id}`
+}
+
+/**
+ * @summary Rename a saved navigation route
+ */
+export const patchRoute = async (id: string,
+    patchRouteBody: PatchRouteBody, options?: RequestInit): Promise<SavedRoute> => {
+
+  return customFetch<SavedRoute>(getPatchRouteUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      patchRouteBody,)
+  }
+);}
+
+
+
+
+export const getPatchRouteMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchRoute>>, TError,{id: string;data: BodyType<PatchRouteBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchRoute>>, TError,{id: string;data: BodyType<PatchRouteBody>}, TContext> => {
+
+const mutationKey = ['patchRoute'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchRoute>>, {id: string;data: BodyType<PatchRouteBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  patchRoute(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchRouteMutationResult = NonNullable<Awaited<ReturnType<typeof patchRoute>>>
+    export type PatchRouteMutationBody = BodyType<PatchRouteBody>
+    export type PatchRouteMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Rename a saved navigation route
+ */
+export const usePatchRoute = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchRoute>>, TError,{id: string;data: BodyType<PatchRouteBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof patchRoute>>,
+        TError,
+        {id: string;data: BodyType<PatchRouteBody>},
+        TContext
+      > => {
+      return useMutation(getPatchRouteMutationOptions(options));
+    }
+
+export const getDeleteRouteUrl = (id: string,) => {
+
+
+
+
+  return `/api/routes/${id}`
+}
+
+/**
+ * @summary Delete a saved navigation route
+ */
+export const deleteRoute = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteRouteUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteRouteMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteRoute>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteRoute>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteRoute'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteRoute>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteRoute(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteRouteMutationResult = NonNullable<Awaited<ReturnType<typeof deleteRoute>>>
+
+    export type DeleteRouteMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Delete a saved navigation route
+ */
+export const useDeleteRoute = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteRoute>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteRoute>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteRouteMutationOptions(options));
+    }
 

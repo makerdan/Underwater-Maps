@@ -28,6 +28,18 @@ tags:
     description: Saved trolling heading/speed presets
   - name: trolling-preset-folders
     description: Folders for grouping saved trolling presets
+  - name: routes
+    description: Saved navigation route operations
+  - name: tidal
+    description: NOAA tide prediction operations
+  - name: admin
+    description: Admin-only operations
+  - name: account
+    description: User account and data export operations
+  - name: github
+    description: GitHub repository sync operations
+  - name: query
+    description: OpenAI terrain query (Ask the Ocean) operations
 paths:
   /datasets:
     get:
@@ -2074,6 +2086,947 @@ paths:
               schema:
                 $ref: "#/components/schemas/EfhFeatureCollection"
 
+  /datasets/{id}/zones:
+    get:
+      operationId: getDatasetZones
+      tags: [datasets]
+      summary: Get AI-classified seafloor/lake-bed zones for a dataset
+      description: Returns 1024 zone labels for the 32×32 coarse grid. Results are cached; a stable gridHash avoids redundant AI calls.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Dataset ID (UUID, "upload", or built-in preset ID)
+        - in: query
+          name: h
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{8}$|^[a-f0-9]{64}$'
+          description: Lowercase hex hash of the depth grid (8-char FNV-1a or 64-char SHA-256) for cache keying
+        - in: query
+          name: w
+          required: true
+          schema:
+            type: string
+            enum: [saltwater, freshwater]
+          description: Water type — must be 'saltwater' or 'freshwater'
+      responses:
+        "200":
+          description: Zone classification result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClassifyResult"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /datasets/upload/chunk:
+    post:
+      operationId: uploadDatasetChunk
+      tags: [datasets]
+      summary: Upload one chunk of a large dataset file
+      description: Receives a single 5 MB slice of a file. The first chunk (chunkIndex=0) opens the upload session; subsequent chunks must come from the same authenticated user.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [uploadId, chunkIndex, totalChunks, file]
+              properties:
+                uploadId:
+                  type: string
+                  description: Stable UUID chosen by the client for this upload session
+                chunkIndex:
+                  type: integer
+                  description: 0-based index of this slice
+                totalChunks:
+                  type: integer
+                  description: Total number of slices the client will send
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Chunk received
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: integer
+        "400":
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /datasets/upload/chunk/finalize:
+    post:
+      operationId: finalizeChunkedUpload
+      tags: [datasets]
+      summary: Finalize a chunked upload and start processing
+      description: Called after all chunks have been sent. Enqueues an async job that reassembles chunks, parses the file, builds the terrain grid, and saves to DB. Returns a jobId to poll.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uploadId, fileName, totalChunks]
+              properties:
+                uploadId:
+                  type: string
+                fileName:
+                  type: string
+                totalChunks:
+                  type: integer
+                resolution:
+                  type: integer
+                  default: 256
+                  minimum: 32
+                  maximum: 512
+      responses:
+        "200":
+          description: Job enqueued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId:
+                    type: string
+        "400":
+          description: Invalid parameters or missing chunks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Upload session belongs to a different user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Upload session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /datasets/upload/jobs/{jobId}:
+    get:
+      operationId: getUploadJobStatus
+      tags: [datasets]
+      summary: Poll the status of a chunked-upload processing job
+      description: Returns the current state of a background upload-processing job. Falls back to the database after a server restart.
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Job status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [queued, processing, done, error]
+                  progress:
+                    type: integer
+                  error:
+                    type: string
+                  datasetId:
+                    type: string
+        "403":
+          description: Job belongs to a different user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /datasets/upload/request-gcs-url:
+    post:
+      operationId: requestGcsUploadUrl
+      tags: [datasets]
+      summary: Get a presigned GCS PUT URL for oversized file uploads
+      description: Generates a presigned GCS PUT URL for files >50 MB. The client uploads directly to GCS; the API server's memory is never involved.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileName]
+              properties:
+                fileName:
+                  type: string
+      responses:
+        "200":
+          description: Presigned upload URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uploadUrl:
+                    type: string
+                  objectKey:
+                    type: string
+        "400":
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "415":
+          description: Unsupported file type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /datasets/upload/gcs-job-status:
+    get:
+      operationId: getGcsJobStatus
+      tags: [datasets]
+      summary: Check processing status for a GCS-backed upload job
+      description: Returns the status of a GCS background-processing job by objectKey. The objectKey must belong to the authenticated user.
+      parameters:
+        - in: query
+          name: objectKey
+          required: true
+          schema:
+            type: string
+          description: GCS object key returned by /datasets/upload/request-gcs-url
+      responses:
+        "200":
+          description: GCS job status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [pending, processing, done, error]
+                  datasetId:
+                    type: string
+                  error:
+                    type: string
+        "400":
+          description: objectKey is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Object key does not belong to this user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /tidal:
+    get:
+      operationId: getTidal
+      tags: [tidal]
+      summary: Current tide height, current speed/direction, and next high/low event
+      description: Queries the nearest NOAA water-level and currents-prediction stations for the given coordinates and returns current conditions with slack window data.
+      parameters:
+        - in: query
+          name: lat
+          required: true
+          schema:
+            type: number
+          description: Latitude in decimal degrees
+        - in: query
+          name: lon
+          required: true
+          schema:
+            type: number
+          description: Longitude in decimal degrees
+        - in: query
+          name: datetime
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: ISO 8601 datetime for the prediction (defaults to now)
+      responses:
+        "200":
+          description: Current tidal conditions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available:
+                    type: boolean
+                  tideHeight:
+                    type: number
+                  currentDirection:
+                    type: number
+                  currentSpeed:
+                    type: number
+                  nextEvent:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                        enum: [high, low]
+                      time:
+                        type: string
+                      height:
+                        type: number
+                  source:
+                    type: string
+                    enum: [noaa, estimated]
+        "400":
+          description: lat and lon are required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /tidal/schedule:
+    get:
+      operationId: getTidalSchedule
+      tags: [tidal]
+      summary: Multi-day tide schedule with slack windows
+      description: Returns an ordered list of high/low tide events with slack windows and current direction changes for the requested location and day range.
+      parameters:
+        - in: query
+          name: lat
+          required: true
+          schema:
+            type: number
+        - in: query
+          name: lon
+          required: true
+          schema:
+            type: number
+        - in: query
+          name: days
+          required: false
+          schema:
+            type: integer
+            default: 3
+            minimum: 1
+            maximum: 14
+          description: Number of days to return (1–14)
+        - in: query
+          name: start
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: ISO 8601 start datetime (defaults to now)
+      responses:
+        "200":
+          description: Tide schedule
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available:
+                    type: boolean
+                  source:
+                    type: string
+                    enum: [noaa, estimated]
+                  stationId:
+                    type: string
+                  stationName:
+                    type: string
+                  rangeStart:
+                    type: string
+                  rangeEnd:
+                    type: string
+                  events:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                          enum: [high, low]
+                        time:
+                          type: string
+                        height:
+                          type: number
+                        nextDirectionDeg:
+                          type: number
+                        windowStart:
+                          type: string
+                        windowEnd:
+                          type: string
+        "400":
+          description: lat and lon are required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /healthz/deep:
+    get:
+      operationId: getDeepHealthz
+      tags: [health]
+      summary: Deep health probe — checks DB, Poe, and AOOS subsystems
+      description: Probes each critical subsystem and returns per-subsystem status. Returns HTTP 503 when any subsystem is degraded. Use the shallow /healthz for load-balancer liveness probes.
+      responses:
+        "200":
+          description: All subsystems healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeepHealthStatus"
+        "503":
+          description: One or more subsystems degraded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeepHealthStatus"
+
+  /admin/bucket-monitor:
+    get:
+      operationId: adminBucketMonitor
+      tags: [admin]
+      summary: GCS dataset landing bucket processing summary
+      description: Returns a JSON summary of all objects in the GCS dataset landing bucket broken down by status (pending, processing, done, failed). Restricted to admin users.
+      responses:
+        "200":
+          description: Bucket status summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pending:
+                    type: integer
+                  processing:
+                    type: integer
+                  done:
+                    type: integer
+                  failed:
+                    type: integer
+                  lifecycle:
+                    type: object
+                    properties:
+                      processedDatasetsTtlDays:
+                        type: integer
+                      failedDatasetsTtlDays:
+                        type: integer
+                      note:
+                        type: string
+                      lastAppliedAt:
+                        type: string
+                        nullable: true
+                      lastApplyError:
+                        type: string
+                        nullable: true
+        "403":
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /me/export:
+    get:
+      operationId: exportUserData
+      tags: [account]
+      summary: Export all user data as a downloadable JSON file
+      description: Returns markers, custom datasets, GPS trails, and settings as a JSON attachment. Used by Settings → Account & Privacy.
+      responses:
+        "200":
+          description: Full user data export (JSON attachment)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exportedAt:
+                    type: string
+                  userId:
+                    type: string
+                  settings:
+                    type: object
+                    nullable: true
+                  markers:
+                    type: array
+                    items:
+                      type: object
+                  customDatasets:
+                    type: array
+                    items:
+                      type: object
+                  trails:
+                    type: array
+                    items:
+                      type: object
+
+  /me:
+    delete:
+      operationId: deleteAccount
+      tags: [account]
+      summary: Permanently delete the authenticated user's account and all associated data
+      description: Deletes all markers, custom datasets, GPS trails, trail points, and settings for the caller. This action is irreversible.
+      responses:
+        "200":
+          description: Account deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  deletedAt:
+                    type: string
+
+  /github/repos:
+    get:
+      operationId: listGithubRepos
+      tags: [github]
+      summary: List GitHub repositories accessible to the configured PAT
+      description: Returns up to 100 repositories for the authenticated GitHub token.
+      responses:
+        "200":
+          description: Repository list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        "500":
+          description: GitHub API error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /github/repos/{owner}/{repo}/contents/{path}:
+    put:
+      operationId: putGithubFileContents
+      tags: [github]
+      summary: Create or update a file in a GitHub repository
+      description: Creates or updates a file. Requires a commit message, base64-encoded content, and optionally the current blob SHA (for updates) and a branch name.
+      parameters:
+        - in: path
+          name: owner
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: repo
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message, content]
+              properties:
+                message:
+                  type: string
+                  description: Commit message
+                content:
+                  type: string
+                  description: Base64-encoded file content
+                sha:
+                  type: string
+                  description: Current blob SHA (required when updating an existing file)
+                branch:
+                  type: string
+                  description: Target branch (defaults to repo default branch)
+      responses:
+        "200":
+          description: File created or updated
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "500":
+          description: GitHub API error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /query:
+    post:
+      operationId: queryTerrain
+      tags: [query]
+      summary: Natural-language terrain query via OpenAI tool calling ("Ask the Ocean")
+      description: Receives a free-text query and terrain context. Sends to GPT with terrain tool schema and returns tool calls and/or a text response that the frontend executes locally. Rate-limited per user and per IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query:
+                  type: string
+                  description: Natural-language question or command about the terrain
+                context:
+                  type: object
+                  properties:
+                    datasetName:
+                      type: string
+                    waterType:
+                      type: string
+                    minDepth:
+                      type: number
+                    maxDepth:
+                      type: number
+                    cameraLon:
+                      type: number
+                      nullable: true
+                    cameraLat:
+                      type: number
+                      nullable: true
+                    cameraDepth:
+                      type: number
+                      nullable: true
+                    topZones:
+                      type: array
+                      items:
+                        type: string
+      responses:
+        "200":
+          description: Query result with tool calls and/or text response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  toolCalls:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        args:
+                          type: object
+                  textResponse:
+                    type: string
+                    nullable: true
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: OpenAI upstream error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /poe/help:
+    post:
+      operationId: poeHelp
+      tags: [poe]
+      summary: Answer a BathyScan help question using Poe AI
+      description: Receives a plain-text question (and optional conversation history) and returns a concise answer drawn from the built-in help articles.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question:
+                  type: string
+                  maxLength: 1000
+                history:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      role:
+                        type: string
+                        enum: [user, assistant]
+                      content:
+                        type: string
+      responses:
+        "200":
+          description: Help answer
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  answer:
+                    type: string
+        "400":
+          description: Missing or invalid question
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "402":
+          description: Poe credits exhausted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PoeError"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PoeError"
+
+  /poe/upscale:
+    post:
+      operationId: poeUpscale
+      tags: [poe]
+      summary: Upscale a 2D heatmap PNG via Poe (TopazLabs model)
+      description: Accepts a base64-encoded PNG and an upscale factor (2 or 4). Returns the upscaled image as a base64 PNG. On failure returns a non-200 status so the frontend can fall back to the original bitmap.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [imageBase64]
+              properties:
+                imageBase64:
+                  type: string
+                  description: "Base64-encoded PNG (with or without data: prefix)"
+                upscaleFactor:
+                  type: integer
+                  minimum: 2
+                  maximum: 4
+                  default: 2
+      responses:
+        "200":
+          description: Upscaled image
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imageBase64:
+                    type: string
+        "400":
+          description: Missing imageBase64
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: TopazLabs returned no image or upstream error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Circuit breaker open — upscale service temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /routes:
+    get:
+      operationId: getRoutes
+      tags: [routes]
+      summary: List saved navigation routes for a dataset
+      description: Returns all routes belonging to the authenticated user for the given dataset, ordered by creation time.
+      parameters:
+        - in: query
+          name: datasetId
+          required: true
+          schema:
+            type: string
+          description: Dataset ID to filter routes by
+      responses:
+        "200":
+          description: List of saved routes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SavedRoute"
+        "400":
+          description: datasetId is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    post:
+      operationId: createRoute
+      tags: [routes]
+      summary: Create a new saved navigation route
+      description: Saves a named waypoint sequence for the given dataset. Waypoints must contain at least 2 and at most 20 points.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [datasetId, name, waypoints, totalDistanceM]
+              properties:
+                datasetId:
+                  type: string
+                name:
+                  type: string
+                  maxLength: 120
+                waypoints:
+                  type: array
+                  minItems: 2
+                  maxItems: 20
+                  items:
+                    type: object
+                    properties:
+                      lon:
+                        type: number
+                      lat:
+                        type: number
+                      depth:
+                        type: number
+                totalDistanceM:
+                  type: number
+      responses:
+        "201":
+          description: Route created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedRoute"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /routes/{id}:
+    patch:
+      operationId: patchRoute
+      tags: [routes]
+      summary: Rename a saved navigation route
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  maxLength: 120
+      responses:
+        "200":
+          description: Updated route
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedRoute"
+        "400":
+          description: Invalid id or body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Route not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteRoute
+      tags: [routes]
+      summary: Delete a saved navigation route
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Route deleted
+        "400":
+          description: Invalid id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Route not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
 components:
   schemas:
     HealthStatus:
@@ -4055,3 +5008,84 @@ components:
         - lat
         - depth
         - label
+
+    SavedRoute:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        datasetId:
+          type: string
+        name:
+          type: string
+        waypoints:
+          type: array
+          items:
+            type: object
+            properties:
+              lon:
+                type: number
+              lat:
+                type: number
+              depth:
+                type: number
+        waypointCount:
+          type: integer
+        totalDistanceM:
+          type: number
+        createdAt:
+          type: string
+      required:
+        - id
+        - userId
+        - datasetId
+        - name
+        - waypoints
+        - waypointCount
+        - totalDistanceM
+
+    DeepHealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        subsystems:
+          type: object
+          properties:
+            db:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [ok, degraded]
+                latencyMs:
+                  type: integer
+                error:
+                  type: string
+            poe:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [ok, degraded]
+                latencyMs:
+                  type: integer
+                error:
+                  type: string
+            aoos:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [ok, degraded]
+                latencyMs:
+                  type: integer
+                error:
+                  type: string
+      required:
+        - status
+        - subsystems

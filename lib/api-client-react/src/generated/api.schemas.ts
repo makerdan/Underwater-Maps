@@ -1861,6 +1861,84 @@ export interface MarkerInput {
   notes?: string | null;
 }
 
+export type SavedRouteWaypointsItem = {
+  lon?: number;
+  lat?: number;
+  depth?: number;
+};
+
+export interface SavedRoute {
+  id: string;
+  userId: string;
+  datasetId: string;
+  name: string;
+  waypoints: SavedRouteWaypointsItem[];
+  waypointCount: number;
+  totalDistanceM: number;
+  createdAt?: string;
+}
+
+export type DeepHealthStatusStatus = typeof DeepHealthStatusStatus[keyof typeof DeepHealthStatusStatus];
+
+
+export const DeepHealthStatusStatus = {
+  ok: 'ok',
+  degraded: 'degraded',
+} as const;
+
+export type DeepHealthStatusSubsystemsDbStatus = typeof DeepHealthStatusSubsystemsDbStatus[keyof typeof DeepHealthStatusSubsystemsDbStatus];
+
+
+export const DeepHealthStatusSubsystemsDbStatus = {
+  ok: 'ok',
+  degraded: 'degraded',
+} as const;
+
+export type DeepHealthStatusSubsystemsDb = {
+  status?: DeepHealthStatusSubsystemsDbStatus;
+  latencyMs?: number;
+  error?: string;
+};
+
+export type DeepHealthStatusSubsystemsPoeStatus = typeof DeepHealthStatusSubsystemsPoeStatus[keyof typeof DeepHealthStatusSubsystemsPoeStatus];
+
+
+export const DeepHealthStatusSubsystemsPoeStatus = {
+  ok: 'ok',
+  degraded: 'degraded',
+} as const;
+
+export type DeepHealthStatusSubsystemsPoe = {
+  status?: DeepHealthStatusSubsystemsPoeStatus;
+  latencyMs?: number;
+  error?: string;
+};
+
+export type DeepHealthStatusSubsystemsAoosStatus = typeof DeepHealthStatusSubsystemsAoosStatus[keyof typeof DeepHealthStatusSubsystemsAoosStatus];
+
+
+export const DeepHealthStatusSubsystemsAoosStatus = {
+  ok: 'ok',
+  degraded: 'degraded',
+} as const;
+
+export type DeepHealthStatusSubsystemsAoos = {
+  status?: DeepHealthStatusSubsystemsAoosStatus;
+  latencyMs?: number;
+  error?: string;
+};
+
+export type DeepHealthStatusSubsystems = {
+  db?: DeepHealthStatusSubsystemsDb;
+  poe?: DeepHealthStatusSubsystemsPoe;
+  aoos?: DeepHealthStatusSubsystemsAoos;
+};
+
+export interface DeepHealthStatus {
+  status: DeepHealthStatusStatus;
+  subsystems: DeepHealthStatusSubsystems;
+}
+
 export type GetDatasetsParams = {
 /**
  * Filter datasets by water body type
@@ -2168,5 +2246,348 @@ datasetId?: string;
  * Comma-separated species names or common names to filter
  */
 species?: string;
+};
+
+export type GetDatasetZonesParams = {
+/**
+ * Lowercase hex hash of the depth grid (8-char FNV-1a or 64-char SHA-256) for cache keying
+ * @pattern ^[a-f0-9]{8}$|^[a-f0-9]{64}$
+ */
+h: string;
+/**
+ * Water type — must be 'saltwater' or 'freshwater'
+ */
+w: GetDatasetZonesW;
+};
+
+export type GetDatasetZonesW = typeof GetDatasetZonesW[keyof typeof GetDatasetZonesW];
+
+
+export const GetDatasetZonesW = {
+  saltwater: 'saltwater',
+  freshwater: 'freshwater',
+} as const;
+
+export type UploadDatasetChunkBody = {
+  /** Stable UUID chosen by the client for this upload session */
+  uploadId: string;
+  /** 0-based index of this slice */
+  chunkIndex: number;
+  /** Total number of slices the client will send */
+  totalChunks: number;
+  file: Blob;
+};
+
+export type UploadDatasetChunk200 = {
+  received?: number;
+};
+
+export type FinalizeChunkedUploadBody = {
+  uploadId: string;
+  fileName: string;
+  totalChunks: number;
+  /**
+     * @minimum 32
+     * @maximum 512
+     */
+  resolution?: number;
+};
+
+export type FinalizeChunkedUpload200 = {
+  jobId?: string;
+};
+
+export type GetUploadJobStatus200Status = typeof GetUploadJobStatus200Status[keyof typeof GetUploadJobStatus200Status];
+
+
+export const GetUploadJobStatus200Status = {
+  queued: 'queued',
+  processing: 'processing',
+  done: 'done',
+  error: 'error',
+} as const;
+
+export type GetUploadJobStatus200 = {
+  status?: GetUploadJobStatus200Status;
+  progress?: number;
+  error?: string;
+  datasetId?: string;
+};
+
+export type RequestGcsUploadUrlBody = {
+  fileName: string;
+};
+
+export type RequestGcsUploadUrl200 = {
+  uploadUrl?: string;
+  objectKey?: string;
+};
+
+export type GetGcsJobStatusParams = {
+/**
+ * GCS object key returned by /datasets/upload/request-gcs-url
+ */
+objectKey: string;
+};
+
+export type GetGcsJobStatus200Status = typeof GetGcsJobStatus200Status[keyof typeof GetGcsJobStatus200Status];
+
+
+export const GetGcsJobStatus200Status = {
+  pending: 'pending',
+  processing: 'processing',
+  done: 'done',
+  error: 'error',
+} as const;
+
+export type GetGcsJobStatus200 = {
+  status?: GetGcsJobStatus200Status;
+  datasetId?: string;
+  error?: string;
+};
+
+export type GetTidalParams = {
+/**
+ * Latitude in decimal degrees
+ */
+lat: number;
+/**
+ * Longitude in decimal degrees
+ */
+lon: number;
+/**
+ * ISO 8601 datetime for the prediction (defaults to now)
+ */
+datetime?: string;
+};
+
+export type GetTidal200NextEventType = typeof GetTidal200NextEventType[keyof typeof GetTidal200NextEventType];
+
+
+export const GetTidal200NextEventType = {
+  high: 'high',
+  low: 'low',
+} as const;
+
+export type GetTidal200NextEvent = {
+  type?: GetTidal200NextEventType;
+  time?: string;
+  height?: number;
+};
+
+export type GetTidal200Source = typeof GetTidal200Source[keyof typeof GetTidal200Source];
+
+
+export const GetTidal200Source = {
+  noaa: 'noaa',
+  estimated: 'estimated',
+} as const;
+
+export type GetTidal200 = {
+  available?: boolean;
+  tideHeight?: number;
+  currentDirection?: number;
+  currentSpeed?: number;
+  nextEvent?: GetTidal200NextEvent;
+  source?: GetTidal200Source;
+};
+
+export type GetTidalScheduleParams = {
+lat: number;
+lon: number;
+/**
+ * Number of days to return (1–14)
+ * @minimum 1
+ * @maximum 14
+ */
+days?: number;
+/**
+ * ISO 8601 start datetime (defaults to now)
+ */
+start?: string;
+};
+
+export type GetTidalSchedule200Source = typeof GetTidalSchedule200Source[keyof typeof GetTidalSchedule200Source];
+
+
+export const GetTidalSchedule200Source = {
+  noaa: 'noaa',
+  estimated: 'estimated',
+} as const;
+
+export type GetTidalSchedule200EventsItemType = typeof GetTidalSchedule200EventsItemType[keyof typeof GetTidalSchedule200EventsItemType];
+
+
+export const GetTidalSchedule200EventsItemType = {
+  high: 'high',
+  low: 'low',
+} as const;
+
+export type GetTidalSchedule200EventsItem = {
+  type?: GetTidalSchedule200EventsItemType;
+  time?: string;
+  height?: number;
+  nextDirectionDeg?: number;
+  windowStart?: string;
+  windowEnd?: string;
+};
+
+export type GetTidalSchedule200 = {
+  available?: boolean;
+  source?: GetTidalSchedule200Source;
+  stationId?: string;
+  stationName?: string;
+  rangeStart?: string;
+  rangeEnd?: string;
+  events?: GetTidalSchedule200EventsItem[];
+};
+
+export type AdminBucketMonitor200Lifecycle = {
+  processedDatasetsTtlDays?: number;
+  failedDatasetsTtlDays?: number;
+  note?: string;
+  lastAppliedAt?: string | null;
+  lastApplyError?: string | null;
+};
+
+export type AdminBucketMonitor200 = {
+  pending?: number;
+  processing?: number;
+  done?: number;
+  failed?: number;
+  lifecycle?: AdminBucketMonitor200Lifecycle;
+};
+
+export type ExportUserData200Settings = { [key: string]: unknown } | null;
+
+export type ExportUserData200MarkersItem = { [key: string]: unknown };
+
+export type ExportUserData200CustomDatasetsItem = { [key: string]: unknown };
+
+export type ExportUserData200TrailsItem = { [key: string]: unknown };
+
+export type ExportUserData200 = {
+  exportedAt?: string;
+  userId?: string;
+  settings?: ExportUserData200Settings;
+  markers?: ExportUserData200MarkersItem[];
+  customDatasets?: ExportUserData200CustomDatasetsItem[];
+  trails?: ExportUserData200TrailsItem[];
+};
+
+export type DeleteAccount200 = {
+  ok?: boolean;
+  deletedAt?: string;
+};
+
+export type ListGithubRepos200Item = { [key: string]: unknown };
+
+export type PutGithubFileContentsBody = {
+  /** Commit message */
+  message: string;
+  /** Base64-encoded file content */
+  content: string;
+  /** Current blob SHA (required when updating an existing file) */
+  sha?: string;
+  /** Target branch (defaults to repo default branch) */
+  branch?: string;
+};
+
+export type PutGithubFileContents200 = { [key: string]: unknown };
+
+export type QueryTerrainBodyContext = {
+  datasetName?: string;
+  waterType?: string;
+  minDepth?: number;
+  maxDepth?: number;
+  cameraLon?: number | null;
+  cameraLat?: number | null;
+  cameraDepth?: number | null;
+  topZones?: string[];
+};
+
+export type QueryTerrainBody = {
+  /** Natural-language question or command about the terrain */
+  query: string;
+  context?: QueryTerrainBodyContext;
+};
+
+export type QueryTerrain200ToolCallsItemArgs = { [key: string]: unknown };
+
+export type QueryTerrain200ToolCallsItem = {
+  name?: string;
+  args?: QueryTerrain200ToolCallsItemArgs;
+};
+
+export type QueryTerrain200 = {
+  toolCalls?: QueryTerrain200ToolCallsItem[];
+  textResponse?: string | null;
+};
+
+export type PoeHelpBodyHistoryItemRole = typeof PoeHelpBodyHistoryItemRole[keyof typeof PoeHelpBodyHistoryItemRole];
+
+
+export const PoeHelpBodyHistoryItemRole = {
+  user: 'user',
+  assistant: 'assistant',
+} as const;
+
+export type PoeHelpBodyHistoryItem = {
+  role?: PoeHelpBodyHistoryItemRole;
+  content?: string;
+};
+
+export type PoeHelpBody = {
+  /** @maxLength 1000 */
+  question: string;
+  history?: PoeHelpBodyHistoryItem[];
+};
+
+export type PoeHelp200 = {
+  answer?: string;
+};
+
+export type PoeUpscaleBody = {
+  /** Base64-encoded PNG (with or without data: prefix) */
+  imageBase64: string;
+  /**
+     * @minimum 2
+     * @maximum 4
+     */
+  upscaleFactor?: number;
+};
+
+export type PoeUpscale200 = {
+  imageBase64?: string;
+};
+
+export type GetRoutesParams = {
+/**
+ * Dataset ID to filter routes by
+ */
+datasetId: string;
+};
+
+export type CreateRouteBodyWaypointsItem = {
+  lon?: number;
+  lat?: number;
+  depth?: number;
+};
+
+export type CreateRouteBody = {
+  datasetId: string;
+  /** @maxLength 120 */
+  name: string;
+  /**
+     * @minItems 2
+     * @maxItems 20
+     */
+  waypoints: CreateRouteBodyWaypointsItem[];
+  totalDistanceM: number;
+};
+
+export type PatchRouteBody = {
+  /** @maxLength 120 */
+  name: string;
 };
 

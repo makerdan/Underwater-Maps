@@ -175,15 +175,32 @@ const SECTION_DEFS = [
   },
   {
     heading: 'Environment & Conditions',
-    match: (_path, tags) => tags.includes('drift-planner'),
+    match: (_path, tags) => tags.includes('drift-planner') || tags.includes('tidal'),
   },
   {
     heading: 'AI Assistant (Poe)',
     match: (_path, tags) => tags.includes('poe'),
   },
   {
+    heading: 'AI Query (OpenAI)',
+    match: (_path, tags) => tags.includes('query'),
+  },
+  {
+    heading: 'Navigation Routes',
+    match: (_path, tags) => tags.includes('routes'),
+  },
+  {
+    heading: 'GitHub Sync',
+    match: (_path, tags) => tags.includes('github'),
+  },
+  {
+    heading: 'Account',
+    match: (_path, tags) => tags.includes('account'),
+  },
+  {
     heading: 'Settings & System',
-    match: (_path, tags) => tags.includes('settings') || tags.includes('health'),
+    match: (_path, tags) =>
+      tags.includes('settings') || tags.includes('health') || tags.includes('admin'),
   },
 ];
 

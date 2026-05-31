@@ -271,12 +271,18 @@ Authentication is handled by **Clerk** across all surfaces:
 | GET | `/datasets/:id/terrain` | Get gridded terrain data for a dataset |
 | GET | `/datasets/:id/preview` | Probe which upstream source would serve this dataset |
 | GET | `/datasets/:id/overview` | Get a low-resolution overview terrain for a dataset |
+| GET | `/datasets/:id/zones` | Get AI-classified seafloor/lake-bed zones for a dataset |
 
 #### Upload
 
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/datasets/upload` | Upload an XYZ or CSV file and persist it to the user's dataset library |
+| POST | `/datasets/upload/chunk` | Upload one chunk of a large dataset file |
+| POST | `/datasets/upload/chunk/finalize` | Finalize a chunked upload and start processing |
+| GET | `/datasets/upload/jobs/:jobId` | Poll the status of a chunked-upload processing job |
+| POST | `/datasets/upload/request-gcs-url` | Get a presigned GCS PUT URL for oversized file uploads |
+| GET | `/datasets/upload/gcs-job-status` | Check processing status for a GCS-backed upload job |
 
 #### Catalog & Search
 
@@ -361,6 +367,8 @@ Authentication is handled by **Clerk** across all surfaces:
 | GET | `/raws-weather` | Fetch latest observation for a single AOOS RAWS station |
 | GET | `/water-temperature` | Fetch current sea-surface temperature for a lat/lon point |
 | GET | `/temperature-profile` | Fetch a depth-resolved temperature profile for a lat/lon point |
+| GET | `/tidal` | Current tide height, current speed/direction, and next high/low event |
+| GET | `/tidal/schedule` | Multi-day tide schedule with slack windows |
 
 #### AI Assistant (Poe)
 
@@ -370,6 +378,37 @@ Authentication is handled by **Clerk** across all surfaces:
 | POST | `/poe/query` | Natural language terrain query |
 | POST | `/poe/describe` | Stream a location description via SSE |
 | GET | `/poe/models` | List available Poe models |
+| POST | `/poe/help` | Answer a BathyScan help question using Poe AI |
+| POST | `/poe/upscale` | Upscale a 2D heatmap PNG via Poe (TopazLabs model) |
+
+#### AI Query (OpenAI)
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/query` | Natural-language terrain query via OpenAI tool calling ("Ask the Ocean") |
+
+#### Navigation Routes
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/routes` | List saved navigation routes for a dataset |
+| POST | `/routes` | Create a new saved navigation route |
+| PATCH | `/routes/:id` | Rename a saved navigation route |
+| DELETE | `/routes/:id` | Delete a saved navigation route |
+
+#### GitHub Sync
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/github/repos` | List GitHub repositories accessible to the configured PAT |
+| PUT | `/github/repos/:owner/:repo/contents/:path` | Create or update a file in a GitHub repository |
+
+#### Account
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/me/export` | Export all user data as a downloadable JSON file |
+| DELETE | `/me` | Permanently delete the authenticated user's account and all associated data |
 
 #### Settings & System
 
@@ -378,6 +417,8 @@ Authentication is handled by **Clerk** across all surfaces:
 | GET | `/settings` | Get the current user's settings |
 | PUT | `/settings` | Upsert the current user's settings |
 | GET | `/healthz` | Health check |
+| GET | `/healthz/deep` | Deep health probe — checks DB, Poe, and AOOS subsystems |
+| GET | `/admin/bucket-monitor` | GCS dataset landing bucket processing summary |
 
 <!-- GENERATED:API-ROUTES:END -->
 

@@ -2267,3 +2267,439 @@ export const GetEfhResponse = zod.object({
 })
 
 
+/**
+ * Returns 1024 zone labels for the 32×32 coarse grid. Results are cached; a stable gridHash avoids redundant AI calls.
+ * @summary Get AI-classified seafloor/lake-bed zones for a dataset
+ */
+export const GetDatasetZonesParams = zod.object({
+  "id": zod.coerce.string().describe('Dataset ID (UUID, \"upload\", or built-in preset ID)')
+})
+
+export const getDatasetZonesQueryHRegExp = new RegExp('^[a-f0-9]{8}$|^[a-f0-9]{64}$');
+
+
+export const GetDatasetZonesQueryParams = zod.object({
+  "h": zod.coerce.string().regex(getDatasetZonesQueryHRegExp).describe('Lowercase hex hash of the depth grid (8-char FNV-1a or 64-char SHA-256) for cache keying'),
+  "w": zod.enum(['saltwater', 'freshwater']).describe('Water type — must be \'saltwater\' or \'freshwater\'')
+})
+
+export const GetDatasetZonesResponse = zod.object({
+  "zones": zod.array(zod.string()).describe('Zone labels in row-major order. Length is `coarseWidth\*coarseHeight`,\nwhich defaults to 1024 (32×32) for the single-tile path and grows for\ntiled high-resolution datasets.\n'),
+  "fromCache": zod.boolean().describe('Whether the result was served from the in-memory cache'),
+  "source": zod.enum(['ai', 'heuristic', 'partial']).optional().describe('\"ai\" when every cell was labeled by the Poe AI classifier (live or\ncached); \"heuristic\" when the depth-based fallback covered the whole\ngrid because the AI was unavailable; \"partial\" when the result was\nstitched from a mix of AI-classified and heuristic tiles.\n'),
+  "substrateFp": zod.string().optional().describe('8-char hex fingerprint of the bundled ShoreZone + ENC substrate grid\nsampled for this dataset\'s AOI. Forms part of the zone-cache key so\na change in surveyed substrate coverage invalidates stale results.\n\"00000000\" when the dataset has no substrate coverage.\n'),
+  "coarseWidth": zod.number().optional().describe('Width of the returned zones grid. Defaults to 32 when omitted.'),
+  "coarseHeight": zod.number().optional().describe('Height of the returned zones grid. Defaults to 32 when omitted.'),
+  "tilesTotal": zod.number().optional().describe('Total number of tiles in the plan (1 for the single-tile path).'),
+  "tilesAi": zod.number().optional().describe('Number of tiles that were successfully labeled by the AI.'),
+  "tilesHeuristic": zod.number().optional().describe('Number of tiles that fell back to the heuristic classifier.')
+})
+
+
+/**
+ * Receives a single 5 MB slice of a file. The first chunk (chunkIndex=0) opens the upload session; subsequent chunks must come from the same authenticated user.
+ * @summary Upload one chunk of a large dataset file
+ */
+export const UploadDatasetChunkBody = zod.object({
+  "uploadId": zod.string().describe('Stable UUID chosen by the client for this upload session'),
+  "chunkIndex": zod.number().describe('0-based index of this slice'),
+  "totalChunks": zod.number().describe('Total number of slices the client will send'),
+  "file": zod.instanceof(File)
+})
+
+export const UploadDatasetChunkResponse = zod.object({
+  "received": zod.number().optional()
+})
+
+
+/**
+ * Called after all chunks have been sent. Enqueues an async job that reassembles chunks, parses the file, builds the terrain grid, and saves to DB. Returns a jobId to poll.
+ * @summary Finalize a chunked upload and start processing
+ */
+export const finalizeChunkedUploadBodyResolutionDefault = 256;
+export const finalizeChunkedUploadBodyResolutionMin = 32;
+export const finalizeChunkedUploadBodyResolutionMax = 512;
+
+
+
+export const FinalizeChunkedUploadBody = zod.object({
+  "uploadId": zod.string(),
+  "fileName": zod.string(),
+  "totalChunks": zod.number(),
+  "resolution": zod.number().min(finalizeChunkedUploadBodyResolutionMin).max(finalizeChunkedUploadBodyResolutionMax).default(finalizeChunkedUploadBodyResolutionDefault)
+})
+
+export const FinalizeChunkedUploadResponse = zod.object({
+  "jobId": zod.string().optional()
+})
+
+
+/**
+ * Returns the current state of a background upload-processing job. Falls back to the database after a server restart.
+ * @summary Poll the status of a chunked-upload processing job
+ */
+export const GetUploadJobStatusParams = zod.object({
+  "jobId": zod.coerce.string()
+})
+
+export const GetUploadJobStatusResponse = zod.object({
+  "status": zod.enum(['queued', 'processing', 'done', 'error']).optional(),
+  "progress": zod.number().optional(),
+  "error": zod.string().optional(),
+  "datasetId": zod.string().optional()
+})
+
+
+/**
+ * Generates a presigned GCS PUT URL for files >50 MB. The client uploads directly to GCS; the API server's memory is never involved.
+ * @summary Get a presigned GCS PUT URL for oversized file uploads
+ */
+export const RequestGcsUploadUrlBody = zod.object({
+  "fileName": zod.string()
+})
+
+export const RequestGcsUploadUrlResponse = zod.object({
+  "uploadUrl": zod.string().optional(),
+  "objectKey": zod.string().optional()
+})
+
+
+/**
+ * Returns the status of a GCS background-processing job by objectKey. The objectKey must belong to the authenticated user.
+ * @summary Check processing status for a GCS-backed upload job
+ */
+export const GetGcsJobStatusQueryParams = zod.object({
+  "objectKey": zod.coerce.string().describe('GCS object key returned by \/datasets\/upload\/request-gcs-url')
+})
+
+export const GetGcsJobStatusResponse = zod.object({
+  "status": zod.enum(['pending', 'processing', 'done', 'error']).optional(),
+  "datasetId": zod.string().optional(),
+  "error": zod.string().optional()
+})
+
+
+/**
+ * Queries the nearest NOAA water-level and currents-prediction stations for the given coordinates and returns current conditions with slack window data.
+ * @summary Current tide height, current speed/direction, and next high/low event
+ */
+export const GetTidalQueryParams = zod.object({
+  "lat": zod.coerce.number().describe('Latitude in decimal degrees'),
+  "lon": zod.coerce.number().describe('Longitude in decimal degrees'),
+  "datetime": zod.date().optional().describe('ISO 8601 datetime for the prediction (defaults to now)')
+})
+
+export const GetTidalResponse = zod.object({
+  "available": zod.boolean().optional(),
+  "tideHeight": zod.number().optional(),
+  "currentDirection": zod.number().optional(),
+  "currentSpeed": zod.number().optional(),
+  "nextEvent": zod.object({
+  "type": zod.enum(['high', 'low']).optional(),
+  "time": zod.string().optional(),
+  "height": zod.number().optional()
+}).optional(),
+  "source": zod.enum(['noaa', 'estimated']).optional()
+})
+
+
+/**
+ * Returns an ordered list of high/low tide events with slack windows and current direction changes for the requested location and day range.
+ * @summary Multi-day tide schedule with slack windows
+ */
+export const getTidalScheduleQueryDaysDefault = 3;
+export const getTidalScheduleQueryDaysMax = 14;
+
+
+
+export const GetTidalScheduleQueryParams = zod.object({
+  "lat": zod.coerce.number(),
+  "lon": zod.coerce.number(),
+  "days": zod.coerce.number().min(1).max(getTidalScheduleQueryDaysMax).default(getTidalScheduleQueryDaysDefault).describe('Number of days to return (1–14)'),
+  "start": zod.date().optional().describe('ISO 8601 start datetime (defaults to now)')
+})
+
+export const GetTidalScheduleResponse = zod.object({
+  "available": zod.boolean().optional(),
+  "source": zod.enum(['noaa', 'estimated']).optional(),
+  "stationId": zod.string().optional(),
+  "stationName": zod.string().optional(),
+  "rangeStart": zod.string().optional(),
+  "rangeEnd": zod.string().optional(),
+  "events": zod.array(zod.object({
+  "type": zod.enum(['high', 'low']).optional(),
+  "time": zod.string().optional(),
+  "height": zod.number().optional(),
+  "nextDirectionDeg": zod.number().optional(),
+  "windowStart": zod.string().optional(),
+  "windowEnd": zod.string().optional()
+})).optional()
+})
+
+
+/**
+ * Probes each critical subsystem and returns per-subsystem status. Returns HTTP 503 when any subsystem is degraded. Use the shallow /healthz for load-balancer liveness probes.
+ * @summary Deep health probe — checks DB, Poe, and AOOS subsystems
+ */
+export const GetDeepHealthzResponse = zod.object({
+  "status": zod.enum(['ok', 'degraded']),
+  "subsystems": zod.object({
+  "db": zod.object({
+  "status": zod.enum(['ok', 'degraded']).optional(),
+  "latencyMs": zod.number().optional(),
+  "error": zod.string().optional()
+}).optional(),
+  "poe": zod.object({
+  "status": zod.enum(['ok', 'degraded']).optional(),
+  "latencyMs": zod.number().optional(),
+  "error": zod.string().optional()
+}).optional(),
+  "aoos": zod.object({
+  "status": zod.enum(['ok', 'degraded']).optional(),
+  "latencyMs": zod.number().optional(),
+  "error": zod.string().optional()
+}).optional()
+})
+})
+
+
+/**
+ * Returns a JSON summary of all objects in the GCS dataset landing bucket broken down by status (pending, processing, done, failed). Restricted to admin users.
+ * @summary GCS dataset landing bucket processing summary
+ */
+export const AdminBucketMonitorResponse = zod.object({
+  "pending": zod.number().optional(),
+  "processing": zod.number().optional(),
+  "done": zod.number().optional(),
+  "failed": zod.number().optional(),
+  "lifecycle": zod.object({
+  "processedDatasetsTtlDays": zod.number().optional(),
+  "failedDatasetsTtlDays": zod.number().optional(),
+  "note": zod.string().optional(),
+  "lastAppliedAt": zod.string().nullish(),
+  "lastApplyError": zod.string().nullish()
+}).optional()
+})
+
+
+/**
+ * Returns markers, custom datasets, GPS trails, and settings as a JSON attachment. Used by Settings → Account & Privacy.
+ * @summary Export all user data as a downloadable JSON file
+ */
+export const ExportUserDataResponse = zod.object({
+  "exportedAt": zod.string().optional(),
+  "userId": zod.string().optional(),
+  "settings": zod.object({
+
+}).passthrough().nullish(),
+  "markers": zod.array(zod.object({
+
+}).passthrough()).optional(),
+  "customDatasets": zod.array(zod.object({
+
+}).passthrough()).optional(),
+  "trails": zod.array(zod.object({
+
+}).passthrough()).optional()
+})
+
+
+/**
+ * Deletes all markers, custom datasets, GPS trails, trail points, and settings for the caller. This action is irreversible.
+ * @summary Permanently delete the authenticated user's account and all associated data
+ */
+export const DeleteAccountResponse = zod.object({
+  "ok": zod.boolean().optional(),
+  "deletedAt": zod.string().optional()
+})
+
+
+/**
+ * Returns up to 100 repositories for the authenticated GitHub token.
+ * @summary List GitHub repositories accessible to the configured PAT
+ */
+export const ListGithubReposResponseItem = zod.object({
+
+}).passthrough()
+export const ListGithubReposResponse = zod.array(ListGithubReposResponseItem)
+
+
+/**
+ * Creates or updates a file. Requires a commit message, base64-encoded content, and optionally the current blob SHA (for updates) and a branch name.
+ * @summary Create or update a file in a GitHub repository
+ */
+export const PutGithubFileContentsParams = zod.object({
+  "owner": zod.coerce.string(),
+  "repo": zod.coerce.string(),
+  "path": zod.coerce.string()
+})
+
+export const PutGithubFileContentsBody = zod.object({
+  "message": zod.string().describe('Commit message'),
+  "content": zod.string().describe('Base64-encoded file content'),
+  "sha": zod.string().optional().describe('Current blob SHA (required when updating an existing file)'),
+  "branch": zod.string().optional().describe('Target branch (defaults to repo default branch)')
+})
+
+export const PutGithubFileContentsResponse = zod.object({
+
+}).passthrough()
+
+
+/**
+ * Receives a free-text query and terrain context. Sends to GPT with terrain tool schema and returns tool calls and/or a text response that the frontend executes locally. Rate-limited per user and per IP.
+ * @summary Natural-language terrain query via OpenAI tool calling ("Ask the Ocean")
+ */
+export const QueryTerrainBody = zod.object({
+  "query": zod.string().describe('Natural-language question or command about the terrain'),
+  "context": zod.object({
+  "datasetName": zod.string().optional(),
+  "waterType": zod.string().optional(),
+  "minDepth": zod.number().optional(),
+  "maxDepth": zod.number().optional(),
+  "cameraLon": zod.number().nullish(),
+  "cameraLat": zod.number().nullish(),
+  "cameraDepth": zod.number().nullish(),
+  "topZones": zod.array(zod.string()).optional()
+}).optional()
+})
+
+export const QueryTerrainResponse = zod.object({
+  "toolCalls": zod.array(zod.object({
+  "name": zod.string().optional(),
+  "args": zod.object({
+
+}).passthrough().optional()
+})).optional(),
+  "textResponse": zod.string().nullish()
+})
+
+
+/**
+ * Receives a plain-text question (and optional conversation history) and returns a concise answer drawn from the built-in help articles.
+ * @summary Answer a BathyScan help question using Poe AI
+ */
+export const poeHelpBodyQuestionMax = 1000;
+
+
+
+export const PoeHelpBody = zod.object({
+  "question": zod.string().max(poeHelpBodyQuestionMax),
+  "history": zod.array(zod.object({
+  "role": zod.enum(['user', 'assistant']).optional(),
+  "content": zod.string().optional()
+})).optional()
+})
+
+export const PoeHelpResponse = zod.object({
+  "answer": zod.string().optional()
+})
+
+
+/**
+ * Accepts a base64-encoded PNG and an upscale factor (2 or 4). Returns the upscaled image as a base64 PNG. On failure returns a non-200 status so the frontend can fall back to the original bitmap.
+ * @summary Upscale a 2D heatmap PNG via Poe (TopazLabs model)
+ */
+export const poeUpscaleBodyUpscaleFactorDefault = 2;
+export const poeUpscaleBodyUpscaleFactorMin = 2;
+export const poeUpscaleBodyUpscaleFactorMax = 4;
+
+
+
+export const PoeUpscaleBody = zod.object({
+  "imageBase64": zod.string().describe('Base64-encoded PNG (with or without data: prefix)'),
+  "upscaleFactor": zod.number().min(poeUpscaleBodyUpscaleFactorMin).max(poeUpscaleBodyUpscaleFactorMax).default(poeUpscaleBodyUpscaleFactorDefault)
+})
+
+export const PoeUpscaleResponse = zod.object({
+  "imageBase64": zod.string().optional()
+})
+
+
+/**
+ * Returns all routes belonging to the authenticated user for the given dataset, ordered by creation time.
+ * @summary List saved navigation routes for a dataset
+ */
+export const GetRoutesQueryParams = zod.object({
+  "datasetId": zod.coerce.string().describe('Dataset ID to filter routes by')
+})
+
+export const GetRoutesResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "userId": zod.string(),
+  "datasetId": zod.string(),
+  "name": zod.string(),
+  "waypoints": zod.array(zod.object({
+  "lon": zod.number().optional(),
+  "lat": zod.number().optional(),
+  "depth": zod.number().optional()
+})),
+  "waypointCount": zod.number(),
+  "totalDistanceM": zod.number(),
+  "createdAt": zod.string().optional()
+})
+export const GetRoutesResponse = zod.array(GetRoutesResponseItem)
+
+
+/**
+ * Saves a named waypoint sequence for the given dataset. Waypoints must contain at least 2 and at most 20 points.
+ * @summary Create a new saved navigation route
+ */
+export const createRouteBodyNameMax = 120;
+
+export const createRouteBodyWaypointsMin = 2;
+export const createRouteBodyWaypointsMax = 20;
+
+
+
+export const CreateRouteBody = zod.object({
+  "datasetId": zod.string(),
+  "name": zod.string().max(createRouteBodyNameMax),
+  "waypoints": zod.array(zod.object({
+  "lon": zod.number().optional(),
+  "lat": zod.number().optional(),
+  "depth": zod.number().optional()
+})).min(createRouteBodyWaypointsMin).max(createRouteBodyWaypointsMax),
+  "totalDistanceM": zod.number()
+})
+
+
+/**
+ * @summary Rename a saved navigation route
+ */
+export const PatchRouteParams = zod.object({
+  "id": zod.coerce.string().uuid()
+})
+
+export const patchRouteBodyNameMax = 120;
+
+
+
+export const PatchRouteBody = zod.object({
+  "name": zod.string().max(patchRouteBodyNameMax)
+})
+
+export const PatchRouteResponse = zod.object({
+  "id": zod.string().uuid(),
+  "userId": zod.string(),
+  "datasetId": zod.string(),
+  "name": zod.string(),
+  "waypoints": zod.array(zod.object({
+  "lon": zod.number().optional(),
+  "lat": zod.number().optional(),
+  "depth": zod.number().optional()
+})),
+  "waypointCount": zod.number(),
+  "totalDistanceM": zod.number(),
+  "createdAt": zod.string().optional()
+})
+
+
+/**
+ * @summary Delete a saved navigation route
+ */
+export const DeleteRouteParams = zod.object({
+  "id": zod.coerce.string().uuid()
+})
+
+
