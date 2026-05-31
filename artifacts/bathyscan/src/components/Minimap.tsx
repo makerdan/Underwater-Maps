@@ -1,10 +1,10 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useMemo } from "react";
 import { useAppState } from "@/lib/context";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useGetMarkers, getGetMarkersQueryKey } from "@workspace/api-client-react";
 import type { Marker } from "@workspace/api-client-react";
-import { getColormap } from "@/lib/colormap";
+import { getColormap, colormapCssGradient } from "@/lib/colormap";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import type { ColormapTheme } from "@/lib/settingsStore";
@@ -36,11 +36,15 @@ function drawHeatmap(
       const idx = gy * width + gx;
       const depth = depths[idx] ?? minDepth;
       const t = (depth - minDepth) / depthRange;
-      const c = toColor(t);
+      // Convert THREE.Color (linear-sRGB when ColorManagement is enabled) to
+      // display-space sRGB bytes for 2D canvas, matching the legend overlay
+      // and the colormapCanvas helper in colormap.ts.
+      const lin = toColor(t);
+      const c = lin.clone().convertLinearToSRGB();
       const i = (py * W + px) * 4;
-      imageData.data[i] = Math.round(c.r * 255);
-      imageData.data[i + 1] = Math.round(c.g * 255);
-      imageData.data[i + 2] = Math.round(c.b * 255);
+      imageData.data[i] = Math.max(0, Math.min(255, Math.round(c.r * 255)));
+      imageData.data[i + 1] = Math.max(0, Math.min(255, Math.round(c.g * 255)));
+      imageData.data[i + 2] = Math.max(0, Math.min(255, Math.round(c.b * 255)));
       imageData.data[i + 3] = 255;
     }
   }
@@ -114,11 +118,35 @@ export const Minimap: React.FC = () => {
   const markersRef = useRef<Marker[]>([]);
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
   const colormapTheme = useSettingsStore((s) => s.colormapTheme);
+  const units = useSettingsStore((s) => s.units);
   const shallow = usePaletteStore((s) => s.shallow);
   const deep = usePaletteStore((s) => s.deep);
   const bandColors = usePaletteStore((s) => s.bandColors);
   const customStops = usePaletteStore((s) => s.customStops);
   const bandBoundaries = usePaletteStore((s) => s.bandBoundaries);
+
+  // Build the CSS gradient for the legend strip.  Re-computed only when the
+  // theme or palette changes — same dependencies that rebuild the heatmap.
+  const legendGradient = useMemo(
+    () => colormapCssGradient(colormapTheme, "to bottom", 16),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [colormapTheme, shallow, deep, bandColors, customStops, bandBoundaries],
+  );
+
+  // Depth labels for the legend (shallow top, deep bottom)
+  const legendLabels = useMemo(() => {
+    if (!terrain) return { top: "", mid: "", bot: "" };
+    const { minDepth, maxDepth } = terrain;
+    const fmt = (m: number) => {
+      const d = Math.abs(Math.round(m));
+      return units !== "metric" ? `${Math.round(d * 3.28084)}ft` : `${d}m`;
+    };
+    return {
+      top: fmt(minDepth),
+      mid: fmt((minDepth + maxDepth) / 2),
+      bot: fmt(maxDepth),
+    };
+  }, [terrain, units]);
 
   const datasetId = terrain?.datasetId ?? "";
   const { data: markers } = useGetMarkers(
@@ -322,6 +350,46 @@ export const Minimap: React.FC = () => {
           }}
         >
           S
+        </div>
+        {/* Colormap legend strip — bottom-left, shallow top → deep bottom */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: 14,
+            left: 5,
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "stretch",
+            gap: 3,
+            pointerEvents: "none",
+          }}
+        >
+          {/* Gradient strip */}
+          <div
+            style={{
+              width: 6,
+              height: 72,
+              background: legendGradient,
+              border: "0.5px solid rgba(255,255,255,0.2)",
+              flexShrink: 0,
+            }}
+          />
+          {/* Depth labels: top / mid / bottom */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 7,
+              color: "rgba(255,255,255,0.65)",
+              lineHeight: 1,
+            }}
+          >
+            <span>{legendLabels.top}</span>
+            <span>{legendLabels.mid}</span>
+            <span>{legendLabels.bot}</span>
+          </div>
         </div>
       </div>
     </div>

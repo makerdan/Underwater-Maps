@@ -35,6 +35,7 @@ import {
   renderDepthPoles,
   renderCameraArrow,
   renderScaleBar,
+  renderColormapLegend,
   renderHabitatOverlay,
   renderEfhOverlay,
   renderEfhLegend,
@@ -540,7 +541,7 @@ export const OverviewMap: React.FC = () => {
       }
 
       // Lat/lon grid (gated by user setting; renderGridLines also checks scale ≥ 2 internally)
-      const { overviewShowGrid, overviewShowMarkers, units } = useSettingsStore.getState();
+      const { overviewShowGrid, overviewShowMarkers, units, colormapTheme: activeTheme } = useSettingsStore.getState();
       if (overviewShowGrid) {
         renderGridLines(ctx, grid, t, cW, cH);
       }
@@ -674,6 +675,10 @@ export const OverviewMap: React.FC = () => {
 
       // Scale bar
       renderScaleBar(ctx, grid, t, cH, units);
+
+      // Colormap legend — top-right gradient strip with depth labels so users
+      // can read off what the 2D colours mean, matching the 3D HUD scale bar.
+      renderColormapLegend(ctx, activeTheme, grid.minDepth, grid.maxDepth, cW, cH, units);
 
       // Box-select / Download overlay (in-progress drag + committed bbox).
       // Painted on top of every other layer so the user can always see it.

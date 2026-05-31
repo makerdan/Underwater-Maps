@@ -148,11 +148,15 @@ export function buildHeatmapBitmap(
     for (let col = 0; col < W; col++) {
       const depth = depths[row * W + col] ?? minDepth;
       const t = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
-      const c = toColor(t);
+      // Convert THREE.Color (linear-sRGB when ColorManagement is enabled) to
+      // display-space sRGB bytes for 2D canvas, matching the legend strip and
+      // the colormapCanvas helper in colormap.ts.
+      const lin = toColor(t);
+      const c = lin.clone().convertLinearToSRGB();
       const i = (row * W + col) * 4;
-      imageData.data[i]     = Math.round(c.r * 255);
-      imageData.data[i + 1] = Math.round(c.g * 255);
-      imageData.data[i + 2] = Math.round(c.b * 255);
+      imageData.data[i]     = Math.max(0, Math.min(255, Math.round(c.r * 255)));
+      imageData.data[i + 1] = Math.max(0, Math.min(255, Math.round(c.g * 255)));
+      imageData.data[i + 2] = Math.max(0, Math.min(255, Math.round(c.b * 255)));
       imageData.data[i + 3] = 255;
     }
   }
@@ -1076,6 +1080,94 @@ export function renderSavedTrails(
 
     ctx.restore();
   }
+}
+
+/**
+ * Render a depth-to-colour legend strip in the top-right corner of the
+ * overview canvas. The strip runs from shallow (top, t=0) to deep (bottom,
+ * t=1) using the active colormap theme, with depth labels at the top, middle,
+ * and bottom tick marks. Matches the 3D HUD DepthScaleBar so both views
+ * communicate the same colour scale.
+ *
+ * @param theme    Active colormap theme (read from settingsStore each frame).
+ * @param minDepth Shallowest depth value in the grid (metres).
+ * @param maxDepth Deepest depth value in the grid (metres).
+ * @param canvasW  Canvas width in pixels.
+ * @param canvasH  Canvas height in pixels.
+ * @param units    Unit system for depth labels.
+ */
+export function renderColormapLegend(
+  ctx: CanvasRenderingContext2D,
+  theme: ColormapTheme,
+  minDepth: number,
+  maxDepth: number,
+  canvasW: number,
+  canvasH: number,
+  units: UnitsSystem = "metric",
+): void {
+  const STRIP_W = 10;
+  const STRIP_H = 120;
+  const MARGIN_RIGHT = 16;
+  const MARGIN_TOP = 16;
+  const x = canvasW - MARGIN_RIGHT - STRIP_W;
+  const y = MARGIN_TOP;
+  const LABEL_X = x - 4;
+
+  const toColor = getColormap(theme);
+  ctx.save();
+
+  // Draw the gradient strip row by row (top = shallow t=0, bottom = deep t=1).
+  // Convert THREE.Color (linear-sRGB) to display-space sRGB bytes so the strip
+  // matches the colour the renderer paints on screen.
+  for (let py = 0; py < STRIP_H; py++) {
+    const t = py / (STRIP_H - 1);
+    const c = toColor(t).clone().convertLinearToSRGB();
+    const r = Math.max(0, Math.min(255, Math.round(c.r * 255)));
+    const g = Math.max(0, Math.min(255, Math.round(c.g * 255)));
+    const b = Math.max(0, Math.min(255, Math.round(c.b * 255)));
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.fillRect(x, y + py, STRIP_W, 1);
+  }
+
+  // Thin border around the strip
+  ctx.strokeStyle = "rgba(255,255,255,0.25)";
+  ctx.lineWidth = 0.5;
+  ctx.strokeRect(x + 0.5, y + 0.5, STRIP_W - 1, STRIP_H - 1);
+
+  // Tick marks at top, middle, and bottom, extending left from the strip
+  ctx.strokeStyle = "rgba(255,255,255,0.45)";
+  ctx.lineWidth = 1;
+  for (const frac of [0, 0.5, 1]) {
+    const ty = y + Math.round(frac * (STRIP_H - 1));
+    ctx.beginPath();
+    ctx.moveTo(x - 3, ty);
+    ctx.lineTo(x, ty);
+    ctx.stroke();
+  }
+
+  // Depth labels (metres or feet) right-aligned next to the tick marks
+  ctx.font = "8px 'JetBrains Mono', monospace";
+  ctx.fillStyle = "rgba(255,255,255,0.7)";
+  ctx.textAlign = "right";
+
+  const depthToLabel = (metres: number): string => {
+    const d = Math.abs(Math.round(metres));
+    if (units !== "metric") {
+      return `${Math.round(d * 3.28084)}ft`;
+    }
+    return `${d}m`;
+  };
+
+  ctx.textBaseline = "top";
+  ctx.fillText(depthToLabel(minDepth), LABEL_X, y);
+
+  ctx.textBaseline = "middle";
+  ctx.fillText(depthToLabel((minDepth + maxDepth) / 2), LABEL_X, y + STRIP_H / 2);
+
+  ctx.textBaseline = "bottom";
+  ctx.fillText(depthToLabel(maxDepth), LABEL_X, y + STRIP_H);
+
+  ctx.restore();
 }
 
 /** Draw a "100 px = X km" scale bar in the bottom-left corner. */
