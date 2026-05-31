@@ -1,0 +1,39 @@
+name: Live WCS Smoke — Southern Alaska CRM
+
+on:
+  schedule:
+    # Nightly at 02:00 UTC — catches NCEI endpoint outages before users report them
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  live-wcs-smoke:
+    name: Southern Alaska CRM live endpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Southern Alaska CRM live WCS smoke tests
+        env:
+          TEST_LIVE_WCS: 'true'
+        run: >
+          pnpm --filter @workspace/api-server exec
+          vitest run --reporter=verbose
+          src/lib/__tests__/southAlaskaCrm.smoke.test.ts
