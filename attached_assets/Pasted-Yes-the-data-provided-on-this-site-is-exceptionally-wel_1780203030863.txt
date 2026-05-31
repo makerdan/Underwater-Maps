@@ -1,0 +1,23 @@
+Yes, the data provided on this site is exceptionally well-suited for extrapolating potential locations for both tide pooling and beachcombing. Because the dataset breaks down the intertidal zones by physical description, biological indicators, and wave energy, you can filter for the exact conditions that make for ideal exploring.
+
+Here is how you can use the specific data layers to find the best spots:
+
+### 🦀 Extrapolating Tide Pooling Locations
+
+Tide pools form where water is trapped in depressions among rocks when the tide goes out, making hard, uneven surfaces with abundant marine life the ideal targets.
+
+* **Intertidal Subclass & Rock Size:** Look for areas categorized under the **Bedrock** or **Rubble** subclass. You can cross-reference this with the **Rock Size** layers (in the Low, Medium, or High zones) to find beaches dominated by boulders or "Blocks" (sizes comparable to a small car), which are perfect for trapping water and sheltering sea life.
+* **Zone Bioband (Algae & Invertebrates):** The Bioband layers map the biological indicator species. Areas showing high concentrations of invertebrates and algae in the Low and Medium zones will be the most vibrant and biologically active tide pools.
+* **Zone Relief:** High surface roughness or relief indicates an uneven shore segment, which is necessary for creating the crevices and catch-basins that become tide pools.
+
+### 🐚 Extrapolating Beachcombing Locations
+
+Beachcombing relies on ocean currents and wave action depositing items (like sea glass, driftwood, shells, or floats) onto softer, accessible shores.
+
+* **Intertidal Debris:** This is your most direct layer. It explicitly maps the volume of both natural and human debris found on the beach segment on a scale of 1 to 5. High-scoring areas act as natural catch-alls for ocean drift.
+* **Subclass & Roundness:** For comfortable walking and searching, you'll want to filter the **Subclass** for **Sand** or **Cobble/Gravel**. Checking the **Roundness** layer for "Rounded" or "Well-Rounded" stones can also indicate beaches where items have been tumbled smooth by the surf (a great indicator for sea glass).
+* **Zone Energy & Dynamism:** Areas with higher fetch (Energy) or seasonal change (Dynamism) are where the ocean is actively churning and depositing new material onto the shore.
+
+### 🥾 Practical Planning
+
+Additionally, you can use the **Zone Use** layers to your advantage. This layer tracks human use based on trails, docks, and boats. If you want an easily accessible spot, look for a higher Use rating. If you prefer an untouched, remote beachcombing or tide pooling experience, filter for a Use rating of 1 to find areas with little to no human footprint.
