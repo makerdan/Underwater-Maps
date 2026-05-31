@@ -13,7 +13,9 @@ import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
 import { worldXZToLonLat, worldYToMetres, lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
 import { useJoystickStore } from "@/components/VirtualJoystick";
-import { computeMetersPerWorldUnit, boatMphToWorldUnitsPerSecond } from "@/lib/boatSpeed";
+import { computeMetersPerWorldUnit, boatMphToWorldUnitsPerSecond, BOAT_MIN_MPH, BOAT_MAX_MPH } from "@/lib/boatSpeed";
+import { useDriveBoatStore } from "@/lib/driveBoatStore";
+import { useCurrentsStore } from "@/lib/currentsStore";
 import { markerGroupRef } from "@/components/MarkerLayer";
 import { useContextMenuStore, type ContextMenuItem } from "@/lib/contextMenuStore";
 import { useMarkerDetailStore } from "@/lib/markerDetailStore";
@@ -116,6 +118,23 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   useEffect(() => { terrainRef.current = terrain; }, [terrain]);
   useEffect(() => { realisticModeRef.current = realisticMode; }, [realisticMode]);
   useEffect(() => { boatSpeedMphRef.current = boatSpeedMph; }, [boatSpeedMph]);
+
+  // ── Drive Boat inertia / heading lock / route following refs ─────────────
+  // Actual (inertia-smoothed) speed that the frame loop uses for movement.
+  // Lags behind boatSpeedMphRef to simulate throttle ramp.
+  const actualSpeedMphRef = useRef(boatSpeedMph);
+  // Heading lock state (read from driveBoatStore each frame via getState())
+  const headingLockedRef = useRef(useDriveBoatStore.getState().headingLocked);
+  const lockedBearingRef = useRef(useDriveBoatStore.getState().lockedBearing);
+  useEffect(() =>
+    useDriveBoatStore.subscribe((s) => {
+      headingLockedRef.current = s.headingLocked;
+      lockedBearingRef.current = s.lockedBearing;
+    }),
+  []);
+  // Previous camera position for per-frame distance accumulation.
+  const prevCamPosRef = useRef(new THREE.Vector3());
+  const prevCamPosInitRef = useRef(false);
 
   // Sync speedIndex to cameraStore for HUD reads
   useEffect(() => { useCameraStore.getState().setSpeedIndex(speedIndex); }, [speedIndex]);
@@ -427,6 +446,12 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         Math.min(Math.PI * 0.472, euler.current.x - dyScaled * sens),
       );
       camera.quaternion.setFromEuler(euler.current);
+      // When heading lock is active, treat yaw input as intentional steering —
+      // update lockedBearing so the autopilot adapts to the new course.
+      if (dx !== 0 && headingLockedRef.current) {
+        const newBearing = ((-euler.current.y * 180 / Math.PI) % 360 + 360) % 360;
+        useDriveBoatStore.getState().setLockedBearing(newBearing);
+      }
     };
 
     const handleWheel = (e: WheelEvent) => {
@@ -849,10 +874,28 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
 
     // 2. WASD movement (suspended during an active orbit gesture or GPS follow mode)
     if (!orbitState.current.active && !useCameraStore.getState().gpsFollowMode) {
+      const isRealistic = realisticModeRef.current && terrainRef.current !== null;
+      const grid = terrainRef.current;
+
+      // ── 2a. Throttle inertia (realistic mode only) ──────────────────────
+      // Smoothly ramp actualSpeed toward target over THROTTLE_RAMP_SECONDS.
+      const THROTTLE_RAMP_SECONDS = 2.5;
+      if (isRealistic) {
+        const targetMph = Math.max(BOAT_MIN_MPH, Math.min(BOAT_MAX_MPH, boatSpeedMphRef.current));
+        const currentActual = actualSpeedMphRef.current;
+        const speedRange = BOAT_MAX_MPH - BOAT_MIN_MPH;
+        const maxStep = (speedRange / THROTTLE_RAMP_SECONDS) * delta;
+        const diff = targetMph - currentActual;
+        actualSpeedMphRef.current =
+          Math.abs(diff) <= maxStep ? targetMph : currentActual + Math.sign(diff) * maxStep;
+        useDriveBoatStore.getState().setActualBoatSpeedMph(actualSpeedMphRef.current);
+      }
+
       let scaledSpeed: number;
-      if (realisticModeRef.current && terrainRef.current) {
-        const mpu = computeMetersPerWorldUnit(terrainRef.current);
-        const wups = boatMphToWorldUnitsPerSecond(boatSpeedMphRef.current, mpu);
+      let mpuForFrame = 1;
+      if (isRealistic && grid) {
+        mpuForFrame = computeMetersPerWorldUnit(grid);
+        const wups = boatMphToWorldUnitsPerSecond(actualSpeedMphRef.current, mpuForFrame);
         scaledSpeed = wups * delta;
       } else {
         const speed = SPEEDS[speedIndexRef.current] ?? 0.15;
@@ -862,48 +905,150 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       camera.getWorldDirection(moveDir.current);
       rightDir.current.crossVectors(moveDir.current, camera.up).normalize();
 
-      const bindings = keyBindingsRef.current;
-      const fwd = getBoundKey(bindings, "moveForward");
-      const back = getBoundKey(bindings, "moveBackward");
-      const left = getBoundKey(bindings, "strafeLeft");
-      const right = getBoundKey(bindings, "strafeRight");
-      const up = getBoundKey(bindings, "ascend");
-      const down = getBoundKey(bindings, "descend");
       // In Drive Boat mode, reverse gear negates the forward/back axes so
       // the camera moves stern-first (bow pointing in the facing direction
       // but the boat moving backwards). The backtroll drag coefficient
       // reduces the effective reverse speed in the same way as the drift
       // planner physics, so holding station against a known current is
       // consistent between the two tools.
-      const reverseActive = realisticModeRef.current && driveBoatReverse();
-      const reverseScale = reverseActive ? -1 / 1 : 1; // drag applied via boatSpeedMph slider by user
-      if (keys.current[fwd]) camera.position.addScaledVector(moveDir.current, scaledSpeed * reverseScale);
-      if (keys.current[back]) camera.position.addScaledVector(moveDir.current, -scaledSpeed * reverseScale);
-      if (keys.current[left]) camera.position.addScaledVector(rightDir.current, -scaledSpeed);
-      if (keys.current[right]) camera.position.addScaledVector(rightDir.current, scaledSpeed);
-      if (keys.current[up]) camera.position.y += scaledSpeed;
-      // ShiftRight stays as a permanent secondary "descend" so the user
-      // doesn't lose a sensible default when they rebind ShiftLeft.
-      if (
-        keys.current[down] ||
-        (down !== "ShiftRight" && keys.current["ShiftRight"])
-      ) {
-        camera.position.y -= scaledSpeed;
+      const reverseActive = isRealistic && driveBoatReverse();
+      const reverseScale = reverseActive ? -1 : 1; // drag applied via boatSpeedMph slider by user
+
+      // ── 2b. Route following (realistic mode) ────────────────────────────
+      const driveState = useDriveBoatStore.getState();
+      const driftWpts = useDriftStore.getState().driftWaypoints;
+      let routeHandled = false;
+
+      if (isRealistic && driveState.followingRoute && driftWpts.length > 0 && grid) {
+        const legIndex = driveState.routeLegIndex;
+        if (legIndex < driftWpts.length) {
+          const target = driftWpts[legIndex]!;
+          const { x: tx, z: tz } = lonLatToWorldXZ(target.lon, target.lat, grid);
+          const dx = tx - camera.position.x;
+          const dz = tz - camera.position.z;
+          const dist2d = Math.sqrt(dx * dx + dz * dz);
+          const ARRIVAL_WU = 1.5;
+
+          if (dist2d < ARRIVAL_WU) {
+            const next = legIndex + 1;
+            if (next < driftWpts.length) {
+              driveState.setRouteLegIndex(next);
+              driveState.setDistanceToNextNm(0);
+            } else {
+              driveState.setFollowingRoute(false);
+              driveState.setDistanceToNextNm(0);
+              toast({ title: "Route complete", description: "All waypoints reached.", duration: 3500 });
+            }
+          } else {
+            // Turn toward waypoint
+            const targetBearing = Math.atan2(dx, -dz);
+            const targetEulerY = -targetBearing;
+            euler.current.setFromQuaternion(camera.quaternion);
+            const yawDiff = targetEulerY - euler.current.y;
+            const normalYaw =
+              ((yawDiff + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+            const turnRate = 2.0;
+            euler.current.y += Math.sign(normalYaw) * Math.min(Math.abs(normalYaw), turnRate * delta);
+            camera.quaternion.setFromEuler(euler.current);
+
+            // Advance toward waypoint
+            camera.getWorldDirection(moveDir.current);
+            camera.position.addScaledVector(moveDir.current, scaledSpeed);
+
+            // Publish distance to next waypoint
+            const distNm = (dist2d * mpuForFrame) / 1852;
+            driveState.setDistanceToNextNm(distNm);
+          }
+          routeHandled = true;
+        } else {
+          driveState.setFollowingRoute(false);
+        }
       }
 
-      // 2b. Virtual joystick (touch devices)
-      if (Math.abs(joy.moveX) > DEAD || Math.abs(joy.moveY) > DEAD) {
-        camera.position.addScaledVector(rightDir.current, joy.moveX * scaledSpeed);
-        camera.position.addScaledVector(moveDir.current, -joy.moveY * scaledSpeed);
+      // ── 2c. Normal WASD / joystick movement ─────────────────────────────
+      if (!routeHandled) {
+        const bindings = keyBindingsRef.current;
+        const fwd = getBoundKey(bindings, "moveForward");
+        const back = getBoundKey(bindings, "moveBackward");
+        const left = getBoundKey(bindings, "strafeLeft");
+        const right = getBoundKey(bindings, "strafeRight");
+        const up = getBoundKey(bindings, "ascend");
+        const down = getBoundKey(bindings, "descend");
+        if (keys.current[fwd]) camera.position.addScaledVector(moveDir.current, scaledSpeed * reverseScale);
+        if (keys.current[back]) camera.position.addScaledVector(moveDir.current, -scaledSpeed * reverseScale);
+        if (keys.current[left]) camera.position.addScaledVector(rightDir.current, -scaledSpeed);
+        if (keys.current[right]) camera.position.addScaledVector(rightDir.current, scaledSpeed);
+        if (keys.current[up]) camera.position.y += scaledSpeed;
+        // ShiftRight stays as a permanent secondary "descend" so the user
+        // doesn't lose a sensible default when they rebind ShiftLeft.
+        if (
+          keys.current[down] ||
+          (down !== "ShiftRight" && keys.current["ShiftRight"])
+        ) {
+          camera.position.y -= scaledSpeed;
+        }
+
+        // Virtual joystick (touch devices)
+        if (Math.abs(joy.moveX) > DEAD || Math.abs(joy.moveY) > DEAD) {
+          camera.position.addScaledVector(rightDir.current, joy.moveX * scaledSpeed);
+          camera.position.addScaledVector(moveDir.current, -joy.moveY * scaledSpeed * reverseScale);
+        }
+        if (Math.abs(joy.lookX) > DEAD || Math.abs(joy.lookY) > DEAD) {
+          euler.current.setFromQuaternion(camera.quaternion);
+          euler.current.y -= joy.lookX * 0.03;
+          euler.current.x = Math.max(
+            -Math.PI / 2,
+            Math.min(Math.PI / 2, euler.current.x - joy.lookY * 0.03),
+          );
+          camera.quaternion.setFromEuler(euler.current);
+        }
       }
-      if (Math.abs(joy.lookX) > DEAD || Math.abs(joy.lookY) > DEAD) {
+
+      // ── 2d. Tidal current pushback (realistic mode) ──────────────────────
+      // Apply the NOAA tidal ambient as a lateral position offset each frame,
+      // forcing the user to correct heading to maintain course — like a real boat.
+      if (isRealistic && grid) {
+        const ambient = useCurrentsStore.getState().noaaAmbient;
+        if (ambient && ambient.speedKt > 0) {
+          const KT_TO_MS = 0.514444;
+          const dirRad = ambient.directionDeg * (Math.PI / 180);
+          // Standard compass: 0=N(+Z world), 90=E(+X world)
+          const worldDX = Math.sin(dirRad) * ambient.speedKt * KT_TO_MS;
+          const worldDZ = Math.cos(dirRad) * ambient.speedKt * KT_TO_MS;
+          const mpu = mpuForFrame > 0 ? mpuForFrame : computeMetersPerWorldUnit(grid);
+          camera.position.x += (worldDX / mpu) * delta;
+          camera.position.z += (worldDZ / mpu) * delta;
+        }
+      }
+
+      // ── 2e. Heading lock autopilot (realistic mode, not route-following) ──
+      // Applies a gentle corrective yaw force toward the locked bearing each
+      // frame to counteract any drift. Does NOT suppress intentional steering —
+      // mouse look updates lockedBearing so the user still has full control.
+      if (isRealistic && headingLockedRef.current && !driveState.followingRoute) {
         euler.current.setFromQuaternion(camera.quaternion);
-        euler.current.y -= joy.lookX * 0.03;
-        euler.current.x = Math.max(
-          -Math.PI / 2,
-          Math.min(Math.PI / 2, euler.current.x - joy.lookY * 0.03),
-        );
+        const targetEulerY = -(lockedBearingRef.current * Math.PI) / 180;
+        const diff = targetEulerY - euler.current.y;
+        const normalized =
+          ((diff + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+        const CORRECTION_RATE = 3.0; // rad/s
+        euler.current.y +=
+          Math.sign(normalized) * Math.min(Math.abs(normalized), CORRECTION_RATE * delta);
         camera.quaternion.setFromEuler(euler.current);
+      }
+
+      // ── 2f. Distance-traveled counter (realistic mode) ───────────────────
+      if (isRealistic && grid) {
+        if (!prevCamPosInitRef.current) {
+          prevCamPosRef.current.copy(camera.position);
+          prevCamPosInitRef.current = true;
+        }
+        const displacement = camera.position.distanceTo(prevCamPosRef.current);
+        if (displacement > 0) {
+          const distNm = (displacement * mpuForFrame) / 1852;
+          useDriveBoatStore.getState().addDistanceNm(distNm);
+        }
+        prevCamPosRef.current.copy(camera.position);
       }
     }
 

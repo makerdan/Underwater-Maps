@@ -11,6 +11,8 @@ import { useSettingsStore, type UnitsSystem } from "@/lib/settingsStore";
 import { formatSpeed, MPH_TO_KPH, MPH_TO_KNOTS, speedSuffix } from "@/lib/units";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
+import { useDriveBoatStore } from "@/lib/driveBoatStore";
+import { useCameraStore } from "@/lib/cameraStore";
 
 const LEVER_TRACK_H = 160;
 const LEVER_THUMB_H = 28;
@@ -65,6 +67,28 @@ const CYAN: React.CSSProperties = {
   textShadow: "0 0 8px rgba(0,229,255,0.5)",
 };
 
+const BTN_BASE: React.CSSProperties = {
+  background: "none",
+  border: "1px solid rgba(0,229,255,0.18)",
+  borderRadius: 3,
+  color: "#94a3b8",
+  cursor: "pointer",
+  fontFamily: "inherit",
+  fontSize: 8,
+  letterSpacing: "0.12em",
+  padding: "2px 6px",
+  lineHeight: 1.5,
+  transition: "background 0.12s, color 0.12s, border-color 0.12s",
+};
+
+const BTN_ACTIVE: React.CSSProperties = {
+  ...BTN_BASE,
+  background: "rgba(0,229,255,0.12)",
+  border: "1px solid rgba(0,229,255,0.55)",
+  color: "#00e5ff",
+  textShadow: "0 0 6px rgba(0,229,255,0.4)",
+};
+
 interface ThrottlePanelProps {
   onClose?: () => void;
 }
@@ -81,6 +105,22 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef(0);
   const dragStartMph = useRef(boatSpeedMph);
+
+  // Drive Boat state
+  const headingLocked = useDriveBoatStore((s) => s.headingLocked);
+  const lockedBearing = useDriveBoatStore((s) => s.lockedBearing);
+  const setHeadingLocked = useDriveBoatStore((s) => s.setHeadingLocked);
+  const setLockedBearing = useDriveBoatStore((s) => s.setLockedBearing);
+  const followingRoute = useDriveBoatStore((s) => s.followingRoute);
+  const routeLegIndex = useDriveBoatStore((s) => s.routeLegIndex);
+  const distanceToNextNm = useDriveBoatStore((s) => s.distanceToNextNm);
+  const setFollowingRoute = useDriveBoatStore((s) => s.setFollowingRoute);
+  const distanceTraveledNm = useDriveBoatStore((s) => s.distanceTraveledNm);
+  const resetDistanceTraveled = useDriveBoatStore((s) => s.resetDistanceTraveled);
+  const actualBoatSpeedMph = useDriveBoatStore((s) => s.actualBoatSpeedMph);
+
+  const driftWaypoints = useDriftStore((s) => s.driftWaypoints);
+  const heading = useCameraStore((s) => s.heading);
 
   useEffect(() => {
     if (!dragging) {
@@ -147,11 +187,37 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
     }
   };
 
+  const handleToggleHeadingLock = () => {
+    if (!headingLocked) {
+      // heading from cameraStore is already the compass bearing (atan2(lx,-lz)*180/π)
+      setLockedBearing(heading);
+      setHeadingLocked(true);
+    } else {
+      setHeadingLocked(false);
+    }
+  };
+
+  const handleFollowRoute = () => {
+    if (followingRoute) {
+      setFollowingRoute(false);
+    } else {
+      if (driftWaypoints.length > 0) {
+        setFollowingRoute(true);
+      }
+    }
+  };
+
   const knots = mphToKnots(boatSpeedMph);
   const showSecondaryKnots = units !== "nautical";
   const unitSuffix = speedSuffix(units);
   const inputMin = Math.round(mphToDisplay(BOAT_MIN_MPH, units) * 10) / 10;
   const inputMax = Math.round(mphToDisplay(BOAT_MAX_MPH, units) * 10) / 10;
+
+  // Inertia indicator: show actual speed when it differs from target by >0.5 mph
+  const showInertia = Math.abs(actualBoatSpeedMph - boatSpeedMph) > 0.5;
+  const actualDisplay = mphToDisplay(actualBoatSpeedMph, units);
+
+  const hasRoute = driftWaypoints.length > 0;
 
   if (minimized) {
     return (
@@ -181,6 +247,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
               <span style={{ color: "#7dd3fc" }}>{knots.toFixed(1)} KT</span>
             </>
           )}
+          {headingLocked && <span style={{ color: "#fbbf24", fontSize: 9 }}>🔒</span>}
           <span style={{ color: "#1e3a5f", fontSize: 10 }}>▲</span>
         </div>
       </ViewscreenTooltip>
@@ -188,7 +255,8 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
   }
 
   return (
-    <div style={{ ...PANEL_STYLE, width: 140 }}>
+    <div style={{ ...PANEL_STYLE, width: 148 }}>
+      {/* Header */}
       <div
         style={{
           display: "flex",
@@ -257,6 +325,11 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
               <div style={{ ...CYAN, fontSize: 15, fontWeight: 700, letterSpacing: "0.05em" }}>
                 {formatSpeed(boatSpeedMph, { units }).toUpperCase()}
               </div>
+              {showInertia && (
+                <div style={{ fontSize: 8, color: "#fbbf24", letterSpacing: "0.1em", marginTop: 1 }}>
+                  ▶ {Math.round(actualDisplay * 10) / 10} {unitSuffix}
+                </div>
+              )}
               {showSecondaryKnots && (
                 <div style={{ fontSize: 9, color: "#94a3b8", letterSpacing: "0.15em", marginTop: 1 }}>
                   {knots.toFixed(1)} KT
@@ -267,13 +340,14 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
         </div>
       </div>
 
+      {/* Lever + tick marks */}
       <div
         style={{
           display: "flex",
           alignItems: "flex-start",
           justifyContent: "center",
           gap: 6,
-          padding: "4px 14px 10px",
+          padding: "4px 14px 6px",
         }}
       >
         <div
@@ -406,7 +480,8 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
         </button>
       </ViewscreenTooltip>
 
-      <div style={{ padding: "0 12px 10px", display: "flex", alignItems: "center", gap: 6 }}>
+      {/* Speed input */}
+      <div style={{ padding: "0 12px 8px", display: "flex", alignItems: "center", gap: 6 }}>
         <input
           type="number"
           min={inputMin}
@@ -429,6 +504,83 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
           }}
         />
         <span style={{ fontSize: 9, color: "#94a3b8", whiteSpace: "nowrap" }}>{unitSuffix}</span>
+      </div>
+
+      {/* ── Drive Boat controls ─────────────────────────────────────────── */}
+      <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)", padding: "6px 10px 4px" }}>
+        <div style={{ fontSize: 7, color: "#475569", letterSpacing: "0.2em", marginBottom: 5 }}>
+          AUTOPILOT
+        </div>
+
+        {/* Heading lock */}
+        <ViewscreenTooltip
+          label={headingLocked
+            ? `Heading lock ON — holding ${Math.round(lockedBearing)}°. Click to disengage.`
+            : "Lock current compass heading (autopilot). Mouse look updates the locked course."}
+          side="left"
+        >
+          <button
+            onClick={handleToggleHeadingLock}
+            style={headingLocked ? BTN_ACTIVE : BTN_BASE}
+          >
+            {headingLocked ? `🔒 HDG ${Math.round(lockedBearing)}°` : "🔓 HEADING LOCK"}
+          </button>
+        </ViewscreenTooltip>
+
+        {/* Follow Route (only shown when Drift Planner has waypoints) */}
+        {hasRoute && (
+          <ViewscreenTooltip
+            label={followingRoute
+              ? `Following route — leg ${routeLegIndex + 1}/${driftWaypoints.length}, ${distanceToNextNm.toFixed(2)} nm to next. Click to stop.`
+              : `Follow the ${driftWaypoints.length} Drift Planner waypoint${driftWaypoints.length !== 1 ? "s" : ""} at current throttle speed.`}
+            side="left"
+          >
+            <button
+              onClick={handleFollowRoute}
+              style={{
+                ...(followingRoute ? BTN_ACTIVE : BTN_BASE),
+                marginTop: 4,
+                color: followingRoute ? "#34d399" : undefined,
+                borderColor: followingRoute ? "rgba(52,211,153,0.5)" : undefined,
+              }}
+            >
+              {followingRoute
+                ? `▶ LEG ${routeLegIndex + 1}/${driftWaypoints.length}`
+                : "▶ FOLLOW ROUTE"}
+            </button>
+          </ViewscreenTooltip>
+        )}
+
+        {followingRoute && distanceToNextNm > 0 && (
+          <div style={{ fontSize: 7, color: "#64748b", marginTop: 3, letterSpacing: "0.1em" }}>
+            {distanceToNextNm.toFixed(2)} nm to turn
+          </div>
+        )}
+      </div>
+
+      {/* Distance traveled */}
+      <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)", padding: "5px 10px 7px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontSize: 7, color: "#475569", letterSpacing: "0.2em" }}>TRAVELED</div>
+            <div style={{ ...CYAN, fontSize: 12, fontWeight: 700, letterSpacing: "0.05em", marginTop: 1 }}>
+              {distanceTraveledNm.toFixed(2)} <span style={{ fontSize: 8, color: "#94a3b8" }}>nm</span>
+            </div>
+          </div>
+          <ViewscreenTooltip label="Reset distance counter" side="left">
+            <button
+              onClick={resetDistanceTraveled}
+              style={{
+                ...BTN_BASE,
+                fontSize: 7,
+                padding: "2px 5px",
+                letterSpacing: "0.1em",
+              }}
+            >
+              RESET
+            </button>
+          </ViewscreenTooltip>
+        </div>
       </div>
     </div>
   );
