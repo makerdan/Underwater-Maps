@@ -2,7 +2,7 @@
 id: throttle
 title: Throttle Panel
 section: Features
-order: 8
+order: 8.5
 showQA: true
 ---
 
