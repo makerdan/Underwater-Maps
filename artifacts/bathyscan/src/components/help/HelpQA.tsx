@@ -14,6 +14,7 @@ const STARTERS = [
   "How do I correct a zone the AI got wrong?",
   "How do I record my GPS track?",
   "What does METAR mean?",
+  "How do I use the overview map?",
 ];
 
 export const HelpQA: React.FC = () => {
