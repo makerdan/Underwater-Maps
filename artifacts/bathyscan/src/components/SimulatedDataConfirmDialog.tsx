@@ -54,6 +54,12 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
   function handleCancel() {
     const wasStartup = pending?.isStartup ?? false;
     onCancel();
+    // If the user has suppressed simulated-data warnings (either before this
+    // dialog opened, or by ticking "Don't ask again" and then clicking Cancel),
+    // skip the toast and the Find-Data re-open entirely. Future synthetic-data
+    // loads will auto-confirm, so "Refine your query" is misleading and the
+    // panel would open unexpectedly.
+    if (suppressed) return;
     toast({
       title: "Load cancelled",
       description: "Refine your query and try again.",
@@ -62,7 +68,7 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
       // Re-open Find Data so the user can restructure the query — but only
       // when the cancel came from an explicit user-initiated switch. During
       // startup auto-select there is no "previous query" to refine, so
-      // opening Find Data here would be surprising and counts as bug #2.
+      // opening Find Data here would be surprising.
       if (!wasStartup && setFindDataPanelOpen) setFindDataPanelOpen(true);
     } catch {
       // ignore — Find Data store optional

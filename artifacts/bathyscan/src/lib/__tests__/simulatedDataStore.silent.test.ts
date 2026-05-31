@@ -88,6 +88,39 @@ describe("requestDatasetSwitch — silent mode", () => {
   });
 });
 
+describe("requestDatasetSwitch — suppressed mode (session-wide suppress)", () => {
+  it("calls onConfirm immediately (non-silent) for synthetic data when suppressed=true", async () => {
+    fetchQueryMock.mockResolvedValue(makePreview("synthetic"));
+    useSimulatedDataStore.setState({ suppressed: true });
+    const onConfirm = vi.fn();
+    const onCancel = vi.fn();
+    const setPendingSpy = vi.spyOn(useSimulatedDataStore.getState(), "setPending");
+
+    await requestDatasetSwitch({
+      datasetId: "ds-test",
+      datasetName: "Test Dataset",
+      onConfirm,
+      onCancel,
+    });
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(setPendingSpy).not.toHaveBeenCalled();
+    expect(useSimulatedDataStore.getState().pending).toBeNull();
+  });
+
+  it("calls onConfirm immediately (non-silent) for unknown data when suppressed=true", async () => {
+    fetchQueryMock.mockResolvedValue(makePreview("unknown"));
+    useSimulatedDataStore.setState({ suppressed: true });
+    const onConfirm = vi.fn();
+
+    await requestDatasetSwitch({ datasetId: "ds-test", onConfirm });
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(useSimulatedDataStore.getState().pending).toBeNull();
+  });
+});
+
 describe("requestDatasetSwitch — non-silent mode (dialog preserved)", () => {
   it("sets pending in the store when preview resolves synthetic and silent is not set", async () => {
     fetchQueryMock.mockResolvedValue(makePreview("synthetic"));
