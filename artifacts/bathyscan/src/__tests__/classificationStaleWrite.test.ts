@@ -12,6 +12,31 @@
  * changed hash when it reaches the write step.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
+
+const makeApiClientMock = vi.hoisted(() => {
+  function noop() {}
+  function queryHook()    { return { data: undefined, isLoading: false, isError: false }; }
+  function mutationHook() { return { mutate: noop, mutateAsync: noop, isPending: false, isSuccess: false, variables: undefined }; }
+  return (overrides: Record<string, unknown> = {}) =>
+    new Proxy(overrides, {
+      get(t, p) {
+        if (typeof p === "symbol" || p === "then" || p === "catch" || p === "finally") return undefined;
+        const k = String(p);
+        if (k in t) return t[k];
+        if (k.startsWith("useGet")) return queryHook;
+        if (/^use(Post|Put|Patch|Delete|Health|Poe)/.test(k)) return mutationHook;
+        if (k.startsWith("getGet") && k.endsWith("QueryKey")) {
+          const label = k.replace(/^getGet/, "").replace(/QueryKey$/, "");
+          return (...a: unknown[]) => [label, ...a];
+        }
+        if (/^get(Get|Post|Put|Patch|Delete).*Url$/.test(k))
+          return (...a: unknown[]) => `/api/mock/${a.filter(Boolean).join("/")}`;
+        return noop;
+      },
+      has(_t, p) { return typeof p !== "symbol"; },
+    });
+});
+
 import { useClassificationStore } from "@/lib/classificationStore";
 import type { TerrainData } from "@workspace/api-client-react";
 
@@ -45,13 +70,9 @@ vi.mock("@/lib/gridToImage", () => ({
 
 // poeClassify — not called in these tests because the server cache fetch
 // path is what we intercept. Mock it as a safety net so it never resolves.
-vi.mock("@workspace/api-client-react", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@workspace/api-client-react")>();
-  return {
-    ...actual,
-    poeClassify: vi.fn(() => new Promise(() => {})),
-  };
-});
+vi.mock("@workspace/api-client-react", () =>
+  makeApiClientMock({ poeClassify: vi.fn(() => new Promise(() => {})) }),
+);
 
 // ---------------------------------------------------------------------------
 // Helpers

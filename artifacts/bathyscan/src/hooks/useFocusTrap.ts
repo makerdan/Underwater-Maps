@@ -40,9 +40,7 @@ export function useFocusTrap(containerRef: RefObject<HTMLElement | null>): void 
         return;
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const first = focusable[0]!;
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const last = focusable[focusable.length - 1]!;
       const active = document.activeElement;
 
