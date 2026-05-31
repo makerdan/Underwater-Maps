@@ -149,7 +149,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
   const retryTidal = useCurrentsStore((st) => st.retryTidal);
 
   const wrapStyle: React.CSSProperties = embedded
-    ? { width: "100%", color: "#e2e8f0", fontFamily: FONT, fontSize: 11 }
+    ? { width: "100%", minWidth: 0, color: "#e2e8f0", fontFamily: FONT, fontSize: 11 }
     : card;
 
   if (!currentsEnabled) {
@@ -348,8 +348,8 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
     if (noaaAmbient) {
       return (
         <div style={{ marginBottom: 8, fontSize: 10, color: "#e2e8f0" }} data-testid="currents-noaa-readout">
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: "1 1 0" }}>
               {noaaAmbient.source === "noaa" ? "NOAA" : "Estimated"}:{" "}
               {noaaAmbient.directionDeg.toFixed(0)}°{" "}
               {cardinal(noaaAmbient.directionDeg)} @{" "}
@@ -371,13 +371,13 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
           </div>
           {noaaAmbient.source === "noaa" &&
           (noaaAmbient.stationName || noaaAmbient.stationId) ? (
-            <div style={{ fontSize: 9, color: "#cbd5e1", marginTop: 2 }} data-testid="currents-noaa-station">
+            <div style={{ fontSize: 9, color: "#cbd5e1", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} data-testid="currents-noaa-station">
               Station:{" "}
               {noaaAmbient.stationName ?? "—"}
               {noaaAmbient.stationId ? ` (${noaaAmbient.stationId})` : ""}
             </div>
           ) : noaaAmbient.source === "estimated" ? (
-            <div style={{ fontSize: 9, color: "#fbbf24", marginTop: 2 }} data-testid="currents-noaa-estimated">
+            <div style={{ fontSize: 9, color: "#fbbf24", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} data-testid="currents-noaa-estimated">
               No NOAA station in range — using tide-derived estimate.
             </div>
           ) : null}
@@ -411,8 +411,8 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
 
   if (tidalStatus === "ok" && noaaAmbient) {
     return (
-      <div style={{ marginBottom: 8, fontSize: 10, color: "#e2e8f0" }} data-testid="currents-noaa-readout">
-        <div>
+      <div style={{ marginBottom: 8, fontSize: 10, color: "#e2e8f0", minWidth: 0 }} data-testid="currents-noaa-readout">
+        <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {noaaAmbient.source === "noaa" ? "NOAA" : "Estimated"}:{" "}
           {noaaAmbient.directionDeg.toFixed(0)}°{" "}
           {cardinal(noaaAmbient.directionDeg)} @{" "}
@@ -421,7 +421,7 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
         {noaaAmbient.source === "noaa" &&
         (noaaAmbient.stationName || noaaAmbient.stationId) ? (
           <div
-            style={{ fontSize: 9, color: "#cbd5e1", marginTop: 2 }}
+            style={{ fontSize: 9, color: "#cbd5e1", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
             data-testid="currents-noaa-station"
           >
             Station:{" "}
@@ -430,7 +430,7 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
           </div>
         ) : noaaAmbient.source === "estimated" ? (
           <div
-            style={{ fontSize: 9, color: "#fbbf24", marginTop: 2 }}
+            style={{ fontSize: 9, color: "#fbbf24", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
             data-testid="currents-noaa-estimated"
           >
             No NOAA station in range — using tide-derived estimate.
