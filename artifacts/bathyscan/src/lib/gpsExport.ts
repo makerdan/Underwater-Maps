@@ -10,6 +10,8 @@
  * Blob/anchor dance.
  */
 
+import { triggerBlobDownload } from "./blobDownload";
+
 export interface ExportMarker {
   lon: number;
   lat: number;
@@ -204,6 +206,10 @@ function slugify(s: string): string {
 /**
  * Trigger a browser download of `content` as `filename`. Uses a transient
  * <a download> element and revokes the object URL afterwards.
+ *
+ * Delegates to `triggerBlobDownload` so the anchor is positioned off-screen
+ * rather than hidden via `display:none`, which lets Playwright's download
+ * event listener detect the click reliably.
  */
 export function downloadTextFile(
   content: string,
@@ -212,17 +218,7 @@ export function downloadTextFile(
 ): void {
   if (typeof document === "undefined") return;
   const blob = new Blob([content], { type: `${mimeType};charset=utf-8` });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.rel = "noopener";
-  a.style.display = "none";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  // Defer revoke so the click has time to start the download.
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  triggerBlobDownload(blob, filename);
 }
 
 export function mimeForFormat(format: ExportFormat): string {

@@ -16,6 +16,7 @@ import { createPortal } from "react-dom";
 import { useAuth } from "@/lib/clerkCompat";
 import { useToast } from "@/hooks/use-toast";
 import { buildBathyscanDownloadFilename } from "@/lib/gpsExport";
+import { triggerBlobDownload } from "@/lib/blobDownload";
 
 type Resolution = 64 | 256 | 512;
 
@@ -131,18 +132,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
       }
       const blob = await resp.blob();
       const filename = buildBathyscanDownloadFilename(centerLat, centerLon, resolution);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.rel = "noopener";
-      a.style.cssText = "position:fixed;top:-200px;left:-200px;width:1px;height:1px;";
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, 1000);
+      triggerBlobDownload(blob, filename);
       const pts = info ? Math.round(resolution * resolution * info.waterFraction) : null;
       toast({
         title: "Download ready",

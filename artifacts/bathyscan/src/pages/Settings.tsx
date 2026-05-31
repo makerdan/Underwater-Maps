@@ -40,6 +40,7 @@ import {
   type ShortcutActionId,
 } from "@/lib/keyBindings";
 import { formatKeyCode, formatGamepadButton } from "@/lib/keyLabel";
+import { triggerBlobDownload } from "@/lib/blobDownload";
 import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMarkersQueryKey } from "@workspace/api-client-react";
@@ -2568,14 +2569,7 @@ function AccountSection() {
         settings: data,
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `bathyscan-settings-${Date.now()}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      triggerBlobDownload(blob, `bathyscan-settings-${Date.now()}.json`);
       showSettingsMsg("✓ Settings exported");
     } catch (err) {
       showSettingsMsg(`✗ ${(err as Error).message}`, 4500);
@@ -2643,14 +2637,7 @@ function AccountSection() {
       const resp = await fetch(`${apiBase}/api/me/export`, { credentials: "include" });
       if (!resp.ok) throw new Error(`Export failed: ${resp.status}`);
       const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `bathyscan-export-${Date.now()}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      triggerBlobDownload(blob, `bathyscan-export-${Date.now()}.json`);
       setAccountMsg("✓ Export downloaded");
       setTimeout(() => setAccountMsg(null), 3000);
     } catch (err) {

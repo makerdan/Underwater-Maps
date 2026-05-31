@@ -9,6 +9,7 @@
  */
 import React, { useState } from "react";
 import type { TerrainData } from "@workspace/api-client-react";
+import { triggerBlobDownload } from "@/lib/blobDownload";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useClassificationStore } from "@/lib/classificationStore";
 
@@ -324,14 +325,7 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
                 const blob = new Blob([JSON.stringify(payload)], {
                   type: "application/json",
                 });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `${terrain.datasetId}-topography.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+                triggerBlobDownload(blob, `${terrain.datasetId}-topography.json`);
               }}
               style={{
                 display: "block",

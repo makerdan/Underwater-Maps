@@ -11,6 +11,7 @@
  * Independent of the marker system; dismiss via the × button.
  */
 import React from "react";
+import { triggerBlobDownload } from "@/lib/blobDownload";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useDepthProfileStore,
@@ -74,14 +75,7 @@ function sanitizeForFilename(s: string): string {
 }
 
 function triggerDownload(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  triggerBlobDownload(blob, filename);
 }
 
 /** Clamp a panel position so it can't be dragged fully off-screen. */
