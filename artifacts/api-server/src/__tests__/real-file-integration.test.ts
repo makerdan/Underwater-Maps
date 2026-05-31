@@ -339,13 +339,14 @@ describe("BAG (HDF5) — realistic NOAA hydrographic survey fixture", () => {
 // ---------------------------------------------------------------------------
 
 describe("GPX — realistic survey track fixture", () => {
-  it("parses the fixture and returns 15 valid depth points", () => {
+  it("parses the fixture and returns 16 valid depth points", () => {
     const pts = parseGpxTerrain(gpxBuf.toString("utf8"));
     // 10 trkpts with <ele> + 3 trkpts with vendor extension depth tags
-    // (<depth>, <gpxx:Depth>, <nmea:depth>) + 2 wpts with <ele> = 15.
+    // (<depth>, <gpxx:Depth>, <nmea:depth>) + 2 wpts with <ele>
+    //   + 1 wpt with <extensions><depth> = 16.
     // Skipped: 1 trkpt missing <ele>/extensions, 1 trkpt with lat=95, 1 wpt missing <ele>.
-    expect(pts.length).toBe(15);
-    assertValidBathyPoints(pts, 15);
+    expect(pts.length).toBe(16);
+    assertValidBathyPoints(pts, 16);
   });
 
   it("skips <trkpt> elements that have no <ele> child", () => {
@@ -369,9 +370,10 @@ describe("GPX — realistic survey track fixture", () => {
 
   it("processes <wpt> waypoint elements in addition to <trkpt> track points", () => {
     const pts = parseGpxTerrain(gpxBuf.toString("utf8"));
-    // The two valid wpts are at lat≈55.22 and lat≈55.221 — assert both present.
-    const wptPts = pts.filter((p) => p.lat >= 55.219 && p.lat <= 55.222);
-    expect(wptPts.length).toBe(2);
+    // Three valid wpts: WP01 (lat≈55.220, ele), WP02 (lat≈55.221, ele),
+    // WP04 (lat≈55.223, extensions depth). WP03 has no <ele>/extensions → skipped.
+    const wptPts = pts.filter((p) => p.lat >= 55.219 && p.lat <= 55.224);
+    expect(wptPts.length).toBe(3);
   });
 
   it("converts negative <ele> values to positive depth", () => {
@@ -404,12 +406,12 @@ describe("GPX — realistic survey track fixture", () => {
   it("produces depth values spanning the fixture's survey range", () => {
     const pts = parseGpxTerrain(gpxBuf.toString("utf8"));
     const depths = pts.map((p) => p.depth);
-    // trkpt depths: 1250–2150 m; wpt depths: 1800.5, 2000
+    // trkpt depths: 1250–2150 m; wpt depths: 1800.5, 2000, 2500 (extension wpt)
     expect(Math.min(...depths)).toBeCloseTo(1250, 0);
-    expect(Math.max(...depths)).toBeCloseTo(2150, 0);
+    expect(Math.max(...depths)).toBeCloseTo(2500, 0);
   });
 
-  it("reads depth from <extensions><depth> when <ele> is absent", () => {
+  it("reads depth from <extensions><depth> when <ele> is absent (trkpt)", () => {
     const pts = parseGpxTerrain(gpxBuf.toString("utf8"));
     // Fixture trkpt at lat=55.211, lon=-132.511 has no <ele> but carries
     // <extensions><depth>1750.0</depth></extensions> (Garmin echoMAP style).
@@ -442,10 +444,21 @@ describe("GPX — realistic survey track fixture", () => {
     expect(nmeaPt!.depth).toBeCloseTo(1950.0, 1);
   });
 
+  it("reads depth from <extensions><depth> on a <wpt> element (no <ele>)", () => {
+    const pts = parseGpxTerrain(gpxBuf.toString("utf8"));
+    // Fixture wpt WP04 at lat=55.223, lon=-132.523 carries
+    // <extensions><depth>2500.0</depth></extensions> with no <ele>.
+    const wptExtPt = pts.find(
+      (p) => Math.abs(p.lat - 55.223) < 0.00001 && Math.abs(p.lon - -132.523) < 0.00001,
+    );
+    expect(wptExtPt).toBeDefined();
+    expect(wptExtPt!.depth).toBeCloseTo(2500.0, 1);
+  });
+
   it("routes through parseUploadedFile dispatcher for .gpx", async () => {
     const pts = await parseUploadedFile(gpxBuf, "survey.gpx");
     assertValidBathyPoints(pts, 10);
-    expect(pts.length).toBe(15);
+    expect(pts.length).toBe(16);
   });
 });
 

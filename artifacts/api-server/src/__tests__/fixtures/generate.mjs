@@ -620,11 +620,12 @@ function buildLaz() {
  *    - 1 trkpt whose <ele> is absent and no extensions → skipped by parseGpxTerrain
  *    - 1 trkpt with lat=95 (out of geographic range) → skipped by isValidCoord
  *
- *  Waypoints (2 wpt with <ele>, 1 missing <ele>):
+ *  Waypoints (2 wpt with <ele>, 1 with <extensions><depth>, 1 missing <ele>):
  *    - 2 valid wpts — one with negative ele, one with positive ele (both → depth)
- *    - 1 wpt without <ele> → skipped
+ *    - 1 wpt with <extensions><depth>2500.0</depth></extensions> and no <ele>
+ *    - 1 wpt without <ele> and no extensions → skipped
  *
- *  Expected output: 15 valid RawPoints (13 trkpts + 2 wpts)
+ *  Expected output: 16 valid RawPoints (13 trkpts + 3 wpts)
  */
 function buildGpx() {
   const trkpts = [];
@@ -682,12 +683,16 @@ function buildGpx() {
     ...trkpts,
     `    </trkseg>`,
     `  </trk>`,
-    // Waypoints: 2 valid, 1 missing ele
+    // Waypoints: 2 valid ele, 1 extension-depth, 1 missing ele
     `  <wpt lat="55.220000" lon="-132.520000">`,
     `    <ele>-2000.0</ele><name>WP01 Deep</name>`,
     `  </wpt>`,
     `  <wpt lat="55.221000" lon="-132.521000">`,
     `    <ele>1800.5</ele><name>WP02 Positive Ele</name>`,
+    `  </wpt>`,
+    `  <wpt lat="55.223000" lon="-132.523000">`,
+    `    <name>WP04 Extension Depth</name>`,
+    `    <extensions><depth>2500.0</depth></extensions>`,
     `  </wpt>`,
     `  <wpt lat="55.222000" lon="-132.522000">`,
     `    <name>WP03 No Ele</name>`,

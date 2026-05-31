@@ -28,6 +28,10 @@
   <wpt lat="55.221000" lon="-132.521000">
     <ele>1800.5</ele><name>WP02 Positive Ele</name>
   </wpt>
+  <wpt lat="55.223000" lon="-132.523000">
+    <name>WP04 Extension Depth</name>
+    <extensions><depth>2500.0</depth></extensions>
+  </wpt>
   <wpt lat="55.222000" lon="-132.522000">
     <name>WP03 No Ele</name>
   </wpt>
