@@ -30,6 +30,8 @@ import {
   clampTransform,
   canvasToLonLat,
   lonLatToCanvas,
+  lonRangeOf,
+  normaliseLon,
   renderHeatmap,
   renderContourLines,
   renderGridLines,
@@ -670,7 +672,7 @@ export const OverviewMap: React.FC = () => {
       // landmarks are visible. Same bounding-box extent as the terrain grid.
       const satImg = satelliteImgRef.current;
       if (satImg) {
-        const lonRange = grid.maxLon - grid.minLon || 1;
+        const lonRange = lonRangeOf(grid);
         const latRange = grid.maxLat - grid.minLat || 1;
         const terrainW = t.pxPerDeg * lonRange * t.scale;
         const terrainH = t.pxPerDeg * latRange * t.scale;
@@ -686,7 +688,7 @@ export const OverviewMap: React.FC = () => {
       ctx.globalAlpha = heatmapAlpha;
       const upscaled = upscaledBitmapRef.current;
       if (upscaled) {
-        const lonRange = grid.maxLon - grid.minLon || 1;
+        const lonRange = lonRangeOf(grid);
         const latRange = grid.maxLat - grid.minLat || 1;
         const terrainW = t.pxPerDeg * lonRange * t.scale;
         const terrainH = t.pxPerDeg * latRange * t.scale;
@@ -849,13 +851,13 @@ export const OverviewMap: React.FC = () => {
 
       /** Convert a committed lon/lat bbox to canvas pixel corners */
       const bboxToCanvasCorners = (north: number, south: number, east: number, west: number) => {
-        const lonRange = grid.maxLon - grid.minLon || 1;
+        const lonRange = lonRangeOf(grid);
         const latRange = grid.maxLat - grid.minLat || 1;
         const terrainW = t.pxPerDeg * lonRange * t.scale;
         const terrainH = t.pxPerDeg * latRange * t.scale;
-        const x0 = t.offsetX + ((west - grid.minLon) / lonRange) * terrainW;
+        const x0 = t.offsetX + ((normaliseLon(west, grid) - grid.minLon) / lonRange) * terrainW;
         const y0 = t.offsetY + ((north - grid.minLat) / latRange) * terrainH;
-        const x1 = t.offsetX + ((east - grid.minLon) / lonRange) * terrainW;
+        const x1 = t.offsetX + ((normaliseLon(east, grid) - grid.minLon) / lonRange) * terrainW;
         const y1 = t.offsetY + ((south - grid.minLat) / latRange) * terrainH;
         return { x0, y0, x1, y1 };
       };
@@ -982,9 +984,9 @@ export const OverviewMap: React.FC = () => {
       if (!grid || !t) return;
 
       const { lon, lat } = canvasToLonLat(mx, my, grid, t);
-      const lonRange = grid.maxLon - grid.minLon || 1;
+      const lonRange = lonRangeOf(grid);
       const latRange = grid.maxLat - grid.minLat || 1;
-      const col = Math.round(((lon - grid.minLon) / lonRange) * (grid.width - 1));
+      const col = Math.round(((normaliseLon(lon, grid) - grid.minLon) / lonRange) * (grid.width - 1));
       const row = Math.round(((lat - grid.minLat) / latRange) * (grid.height - 1));
       const inBounds =
         col >= 0 && col < grid.width && row >= 0 && row < grid.height;
@@ -1283,11 +1285,11 @@ export const OverviewMap: React.FC = () => {
 
       // Approximate depth at this lon/lat from the overview grid.
       const N = overviewGrid.resolution;
-      const lonRange = overviewGrid.maxLon - overviewGrid.minLon || 1;
+      const lonRange = lonRangeOf(overviewGrid);
       const latRange = overviewGrid.maxLat - overviewGrid.minLat || 1;
       const col = Math.max(
         0,
-        Math.min(N - 1, Math.round(((lon - overviewGrid.minLon) / lonRange) * (N - 1))),
+        Math.min(N - 1, Math.round(((normaliseLon(lon, overviewGrid) - overviewGrid.minLon) / lonRange) * (N - 1))),
       );
       const row = Math.max(
         0,

@@ -324,6 +324,101 @@ describe("canvasToLonLat — round-trip fidelity", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Antimeridian-crossing bounding boxes
+// ---------------------------------------------------------------------------
+
+describe("lonLatToCanvas — antimeridian-crossing bbox (minLon=170, maxLon=-170)", () => {
+  // 20° span centred on the antimeridian: 170 → 180 → -180 → -170
+  const grid = makeGrid({
+    minLon: 170,
+    maxLon: -170,
+    minLat: 50,
+    maxLat: 60,
+  });
+  // pxPerDeg=100, so terrainW = 100 * 20 * 1 = 2000 px
+  const t = makeTransform({ pxPerDeg: 100 });
+
+  it("the west edge (minLon=170) maps to offsetX", () => {
+    const [x] = lonLatToCanvas(170, 55, grid, t);
+    expect(x).toBeCloseTo(t.offsetX, 5);
+  });
+
+  it("the east edge (maxLon=-170) maps to offsetX + terrainW", () => {
+    const [x] = lonLatToCanvas(-170, 55, grid, t);
+    const terrainW = t.pxPerDeg * 20 * t.scale;
+    expect(x).toBeCloseTo(t.offsetX + terrainW, 5);
+  });
+
+  it("a point just east of the antimeridian (-175°) maps between 50% and 100% of terrainW", () => {
+    // -175 normalises to 185; fraction = (185-170)/20 = 0.75
+    const [x] = lonLatToCanvas(-175, 55, grid, t);
+    const terrainW = t.pxPerDeg * 20 * t.scale;
+    expect(x).toBeCloseTo(t.offsetX + 0.75 * terrainW, 5);
+  });
+
+  it("a point just west of the antimeridian (175°) maps between 0% and 50% of terrainW", () => {
+    // 175 is already >= minLon; fraction = (175-170)/20 = 0.25
+    const [x] = lonLatToCanvas(175, 55, grid, t);
+    const terrainW = t.pxPerDeg * 20 * t.scale;
+    expect(x).toBeCloseTo(t.offsetX + 0.25 * terrainW, 5);
+  });
+
+  it("points east of antimeridian have greater X than points west of antimeridian", () => {
+    const [xWest] = lonLatToCanvas(175, 55, grid, t);
+    const [xEast] = lonLatToCanvas(-175, 55, grid, t);
+    expect(xEast).toBeGreaterThan(xWest);
+  });
+});
+
+describe("canvasToLonLat — round-trip fidelity with antimeridian-crossing bbox", () => {
+  const grid = makeGrid({
+    minLon: 170,
+    maxLon: -170,
+    minLat: 50,
+    maxLat: 60,
+  });
+  const t = makeTransform({ pxPerDeg: 100 });
+
+  it("round-trips a point west of the antimeridian (175°)", () => {
+    const [cx, cy] = lonLatToCanvas(175, 55, grid, t);
+    const { lon, lat } = canvasToLonLat(cx, cy, grid, t);
+    expect(lon).toBeCloseTo(175, 8);
+    expect(lat).toBeCloseTo(55, 8);
+  });
+
+  it("round-trips a point east of the antimeridian (-175°)", () => {
+    const [cx, cy] = lonLatToCanvas(-175, 55, grid, t);
+    const { lon, lat } = canvasToLonLat(cx, cy, grid, t);
+    expect(lon).toBeCloseTo(-175, 8);
+    expect(lat).toBeCloseTo(55, 8);
+  });
+
+  it("round-trips the west edge (minLon=170)", () => {
+    const [cx, cy] = lonLatToCanvas(170, 55, grid, t);
+    const { lon, lat } = canvasToLonLat(cx, cy, grid, t);
+    expect(lon).toBeCloseTo(170, 8);
+    expect(lat).toBeCloseTo(55, 8);
+  });
+
+  it("round-trips the east edge (maxLon=-170)", () => {
+    const [cx, cy] = lonLatToCanvas(-170, 55, grid, t);
+    const { lon, lat } = canvasToLonLat(cx, cy, grid, t);
+    expect(lon).toBeCloseTo(-170, 8);
+    expect(lat).toBeCloseTo(55, 8);
+  });
+
+  it("round-trips with non-zero offsets and scale > 1", () => {
+    const zoomed = makeTransform({ pxPerDeg: 100, scale: 2, offsetX: 30, offsetY: 20 });
+    const lon = -173;
+    const lat = 57.5;
+    const [cx, cy] = lonLatToCanvas(lon, lat, grid, zoomed);
+    const { lon: lon2, lat: lat2 } = canvasToLonLat(cx, cy, grid, zoomed);
+    expect(lon2).toBeCloseTo(lon, 8);
+    expect(lat2).toBeCloseTo(lat, 8);
+  });
+});
+
 describe("buildHeatmapBitmap — northernmost data row in top canvas row", () => {
   beforeEach(() => {
     usePaletteStore.getState().reset();

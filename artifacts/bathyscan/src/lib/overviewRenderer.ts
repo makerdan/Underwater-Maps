@@ -44,6 +44,30 @@ export interface OverviewTransform {
   pxPerDeg: number;
 }
 
+/**
+ * Return the effective longitude span for a bounding box, handling the case
+ * where the box crosses the antimeridian (minLon > maxLon).
+ * e.g. minLon=170, maxLon=-170  →  span = 20°
+ */
+export function lonRangeOf(grid: TerrainData): number {
+  if (grid.minLon > grid.maxLon) {
+    return grid.maxLon + 360 - grid.minLon;
+  }
+  return grid.maxLon - grid.minLon || 1;
+}
+
+/**
+ * Normalise a longitude value so it lies on the same continuous number line as
+ * grid.minLon when the bbox crosses the antimeridian.
+ * e.g. with minLon=170: lon=-175 → 185 (so the fraction is (185-170)/20 = 0.75)
+ */
+export function normaliseLon(lon: number, grid: TerrainData): number {
+  if (grid.minLon > grid.maxLon && lon < grid.minLon) {
+    return lon + 360;
+  }
+  return lon;
+}
+
 /** Compute (offsetX, offsetY) for a lon/lat point given the transform. */
 export function lonLatToCanvas(
   lon: number,
@@ -51,12 +75,13 @@ export function lonLatToCanvas(
   grid: TerrainData,
   t: OverviewTransform,
 ): [number, number] {
-  const lonRange = grid.maxLon - grid.minLon || 1;
+  const lonRange = lonRangeOf(grid);
   const latRange = grid.maxLat - grid.minLat || 1;
   const terrainW = t.pxPerDeg * lonRange * t.scale;
   const terrainH = t.pxPerDeg * latRange * t.scale;
+  const normLon = normaliseLon(lon, grid);
   return [
-    t.offsetX + ((lon - grid.minLon) / lonRange) * terrainW,
+    t.offsetX + ((normLon - grid.minLon) / lonRange) * terrainW,
     // North-up: higher latitudes (North) map to smaller Y values (top of canvas).
     t.offsetY + (1 - (lat - grid.minLat) / latRange) * terrainH,
   ];
@@ -69,12 +94,16 @@ export function canvasToLonLat(
   grid: TerrainData,
   t: OverviewTransform,
 ): { lon: number; lat: number } {
-  const lonRange = grid.maxLon - grid.minLon || 1;
+  const lonRange = lonRangeOf(grid);
   const latRange = grid.maxLat - grid.minLat || 1;
   const terrainW = t.pxPerDeg * lonRange * t.scale;
   const terrainH = t.pxPerDeg * latRange * t.scale;
+  let lon = grid.minLon + ((cx - t.offsetX) / terrainW) * lonRange;
+  // Wrap back into [-180, 180] only for antimeridian-crossing bboxes where the
+  // computed lon can legitimately exceed 180 (e.g. normalised 185 → -175).
+  if (grid.minLon > grid.maxLon && lon > 180) lon -= 360;
   return {
-    lon: grid.minLon + ((cx - t.offsetX) / terrainW) * lonRange,
+    lon,
     // Inverse of the North-up Y formula in lonLatToCanvas.
     lat: grid.minLat + (1 - (cy - t.offsetY) / terrainH) * latRange,
   };
@@ -86,7 +115,7 @@ export function computeInitialTransform(
   canvasW: number,
   canvasH: number,
 ): OverviewTransform {
-  const lonRange = grid.maxLon - grid.minLon || 1;
+  const lonRange = lonRangeOf(grid);
   const latRange = grid.maxLat - grid.minLat || 1;
   const margin = 0.88;
   const pxPerDeg = Math.min(
@@ -113,7 +142,7 @@ export function clampTransform(
   canvasW: number,
   canvasH: number,
 ): OverviewTransform {
-  const lonRange = grid.maxLon - grid.minLon || 1;
+  const lonRange = lonRangeOf(grid);
   const latRange = grid.maxLat - grid.minLat || 1;
   const terrainW = t.pxPerDeg * lonRange * t.scale;
   const terrainH = t.pxPerDeg * latRange * t.scale;
@@ -181,7 +210,7 @@ export function renderHeatmap(
   grid: TerrainData,
   t: OverviewTransform,
 ): void {
-  const lonRange = grid.maxLon - grid.minLon || 1;
+  const lonRange = lonRangeOf(grid);
   const latRange = grid.maxLat - grid.minLat || 1;
   const terrainW = t.pxPerDeg * lonRange * t.scale;
   const terrainH = t.pxPerDeg * latRange * t.scale;
@@ -322,7 +351,7 @@ export function renderHabitatOverlay(
   const N = Math.round(Math.sqrt(scores.length));
   if (N === 0) return;
 
-  const lonRange = grid.maxLon - grid.minLon || 1;
+  const lonRange = lonRangeOf(grid);
   const latRange = grid.maxLat - grid.minLat || 1;
   const terrainW = t.pxPerDeg * lonRange * t.scale;
   const terrainH = t.pxPerDeg * latRange * t.scale;
@@ -906,7 +935,7 @@ export function renderGpsPosition(
 
   if (inBounds) {
     // Accuracy ring (dashed)
-    const lonRange = grid.maxLon - grid.minLon || 1;
+    const lonRange = lonRangeOf(grid);
     const terrainW = t.pxPerDeg * lonRange * t.scale;
     const mPerPx = ((lonRange * 111_320) / terrainW);
     const accuracyR = accuracy / mPerPx;
@@ -1299,7 +1328,7 @@ export function renderContourLines(
 
   const { width: W, height: H, minDepth, maxDepth } = grid;
   const depthRange = maxDepth - minDepth || 1;
-  const lonRange = grid.maxLon - grid.minLon || 1;
+  const lonRange = lonRangeOf(grid);
   const latRange = grid.maxLat - grid.minLat || 1;
   const toColor = getColormap(colormapTheme);
 
