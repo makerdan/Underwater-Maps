@@ -21,6 +21,7 @@ import {
   previewBboxForDownload,
   buildBboxCsvRows,
 } from "../lib/terrain.js";
+import { fetchCopernicusDem } from "../lib/copernicusDem.js";
 import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
 import { substrateFingerprintForDataset } from "../lib/substrateGrid.js";
 
@@ -289,6 +290,59 @@ router.get("/datasets/:id/zones", async (req, res): Promise<void> => {
   }
 
   res.status(404).json({ error: "not_found", message: "No cached classification for this grid" });
+});
+
+// ── GET /terrain/land ─────────────────────────────────────────────────────────
+// Returns above-water Copernicus DEM 90 m elevation for a given bounding box.
+// Results are cached server-side (memory + disk keyed by sha256 of bbox+size)
+// so subsequent requests for the same region are served without an upstream
+// round-trip. Falls back to a flat-plane (all-zero) grid on upstream failure.
+//
+// Query params:
+//   bbox — comma-separated "minLon,minLat,maxLon,maxLat"
+//   size — integer grid resolution, clamped to [32, 256] (default 128)
+//
+// No auth required — land elevation data is public.
+router.get("/terrain/land", async (req, res): Promise<void> => {
+  const rawBbox = String(req.query["bbox"] ?? "");
+  const rawSize = req.query["size"];
+
+  const parts = rawBbox.split(",").map((s) => parseFloat(s.trim()));
+  if (
+    parts.length !== 4 ||
+    parts.some((v) => !isFinite(v))
+  ) {
+    res.status(400).json({
+      error: "invalid_param",
+      details: 'bbox must be "minLon,minLat,maxLon,maxLat" (four finite numbers)',
+    });
+    return;
+  }
+
+  const [minLon, minLat, maxLon, maxLat] = parts as [number, number, number, number];
+
+  if (
+    minLon >= maxLon || minLat >= maxLat ||
+    minLon < -180 || maxLon > 180 ||
+    minLat < -90  || maxLat > 90
+  ) {
+    res.status(400).json({
+      error: "invalid_bbox",
+      details: "bbox values out of range or min >= max",
+    });
+    return;
+  }
+
+  const rawSizeNum = rawSize !== undefined ? parseInt(String(rawSize), 10) : 128;
+  const gridSize = Math.max(32, Math.min(256, isNaN(rawSizeNum) ? 128 : rawSizeNum));
+
+  try {
+    const grid = await fetchCopernicusDem({ minLon, minLat, maxLon, maxLat }, gridSize);
+    res.json(grid);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Land DEM fetch failed";
+    res.status(502).json({ error: "upstream_error", details: msg });
+  }
 });
 
 // ── GET /terrain/download/info ────────────────────────────────────────────────

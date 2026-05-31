@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import {
@@ -36,6 +36,8 @@ import { CurrentsLayer } from "@/components/CurrentsLayer";
 import { useCurrentsStore } from "@/lib/currentsStore";
 import { useWebglContextStore } from "@/lib/webglContextStore";
 import { WebglContextLostOverlay } from "@/components/WebglContextLostOverlay";
+import { useLandTerrainStore } from "@/lib/landTerrainStore";
+import { useLandTerrain } from "@/hooks/useLandTerrain";
 
 // One-shot WebGL availability probe. Cached at module scope so we don't
 // recreate a throwaway <canvas> on every TourScene re-render. Used by the
@@ -68,6 +70,92 @@ function hostHasWebGL(): boolean {
   }
   return _hostHasWebGLCache;
 }
+
+// ---------------------------------------------------------------------------
+// LandTerrainMesh — above-water Copernicus DEM 90 m land terrain.
+//
+// Shares the exact same XZ footprint as TerrainMesh (PlaneGeometry WORLD_SIZE
+// × WORLD_SIZE) so both meshes meet seamlessly at Y=0 (the waterline).
+// Vertices with elevation > 0 are displaced upward; ocean cells stay at Y=0.
+// Max uplift is capped at MAX_LAND_HEIGHT_WORLD (40 % of MAX_DEPTH_WORLD) so
+// coastal ridges are visible without dominating the underwater scene.
+//
+// The fetch fires whenever the primary terrain's bbox changes; it is
+// non-blocking — bathymetry renders immediately and land fades in once the
+// DEM grid arrives. Skips rendering when maxElevation=0 (ocean-only datasets
+// or upstream flat-plane fallback).
+// ---------------------------------------------------------------------------
+const MAX_LAND_HEIGHT_WORLD = MAX_DEPTH_WORLD * 0.4; // e.g. 20 world units
+
+const LandTerrainMesh: React.FC = () => {
+  const { terrain } = useAppState();
+  const landGrid = useLandTerrainStore((s) => s.landGrid);
+
+  const bbox = useMemo(() => {
+    if (!terrain) return null;
+    return {
+      minLon: terrain.minLon,
+      maxLon: terrain.maxLon,
+      minLat: terrain.minLat,
+      maxLat: terrain.maxLat,
+    };
+  }, [terrain]);
+
+  useLandTerrain(bbox);
+
+  const { geometry, material } = useMemo(() => {
+    if (!landGrid || landGrid.maxElevation <= 0) {
+      return { geometry: null, material: null };
+    }
+
+    const { elevation, width, height, maxElevation } = landGrid;
+    const N = Math.min(width, height);
+    const geometry = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, N - 1, N - 1);
+    geometry.rotateX(-Math.PI / 2);
+
+    const positions = geometry.attributes["position"]!.array as Float32Array;
+    const colors = new Float32Array(positions.length);
+    const color = new THREE.Color();
+
+    const lowColor  = new THREE.Color("#2d6a4f"); // dark forest green
+    const midColor  = new THREE.Color("#8B5E3C"); // earthy brown
+    const highColor = new THREE.Color("#d4d4d4"); // light grey / snow
+
+    for (let i = 0; i < N * N; i++) {
+      const elev = elevation[i] ?? 0;
+      const t = elev > 0 ? Math.min(1, elev / maxElevation) : 0;
+
+      // Displace upward for land cells; ocean cells (elev=0) stay at Y=0.
+      positions[i * 3 + 1] = elev > 0 ? t * MAX_LAND_HEIGHT_WORLD : 0;
+
+      if (t < 0.5) {
+        color.lerpColors(lowColor, midColor, t * 2);
+      } else {
+        color.lerpColors(midColor, highColor, (t - 0.5) * 2);
+      }
+
+      colors[i * 3]     = color.r;
+      colors[i * 3 + 1] = color.g;
+      colors[i * 3 + 2] = color.b;
+    }
+
+    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    geometry.computeVertexNormals();
+
+    const material = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 1.0,
+      metalness: 0.0,
+      side: THREE.DoubleSide,
+    });
+
+    return { geometry, material };
+  }, [landGrid]);
+
+  if (!geometry || !material) return null;
+
+  return <mesh geometry={geometry} material={material} />;
+};
 
 // ---------------------------------------------------------------------------
 // NonPrimaryDatasetMeshes — renders every visible-but-not-primary dataset
@@ -310,6 +398,12 @@ const SceneContents: React.FC<SceneContentsProps> = ({
   const showWaterSurface = useSettingsStore((s) => s.showWaterSurface);
   const showLandmass = useSettingsStore((s) => s.showLandmass);
   const brightDaylight = useSettingsStore((s) => s.brightDaylight);
+  // True only when a Copernicus DEM grid with real elevation data is loaded.
+  // Used to suppress LandmassMesh (flat silhouette fallback) once the richer
+  // DEM surface is ready — prevents two land surfaces from stacking.
+  const hasLandDem = useLandTerrainStore(
+    (s) => s.landGrid !== null && (s.landGrid.maxElevation ?? 0) > 0,
+  );
 
   // Freshwater environments are clearer and brighter than the open ocean —
   // shift the background/fog hue toward green-teal, thin the fog, and warm
@@ -343,7 +437,10 @@ const SceneContents: React.FC<SceneContentsProps> = ({
       <TestCameraBridge />
       <Particles />
       {terrain && <TerrainMesh ref={terrainMeshRef} grid={terrain} />}
-      {terrain && showLandmass && <LandmassMesh grid={terrain} />}
+      {/* LandmassMesh is a flat-silhouette fallback; hidden once the richer
+          Copernicus DEM surface (LandTerrainMesh) is loaded — never both. */}
+      {terrain && showLandmass && !hasLandDem && <LandmassMesh grid={terrain} />}
+      {showLandmass && <LandTerrainMesh />}
       {terrain && <NonPrimaryDatasetMeshes primary={terrain} showLandmass={showLandmass} />}
       <EfhZoneLayer />
       <SubstrateLayer />
