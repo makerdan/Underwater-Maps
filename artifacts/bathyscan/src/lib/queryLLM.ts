@@ -29,6 +29,7 @@ export interface QueryLLMResult {
 export async function queryLLM(
   query: string,
   context: QueryContext,
+  signal?: AbortSignal,
 ): Promise<QueryLLMResult> {
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   const resp = await fetch(`${base}/api/query`, {
@@ -36,6 +37,7 @@ export async function queryLLM(
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify({ query, context }),
+    signal,
   });
 
   if (!resp.ok) {

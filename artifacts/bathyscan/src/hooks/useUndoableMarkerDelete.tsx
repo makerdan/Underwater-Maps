@@ -51,7 +51,12 @@ export function useUndoableMarkerDelete() {
 
       const undoKey = `${datasetId}:${marker.id}`;
 
+      // Closure flag — set by undo() to prevent the mutation from firing even
+      // if the timer callback was already queued when the user clicked "Undo".
+      let aborted = false;
+
       const commit = () => {
+        if (aborted) return;
         pendingRef.current.delete(undoKey);
         mutation.mutate(
           { id: marker.id },
@@ -59,9 +64,14 @@ export function useUndoableMarkerDelete() {
             onSuccess: () => {
               void qc.invalidateQueries({ queryKey: key });
             },
-            onError: () => {
-              // Restore on failure so the user can see (and retry) the
-              // marker the server still has.
+            onError: (err) => {
+              const status = (err as { response?: { status?: number } })?.response?.status;
+              if (status === 404 || status === 409) {
+                // Already deleted elsewhere — re-sync so the UI is consistent.
+                void qc.invalidateQueries({ queryKey: key });
+                return;
+              }
+              // Other error — restore so the user can retry.
               if (snapshot !== undefined) qc.setQueryData(key, snapshot);
             },
           },
@@ -69,6 +79,7 @@ export function useUndoableMarkerDelete() {
       };
 
       const undo = () => {
+        aborted = true;
         const entry = pendingRef.current.get(undoKey);
         if (!entry) return;
         clearTimeout(entry.timer);

@@ -46,6 +46,7 @@ import { GpsExportDialog } from "@/components/GpsExportDialog";
 import { LoadingDial } from "@/components/LoadingDial";
 import { useActiveLoadStore } from "@/lib/activeLoadStore";
 import { fetchJsonWithProgress } from "@/lib/fetchWithProgress";
+import { useToast } from "@/hooks/use-toast";
 import {
   getGetDatasetsIdTerrainUrl,
   getGetDatasetsIdOverviewUrl,
@@ -221,6 +222,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const { isSignedIn } = useAuth();
   const qc = useQueryClient();
   const isOnline = useOfflineStore((s) => s.isOnline);
+  const { toast } = useToast();
 
   // Track which dataset IDs are available in the service-worker cache
   const [cachedIds, setCachedIds] = useState<Set<string>>(new Set());
@@ -514,6 +516,23 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       setPendingExternalUserDatasetId(null);
       return;
     }
+    // Guard: if a previous upload handoff is still being loaded, reject the
+    // second one with a toast so the user knows to wait.
+    if (pendingUserDatasetId) {
+      // Silently drop duplicate handoffs for the same id that is already loading.
+      if (pendingExternalUserDatasetId !== pendingUserDatasetId) {
+        // Use a microtask to avoid state updates during render.
+        setTimeout(() => {
+          const { dismiss, ...toastHandle } = toast({
+            title: "Upload in progress",
+            description: "Please wait — still loading the previous upload.",
+          });
+          void dismiss; void toastHandle;
+        }, 0);
+      }
+      setPendingExternalUserDatasetId(null);
+      return;
+    }
     setUserLoadError(null);
     setPresetLoadError(null);
     setLoadingId(pendingExternalUserDatasetId);
@@ -528,6 +547,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     pendingUserDatasetId,
     qc,
     setPendingExternalUserDatasetId,
+    toast,
   ]);
 
   const handleRetryUserDataset = (e: React.MouseEvent) => {

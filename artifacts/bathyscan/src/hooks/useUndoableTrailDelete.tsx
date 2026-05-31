@@ -50,7 +50,12 @@ export function useUndoableTrailDelete(
         prev ? prev.filter((t) => t.id !== id) : prev,
       );
 
+      // Closure flag — set by undo() to prevent the mutation from firing even
+      // if the timer callback was already queued when the user clicked "Undo".
+      let aborted = false;
+
       const commit = () => {
+        if (aborted) return;
         pendingRef.current.delete(id);
         mutation.mutate(
           { id },
@@ -67,6 +72,7 @@ export function useUndoableTrailDelete(
       };
 
       const undo = () => {
+        aborted = true;
         const entry = pendingRef.current.get(id);
         if (!entry) return;
         clearTimeout(entry.timer);

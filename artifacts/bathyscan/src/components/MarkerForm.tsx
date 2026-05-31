@@ -19,6 +19,17 @@ import { useOfflineStore } from "@/lib/offlineStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { formatDepth } from "@/lib/units";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   usePostMarkers,
   usePatchMarkersId,
@@ -120,6 +131,7 @@ export const MarkerForm: React.FC = () => {
   const patchMarker = usePatchMarkersId();
   const isOnline = useOfflineStore((s) => s.isOnline);
   const [savedOffline, setSavedOffline] = useState(false);
+  const { toast } = useToast();
 
   // Stable ref so the guard always reads the latest form state without
   // needing to re-register itself on every keystroke.
@@ -147,23 +159,23 @@ export const MarkerForm: React.FC = () => {
     isDirtyRef.current = dirty;
   });
 
-  // Register a beforeClose guard while the form is in edit mode.
-  // The guard reads isDirtyRef so it always sees the latest values.
+  // Always clear the beforeClose guard — dirty-form protection is handled
+  // locally via the AlertDialog below so we don't rely on window.confirm.
   useEffect(() => {
-    if (!isEditMode) {
-      setBeforeClose(null);
-      return;
-    }
-    setBeforeClose(() => {
-      if (!isDirtyRef.current) return true;
-      return window.confirm("Discard unsaved changes to this marker?");
-    });
+    setBeforeClose(null);
     return () => setBeforeClose(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEditMode]);
+  }, []);
+
+  // Controls the "Discard unsaved changes?" in-app dialog.
+  const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
 
   const handleClose = () => {
     if (isEditMode) {
+      if (isDirtyRef.current) {
+        setDiscardDialogOpen(true);
+        return;
+      }
       requestClose();
     } else {
       setMarkerFormOpen(false);
@@ -210,6 +222,20 @@ export const MarkerForm: React.FC = () => {
               queryKey: getGetMarkersQueryKey({ datasetId: editMarker.datasetId }),
             });
             closeEdit();
+          },
+          onError: (err) => {
+            const status = (err as { response?: { status?: number } })?.response?.status;
+            if (status === 404 || status === 409) {
+              toast({
+                title: "Marker no longer exists",
+                description: "This marker was already deleted or modified elsewhere. Refreshing…",
+                variant: "destructive",
+              });
+              void qc.invalidateQueries({
+                queryKey: getGetMarkersQueryKey({ datasetId: editMarker.datasetId }),
+              });
+              closeEdit();
+            }
           },
         },
       );
@@ -288,6 +314,36 @@ export const MarkerForm: React.FC = () => {
 
   if (!isEditMode && (!gps || !terrain)) return null;
 
+  // ── Discard-changes confirmation dialog ──────────────────────────────────
+  const discardDialog = (
+    <AlertDialog
+      open={discardDialogOpen}
+      onOpenChange={(open) => { if (!open) setDiscardDialogOpen(false); }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+          <AlertDialogDescription>
+            You have unsaved edits to this marker. Closing now will discard them.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => setDiscardDialogOpen(false)}>
+            Keep Editing
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              setDiscardDialogOpen(false);
+              requestClose();
+            }}
+          >
+            Discard Changes
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
   // In edit mode use the stored marker's coordinates; in create mode use GPS.
   const displayGps = isEditMode && editMarker
     ? { lon: editMarker.lon, lat: editMarker.lat, depth: editMarker.depth }
@@ -296,6 +352,8 @@ export const MarkerForm: React.FC = () => {
   const selectedType = visibleMarkerTypes.find((t) => t.value === markerType);
 
   return (
+    <>
+    {discardDialog}
     <div className="marker-form-panel" style={PANEL}>
       {/* Header */}
       <div
@@ -582,5 +640,6 @@ export const MarkerForm: React.FC = () => {
         </div>
       </form>
     </div>
+    </>
   );
 };

@@ -335,7 +335,13 @@ export const DatasetFolderTree: React.FC<Props> = ({
       setPendingDeleteDatasetIds((s) => new Set(s).add(removedId));
 
       const undoKey = `dataset:${removedId}`;
+
+      // Closure flag — set by undo() to prevent the mutation from firing even
+      // if the timer callback was already queued when the user clicked "Undo".
+      let aborted = false;
+
       const commit = () => {
+        if (aborted) return;
         pendingDeletesRef.current.delete(undoKey);
         deleteDataset.mutate(
           { id: removedId },
@@ -344,6 +350,14 @@ export const DatasetFolderTree: React.FC<Props> = ({
               evictDatasetCaches([removedId]);
               invalidateAll();
               onDatasetsRemoved?.([removedId]);
+            },
+            onError: (err) => {
+              const status = (err as { response?: { status?: number } })?.response?.status;
+              if (status === 404 || status === 409) {
+                // Already gone — re-sync the tree.
+                invalidateAll();
+                return;
+              }
             },
             onSettled: () => {
               setPendingDeleteDatasetIds((s) => {
@@ -358,6 +372,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
       };
 
       const undo = () => {
+        aborted = true;
         const entry = pendingDeletesRef.current.get(undoKey);
         if (!entry) return;
         clearTimeout(entry.timer);
@@ -437,7 +452,12 @@ export const DatasetFolderTree: React.FC<Props> = ({
         });
       };
 
+      // Closure flag — set by undo() to prevent the mutation from firing even
+      // if the timer callback was already queued when the user clicked "Undo".
+      let abortedFolder = false;
+
       const commit = () => {
+        if (abortedFolder) return;
         pendingDeletesRef.current.delete(undoKey);
         deleteFolder.mutate(
           { id: folderId, data: { mode } },
@@ -449,12 +469,20 @@ export const DatasetFolderTree: React.FC<Props> = ({
                 onDatasetsRemoved?.(removedDatasetIds);
               }
             },
+            onError: (err) => {
+              const status = (err as { response?: { status?: number } })?.response?.status;
+              if (status === 404 || status === 409) {
+                // Already gone — re-sync the tree.
+                invalidateAll();
+              }
+            },
             onSettled: dropFromPending,
           },
         );
       };
 
       const undo = () => {
+        abortedFolder = true;
         const entry = pendingDeletesRef.current.get(undoKey);
         if (!entry) return;
         clearTimeout(entry.timer);

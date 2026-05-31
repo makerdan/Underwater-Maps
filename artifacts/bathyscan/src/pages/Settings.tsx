@@ -3274,6 +3274,9 @@ export function Settings() {
   useEffect(() => {
     return () => {
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      // Flush any pending debounced settings PUT when the page unmounts
+      // (e.g. user navigates away before the debounce window elapses).
+      void flushServerSync();
     };
   }, []);
 

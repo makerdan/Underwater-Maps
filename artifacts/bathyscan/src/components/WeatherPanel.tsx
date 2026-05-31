@@ -279,7 +279,12 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
       if (prevSaveFolderId !== null) setSaveFolderId(prevSaveFolderId);
     };
 
+    // Closure flag — set by undo() to prevent the mutation from firing even
+    // if the timer callback was already queued when the user clicked "Undo".
+    let abortedFolder = false;
+
     const commit = () => {
+      if (abortedFolder) return;
       pendingDeletesRef.current.delete(undoKey);
       deleteFolderMutation.mutate(
         { id },
@@ -290,12 +295,24 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
               queryClient.invalidateQueries({ queryKey: presetsQueryKey }),
             ]);
           },
-          onError: restore,
+          onError: (err) => {
+            const status = (err as { response?: { status?: number } })?.response?.status;
+            if (status === 404 || status === 409) {
+              // Already gone — re-sync.
+              void Promise.all([
+                queryClient.invalidateQueries({ queryKey: foldersQueryKey }),
+                queryClient.invalidateQueries({ queryKey: presetsQueryKey }),
+              ]);
+              return;
+            }
+            restore();
+          },
         },
       );
     };
 
     const undo = () => {
+      abortedFolder = true;
       const entry = pendingDeletesRef.current.get(undoKey);
       if (!entry) return;
       clearTimeout(entry.timer);
@@ -385,7 +402,12 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     );
     setPendingDeletePresetIds((s) => new Set(s).add(presetId));
 
+    // Closure flag — set by undo() to prevent the mutation from firing even
+    // if the timer callback was already queued when the user clicked "Undo".
+    let aborted = false;
+
     const commit = () => {
+      if (aborted) return;
       pendingDeletesRef.current.delete(presetId);
       deletePresetMutation.mutate(
         { id: presetId },
@@ -393,10 +415,16 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
           onSuccess: () => {
             void queryClient.invalidateQueries({ queryKey: presetsQueryKey });
           },
-          onError: () => {
-            // Restore the list on failure so the user can retry.
-            if (snapshot !== undefined) {
-              queryClient.setQueryData(presetsQueryKey, snapshot);
+          onError: (err) => {
+            const status = (err as { response?: { status?: number } })?.response?.status;
+            if (status === 404 || status === 409) {
+              // Already gone — re-sync.
+              void queryClient.invalidateQueries({ queryKey: presetsQueryKey });
+            } else {
+              // Restore the list on failure so the user can retry.
+              if (snapshot !== undefined) {
+                queryClient.setQueryData(presetsQueryKey, snapshot);
+              }
             }
           },
           onSettled: () => {
@@ -412,6 +440,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     };
 
     const undo = () => {
+      aborted = true;
       const entry = pendingDeletesRef.current.get(presetId);
       if (!entry) return;
       clearTimeout(entry.timer);

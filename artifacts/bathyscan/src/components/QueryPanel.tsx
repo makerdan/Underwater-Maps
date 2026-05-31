@@ -63,10 +63,30 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
   const llmDisclosureAcknowledged = useSettingsStore((s) => s.llmDisclosureAcknowledged);
   const setLlmDisclosureAcknowledged = useSettingsStore((s) => s.setLlmDisclosureAcknowledged);
 
+  // Holds the AbortController for the currently in-flight request so we can
+  // cancel it before sending a new one or when the panel unmounts.
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Abort any in-flight stream when the panel unmounts.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
+  }, []);
+
   // Focus input when panel opens
   useEffect(() => {
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 80);
+    }
+  }, [open]);
+
+  // Cancel any in-flight stream when the panel is closed.
+  useEffect(() => {
+    if (!open) {
+      abortRef.current?.abort();
+      abortRef.current = null;
     }
   }, [open]);
 
@@ -106,6 +126,11 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
     // Require disclosure acknowledgment before sending any data to the LLM.
     if (!llmDisclosureAcknowledged) return;
 
+    // Cancel any previous in-flight request before starting a new one.
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoading(true);
     setResult(null);
     setStatBanner(null);
@@ -125,7 +150,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
 
     try {
       const ctx = buildContext();
-      const llmResult = await queryLLM(trimmed, ctx);
+      const llmResult = await queryLLM(trimmed, ctx, controller.signal);
 
       // Execute each tool
       const toolMessages: string[] = [];
@@ -138,6 +163,11 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
       const displayText = llmResult.textResponse ?? (toolMessages.length > 0 ? toolMessages.join(" ") : null);
       setResult(displayText);
     } catch (err) {
+      // Ignore AbortError — the user cancelled intentionally or navigated away.
+      if (err instanceof Error && err.name === "AbortError") {
+        setResult(null);
+        return;
+      }
       setResult(err instanceof Error ? err.message : "Query failed. Please try again.");
     } finally {
       setLoading(false);
