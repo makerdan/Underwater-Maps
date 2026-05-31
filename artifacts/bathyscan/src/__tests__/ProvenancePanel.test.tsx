@@ -1,9 +1,11 @@
 import React from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "./setup";
 import { ProvenancePanel } from "@/components/ProvenancePanel";
 import { useLandTerrainStore } from "@/lib/landTerrainStore";
+import { triggerBlobDownload } from "@/lib/blobDownload";
 import type { TerrainData } from "@workspace/api-client-react";
 
 // ---------------------------------------------------------------------------
@@ -149,5 +151,87 @@ describe("ProvenancePanel — topo badge", () => {
     const terrain = makeTerrain({ hasTopography: false });
     renderWithProviders(<ProvenancePanel terrain={terrain} />);
     expect(screen.queryByTestId("topo-badge")).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Helper to expand the provenance panel
+// ---------------------------------------------------------------------------
+
+async function expandPanel() {
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: /toggle data provenance/i }));
+}
+
+// ---------------------------------------------------------------------------
+// Download topography button
+// ---------------------------------------------------------------------------
+
+describe("ProvenancePanel — download topography button", () => {
+  const mockTriggerBlobDownload = triggerBlobDownload as ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mockTriggerBlobDownload.mockClear();
+  });
+
+  it("is absent when hasTopography is false (even with topography data present)", async () => {
+    const terrain = makeTerrain({
+      hasTopography: false,
+      topography: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+    });
+    renderWithProviders(<ProvenancePanel terrain={terrain} />);
+    await expandPanel();
+    expect(screen.queryByTestId("btn-download-topography")).not.toBeInTheDocument();
+  });
+
+  it("is absent when hasTopography is true but topography array is missing", async () => {
+    const terrain = makeTerrain({ hasTopography: true, topography: undefined });
+    renderWithProviders(<ProvenancePanel terrain={terrain} />);
+    await expandPanel();
+    expect(screen.queryByTestId("btn-download-topography")).not.toBeInTheDocument();
+  });
+
+  it("is visible when hasTopography is true and topography array is set", async () => {
+    const terrain = makeTerrain({
+      hasTopography: true,
+      topography: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+    });
+    renderWithProviders(<ProvenancePanel terrain={terrain} />);
+    await expandPanel();
+    expect(screen.getByTestId("btn-download-topography")).toBeVisible();
+  });
+
+  it("calls triggerBlobDownload with a payload containing the expected fields", async () => {
+    const topoData = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+    const terrain = makeTerrain({
+      hasTopography: true,
+      topography: topoData,
+    });
+    renderWithProviders(<ProvenancePanel terrain={terrain} />);
+    await expandPanel();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("btn-download-topography"));
+
+    expect(mockTriggerBlobDownload).toHaveBeenCalledOnce();
+
+    const [blobArg, filenameArg] = mockTriggerBlobDownload.mock.calls[0] as [Blob, string];
+
+    expect(filenameArg).toBe(`${terrain.datasetId}-topography.json`);
+
+    const text = await blobArg.text();
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+
+    expect(parsed.datasetId).toBe(terrain.datasetId);
+    expect(parsed.name).toBe(terrain.name);
+    expect(parsed.resolution).toBe(terrain.resolution);
+    expect(parsed.bbox).toEqual({
+      minLon: terrain.minLon,
+      minLat: terrain.minLat,
+      maxLon: terrain.maxLon,
+      maxLat: terrain.maxLat,
+    });
+    expect(parsed.units).toBe("metres above sea level");
+    expect(parsed.topography).toEqual(topoData);
   });
 });
