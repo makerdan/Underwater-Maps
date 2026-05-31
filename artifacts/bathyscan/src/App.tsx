@@ -260,6 +260,10 @@ function useLastSessionServerSync(isSignedIn: boolean | undefined) {
 
 function Main() {
   const [, setLocation] = useLocation();
+  // Two-way settings sync (GET on mount, debounced PUT on change). Also
+  // exposes `settingsReady` so the startup auto-select waits for the server's
+  // saved defaultMapLoad before committing to a dataset.
+  const { settingsReady } = useServerSettingsSync();
   const waterTypeForDatasets = useSettingsStore((s) => s.waterType);
   void waterTypeForDatasets;
   const { data: datasets } = useGetDatasets(
@@ -535,6 +539,11 @@ function Main() {
   const hasAutoSelectedRef = useRef(false);
   useEffect(() => {
     if (hasAutoSelectedRef.current) return;
+    // Wait for server settings to hydrate before committing to a dataset.
+    // Without this guard, a signed-in user whose GET /api/settings response
+    // arrives after the datasets list would always get datasets[0] instead of
+    // their saved defaultMapLoad preference.
+    if (isSignedIn && !settingsReady) return;
     if (datasets?.length && !datasetId) {
       const { cameraSpawnBehaviour, lastSession } = useSettingsStore.getState();
       const action = resolveDefaultDataset({
@@ -558,6 +567,7 @@ function Main() {
           void requestDatasetSwitch({
             datasetId: action.datasetId,
             datasetName: action.name,
+            isStartup: true,
             onConfirm: () => setDatasetId(action.datasetId),
             silent: true,
           });
@@ -571,7 +581,7 @@ function Main() {
       }
     }
   }, [datasets, datasetId, setDatasetId, defaultMapLoad, isSignedIn, userDatasets,
-      pendingExternalUserDatasetId, setPendingExternalUserDatasetId]);
+      pendingExternalUserDatasetId, setPendingExternalUserDatasetId, settingsReady]);
 
   // Side-effects on water-type switch (see useWaterTypeSideEffects):
   //   1) Clear derived state computed for the previous environment
@@ -1398,7 +1408,6 @@ function HomeRoute() {
   return (
     <QueryClientProvider client={queryClient}>
       <Show when="signed-in">
-        <ServerSettingsSyncMount />
         <TooltipProvider>
           <AppProvider>
             <TestBridge />

@@ -681,6 +681,11 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const { toast } = useToast();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nceiDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tracks whether the user has explicitly interacted with this panel instance.
+  // The NCEI bbox-seed auto-fetch is suppressed until interaction so the panel
+  // always opens with an empty state (bug #3). Because <FindDataPanel> is keyed
+  // by openFindDataCount, this ref resets naturally on every fresh open.
+  const hasUserInteractedRef = useRef(false);
   const [nceiQuery, setNceiQuery] = useState("");
   const [debouncedNceiQuery, setDebouncedNceiQuery] = useState("");
   const [nceiSavingIds, setNceiSavingIds] = useState<Set<string>>(new Set());
@@ -705,6 +710,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
 
   const handleNceiQueryChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
+    hasUserInteractedRef.current = true;
     setNceiQuery(val);
     if (nceiDebounceRef.current) clearTimeout(nceiDebounceRef.current);
     nceiDebounceRef.current = setTimeout(() => setDebouncedNceiQuery(val), 400);
@@ -811,9 +817,11 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   // NCEI Portal search
   const nceiSearchParams = {
     q: debouncedNceiQuery || undefined,
-    // When no query is typed, send the viewport bbox so results are
-    // pre-filtered to the area the user is currently exploring.
-    bbox: debouncedNceiQuery ? undefined : viewportBboxString,
+    // Send the viewport bbox only after the user has explicitly interacted
+    // (typed a query or changed tabs). Before any interaction the NCEI tab
+    // must open with an empty state — not pre-populated results — so we
+    // suppress the bbox seed until hasUserInteractedRef is set.
+    bbox: (debouncedNceiQuery || !hasUserInteractedRef.current) ? undefined : viewportBboxString,
     from: nceiFrom > 1 ? nceiFrom : undefined,
   };
   const {
@@ -1090,17 +1098,17 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
       {/* Tabs */}
       <div style={TAB_BAR}>
         <ViewscreenTooltip label="Search the dataset catalog" side="bottom">
-          <button style={tabStyle(tab === "search")} onClick={() => setTab("search")}>
+          <button style={tabStyle(tab === "search")} onClick={() => { hasUserInteractedRef.current = true; setTab("search"); }}>
             Search
           </button>
         </ViewscreenTooltip>
         <ViewscreenTooltip label="See datasets you saved" side="bottom">
-          <button style={tabStyle(tab === "saves")} onClick={() => setTab("saves")}>
+          <button style={tabStyle(tab === "saves")} onClick={() => { hasUserInteractedRef.current = true; setTab("saves"); }}>
             My Saves
           </button>
         </ViewscreenTooltip>
         <ViewscreenTooltip label="Browse the NOAA/NCEI Bathymetry Geoportal" side="bottom">
-          <button style={tabStyle(tab === "ncei")} onClick={() => setTab("ncei")}>
+          <button style={tabStyle(tab === "ncei")} onClick={() => { hasUserInteractedRef.current = true; setTab("ncei"); }}>
             NCEI Portal
           </button>
         </ViewscreenTooltip>

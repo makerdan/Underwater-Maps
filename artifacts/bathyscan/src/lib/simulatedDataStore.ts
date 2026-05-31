@@ -48,6 +48,8 @@ export interface PendingSwitch {
   preview: DatasetPreview;
   onConfirm: () => void;
   onCancel: () => void;
+  /** True when the switch was triggered by the startup auto-select (not a user action). */
+  isStartup?: boolean;
 }
 
 interface SimulatedDataState {
@@ -80,6 +82,13 @@ export interface RequestSwitchArgs {
    * programmatic startup auto-loads that should never show a dialog.
    */
   silent?: boolean;
+  /**
+   * Pass `true` when the switch is triggered by the startup auto-select (not
+   * an explicit user action). The dialog's Cancel handler will not re-open the
+   * Find Data panel when this flag is set, since there is no "previous query"
+   * to refine at startup.
+   */
+  isStartup?: boolean;
 }
 
 /**
@@ -140,6 +149,7 @@ export async function requestDatasetSwitch(args: RequestSwitchArgs): Promise<voi
     datasetId,
     datasetName: args.datasetName ?? preview.name ?? datasetId,
     preview,
+    isStartup: args.isStartup,
     onConfirm: () => {
       setPending(null);
       onConfirm();

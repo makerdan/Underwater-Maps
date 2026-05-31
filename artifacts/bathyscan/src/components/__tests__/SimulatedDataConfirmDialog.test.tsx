@@ -66,6 +66,18 @@ describe("SimulatedDataConfirmDialog", () => {
     expect(useUiStore.getState().findDataPanelOpen).toBe(true);
   });
 
+  it("Cancel does NOT open Find Data when isStartup=true (startup auto-select context)", () => {
+    const { onConfirm, onCancel } = openPending({ isStartup: true });
+    render(<SimulatedDataConfirmDialog />);
+    act(() => {
+      fireEvent.click(screen.getByTestId("simulated-data-cancel"));
+    });
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onConfirm).not.toHaveBeenCalled();
+    // Find Data panel must stay closed — there is no user query to refine at startup.
+    expect(useUiStore.getState().findDataPanelOpen).toBe(false);
+  });
+
   it("Load anyway calls onConfirm without flipping suppression", () => {
     const { onConfirm, onCancel } = openPending();
     render(<SimulatedDataConfirmDialog />);

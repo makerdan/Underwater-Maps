@@ -52,14 +52,18 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
       : null;
 
   function handleCancel() {
+    const wasStartup = pending?.isStartup ?? false;
     onCancel();
     toast({
       title: "Load cancelled",
       description: "Refine your query and try again.",
     });
     try {
-      // Re-open Find Data so the user can restructure the query.
-      if (setFindDataPanelOpen) setFindDataPanelOpen(true);
+      // Re-open Find Data so the user can restructure the query — but only
+      // when the cancel came from an explicit user-initiated switch. During
+      // startup auto-select there is no "previous query" to refine, so
+      // opening Find Data here would be surprising and counts as bug #2.
+      if (!wasStartup && setFindDataPanelOpen) setFindDataPanelOpen(true);
     } catch {
       // ignore — Find Data store optional
     }

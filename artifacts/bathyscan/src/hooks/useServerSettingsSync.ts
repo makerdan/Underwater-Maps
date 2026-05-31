@@ -17,7 +17,7 @@
  * Save button, without requiring prop-drilling or a separate React context.
  */
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { useUser } from "@/lib/clerkCompat";
 import {
   useGetSettings,
@@ -98,15 +98,30 @@ function buildPayload(): Record<string, unknown> {
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
-export function useServerSettingsSync(): void {
+/**
+ * Returns `{ settingsReady }` which is `true` once server settings have been
+ * fetched and hydrated (or immediately when the user is not signed in). The
+ * App.tsx startup auto-select effect waits for this before committing to a
+ * dataset so the user's saved default preference is always respected.
+ */
+export function useServerSettingsSync(): { settingsReady: boolean } {
   const { isSignedIn } = useUser();
   const hydrateFromServer = useSettingsStore((s) => s.hydrateFromServer);
   const markAllSaved = useSettingsStore((s) => s.markAllSaved);
   const { mutateAsync: saveSettingsAsync } = usePutSettings();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Tracks whether the server-side settings have been received at least once.
+  // Signed-out users don't fetch settings, so they are immediately ready.
+  const [settingsReady, setSettingsReady] = useState<boolean>(() => isSignedIn === false);
+
+  // When auth state resolves to "not signed in", mark ready immediately.
+  useEffect(() => {
+    if (isSignedIn === false) setSettingsReady(true);
+  }, [isSignedIn]);
+
   // ── GET hydration ──────────────────────────────────────────────────────────
-  const { data: serverSettings } = useGetSettings({
+  const { data: serverSettings, isError: settingsFetchError } = useGetSettings({
     query: {
       enabled: !!isSignedIn,
       queryKey: getGetSettingsQueryKey(),
@@ -115,6 +130,12 @@ export function useServerSettingsSync(): void {
       retry: false,
     },
   });
+
+  // If the settings fetch fails (e.g. network error), mark ready so the app
+  // doesn't wait forever — it will fall back to local defaults.
+  useEffect(() => {
+    if (settingsFetchError) setSettingsReady(true);
+  }, [settingsFetchError]);
 
   useEffect(() => {
     if (!serverSettings) return;
@@ -130,6 +151,9 @@ export function useServerSettingsSync(): void {
       (serverUpdatedAt !== undefined && serverUpdatedAt > lastSyncedAt);
 
     hydrateFromServer(serverSettings as Parameters<typeof hydrateFromServer>[0]);
+    // Mark settings as ready after the first successful hydration so the
+    // startup auto-select effect can proceed with the correct default dataset.
+    setSettingsReady(true);
 
     if (serverIsNewer) {
       usePaletteStore.getState().hydrateFromServer({
@@ -263,4 +287,6 @@ export function useServerSettingsSync(): void {
   useEffect(() => {
     _flush = flush;
   }, [flush]);
+
+  return { settingsReady };
 }
