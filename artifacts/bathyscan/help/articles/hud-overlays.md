@@ -19,7 +19,7 @@ The panel is always visible in the left column. If the left sidebar is hidden, c
 | --- | --- |
 | 🗺 OVERVIEW | Opens/closes the top-down Overview Map (same as pressing **O**) |
 | 🔍 FIND DATA | Opens the dataset search and browse drawer — see [Find Data](#article:find-data) |
-| ◼ SUBSTRATE | Tints the seafloor by classified substrate type (sand, silt, sediment, basalt) |
+| ◼ SUBSTRATE | Tints the seafloor by classified substrate type (sand, silt, sediment, basalt) — see [Substrate Layer](#article:substrate-layer) |
 | 💨 WIND | Overlays surface wind-direction arrows; colour intensity scales with speed |
 | 🌊 TIDE | Overlays tidal-flow arrows (pair with the [Tidal Overlay](#article:tidal-overlay) panel) |
 | ↬ CURRENT | Overlays sub-surface current arrows at the selected depth layer |
@@ -27,7 +27,7 @@ The panel is always visible in the left column. If the left sidebar is hidden, c
 | 🌿 RAWS WEATHER STATIONS | Toggles AOOS RAWS land weather station pins (saltwater only) |
 | 📷 FAA WEATHERCAMS ↗ | Opens the FAA WeatherCams page for your region in a new browser tab (saltwater only) |
 | 🌊 INTERTIDAL HOTSPOTS | Toggles scoring and pin display for tidepool and beachcombing hotspot areas |
-| 🐟 EFH | Overlays Essential Fish Habitat polygons (only on datasets that include EFH data) |
+| 🐟 EFH | Overlays [Essential Fish Habitat](#article:essential-fish-habitat) polygons (only on datasets that include EFH data) |
 
 ## Weather station pins (NOAA and RAWS)
 

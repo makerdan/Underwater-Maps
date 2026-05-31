@@ -47,7 +47,7 @@ Corrections are stored per dataset and override the AI's classification for thos
 
 ## Substrate colour mode
 
-The **◼ SUBSTRATE** button in the Overlays panel (left sidebar) recolours the actual terrain texture (not just an overlay) by substrate type — sand, sediment, silt, basalt. Useful for screenshots. This is separate from the zone overlay and does not affect habitat scoring.
+The **◼ SUBSTRATE** button in the Overlays panel (left sidebar) recolours the actual terrain texture (not just an overlay) by substrate type — sand, sediment, silt, basalt. Useful for screenshots. This is separate from the zone overlay and does not affect habitat scoring. See [Substrate Layer](#article:substrate-layer) for full details, including how to click individual substrate polygons to read their ShoreZone classification.
 
 ---
 

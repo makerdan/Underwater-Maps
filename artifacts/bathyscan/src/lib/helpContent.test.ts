@@ -8,9 +8,12 @@ import {
 
 const EXPECTED_IDS = [
   "ai-assistant",
+  "currents-simulation",
+  "data-provenance",
   "datasets-uploads",
   "depth-profile",
   "drift-planner",
+  "essential-fish-habitat",
   "faq",
   "find-data",
   "first-time-guide",
@@ -21,7 +24,9 @@ const EXPECTED_IDS = [
   "keyboard-shortcuts",
   "markers",
   "overview-map",
+  "saved-routes",
   "settings",
+  "substrate-layer",
   "terrain-3d-scene",
   "throttle",
   "tidal-overlay",
@@ -32,7 +37,7 @@ const EXPECTED_IDS = [
 ];
 
 describe("HELP_ARTICLES — registration", () => {
-  it("parses every .md file — expects 22 articles", () => {
+  it("parses every .md file — expects 27 articles", () => {
     expect(HELP_ARTICLES.length).toBe(EXPECTED_IDS.length);
   });
 
@@ -95,7 +100,7 @@ describe("searchArticles — smoke tests for new content keywords", () => {
     ["metar", "glossary"],
     ["gps trail", "gps-trail-recorder"],
     ["weathercam", "glossary"],
-    ["contour", "interface-tour"],
+    ["crosshair", "interface-tour"],
     ["trolling", "drift-planner"],
   ])('search("%s") returns article "%s" among results', (query, expectedId) => {
     const hits = searchArticles(query);

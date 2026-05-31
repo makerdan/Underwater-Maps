@@ -54,3 +54,7 @@ Use the day buttons and hour slider to jump the entire scene (arrows, height rea
 - **`PREDICTED` badge stays on** — the live gauge feed is unavailable. Numbers are still accurate to within harmonic prediction error (~5–10 cm for height, ~0.1 kn for speed).
 - **`SIMULATED` badge on arrows** — the arrow data for this area is modelled, not from a real-time current station. Direction and relative speed are reliable; absolute magnitudes are estimates.
 - **Arrows not visible** — check that the **🌊 TIDE** or **↬ CURRENT** HUD toggle is on. The tidal panel controls time and layer, but the HUD button controls visibility.
+
+## Related features
+
+- [Currents Simulation](#article:currents-simulation) — the separate currents panel that renders particles, arrows, and streamlines driven by NOAA data or manual speed/direction inputs.

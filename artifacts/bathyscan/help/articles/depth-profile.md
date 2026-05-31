@@ -87,3 +87,7 @@ Click the **×** in the top-right of the profile panel to dismiss it. The measur
 - Checking whether a route crosses a hazard or a ledge.
 - Comparing slope steepness between two regions.
 - Quickly sanity-checking a depth claim from a paper chart.
+
+## Saving and replaying routes
+
+Multi-waypoint path profiles can be saved as named routes and flown back as animated camera flythroughs. See [Saved Routes](#article:saved-routes) for the full workflow.

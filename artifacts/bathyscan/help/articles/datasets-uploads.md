@@ -86,4 +86,4 @@ See [Markers](#article:markers) for full details on folders, drag-to-folder, and
 
 ## Provenance
 
-Every dataset has a small provenance box that tells you where the data came from, when it was collected, and at what resolution. Check this when interpreting fine detail — resolution varies from sub-metre survey data to ~500 m GEBCO open-ocean grids.
+Every dataset has a small provenance box that tells you where the data came from, when it was collected, and at what resolution. Check this when interpreting fine detail — resolution varies from sub-metre survey data to ~500 m GEBCO open-ocean grids. See [Data Provenance](#article:data-provenance) for a full breakdown of each source badge.
