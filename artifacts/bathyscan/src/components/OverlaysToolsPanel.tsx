@@ -134,6 +134,8 @@ export const OverlaysToolsPanel: React.FC = () => {
   const setCurrentOverlayActive = useUiStore((s) => s.setCurrentOverlayActive);
   const weatherStationsActive = useUiStore((s) => s.weatherStationsActive);
   const setWeatherStationsActive = useUiStore((s) => s.setWeatherStationsActive);
+  const rawsOverlayActive = useUiStore((s) => s.rawsOverlayActive);
+  const setRawsOverlayActive = useUiStore((s) => s.setRawsOverlayActive);
 
   const waterType = useSettingsStore((s) => s.waterType);
   const { data: datasets } = useGetDatasets(
@@ -516,6 +518,68 @@ export const OverlaysToolsPanel: React.FC = () => {
                 </a>
               </ViewscreenTooltip>
             </>
+          )}
+
+          {/* RAWS Land Weather section — saltwater only, disabled when no terrain */}
+          {waterType !== "freshwater" && (
+            <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)", marginTop: 4, paddingTop: 6 }}>
+              <span
+                style={{
+                  fontSize: 9,
+                  letterSpacing: "0.12em",
+                  color: "#64748b",
+                  textTransform: "uppercase",
+                  display: "block",
+                  marginBottom: 4,
+                }}
+              >
+                Land Weather (RAWS)
+              </span>
+              <ViewscreenTooltip
+                label={
+                  !terrain
+                    ? "Load a terrain dataset to enable RAWS stations"
+                    : rawsOverlayActive
+                    ? "Hide AOOS RAWS land weather station pins"
+                    : "Show AOOS RAWS land weather station pins on the Overview Map"
+                }
+                side="right"
+              >
+                <button
+                  data-testid="overlay-toggle-raws"
+                  aria-pressed={rawsOverlayActive}
+                  disabled={!terrain}
+                  onClick={() => {
+                    const next = !rawsOverlayActive;
+                    setRawsOverlayActive(next);
+                    if (next) setOverviewOpen(true);
+                  }}
+                  style={{
+                    width: "100%",
+                    textAlign: "left",
+                    background: rawsOverlayActive ? "rgba(52,211,153,0.12)" : "rgba(0,10,20,0.55)",
+                    border: `1px solid ${rawsOverlayActive ? "rgba(52,211,153,0.5)" : "rgba(0,229,255,0.15)"}`,
+                    borderRadius: 4,
+                    color: !terrain ? "#475569" : rawsOverlayActive ? "#34d399" : "#e2e8f0",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10,
+                    padding: "5px 10px",
+                    cursor: !terrain ? "not-allowed" : "pointer",
+                    letterSpacing: "0.12em",
+                    textShadow: rawsOverlayActive ? "0 0 6px rgba(52,211,153,0.5)" : "none",
+                    transition: "all 0.15s ease",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 4,
+                    opacity: !terrain ? 0.5 : 1,
+                    ...(IS_TOUCH ? { minHeight: 44 } : {}),
+                  }}
+                >
+                  <span>🌿 RAWS WEATHER STATIONS</span>
+                </button>
+              </ViewscreenTooltip>
+            </div>
           )}
 
           {hasEfh && (

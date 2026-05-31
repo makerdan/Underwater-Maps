@@ -1489,6 +1489,70 @@ export interface WeatherStationPin {
 }
 
 /**
+ * Pin descriptor for RAWS station canvas rendering.
+ * Mirrors WeatherStationPin but uses `datasetId` instead of `id`.
+ */
+export interface RawsStationPin {
+  datasetId: string;
+  lat: number;
+  lon: number;
+}
+
+/**
+ * Render AOOS RAWS land-weather station pins on the overview canvas.
+ * Uses a green diamond-style pin with "R" label to distinguish from
+ * aviation (yellow W) and bathymetric (teal dot) markers.
+ * Returns an array of { datasetId, cx, cy } so the caller can hit-test clicks.
+ */
+export function renderRawsStations(
+  ctx: CanvasRenderingContext2D,
+  stations: RawsStationPin[],
+  grid: TerrainData,
+  t: OverviewTransform,
+  selectedId: string | null,
+): Array<{ datasetId: string; cx: number; cy: number }> {
+  const positions: Array<{ datasetId: string; cx: number; cy: number }> = [];
+
+  for (const s of stations) {
+    const [cx, cy] = lonLatToCanvas(s.lon, s.lat, grid, t);
+    positions.push({ datasetId: s.datasetId, cx, cy });
+
+    const isSelected = s.datasetId === selectedId;
+    const R = isSelected ? 7 : 5;
+
+    ctx.save();
+
+    // Outer glow when selected
+    if (isSelected) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, R + 4, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(52,211,153,0.18)";
+      ctx.fill();
+    }
+
+    // Pin body: green circle
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fillStyle = isSelected ? "#6ee7b7" : "#34d399";
+    ctx.fill();
+    ctx.strokeStyle = isSelected ? "#059669" : "rgba(0,0,0,0.5)";
+    ctx.lineWidth = isSelected ? 1.5 : 1;
+    ctx.stroke();
+
+    // RAWS "R" label
+    ctx.font = `bold ${isSelected ? 7 : 6}px sans-serif`;
+    ctx.fillStyle = isSelected ? "#065f46" : "#064e3b";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("R", cx, cy + 0.5);
+
+    ctx.restore();
+  }
+
+  return positions;
+}
+
+/**
  * Render NOAA ASOS/AWOS station pins on the overview canvas.
  * Returns an array of { id, cx, cy } so the caller can hit-test clicks.
  */

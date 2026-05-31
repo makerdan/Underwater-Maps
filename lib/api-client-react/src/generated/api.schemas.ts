@@ -1183,6 +1183,66 @@ export interface WeatherStationsResponse {
   faaWeatherCamsUrl?: string | null;
 }
 
+/**
+ * A single AOOS RAWS weather station from the ERDDAP catalog
+ */
+export interface RawsStationItem {
+  /** AOOS ERDDAP dataset ID (e.g. "raws_haida") */
+  datasetId: string;
+  /** Human-readable station name */
+  name: string;
+  /** Station latitude */
+  lat: number;
+  /** Station longitude */
+  lon: number;
+}
+
+export interface RawsStationsResponse {
+  /** False when the AOOS ERDDAP catalog was unreachable */
+  available: boolean;
+  /** Nearby RAWS stations within the requested radius */
+  stations: RawsStationItem[];
+  /** Data source identifier ("aoos-raws") */
+  source: string;
+}
+
+/**
+ * Latest sensor readings from a single RAWS station
+ */
+export interface RawsObservation {
+  /** ISO 8601 UTC timestamp of the observation */
+  time?: string | null;
+  /** Air temperature in degrees Celsius */
+  airTemperatureC?: number | null;
+  /** Wind speed in metres per second */
+  windSpeedMs?: number | null;
+  /** Wind direction (from) in degrees true */
+  windFromDirectionDeg?: number | null;
+  /** Wind gust speed in metres per second */
+  windGustMs?: number | null;
+  /** Relative humidity in percent */
+  relativeHumidityPct?: number | null;
+  /** Solar irradiance in watts per square metre */
+  solarIrradianceWm2?: number | null;
+  /** Liquid-water-equivalent precipitation in millimetres */
+  precipitationMm?: number | null;
+  /** Fuel temperature (fire weather) in degrees Celsius */
+  fuelTemperatureC?: number | null;
+  /** Station battery voltage */
+  batteryVoltageV?: number | null;
+}
+
+export type RawsWeatherResponseStation = {
+  datasetId: string;
+};
+
+export interface RawsWeatherResponse {
+  /** False when the AOOS ERDDAP station was unreachable or had no recent data */
+  available: boolean;
+  observation?: RawsObservation;
+  station?: RawsWeatherResponseStation;
+}
+
 export interface WaterTemperature {
   /** True when a live sea-surface temperature was retrieved */
   available: boolean;
@@ -1591,6 +1651,28 @@ lon: number;
  * Search radius in statute miles (default 75, max 500)
  */
 radiusMiles?: number;
+};
+
+export type GetRawsStationsParams = {
+/**
+ * Latitude of dataset centre
+ */
+lat: number;
+/**
+ * Longitude of dataset centre
+ */
+lon: number;
+/**
+ * Search radius in kilometres (default 150, max 500)
+ */
+radiusKm?: number;
+};
+
+export type GetRawsWeatherParams = {
+/**
+ * AOOS ERDDAP dataset ID (must match raws_* pattern)
+ */
+datasetId: string;
 };
 
 export type GetWaterTemperatureParams = {

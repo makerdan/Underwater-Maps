@@ -1875,6 +1875,66 @@ export const GetWeatherStationsResponse = zod.object({
 
 
 /**
+ * Returns all RAWS (Remote Automatic Weather Station) stations within
+`radiusKm` kilometres of the given lat/lon, drawn from the AOOS ERDDAP
+catalog (cached 24 h). Returns available=false on ERDDAP failure so
+the UI degrades gracefully.
+
+ * @summary Fetch nearby AOOS RAWS weather station list
+ */
+export const getRawsStationsQueryRadiusKmDefault = 150;
+
+export const GetRawsStationsQueryParams = zod.object({
+  "lat": zod.coerce.number().describe('Latitude of dataset centre'),
+  "lon": zod.coerce.number().describe('Longitude of dataset centre'),
+  "radiusKm": zod.coerce.number().default(getRawsStationsQueryRadiusKmDefault).describe('Search radius in kilometres (default 150, max 500)')
+})
+
+export const GetRawsStationsResponse = zod.object({
+  "available": zod.boolean().describe('False when the AOOS ERDDAP catalog was unreachable'),
+  "stations": zod.array(zod.object({
+  "datasetId": zod.string().describe('AOOS ERDDAP dataset ID (e.g. \"raws_haida\")'),
+  "name": zod.string().describe('Human-readable station name'),
+  "lat": zod.number().describe('Station latitude'),
+  "lon": zod.number().describe('Station longitude')
+}).describe('A single AOOS RAWS weather station from the ERDDAP catalog')).describe('Nearby RAWS stations within the requested radius'),
+  "source": zod.string().describe('Data source identifier (\"aoos-raws\")')
+})
+
+
+/**
+ * Returns the most-recent observation row for the given RAWS datasetId
+from the AOOS ERDDAP server. The datasetId must match the raws_* pattern.
+Results are cached 10 min on success, 2 min on failure.
+Returns available=false on ERDDAP failure so the UI degrades gracefully.
+
+ * @summary Fetch latest observation for a single AOOS RAWS station
+ */
+export const GetRawsWeatherQueryParams = zod.object({
+  "datasetId": zod.coerce.string().describe('AOOS ERDDAP dataset ID (must match raws_\* pattern)')
+})
+
+export const GetRawsWeatherResponse = zod.object({
+  "available": zod.boolean().describe('False when the AOOS ERDDAP station was unreachable or had no recent data'),
+  "observation": zod.object({
+  "time": zod.string().nullish().describe('ISO 8601 UTC timestamp of the observation'),
+  "airTemperatureC": zod.number().nullish().describe('Air temperature in degrees Celsius'),
+  "windSpeedMs": zod.number().nullish().describe('Wind speed in metres per second'),
+  "windFromDirectionDeg": zod.number().nullish().describe('Wind direction (from) in degrees true'),
+  "windGustMs": zod.number().nullish().describe('Wind gust speed in metres per second'),
+  "relativeHumidityPct": zod.number().nullish().describe('Relative humidity in percent'),
+  "solarIrradianceWm2": zod.number().nullish().describe('Solar irradiance in watts per square metre'),
+  "precipitationMm": zod.number().nullish().describe('Liquid-water-equivalent precipitation in millimetres'),
+  "fuelTemperatureC": zod.number().nullish().describe('Fuel temperature (fire weather) in degrees Celsius'),
+  "batteryVoltageV": zod.number().nullish().describe('Station battery voltage')
+}).optional().describe('Latest sensor readings from a single RAWS station'),
+  "station": zod.object({
+  "datasetId": zod.string()
+}).optional()
+})
+
+
+/**
  * Returns the current sea-surface temperature (°C) at the requested
 lat/lon from the Open-Meteo Marine API. Used by BathyScan's HUD
 temperature readout as the surface anchor of a thermocline model.

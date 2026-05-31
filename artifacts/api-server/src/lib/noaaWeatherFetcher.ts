@@ -13,6 +13,8 @@
  * Normalized into WeatherStation shape (see below).
  */
 
+import { registerCache } from "./cacheRegistry.js";
+
 const NOAA_API_BASE = "https://api.weather.gov";
 const FETCH_TIMEOUT_MS = 12_000;
 const OBS_TIMEOUT_MS = 8_000;
@@ -69,6 +71,7 @@ interface CacheEntry {
 }
 
 const cache = new Map<string, CacheEntry>();
+registerCache(() => cache.clear());
 
 function cacheKey(lat: number, lon: number, radiusMiles: number): string {
   // Round to 2 decimal places (~1 km grid) to get reasonable cache hits

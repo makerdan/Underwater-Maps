@@ -38,6 +38,8 @@ import type {
   GetDatasetsParams,
   GetEfhParams,
   GetMarkersParams,
+  GetRawsStationsParams,
+  GetRawsWeatherParams,
   GetSurfaceConditionsParams,
   GetTemperatureProfileParams,
   GetTrailsIdPointsParams,
@@ -61,6 +63,8 @@ import type {
   PostDatasetsBboxQueryBody,
   PostDatasetsUploadBody,
   QueryResult,
+  RawsStationsResponse,
+  RawsWeatherResponse,
   RenameDatasetFolderBody,
   RenameTrollingPresetFolderBody,
   SubstrateFeatureCollection,
@@ -4135,6 +4139,184 @@ export function useGetWeatherStations<TData = Awaited<ReturnType<typeof getWeath
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetWeatherStationsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetRawsStationsUrl = (params: GetRawsStationsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/raws-stations?${stringifiedParams}` : `/api/raws-stations`
+}
+
+/**
+ * Returns all RAWS (Remote Automatic Weather Station) stations within
+`radiusKm` kilometres of the given lat/lon, drawn from the AOOS ERDDAP
+catalog (cached 24 h). Returns available=false on ERDDAP failure so
+the UI degrades gracefully.
+
+ * @summary Fetch nearby AOOS RAWS weather station list
+ */
+export const getRawsStations = async (params: GetRawsStationsParams, options?: RequestInit): Promise<RawsStationsResponse> => {
+
+  return customFetch<RawsStationsResponse>(getGetRawsStationsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRawsStationsQueryKey = (params?: GetRawsStationsParams,) => {
+    return [
+    `/api/raws-stations`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetRawsStationsQueryOptions = <TData = Awaited<ReturnType<typeof getRawsStations>>, TError = ErrorType<ApiError>>(params: GetRawsStationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRawsStations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRawsStationsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRawsStations>>> = ({ signal }) => getRawsStations(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRawsStations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRawsStationsQueryResult = NonNullable<Awaited<ReturnType<typeof getRawsStations>>>
+export type GetRawsStationsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Fetch nearby AOOS RAWS weather station list
+ */
+
+export function useGetRawsStations<TData = Awaited<ReturnType<typeof getRawsStations>>, TError = ErrorType<ApiError>>(
+ params: GetRawsStationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRawsStations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRawsStationsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetRawsWeatherUrl = (params: GetRawsWeatherParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/raws-weather?${stringifiedParams}` : `/api/raws-weather`
+}
+
+/**
+ * Returns the most-recent observation row for the given RAWS datasetId
+from the AOOS ERDDAP server. The datasetId must match the raws_* pattern.
+Results are cached 10 min on success, 2 min on failure.
+Returns available=false on ERDDAP failure so the UI degrades gracefully.
+
+ * @summary Fetch latest observation for a single AOOS RAWS station
+ */
+export const getRawsWeather = async (params: GetRawsWeatherParams, options?: RequestInit): Promise<RawsWeatherResponse> => {
+
+  return customFetch<RawsWeatherResponse>(getGetRawsWeatherUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRawsWeatherQueryKey = (params?: GetRawsWeatherParams,) => {
+    return [
+    `/api/raws-weather`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetRawsWeatherQueryOptions = <TData = Awaited<ReturnType<typeof getRawsWeather>>, TError = ErrorType<ApiError>>(params: GetRawsWeatherParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRawsWeather>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRawsWeatherQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRawsWeather>>> = ({ signal }) => getRawsWeather(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRawsWeather>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRawsWeatherQueryResult = NonNullable<Awaited<ReturnType<typeof getRawsWeather>>>
+export type GetRawsWeatherQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Fetch latest observation for a single AOOS RAWS station
+ */
+
+export function useGetRawsWeather<TData = Awaited<ReturnType<typeof getRawsWeather>>, TError = ErrorType<ApiError>>(
+ params: GetRawsWeatherParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRawsWeather>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRawsWeatherQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

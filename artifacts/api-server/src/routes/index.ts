@@ -20,6 +20,8 @@ import waterTemperatureRouter from "./water-temperature";
 import temperatureProfileRouter from "./temperature-profile";
 import routesRouter from "./routes";
 import weatherStationsRouter from "./weather-stations";
+import rawsStationsRouter from "./raws-stations";
+import rawsWeatherRouter from "./raws-weather";
 
 const router: IRouter = Router();
 
@@ -44,5 +46,7 @@ router.use(waterTemperatureRouter);
 router.use(temperatureProfileRouter);
 router.use(routesRouter);
 router.use(weatherStationsRouter);
+router.use(rawsStationsRouter);
+router.use(rawsWeatherRouter);
 
 export default router;

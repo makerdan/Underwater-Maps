@@ -52,11 +52,15 @@ import {
   renderSavedTrails,
   drawSelectionRect,
   renderWeatherStations,
+  renderRawsStations,
 } from "@/lib/overviewRenderer";
-import type { OverviewTransform, CanvasSavedTrail, EfhLegendLayout, ContourSegment, WeatherStationPin } from "@/lib/overviewRenderer";
+import type { OverviewTransform, CanvasSavedTrail, EfhLegendLayout, ContourSegment, WeatherStationPin, RawsStationPin } from "@/lib/overviewRenderer";
 import { useWeatherStations } from "@/hooks/useWeatherStations";
 import type { WeatherStation } from "@workspace/api-client-react";
 import { WeatherStationPopover } from "@/components/WeatherStationLayer";
+import { useRawsStations } from "@/hooks/useRawsStations";
+import type { RawsStationItem } from "@/hooks/useRawsStations";
+import { RawsStationPopover } from "@/components/RawsStationLayer";
 import {
   useGetEfh,
   getGetEfhQueryKey,
@@ -167,6 +171,13 @@ export const OverviewMap: React.FC = () => {
   const weatherStationCanvasPositionsRef = useRef<Array<{ id: string; cx: number; cy: number }>>([]);
   // Full station objects keyed by id for the popover
   const weatherStationDataRef = useRef<Map<string, WeatherStation>>(new Map());
+
+  // RAWS station refs (read in rAF loop without React re-render)
+  const rawsPinsRef = useRef<RawsStationPin[]>([]);
+  const rawsActiveRef = useRef(false);
+  const rawsSelectedIdRef = useRef<string | null>(null);
+  const rawsCanvasPositionsRef = useRef<Array<{ datasetId: string; cx: number; cy: number }>>([]);
+  const rawsDataRef = useRef<Map<string, RawsStationItem>>(new Map());
 
   // Upscale hook — auto-enhances the heatmap via Topaz Labs on Poe when the
   // rendered grid is coarser than the canvas resolution warrants.
@@ -453,6 +464,32 @@ export const OverviewMap: React.FC = () => {
     for (const s of weatherStations) m.set(s.id, s);
     weatherStationDataRef.current = m;
   }, [weatherStations, weatherStationsActive]);
+
+  // RAWS overlay — fetch all nearby stations when overlay is enabled
+  const rawsOverlayActive = useUiStore((s) => s.rawsOverlayActive);
+  const { stations: rawsStations } = useRawsStations();
+  // Selected RAWS pin React state (drives popover)
+  const [selectedRawsDatasetId, setSelectedRawsDatasetId] = useState<string | null>(null);
+  const [selectedRawsPos, setSelectedRawsPos] = useState<{ cx: number; cy: number } | null>(null);
+  useEffect(() => {
+    rawsActiveRef.current = rawsOverlayActive;
+    if (!rawsOverlayActive) {
+      rawsPinsRef.current = [];
+      rawsDataRef.current = new Map();
+      rawsSelectedIdRef.current = null;
+      setSelectedRawsDatasetId(null);
+      setSelectedRawsPos(null);
+    }
+  }, [rawsOverlayActive]);
+  useEffect(() => {
+    if (!rawsOverlayActive) return;
+    rawsPinsRef.current = rawsStations.map((s) => ({
+      datasetId: s.datasetId, lat: s.lat, lon: s.lon,
+    }));
+    const m = new Map<string, RawsStationItem>();
+    for (const s of rawsStations) m.set(s.datasetId, s);
+    rawsDataRef.current = m;
+  }, [rawsStations, rawsOverlayActive]);
 
   const { data: substrateCollection } = useGetSubstrate(datasetId, {
     query: {
@@ -837,6 +874,19 @@ export const OverviewMap: React.FC = () => {
       ctx.lineWidth = 1;
       ctx.strokeRect(0.5, 0.5, cW - 1, cH - 1);
 
+      // RAWS station pins — AOOS RAWS land-weather stations (drawn above most layers)
+      if (rawsActiveRef.current && rawsPinsRef.current.length > 0) {
+        rawsCanvasPositionsRef.current = renderRawsStations(
+          ctx,
+          rawsPinsRef.current,
+          grid,
+          t,
+          rawsSelectedIdRef.current,
+        );
+      } else {
+        rawsCanvasPositionsRef.current = [];
+      }
+
       // Weather station pins — NOAA ASOS/AWOS stations (drawn above all other layers)
       if (weatherStationActiveRef.current && weatherStationPinsRef.current.length > 0) {
         weatherStationCanvasPositionsRef.current = renderWeatherStations(
@@ -1035,6 +1085,34 @@ export const OverviewMap: React.FC = () => {
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
 
+      // RAWS station pin hit-test — before weather stations and other overlays
+      if (rawsActiveRef.current && rawsCanvasPositionsRef.current.length > 0) {
+        const HIT_R = 10;
+        const hit = rawsCanvasPositionsRef.current.find(
+          (p) => Math.hypot(p.cx - mx, p.cy - my) <= HIT_R,
+        );
+        if (hit) {
+          const stationData = rawsDataRef.current.get(hit.datasetId) ?? null;
+          if (stationData) {
+            const alreadySelected = rawsSelectedIdRef.current === hit.datasetId;
+            if (alreadySelected) {
+              rawsSelectedIdRef.current = null;
+              setSelectedRawsDatasetId(null);
+              setSelectedRawsPos(null);
+            } else {
+              rawsSelectedIdRef.current = hit.datasetId;
+              setSelectedRawsDatasetId(hit.datasetId);
+              setSelectedRawsPos({ cx: hit.cx, cy: hit.cy });
+              // Close weather station popover if open
+              weatherStationSelectedIdRef.current = null;
+              setSelectedWeatherStation(null);
+              setSelectedWeatherStationPos(null);
+            }
+            return;
+          }
+        }
+      }
+
       // Weather station pin hit-test — before other overlays so the pin is
       // always clickable even when EFH/substrate polygons are also active.
       if (weatherStationActiveRef.current && weatherStationCanvasPositionsRef.current.length > 0) {
@@ -1055,6 +1133,10 @@ export const OverviewMap: React.FC = () => {
               weatherStationSelectedIdRef.current = hit.id;
               setSelectedWeatherStation(stationData);
               setSelectedWeatherStationPos({ cx: hit.cx, cy: hit.cy });
+              // Close RAWS popover if open
+              rawsSelectedIdRef.current = null;
+              setSelectedRawsDatasetId(null);
+              setSelectedRawsPos(null);
             }
             return;
           }
@@ -1602,6 +1684,22 @@ export const OverviewMap: React.FC = () => {
             weatherStationSelectedIdRef.current = null;
             setSelectedWeatherStation(null);
             setSelectedWeatherStationPos(null);
+          }}
+        />
+      )}
+
+      {/* RAWS Station popover — shown when a RAWS pin is clicked */}
+      {selectedRawsDatasetId && selectedRawsPos && canvasRef.current && (
+        <RawsStationPopover
+          datasetId={selectedRawsDatasetId}
+          stationName={rawsDataRef.current.get(selectedRawsDatasetId)?.name ?? selectedRawsDatasetId}
+          pinX={selectedRawsPos.cx}
+          pinY={selectedRawsPos.cy}
+          containerWidth={canvasRef.current.width}
+          onClose={() => {
+            rawsSelectedIdRef.current = null;
+            setSelectedRawsDatasetId(null);
+            setSelectedRawsPos(null);
           }}
         />
       )}
