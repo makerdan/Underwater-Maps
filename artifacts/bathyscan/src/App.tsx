@@ -343,6 +343,7 @@ function Main() {
   // the bathymetric currents simulation (Task #136) can use it as the
   // ambient vector when the user picks `source: "noaa"`.
   const setNoaaAmbient = useCurrentsStore((s) => s.setNoaaAmbient);
+  const tidalStatus = useCurrentsStore((s) => s.tidalStatus);
   const setTidalStatus = useCurrentsStore((s) => s.setTidalStatus);
   const setRetryTidal = useCurrentsStore((s) => s.setRetryTidal);
 
@@ -384,6 +385,54 @@ function Main() {
       setNoaaAmbient(null);
     }
   }, [tidalData, setNoaaAmbient]);
+
+  // ── Auto-retry NOAA fetch when the user flies to a new area ────────────────
+  // Minimum centre-point shift (degrees, either axis) that triggers an
+  // automatic re-fetch when the last result was "unavailable".  0.5° ≈ 55 km
+  // at mid-latitudes — large enough to plausibly cross into a new station's
+  // coverage zone, small enough to fire without an extreme pan.
+  const TIDAL_RETRY_THRESHOLD_DEG = 0.5;
+  // Tracks the map centre at which "unavailable" was last recorded so we can
+  // compare subsequent moves against that baseline.
+  const unavailableAtRef = useRef<{ lat: number; lon: number } | null>(null);
+  // Tracks the previous tidalStatus so we can detect the transition INTO
+  // "unavailable" vs. just staying there while the user pans.
+  const prevTidalStatusRef = useRef<string>("idle");
+
+  useEffect(() => {
+    const prev = prevTidalStatusRef.current;
+    prevTidalStatusRef.current = tidalStatus;
+
+    if (tidalStatus === "unavailable") {
+      if (prev !== "unavailable") {
+        // Record where the user was when the "unavailable" response arrived.
+        unavailableAtRef.current =
+          centerLat !== null && centerLon !== null
+            ? { lat: centerLat, lon: centerLon }
+            : null;
+        return;
+      }
+      // Status is still "unavailable" — check whether the centre has moved
+      // past the threshold since the baseline was recorded.
+      const baseline = unavailableAtRef.current;
+      if (
+        baseline !== null &&
+        centerLat !== null &&
+        centerLon !== null &&
+        (Math.abs(centerLat - baseline.lat) > TIDAL_RETRY_THRESHOLD_DEG ||
+          Math.abs(centerLon - baseline.lon) > TIDAL_RETRY_THRESHOLD_DEG)
+      ) {
+        // Advance the baseline so a single large pan fires exactly one retry
+        // rather than spamming retries on every subsequent small move.
+        unavailableAtRef.current = { lat: centerLat, lon: centerLon };
+        retryTidal();
+      }
+    } else {
+      // Once we're no longer unavailable (loading / ok / idle) reset so the
+      // next unavailable transition starts fresh.
+      unavailableAtRef.current = null;
+    }
+  }, [tidalStatus, centerLat, centerLon, retryTidal]);
 
   // Keep URL in sync with current camera + dataset (debounced, no-op until
   // terrain is loaded so we never write partial initialisation state).
