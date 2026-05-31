@@ -41,21 +41,31 @@ function buildSearchText(body: string): string {
     .toLowerCase();
 }
 
-export const HELP_ARTICLES: HelpArticle[] = Object.entries(modules)
-  .map(([_path, raw]) => {
-    const { meta, body } = parseFrontmatter(raw);
-    return {
-      id: meta["id"] ?? "",
-      title: meta["title"] ?? "Untitled",
-      section: meta["section"] ?? "Other",
-      order: Number(meta["order"] ?? 999),
-      showQA: meta["showQA"] === "true",
-      body,
-      searchText: buildSearchText(body) + " " + (meta["title"] ?? "").toLowerCase(),
-    };
-  })
-  .filter((a) => a.id)
-  .sort((a, b) => a.order - b.order);
+export function buildArticles(rawModules: Record<string, string>): HelpArticle[] {
+  return Object.entries(rawModules)
+    .map(([path, raw]) => {
+      const { meta, body } = parseFrontmatter(raw);
+      const id = meta["id"] ?? "";
+      if (!id) {
+        console.warn(
+          `[helpContent] Article at "${path}" has a missing or empty 'id' field and will be excluded from the help panel. Fix the frontmatter to make it visible.`,
+        );
+      }
+      return {
+        id,
+        title: meta["title"] ?? "Untitled",
+        section: meta["section"] ?? "Other",
+        order: Number(meta["order"] ?? 999),
+        showQA: meta["showQA"] === "true",
+        body,
+        searchText: buildSearchText(body) + " " + (meta["title"] ?? "").toLowerCase(),
+      };
+    })
+    .filter((a) => a.id)
+    .sort((a, b) => a.order - b.order);
+}
+
+export const HELP_ARTICLES: HelpArticle[] = buildArticles(modules);
 
 export const SECTION_ORDER = [
   "Getting Started",

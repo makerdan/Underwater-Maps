@@ -1,9 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   HELP_ARTICLES,
   HELP_SECTIONS,
   searchArticles,
   getArticleById,
+  buildArticles,
 } from "./helpContent";
 
 const EXPECTED_IDS = [
@@ -135,6 +136,40 @@ describe("HELP_SECTIONS — grouping", () => {
     const referenceIdx = names.indexOf("Reference");
     expect(gettingStartedIdx).toBeLessThan(featuresIdx);
     expect(featuresIdx).toBeLessThan(referenceIdx);
+  });
+});
+
+describe("buildArticles — malformed article handling", () => {
+  it("excludes an article with a missing id and warns to console", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const raw = "---\ntitle: No ID Article\nsection: Other\norder: 1\n---\nBody text here.";
+    const result = buildArticles({ "no-id.md": raw });
+    expect(result).toHaveLength(0);
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("missing or empty 'id' field"));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("no-id.md"));
+    warnSpy.mockRestore();
+  });
+
+  it("includes articles with valid ids and does not warn", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const raw = "---\nid: valid-id\ntitle: Valid Article\nsection: Other\norder: 1\n---\nBody text here.";
+    const result = buildArticles({ "valid.md": raw });
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe("valid-id");
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it("warns once per malformed article when multiple are present", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const bad1 = "---\ntitle: No ID 1\nsection: Other\norder: 1\n---\nBody.";
+    const bad2 = "---\ntitle: No ID 2\nsection: Other\norder: 2\n---\nBody.";
+    const good = "---\nid: keep-me\ntitle: Good\nsection: Other\norder: 3\n---\nBody.";
+    const result = buildArticles({ "bad1.md": bad1, "bad2.md": bad2, "good.md": good });
+    expect(result).toHaveLength(1);
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+    warnSpy.mockRestore();
   });
 });
 
