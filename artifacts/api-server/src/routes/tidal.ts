@@ -443,7 +443,7 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
   const datetimeStr = String(req.query["datetime"] ?? "");
 
   if (isNaN(lat) || isNaN(lon)) {
-    res.status(400).json({ error: "lat and lon are required numeric parameters" });
+    res.status(400).json({ error: "invalid_param", details: "lat and lon are required numeric parameters" });
     return;
   }
 
@@ -451,7 +451,7 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
   if (datetimeStr) {
     datetime = new Date(datetimeStr);
     if (isNaN(datetime.getTime())) {
-      res.status(400).json({ error: "Invalid datetime parameter" });
+      res.status(400).json({ error: "invalid_param", details: "Invalid datetime parameter" });
       return;
     }
   }
@@ -549,7 +549,7 @@ router.get("/tidal/schedule", asyncHandler(async (req, res): Promise<void> => {
   const startStr = String(req.query["start"] ?? "");
 
   if (isNaN(lat) || isNaN(lon)) {
-    res.status(400).json({ error: "lat and lon are required numeric parameters" });
+    res.status(400).json({ error: "invalid_param", details: "lat and lon are required numeric parameters" });
     return;
   }
 
@@ -557,7 +557,7 @@ router.get("/tidal/schedule", asyncHandler(async (req, res): Promise<void> => {
   if (startStr) {
     startTime = new Date(startStr);
     if (isNaN(startTime.getTime())) {
-      res.status(400).json({ error: "Invalid start parameter" });
+      res.status(400).json({ error: "invalid_param", details: "Invalid start parameter" });
       return;
     }
   } else {
@@ -671,7 +671,7 @@ router.get("/tidal/pack", asyncHandler(async (req, res): Promise<void> => {
   const days = Math.min(14, Math.max(3, parseInt(String(req.query["days"] ?? "7"), 10) || 7));
 
   if (isNaN(lat) || isNaN(lon)) {
-    res.status(400).json({ error: "lat and lon are required numeric parameters" });
+    res.status(400).json({ error: "invalid_param", details: "lat and lon are required numeric parameters" });
     return;
   }
 

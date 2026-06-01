@@ -55,7 +55,7 @@ router.get("/weather-stations", async (req, res): Promise<void> => {
       console.warn("[weather-stations] NOAA unavailable, no cached data:", (err as Error).message);
       res.status(503).json({
         error: "noaa_unavailable",
-        message: "NOAA weather data is currently unavailable and there is no cached data for this location. Please try again later.",
+        details: "NOAA weather data is currently unavailable and there is no cached data for this location. Please try again later.",
       });
       return;
     }

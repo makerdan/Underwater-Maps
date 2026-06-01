@@ -7,7 +7,7 @@ describe("categorizeClassificationError", () => {
       status: 500,
       data: {
         error: "poe_error",
-        message:
+        details:
           "POE_API_KEY environment variable is not set. Add it to Secrets and restart.",
       },
       message: "Internal Server Error",
@@ -22,7 +22,7 @@ describe("categorizeClassificationError", () => {
   it("maps a 401 ApiError to category 'unauthorized'", () => {
     const err = {
       status: 401,
-      data: { error: "auth_error", message: "AI service authentication failed" },
+      data: { error: "auth_error", details: "AI service authentication failed" },
       message: "Unauthorized",
     };
     const out = categorizeClassificationError(err);
@@ -34,7 +34,7 @@ describe("categorizeClassificationError", () => {
   it("maps a 429 ApiError to category 'rate_limited'", () => {
     const err = {
       status: 429,
-      data: { error: "rate_limit", message: "Rate limit exceeded" },
+      data: { error: "rate_limit", details: "Rate limit exceeded" },
       message: "Too Many Requests",
     };
     const out = categorizeClassificationError(err);

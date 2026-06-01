@@ -44,7 +44,8 @@ describe("GET /tidal/schedule", () => {
   it("rejects missing/invalid coordinates", async () => {
     const res = await request(makeApp()).get("/tidal/schedule");
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/lat and lon/i);
+    expect(res.body.error).toBe("invalid_param");
+    expect(res.body.details).toMatch(/lat and lon/i);
   });
 
   it("rejects an unparseable start parameter", async () => {
@@ -52,7 +53,8 @@ describe("GET /tidal/schedule", () => {
       "/tidal/schedule?lat=55.5&lon=-132.5&start=not-a-date",
     );
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/start/i);
+    expect(res.body.error).toBe("invalid_param");
+    expect(res.body.details).toMatch(/start/i);
   });
 
   it("returns estimated schedule when no NOAA station is in range", async () => {
@@ -109,7 +111,8 @@ describe("GET /tidal", () => {
   it("rejects missing/invalid coordinates", async () => {
     const res = await request(makeApp()).get("/tidal");
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/lat and lon/i);
+    expect(res.body.error).toBe("invalid_param");
+    expect(res.body.details).toMatch(/lat and lon/i);
   });
 
   it("rejects an unparseable datetime parameter", async () => {
@@ -117,7 +120,8 @@ describe("GET /tidal", () => {
       "/tidal?lat=55.5&lon=-132.5&datetime=not-a-date",
     );
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/datetime/i);
+    expect(res.body.error).toBe("invalid_param");
+    expect(res.body.details).toMatch(/datetime/i);
   });
 
   it("returns an estimated payload when no NOAA stations are in range (legacy fields populated, no crash)", async () => {

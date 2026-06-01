@@ -75,11 +75,11 @@ describe("GET /weather-stations — NOAA down, no cached data", () => {
 
     expect(res.status).toBe(503);
     expect(res.body.error).toBe("noaa_unavailable");
-    expect(typeof res.body.message).toBe("string");
-    expect(res.body.message.length).toBeGreaterThan(0);
+    expect(typeof res.body.details).toBe("string");
+    expect(res.body.details.length).toBeGreaterThan(0);
   });
 
-  it("503 body does not include a 'details' field (uses 'message' instead)", async () => {
+  it("503 body uses 'details' and not 'message'", async () => {
     fetchWeatherStationsMock.mockRejectedValue(
       new NoaaUnavailableError("NOAA unavailable"),
     );
@@ -87,8 +87,8 @@ describe("GET /weather-stations — NOAA down, no cached data", () => {
     const res = await request(makeApp()).get("/weather-stations?lat=47.6&lon=-122.3");
 
     expect(res.status).toBe(503);
-    expect(res.body.details).toBeUndefined();
-    expect(res.body.message).toBeDefined();
+    expect(res.body.details).toBeDefined();
+    expect(res.body.message).toBeUndefined();
   });
 
   it("still returns 502 for unexpected (non-NOAA) errors", async () => {

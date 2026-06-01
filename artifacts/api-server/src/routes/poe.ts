@@ -122,7 +122,7 @@ router.get("/models", async (_req, res) => {
     modelsCache = { data, expiresAt: Date.now() + 60 * 60 * 1000 };
     res.json(data);
   } catch {
-    res.status(502).json({ error: "models_unavailable", message: "Could not fetch Poe models list" });
+    res.status(502).json({ error: "models_unavailable", details: "Could not fetch Poe models list" });
   }
 });
 
@@ -180,14 +180,14 @@ async function logUsage(
 
 function handlePoeError(err: unknown, res: Response): void {
   if (err instanceof PoeCreditsError) {
-    res.status(402).json({ error: "credits_exhausted", message: err.message });
+    res.status(402).json({ error: "credits_exhausted", details: err.message });
   } else if (err instanceof PoeRateLimitError) {
-    res.status(429).json({ error: "rate_limit", message: err.message });
+    res.status(429).json({ error: "rate_limit", details: err.message });
   } else if (err instanceof PoeAuthError) {
-    res.status(401).json({ error: "auth_error", message: "AI service authentication failed" });
+    res.status(401).json({ error: "auth_error", details: "AI service authentication failed" });
   } else {
     const msg = err instanceof Error ? err.message : "Unknown Poe API error";
-    res.status(500).json({ error: "poe_error", message: msg });
+    res.status(500).json({ error: "poe_error", details: msg });
   }
 }
 
@@ -841,7 +841,7 @@ router.post("/classify", asyncHandler(async (req, res) => {
   };
 
   if (!gridBase64) {
-    res.status(400).json({ error: "missing_field", message: "gridBase64 is required" });
+    res.status(400).json({ error: "missing_field", details: "gridBase64 is required" });
     return;
   }
 
@@ -1317,7 +1317,7 @@ router.post("/query", asyncHandler(async (req, res) => {
   };
 
   if (!userMessage) {
-    res.status(400).json({ error: "missing_field", message: "userMessage is required" });
+    res.status(400).json({ error: "missing_field", details: "userMessage is required" });
     return;
   }
 
@@ -1559,11 +1559,11 @@ router.post("/help", asyncHandler(async (req, res) => {
   };
 
   if (!question || typeof question !== "string" || !question.trim()) {
-    res.status(400).json({ error: "missing_field", message: "question is required" });
+    res.status(400).json({ error: "missing_field", details: "question is required" });
     return;
   }
   if (question.length > 1000) {
-    res.status(400).json({ error: "too_long", message: "question must be ≤ 1000 characters" });
+    res.status(400).json({ error: "too_long", details: "question must be ≤ 1000 characters" });
     return;
   }
 
@@ -1680,14 +1680,14 @@ router.post("/upscale", asyncHandler(async (req, res) => {
   };
 
   if (!imageBase64) {
-    res.status(400).json({ error: "missing_field", message: "imageBase64 is required" });
+    res.status(400).json({ error: "missing_field", details: "imageBase64 is required" });
     return;
   }
 
   const factor = upscaleFactor === 4 ? 4 : 2;
 
   if (poeBreaker.isOpen()) {
-    res.status(503).json({ error: "circuit_open", message: "Upscale service temporarily unavailable" });
+    res.status(503).json({ error: "circuit_open", details: "Upscale service temporarily unavailable" });
     return;
   }
 
@@ -1747,7 +1747,7 @@ router.post("/upscale", asyncHandler(async (req, res) => {
 
     if (!resultBase64) {
       logger.warn({ model: TOPAZ_MODEL }, "[poe/upscale] TopazLabs returned no image in response");
-      res.status(502).json({ error: "no_image_in_response", message: "TopazLabs returned no image" });
+      res.status(502).json({ error: "no_image_in_response", details: "TopazLabs returned no image" });
       return;
     }
 

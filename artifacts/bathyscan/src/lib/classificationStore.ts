@@ -55,15 +55,16 @@ export interface ClassificationError {
  * Pure / sync / no DOM access so it can be unit-tested directly.
  */
 export function categorizeClassificationError(err: unknown): ClassificationError {
-  const e = err as { status?: number; data?: { message?: string; error?: string }; message?: string };
+  const e = err as { status?: number; data?: { details?: string; message?: string; error?: string }; message?: string };
   const status = typeof e?.status === "number" ? e.status : undefined;
   const serverMessage =
+    (typeof e?.data?.details === "string" && e.data.details) ||
     (typeof e?.data?.message === "string" && e.data.message) ||
     (typeof e?.message === "string" && e.message) ||
     "Classification failed";
 
   // missing_key — server's getPoeClient() throws when POE_API_KEY is unset,
-  // which handlePoeError wraps as 500 { error: "poe_error", message: "POE_API_KEY environment variable is not set. ..." }
+  // which handlePoeError wraps as 500 { error: "poe_error", details: "POE_API_KEY environment variable is not set. ..." }
   if (/POE_API_KEY/i.test(serverMessage) || /api[_ ]key/i.test(serverMessage) && /not set|missing/i.test(serverMessage)) {
     return {
       category: "missing_key",

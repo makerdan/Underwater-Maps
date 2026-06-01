@@ -273,7 +273,7 @@ router.post(
 
     const choice = response.choices[0];
     if (!choice) {
-      res.status(502).json({ error: "no_response", message: "LLM returned no choices" });
+      res.status(502).json({ error: "no_response", details: "LLM returned no choices" });
       return;
     }
 
@@ -293,7 +293,7 @@ router.post(
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.error("[query] OpenAI error:", msg);
-    res.status(502).json({ error: "llm_error", message: msg });
+    res.status(502).json({ error: "llm_error", details: msg });
   }
   }),
 );

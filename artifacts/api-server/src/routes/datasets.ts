@@ -703,14 +703,14 @@ router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> =
   if (!gridHash || !GRID_HASH_RE.test(gridHash)) {
     res.status(400).json({
       error: "invalid_param",
-      message: "?h= must be a lowercase hex string (8 or 64 chars)",
+      details: "?h= must be a lowercase hex string (8 or 64 chars)",
     });
     return;
   }
   if (waterTypeRaw !== "saltwater" && waterTypeRaw !== "freshwater") {
     res
       .status(400)
-      .json({ error: "invalid_param", message: "?w= must be 'saltwater' or 'freshwater'" });
+      .json({ error: "invalid_param", details: "?w= must be 'saltwater' or 'freshwater'" });
     return;
   }
   const waterType = waterTypeRaw;
@@ -733,7 +733,7 @@ router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> =
     const callerId = auth?.userId ?? null;
 
     if (!callerId) {
-      res.status(401).json({ error: "unauthenticated", message: "Authentication required" });
+      res.status(401).json({ error: "unauthenticated", details: "Authentication required" });
       return;
     }
 
@@ -745,7 +745,7 @@ router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> =
         .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, callerId)));
       if (rows.length === 0) {
         // Either dataset doesn't exist or belongs to a different user
-        res.status(403).json({ error: "forbidden", message: "Access denied" });
+        res.status(403).json({ error: "forbidden", details: "Access denied" });
         return;
       }
     }
@@ -788,7 +788,7 @@ router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> =
     return;
   }
 
-  res.status(404).json({ error: "not_found", message: "No cached classification for this grid" });
+  res.status(404).json({ error: "not_found", details: "No cached classification for this grid" });
 }));
 
 // ── GET /terrain/land ─────────────────────────────────────────────────────────

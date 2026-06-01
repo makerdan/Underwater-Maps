@@ -31,7 +31,7 @@ function rateLimitResponse() {
   return {
     ok: false,
     status: 429,
-    json: async () => ({ error: "rate_limit", message: "Too many" }),
+    json: async () => ({ error: "rate_limit", details: "Too many requests — please wait a moment." }),
   } as unknown as Response;
 }
 
