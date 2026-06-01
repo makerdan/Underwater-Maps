@@ -8,7 +8,13 @@ import {
   patchMarkersIdBodyNotesMax,
   GetMarkersQueryParams,
   PutSettingsBody,
+  putSettingsBodyZonePaintBrushRadiusMax,
+  putSettingsBodyZonePaintSlotMin,
+  putSettingsBodyZonePaintSlotMax,
   GetSettingsResponse,
+  getSettingsResponseZonePaintBrushRadiusMax,
+  getSettingsResponseZonePaintSlotMin,
+  getSettingsResponseZonePaintSlotMax,
   PostNceiSaveBody,
   PostDatasetsBboxQueryBody,
   PostTrailsBody,
@@ -205,6 +211,125 @@ describe("PutSettingsBody", () => {
     const good = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000];
     expect(PutSettingsBody.safeParse({ bandBoundaries: good }).success).toBe(true);
   });
+
+  it("accepts valid currentDepthLayers values", () => {
+    for (const layer of ["surface", "mid", "near-bottom"] as const) {
+      expect(PutSettingsBody.safeParse({ currentDepthLayers: [layer] }).success).toBe(true);
+    }
+  });
+
+  it("accepts multiple currentDepthLayers values together", () => {
+    expect(PutSettingsBody.safeParse({ currentDepthLayers: ["surface", "mid", "near-bottom"] }).success).toBe(true);
+  });
+
+  it("rejects an invalid currentDepthLayers enum value", () => {
+    expect(PutSettingsBody.safeParse({ currentDepthLayers: ["deep"] }).success).toBe(false);
+  });
+
+  it("accepts zonePaintBrushRadius at minimum (1)", () => {
+    expect(PutSettingsBody.safeParse({ zonePaintBrushRadius: 1 }).success).toBe(true);
+  });
+
+  it(`accepts zonePaintBrushRadius at maximum (${putSettingsBodyZonePaintBrushRadiusMax})`, () => {
+    expect(PutSettingsBody.safeParse({ zonePaintBrushRadius: putSettingsBodyZonePaintBrushRadiusMax }).success).toBe(true);
+  });
+
+  it(`rejects zonePaintBrushRadius above maximum (${putSettingsBodyZonePaintBrushRadiusMax + 1})`, () => {
+    expect(PutSettingsBody.safeParse({ zonePaintBrushRadius: putSettingsBodyZonePaintBrushRadiusMax + 1 }).success).toBe(false);
+  });
+
+  it("rejects zonePaintBrushRadius below minimum (0)", () => {
+    expect(PutSettingsBody.safeParse({ zonePaintBrushRadius: 0 }).success).toBe(false);
+  });
+
+  it("rejects zonePaintBrushRadius as a float", () => {
+    expect(PutSettingsBody.safeParse({ zonePaintBrushRadius: 3.5 }).success).toBe(false);
+  });
+
+  it(`accepts zonePaintSlot at minimum (${putSettingsBodyZonePaintSlotMin})`, () => {
+    expect(PutSettingsBody.safeParse({ zonePaintSlot: putSettingsBodyZonePaintSlotMin }).success).toBe(true);
+  });
+
+  it(`accepts zonePaintSlot at maximum (${putSettingsBodyZonePaintSlotMax})`, () => {
+    expect(PutSettingsBody.safeParse({ zonePaintSlot: putSettingsBodyZonePaintSlotMax }).success).toBe(true);
+  });
+
+  it(`rejects zonePaintSlot above maximum (${putSettingsBodyZonePaintSlotMax + 1})`, () => {
+    expect(PutSettingsBody.safeParse({ zonePaintSlot: putSettingsBodyZonePaintSlotMax + 1 }).success).toBe(false);
+  });
+
+  it("rejects zonePaintSlot below minimum (-1)", () => {
+    expect(PutSettingsBody.safeParse({ zonePaintSlot: -1 }).success).toBe(false);
+  });
+
+  it("rejects zonePaintSlot as a float", () => {
+    expect(PutSettingsBody.safeParse({ zonePaintSlot: 1.5 }).success).toBe(false);
+  });
+
+  it("accepts valid globalFontSize values", () => {
+    for (const size of ["smallest", "small", "medium", "large", "x-large", "largest"] as const) {
+      expect(PutSettingsBody.safeParse({ globalFontSize: size }).success).toBe(true);
+    }
+  });
+
+  it("rejects an invalid globalFontSize enum value", () => {
+    expect(PutSettingsBody.safeParse({ globalFontSize: "huge" }).success).toBe(false);
+  });
+
+  it("accepts valid intertidalScoreMode values", () => {
+    for (const mode of ["tidepool", "beachcombing"] as const) {
+      expect(PutSettingsBody.safeParse({ intertidalScoreMode: mode }).success).toBe(true);
+    }
+  });
+
+  it("rejects an invalid intertidalScoreMode enum value", () => {
+    expect(PutSettingsBody.safeParse({ intertidalScoreMode: "rocky-shore" }).success).toBe(false);
+  });
+
+  it("accepts boolean overlay toggles set to true", () => {
+    const toggles = {
+      asosOverlayActive: true,
+      rawsOverlayActive: true,
+      windOverlayActive: true,
+      tideOverlayActive: true,
+      currentOverlayActive: true,
+      sidePaneCollapsed: true,
+      zoneOverlayEnabled: true,
+      zonePaintMode: true,
+      substrateColorMode: true,
+      intertidalHotspotsEnabled: true,
+      efhOverlayEnabled: true,
+    };
+    expect(PutSettingsBody.safeParse(toggles).success).toBe(true);
+  });
+
+  it("rejects a non-boolean value for windOverlayActive", () => {
+    expect(PutSettingsBody.safeParse({ windOverlayActive: "yes" }).success).toBe(false);
+  });
+
+  it("accepts hiddenSubstrateClasses as an array of strings", () => {
+    expect(PutSettingsBody.safeParse({ hiddenSubstrateClasses: ["rock", "sand"] }).success).toBe(true);
+  });
+
+  it("accepts hiddenSubstrateClasses as an empty array", () => {
+    expect(PutSettingsBody.safeParse({ hiddenSubstrateClasses: [] }).success).toBe(true);
+  });
+
+  it("rejects hiddenSubstrateClasses containing non-string items", () => {
+    expect(PutSettingsBody.safeParse({ hiddenSubstrateClasses: [1, 2] }).success).toBe(false);
+  });
+
+  it("accepts hiddenEfhSpecies as an array of strings", () => {
+    expect(PutSettingsBody.safeParse({ hiddenEfhSpecies: ["rockfish", "halibut"] }).success).toBe(true);
+  });
+
+  it("accepts hiddenEfhSpecies as an empty array", () => {
+    expect(PutSettingsBody.safeParse({ hiddenEfhSpecies: [] }).success).toBe(true);
+  });
+
+  it("rejects hiddenEfhSpecies containing non-string items", () => {
+    expect(PutSettingsBody.safeParse({ hiddenEfhSpecies: [null] }).success).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -228,6 +353,125 @@ describe("GetSettingsResponse", () => {
 
   it("rejects an invalid coordinateFormat enum value", () => {
     expect(GetSettingsResponse.safeParse({ coordinateFormat: "utm" }).success).toBe(false);
+  });
+
+  it("accepts valid currentDepthLayers values", () => {
+    for (const layer of ["surface", "mid", "near-bottom"] as const) {
+      expect(GetSettingsResponse.safeParse({ currentDepthLayers: [layer] }).success).toBe(true);
+    }
+  });
+
+  it("accepts multiple currentDepthLayers values together", () => {
+    expect(GetSettingsResponse.safeParse({ currentDepthLayers: ["surface", "near-bottom"] }).success).toBe(true);
+  });
+
+  it("rejects an invalid currentDepthLayers enum value", () => {
+    expect(GetSettingsResponse.safeParse({ currentDepthLayers: ["bottom"] }).success).toBe(false);
+  });
+
+  it("accepts zonePaintBrushRadius at minimum (1)", () => {
+    expect(GetSettingsResponse.safeParse({ zonePaintBrushRadius: 1 }).success).toBe(true);
+  });
+
+  it(`accepts zonePaintBrushRadius at maximum (${getSettingsResponseZonePaintBrushRadiusMax})`, () => {
+    expect(GetSettingsResponse.safeParse({ zonePaintBrushRadius: getSettingsResponseZonePaintBrushRadiusMax }).success).toBe(true);
+  });
+
+  it(`rejects zonePaintBrushRadius above maximum (${getSettingsResponseZonePaintBrushRadiusMax + 1})`, () => {
+    expect(GetSettingsResponse.safeParse({ zonePaintBrushRadius: getSettingsResponseZonePaintBrushRadiusMax + 1 }).success).toBe(false);
+  });
+
+  it("rejects zonePaintBrushRadius below minimum (0)", () => {
+    expect(GetSettingsResponse.safeParse({ zonePaintBrushRadius: 0 }).success).toBe(false);
+  });
+
+  it("rejects zonePaintBrushRadius as a float", () => {
+    expect(GetSettingsResponse.safeParse({ zonePaintBrushRadius: 2.7 }).success).toBe(false);
+  });
+
+  it(`accepts zonePaintSlot at minimum (${getSettingsResponseZonePaintSlotMin})`, () => {
+    expect(GetSettingsResponse.safeParse({ zonePaintSlot: getSettingsResponseZonePaintSlotMin }).success).toBe(true);
+  });
+
+  it(`accepts zonePaintSlot at maximum (${getSettingsResponseZonePaintSlotMax})`, () => {
+    expect(GetSettingsResponse.safeParse({ zonePaintSlot: getSettingsResponseZonePaintSlotMax }).success).toBe(true);
+  });
+
+  it(`rejects zonePaintSlot above maximum (${getSettingsResponseZonePaintSlotMax + 1})`, () => {
+    expect(GetSettingsResponse.safeParse({ zonePaintSlot: getSettingsResponseZonePaintSlotMax + 1 }).success).toBe(false);
+  });
+
+  it("rejects zonePaintSlot below minimum (-1)", () => {
+    expect(GetSettingsResponse.safeParse({ zonePaintSlot: -1 }).success).toBe(false);
+  });
+
+  it("rejects zonePaintSlot as a float", () => {
+    expect(GetSettingsResponse.safeParse({ zonePaintSlot: 0.5 }).success).toBe(false);
+  });
+
+  it("accepts valid globalFontSize values", () => {
+    for (const size of ["smallest", "small", "medium", "large", "x-large", "largest"] as const) {
+      expect(GetSettingsResponse.safeParse({ globalFontSize: size }).success).toBe(true);
+    }
+  });
+
+  it("rejects an invalid globalFontSize enum value", () => {
+    expect(GetSettingsResponse.safeParse({ globalFontSize: "gigantic" }).success).toBe(false);
+  });
+
+  it("accepts valid intertidalScoreMode values", () => {
+    for (const mode of ["tidepool", "beachcombing"] as const) {
+      expect(GetSettingsResponse.safeParse({ intertidalScoreMode: mode }).success).toBe(true);
+    }
+  });
+
+  it("rejects an invalid intertidalScoreMode enum value", () => {
+    expect(GetSettingsResponse.safeParse({ intertidalScoreMode: "cliffside" }).success).toBe(false);
+  });
+
+  it("accepts boolean overlay toggles set to true", () => {
+    const toggles = {
+      asosOverlayActive: true,
+      rawsOverlayActive: true,
+      windOverlayActive: true,
+      tideOverlayActive: true,
+      currentOverlayActive: true,
+      sidePaneCollapsed: true,
+      zoneOverlayEnabled: true,
+      zonePaintMode: true,
+      substrateColorMode: true,
+      intertidalHotspotsEnabled: true,
+      efhOverlayEnabled: true,
+    };
+    expect(GetSettingsResponse.safeParse(toggles).success).toBe(true);
+  });
+
+  it("rejects a non-boolean value for tideOverlayActive", () => {
+    expect(GetSettingsResponse.safeParse({ tideOverlayActive: 1 }).success).toBe(false);
+  });
+
+  it("accepts hiddenSubstrateClasses as an array of strings", () => {
+    expect(GetSettingsResponse.safeParse({ hiddenSubstrateClasses: ["mud", "gravel"] }).success).toBe(true);
+  });
+
+  it("accepts hiddenSubstrateClasses as an empty array", () => {
+    expect(GetSettingsResponse.safeParse({ hiddenSubstrateClasses: [] }).success).toBe(true);
+  });
+
+  it("rejects hiddenSubstrateClasses containing non-string items", () => {
+    expect(GetSettingsResponse.safeParse({ hiddenSubstrateClasses: [42] }).success).toBe(false);
+  });
+
+  it("accepts hiddenEfhSpecies as an array of strings", () => {
+    expect(GetSettingsResponse.safeParse({ hiddenEfhSpecies: ["salmon", "crab"] }).success).toBe(true);
+  });
+
+  it("accepts hiddenEfhSpecies as an empty array", () => {
+    expect(GetSettingsResponse.safeParse({ hiddenEfhSpecies: [] }).success).toBe(true);
+  });
+
+  it("rejects hiddenEfhSpecies containing non-string items", () => {
+    expect(GetSettingsResponse.safeParse({ hiddenEfhSpecies: [false] }).success).toBe(false);
   });
 });
 
