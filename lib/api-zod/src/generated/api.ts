@@ -2820,3 +2820,267 @@ export const DeleteRouteParams = zod.object({
 })
 
 
+/**
+ * Returns a row-major NxN elevation grid sourced from the Copernicus DEM
+for the requested bounding box. Used to drape above-water terrain on the
+3-D canvas. No authentication required.
+
+ * @summary Fetch a land-elevation (DEM) grid for a bounding box
+ */
+export const getTerrainLandQuerySizeDefault = 128;
+export const getTerrainLandQuerySizeMin = 32;
+export const getTerrainLandQuerySizeMax = 256;
+
+
+
+export const GetTerrainLandQueryParams = zod.object({
+  "bbox": zod.coerce.string().describe('\"minLon,minLat,maxLon,maxLat\" — four comma-separated finite numbers'),
+  "size": zod.coerce.number().min(getTerrainLandQuerySizeMin).max(getTerrainLandQuerySizeMax).default(getTerrainLandQuerySizeDefault).describe('Grid side length N, clamped to [32, 256]')
+})
+
+export const GetTerrainLandResponse = zod.object({
+
+}).passthrough().describe('Elevation grid in the same shape as TerrainData (depths field contains above-water metres)')
+
+
+/**
+ * Fetches and caches a PNG tile from ESRI World Imagery for the given
+bounding box. Returned as `image/png` and cached for 24 hours. The
+client drapes this over the LandTerrainMesh as a photo-realistic
+texture. Antimeridian-crossing bboxes (minLon > maxLon) are handled
+automatically. No authentication required.
+
+ * @summary Proxy a satellite/aerial imagery PNG for a bounding box
+ */
+export const getTerrainSatelliteTileQuerySizeDefault = 512;
+export const getTerrainSatelliteTileQuerySizeMin = 64;
+export const getTerrainSatelliteTileQuerySizeMax = 1024;
+
+
+
+export const GetTerrainSatelliteTileQueryParams = zod.object({
+  "bbox": zod.coerce.string().describe('\"minLon,minLat,maxLon,maxLat\" — four comma-separated finite numbers'),
+  "size": zod.coerce.number().min(getTerrainSatelliteTileQuerySizeMin).max(getTerrainSatelliteTileQuerySizeMax).default(getTerrainSatelliteTileQuerySizeDefault).describe('Image resolution in pixels, clamped to [64, 1024]')
+})
+
+
+/**
+ * Lightweight preflight that resolves the upstream data source, nominal
+resolution, and water-cell fraction for the requested bounding box
+without transferring the full grid. The client uses `waterFraction` to
+estimate point counts locally (estimatedPoints = resolution² ×
+waterFraction) so resolution switching is instant. Max bbox: 10° × 10°.
+Authentication required.
+
+ * @summary Preflight for bbox terrain CSV download
+ */
+export const GetTerrainDownloadInfoQueryParams = zod.object({
+  "north": zod.coerce.number(),
+  "south": zod.coerce.number(),
+  "east": zod.coerce.number(),
+  "west": zod.coerce.number()
+})
+
+export const getTerrainDownloadInfoResponseWaterFractionMin = 0;
+export const getTerrainDownloadInfoResponseWaterFractionMax = 1;
+
+
+
+export const GetTerrainDownloadInfoResponse = zod.object({
+  "sourceName": zod.string().describe('Human-readable name of the upstream data source'),
+  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']),
+  "nominalResolutionM": zod.number().describe('Nominal grid resolution in metres (0 when synthetic)'),
+  "waterFraction": zod.number().min(getTerrainDownloadInfoResponseWaterFractionMin).max(getTerrainDownloadInfoResponseWaterFractionMax).describe('Fraction of the probe grid cells that contain water (0–1)')
+})
+
+
+/**
+ * Builds the full bathymetric grid for the requested bbox and streams it
+as a `text/csv` attachment with columns `lon,lat,depth`. Only water
+cells (depth > 0) are emitted; land and topography are excluded. Max
+bbox: 10° × 10°. Resolution must be one of 64, 256, or 512.
+Authentication required.
+
+ * @summary Stream a terrain CSV for a bounding box
+ */
+export const getTerrainDownloadQueryResolutionDefault = 256;
+
+export const GetTerrainDownloadQueryParams = zod.object({
+  "north": zod.coerce.number(),
+  "south": zod.coerce.number(),
+  "east": zod.coerce.number(),
+  "west": zod.coerce.number(),
+  "resolution": zod.union([zod.literal(64),zod.literal(256),zod.literal(512)]).default(getTerrainDownloadQueryResolutionDefault)
+})
+
+
+/**
+ * Returns the nearest NOAA tide-heights station name, an array of
+6-minute height predictions, and an array of max-slack current
+predictions for the requested lat/lon. Falls back to a synthetic
+harmonic model when no NOAA station is reachable. Intended for offline
+packs and pre-fetch scenarios. No authentication required.
+
+ * @summary Packed tide-height and current predictions for a location
+ */
+export const getTidalPackQueryLatMin = -90;
+export const getTidalPackQueryLatMax = 90;
+
+export const getTidalPackQueryLonMin = -180;
+export const getTidalPackQueryLonMax = 180;
+
+export const getTidalPackQueryDaysDefault = 7;
+export const getTidalPackQueryDaysMin = 3;
+export const getTidalPackQueryDaysMax = 14;
+
+
+
+export const GetTidalPackQueryParams = zod.object({
+  "lat": zod.coerce.number().min(getTidalPackQueryLatMin).max(getTidalPackQueryLatMax),
+  "lon": zod.coerce.number().min(getTidalPackQueryLonMin).max(getTidalPackQueryLonMax),
+  "days": zod.coerce.number().min(getTidalPackQueryDaysMin).max(getTidalPackQueryDaysMax).default(getTidalPackQueryDaysDefault).describe('Number of days of predictions to return (clamped to [3, 14])')
+})
+
+export const GetTidalPackResponse = zod.object({
+  "station": zod.string().nullable().describe('Name or ID of the nearest NOAA station, or null when synthetic'),
+  "generatedAt": zod.coerce.date(),
+  "tidalExpiresAt": zod.coerce.date().describe('ISO timestamp marking the end of the prediction window'),
+  "heightPredictions": zod.array(zod.object({
+  "t": zod.coerce.date(),
+  "v": zod.number().describe('Water level in metres (MLLW datum)')
+})),
+  "currentPredictions": zod.array(zod.object({
+  "t": zod.coerce.date(),
+  "speed": zod.number().describe('Current speed in metres per second'),
+  "dir": zod.number().describe('Current direction in degrees true')
+}))
+})
+
+
+/**
+ * Returns the nearest NOAA ASOS weather station observation for the
+requested lat/lon. Intended for offline-pack pre-fetches. Falls back
+gracefully when NOAA is unreachable (returns null fields). No
+authentication required.
+
+ * @summary Weather snapshot for offline packs
+ */
+export const getWeatherPackQueryLatMin = -90;
+export const getWeatherPackQueryLatMax = 90;
+
+export const getWeatherPackQueryLonMin = -180;
+export const getWeatherPackQueryLonMax = 180;
+
+
+
+export const GetWeatherPackQueryParams = zod.object({
+  "lat": zod.coerce.number().min(getWeatherPackQueryLatMin).max(getWeatherPackQueryLatMax),
+  "lon": zod.coerce.number().min(getWeatherPackQueryLonMin).max(getWeatherPackQueryLonMax)
+})
+
+export const GetWeatherPackResponse = zod.object({
+  "station": zod.string().nullable().describe('Station name, or null when unavailable'),
+  "observation": zod.object({
+  "id": zod.string().describe('ICAO station identifier (e.g. \"KBLI\")'),
+  "name": zod.string().describe('Human-readable station name'),
+  "lat": zod.number().describe('Station latitude'),
+  "lon": zod.number().describe('Station longitude'),
+  "windSpeedKnots": zod.number().nullish().describe('Wind speed in knots (null if not reported)'),
+  "windDirDeg": zod.number().nullish().describe('Wind direction in degrees true (null if variable\/calm\/not reported)'),
+  "visibilityMiles": zod.number().nullish().describe('Visibility in statute miles (null if not reported)'),
+  "ceilingFt": zod.number().nullish().describe('Cloud ceiling height in feet AGL (null if unlimited\/not reported)'),
+  "tempC": zod.number().nullish().describe('Temperature in degrees Celsius (null if not reported)'),
+  "observedAt": zod.string().nullish().describe('ISO 8601 UTC timestamp of the observation')
+}).describe('A NOAA ASOS\/AWOS aviation weather observation station with its latest obs').nullable(),
+  "snapshotAt": zod.coerce.date()
+})
+
+
+/**
+ * Marks a known preset dataset ID as disabled by inserting a row into the
+`disabled_presets` table. The preset will no longer appear in the
+standard dataset list for any user. Idempotent — calling with an already-
+disabled ID is a no-op. No authentication required (admin protection is
+applied at the network/reverse-proxy layer for this endpoint).
+
+ * @summary Disable a built-in preset dataset
+ */
+export const deleteDatasetPresetPathIdRegExp = new RegExp('^[a-zA-Z0-9_-]+$');
+
+
+export const DeleteDatasetPresetParams = zod.object({
+  "id": zod.coerce.string().regex(deleteDatasetPresetPathIdRegExp).describe('Preset dataset ID (alphanumeric, hyphens, underscores)')
+})
+
+
+/**
+ * Dispatches a `workflow_dispatch` event for the given workflow. The
+`ref` field (branch or tag) is required. Optional `inputs` are passed
+through to the workflow as-is.
+
+ * @summary Trigger a GitHub Actions workflow_dispatch event
+ */
+export const PostGithubWorkflowDispatchParams = zod.object({
+  "owner": zod.coerce.string(),
+  "repo": zod.coerce.string(),
+  "workflow_id": zod.coerce.string().describe('Workflow file name (e.g. \"ci.yml\") or numeric workflow ID')
+})
+
+export const PostGithubWorkflowDispatchBody = zod.object({
+  "ref": zod.string().describe('Branch or tag name to dispatch against'),
+  "inputs": zod.record(zod.string(), zod.string()).optional().describe('Key-value pairs passed as workflow inputs')
+})
+
+
+/**
+ * Returns a paginated list of workflow runs for the given repository.
+Optional filters: workflow_id, status, per_page, page.
+
+ * @summary List GitHub Actions workflow runs for a repository
+ */
+export const ListGithubWorkflowRunsParams = zod.object({
+  "owner": zod.coerce.string(),
+  "repo": zod.coerce.string()
+})
+
+export const ListGithubWorkflowRunsQueryParams = zod.object({
+  "workflow_id": zod.coerce.string().optional().describe('Filter by workflow file name or ID'),
+  "status": zod.enum(['queued', 'in_progress', 'completed']).optional(),
+  "per_page": zod.coerce.number().optional(),
+  "page": zod.coerce.number().optional()
+})
+
+export const ListGithubWorkflowRunsResponse = zod.object({
+  "total_count": zod.number(),
+  "workflow_runs": zod.array(zod.object({
+  "id": zod.number().describe('Numeric run ID'),
+  "name": zod.string().nullish().describe('Display name of the workflow run'),
+  "status": zod.string().nullable().describe('Run status (queued, in_progress, completed, etc.)'),
+  "conclusion": zod.string().nullish().describe('Run conclusion (success, failure, cancelled, etc.)'),
+  "created_at": zod.coerce.date(),
+  "html_url": zod.string().describe('URL to the run on github.com'),
+  "workflow_id": zod.number().describe('Numeric workflow ID this run belongs to')
+}).describe('Slim representation of a GitHub Actions workflow run'))
+})
+
+
+/**
+ * @summary Get a single GitHub Actions workflow run
+ */
+export const GetGithubWorkflowRunParams = zod.object({
+  "owner": zod.coerce.string(),
+  "repo": zod.coerce.string(),
+  "run_id": zod.coerce.number().describe('Numeric workflow run ID')
+})
+
+export const GetGithubWorkflowRunResponse = zod.object({
+  "id": zod.number().describe('Numeric run ID'),
+  "name": zod.string().nullish().describe('Display name of the workflow run'),
+  "status": zod.string().nullable().describe('Run status (queued, in_progress, completed, etc.)'),
+  "conclusion": zod.string().nullish().describe('Run conclusion (success, failure, cancelled, etc.)'),
+  "created_at": zod.coerce.date(),
+  "html_url": zod.string().describe('URL to the run on github.com'),
+  "workflow_id": zod.number().describe('Numeric workflow ID this run belongs to')
+}).describe('Slim representation of a GitHub Actions workflow run')
+
+

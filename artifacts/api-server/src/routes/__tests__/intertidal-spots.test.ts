@@ -143,7 +143,7 @@ describe("GET /intertidal-spots/:id", () => {
   it("returns 400 for invalid type param", async () => {
     const res = await request(app).get("/intertidal-spots/thorne-bay?type=diving");
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe("bad_request");
+    expect(res.body.error).toBe("invalid_params");
   });
 
   it("metadata includes datasetId and featureCount", async () => {

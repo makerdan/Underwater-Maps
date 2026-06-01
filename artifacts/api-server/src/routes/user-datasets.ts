@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq, and, desc, sql } from "drizzle-orm";
-import { db, customDatasetsTable, datasetFoldersTable } from "@workspace/db";
+import { db, customDatasetsTable, datasetFoldersTable, type StoredTerrainJson } from "@workspace/db";
 import { MAX_TERRAIN_JSON_BYTES } from "../lib/constants.js";
 import {
   GetUserDatasetsResponse,
@@ -151,8 +151,8 @@ router.post("/user/datasets/:id/duplicate", requireAuth, asyncHandler(async (req
       name: `${source.name} (copy)`,
       minDepth: source.minDepth,
       maxDepth: source.maxDepth,
-      terrainJson: source.terrainJson as Record<string, unknown>,
-      overviewJson: source.overviewJson as Record<string, unknown>,
+      terrainJson: source.terrainJson,
+      overviewJson: source.overviewJson,
       folderId: source.folderId,
     })
     .returning();
@@ -166,13 +166,13 @@ router.post("/user/datasets/:id/duplicate", requireAuth, asyncHandler(async (req
   // the source of truth and will rebrand on read, but stamping here keeps the
   // stored payload internally consistent for future tooling.
   const dupTerrain = {
-    ...(source.terrainJson as Record<string, unknown>),
+    ...(source.terrainJson as unknown as Record<string, unknown>),
     datasetId: created.id,
-  };
+  } as unknown as StoredTerrainJson;
   const dupOverview = {
-    ...(source.overviewJson as Record<string, unknown>),
+    ...(source.overviewJson as unknown as Record<string, unknown>),
     datasetId: created.id,
-  };
+  } as unknown as StoredTerrainJson;
   await db
     .update(customDatasetsTable)
     .set({ terrainJson: dupTerrain, overviewJson: dupOverview })

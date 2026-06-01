@@ -15,7 +15,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { Storage } from "@google-cloud/storage";
-import { db, customDatasetsTable } from "@workspace/db";
+import { db, customDatasetsTable, type StoredTerrainJson } from "@workspace/db";
 import { logger } from "./logger.js";
 import { parseXyzCsv, gridPoints } from "./terrain.js";
 import { parseUploadedFile } from "./uploadParsers.js";
@@ -247,8 +247,8 @@ export async function processObject(bucketName: string, objectKey: string): Prom
       name: datasetName,
       minDepth: terrain.minDepth,
       maxDepth: terrain.maxDepth,
-      terrainJson: terrain as unknown as Record<string, unknown>,
-      overviewJson: overview as unknown as Record<string, unknown>,
+      terrainJson: terrain as unknown as StoredTerrainJson,
+      overviewJson: overview as unknown as StoredTerrainJson,
     });
 
     const destKey = objectKey.replace(/^pending-datasets\//, "processed-datasets/");

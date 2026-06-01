@@ -607,6 +607,8 @@ export interface ApiError {
   error: string;
   /** Human-readable description of what went wrong */
   details: string;
+  /** Optional tracing ID for correlating this error with server logs */
+  requestId?: string;
 }
 
 export type DatasetMetaWaterType = typeof DatasetMetaWaterType[keyof typeof DatasetMetaWaterType];
@@ -2018,6 +2020,25 @@ export interface DeepHealthStatus {
   subsystems: DeepHealthStatusSubsystems;
 }
 
+/**
+ * Slim representation of a GitHub Actions workflow run
+ */
+export interface GithubWorkflowRun {
+  /** Numeric run ID */
+  id: number;
+  /** Display name of the workflow run */
+  name?: string | null;
+  /** Run status (queued, in_progress, completed, etc.) */
+  status: string | null;
+  /** Run conclusion (success, failure, cancelled, etc.) */
+  conclusion?: string | null;
+  created_at: string;
+  /** URL to the run on github.com */
+  html_url: string;
+  /** Numeric workflow ID this run belongs to */
+  workflow_id: number;
+}
+
 export type GetDatasetsParams = {
 /**
  * Filter datasets by water body type
@@ -2668,5 +2689,185 @@ export type CreateRouteBody = {
 export type PatchRouteBody = {
   /** @maxLength 120 */
   name: string;
+};
+
+export type GetTerrainLandParams = {
+/**
+ * "minLon,minLat,maxLon,maxLat" — four comma-separated finite numbers
+ */
+bbox: string;
+/**
+ * Grid side length N, clamped to [32, 256]
+ * @minimum 32
+ * @maximum 256
+ */
+size?: number;
+};
+
+/**
+ * Elevation grid in the same shape as TerrainData (depths field contains above-water metres)
+ */
+export type GetTerrainLand200 = { [key: string]: unknown };
+
+export type GetTerrainSatelliteTileParams = {
+/**
+ * "minLon,minLat,maxLon,maxLat" — four comma-separated finite numbers
+ */
+bbox: string;
+/**
+ * Image resolution in pixels, clamped to [64, 1024]
+ * @minimum 64
+ * @maximum 1024
+ */
+size?: number;
+};
+
+export type GetTerrainDownloadInfoParams = {
+north: number;
+south: number;
+east: number;
+west: number;
+};
+
+export type GetTerrainDownloadInfo200DataSource = typeof GetTerrainDownloadInfo200DataSource[keyof typeof GetTerrainDownloadInfo200DataSource];
+
+
+export const GetTerrainDownloadInfo200DataSource = {
+  ncei: 'ncei',
+  gebco: 'gebco',
+  synthetic: 'synthetic',
+  twdb: 'twdb',
+  usace: 'usace',
+  'usgs-3dep': 'usgs-3dep',
+} as const;
+
+export type GetTerrainDownloadInfo200 = {
+  /** Human-readable name of the upstream data source */
+  sourceName: string;
+  dataSource: GetTerrainDownloadInfo200DataSource;
+  /** Nominal grid resolution in metres (0 when synthetic) */
+  nominalResolutionM: number;
+  /**
+     * Fraction of the probe grid cells that contain water (0–1)
+     * @minimum 0
+     * @maximum 1
+     */
+  waterFraction: number;
+};
+
+export type GetTerrainDownloadParams = {
+north: number;
+south: number;
+east: number;
+west: number;
+resolution?: GetTerrainDownloadResolution;
+};
+
+export type GetTerrainDownloadResolution = typeof GetTerrainDownloadResolution[keyof typeof GetTerrainDownloadResolution];
+
+
+export const GetTerrainDownloadResolution = {
+  NUMBER_64: 64,
+  NUMBER_256: 256,
+  NUMBER_512: 512,
+} as const;
+
+export type GetTidalPackParams = {
+/**
+ * @minimum -90
+ * @maximum 90
+ */
+lat: number;
+/**
+ * @minimum -180
+ * @maximum 180
+ */
+lon: number;
+/**
+ * Number of days of predictions to return (clamped to [3, 14])
+ * @minimum 3
+ * @maximum 14
+ */
+days?: number;
+};
+
+export type GetTidalPack200HeightPredictionsItem = {
+  t: string;
+  /** Water level in metres (MLLW datum) */
+  v: number;
+};
+
+export type GetTidalPack200CurrentPredictionsItem = {
+  t: string;
+  /** Current speed in metres per second */
+  speed: number;
+  /** Current direction in degrees true */
+  dir: number;
+};
+
+export type GetTidalPack200 = {
+  /** Name or ID of the nearest NOAA station, or null when synthetic */
+  station: string | null;
+  generatedAt: string;
+  /** ISO timestamp marking the end of the prediction window */
+  tidalExpiresAt: string;
+  heightPredictions: GetTidalPack200HeightPredictionsItem[];
+  currentPredictions: GetTidalPack200CurrentPredictionsItem[];
+};
+
+export type GetWeatherPackParams = {
+/**
+ * @minimum -90
+ * @maximum 90
+ */
+lat: number;
+/**
+ * @minimum -180
+ * @maximum 180
+ */
+lon: number;
+};
+
+export type GetWeatherPack200 = {
+  /** Station name, or null when unavailable */
+  station: string | null;
+  observation: WeatherStation | null;
+  snapshotAt: string;
+};
+
+/**
+ * Key-value pairs passed as workflow inputs
+ */
+export type PostGithubWorkflowDispatchBodyInputs = {[key: string]: string};
+
+export type PostGithubWorkflowDispatchBody = {
+  /** Branch or tag name to dispatch against */
+  ref: string;
+  /** Key-value pairs passed as workflow inputs */
+  inputs?: PostGithubWorkflowDispatchBodyInputs;
+};
+
+export type ListGithubWorkflowRunsParams = {
+/**
+ * Filter by workflow file name or ID
+ */
+workflow_id?: string;
+status?: ListGithubWorkflowRunsStatus;
+per_page?: number;
+page?: number;
+};
+
+export type ListGithubWorkflowRunsStatus = typeof ListGithubWorkflowRunsStatus[keyof typeof ListGithubWorkflowRunsStatus];
+
+
+export const ListGithubWorkflowRunsStatus = {
+  queued: 'queued',
+  in_progress: 'in_progress',
+  completed: 'completed',
+} as const;
+
+export type ListGithubWorkflowRuns200 = {
+  total_count: number;
+  workflow_runs: GithubWorkflowRun[];
 };
 

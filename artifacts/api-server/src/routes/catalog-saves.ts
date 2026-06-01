@@ -28,7 +28,7 @@
 import { Router } from "express";
 import { eq, and, lt } from "drizzle-orm";
 import { z } from "zod";
-import { db, userCatalogSavesTable, customDatasetsTable } from "@workspace/db";
+import { db, userCatalogSavesTable, customDatasetsTable, type StoredTerrainJson } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import {
@@ -356,8 +356,8 @@ export async function materializeSave(
           name: entry.name,
           minDepth: terrain.minDepth,
           maxDepth: terrain.maxDepth,
-          terrainJson: terrain as unknown as Record<string, unknown>,
-          overviewJson: overview as unknown as Record<string, unknown>,
+          terrainJson: terrain as unknown as StoredTerrainJson,
+          overviewJson: overview as unknown as StoredTerrainJson,
         })
         .returning({ id: customDatasetsTable.id });
 
@@ -371,8 +371,8 @@ export async function materializeSave(
       await db
         .update(customDatasetsTable)
         .set({
-          terrainJson: terrainStamped as unknown as Record<string, unknown>,
-          overviewJson: overviewStamped as unknown as Record<string, unknown>,
+          terrainJson: terrainStamped as unknown as StoredTerrainJson,
+          overviewJson: overviewStamped as unknown as StoredTerrainJson,
         })
         .where(eq(customDatasetsTable.id, created.id));
 

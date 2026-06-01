@@ -376,6 +376,8 @@ All routes are served under the `/api` prefix by the Express 5 server.
 | GET | `/temperature-profile` | Fetch a depth-resolved temperature profile for a lat/lon point |
 | GET | `/tidal` | Current tide height, current speed/direction, and next high/low event |
 | GET | `/tidal/schedule` | Multi-day tide schedule with slack windows |
+| GET | `/tidal/pack` | Packed tide-height and current predictions for a location |
+| GET | `/weather/pack` | Weather snapshot for offline packs |
 
 ### AI Assistant (Poe)
 
@@ -409,6 +411,9 @@ All routes are served under the `/api` prefix by the Express 5 server.
 |---|---|---|
 | GET | `/github/repos` | List GitHub repositories accessible to the configured PAT |
 | PUT | `/github/repos/:owner/:repo/contents/:path` | Create or update a file in a GitHub repository |
+| POST | `/github/repos/:owner/:repo/actions/workflows/:workflow_id/dispatches` | Trigger a GitHub Actions workflow_dispatch event |
+| GET | `/github/repos/:owner/:repo/actions/runs` | List GitHub Actions workflow runs for a repository |
+| GET | `/github/repos/:owner/:repo/actions/runs/:run_id` | Get a single GitHub Actions workflow run |
 
 ### Account
 
@@ -426,6 +431,16 @@ All routes are served under the `/api` prefix by the Express 5 server.
 | GET | `/healthz` | Health check |
 | GET | `/healthz/deep` | Deep health probe — checks DB, Poe, and AOOS subsystems |
 | GET | `/admin/bucket-monitor` | GCS dataset landing bucket processing summary |
+
+### Other
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/terrain/land` | Fetch a land-elevation (DEM) grid for a bounding box |
+| GET | `/terrain/satellite-tile` | Proxy a satellite/aerial imagery PNG for a bounding box |
+| GET | `/terrain/download/info` | Preflight for bbox terrain CSV download |
+| GET | `/terrain/download` | Stream a terrain CSV for a bounding box |
+| DELETE | `/datasets/presets/:id` | Disable a built-in preset dataset |
 
 <!-- GENERATED:API-ROUTES:END -->
 

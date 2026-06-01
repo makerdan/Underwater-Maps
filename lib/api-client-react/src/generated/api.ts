@@ -55,7 +55,15 @@ import type {
   GetRoutesParams,
   GetSurfaceConditionsParams,
   GetTemperatureProfileParams,
+  GetTerrainDownloadInfo200,
+  GetTerrainDownloadInfoParams,
+  GetTerrainDownloadParams,
+  GetTerrainLand200,
+  GetTerrainLandParams,
+  GetTerrainSatelliteTileParams,
   GetTidal200,
+  GetTidalPack200,
+  GetTidalPackParams,
   GetTidalParams,
   GetTidalSchedule200,
   GetTidalScheduleParams,
@@ -63,12 +71,17 @@ import type {
   GetTrailsParams,
   GetUploadJobStatus200,
   GetWaterTemperatureParams,
+  GetWeatherPack200,
+  GetWeatherPackParams,
   GetWeatherStationsParams,
+  GithubWorkflowRun,
   GpsTrail,
   GpsTrailInput,
   HealthStatus,
   IntertidalSpotFeatureCollection,
   ListGithubRepos200Item,
+  ListGithubWorkflowRuns200,
+  ListGithubWorkflowRunsParams,
   Marker,
   MarkerInput,
   MarkerPatch,
@@ -89,6 +102,7 @@ import type {
   PostDatasetsBboxQuery200,
   PostDatasetsBboxQueryBody,
   PostDatasetsUploadBody,
+  PostGithubWorkflowDispatchBody,
   PutGithubFileContents200,
   PutGithubFileContentsBody,
   QueryResult,
@@ -6528,4 +6542,882 @@ export const useDeleteRoute = <TError = ErrorType<ApiError>,
       > => {
       return useMutation(getDeleteRouteMutationOptions(options));
     }
+
+export const getGetTerrainLandUrl = (params: GetTerrainLandParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/terrain/land?${stringifiedParams}` : `/api/terrain/land`
+}
+
+/**
+ * Returns a row-major NxN elevation grid sourced from the Copernicus DEM
+for the requested bounding box. Used to drape above-water terrain on the
+3-D canvas. No authentication required.
+
+ * @summary Fetch a land-elevation (DEM) grid for a bounding box
+ */
+export const getTerrainLand = async (params: GetTerrainLandParams, options?: RequestInit): Promise<GetTerrainLand200> => {
+
+  return customFetch<GetTerrainLand200>(getGetTerrainLandUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTerrainLandQueryKey = (params?: GetTerrainLandParams,) => {
+    return [
+    `/api/terrain/land`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetTerrainLandQueryOptions = <TData = Awaited<ReturnType<typeof getTerrainLand>>, TError = ErrorType<ApiError>>(params: GetTerrainLandParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTerrainLand>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTerrainLandQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTerrainLand>>> = ({ signal }) => getTerrainLand(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTerrainLand>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTerrainLandQueryResult = NonNullable<Awaited<ReturnType<typeof getTerrainLand>>>
+export type GetTerrainLandQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Fetch a land-elevation (DEM) grid for a bounding box
+ */
+
+export function useGetTerrainLand<TData = Awaited<ReturnType<typeof getTerrainLand>>, TError = ErrorType<ApiError>>(
+ params: GetTerrainLandParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTerrainLand>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTerrainLandQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetTerrainSatelliteTileUrl = (params: GetTerrainSatelliteTileParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/terrain/satellite-tile?${stringifiedParams}` : `/api/terrain/satellite-tile`
+}
+
+/**
+ * Fetches and caches a PNG tile from ESRI World Imagery for the given
+bounding box. Returned as `image/png` and cached for 24 hours. The
+client drapes this over the LandTerrainMesh as a photo-realistic
+texture. Antimeridian-crossing bboxes (minLon > maxLon) are handled
+automatically. No authentication required.
+
+ * @summary Proxy a satellite/aerial imagery PNG for a bounding box
+ */
+export const getTerrainSatelliteTile = async (params: GetTerrainSatelliteTileParams, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetTerrainSatelliteTileUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTerrainSatelliteTileQueryKey = (params?: GetTerrainSatelliteTileParams,) => {
+    return [
+    `/api/terrain/satellite-tile`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetTerrainSatelliteTileQueryOptions = <TData = Awaited<ReturnType<typeof getTerrainSatelliteTile>>, TError = ErrorType<ApiError>>(params: GetTerrainSatelliteTileParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTerrainSatelliteTile>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTerrainSatelliteTileQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTerrainSatelliteTile>>> = ({ signal }) => getTerrainSatelliteTile(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTerrainSatelliteTile>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTerrainSatelliteTileQueryResult = NonNullable<Awaited<ReturnType<typeof getTerrainSatelliteTile>>>
+export type GetTerrainSatelliteTileQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Proxy a satellite/aerial imagery PNG for a bounding box
+ */
+
+export function useGetTerrainSatelliteTile<TData = Awaited<ReturnType<typeof getTerrainSatelliteTile>>, TError = ErrorType<ApiError>>(
+ params: GetTerrainSatelliteTileParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTerrainSatelliteTile>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTerrainSatelliteTileQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetTerrainDownloadInfoUrl = (params: GetTerrainDownloadInfoParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/terrain/download/info?${stringifiedParams}` : `/api/terrain/download/info`
+}
+
+/**
+ * Lightweight preflight that resolves the upstream data source, nominal
+resolution, and water-cell fraction for the requested bounding box
+without transferring the full grid. The client uses `waterFraction` to
+estimate point counts locally (estimatedPoints = resolution² ×
+waterFraction) so resolution switching is instant. Max bbox: 10° × 10°.
+Authentication required.
+
+ * @summary Preflight for bbox terrain CSV download
+ */
+export const getTerrainDownloadInfo = async (params: GetTerrainDownloadInfoParams, options?: RequestInit): Promise<GetTerrainDownloadInfo200> => {
+
+  return customFetch<GetTerrainDownloadInfo200>(getGetTerrainDownloadInfoUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTerrainDownloadInfoQueryKey = (params?: GetTerrainDownloadInfoParams,) => {
+    return [
+    `/api/terrain/download/info`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetTerrainDownloadInfoQueryOptions = <TData = Awaited<ReturnType<typeof getTerrainDownloadInfo>>, TError = ErrorType<ApiError>>(params: GetTerrainDownloadInfoParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTerrainDownloadInfo>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTerrainDownloadInfoQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTerrainDownloadInfo>>> = ({ signal }) => getTerrainDownloadInfo(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTerrainDownloadInfo>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTerrainDownloadInfoQueryResult = NonNullable<Awaited<ReturnType<typeof getTerrainDownloadInfo>>>
+export type GetTerrainDownloadInfoQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Preflight for bbox terrain CSV download
+ */
+
+export function useGetTerrainDownloadInfo<TData = Awaited<ReturnType<typeof getTerrainDownloadInfo>>, TError = ErrorType<ApiError>>(
+ params: GetTerrainDownloadInfoParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTerrainDownloadInfo>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTerrainDownloadInfoQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetTerrainDownloadUrl = (params: GetTerrainDownloadParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/terrain/download?${stringifiedParams}` : `/api/terrain/download`
+}
+
+/**
+ * Builds the full bathymetric grid for the requested bbox and streams it
+as a `text/csv` attachment with columns `lon,lat,depth`. Only water
+cells (depth > 0) are emitted; land and topography are excluded. Max
+bbox: 10° × 10°. Resolution must be one of 64, 256, or 512.
+Authentication required.
+
+ * @summary Stream a terrain CSV for a bounding box
+ */
+export const getTerrainDownload = async (params: GetTerrainDownloadParams, options?: RequestInit): Promise<string> => {
+
+  return customFetch<string>(getGetTerrainDownloadUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTerrainDownloadQueryKey = (params?: GetTerrainDownloadParams,) => {
+    return [
+    `/api/terrain/download`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetTerrainDownloadQueryOptions = <TData = Awaited<ReturnType<typeof getTerrainDownload>>, TError = ErrorType<ApiError>>(params: GetTerrainDownloadParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTerrainDownload>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTerrainDownloadQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTerrainDownload>>> = ({ signal }) => getTerrainDownload(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTerrainDownload>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTerrainDownloadQueryResult = NonNullable<Awaited<ReturnType<typeof getTerrainDownload>>>
+export type GetTerrainDownloadQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Stream a terrain CSV for a bounding box
+ */
+
+export function useGetTerrainDownload<TData = Awaited<ReturnType<typeof getTerrainDownload>>, TError = ErrorType<ApiError>>(
+ params: GetTerrainDownloadParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTerrainDownload>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTerrainDownloadQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetTidalPackUrl = (params: GetTidalPackParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/tidal/pack?${stringifiedParams}` : `/api/tidal/pack`
+}
+
+/**
+ * Returns the nearest NOAA tide-heights station name, an array of
+6-minute height predictions, and an array of max-slack current
+predictions for the requested lat/lon. Falls back to a synthetic
+harmonic model when no NOAA station is reachable. Intended for offline
+packs and pre-fetch scenarios. No authentication required.
+
+ * @summary Packed tide-height and current predictions for a location
+ */
+export const getTidalPack = async (params: GetTidalPackParams, options?: RequestInit): Promise<GetTidalPack200> => {
+
+  return customFetch<GetTidalPack200>(getGetTidalPackUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTidalPackQueryKey = (params?: GetTidalPackParams,) => {
+    return [
+    `/api/tidal/pack`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetTidalPackQueryOptions = <TData = Awaited<ReturnType<typeof getTidalPack>>, TError = ErrorType<ApiError>>(params: GetTidalPackParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTidalPack>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTidalPackQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTidalPack>>> = ({ signal }) => getTidalPack(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTidalPack>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTidalPackQueryResult = NonNullable<Awaited<ReturnType<typeof getTidalPack>>>
+export type GetTidalPackQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Packed tide-height and current predictions for a location
+ */
+
+export function useGetTidalPack<TData = Awaited<ReturnType<typeof getTidalPack>>, TError = ErrorType<ApiError>>(
+ params: GetTidalPackParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTidalPack>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTidalPackQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetWeatherPackUrl = (params: GetWeatherPackParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/weather/pack?${stringifiedParams}` : `/api/weather/pack`
+}
+
+/**
+ * Returns the nearest NOAA ASOS weather station observation for the
+requested lat/lon. Intended for offline-pack pre-fetches. Falls back
+gracefully when NOAA is unreachable (returns null fields). No
+authentication required.
+
+ * @summary Weather snapshot for offline packs
+ */
+export const getWeatherPack = async (params: GetWeatherPackParams, options?: RequestInit): Promise<GetWeatherPack200> => {
+
+  return customFetch<GetWeatherPack200>(getGetWeatherPackUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetWeatherPackQueryKey = (params?: GetWeatherPackParams,) => {
+    return [
+    `/api/weather/pack`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetWeatherPackQueryOptions = <TData = Awaited<ReturnType<typeof getWeatherPack>>, TError = ErrorType<ApiError>>(params: GetWeatherPackParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWeatherPack>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetWeatherPackQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWeatherPack>>> = ({ signal }) => getWeatherPack(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWeatherPack>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetWeatherPackQueryResult = NonNullable<Awaited<ReturnType<typeof getWeatherPack>>>
+export type GetWeatherPackQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Weather snapshot for offline packs
+ */
+
+export function useGetWeatherPack<TData = Awaited<ReturnType<typeof getWeatherPack>>, TError = ErrorType<ApiError>>(
+ params: GetWeatherPackParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWeatherPack>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetWeatherPackQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getDeleteDatasetPresetUrl = (id: string,) => {
+
+
+
+
+  return `/api/datasets/presets/${id}`
+}
+
+/**
+ * Marks a known preset dataset ID as disabled by inserting a row into the
+`disabled_presets` table. The preset will no longer appear in the
+standard dataset list for any user. Idempotent — calling with an already-
+disabled ID is a no-op. No authentication required (admin protection is
+applied at the network/reverse-proxy layer for this endpoint).
+
+ * @summary Disable a built-in preset dataset
+ */
+export const deleteDatasetPreset = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteDatasetPresetUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteDatasetPresetMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDatasetPreset>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteDatasetPreset>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteDatasetPreset'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteDatasetPreset>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteDatasetPreset(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteDatasetPresetMutationResult = NonNullable<Awaited<ReturnType<typeof deleteDatasetPreset>>>
+
+    export type DeleteDatasetPresetMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Disable a built-in preset dataset
+ */
+export const useDeleteDatasetPreset = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDatasetPreset>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteDatasetPreset>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteDatasetPresetMutationOptions(options));
+    }
+
+export const getPostGithubWorkflowDispatchUrl = (owner: string,
+    repo: string,
+    workflowId: string,) => {
+
+
+
+
+  return `/api/github/repos/${owner}/${repo}/actions/workflows/${workflowId}/dispatches`
+}
+
+/**
+ * Dispatches a `workflow_dispatch` event for the given workflow. The
+`ref` field (branch or tag) is required. Optional `inputs` are passed
+through to the workflow as-is.
+
+ * @summary Trigger a GitHub Actions workflow_dispatch event
+ */
+export const postGithubWorkflowDispatch = async (owner: string,
+    repo: string,
+    workflowId: string,
+    postGithubWorkflowDispatchBody: PostGithubWorkflowDispatchBody, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getPostGithubWorkflowDispatchUrl(owner,repo,workflowId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      postGithubWorkflowDispatchBody,)
+  }
+);}
+
+
+
+
+export const getPostGithubWorkflowDispatchMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postGithubWorkflowDispatch>>, TError,{owner: string;repo: string;workflowId: string;data: BodyType<PostGithubWorkflowDispatchBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postGithubWorkflowDispatch>>, TError,{owner: string;repo: string;workflowId: string;data: BodyType<PostGithubWorkflowDispatchBody>}, TContext> => {
+
+const mutationKey = ['postGithubWorkflowDispatch'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postGithubWorkflowDispatch>>, {owner: string;repo: string;workflowId: string;data: BodyType<PostGithubWorkflowDispatchBody>}> = (props) => {
+          const {owner,repo,workflowId,data} = props ?? {};
+
+          return  postGithubWorkflowDispatch(owner,repo,workflowId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostGithubWorkflowDispatchMutationResult = NonNullable<Awaited<ReturnType<typeof postGithubWorkflowDispatch>>>
+    export type PostGithubWorkflowDispatchMutationBody = BodyType<PostGithubWorkflowDispatchBody>
+    export type PostGithubWorkflowDispatchMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Trigger a GitHub Actions workflow_dispatch event
+ */
+export const usePostGithubWorkflowDispatch = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postGithubWorkflowDispatch>>, TError,{owner: string;repo: string;workflowId: string;data: BodyType<PostGithubWorkflowDispatchBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postGithubWorkflowDispatch>>,
+        TError,
+        {owner: string;repo: string;workflowId: string;data: BodyType<PostGithubWorkflowDispatchBody>},
+        TContext
+      > => {
+      return useMutation(getPostGithubWorkflowDispatchMutationOptions(options));
+    }
+
+export const getListGithubWorkflowRunsUrl = (owner: string,
+    repo: string,
+    params?: ListGithubWorkflowRunsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/github/repos/${owner}/${repo}/actions/runs?${stringifiedParams}` : `/api/github/repos/${owner}/${repo}/actions/runs`
+}
+
+/**
+ * Returns a paginated list of workflow runs for the given repository.
+Optional filters: workflow_id, status, per_page, page.
+
+ * @summary List GitHub Actions workflow runs for a repository
+ */
+export const listGithubWorkflowRuns = async (owner: string,
+    repo: string,
+    params?: ListGithubWorkflowRunsParams, options?: RequestInit): Promise<ListGithubWorkflowRuns200> => {
+
+  return customFetch<ListGithubWorkflowRuns200>(getListGithubWorkflowRunsUrl(owner,repo,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGithubWorkflowRunsQueryKey = (owner: string,
+    repo: string,
+    params?: ListGithubWorkflowRunsParams,) => {
+    return [
+    `/api/github/repos/${owner}/${repo}/actions/runs`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListGithubWorkflowRunsQueryOptions = <TData = Awaited<ReturnType<typeof listGithubWorkflowRuns>>, TError = ErrorType<ApiError>>(owner: string,
+    repo: string,
+    params?: ListGithubWorkflowRunsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGithubWorkflowRuns>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGithubWorkflowRunsQueryKey(owner,repo,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGithubWorkflowRuns>>> = ({ signal }) => listGithubWorkflowRuns(owner,repo,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(owner && repo), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGithubWorkflowRuns>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGithubWorkflowRunsQueryResult = NonNullable<Awaited<ReturnType<typeof listGithubWorkflowRuns>>>
+export type ListGithubWorkflowRunsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List GitHub Actions workflow runs for a repository
+ */
+
+export function useListGithubWorkflowRuns<TData = Awaited<ReturnType<typeof listGithubWorkflowRuns>>, TError = ErrorType<ApiError>>(
+ owner: string,
+    repo: string,
+    params?: ListGithubWorkflowRunsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGithubWorkflowRuns>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGithubWorkflowRunsQueryOptions(owner,repo,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetGithubWorkflowRunUrl = (owner: string,
+    repo: string,
+    runId: number,) => {
+
+
+
+
+  return `/api/github/repos/${owner}/${repo}/actions/runs/${runId}`
+}
+
+/**
+ * @summary Get a single GitHub Actions workflow run
+ */
+export const getGithubWorkflowRun = async (owner: string,
+    repo: string,
+    runId: number, options?: RequestInit): Promise<GithubWorkflowRun> => {
+
+  return customFetch<GithubWorkflowRun>(getGetGithubWorkflowRunUrl(owner,repo,runId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGithubWorkflowRunQueryKey = (owner: string,
+    repo: string,
+    runId: number,) => {
+    return [
+    `/api/github/repos/${owner}/${repo}/actions/runs/${runId}`
+    ] as const;
+    }
+
+
+export const getGetGithubWorkflowRunQueryOptions = <TData = Awaited<ReturnType<typeof getGithubWorkflowRun>>, TError = ErrorType<ApiError>>(owner: string,
+    repo: string,
+    runId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGithubWorkflowRun>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGithubWorkflowRunQueryKey(owner,repo,runId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGithubWorkflowRun>>> = ({ signal }) => getGithubWorkflowRun(owner,repo,runId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(owner && repo && runId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGithubWorkflowRun>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGithubWorkflowRunQueryResult = NonNullable<Awaited<ReturnType<typeof getGithubWorkflowRun>>>
+export type GetGithubWorkflowRunQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get a single GitHub Actions workflow run
+ */
+
+export function useGetGithubWorkflowRun<TData = Awaited<ReturnType<typeof getGithubWorkflowRun>>, TError = ErrorType<ApiError>>(
+ owner: string,
+    repo: string,
+    runId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGithubWorkflowRun>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGithubWorkflowRunQueryOptions(owner,repo,runId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 

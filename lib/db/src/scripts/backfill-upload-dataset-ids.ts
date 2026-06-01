@@ -15,8 +15,8 @@ async function main() {
 
   for (const row of rows) {
     scanned++;
-    const terrain = (row.terrainJson ?? {}) as Record<string, unknown>;
-    const overview = (row.overviewJson ?? {}) as Record<string, unknown>;
+    const terrain = ((row.terrainJson as unknown) ?? {}) as Record<string, unknown>;
+    const overview = ((row.overviewJson as unknown) ?? {}) as Record<string, unknown>;
 
     // Per the task spec, only rewrite rows whose stored datasetId is the
     // legacy "upload" placeholder. Other mismatches are out of scope.
@@ -30,7 +30,10 @@ async function main() {
 
     await db
       .update(customDatasetsTable)
-      .set({ terrainJson: newTerrain, overviewJson: newOverview })
+      .set({
+        terrainJson: newTerrain as unknown as import("../schema/custom-datasets.js").StoredTerrainJson,
+        overviewJson: newOverview as unknown as import("../schema/custom-datasets.js").StoredTerrainJson,
+      })
       .where(sql`${customDatasetsTable.id} = ${row.id}`);
 
     updated++;

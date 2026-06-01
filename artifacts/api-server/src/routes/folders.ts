@@ -15,6 +15,7 @@ import {
   datasetFoldersTable,
   customDatasetsTable,
   userCatalogSavesTable,
+  type StoredTerrainJson,
 } from "@workspace/db";
 import {
   GetUserFoldersResponse,
@@ -312,8 +313,8 @@ router.post("/user/folders/:id/duplicate", requireAuth, asyncHandler(async (req,
               name: ds.name,
               minDepth: ds.minDepth,
               maxDepth: ds.maxDepth,
-              terrainJson: ds.terrainJson as Record<string, unknown>,
-              overviewJson: ds.overviewJson as Record<string, unknown>,
+              terrainJson: ds.terrainJson,
+              overviewJson: ds.overviewJson,
               folderId: newIdByOld.get(ds.folderId) ?? null,
             })
             .returning({ id: customDatasetsTable.id });
@@ -322,13 +323,13 @@ router.post("/user/folders/:id/duplicate", requireAuth, asyncHandler(async (req,
           // the new row, not the source — otherwise the client's load guard
           // will reject the payload and the scene stays blank.
           const stampedTerrain = {
-            ...(ds.terrainJson as Record<string, unknown>),
+            ...(ds.terrainJson as unknown as Record<string, unknown>),
             datasetId: inserted.id,
-          };
+          } as unknown as StoredTerrainJson;
           const stampedOverview = {
-            ...(ds.overviewJson as Record<string, unknown>),
+            ...(ds.overviewJson as unknown as Record<string, unknown>),
             datasetId: inserted.id,
-          };
+          } as unknown as StoredTerrainJson;
           await tx
             .update(customDatasetsTable)
             .set({ terrainJson: stampedTerrain, overviewJson: stampedOverview })

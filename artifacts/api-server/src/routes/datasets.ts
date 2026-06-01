@@ -9,7 +9,7 @@ import multer from "multer";
 import { eq, and, inArray, or } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { z } from "zod";
-import { db, customDatasetsTable, userSettingsTable, uploadJobsTable, disabledPresetsTable } from "@workspace/db";
+import { db, customDatasetsTable, userSettingsTable, uploadJobsTable, disabledPresetsTable, type StoredTerrainJson } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
@@ -427,8 +427,8 @@ async function processUploadJob(
         name: datasetName,
         minDepth: terrain.minDepth,
         maxDepth: terrain.maxDepth,
-        terrainJson: terrain as unknown as Record<string, unknown>,
-        overviewJson: overview as unknown as Record<string, unknown>,
+        terrainJson: terrain as unknown as StoredTerrainJson,
+        overviewJson: overview as unknown as StoredTerrainJson,
       })
       .returning({ id: customDatasetsTable.id });
 
@@ -1196,8 +1196,8 @@ router.post(
         name: datasetName,
         minDepth: terrain.minDepth,
         maxDepth: terrain.maxDepth,
-        terrainJson: terrain as unknown as Record<string, unknown>,
-        overviewJson: overview as unknown as Record<string, unknown>,
+        terrainJson: terrain as unknown as StoredTerrainJson,
+        overviewJson: overview as unknown as StoredTerrainJson,
       })
       .returning({
         id: customDatasetsTable.id,

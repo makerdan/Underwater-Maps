@@ -40,6 +40,8 @@ tags:
     description: GitHub repository sync operations
   - name: query
     description: OpenAI terrain query (Ask the Ocean) operations
+  - name: terrain
+    description: Land DEM, satellite tile, and CSV download operations
 paths:
   /datasets:
     get:
@@ -3027,6 +3029,589 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /terrain/land:
+    get:
+      operationId: getTerrainLand
+      tags: [terrain]
+      summary: Fetch a land-elevation (DEM) grid for a bounding box
+      description: |
+        Returns a row-major NxN elevation grid sourced from the Copernicus DEM
+        for the requested bounding box. Used to drape above-water terrain on the
+        3-D canvas. No authentication required.
+      parameters:
+        - in: query
+          name: bbox
+          required: true
+          schema:
+            type: string
+          description: '"minLon,minLat,maxLon,maxLat" — four comma-separated finite numbers'
+        - in: query
+          name: size
+          required: false
+          schema:
+            type: integer
+            minimum: 32
+            maximum: 256
+            default: 128
+          description: Grid side length N, clamped to [32, 256]
+      responses:
+        "200":
+          description: Land elevation grid
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Elevation grid in the same shape as TerrainData (depths field contains above-water metres)
+        "400":
+          description: Invalid or out-of-range bbox
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Upstream DEM fetch failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /terrain/satellite-tile:
+    get:
+      operationId: getTerrainSatelliteTile
+      tags: [terrain]
+      summary: Proxy a satellite/aerial imagery PNG for a bounding box
+      description: |
+        Fetches and caches a PNG tile from ESRI World Imagery for the given
+        bounding box. Returned as `image/png` and cached for 24 hours. The
+        client drapes this over the LandTerrainMesh as a photo-realistic
+        texture. Antimeridian-crossing bboxes (minLon > maxLon) are handled
+        automatically. No authentication required.
+      parameters:
+        - in: query
+          name: bbox
+          required: true
+          schema:
+            type: string
+          description: '"minLon,minLat,maxLon,maxLat" — four comma-separated finite numbers'
+        - in: query
+          name: size
+          required: false
+          schema:
+            type: integer
+            minimum: 64
+            maximum: 1024
+            default: 512
+          description: Image resolution in pixels, clamped to [64, 1024]
+      responses:
+        "200":
+          description: PNG satellite tile
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Invalid or degenerate bbox
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Upstream tile fetch failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /terrain/download/info:
+    get:
+      operationId: getTerrainDownloadInfo
+      tags: [terrain]
+      summary: Preflight for bbox terrain CSV download
+      description: |
+        Lightweight preflight that resolves the upstream data source, nominal
+        resolution, and water-cell fraction for the requested bounding box
+        without transferring the full grid. The client uses `waterFraction` to
+        estimate point counts locally (estimatedPoints = resolution² ×
+        waterFraction) so resolution switching is instant. Max bbox: 10° × 10°.
+        Authentication required.
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: query
+          name: north
+          required: true
+          schema:
+            type: number
+        - in: query
+          name: south
+          required: true
+          schema:
+            type: number
+        - in: query
+          name: east
+          required: true
+          schema:
+            type: number
+        - in: query
+          name: west
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Preflight result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sourceName, dataSource, nominalResolutionM, waterFraction]
+                properties:
+                  sourceName:
+                    type: string
+                    description: Human-readable name of the upstream data source
+                  dataSource:
+                    type: string
+                    enum: [ncei, gebco, synthetic, twdb, usace, usgs-3dep]
+                  nominalResolutionM:
+                    type: number
+                    description: Nominal grid resolution in metres (0 when synthetic)
+                  waterFraction:
+                    type: number
+                    minimum: 0
+                    maximum: 1
+                    description: Fraction of the probe grid cells that contain water (0–1)
+        "400":
+          description: Invalid or out-of-range bbox
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Upstream preflight failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /terrain/download:
+    get:
+      operationId: getTerrainDownload
+      tags: [terrain]
+      summary: Stream a terrain CSV for a bounding box
+      description: |
+        Builds the full bathymetric grid for the requested bbox and streams it
+        as a `text/csv` attachment with columns `lon,lat,depth`. Only water
+        cells (depth > 0) are emitted; land and topography are excluded. Max
+        bbox: 10° × 10°. Resolution must be one of 64, 256, or 512.
+        Authentication required.
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: query
+          name: north
+          required: true
+          schema:
+            type: number
+        - in: query
+          name: south
+          required: true
+          schema:
+            type: number
+        - in: query
+          name: east
+          required: true
+          schema:
+            type: number
+        - in: query
+          name: west
+          required: true
+          schema:
+            type: number
+        - in: query
+          name: resolution
+          required: false
+          schema:
+            type: integer
+            enum: [64, 256, 512]
+            default: 256
+      responses:
+        "200":
+          description: CSV file attachment (lon,lat,depth rows)
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          description: Invalid bbox or out-of-range parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Upstream data fetch failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /tidal/pack:
+    get:
+      operationId: getTidalPack
+      tags: [tidal]
+      summary: Packed tide-height and current predictions for a location
+      description: |
+        Returns the nearest NOAA tide-heights station name, an array of
+        6-minute height predictions, and an array of max-slack current
+        predictions for the requested lat/lon. Falls back to a synthetic
+        harmonic model when no NOAA station is reachable. Intended for offline
+        packs and pre-fetch scenarios. No authentication required.
+      parameters:
+        - in: query
+          name: lat
+          required: true
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - in: query
+          name: lon
+          required: true
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+        - in: query
+          name: days
+          required: false
+          schema:
+            type: integer
+            minimum: 3
+            maximum: 14
+            default: 7
+          description: Number of days of predictions to return (clamped to [3, 14])
+      responses:
+        "200":
+          description: Packed tidal predictions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [station, generatedAt, heightPredictions, currentPredictions, tidalExpiresAt]
+                properties:
+                  station:
+                    type: string
+                    nullable: true
+                    description: Name or ID of the nearest NOAA station, or null when synthetic
+                  generatedAt:
+                    type: string
+                    format: date-time
+                  tidalExpiresAt:
+                    type: string
+                    format: date-time
+                    description: ISO timestamp marking the end of the prediction window
+                  heightPredictions:
+                    type: array
+                    items:
+                      type: object
+                      required: [t, v]
+                      properties:
+                        t:
+                          type: string
+                          format: date-time
+                        v:
+                          type: number
+                          description: Water level in metres (MLLW datum)
+                  currentPredictions:
+                    type: array
+                    items:
+                      type: object
+                      required: [t, speed, dir]
+                      properties:
+                        t:
+                          type: string
+                          format: date-time
+                        speed:
+                          type: number
+                          description: Current speed in metres per second
+                        dir:
+                          type: number
+                          description: Current direction in degrees true
+        "400":
+          description: Missing or invalid lat/lon
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /weather/pack:
+    get:
+      operationId: getWeatherPack
+      tags: [drift-planner]
+      summary: Weather snapshot for offline packs
+      description: |
+        Returns the nearest NOAA ASOS weather station observation for the
+        requested lat/lon. Intended for offline-pack pre-fetches. Falls back
+        gracefully when NOAA is unreachable (returns null fields). No
+        authentication required.
+      parameters:
+        - in: query
+          name: lat
+          required: true
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - in: query
+          name: lon
+          required: true
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+      responses:
+        "200":
+          description: Weather snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [station, observation, snapshotAt]
+                properties:
+                  station:
+                    type: string
+                    nullable: true
+                    description: Station name, or null when unavailable
+                  observation:
+                    nullable: true
+                    allOf:
+                      - $ref: "#/components/schemas/WeatherStation"
+                  snapshotAt:
+                    type: string
+                    format: date-time
+        "400":
+          description: Missing or out-of-range lat/lon
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /datasets/presets/{id}:
+    delete:
+      operationId: deleteDatasetPreset
+      tags: [datasets]
+      summary: Disable a built-in preset dataset
+      description: |
+        Marks a known preset dataset ID as disabled by inserting a row into the
+        `disabled_presets` table. The preset will no longer appear in the
+        standard dataset list for any user. Idempotent — calling with an already-
+        disabled ID is a no-op. No authentication required (admin protection is
+        applied at the network/reverse-proxy layer for this endpoint).
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-zA-Z0-9_-]+$'
+          description: Preset dataset ID (alphanumeric, hyphens, underscores)
+      responses:
+        "204":
+          description: Preset disabled (or was already disabled)
+        "400":
+          description: Invalid preset ID format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Unknown preset ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /github/repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches:
+    post:
+      operationId: postGithubWorkflowDispatch
+      tags: [github]
+      summary: Trigger a GitHub Actions workflow_dispatch event
+      description: |
+        Dispatches a `workflow_dispatch` event for the given workflow. The
+        `ref` field (branch or tag) is required. Optional `inputs` are passed
+        through to the workflow as-is.
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: owner
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: repo
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workflow_id
+          required: true
+          schema:
+            type: string
+          description: Workflow file name (e.g. "ci.yml") or numeric workflow ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ref]
+              properties:
+                ref:
+                  type: string
+                  description: Branch or tag name to dispatch against
+                inputs:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: Key-value pairs passed as workflow inputs
+      responses:
+        "204":
+          description: Dispatch accepted
+        "400":
+          description: Missing ref field
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "500":
+          description: GitHub API error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /github/repos/{owner}/{repo}/actions/runs:
+    get:
+      operationId: listGithubWorkflowRuns
+      tags: [github]
+      summary: List GitHub Actions workflow runs for a repository
+      description: |
+        Returns a paginated list of workflow runs for the given repository.
+        Optional filters: workflow_id, status, per_page, page.
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: owner
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: repo
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: workflow_id
+          required: false
+          schema:
+            type: string
+          description: Filter by workflow file name or ID
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum: [queued, in_progress, completed]
+        - in: query
+          name: per_page
+          required: false
+          schema:
+            type: integer
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Workflow run list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [total_count, workflow_runs]
+                properties:
+                  total_count:
+                    type: integer
+                  workflow_runs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/GithubWorkflowRun"
+        "500":
+          description: GitHub API error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /github/repos/{owner}/{repo}/actions/runs/{run_id}:
+    get:
+      operationId: getGithubWorkflowRun
+      tags: [github]
+      summary: Get a single GitHub Actions workflow run
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: owner
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: repo
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: run_id
+          required: true
+          schema:
+            type: integer
+          description: Numeric workflow run ID
+      responses:
+        "200":
+          description: Workflow run details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GithubWorkflowRun"
+        "400":
+          description: Invalid run_id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "500":
+          description: GitHub API error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
 components:
   schemas:
     HealthStatus:
@@ -3568,6 +4153,9 @@ components:
         details:
           type: string
           description: Human-readable description of what went wrong
+        requestId:
+          type: string
+          description: Optional tracing ID for correlating this error with server logs
       required:
         - error
         - details
@@ -5174,3 +5762,33 @@ components:
       required:
         - status
         - subsystems
+
+    GithubWorkflowRun:
+      type: object
+      description: Slim representation of a GitHub Actions workflow run
+      required: [id, status, created_at, html_url, workflow_id]
+      properties:
+        id:
+          type: integer
+          description: Numeric run ID
+        name:
+          type: string
+          nullable: true
+          description: Display name of the workflow run
+        status:
+          type: string
+          nullable: true
+          description: Run status (queued, in_progress, completed, etc.)
+        conclusion:
+          type: string
+          nullable: true
+          description: Run conclusion (success, failure, cancelled, etc.)
+        created_at:
+          type: string
+          format: date-time
+        html_url:
+          type: string
+          description: URL to the run on github.com
+        workflow_id:
+          type: integer
+          description: Numeric workflow ID this run belongs to
