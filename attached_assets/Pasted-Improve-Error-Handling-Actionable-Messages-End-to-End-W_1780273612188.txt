@@ -1,0 +1,43 @@
+Improve Error Handling — Actionable Messages End-to-End
+What & Why
+The current error handling infrastructure has several layers that each lose fidelity before an error reaches the developer or user. Backend Zod validation only returns a flat concatenated string (not the structured field-level issues array), the ApiError class discards that structure further, toasts show generic messages, ErrorBoundary hides all detail behind a generic label, and several async catch blocks silently swallow failures (zombie job states, leaked temp files, ignored user preferences). This task tightens each layer so that every failure produces a message that identifies what failed, where (field name or component), why (root cause), and how to act (retry, report, or fix input).
+
+Done looks like
+Backend Zod 400 responses include a structured issues array alongside the flat details string so callers can highlight specific form fields
+ApiError parses and exposes the issues array; its .message includes the HTTP correlation ID (X-Request-Id) so every error is traceable
+Toasts triggered by API mutations include the request ID in the description and, where idempotent, offer a "Retry" action button
+ErrorBoundary shows a collapsed "Error details" section containing the error message, component stack, and correlation ID (if available), plus a one-click "Copy error details" button; error text is rendered in a selectable element so users can also highlight and copy manually; the outer user-facing label remains friendly
+persistJobToDB failure no longer silently leaves a job in a zombie "processing" state — it escalates to an error state in-memory and logs a structured warning
+getSmoothingPreference failure is logged as a warning with the DB error message rather than silently returning true
+cleanupChunks unlink failures are logged as warnings (file path, error code) instead of being swallowed
+File upload partial-success (saveError) shows a banner identifying which step succeeded and which failed, not just "Saved with warning"
+Out of scope
+Field-level inline form highlighting (consuming the issues array in UI form controls) — that's a separate UI task
+Centralised remote error reporting / Sentry integration
+Error field name consistency audit (covered by Task #1220, which this task depends on)
+Steps
+Extend backend Zod error serialisation — wherever routes return { error: "invalid_request", details: parsed.error.message }, also include issues: parsed.error.issues so callers receive field-level detail (path, code, message per field). Use the shared error-response helper introduced by Task #1220.
+
+Upgrade ApiError with correlation ID and structured issues — in custom-fetch.ts, read the X-Request-Id response header and store it on the ApiError instance. If the response body contains an issues array, store it as this.issues. Append the request ID to .message so it appears in every log and toast.
+
+Improve toast descriptions for API mutations — audit mutation onError callbacks in the frontend. Replace generic strings with messages that include the ApiError.message (which now carries the request ID). For idempotent operations (retry-safe), add a toast action button labelled "Retry" that re-invokes the mutation.
+
+Enrich ErrorBoundary with collapsible debug detail — add a collapsed <details> element inside the boundary fallback that renders the error message, component stack, and correlation ID (extracted from the error if it's an ApiError). Add a "Copy error details" button that writes the combined info to the clipboard. Keep the visible heading friendly for end users.
+
+Fix persistJobToDB zombie state — if the DB write fails inside an error-state job update, catch the failure, log a structured warning (job ID, error message), and ensure the in-memory JobState is set to error with a descriptive reason so subsequent status polls return a failed state rather than a stale "processing" state.
+
+Fix silent swallows in getSmoothingPreference and cleanupChunks — getSmoothingPreference should log logger.warn with the DB error before returning the fallback. cleanupChunks should log logger.warn with the file path and system error code for each failed unlink instead of .catch(() => undefined).
+
+Clarify partial-success upload banner — when data.saveError is set after a file upload, show a distinct "Upload succeeded, processing failed" banner that names the failed step and includes the server error message rather than the current undifferentiated "Saved with warning" label.
+
+Relevant files
+lib/api-client-react/src/custom-fetch.ts
+artifacts/api-server/src/routes/markers.ts
+artifacts/api-server/src/routes/settings.ts
+artifacts/api-server/src/routes/datasets.ts
+artifacts/bathyscan/src/components/ErrorBoundary.tsx
+artifacts/bathyscan/src/hooks/use-toast.ts
+artifacts/bathyscan/src/components/panels/DatasetPanel.tsx
+artifacts/bathyscan/src/lib/queryClient.ts
+Dependencies
+Make error field names consistent across all API routes
