@@ -90,7 +90,8 @@ async function persistJobToDB(jobId: string, state: JobState): Promise<void> {
   } catch (err) {
     // Persistence failure is non-fatal during processing — the in-memory state
     // is still the source of truth for the current server process.
-    console.error(`[upload-job:${jobId}] failed to persist state to DB:`, err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.warn(`[upload-job] persist failed { jobId: "${jobId}", status: "${state.status}", error: ${JSON.stringify(errMsg)} }`);
   }
 }
 
@@ -156,7 +157,12 @@ const uploadChunkMiddleware = multer({
 async function cleanupChunks(uploadId: string, totalChunks: number): Promise<void> {
   for (let i = 0; i < totalChunks; i++) {
     const p = path.join(CHUNK_BASE_DIR, `${uploadId}-chunk-${i}`);
-    await fs.promises.unlink(p).catch(() => undefined);
+    await fs.promises.unlink(p).catch((err: unknown) => {
+      const code = (err as { code?: string })?.code ?? "UNKNOWN";
+      if (code !== "ENOENT") {
+        console.warn(`[cleanup-chunks:${uploadId}] failed to unlink chunk ${i} (${p}): code=${code}`, err);
+      }
+    });
   }
 }
 
@@ -405,6 +411,10 @@ async function processUploadJob(
     job.status = "error";
     job.error = msg;
     console.error(`[chunk-job:${jobId}] failed:`, err);
+    // Persist the error state so polls return a clear failure instead of a
+    // stale "processing" status. The in-memory state is already "error" above,
+    // so subsequent polls on this process will be correct even if the DB write
+    // fails. persistJobToDB logs its own warning on failure.
     await persistJobToDB(jobId, { ...job });
   } finally {
     await cleanupChunks(uploadId, totalChunks);
@@ -524,7 +534,9 @@ async function getSmoothingPreference(req: import("express").Request): Promise<b
     const settings = rows[0]?.settings as Record<string, unknown> | undefined;
     const value = settings?.["smoothTerrainSpikes"];
     return typeof value === "boolean" ? value : true;
-  } catch {
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.warn(`[getSmoothingPreference] DB lookup failed for userId="${userId}", defaulting to true: ${errMsg}`);
     return true;
   }
 }

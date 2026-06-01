@@ -74,7 +74,7 @@ export const FileUpload = () => {
               setPendingExternalUserDatasetId(data.savedDatasetId);
             }
             if (data.saveError) {
-              setError(`Saved with warning: ${data.saveError}`);
+              setError(`Upload succeeded, but saving to your library failed — ${data.saveError}. You can still view the terrain this session.`);
             }
           },
           onError: (err: unknown) => {

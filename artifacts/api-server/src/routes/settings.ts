@@ -174,7 +174,7 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
   const body = (req.body ?? {}) as Record<string, unknown>;
   const parsed = PutSettingsBody.safeParse(body);
   if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: parsed.error.message });
+    res.status(400).json({ error: "invalid_request", details: parsed.error.message, issues: parsed.error.issues });
     return;
   }
 

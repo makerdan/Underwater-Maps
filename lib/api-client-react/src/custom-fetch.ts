@@ -171,6 +171,13 @@ function buildErrorMessage(response: Response, data: unknown): string {
   return prefix;
 }
 
+function getIssuesArray(data: unknown): unknown[] | null {
+  if (!data || typeof data !== "object") return null;
+  const candidate = (data as Record<string, unknown>)["issues"];
+  if (!Array.isArray(candidate) || candidate.length === 0) return null;
+  return candidate;
+}
+
 export class ApiError<T = unknown> extends Error {
   readonly name = "ApiError";
   readonly status: number;
@@ -180,13 +187,20 @@ export class ApiError<T = unknown> extends Error {
   readonly response: Response;
   readonly method: string;
   readonly url: string;
+  /** Correlation ID from the `X-Request-Id` response header, if present. */
+  readonly requestId: string | null;
+  /** Structured Zod validation issues from the response body, if present. */
+  readonly issues: unknown[] | null;
 
   constructor(
     response: Response,
     data: T | null,
     requestInfo: { method: string; url: string },
   ) {
-    super(buildErrorMessage(response, data));
+    const requestId = response.headers.get("x-request-id") ?? null;
+    const baseMessage = buildErrorMessage(response, data);
+    const message = requestId ? `${baseMessage} [request-id: ${requestId}]` : baseMessage;
+    super(message);
     Object.setPrototypeOf(this, new.target.prototype);
 
     this.status = response.status;
@@ -196,6 +210,8 @@ export class ApiError<T = unknown> extends Error {
     this.response = response;
     this.method = requestInfo.method;
     this.url = response.url || requestInfo.url;
+    this.requestId = requestId;
+    this.issues = getIssuesArray(data);
   }
 }
 

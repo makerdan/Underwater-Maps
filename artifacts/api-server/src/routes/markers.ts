@@ -29,7 +29,7 @@ router.get("/markers", requireAuth, asyncHandler(async (req, res): Promise<void>
 router.post("/markers", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const parsed = PostMarkersBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: parsed.error.message });
+    res.status(400).json({ error: "invalid_request", details: parsed.error.message, issues: parsed.error.issues });
     return;
   }
 
@@ -62,7 +62,7 @@ router.patch("/markers/:id", requireAuth, asyncHandler(async (req, res): Promise
   }
   const body = PatchMarkersIdBody.safeParse(req.body);
   if (!body.success) {
-    res.status(400).json({ error: "invalid_request", details: body.error.message });
+    res.status(400).json({ error: "invalid_request", details: body.error.message, issues: body.error.issues });
     return;
   }
 
