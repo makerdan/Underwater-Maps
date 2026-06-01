@@ -45,6 +45,7 @@
 import { Router } from "express";
 import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
+import { NceiSearchQuerySchema } from "@workspace/api-zod";
 import { db, datasetCatalogTable, userCatalogSavesTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
@@ -62,8 +63,6 @@ const NCEI_GEOPORTAL_URL =
   "https://www.ncei.noaa.gov/metadata/geoportal/rest/metadata/search";
 const NCEI_CACHE_TTL_MS = 10 * 60 * 1000;
 const NCEI_REQUEST_TIMEOUT_MS = 12_000;
-const NCEI_DEFAULT_MAX = 20;
-const NCEI_MAX_RESULTS_CAP = 100;
 
 // ---------------------------------------------------------------------------
 // NCEI WCS mosaic coverage footprints
@@ -405,37 +404,7 @@ function setCachedResults(cacheKey: string, results: NceiPortalResult[]): void {
   searchCache.set(cacheKey, { results, expiry: Date.now() + NCEI_CACHE_TTL_MS });
 }
 
-// ---------------------------------------------------------------------------
-// Zod schema for GET /ncei/search query params
-// ---------------------------------------------------------------------------
-
-const NceiSearchQuerySchema = z.object({
-  q: z.string().max(500).optional().default(""),
-  bbox: z
-    .string()
-    .max(200)
-    .optional()
-    .default("")
-    .refine(
-      (v) => {
-        if (!v) return true;
-        const parts = v.split(",");
-        if (parts.length !== 4) return false;
-        return parts.every((p) => isFinite(parseFloat(p)));
-      },
-      { message: "bbox must be 'minLon,minLat,maxLon,maxLat' with four finite numbers" },
-    ),
-  from: z
-    .string()
-    .optional()
-    .transform((v) => (v !== undefined ? parseInt(v, 10) : 1))
-    .pipe(z.number().int().min(1, "from must be >= 1")),
-  max: z
-    .string()
-    .optional()
-    .transform((v) => (v !== undefined ? parseInt(v, 10) : NCEI_DEFAULT_MAX))
-    .pipe(z.number().int().min(1, "max must be >= 1").max(NCEI_MAX_RESULTS_CAP, `max must be <= ${NCEI_MAX_RESULTS_CAP}`)),
-});
+// NceiSearchQuerySchema is imported from @workspace/api-zod above.
 
 // ---------------------------------------------------------------------------
 // GET /ncei/search  (public — no auth required)

@@ -1,36 +1,16 @@
 import { Router } from "express";
 import { and, eq } from "drizzle-orm";
-import { z } from "zod";
 import { db, routesTable } from "@workspace/db";
+import {
+  GetRoutesQuerySchema,
+  PostRouteBodySchema,
+  RouteIdParamSchema,
+  PatchRouteBodySchema,
+} from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 
 const router = Router();
-
-const RouteWaypointSchema = z.object({
-  lon: z.number(),
-  lat: z.number(),
-  depth: z.number(),
-});
-
-const GetRoutesQuerySchema = z.object({
-  datasetId: z.string().min(1),
-});
-
-const PostRouteBodySchema = z.object({
-  datasetId: z.string().min(1),
-  name: z.string().min(1).max(120),
-  waypoints: z.array(RouteWaypointSchema).min(2).max(20),
-  totalDistanceM: z.number().min(0),
-});
-
-const RouteIdParamSchema = z.object({
-  id: z.string().uuid(),
-});
-
-const PatchRouteBodySchema = z.object({
-  name: z.string().min(1).max(120),
-});
 
 // GET /routes?datasetId=
 router.get("/routes", requireAuth, asyncHandler(async (req, res): Promise<void> => {

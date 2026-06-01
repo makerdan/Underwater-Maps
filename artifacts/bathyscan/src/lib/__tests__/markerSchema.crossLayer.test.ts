@@ -6,10 +6,42 @@ import {
   markerNotesSchema,
 } from "../markerFormSchema";
 import {
+  SALTWATER_MARKER_TYPES,
+  FRESHWATER_MARKER_TYPES,
+} from "../markerConstants";
+import {
   postMarkersBodyLabelMax,
   postMarkersBodyNotesMax,
   PostMarkersBody,
 } from "@workspace/api-zod";
+
+// ---------------------------------------------------------------------------
+// Derive the union type values from both layers for type-enum parity checks
+// ---------------------------------------------------------------------------
+
+const FRONTEND_MARKER_VALUES = new Set<string>([
+  ...SALTWATER_MARKER_TYPES.map((t) => t.value as string),
+  ...FRESHWATER_MARKER_TYPES.map((t) => t.value as string),
+]);
+
+// PostMarkersBody.shape.type is ZodDefault<ZodEnum<[...]>> — drill into
+// _def.innerType to reach the ZodEnum, then read .options for the value list.
+// Using _def directly is more reliable than .unwrap() across Zod versions.
+type ZodLike = {
+  _def?: { innerType?: { options?: readonly string[] }; values?: readonly string[] };
+  options?: readonly string[];
+};
+const _typeField = PostMarkersBody.shape["type"] as unknown as ZodLike;
+const SERVER_MARKER_ENUM_VALUES: Set<string> = new Set(
+  _typeField._def?.innerType?.options ??   // ZodDefault wrapping ZodEnum
+  _typeField._def?.values ??               // ZodEnum directly (v4 shape)
+  _typeField.options ??                    // ZodEnum.options shorthand
+  [],
+);
+
+// ---------------------------------------------------------------------------
+// Label / notes length parity (existing tests)
+// ---------------------------------------------------------------------------
 
 describe("cross-layer consistency: markerFormSchema vs PostMarkersBody", () => {
   it("frontend MARKER_LABEL_MAX matches server postMarkersBodyLabelMax", () => {
@@ -63,4 +95,84 @@ describe("cross-layer consistency: markerFormSchema vs PostMarkersBody", () => {
     const body = { datasetId: "ds-1", lon: -136.0, lat: 58.0, depth: 50, label: "Test", notes: atLimit };
     expect(PostMarkersBody.safeParse(body).success).toBe(true);
   });
+});
+
+// ---------------------------------------------------------------------------
+// Marker type enum parity: every frontend type is accepted by the server, and
+// vice versa — no type silently accepted on one side and rejected on the other.
+// ---------------------------------------------------------------------------
+
+describe("cross-layer consistency: marker type enum parity", () => {
+  it("every saltwater marker type is accepted by PostMarkersBody.type", () => {
+    for (const t of SALTWATER_MARKER_TYPES) {
+      const result = PostMarkersBody.safeParse({
+        datasetId: "ds-1",
+        lon: -136.0,
+        lat: 58.0,
+        depth: 50,
+        label: "Test",
+        type: t.value,
+      });
+      expect(result.success, `saltwater type "${t.value}" rejected by server schema`).toBe(true);
+    }
+  });
+
+  it("every freshwater marker type is accepted by PostMarkersBody.type", () => {
+    for (const t of FRESHWATER_MARKER_TYPES) {
+      const result = PostMarkersBody.safeParse({
+        datasetId: "ds-1",
+        lon: -136.0,
+        lat: 58.0,
+        depth: 50,
+        label: "Test",
+        type: t.value,
+      });
+      expect(result.success, `freshwater type "${t.value}" rejected by server schema`).toBe(true);
+    }
+  });
+
+  it("every server enum value is present in the frontend MARKER_TYPES list", () => {
+    for (const serverType of SERVER_MARKER_ENUM_VALUES) {
+      expect(
+        FRONTEND_MARKER_VALUES.has(serverType),
+        `server enum value "${serverType}" has no matching frontend marker type`,
+      ).toBe(true);
+    }
+  });
+
+  it("frontend has no types that are absent from the server enum", () => {
+    for (const frontendType of FRONTEND_MARKER_VALUES) {
+      expect(
+        SERVER_MARKER_ENUM_VALUES.has(frontendType),
+        `frontend type "${frontendType}" is absent from the server enum`,
+      ).toBe(true);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Coordinate range parity: both sides accept unconstrained (any finite) numbers
+// for lon/lat/depth — neither layer imposes min/max bounds, so a value like
+// lon=999 must pass rather than being silently range-clamped on one side only.
+// ---------------------------------------------------------------------------
+
+describe("cross-layer consistency: coordinate ranges (unconstrained on both sides)", () => {
+  const extremeCoords = [
+    { lon: -180, lat: -90, depth: 0 },
+    { lon: 180, lat: 90, depth: 11000 },
+    { lon: 0, lat: 0, depth: -1 },
+  ];
+
+  for (const { lon, lat, depth } of extremeCoords) {
+    it(`server accepts lon=${lon}, lat=${lat}, depth=${depth} without range rejection`, () => {
+      const result = PostMarkersBody.safeParse({
+        datasetId: "ds-1",
+        lon,
+        lat,
+        depth,
+        label: "Test",
+      });
+      expect(result.success).toBe(true);
+    });
+  }
 });

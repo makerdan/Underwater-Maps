@@ -31,6 +31,7 @@ import {
   type TerrainGrid,
 } from "../lib/terrain.js";
 import { parseUploadedFile } from "../lib/uploadParsers.js";
+import { gunzipBounded } from "../lib/gunzipBounded.js";
 import { fetchCopernicusDem } from "../lib/copernicusDem.js";
 import { fetchSatelliteTile } from "../lib/satelliteTile.js";
 import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
@@ -414,48 +415,6 @@ async function processUploadJob(
 
 const DECOMPRESS_MAX_BYTES = 200 * 1024 * 1024;
 
-/**
- * Streaming gunzip with an early-abort size guard.
- * Rejects with DECOMPRESS_TOO_LARGE if inflated output exceeds maxBytes
- * *during* decompression (no full buffer is materialized beyond the limit).
- * Rejects with the underlying zlib error if the input is not a valid gzip.
- */
-function gunzipBounded(input: Buffer, maxBytes: number): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const gz = zlib.createGunzip();
-    const chunks: Buffer[] = [];
-    let total = 0;
-    let settled = false;
-
-    function abort(err: Error) {
-      if (settled) return;
-      settled = true;
-      gz.destroy();
-      reject(err);
-    }
-
-    gz.on("data", (chunk: Buffer) => {
-      total += chunk.length;
-      if (total > maxBytes) {
-        abort(Object.assign(new Error("DECOMPRESS_TOO_LARGE"), { code: "DECOMPRESS_TOO_LARGE" }));
-        return;
-      }
-      chunks.push(chunk);
-    });
-
-    gz.on("end", () => {
-      if (settled) return;
-      settled = true;
-      resolve(Buffer.concat(chunks));
-    });
-
-    gz.on("error", (err) => abort(err));
-
-    gz.write(input);
-    gz.end();
-  });
-}
-
 const ALLOWED_UPLOAD_EXTENSIONS = new Set([
   // Text-based formats
   ".csv", ".txt", ".xyz",
@@ -605,7 +564,12 @@ router.get("/datasets", asyncHandler(async (req, res): Promise<void> => {
     ...(d.hasTopography === true ? { hasTopography: true as const } : {}),
     ...(d.hasEfh === true ? { hasEfh: true as const } : {}),
   }));
-  res.json(GetDatasetsResponse.parse(list));
+  try {
+    res.json(GetDatasetsResponse.parse(list));
+  } catch (err) {
+    const details = err instanceof Error ? err.message : "Response schema validation failed";
+    res.status(500).json({ error: "internal", details });
+  }
 }));
 
 // ── DELETE /datasets/presets/:id ──────────────────────────────────────────────
@@ -1246,6 +1210,7 @@ router.post(
   "/datasets/upload/chunk",
   requireAuth,
   uploadChunkMiddleware.single("file"),
+  multerErrorHandler,
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const file = req.file;
     if (!file) {

@@ -12,6 +12,7 @@
     "typecheck": "pnpm --filter @workspace/api-spec run codegen:generate && pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "lint": "eslint artifacts/bathyscan/src artifacts/api-server/src tests/e2e",
     "test:unit": "pnpm -r --if-present run test:unit",
+    "test:validation": "pnpm --filter @workspace/api-server run test:validation && pnpm --filter @workspace/bathyscan run test:validation",
     "test:e2e": "playwright test",
     "capture:help-screenshots": "node scripts/capture-help-screenshots.mjs",
     "docs": "node scripts/generate-api-docs.mjs",

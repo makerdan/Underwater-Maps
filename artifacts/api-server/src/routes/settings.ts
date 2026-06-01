@@ -158,7 +158,14 @@ router.get("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
     };
   }
 
-  const validated = GetSettingsResponse.parse(merged) as Record<string, unknown>;
+  let validated: Record<string, unknown>;
+  try {
+    validated = GetSettingsResponse.parse(merged) as Record<string, unknown>;
+  } catch (err) {
+    const details = err instanceof Error ? err.message : "Response schema validation failed";
+    res.status(500).json({ error: "internal", details });
+    return;
+  }
   res.json(mergeForResponse(stored, validated));
 }));
 
