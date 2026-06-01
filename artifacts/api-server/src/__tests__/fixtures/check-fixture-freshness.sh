@@ -3,23 +3,43 @@
 #
 # Verifies that the committed fixture files are in sync with generate.mjs.
 #
+# Required Python version: 3.11
+#   The LAZ fixture generator (gen_laz.py) depends on laspy[lazrs] binary
+#   wheels that are published for CPython 3.11. The pinned interpreter is
+#   recorded in .python-version at the repository root and is enforced below.
+#
 # Strategy
 # --------
-#   1. Copy committed fixtures to a temp directory (no git required).
-#   2. Run `node generate.mjs` in-place (it hard-codes its own dir as output).
-#   3. Compare fresh output against the temp copy:
+#   1. Check that the active Python interpreter is 3.11.x (fail fast otherwise).
+#   2. Copy committed fixtures to a temp directory (no git required).
+#   3. Run `node generate.mjs` in-place (it hard-codes its own dir as output).
+#   4. Compare fresh output against the temp copy:
 #        - SHA256 checksum for deterministic formats (TIF, NC, LAS, LAZ, GPX, NMEA)
 #        - File size only for BAG/HDF5 (h5wasm embeds wall-clock timestamps in
 #          object headers, making checksums non-deterministic across runs)
-#   4. Scan the fixture directory for any NEW files not in the expected set —
+#   5. Scan the fixture directory for any NEW files not in the expected set —
 #      catches generator additions that haven't been committed yet.
-#   5. Restore committed fixtures from the temp copy (works without git).
+#   6. Restore committed fixtures from the temp copy (works without git).
 #      A `trap` on EXIT guarantees restoration even on generator failure.
 #
 # Usage (from repo root):
 #   bash artifacts/api-server/src/__tests__/fixtures/check-fixture-freshness.sh
 
 set -euo pipefail
+
+# ── Python version guard (must be 3.11.x) ───────────────────────────────────
+REQUIRED_PY_MAJOR=3
+REQUIRED_PY_MINOR=11
+PY_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+PY_MAJOR=$(echo "$PY_VERSION" | cut -d. -f1)
+PY_MINOR=$(echo "$PY_VERSION" | cut -d. -f2)
+if [ "$PY_MAJOR" -ne "$REQUIRED_PY_MAJOR" ] || [ "$PY_MINOR" -ne "$REQUIRED_PY_MINOR" ]; then
+  echo "ERROR: Python ${REQUIRED_PY_MAJOR}.${REQUIRED_PY_MINOR} is required (found ${PY_VERSION})."
+  echo "  The pinned version is recorded in .python-version at the repo root."
+  echo "  laspy[lazrs] binary wheels are only guaranteed for CPython 3.11."
+  exit 1
+fi
+echo "Python ${PY_VERSION} — OK"
 
 FIXTURE_DIR="artifacts/api-server/src/__tests__/fixtures"
 GENERATOR="$FIXTURE_DIR/generate.mjs"

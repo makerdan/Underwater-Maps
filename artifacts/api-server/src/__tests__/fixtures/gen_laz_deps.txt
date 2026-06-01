@@ -1,2 +1,2 @@
-numpy
-laspy[lazrs]
+numpy>=1.26,<3
+laspy[lazrs]>=2.5,<3

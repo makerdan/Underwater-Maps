@@ -525,15 +525,21 @@ async function buildBag() {
  * implementation).  The output is a standards-conformant LAZ 1.2 file that
  * laz-perf can decompress without any mocking.
  *
+ * Required Python version: 3.11 (pinned in .python-version at the repo root).
+ *   laspy[lazrs] binary wheels are published for CPython 3.11; other versions
+ *   may resolve different wheel variants and cause subtle incompatibilities.
+ *   The site-packages path below is hard-coded to python3.11 to match.
+ *
  * The Python helper script (gen_laz.py in this directory) produces a LAS 1.2
  * file, point format 0, with:
  *   scale XY = 1e-6°, Z = 0.001 m; offset X = -133, Y = 55, Z = 0
  *   15 records; index 10 has depth=0 (zi=0) — parseLasLaz must skip it
  *   14 valid points at lon ≈ -132.5, lat ≈ 55.2, depth 1250–2400 m
  *
- * Python dependencies are listed in gen_laz_deps.txt (same directory).
- * They are auto-installed before the script runs so fresh environments work
- * without any manual setup step.
+ * Python dependencies are listed in gen_laz_deps.txt (same directory) with
+ * version bounds confirmed working on Python 3.11 (numpy>=1.26,<3;
+ * laspy[lazrs]>=2.5,<3). They are auto-installed before the script runs so
+ * fresh environments work without any manual setup step.
  */
 async function buildLaz() {
   const reqFile  = join(__dir, "gen_laz_deps.txt");
