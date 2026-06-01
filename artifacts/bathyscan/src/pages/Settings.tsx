@@ -1287,47 +1287,6 @@ const FRESHWATER_MARKER_TYPE_OPTIONS: { value: MarkerType; label: string }[] = [
   { value: "custom", label: "📍 Custom" },
   { value: "depth_pole", label: "📏 Depth Pole" },
 ];
-/**
- * Zone Colours shortcut — shown in the Visuals tab in place of the full
- * ZoneColoursCard.  The colour pickers have moved into the unified
- * "Seafloor Classification" sidebar panel in the main view.
- */
-function ZoneColoursShortcutCard() {
-  const [, setLocation] = useLocation();
-  return (
-    <div style={S.card}>
-      <div style={S.cardHeader}>ZONE COLOURS</div>
-      <div style={{ ...S.row, flexDirection: "column", alignItems: "flex-start", gap: 8 }}>
-        <div style={{ ...S.sublabel, fontSize: 10 }}>
-          Zone colour pickers have moved to the{" "}
-          <strong style={{ color: "#00e5ff" }}>Seafloor Classification</strong> panel
-          in the main view, where they sit alongside the Substrate overlay controls.
-        </div>
-        <button
-          type="button"
-          data-testid="settings-zone-colours-goto-panel"
-          onClick={() => setLocation(basePath + "/")}
-          style={{
-            fontFamily: FONT,
-            fontSize: 9,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color: "#00e5ff",
-            background: "rgba(0,229,255,0.06)",
-            border: "1px solid rgba(0,229,255,0.25)",
-            borderRadius: 3,
-            padding: "5px 14px",
-            cursor: "pointer",
-            transition: "background 0.1s",
-          }}
-        >
-          → Open Seafloor Classification panel
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function ZoneColourSwatches() {
   const waterType = useSettingsStore((s) => s.waterType);
   const slots = useZoneOverlayStore((s) => s.slots);
