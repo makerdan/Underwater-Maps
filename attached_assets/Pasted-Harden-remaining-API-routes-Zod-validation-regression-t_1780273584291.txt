@@ -1,0 +1,50 @@
+Harden remaining API routes: Zod validation + regression tests
+What & Why
+After the asyncHandler + Zod pass (#1346), nine environmental/analysis routes and several route files still use raw req.query type-casting with no schema validation. Malformed lat/lon/radius values reach downstream fetchers without producing a clear 400 response. Additionally, eight route files (admin, efh, github, health, substrate, trolling-preset-folders, trolling-presets, user-datasets) have zero route-level test coverage, meaning regressions in those paths are invisible to CI.
+
+Done looks like
+Every listed route validates its query/body parameters with a Zod schema; invalid input returns { error: string, details: string } with status 400.
+Route-level integration tests (vitest) exist for all eight previously untested route files.
+Tests cover both happy-path (valid input → correct response shape) and sad-path (malformed/missing params → 400 with details field).
+All new tests pass in CI (test-unit workflow).
+Out of scope
+Auth policy changes (covered by #151).
+Error field name standardisation across poe.ts, query.ts, tidal.ts, etc. (covered by #1220).
+Dataset :id route param validation (covered by #1364, #1366).
+CSV/XYZ and GPX upload tests (covered by #1221, #1222).
+Steps
+Zod schema for coordinate-query routes — Add LatLonQuerySchema (lat, lon as finite numbers; optional radius) and apply it to surface-conditions.ts, temperature-profile.ts, water-temperature.ts, weather-stations.ts, and raws-stations.ts. Replace all manual parseFloat/if (!lat) guards with a single schema.safeParse(req.query) check that returns 400 on failure.
+
+Zod schema for remaining analysis routes — Apply schemas to efh.ts (bbox + optional filters), intertidal-spots.ts (:id param + type/minScore query), substrate.ts (:id param), and raws-weather.ts (datasetId query). Use existing UUIDParamSchema patterns where applicable.
+
+Route tests: health, admin, github — Write vitest integration tests for GET /healthz, GET /healthz/deep, GET /admin/bucket-monitor (mock the GCS client), and GET /github/* (mock Octokit). Assert correct response shape and that auth-protected paths reject unauthenticated requests.
+
+Route tests: efh, substrate — Write integration tests for GET /efh and GET /substrate/:id. Cover valid params → 200 with correct structure, missing required params → 400, and invalid :id format → 400.
+
+Route tests: trolling-presets, trolling-preset-folders — Write integration tests for CRUD operations on both trolling routes. Cover list, create (valid + invalid body), update, and delete. Assert ownership enforcement (other-user's resource → 404).
+
+Route tests: user-datasets — Write integration tests for GET /user-datasets, PATCH /user-datasets/:id, DELETE /user-datasets/:id. Assert pagination params, ownership checks, and that the new Zod :id validation returns 400 for malformed IDs.
+
+Relevant files
+artifacts/api-server/src/routes/efh.ts
+artifacts/api-server/src/routes/intertidal-spots.ts
+artifacts/api-server/src/routes/substrate.ts
+artifacts/api-server/src/routes/surface-conditions.ts
+artifacts/api-server/src/routes/temperature-profile.ts
+artifacts/api-server/src/routes/water-temperature.ts
+artifacts/api-server/src/routes/weather-stations.ts
+artifacts/api-server/src/routes/raws-stations.ts
+artifacts/api-server/src/routes/raws-weather.ts
+artifacts/api-server/src/routes/health.ts
+artifacts/api-server/src/routes/admin.ts
+artifacts/api-server/src/routes/github.ts
+artifacts/api-server/src/routes/trolling-presets.ts
+artifacts/api-server/src/routes/trolling-preset-folders.ts
+artifacts/api-server/src/routes/user-datasets.ts
+artifacts/api-server/src/routes/__tests__/datasets.test.ts
+artifacts/api-server/src/routes/__tests__/markers.test.ts
+artifacts/api-server/src/middlewares/requireAuth.ts
+Dependencies
+Make error field names consistent across all API routes
+
+Wrap unguarded async API routes with asyncHandler and add Zod param validation
