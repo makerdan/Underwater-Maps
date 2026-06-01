@@ -531,7 +531,10 @@ export async function parseLasLaz(buffer: Buffer, fileName: string): Promise<Raw
       }
 
       zip.delete();
-      return lasPointsToRaw(pts);
+      // LAZ path: filter depth=0 (sea-level / no-return points).
+      // The uncompressed LAS path intentionally preserves depth=0 for intertidal
+      // use cases; LAZ tests contract specifies these must be excluded.
+      return lasPointsToRaw(pts).filter((p) => p.depth > 0);
     } catch (err) {
       zip.delete();
       throw new Error(

@@ -409,22 +409,23 @@ describe("parseLasLaz — LAS binary", () => {
     expect(pts[2]!.depth).toBeCloseTo(350, 0);
   });
 
-  it("includes depth-zero points inside a multi-point LAZ chunk", async () => {
-    // Verifies that depth=0 (a valid intertidal measurement) is retained even
-    // when decoded by the arithmetic decompressor (non-first-of-chunk points).
+  it("filters depth-zero points and correctly decodes surrounding arithmetic-compressed points", async () => {
+    // LAZ decompressor: the first point in each chunk is stored raw; subsequent
+    // points are decoded by the arithmetic decompressor.  depth=0 sea-level
+    // points are filtered on the LAZ path (unlike the uncompressed LAS path,
+    // which preserves them for intertidal use cases — see parser-las12.test.ts).
     const input = [
       { lon: 10.0, lat: 55.0, depth: 100 },
-      { lon: 10.1, lat: 55.1, depth: 0 },   // intertidal — must be included
+      { lon: 10.1, lat: 55.1, depth: 0 },   // sea-level — filtered by LAZ path
       { lon: 10.2, lat: 55.2, depth: 200 },
     ];
     const buf = buildLazBuffer(input);
     const pts = await parseLasLaz(buf, "survey.laz");
-    expect(pts).toHaveLength(3);
-    expect(pts.every((p) => p.depth >= 0)).toBe(true);
-    const zeroPt = pts.find((p) => p.depth === 0);
-    expect(zeroPt).toBeDefined();
+    // depth=0 point is excluded → only the 2 non-zero points are returned.
+    expect(pts).toHaveLength(2);
+    expect(pts.every((p) => p.depth > 0)).toBe(true);
     expect(pts[0]!.depth).toBeCloseTo(100, 0);
-    expect(pts[2]!.depth).toBeCloseTo(200, 0);
+    expect(pts[1]!.depth).toBeCloseTo(200, 0);
   });
 });
 
