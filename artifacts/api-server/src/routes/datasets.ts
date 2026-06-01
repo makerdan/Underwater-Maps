@@ -154,6 +154,27 @@ const uploadChunkMiddleware = multer({
   limits: { fileSize: 6 * 1024 * 1024 },
 });
 
+/**
+ * Purge the entire chunk staging directory on server startup.
+ *
+ * Any chunk files still present at startup belong to upload sessions that were
+ * in flight when the previous process was killed — those jobs are already
+ * marked "error" by recoverStaleUploadJobs() so no valid session can continue
+ * to reference them. Removing the directory prevents unbounded /tmp growth.
+ *
+ * Called once from index.ts after the server begins listening.
+ */
+export async function cleanupStaleChunks(): Promise<void> {
+  try {
+    await fs.promises.rm(CHUNK_BASE_DIR, { recursive: true, force: true });
+    console.info("[upload-chunks] purged stale chunk directory on startup");
+  } catch (err) {
+    // Non-fatal — worst case the orphaned files persist until the OS clears /tmp.
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[upload-chunks] could not purge chunk directory: ${msg}`);
+  }
+}
+
 async function cleanupChunks(uploadId: string, totalChunks: number): Promise<void> {
   for (let i = 0; i < totalChunks; i++) {
     const p = path.join(CHUNK_BASE_DIR, `${uploadId}-chunk-${i}`);
@@ -274,7 +295,7 @@ interface ParseWorkerResult {
  * @param smoothing  Whether to run the spike-smoothing pass.
  * @param onProgress Callback invoked with each progress milestone.
  */
-function runParseWorker(params: {
+export function runParseWorker(params: {
   filePath: string;
   fileName: string;
   resolution: number;
@@ -303,10 +324,16 @@ function runParseWorker(params: {
       } else if (msg.type === "result") {
         if (settled) return;
         settled = true;
+        // Worker posts result then exits naturally; terminate() ensures cleanup
+        // even if the worker is still winding down when we resolve.
+        void worker.terminate();
         resolve({ terrain: msg.terrain as ParseWorkerResult["terrain"], overview: msg.overview as ParseWorkerResult["overview"] });
       } else if (msg.type === "error" && typeof msg.message === "string") {
         if (settled) return;
         settled = true;
+        // Terminate explicitly — the worker may still be running if it posted
+        // the error via parentPort but hasn't exited its event loop yet.
+        void worker.terminate();
         reject(new Error(msg.message));
       }
     });
@@ -314,6 +341,9 @@ function runParseWorker(params: {
     worker.on("error", (err) => {
       if (settled) return;
       settled = true;
+      // An uncaught exception in the worker thread: terminate to guarantee the
+      // OS thread is reclaimed, since it may not exit on its own after an error.
+      void worker.terminate();
       reject(err);
     });
 

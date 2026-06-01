@@ -3,7 +3,7 @@ import { logger } from "./lib/logger";
 import { seedDatasetCatalog } from "./lib/catalogSeeder.js";
 import { startBucketMonitor } from "./lib/bucketMonitor.js";
 import { startWeatherCacheRefresher } from "./lib/weatherCacheRefresher.js";
-import { recoverStaleUploadJobs } from "./routes/datasets.js";
+import { recoverStaleUploadJobs, cleanupStaleChunks } from "./routes/datasets.js";
 
 // ---------------------------------------------------------------------------
 // Process-level safety nets
@@ -65,6 +65,13 @@ const server = app.listen(port, "127.0.0.1", (err) => {
   // process died — turns an eternal spinner into a clear "re-upload" error.
   void recoverStaleUploadJobs().catch((recoverErr: unknown) => {
     logger.warn({ err: recoverErr }, "Upload job recovery failed (non-critical)");
+  });
+
+  // Purge any chunk files left behind by uploads that were in flight when the
+  // previous process was killed. Those jobs are already marked "error" above so
+  // no session will reference the orphaned files again.
+  void cleanupStaleChunks().catch((cleanErr: unknown) => {
+    logger.warn({ err: cleanErr }, "Stale chunk cleanup failed (non-critical)");
   });
 
   // Seed the dataset discovery catalog on startup (idempotent).
