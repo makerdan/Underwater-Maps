@@ -1358,7 +1358,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       "application/gzip": [".gz"],
       "application/x-gzip": [".gz"],
       "image/tiff": [".tif", ".tiff"],
-      "application/octet-stream": [".bag", ".las", ".laz", ".nc"],
+      "application/octet-stream": [".bag", ".las", ".laz", ".nc", ".gz"],
       "application/x-netcdf": [".nc"],
       "application/gpx+xml": [".gpx"],
       "text/xml": [".gpx"],
