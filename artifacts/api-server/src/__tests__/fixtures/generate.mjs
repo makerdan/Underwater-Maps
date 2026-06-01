@@ -537,7 +537,17 @@ async function buildBag() {
 async function buildLaz() {
   const pyScript = join(__dir, "gen_laz.py");
   const outPath  = join(__dir, "survey.laz");
-  execFileSync("python3", [pyScript], { stdio: "inherit" });
+  // Extend PYTHONPATH to include the workspace venv so numpy/laspy are found
+  // even when the system python3 doesn't have them installed globally.
+  const venvSitePackages = "/home/runner/workspace/.venv/lib/python3.11/site-packages";
+  const existingPythonPath = process.env.PYTHONPATH ?? "";
+  const pythonPath = existingPythonPath
+    ? `${venvSitePackages}:${existingPythonPath}`
+    : venvSitePackages;
+  execFileSync("python3", [pyScript], {
+    stdio: "inherit",
+    env: { ...process.env, PYTHONPATH: pythonPath },
+  });
   const { readFile } = await import("fs/promises");
   return readFile(outPath);
 }
