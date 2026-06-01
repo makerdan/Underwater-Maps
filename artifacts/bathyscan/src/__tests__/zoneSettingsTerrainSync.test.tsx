@@ -324,7 +324,7 @@ describe("Settings → terrain live sync — colour", () => {
   it("changing slot 0 colour immediately updates getState().slots[0].color", async () => {
     render(<Settings />);
     fireEvent.click(screen.getByText("MAP & OVERLAYS"));
-    const input = screen.getByTestId("settings-zone-color-input-0") as HTMLInputElement;
+    const input = screen.getByTestId("settings-zone-colour-input-0") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "#112233" } });
     await waitFor(() => {
       expect(useZoneOverlayStore.getState().slots[0]!.color).toBe("#112233");
@@ -334,7 +334,7 @@ describe("Settings → terrain live sync — colour", () => {
   it("changing slot 3 colour immediately updates getState().slots[3].color", async () => {
     render(<Settings />);
     fireEvent.click(screen.getByText("MAP & OVERLAYS"));
-    const input = screen.getByTestId("settings-zone-color-input-3") as HTMLInputElement;
+    const input = screen.getByTestId("settings-zone-colour-input-3") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "#aabbcc" } });
     await waitFor(() => {
       expect(useZoneOverlayStore.getState().slots[3]!.color).toBe("#aabbcc");
@@ -344,7 +344,7 @@ describe("Settings → terrain live sync — colour", () => {
   it("colour change does not affect visibility of that slot in getState()", async () => {
     render(<Settings />);
     fireEvent.click(screen.getByText("MAP & OVERLAYS"));
-    const input = screen.getByTestId("settings-zone-color-input-1") as HTMLInputElement;
+    const input = screen.getByTestId("settings-zone-colour-input-1") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "#deadbe" } });
     await waitFor(() => {
       expect(useZoneOverlayStore.getState().slots[1]!.color).toBe("#deadbe");
@@ -358,7 +358,7 @@ describe("Settings → terrain live sync — colour", () => {
     });
     render(<Settings />);
     fireEvent.click(screen.getByText("MAP & OVERLAYS"));
-    const input = screen.getByTestId("settings-zone-color-input-0") as HTMLInputElement;
+    const input = screen.getByTestId("settings-zone-colour-input-0") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "#ff0099" } });
     act(() => {
       useZoneOverlayStore.getState().setSlotVisible(0, true);
@@ -383,7 +383,7 @@ describe("Settings → terrain live sync — reset to defaults", () => {
     });
     render(<Settings />);
     fireEvent.click(screen.getByText("MAP & OVERLAYS"));
-    fireEvent.click(screen.getByTestId("settings-zone-colors-reset"));
+    fireEvent.click(screen.getByTestId("settings-zone-colours-reset"));
     await waitFor(() => {
       const slots = useZoneOverlayStore.getState().slots;
       ZONE_DEFAULT_COLORS.forEach((color, i) => {
@@ -399,7 +399,7 @@ describe("Settings → terrain live sync — reset to defaults", () => {
     });
     render(<Settings />);
     fireEvent.click(screen.getByText("MAP & OVERLAYS"));
-    fireEvent.click(screen.getByTestId("settings-zone-colors-reset"));
+    fireEvent.click(screen.getByTestId("settings-zone-colours-reset"));
     await waitFor(() => {
       const slots = useZoneOverlayStore.getState().slots;
       expect(slots[1]!.visible).toBe(true);
@@ -438,7 +438,7 @@ describe("Settings → terrain live sync — freshwater palette", () => {
   it("freshwater colour change updates getState().freshwater[2].color", async () => {
     render(<Settings />);
     fireEvent.click(screen.getByText("MAP & OVERLAYS"));
-    const input = screen.getByTestId("settings-zone-color-input-2") as HTMLInputElement;
+    const input = screen.getByTestId("settings-zone-colour-input-2") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "#336699" } });
     await waitFor(() => {
       expect(useZoneOverlayStore.getState().freshwater[2]!.color).toBe("#336699");

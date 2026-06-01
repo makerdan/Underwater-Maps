@@ -63,10 +63,20 @@ vi.mock("@/lib/context", () => ({
 
 // ── Static mocks ───────────────────────────────────────────────────────────────
 
-vi.mock("@/lib/settingsStore", () => ({
-  useSettingsStore: (sel: (s: { waterType: string }) => unknown) =>
-    sel({ waterType: "salt" }),
-}));
+vi.mock("@/lib/settingsStore", async (importOriginal) => {
+  const actual = await importOriginal();
+  const storeState = { waterType: "salt" };
+  const useSettingsStore = Object.assign(
+    (sel: (s: { waterType: string }) => unknown) => sel(storeState),
+    {
+      getState: () => storeState,
+      setState: vi.fn(),
+      persist: { hasHydrated: () => false, onFinishHydration: () => () => {} },
+      subscribe: () => () => {},
+    },
+  );
+  return { ...actual, useSettingsStore };
+});
 
 const makeApiClientMock = vi.hoisted(() => {
   function noop() {}

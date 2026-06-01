@@ -167,5 +167,3 @@ defaultBucketID = "replit-objstore-7d763d9b-7f87-4c5c-8bf1-317ab19f2828"
 GITHUB_REPO_URL = "https://github.com/makerdan/Underwater-Maps.git"
 
 [userenv.development]
-E2E_AUTH_BYPASS = "1"
-VITE_DEV_AUTH_BYPASS = "1"

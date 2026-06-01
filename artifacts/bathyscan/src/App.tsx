@@ -7,7 +7,7 @@ import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { useGetDatasets, useGetUserDatasets, getGetDatasetsQueryKey, getGetUserDatasetsQueryKey } from "@workspace/api-client-react";
+import { useGetDatasets, useGetUserDatasets, getGetDatasetsQueryKey, getGetUserDatasetsQueryKey, setAuthTokenGetter } from "@workspace/api-client-react";
 import { AppProvider, useAppState } from "@/lib/context";
 import { registerTestBridge, registerTestCameraPosRef } from "@/lib/testHelpers";
 import { useTerrainStore } from "@/lib/terrainStore";
@@ -1480,6 +1480,23 @@ function SettingsRoute() {
   );
 }
 
+/**
+ * Wires Clerk's session token into the API client so every fetch carries
+ * `Authorization: Bearer <token>` instead of relying on the __session cookie.
+ * Cookie-based auth does not work in the Replit proxied-iframe environment
+ * because Clerk's handshake 307 redirect cannot be followed by XHR/fetch.
+ * Using short-lived JWTs from `session.getToken()` bypasses the handshake
+ * entirely and works in any proxy or iframe setup.
+ */
+function ClerkAuthTokenWirer() {
+  const { session } = useClerk();
+  useEffect(() => {
+    setAuthTokenGetter(session ? () => session.getToken() : null);
+    return () => { setAuthTokenGetter(null); };
+  }, [session]);
+  return null;
+}
+
 function ClerkProviderWithRoutes() {
   const [, setLocation] = useLocation();
   const waterType = useSettingsStore((s) => s.waterType);
@@ -1509,6 +1526,7 @@ function ClerkProviderWithRoutes() {
       routerPush={(to) => setLocation(stripBase(to))}
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >
+      <ClerkAuthTokenWirer />
       <QueryClientProvider client={queryClient}>
         <ClerkQueryClientCacheInvalidator />
       </QueryClientProvider>

@@ -1331,7 +1331,7 @@ function ZoneColourSwatches() {
             fontFamily: FONT,
           }}
         >
-          RESET TO DEFAULTS
+          Reset
         </button>
       </div>
       {slotNames.map((name, i) => {
@@ -1349,6 +1349,7 @@ function ZoneColourSwatches() {
               onChange={(v) => setSlotVisible(i as 0 | 1 | 2 | 3, v)}
             />
             <span
+              data-testid={`settings-zone-swatch-${i}`}
               style={{
                 display: "block",
                 width: 24,
@@ -1365,6 +1366,7 @@ function ZoneColourSwatches() {
             >
               <input
                 data-testid={`settings-zone-colour-input-${i}`}
+                title={`Click to change colour — ${name}`}
                 type="color"
                 value={color}
                 onChange={(e) => setSlotColor(i as 0 | 1 | 2 | 3, e.target.value)}

@@ -65,19 +65,28 @@ vi.mock("@/lib/context", () => ({
   }),
 }));
 
-vi.mock("@/lib/settingsStore", () => ({
-  useSettingsStore: (sel: (s: Record<string, unknown>) => unknown) =>
-    sel({
-      showCrosshairGps: true,
-      showCameraPosition: true,
-      showHeading: true,
-      coordinateFormat: "decimal",
-      depthUnit: "metres",
-      units: "metric",
-      hudOpacity: 1,
-      waterType: "saltwater",
-    }),
-}));
+vi.mock("@/lib/settingsStore", async (importOriginal) => {
+  const actual = await importOriginal();
+  const storeState = {
+    showCrosshairGps: true,
+    showCameraPosition: true,
+    showHeading: true,
+    coordinateFormat: "decimal" as const,
+    depthUnit: "metres" as const,
+    units: "metric" as const,
+    hudOpacity: 1,
+    waterType: "saltwater" as const,
+  };
+  const useSettingsStore = Object.assign(
+    (sel: (s: Record<string, unknown>) => unknown) => sel(storeState),
+    {
+      getState: () => storeState,
+      persist: { hasHydrated: () => false, onFinishHydration: () => () => {} },
+      subscribe: () => () => {},
+    },
+  );
+  return { ...actual, useSettingsStore };
+});
 
 describe("Overlays & Tools overview toggle", () => {
   beforeEach(() => {

@@ -126,8 +126,8 @@ describe("ZoneColourSwatches — rendering", () => {
   it("renders the Reset button in MAP & OVERLAYS tab", () => {
     render(<Settings />);
     navigateToMapOverlays();
-    expect(screen.getByTestId("settings-zone-colors-reset")).toBeInTheDocument();
-    expect(screen.getByTestId("settings-zone-colors-reset")).toHaveTextContent("Reset");
+    expect(screen.getByTestId("settings-zone-colours-reset")).toBeInTheDocument();
+    expect(screen.getByTestId("settings-zone-colours-reset")).toHaveTextContent("Reset");
   });
 
   it("renders all four slot swatches", () => {
@@ -143,7 +143,7 @@ describe("ZoneColourSwatches — rendering", () => {
     render(<Settings />);
     navigateToMapOverlays();
     for (let i = 0; i < 4; i++) {
-      const input = screen.getByTestId(`settings-zone-color-input-${i}`) as HTMLInputElement;
+      const input = screen.getByTestId(`settings-zone-colour-input-${i}`) as HTMLInputElement;
       expect(input).toBeInTheDocument();
       expect(input.type).toBe("color");
     }
@@ -153,7 +153,7 @@ describe("ZoneColourSwatches — rendering", () => {
     render(<Settings />);
     navigateToMapOverlays();
     for (let i = 0; i < 4; i++) {
-      const input = screen.getByTestId(`settings-zone-color-input-${i}`) as HTMLInputElement;
+      const input = screen.getByTestId(`settings-zone-colour-input-${i}`) as HTMLInputElement;
       expect(input.value.toLowerCase()).toBe(ZONE_DEFAULT_COLORS[i]!.toLowerCase());
     }
   });
@@ -163,7 +163,7 @@ describe("ZoneColourSwatches — colour input interaction", () => {
   it("changing a colour input updates the store for that slot", async () => {
     render(<Settings />);
     navigateToMapOverlays();
-    const input = screen.getByTestId("settings-zone-color-input-1") as HTMLInputElement;
+    const input = screen.getByTestId("settings-zone-colour-input-1") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "#aabbcc" } });
     await waitFor(() => {
       expect(useZoneOverlayStore.getState().slots[1]!.color).toBe("#aabbcc");
@@ -177,7 +177,7 @@ describe("ZoneColourSwatches — colour input interaction", () => {
       useZoneOverlayStore.getState().setSlotColor(0, "#112233");
     });
     await waitFor(() => {
-      const input = screen.getByTestId("settings-zone-color-input-0") as HTMLInputElement;
+      const input = screen.getByTestId("settings-zone-colour-input-0") as HTMLInputElement;
       expect(input.value.toLowerCase()).toBe("#112233");
     });
   });
@@ -191,7 +191,7 @@ describe("ZoneColourSwatches — Reset to Defaults", () => {
     });
     render(<Settings />);
     navigateToMapOverlays();
-    fireEvent.click(screen.getByTestId("settings-zone-colors-reset"));
+    fireEvent.click(screen.getByTestId("settings-zone-colours-reset"));
     await waitFor(() => {
       const { slots } = useZoneOverlayStore.getState();
       for (let i = 0; i < 4; i++) {
@@ -208,10 +208,10 @@ describe("ZoneColourSwatches — Reset to Defaults", () => {
     });
     render(<Settings />);
     navigateToMapOverlays();
-    fireEvent.click(screen.getByTestId("settings-zone-colors-reset"));
+    fireEvent.click(screen.getByTestId("settings-zone-colours-reset"));
     await waitFor(() => {
       for (let i = 0; i < 4; i++) {
-        const input = screen.getByTestId(`settings-zone-color-input-${i}`) as HTMLInputElement;
+        const input = screen.getByTestId(`settings-zone-colour-input-${i}`) as HTMLInputElement;
         expect(input.value.toLowerCase()).toBe(ZONE_DEFAULT_COLORS[i]!.toLowerCase());
       }
     });
@@ -224,7 +224,7 @@ describe("ZoneColourSwatches — Reset to Defaults", () => {
     });
     render(<Settings />);
     navigateToMapOverlays();
-    fireEvent.click(screen.getByTestId("settings-zone-colors-reset"));
+    fireEvent.click(screen.getByTestId("settings-zone-colours-reset"));
     await waitFor(() => {
       const { slots } = useZoneOverlayStore.getState();
       for (let i = 0; i < 4; i++) {

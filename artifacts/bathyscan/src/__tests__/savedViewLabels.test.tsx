@@ -253,7 +253,8 @@ vi.mock("@/components/ViewscreenTooltip", () => ({
  * settingsStore mock reads from `activeBookmarks` (module-level mutable ref)
  * so individual tests can set bookmarks without re-importing the module.
  */
-vi.mock("@/lib/settingsStore", () => {
+vi.mock("@/lib/settingsStore", async (importOriginal) => {
+  const actual = await importOriginal();
   const useSettingsStore = ((
     sel: (s: {
       waterType: "saltwater" | "freshwater";
@@ -282,7 +283,7 @@ vi.mock("@/lib/settingsStore", () => {
     renameBookmark: vi.fn(),
     deleteBookmark: vi.fn(),
   });
-  return { useSettingsStore };
+  return { ...actual, useSettingsStore };
 });
 
 // ── Helper ────────────────────────────────────────────────────────────────────

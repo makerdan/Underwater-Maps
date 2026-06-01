@@ -94,7 +94,8 @@ vi.mock("@/lib/offlineStore", () => ({
     sel({ isOnline: true }),
 }));
 
-vi.mock("@/lib/settingsStore", () => {
+vi.mock("@/lib/settingsStore", async (importOriginal) => {
+  const actual = await importOriginal();
   type S = {
     showCrosshairGps: boolean; showHeading: boolean;
     coordinateFormat: "decimal"; units: "metric"; temperatureUnit: "celsius";
@@ -112,9 +113,14 @@ vi.mock("@/lib/settingsStore", () => {
   });
   const useSettingsStore = Object.assign(
     (sel: (s: S) => unknown) => sel(getState()),
-    { getState },
+    {
+      getState,
+      persist: { hasHydrated: () => false, onFinishHydration: () => () => {} },
+      subscribe: () => () => {},
+    },
   );
   return {
+    ...actual,
     useSettingsStore,
     FONT_SIZE_SCALE: {
       smallest: 0.80, small: 0.875, medium: 1.0,

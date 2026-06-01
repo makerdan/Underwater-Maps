@@ -63,28 +63,27 @@ vi.mock("@/lib/offlineStore", () => ({
     sel({ isOnline: true }),
 }));
 
-vi.mock("@/lib/settingsStore", () => ({
-  useSettingsStore: (
-    sel: (s: {
-      showCrosshairGps: boolean;
-      showCameraPosition: boolean;
-      showHeading: boolean;
-      coordinateFormat: "decimal";
-      depthUnit: "metres";
-      units: "metric";
-      hudOpacity: number;
-    }) => unknown,
-  ) =>
-    sel({
-      showCrosshairGps: true,
-      showCameraPosition: true,
-      showHeading: true,
-      coordinateFormat: "decimal",
-      depthUnit: "metres",
-      units: "metric",
-      hudOpacity: 1,
-    }),
-}));
+vi.mock("@/lib/settingsStore", async (importOriginal) => {
+  const actual = await importOriginal();
+  const storeState = {
+    showCrosshairGps: true,
+    showCameraPosition: true,
+    showHeading: true,
+    coordinateFormat: "decimal" as const,
+    depthUnit: "metres" as const,
+    units: "metric" as const,
+    hudOpacity: 1,
+  };
+  const useSettingsStore = Object.assign(
+    (sel: (s: typeof storeState) => unknown) => sel(storeState),
+    {
+      getState: () => storeState,
+      persist: { hasHydrated: () => false, onFinishHydration: () => () => {} },
+      subscribe: () => () => {},
+    },
+  );
+  return { ...actual, useSettingsStore };
+});
 
 describe("HUD", () => {
   beforeEach(() => {

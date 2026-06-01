@@ -114,7 +114,7 @@ export function buildTerrainMenuItems(
       disabled: !datasetId,
     },
     {
-      label: "Save view as bookmark",
+      label: "Save as saved view…",
       icon: "📷",
       onClick: () => {
         if (!datasetId) return;

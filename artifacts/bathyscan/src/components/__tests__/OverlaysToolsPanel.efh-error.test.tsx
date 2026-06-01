@@ -52,10 +52,20 @@ vi.mock("@/components/ui/spinner", () => ({
   Spinner: () => null,
 }));
 
-vi.mock("@/lib/settingsStore", () => ({
-  useSettingsStore: (sel: (s: { waterType: string }) => unknown) =>
-    sel({ waterType: "salt" }),
-}));
+vi.mock("@/lib/settingsStore", async (importOriginal) => {
+  const actual = await importOriginal();
+  const storeState = { waterType: "salt" };
+  const useSettingsStore = Object.assign(
+    (sel: (s: { waterType: string }) => unknown) => sel(storeState),
+    {
+      getState: () => storeState,
+      setState: vi.fn(),
+      persist: { hasHydrated: () => false, onFinishHydration: () => () => {} },
+      subscribe: () => () => {},
+    },
+  );
+  return { ...actual, useSettingsStore };
+});
 
 vi.mock("@/lib/panelCollapseStore", () => ({
   usePanelCollapseStore: (

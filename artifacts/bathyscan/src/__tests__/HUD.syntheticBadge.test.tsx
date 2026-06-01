@@ -65,7 +65,8 @@ vi.mock("@/lib/offlineStore", () => ({
     sel({ isOnline: true }),
 }));
 
-vi.mock("@/lib/settingsStore", () => {
+vi.mock("@/lib/settingsStore", async (importOriginal) => {
+  const actual = await importOriginal();
   const defaults = {
     showCrosshairGps: true,
     showCameraPosition: true,
@@ -80,9 +81,14 @@ vi.mock("@/lib/settingsStore", () => {
   };
   const useSettingsStore = Object.assign(
     (sel: (s: typeof defaults) => unknown) => sel(defaults),
-    { getState: () => defaults },
+    {
+      getState: () => defaults,
+      persist: { hasHydrated: () => false, onFinishHydration: () => () => {} },
+      subscribe: () => () => {},
+    },
   );
   return {
+    ...actual,
     useSettingsStore,
     FONT_SIZE_SCALE: {
       smallest: 0.80,
