@@ -281,7 +281,8 @@ export async function readZoneDiskByKey(cacheKey: string): Promise<CachedZones |
     if (!resolved.startsWith(path.resolve(ZONE_CACHE_DIR) + path.sep)) return null;
     const raw = await fsPromises.readFile(resolved, "utf8");
     return JSON.parse(raw) as CachedZones;
-  } catch {
+  } catch (err) {
+    logger.warn({ err, cacheKey }, "[zones] readZoneDiskByKey failed");
     return null;
   }
 }
@@ -352,8 +353,9 @@ async function hydrateCacheFromDisk(): Promise<void> {
         }
       }),
     );
-  } catch {
+  } catch (err) {
     // Non-fatal — cache simply starts empty
+    logger.warn({ err }, "[zones] hydrateCacheFromDisk failed — starting with empty cache");
   }
 }
 

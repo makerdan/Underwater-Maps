@@ -16,6 +16,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 import { fetchRawsObservation } from "../lib/rawsErddap.js";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 
 const router = Router();
 
@@ -26,7 +27,7 @@ const RawsWeatherQuerySchema = z.object({
     .regex(/^raws_[a-zA-Z0-9_-]+$/, "datasetId is required and must match the raws_* pattern"),
 });
 
-router.get("/raws-weather", async (req, res): Promise<void> => {
+router.get("/raws-weather", asyncHandler(async (req, res): Promise<void> => {
   const parsed = RawsWeatherQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({
@@ -53,6 +54,6 @@ router.get("/raws-weather", async (req, res): Promise<void> => {
     logger.warn({ err, datasetId }, "raws-weather: unexpected error");
     res.json({ available: false });
   }
-});
+}));
 
 export default router;

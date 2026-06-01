@@ -35,6 +35,7 @@ import {
 } from "../lib/slack.js";
 import { registerCache } from "../lib/cacheRegistry.js";
 import { LatLonQuerySchema } from "./schemas.js";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 
 const router = Router();
 
@@ -516,7 +517,7 @@ export interface ForecastHour {
 // GET /surface-conditions
 // ---------------------------------------------------------------------------
 
-router.get("/surface-conditions", async (req, res): Promise<void> => {
+router.get("/surface-conditions", asyncHandler(async (req, res): Promise<void> => {
   const parsed = LatLonQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({
@@ -650,6 +651,6 @@ router.get("/surface-conditions", async (req, res): Promise<void> => {
     hours,
     forecast48h,
   });
-});
+}));
 
 export default router;

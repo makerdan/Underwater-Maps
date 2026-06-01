@@ -81,12 +81,20 @@ const server = app.listen(port, "127.0.0.1", (err) => {
 
   // Start the GCS bucket monitor — scans pending-datasets/ every 30 s and
   // processes any oversized dataset files uploaded via the presigned URL path.
-  startBucketMonitor();
+  try {
+    startBucketMonitor();
+  } catch (err) {
+    logger.error({ err }, "[startup] startBucketMonitor failed");
+  }
 
   // Start the background weather cache refresher — re-fetches DB rows that are
   // >15 min old every 30 min so the 1-hour stale fallback window is never hit.
   // Also prunes rows older than 24 hours that no one is actively requesting.
-  startWeatherCacheRefresher();
+  try {
+    startWeatherCacheRefresher();
+  } catch (err) {
+    logger.error({ err }, "[startup] startWeatherCacheRefresher failed");
+  }
 });
 
 // ---------------------------------------------------------------------------

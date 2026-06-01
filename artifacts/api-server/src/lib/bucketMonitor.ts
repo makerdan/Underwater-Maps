@@ -312,8 +312,12 @@ async function scan(): Promise<void> {
     // Skip already-tracked jobs
     if (activeJobs.has(key)) continue;
 
-    // Fire-and-forget — failures are recorded in the job map
-    void processObject(bucketName, key);
+    // Fire-and-forget — failures are recorded in the job map.
+    // Any escape from processObject's own catch blocks is logged here so the
+    // scan loop continues and unhandledRejection is never emitted.
+    processObject(bucketName, key).then(() => undefined).catch((err: unknown) => {
+      logger.error({ err, key }, "[bucket-monitor] processObject failed unexpectedly");
+    });
   }
 }
 

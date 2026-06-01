@@ -14,6 +14,7 @@ import { z } from "zod";
 import { logger } from "../lib/logger.js";
 import { fetchRawsStations, type RawsStation } from "../lib/rawsStations.js";
 import { LatLonQuerySchema } from "./schemas.js";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 
 const DEFAULT_RADIUS_KM = 150;
 const MAX_RADIUS_KM = 500;
@@ -45,7 +46,7 @@ function haversineKm(
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
-router.get("/raws-stations", async (req, res): Promise<void> => {
+router.get("/raws-stations", asyncHandler(async (req, res): Promise<void> => {
   const parsed = RawsStationsQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({
@@ -72,6 +73,6 @@ router.get("/raws-stations", async (req, res): Promise<void> => {
     logger.warn({ err }, "raws-stations: unexpected error");
     res.json({ available: false, stations: [], source: "aoos-raws" });
   }
-});
+}));
 
 export default router;

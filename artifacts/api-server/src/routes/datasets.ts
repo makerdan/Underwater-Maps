@@ -37,12 +37,20 @@ import { fetchSatelliteTile } from "../lib/satelliteTile.js";
 import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
 import { substrateFingerprintForDataset } from "../lib/substrateGrid.js";
 import { registerCache } from "../lib/cacheRegistry.js";
+import { logger } from "../lib/logger.js";
 
 // ─── Chunked-upload session + job stores ──────────────────────────────────────
 // Sessions: keyed by uploadId, created on the first chunk, used to enforce
 // that only the originating user can send subsequent chunks, finalize, or poll.
 interface UploadSession {
   userId: string;
+  /**
+   * True while a finalize is in-flight (set synchronously before any await so
+   * concurrent requests see it immediately and return 409 without racing).
+   */
+  finalizing?: boolean;
+  /** Set when finalize has been called; prevents double-processing the same upload. */
+  activeJobId?: string;
 }
 const uploadSessions = new Map<string, UploadSession>();
 registerCache(() => uploadSessions.clear());
@@ -326,14 +334,18 @@ export function runParseWorker(params: {
         settled = true;
         // Worker posts result then exits naturally; terminate() ensures cleanup
         // even if the worker is still winding down when we resolve.
-        void worker.terminate();
+        worker.terminate().catch((terminateErr: unknown) => {
+          logger.warn({ err: terminateErr }, "worker terminate error");
+        });
         resolve({ terrain: msg.terrain as ParseWorkerResult["terrain"], overview: msg.overview as ParseWorkerResult["overview"] });
       } else if (msg.type === "error" && typeof msg.message === "string") {
         if (settled) return;
         settled = true;
         // Terminate explicitly — the worker may still be running if it posted
         // the error via parentPort but hasn't exited its event loop yet.
-        void worker.terminate();
+        worker.terminate().catch((terminateErr: unknown) => {
+          logger.warn({ err: terminateErr }, "worker terminate error");
+        });
         reject(new Error(msg.message));
       }
     });
@@ -343,7 +355,9 @@ export function runParseWorker(params: {
       settled = true;
       // An uncaught exception in the worker thread: terminate to guarantee the
       // OS thread is reclaimed, since it may not exit on its own after an error.
-      void worker.terminate();
+      worker.terminate().catch((terminateErr: unknown) => {
+        logger.warn({ err: terminateErr }, "worker terminate error");
+      });
       reject(err);
     });
 
@@ -1001,33 +1015,26 @@ router.get("/terrain/download/info", requireAuth, asyncHandler(async (req, res):
 // Query params: north, south, east, west (degrees), resolution (64|256|512).
 // Max bbox: 10° × 10°.
 // Only water cells (depth > 0) are emitted; land/topography is excluded.
+const TerrainDownloadQuerySchema = z.object({
+  north: z.coerce.number({ invalid_type_error: "north must be a number" }).gte(-90).lte(90),
+  south: z.coerce.number({ invalid_type_error: "south must be a number" }).gte(-90).lte(90),
+  east:  z.coerce.number({ invalid_type_error: "east must be a number" }).gte(-180).lte(180),
+  west:  z.coerce.number({ invalid_type_error: "west must be a number" }).gte(-180).lte(180),
+  resolution: z.coerce.number().int().refine((v) => [64, 256, 512].includes(v), "resolution must be 64, 256, or 512").default(256),
+}).refine((d) => d.north > d.south, { message: "north must be greater than south", path: ["north"] })
+  .refine((d) => d.east > d.west, { message: "east must be greater than west", path: ["east"] })
+  .refine((d) => d.north - d.south <= 10, { message: "Bounding box must be at most 10° latitude span", path: ["north"] })
+  .refine((d) => d.east - d.west <= 10, { message: "Bounding box must be at most 10° longitude span", path: ["east"] });
+
 router.get("/terrain/download", requireAuth, asyncHandler(async (req, res): Promise<void> => {
-  const north = parseFloat(String(req.query["north"] ?? ""));
-  const south = parseFloat(String(req.query["south"] ?? ""));
-  const east  = parseFloat(String(req.query["east"] ?? ""));
-  const west  = parseFloat(String(req.query["west"] ?? ""));
-  const rawRes = parseInt(String(req.query["resolution"] ?? "256"), 10);
-
-  if (
-    !isFinite(north) || !isFinite(south) || !isFinite(east) || !isFinite(west) ||
-    north <= south || east <= west ||
-    north > 90 || south < -90 || east > 180 || west < -180
-  ) {
-    res.status(400).json({ error: "invalid_bbox", details: "Provide valid north, south, east, west query params." });
+  const parsed = TerrainDownloadQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    const details = parsed.error.issues.map((i) => i.message).join("; ");
+    res.status(400).json({ error: "invalid_bbox", details });
     return;
   }
+  const { north, south, east, west, resolution } = parsed.data;
 
-  const dLon = east - west;
-  const dLat = north - south;
-  if (dLon > 10 || dLat > 10) {
-    res.status(400).json({
-      error: "bbox_too_large",
-      details: `Bounding box must be at most 10° × 10° (got ${dLon.toFixed(2)}° × ${dLat.toFixed(2)}°).`,
-    });
-    return;
-  }
-
-  const resolution = [64, 256, 512].includes(rawRes) ? rawRes : 256;
   const centerLat = (north + south) / 2;
   const centerLon = (east + west) / 2;
 
@@ -1367,11 +1374,53 @@ router.post(
       return;
     }
 
-    const smoothing = await getSmoothingPreference(req);
-    const jobId = crypto.randomUUID();
+    // Idempotency guard — atomic: check AND lock synchronously before any await
+    // so two concurrent finalize requests cannot both slip past the check.
+    //
+    // `session.finalizing` is set to true immediately (no yield point between
+    // the check and the set), so the second request always sees the flag and
+    // returns 409 without waiting for the first to finish.
+    if (session.finalizing) {
+      res.status(409).json({
+        error: "already_processing",
+        details: "A finalize for this upload is already in progress. Poll the existing jobId.",
+      });
+      return;
+    }
+    if (session.activeJobId) {
+      const existingJob = uploadJobs.get(session.activeJobId);
+      if (existingJob && (existingJob.status === "queued" || existingJob.status === "processing")) {
+        res.status(409).json({
+          error: "already_processing",
+          jobId: session.activeJobId,
+          details: "A finalize job for this upload is already running. Poll the existing jobId.",
+        });
+        return;
+      }
+    }
+
+    // Lock acquired — set before any await so concurrent requests see it immediately.
+    session.finalizing = true;
+
+    let smoothing: Awaited<ReturnType<typeof getSmoothingPreference>>;
+    let jobId: string;
+    try {
+      smoothing = await getSmoothingPreference(req);
+      jobId = crypto.randomUUID();
+    } catch (err) {
+      // Release lock so the client can retry.
+      session.finalizing = false;
+      throw err;
+    }
 
     const initialState: JobState = { status: "queued", progress: 0, userId };
     uploadJobs.set(jobId, initialState);
+
+    // Promote from in-flight lock to a stable jobId reference, then clear the
+    // finalizing flag (the activeJobId check above prevents duplicate jobs from
+    // any subsequent finalize calls once the job is queued/processing).
+    session.activeJobId = jobId;
+    session.finalizing = false;
 
     // Persist initial "queued" state to DB before firing the job so that if
     // the process dies immediately the row exists and can be recovered.

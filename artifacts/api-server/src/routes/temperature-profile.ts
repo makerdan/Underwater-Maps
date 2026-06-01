@@ -28,6 +28,8 @@ import { z } from "zod";
 import { findBundledTemperatureProfile } from "../lib/temperatureProfiles";
 import { fetchArgoProfile } from "../lib/argoErddap";
 import { LatLonQuerySchema } from "./schemas.js";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -69,7 +71,7 @@ const TemperatureProfileQuerySchema = LatLonQuerySchema.extend({
   datasetId: z.string().optional(),
 });
 
-router.get("/temperature-profile", async (req, res): Promise<void> => {
+router.get("/temperature-profile", asyncHandler(async (req, res): Promise<void> => {
   const parsed = TemperatureProfileQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({
@@ -88,7 +90,7 @@ router.get("/temperature-profile", async (req, res): Promise<void> => {
   // a fresh Argo float profile is only published every 10 days.
   res.setHeader("Cache-Control", "public, max-age=3600");
 
-  for (const provider of profileProviders) {
+  for (const [index, provider] of profileProviders.entries()) {
     try {
       const payload = await provider({ lat, lon, datasetId });
       if (payload && payload.samples.length >= 2) {
@@ -107,9 +109,10 @@ router.get("/temperature-profile", async (req, res): Promise<void> => {
         });
         return;
       }
-    } catch {
+    } catch (err) {
       // Individual provider failures must never break the chain; just try
       // the next one.
+      logger.error({ err, lat, lon, datasetId, providerIndex: index }, "[temperature-profile] provider failed");
     }
   }
 
@@ -120,6 +123,6 @@ router.get("/temperature-profile", async (req, res): Promise<void> => {
     samples: [],
     provider: "none",
   });
-});
+}));
 
 export default router;

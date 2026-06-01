@@ -17,6 +17,7 @@ import { z } from "zod";
 import { fetchWeatherStations, NoaaUnavailableError } from "../lib/noaaWeatherFetcher.js";
 import type { WeatherStation } from "../lib/noaaWeatherFetcher.js";
 import { LatLonQuerySchema } from "./schemas.js";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 
 const WeatherStationsQuerySchema = LatLonQuerySchema.extend({
   radiusMiles: z.coerce
@@ -29,7 +30,7 @@ const WeatherStationsQuerySchema = LatLonQuerySchema.extend({
 
 const router = Router();
 
-router.get("/weather-stations", async (req, res): Promise<void> => {
+router.get("/weather-stations", asyncHandler(async (req, res): Promise<void> => {
   const parsed = WeatherStationsQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({
@@ -58,11 +59,11 @@ router.get("/weather-stations", async (req, res): Promise<void> => {
       details: "Could not fetch NOAA weather station data",
     });
   }
-});
+}));
 
 // GET /weather/pack?lat=&lon=
 // Returns a weather snapshot for offline packs.
-router.get("/weather/pack", async (req, res): Promise<void> => {
+router.get("/weather/pack", asyncHandler(async (req, res): Promise<void> => {
   const parsed = LatLonQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({
@@ -88,6 +89,6 @@ router.get("/weather/pack", async (req, res): Promise<void> => {
     }
     res.json({ station: null, observation: null, snapshotAt: new Date().toISOString() });
   }
-});
+}));
 
 export default router;

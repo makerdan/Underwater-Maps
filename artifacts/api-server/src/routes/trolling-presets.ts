@@ -7,10 +7,11 @@ import {
   DeleteTrollingPresetsIdParams,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 
 const router = Router();
 
-router.get("/trolling-presets", requireAuth, async (req, res): Promise<void> => {
+router.get("/trolling-presets", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const rows = await db
     .select()
@@ -18,9 +19,9 @@ router.get("/trolling-presets", requireAuth, async (req, res): Promise<void> => 
     .where(eq(trollingPresetsTable.userId, userId))
     .orderBy(asc(trollingPresetsTable.sortOrder), asc(trollingPresetsTable.createdAt));
   res.json(rows);
-});
+}));
 
-router.post("/trolling-presets", requireAuth, async (req, res): Promise<void> => {
+router.post("/trolling-presets", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const parsed = PostTrollingPresetsBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: parsed.error.message });
@@ -60,9 +61,9 @@ router.post("/trolling-presets", requireAuth, async (req, res): Promise<void> =>
     .returning();
 
   res.status(201).json(created);
-});
+}));
 
-router.patch("/trolling-presets/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/trolling-presets/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const parsed = PatchTrollingPresetsIdBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: parsed.error.message });
@@ -109,9 +110,9 @@ router.patch("/trolling-presets/:id", requireAuth, async (req, res): Promise<voi
   }
 
   res.json(updated);
-});
+}));
 
-router.delete("/trolling-presets/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/trolling-presets/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const parsed = DeleteTrollingPresetsIdParams.safeParse(req.params);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: "Invalid preset id" });
@@ -131,6 +132,6 @@ router.delete("/trolling-presets/:id", requireAuth, async (req, res): Promise<vo
   }
 
   res.status(204).send();
-});
+}));
 
 export default router;

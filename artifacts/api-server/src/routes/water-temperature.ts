@@ -16,6 +16,8 @@
 
 import { Router } from "express";
 import { LatLonQuerySchema } from "./schemas.js";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -81,7 +83,7 @@ export function pickCurrentSst(
   };
 }
 
-router.get("/water-temperature", async (req, res): Promise<void> => {
+router.get("/water-temperature", asyncHandler(async (req, res): Promise<void> => {
   const parsed = LatLonQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({
@@ -115,7 +117,8 @@ router.get("/water-temperature", async (req, res): Promise<void> => {
         return;
       }
     }
-  } catch {
+  } catch (err) {
+    logger.error({ err, lat, lon }, "[water-temperature] Open-Meteo fetch failed");
     // fall through to unavailable response
   }
 
@@ -126,6 +129,6 @@ router.get("/water-temperature", async (req, res): Promise<void> => {
     source: SOURCE_LABEL,
     sourceUrl: SOURCE_URL,
   });
-});
+}));
 
 export default router;
