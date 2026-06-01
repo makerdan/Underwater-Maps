@@ -12,6 +12,7 @@ import {
 import {
   postMarkersBodyLabelMax,
   postMarkersBodyNotesMax,
+  patchMarkersIdBodyNotesMax,
   PostMarkersBody,
 } from "@workspace/api-zod";
 
@@ -94,6 +95,18 @@ describe("cross-layer consistency: markerFormSchema vs PostMarkersBody", () => {
     const atLimit = "n".repeat(postMarkersBodyNotesMax);
     const body = { datasetId: "ds-1", lon: -136.0, lat: 58.0, depth: 50, label: "Test", notes: atLimit };
     expect(PostMarkersBody.safeParse(body).success).toBe(true);
+  });
+
+  // DOCUMENTED INTENTIONAL GAP: PATCH /markers/:id allows up to 500-char notes
+  // while POST /markers and the frontend form cap at 280. This permits direct-API
+  // edits to extend notes beyond the form limit without breaking the creation UX.
+  // Any change to either value must be reviewed here.
+  it("DOCUMENTED GAP: patchMarkersIdBodyNotesMax (500) intentionally exceeds MARKER_NOTES_MAX and postMarkersBodyNotesMax (280)", () => {
+    expect(patchMarkersIdBodyNotesMax).toBeGreaterThan(MARKER_NOTES_MAX);
+    expect(patchMarkersIdBodyNotesMax).toBeGreaterThan(postMarkersBodyNotesMax);
+    expect(patchMarkersIdBodyNotesMax).toBe(500);
+    expect(MARKER_NOTES_MAX).toBe(280);
+    expect(postMarkersBodyNotesMax).toBe(280);
   });
 });
 
