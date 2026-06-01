@@ -254,7 +254,7 @@ vi.mock("@/components/ViewscreenTooltip", () => ({
  * so individual tests can set bookmarks without re-importing the module.
  */
 vi.mock("@/lib/settingsStore", async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal<typeof import("@/lib/settingsStore")>();
   const useSettingsStore = ((
     sel: (s: {
       waterType: "saltwater" | "freshwater";

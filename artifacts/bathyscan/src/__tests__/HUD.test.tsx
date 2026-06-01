@@ -64,7 +64,7 @@ vi.mock("@/lib/offlineStore", () => ({
 }));
 
 vi.mock("@/lib/settingsStore", async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal<typeof import("@/lib/settingsStore")>();
   const storeState = {
     showCrosshairGps: true,
     showCameraPosition: true,

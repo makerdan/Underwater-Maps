@@ -95,7 +95,7 @@ vi.mock("@/lib/offlineStore", () => ({
 }));
 
 vi.mock("@/lib/settingsStore", async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal<typeof import("@/lib/settingsStore")>();
   type S = {
     showCrosshairGps: boolean; showHeading: boolean;
     coordinateFormat: "decimal"; units: "metric"; temperatureUnit: "celsius";

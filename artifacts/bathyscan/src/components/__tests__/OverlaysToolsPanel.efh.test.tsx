@@ -56,7 +56,7 @@ vi.mock("@/components/ui/spinner", () => ({
 }));
 
 vi.mock("@/lib/settingsStore", async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal<typeof import("@/lib/settingsStore")>();
   const storeState = { waterType: "salt" };
   const useSettingsStore = Object.assign(
     (sel: (s: { waterType: string }) => unknown) => sel(storeState),
