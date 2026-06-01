@@ -35,6 +35,7 @@ async function ensureTidalOverlayEnabled(page: Page): Promise<void> {
         document
           .querySelector("[data-testid='tidal-overlay-toggle']")
           ?.getAttribute("aria-pressed") === "true",
+      undefined,
       { timeout: 5_000 },
     )
     .catch(() => {});

@@ -239,8 +239,21 @@ test.describe("GPS import — real auth-gated flow", () => {
 
     // Drive into the Thorne Bay dataset so terrain (and therefore the import
     // dialog's bounding-box filter) is available.
+    // seedTerrain is called alongside setActiveDatasetId so that the markers
+    // section renders immediately (it gates on terrain?.datasetId) without
+    // having to wait for the async terrain API fetch, which may be slow or
+    // unavailable in headless environments.
     await page.evaluate((id) => {
       window.__bathyTest!.setActiveDatasetId(id);
+      window.__bathyTest!.seedTerrain({
+        datasetId: id,
+        minLon: -133.5,
+        minLat: 55.0,
+        maxLon: -131.5,
+        maxLat: 56.5,
+        centerLon: -132.5,
+        centerLat: 55.75,
+      });
     }, DATASET_ID);
 
     // Open the Markers section, then the Import GPS dialog.
@@ -301,6 +314,15 @@ test.describe("GPS import — real auth-gated flow", () => {
 
     await page.evaluate((id) => {
       window.__bathyTest!.setActiveDatasetId(id);
+      window.__bathyTest!.seedTerrain({
+        datasetId: id,
+        minLon: -133.5,
+        minLat: 55.0,
+        maxLon: -131.5,
+        maxLat: 56.5,
+        centerLon: -132.5,
+        centerLat: 55.75,
+      });
     }, DATASET_ID);
 
     const openBtn = page.locator('[data-testid="open-gps-import"]');

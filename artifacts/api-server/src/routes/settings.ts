@@ -104,10 +104,17 @@ function mergeForResponse(
   stored: Record<string, unknown> | null | undefined,
   validated: Record<string, unknown>,
 ): Record<string, unknown> {
+  // Include any stored field that is not already present in the validated
+  // schema response. This covers both fields that are completely outside the
+  // spec (e.g. showCompassMinimap) AND fields that live in DEFAULT_SETTINGS
+  // but were added after the OpenAPI spec was last regenerated and therefore
+  // aren't yet part of GetSettingsResponse (e.g. weatherStationsActive,
+  // efhOverlayEnabled, globalFontSize, …). Both categories deserve to be
+  // passed through so the frontend can hydrate them correctly.
   const extras: Record<string, unknown> = {};
   if (stored) {
     for (const [k, v] of Object.entries(stored)) {
-      if (!(k in DEFAULT_SETTINGS)) extras[k] = v;
+      if (!(k in validated)) extras[k] = v;
     }
   }
   return { ...validated, ...extras };
@@ -191,10 +198,17 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
     if (sentKeys.has(k)) sentValidated[k] = v;
   }
 
-  // Preserve any extra (non-spec) fields so advanced settings persist server-side.
+  // Preserve fields that the client sent but that aren't part of the validated
+  // Zod schema. This covers two categories:
+  //   1. Fields completely outside the spec (e.g. showCompassMinimap).
+  //   2. Fields that ARE in DEFAULT_SETTINGS but haven't yet been added to the
+  //      OpenAPI spec / Zod schema (e.g. weatherStationsActive, efhOverlayEnabled,
+  //      globalFontSize, zonePaintSlot, …).
+  // Both should be stored verbatim so they round-trip correctly.
+  const schemaKeys = new Set(Object.keys(parsed.data as Record<string, unknown>));
   const extras: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(body)) {
-    if (!(k in DEFAULT_SETTINGS)) extras[k] = v;
+    if (!schemaKeys.has(k)) extras[k] = v;
   }
   // Server is the source of truth for the sync timestamp — never trust the
   // client's value here. This is what cross-device hydration uses to decide

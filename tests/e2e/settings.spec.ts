@@ -127,7 +127,7 @@ test.describe("Settings page", () => {
 
     await page.locator('button:has-text("ACCOUNT & PRIVACY")').first().click();
     await expect(page.locator("text=DANGER ZONE")).toBeVisible({ timeout: 5_000 });
-    await expect(page.locator("text=DELETE ALL MY MARKERS")).toBeVisible();
+    await expect(page.getByRole("button", { name: "DELETE ALL MY MARKERS" })).toBeVisible();
   });
 
   test("danger zone delete button requires confirmation", async ({ page }) => {
@@ -135,7 +135,7 @@ test.describe("Settings page", () => {
     await page.waitForLoadState("networkidle");
 
     await page.locator('button:has-text("ACCOUNT & PRIVACY")').first().click();
-    await page.locator("text=DELETE ALL MY MARKERS").click();
+    await page.getByRole("button", { name: "DELETE ALL MY MARKERS" }).click();
 
     await expect(page.locator("text=Are you sure?")).toBeVisible({ timeout: 5_000 });
     await expect(page.locator("text=YES, DELETE ALL")).toBeVisible();

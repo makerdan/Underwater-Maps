@@ -227,6 +227,7 @@ export const FRESHWATER_PRESET_DATASETS: DatasetMeta[] = [
     centerLat: (33.3 + 33.52) / 2,
     bbox: { minLon: -97.15, minLat: 33.3, maxLon: -96.92, maxLat: 33.52 },
     hasTopography: true,
+    hasEfh: true,
   },
 ];
 

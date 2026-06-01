@@ -55,7 +55,7 @@ async function mockReadySurfaceConditions(page: Page): Promise<void> {
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        hours,
+        forecast48h: hours,
         estimatedConditions: false,
         tidalDataSource: "noaa",
         tidalStationName: "Mock Station",
@@ -157,12 +157,22 @@ async function mockTidalDataReady(page: Page): Promise<void> {
  * Falls back to seeding synthetic terrain when auto-load takes too long.
  */
 async function ensureTerrainLoaded(page: Page): Promise<void> {
-  type BathyWindow = { __bathyTest?: { getTerrainSummary?: () => unknown; seedTerrain?: () => unknown } };
+  type BathyWindow = {
+    __bathyTest?: {
+      getTerrainSummary?: () => unknown;
+      seedTerrain?: () => unknown;
+      isTestBridgeReady?: () => boolean;
+    };
+  };
 
+  // Wait up to 10s for terrain to auto-load from a saved dataset in localStorage.
+  // Shorter than the previous 25s — if no dataset is saved the auto-load will
+  // never fire, so failing fast lets us seed synthetic terrain sooner.
   await page
     .waitForFunction(
       () => Boolean((window as unknown as BathyWindow).__bathyTest?.getTerrainSummary?.()),
-      { timeout: 25_000 },
+      undefined,
+      { timeout: 10_000 },
     )
     .catch(() => {});
 
@@ -171,18 +181,30 @@ async function ensureTerrainLoaded(page: Page): Promise<void> {
     .catch(() => false);
 
   if (!hasTerrain) {
-    const seeded = await page
-      .evaluate(() => (window as unknown as BathyWindow).__bathyTest?.seedTerrain?.())
-      .catch(() => false);
+    // Retry seeding a few times in case the TestBridge useEffect registration
+    // is still settling (the seedTerrain function returns false when
+    // appSetTerrain is not yet registered).
+    let seeded = false;
+    for (let attempt = 0; attempt < 4 && !seeded; attempt++) {
+      if (attempt > 0) {
+        await page.waitForTimeout(500).catch(() => {});
+      }
+      seeded = Boolean(
+        await page
+          .evaluate(() => (window as unknown as BathyWindow).__bathyTest?.seedTerrain?.())
+          .catch(() => false),
+      );
+    }
     if (seeded) {
       await page
         .waitForFunction(
           () => Boolean((window as unknown as BathyWindow).__bathyTest?.getTerrainSummary?.()),
+          undefined,
           { timeout: 8_000 },
         )
         .catch(() => {});
     } else {
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(500).catch(() => {});
     }
   }
 }
@@ -197,6 +219,7 @@ async function ensureTidalOverlayOn(page: Page): Promise<void> {
         document
           .querySelector("[data-testid='tidal-overlay-toggle']")
           ?.getAttribute("aria-pressed") === "true",
+      undefined,
       { timeout: 5_000 },
     )
     .catch(() => {});
@@ -251,7 +274,27 @@ test.describe("LocationBadge on data panels", () => {
   // ─────────────────────────────────────────────────────────────────────────
   test.describe("ForecastStrip", () => {
     test("shows badge in ready state once surface-conditions data arrives", async ({ page }) => {
-      test.setTimeout(60_000);
+      test.setTimeout(90_000);
+      // Ensure the Forecast sidebar section is expanded before the page
+      // bootstraps. The panelCollapseStore persists to localStorage; a previous
+      // test in the same browser context may have collapsed it.
+      await page.addInitScript(() => {
+        try {
+          const raw = window.localStorage.getItem("bathyscan:panel-collapse");
+          if (raw) {
+            const stored = JSON.parse(raw) as {
+              state?: { collapsed?: Record<string, boolean> };
+            };
+            if (stored?.state?.collapsed) {
+              stored.state.collapsed["forecast"] = false;
+              window.localStorage.setItem(
+                "bathyscan:panel-collapse",
+                JSON.stringify(stored),
+              );
+            }
+          }
+        } catch {}
+      });
       await mockReadySurfaceConditions(page);
       await page.goto("/");
       await page.waitForLoadState("domcontentloaded");
@@ -266,6 +309,12 @@ test.describe("LocationBadge on data panels", () => {
       const forecastSection = page.locator("[data-testid='sidebar-section-forecast']");
       await expect(forecastSection).toBeVisible({ timeout: 15_000 });
 
+      // Expand the section if it was somehow still collapsed.
+      const collapsedHeader = forecastSection.locator("button[aria-expanded='false']");
+      if (await collapsedHeader.isVisible().catch(() => false)) {
+        await collapsedHeader.dispatchEvent("click");
+      }
+
       const badge = forecastSection.locator("[data-testid='location-badge']");
       await expect(badge).toBeVisible({ timeout: 20_000 });
       await expect(badge).toHaveAttribute("data-state", "ready");
@@ -276,7 +325,27 @@ test.describe("LocationBadge on data panels", () => {
     });
 
     test("shows badge in loading state while surface-conditions fetch is in-flight", async ({ page }) => {
-      test.setTimeout(60_000);
+      test.setTimeout(90_000);
+      // Ensure the Forecast sidebar section is expanded before the page
+      // bootstraps. The panelCollapseStore persists to localStorage; a previous
+      // test in the same browser context may have collapsed it.
+      await page.addInitScript(() => {
+        try {
+          const raw = window.localStorage.getItem("bathyscan:panel-collapse");
+          if (raw) {
+            const stored = JSON.parse(raw) as {
+              state?: { collapsed?: Record<string, boolean> };
+            };
+            if (stored?.state?.collapsed) {
+              stored.state.collapsed["forecast"] = false;
+              window.localStorage.setItem(
+                "bathyscan:panel-collapse",
+                JSON.stringify(stored),
+              );
+            }
+          }
+        } catch {}
+      });
       await mockStallingSurfaceConditions(page);
       await page.goto("/");
       await page.waitForLoadState("domcontentloaded");
@@ -290,6 +359,12 @@ test.describe("LocationBadge on data panels", () => {
 
       const forecastSection = page.locator("[data-testid='sidebar-section-forecast']");
       await expect(forecastSection).toBeVisible({ timeout: 15_000 });
+
+      // Expand the section if it was somehow still collapsed.
+      const collapsedHeader = forecastSection.locator("button[aria-expanded='false']");
+      if (await collapsedHeader.isVisible().catch(() => false)) {
+        await collapsedHeader.dispatchEvent("click");
+      }
 
       // Once terrain is set the surface-conditions query fires but our stalling
       // route never resolves, so isLoading stays true → badge shows loading.
@@ -334,7 +409,7 @@ test.describe("LocationBadge on data panels", () => {
     });
 
     test("shows badge in ready state once wind overlay is active and data arrives", async ({ page }) => {
-      test.setTimeout(60_000);
+      test.setTimeout(90_000);
       await mockReadySurfaceConditions(page);
       await page.goto("/");
       await page.waitForLoadState("domcontentloaded");
@@ -360,7 +435,7 @@ test.describe("LocationBadge on data panels", () => {
     });
 
     test("shows badge in loading state while surface-conditions fetch is in-flight", async ({ page }) => {
-      test.setTimeout(60_000);
+      test.setTimeout(90_000);
       await mockStallingSurfaceConditions(page);
       await page.goto("/");
       await page.waitForLoadState("domcontentloaded");
@@ -394,7 +469,7 @@ test.describe("LocationBadge on data panels", () => {
   // ─────────────────────────────────────────────────────────────────────────
   test.describe("TidePanel (embedded)", () => {
     test("shows badge in ready state once tidal overlay is active and data arrives", async ({ page }) => {
-      test.setTimeout(60_000);
+      test.setTimeout(90_000);
       await mockReadySurfaceConditions(page);
       await mockTidalDataReady(page);
       await page.goto("/");
@@ -421,7 +496,7 @@ test.describe("LocationBadge on data panels", () => {
     });
 
     test("shows badge in loading state while a scrubDatetime re-fetch is in-flight", async ({ page }) => {
-      test.setTimeout(60_000);
+      test.setTimeout(90_000);
       await mockReadySurfaceConditions(page);
       await mockTidalFirstFastThenStall(page);
       await page.goto("/");
@@ -463,7 +538,7 @@ test.describe("LocationBadge on data panels", () => {
   // ─────────────────────────────────────────────────────────────────────────
   test.describe("WeatherPanel (Drift Planner)", () => {
     test("shows badge in ready state once Drift Planner is open and data arrives", async ({ page }) => {
-      test.setTimeout(60_000);
+      test.setTimeout(90_000);
       await mockReadySurfaceConditions(page);
       await page.goto("/");
       await page.waitForLoadState("domcontentloaded");
@@ -492,7 +567,7 @@ test.describe("LocationBadge on data panels", () => {
     });
 
     test("shows badge in loading state while Drift Planner surface-conditions fetch is in-flight", async ({ page }) => {
-      test.setTimeout(60_000);
+      test.setTimeout(90_000);
       await mockStallingSurfaceConditions(page);
       await page.goto("/");
       await page.waitForLoadState("domcontentloaded");

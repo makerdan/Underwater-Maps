@@ -186,6 +186,7 @@ test.describe("Help-icon deep links", () => {
           Boolean(
             (window as unknown as { __bathyTest?: { getTerrainSummary?: () => unknown } }).__bathyTest?.getTerrainSummary?.(),
           ),
+        undefined,
         { timeout: 20_000 },
       )
       .catch(() => {});
@@ -201,6 +202,7 @@ test.describe("Help-icon deep links", () => {
       await page
         .waitForFunction(
           () => typeof (window as unknown as { __bathyTest?: { seedTerrain?: unknown } }).__bathyTest?.seedTerrain === "function",
+          undefined,
           { timeout: 10_000 },
         )
         .catch(() => {});
@@ -214,6 +216,7 @@ test.describe("Help-icon deep links", () => {
             Boolean(
               (window as unknown as { __bathyTest?: { getTerrainSummary?: () => unknown } }).__bathyTest?.getTerrainSummary?.(),
             ),
+          undefined,
           { timeout: 5_000 },
         )
         .catch(() => {});
@@ -236,6 +239,7 @@ test.describe("Help-icon deep links", () => {
           const btn = document.querySelector("[data-testid='tidal-overlay-toggle']");
           return btn?.getAttribute("aria-pressed") === "true";
         },
+        undefined,
         { timeout: 5_000 },
       )
       .catch(() => {});

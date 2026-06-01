@@ -211,6 +211,17 @@ test.describe("Slack-tide visuals", () => {
     await mockEstimatedSurfaceConditions(page);
     await page.reload({ waitUntil: "domcontentloaded" });
 
+    // Seed synthetic terrain so useSurfaceConditions (gated on !!terrain)
+    // fires the fetch and the mock returns estimatedConditions:true.
+    await page.evaluate(() => window.__bathyTest?.seedTerrain?.()).catch(() => {});
+    await page
+      .waitForFunction(
+        () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
+        null,
+        { timeout: 5_000 },
+      )
+      .catch(() => {});
+
     await clickTopBarToggle(page, "DRIFT");
     await expect(page.locator("text=DRIFT PLANNER")).toBeVisible({ timeout: 5_000 });
 
@@ -239,6 +250,17 @@ test.describe("Slack-tide visuals", () => {
     // the initial surface-conditions fetch is intercepted and cached.
     await mockEstimatedSurfaceConditions(page);
     await page.reload({ waitUntil: "domcontentloaded" });
+
+    // Seed synthetic terrain so useSurfaceConditions (gated on !!terrain)
+    // fires the fetch and the mock returns estimatedConditions:true.
+    await page.evaluate(() => window.__bathyTest?.seedTerrain?.()).catch(() => {});
+    await page
+      .waitForFunction(
+        () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
+        null,
+        { timeout: 5_000 },
+      )
+      .catch(() => {});
 
     await clickTopBarToggle(page, "DRIFT");
     await expect(page.locator("text=DRIFT PLANNER")).toBeVisible({ timeout: 5_000 });

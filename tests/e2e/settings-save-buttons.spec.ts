@@ -26,9 +26,14 @@ const TOP_SAVED = "[data-testid='topbar-saved-indicator']";
  * native input setter so React's onChange fires (Playwright's .fill()
  * does not dispatch the synthetic event range inputs need).
  */
-async function nudgeHudOpacity(page: Page, value: number): Promise<void> {
+async function nudgeHudOpacity(page: Page, _hint: number): Promise<void> {
   const slider = page.locator("input[type='range']").nth(0); // HUD Opacity is the first range in the HUD tab
   await expect(slider).toBeVisible({ timeout: 5_000 });
+  // Read the current persisted/server value so we always move to a different
+  // value — if a previous run left hudOpacity at 0.5, nudging to 0.5 again
+  // would be a no-op and dirty would stay false.
+  const current = parseFloat((await slider.inputValue()) || "0.75");
+  const target = Math.abs(current - 0.5) < 0.02 ? 0.4 : 0.5;
   await slider.evaluate((el, v) => {
     const input = el as HTMLInputElement;
     const setter = Object.getOwnPropertyDescriptor(
@@ -38,7 +43,7 @@ async function nudgeHudOpacity(page: Page, value: number): Promise<void> {
     setter?.call(input, String(v));
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.dispatchEvent(new Event("change", { bubbles: true }));
-  }, value);
+  }, target);
 }
 
 async function gotoHudTab(page: Page): Promise<void> {

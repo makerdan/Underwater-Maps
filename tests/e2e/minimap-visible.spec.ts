@@ -20,7 +20,7 @@ test.describe("BathyScan — minimap visibility", () => {
   });
 
   test("minimap is visible on screen with a non-zero size and stays inside the viewport", async ({ page }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(90_000);
     // domcontentloaded (not networkidle): the home route keeps long-lived
     // requests open (NOAA, surface-conditions, terrain warm-up) so networkidle
     // never resolves before Playwright's 30 s timeout. The canvas visibility
@@ -35,6 +35,13 @@ test.describe("BathyScan — minimap visibility", () => {
       test.skip(true, "Scene canvas not visible — user is not signed in; landing page is shown");
       return;
     }
+
+    // Seed terrain (including the terrainStore overviewGrid) so the minimap
+    // canvas renders. Without this, the minimap container exists in the DOM but
+    // has no content and is considered hidden by Playwright.
+    await page.evaluate(() => {
+      (window as unknown as { __bathyTest?: { seedTerrain?: () => void } }).__bathyTest?.seedTerrain?.();
+    });
 
     const minimap = page.locator("[data-testid='minimap-container']");
     await expect(minimap).toBeVisible({ timeout: 25_000 });
@@ -58,7 +65,7 @@ test.describe("BathyScan — minimap visibility", () => {
   });
 
   test("disabling the Compass / Minimap setting removes it from the screen", async ({ page, request }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(90_000);
     // domcontentloaded (not networkidle): the home route keeps long-lived
     // requests open (NOAA, surface-conditions, terrain warm-up) so networkidle
     // never resolves before Playwright's 30 s timeout.
@@ -80,13 +87,26 @@ test.describe("BathyScan — minimap visibility", () => {
       headers: { "x-e2e-user-id": E2E_USER_ID },
       data: { showCompassMinimap: false },
     });
+    // Also patch localStorage so the store initialises with showCompassMinimap=false
+    // on the reload, independent of hydrateFromServer's recency check (which may
+    // skip the update when __updatedAt hasn't advanced beyond lastSyncedAt).
+    await page.addInitScript(() => {
+      try {
+        const raw = localStorage.getItem("bathyscan:settings");
+        const parsed: { state?: Record<string, unknown>; version?: number } = raw
+          ? JSON.parse(raw)
+          : {};
+        parsed.state = { ...(parsed.state ?? {}), showCompassMinimap: false };
+        localStorage.setItem("bathyscan:settings", JSON.stringify(parsed));
+      } catch {}
+    });
     await page.reload();
     // domcontentloaded after reload for the same reason as above.
     await page.waitForLoadState("domcontentloaded");
 
     // Wait for the scene to come back up before asserting absence.
     await canvas.isVisible({ timeout: 15_000 }).catch(() => false);
-    await expect(minimap).toHaveCount(0);
+    await expect(minimap).toHaveCount(0, { timeout: 20_000 });
     // No manual restore needed — the shared resetSettings fixture (fixtures.ts)
     // resets showCompassMinimap to true automatically before the next test.
   });

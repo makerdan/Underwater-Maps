@@ -116,6 +116,7 @@ export const OverviewMap: React.FC = () => {
   const gpsError = useGpsStore((s) => s.error);
   const startWatching = useGpsStore((s) => s.startWatching);
   const overviewGrid = useTerrainStore((s) => s.overviewGrid);
+  const { terrain: appTerrain } = useAppState();
   const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
   const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
   // Refs so the rAF render + DOM event handlers always read the latest store
@@ -148,7 +149,7 @@ export const OverviewMap: React.FC = () => {
   }, [satelliteImagery, overviewGrid]);
   useSatelliteTile(satelliteBbox);
 
-  const datasetId = overviewGrid?.datasetId ?? "";
+  const datasetId = overviewGrid?.datasetId ?? appTerrain?.datasetId ?? "";
   const { data: markerData } = useGetMarkers(
     { datasetId },
     { query: { enabled: !!datasetId, queryKey: getGetMarkersQueryKey({ datasetId }) } },
@@ -1206,7 +1207,12 @@ export const OverviewMap: React.FC = () => {
       if (selectModeRef.current || downloadModeRef.current) return;
       if (hasDraggedRef.current) return;
       const t = transformRef.current;
-      if (!t || !overviewGrid) return;
+      if (!t || !overviewGrid) {
+        // No terrain grid loaded yet — close the overlay to respect the dismiss
+        // gesture even though a teleport isn't possible without coordinates.
+        useUiStore.getState().setOverviewOpen(false);
+        return;
+      }
 
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left;

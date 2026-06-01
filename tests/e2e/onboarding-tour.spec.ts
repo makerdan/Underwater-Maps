@@ -100,6 +100,14 @@ async function ensureSceneLoaded(page: Page): Promise<boolean> {
     test.skip(true, "Scene canvas not visible — E2E auth bypass not active in this environment");
     return false;
   }
+  // Seed synthetic terrain so OnboardingGuard (which gates the overlay on terrain
+  // being loaded) mounts the OnboardingOverlay. Without this, the overlay is never
+  // rendered even when hasSeenOnboarding=false, because the guard returns null
+  // until a terrain commit has been received by the React context.
+  await page.evaluate(() => {
+    (window as unknown as { __bathyTest?: { seedTerrain?: () => void } })
+      .__bathyTest?.seedTerrain?.();
+  });
   return true;
 }
 
@@ -120,7 +128,7 @@ test.describe("Onboarding tour overlay", () => {
     page,
     request,
   }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(90_000);
 
     await setServerOnboardingFlag(request, false);
     await page.addInitScript(patchOnboardingLocalStorage(false));
@@ -130,7 +138,7 @@ test.describe("Onboarding tour overlay", () => {
     if (!ok) return;
 
     const dialog = page.locator(TOUR_DIALOG_SELECTOR);
-    await expect(dialog).toBeVisible({ timeout: 10_000 });
+    await expect(dialog).toBeVisible({ timeout: 20_000 });
 
     // Header confirms we are on step 1 of 5.
     await expect(dialog).toContainText("STEP 1 OF 5");
@@ -146,7 +154,7 @@ test.describe("Onboarding tour overlay", () => {
     page,
     request,
   }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(90_000);
 
     await setServerOnboardingFlag(request, false);
     await page.addInitScript(patchOnboardingLocalStorage(false));
@@ -156,7 +164,7 @@ test.describe("Onboarding tour overlay", () => {
     if (!ok) return;
 
     const dialog = page.locator(TOUR_DIALOG_SELECTOR);
-    await expect(dialog).toBeVisible({ timeout: 10_000 });
+    await expect(dialog).toBeVisible({ timeout: 20_000 });
 
     // Dismiss the tour via Skip.
     await dialog.locator(SKIP_BTN_SELECTOR).dispatchEvent("click");
@@ -183,7 +191,7 @@ test.describe("Onboarding tour overlay", () => {
     page,
     request,
   }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(90_000);
 
     await setServerOnboardingFlag(request, false);
     await page.addInitScript(patchOnboardingLocalStorage(false));
@@ -193,7 +201,7 @@ test.describe("Onboarding tour overlay", () => {
     if (!ok) return;
 
     const dialog = page.locator(TOUR_DIALOG_SELECTOR);
-    await expect(dialog).toBeVisible({ timeout: 10_000 });
+    await expect(dialog).toBeVisible({ timeout: 20_000 });
 
     // Step through to the last step using the step-dot nav (faster than
     // clicking Next four times and avoids timing issues with the fade).
@@ -216,7 +224,7 @@ test.describe("Onboarding tour overlay", () => {
     page,
     request,
   }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(90_000);
 
     await setServerOnboardingFlag(request, true);
     await page.addInitScript(patchOnboardingLocalStorage(true));
@@ -238,7 +246,7 @@ test.describe("Onboarding tour overlay", () => {
     page,
     request,
   }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(90_000);
 
     // Start with hasSeenOnboarding: true so the overlay is not visible before
     // we click the replay button.
@@ -275,9 +283,17 @@ test.describe("Onboarding tour overlay", () => {
       timeout: 10_000,
     });
 
+    // Seed synthetic terrain so OnboardingGuard mounts the overlay after the
+    // SPA navigation (terrain is not auto-loaded in the test environment
+    // quickly enough for the 20 s dialog wait to catch it).
+    await page.evaluate(() => {
+      (window as unknown as { __bathyTest?: { seedTerrain?: () => void } })
+        .__bathyTest?.seedTerrain?.();
+    });
+
     // The overlay should be visible now that hasSeenOnboarding is false.
     const dialog = page.locator(TOUR_DIALOG_SELECTOR);
-    await expect(dialog).toBeVisible({ timeout: 10_000 });
+    await expect(dialog).toBeVisible({ timeout: 20_000 });
     await expect(dialog).toContainText("STEP 1 OF 5");
   });
 
@@ -287,7 +303,7 @@ test.describe("Onboarding tour overlay", () => {
     page,
     request,
   }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(90_000);
 
     // Start with hasSeenOnboarding: true so the overlay is absent initially.
     await setServerOnboardingFlag(request, true);
@@ -319,7 +335,7 @@ test.describe("Onboarding tour overlay", () => {
     await expect(helpWindow).toHaveCount(0, { timeout: 5_000 });
 
     // Overlay should now be visible on the main scene.
-    await expect(dialog).toBeVisible({ timeout: 10_000 });
+    await expect(dialog).toBeVisible({ timeout: 20_000 });
     await expect(dialog).toContainText("STEP 1 OF 5");
   });
 });

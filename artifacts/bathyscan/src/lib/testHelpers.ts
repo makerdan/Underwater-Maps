@@ -20,6 +20,7 @@
  *      the output, so this guard is exercised in CI.
  */
 import { useTerrainStore } from "./terrainStore";
+import { useDriftStore } from "./driftStore";
 import { useContextMenuStore, type ContextMenuItem } from "./contextMenuStore";
 import { useMeasureStore } from "./measureStore";
 import { useMarkerDetailStore } from "./markerDetailStore";
@@ -328,6 +329,16 @@ export interface BathyTestApi {
    * the same one TerrainMesh.tsx's pointer handlers call, so this faithfully
    * exercises the paint-mode write path.
    */
+  /** Returns true when the TestBridge has been fully registered (appSetTerrain is non-null). */
+  isTestBridgeReady: () => boolean;
+  /**
+   * Activate or deactivate the Drift Planner overlay. The production UI
+   * opens it by clicking a forecast slot in ForecastStrip, but that requires
+   * surface-conditions data and sidebar visibility. E2E tests drive the
+   * Zustand store directly to exercise the WeatherPanel and DriftTimeline
+   * without depending on the sidebar state.
+   */
+  setDriftPlannerActive: (v: boolean) => void;
   seedTerrain: (overrides?: Partial<TerrainData>) => boolean;
   /** Snapshot of the React-bound active terrain (datasetId + hasTopography). */
   getTerrainSummary: () =>
@@ -699,6 +710,8 @@ export function installTestHelpers(): void {
     showContextMenu: (x, y, items) =>
       useContextMenuStore.getState().show(x, y, items),
     hideContextMenu: () => useContextMenuStore.getState().hide(),
+    setDriftPlannerActive: (v) =>
+      useDriftStore.getState().setDriftPlannerActive(v),
     seedMarkerCache: (datasetId, markers) => {
       queryClient.setQueryData(getGetMarkersQueryKey({ datasetId }), markers);
     },
@@ -822,6 +835,7 @@ export function installTestHelpers(): void {
         separators: s.items.filter((i) => i.separator).length,
       };
     },
+    isTestBridgeReady: () => !!appSetTerrain,
     seedTerrain: (overrides) => {
       if (!appSetTerrain) return false;
       const resolution = overrides?.resolution ?? 64;
@@ -857,6 +871,9 @@ export function installTestHelpers(): void {
       }
       appSetTerrain(base);
       if (appSetDatasetId) appSetDatasetId(base.datasetId);
+      // Also seed the terrain store's overviewGrid so components that read
+      // from terrainStore (OverviewMap, minimap) see terrain immediately.
+      useTerrainStore.getState().setGrids({ overviewGrid: base });
       return true;
     },
     getTerrainSummary: () => {

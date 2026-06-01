@@ -196,6 +196,19 @@ test.describe("RAWS weather popup", () => {
       return;
     }
 
+    // Seed synthetic terrain so the OverviewMap's transform/overviewGrid are
+    // populated before we enable the RAWS overlay. Without terrain the canvas
+    // positions array stays empty because the rAF loop has nothing to project
+    // station lon/lat coordinates against.
+    await page.evaluate(() => window.__bathyTest?.seedTerrain?.()).catch(() => {});
+    await page
+      .waitForFunction(
+        () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
+        null,
+        { timeout: 5_000 },
+      )
+      .catch(() => {});
+
     await openOverviewMap(page);
 
     expect(

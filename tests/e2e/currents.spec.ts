@@ -39,6 +39,34 @@ async function openCurrentsHome(page: Page): Promise<void> {
   // never resolves before Playwright's 30 s timeout. appIsSignedIn (which
   // waits for the currents-panel element) is the real readiness gate.
   await page.waitForLoadState("domcontentloaded");
+  // Seed synthetic terrain so useTidalData has a centerLat/centerLon to fire
+  // with. Without terrain the NOAA source readout never renders because the
+  // tidal hook skips its fetch when centerLat is null, producing only an
+  // empty <div data-testid="currents-noaa-readout" /> which Playwright's
+  // toBeVisible() rejects (zero-height element).
+  await page
+    .waitForFunction(
+      () =>
+        Boolean(
+          (
+            window as unknown as {
+              __bathyTest?: { isTestBridgeReady?: () => boolean };
+            }
+          ).__bathyTest?.isTestBridgeReady?.(),
+        ),
+      undefined,
+      { timeout: 10_000 },
+    )
+    .catch(() => {});
+  await page
+    .evaluate(() =>
+      (
+        window as unknown as {
+          __bathyTest?: { seedTerrain?: () => boolean };
+        }
+      ).__bathyTest?.seedTerrain?.(),
+    )
+    .catch(() => {});
 }
 
 async function enableCurrents(page: Page): Promise<void> {
@@ -119,8 +147,18 @@ test.describe("Bathymetric currents — interaction coverage", () => {
     const manualSpeed = page.locator("[data-testid='currents-manual-speed']");
     const noaaReadout = page.locator("[data-testid='currents-noaa-readout']");
 
-    // Default state: Manual is active, manual inputs are rendered, NOAA
-    // readout is not.
+    // enableCurrents auto-detects the tidal mock and may leave NOAA as the
+    // active source. Explicitly switch to Manual to establish a known baseline
+    // before asserting the round-trip sequence.
+    await expect(manualBtn).toBeVisible({ timeout: 5_000 });
+    const currentManualColor = await manualBtn
+      .evaluate((el) => window.getComputedStyle(el).color)
+      .catch(() => "");
+    if (currentManualColor !== ACTIVE_COLOR_RGB) {
+      await manualBtn.click();
+    }
+
+    // Baseline: Manual is active, manual inputs are rendered, NOAA readout is not.
     await expect(manualBtn).toHaveCSS("color", ACTIVE_COLOR_RGB);
     await expect(manualDir).toBeVisible();
     await expect(manualSpeed).toBeVisible();
@@ -267,7 +305,7 @@ test.describe("Bathymetric currents — interaction coverage", () => {
       return;
     }
     await tab.click();
-    await expect(page.locator("text=◈ BATHYMETRIC CURRENTS")).toBeVisible({
+    await expect(page.locator("text=◈ TIDES & CURRENTS")).toBeVisible({
       timeout: 3_000,
     });
   });

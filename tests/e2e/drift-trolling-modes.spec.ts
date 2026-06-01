@@ -27,11 +27,19 @@ async function appIsSignedIn(page: Page): Promise<boolean> {
 }
 
 async function openDriftPlanner(page: Page): Promise<void> {
-  const driftBtn = page.locator("button:has-text('DRIFT')").first();
-  await expect(driftBtn).toBeVisible({ timeout: 10_000 });
-  await driftBtn.dispatchEvent("click");
+  // Activate via TestBridge: the production UI opens the planner by clicking
+  // a forecast slot (<div role="button">, no text "DRIFT"), which requires
+  // surface-conditions data and sidebar scroll. Driving the store directly
+  // exercises WeatherPanel + DriftTimeline without sidebar dependencies.
+  await page.evaluate(() =>
+    (
+      window as unknown as {
+        __bathyTest?: { setDriftPlannerActive?: (v: boolean) => void };
+      }
+    ).__bathyTest?.setDriftPlannerActive?.(true),
+  );
   await expect(page.locator("text=DRIFT PLANNER")).toBeVisible({ timeout: 5_000 });
-  // Timeline only renders after computeDrift resolves.
+  // Timeline only renders after computeDrift resolves (needs surface conditions).
   await expect(page.locator("[data-testid='timeline-drift-mode-badge']")).toBeVisible({
     timeout: 15_000,
   });
@@ -84,6 +92,9 @@ async function switchMode(page: Page, mode: "drift" | "trolling"): Promise<void>
 
 test.describe("Drift Planner — Drift vs Trolling modes", () => {
   test.beforeEach(async ({ page }) => {
+    // Extend timeout to 60 s — terrain wait + seedTerrain + WeatherPanel can
+    // exceed the 30 s default, especially on a cold browser context.
+    test.setTimeout(60_000);
     // Suppress SimulatedDataConfirmDialog and register the surface-conditions
     // mock BEFORE goto so React Query's initial fetch is intercepted.
     await page.addInitScript(() => {
@@ -95,18 +106,44 @@ test.describe("Drift Planner — Drift vs Trolling modes", () => {
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     // useSurfaceConditions is gated on centerLat !== null (needs terrain).
-    // Wait for the TestBridge to report any terrain (real or simulated
-    // fallback). Once terrain is loaded the always-on useSurfaceConditions
-    // hook fires automatically and the mock above intercepts it.
+    // Wait up to 10 s for real terrain, then fall back to seedTerrain so
+    // the surface-conditions mock above is guaranteed to fire.
     await page
       .waitForFunction(
         () =>
           Boolean(
             (window as unknown as { __bathyTest?: { getTerrainSummary?: () => unknown } }).__bathyTest?.getTerrainSummary?.(),
           ),
-        { timeout: 20_000 },
+        undefined,
+        { timeout: 10_000 },
       )
       .catch(() => {});
+    const hasTerrain = await page
+      .evaluate(
+        () =>
+          Boolean(
+            (window as unknown as { __bathyTest?: { getTerrainSummary?: () => unknown } }).__bathyTest?.getTerrainSummary?.(),
+          ),
+      )
+      .catch(() => false);
+    if (!hasTerrain) {
+      await page
+        .evaluate(
+          () =>
+            (window as unknown as { __bathyTest?: { seedTerrain?: () => boolean } }).__bathyTest?.seedTerrain?.(),
+        )
+        .catch(() => {});
+      await page
+        .waitForFunction(
+          () =>
+            Boolean(
+              (window as unknown as { __bathyTest?: { getTerrainSummary?: () => unknown } }).__bathyTest?.getTerrainSummary?.(),
+            ),
+          undefined,
+          { timeout: 5_000 },
+        )
+        .catch(() => {});
+    }
   });
 
   test("Trolling: heading + speed propagate to HUD and Timeline; switching back restores Drift", async ({

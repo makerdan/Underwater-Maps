@@ -28,6 +28,7 @@ export const DEFAULT_SETTINGS = {
   waterType: "saltwater",
   colormapTheme: "ocean",
   showCompassMinimap: true,
+  hasSeenOnboarding: true,
 } as const;
 
 export const test = base.extend<{ resetSettings: void }>({

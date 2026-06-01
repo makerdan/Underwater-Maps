@@ -156,18 +156,40 @@ export const ForecastStrip: React.FC = () => {
     }
   }, [forecast48h.length]);
 
+  // The location badge is rendered whenever terrain is loaded, regardless of
+  // whether forecast data has arrived — this way it also appears in the
+  // loading / stalling state so tests and users always see the context pill.
+  const locationBadge =
+    terrain ? (
+      <div style={{ padding: "6px 10px 0" }}>
+        <LocationBadge
+          datasetName={terrain.name}
+          lat={centerLat}
+          lon={centerLon}
+          isLoading={loading}
+          isFetching={isFetching}
+        />
+      </div>
+    ) : null;
+
   if (loading && !forecast48h.length) {
     return (
-      <div style={{ padding: "10px 12px", color: "#94a3b8", fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }}>
-        Loading forecast…
+      <div>
+        {locationBadge}
+        <div style={{ padding: "10px 12px", color: "#94a3b8", fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }}>
+          Loading forecast…
+        </div>
       </div>
     );
   }
 
   if (!forecast48h.length) {
     return (
-      <div style={{ padding: "10px 12px", color: "#94a3b8", fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }}>
-        No forecast data available
+      <div>
+        {locationBadge}
+        <div style={{ padding: "10px 12px", color: "#94a3b8", fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }}>
+          No forecast data available
+        </div>
       </div>
     );
   }
@@ -192,17 +214,7 @@ export const ForecastStrip: React.FC = () => {
       }}
     >
       {/* Location context badge */}
-      {terrain && (
-        <div style={{ padding: "6px 10px 0" }}>
-          <LocationBadge
-            datasetName={terrain.name}
-            lat={centerLat}
-            lon={centerLon}
-            isLoading={loading}
-            isFetching={isFetching}
-          />
-        </div>
-      )}
+      {locationBadge}
 
       {/* Day summary bar */}
       <div
