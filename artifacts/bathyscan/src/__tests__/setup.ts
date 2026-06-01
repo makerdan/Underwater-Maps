@@ -4,6 +4,11 @@ import { afterEach, vi } from "vitest";
 import { cleanup, render, type RenderOptions, type RenderResult } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
+if (typeof window !== "undefined") {
+  Object.defineProperty(window, "innerWidth",  { writable: true, configurable: true, value: 1024 });
+  Object.defineProperty(window, "innerHeight", { writable: true, configurable: true, value: 768 });
+}
+
 if (typeof global !== "undefined" && !(global as unknown as Record<string, unknown>)["ResizeObserver"]) {
   (global as unknown as Record<string, unknown>)["ResizeObserver"] = vi.fn(() => ({
     observe: vi.fn(),

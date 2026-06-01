@@ -36,6 +36,11 @@ vi.mock("@workspace/api-client-react", () =>
   }),
 );
 
+vi.mock("@/hooks/use-mobile", () => ({
+  useIsNarrow: () => false,
+  useIsMobile: () => false,
+}));
+
 vi.mock("@/hooks/useSurfaceTemperature", () => ({
   useSurfaceTemperature: () => ({ anchor: null, loading: false, error: false }),
 }));
