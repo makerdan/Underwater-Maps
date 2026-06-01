@@ -27,11 +27,7 @@ import {
   type HelpPackStatus,
 } from "@/lib/helpPackStore";
 
-// Undo window for "soft" bulk-marker deletes (ms). The active dataset's
-// marker list is cleared from the cache immediately and the actual DELETE
-// only fires when the window elapses, so a misclick can be reverted by
-// clicking "Undo".
-const UNDO_DELETE_WINDOW_MS = 5000;
+import { useShallow } from "zustand/react/shallow";
 import {
   useSettingsStore,
   useAnySectionDirty,
@@ -100,6 +96,12 @@ const SectionTitle: React.FC<{ children: React.ReactNode; helpId?: string; helpL
       )}
     </h2>
   );
+
+// Undo window for "soft" bulk-marker deletes (ms). The active dataset's
+// marker list is cleared from the cache immediately and the actual DELETE
+// only fires when the window elapses, so a misclick can be reverted by
+// clicking "Undo".
+const UNDO_DELETE_WINDOW_MS = 5000;
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -812,7 +814,7 @@ function defaultContourInterval(units: "metric" | "imperial" | "nautical"): numb
  * "Depth Display" card in VisualsSection so the toggle and slider are adjacent.
  */
 function ContourIntervalRow() {
-  const s = useSettingsStore();
+  const s = useSettingsStore(useShallow((s) => s));
   const isMetric = s.units === "metric";
   const isNautical = s.units === "nautical";
   const sliderMin  = isMetric ? 5  : isNautical ? 5  : 10;
@@ -844,7 +846,7 @@ function ContourIntervalRow() {
 
 // ─── Section components ───────────────────────────────────────────────────────
 function VisualsSection() {
-  const s = useSettingsStore();
+  const s = useSettingsStore(useShallow((s) => s));
   return (
     <>
       <SectionTitle helpId="settings" helpLabel="Visuals & Performance">◈ VISUALS &amp; PERFORMANCE</SectionTitle>
@@ -1069,7 +1071,7 @@ function VisualsSection() {
 }
 
 function NavigationSection() {
-  const s = useSettingsStore();
+  const s = useSettingsStore(useShallow((s) => s));
   return (
     <>
       <SectionTitle helpId="keyboard-shortcuts" helpLabel="Camera & Controls">◈ CAMERA &amp; CONTROLS</SectionTitle>
@@ -1200,7 +1202,7 @@ function NavigationSection() {
 }
 
 function HUDSection() {
-  const s = useSettingsStore();
+  const s = useSettingsStore(useShallow((s) => s));
   return (
     <>
       <SectionTitle helpId="interface-tour" helpLabel="HUD & Layout">◈ HUD &amp; LAYOUT</SectionTitle>
@@ -1388,7 +1390,7 @@ function ZoneColourSwatches() {
   );
 }
 function AccessibilitySection() {
-  const s = useSettingsStore();
+  const s = useSettingsStore(useShallow((s) => s));
   return (
     <>
       <h2 style={S.sectionTitle}>◈ ACCESSIBILITY</h2>
@@ -1861,7 +1863,7 @@ function AccountSection() {
   const { user } = useUser();
   const qc = useQueryClient();
   const activeGrid = useTerrainStore((s) => s.activeGrid);
-  const s = useSettingsStore();
+  const s = useSettingsStore(useShallow((s) => s));
   const { toast } = useToast();
   const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
   const deleteAllMarkers = useDeleteMarkersMine({
@@ -2442,7 +2444,7 @@ function AccountSection() {
  * Merges the old standalone "Environment" and "Units" sidebar entries.
  */
 function GeneralSection() {
-  const s = useSettingsStore();
+  const s = useSettingsStore(useShallow((s) => s));
   const [, setLocation] = useLocation();
   const setHasSeenOnboarding = useSettingsStore((st) => st.setHasSeenOnboarding);
   return (
@@ -2571,7 +2573,7 @@ function GeneralSection() {
  * Map & Overlays — Overview Map + Habitat Defaults in one section.
  */
 function MapOverlaysSection() {
-  const s = useSettingsStore();
+  const s = useSettingsStore(useShallow((s) => s));
   return (
     <>
       <SectionTitle helpId="ai-assistant" helpLabel="Map & Overlays">◈ MAP &amp; OVERLAYS</SectionTitle>
@@ -2639,7 +2641,7 @@ function MapOverlaysSection() {
  * Markers & Trails — Markers + GPS & Trail in one section.
  */
 function MarkersTrailsSection() {
-  const s = useSettingsStore();
+  const s = useSettingsStore(useShallow((s) => s));
   const MARKER_TYPE_OPTIONS =
     s.waterType === "freshwater"
       ? FRESHWATER_MARKER_TYPE_OPTIONS
@@ -2751,7 +2753,7 @@ function MarkersTrailsSection() {
  * Tides & Currents — Tidal Defaults + Bathymetric Currents in one section.
  */
 function TidesCurrentsSection() {
-  const s = useSettingsStore();
+  const s = useSettingsStore(useShallow((s) => s));
   return (
     <>
       <SectionTitle helpId="settings" helpLabel="Tides & Currents">◈ TIDES &amp; CURRENTS</SectionTitle>
@@ -2921,7 +2923,7 @@ function TidesCurrentsSection() {
  * Data & Storage — Dataset Defaults + Offline/Cache in one section.
  */
 function DataStorageSection() {
-  const s = useSettingsStore();
+  const s = useSettingsStore(useShallow((s) => s));
   const [cached, setCached] = useState<CachedDataset[]>([]);
   const [pending, setPending] = useState({ markers: 0, trails: 0 });
   const [loading, setLoading] = useState(true);

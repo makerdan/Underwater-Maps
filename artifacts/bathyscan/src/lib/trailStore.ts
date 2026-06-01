@@ -26,6 +26,12 @@ interface TrailStore {
   currentPoints: TrailGpsPoint[];
   startedAt: number | null;
   intervalId: ReturnType<typeof setInterval> | null;
+  /**
+   * The `beforeunload` listener registered when recording starts.
+   * Stored in state so `stopRecording` can remove it cleanly without
+   * mutating the timer-id primitive (which throws in strict-mode ES modules).
+   */
+  beforeUnloadCleanup: (() => void) | null;
   isOverflowing: boolean;
   startRecording: (intervalMs?: number) => void;
   addPoint: (pos: GpsPosition) => void;
@@ -40,17 +46,28 @@ export const useTrailStore = create<TrailStore>((set, get) => ({
   currentPoints: [],
   startedAt: null,
   intervalId: null,
+  beforeUnloadCleanup: null,
   isOverflowing: false,
 
   startRecording: (intervalMs = DEFAULT_INTERVAL_MS) => {
-    const { recording, intervalId } = get();
+    const { recording, intervalId, beforeUnloadCleanup: prevCleanup } = get();
     if (recording) return;
+
+    // Clean up any leftover interval / listener from a previous aborted session.
     if (intervalId) clearInterval(intervalId);
+    if (prevCleanup) window.removeEventListener("beforeunload", prevCleanup);
 
     const now = Date.now();
-    set({ recording: true, currentPoints: [], startedAt: now, intervalId: null, isOverflowing: false });
+    set({
+      recording: true,
+      currentPoints: [],
+      startedAt: now,
+      intervalId: null,
+      beforeUnloadCleanup: null,
+      isOverflowing: false,
+    });
 
-    // Sample immediately then on interval
+    // Sample immediately, then on every interval tick.
     const sample = () => {
       const pos = useGpsStore.getState().position;
       if (pos) get().addPoint(pos);
@@ -58,7 +75,17 @@ export const useTrailStore = create<TrailStore>((set, get) => ({
 
     sample();
     const id = setInterval(sample, intervalMs);
-    set({ intervalId: id });
+
+    // Guard against the page closing while a trail is still recording.
+    // The handler is stored in Zustand state (not on the timer-id primitive,
+    // which is a number and throws when you assign properties to it in strict
+    // ES-module mode) so stopRecording() can remove it on a normal stop.
+    const cleanup = () => {
+      clearInterval(id);
+    };
+    window.addEventListener("beforeunload", cleanup, { once: true });
+
+    set({ intervalId: id, beforeUnloadCleanup: cleanup });
   },
 
   addPoint: (pos) => {
@@ -75,7 +102,7 @@ export const useTrailStore = create<TrailStore>((set, get) => ({
         return { currentPoints: [...state.currentPoints, next] };
       }
 
-      // Ring-buffer: drop oldest, append new, mark overflowing
+      // Ring-buffer: drop oldest, append new, mark overflowing.
       const trimmed = state.currentPoints.slice(1);
       trimmed.push(next);
       return { currentPoints: trimmed, isOverflowing: true };
@@ -83,9 +110,13 @@ export const useTrailStore = create<TrailStore>((set, get) => ({
   },
 
   stopRecording: () => {
-    const { intervalId, currentPoints } = get();
+    const { intervalId, beforeUnloadCleanup, currentPoints } = get();
     if (intervalId) clearInterval(intervalId);
-    set({ recording: false, intervalId: null });
+    if (beforeUnloadCleanup) {
+      // Remove the listener so it doesn't dangle after a normal stop.
+      window.removeEventListener("beforeunload", beforeUnloadCleanup);
+    }
+    set({ recording: false, intervalId: null, beforeUnloadCleanup: null });
     return currentPoints;
   },
 

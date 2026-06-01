@@ -35,7 +35,7 @@
 import { create } from "zustand";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import type { EfhSpeciesProperties } from "@workspace/api-client-react";
-import { useSettingsStore } from "./settingsStore";
+import { useSettingsStore, DEFAULT_SETTINGS } from "./settingsStore";
 
 export const CURRENT_DEPTH_LAYERS: DepthLayer[] = ["surface", "mid", "near-bottom"];
 
@@ -280,10 +280,39 @@ function validDepthLayers(raw: unknown): DepthLayer[] {
   return valid.length ? valid : ["mid"];
 }
 
+// ── Helper: apply persisted settingsStore values to uiStore ──────────────────
+// Called once after settingsStore finishes rehydrating from localStorage so
+// the initial render sees the correct persisted overlay/toggle state rather
+// than the DEFAULT_SETTINGS fallbacks used during store construction.
+function applySettingsToUiStore(s: typeof DEFAULT_SETTINGS) {
+  useUiStore.setState({
+    zoneOverlayEnabled: s.zoneOverlayEnabled,
+    zonePaintMode: s.zonePaintMode,
+    zonePaintSlot: (s.zonePaintSlot as 0 | 1 | 2 | 3) ?? 0,
+    zonePaintBrushRadius: s.zonePaintBrushRadius,
+    substrateColorMode: s.substrateColorMode,
+    hiddenSubstrateClasses: new Set<string>(s.hiddenSubstrateClasses ?? []),
+    intertidalHotspotsEnabled: s.intertidalHotspotsEnabled,
+    intertidalScoreMode: s.intertidalScoreMode ?? 'tidepool',
+    efhOverlayEnabled: s.efhOverlayEnabled,
+    hiddenEfhSpecies: new Set<string>(s.hiddenEfhSpecies ?? []),
+    weatherStationsActive: s.weatherStationsActive,
+    rawsOverlayActive: s.rawsOverlayActive,
+    windOverlayActive: s.windOverlayActive,
+    tideOverlayActive: s.tideOverlayActive,
+    currentOverlayActive: s.currentOverlayActive,
+    currentDepthLayers: validDepthLayers(s.currentDepthLayers),
+    sidePaneCollapsed: s.sidePaneCollapsed,
+  });
+}
+
 export const useUiStore = create<UiStore>((set) => {
-  // Read initial values from settingsStore, which is already hydrated from
-  // localStorage via Zustand persist before this module is evaluated.
-  const s = useSettingsStore.getState();
+  // Use DEFAULT_SETTINGS as the initial values for fields that mirror
+  // settingsStore. The correct persisted values are applied via
+  // onFinishHydration (below) once settingsStore rehydrates from localStorage.
+  // This avoids reading useSettingsStore.getState() before persist has had a
+  // chance to hydrate, which could cause a flash of wrong defaults.
+  const s = DEFAULT_SETTINGS;
 
   return {
     // ── Transient state (resets on reload) ─────────────────────────────────
@@ -315,7 +344,8 @@ export const useUiStore = create<UiStore>((set) => {
     setScrubDatetime: (d) => set({ scrubDatetime: d }),
 
     // ── Persistent overlay toggles (synced via settingsStore → server) ─────
-    // Initial values come from settingsStore (already hydrated from localStorage).
+    // Initial values come from DEFAULT_SETTINGS; corrected post-rehydration
+    // via the onFinishHydration subscriber registered below this store.
     // Every setter writes back to settingsStore so the debounced PUT fires.
 
     zoneOverlayEnabled: s.zoneOverlayEnabled,
@@ -470,3 +500,18 @@ export const useUiStore = create<UiStore>((set) => {
     },
   };
 });
+
+// ── Post-rehydration sync from settingsStore ──────────────────────────────────
+// settingsStore uses Zustand's `persist` middleware with localStorage (sync).
+// In practice, hydration completes before this module finishes evaluating, but
+// we cannot guarantee that ordering in all bundler/lazy-import scenarios.
+// Using onFinishHydration (with a hasHydrated() guard) ensures uiStore always
+// gets the correct persisted values — either immediately (if already hydrated)
+// or as soon as hydration completes.
+if (useSettingsStore.persist.hasHydrated()) {
+  applySettingsToUiStore(useSettingsStore.getState());
+} else {
+  useSettingsStore.persist.onFinishHydration((state) => {
+    applySettingsToUiStore(state);
+  });
+}
