@@ -20,11 +20,6 @@ pnpm run typecheck && pnpm run lint
 # Guardrail: fail immediately if the generated API route tables in README.md
 # or replit.md are out of sync with lib/api-spec/openapi.yaml.
 pnpm run check:docs-stale
-# Increment the audit-cadence counters and create project tasks for any audit
-# that has reached its merge threshold. Uses || true so a failure (e.g. when
-# running outside the Replit code_execution sandbox) never aborts the post-merge
-# run — the script is advisory, not blocking.
-node scripts/queue-audits.mjs || true
 # Sync to GitHub mirror. Skipped (with a log message) if either secret is
 # absent so contributors without the GitHub secret don't break CI.
 if [ -n "${GITHUB_TOKEN}" ] && [ -n "${GITHUB_REPO_URL}" ]; then

@@ -17,8 +17,7 @@
     "capture:help-screenshots": "node scripts/capture-help-screenshots.mjs",
     "docs": "node scripts/generate-api-docs.mjs",
     "check:docs-stale": "node scripts/generate-api-docs.mjs --check",
-    "test-all": "pnpm run typecheck && pnpm run lint && pnpm run test:unit && pnpm run check:docs-stale",
-    "audits:status": "node scripts/audits-status.mjs"
+    "test-all": "pnpm run typecheck && pnpm run lint && pnpm run test:unit && pnpm run check:docs-stale"
   },
   "private": true,
   "devDependencies": {
