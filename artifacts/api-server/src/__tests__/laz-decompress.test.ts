@@ -10,7 +10,7 @@
  *
  * The suite validates:
  *   1. Round-trip correctness: real compressed bytes → correct lon/lat/depth
- *   2. Geographic and depth filtering (invalid coords, depth=0 skipped)
+ *   2. Geographic filtering (invalid coords) and depth=0 inclusion (intertidal)
  *   3. Dispatcher routing (.laz vs .las extension)
  *   4. Error paths (bad magic, too-small buffer, WASM init failure)
  *
@@ -54,7 +54,8 @@ describe("LAZ decompression — real laz-perf round-trip", () => {
       expect(p.lon).toBeLessThanOrEqual(180);
       expect(p.lat).toBeGreaterThanOrEqual(-90);
       expect(p.lat).toBeLessThanOrEqual(90);
-      expect(p.depth).toBeGreaterThan(0);
+      // depth=0 is a valid intertidal/waterline measurement; allow >= 0
+      expect(p.depth).toBeGreaterThanOrEqual(0);
     }
   });
 
@@ -70,13 +71,14 @@ describe("LAZ decompression — real laz-perf round-trip", () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it("filters the depth=0 point that the fixture includes at index 10", async () => {
+  it("includes the depth=0 point at index 10 (intertidal / waterline measurement)", async () => {
     const pts = await parseLasLaz(lazBuf, "survey.laz");
-    // 15 records total, 1 with depth=0 → 14 valid
-    expect(pts.length).toBe(14);
-    for (const p of pts) {
-      expect(p.depth).toBeGreaterThan(0);
-    }
+    // 15 records total; depth=0 is a valid intertidal measurement, so all 15
+    // are returned. The zero-depth-is-valid contract is enforced by
+    // parser-zero-depth-projected-crs.test.ts — do NOT filter depth=0 here.
+    expect(pts.length).toBe(15);
+    const zeroPt = pts.find((p) => p.depth === 0);
+    expect(zeroPt).toBeDefined();
   });
 
   it("derives correct lon/lat from scale and offset in the LAS header", async () => {
@@ -89,17 +91,22 @@ describe("LAZ decompression — real laz-perf round-trip", () => {
     }
   });
 
-  it("produces depth values spanning the fixture survey range (1250–2400 m)", async () => {
+  it("produces depth values spanning the full fixture range (0–2400 m)", async () => {
     const pts = await parseLasLaz(lazBuf, "survey.laz");
     const depths = pts.map((p) => p.depth);
-    expect(Math.min(...depths)).toBeCloseTo(1250, 0);
+    // Fixture has depths 1250–2400 m plus one depth=0 intertidal point
+    expect(Math.min(...depths)).toBeCloseTo(0, 0);
     expect(Math.max(...depths)).toBeCloseTo(2400, 0);
+    // Non-zero depths should cover the survey range
+    const nonZero = depths.filter((d) => d > 0);
+    expect(Math.min(...nonZero)).toBeCloseTo(1250, 0);
   });
 
   it("converts positive-up Z (negative LAS int) to positive-down depth", async () => {
     const pts = await parseLasLaz(lazBuf, "survey.laz");
     for (const p of pts) {
-      expect(p.depth).toBeGreaterThan(0);
+      // depth=0 is valid for the intertidal point; all others are > 0
+      expect(p.depth).toBeGreaterThanOrEqual(0);
     }
   });
 
@@ -107,7 +114,8 @@ describe("LAZ decompression — real laz-perf round-trip", () => {
     const pts = await parseUploadedFile(lazBuf, "survey.laz");
     expect(pts.length).toBeGreaterThanOrEqual(1);
     for (const p of pts) {
-      expect(p.depth).toBeGreaterThan(0);
+      // depth=0 is valid for the intertidal point; all others are > 0
+      expect(p.depth).toBeGreaterThanOrEqual(0);
     }
   });
 });

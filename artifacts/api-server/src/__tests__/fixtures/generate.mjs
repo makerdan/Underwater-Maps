@@ -280,7 +280,7 @@ function buildLas12() {
     { lon: -132.500700, lat: 55.200700, depth: 1800 },
     { lon: -132.500800, lat: 55.200800, depth: 1900 },
     { lon: -132.500900, lat: 55.200900, depth: 2000 },
-    { lon: -132.501000, lat: 55.201000, depth: 0 },    // depth=0 → skipped
+    { lon: -132.501000, lat: 55.201000, depth: 0 },    // depth=0 → valid intertidal point, included
     { lon: -132.501100, lat: 55.201100, depth: 2100 },
     { lon: -132.501200, lat: 55.201200, depth: 2200 },
     { lon: -132.501300, lat: 55.201300, depth: 2300 },
