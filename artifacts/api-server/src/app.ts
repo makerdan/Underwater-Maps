@@ -6,7 +6,6 @@ import { publishableKeyFromHost } from "@clerk/shared/keys";
 import {
   CLERK_PROXY_PATH,
   clerkProxyMiddleware,
-  getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
 import { correlationIdMiddleware, globalTimeoutMiddleware } from "./middlewares/correlationId";
 import router from "./routes";
