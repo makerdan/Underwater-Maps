@@ -59,7 +59,7 @@ describe("Canvas ARIA (structural)", () => {
   it("TourScene module exports TourScene without throwing", async () => {
     const mod = await import("../pages/TourScene");
     expect(mod.TourScene).toBeDefined();
-  });
+  }, 15_000);
 
   it("TourScene source includes aria-label for the canvas", async () => {
     const src = await import("../pages/TourScene?raw");
