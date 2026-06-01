@@ -44,6 +44,10 @@ args = "test-gpx-nmea-integration"
 task = "workflow.run"
 args = "test-fixture-freshness"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-settings-validation"
+
 [[workflows.workflow]]
 name = "typecheck"
 author = "agent"
@@ -117,6 +121,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "bash artifacts/api-server/src/__tests__/fixtures/check-fixture-freshness.sh"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "test-settings-validation"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/api-server run test:validation"
 
 [workflows.workflow.metadata]
 isValidation = true
