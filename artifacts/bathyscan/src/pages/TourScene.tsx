@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
+import { useCameraStore } from "@/lib/cameraStore";
 import * as THREE from "three";
 import {
   useGetDatasetsIdTerrain,
@@ -573,6 +574,58 @@ const ErrorOverlay: React.FC<ErrorOverlayProps> = ({ message, onRetry }) => (
 );
 
 // ---------------------------------------------------------------------------
+// CanvasAriaAnnouncer — screen-reader live region for depth / coordinates
+// ---------------------------------------------------------------------------
+/**
+ * Reads cameraLon / cameraLat / cameraDepth from cameraStore and writes a
+ * short, human-readable phrase into a visually-hidden aria-live="polite" div.
+ * Updates are debounced to ~1 s so the AT is not overwhelmed while flying.
+ */
+const CanvasAriaAnnouncer: React.FC = () => {
+  const [text, setText] = useState("");
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = useCameraStore.subscribe((state) => {
+      const { cameraLon, cameraLat, cameraDepth } = state;
+      if (cameraLon === null || cameraLat === null || cameraDepth === null) return;
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => {
+        setText(
+          `Depth ${Math.round(cameraDepth)} m, lat ${cameraLat.toFixed(4)}, lon ${cameraLon.toFixed(4)}`,
+        );
+      }, 1000);
+    });
+    return () => {
+      unsubscribe();
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  return (
+    <div
+      aria-live="polite"
+      aria-atomic="true"
+      data-testid="canvas-aria-announcer"
+      style={{
+        position: "absolute",
+        width: 1,
+        height: 1,
+        padding: 0,
+        margin: -1,
+        overflow: "hidden",
+        clip: "rect(0,0,0,0)",
+        whiteSpace: "nowrap",
+        border: 0,
+        zIndex: -1,
+      }}
+    >
+      {text}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // TourScene — the main page
 // ---------------------------------------------------------------------------
 interface TourSceneProps {
@@ -719,7 +772,12 @@ export const TourScene: React.FC<TourSceneProps> = ({
 
   return (
     <div className="relative w-full h-full">
+      {/* Screen-reader live region: announces depth and coordinates as the
+          camera moves. Visually hidden but read by AT on content change. */}
+      <CanvasAriaAnnouncer />
+
       <Canvas
+        aria-label="3D seafloor terrain viewer"
         camera={{ position: [0, 20, 40], fov, far: renderDistance }}
         gl={{
           antialias,

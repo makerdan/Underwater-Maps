@@ -21,6 +21,7 @@
  */
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   usePostMarkers,
@@ -128,6 +129,8 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const [speedKnots, setSpeedKnots] = useState<number>(DEFAULT_SPEED_KNOTS);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importingRef = useRef(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef);
 
   const bounds = useMemo<Bounds>(
     () => ({
@@ -374,6 +377,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     <div
       data-testid="gps-import-dialog"
       role="dialog"
+      aria-modal="true"
       aria-label="Import GPS data"
       style={{
         position: "fixed",
@@ -393,6 +397,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       }}
     >
       <div
+        ref={panelRef}
         style={{
           width: 520,
           maxWidth: "92vw",

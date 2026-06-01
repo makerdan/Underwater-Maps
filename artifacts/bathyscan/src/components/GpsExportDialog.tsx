@@ -9,8 +9,9 @@
  * Mirrors GpsImportDialog's visual + portal/scrim conventions so the entry
  * points feel symmetric.
  */
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import {
   useGetMarkers,
   useGetTrollingPresets,
@@ -36,6 +37,8 @@ interface Props {
 export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const { toast } = useToast();
   const [format, setFormat] = useState<ExportFormat>("gpx");
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef);
 
   const { data: markers } = useGetMarkers(
     { datasetId: terrain.datasetId },
@@ -104,6 +107,7 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     <div
       data-testid="gps-export-dialog"
       role="dialog"
+      aria-modal="true"
       aria-label="Export GPS data"
       style={{
         position: "fixed",
@@ -123,6 +127,7 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       }}
     >
       <div
+        ref={panelRef}
         style={{
           width: 460,
           maxWidth: "92vw",

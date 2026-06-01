@@ -12,7 +12,6 @@
     "test:validation": "vitest run --config vitest.config.validation.ts"
   },
   "devDependencies": {
-    "@workspace/api-zod": "workspace:*",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.4",
     "@radix-ui/react-alert-dialog": "^1.1.7",
@@ -59,6 +58,8 @@
     "@vitest/coverage-v8": "^4.1.7",
     "@vitest/ui": "^4.1.7",
     "@workspace/api-client-react": "workspace:*",
+    "@workspace/api-zod": "workspace:*",
+    "axe-core": "^4.11.4",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "cmdk": "^1.1.1",
@@ -84,6 +85,7 @@
     "vaul": "^1.1.2",
     "vite": "catalog:",
     "vitest": "^3.2.4",
+    "vitest-axe": "^0.1.0",
     "wouter": "catalog:",
     "zod": "catalog:"
   },

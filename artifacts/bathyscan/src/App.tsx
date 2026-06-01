@@ -779,12 +779,17 @@ function Main() {
     const handler = (e: KeyboardEvent) => {
       const bindings = useSettingsStore.getState().keyBindings;
       if (e.code === getBoundKey(bindings, "toggleOverview") && !e.repeat) {
-        const store = useUiStore.getState();
-        store.setOverviewOpen(!store.overviewOpen);
+        const el = e.target as HTMLElement | null;
+        const tag = el?.tagName ?? "";
+        if (tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT" && !el?.isContentEditable) {
+          const store = useUiStore.getState();
+          store.setOverviewOpen(!store.overviewOpen);
+        }
       }
       if (e.code === getBoundKey(bindings, "openQuery") && !e.repeat) {
-        const tag = (e.target as HTMLElement)?.tagName;
-        if (tag !== "INPUT" && tag !== "TEXTAREA") {
+        const el = e.target as HTMLElement | null;
+        const tag = el?.tagName ?? "";
+        if (tag !== "INPUT" && tag !== "TEXTAREA" && !el?.isContentEditable) {
           e.preventDefault();
           setQueryOpen(true);
         }
@@ -793,8 +798,9 @@ function Main() {
         e.code === getBoundKey(bindings, "openSettings") &&
         !e.repeat && !e.ctrlKey && !e.metaKey
       ) {
-        const tag = (e.target as HTMLElement)?.tagName;
-        if (tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") {
+        const el = e.target as HTMLElement | null;
+        const tag = el?.tagName ?? "";
+        if (tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT" && !el?.isContentEditable) {
           setLocation(basePath + "/settings");
         }
       }

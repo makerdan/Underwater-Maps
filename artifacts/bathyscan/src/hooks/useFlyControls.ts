@@ -291,6 +291,19 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       keys.current[e.code] = true;
       const bindings = keyBindingsRef.current;
 
+      // Suppress all single-key action shortcuts when focus is inside a text
+      // input, textarea, or contenteditable element — unless the pointer is
+      // already locked (pointer lock precludes focus in any input anyway).
+      const activeEl = document.activeElement as HTMLElement | null;
+      const activeTag = activeEl?.tagName ?? "";
+      const isEditableFocused =
+        !isLocked.current &&
+        (activeTag === "INPUT" ||
+          activeTag === "TEXTAREA" ||
+          activeEl?.isContentEditable === true);
+
+      if (isEditableFocused) return;
+
       // Speed tier up / down (not in realistic mode). The NumpadAdd /
       // NumpadSubtract synonyms are always honoured in addition to the
       // user's chosen binding so a numpad keeps working out of the box.

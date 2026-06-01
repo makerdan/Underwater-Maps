@@ -10,11 +10,12 @@
  * "SIMULATED DATA" badge stays visible). A "Don't ask again this session"
  * checkbox suppresses subsequent prompts for the current tab only.
  */
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSimulatedDataStore } from "@/lib/simulatedDataStore";
 import { useToast } from "@/hooks/use-toast";
 import { useUiStore } from "@/lib/uiStore";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 export const SimulatedDataConfirmDialog: React.FC = () => {
   const pending = useSimulatedDataStore((s) => s.pending);
@@ -22,6 +23,9 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
   const setSuppressed = useSimulatedDataStore((s) => s.setSuppressed);
   const { toast } = useToast();
   const setFindDataPanelOpen = useUiStore((s) => s.setFindDataPanelOpen);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const cancelBtnRef = useRef<HTMLButtonElement>(null);
+  useFocusTrap(dialogRef);
 
   // Close on Escape — treat as Cancel.
   useEffect(() => {
@@ -81,9 +85,6 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
 
   const body = (
     <div
-      data-testid="simulated-data-dialog"
-      role="dialog"
-      aria-label="Simulated depth data warning"
       style={{
         position: "fixed",
         inset: 0,
@@ -102,6 +103,12 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
       }}
     >
       <div
+        ref={dialogRef}
+        data-testid="simulated-data-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="simdata-dialog-title"
+        aria-describedby="simdata-dialog-desc"
         style={{
           width: 480,
           maxWidth: "92vw",
@@ -123,6 +130,7 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
           }}
         >
           <span
+            id="simdata-dialog-title"
             style={{
               color: "#f59e0b",
               letterSpacing: "0.18em",
@@ -149,7 +157,7 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
         </div>
 
         <div style={{ padding: 14 }}>
-          <p style={{ margin: "0 0 10px", color: "#e2e8f0", lineHeight: 1.5 }}>
+          <p id="simdata-dialog-desc" style={{ margin: "0 0 10px", color: "#e2e8f0", lineHeight: 1.5 }}>
             The depth values for this dataset will be{" "}
             <strong style={{ color: "#f59e0b" }}>simulated</strong>, not
             measured. {isUnknown
@@ -231,6 +239,7 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
             }}
           >
             <button
+              ref={cancelBtnRef}
               onClick={handleCancel}
               data-testid="simulated-data-cancel"
               autoFocus
