@@ -1795,7 +1795,10 @@ export function gridPoints(
           const j = r2 * N + c2;
           if (counts[j]! === 0) continue;
           const dist2 = dr * dr + dc * dc;
-          const w = 1 / dist2;
+          // Guard: clamp to a large finite weight for exact-match (dist2 === 0).
+          // In practice Chebyshev-ring iteration (r >= 1) ensures dist2 >= 1,
+          // but this prevents a 1/0 = Infinity if the geometry ever changes.
+          const w = dist2 === 0 ? 1e12 : 1 / dist2;
           weightedSum += depths[j]! * w;
           weightSum += w;
           found++;
@@ -1804,6 +1807,8 @@ export function gridPoints(
       if (found >= K_MIN) break; // enough neighbours collected
     }
 
+    // Leave the cell untouched (depth stays 0 / NaN) when no neighbours were
+    // found rather than writing NaN from a 0/0 division.
     if (weightSum > 0) {
       depths[i] = weightedSum / weightSum;
     }

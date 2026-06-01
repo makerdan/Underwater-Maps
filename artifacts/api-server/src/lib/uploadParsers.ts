@@ -494,6 +494,10 @@ export async function parseLasLaz(buffer: Buffer, fileName: string): Promise<Raw
     const zip = new lp.LASZip();
     // Allocate WASM heap space for the entire file buffer
     const ptr = (lp as unknown as { _malloc: (n: number) => number })._malloc(buffer.length);
+    if (ptr === 0) {
+      zip.delete();
+      throw new Error("WASM out of memory allocating file buffer");
+    }
     try {
       (lp as unknown as { HEAPU8: Uint8Array }).HEAPU8.set(
         new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength),
@@ -506,6 +510,9 @@ export async function parseLasLaz(buffer: Buffer, fileName: string): Promise<Raw
       const pts: { x: number; y: number; z: number }[] = [];
 
       const dest = (lp as unknown as { _malloc: (n: number) => number })._malloc(ptLen);
+      if (dest === 0) {
+        throw new Error("WASM out of memory allocating point record buffer");
+      }
       try {
         for (let i = 0; i < count; i++) {
           zip.getPoint(dest);
@@ -557,7 +564,7 @@ export async function parseLasLaz(buffer: Buffer, fileName: string): Promise<Raw
 
   for (let i = 0; i < total; i++) {
     const base = pointDataOffset + i * recordSize;
-    if (base + 12 > buffer.length) break;
+    if (base + recordSize > buffer.length) break;
     const xi = buffer.readInt32LE(base);
     const yi = buffer.readInt32LE(base + 4);
     const zi = buffer.readInt32LE(base + 8);
@@ -711,8 +718,14 @@ function extractBagGeolocation(
     };
   }
 
-  // Fallback: 1 degree spans with unit pixel size
-  return { lon0: -180, lat0: -90, dLon: 0.001, dLat: 0.001, cols: ncols, rows: nrows };
+  // No valid bounding-box coordinates found in the XML — throw a structured
+  // error so the upload fails loudly rather than silently placing data at the
+  // Antarctic sentinel coordinates (-180 lon, -90 lat).
+  throw new Error(
+    "BAG metadata missing geolocation: could not extract westBoundLongitude / " +
+      "eastBoundLongitude / southBoundLatitude / northBoundLatitude from BAG XML metadata. " +
+      "Ensure the .bag file contains a valid ISO 19115 spatial-extent element.",
+  );
 }
 
 // ---------------------------------------------------------------------------
