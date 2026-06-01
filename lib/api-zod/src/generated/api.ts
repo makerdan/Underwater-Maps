@@ -854,7 +854,28 @@ export const getSettingsResponseZoneOverlaySlotsFreshwaterItemColorRegExp = new 
 export const getSettingsResponseZoneOverlaySlotsFreshwaterMin = 4;
 export const getSettingsResponseZoneOverlaySlotsFreshwaterMax = 4;
 
+export const getSettingsResponseWeatherStationsActiveDefault = false;
+export const getSettingsResponseRawsOverlayActiveDefault = false;
+export const getSettingsResponseWindOverlayActiveDefault = false;
+export const getSettingsResponseTideOverlayActiveDefault = false;
+export const getSettingsResponseCurrentOverlayActiveDefault = false;
+export const getSettingsResponseSidePaneCollapsedDefault = false;
+export const getSettingsResponseZonePaintBrushRadiusDefault = 4;
+export const getSettingsResponseZonePaintBrushRadiusMax = 20;
 
+export const getSettingsResponseZoneOverlayEnabledDefault = false;
+export const getSettingsResponseZonePaintModeDefault = false;
+export const getSettingsResponseZonePaintSlotDefault = 0;
+export const getSettingsResponseZonePaintSlotMin = 0;
+export const getSettingsResponseZonePaintSlotMax = 3;
+
+export const getSettingsResponseSubstrateColorModeDefault = false;
+export const getSettingsResponseHiddenSubstrateClassesDefault = [];
+export const getSettingsResponseIntertidalHotspotsEnabledDefault = false;
+export const getSettingsResponseIntertidalScoreModeDefault = `tidepool`;
+export const getSettingsResponseEfhOverlayEnabledDefault = false;
+export const getSettingsResponseHiddenEfhSpeciesDefault = [];
+export const getSettingsResponseGlobalFontSizeDefault = `medium`;
 
 export const GetSettingsResponse = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(getSettingsResponseTextureQualityDefault),
@@ -883,7 +904,7 @@ export const GetSettingsResponse = zod.object({
   }
 }),
   "lampIntensity": zod.number().min(getSettingsResponseLampIntensityMin).max(getSettingsResponseLampIntensityMax).default(getSettingsResponseLampIntensityDefault),
-  "defaultSpeedTier": zod.number().min(getSettingsResponseDefaultSpeedTierMin).max(getSettingsResponseDefaultSpeedTierMax).default(getSettingsResponseDefaultSpeedTierDefault),
+  "defaultSpeedTier": zod.number().min(getSettingsResponseDefaultSpeedTierMin).max(getSettingsResponseDefaultSpeedTierMax).int().default(getSettingsResponseDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(getSettingsResponseInvertMouseYDefault),
   "mouseSensitivity": zod.number().min(getSettingsResponseMouseSensitivityMin).max(getSettingsResponseMouseSensitivityMax).default(getSettingsResponseMouseSensitivityDefault),
   "cameraSpawnBehaviour": zod.enum(['deepest', 'home', 'last']).default(getSettingsResponseCameraSpawnBehaviourDefault),
@@ -905,7 +926,7 @@ export const GetSettingsResponse = zod.object({
   "privateMarkers": zod.boolean().default(getSettingsResponsePrivateMarkersDefault),
   "defaultMarkerType": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'depth_pole', 'log', 'vegetation', 'sample', 'bass', 'trout', 'pike', 'walleye', 'crayfish', 'salmon', 'tuna', 'halibut', 'shark', 'swordfish', 'rockfish', 'cod', 'mahi_mahi', 'grouper', 'snapper', 'crab', 'lobster', 'shrimp', 'krill', 'jellyfish', 'octopus', 'squid', 'sea_urchin', 'starfish', 'sea_turtle', 'school_herring', 'school_sardine', 'school_mackerel', 'school_tuna', 'school_anchovy', 'catfish', 'crappie', 'bluegill', 'sunfish', 'carp', 'yellow_perch', 'muskie', 'largemouth_bass', 'smallmouth_bass', 'channel_catfish', 'freshwater_shrimp', 'freshwater_crab', 'snapping_turtle', 'bullfrog', 'beaver_dam', 'lily_pad', 'cattail', 'reed_bed', 'submerged_grass', 'spring', 'school_perch', 'school_bluegill', 'school_bass', 'school_crappie', 'school_carp']).default(getSettingsResponseDefaultMarkerTypeDefault),
   "defaultRegion": zod.string().default(getSettingsResponseDefaultRegionDefault),
-  "gpsRecordingInterval": zod.number().min(getSettingsResponseGpsRecordingIntervalMin).max(getSettingsResponseGpsRecordingIntervalMax).default(getSettingsResponseGpsRecordingIntervalDefault),
+  "gpsRecordingInterval": zod.number().min(getSettingsResponseGpsRecordingIntervalMin).max(getSettingsResponseGpsRecordingIntervalMax).int().default(getSettingsResponseGpsRecordingIntervalDefault),
   "waterType": zod.enum(['saltwater', 'freshwater']).default(getSettingsResponseWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter'),
   "showUiTooltips": zod.boolean().default(getSettingsResponseShowUiTooltipsDefault).describe('Show hover\/focus tooltips on viewscreen controls and HUD readouts.'),
   "panelCollapse": zod.record(zod.string(), zod.boolean()).default(getSettingsResponsePanelCollapseDefault).describe('Panel expand\/collapse state keyed by panel id. Synced cross-device for signed-in users.'),
@@ -918,7 +939,25 @@ export const GetSettingsResponse = zod.object({
   "color": zod.string().regex(getSettingsResponseZoneOverlaySlotsFreshwaterItemColorRegExp),
   "visible": zod.boolean()
 })).min(getSettingsResponseZoneOverlaySlotsFreshwaterMin).max(getSettingsResponseZoneOverlaySlotsFreshwaterMax).optional()
-}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.')
+}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.'),
+  "weatherStationsActive": zod.boolean().default(getSettingsResponseWeatherStationsActiveDefault).describe('Show ASOS\/AWOS weather station overlays on the overview map.'),
+  "rawsOverlayActive": zod.boolean().default(getSettingsResponseRawsOverlayActiveDefault).describe('Show RAWS (Remote Automated Weather Stations) overlay.'),
+  "windOverlayActive": zod.boolean().default(getSettingsResponseWindOverlayActiveDefault).describe('Show animated wind overlay on the overview map.'),
+  "tideOverlayActive": zod.boolean().default(getSettingsResponseTideOverlayActiveDefault).describe('Show tidal height overlay on the overview map.'),
+  "currentOverlayActive": zod.boolean().default(getSettingsResponseCurrentOverlayActiveDefault).describe('Show ocean current overlay on the overview map.'),
+  "currentDepthLayers": zod.array(zod.enum(['surface', 'mid', 'near-bottom'])).default([`mid`]).describe('Which depth layers to display for the current overlay.'),
+  "sidePaneCollapsed": zod.boolean().default(getSettingsResponseSidePaneCollapsedDefault).describe('Whether the side panel is collapsed.'),
+  "zonePaintBrushRadius": zod.number().min(1).max(getSettingsResponseZonePaintBrushRadiusMax).int().default(getSettingsResponseZonePaintBrushRadiusDefault).describe('Radius in grid cells of the zone-paint brush tool.'),
+  "zoneOverlayEnabled": zod.boolean().default(getSettingsResponseZoneOverlayEnabledDefault).describe('Whether the substrate zone overlay is visible.'),
+  "zonePaintMode": zod.boolean().default(getSettingsResponseZonePaintModeDefault).describe('Whether the zone-paint mode is active.'),
+  "zonePaintSlot": zod.number().min(getSettingsResponseZonePaintSlotMin).max(getSettingsResponseZonePaintSlotMax).int().default(getSettingsResponseZonePaintSlotDefault).describe('Active zone-paint slot index (0–3).'),
+  "substrateColorMode": zod.boolean().default(getSettingsResponseSubstrateColorModeDefault).describe('When true, terrain is coloured by substrate class instead of depth.'),
+  "hiddenSubstrateClasses": zod.array(zod.string()).default(getSettingsResponseHiddenSubstrateClassesDefault).describe('List of substrate class names hidden from the substrate overlay.'),
+  "intertidalHotspotsEnabled": zod.boolean().default(getSettingsResponseIntertidalHotspotsEnabledDefault).describe('Whether the intertidal hotspot overlay is enabled.'),
+  "intertidalScoreMode": zod.enum(['tidepool', 'beachcombing']).default(getSettingsResponseIntertidalScoreModeDefault).describe('Scoring mode used to rank intertidal hotspot polygons.'),
+  "efhOverlayEnabled": zod.boolean().default(getSettingsResponseEfhOverlayEnabledDefault).describe('Whether the Essential Fish Habitat overlay is visible.'),
+  "hiddenEfhSpecies": zod.array(zod.string()).default(getSettingsResponseHiddenEfhSpeciesDefault).describe('Species names whose EFH polygons are hidden from the overlay.'),
+  "globalFontSize": zod.enum(['smallest', 'small', 'medium', 'large', 'x-large', 'largest']).default(getSettingsResponseGlobalFontSizeDefault).describe('Global UI font size level applied throughout the application.')
 }).describe('Per-user application settings with sensible defaults')
 
 
@@ -1009,7 +1048,28 @@ export const putSettingsBodyZoneOverlaySlotsFreshwaterItemColorRegExp = new RegE
 export const putSettingsBodyZoneOverlaySlotsFreshwaterMin = 4;
 export const putSettingsBodyZoneOverlaySlotsFreshwaterMax = 4;
 
+export const putSettingsBodyWeatherStationsActiveDefault = false;
+export const putSettingsBodyRawsOverlayActiveDefault = false;
+export const putSettingsBodyWindOverlayActiveDefault = false;
+export const putSettingsBodyTideOverlayActiveDefault = false;
+export const putSettingsBodyCurrentOverlayActiveDefault = false;
+export const putSettingsBodySidePaneCollapsedDefault = false;
+export const putSettingsBodyZonePaintBrushRadiusDefault = 4;
+export const putSettingsBodyZonePaintBrushRadiusMax = 20;
 
+export const putSettingsBodyZoneOverlayEnabledDefault = false;
+export const putSettingsBodyZonePaintModeDefault = false;
+export const putSettingsBodyZonePaintSlotDefault = 0;
+export const putSettingsBodyZonePaintSlotMin = 0;
+export const putSettingsBodyZonePaintSlotMax = 3;
+
+export const putSettingsBodySubstrateColorModeDefault = false;
+export const putSettingsBodyHiddenSubstrateClassesDefault = [];
+export const putSettingsBodyIntertidalHotspotsEnabledDefault = false;
+export const putSettingsBodyIntertidalScoreModeDefault = `tidepool`;
+export const putSettingsBodyEfhOverlayEnabledDefault = false;
+export const putSettingsBodyHiddenEfhSpeciesDefault = [];
+export const putSettingsBodyGlobalFontSizeDefault = `medium`;
 
 export const PutSettingsBody = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsBodyTextureQualityDefault),
@@ -1038,7 +1098,7 @@ export const PutSettingsBody = zod.object({
   }
 }),
   "lampIntensity": zod.number().min(putSettingsBodyLampIntensityMin).max(putSettingsBodyLampIntensityMax).default(putSettingsBodyLampIntensityDefault),
-  "defaultSpeedTier": zod.number().min(putSettingsBodyDefaultSpeedTierMin).max(putSettingsBodyDefaultSpeedTierMax).default(putSettingsBodyDefaultSpeedTierDefault),
+  "defaultSpeedTier": zod.number().min(putSettingsBodyDefaultSpeedTierMin).max(putSettingsBodyDefaultSpeedTierMax).int().default(putSettingsBodyDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(putSettingsBodyInvertMouseYDefault),
   "mouseSensitivity": zod.number().min(putSettingsBodyMouseSensitivityMin).max(putSettingsBodyMouseSensitivityMax).default(putSettingsBodyMouseSensitivityDefault),
   "cameraSpawnBehaviour": zod.enum(['deepest', 'home', 'last']).default(putSettingsBodyCameraSpawnBehaviourDefault),
@@ -1060,7 +1120,7 @@ export const PutSettingsBody = zod.object({
   "privateMarkers": zod.boolean().default(putSettingsBodyPrivateMarkersDefault),
   "defaultMarkerType": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'depth_pole', 'log', 'vegetation', 'sample', 'bass', 'trout', 'pike', 'walleye', 'crayfish', 'salmon', 'tuna', 'halibut', 'shark', 'swordfish', 'rockfish', 'cod', 'mahi_mahi', 'grouper', 'snapper', 'crab', 'lobster', 'shrimp', 'krill', 'jellyfish', 'octopus', 'squid', 'sea_urchin', 'starfish', 'sea_turtle', 'school_herring', 'school_sardine', 'school_mackerel', 'school_tuna', 'school_anchovy', 'catfish', 'crappie', 'bluegill', 'sunfish', 'carp', 'yellow_perch', 'muskie', 'largemouth_bass', 'smallmouth_bass', 'channel_catfish', 'freshwater_shrimp', 'freshwater_crab', 'snapping_turtle', 'bullfrog', 'beaver_dam', 'lily_pad', 'cattail', 'reed_bed', 'submerged_grass', 'spring', 'school_perch', 'school_bluegill', 'school_bass', 'school_crappie', 'school_carp']).default(putSettingsBodyDefaultMarkerTypeDefault),
   "defaultRegion": zod.string().default(putSettingsBodyDefaultRegionDefault),
-  "gpsRecordingInterval": zod.number().min(putSettingsBodyGpsRecordingIntervalMin).max(putSettingsBodyGpsRecordingIntervalMax).default(putSettingsBodyGpsRecordingIntervalDefault),
+  "gpsRecordingInterval": zod.number().min(putSettingsBodyGpsRecordingIntervalMin).max(putSettingsBodyGpsRecordingIntervalMax).int().default(putSettingsBodyGpsRecordingIntervalDefault),
   "waterType": zod.enum(['saltwater', 'freshwater']).default(putSettingsBodyWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter'),
   "showUiTooltips": zod.boolean().default(putSettingsBodyShowUiTooltipsDefault).describe('Show hover\/focus tooltips on viewscreen controls and HUD readouts.'),
   "panelCollapse": zod.record(zod.string(), zod.boolean()).default(putSettingsBodyPanelCollapseDefault).describe('Panel expand\/collapse state keyed by panel id. Synced cross-device for signed-in users.'),
@@ -1073,7 +1133,25 @@ export const PutSettingsBody = zod.object({
   "color": zod.string().regex(putSettingsBodyZoneOverlaySlotsFreshwaterItemColorRegExp),
   "visible": zod.boolean()
 })).min(putSettingsBodyZoneOverlaySlotsFreshwaterMin).max(putSettingsBodyZoneOverlaySlotsFreshwaterMax).optional()
-}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.')
+}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.'),
+  "weatherStationsActive": zod.boolean().default(putSettingsBodyWeatherStationsActiveDefault).describe('Show ASOS\/AWOS weather station overlays on the overview map.'),
+  "rawsOverlayActive": zod.boolean().default(putSettingsBodyRawsOverlayActiveDefault).describe('Show RAWS (Remote Automated Weather Stations) overlay.'),
+  "windOverlayActive": zod.boolean().default(putSettingsBodyWindOverlayActiveDefault).describe('Show animated wind overlay on the overview map.'),
+  "tideOverlayActive": zod.boolean().default(putSettingsBodyTideOverlayActiveDefault).describe('Show tidal height overlay on the overview map.'),
+  "currentOverlayActive": zod.boolean().default(putSettingsBodyCurrentOverlayActiveDefault).describe('Show ocean current overlay on the overview map.'),
+  "currentDepthLayers": zod.array(zod.enum(['surface', 'mid', 'near-bottom'])).default([`mid`]).describe('Which depth layers to display for the current overlay.'),
+  "sidePaneCollapsed": zod.boolean().default(putSettingsBodySidePaneCollapsedDefault).describe('Whether the side panel is collapsed.'),
+  "zonePaintBrushRadius": zod.number().min(1).max(putSettingsBodyZonePaintBrushRadiusMax).int().default(putSettingsBodyZonePaintBrushRadiusDefault).describe('Radius in grid cells of the zone-paint brush tool.'),
+  "zoneOverlayEnabled": zod.boolean().default(putSettingsBodyZoneOverlayEnabledDefault).describe('Whether the substrate zone overlay is visible.'),
+  "zonePaintMode": zod.boolean().default(putSettingsBodyZonePaintModeDefault).describe('Whether the zone-paint mode is active.'),
+  "zonePaintSlot": zod.number().min(putSettingsBodyZonePaintSlotMin).max(putSettingsBodyZonePaintSlotMax).int().default(putSettingsBodyZonePaintSlotDefault).describe('Active zone-paint slot index (0–3).'),
+  "substrateColorMode": zod.boolean().default(putSettingsBodySubstrateColorModeDefault).describe('When true, terrain is coloured by substrate class instead of depth.'),
+  "hiddenSubstrateClasses": zod.array(zod.string()).default(putSettingsBodyHiddenSubstrateClassesDefault).describe('List of substrate class names hidden from the substrate overlay.'),
+  "intertidalHotspotsEnabled": zod.boolean().default(putSettingsBodyIntertidalHotspotsEnabledDefault).describe('Whether the intertidal hotspot overlay is enabled.'),
+  "intertidalScoreMode": zod.enum(['tidepool', 'beachcombing']).default(putSettingsBodyIntertidalScoreModeDefault).describe('Scoring mode used to rank intertidal hotspot polygons.'),
+  "efhOverlayEnabled": zod.boolean().default(putSettingsBodyEfhOverlayEnabledDefault).describe('Whether the Essential Fish Habitat overlay is visible.'),
+  "hiddenEfhSpecies": zod.array(zod.string()).default(putSettingsBodyHiddenEfhSpeciesDefault).describe('Species names whose EFH polygons are hidden from the overlay.'),
+  "globalFontSize": zod.enum(['smallest', 'small', 'medium', 'large', 'x-large', 'largest']).default(putSettingsBodyGlobalFontSizeDefault).describe('Global UI font size level applied throughout the application.')
 }).describe('Per-user application settings with sensible defaults')
 
 export const putSettingsResponseTextureQualityDefault = `high`;
@@ -1159,7 +1237,28 @@ export const putSettingsResponseZoneOverlaySlotsFreshwaterItemColorRegExp = new 
 export const putSettingsResponseZoneOverlaySlotsFreshwaterMin = 4;
 export const putSettingsResponseZoneOverlaySlotsFreshwaterMax = 4;
 
+export const putSettingsResponseWeatherStationsActiveDefault = false;
+export const putSettingsResponseRawsOverlayActiveDefault = false;
+export const putSettingsResponseWindOverlayActiveDefault = false;
+export const putSettingsResponseTideOverlayActiveDefault = false;
+export const putSettingsResponseCurrentOverlayActiveDefault = false;
+export const putSettingsResponseSidePaneCollapsedDefault = false;
+export const putSettingsResponseZonePaintBrushRadiusDefault = 4;
+export const putSettingsResponseZonePaintBrushRadiusMax = 20;
 
+export const putSettingsResponseZoneOverlayEnabledDefault = false;
+export const putSettingsResponseZonePaintModeDefault = false;
+export const putSettingsResponseZonePaintSlotDefault = 0;
+export const putSettingsResponseZonePaintSlotMin = 0;
+export const putSettingsResponseZonePaintSlotMax = 3;
+
+export const putSettingsResponseSubstrateColorModeDefault = false;
+export const putSettingsResponseHiddenSubstrateClassesDefault = [];
+export const putSettingsResponseIntertidalHotspotsEnabledDefault = false;
+export const putSettingsResponseIntertidalScoreModeDefault = `tidepool`;
+export const putSettingsResponseEfhOverlayEnabledDefault = false;
+export const putSettingsResponseHiddenEfhSpeciesDefault = [];
+export const putSettingsResponseGlobalFontSizeDefault = `medium`;
 
 export const PutSettingsResponse = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsResponseTextureQualityDefault),
@@ -1188,7 +1287,7 @@ export const PutSettingsResponse = zod.object({
   }
 }),
   "lampIntensity": zod.number().min(putSettingsResponseLampIntensityMin).max(putSettingsResponseLampIntensityMax).default(putSettingsResponseLampIntensityDefault),
-  "defaultSpeedTier": zod.number().min(putSettingsResponseDefaultSpeedTierMin).max(putSettingsResponseDefaultSpeedTierMax).default(putSettingsResponseDefaultSpeedTierDefault),
+  "defaultSpeedTier": zod.number().min(putSettingsResponseDefaultSpeedTierMin).max(putSettingsResponseDefaultSpeedTierMax).int().default(putSettingsResponseDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(putSettingsResponseInvertMouseYDefault),
   "mouseSensitivity": zod.number().min(putSettingsResponseMouseSensitivityMin).max(putSettingsResponseMouseSensitivityMax).default(putSettingsResponseMouseSensitivityDefault),
   "cameraSpawnBehaviour": zod.enum(['deepest', 'home', 'last']).default(putSettingsResponseCameraSpawnBehaviourDefault),
@@ -1210,7 +1309,7 @@ export const PutSettingsResponse = zod.object({
   "privateMarkers": zod.boolean().default(putSettingsResponsePrivateMarkersDefault),
   "defaultMarkerType": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'depth_pole', 'log', 'vegetation', 'sample', 'bass', 'trout', 'pike', 'walleye', 'crayfish', 'salmon', 'tuna', 'halibut', 'shark', 'swordfish', 'rockfish', 'cod', 'mahi_mahi', 'grouper', 'snapper', 'crab', 'lobster', 'shrimp', 'krill', 'jellyfish', 'octopus', 'squid', 'sea_urchin', 'starfish', 'sea_turtle', 'school_herring', 'school_sardine', 'school_mackerel', 'school_tuna', 'school_anchovy', 'catfish', 'crappie', 'bluegill', 'sunfish', 'carp', 'yellow_perch', 'muskie', 'largemouth_bass', 'smallmouth_bass', 'channel_catfish', 'freshwater_shrimp', 'freshwater_crab', 'snapping_turtle', 'bullfrog', 'beaver_dam', 'lily_pad', 'cattail', 'reed_bed', 'submerged_grass', 'spring', 'school_perch', 'school_bluegill', 'school_bass', 'school_crappie', 'school_carp']).default(putSettingsResponseDefaultMarkerTypeDefault),
   "defaultRegion": zod.string().default(putSettingsResponseDefaultRegionDefault),
-  "gpsRecordingInterval": zod.number().min(putSettingsResponseGpsRecordingIntervalMin).max(putSettingsResponseGpsRecordingIntervalMax).default(putSettingsResponseGpsRecordingIntervalDefault),
+  "gpsRecordingInterval": zod.number().min(putSettingsResponseGpsRecordingIntervalMin).max(putSettingsResponseGpsRecordingIntervalMax).int().default(putSettingsResponseGpsRecordingIntervalDefault),
   "waterType": zod.enum(['saltwater', 'freshwater']).default(putSettingsResponseWaterTypeDefault).describe('Active water body type; controls colormap, species lists, marker types, and dataset filter'),
   "showUiTooltips": zod.boolean().default(putSettingsResponseShowUiTooltipsDefault).describe('Show hover\/focus tooltips on viewscreen controls and HUD readouts.'),
   "panelCollapse": zod.record(zod.string(), zod.boolean()).default(putSettingsResponsePanelCollapseDefault).describe('Panel expand\/collapse state keyed by panel id. Synced cross-device for signed-in users.'),
@@ -1223,7 +1322,25 @@ export const PutSettingsResponse = zod.object({
   "color": zod.string().regex(putSettingsResponseZoneOverlaySlotsFreshwaterItemColorRegExp),
   "visible": zod.boolean()
 })).min(putSettingsResponseZoneOverlaySlotsFreshwaterMin).max(putSettingsResponseZoneOverlaySlotsFreshwaterMax).optional()
-}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.')
+}).optional().describe('Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users.'),
+  "weatherStationsActive": zod.boolean().default(putSettingsResponseWeatherStationsActiveDefault).describe('Show ASOS\/AWOS weather station overlays on the overview map.'),
+  "rawsOverlayActive": zod.boolean().default(putSettingsResponseRawsOverlayActiveDefault).describe('Show RAWS (Remote Automated Weather Stations) overlay.'),
+  "windOverlayActive": zod.boolean().default(putSettingsResponseWindOverlayActiveDefault).describe('Show animated wind overlay on the overview map.'),
+  "tideOverlayActive": zod.boolean().default(putSettingsResponseTideOverlayActiveDefault).describe('Show tidal height overlay on the overview map.'),
+  "currentOverlayActive": zod.boolean().default(putSettingsResponseCurrentOverlayActiveDefault).describe('Show ocean current overlay on the overview map.'),
+  "currentDepthLayers": zod.array(zod.enum(['surface', 'mid', 'near-bottom'])).default([`mid`]).describe('Which depth layers to display for the current overlay.'),
+  "sidePaneCollapsed": zod.boolean().default(putSettingsResponseSidePaneCollapsedDefault).describe('Whether the side panel is collapsed.'),
+  "zonePaintBrushRadius": zod.number().min(1).max(putSettingsResponseZonePaintBrushRadiusMax).int().default(putSettingsResponseZonePaintBrushRadiusDefault).describe('Radius in grid cells of the zone-paint brush tool.'),
+  "zoneOverlayEnabled": zod.boolean().default(putSettingsResponseZoneOverlayEnabledDefault).describe('Whether the substrate zone overlay is visible.'),
+  "zonePaintMode": zod.boolean().default(putSettingsResponseZonePaintModeDefault).describe('Whether the zone-paint mode is active.'),
+  "zonePaintSlot": zod.number().min(putSettingsResponseZonePaintSlotMin).max(putSettingsResponseZonePaintSlotMax).int().default(putSettingsResponseZonePaintSlotDefault).describe('Active zone-paint slot index (0–3).'),
+  "substrateColorMode": zod.boolean().default(putSettingsResponseSubstrateColorModeDefault).describe('When true, terrain is coloured by substrate class instead of depth.'),
+  "hiddenSubstrateClasses": zod.array(zod.string()).default(putSettingsResponseHiddenSubstrateClassesDefault).describe('List of substrate class names hidden from the substrate overlay.'),
+  "intertidalHotspotsEnabled": zod.boolean().default(putSettingsResponseIntertidalHotspotsEnabledDefault).describe('Whether the intertidal hotspot overlay is enabled.'),
+  "intertidalScoreMode": zod.enum(['tidepool', 'beachcombing']).default(putSettingsResponseIntertidalScoreModeDefault).describe('Scoring mode used to rank intertidal hotspot polygons.'),
+  "efhOverlayEnabled": zod.boolean().default(putSettingsResponseEfhOverlayEnabledDefault).describe('Whether the Essential Fish Habitat overlay is visible.'),
+  "hiddenEfhSpecies": zod.array(zod.string()).default(putSettingsResponseHiddenEfhSpeciesDefault).describe('Species names whose EFH polygons are hidden from the overlay.'),
+  "globalFontSize": zod.enum(['smallest', 'small', 'medium', 'large', 'x-large', 'largest']).default(putSettingsResponseGlobalFontSizeDefault).describe('Global UI font size level applied throughout the application.')
 }).describe('Per-user application settings with sensible defaults')
 
 

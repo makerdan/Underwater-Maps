@@ -423,6 +423,41 @@ export type UserSettingsZoneOverlaySlots = {
   freshwater?: UserSettingsZoneOverlaySlotsFreshwaterItem[];
 };
 
+export type UserSettingsCurrentDepthLayersItem = typeof UserSettingsCurrentDepthLayersItem[keyof typeof UserSettingsCurrentDepthLayersItem];
+
+
+export const UserSettingsCurrentDepthLayersItem = {
+  surface: 'surface',
+  mid: 'mid',
+  'near-bottom': 'near-bottom',
+} as const;
+
+/**
+ * Scoring mode used to rank intertidal hotspot polygons.
+ */
+export type UserSettingsIntertidalScoreMode = typeof UserSettingsIntertidalScoreMode[keyof typeof UserSettingsIntertidalScoreMode];
+
+
+export const UserSettingsIntertidalScoreMode = {
+  tidepool: 'tidepool',
+  beachcombing: 'beachcombing',
+} as const;
+
+/**
+ * Global UI font size level applied throughout the application.
+ */
+export type UserSettingsGlobalFontSize = typeof UserSettingsGlobalFontSize[keyof typeof UserSettingsGlobalFontSize];
+
+
+export const UserSettingsGlobalFontSize = {
+  smallest: 'smallest',
+  small: 'small',
+  medium: 'medium',
+  large: 'large',
+  'x-large': 'x-large',
+  largest: 'largest',
+} as const;
+
 /**
  * Per-user application settings with sensible defaults
  */
@@ -521,6 +556,50 @@ export interface UserSettings {
   panelCollapse?: UserSettingsPanelCollapse;
   /** Per-slot zone colour and visibility, stored independently for saltwater and freshwater sessions. Each key holds a four-element array (0=sand, 1=sediment, 2=silt, 3=basalt). Synced cross-device for signed-in users. */
   zoneOverlaySlots?: UserSettingsZoneOverlaySlots;
+  /** Show ASOS/AWOS weather station overlays on the overview map. */
+  weatherStationsActive?: boolean;
+  /** Show RAWS (Remote Automated Weather Stations) overlay. */
+  rawsOverlayActive?: boolean;
+  /** Show animated wind overlay on the overview map. */
+  windOverlayActive?: boolean;
+  /** Show tidal height overlay on the overview map. */
+  tideOverlayActive?: boolean;
+  /** Show ocean current overlay on the overview map. */
+  currentOverlayActive?: boolean;
+  /** Which depth layers to display for the current overlay. */
+  currentDepthLayers?: UserSettingsCurrentDepthLayersItem[];
+  /** Whether the side panel is collapsed. */
+  sidePaneCollapsed?: boolean;
+  /**
+     * Radius in grid cells of the zone-paint brush tool.
+     * @minimum 1
+     * @maximum 20
+     */
+  zonePaintBrushRadius?: number;
+  /** Whether the substrate zone overlay is visible. */
+  zoneOverlayEnabled?: boolean;
+  /** Whether the zone-paint mode is active. */
+  zonePaintMode?: boolean;
+  /**
+     * Active zone-paint slot index (0–3).
+     * @minimum 0
+     * @maximum 3
+     */
+  zonePaintSlot?: number;
+  /** When true, terrain is coloured by substrate class instead of depth. */
+  substrateColorMode?: boolean;
+  /** List of substrate class names hidden from the substrate overlay. */
+  hiddenSubstrateClasses?: string[];
+  /** Whether the intertidal hotspot overlay is enabled. */
+  intertidalHotspotsEnabled?: boolean;
+  /** Scoring mode used to rank intertidal hotspot polygons. */
+  intertidalScoreMode?: UserSettingsIntertidalScoreMode;
+  /** Whether the Essential Fish Habitat overlay is visible. */
+  efhOverlayEnabled?: boolean;
+  /** Species names whose EFH polygons are hidden from the overlay. */
+  hiddenEfhSpecies?: string[];
+  /** Global UI font size level applied throughout the application. */
+  globalFontSize?: UserSettingsGlobalFontSize;
 }
 
 export interface ApiError {
