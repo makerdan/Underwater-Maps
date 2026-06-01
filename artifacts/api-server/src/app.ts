@@ -136,13 +136,53 @@ app.use((req, res, next) => {
 
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
+// ─── Clerk handshake interceptor (API routes only) ────────────────────────────
+// In Clerk's dev-instance flow, the first request from a new browser session
+// triggers a "handshake" round-trip: Clerk's middleware calls res.redirect(307)
+// to a URL that plants the __session cookie.  For XHR/fetch calls (all /api
+// requests) the browser cannot follow a 307 as a top-level navigation, so the
+// cookie is never set and every subsequent call returns 401.
+//
+// This middleware patches res.redirect for /api requests so that a Clerk
+// handshake 307 is converted to 401 { error: "session_handshake" } instead.
+// The frontend API client detects this specific body and calls
+// window.location.reload() once, which completes the handshake via a real
+// top-level navigation so the cookie is planted correctly.
+//
+// Must be registered BEFORE clerkMiddleware so the patch is in place when
+// clerkMiddleware calls res.redirect().
+app.use("/api", (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const _redirect = res.redirect.bind(res);
+  // Express overloads: redirect(url) | redirect(status, url)
+  (res as express.Response & { redirect: (...args: unknown[]) => void }).redirect = function (
+    ...args: unknown[]
+  ) {
+    const status = typeof args[0] === "number" ? args[0] : 302;
+    const location = typeof args[0] === "string" ? args[0] : (args[1] as string | undefined) ?? "";
+    if (status === 307 && location.includes("__clerk_handshake")) {
+      res.status(401).json({ error: "session_handshake" });
+      return;
+    }
+    (_redirect as (...a: unknown[]) => void)(...args);
+  };
+  next();
+});
+
+// ─── Clerk authentication middleware ──────────────────────────────────────────
+// Use a static publishable key resolved once at startup rather than a
+// per-request factory.  The per-request factory derived the key from
+// x-forwarded-host, which can differ from the hostname the frontend uses in
+// Replit's path-based proxy, causing a key mismatch that prevents the session
+// token from being verified.
 app.use(
-  clerkMiddleware((req) => ({
-    publishableKey: publishableKeyFromHost(
-      getClerkProxyHost(req) ?? "",
-      process.env.CLERK_PUBLISHABLE_KEY,
-    ),
-  })),
+  clerkMiddleware({
+    publishableKey:
+      publishableKeyFromHost(
+        process.env.REPLIT_DEV_DOMAIN ?? "",
+        process.env.CLERK_PUBLISHABLE_KEY,
+      ) ?? process.env.CLERK_PUBLISHABLE_KEY,
+    secretKey: process.env.CLERK_SECRET_KEY,
+  }),
 );
 
 app.use("/api", router);

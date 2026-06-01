@@ -2,6 +2,19 @@ export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
 };
 
+// ---------------------------------------------------------------------------
+// Clerk handshake reload guard
+// ---------------------------------------------------------------------------
+// When the API server returns 401 { error: "session_handshake" }, Clerk's
+// dev-instance cookie handshake could not complete via XHR (the browser
+// can't follow a 307 redirect for fetch calls).  We trigger a single
+// full-page reload so the browser can complete the handshake via a real
+// top-level navigation and plant the __session cookie.
+//
+// The flag is module-scoped so it resets on every page load, preventing
+// an infinite reload loop even if the handshake doesn't resolve.
+let _handshakeReloadScheduled = false;
+
 export type ErrorType<T = unknown> = ApiError<T>;
 
 export type BodyType<T> = T;
@@ -380,6 +393,23 @@ export async function customFetch<T = unknown>(
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
+
+    // Clerk dev-instance handshake: the server converted a 307 handshake
+    // redirect into a 401 so XHR callers can detect it.  Trigger one
+    // full-page reload to let the browser complete the handshake via a real
+    // top-level navigation.  The module-scoped flag prevents reload loops.
+    if (
+      response.status === 401 &&
+      typeof errorData === "object" &&
+      errorData !== null &&
+      (errorData as Record<string, unknown>)["error"] === "session_handshake" &&
+      !_handshakeReloadScheduled &&
+      typeof window !== "undefined"
+    ) {
+      _handshakeReloadScheduled = true;
+      window.location.reload();
+    }
+
     throw new ApiError(response, errorData, requestInfo);
   }
 
