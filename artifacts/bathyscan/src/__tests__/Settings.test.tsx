@@ -109,16 +109,14 @@ describe("Settings page", () => {
   it("renders all section tabs in the sidebar", () => {
     render(<Settings />);
     const expected = [
+      "GENERAL",
       "VISUALS & PERF",
       "CAMERA & CTRL",
       "HUD & LAYOUT",
-      "OVERVIEW MAP",
-      "MARKERS",
-      "TIDAL",
-      "HABITAT",
-      "GPS & TRAIL",
+      "MAP & OVERLAYS",
+      "MARKERS & TRAILS",
+      "TIDES & CURRENTS",
       "DATA & STORAGE",
-      "OFFLINE CACHE",
       "ACCESSIBILITY",
       "SHORTCUTS",
       "ACCOUNT & PRIVACY",
@@ -235,7 +233,7 @@ describe("Settings page", () => {
 
   it("OFFLINE CACHE section: clear-upscale-cache-btn is rendered", async () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("OFFLINE CACHE"));
+    fireEvent.click(screen.getByText("DATA & STORAGE"));
     await waitFor(() =>
       expect(screen.getByTestId("clear-upscale-cache-btn")).toBeInTheDocument(),
     );
@@ -246,7 +244,7 @@ describe("Settings page", () => {
 
   it("OFFLINE CACHE section: clicking the button calls clearUpscaleCache", async () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("OFFLINE CACHE"));
+    fireEvent.click(screen.getByText("DATA & STORAGE"));
     const btn = await screen.findByTestId("clear-upscale-cache-btn");
     fireEvent.click(btn);
     await waitFor(() => expect(mockClearUpscaleCache).toHaveBeenCalledOnce());
@@ -254,7 +252,7 @@ describe("Settings page", () => {
 
   it("OFFLINE CACHE section: confirmation message appears after clearing", async () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("OFFLINE CACHE"));
+    fireEvent.click(screen.getByText("DATA & STORAGE"));
     const btn = await screen.findByTestId("clear-upscale-cache-btn");
     fireEvent.click(btn);
     await waitFor(() =>
@@ -266,7 +264,7 @@ describe("Settings page", () => {
 
   it("OFFLINE CACHE section: toast is fired with the correct title after clearing", async () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("OFFLINE CACHE"));
+    fireEvent.click(screen.getByText("DATA & STORAGE"));
     const btn = await screen.findByTestId("clear-upscale-cache-btn");
     fireEvent.click(btn);
     await waitFor(() =>
@@ -278,7 +276,7 @@ describe("Settings page", () => {
 
   it("OFFLINE CACHE section: clear-all-cache-btn is rendered", async () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("OFFLINE CACHE"));
+    fireEvent.click(screen.getByText("DATA & STORAGE"));
     await waitFor(() =>
       expect(screen.getByTestId("clear-all-cache-btn")).toBeInTheDocument(),
     );
@@ -289,7 +287,7 @@ describe("Settings page", () => {
 
   it("OFFLINE CACHE section: clicking clear-all-cache-btn calls Cache API and idb-keyval clear", async () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("OFFLINE CACHE"));
+    fireEvent.click(screen.getByText("DATA & STORAGE"));
     const btn = await screen.findByTestId("clear-all-cache-btn");
     fireEvent.click(btn);
     await waitFor(() => expect(mockCachesKeys).toHaveBeenCalled());
@@ -304,7 +302,7 @@ describe("Settings page", () => {
 
   it("OFFLINE CACHE section: confirmation message appears after clearing all cached data", async () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("OFFLINE CACHE"));
+    fireEvent.click(screen.getByText("DATA & STORAGE"));
     const btn = await screen.findByTestId("clear-all-cache-btn");
     fireEvent.click(btn);
     await waitFor(() =>

@@ -4,6 +4,14 @@ import { afterEach, vi } from "vitest";
 import { cleanup, render, type RenderOptions, type RenderResult } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
+if (typeof global !== "undefined" && !(global as unknown as Record<string, unknown>)["ResizeObserver"]) {
+  (global as unknown as Record<string, unknown>)["ResizeObserver"] = vi.fn(() => ({
+    observe: vi.fn(),
+    unobserve: vi.fn(),
+    disconnect: vi.fn(),
+  }));
+}
+
 if (typeof window !== "undefined" && !window.matchMedia) {
   Object.defineProperty(window, "matchMedia", {
     writable: true,
@@ -33,6 +41,10 @@ export function renderWithProviders(
 afterEach(() => {
   cleanup();
 });
+
+if (typeof HTMLElement !== "undefined" && !HTMLElement.prototype.scrollIntoView) {
+  HTMLElement.prototype.scrollIntoView = vi.fn();
+}
 
 if (typeof HTMLCanvasElement !== "undefined") {
   HTMLCanvasElement.prototype.toDataURL = vi.fn(

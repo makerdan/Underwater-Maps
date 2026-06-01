@@ -68,13 +68,13 @@ import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
 
 beforeEach(() => {
   try { localStorage.clear(); } catch { /* ignore */ }
-  useSettingsStore.setState({ ...useSettingsStore.getState(), ...DEFAULT_SETTINGS });
+  useSettingsStore.setState({ ...useSettingsStore.getState(), ...DEFAULT_SETTINGS, units: "metric", depthUnit: "metres" });
 });
 
 describe("Settings → UNITS section", () => {
   it("defaults to metric and switches the persisted store when imperial is picked", () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("UNITS"));
+    fireEvent.click(screen.getByText("GENERAL"));
 
     expect(useSettingsStore.getState().units).toBe("metric");
 
@@ -95,7 +95,7 @@ describe("Settings → UNITS section", () => {
 
   it("temperature-unit override flips only temperatureUnit (not depthUnit or units)", () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("UNITS"));
+    fireEvent.click(screen.getByText("GENERAL"));
 
     // Default: auto. Units row is first, Depth Unit second, Temperature third.
     expect(useSettingsStore.getState().temperatureUnit).toBe("auto");

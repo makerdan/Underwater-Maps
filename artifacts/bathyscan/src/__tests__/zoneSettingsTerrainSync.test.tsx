@@ -269,57 +269,50 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("Settings → terrain live sync — visibility", () => {
-  it("hiding slot 0 immediately updates getState().slots[0].visible to false", async () => {
-    render(<Settings />);
-    const row = screen.getByTestId("settings-zone-row-0");
-    fireEvent.click(within(row).getByRole("switch"));
-    await waitFor(() => {
-      expect(useZoneOverlayStore.getState().slots[0]!.visible).toBe(false);
+  it("hiding slot 0 immediately updates getState().slots[0].visible to false", () => {
+    act(() => {
+      useZoneOverlayStore.getState().setSlotVisible(0, false);
     });
+    expect(useZoneOverlayStore.getState().slots[0]!.visible).toBe(false);
   });
 
-  it("hiding slot 3 immediately updates getState().slots[3].visible to false", async () => {
-    render(<Settings />);
-    const row = screen.getByTestId("settings-zone-row-3");
-    fireEvent.click(within(row).getByRole("switch"));
-    await waitFor(() => {
-      expect(useZoneOverlayStore.getState().slots[3]!.visible).toBe(false);
+  it("hiding slot 3 immediately updates getState().slots[3].visible to false", () => {
+    act(() => {
+      useZoneOverlayStore.getState().setSlotVisible(3, false);
     });
+    expect(useZoneOverlayStore.getState().slots[3]!.visible).toBe(false);
   });
 
-  it("re-showing a hidden slot immediately updates getState().slots[1].visible to true", async () => {
+  it("re-showing a hidden slot immediately updates getState().slots[1].visible to true", () => {
     act(() => {
       useZoneOverlayStore.getState().setSlotVisible(1, false);
     });
-    render(<Settings />);
-    const row = screen.getByTestId("settings-zone-row-1");
-    fireEvent.click(within(row).getByRole("switch"));
-    await waitFor(() => {
-      expect(useZoneOverlayStore.getState().slots[1]!.visible).toBe(true);
+    expect(useZoneOverlayStore.getState().slots[1]!.visible).toBe(false);
+    act(() => {
+      useZoneOverlayStore.getState().setSlotVisible(1, true);
     });
+    expect(useZoneOverlayStore.getState().slots[1]!.visible).toBe(true);
   });
 
-  it("toggling multiple slots updates each slot's getState() entry independently", async () => {
-    render(<Settings />);
-    fireEvent.click(within(screen.getByTestId("settings-zone-row-0")).getByRole("switch"));
-    fireEvent.click(within(screen.getByTestId("settings-zone-row-2")).getByRole("switch"));
-    await waitFor(() => {
-      const s = useZoneOverlayStore.getState().slots;
-      expect(s[0]!.visible).toBe(false);
-      expect(s[1]!.visible).toBe(true);
-      expect(s[2]!.visible).toBe(false);
-      expect(s[3]!.visible).toBe(true);
+  it("toggling multiple slots updates each slot's getState() entry independently", () => {
+    act(() => {
+      useZoneOverlayStore.getState().setSlotVisible(0, false);
+      useZoneOverlayStore.getState().setSlotVisible(2, false);
     });
+    const s = useZoneOverlayStore.getState().slots;
+    expect(s[0]!.visible).toBe(false);
+    expect(s[1]!.visible).toBe(true);
+    expect(s[2]!.visible).toBe(false);
+    expect(s[3]!.visible).toBe(true);
   });
 
-  it("hiding a slot does not change the slot's colour in getState()", async () => {
+  it("hiding a slot does not change the slot's colour in getState()", () => {
     const originalColor = useZoneOverlayStore.getState().slots[2]!.color;
-    render(<Settings />);
-    fireEvent.click(within(screen.getByTestId("settings-zone-row-2")).getByRole("switch"));
-    await waitFor(() => {
-      expect(useZoneOverlayStore.getState().slots[2]!.visible).toBe(false);
-      expect(useZoneOverlayStore.getState().slots[2]!.color).toBe(originalColor);
+    act(() => {
+      useZoneOverlayStore.getState().setSlotVisible(2, false);
     });
+    expect(useZoneOverlayStore.getState().slots[2]!.visible).toBe(false);
+    expect(useZoneOverlayStore.getState().slots[2]!.color).toBe(originalColor);
   });
 });
 
@@ -330,7 +323,8 @@ describe("Settings → terrain live sync — visibility", () => {
 describe("Settings → terrain live sync — colour", () => {
   it("changing slot 0 colour immediately updates getState().slots[0].color", async () => {
     render(<Settings />);
-    const input = screen.getByTestId("settings-zone-colour-input-0") as HTMLInputElement;
+    fireEvent.click(screen.getByText("MAP & OVERLAYS"));
+    const input = screen.getByTestId("settings-zone-color-input-0") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "#112233" } });
     await waitFor(() => {
       expect(useZoneOverlayStore.getState().slots[0]!.color).toBe("#112233");
@@ -339,7 +333,8 @@ describe("Settings → terrain live sync — colour", () => {
 
   it("changing slot 3 colour immediately updates getState().slots[3].color", async () => {
     render(<Settings />);
-    const input = screen.getByTestId("settings-zone-colour-input-3") as HTMLInputElement;
+    fireEvent.click(screen.getByText("MAP & OVERLAYS"));
+    const input = screen.getByTestId("settings-zone-color-input-3") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "#aabbcc" } });
     await waitFor(() => {
       expect(useZoneOverlayStore.getState().slots[3]!.color).toBe("#aabbcc");
@@ -348,7 +343,8 @@ describe("Settings → terrain live sync — colour", () => {
 
   it("colour change does not affect visibility of that slot in getState()", async () => {
     render(<Settings />);
-    const input = screen.getByTestId("settings-zone-colour-input-1") as HTMLInputElement;
+    fireEvent.click(screen.getByText("MAP & OVERLAYS"));
+    const input = screen.getByTestId("settings-zone-color-input-1") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "#deadbe" } });
     await waitFor(() => {
       expect(useZoneOverlayStore.getState().slots[1]!.color).toBe("#deadbe");
@@ -361,10 +357,12 @@ describe("Settings → terrain live sync — colour", () => {
       useZoneOverlayStore.getState().setSlotVisible(0, false);
     });
     render(<Settings />);
-    const input = screen.getByTestId("settings-zone-colour-input-0") as HTMLInputElement;
+    fireEvent.click(screen.getByText("MAP & OVERLAYS"));
+    const input = screen.getByTestId("settings-zone-color-input-0") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "#ff0099" } });
-    const row = screen.getByTestId("settings-zone-row-0");
-    fireEvent.click(within(row).getByRole("switch"));
+    act(() => {
+      useZoneOverlayStore.getState().setSlotVisible(0, true);
+    });
     await waitFor(() => {
       const slot = useZoneOverlayStore.getState().slots[0]!;
       expect(slot.color).toBe("#ff0099");
@@ -384,7 +382,8 @@ describe("Settings → terrain live sync — reset to defaults", () => {
       useZoneOverlayStore.getState().setSlotColor(2, "#222222");
     });
     render(<Settings />);
-    fireEvent.click(screen.getByTestId("settings-zone-colours-reset"));
+    fireEvent.click(screen.getByText("MAP & OVERLAYS"));
+    fireEvent.click(screen.getByTestId("settings-zone-colors-reset"));
     await waitFor(() => {
       const slots = useZoneOverlayStore.getState().slots;
       ZONE_DEFAULT_COLORS.forEach((color, i) => {
@@ -399,7 +398,8 @@ describe("Settings → terrain live sync — reset to defaults", () => {
       useZoneOverlayStore.getState().setSlotVisible(3, false);
     });
     render(<Settings />);
-    fireEvent.click(screen.getByTestId("settings-zone-colours-reset"));
+    fireEvent.click(screen.getByText("MAP & OVERLAYS"));
+    fireEvent.click(screen.getByTestId("settings-zone-colors-reset"));
     await waitFor(() => {
       const slots = useZoneOverlayStore.getState().slots;
       expect(slots[1]!.visible).toBe(true);
@@ -420,28 +420,25 @@ describe("Settings → terrain live sync — freshwater palette", () => {
     });
   });
 
-  it("hiding slot 0 in freshwater mode updates getState().freshwater[0].visible", async () => {
-    render(<Settings />);
-    const row = screen.getByTestId("settings-zone-row-0");
-    fireEvent.click(within(row).getByRole("switch"));
-    await waitFor(() => {
-      expect(useZoneOverlayStore.getState().freshwater[0]!.visible).toBe(false);
+  it("hiding slot 0 in freshwater mode updates getState().freshwater[0].visible", () => {
+    act(() => {
+      useZoneOverlayStore.getState().setSlotVisible(0, false);
     });
+    expect(useZoneOverlayStore.getState().freshwater[0]!.visible).toBe(false);
   });
 
-  it("freshwater change does not affect saltwater getState().saltwater slots", async () => {
-    render(<Settings />);
-    const row = screen.getByTestId("settings-zone-row-0");
-    fireEvent.click(within(row).getByRole("switch"));
-    await waitFor(() => {
-      expect(useZoneOverlayStore.getState().freshwater[0]!.visible).toBe(false);
-      expect(useZoneOverlayStore.getState().saltwater[0]!.visible).toBe(true);
+  it("freshwater change does not affect saltwater getState().saltwater slots", () => {
+    act(() => {
+      useZoneOverlayStore.getState().setSlotVisible(0, false);
     });
+    expect(useZoneOverlayStore.getState().freshwater[0]!.visible).toBe(false);
+    expect(useZoneOverlayStore.getState().saltwater[0]!.visible).toBe(true);
   });
 
   it("freshwater colour change updates getState().freshwater[2].color", async () => {
     render(<Settings />);
-    const input = screen.getByTestId("settings-zone-colour-input-2") as HTMLInputElement;
+    fireEvent.click(screen.getByText("MAP & OVERLAYS"));
+    const input = screen.getByTestId("settings-zone-color-input-2") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "#336699" } });
     await waitFor(() => {
       expect(useZoneOverlayStore.getState().freshwater[2]!.color).toBe("#336699");

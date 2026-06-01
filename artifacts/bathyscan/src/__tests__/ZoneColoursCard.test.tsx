@@ -1,16 +1,15 @@
 /**
- * Tests for the ZoneColoursCard component in the Visuals tab (Settings page).
+ * Tests for the ZoneColourSwatches component in the Map & Overlays tab (Settings page).
  *
  * Covers:
- *   - All four slot rows render with colour inputs and visibility toggles
+ *   - All four slot swatches render with colour inputs
  *   - Colour inputs are bound to the current store values
  *   - Changing a colour input updates zoneOverlayStore
- *   - "RESET TO DEFAULTS" restores the four default colours
- *   - Toggling visibility dims the swatch (opacity) and label for that slot
- *   - Re-enabling visibility restores full opacity
+ *   - "Reset" restores the four default colours
+ *   - Water-type mode label changes (saltwater vs freshwater slot names)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 
 vi.mock("@/lib/clerkCompat", () => ({
   useUser: () => ({
@@ -105,6 +104,10 @@ function resetZoneStore() {
   });
 }
 
+function navigateToMapOverlays() {
+  fireEvent.click(screen.getByText("MAP & OVERLAYS"));
+}
+
 beforeEach(() => {
   try { localStorage.clear(); } catch { /* ignore */ }
   useSettingsStore.setState({
@@ -114,68 +117,53 @@ beforeEach(() => {
   resetZoneStore();
 });
 
-describe("ZoneColoursCard — rendering", () => {
-  it("renders the ZONE COLOURS heading in the Visuals tab", () => {
+describe("ZoneColourSwatches — rendering", () => {
+  it("renders the ZONE COLOURS heading in the Visuals tab (shortcut card)", () => {
     render(<Settings />);
     expect(screen.getByText("ZONE COLOURS")).toBeInTheDocument();
   });
 
-  it("renders the RESET TO DEFAULTS button", () => {
+  it("renders the Reset button in MAP & OVERLAYS tab", () => {
     render(<Settings />);
-    expect(screen.getByTestId("settings-zone-colours-reset")).toBeInTheDocument();
-    expect(screen.getByTestId("settings-zone-colours-reset")).toHaveTextContent(
-      "RESET TO DEFAULTS",
-    );
+    navigateToMapOverlays();
+    expect(screen.getByTestId("settings-zone-colors-reset")).toBeInTheDocument();
+    expect(screen.getByTestId("settings-zone-colors-reset")).toHaveTextContent("Reset");
   });
 
-  it("renders all four slot rows", () => {
+  it("renders all four slot swatches", () => {
     render(<Settings />);
+    navigateToMapOverlays();
     for (let i = 0; i < 4; i++) {
-      expect(screen.getByTestId(`settings-zone-row-${i}`)).toBeInTheDocument();
+      expect(screen.getByTestId(`settings-zone-swatch-${i}`)).toBeInTheDocument();
     }
-    expect(screen.queryByTestId("settings-zone-row-4")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("settings-zone-swatch-4")).not.toBeInTheDocument();
   });
 
   it("renders a colour input for each slot", () => {
     render(<Settings />);
+    navigateToMapOverlays();
     for (let i = 0; i < 4; i++) {
-      const input = screen.getByTestId(`settings-zone-colour-input-${i}`) as HTMLInputElement;
+      const input = screen.getByTestId(`settings-zone-color-input-${i}`) as HTMLInputElement;
       expect(input).toBeInTheDocument();
       expect(input.type).toBe("color");
     }
   });
 
-  it("renders a visibility toggle for each slot", () => {
-    render(<Settings />);
-    for (let i = 0; i < 4; i++) {
-      const row = screen.getByTestId(`settings-zone-row-${i}`);
-      const toggle = within(row).getByRole("switch");
-      expect(toggle).toBeInTheDocument();
-    }
-  });
-
   it("colour inputs are initialised to the default slot colours", () => {
     render(<Settings />);
+    navigateToMapOverlays();
     for (let i = 0; i < 4; i++) {
-      const input = screen.getByTestId(`settings-zone-colour-input-${i}`) as HTMLInputElement;
+      const input = screen.getByTestId(`settings-zone-color-input-${i}`) as HTMLInputElement;
       expect(input.value.toLowerCase()).toBe(ZONE_DEFAULT_COLORS[i]!.toLowerCase());
-    }
-  });
-
-  it("all visibility toggles are ON (aria-checked=true) by default", () => {
-    render(<Settings />);
-    for (let i = 0; i < 4; i++) {
-      const row = screen.getByTestId(`settings-zone-row-${i}`);
-      const toggle = within(row).getByRole("switch");
-      expect(toggle.getAttribute("aria-checked")).toBe("true");
     }
   });
 });
 
-describe("ZoneColoursCard — colour input interaction", () => {
+describe("ZoneColourSwatches — colour input interaction", () => {
   it("changing a colour input updates the store for that slot", async () => {
     render(<Settings />);
-    const input = screen.getByTestId("settings-zone-colour-input-1") as HTMLInputElement;
+    navigateToMapOverlays();
+    const input = screen.getByTestId("settings-zone-color-input-1") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "#aabbcc" } });
     await waitFor(() => {
       expect(useZoneOverlayStore.getState().slots[1]!.color).toBe("#aabbcc");
@@ -184,24 +172,26 @@ describe("ZoneColoursCard — colour input interaction", () => {
 
   it("colour input for slot 0 reflects a store-side colour change", async () => {
     render(<Settings />);
+    navigateToMapOverlays();
     act(() => {
       useZoneOverlayStore.getState().setSlotColor(0, "#112233");
     });
     await waitFor(() => {
-      const input = screen.getByTestId("settings-zone-colour-input-0") as HTMLInputElement;
+      const input = screen.getByTestId("settings-zone-color-input-0") as HTMLInputElement;
       expect(input.value.toLowerCase()).toBe("#112233");
     });
   });
 });
 
-describe("ZoneColoursCard — Reset to Defaults", () => {
+describe("ZoneColourSwatches — Reset to Defaults", () => {
   it("resets all four slots to the default colours when clicked", async () => {
     act(() => {
       useZoneOverlayStore.getState().setSlotColor(0, "#111111");
       useZoneOverlayStore.getState().setSlotColor(2, "#222222");
     });
     render(<Settings />);
-    fireEvent.click(screen.getByTestId("settings-zone-colours-reset"));
+    navigateToMapOverlays();
+    fireEvent.click(screen.getByTestId("settings-zone-colors-reset"));
     await waitFor(() => {
       const { slots } = useZoneOverlayStore.getState();
       for (let i = 0; i < 4; i++) {
@@ -217,10 +207,11 @@ describe("ZoneColoursCard — Reset to Defaults", () => {
       useZoneOverlayStore.getState().setSlotColor(3, "#deadbe");
     });
     render(<Settings />);
-    fireEvent.click(screen.getByTestId("settings-zone-colours-reset"));
+    navigateToMapOverlays();
+    fireEvent.click(screen.getByTestId("settings-zone-colors-reset"));
     await waitFor(() => {
       for (let i = 0; i < 4; i++) {
-        const input = screen.getByTestId(`settings-zone-colour-input-${i}`) as HTMLInputElement;
+        const input = screen.getByTestId(`settings-zone-color-input-${i}`) as HTMLInputElement;
         expect(input.value.toLowerCase()).toBe(ZONE_DEFAULT_COLORS[i]!.toLowerCase());
       }
     });
@@ -232,7 +223,8 @@ describe("ZoneColoursCard — Reset to Defaults", () => {
       useZoneOverlayStore.getState().setSlotVisible(3, false);
     });
     render(<Settings />);
-    fireEvent.click(screen.getByTestId("settings-zone-colours-reset"));
+    navigateToMapOverlays();
+    fireEvent.click(screen.getByTestId("settings-zone-colors-reset"));
     await waitFor(() => {
       const { slots } = useZoneOverlayStore.getState();
       for (let i = 0; i < 4; i++) {
@@ -242,86 +234,23 @@ describe("ZoneColoursCard — Reset to Defaults", () => {
   });
 });
 
-describe("ZoneColoursCard — visibility toggle", () => {
-  it("toggling a slot OFF sets visible=false in the store", async () => {
-    render(<Settings />);
-    const row = screen.getByTestId("settings-zone-row-2");
-    const toggle = within(row).getByRole("switch");
-    fireEvent.click(toggle);
-    await waitFor(() => {
-      expect(useZoneOverlayStore.getState().slots[2]!.visible).toBe(false);
-    });
-  });
-
-  it("toggle aria-checked becomes false after turning a slot OFF", async () => {
-    render(<Settings />);
-    const row = screen.getByTestId("settings-zone-row-0");
-    const toggle = within(row).getByRole("switch");
-    fireEvent.click(toggle);
-    await waitFor(() => {
-      expect(toggle.getAttribute("aria-checked")).toBe("false");
-    });
-  });
-
-  it("swatch opacity is 0.35 when slot is hidden and 1 when visible", async () => {
-    render(<Settings />);
-    const row2 = screen.getByTestId("settings-zone-row-2");
-    const toggle = within(row2).getByRole("switch");
-
-    const swatch = row2.querySelector("span[style*='border-radius']") as HTMLElement;
-    expect(swatch).toBeTruthy();
-    expect(swatch.style.opacity).toBe("1");
-
-    fireEvent.click(toggle);
-    await waitFor(() => {
-      expect(swatch.style.opacity).toBe("0.35");
-    });
-  });
-
-  it("re-enabling a hidden slot restores opacity to 1", async () => {
-    act(() => {
-      useZoneOverlayStore.getState().setSlotVisible(0, false);
-    });
-    render(<Settings />);
-    const row = screen.getByTestId("settings-zone-row-0");
-    const toggle = within(row).getByRole("switch");
-
-    const swatch = row.querySelector("span[style*='border-radius']") as HTMLElement;
-    expect(swatch.style.opacity).toBe("0.35");
-
-    fireEvent.click(toggle);
-    await waitFor(() => {
-      expect(swatch.style.opacity).toBe("1");
-    });
-    expect(useZoneOverlayStore.getState().slots[0]!.visible).toBe(true);
-  });
-
-  it("toggling OFF and back ON leaves the store visible=true", async () => {
-    render(<Settings />);
-    const row = screen.getByTestId("settings-zone-row-1");
-    const toggle = within(row).getByRole("switch");
-    fireEvent.click(toggle);
-    await waitFor(() => expect(useZoneOverlayStore.getState().slots[1]!.visible).toBe(false));
-    fireEvent.click(toggle);
-    await waitFor(() => expect(useZoneOverlayStore.getState().slots[1]!.visible).toBe(true));
-  });
-});
-
-describe("ZoneColoursCard — freshwater mode", () => {
+describe("ZoneColourSwatches — freshwater mode", () => {
   it("shows freshwater slot names when waterType is freshwater", () => {
     useSettingsStore.setState({ ...useSettingsStore.getState(), waterType: "freshwater" });
     render(<Settings />);
-    expect(screen.getByText("Vegetation / Sandy Bed")).toBeInTheDocument();
-    expect(screen.getByText("Gravel / Submerged Wood")).toBeInTheDocument();
-    expect(screen.getByText("Silt / Clay")).toBeInTheDocument();
-    expect(screen.getByText("Rock / Bedrock")).toBeInTheDocument();
+    navigateToMapOverlays();
+    expect(screen.getByTitle("Click to change colour — Vegetation / Sandy Bed")).toBeInTheDocument();
+    expect(screen.getByTitle("Click to change colour — Gravel / Submerged Wood")).toBeInTheDocument();
+    expect(screen.getByTitle("Click to change colour — Silt / Clay")).toBeInTheDocument();
+    expect(screen.getByTitle("Click to change colour — Rock / Bedrock")).toBeInTheDocument();
   });
 
   it("shows saltwater slot names by default", () => {
     render(<Settings />);
-    expect(screen.getByText("Sandy Shelf / Reef")).toBeInTheDocument();
-    expect(screen.getByText("Coarse Sediment / Seamount")).toBeInTheDocument();
-    expect(screen.getByText("Silt Plain")).toBeInTheDocument();
-    expect(screen.getByText("Basalt / Volcanic")).toBeInTheDocument();
+    navigateToMapOverlays();
+    expect(screen.getByTitle("Click to change colour — Sandy Shelf / Reef")).toBeInTheDocument();
+    expect(screen.getByTitle("Click to change colour — Coarse Sediment / Seamount")).toBeInTheDocument();
+    expect(screen.getByTitle("Click to change colour — Silt Plain")).toBeInTheDocument();
+    expect(screen.getByTitle("Click to change colour — Basalt / Volcanic")).toBeInTheDocument();
   });
 });

@@ -1,5 +1,4 @@
 import React from "react";
-import type { ApiError } from "@workspace/api-client-react";
 
 interface Props {
   /** Short label used in the fallback message (e.g. "dataset library"). */
@@ -15,8 +14,8 @@ interface State {
 }
 
 function extractRequestId(error: Error): string | null {
-  const apiErr = error as Partial<ApiError>;
-  if (typeof apiErr.requestId === "string") return apiErr.requestId;
+  const apiErr = error as unknown as Record<string, unknown>;
+  if (typeof apiErr["requestId"] === "string") return apiErr["requestId"];
   const match = error.message.match(/\[request-id:\s*([^\]]+)\]/);
   return match?.[1] ?? null;
 }

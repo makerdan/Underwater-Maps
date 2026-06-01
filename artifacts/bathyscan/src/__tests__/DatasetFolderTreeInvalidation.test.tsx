@@ -47,6 +47,13 @@ const deleteFolderMutate = vi.fn();
 // ─── React Query capture ────────────────────────────────────────────────────
 const invalidateQueries = vi.fn();
 const removeQueries = vi.fn();
+
+vi.mock("@/lib/clerkCompat", () => ({
+  useAuth: () => ({ isSignedIn: true, isLoaded: true }),
+  useUser: () => ({ isSignedIn: true, isLoaded: true }),
+  useClerk: () => ({ signOut: vi.fn() }),
+}));
+
 vi.mock("@tanstack/react-query", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-query")>();
   return {
