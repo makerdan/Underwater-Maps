@@ -100,7 +100,7 @@ while IFS= read -r -d '' generated_file; do
   base=$(basename "$generated_file")
   # Skip non-data files
   case "$base" in
-    *.sh|*.mjs|.*) continue ;;
+    *.sh|*.mjs|*.py|.*) continue ;;
   esac
   if [[ "$EXPECTED_SET" != *" $base "* ]]; then
     echo "  EXTRA  $base  (generated but not committed — add to FIXTURES list and commit)"
