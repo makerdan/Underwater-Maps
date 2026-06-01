@@ -679,9 +679,23 @@ async function classifyOneTileAi(
     try {
       parsed = JSON.parse(result.output_text) as { zones: string[] };
     } catch {
-      throw new ZoneParseError(
-        `Poe returned invalid JSON for zone classification: ${result.output_text.slice(0, 200)}`,
-      );
+      // Before giving up, try to salvage a JSON object embedded in prose text
+      // (e.g. model wraps the payload in an explanation paragraph). Match the
+      // first `{ ... }` block in the output and attempt to parse that instead.
+      const embeddedMatch = result.output_text.match(/\{[\s\S]*\}/);
+      if (embeddedMatch) {
+        try {
+          parsed = JSON.parse(embeddedMatch[0]) as { zones: string[] };
+        } catch {
+          throw new ZoneParseError(
+            `Poe returned invalid JSON for zone classification: ${result.output_text.slice(0, 200)}`,
+          );
+        }
+      } else {
+        throw new ZoneParseError(
+          `Poe returned invalid JSON for zone classification: ${result.output_text.slice(0, 200)}`,
+        );
+      }
     }
 
     poeBreaker.recordSuccess();
@@ -693,11 +707,27 @@ async function classifyOneTileAi(
       },
     };
   } catch (err) {
-    if ((err as Error)?.message !== "poe_circuit_open") {
+    // ZoneParseError means the model returned unparseable text (a quality
+    // issue), not a service outage. Do NOT count it as a circuit-breaker
+    // failure — otherwise 5 consecutive "prose" responses open the breaker
+    // and cripple the substrate overlay for the rest of the server's uptime.
+    if (
+      (err as Error)?.message !== "poe_circuit_open" &&
+      !(err instanceof ZoneParseError)
+    ) {
       poeBreaker.recordFailure();
     }
     throw err;
   }
+}
+
+/**
+ * TEST-ONLY — returns whether the module-level `poeBreaker` is currently open.
+ * Used in unit tests that verify prose/malformed-JSON responses do not trip
+ * the breaker. Never imported or called in production code.
+ */
+export function __isPoeBreakersOpen(): boolean {
+  return poeBreaker.isOpen();
 }
 
 /**
@@ -1034,8 +1064,28 @@ router.post("/classify", asyncHandler(async (req, res) => {
       return response;
     }, 3);
 
-    const parsed = JSON.parse(result.output_text) as { zones: string[] };
-    let zones = parsed.zones;
+    let parsedRaw: { zones: string[] };
+    try {
+      parsedRaw = JSON.parse(result.output_text) as { zones: string[] };
+    } catch {
+      // Attempt to salvage a JSON object embedded in prose (model wrapped its
+      // payload in an explanation paragraph). Match the first `{ … }` block.
+      const embeddedMatch = result.output_text?.match(/\{[\s\S]*\}/);
+      if (embeddedMatch) {
+        try {
+          parsedRaw = JSON.parse(embeddedMatch[0]) as { zones: string[] };
+        } catch {
+          throw new ZoneParseError(
+            `Poe returned invalid JSON for zone classification: ${(result.output_text ?? "").slice(0, 200)}`,
+          );
+        }
+      } else {
+        throw new ZoneParseError(
+          `Poe returned invalid JSON for zone classification: ${(result.output_text ?? "").slice(0, 200)}`,
+        );
+      }
+    }
+    let zones = parsedRaw.zones;
 
     // Post-AI reconciliation — covered cells in surveyed substrate are the
     // source of truth. The prompt instructs the model to honour them, but we
@@ -1097,7 +1147,12 @@ router.post("/classify", asyncHandler(async (req, res) => {
     // Record Poe failures so the circuit breaker can track consecutive errors.
     // Circuit-open errors are self-inflicted (we threw them above) — don't
     // count those or the breaker would never close.
-    if (!(err as { circuitOpen?: boolean }).circuitOpen) {
+    // ZoneParseError is a content-quality issue (model returned prose instead
+    // of JSON) — NOT a service outage — so it must not trip the breaker either.
+    if (
+      !(err as { circuitOpen?: boolean }).circuitOpen &&
+      !(err instanceof ZoneParseError)
+    ) {
       poeBreaker.recordFailure();
     }
     // Depth-based fallback — if the client supplied a 1024-length depth grid

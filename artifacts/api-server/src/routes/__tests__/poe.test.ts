@@ -58,7 +58,7 @@ vi.mock("@clerk/shared/keys", () => ({
 import app from "../../app.js";
 import { globalPoeCache } from "@workspace/poe";
 import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
-import { __resetPoeBreaker } from "../poe.js";
+import { __resetPoeBreaker, __isPoeBreakersOpen } from "../poe.js";
 
 const GRID_BASE64 = Buffer.from("fake-grid-bytes-for-testing").toString(
   "base64",
@@ -591,6 +591,84 @@ describe("POST /api/poe/classify", () => {
     expect(res.body.coarseHeight).toBe(32);
     expect(res.body.zones).toHaveLength(1024);
     expect(fakeCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("breaker stays closed after 5 consecutive prose-only responses", async () => {
+    // Simulate the model returning an explanation paragraph instead of JSON.
+    // This is a content-quality issue, NOT a service outage, so the circuit
+    // breaker must remain closed after any number of such responses and
+    // subsequent requests must still succeed (via heuristic fallback).
+    fakeCreate.mockReset();
+    fakeCreate.mockResolvedValue({
+      id: "resp_prose",
+      output_text:
+        "Sorry, I'm unable to classify this image as requested because the depth map appears to be corrupted.",
+      usage: { input_tokens: 10, output_tokens: 20 },
+    });
+
+    const depths32 = Array.from({ length: 1024 }, (_, i) => i % 50);
+
+    for (let i = 0; i < 5; i++) {
+      const res = await request(app)
+        .post("/api/poe/classify")
+        .set("x-e2e-user-id", "user-prose-breaker")
+        .send({
+          gridBase64: GRID_BASE64,
+          waterType: "saltwater",
+          // Unique per iteration so the cache doesn't short-circuit the AI call.
+          datasetId: `ds-prose-${i}`,
+          depths32,
+        });
+      // Each response must still succeed via heuristic fallback.
+      expect(res.status).toBe(200);
+      expect(res.body.zones).toHaveLength(1024);
+    }
+
+    // After 5 prose responses the breaker MUST still be closed — prose is a
+    // model-quality issue, not a connectivity/service failure.
+    expect(__isPoeBreakersOpen()).toBe(false);
+
+    // A real AI response after the prose streak must succeed and NOT 503.
+    fakeCreate.mockReset();
+    fakeCreate.mockResolvedValue(buildOkResponse());
+    const afterRes = await request(app)
+      .post("/api/poe/classify")
+      .set("x-e2e-user-id", "user-prose-breaker")
+      .send({
+        gridBase64: GRID_BASE64,
+        waterType: "saltwater",
+        datasetId: "ds-prose-after",
+        depths32,
+      });
+    expect(afterRes.status).toBe(200);
+    expect(afterRes.body.source).toBe("ai");
+  });
+
+  it("prose-wrapped JSON is salvaged via regex extraction", async () => {
+    // Model wraps a valid JSON payload in an explanation paragraph.
+    // The regex fallback should extract the {zones:[...]} block and succeed.
+    const validZones = Array(1024).fill("sandy_shelf");
+    fakeCreate.mockReset();
+    fakeCreate.mockResolvedValue({
+      id: "resp_prose_json",
+      output_text: `Here is my classification result:\n\n${JSON.stringify({ zones: validZones })}\n\nI hope that helps!`,
+      usage: { input_tokens: 10, output_tokens: 200 },
+    });
+
+    const res = await request(app)
+      .post("/api/poe/classify")
+      .set("x-e2e-user-id", "user-prose-json")
+      .send({
+        gridBase64: GRID_BASE64,
+        waterType: "saltwater",
+        datasetId: "ds-prose-json",
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBe("ai");
+    expect(res.body.zones).toHaveLength(1024);
+    // Breaker stays closed — this was a successful parse.
+    expect(__isPoeBreakersOpen()).toBe(false);
   });
 });
 

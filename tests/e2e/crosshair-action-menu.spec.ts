@@ -131,7 +131,8 @@ test.describe("BathyScan — Crosshair action menu (desktop / Q key)", () => {
     await expect(items.nth(0)).toContainText("Drop GPS pin here");
     await expect(items.nth(1)).toContainText("Measure from here");
     await expect(items.nth(2)).toContainText("Set as home position");
-    await expect(items.nth(3)).toContainText("Save view as bookmark");
+    // Label source: terrainContextMenu.ts buildTerrainMenuItems — keep in sync
+    await expect(items.nth(3)).toContainText("Save as saved view…");
     await expect(items.nth(4)).toContainText("Start straight-line profile");
     await expect(items.nth(5)).toContainText("Start path profile");
     await expect(items.nth(6)).toContainText("Copy coordinates");
@@ -415,7 +416,8 @@ test.describe(
       await expect(items.nth(0)).toContainText("Drop GPS pin here");
       await expect(items.nth(1)).toContainText("Measure from here");
       await expect(items.nth(2)).toContainText("Set as home position");
-      await expect(items.nth(3)).toContainText("Save view as bookmark");
+      // Label source: terrainContextMenu.ts buildTerrainMenuItems — keep in sync
+      await expect(items.nth(3)).toContainText("Save as saved view…");
       await expect(items.nth(4)).toContainText("Start straight-line profile");
       await expect(items.nth(5)).toContainText("Start path profile");
       await expect(items.nth(6)).toContainText("Copy coordinates");

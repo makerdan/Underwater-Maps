@@ -8,17 +8,25 @@
  *   • 400 when each field receives an out-of-range or wrong-type value
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
+
+// vi.hoisted ensures these refs are available inside the vi.mock() factory,
+// which vitest hoists above all imports. We keep them at module scope so
+// beforeEach can reset their resolved values between tests.
+const { selectWhereMock, fromMock, onConflictDoUpdateMock, valuesMock } =
+  vi.hoisted(() => {
+    const selectWhereMock = vi.fn().mockResolvedValue([]);
+    const fromMock = vi.fn().mockReturnValue({ where: selectWhereMock });
+    const onConflictDoUpdateMock = vi.fn().mockResolvedValue([]);
+    const valuesMock = vi.fn().mockReturnValue({
+      onConflictDoUpdate: onConflictDoUpdateMock,
+    });
+    return { selectWhereMock, fromMock, onConflictDoUpdateMock, valuesMock };
+  });
 
 vi.mock("@workspace/db", () => {
   const stored: Record<string, unknown> = {};
-
-  const selectWhereMock = vi.fn().mockResolvedValue([]);
-  const fromMock = vi.fn().mockReturnValue({ where: selectWhereMock });
-
-  const onConflictDoUpdateMock = vi.fn().mockResolvedValue([]);
-  const valuesMock = vi.fn().mockReturnValue({ onConflictDoUpdate: onConflictDoUpdateMock });
 
   return {
     db: {
@@ -52,6 +60,13 @@ vi.mock("@clerk/shared/keys", () => ({
 import app from "../app.js";
 
 const AUTH = { "x-mock-clerk-user-id": "user_test123" };
+
+// Reset DB mock state before each test so no settings row for user_test123
+// bleeds from one test into the next (simulates a clean slate per-test).
+beforeEach(() => {
+  selectWhereMock.mockResolvedValue([]);
+  onConflictDoUpdateMock.mockResolvedValue([]);
+});
 
 describe("PUT /api/settings — auth required", () => {
   it("returns 401 when unauthenticated", async () => {
