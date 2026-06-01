@@ -199,12 +199,16 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
   }
 
   // Preserve fields that the client sent but that aren't part of the validated
-  // Zod schema. This covers two categories:
-  //   1. Fields completely outside the spec (e.g. showCompassMinimap).
-  //   2. Fields that ARE in DEFAULT_SETTINGS but haven't yet been added to the
-  //      OpenAPI spec / Zod schema (e.g. weatherStationsActive, efhOverlayEnabled,
-  //      globalFontSize, zonePaintSlot, …).
-  // Both should be stored verbatim so they round-trip correctly.
+  // Zod schema (i.e. fields whose keys are not present in parsed.data). These
+  // are fields that are completely unknown to the current API spec — for
+  // example legacy client keys like showCompassMinimap, or fields that a newer
+  // client version sends before the server's schema has been updated to include
+  // them. NOTE: all fields listed in DEFAULT_SETTINGS (including zonePaintSlot,
+  // globalFontSize, efhOverlayEnabled, weatherStationsActive, etc.) ARE already
+  // present in PutSettingsBody and will therefore appear in parsed.data; they
+  // do NOT go through this extras path. Only genuinely unrecognised keys reach
+  // this block. Both categories should be stored verbatim so they round-trip
+  // correctly.
   const schemaKeys = new Set(Object.keys(parsed.data as Record<string, unknown>));
   const extras: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(body)) {

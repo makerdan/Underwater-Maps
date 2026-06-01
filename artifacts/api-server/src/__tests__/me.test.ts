@@ -389,6 +389,33 @@ describe("PUT /api/settings — globalFontSize (new v16 field)", () => {
   });
 });
 
+describe("PUT /api/settings — unknown fields round-trip via extras path", () => {
+  it("stores and returns a genuinely unrecognised field verbatim", async () => {
+    // A field that is not in PutSettingsBody at all must still be stored and
+    // returned so that clients sending forward-compatible payloads don't lose
+    // data. This exercises the extras path (keys absent from parsed.data).
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ fogDensity: 0.012, xClientExperimentalFeature: "some-value" });
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("xClientExperimentalFeature", "some-value");
+    expect(res.body).toHaveProperty("fogDensity", 0.012);
+  });
+
+  it("does not return __updatedAt from an unknown-field payload (server owns it)", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ __updatedAt: "2000-01-01T00:00:00.000Z", xClientExperimentalFeature: 42 });
+    expect(res.status).toBe(200);
+    // __updatedAt must be server-generated, never the client-supplied value.
+    expect(res.body.__updatedAt).not.toBe("2000-01-01T00:00:00.000Z");
+    // Unknown field should still round-trip.
+    expect(res.body).toHaveProperty("xClientExperimentalFeature", 42);
+  });
+});
+
 describe("PUT /api/settings — combined payload with all 17 new fields", () => {
   it("accepts a full valid payload containing all 17 new v15 fields", async () => {
     const payload = {
