@@ -24,8 +24,10 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import { findBundledTemperatureProfile } from "../lib/temperatureProfiles";
 import { fetchArgoProfile } from "../lib/argoErddap";
+import { LatLonQuerySchema } from "./schemas.js";
 
 const router = Router();
 
@@ -63,25 +65,24 @@ export const profileProviders: TemperatureProfileProvider[] = [
   // 3. (future) Copernicus Marine reanalysis
 ];
 
-router.get("/temperature-profile", async (req, res): Promise<void> => {
-  const lat = parseFloat(req.query["lat"] as string);
-  const lon = parseFloat(req.query["lon"] as string);
-  const datasetIdRaw = req.query["datasetId"];
-  const datasetId =
-    typeof datasetIdRaw === "string" && datasetIdRaw.length > 0
-      ? datasetIdRaw
-      : null;
+const TemperatureProfileQuerySchema = LatLonQuerySchema.extend({
+  datasetId: z.string().optional(),
+});
 
-  if (
-    !Number.isFinite(lat) || !Number.isFinite(lon) ||
-    lat < -90 || lat > 90 || lon < -180 || lon > 180
-  ) {
+router.get("/temperature-profile", async (req, res): Promise<void> => {
+  const parsed = TemperatureProfileQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
     res.status(400).json({
       error: "invalid_params",
-      details: "lat and lon are required and must be valid coordinates",
+      details: parsed.error.issues.map((i) => i.message).join("; "),
     });
     return;
   }
+  const { lat, lon } = parsed.data;
+  const datasetId =
+    typeof parsed.data.datasetId === "string" && parsed.data.datasetId.length > 0
+      ? parsed.data.datasetId
+      : null;
 
   // Cache for 1h — climatology and bundled casts change very slowly, and
   // a fresh Argo float profile is only published every 10 days.

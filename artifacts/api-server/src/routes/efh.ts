@@ -13,11 +13,17 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import {
   SALTWATER_EFH_BY_DATASET,
   type EfhFeatureCollection,
 } from "../lib/efhData.js";
 import { TX_FRESHWATER_EFH_BY_DATASET } from "../lib/txFreshwaterEfhData.js";
+
+const EfhQuerySchema = z.object({
+  datasetId: z.string().optional(),
+  species: z.string().optional(),
+});
 
 const router = Router();
 
@@ -39,7 +45,15 @@ export const EFH_DATASET_IDS: ReadonlySet<string> = new Set(
  *   species    — comma-separated list to filter (optional)
  */
 router.get("/efh", (req, res) => {
-  const { datasetId, species } = req.query as { datasetId?: string; species?: string };
+  const parsed = EfhQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: "invalid_params",
+      details: parsed.error.issues.map((i) => i.message).join("; "),
+    });
+    return;
+  }
+  const { datasetId, species } = parsed.data;
 
   const collection = datasetId ? EFH_BY_DATASET[datasetId] : undefined;
 

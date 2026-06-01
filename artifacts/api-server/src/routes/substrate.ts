@@ -39,6 +39,7 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import { ALL_PRESET_DATASETS } from "../lib/terrain.js";
 import {
   ALASKA_SHOREZONE,
@@ -50,6 +51,10 @@ import {
   type SubstrateSource,
   type ShoreZoneFeatureCollection,
 } from "../lib/shoreZoneData.js";
+
+const DatasetIdParamSchema = z.object({
+  id: z.string().min(1, "Dataset ID is required"),
+});
 
 const router = Router();
 
@@ -114,7 +119,15 @@ const SOURCE_PROVENANCE = {
  * ShoreZone + ENC substrate FeatureCollection clipped to the dataset bbox.
  */
 router.get("/substrate/:id", (req, res) => {
-  const datasetId = req.params["id"]!;
+  const paramParsed = DatasetIdParamSchema.safeParse(req.params);
+  if (!paramParsed.success) {
+    res.status(400).json({
+      error: "invalid_params",
+      details: paramParsed.error.issues.map((i) => i.message).join("; "),
+    });
+    return;
+  }
+  const datasetId = paramParsed.data.id;
   const meta = ALL_PRESET_DATASETS.find((d) => d.id === datasetId);
   if (!meta) {
     res.status(404).json({ error: "not_found", details: `Dataset '${datasetId}' not found` });

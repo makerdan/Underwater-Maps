@@ -13,23 +13,29 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import { logger } from "../lib/logger.js";
 import { fetchRawsObservation } from "../lib/rawsErddap.js";
 
 const router = Router();
 
-const DATASET_ID_PATTERN = /^raws_[a-zA-Z0-9_-]+$/;
+const RawsWeatherQuerySchema = z.object({
+  datasetId: z
+    .string({ required_error: "datasetId is required" })
+    .min(1, "datasetId is required")
+    .regex(/^raws_[a-zA-Z0-9_-]+$/, "datasetId is required and must match the raws_* pattern"),
+});
 
 router.get("/raws-weather", async (req, res): Promise<void> => {
-  const datasetId = String(req.query["datasetId"] ?? "");
-
-  if (!datasetId || !DATASET_ID_PATTERN.test(datasetId)) {
+  const parsed = RawsWeatherQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
     res.status(400).json({
       error: "invalid_params",
-      details: "datasetId is required and must match the raws_* pattern",
+      details: parsed.error.issues.map((i) => i.message).join("; "),
     });
     return;
   }
+  const { datasetId } = parsed.data;
 
   try {
     const result = await fetchRawsObservation(datasetId);

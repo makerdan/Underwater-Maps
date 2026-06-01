@@ -10,13 +10,24 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import { logger } from "../lib/logger.js";
 import { fetchRawsStations, type RawsStation } from "../lib/rawsStations.js";
-
-const router = Router();
+import { LatLonQuerySchema } from "./schemas.js";
 
 const DEFAULT_RADIUS_KM = 150;
 const MAX_RADIUS_KM = 500;
+
+const RawsStationsQuerySchema = LatLonQuerySchema.extend({
+  radiusKm: z.coerce
+    .number({ invalid_type_error: "radiusKm must be a valid number" })
+    .positive("radiusKm must be a positive number")
+    .lte(MAX_RADIUS_KM, `radiusKm must be ≤ ${MAX_RADIUS_KM}`)
+    .optional()
+    .default(DEFAULT_RADIUS_KM),
+});
+
+const router = Router();
 
 function haversineKm(
   lat1: number,
@@ -35,29 +46,15 @@ function haversineKm(
 }
 
 router.get("/raws-stations", async (req, res): Promise<void> => {
-  const lat = parseFloat(String(req.query["lat"] ?? ""));
-  const lon = parseFloat(String(req.query["lon"] ?? ""));
-  const rawRadius = req.query["radiusKm"];
-  const radiusKm =
-    rawRadius !== undefined
-      ? parseFloat(String(rawRadius))
-      : DEFAULT_RADIUS_KM;
-
-  if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+  const parsed = RawsStationsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
     res.status(400).json({
       error: "invalid_params",
-      details: "lat and lon are required and must be valid coordinates",
+      details: parsed.error.issues.map((i) => i.message).join("; "),
     });
     return;
   }
-
-  if (isNaN(radiusKm) || radiusKm <= 0 || radiusKm > MAX_RADIUS_KM) {
-    res.status(400).json({
-      error: "invalid_params",
-      details: `radiusKm must be a positive number ≤ ${MAX_RADIUS_KM}`,
-    });
-    return;
-  }
+  const { lat, lon, radiusKm } = parsed.data;
 
   try {
     const all = await fetchRawsStations();

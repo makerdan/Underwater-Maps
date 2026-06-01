@@ -15,6 +15,7 @@
  */
 
 import { Router } from "express";
+import { LatLonQuerySchema } from "./schemas.js";
 
 const router = Router();
 
@@ -81,19 +82,15 @@ export function pickCurrentSst(
 }
 
 router.get("/water-temperature", async (req, res): Promise<void> => {
-  const lat = parseFloat(req.query["lat"] as string);
-  const lon = parseFloat(req.query["lon"] as string);
-
-  if (
-    !Number.isFinite(lat) || !Number.isFinite(lon) ||
-    lat < -90 || lat > 90 || lon < -180 || lon > 180
-  ) {
+  const parsed = LatLonQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
     res.status(400).json({
       error: "invalid_params",
-      details: "lat and lon are required and must be valid coordinates",
+      details: parsed.error.issues.map((i) => i.message).join("; "),
     });
     return;
   }
+  const { lat, lon } = parsed.data;
 
   // Cache for 30 minutes — SST changes very slowly and the Open-Meteo
   // forecast is itself hourly.

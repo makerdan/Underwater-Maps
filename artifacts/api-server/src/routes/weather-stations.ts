@@ -13,39 +13,32 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import { fetchWeatherStations, NoaaUnavailableError } from "../lib/noaaWeatherFetcher.js";
 import type { WeatherStation } from "../lib/noaaWeatherFetcher.js";
+import { LatLonQuerySchema } from "./schemas.js";
+
+const WeatherStationsQuerySchema = LatLonQuerySchema.extend({
+  radiusMiles: z.coerce
+    .number({ invalid_type_error: "radiusMiles must be a valid number" })
+    .positive("radiusMiles must be a positive number")
+    .lte(500, "radiusMiles must be ≤ 500")
+    .optional()
+    .default(75),
+});
 
 const router = Router();
 
 router.get("/weather-stations", async (req, res): Promise<void> => {
-  const rawLat = req.query["lat"];
-  const rawLon = req.query["lon"];
-  const rawRadius = req.query["radiusMiles"];
-
-  const lat = parseFloat(rawLat as string);
-  const lon = parseFloat(rawLon as string);
-  const radiusMiles = rawRadius !== undefined ? parseFloat(rawRadius as string) : 75;
-
-  if (
-    isNaN(lat) || isNaN(lon) ||
-    lat < -90 || lat > 90 ||
-    lon < -180 || lon > 180
-  ) {
+  const parsed = WeatherStationsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
     res.status(400).json({
       error: "invalid_params",
-      details: "lat and lon are required and must be valid coordinates",
+      details: parsed.error.issues.map((i) => i.message).join("; "),
     });
     return;
   }
-
-  if (isNaN(radiusMiles) || radiusMiles <= 0 || radiusMiles > 500) {
-    res.status(400).json({
-      error: "invalid_params",
-      details: "radiusMiles must be a positive number ≤ 500",
-    });
-    return;
-  }
+  const { lat, lon, radiusMiles } = parsed.data;
 
   try {
     const result = await fetchWeatherStations(lat, lon, radiusMiles);
@@ -70,15 +63,15 @@ router.get("/weather-stations", async (req, res): Promise<void> => {
 // GET /weather/pack?lat=&lon=
 // Returns a weather snapshot for offline packs.
 router.get("/weather/pack", async (req, res): Promise<void> => {
-  const rawLat = req.query["lat"];
-  const rawLon = req.query["lon"];
-  const lat = parseFloat(rawLat as string);
-  const lon = parseFloat(rawLon as string);
-
-  if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
-    res.status(400).json({ error: "invalid_params", details: "lat and lon are required" });
+  const parsed = LatLonQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: "invalid_params",
+      details: parsed.error.issues.map((i) => i.message).join("; "),
+    });
     return;
   }
+  const { lat, lon } = parsed.data;
 
   try {
     const result = await fetchWeatherStations(lat, lon, 75);

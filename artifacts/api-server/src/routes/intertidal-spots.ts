@@ -21,6 +21,7 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import { ALL_PRESET_DATASETS } from "../lib/terrain.js";
 import {
   getSubstrateForDataset,
@@ -29,6 +30,17 @@ import {
 } from "../lib/shoreZoneData.js";
 import { scoreTidepool, scoreBeachcombing, buildScoreSignals } from "../lib/intertidalScorer.js";
 import type { IntertidalScoringProps } from "../lib/intertidalScorer.js";
+
+const IntertidalSpotsQuerySchema = z.object({
+  type: z.enum(["tidepool", "beachcombing", "both"]).optional().default("both"),
+  minScore: z.coerce
+    .number({ invalid_type_error: "minScore must be a number" })
+    .int("minScore must be an integer")
+    .min(0, "minScore must be between 0 and 100")
+    .max(100, "minScore must be between 0 and 100")
+    .optional()
+    .default(0),
+});
 
 const router = Router();
 
@@ -75,17 +87,16 @@ router.get("/intertidal-spots/:id", (req, res) => {
     return;
   }
 
-  const typeParam = (req.query["type"] as string | undefined) ?? "both";
-  const minScoreParam = parseInt((req.query["minScore"] as string | undefined) ?? "0", 10);
-  const minScore = Number.isFinite(minScoreParam) ? Math.max(0, Math.min(100, minScoreParam)) : 0;
-
-  if (!["tidepool", "beachcombing", "both"].includes(typeParam)) {
+  const queryParsed = IntertidalSpotsQuerySchema.safeParse(req.query);
+  if (!queryParsed.success) {
     res.status(400).json({
-      error: "bad_request",
-      details: "`type` must be one of: tidepool, beachcombing, both",
+      error: "invalid_params",
+      details: queryParsed.error.issues.map((i) => i.message).join("; "),
     });
     return;
   }
+  const typeParam = queryParsed.data.type;
+  const minScore = queryParsed.data.minScore;
 
   const slice = getSubstrateForDataset(datasetId, meta.bbox);
 

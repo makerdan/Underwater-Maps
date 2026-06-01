@@ -27,6 +27,7 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import {
   buildSyntheticEvents,
   computeSlackSample,
@@ -34,6 +35,7 @@ import {
   type TidePhase,
 } from "../lib/slack.js";
 import { registerCache } from "../lib/cacheRegistry.js";
+import { LatLonQuerySchema } from "./schemas.js";
 
 const router = Router();
 
@@ -516,16 +518,15 @@ export interface ForecastHour {
 // ---------------------------------------------------------------------------
 
 router.get("/surface-conditions", async (req, res): Promise<void> => {
-  const rawLat = req.query["lat"];
-  const rawLon = req.query["lon"];
-
-  const lat = parseFloat(rawLat as string);
-  const lon = parseFloat(rawLon as string);
-
-  if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
-    res.status(400).json({ error: "invalid_params", details: "lat and lon are required and must be valid coordinates" });
+  const parsed = LatLonQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: "invalid_params",
+      details: parsed.error.issues.map((i) => i.message).join("; "),
+    });
     return;
   }
+  const { lat, lon } = parsed.data;
 
   // Anchor the 48-hour series at the top of the current UTC hour so each
   // index aligns with a wall-clock hour.
