@@ -46,7 +46,59 @@ app.use(
 
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
-app.use(cors({ credentials: true, origin: true }));
+// ─── CORS ─────────────────────────────────────────────────────────────────────
+// `origin: true` (reflect any incoming origin) combined with
+// `credentials: true` would allow any website to make credentialed cross-origin
+// mutations on behalf of a logged-in user.  Instead we validate each origin
+// against an explicit allowlist built from environment variables.
+//
+// Allowlist sources (comma-separated `ALLOWED_ORIGINS` + REPLIT_DEV_DOMAIN):
+//   - ALLOWED_ORIGINS: e.g. "https://myapp.example.com,https://www.myapp.com"
+//   - REPLIT_DEV_DOMAIN: auto-set in Replit dev environments
+//
+// In non-production environments where no allowlist is configured, the
+// middleware falls back to reflecting the request origin (dev convenience).
+// In production (REPLIT_DEPLOYMENT set or NODE_ENV=production) a missing
+// allowlist means no cross-origin credentialed request is granted.
+app.use(
+  cors({
+    credentials: true,
+    origin(requestOrigin, callback) {
+      // No origin header → same-origin request, curl, Postman — always allowed.
+      if (!requestOrigin) {
+        callback(null, true);
+        return;
+      }
+
+      const allowList = (process.env["ALLOWED_ORIGINS"] ?? "")
+        .split(",")
+        .map((o) => o.trim())
+        .filter(Boolean);
+      if (process.env["REPLIT_DEV_DOMAIN"]) {
+        allowList.push(`https://${process.env["REPLIT_DEV_DOMAIN"]}`);
+      }
+
+      const isProduction =
+        process.env["NODE_ENV"] === "production" ||
+        Boolean(process.env["REPLIT_DEPLOYMENT"]);
+
+      // Dev with no allowlist configured: fall back to permissive so local
+      // developer machines and Playwright E2E tests are not broken.
+      if (!isProduction && allowList.length === 0) {
+        callback(null, requestOrigin);
+        return;
+      }
+
+      if (allowList.includes(requestOrigin)) {
+        callback(null, requestOrigin);
+      } else {
+        // Return false: cors package omits Access-Control-Allow-Origin so the
+        // browser's CORS policy blocks the response.
+        callback(null, false);
+      }
+    },
+  }),
+);
 
 // ─── Per-route JSON body limits ───────────────────────────────────────────────
 // A single middleware selects the correct limit before any router or Zod

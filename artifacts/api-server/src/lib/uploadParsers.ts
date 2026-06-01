@@ -84,11 +84,12 @@ export async function parseUploadedFile(
     case "gpx":
       return parseGpxTerrain(buffer.toString("utf8"));
     case "nmea":
+    case "nme":
       return parseNmea(buffer.toString("utf8"));
     default:
       throw new Error(
         `Unsupported file extension ".${ext}". Supported formats: ` +
-          `.tif, .tiff, .bag, .las, .laz, .nc, .gpx, .nmea, .csv, .xyz, .txt`,
+          `.tif, .tiff, .bag, .las, .laz, .nc, .gpx, .nmea, .nme, .csv, .xyz, .txt`,
       );
   }
 }

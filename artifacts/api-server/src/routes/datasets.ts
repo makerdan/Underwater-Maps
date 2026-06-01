@@ -436,7 +436,8 @@ const ALLOWED_UPLOAD_EXTENSIONS = new Set([
   ".las", ".laz",  // LAS / compressed LAS
   ".bag",          // Bathymetric Attributed Grid (HDF5)
   ".gpx",          // GPS Exchange (track logs with elevation)
-  ".nmea",         // NMEA-0183 depth sounder logs
+  ".nmea",         // NMEA-0183 depth sounder logs (primary extension)
+  ".nme",          // NMEA-0183 depth sounder logs (alternate extension used by some devices)
 ]);
 
 const datasetUploadRateLimit = createRateLimit({
@@ -471,7 +472,7 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(
-        Object.assign(new Error(`Unsupported file type. Accepted: .csv, .txt, .xyz, .gz, .tif, .tiff, .nc, .las, .laz, .bag, .gpx, .nmea`), {
+        Object.assign(new Error(`Unsupported file type. Accepted: .csv, .txt, .xyz, .gz, .tif, .tiff, .nc, .las, .laz, .bag, .gpx, .nmea, .nme`), {
           code: "LIMIT_UNEXPECTED_FILE",
         }) as unknown as null,
         false,
