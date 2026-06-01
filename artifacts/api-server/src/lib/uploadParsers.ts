@@ -531,10 +531,10 @@ export async function parseLasLaz(buffer: Buffer, fileName: string): Promise<Raw
       }
 
       zip.delete();
-      // LAZ path: filter depth=0 (sea-level / no-return points).
-      // The uncompressed LAS path intentionally preserves depth=0 for intertidal
-      // use cases; LAZ tests contract specifies these must be excluded.
-      return lasPointsToRaw(pts).filter((p) => p.depth > 0);
+      // depth=0 is a valid intertidal / waterline measurement — preserve it.
+      // lasPointsToRaw already flips negative-Z to positive depth; a zi=0
+      // in the LAS record (surface point) becomes depth=0 and must be kept.
+      return lasPointsToRaw(pts);
     } catch (err) {
       zip.delete();
       throw new Error(
