@@ -531,23 +531,42 @@ async function buildBag() {
  *   15 records; index 10 has depth=0 (zi=0) — parseLasLaz must skip it
  *   14 valid points at lon ≈ -132.5, lat ≈ 55.2, depth 1250–2400 m
  *
- * Prerequisites: python3 with laspy[lazrs] installed.
- *   pip install "laspy[lazrs]"
+ * Python dependencies are listed in gen_laz_deps.txt (same directory).
+ * They are auto-installed before the script runs so fresh environments work
+ * without any manual setup step.
  */
 async function buildLaz() {
+  const reqFile  = join(__dir, "gen_laz_deps.txt");
   const pyScript = join(__dir, "gen_laz.py");
   const outPath  = join(__dir, "survey.laz");
-  // Extend PYTHONPATH to include the workspace venv so numpy/laspy are found
-  // even when the system python3 doesn't have them installed globally.
-  const venvSitePackages = "/home/runner/workspace/.venv/lib/python3.11/site-packages";
-  const existingPythonPath = process.env.PYTHONPATH ?? "";
-  const pythonPath = existingPythonPath
-    ? `${venvSitePackages}:${existingPythonPath}`
-    : venvSitePackages;
-  execFileSync("python3", [pyScript], {
-    stdio: "inherit",
-    env: { ...process.env, PYTHONPATH: pythonPath },
-  });
+
+  // Replit stores pip-installed packages under .pythonlibs, keyed by
+  // PYTHONUSERBASE.  Subprocesses spawned from workflows may not inherit
+  // this variable, so we forward it (and the matching PYTHONPATH) explicitly
+  // so that both the import check and the fallback pip install use the same
+  // writable user-site location.
+  const pythonUserBase = process.env.PYTHONUSERBASE
+    || join(dirname(fileURLToPath(import.meta.url)), "../../../../.pythonlibs");
+  const userSite = join(pythonUserBase, "lib", "python3.11", "site-packages");
+  const pythonEnv = {
+    ...process.env,
+    PYTHONUSERBASE: pythonUserBase,
+    PYTHONPATH: process.env.PYTHONPATH
+      ? `${userSite}:${process.env.PYTHONPATH}`
+      : userSite,
+  };
+
+  try {
+    execFileSync("python3", ["-c", "import numpy; import laspy"], { stdio: "pipe", env: pythonEnv });
+  } catch {
+    // Use the pip wrapper (not python3 -m pip) so packages land in .pythonlibs.
+    // python3 -m pip is blocked in Nix with "externally-managed-environment".
+    execFileSync(
+      "pip", ["install", "-q", "-r", reqFile],
+      { stdio: "inherit", env: pythonEnv },
+    );
+  }
+  execFileSync("python3", [pyScript], { stdio: "inherit", env: pythonEnv });
   const { readFile } = await import("fs/promises");
   return readFile(outPath);
 }

@@ -49,10 +49,15 @@ for f in "${FIXTURES[@]}"; do
   cp "$path" "$TMPDIR_BACKUP/$f"
 done
 
-# ── Step 2: Install Python deps then regenerate fixtures in-place ───────────
-echo "Installing Python dependencies (numpy, laspy[lazrs]) via uv …"
-uv sync --frozen
-echo ""
+# ── Step 2: Ensure Python deps are present, then regenerate fixtures in-place
+# Use the pip wrapper (not python3 -m pip / uv) so packages land in
+# .pythonlibs — the writable user-site Replit exposes in workflow contexts.
+DEPS_FILE="$FIXTURE_DIR/gen_laz_deps.txt"
+if ! python3 -c "import numpy; import laspy" 2>/dev/null; then
+  echo "Installing Python dependencies (numpy, laspy[lazrs]) …"
+  PYTHONUSERBASE="${PYTHONUSERBASE:-$PWD/.pythonlibs}" \
+    pip install -q -r "$DEPS_FILE"
+fi
 
 echo "Running generate.mjs …"
 node "$GENERATOR"
@@ -104,7 +109,7 @@ while IFS= read -r -d '' generated_file; do
   base=$(basename "$generated_file")
   # Skip non-data files
   case "$base" in
-    *.sh|*.mjs|*.py|.*) continue ;;
+    *.sh|*.mjs|*.py|*.txt|.*) continue ;;
   esac
   if [[ "$EXPECTED_SET" != *" $base "* ]]; then
     echo "  EXTRA  $base  (generated but not committed — add to FIXTURES list and commit)"
