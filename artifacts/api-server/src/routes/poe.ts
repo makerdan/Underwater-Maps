@@ -105,7 +105,7 @@ const POE_HELP_TIMEOUT_MS = 30_000;
 
 let modelsCache: { data: unknown; expiresAt: number } | null = null;
 
-router.get("/models", async (_req, res) => {
+router.get("/models", asyncHandler(async (_req, res) => {
   if (modelsCache && Date.now() < modelsCache.expiresAt) {
     res.json(modelsCache.data);
     return;
@@ -124,7 +124,7 @@ router.get("/models", async (_req, res) => {
   } catch {
     res.status(502).json({ error: "models_unavailable", details: "Could not fetch Poe models list" });
   }
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Shared helpers

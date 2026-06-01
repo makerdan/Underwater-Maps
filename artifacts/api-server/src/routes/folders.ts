@@ -399,25 +399,23 @@ router.delete("/user/folders/:id", requireAuth, asyncHandler(async (req, res): P
       const descendants = collectDescendantIds(rows, id);
       const idsArr = Array.from(descendants);
       await db.transaction(async (tx) => {
-        // Delete custom datasets that live in any descendant folder
-        for (const fid of idsArr) {
-          await tx
-            .delete(customDatasetsTable)
-            .where(
-              and(
-                eq(customDatasetsTable.folderId, fid),
-                eq(customDatasetsTable.userId, userId),
-              ),
-            );
-          await tx
-            .delete(userCatalogSavesTable)
-            .where(
-              and(
-                eq(userCatalogSavesTable.folderId, fid),
-                eq(userCatalogSavesTable.userId, userId),
-              ),
-            );
-        }
+        // Delete custom datasets and catalog saves that live in any descendant folder
+        await tx
+          .delete(customDatasetsTable)
+          .where(
+            and(
+              inArray(customDatasetsTable.folderId, idsArr),
+              eq(customDatasetsTable.userId, userId),
+            ),
+          );
+        await tx
+          .delete(userCatalogSavesTable)
+          .where(
+            and(
+              inArray(userCatalogSavesTable.folderId, idsArr),
+              eq(userCatalogSavesTable.userId, userId),
+            ),
+          );
         // Cascade FK deletes the descendant folders when we delete the root
         await tx
           .delete(datasetFoldersTable)

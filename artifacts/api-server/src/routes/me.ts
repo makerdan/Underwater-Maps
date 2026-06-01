@@ -4,7 +4,7 @@
  * Used by the Settings → Account & Privacy section.
  */
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import {
   db,
   userSettingsTable,
@@ -98,8 +98,10 @@ router.delete("/me", requireAuth, asyncHandler(async (req, res): Promise<void> =
     .from(gpsTrailsTable)
     .where(eq(gpsTrailsTable.userId, userId));
 
-  for (const t of userTrails) {
-    await db.delete(gpsTrailPointsTable).where(eq(gpsTrailPointsTable.trailId, t.id));
+  if (userTrails.length > 0) {
+    await db
+      .delete(gpsTrailPointsTable)
+      .where(inArray(gpsTrailPointsTable.trailId, userTrails.map((t) => t.id)));
   }
   await db.delete(gpsTrailsTable).where(eq(gpsTrailsTable.userId, userId));
   await db.delete(markersTable).where(eq(markersTable.userId, userId));

@@ -125,30 +125,26 @@ function toCatalogResponse(entry: CatalogSeedEntry, createdAt?: string) {
 // GET /datasets/catalog
 // ---------------------------------------------------------------------------
 
-router.get("/datasets/catalog", async (req, res): Promise<void> => {
+router.get("/datasets/catalog", asyncHandler(async (req, res): Promise<void> => {
   const rawDataType = req.query["dataType"] as string | undefined;
   const rawWaterType = req.query["waterType"] as string | undefined;
 
-  try {
-    const entries = await getCatalogEntries();
+  const entries = await getCatalogEntries();
 
-    const filtered = entries.filter((e) => {
-      if (rawDataType && e.dataType !== rawDataType) return false;
-      if (rawWaterType && e.waterType !== rawWaterType) return false;
-      return true;
-    });
+  const filtered = entries.filter((e) => {
+    if (rawDataType && e.dataType !== rawDataType) return false;
+    if (rawWaterType && e.waterType !== rawWaterType) return false;
+    return true;
+  });
 
-    res.json(filtered.map((e) => toCatalogResponse(e)));
-  } catch (err) {
-    res.status(500).json({ error: "catalog_error", details: (err as Error).message });
-  }
-});
+  res.json(filtered.map((e) => toCatalogResponse(e)));
+}));
 
 // ---------------------------------------------------------------------------
 // GET /datasets/catalog/search
 // ---------------------------------------------------------------------------
 
-router.get("/datasets/catalog/search", async (req, res): Promise<void> => {
+router.get("/datasets/catalog/search", asyncHandler(async (req, res): Promise<void> => {
   const q = req.query["q"] as string | undefined;
   const dataType = req.query["dataType"] as string | undefined;
   const waterType = req.query["waterType"] as string | undefined;
@@ -157,18 +153,14 @@ router.get("/datasets/catalog/search", async (req, res): Promise<void> => {
   const maxLon = req.query["maxLon"] !== undefined ? Number(req.query["maxLon"]) : undefined;
   const maxLat = req.query["maxLat"] !== undefined ? Number(req.query["maxLat"]) : undefined;
 
-  try {
-    const results = await searchCatalog({ q, dataType, waterType, minLon, minLat, maxLon, maxLat });
-    res.json(
-      results.map((r) => ({
-        ...toCatalogResponse(r, r.createdAt),
-        relevanceScore: r.relevanceScore,
-      })),
-    );
-  } catch (err) {
-    res.status(500).json({ error: "search_error", details: (err as Error).message });
-  }
-});
+  const results = await searchCatalog({ q, dataType, waterType, minLon, minLat, maxLon, maxLat });
+  res.json(
+    results.map((r) => ({
+      ...toCatalogResponse(r, r.createdAt),
+      relevanceScore: r.relevanceScore,
+    })),
+  );
+}));
 
 // ---------------------------------------------------------------------------
 // POST /datasets/bbox-query
@@ -197,7 +189,7 @@ const MIN_BBOX_DEG = 1e-4;
 const MAX_BBOX_LON_DEG = 180;
 const MAX_BBOX_LAT_DEG = 170;
 
-router.post("/datasets/bbox-query", async (req, res): Promise<void> => {
+router.post("/datasets/bbox-query", asyncHandler(async (req, res): Promise<void> => {
   const parsed = BboxQueryBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({
@@ -236,26 +228,22 @@ router.post("/datasets/bbox-query", async (req, res): Promise<void> => {
     return;
   }
 
-  try {
-    const results = await searchCatalog({
-      dataType,
-      waterType,
-      minLon: west,
-      minLat: south,
-      maxLon: east,
-      maxLat: north,
-    });
-    res.json({
-      bbox: { north, south, east, west },
-      datasets: results.map((r) => ({
-        ...toCatalogResponse(r, r.createdAt),
-        relevanceScore: r.relevanceScore,
-      })),
-    });
-  } catch (err) {
-    res.status(500).json({ error: "search_error", details: (err as Error).message });
-  }
-});
+  const results = await searchCatalog({
+    dataType,
+    waterType,
+    minLon: west,
+    minLat: south,
+    maxLon: east,
+    maxLat: north,
+  });
+  res.json({
+    bbox: { north, south, east, west },
+    datasets: results.map((r) => ({
+      ...toCatalogResponse(r, r.createdAt),
+      relevanceScore: r.relevanceScore,
+    })),
+  });
+}));
 
 // ---------------------------------------------------------------------------
 // POST /datasets/catalog/:id/save  (auth-gated)

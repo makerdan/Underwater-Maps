@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { HealthCheckResponse, DeepHealthCheckResponse } from "@workspace/api-zod";
 import { pool } from "@workspace/db";
 import { logger } from "../lib/logger.js";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 
 const router: IRouter = Router();
 
@@ -25,7 +26,7 @@ const AOOS_PROBE_URL =
  * healthy one. The shallow `/healthz` continues to return 200 quickly for
  * load-balancer liveness probes.
  */
-router.get("/healthz/deep", async (_req, res) => {
+router.get("/healthz/deep", asyncHandler(async (_req, res) => {
   const [dbResult, poeResult, aoosResult] = await Promise.allSettled([
     checkDb(),
     checkPoe(),
@@ -44,7 +45,7 @@ router.get("/healthz/deep", async (_req, res) => {
 
   const body = DeepHealthCheckResponse.parse({ status: overallStatus, subsystems: { db, poe, aoos } });
   res.status(overallStatus === "ok" ? 200 : 503).json(body);
-});
+}));
 
 async function checkDb(): Promise<{ status: "ok" | "degraded"; latencyMs?: number; error?: string }> {
   const start = Date.now();
