@@ -956,7 +956,7 @@ function VisualsSection() {
       </div>
 
       <PalettePickerCard />
-      <ZoneColoursShortcutCard />
+      <ZoneColourSwatches />
       <AdvancedDisclosure testId="visuals-advanced">
         <div style={S.card}>
           <div style={S.cardHeader}>PARTICLES &amp; TEXTURES</div>
@@ -1332,6 +1332,7 @@ function ZoneColourSwatches() {
   const waterType = useSettingsStore((s) => s.waterType);
   const slots = useZoneOverlayStore((s) => s.slots);
   const setSlotColor = useZoneOverlayStore((s) => s.setSlotColor);
+  const setSlotVisible = useZoneOverlayStore((s) => s.setSlotVisible);
   const resetToDefaults = useZoneOverlayStore((s) => s.resetToDefaults);
   const setActiveWaterType = useZoneOverlayStore((s) => s.setActiveWaterType);
   const slotNames =
@@ -1353,7 +1354,8 @@ function ZoneColourSwatches() {
       >
         <span>ZONE COLOURS</span>
         <button
-          data-testid="settings-zone-colors-reset"
+          type="button"
+          data-testid="settings-zone-colours-reset"
           onClick={resetToDefaults}
           style={{
             fontSize: 9,
@@ -1368,76 +1370,61 @@ function ZoneColourSwatches() {
             fontFamily: FONT,
           }}
         >
-          Reset
+          RESET TO DEFAULTS
         </button>
       </div>
-      <div style={{ padding: "10px 16px", display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {slotNames.map((name, i) => {
-          const slot = slots[i as 0 | 1 | 2 | 3];
-          const color = slot?.color ?? "#f5d58a";
-          return (
-            <label
-              key={i}
-              data-testid={`settings-zone-swatch-${i}`}
-              title={`Click to change colour — ${name}`}
+      {slotNames.map((name, i) => {
+        const slot = slots[i as 0 | 1 | 2 | 3];
+        const color = slot?.color ?? "#f5d58a";
+        const visible = slot?.visible ?? true;
+        return (
+          <div
+            key={i}
+            data-testid={`settings-zone-row-${i}`}
+            style={{ ...S.row }}
+          >
+            <Toggle
+              value={visible}
+              onChange={(v) => setSlotVisible(i as 0 | 1 | 2 | 3, v)}
+            />
+            <span
               style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 4,
-                cursor: "pointer",
+                display: "block",
+                width: 24,
+                height: 24,
+                borderRadius: 4,
+                background: color,
+                border: "1.5px solid rgba(255,255,255,0.15)",
+                boxShadow: `0 0 6px ${color}55`,
+                position: "relative",
+                flexShrink: 0,
+                opacity: visible ? 1 : 0.35,
+                transition: "opacity 0.15s",
               }}
             >
-              <span
+              <input
+                data-testid={`settings-zone-colour-input-${i}`}
+                type="color"
+                value={color}
+                onChange={(e) => setSlotColor(i as 0 | 1 | 2 | 3, e.target.value)}
                 style={{
-                  display: "block",
-                  width: 28,
-                  height: 28,
-                  borderRadius: 4,
-                  background: color,
-                  border: "1.5px solid rgba(255,255,255,0.15)",
-                  boxShadow: `0 0 6px ${color}55`,
-                  position: "relative",
-                  transition: "box-shadow 0.15s",
-                  flexShrink: 0,
+                  position: "absolute",
+                  inset: 0,
+                  opacity: 0,
+                  cursor: "pointer",
+                  width: "100%",
+                  height: "100%",
+                  border: "none",
+                  padding: 0,
                 }}
-              >
-                <input
-                  data-testid={`settings-zone-color-input-${i}`}
-                  type="color"
-                  value={color}
-                  onChange={(e) => setSlotColor(i as 0 | 1 | 2 | 3, e.target.value)}
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    opacity: 0,
-                    cursor: "pointer",
-                    width: "100%",
-                    height: "100%",
-                    border: "none",
-                    padding: 0,
-                  }}
-                />
-              </span>
-              <span
-                style={{
-                  fontSize: 8,
-                  color: "#94a3b8",
-                  letterSpacing: "0.06em",
-                  textTransform: "uppercase",
-                  textAlign: "center",
-                  maxWidth: 52,
-                  lineHeight: 1.3,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                }}
-              >
-                {name.split(" /")[0]}
-              </span>
-            </label>
-          );
-        })}
-      </div>
+              />
+            </span>
+            <div style={{ flex: 1 }}>
+              <div style={{ ...S.label, opacity: visible ? 1 : 0.5 }}>{name}</div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
