@@ -102,6 +102,8 @@ vi.mock("../lib/uploadParsers.js", () => ({
 
 import { processObject, getJobByObjectKey } from "../lib/bucketMonitor.js";
 import { parseXyzCsv } from "../lib/terrain.js";
+import { parseUploadedFile } from "../lib/uploadParsers.js";
+import { gzipSync } from "zlib";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -137,6 +139,7 @@ beforeEach(() => {
   gcsMocks.mockFile.mockClear();
   dbMocks.insertMock.mockClear();
   dbMocks.valuesMock.mockClear();
+  vi.mocked(parseUploadedFile).mockClear();
 });
 
 afterEach(() => {
@@ -292,5 +295,31 @@ describe("processObject — failure path (GCS move itself fails)", () => {
     // Job should still report failed with the original parse error
     expect(job!.status).toBe("failed");
     expect(job!.error).toMatch(/at least 10/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// .gz binary path — parseUploadedFile receives the stripped base name
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("processObject — .gz binary format (e.g. .las.gz)", () => {
+  it("calls parseUploadedFile with the base name (no .gz suffix), not the original .gz filename", async () => {
+    // Build a valid gzip stream wrapping dummy binary bytes (simulates a .las file)
+    const dummyInner = Buffer.from("dummy las binary content");
+    const gzippedBytes = gzipSync(dummyInner);
+    gcsMocks.mockCreateReadStream.mockReturnValue(Readable.from([gzippedBytes]));
+
+    vi.mocked(parseUploadedFile).mockResolvedValue(MOCK_POINTS);
+
+    const objectKey = "pending-datasets/user_abc/uuid-lasgz/survey.las.gz";
+    await processObject(TEST_BUCKET, objectKey);
+
+    expect(vi.mocked(parseUploadedFile)).toHaveBeenCalledOnce();
+    const [, filenameArg] = vi.mocked(parseUploadedFile).mock.calls[0]!;
+    expect(filenameArg).toBe("survey.las");
+    expect(filenameArg).not.toMatch(/\.gz$/i);
+
+    const job = getJobByObjectKey(objectKey);
+    expect(job?.status).toBe("done");
   });
 });

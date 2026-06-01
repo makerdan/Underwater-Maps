@@ -229,7 +229,7 @@ export async function processObject(bucketName: string, objectKey: string): Prom
       points = parseXyzCsv(content, fileName);
     } else {
       const raw = await fs.promises.readFile(processPath);
-      points = await parseUploadedFile(raw, fileName);
+      points = await parseUploadedFile(raw, baseName);
     }
 
     if (points.length < 10) {
