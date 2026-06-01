@@ -49,7 +49,11 @@ for f in "${FIXTURES[@]}"; do
   cp "$path" "$TMPDIR_BACKUP/$f"
 done
 
-# ── Step 2: Regenerate fixtures in-place ────────────────────────────────────
+# ── Step 2: Install Python deps then regenerate fixtures in-place ───────────
+echo "Installing Python dependencies (numpy, laspy[lazrs]) via uv …"
+uv sync --frozen
+echo ""
+
 echo "Running generate.mjs …"
 node "$GENERATOR"
 echo ""
