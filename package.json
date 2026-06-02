@@ -17,6 +17,8 @@
     "capture:help-screenshots": "node scripts/capture-help-screenshots.mjs",
     "docs": "node scripts/generate-api-docs.mjs",
     "check:docs-stale": "node scripts/generate-api-docs.mjs --check",
+    "scaffold:catalog-tests": "node scripts/scaffold-catalog-tests.mjs",
+    "check:catalog-coverage": "node scripts/scaffold-catalog-tests.mjs --check",
     "test-all": "pnpm run typecheck && pnpm run lint && pnpm run test:unit && pnpm run check:docs-stale"
   },
   "private": true,

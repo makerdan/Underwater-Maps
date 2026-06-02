@@ -597,10 +597,14 @@ All secrets should be set through the Replit Secrets pane; never commit them to 
 | `pnpm run build` | typecheck + per-package production builds |
 | `pnpm --filter @workspace/api-spec run codegen` | Regenerate React Query hooks and Zod schemas from `openapi.yaml` |
 | `pnpm --filter @workspace/db run push` | Apply the Drizzle schema to the database (dev only) |
+| `pnpm run scaffold:catalog-tests` | Print stub `it()` blocks for any `EXTRA_CATALOG_ENTRIES` id not yet covered in `catalog-search.test.ts` |
+| `pnpm run check:catalog-coverage` | Exit 1 if any catalog entry id is missing test coverage (CI gate / pre-commit hook) |
 
 **Changing an API endpoint:** edit `lib/api-spec/openapi.yaml` first → run codegen → update the server route → update the frontend consumer.
 
 **Changing the DB schema:** edit `lib/db/src/schema/*.ts` → run `pnpm --filter @workspace/db run push`.
+
+**Adding a catalog entry:** run `pnpm run scaffold:catalog-tests` before adding the entry to `catalogSeeder.ts`. The script prints a stub `it()` block for every id in `EXTRA_CATALOG_ENTRIES` not yet referenced in `catalog-search.test.ts`. Paste the stub into the *"searchCatalog — additional entry coverage"* describe block, replace the generated query placeholder with a term from the entry's `keywords` field, verify with `pnpm run test:unit`, then commit both files together. To block commits that skip this step, add `node scripts/scaffold-catalog-tests.mjs --check` to a pre-commit hook (e.g. `.husky/pre-commit`).
 
 ---
 
