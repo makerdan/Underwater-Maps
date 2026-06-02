@@ -420,6 +420,95 @@ describe("searchCatalog — additional entry coverage", () => {
     const ids = results.map((r) => r.id);
     expect(ids).toContain("aoos-intertidal-pow");
   });
+
+  it("returns alaska-shorezone-substrate for 'ShoreZone substrate CMECS' query", async () => {
+    const results = await searchCatalog({ q: "ShoreZone substrate CMECS" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("alaska-shorezone-substrate");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Keyword coverage guard
+//
+// PRIMARY_KEYWORD_QUERIES maps every EXTRA_CATALOG_ENTRIES id to a short
+// representative query using the entry's primary species / common-name /
+// location terms — NOT the full catalog entry name.  The describe block
+// below uses these queries to call searchCatalog() and assert that each
+// entry actually surfaces in results.  This goes further than the
+// fixture-freshness check: a keyword misspelling or accidental strip inside
+// catalogSeeder.ts will fail one of these tests immediately, before the
+// broken keyword ever reaches production.
+//
+// Rules for maintaining this map:
+//   • Use species names, common names, or location terms — never the full
+//     entry name or a generic word like "Alaska" or "EFH" alone.
+//   • One query per entry is sufficient; choose tokens that are distinctive
+//     to that entry (or at least to a small subset of entries).
+//   • Adding a new id to EXTRA_CATALOG_ENTRIES without updating this map
+//     will fail the "coverage completeness" test below.
+// ---------------------------------------------------------------------------
+
+const PRIMARY_KEYWORD_QUERIES: Record<string, string> = {
+  "gebco-2024-global":                       "GEBCO global ocean",
+  "ncei-bag-mosaic-alaska":                  "multibeam inside passage",
+  "ncei-dem-global-mosaic":                  "community DEM Juneau",
+  "noaa-efh-alaska-pcod":                    "Pacific cod Kodiak",
+  "noaa-efh-alaska-halibut":                 "halibut Hippoglossus",
+  "noaa-efh-alaska-rockfish":                "yelloweye rockfish kelp",
+  "noaa-efh-alaska-pollock":                 "walleye pollock Gadus chalcogrammus",
+  "noaa-efh-alaska-sablefish":               "sablefish black cod Anoplopoma",
+  "noaa-efh-alaska-arrowtooth":              "arrowtooth flounder Atheresthes",
+  "alaska-shorezone-substrate":              "ShoreZone substrate CMECS",
+  "usgs-coned-lidar-alaska":                 "lidar CoNED coastal elevation",
+  "noaa-enc-se-alaska":                      "navigational ENC soundings nautical",
+  "noaa-efh-alaska-spotted-prawn":           "spotted prawn Pandalus platyceros",
+  "noaa-efh-alaska-turbot":                  "Greenland turbot Reinhardtius",
+  "noaa-efh-alaska-rex-sole":                "rex sole Glyptocephalus",
+  "noaa-efh-alaska-tomcod":                  "tomcod Microgadus proximus",
+  "noaa-efh-alaska-juvenile-rockfish":       "juvenile rockfish nursery Sebastes",
+  "noaa-efh-alaska-chinook-salmon":          "Chinook salmon king Oncorhynchus tshawytscha",
+  "noaa-efh-alaska-pink-salmon":             "pink salmon humpback Oncorhynchus gorbuscha",
+  "noaa-efh-alaska-chum-salmon":             "chum salmon dog Oncorhynchus keta",
+  "noaa-efh-alaska-sockeye-salmon":          "sockeye salmon red Oncorhynchus nerka",
+  "noaa-efh-alaska-coho-salmon":             "coho salmon silver Oncorhynchus kisutch",
+  "noaa-efh-alaska-dungeness-crab":          "Dungeness crab Metacarcinus magister",
+  "noaa-efh-alaska-tanner-crab":             "Tanner crab Chionoecetes bairdi",
+  "noaa-efh-alaska-black-rockfish":          "black rockfish Sitka Sebastes melanops",
+  "noaa-efh-alaska-quillback-rockfish":      "quillback rockfish Sebastes maliger",
+  "adfg-intertidal-clam-habitat-se-alaska":  "razor clam intertidal Siliqua",
+  "noaa-shorezone-tidal-pools-se-alaska":    "tidal pool rocky intertidal barnacle",
+  "noaa-shorezone-beachcombing-se-alaska":   "beachcombing shoreline cobble wrack",
+  "ncei-crm-s-alaska":                       "Coastal Relief Model Gulf Alaska",
+  "ncei-crm-kodiak-island":                  "Kodiak Island Chiniak Bay bathymetry",
+  "ncei-crm-kachemak-bay":                   "Kachemak Bay Homer Cook Inlet",
+  "ncei-crm-resurrection-bay":               "Resurrection Bay Seward Kenai Fjords",
+  "ncei-crm-prince-william-sound":           "Prince William Sound Valdez PWS",
+  "aoos-intertidal-pow":                     "Prince of Wales Island AOOS intertidal",
+};
+
+describe("catalog keyword coverage — each entry findable by primary keyword", () => {
+  it("PRIMARY_KEYWORD_QUERIES covers every entry in EXTRA_CATALOG_ENTRIES", () => {
+    const missing = EXTRA_CATALOG_ENTRIES
+      .map((e) => e.id)
+      .filter((id) => !(id in PRIMARY_KEYWORD_QUERIES));
+    if (missing.length > 0) {
+      throw new Error(
+        `The following EXTRA_CATALOG_ENTRIES ids are missing from PRIMARY_KEYWORD_QUERIES:\n` +
+          missing.map((id) => `  - ${id}`).join("\n") +
+          `\n\nAdd a primary keyword query for each new id so that keyword coverage is enforced.`,
+      );
+    }
+  });
+
+  for (const [id, query] of Object.entries(PRIMARY_KEYWORD_QUERIES)) {
+    it(`"${id}" appears in searchCatalog results for "${query}"`, async () => {
+      getEntry(id); // fail fast if the id was renamed or removed from EXTRA_CATALOG_ENTRIES
+      const results = await searchCatalog({ q: query }, EXTRA_CATALOG_ENTRIES);
+      const ids = results.map((r) => r.id);
+      expect(ids).toContain(id);
+    });
+  }
 });
 
 // ---------------------------------------------------------------------------
