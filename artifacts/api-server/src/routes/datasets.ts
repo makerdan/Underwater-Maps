@@ -639,7 +639,7 @@ const PresetIdParamSchema = z
   .max(128)
   .regex(/^[a-zA-Z0-9_-]+$/, "Preset id must contain only alphanumeric characters, hyphens, or underscores");
 
-router.delete("/datasets/presets/:id", asyncHandler(async (req, res): Promise<void> => {
+router.delete("/datasets/presets/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const idParsed = PresetIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
     res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid preset id" });

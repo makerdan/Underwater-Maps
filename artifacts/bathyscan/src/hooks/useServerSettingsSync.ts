@@ -46,6 +46,25 @@ export function flushServerSync(): Promise<void> {
   return _flush ? _flush() : Promise.resolve();
 }
 
+// ─── Module-level scheduleSync ref ────────────────────────────────────────────
+// Populated by the hook so external callers (e.g. useLastSessionServerSync) can
+// enqueue a debounced settings PUT through the *same* writer path, eliminating
+// TOCTOU races that arise when two independent PUT requests write concurrently.
+let _scheduleSync: (() => void) | null = null;
+
+/**
+ * Enqueue a debounced settings PUT through the canonical sync path.
+ * Call this whenever a settings field changes outside the hook's own
+ * subscriber (e.g. lastSession from useLastSessionServerSync) so all
+ * writes are serialised through a single debounced flush, preventing
+ * concurrent PUT races that can cause last-writer-wins data loss.
+ *
+ * No-op if the hook has not been mounted yet or the user is signed out.
+ */
+export function requestSettingsSync(): void {
+  _scheduleSync?.();
+}
+
 // ─── Module-level pending / in-flight tracking ───────────────────────────────
 // These flags let E2E test helpers determine whether a sync is currently
 // outstanding without coupling to React internals.
@@ -175,6 +194,18 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
   useEffect(() => {
     if (!serverSettings) return;
 
+    // Always mark settings as ready once we have a server response — even if
+    // we skip field hydration below.  Blocking settingsReady on pending state
+    // would leave the startup auto-select effect stuck when the first GET
+    // arrives while the user already has a change queued to flush.
+    setSettingsReady(true);
+
+    // Guard: if a local change is pending flush to the server, skip field
+    // hydration to avoid overwriting in-flight local state with a stale server
+    // response.  The next GET (triggered after the PUT settles) will carry the
+    // up-to-date server values and will hydrate without interference.
+    if (_pendingDebounce || _flushInFlight) return;
+
     const serverRec = serverSettings as Record<string, unknown>;
     const serverUpdatedAt =
       typeof serverRec.__updatedAt === "string"
@@ -186,9 +217,6 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       (serverUpdatedAt !== undefined && serverUpdatedAt > lastSyncedAt);
 
     hydrateFromServer(serverSettings as Parameters<typeof hydrateFromServer>[0]);
-    // Mark settings as ready after the first successful hydration so the
-    // startup auto-select effect can proceed with the correct default dataset.
-    setSettingsReady(true);
 
     if (serverIsNewer) {
       usePaletteStore.getState().hydrateFromServer({
@@ -357,12 +385,14 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
     };
   }, [scheduleSync]);
 
-  // Publish the current flush function so Settings can call it synchronously.
-  // Done in an effect so the module-level variable is only updated after the
-  // render has committed — assigning it during render is unsafe in Concurrent Mode.
+  // Publish the current flush + scheduleSync functions so external callers
+  // can drive the sync path without creating independent PUT writers.
+  // Done in an effect so the module-level variables are only updated after the
+  // render has committed — assigning them during render is unsafe in Concurrent Mode.
   useEffect(() => {
     _flush = flush;
-  }, [flush]);
+    _scheduleSync = scheduleSync;
+  }, [flush, scheduleSync]);
 
   return { settingsReady };
 }

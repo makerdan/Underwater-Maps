@@ -11,10 +11,13 @@
  *   3. Pops a 5-second toast with an "Undo" action.
  *   4. After the window elapses, fires the real DELETE and invalidates the
  *      marker query on success. If the user clicks "Undo", we cancel the
- *      timer and restore the cache to the snapshot.
+ *      timer and restore only that specific marker into the current cache —
+ *      not the full snapshot — so concurrent pending deletes are not
+ *      accidentally reverted.
  *
- * Pending deletes are flushed on unmount so the server eventually receives
- * the DELETE even if the user navigates away or closes the panel.
+ * Pending deletes are flushed on unmount AND on page unload (via
+ * beforeunload + fetch keepalive) so the server is never left with
+ * dangling rows even when the user closes the tab during the undo window.
  */
 import React, { useCallback, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -29,6 +32,8 @@ import { ToastAction } from "@/components/ui/toast";
 const UNDO_DELETE_WINDOW_MS = 5000;
 
 type PendingEntry = {
+  markerId: string;
+  datasetId: string;
   timer: ReturnType<typeof setTimeout>;
   commit: () => void;
 };
@@ -43,7 +48,10 @@ export function useUndoableMarkerDelete() {
     (marker: Pick<Marker, "id" | "label">, datasetId: string) => {
       if (!datasetId) return;
       const key = getGetMarkersQueryKey({ datasetId });
-      const snapshot = qc.getQueryData<Marker[]>(key);
+
+      // Snapshot used ONLY for undo-rollback of this specific marker.
+      // We store it so undo can re-insert the item at its original position.
+      const snapshotAtDelete = qc.getQueryData<Marker[]>(key);
 
       qc.setQueryData<Marker[] | undefined>(key, (prev) =>
         prev ? prev.filter((m) => m.id !== marker.id) : prev,
@@ -66,13 +74,40 @@ export function useUndoableMarkerDelete() {
             },
             onError: (err) => {
               const status = (err as { response?: { status?: number } })?.response?.status;
-              if (status === 404 || status === 409) {
-                // Already deleted elsewhere — re-sync so the UI is consistent.
+              if (status === 404) {
+                // Already deleted elsewhere — inform the user and re-sync.
+                toast({
+                  title: "Already removed",
+                  description: "This marker was already deleted from another session.",
+                  duration: 4000,
+                });
                 void qc.invalidateQueries({ queryKey: key });
                 return;
               }
-              // Other error — restore so the user can retry.
-              if (snapshot !== undefined) qc.setQueryData(key, snapshot);
+              if (status === 409) {
+                // Conflict (e.g. concurrent edit) — inform the user and re-sync.
+                toast({
+                  title: "Edit conflict",
+                  description: "Changes were not saved due to a conflict — the list has been refreshed.",
+                  duration: 4000,
+                });
+                void qc.invalidateQueries({ queryKey: key });
+                return;
+              }
+              // Other error — restore only this marker into the current cache
+              // so concurrent pending deletes are not accidentally reverted.
+              if (snapshotAtDelete !== undefined) {
+                const item = snapshotAtDelete.find((m) => m.id === marker.id);
+                if (item) {
+                  const originalIdx = snapshotAtDelete.findIndex((m) => m.id === marker.id);
+                  qc.setQueryData<Marker[]>(key, (current) => {
+                    if (!current) return snapshotAtDelete;
+                    const next = [...current];
+                    next.splice(Math.min(originalIdx, next.length), 0, item);
+                    return next;
+                  });
+                }
+              }
             },
           },
         );
@@ -84,11 +119,26 @@ export function useUndoableMarkerDelete() {
         if (!entry) return;
         clearTimeout(entry.timer);
         pendingRef.current.delete(undoKey);
-        if (snapshot !== undefined) qc.setQueryData(key, snapshot);
+        // Re-insert only this specific marker at its original position so
+        // other concurrent pending deletes are not accidentally un-done.
+        if (snapshotAtDelete !== undefined) {
+          const item = snapshotAtDelete.find((m) => m.id === marker.id);
+          if (item) {
+            const originalIdx = snapshotAtDelete.findIndex((m) => m.id === marker.id);
+            qc.setQueryData<Marker[]>(key, (current) => {
+              if (!current) return snapshotAtDelete;
+              const next = [...current];
+              next.splice(Math.min(originalIdx, next.length), 0, item);
+              return next;
+            });
+          }
+        }
       };
 
       const timer = setTimeout(commit, UNDO_DELETE_WINDOW_MS);
       pendingRef.current.set(undoKey, {
+        markerId: marker.id,
+        datasetId,
         timer,
         commit: () => {
           clearTimeout(timer);
@@ -118,6 +168,7 @@ export function useUndoableMarkerDelete() {
     [qc, mutation, toast],
   );
 
+  // Flush pending deletes on unmount (e.g. panel closes mid-undo-window).
   useEffect(() => {
     const map = pendingRef.current;
     return () => {
@@ -125,6 +176,29 @@ export function useUndoableMarkerDelete() {
       map.clear();
       for (const entry of entries) entry.commit();
     };
+  }, []);
+
+  // Flush pending deletes on page unload using fetch keepalive so the
+  // server receives the DELETE even if the browser tab is closed during
+  // the 5-second undo window.
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const map = pendingRef.current;
+      if (map.size === 0) return;
+      const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+      for (const entry of map.values()) {
+        // fetch with keepalive survives page unload; sendBeacon only supports POST.
+        void fetch(`${apiBase}/api/markers/${encodeURIComponent(entry.markerId)}`, {
+          method: "DELETE",
+          credentials: "include",
+          keepalive: true,
+        }).catch(() => undefined);
+      }
+      map.clear();
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, []);
 
   return requestDelete;

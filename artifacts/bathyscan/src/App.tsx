@@ -63,7 +63,8 @@ import { useWaterTypeSideEffects } from "@/lib/useWaterTypeSideEffects";
 import { useActiveDatasetSync } from "@/lib/useActiveDatasetSync";
 import { VisibleDatasetsLoader } from "@/lib/VisibleDatasetsLoader";
 import { waterLabels } from "@/lib/waterLabels";
-import { useServerSettingsSync } from "@/hooks/useServerSettingsSync";
+import { useServerSettingsSync, requestSettingsSync } from "@/hooks/useServerSettingsSync";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useDriftStore } from "@/lib/driftStore";
 import { useMarkerLayerStore } from "@/lib/markerLayerStore";
 import { WeatherPanel } from "@/components/WeatherPanel";
@@ -219,42 +220,18 @@ function ClerkQueryClientCacheInvalidator() {
 // signed-in users. The Settings page sync only runs while Settings is open,
 // so without this hook a user who flies without ever opening Settings would
 // never persist their last session to the server (breaking cross-device resume).
-function useLastSessionServerSync(isSignedIn: boolean | undefined) {
-  const isSignedInRef = useRef(isSignedIn);
-  useEffect(() => { isSignedInRef.current = isSignedIn; }, [isSignedIn]);
-
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
+function useLastSessionServerSync() {
+  // Rather than issuing an independent PUT /api/settings, we call
+  // requestSettingsSync() which enqueues through the same debounced flush path
+  // used by useServerSettingsSync. This means lastSession is always written as
+  // part of the full settings payload — no concurrent PUT writers, no TOCTOU
+  // race, no last-writer-wins data loss.
   useEffect(() => {
-    const flush = async () => {
-      if (!isSignedInRef.current) return;
-      const lastSession = useSettingsStore.getState().lastSession;
-      const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
-      try {
-        await fetch(`${apiBase}/api/settings`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ lastSession }),
-        });
-      } catch {
-        // Best-effort — offline or session expired
-      }
-    };
-
     const unsub = useSettingsStore.subscribe((state, prevState) => {
       if (state.lastSession === prevState.lastSession) return;
-      if (timerRef.current !== null) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => { void flush(); }, 3000);
+      requestSettingsSync();
     });
-
-    return () => {
-      unsub();
-      if (timerRef.current !== null) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-    };
+    return unsub;
   }, []);
 }
 
@@ -288,7 +265,7 @@ function Main() {
   const { isSignedIn, isLoaded } = useUser();
   // Always-mounted sync: debounce-flush lastSession to server when signed in,
   // independent of whether the Settings page is currently open.
-  useLastSessionServerSync(isSignedIn);
+  useLastSessionServerSync();
   // Fetch user datasets so we can verify a stored upload default still exists.
   const { data: userDatasets } = useGetUserDatasets({
     query: {
@@ -853,7 +830,9 @@ function Main() {
           }}
         >
           <div className="flex-1 relative">
-            <HUD />
+            <ErrorBoundary label="HUD">
+              <HUD />
+            </ErrorBoundary>
           </div>
         </div>
 
@@ -956,19 +935,23 @@ function Main() {
                 {/* ── Section 2: Conditions ── */}
                 <SidebarSection id="conditions" title="Conditions">
                   {showTidePanel && tidalOverlay && tidalData !== null ? (
-                    <TidePanel
-                      data={tidalData}
-                      loading={tidalLoading}
-                      depthLayer={depthLayer}
-                      onDepthLayerChange={setDepthLayer}
-                      scrubDatetime={scrubDatetime}
-                      onScrubChange={setScrubDatetime}
-                      lat={centerLat}
-                      lon={centerLon}
-                      embedded
-                    />
+                    <ErrorBoundary label="tide panel">
+                      <TidePanel
+                        data={tidalData}
+                        loading={tidalLoading}
+                        depthLayer={depthLayer}
+                        onDepthLayerChange={setDepthLayer}
+                        scrubDatetime={scrubDatetime}
+                        onScrubChange={setScrubDatetime}
+                        lat={centerLat}
+                        lon={centerLon}
+                        embedded
+                      />
+                    </ErrorBoundary>
                   ) : null}
-                  <CurrentsPanel embedded />
+                  <ErrorBoundary label="currents panel">
+                    <CurrentsPanel embedded />
+                  </ErrorBoundary>
                 </SidebarSection>
               </SidebarSectionGroup>
 

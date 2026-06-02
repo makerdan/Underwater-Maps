@@ -1,4 +1,4 @@
-import React, { useRef, useMemo } from "react";
+import React, { useEffect, useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { WORLD_SIZE, MAX_DEPTH_WORLD } from "@/lib/terrain";
@@ -45,6 +45,12 @@ export const TidalWaterPlane: React.FC<TidalWaterPlaneProps> = ({ tideHeight, te
     geo.rotateX(-Math.PI / 2);
     return geo;
   }, []);
+
+  useEffect(() => {
+    return () => {
+      geometry.dispose();
+    };
+  }, [geometry]);
 
   return (
     <mesh

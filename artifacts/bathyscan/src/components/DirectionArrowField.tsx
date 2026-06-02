@@ -120,6 +120,13 @@ export const DirectionArrowField: React.FC<DirectionArrowFieldProps> = ({
     [color, opacity],
   );
 
+  useEffect(() => {
+    return () => {
+      geometry.dispose();
+      material.dispose();
+    };
+  }, [geometry, material]);
+
   // Meteorological → math: bearing 0=N maps to world +Z(−), 90=E to +X(+).
   // After our rotateX setup, heading vector in XZ plane is:
   //   x = sin(bearing), z = -cos(bearing)

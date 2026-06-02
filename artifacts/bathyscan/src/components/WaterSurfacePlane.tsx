@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { WORLD_SIZE, MAX_DEPTH_WORLD } from "@/lib/terrain";
@@ -35,6 +35,12 @@ export const WaterSurfacePlane: React.FC<WaterSurfacePlaneProps> = ({ terrain })
     geo.rotateX(-Math.PI / 2);
     return geo;
   }, []);
+
+  useEffect(() => {
+    return () => {
+      geometry.dispose();
+    };
+  }, [geometry]);
 
   const isFresh = waterType === "freshwater";
   const color = isFresh ? "#3ec9a8" : "#0ea5e9";

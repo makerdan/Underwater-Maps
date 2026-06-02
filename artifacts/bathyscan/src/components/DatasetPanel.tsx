@@ -510,7 +510,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const [lastChunkedFile, setLastChunkedFile] = useState<File | null>(null);
 
   // ─── GCS upload state (oversized files > GCS_THRESHOLD via presigned URL) ──
-  type GcsPhase = "idle" | "uploading" | "processing" | "error";
+  // processing_timeout: upload succeeded, background conversion is still running
+  // after the 15-minute poll window.  The user can drop a new file while this
+  // state is active — it is distinct from "error" (which blocks further uploads)
+  // and distinct from "idle" (which gives no indication a job is pending).
+  type GcsPhase = "idle" | "uploading" | "processing" | "processing_timeout" | "error";
   const [gcsPhase, setGcsPhase] = useState<GcsPhase>("idle");
   const [gcsUploadProgress, setGcsUploadProgress] = useState(0);
   const [gcsError, setGcsError] = useState<string | null>(null);
@@ -1159,20 +1163,20 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         });
     }, 10_000);
 
-    // Stop polling after 15 minutes and surface a timeout error so the panel
-    // isn't stuck in `processing` indefinitely (blocking further uploads).
+    // After 15 minutes, stop polling and enter a distinct "processing_timeout"
+    // phase rather than "idle" or "error". The upload itself succeeded; only
+    // background conversion is still running.  "processing_timeout" signals
+    // this clearly in the UI while still allowing a new file to be dropped.
     setTimeout(() => {
       clearInterval(pollIntervalId);
       setGcsPhase((prev) => {
         if (prev === "processing") {
-          const timeoutMsg = "Background processing timed out. The file may still be processing — check back in a few minutes or try uploading again.";
-          setGcsError(timeoutMsg);
           toast({
-            title: "Upload processing timed out",
-            description: timeoutMsg,
-            variant: "destructive",
+            title: "Still processing",
+            description:
+              "Processing is taking longer than usual. Your file is safe — check back in a few minutes and it should appear in your datasets.",
           });
-          return "error";
+          return "processing_timeout";
         }
         return prev;
       });
@@ -2410,6 +2414,18 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           </div>
                           <div style={{ fontSize: 10, color: "#94a3b8" }}>
                             We&apos;ll notify you when it&apos;s ready
+                          </div>
+                        </div>
+                      ) : gcsPhase === "processing_timeout" ? (
+                        <div>
+                          <div style={{ fontSize: 10, color: "#f59e0b", marginBottom: 4 }}>
+                            ⏳ Still processing — taking longer than usual
+                          </div>
+                          <div style={{ fontSize: 9, color: "#94a3b8", marginBottom: 4 }}>
+                            Your file was uploaded safely. It will appear in your datasets once conversion finishes. You can drop a new file while you wait.
+                          </div>
+                          <div style={{ fontSize: 10, color: "#cbd5e1" }}>
+                            Drop file here, or click to browse
                           </div>
                         </div>
                       ) : (

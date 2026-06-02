@@ -35,6 +35,7 @@ import {
 } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { useAuth } from "@/lib/clerkCompat";
+import { useSettingsStore } from "@/lib/settingsStore";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
@@ -774,6 +775,14 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const searchResults = dataTypeFilter === "intertidal"
     ? rawSearchResults.filter((e) => INTERTIDAL_CATALOG_IDS.has(e.id))
     : rawSearchResults;
+
+  // Invalidate catalog search when the user changes water type so freshwater /
+  // saltwater datasets are filtered correctly on the next fetch.
+  const waterType = useSettingsStore((s) => s.waterType);
+  useEffect(() => {
+    void qc.invalidateQueries({ queryKey: getGetDatasetsCatalogSearchQueryKey(searchParams) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waterType]);
 
   // My Saves
   const {
