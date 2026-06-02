@@ -34,6 +34,126 @@ import { useCameraStore } from "@/lib/cameraStore";
 // Mocks
 // ---------------------------------------------------------------------------
 
+// Stub the heavy Three.js module so that importing TourScene (which pulls in
+// the entire THREE namespace) resolves in microseconds instead of ~3.9 s.
+// vi.mock calls are hoisted by vitest, so even dynamic imports inside test
+// bodies receive the stub.
+vi.mock("three", () => {
+  class Stub {
+    r = 0; g = 0; b = 0;
+    set() { return this; }
+    copy() { return this; }
+    clone() { return this; }
+    dispose() {}
+    lerpColors() { return this; }
+    computeVertexNormals() {}
+    rotateX() { return this; }
+    setAttribute() {}
+    setDrawRange() {}
+    normalizeNormals() {}
+    getPoints() { return []; }
+    attributes: Record<string, { array: Float32Array }> = {};
+  }
+  return {
+    Color: Stub,
+    Vector3: Stub,
+    Vector2: Stub,
+    Quaternion: Stub,
+    Euler: Stub,
+    Matrix4: Stub,
+    PlaneGeometry: Stub,
+    BufferGeometry: Stub,
+    BufferAttribute: Stub,
+    MeshStandardMaterial: Stub,
+    MeshBasicMaterial: Stub,
+    LineBasicMaterial: Stub,
+    PointsMaterial: Stub,
+    ShaderMaterial: Stub,
+    TextureLoader: Stub,
+    Texture: Stub,
+    Mesh: Stub,
+    Points: Stub,
+    LineSegments: Stub,
+    Line: Stub,
+    Group: Stub,
+    Object3D: Stub,
+    Raycaster: Stub,
+    Sphere: Stub,
+    Box3: Stub,
+    CatmullRomCurve3: class extends Stub { getPoints() { return []; } },
+    DoubleSide: 0,
+    FrontSide: 0,
+    BackSide: 1,
+    AdditiveBlending: 1,
+    NormalBlending: 2,
+    ClampToEdgeWrapping: 1001,
+    RepeatWrapping: 1000,
+    LinearFilter: 1006,
+    SRGBColorSpace: "srgb",
+    NoColorSpace: "",
+    MathUtils: {
+      clamp: (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi),
+      degToRad: (d: number) => (d * Math.PI) / 180,
+      lerp: (a: number, b: number, t: number) => a + (b - a) * t,
+    },
+  };
+});
+
+// Stub @react-three/fiber — TourScene uses Canvas + useThree/useFrame.
+vi.mock("@react-three/fiber", () => ({
+  Canvas: ({ children }: { children: React.ReactNode }) =>
+    React.createElement("div", { "data-testid": "r3f-canvas-stub" }, children),
+  useThree: () => ({
+    camera: { position: { set() {}, copy() {} }, quaternion: { copy() {} }, fov: 60 },
+    gl: { domElement: document.createElement("canvas") },
+    scene: {},
+    size: { width: 800, height: 600 },
+  }),
+  useFrame: () => {},
+  extend: () => {},
+}));
+
+// Stub @react-three/drei — used by some scene components (Billboard, Line, Text).
+vi.mock("@react-three/drei", () => ({
+  Billboard: ({ children }: { children?: React.ReactNode }) => children ?? null,
+  Line: () => null,
+  Text: () => null,
+}));
+
+// Stub every 3-D component that TourScene imports so vitest skips transforming
+// those files (and their transitive Three.js / R3F dependencies) entirely.
+// These stubs only apply to this test file; other test files are unaffected.
+const nullFC = () => null;
+vi.mock("@/components/TerrainMesh", () => ({ TerrainMesh: nullFC }));
+vi.mock("@/components/EfhZoneLayer", () => ({ EfhZoneLayer: nullFC }));
+vi.mock("@/components/SubstrateLayer", () => ({ SubstrateLayer: nullFC }));
+vi.mock("@/components/IntertidalHotspotsLayer", () => ({ IntertidalHotspotsLayer: nullFC }));
+vi.mock("@/components/Particles", () => ({ Particles: nullFC }));
+vi.mock("@/components/Caustics", () => ({ Caustics: nullFC }));
+vi.mock("@/components/TidalWaterPlane", () => ({ TidalWaterPlane: nullFC }));
+vi.mock("@/components/TidalCurrentArrows", () => ({ TidalCurrentArrows: nullFC }));
+vi.mock("@/components/MarkerLayer", () => ({ MarkerLayer: nullFC }));
+vi.mock("@/components/DepthPoleLayer", () => ({ DepthPoleLayer: nullFC, DepthPoleDomLabels: nullFC }));
+vi.mock("@/components/GpsMarker", () => ({ GpsMarker: nullFC }));
+vi.mock("@/components/DepthProfileLine", () => ({ DepthProfileLine: nullFC }));
+vi.mock("@/components/WaterSurfacePlane", () => ({ WaterSurfacePlane: nullFC }));
+vi.mock("@/components/LandmassMesh", () => ({ LandmassMesh: nullFC }));
+vi.mock("@/components/DriftWaterPlane", () => ({ DriftWaterPlane: nullFC }));
+vi.mock("@/components/DriftBoat", () => ({ DriftBoat: nullFC }));
+vi.mock("@/components/DriftPath", () => ({ DriftPath: nullFC }));
+vi.mock("@/components/WindArrow", () => ({ WindArrow: nullFC }));
+vi.mock("@/components/ConditionsOverlays", () => ({ ConditionsOverlays: nullFC }));
+vi.mock("@/components/CurrentsLayer", () => ({ CurrentsLayer: nullFC }));
+vi.mock("@/components/WebglContextLostOverlay", () => ({ WebglContextLostOverlay: nullFC }));
+vi.mock("@/components/TerrainContourLines", () => ({ TerrainContourLines: nullFC }));
+
+// Stub hooks used exclusively in the 3-D scene.
+vi.mock("@/hooks/useFlyControls", () => ({ useFlyControls: () => {} }));
+vi.mock("@/hooks/useGpsFollowCamera", () => ({ useGpsFollowCamera: () => {} }));
+vi.mock("@/hooks/useLandTerrain", () => ({ useLandTerrain: () => {} }));
+vi.mock("@/hooks/useSatelliteTile", () => ({ useSatelliteTile: () => {} }));
+vi.mock("@/lib/testHelpers", () => ({ registerTestThreeCamera: () => {} }));
+
 vi.mock("@/lib/uiStore", () => ({
   useUiStore: () => vi.fn(),
 }));
