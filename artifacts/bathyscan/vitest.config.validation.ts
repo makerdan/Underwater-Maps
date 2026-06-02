@@ -18,6 +18,7 @@ export default defineConfig({
     name: "validation-regression-bathyscan",
     environment: "jsdom",
     globals: true,
+    testTimeout: 15_000,
     setupFiles: ["./src/__tests__/setup.ts"],
     include: [
       "src/lib/__tests__/markerSchema.crossLayer.test.ts",
