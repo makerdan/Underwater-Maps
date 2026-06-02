@@ -67,7 +67,7 @@ const bypassUseUser = () =>
 const bypassUseClerk = () =>
   ({
     user: FAKE_DEV_USER,
-    session: { id: "dev-session", user: FAKE_DEV_USER },
+    session: { id: "dev-session", user: FAKE_DEV_USER, getToken: async () => null },
     signOut: async () => {
       console.warn("[bathyscan dev-bypass] signOut() is a no-op while the bypass is on.");
     },

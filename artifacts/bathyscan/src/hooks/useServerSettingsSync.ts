@@ -324,8 +324,11 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
     _pendingDebounce = true;
     debounceRef.current = setTimeout(() => {
       _pendingDebounce = false; // flush() takes over from here
-      void flush().catch(() => {
+      void flush().catch((err) => {
         /* keep dirty so the section Save button stays active */
+        if (import.meta.env.DEV) {
+          console.error("[useServerSettingsSync] PUT /api/settings failed:", err);
+        }
       });
     }, 300);
   }, [isSignedIn, flush]);
