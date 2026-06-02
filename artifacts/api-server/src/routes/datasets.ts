@@ -668,11 +668,18 @@ router.delete("/datasets/presets/:id", requireAuth, asyncHandler(async (req, res
 }));
 
 // ── GET /datasets/:id/terrain ─────────────────────────────────────────────────
+// Dataset IDs may be preset slugs (e.g. "thorne-bay", "gebco") or custom
+// dataset UUIDs. The schema rejects empty strings, strings containing dots /
+// slashes / spaces, and other characters outside the alphanumeric-hyphen-
+// underscore charset, returning 400 before any downstream processing.
 const DatasetIdParamSchema = z
   .string()
-  .min(1)
-  .max(128)
-  .regex(/^[a-zA-Z0-9_-]+$/, "Dataset id must contain only alphanumeric characters, hyphens, or underscores");
+  .min(1, "Dataset id is required")
+  .max(128, "Dataset id must be at most 128 characters")
+  .regex(
+    /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/,
+    "Dataset id must start with an alphanumeric character and contain only alphanumeric characters, hyphens, or underscores",
+  );
 
 router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
