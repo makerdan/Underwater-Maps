@@ -3,8 +3,8 @@ import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from "@/lib/cl
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 import { Switch, Route, useLocation, Router as WouterRouter } from "wouter";
-import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { QueryClientProvider, useQueryClient, useIsFetching } from "@tanstack/react-query";
+import { queryClient, useHas502 } from "@/lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useGetDatasets, useGetUserDatasets, getGetDatasetsQueryKey, getGetUserDatasetsQueryKey, setAuthTokenGetter } from "@workspace/api-client-react";
@@ -241,6 +241,13 @@ function Main() {
   // exposes `settingsReady` so the startup auto-select waits for the server's
   // saved defaultMapLoad before committing to a dataset.
   const { settingsReady } = useServerSettingsSync();
+
+  // Server-warming indicator: true while any query is fetching AND at least
+  // one query has previously returned 502 (API server still starting up).
+  // The banner dismisses itself automatically once all queries succeed.
+  const has502 = useHas502();
+  const isFetching = useIsFetching();
+  const serverWarmingUp = has502 && isFetching > 0;
   const waterTypeForDatasets = useSettingsStore((s) => s.waterType);
   void waterTypeForDatasets;
   const { data: datasets } = useGetDatasets(
@@ -805,6 +812,34 @@ function Main() {
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#040810] flex flex-col">
       <VisibleDatasetsLoader />
+
+      {/* Connecting banner — shown while the API server is still warming up
+          after a cold start (502 retries in flight). Dismisses automatically
+          once all queries succeed. Non-alarming: no red, no destructive tone. */}
+      {serverWarmingUp && (
+        <div
+          role="status"
+          aria-live="polite"
+          aria-label="Connecting to server"
+          className="absolute inset-x-0 top-0 z-[200] flex items-center justify-center gap-2 h-7 bg-sky-950/90 backdrop-blur-sm border-b border-sky-800/40 text-sky-400 text-[11px] font-mono tracking-wide select-none pointer-events-none"
+        >
+          <svg
+            aria-hidden="true"
+            className="animate-spin"
+            width="11"
+            height="11"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          >
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+          </svg>
+          Connecting to server…
+        </div>
+      )}
+
       <AppHeader />
 
       <div className="relative flex-1 overflow-hidden">
