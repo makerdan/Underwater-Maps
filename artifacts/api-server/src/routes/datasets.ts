@@ -1132,12 +1132,21 @@ router.post(
   // Validate numeric body params via Zod so malformed values surface as a
   // clear 400 instead of falling through `parseInt` → `NaN` and producing a
   // 5xx from a downstream grid call.
-  const UploadParamsSchema = z.object({
-    resolution: z.coerce.number().int().min(32).max(512).default(256),
-    gridResolution: z.coerce.number().int().min(32).max(512).optional(),
-  });
+  //
+  // Both `resolution` and `gridResolution` are declared so each is validated
+  // independently — no pre-Zod manual extraction that could mask bad values.
+  // At least one must be present; if both are supplied, `resolution` wins.
+  const UploadParamsSchema = z
+    .object({
+      resolution: z.coerce.number().int().min(32).max(512).optional(),
+      gridResolution: z.coerce.number().int().min(32).max(512).optional(),
+    })
+    .refine(
+      (data) => data.resolution !== undefined || data.gridResolution !== undefined,
+      { message: "resolution or gridResolution is required" },
+    );
   const paramsParsed = UploadParamsSchema.safeParse({
-    resolution: req.body["resolution"] ?? req.body["gridResolution"],
+    resolution: req.body["resolution"],
     gridResolution: req.body["gridResolution"],
   });
   if (!paramsParsed.success) {
@@ -1149,7 +1158,8 @@ router.post(
     });
     return;
   }
-  const resolution = paramsParsed.data.gridResolution ?? paramsParsed.data.resolution;
+  // resolution takes priority; gridResolution is the legacy-client fallback.
+  const resolution = (paramsParsed.data.resolution ?? paramsParsed.data.gridResolution) as number;
 
   const TEXT_EXTENSIONS = new Set(["csv", "xyz", "txt"]);
   // Strip the outer .gz suffix before deriving the inner extension so that
