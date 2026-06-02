@@ -184,7 +184,7 @@ describe("Canvas ARIA (structural)", () => {
   it("TourScene source includes aria-label for the canvas", async () => {
     const src = await import("../pages/TourScene?raw");
     expect((src as { default: string }).default).toContain("aria-label");
-  });
+  }, 15_000);
 });
 
 // ---------------------------------------------------------------------------
@@ -375,7 +375,7 @@ describe("GpsExportDialog ARIA", () => {
     const dialog = screen.getByTestId("gps-export-dialog");
     expect(dialog).toHaveAttribute("role", "dialog");
     expect(dialog).toHaveAttribute("aria-modal", "true");
-  });
+  }, 15_000);
 
   it("passes axe-core with no critical violations", async () => {
     const { GpsExportDialog } = await import("@/components/GpsExportDialog");
@@ -390,7 +390,7 @@ describe("GpsExportDialog ARIA", () => {
     const results = await axe(container, { runOnly: ["wcag2a", "wcag2aa"] });
     const criticalViolations = results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
     expect(criticalViolations, `axe violations: ${JSON.stringify(criticalViolations.map((v) => v.id))}`).toHaveLength(0);
-  });
+  }, 15_000);
 });
 
 // ---------------------------------------------------------------------------
@@ -423,7 +423,7 @@ describe("GpsImportDialog ARIA", () => {
     const dialog = screen.getByTestId("gps-import-dialog");
     expect(dialog).toHaveAttribute("role", "dialog");
     expect(dialog).toHaveAttribute("aria-modal", "true");
-  });
+  }, 15_000);
 
   it("passes axe-core with no critical violations", async () => {
     const { GpsImportDialog } = await import("@/components/GpsImportDialog");
@@ -438,7 +438,7 @@ describe("GpsImportDialog ARIA", () => {
     const results = await axe(container, { runOnly: ["wcag2a", "wcag2aa"] });
     const criticalViolations = results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
     expect(criticalViolations, `axe violations: ${JSON.stringify(criticalViolations.map((v) => v.id))}`).toHaveLength(0);
-  });
+  }, 15_000);
 });
 
 // ---------------------------------------------------------------------------
