@@ -58,3 +58,57 @@ export const DatasetsQuerySchema = z.object({
 });
 
 export type DatasetsQuery = z.infer<typeof DatasetsQuerySchema>;
+
+/**
+ * Validates the multipart body fields for POST /datasets/upload/chunk.
+ *
+ * All three fields arrive as plain strings from the multipart body.
+ * Using z.string() (not z.coerce) for each field ensures that array-injected
+ * values (e.g. duplicate uploadId fields sent by a malicious client, which
+ * multer collects into a JS array) are rejected with a type error before
+ * any coercion or regex checks run.
+ */
+export const ChunkUploadBodySchema = z.object({
+  uploadId: z
+    .string({ invalid_type_error: "uploadId must be a string" })
+    .regex(
+      /^[a-zA-Z0-9_-]{8,64}$/,
+      "uploadId must be 8–64 alphanumeric characters, hyphens, or underscores",
+    ),
+  chunkIndex: z
+    .string({ invalid_type_error: "chunkIndex must be a string" })
+    .regex(
+      /^(0|[1-9]\d*)$/,
+      "chunkIndex must be a non-negative integer with no leading zeros",
+    )
+    .transform((val, ctx) => {
+      const n = Number(val);
+      if (n > 99_999) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "chunkIndex must be between 0 and 99999",
+        });
+        return z.NEVER;
+      }
+      return n;
+    }),
+  totalChunks: z
+    .string({ invalid_type_error: "totalChunks must be a string" })
+    .regex(
+      /^[1-9]\d*$/,
+      "totalChunks must be a positive integer with no leading zeros",
+    )
+    .transform((val, ctx) => {
+      const n = Number(val);
+      if (n > 4096) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "totalChunks must be between 1 and 4096",
+        });
+        return z.NEVER;
+      }
+      return n;
+    }),
+});
+
+export type ChunkUploadBody = z.infer<typeof ChunkUploadBodySchema>;

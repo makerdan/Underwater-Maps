@@ -35,6 +35,7 @@ import { gunzipBounded } from "../lib/gunzipBounded.js";
 import { fetchCopernicusDem } from "../lib/copernicusDem.js";
 import { fetchSatelliteTile } from "../lib/satelliteTile.js";
 import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
+import { ChunkUploadBodySchema } from "./schemas.js";
 import { substrateFingerprintForDataset } from "../lib/substrateGrid.js";
 import { registerCache } from "../lib/cacheRegistry.js";
 import { logger } from "../lib/logger.js";
@@ -1283,23 +1284,18 @@ router.post(
       return;
     }
 
-    const uploadId = String(req.body["uploadId"] ?? "").trim();
-    const chunkIndex = parseInt(String(req.body["chunkIndex"] ?? ""), 10);
-    const totalChunks = parseInt(String(req.body["totalChunks"] ?? ""), 10);
+    const parsed = ChunkUploadBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      await fs.promises.unlink(file.path).catch(() => undefined);
+      const msg = parsed.error.issues[0]?.message ?? "Invalid request";
+      res.status(400).json({ error: "invalid_request", details: msg });
+      return;
+    }
+    const { uploadId, chunkIndex, totalChunks } = parsed.data;
 
-    if (!uploadId || !/^[a-zA-Z0-9_-]{8,64}$/.test(uploadId)) {
+    if (chunkIndex >= totalChunks) {
       await fs.promises.unlink(file.path).catch(() => undefined);
-      res.status(400).json({ error: "invalid_param", details: "uploadId must be 8–64 alphanumeric characters." });
-      return;
-    }
-    if (!isFinite(chunkIndex) || chunkIndex < 0) {
-      await fs.promises.unlink(file.path).catch(() => undefined);
-      res.status(400).json({ error: "invalid_param", details: "chunkIndex must be a non-negative integer." });
-      return;
-    }
-    if (!isFinite(totalChunks) || totalChunks < 1 || totalChunks > 4096) {
-      await fs.promises.unlink(file.path).catch(() => undefined);
-      res.status(400).json({ error: "invalid_param", details: "totalChunks must be between 1 and 4096." });
+      res.status(400).json({ error: "invalid_request", details: "chunkIndex must be less than totalChunks" });
       return;
     }
 
