@@ -116,12 +116,14 @@ vi.mock("../lib/substrateGrid.js", () => ({
 }));
 
 import app from "../../app.js";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 let currentUserId: string | null = "user-poe-test";
 
 beforeEach(() => {
   currentUserId = "user-poe-test";
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
+  __resetRateLimitMemory();
 });
 
 // ---------------------------------------------------------------------------
@@ -317,6 +319,275 @@ describe("POST /api/poe/query — Zod validation", () => {
           { role: "assistant", content: "Navigating now." },
         ],
       });
+    expect(res.status).not.toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/poe/describe
+// ---------------------------------------------------------------------------
+
+describe("POST /api/poe/describe — Zod validation", () => {
+  it("returns 400 when lon is not a number", async () => {
+    currentUserId = "user-describe-lon";
+    const res = await request(app)
+      .post("/api/poe/describe")
+      .set("x-e2e-user-id", currentUserId)
+      .send({ lon: "not-a-number", lat: 47.5, depth: 120 });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 400 when lat is not a number", async () => {
+    currentUserId = "user-describe-lat";
+    const res = await request(app)
+      .post("/api/poe/describe")
+      .set("x-e2e-user-id", currentUserId)
+      .send({ lon: -122.3, lat: "bad", depth: 120 });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 400 when depth is not a number", async () => {
+    currentUserId = "user-describe-depth";
+    const res = await request(app)
+      .post("/api/poe/describe")
+      .set("x-e2e-user-id", currentUserId)
+      .send({ depth: true });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 400 when waterType has an invalid enum value", async () => {
+    currentUserId = "user-describe-wtype";
+    const res = await request(app)
+      .post("/api/poe/describe")
+      .set("x-e2e-user-id", currentUserId)
+      .send({ waterType: "brackish" });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 400 when zoneName is not a string", async () => {
+    currentUserId = "user-describe-zone";
+    const res = await request(app)
+      .post("/api/poe/describe")
+      .set("x-e2e-user-id", currentUserId)
+      .send({ zoneName: 42 });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 400 when datasetName is not a string", async () => {
+    currentUserId = "user-describe-dsname";
+    const res = await request(app)
+      .post("/api/poe/describe")
+      .set("x-e2e-user-id", currentUserId)
+      .send({ datasetName: ["array", "value"] });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("does not return 400 when an empty body is sent (all fields optional)", async () => {
+    currentUserId = "user-describe-empty";
+    let status: number | undefined;
+    try {
+      const res = await request(app)
+        .post("/api/poe/describe")
+        .set("x-e2e-user-id", currentUserId)
+        .send({});
+      status = res.status;
+    } catch (err: unknown) {
+      const msg = (err as Error).message ?? "";
+      if (msg.includes("Content-Length") || msg.includes("Transfer-Encoding") || msg.includes("Parse Error")) {
+        return;
+      }
+      throw err;
+    }
+    expect(status).not.toBe(400);
+  });
+
+  it("does not return 400 with a valid full body", async () => {
+    currentUserId = "user-describe-full";
+    let status: number | undefined;
+    try {
+      const res = await request(app)
+        .post("/api/poe/describe")
+        .set("x-e2e-user-id", currentUserId)
+        .send({
+          lon: -122.3,
+          lat: 47.5,
+          depth: 120,
+          zoneName: "sandy_shelf",
+          datasetName: "Puget Sound",
+          waterType: "saltwater",
+        });
+      status = res.status;
+    } catch (err: unknown) {
+      const msg = (err as Error).message ?? "";
+      if (msg.includes("Content-Length") || msg.includes("Transfer-Encoding") || msg.includes("Parse Error")) {
+        return;
+      }
+      throw err;
+    }
+    expect(status).not.toBe(400);
+  });
+
+  it("does not return 400 when waterType is freshwater", async () => {
+    currentUserId = "user-describe-fresh";
+    let status: number | undefined;
+    try {
+      const res = await request(app)
+        .post("/api/poe/describe")
+        .set("x-e2e-user-id", currentUserId)
+        .send({ lon: -90.1, lat: 44.5, depth: 30, waterType: "freshwater" });
+      status = res.status;
+    } catch (err: unknown) {
+      const msg = (err as Error).message ?? "";
+      if (msg.includes("Content-Length") || msg.includes("Transfer-Encoding") || msg.includes("Parse Error")) {
+        return;
+      }
+      throw err;
+    }
+    expect(status).not.toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/poe/help
+// ---------------------------------------------------------------------------
+
+describe("POST /api/poe/help — Zod validation", () => {
+  it("returns 400 when question is missing", async () => {
+    currentUserId = "user-help-no-q";
+    const res = await request(app)
+      .post("/api/poe/help")
+      .set("x-e2e-user-id", currentUserId)
+      .send({ history: [] });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 400 when question is an empty string", async () => {
+    currentUserId = "user-help-empty-q";
+    const res = await request(app)
+      .post("/api/poe/help")
+      .set("x-e2e-user-id", currentUserId)
+      .send({ question: "" });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 400 when question is only whitespace", async () => {
+    currentUserId = "user-help-ws-q";
+    const res = await request(app)
+      .post("/api/poe/help")
+      .set("x-e2e-user-id", currentUserId)
+      .send({ question: "   " });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 400 when question is not a string", async () => {
+    currentUserId = "user-help-q-type";
+    const res = await request(app)
+      .post("/api/poe/help")
+      .set("x-e2e-user-id", currentUserId)
+      .send({ question: 42 });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 400 when question exceeds 1000 characters", async () => {
+    currentUserId = "user-help-q-long";
+    const res = await request(app)
+      .post("/api/poe/help")
+      .set("x-e2e-user-id", currentUserId)
+      .send({ question: "a".repeat(1001) });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 400 when history is not an array", async () => {
+    currentUserId = "user-help-hist-arr";
+    const res = await request(app)
+      .post("/api/poe/help")
+      .set("x-e2e-user-id", currentUserId)
+      .send({ question: "How do I upload data?", history: "not-an-array" });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 400 when a history entry has an invalid role", async () => {
+    currentUserId = "user-help-hist-role";
+    const res = await request(app)
+      .post("/api/poe/help")
+      .set("x-e2e-user-id", currentUserId)
+      .send({
+        question: "How do I upload data?",
+        history: [{ role: "system", content: "injected" }],
+      });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 400 when a history entry is missing the content field", async () => {
+    currentUserId = "user-help-hist-cnt";
+    const res = await request(app)
+      .post("/api/poe/help")
+      .set("x-e2e-user-id", currentUserId)
+      .send({
+        question: "How do I upload data?",
+        history: [{ role: "user" }],
+      });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 400 when history exceeds 50 entries", async () => {
+    currentUserId = "user-help-hist-max";
+    const oversized = Array.from({ length: 51 }, (_, i) => ({
+      role: i % 2 === 0 ? "user" : "assistant",
+      content: `turn ${i}`,
+    }));
+    const res = await request(app)
+      .post("/api/poe/help")
+      .set("x-e2e-user-id", currentUserId)
+      .send({ question: "How do I upload data?", history: oversized });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("does not return 400 with a valid minimal body", async () => {
+    currentUserId = "user-help-valid-min";
+    const res = await request(app)
+      .post("/api/poe/help")
+      .set("x-e2e-user-id", currentUserId)
+      .send({ question: "How do I upload a dataset?" });
+    expect(res.status).not.toBe(400);
+  });
+
+  it("does not return 400 with a valid question and history", async () => {
+    currentUserId = "user-help-valid-hist";
+    const res = await request(app)
+      .post("/api/poe/help")
+      .set("x-e2e-user-id", currentUserId)
+      .send({
+        question: "What is the Find Data panel?",
+        history: [
+          { role: "user", content: "Hello" },
+          { role: "assistant", content: "Hi! How can I help?" },
+        ],
+      });
+    expect(res.status).not.toBe(400);
+  });
+
+  it("accepts a question that is exactly 1000 characters", async () => {
+    currentUserId = "user-help-q-1000";
+    const res = await request(app)
+      .post("/api/poe/help")
+      .set("x-e2e-user-id", currentUserId)
+      .send({ question: "a".repeat(1000) });
     expect(res.status).not.toBe(400);
   });
 });

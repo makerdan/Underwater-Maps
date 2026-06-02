@@ -1479,17 +1479,25 @@ router.post("/query", asyncHandler(async (req, res) => {
 // Describe (SSE streaming)
 // ---------------------------------------------------------------------------
 
+const DescribeBodySchema = z.object({
+  lon: z.number().optional(),
+  lat: z.number().optional(),
+  depth: z.number().optional(),
+  zoneName: z.string().optional(),
+  datasetName: z.string().optional(),
+  waterType: z.enum(["saltwater", "freshwater"]).optional().default("saltwater"),
+});
+
 router.post("/describe", asyncHandler(async (req, res) => {
   const userId = getAuthenticatedUserId(req);
 
-  const { lon, lat, depth, zoneName, datasetName, waterType = "saltwater" } = req.body as {
-    lon?: number;
-    lat?: number;
-    depth?: number;
-    zoneName?: string;
-    datasetName?: string;
-    waterType?: string;
-  };
+  const parsedDescribe = DescribeBodySchema.safeParse(req.body);
+  if (!parsedDescribe.success) {
+    res.status(400).json({ error: "invalid_request", details: parsedDescribe.error.message });
+    return;
+  }
+
+  const { lon, lat, depth, zoneName, datasetName, waterType } = parsedDescribe.data;
 
   const env = waterType === "freshwater" ? "freshwater lake or reservoir" : "ocean seafloor";
   const systemMsg = `You are a concise marine geologist. Describe the ${env} feature in 2–3 sentences. Focus on physical characteristics and what might be found here.`;
@@ -1623,34 +1631,35 @@ function loadHelpContext(): string {
 
 const HELP_SYSTEM_PROMPT = `You are the in-app help assistant for BathyScan, a 3D seafloor and lake-bed exploration web app. Answer the user's question using ONLY the help articles provided below as grounding truth. If the question is not about BathyScan or the answer is not in the articles, politely say you can only answer questions about the BathyScan app. Keep answers concise (3-6 sentences) and refer to specific features, panels, and keyboard shortcuts by name when relevant. Do not invent features that are not described in the articles.`;
 
+const HelpBodySchema = z.object({
+  question: z
+    .string({ required_error: "question is required", invalid_type_error: "question must be a string" })
+    .trim()
+    .min(1, "question is required")
+    .max(1000, "question must be ≤ 1000 characters"),
+  history: z
+    .array(PoeHistoryEntrySchema, { invalid_type_error: "history must be an array" })
+    .max(50, "history must not exceed 50 entries")
+    .optional()
+    .default([]),
+});
+
 router.post("/help", asyncHandler(async (req, res) => {
   const userId = getAuthenticatedUserId(req);
-  const { question, history = [] } = req.body as {
-    question?: string;
-    history?: Array<{ role: string; content: string }>;
-  };
 
-  if (!question || typeof question !== "string" || !question.trim()) {
-    res.status(400).json({ error: "missing_field", details: "question is required" });
+  const parsedHelp = HelpBodySchema.safeParse(req.body);
+  if (!parsedHelp.success) {
+    res.status(400).json({ error: "invalid_request", details: parsedHelp.error.message });
     return;
   }
-  if (question.length > 1000) {
-    res.status(400).json({ error: "too_long", details: "question must be ≤ 1000 characters" });
-    return;
-  }
+
+  const { question, history } = parsedHelp.data;
 
   const helpContext = loadHelpContext();
   const systemPrompt = `${HELP_SYSTEM_PROMPT}\n\n=== BATHYSCAN HELP ARTICLES ===\n\n${helpContext}`;
 
-  const cleanHistory = (Array.isArray(history) ? history : [])
+  const cleanHistory = history
     .slice(-8)
-    .filter(
-      (m) =>
-        m &&
-        typeof m === "object" &&
-        (m.role === "user" || m.role === "assistant") &&
-        typeof m.content === "string",
-    )
     .map((m) => ({ role: m.role, content: m.content.slice(0, 2000) }));
 
   try {
