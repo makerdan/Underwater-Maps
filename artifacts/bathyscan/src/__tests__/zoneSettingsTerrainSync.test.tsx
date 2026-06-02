@@ -154,6 +154,51 @@ const mockMatHolder = vi.hoisted(() => {
   };
 });
 
+// Stub the heavy Three.js module so vitest skips loading ~3–4 s of native
+// WebGL code.  TerrainMesh uses THREE for geometry/materials but those paths
+// are already covered by the @/lib/terrain and @/lib/terrainShader mocks.
+vi.mock("three", () => {
+  class Stub {
+    r = 0; g = 0; b = 0;
+    set() { return this; }
+    copy() { return this; }
+    clone() { return this; }
+    dispose() {}
+    lerpColors() { return this; }
+    computeVertexNormals() {}
+    rotateX() { return this; }
+    translate() { return this; }
+    convertLinearToSRGB() { return this; }
+    setAttribute() {}
+    setDrawRange() {}
+    normalizeNormals() {}
+    getPoints() { return []; }
+    attributes: Record<string, { array: Float32Array }> = {};
+  }
+  return {
+    Color: Stub, Vector3: Stub, Vector2: Stub, Quaternion: Stub,
+    Euler: Stub, Matrix4: Stub, PlaneGeometry: Stub, BufferGeometry: Stub,
+    BufferAttribute: Stub, Float32BufferAttribute: Stub,
+    MeshStandardMaterial: Stub, MeshBasicMaterial: Stub,
+    LineBasicMaterial: Stub, PointsMaterial: Stub, ShaderMaterial: Stub,
+    TextureLoader: Stub, Texture: Stub, DataTexture: Stub,
+    Mesh: Stub, Points: Stub, LineSegments: Stub, Line: Stub, LineLoop: Stub,
+    Group: Stub, Object3D: Stub, Raycaster: Stub, Sphere: Stub, Box3: Stub,
+    Shape: Stub, Path: Stub, ShapeGeometry: Stub,
+    CatmullRomCurve3: class extends Stub { getPoints() { return []; } },
+    DoubleSide: 0, FrontSide: 0, BackSide: 1,
+    AdditiveBlending: 1, NormalBlending: 2,
+    ClampToEdgeWrapping: 1001, RepeatWrapping: 1000, LinearFilter: 1006,
+    SRGBColorSpace: "srgb", NoColorSpace: "",
+    RedFormat: 1028, UnsignedByteType: 1009,
+    MathUtils: {
+      clamp: (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi),
+      degToRad: (d: number) => (d * Math.PI) / 180,
+      lerp: (a: number, b: number, t: number) => a + (b - a) * t,
+    },
+  };
+});
+
 vi.mock("@react-three/fiber", () => ({
   useFrame: (cb: (state: { camera: { position: object } }, delta: number) => void) => {
     frameRef.cb = cb;

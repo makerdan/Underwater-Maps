@@ -5,7 +5,58 @@
  * adding a property in one place forces both the 2D and 3D tests to be
  * updated — preventing the two views from silently diverging.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+
+// Stub Three.js and @react-three/fiber — SubstrateLayer imports both at the
+// top level, but buildSelectedSubstrate (the only export used here) is a
+// pure mapping function that never calls any THREE constructors.
+vi.mock("three", () => {
+  class Stub {
+    r = 0; g = 0; b = 0;
+    set() { return this; }
+    copy() { return this; }
+    clone() { return this; }
+    dispose() {}
+    lerpColors() { return this; }
+    computeVertexNormals() {}
+    rotateX() { return this; }
+    translate() { return this; }
+    convertLinearToSRGB() { return this; }
+    setAttribute() {}
+    setDrawRange() {}
+    normalizeNormals() {}
+    getPoints() { return []; }
+    attributes: Record<string, { array: Float32Array }> = {};
+  }
+  return {
+    Color: Stub, Vector3: Stub, Vector2: Stub, Quaternion: Stub,
+    Euler: Stub, Matrix4: Stub, PlaneGeometry: Stub, BufferGeometry: Stub,
+    BufferAttribute: Stub, Float32BufferAttribute: Stub,
+    MeshStandardMaterial: Stub, MeshBasicMaterial: Stub,
+    LineBasicMaterial: Stub, PointsMaterial: Stub, ShaderMaterial: Stub,
+    TextureLoader: Stub, Texture: Stub, DataTexture: Stub,
+    Mesh: Stub, Points: Stub, LineSegments: Stub, Line: Stub, LineLoop: Stub,
+    Group: Stub, Object3D: Stub, Raycaster: Stub, Sphere: Stub, Box3: Stub,
+    Shape: Stub, Path: Stub, ShapeGeometry: Stub,
+    CatmullRomCurve3: class extends Stub { getPoints() { return []; } },
+    DoubleSide: 0, FrontSide: 0, BackSide: 1,
+    AdditiveBlending: 1, NormalBlending: 2,
+    ClampToEdgeWrapping: 1001, RepeatWrapping: 1000, LinearFilter: 1006,
+    SRGBColorSpace: "srgb", NoColorSpace: "",
+    RedFormat: 1028, UnsignedByteType: 1009,
+    MathUtils: {
+      clamp: (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi),
+      degToRad: (d: number) => (d * Math.PI) / 180,
+      lerp: (a: number, b: number, t: number) => a + (b - a) * t,
+    },
+  };
+});
+
+vi.mock("@react-three/fiber", () => ({
+  useFrame: () => {},
+  extend: () => {},
+}));
+
 import type { SubstrateFeature } from "@workspace/api-client-react";
 import { buildSelectedSubstrate } from "@/components/SubstrateLayer";
 import { useUiStore } from "@/lib/uiStore";
