@@ -73,38 +73,54 @@ beforeEach(() => {
 // numeric-param validation actually runs.
 const E2E_USER = "user_e2e_datasets_test";
 
+// A CSV with enough points (≥10) that the parse step succeeds and the handler
+// reaches the resolution-param validation check.  The handler was reordered to
+// parse before validating resolution (so file-format errors surface first), so
+// a 2-point file would trigger insufficient_data before the resolution check.
+const ENOUGH_POINTS_CSV = [
+  "lon,lat,depth",
+  "-122.00,37.00,10",
+  "-122.01,37.01,11",
+  "-122.02,37.02,12",
+  "-122.03,37.03,13",
+  "-122.04,37.04,14",
+  "-122.05,37.05,15",
+  "-122.06,37.06,16",
+  "-122.07,37.07,17",
+  "-122.08,37.08,18",
+  "-122.09,37.09,19",
+  "-122.10,37.10,20",
+].join("\n") + "\n";
+
 describe("POST /api/datasets/upload — numeric-param validation", () => {
   it("returns 400 with invalid_param when resolution is malformed", async () => {
-    const csv = "lon,lat,depth\n-122.0,37.0,10\n-122.1,37.1,15\n";
     const res = await request(app)
       .post("/api/datasets/upload")
       .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "not-a-number")
-      .attach("file", Buffer.from(csv), "small.csv");
+      .attach("file", Buffer.from(ENOUGH_POINTS_CSV), "survey.csv");
 
     expect(res.status).toBe(400);
     expect(res.body).toMatchObject({ error: "invalid_param" });
   });
 
   it("returns 400 when resolution is out of range (too small)", async () => {
-    const csv = "lon,lat,depth\n-122.0,37.0,10\n-122.1,37.1,15\n";
     const res = await request(app)
       .post("/api/datasets/upload")
       .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "8")
-      .attach("file", Buffer.from(csv), "small.csv");
+      .attach("file", Buffer.from(ENOUGH_POINTS_CSV), "survey.csv");
 
     expect(res.status).toBe(400);
     expect(res.body).toMatchObject({ error: "invalid_param" });
   });
 
   it("returns 400 when resolution is out of range (too large)", async () => {
-    const csv = "lon,lat,depth\n-122.0,37.0,10\n-122.1,37.1,15\n";
     const res = await request(app)
       .post("/api/datasets/upload")
       .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "9999")
-      .attach("file", Buffer.from(csv), "small.csv");
+      .attach("file", Buffer.from(ENOUGH_POINTS_CSV), "survey.csv");
 
     expect(res.status).toBe(400);
     expect(res.body).toMatchObject({ error: "invalid_param" });
@@ -113,12 +129,11 @@ describe("POST /api/datasets/upload — numeric-param validation", () => {
   it("returns 400 when gridResolution alias is malformed", async () => {
     // Older clients send `gridResolution` instead of `resolution`. Both must
     // surface a clean 400 (not a 5xx) when the value isn't a valid int.
-    const csv = "lon,lat,depth\n-122.0,37.0,10\n-122.1,37.1,15\n";
     const res = await request(app)
       .post("/api/datasets/upload")
       .set("x-e2e-user-id", E2E_USER)
       .field("gridResolution", "NaN")
-      .attach("file", Buffer.from(csv), "small.csv");
+      .attach("file", Buffer.from(ENOUGH_POINTS_CSV), "survey.csv");
 
     expect(res.status).toBe(400);
     expect(res.body).toMatchObject({ error: "invalid_param" });

@@ -84,7 +84,7 @@ describe("POST /api/poe/help", () => {
       .send({});
 
     expect(res.status).toBe(400);
-    expect(res.body).toMatchObject({ error: "missing_field" });
+    expect(res.body).toMatchObject({ error: "invalid_request" });
     expect(res.headers["x-ratelimit-limit"]).toBeDefined();
     expect(res.headers["x-ratelimit-remaining"]).toBeDefined();
     expect(fakeChatCreate).not.toHaveBeenCalled();
@@ -98,7 +98,7 @@ describe("POST /api/poe/help", () => {
       .send({ question: longQuestion });
 
     expect(res.status).toBe(400);
-    expect(res.body).toMatchObject({ error: "too_long" });
+    expect(res.body).toMatchObject({ error: "invalid_request" });
     expect(res.headers["x-ratelimit-limit"]).toBeDefined();
     expect(fakeChatCreate).not.toHaveBeenCalled();
   });
