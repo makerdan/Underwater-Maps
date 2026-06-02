@@ -179,6 +179,75 @@ describe("CatalogSearchQuerySchema — bbox coordinates", () => {
 });
 
 // ---------------------------------------------------------------------------
+// CatalogSearchQuerySchema — bbox ordering refinements
+// ---------------------------------------------------------------------------
+
+describe("CatalogSearchQuerySchema — bbox ordering refinements", () => {
+  const validBbox = { minLon: "-120", minLat: "30", maxLon: "-110", maxLat: "40" };
+
+  it("rejects inverted longitude (minLon > maxLon)", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ ...validBbox, minLon: "-100", maxLon: "-110" });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i) => i.message);
+      expect(messages.some((m) => /minLon.*maxLon/i.test(m))).toBe(true);
+    }
+  });
+
+  it("rejects inverted latitude (minLat > maxLat)", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ ...validBbox, minLat: "50", maxLat: "40" });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i) => i.message);
+      expect(messages.some((m) => /minLat.*maxLat/i.test(m))).toBe(true);
+    }
+  });
+
+  it("accepts equal minLon and maxLon (degenerate vertical slice)", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ ...validBbox, minLon: "-110", maxLon: "-110" });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts equal minLat and maxLat (degenerate horizontal slice)", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ ...validBbox, minLat: "35", maxLat: "35" });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts only minLon without maxLon (no ordering check needed)", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ minLon: "-120" });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts only maxLon without minLon (no ordering check needed)", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ maxLon: "-110" });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts only minLat without maxLat (no ordering check needed)", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ minLat: "30" });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts only maxLat without minLat (no ordering check needed)", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ maxLat: "40" });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects both inverted longitude and inverted latitude simultaneously", () => {
+    const result = CatalogSearchQuerySchema.safeParse({
+      minLon: "10", maxLon: "-10",
+      minLat: "50", maxLat: "30",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i) => i.message);
+      expect(messages.some((m) => /minLon.*maxLon/i.test(m))).toBe(true);
+      expect(messages.some((m) => /minLat.*maxLat/i.test(m))).toBe(true);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // CatalogSearchQuerySchema
 // ---------------------------------------------------------------------------
 
