@@ -34,10 +34,6 @@ args = "test-e2e"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "test-all"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "test-gpx-nmea-integration"
 
 [[workflows.workflow.tasks]]
@@ -47,6 +43,10 @@ args = "test-fixture-freshness"
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "test-settings-validation"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-all"
 
 [[workflows.workflow]]
 name = "typecheck"
@@ -93,17 +93,6 @@ args = "pnpm run test:e2e"
 isValidation = true
 
 [[workflows.workflow]]
-name = "test-all"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm run typecheck && pnpm run lint && pnpm run test:unit"
-
-[workflows.workflow.metadata]
-isValidation = true
-
-[[workflows.workflow]]
 name = "test-gpx-nmea-integration"
 author = "agent"
 
@@ -132,6 +121,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/api-server run test:validation"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "test-all"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm run test-all"
 
 [workflows.workflow.metadata]
 isValidation = true
