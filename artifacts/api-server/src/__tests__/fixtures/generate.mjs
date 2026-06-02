@@ -1,7 +1,18 @@
 /**
  * generate.mjs — Generates realistic binary fixture files for integration tests.
  *
- * Run once:  node artifacts/api-server/src/__tests__/fixtures/generate.mjs
+ * Preferred way to regenerate (installs Python deps automatically, then prints
+ * a git-add reminder):
+ *
+ *   pnpm --filter @workspace/api-server run fixtures:regen
+ *
+ * Or run directly from the repo root:
+ *
+ *   node artifacts/api-server/src/__tests__/fixtures/generate.mjs
+ *
+ * After regenerating, verify the committed files are still in sync:
+ *
+ *   bash artifacts/api-server/src/__tests__/fixtures/check-fixture-freshness.sh
  *
  * Produces:
  *   survey.tif       — GeoTIFF (float32, ModelTiepoint+ModelPixelScale, GDAL_NODATA)

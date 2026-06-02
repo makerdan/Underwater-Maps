@@ -11,7 +11,8 @@
     "typecheck:tests": "tsc -p tsconfig.test.json",
     "test": "vitest run",
     "test:unit": "vitest run",
-    "test:validation": "vitest run --config vitest.config.validation.ts"
+    "test:validation": "vitest run --config vitest.config.validation.ts",
+    "fixtures:regen": "node src/__tests__/fixtures/generate.mjs && echo '' && echo 'Fixtures regenerated. Stage and commit the updated files:' && echo '  git add artifacts/api-server/src/__tests__/fixtures/' && echo \"  git commit -m 'chore: regenerate fixtures'\" && echo '' && echo 'To verify freshness (from repo root):' && echo '  bash artifacts/api-server/src/__tests__/fixtures/check-fixture-freshness.sh'"
   },
   "dependencies": {
     "@clerk/express": "^2.1.21",

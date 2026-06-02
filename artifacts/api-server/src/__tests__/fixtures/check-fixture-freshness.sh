@@ -159,8 +159,8 @@ if [ "$FAILED" -ne 0 ]; then
     echo "  Add them to the FIXTURES list in this script and commit them."
   fi
   echo ""
-  echo "To fix stale fixtures, re-run the generator and commit the results:"
-  echo "  node $GENERATOR"
+  echo "To fix stale fixtures, run the one-command regenerator and commit the results:"
+  echo "  pnpm --filter @workspace/api-server run fixtures:regen"
   echo "  git add $FIXTURE_DIR/"
   echo "  git commit -m 'chore: regenerate fixtures'"
   exit 1
