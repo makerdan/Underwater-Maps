@@ -25,3 +25,36 @@ export const LatLonQuerySchema = z.object({
 });
 
 export type LatLonQuery = z.infer<typeof LatLonQuerySchema>;
+
+/**
+ * Validates query parameters for GET /datasets/catalog/search.
+ * `q` is optional but when provided must be a non-empty string capped at 500
+ * characters. Multi-value injection (?q[]=a&q[]=b) is rejected because Zod
+ * z.string() rejects non-string values.
+ */
+export const CatalogSearchQuerySchema = z.object({
+  q: z
+    .string({ invalid_type_error: "q must be a string" })
+    .min(1, "q must not be empty")
+    .max(500, "q must not exceed 500 characters")
+    .optional(),
+});
+
+export type CatalogSearchQuery = z.infer<typeof CatalogSearchQuerySchema>;
+
+/**
+ * Validates query parameters for GET /datasets.
+ * `waterType` is optional but when provided must be one of the known enum
+ * values. Multi-value injection (?waterType[]=saltwater&waterType[]=freshwater)
+ * and unknown values (e.g. "brackish") are both rejected with 400.
+ */
+export const DatasetsQuerySchema = z.object({
+  waterType: z
+    .enum(["saltwater", "freshwater"], {
+      invalid_type_error: "waterType must be a string",
+      message: "waterType must be 'saltwater' or 'freshwater'",
+    })
+    .optional(),
+});
+
+export type DatasetsQuery = z.infer<typeof DatasetsQuerySchema>;

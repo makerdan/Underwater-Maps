@@ -38,6 +38,7 @@ import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
 import { substrateFingerprintForDataset } from "../lib/substrateGrid.js";
 import { registerCache } from "../lib/cacheRegistry.js";
 import { logger } from "../lib/logger.js";
+import { DatasetsQuerySchema } from "./schemas.js";
 
 // ─── Chunked-upload session + job stores ──────────────────────────────────────
 // Sessions: keyed by uploadId, created on the first chunk, used to enforce
@@ -588,11 +589,15 @@ async function getSmoothingPreference(req: import("express").Request): Promise<b
 
 // ── GET /datasets ─────────────────────────────────────────────────────────────
 router.get("/datasets", asyncHandler(async (req, res): Promise<void> => {
-  const rawWaterType = req.query["waterType"];
-  const waterTypeFilter =
-    rawWaterType === "freshwater" || rawWaterType === "saltwater"
-      ? rawWaterType
-      : null;
+  const queryParsed = DatasetsQuerySchema.safeParse(req.query);
+  if (!queryParsed.success) {
+    res.status(400).json({
+      error: "invalid_param",
+      details: queryParsed.error.issues[0]?.message ?? "Invalid query parameter",
+    });
+    return;
+  }
+  const waterTypeFilter = queryParsed.data.waterType ?? null;
 
   // Load suppressed preset IDs so they are excluded from the response.
   let disabledIds = new Set<string>();

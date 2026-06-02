@@ -28,6 +28,7 @@
 import { Router } from "express";
 import { eq, and, lt } from "drizzle-orm";
 import { z } from "zod";
+import { CatalogSearchQuerySchema } from "./schemas.js";
 import { db, userCatalogSavesTable, customDatasetsTable, type StoredTerrainJson } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
@@ -145,7 +146,15 @@ router.get("/datasets/catalog", asyncHandler(async (req, res): Promise<void> => 
 // ---------------------------------------------------------------------------
 
 router.get("/datasets/catalog/search", asyncHandler(async (req, res): Promise<void> => {
-  const q = req.query["q"] as string | undefined;
+  const queryParsed = CatalogSearchQuerySchema.safeParse(req.query);
+  if (!queryParsed.success) {
+    res.status(400).json({
+      error: "invalid_param",
+      details: queryParsed.error.issues[0]?.message ?? "Invalid query parameter",
+    });
+    return;
+  }
+  const q = queryParsed.data.q;
   const dataType = req.query["dataType"] as string | undefined;
   const waterType = req.query["waterType"] as string | undefined;
   const minLon = req.query["minLon"] !== undefined ? Number(req.query["minLon"]) : undefined;
