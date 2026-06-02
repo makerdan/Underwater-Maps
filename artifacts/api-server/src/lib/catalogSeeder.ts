@@ -16,6 +16,7 @@
 
 import { db, datasetCatalogTable, disabledPresetsTable } from "@workspace/db";
 import { inArray, notInArray, sql } from "drizzle-orm";
+import type { CatalogSearchQuery } from "../routes/schemas.js";
 import { ALL_PRESET_DATASETS, NCEI_DATASET_COVERAGES } from "./terrain.js";
 
 export interface CatalogSeedEntry {
@@ -861,8 +862,8 @@ export function scoreEntry(entry: CatalogSeedEntry, terms: string[]): number {
 
 export interface CatalogSearchParams {
   q?: string;
-  dataType?: string;
-  waterType?: string;
+  dataType?: CatalogSearchQuery["dataType"];
+  waterType?: CatalogSearchQuery["waterType"];
   minLon?: number;
   minLat?: number;
   maxLon?: number;
