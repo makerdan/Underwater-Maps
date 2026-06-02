@@ -279,3 +279,37 @@ export const TerrainDownloadInfoQuerySchema = z
   });
 
 export type TerrainDownloadInfoQuery = z.infer<typeof TerrainDownloadInfoQuerySchema>;
+
+/**
+ * Validates the JSON body for POST /datasets/upload/chunk/finalize.
+ *
+ * uploadId uses z.string() (not z.coerce) so that array-injected values
+ * (e.g. {"uploadId": ["a","b"]}) are rejected before the regex runs.
+ * totalChunks and resolution arrive as JSON numbers; z.number() is used
+ * directly (no coerce needed) and validated with .int() + range checks.
+ */
+export const ChunkFinalizeBodySchema = z.object({
+  uploadId: z
+    .string({ invalid_type_error: "uploadId must be a string" })
+    .regex(
+      /^[a-zA-Z0-9_-]{8,64}$/,
+      "uploadId must be 8–64 alphanumeric characters, hyphens, or underscores",
+    ),
+  fileName: z
+    .string({ invalid_type_error: "fileName must be a string" })
+    .min(1, "fileName must not be empty")
+    .max(255, "fileName must not exceed 255 characters"),
+  totalChunks: z
+    .number({ invalid_type_error: "totalChunks must be a number" })
+    .int("totalChunks must be an integer")
+    .min(1, "totalChunks must be at least 1")
+    .max(4096, "totalChunks must be at most 4096"),
+  resolution: z
+    .number({ invalid_type_error: "resolution must be a number" })
+    .int("resolution must be an integer")
+    .min(32, "resolution must be at least 32")
+    .max(512, "resolution must be at most 512")
+    .default(256),
+});
+
+export type ChunkFinalizeBody = z.infer<typeof ChunkFinalizeBodySchema>;

@@ -35,7 +35,7 @@ import { gunzipBounded } from "../lib/gunzipBounded.js";
 import { fetchCopernicusDem } from "../lib/copernicusDem.js";
 import { fetchSatelliteTile } from "../lib/satelliteTile.js";
 import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
-import { ChunkUploadBodySchema } from "./schemas.js";
+import { ChunkUploadBodySchema, ChunkFinalizeBodySchema } from "./schemas.js";
 import { substrateFingerprintForDataset } from "../lib/substrateGrid.js";
 import { registerCache } from "../lib/cacheRegistry.js";
 import { logger } from "../lib/logger.js";
@@ -1327,13 +1327,7 @@ router.post(
   "/datasets/upload/chunk/finalize",
   requireAuth,
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const FinalizeSchema = z.object({
-      uploadId: z.string().regex(/^[a-zA-Z0-9_-]{8,64}$/, "Invalid uploadId"),
-      fileName: z.string().min(1).max(255),
-      totalChunks: z.coerce.number().int().min(1).max(4096),
-      resolution: z.coerce.number().int().min(32).max(512).default(256),
-    });
-    const parsed = FinalizeSchema.safeParse(req.body);
+    const parsed = ChunkFinalizeBodySchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
         error: "invalid_param",
