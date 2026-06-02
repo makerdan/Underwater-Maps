@@ -983,19 +983,6 @@ router.get("/terrain/download/info", requireAuth, asyncHandler(async (req, res):
 
   const { north, south, east, west } = parsedQuery.data;
 
-  // TerrainDownloadInfoQuerySchema already enforces north>south, east>west,
-  // and ≤10° span on each axis via .refine(); this guard is kept as a
-  // belt-and-suspenders check with a human-readable error message.
-  const dLon = east - west;
-  const dLat = north - south;
-  if (dLon > 10 || dLat > 10) {
-    res.status(400).json({
-      error: "bbox_too_large",
-      details: `Bounding box must be at most 10° × 10° (got ${dLon.toFixed(2)}° × ${dLat.toFixed(2)}°).`,
-    });
-    return;
-  }
-
   try {
     const info = await previewBboxForDownload({ north, south, east, west });
     res.json(info);
