@@ -81,12 +81,10 @@ async function setRange(locator: Locator, value: number): Promise<void> {
 }
 
 async function switchMode(page: Page, mode: "drift" | "trolling"): Promise<void> {
-  const label = mode === "drift" ? "DRIFT" : "TROLLING";
-  // Mode toggle buttons live inside the Weather Panel.
-  const btn = page
-    .locator(`button:has-text('${label}')`)
-    .filter({ hasNotText: "DRIFT PLANNER" })
-    .last();
+  // Use the data-testid added to the WeatherPanel mode toggle buttons so the
+  // selector is unambiguous — avoids strict-mode violations from other "DRIFT"
+  // or "TROLLING" text nodes in the DOM (drift-trolling-modes.spec.ts:149).
+  const btn = page.locator(`[data-testid="drift-mode-btn-${mode}"]`);
   await btn.dispatchEvent("click");
 }
 

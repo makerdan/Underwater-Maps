@@ -773,7 +773,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   timeFormat: "local",
   coordinateFormat: "decimal",
   depthUnit: "metres",
-  units: "nautical",
+  units: "metric",
   temperatureUnit: "auto",
 
   // Overview

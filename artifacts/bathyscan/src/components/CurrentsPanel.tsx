@@ -457,8 +457,13 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
     );
   }
 
+  // tidalStatus === "idle": source just switched to NOAA, fetch not yet started.
+  // Render a visible standby message so e2e tests can assert the element is
+  // present and visible immediately after the source toggle (currents.spec.ts).
   return (
-    <div style={{ marginBottom: 8, fontSize: 10, color: "#94a3b8" }} data-testid="currents-noaa-readout" />
+    <div style={{ marginBottom: 8, fontSize: 10, color: "#94a3b8" }} data-testid="currents-noaa-readout">
+      <span data-testid="currents-noaa-idle">⟳ Connecting to NOAA…</span>
+    </div>
   );
 }
 

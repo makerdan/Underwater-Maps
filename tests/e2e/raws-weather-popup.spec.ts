@@ -196,11 +196,21 @@ test.describe("RAWS weather popup", () => {
       return;
     }
 
-    // Seed synthetic terrain so the OverviewMap's transform/overviewGrid are
-    // populated before we enable the RAWS overlay. Without terrain the canvas
-    // positions array stays empty because the rAF loop has nothing to project
-    // station lon/lat coordinates against.
-    await page.evaluate(() => window.__bathyTest?.seedTerrain?.()).catch(() => {});
+    // Seed synthetic terrain centred on the mock RAWS station (61.2 N, -149.9 W —
+    // near Anchorage). Without matching terrain bounds the rAF loop projects the
+    // station lon/lat onto canvas coordinates that fall outside the drawn area,
+    // so renderRawsStations returns no positions and the 8-second poll times out
+    // (raws-weather-popup.spec.ts:168).
+    await page.evaluate(() =>
+      window.__bathyTest?.seedTerrain?.({
+        minLat: 60,
+        maxLat: 62.5,
+        minLon: -152,
+        maxLon: -147.5,
+        centerLat: 61.2,
+        centerLon: -149.9,
+      }),
+    ).catch(() => {});
     await page
       .waitForFunction(
         () => Boolean(window.__bathyTest?.getTerrainSummary?.()),

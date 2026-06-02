@@ -977,6 +977,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
             return (
               <button
                 key={m}
+                data-testid={`drift-mode-btn-${m}`}
                 onClick={() => setDriftMode(m)}
                 style={{
                   flex: 1,

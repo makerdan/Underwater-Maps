@@ -144,9 +144,13 @@ test.describe("Drift Planner", () => {
     // Either we get the live readouts (WIND + TIDAL CURRENT labels) or the
     // amber estimated-conditions banner — both are valid outcomes depending
     // on whether the surface-conditions API reached Open-Meteo in this env.
+    // Use .first() to avoid Playwright strict-mode violation: WeatherPanel can
+    // render "⚠ Using estimated conditions" in two sibling sections
+    // simultaneously (header banner + manual-override block), which makes the
+    // .or() locator match more than one element (drift-planner.spec.ts:136).
     const realData = page.locator("text=TIDAL CURRENT");
     const estimatedBanner = page.locator("text=Using estimated conditions");
-    await expect(realData.or(estimatedBanner)).toBeVisible({ timeout: 15_000 });
+    await expect(realData.or(estimatedBanner).first()).toBeVisible({ timeout: 15_000 });
   });
 
   test("Drift Timeline renders 24 hour chips and selecting one updates the detail row", async ({ page }) => {
