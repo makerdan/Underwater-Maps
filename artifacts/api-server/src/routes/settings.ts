@@ -7,7 +7,7 @@ import { asyncHandler } from "../middlewares/asyncHandler.js";
 
 const router = Router();
 
-const DEFAULT_SETTINGS = {
+export const DEFAULT_SETTINGS = {
   panelCollapse: {} as Record<string, boolean>,
   textureQuality: "high",
   enableCaustics: false,
