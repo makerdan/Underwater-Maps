@@ -681,6 +681,10 @@ const DatasetIdParamSchema = z
     "Dataset id must start with an alphanumeric character and contain only alphanumeric characters, hyphens, or underscores",
   );
 
+// UUID pattern shared by the terrain/overview auth guards below.
+const CUSTOM_DATASET_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
@@ -688,6 +692,26 @@ router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRat
     return;
   }
   const id = idParsed.data;
+
+  // Auth + ownership guard for custom (UUID-format) dataset IDs.
+  // Preset/catalog dataset IDs remain publicly accessible.
+  // Non-owner requests return 404 (not 403) to avoid confirming existence.
+  if (CUSTOM_DATASET_UUID_RE.test(id) && !ALL_PRESET_DATASETS.some((d) => d.id === id)) {
+    const callerId = getAuth(req)?.userId ?? null;
+    if (!callerId) {
+      res.status(401).json({ error: "unauthenticated", details: "Authentication required" });
+      return;
+    }
+    const [ownRow] = await db
+      .select({ userId: customDatasetsTable.userId })
+      .from(customDatasetsTable)
+      .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, callerId)));
+    if (!ownRow) {
+      res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
+      return;
+    }
+  }
+
   const rawRes = req.query["resolution"];
   const resolution = rawRes ? Math.max(32, Math.min(512, parseInt(String(rawRes), 10))) : 256;
 
@@ -745,6 +769,25 @@ router.get("/datasets/:id/overview", asyncHandler(async (req, res): Promise<void
     return;
   }
   const id = idParsed.data;
+
+  // Auth + ownership guard for custom (UUID-format) dataset IDs.
+  // Preset/catalog dataset IDs remain publicly accessible.
+  // Non-owner requests return 404 (not 403) to avoid confirming existence.
+  if (CUSTOM_DATASET_UUID_RE.test(id) && !ALL_PRESET_DATASETS.some((d) => d.id === id)) {
+    const callerId = getAuth(req)?.userId ?? null;
+    if (!callerId) {
+      res.status(401).json({ error: "unauthenticated", details: "Authentication required" });
+      return;
+    }
+    const [ownRow] = await db
+      .select({ userId: customDatasetsTable.userId })
+      .from(customDatasetsTable)
+      .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, callerId)));
+    if (!ownRow) {
+      res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
+      return;
+    }
+  }
 
   const smoothing = await getSmoothingPreference(req);
   const grid = await buildTerrainGrid(id, 64, { smoothing });

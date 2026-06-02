@@ -3,12 +3,37 @@
  *
  * Covers:
  *   GET /substrate/:id — valid id → 200 with GeoJSON, unknown id → 404
+ *   GET /substrate/:id — UUID auth guard → 401 (no auth), 404 (non-owner)
  */
 import { describe, it, expect, vi } from "vitest";
 import express from "express";
 import request from "supertest";
 
 const getSubstrateForDatasetMock = vi.fn();
+
+// Mutable state for controlling db ownership check results
+const dbState: { ownerRows: unknown[] } = { ownerRows: [] };
+
+vi.mock("@clerk/express", () => ({
+  clerkMiddleware: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
+  getAuth: vi.fn(() => ({ userId: null })),
+}));
+
+vi.mock("@workspace/db", () => ({
+  db: {
+    select: () => ({
+      from: () => ({
+        where: () => Promise.resolve(dbState.ownerRows),
+      }),
+    }),
+  },
+  customDatasetsTable: { id: "id", userId: "userId" },
+}));
+
+vi.mock("drizzle-orm", () => ({
+  eq: vi.fn(() => "eq-condition"),
+  and: vi.fn((...args: unknown[]) => args),
+}));
 
 vi.mock("../../lib/terrain.js", () => ({
   ALL_PRESET_DATASETS: [
@@ -124,5 +149,41 @@ describe("GET /substrate/:id — no coverage", () => {
     expect(res.body.features).toHaveLength(0);
     expect(res.body.metadata).toHaveProperty("nearestCoverage");
     expect(res.body.metadata.nearestCoverage.distanceKm).toBe(42);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// UUID auth guard — custom (user-uploaded) dataset IDs require auth.
+// Preset IDs remain publicly accessible regardless of auth state.
+// ---------------------------------------------------------------------------
+
+const SUBSTRATE_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+
+import { getAuth } from "@clerk/express";
+
+describe("GET /substrate/:id — custom dataset (UUID) auth guard", () => {
+  it("returns 401 for a UUID-format dataset id when the caller is not authenticated", async () => {
+    vi.mocked(getAuth).mockReturnValueOnce({ userId: null } as ReturnType<typeof getAuth>);
+    const res = await request(makeApp()).get(`/substrate/${SUBSTRATE_UUID}`);
+    expect(res.status).toBe(401);
+    expect(res.body).toMatchObject({ error: "unauthenticated" });
+  });
+
+  it("returns 404 when an authenticated user requests a custom UUID dataset they do not own", async () => {
+    vi.mocked(getAuth).mockReturnValueOnce({ userId: "user-a" } as ReturnType<typeof getAuth>);
+    // DB ownership check returns no matching row
+    dbState.ownerRows = [];
+    const res = await request(makeApp()).get(`/substrate/${SUBSTRATE_UUID}`);
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ error: "not_found" });
+  });
+
+  it("does not require auth for a known preset dataset id", async () => {
+    // getAuth returns null (unauthenticated) — preset IDs should still be public
+    vi.mocked(getAuth).mockReturnValueOnce({ userId: null } as ReturnType<typeof getAuth>);
+    getSubstrateForDatasetMock.mockReturnValue(MOCK_SLICE_WITH_FEATURES);
+    const res = await request(makeApp()).get("/substrate/glacier-bay");
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe("FeatureCollection");
   });
 });

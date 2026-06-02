@@ -40,6 +40,9 @@
 
 import { Router } from "express";
 import { z } from "zod";
+import { eq, and } from "drizzle-orm";
+import { getAuth } from "@clerk/express";
+import { db, customDatasetsTable } from "@workspace/db";
 import { ALL_PRESET_DATASETS } from "../lib/terrain.js";
 import {
   ALASKA_SHOREZONE,
@@ -112,13 +115,23 @@ const SOURCE_PROVENANCE = {
   },
 } as const satisfies Record<SubstrateSource, unknown>;
 
+// UUID pattern for custom (user-uploaded) dataset IDs.
+const CUSTOM_DATASET_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * GET /substrate/:id
  *
  * Responds 404 for unknown dataset ids, otherwise 200 with a merged
  * ShoreZone + ENC substrate FeatureCollection clipped to the dataset bbox.
+ *
+ * Auth rules (mirrors the zones/terrain pattern):
+ *  - Preset/catalog dataset IDs → public, no auth required.
+ *  - UUID-format (custom) dataset IDs → require auth + ownership check.
+ *    Non-owner / non-existent custom datasets return 404 (not 403) to avoid
+ *    confirming existence to unauthenticated or cross-user callers.
  */
-router.get("/substrate/:id", (req, res) => {
+router.get("/substrate/:id", async (req, res) => {
   const paramParsed = DatasetIdParamSchema.safeParse(req.params);
   if (!paramParsed.success) {
     res.status(400).json({
@@ -128,6 +141,24 @@ router.get("/substrate/:id", (req, res) => {
     return;
   }
   const datasetId = paramParsed.data.id;
+
+  // Auth + ownership guard for custom (UUID-format) dataset IDs.
+  if (CUSTOM_DATASET_UUID_RE.test(datasetId) && !ALL_PRESET_DATASETS.some((d) => d.id === datasetId)) {
+    const callerId = getAuth(req)?.userId ?? null;
+    if (!callerId) {
+      res.status(401).json({ error: "unauthenticated", details: "Authentication required" });
+      return;
+    }
+    const [ownRow] = await db
+      .select({ userId: customDatasetsTable.userId })
+      .from(customDatasetsTable)
+      .where(and(eq(customDatasetsTable.id, datasetId), eq(customDatasetsTable.userId, callerId)));
+    if (!ownRow) {
+      res.status(404).json({ error: "not_found", details: `Dataset '${datasetId}' not found` });
+      return;
+    }
+  }
+
   const meta = ALL_PRESET_DATASETS.find((d) => d.id === datasetId);
   if (!meta) {
     res.status(404).json({ error: "not_found", details: `Dataset '${datasetId}' not found` });

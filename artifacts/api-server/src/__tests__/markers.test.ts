@@ -155,3 +155,45 @@ describe("DELETE /api/markers/:id — auth required", () => {
     expect(res.status).toBe(404);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Cross-user delete ownership enforcement
+//
+// The DELETE /api/markers/:id WHERE clause includes BOTH id AND userId, so
+// a marker belonging to a different user produces an empty RETURNING set and
+// the route returns 404 (not 403) to avoid leaking existence to the caller.
+// ---------------------------------------------------------------------------
+describe("DELETE /api/markers/:id — cross-user ownership", () => {
+  it("returns 404 (not 403) when an authenticated user tries to delete another user's marker", async () => {
+    const { db } = await import("@workspace/db");
+    // Simulate the DB returning no rows: the WHERE(id = ? AND userId = ?)
+    // condition matched nothing because the marker belongs to a different user.
+    (db.delete as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+      where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
+    });
+
+    const res = await request(app)
+      .delete("/api/markers/99999999-9999-9999-9999-999999999999")
+      .set({ "x-mock-clerk-user-id": "user_attacker" });
+
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ error: "not_found" });
+  });
+
+  it("leaves the marker intact after a failed cross-user delete attempt", async () => {
+    const { db } = await import("@workspace/db");
+    // The cross-user delete returns no rows …
+    (db.delete as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+      where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
+    });
+    await request(app)
+      .delete("/api/markers/11111111-1111-1111-1111-111111111111")
+      .set({ "x-mock-clerk-user-id": "user_attacker" });
+
+    // … and the real owner can still delete it afterwards (db returns the row).
+    const res = await request(app)
+      .delete("/api/markers/11111111-1111-1111-1111-111111111111")
+      .set(AUTHED_HEADER);
+    expect(res.status).toBe(204);
+  });
+});

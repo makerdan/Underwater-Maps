@@ -61,11 +61,70 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../../app.js";
+import { getAuth } from "@clerk/express";
 
 beforeEach(() => {
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
   // Reset the DB mock row store before each test.
   _mockJobRows = [];
+});
+
+// ---------------------------------------------------------------------------
+// Custom dataset (UUID) auth guards — GET /api/datasets/:id/terrain and
+// GET /api/datasets/:id/overview
+//
+// UUID-format IDs that are not in the preset catalog require:
+//   • authentication (401 if missing)
+//   • ownership (404 if the dataset exists but belongs to another user)
+// Preset IDs remain publicly accessible regardless of auth state.
+// ---------------------------------------------------------------------------
+
+const TEST_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+
+describe("GET /api/datasets/:id/terrain — custom dataset auth guard", () => {
+  it("returns 401 for a UUID-format dataset id when the caller is not authenticated", async () => {
+    // Ensure getAuth returns no userId (default mock, but make explicit)
+    vi.mocked(getAuth).mockReturnValueOnce({ userId: null } as ReturnType<typeof getAuth>);
+    // Unset bypass so requireAuth doesn't short-circuit (this test exercises
+    // the inline getAuth check, not requireAuth)
+    vi.unstubAllEnvs();
+
+    const res = await request(app).get(`/api/datasets/${TEST_UUID}/terrain`);
+    expect(res.status).toBe(401);
+    expect(res.body).toMatchObject({ error: "unauthenticated" });
+  });
+
+  it("returns 404 when an authenticated user requests a UUID dataset they do not own", async () => {
+    vi.mocked(getAuth).mockReturnValueOnce({ userId: "user-a" } as ReturnType<typeof getAuth>);
+    vi.unstubAllEnvs();
+    // DB mock returns no matching row for the ownership check
+    _mockJobRows = [];
+
+    const res = await request(app).get(`/api/datasets/${TEST_UUID}/terrain`);
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ error: "not_found" });
+  });
+});
+
+describe("GET /api/datasets/:id/overview — custom dataset auth guard", () => {
+  it("returns 401 for a UUID-format dataset id when the caller is not authenticated", async () => {
+    vi.mocked(getAuth).mockReturnValueOnce({ userId: null } as ReturnType<typeof getAuth>);
+    vi.unstubAllEnvs();
+
+    const res = await request(app).get(`/api/datasets/${TEST_UUID}/overview`);
+    expect(res.status).toBe(401);
+    expect(res.body).toMatchObject({ error: "unauthenticated" });
+  });
+
+  it("returns 404 when an authenticated user requests a UUID dataset they do not own", async () => {
+    vi.mocked(getAuth).mockReturnValueOnce({ userId: "user-a" } as ReturnType<typeof getAuth>);
+    vi.unstubAllEnvs();
+    _mockJobRows = [];
+
+    const res = await request(app).get(`/api/datasets/${TEST_UUID}/overview`);
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ error: "not_found" });
+  });
 });
 
 // /datasets/upload is auth-gated (task #433). All requests below carry the
