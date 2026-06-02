@@ -152,3 +152,130 @@ export const ChunkUploadBodySchema = z.object({
 });
 
 export type ChunkUploadBody = z.infer<typeof ChunkUploadBodySchema>;
+
+/**
+ * Validates query parameters for GET /datasets/:id/zones.
+ * - h: lowercase hex grid fingerprint (8-char FNV-1a or 64-char SHA-256)
+ * - w: waterType enum
+ * z.string() on both fields rejects array injection (?h[]=...&h[]=...).
+ */
+export const ZonesQuerySchema = z.object({
+  h: z
+    .string({ invalid_type_error: "h must be a string" })
+    .regex(
+      /^([a-f0-9]{8}|[a-f0-9]{64})$/,
+      "h must be a lowercase hex string (8 or 64 chars)",
+    ),
+  w: z.enum(["saltwater", "freshwater"], {
+    invalid_type_error: "w must be a string",
+    message: "w must be 'saltwater' or 'freshwater'",
+  }),
+});
+
+export type ZonesQuery = z.infer<typeof ZonesQuerySchema>;
+
+/**
+ * Parses a comma-separated bbox string "minLon,minLat,maxLon,maxLat" into a
+ * tuple of four finite numbers.  z.string() up-front rejects array injection
+ * (?bbox[]=...); the transform rejects non-finite values and wrong element
+ * counts.
+ */
+const bboxCoordsSchema = z
+  .string({ invalid_type_error: "bbox must be a string, not an array" })
+  .transform((s, ctx) => {
+    const parts = s.split(",").map((p) => parseFloat(p.trim()));
+    if (parts.length !== 4 || parts.some((v) => !isFinite(v))) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'bbox must be "minLon,minLat,maxLon,maxLat" (four finite numbers)',
+      });
+      return z.NEVER;
+    }
+    return parts as [number, number, number, number];
+  });
+
+/**
+ * Validates query parameters for GET /terrain/land (Copernicus DEM).
+ * - bbox: comma-separated "minLon,minLat,maxLon,maxLat"
+ * - size: optional integer; clamped to [32, 256] by the route handler
+ * z.string() on size rejects array injection (?size[]=64&size[]=128).
+ */
+export const TerrainLandQuerySchema = z.object({
+  bbox: bboxCoordsSchema,
+  size: z
+    .string({ invalid_type_error: "size must be a string" })
+    .optional()
+    .transform((s) => (s === undefined ? 128 : parseInt(s, 10))),
+});
+
+export type TerrainLandQuery = z.infer<typeof TerrainLandQuerySchema>;
+
+/**
+ * Validates query parameters for GET /terrain/satellite-tile.
+ * - bbox: comma-separated "minLon,minLat,maxLon,maxLat"
+ * - size: optional integer; clamped to [64, 1024] by the route handler
+ * z.string() on size rejects array injection.
+ */
+export const TerrainSatelliteQuerySchema = z.object({
+  bbox: bboxCoordsSchema,
+  size: z
+    .string({ invalid_type_error: "size must be a string" })
+    .optional()
+    .transform((s) => (s === undefined ? 512 : parseInt(s, 10))),
+});
+
+export type TerrainSatelliteQuery = z.infer<typeof TerrainSatelliteQuerySchema>;
+
+/**
+ * A lat coord that rejects array injection: z.string() first, then coerce.
+ * This prevents ?north[]=45&north[]=50 → parseFloat("45,50") → 45 bypass.
+ */
+const latCoordSchema = z
+  .string({ invalid_type_error: "coordinate must be a string, not an array" })
+  .pipe(
+    z.coerce
+      .number({ invalid_type_error: "coordinate must be a valid number" })
+      .finite("coordinate must be a finite number")
+      .gte(-90, "latitude must be between -90 and 90")
+      .lte(90, "latitude must be between -90 and 90"),
+  );
+
+const lonCoordSchema = z
+  .string({ invalid_type_error: "coordinate must be a string, not an array" })
+  .pipe(
+    z.coerce
+      .number({ invalid_type_error: "coordinate must be a valid number" })
+      .finite("coordinate must be a finite number")
+      .gte(-180, "longitude must be between -180 and 180")
+      .lte(180, "longitude must be between -180 and 180"),
+  );
+
+/**
+ * Validates query parameters for GET /terrain/download/info.
+ * Rejects array injection on all four cardinal params.
+ */
+export const TerrainDownloadInfoQuerySchema = z
+  .object({
+    north: latCoordSchema,
+    south: latCoordSchema,
+    east: lonCoordSchema,
+    west: lonCoordSchema,
+  })
+  .refine((d) => d.north > d.south, {
+    message: "north must be greater than south",
+    path: ["north"],
+  })
+  .refine((d) => d.east > d.west, {
+    message: "east must be greater than west",
+    path: ["east"],
+  })
+  .refine((d) => d.north - d.south <= 10, {
+    message: "Bounding box must be at most 10° latitude span",
+    path: ["north"],
+  })
+  .refine((d) => d.east - d.west <= 10, {
+    message: "Bounding box must be at most 10° longitude span",
+    path: ["east"],
+  });
+
+export type TerrainDownloadInfoQuery = z.infer<typeof TerrainDownloadInfoQuerySchema>;

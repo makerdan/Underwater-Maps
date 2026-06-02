@@ -39,7 +39,13 @@ import { ChunkUploadBodySchema } from "./schemas.js";
 import { substrateFingerprintForDataset } from "../lib/substrateGrid.js";
 import { registerCache } from "../lib/cacheRegistry.js";
 import { logger } from "../lib/logger.js";
-import { DatasetsQuerySchema } from "./schemas.js";
+import {
+  DatasetsQuerySchema,
+  ZonesQuerySchema,
+  TerrainLandQuerySchema,
+  TerrainSatelliteQuerySchema,
+  TerrainDownloadInfoQuerySchema,
+} from "./schemas.js";
 
 // ─── Chunked-upload session + job stores ──────────────────────────────────────
 // Sessions: keyed by uploadId, created on the first chunk, used to enforce
@@ -755,28 +761,16 @@ router.get("/datasets/:id/overview", asyncHandler(async (req, res): Promise<void
 //  - Other IDs ("upload", etc.) → require auth (no DB row to verify ownership)
 router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> => {
   const { id } = req.params as { id: string };
-  const gridHash = (req.query["h"] as string | undefined) ?? "";
-  const waterTypeRaw = (req.query["w"] as string | undefined) ?? "";
 
-  // Accept either the legacy 8-char FNV-1a hex (for clients on older bundles
-  // mid-rollout) or the new 64-char SHA-256 hex produced by the upgraded
-  // client-side `hashGrid`. Both are valid lowercase-hex fingerprints; the
-  // server then namespaces by waterType inside `zoneCacheKey`.
-  const GRID_HASH_RE = /^([a-f0-9]{8}|[a-f0-9]{64})$/;
-  if (!gridHash || !GRID_HASH_RE.test(gridHash)) {
-    res.status(400).json({
-      error: "invalid_param",
-      details: "?h= must be a lowercase hex string (8 or 64 chars)",
-    });
+  // Validate ?h= and ?w= via Zod — rejects array injection and unknown values.
+  const parsedQuery = ZonesQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
+    res.status(400).json({ error: "invalid_param", details });
     return;
   }
-  if (waterTypeRaw !== "saltwater" && waterTypeRaw !== "freshwater") {
-    res
-      .status(400)
-      .json({ error: "invalid_param", details: "?w= must be 'saltwater' or 'freshwater'" });
-    return;
-  }
-  const waterType = waterTypeRaw;
+  const gridHash = parsedQuery.data.h;
+  const waterType = parsedQuery.data.w;
 
   // --- Auth / ownership gate ---
   const isPreset = ALL_PRESET_DATASETS.some((d) => d.id === id);
@@ -866,22 +860,16 @@ router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> =
 //
 // No auth required — land elevation data is public.
 router.get("/terrain/land", asyncHandler(async (req, res): Promise<void> => {
-  const rawBbox = String(req.query["bbox"] ?? "");
-  const rawSize = req.query["size"];
-
-  const parts = rawBbox.split(",").map((s) => parseFloat(s.trim()));
-  if (
-    parts.length !== 4 ||
-    parts.some((v) => !isFinite(v))
-  ) {
-    res.status(400).json({
-      error: "invalid_param",
-      details: 'bbox must be "minLon,minLat,maxLon,maxLat" (four finite numbers)',
-    });
+  // Validate bbox (string, not array) and size via Zod — rejects array injection
+  // and non-finite values before any manual parseFloat.
+  const parsedQuery = TerrainLandQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
+    res.status(400).json({ error: "invalid_param", details });
     return;
   }
 
-  const [minLon, minLat, maxLon, maxLat] = parts as [number, number, number, number];
+  const [minLon, minLat, maxLon, maxLat] = parsedQuery.data.bbox;
 
   if (
     minLon >= maxLon || minLat >= maxLat ||
@@ -895,7 +883,7 @@ router.get("/terrain/land", asyncHandler(async (req, res): Promise<void> => {
     return;
   }
 
-  const rawSizeNum = rawSize !== undefined ? parseInt(String(rawSize), 10) : 128;
+  const rawSizeNum = parsedQuery.data.size;
   const gridSize = Math.max(32, Math.min(256, isNaN(rawSizeNum) ? 128 : rawSizeNum));
 
   try {
@@ -921,19 +909,16 @@ router.get("/terrain/land", asyncHandler(async (req, res): Promise<void> => {
 // Returns image/png on success; 502 on upstream failure (client falls back to
 // procedural colour ramp gracefully).
 router.get("/terrain/satellite-tile", asyncHandler(async (req, res): Promise<void> => {
-  const rawBbox = String(req.query["bbox"] ?? "");
-  const rawSize = req.query["size"];
-
-  const parts = rawBbox.split(",").map((s) => parseFloat(s.trim()));
-  if (parts.length !== 4 || parts.some((v) => !isFinite(v))) {
-    res.status(400).json({
-      error: "invalid_param",
-      details: 'bbox must be "minLon,minLat,maxLon,maxLat" (four finite numbers)',
-    });
+  // Validate bbox (string, not array) and size via Zod — rejects array injection
+  // and non-finite values before any manual parseFloat.
+  const parsedQuery = TerrainSatelliteQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
+    res.status(400).json({ error: "invalid_param", details });
     return;
   }
 
-  const [minLon, minLat, maxLon, maxLat] = parts as [number, number, number, number];
+  const [minLon, minLat, maxLon, maxLat] = parsedQuery.data.bbox;
 
   // An antimeridian-crossing bbox has minLon > maxLon (e.g. Bering Sea:
   // minLon=170, maxLon=-160). The lib/satelliteTile.ts helper handles the
@@ -955,7 +940,7 @@ router.get("/terrain/satellite-tile", asyncHandler(async (req, res): Promise<voi
     return;
   }
 
-  const rawSizeNum = rawSize !== undefined ? parseInt(String(rawSize), 10) : 512;
+  const rawSizeNum = parsedQuery.data.size;
   const size = Math.max(64, Math.min(1024, isNaN(rawSizeNum) ? 512 : rawSizeNum));
 
   try {
@@ -980,20 +965,20 @@ router.get("/terrain/satellite-tile", asyncHandler(async (req, res): Promise<voi
 //
 // Max bbox: 10° × 10°.  Returns 400 for out-of-range params.
 router.get("/terrain/download/info", requireAuth, asyncHandler(async (req, res): Promise<void> => {
-  const north = parseFloat(String(req.query["north"] ?? ""));
-  const south = parseFloat(String(req.query["south"] ?? ""));
-  const east  = parseFloat(String(req.query["east"] ?? ""));
-  const west  = parseFloat(String(req.query["west"] ?? ""));
-
-  if (
-    !isFinite(north) || !isFinite(south) || !isFinite(east) || !isFinite(west) ||
-    north <= south || east <= west ||
-    north > 90 || south < -90 || east > 180 || west < -180
-  ) {
-    res.status(400).json({ error: "invalid_bbox", details: "Provide valid north, south, east, west query params." });
+  // Validate via Zod — rejects array injection on any cardinal param (e.g.
+  // ?north[]=45&north[]=50 would previously resolve to parseFloat("45,50")=45).
+  const parsedQuery = TerrainDownloadInfoQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
+    res.status(400).json({ error: "invalid_bbox", details });
     return;
   }
 
+  const { north, south, east, west } = parsedQuery.data;
+
+  // TerrainDownloadInfoQuerySchema already enforces north>south, east>west,
+  // and ≤10° span on each axis via .refine(); this guard is kept as a
+  // belt-and-suspenders check with a human-readable error message.
   const dLon = east - west;
   const dLat = north - south;
   if (dLon > 10 || dLat > 10) {
