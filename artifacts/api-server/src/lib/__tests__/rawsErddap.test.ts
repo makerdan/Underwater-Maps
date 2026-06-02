@@ -229,7 +229,12 @@ describe("fetchRawsObservation — ERDDAP failure with DB fallback", () => {
 
 describe("fetchRawsObservation — stale boundary (exactly 10 min)", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     fetchMock.mockRejectedValue(new Error("ERDDAP unreachable"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("marks as not-stale when age is exactly 10 min (boundary is exclusive)", async () => {
