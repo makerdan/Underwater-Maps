@@ -154,13 +154,7 @@ router.get("/datasets/catalog/search", asyncHandler(async (req, res): Promise<vo
     });
     return;
   }
-  const q = queryParsed.data.q;
-  const dataType = req.query["dataType"] as string | undefined;
-  const waterType = req.query["waterType"] as string | undefined;
-  const minLon = req.query["minLon"] !== undefined ? Number(req.query["minLon"]) : undefined;
-  const minLat = req.query["minLat"] !== undefined ? Number(req.query["minLat"]) : undefined;
-  const maxLon = req.query["maxLon"] !== undefined ? Number(req.query["maxLon"]) : undefined;
-  const maxLat = req.query["maxLat"] !== undefined ? Number(req.query["maxLat"]) : undefined;
+  const { q, dataType, waterType, minLon, minLat, maxLon, maxLat } = queryParsed.data;
 
   const results = await searchCatalog({ q, dataType, waterType, minLon, minLat, maxLon, maxLat });
   res.json(

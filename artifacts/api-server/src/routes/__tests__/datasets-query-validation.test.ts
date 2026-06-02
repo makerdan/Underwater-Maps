@@ -13,6 +13,172 @@ import { describe, it, expect } from "vitest";
 import { CatalogSearchQuerySchema, DatasetsQuerySchema } from "../schemas.js";
 
 // ---------------------------------------------------------------------------
+// CatalogSearchQuerySchema — dataType
+// ---------------------------------------------------------------------------
+
+describe("CatalogSearchQuerySchema — dataType filter", () => {
+  const valid = ["bathymetry", "substrate", "habitat", "lidar", "chart"] as const;
+
+  for (const v of valid) {
+    it(`accepts dataType=${v}`, () => {
+      const result = CatalogSearchQuerySchema.safeParse({ dataType: v });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.dataType).toBe(v);
+    });
+  }
+
+  it("accepts missing dataType (optional)", () => {
+    const result = CatalogSearchQuerySchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.dataType).toBeUndefined();
+  });
+
+  it("rejects unknown dataType value 'sonar'", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ dataType: "sonar" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects empty string for dataType", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ dataType: "" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects array injection for dataType", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ dataType: ["bathymetry", "lidar"] });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects single-element array injection for dataType", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ dataType: ["bathymetry"] });
+    expect(result.success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CatalogSearchQuerySchema — waterType
+// ---------------------------------------------------------------------------
+
+describe("CatalogSearchQuerySchema — waterType filter", () => {
+  it("accepts waterType=saltwater", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ waterType: "saltwater" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.waterType).toBe("saltwater");
+  });
+
+  it("accepts waterType=freshwater", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ waterType: "freshwater" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.waterType).toBe("freshwater");
+  });
+
+  it("accepts missing waterType (optional)", () => {
+    const result = CatalogSearchQuerySchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.waterType).toBeUndefined();
+  });
+
+  it("rejects unknown waterType value 'brackish'", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ waterType: "brackish" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects array injection for waterType", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ waterType: ["saltwater", "freshwater"] });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects single-element array injection for waterType", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ waterType: ["saltwater"] });
+    expect(result.success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CatalogSearchQuerySchema — bbox coordinates
+// ---------------------------------------------------------------------------
+
+describe("CatalogSearchQuerySchema — bbox coordinates", () => {
+  const validBbox = { minLon: "-120", minLat: "30", maxLon: "-110", maxLat: "40" };
+
+  it("accepts valid bbox string coordinates (coerced from query strings)", () => {
+    const result = CatalogSearchQuerySchema.safeParse(validBbox);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.minLon).toBe(-120);
+      expect(result.data.minLat).toBe(30);
+      expect(result.data.maxLon).toBe(-110);
+      expect(result.data.maxLat).toBe(40);
+    }
+  });
+
+  it("accepts numeric bbox values directly", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ minLon: -180, minLat: -90, maxLon: 180, maxLat: 90 });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts bbox at boundary extremes (±180 lon, ±90 lat)", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ minLon: "-180", minLat: "-90", maxLon: "180", maxLat: "90" });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts missing all bbox params (all optional)", () => {
+    const result = CatalogSearchQuerySchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.minLon).toBeUndefined();
+      expect(result.data.minLat).toBeUndefined();
+      expect(result.data.maxLon).toBeUndefined();
+      expect(result.data.maxLat).toBeUndefined();
+    }
+  });
+
+  it("rejects minLon out of range (< -180)", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ ...validBbox, minLon: "-181" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects maxLon out of range (> 180)", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ ...validBbox, maxLon: "181" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects minLat out of range (< -90)", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ ...validBbox, minLat: "-91" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects maxLat out of range (> 90)", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ ...validBbox, maxLat: "91" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects non-numeric string for minLon", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ ...validBbox, minLon: "abc" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects Infinity for maxLat", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ ...validBbox, maxLat: Infinity });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects NaN for minLat", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ ...validBbox, minLat: NaN });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects array injection for minLon", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ ...validBbox, minLon: ["-120", "-130"] });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects array injection for maxLat", () => {
+    const result = CatalogSearchQuerySchema.safeParse({ ...validBbox, maxLat: ["40", "50"] });
+    expect(result.success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // CatalogSearchQuerySchema
 // ---------------------------------------------------------------------------
 

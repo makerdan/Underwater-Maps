@@ -31,12 +31,52 @@ export type LatLonQuery = z.infer<typeof LatLonQuerySchema>;
  * `q` is optional but when provided must be a non-empty string capped at 500
  * characters. Multi-value injection (?q[]=a&q[]=b) is rejected because Zod
  * z.string() rejects non-string values.
+ * `dataType` and `waterType` are validated as enums.
+ * Bbox coordinates are coerced from strings and validated as finite numbers
+ * within geographic range. Array injection is rejected because z.coerce.number()
+ * applied to an array produces NaN, which fails .finite().
  */
 export const CatalogSearchQuerySchema = z.object({
   q: z
     .string({ invalid_type_error: "q must be a string" })
     .min(1, "q must not be empty")
     .max(500, "q must not exceed 500 characters")
+    .optional(),
+  dataType: z
+    .enum(["bathymetry", "substrate", "habitat", "lidar", "chart"], {
+      invalid_type_error: "dataType must be a string",
+      message: "dataType must be one of: bathymetry, substrate, habitat, lidar, chart",
+    })
+    .optional(),
+  waterType: z
+    .enum(["saltwater", "freshwater"], {
+      invalid_type_error: "waterType must be a string",
+      message: "waterType must be 'saltwater' or 'freshwater'",
+    })
+    .optional(),
+  minLon: z.coerce
+    .number({ invalid_type_error: "minLon must be a valid number" })
+    .finite("minLon must be a finite number")
+    .gte(-180, "minLon must be between -180 and 180")
+    .lte(180, "minLon must be between -180 and 180")
+    .optional(),
+  minLat: z.coerce
+    .number({ invalid_type_error: "minLat must be a valid number" })
+    .finite("minLat must be a finite number")
+    .gte(-90, "minLat must be between -90 and 90")
+    .lte(90, "minLat must be between -90 and 90")
+    .optional(),
+  maxLon: z.coerce
+    .number({ invalid_type_error: "maxLon must be a valid number" })
+    .finite("maxLon must be a finite number")
+    .gte(-180, "maxLon must be between -180 and 180")
+    .lte(180, "maxLon must be between -180 and 180")
+    .optional(),
+  maxLat: z.coerce
+    .number({ invalid_type_error: "maxLat must be a valid number" })
+    .finite("maxLat must be a finite number")
+    .gte(-90, "maxLat must be between -90 and 90")
+    .lte(90, "maxLat must be between -90 and 90")
     .optional(),
 });
 
