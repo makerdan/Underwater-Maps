@@ -1122,6 +1122,42 @@ router.post(
     fileContent = file.buffer.toString("utf8");
   }
 
+  const TEXT_EXTENSIONS = new Set(["csv", "xyz", "txt"]);
+  // Strip the outer .gz suffix before deriving the inner extension so that
+  // text formats (csv/xyz/txt) compressed as .gz are correctly routed to
+  // parseXyzCsv with the already-decompressed fileContent.
+  const baseFileName = fileName.toLowerCase().endsWith(".gz") ? fileName.slice(0, -3) : fileName;
+  const fileExt = baseFileName.toLowerCase().split(".").pop() ?? "";
+
+  // Parse the file BEFORE validating resolution so that parse failures (e.g.
+  // GPX with no <ele>, NMEA with no depth sentences) return 422 parse_error
+  // rather than falling through to the 400 "resolution required" check below.
+  let points;
+  try {
+    if (TEXT_EXTENSIONS.has(fileExt)) {
+      points = parseXyzCsv(fileContent, baseFileName);
+    } else {
+      // For .gz-wrapped binary formats (LAS, GeoTIFF, NetCDF, BAG), pass the
+      // decompressed Buffer and the inner filename (baseFileName, without the
+      // .gz suffix) so the parser routes on the real extension and receives
+      // uncorrupted binary content.
+      const bufferForParser = decompressedBuffer ?? file.buffer;
+      points = await parseUploadedFile(bufferForParser, baseFileName);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Parse error";
+    res.status(422).json({ error: "parse_error", details: msg });
+    return;
+  }
+
+  if (points.length < 10) {
+    res.status(400).json({
+      error: "insufficient_data",
+      details: "File must contain at least 10 valid (lon, lat, depth) rows",
+    });
+    return;
+  }
+
   // Validate numeric body params via Zod so malformed values surface as a
   // clear 400 instead of falling through `parseInt` → `NaN` and producing a
   // 5xx from a downstream grid call.
@@ -1154,38 +1190,6 @@ router.post(
   // resolution takes priority; gridResolution is the legacy-client fallback.
   const resolution = (paramsParsed.data.resolution ?? paramsParsed.data.gridResolution) as number;
 
-  const TEXT_EXTENSIONS = new Set(["csv", "xyz", "txt"]);
-  // Strip the outer .gz suffix before deriving the inner extension so that
-  // text formats (csv/xyz/txt) compressed as .gz are correctly routed to
-  // parseXyzCsv with the already-decompressed fileContent.
-  const baseFileName = fileName.toLowerCase().endsWith(".gz") ? fileName.slice(0, -3) : fileName;
-  const fileExt = baseFileName.toLowerCase().split(".").pop() ?? "";
-
-  let points;
-  try {
-    if (TEXT_EXTENSIONS.has(fileExt)) {
-      points = parseXyzCsv(fileContent, baseFileName);
-    } else {
-      // For .gz-wrapped binary formats (LAS, GeoTIFF, NetCDF, BAG), pass the
-      // decompressed Buffer and the inner filename (baseFileName, without the
-      // .gz suffix) so the parser routes on the real extension and receives
-      // uncorrupted binary content.
-      const bufferForParser = decompressedBuffer ?? file.buffer;
-      points = await parseUploadedFile(bufferForParser, baseFileName);
-    }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Parse error";
-    res.status(422).json({ error: "parse_error", details: msg });
-    return;
-  }
-
-  if (points.length < 10) {
-    res.status(400).json({
-      error: "insufficient_data",
-      details: "File must contain at least 10 valid (lon, lat, depth) rows",
-    });
-    return;
-  }
   const datasetName = baseFileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
   const smoothing = await getSmoothingPreference(req);
 
