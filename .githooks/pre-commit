@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+# .githooks/pre-commit
+#
+# If lib/api-spec/openapi.yaml is part of this commit, regenerate the API
+# route tables in README.md and replit.md and stage the updated files so the
+# commit stays consistent without any extra manual step.
+
+set -e
+
+# Check whether openapi.yaml is staged
+if git diff --cached --name-only | grep -q "lib/api-spec/openapi.yaml"; then
+  echo "[pre-commit] openapi.yaml changed — regenerating API docs…"
+  node scripts/generate-api-docs.mjs
+  git add README.md replit.md
+  echo "[pre-commit] README.md and replit.md updated and staged."
+fi
