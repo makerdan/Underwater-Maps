@@ -2642,6 +2642,25 @@ export const ListGithubReposResponse = zod.array(ListGithubReposResponseItem)
 
 
 /**
+ * Returns the file content (or directory listing) at the given path in the repository. Optionally accepts a `ref` query parameter to specify a branch or commit SHA.
+ * @summary Read a file or list a directory from a GitHub repository
+ */
+export const GetGithubFileContentsParams = zod.object({
+  "owner": zod.coerce.string(),
+  "repo": zod.coerce.string(),
+  "path": zod.coerce.string()
+})
+
+export const GetGithubFileContentsQueryParams = zod.object({
+  "ref": zod.coerce.string().optional().describe('Branch name or commit SHA to read from')
+})
+
+export const GetGithubFileContentsResponse = zod.object({
+
+}).passthrough()
+
+
+/**
  * Creates or updates a file. Requires a commit message, base64-encoded content, and optionally the current blob SHA (for updates) and a branch name.
  * @summary Create or update a file in a GitHub repository
  */
@@ -2659,6 +2678,27 @@ export const PutGithubFileContentsBody = zod.object({
 })
 
 export const PutGithubFileContentsResponse = zod.object({
+
+}).passthrough()
+
+
+/**
+ * Deletes the file at the given path. Requires the current blob SHA and a commit message. Optionally accepts a branch name.
+ * @summary Delete a file from a GitHub repository
+ */
+export const DeleteGithubFileContentsParams = zod.object({
+  "owner": zod.coerce.string(),
+  "repo": zod.coerce.string(),
+  "path": zod.coerce.string()
+})
+
+export const DeleteGithubFileContentsBody = zod.object({
+  "message": zod.string().describe('Commit message'),
+  "sha": zod.string().describe('Current blob SHA of the file to delete'),
+  "branch": zod.string().optional().describe('Target branch (defaults to repo default branch)')
+})
+
+export const DeleteGithubFileContentsResponse = zod.object({
 
 }).passthrough()
 

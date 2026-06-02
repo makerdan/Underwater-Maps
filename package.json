@@ -19,6 +19,7 @@
     "check:docs-stale": "node scripts/generate-api-docs.mjs --check",
     "scaffold:catalog-tests": "node scripts/scaffold-catalog-tests.mjs",
     "check:catalog-coverage": "node scripts/scaffold-catalog-tests.mjs --check",
+    "check:routes-documented": "pnpm --filter @workspace/api-server exec vitest run src/__tests__/routes-documented.test.ts",
     "test-all": "pnpm run typecheck && pnpm run lint && pnpm run test:unit && pnpm run check:docs-stale"
   },
   "private": true,

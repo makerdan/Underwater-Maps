@@ -2637,6 +2637,46 @@ paths:
                 $ref: "#/components/schemas/ApiError"
 
   /github/repos/{owner}/{repo}/contents/{path}:
+    get:
+      operationId: getGithubFileContents
+      tags: [github]
+      summary: Read a file or list a directory from a GitHub repository
+      description: Returns the file content (or directory listing) at the given path in the repository. Optionally accepts a `ref` query parameter to specify a branch or commit SHA.
+      parameters:
+        - in: path
+          name: owner
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: repo
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: path
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: ref
+          required: false
+          description: Branch name or commit SHA to read from
+          schema:
+            type: string
+      responses:
+        "200":
+          description: File content or directory listing
+          content:
+            application/json:
+              schema:
+                type: object
+        "500":
+          description: GitHub API error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
     put:
       operationId: putGithubFileContents
       tags: [github]
@@ -2681,6 +2721,63 @@ paths:
       responses:
         "200":
           description: File created or updated
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "500":
+          description: GitHub API error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteGithubFileContents
+      tags: [github]
+      summary: Delete a file from a GitHub repository
+      description: Deletes the file at the given path. Requires the current blob SHA and a commit message. Optionally accepts a branch name.
+      parameters:
+        - in: path
+          name: owner
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: repo
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message, sha]
+              properties:
+                message:
+                  type: string
+                  description: Commit message
+                sha:
+                  type: string
+                  description: Current blob SHA of the file to delete
+                branch:
+                  type: string
+                  description: Target branch (defaults to repo default branch)
+      responses:
+        "200":
+          description: File deleted
           content:
             application/json:
               schema:

@@ -403,7 +403,9 @@ Authentication is handled by **Clerk** across all surfaces:
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/github/repos` | List GitHub repositories accessible to the configured PAT |
+| GET | `/github/repos/:owner/:repo/contents/:path` | Read a file or list a directory from a GitHub repository |
 | PUT | `/github/repos/:owner/:repo/contents/:path` | Create or update a file in a GitHub repository |
+| DELETE | `/github/repos/:owner/:repo/contents/:path` | Delete a file from a GitHub repository |
 | POST | `/github/repos/:owner/:repo/actions/workflows/:workflow_id/dispatches` | Trigger a GitHub Actions workflow_dispatch event |
 | GET | `/github/repos/:owner/:repo/actions/runs` | List GitHub Actions workflow runs for a repository |
 | GET | `/github/repos/:owner/:repo/actions/runs/:run_id` | Get a single GitHub Actions workflow run |

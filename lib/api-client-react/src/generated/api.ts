@@ -34,6 +34,8 @@ import type {
   DeepHealthStatus,
   DeleteAccount200,
   DeleteDatasetFolderBody,
+  DeleteGithubFileContents200,
+  DeleteGithubFileContentsBody,
   DeleteMarkersMine200,
   EfhFeatureCollection,
   ExportUserData200,
@@ -47,6 +49,8 @@ import type {
   GetEfhParams,
   GetGcsJobStatus200,
   GetGcsJobStatusParams,
+  GetGithubFileContents200,
+  GetGithubFileContentsParams,
   GetIntertidalSpotsParams,
   GetMarkersParams,
   GetNceiSearchParams,
@@ -5951,6 +5955,106 @@ export function useListGithubRepos<TData = Awaited<ReturnType<typeof listGithubR
 
 
 
+export const getGetGithubFileContentsUrl = (owner: string,
+    repo: string,
+    path: string,
+    params?: GetGithubFileContentsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/github/repos/${owner}/${repo}/contents/${path}?${stringifiedParams}` : `/api/github/repos/${owner}/${repo}/contents/${path}`
+}
+
+/**
+ * Returns the file content (or directory listing) at the given path in the repository. Optionally accepts a `ref` query parameter to specify a branch or commit SHA.
+ * @summary Read a file or list a directory from a GitHub repository
+ */
+export const getGithubFileContents = async (owner: string,
+    repo: string,
+    path: string,
+    params?: GetGithubFileContentsParams, options?: RequestInit): Promise<GetGithubFileContents200> => {
+
+  return customFetch<GetGithubFileContents200>(getGetGithubFileContentsUrl(owner,repo,path,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGithubFileContentsQueryKey = (owner: string,
+    repo: string,
+    path: string,
+    params?: GetGithubFileContentsParams,) => {
+    return [
+    `/api/github/repos/${owner}/${repo}/contents/${path}`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetGithubFileContentsQueryOptions = <TData = Awaited<ReturnType<typeof getGithubFileContents>>, TError = ErrorType<ApiError>>(owner: string,
+    repo: string,
+    path: string,
+    params?: GetGithubFileContentsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGithubFileContents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGithubFileContentsQueryKey(owner,repo,path,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGithubFileContents>>> = ({ signal }) => getGithubFileContents(owner,repo,path,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(owner && repo && path), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGithubFileContents>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGithubFileContentsQueryResult = NonNullable<Awaited<ReturnType<typeof getGithubFileContents>>>
+export type GetGithubFileContentsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Read a file or list a directory from a GitHub repository
+ */
+
+export function useGetGithubFileContents<TData = Awaited<ReturnType<typeof getGithubFileContents>>, TError = ErrorType<ApiError>>(
+ owner: string,
+    repo: string,
+    path: string,
+    params?: GetGithubFileContentsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGithubFileContents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGithubFileContentsQueryOptions(owner,repo,path,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
 export const getPutGithubFileContentsUrl = (owner: string,
     repo: string,
     path: string,) => {
@@ -6026,6 +6130,83 @@ export const usePutGithubFileContents = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getPutGithubFileContentsMutationOptions(options));
+    }
+
+export const getDeleteGithubFileContentsUrl = (owner: string,
+    repo: string,
+    path: string,) => {
+
+
+
+
+  return `/api/github/repos/${owner}/${repo}/contents/${path}`
+}
+
+/**
+ * Deletes the file at the given path. Requires the current blob SHA and a commit message. Optionally accepts a branch name.
+ * @summary Delete a file from a GitHub repository
+ */
+export const deleteGithubFileContents = async (owner: string,
+    repo: string,
+    path: string,
+    deleteGithubFileContentsBody: DeleteGithubFileContentsBody, options?: RequestInit): Promise<DeleteGithubFileContents200> => {
+
+  return customFetch<DeleteGithubFileContents200>(getDeleteGithubFileContentsUrl(owner,repo,path),
+  {
+    ...options,
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      deleteGithubFileContentsBody,)
+  }
+);}
+
+
+
+
+export const getDeleteGithubFileContentsMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGithubFileContents>>, TError,{owner: string;repo: string;path: string;data: BodyType<DeleteGithubFileContentsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteGithubFileContents>>, TError,{owner: string;repo: string;path: string;data: BodyType<DeleteGithubFileContentsBody>}, TContext> => {
+
+const mutationKey = ['deleteGithubFileContents'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteGithubFileContents>>, {owner: string;repo: string;path: string;data: BodyType<DeleteGithubFileContentsBody>}> = (props) => {
+          const {owner,repo,path,data} = props ?? {};
+
+          return  deleteGithubFileContents(owner,repo,path,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteGithubFileContentsMutationResult = NonNullable<Awaited<ReturnType<typeof deleteGithubFileContents>>>
+    export type DeleteGithubFileContentsMutationBody = BodyType<DeleteGithubFileContentsBody>
+    export type DeleteGithubFileContentsMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Delete a file from a GitHub repository
+ */
+export const useDeleteGithubFileContents = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGithubFileContents>>, TError,{owner: string;repo: string;path: string;data: BodyType<DeleteGithubFileContentsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteGithubFileContents>>,
+        TError,
+        {owner: string;repo: string;path: string;data: BodyType<DeleteGithubFileContentsBody>},
+        TContext
+      > => {
+      return useMutation(getDeleteGithubFileContentsMutationOptions(options));
     }
 
 export const getQueryTerrainUrl = () => {

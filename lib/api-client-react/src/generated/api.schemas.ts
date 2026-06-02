@@ -2582,6 +2582,15 @@ export type DeleteAccount200 = {
 
 export type ListGithubRepos200Item = { [key: string]: unknown };
 
+export type GetGithubFileContentsParams = {
+/**
+ * Branch name or commit SHA to read from
+ */
+ref?: string;
+};
+
+export type GetGithubFileContents200 = { [key: string]: unknown };
+
 export type PutGithubFileContentsBody = {
   /** Commit message */
   message: string;
@@ -2594,6 +2603,17 @@ export type PutGithubFileContentsBody = {
 };
 
 export type PutGithubFileContents200 = { [key: string]: unknown };
+
+export type DeleteGithubFileContentsBody = {
+  /** Commit message */
+  message: string;
+  /** Current blob SHA of the file to delete */
+  sha: string;
+  /** Target branch (defaults to repo default branch) */
+  branch?: string;
+};
+
+export type DeleteGithubFileContents200 = { [key: string]: unknown };
 
 export type QueryTerrainBodyContext = {
   datasetName?: string;
