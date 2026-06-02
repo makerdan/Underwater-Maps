@@ -1,39 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { DEPTH_BAND_BOUNDARIES_FT, OCEAN_MAX_DEPTH_FT } from "../lib/colormap";
 
-vi.mock("three", () => {
-  class Color {
-    r: number;
-    g: number;
-    b: number;
-    constructor(hex?: string) {
-      if (hex) {
-        const n = parseInt(hex.replace("#", ""), 16);
-        this.r = ((n >> 16) & 0xff) / 255;
-        this.g = ((n >> 8) & 0xff) / 255;
-        this.b = (n & 0xff) / 255;
-      } else {
-        this.r = 0;
-        this.g = 0;
-        this.b = 0;
-      }
-    }
-    clone() {
-      const c = new Color();
-      c.r = this.r;
-      c.g = this.g;
-      c.b = this.b;
-      return c;
-    }
-    lerpColors(a: Color, b: Color, alpha: number) {
-      this.r = a.r + (b.r - a.r) * alpha;
-      this.g = a.g + (b.g - a.g) * alpha;
-      this.b = a.b + (b.b - a.b) * alpha;
-      return this;
-    }
-  }
-  return { Color };
-});
+// Shared stub — implementations live in src/__tests__/mocks/three.ts,
+// wired via __mocks__/three.ts so no factory is needed here.
+vi.mock("three");
 
 import { getColormap } from "../lib/colormap";
 import {

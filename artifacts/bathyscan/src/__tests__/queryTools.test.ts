@@ -2,59 +2,9 @@ import { describe, it, expect, vi } from "vitest";
 import { computeStatistic, computeSlopeAttribute } from "../lib/terrain";
 import type { TerrainData } from "@workspace/api-client-react";
 
-// Mock three (required by terrain.ts → terrainShader imports, etc.)
-vi.mock("three", () => {
-  class Vector3 {
-    x = 0; y = 0; z = 0;
-    constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
-    normalize() { return this; }
-    copy(v: Vector3) { this.x = v.x; this.y = v.y; this.z = v.z; return this; }
-  }
-  class Color {
-    r = 0; g = 0; b = 0;
-    constructor(hex?: number) {
-      if (hex !== undefined) {
-        this.r = ((hex >> 16) & 0xff) / 255;
-        this.g = ((hex >> 8) & 0xff) / 255;
-        this.b = (hex & 0xff) / 255;
-      }
-    }
-    clone() { const c = new Color(); c.r = this.r; c.g = this.g; c.b = this.b; return c; }
-    lerpColors(a: Color, b: Color, alpha: number) {
-      this.r = a.r + (b.r - a.r) * alpha;
-      this.g = a.g + (b.g - a.g) * alpha;
-      this.b = a.b + (b.b - a.b) * alpha;
-      return this;
-    }
-  }
-  class BufferAttribute {
-    array: Float32Array; itemSize: number;
-    constructor(arr: Float32Array, itemSize: number) { this.array = arr; this.itemSize = itemSize; }
-  }
-  class PlaneGeometry {
-    attributes: Record<string, { array: Float32Array }> = {};
-    constructor(w: number, h: number, segW: number, segH: number) {
-      const vX = segW + 1; const vZ = segH + 1;
-      const pos = new Float32Array(vX * vZ * 3);
-      for (let r = 0; r < vZ; r++) for (let c = 0; c < vX; c++) {
-        const i = (r * vX + c) * 3;
-        pos[i] = (c / segW - 0.5) * w; pos[i + 1] = 0; pos[i + 2] = (r / segH - 0.5) * h;
-      }
-      this.attributes = { position: { array: pos } };
-    }
-    rotateX(_a: number) { return this; }
-    setAttribute(_n: string, _a: BufferAttribute) {}
-    computeVertexNormals() {}
-  }
-  class ShaderMaterial {
-    uniforms: Record<string, { value: unknown }> = {};
-    constructor(opts: { uniforms?: Record<string, { value: unknown }> } = {}) {
-      this.uniforms = opts.uniforms ?? {};
-    }
-    dispose() {}
-  }
-  return { Color, Vector3, BufferAttribute, PlaneGeometry, ShaderMaterial, DoubleSide: 2 };
-});
+// Shared stub — implementations live in src/__tests__/mocks/three.ts,
+// wired via __mocks__/three.ts so no factory is needed here.
+vi.mock("three");
 
 // ---------------------------------------------------------------------------
 // Test grid factory

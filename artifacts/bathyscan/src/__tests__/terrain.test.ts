@@ -1,56 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("three", () => {
-  class Color {
-    r = 0; g = 0; b = 0;
-    constructor(hex?: string) {
-      if (hex) {
-        const n = parseInt(hex.replace("#", ""), 16);
-        this.r = ((n >> 16) & 0xff) / 255;
-        this.g = ((n >> 8) & 0xff) / 255;
-        this.b = (n & 0xff) / 255;
-      }
-    }
-    clone() { const c = new Color(); c.r = this.r; c.g = this.g; c.b = this.b; return c; }
-    lerpColors(a: Color, b: Color, alpha: number) {
-      this.r = a.r + (b.r - a.r) * alpha;
-      this.g = a.g + (b.g - a.g) * alpha;
-      this.b = a.b + (b.b - a.b) * alpha;
-      return this;
-    }
-  }
-
-  class BufferAttribute {
-    array: Float32Array;
-    itemSize: number;
-    constructor(arr: Float32Array, itemSize: number) { this.array = arr; this.itemSize = itemSize; }
-  }
-
-  class PlaneGeometry {
-    attributes: Record<string, { array: Float32Array }> = {};
-    constructor(w: number, h: number, segW: number, segH: number) {
-      const vertsX = segW + 1;
-      const vertsZ = segH + 1;
-      const count = vertsX * vertsZ;
-      const pos = new Float32Array(count * 3);
-      // lay out a flat grid at Y=0
-      for (let r = 0; r < vertsZ; r++) {
-        for (let c = 0; c < vertsX; c++) {
-          const i = (r * vertsX + c) * 3;
-          pos[i] = (c / segW - 0.5) * w;
-          pos[i + 1] = 0;
-          pos[i + 2] = (r / segH - 0.5) * h;
-        }
-      }
-      this.attributes = { position: { array: pos } };
-    }
-    rotateX(_angle: number) { return this; }
-    setAttribute(_name: string, _attr: BufferAttribute) {}
-    computeVertexNormals() {}
-  }
-
-  return { Color, BufferAttribute, PlaneGeometry, BufferGeometry: class {} };
-});
+// Shared stub — implementations live in src/__tests__/mocks/three.ts,
+// wired via __mocks__/three.ts so no factory is needed here.
+vi.mock("three");
 
 // zoneMap module has no three.js dep — mock as passthrough
 vi.mock("../lib/zoneMap", () => ({

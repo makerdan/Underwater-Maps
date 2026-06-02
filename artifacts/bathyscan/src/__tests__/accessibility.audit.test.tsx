@@ -34,91 +34,12 @@ import { useCameraStore } from "@/lib/cameraStore";
 // Mocks
 // ---------------------------------------------------------------------------
 
-// Stub the heavy Three.js module so that importing TourScene (which pulls in
-// the entire THREE namespace) resolves in microseconds instead of ~3.9 s.
-// vi.mock calls are hoisted by vitest, so even dynamic imports inside test
-// bodies receive the stub.
-vi.mock("three", () => {
-  class Stub {
-    r = 0; g = 0; b = 0;
-    set() { return this; }
-    copy() { return this; }
-    clone() { return this; }
-    dispose() {}
-    lerpColors() { return this; }
-    computeVertexNormals() {}
-    rotateX() { return this; }
-    setAttribute() {}
-    setDrawRange() {}
-    normalizeNormals() {}
-    getPoints() { return []; }
-    attributes: Record<string, { array: Float32Array }> = {};
-  }
-  return {
-    Color: Stub,
-    Vector3: Stub,
-    Vector2: Stub,
-    Quaternion: Stub,
-    Euler: Stub,
-    Matrix4: Stub,
-    PlaneGeometry: Stub,
-    BufferGeometry: Stub,
-    BufferAttribute: Stub,
-    MeshStandardMaterial: Stub,
-    MeshBasicMaterial: Stub,
-    LineBasicMaterial: Stub,
-    PointsMaterial: Stub,
-    ShaderMaterial: Stub,
-    TextureLoader: Stub,
-    Texture: Stub,
-    Mesh: Stub,
-    Points: Stub,
-    LineSegments: Stub,
-    Line: Stub,
-    Group: Stub,
-    Object3D: Stub,
-    Raycaster: Stub,
-    Sphere: Stub,
-    Box3: Stub,
-    CatmullRomCurve3: class extends Stub { getPoints() { return []; } },
-    DoubleSide: 0,
-    FrontSide: 0,
-    BackSide: 1,
-    AdditiveBlending: 1,
-    NormalBlending: 2,
-    ClampToEdgeWrapping: 1001,
-    RepeatWrapping: 1000,
-    LinearFilter: 1006,
-    SRGBColorSpace: "srgb",
-    NoColorSpace: "",
-    MathUtils: {
-      clamp: (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi),
-      degToRad: (d: number) => (d * Math.PI) / 180,
-      lerp: (a: number, b: number, t: number) => a + (b - a) * t,
-    },
-  };
-});
-
-// Stub @react-three/fiber — TourScene uses Canvas + useThree/useFrame.
-vi.mock("@react-three/fiber", () => ({
-  Canvas: ({ children }: { children: React.ReactNode }) =>
-    React.createElement("div", { "data-testid": "r3f-canvas-stub" }, children),
-  useThree: () => ({
-    camera: { position: { set() {}, copy() {} }, quaternion: { copy() {} }, fov: 60 },
-    gl: { domElement: document.createElement("canvas") },
-    scene: {},
-    size: { width: 800, height: 600 },
-  }),
-  useFrame: () => {},
-  extend: () => {},
-}));
-
-// Stub @react-three/drei — used by some scene components (Billboard, Line, Text).
-vi.mock("@react-three/drei", () => ({
-  Billboard: ({ children }: { children?: React.ReactNode }) => children ?? null,
-  Line: () => null,
-  Text: () => null,
-}));
+// Stub the heavy Three.js / R3F modules so that importing TourScene resolves
+// in microseconds instead of ~3.9 s.  Shared stub implementations live in
+// src/__tests__/mocks/ and are wired via __mocks__/ so no factory is needed.
+vi.mock("three");
+vi.mock("@react-three/fiber");
+vi.mock("@react-three/drei");
 
 // Stub every 3-D component that TourScene imports so vitest skips transforming
 // those files (and their transitive Three.js / R3F dependencies) entirely.
