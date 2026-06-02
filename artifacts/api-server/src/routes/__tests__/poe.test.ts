@@ -97,7 +97,7 @@ describe("POST /api/poe/classify", () => {
       .send({ waterType: "saltwater" });
 
     expect(res.status).toBe(400);
-    expect(res.body).toMatchObject({ error: "missing_field" });
+    expect(res.body).toMatchObject({ error: "invalid_request" });
     expect(fakeCreate).not.toHaveBeenCalled();
   });
 

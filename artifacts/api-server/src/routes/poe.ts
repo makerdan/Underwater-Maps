@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import { z } from "zod";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { promises as fsPromises } from "fs";
 import path from "path";
@@ -846,36 +847,36 @@ async function runTiledClassify(opts: {
   };
 }
 
+const ClassifyBodySchema = z.object({
+  gridBase64: z.string().min(1, "gridBase64 is required"),
+  waterType: z.enum(["saltwater", "freshwater"]).optional().default("saltwater"),
+  datasetId: z.string().optional(),
+  gridHash: z.string().optional(),
+  depths32: z.array(z.number()).optional(),
+  depthsFull: z.array(z.number()).optional(),
+  widthFull: z.number().optional(),
+  heightFull: z.number().optional(),
+});
+
 router.post("/classify", asyncHandler(async (req, res) => {
   const userId = getAuthenticatedUserId(req);
 
+  const parsed = ClassifyBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_request", details: parsed.error.message });
+    return;
+  }
+
   const {
     gridBase64,
-    waterType = "saltwater",
+    waterType,
     datasetId,
     gridHash,
     depths32,
     depthsFull,
     widthFull,
     heightFull,
-  } = req.body as {
-    gridBase64: string;
-    waterType?: "saltwater" | "freshwater";
-    datasetId?: string;
-    /** Client-computed FNV-1a 32-bit hash of the depth grid (hex string). */
-    gridHash?: string;
-    /** Optional 1024-length downsampled depth grid for the heuristic fallback. */
-    depths32?: number[];
-    /** Optional full-resolution depths — triggers the tiled path when present. */
-    depthsFull?: number[];
-    widthFull?: number;
-    heightFull?: number;
-  };
-
-  if (!gridBase64) {
-    res.status(400).json({ error: "missing_field", details: "gridBase64 is required" });
-    return;
-  }
+  } = parsed.data;
 
   // Sample bundled ShoreZone + ENC substrate polygons onto the 32×32 grid so
   // covered cells can be grounded in surveyed substrate (vs. inferred from
@@ -1362,21 +1363,35 @@ type ResponsesOutputItem = {
   content?: Array<{ type: string; text?: string }>;
 };
 
+const PoeHistoryEntrySchema = z.object({
+  role: z.enum(["user", "assistant"], {
+    errorMap: () => ({ message: 'history[].role must be "user" or "assistant"' }),
+  }),
+  content: z.string(),
+});
+
+const PoeQueryBodySchema = z.object({
+  userMessage: z.string().min(1, "userMessage is required"),
+  context: z.record(z.unknown()).optional(),
+  history: z
+    .array(PoeHistoryEntrySchema, { invalid_type_error: "history must be an array" })
+    .max(50, "history must not exceed 50 entries")
+    .optional()
+    .default([]),
+  previousResponseId: z.string().optional(),
+  includeTools: z.boolean().optional().default(true),
+});
+
 router.post("/query", asyncHandler(async (req, res) => {
   const userId = getAuthenticatedUserId(req);
 
-  const { userMessage, context, history = [], previousResponseId, includeTools = true } = req.body as {
-    userMessage: string;
-    context?: Record<string, unknown>;
-    history?: Array<{ role: string; content: string }>;
-    previousResponseId?: string;
-    includeTools?: boolean;
-  };
-
-  if (!userMessage) {
-    res.status(400).json({ error: "missing_field", details: "userMessage is required" });
+  const parsedQuery = PoeQueryBodySchema.safeParse(req.body);
+  if (!parsedQuery.success) {
+    res.status(400).json({ error: "invalid_request", details: parsedQuery.error.message });
     return;
   }
+
+  const { userMessage, context, history, previousResponseId, includeTools } = parsedQuery.data;
 
   const systemPrompt = context
     ? `You are BathyScan's AI guide for underwater terrain exploration. Dataset: "${context["datasetName"] ?? "Unknown"}". Water type: ${context["waterType"] ?? "saltwater"}. Depth range: ${context["minDepth"] ?? 0}m to ${context["maxDepth"] ?? 0}m. Camera position: lon ${context["lon"] ?? 0}, lat ${context["lat"] ?? 0}, depth ${context["cameraDepth"] ?? 0}m. Zone: "${context["zoneName"] ?? "unknown"}". When the user asks to navigate, highlight zones, filter depths, change the view, or adjust settings — call the appropriate tool. Answer geological questions directly in text. Be concise and scientific.`
