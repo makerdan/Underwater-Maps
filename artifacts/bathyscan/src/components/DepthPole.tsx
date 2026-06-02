@@ -43,10 +43,12 @@ export const DepthPole: React.FC<Props> = ({ marker, terrain }) => {
   const midY = bottomY / 2;
 
   const discRef = useRef<THREE.Mesh>(null);
+  const elapsedRef = useRef<number>(0);
 
-  useFrame(({ clock }) => {
+  useFrame((_state, delta) => {
+    elapsedRef.current += delta;
     if (discRef.current) {
-      const s = 0.8 + 0.2 * Math.sin(clock.getElapsedTime() * 2);
+      const s = 0.8 + 0.2 * Math.sin(elapsedRef.current * 2);
       discRef.current.scale.setScalar(s);
     }
   });

@@ -20,10 +20,12 @@ export const GpsMarker: React.FC = () => {
   const { terrain } = useAppState();
   const units = useSettingsStore((s) => s.units);
   const ringRef = useRef<THREE.Mesh>(null);
+  const elapsedRef = useRef<number>(0);
 
-  useFrame(({ clock }) => {
+  useFrame((_state, delta) => {
+    elapsedRef.current += delta;
     if (ringRef.current) {
-      const s = 0.9 + 0.1 * Math.sin(clock.getElapsedTime() * 3);
+      const s = 0.9 + 0.1 * Math.sin(elapsedRef.current * 3);
       ringRef.current.scale.setScalar(s);
     }
   });
