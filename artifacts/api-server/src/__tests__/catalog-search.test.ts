@@ -11,8 +11,15 @@
  * Structural filter tests (waterType, bbox) that need entry shapes not present
  * in EXTRA_CATALOG_ENTRIES (e.g. a freshwater lake) use a single synthetic
  * fixture that does NOT duplicate keyword data from the seeder.
+ *
+ * Fixture freshness: the final describe block verifies that every id in
+ * EXTRA_CATALOG_ENTRIES is referenced at least once in this file. Add a test
+ * for any new catalog entry before adding it to catalogSeeder.ts, or the
+ * freshness check will fail the build.
  */
 
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
 import { describe, it, expect } from "vitest";
 import { scoreEntry, searchCatalog, EXTRA_CATALOG_ENTRIES } from "../lib/catalogSeeder.js";
 import type { CatalogSeedEntry } from "../lib/catalogSeeder.js";
@@ -277,5 +284,168 @@ describe("searchCatalog — Southern Alaska location keyword coverage", () => {
     const results = await searchCatalog({ q: "salmon Homer" }, EXTRA_CATALOG_ENTRIES);
     expect(results.length).toBeGreaterThan(0);
     results.forEach((r) => expect(r.relevanceScore).toBeGreaterThan(0));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Coverage tests for catalog entries not exercised in the sections above.
+//
+// Each test below ensures at least one search query returns the entry so that
+// the fixture-freshness check (at the bottom of this file) remains green.
+// ---------------------------------------------------------------------------
+
+describe("searchCatalog — additional entry coverage", () => {
+  it("returns ncei-dem-global-mosaic for 'DEM global mosaic' query", async () => {
+    const results = await searchCatalog({ q: "DEM global mosaic" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("ncei-dem-global-mosaic");
+  });
+
+  it("returns noaa-efh-alaska-pcod for 'Pacific cod' query", async () => {
+    const results = await searchCatalog({ q: "Pacific cod" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-efh-alaska-pcod");
+  });
+
+  it("returns noaa-enc-se-alaska for 'navigational chart ENC' query", async () => {
+    const results = await searchCatalog({ q: "navigational chart ENC" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-enc-se-alaska");
+  });
+
+  it("returns noaa-efh-alaska-spotted-prawn for 'spotted prawn' query", async () => {
+    const results = await searchCatalog({ q: "spotted prawn" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-efh-alaska-spotted-prawn");
+  });
+
+  it("returns noaa-efh-alaska-turbot for 'turbot' query", async () => {
+    const results = await searchCatalog({ q: "turbot" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-efh-alaska-turbot");
+  });
+
+  it("returns noaa-efh-alaska-rex-sole for 'rex sole' query", async () => {
+    const results = await searchCatalog({ q: "rex sole" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-efh-alaska-rex-sole");
+  });
+
+  it("returns noaa-efh-alaska-tomcod for 'tomcod' query", async () => {
+    const results = await searchCatalog({ q: "tomcod" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-efh-alaska-tomcod");
+  });
+
+  it("returns noaa-efh-alaska-juvenile-rockfish for 'juvenile rockfish' query", async () => {
+    const results = await searchCatalog({ q: "juvenile rockfish" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-efh-alaska-juvenile-rockfish");
+  });
+
+  it("returns noaa-efh-alaska-dungeness-crab for 'Dungeness crab' query", async () => {
+    const results = await searchCatalog({ q: "Dungeness crab" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-efh-alaska-dungeness-crab");
+  });
+
+  it("returns noaa-efh-alaska-tanner-crab for 'Tanner crab' query", async () => {
+    const results = await searchCatalog({ q: "Tanner crab" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-efh-alaska-tanner-crab");
+  });
+
+  it("returns noaa-efh-alaska-black-rockfish for 'black rockfish Sitka' query", async () => {
+    const results = await searchCatalog({ q: "black rockfish Sitka" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-efh-alaska-black-rockfish");
+  });
+
+  it("returns noaa-efh-alaska-quillback-rockfish for 'quillback rockfish' query", async () => {
+    const results = await searchCatalog({ q: "quillback rockfish" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-efh-alaska-quillback-rockfish");
+  });
+
+  it("returns adfg-intertidal-clam-habitat-se-alaska for 'razor clam intertidal' query", async () => {
+    const results = await searchCatalog({ q: "razor clam intertidal" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("adfg-intertidal-clam-habitat-se-alaska");
+  });
+
+  it("returns noaa-shorezone-tidal-pools-se-alaska for 'tidal pool rocky intertidal' query", async () => {
+    const results = await searchCatalog({ q: "tidal pool rocky intertidal" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-shorezone-tidal-pools-se-alaska");
+  });
+
+  it("returns noaa-shorezone-beachcombing-se-alaska for 'beachcombing shoreline' query", async () => {
+    const results = await searchCatalog({ q: "beachcombing shoreline" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("noaa-shorezone-beachcombing-se-alaska");
+  });
+
+  it("returns ncei-crm-s-alaska for 'Coastal Relief Model southern Alaska' query", async () => {
+    const results = await searchCatalog({ q: "Coastal Relief Model southern Alaska" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("ncei-crm-s-alaska");
+  });
+
+  it("returns ncei-crm-kodiak-island for 'Kodiak Island bathymetry' query", async () => {
+    const results = await searchCatalog({ q: "Kodiak Island bathymetry" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("ncei-crm-kodiak-island");
+  });
+
+  it("returns ncei-crm-kachemak-bay for 'Kachemak Bay Homer bathymetry' query", async () => {
+    const results = await searchCatalog({ q: "Kachemak Bay Homer bathymetry" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("ncei-crm-kachemak-bay");
+  });
+
+  it("returns ncei-crm-resurrection-bay for 'Resurrection Bay Seward' query", async () => {
+    const results = await searchCatalog({ q: "Resurrection Bay Seward" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("ncei-crm-resurrection-bay");
+  });
+
+  it("returns ncei-crm-prince-william-sound for 'Prince William Sound Valdez' query", async () => {
+    const results = await searchCatalog({ q: "Prince William Sound Valdez" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("ncei-crm-prince-william-sound");
+  });
+
+  it("returns aoos-intertidal-pow for 'Prince of Wales Island intertidal AOOS' query", async () => {
+    const results = await searchCatalog({ q: "Prince of Wales Island intertidal AOOS" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("aoos-intertidal-pow");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fixture freshness — every EXTRA_CATALOG_ENTRIES id must appear in this file.
+//
+// This guard fails the build when someone adds a new catalog entry without
+// adding at least one test that references its id. Add a test in the section
+// above before adding the entry to catalogSeeder.ts.
+// ---------------------------------------------------------------------------
+
+describe("catalog fixture freshness", () => {
+  it("every EXTRA_CATALOG_ENTRIES id is referenced at least once in this test file", () => {
+    const thisFileSrc = readFileSync(fileURLToPath(import.meta.url), "utf8");
+    const missing: string[] = [];
+    for (const entry of EXTRA_CATALOG_ENTRIES) {
+      if (!thisFileSrc.includes(entry.id)) {
+        missing.push(entry.id);
+      }
+    }
+    if (missing.length > 0) {
+      throw new Error(
+        `The following EXTRA_CATALOG_ENTRIES ids have no test coverage in catalog-search.test.ts:\n` +
+          missing.map((id) => `  - ${id}`).join("\n") +
+          `\n\nAdd at least one searchCatalog() assertion that references each id, ` +
+          `then re-run the tests.`,
+      );
+    }
   });
 });
