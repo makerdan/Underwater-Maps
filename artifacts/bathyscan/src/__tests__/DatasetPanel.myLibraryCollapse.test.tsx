@@ -83,9 +83,10 @@ vi.mock("@/lib/context", () => ({
 }));
 
 // Signed IN — required so the MY LIBRARY section is rendered.
-vi.mock("@/lib/clerkCompat", () => ({
-  useAuth: () => ({ isSignedIn: true }),
-}));
+vi.mock("@/lib/clerkCompat", async () => {
+  const { mockClerkCompat } = await import("@/__tests__/testHelpers.auth");
+  return mockClerkCompat();
+});
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),

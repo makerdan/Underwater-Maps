@@ -83,10 +83,12 @@ vi.mock("@/lib/depthProfileStore", () => {
   };
 });
 
-vi.mock("@/lib/clerkCompat", () => ({
-  useUser: () => ({ isSignedIn, user: isSignedIn ? { id: "user-a" } : null }),
-  useClerk: () => ({ signOut: vi.fn() }),
-}));
+vi.mock("@/lib/clerkCompat", async () => {
+  const { mockClerkCompat } = await import("@/__tests__/testHelpers.auth");
+  return mockClerkCompat({
+    useUser: () => ({ isSignedIn, user: isSignedIn ? { id: "user-a" } : null }),
+  });
+});
 
 vi.mock("@/lib/context", () => ({
   useAppState: () => ({ datasetId: mockDatasetId, terrain: mockTerrain }),

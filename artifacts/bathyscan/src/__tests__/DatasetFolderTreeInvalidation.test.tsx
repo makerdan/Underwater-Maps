@@ -48,11 +48,10 @@ const deleteFolderMutate = vi.fn();
 const invalidateQueries = vi.fn();
 const removeQueries = vi.fn();
 
-vi.mock("@/lib/clerkCompat", () => ({
-  useAuth: () => ({ isSignedIn: true, isLoaded: true }),
-  useUser: () => ({ isSignedIn: true, isLoaded: true }),
-  useClerk: () => ({ signOut: vi.fn() }),
-}));
+vi.mock("@/lib/clerkCompat", async () => {
+  const { mockClerkCompat } = await import("@/__tests__/testHelpers.auth");
+  return mockClerkCompat();
+});
 
 vi.mock("@tanstack/react-query", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-query")>();

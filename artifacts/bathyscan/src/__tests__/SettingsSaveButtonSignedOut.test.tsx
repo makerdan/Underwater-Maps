@@ -17,10 +17,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 
-vi.mock("@/lib/clerkCompat", () => ({
-  useUser: () => ({ user: null, isSignedIn: false }),
-  useClerk: () => ({ signOut: vi.fn() }),
-}));
+vi.mock("@/lib/clerkCompat", async () => {
+  const { mockClerkCompat } = await import("@/__tests__/testHelpers.auth");
+  return mockClerkCompat({
+    useUser: () => ({ user: null, isSignedIn: false, isLoaded: true }),
+  });
+});
 
 vi.mock("wouter", () => ({
   useLocation: () => ["/settings", vi.fn()],

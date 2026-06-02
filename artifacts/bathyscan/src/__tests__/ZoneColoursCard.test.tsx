@@ -11,13 +11,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 
-vi.mock("@/lib/clerkCompat", () => ({
-  useUser: () => ({
-    user: { primaryEmailAddress: { emailAddress: "test@example.com" }, username: "test" },
-    isSignedIn: true,
-  }),
-  useClerk: () => ({ signOut: vi.fn() }),
-}));
+vi.mock("@/lib/clerkCompat", async () => {
+  const { mockClerkCompat } = await import("@/__tests__/testHelpers.auth");
+  return mockClerkCompat();
+});
 
 vi.mock("wouter", () => ({
   useLocation: () => ["/settings", vi.fn()],

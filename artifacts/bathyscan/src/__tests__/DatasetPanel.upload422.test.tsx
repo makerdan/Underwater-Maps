@@ -137,9 +137,10 @@ vi.mock("@/lib/context", () => ({
   }),
 }));
 
-vi.mock("@/lib/clerkCompat", () => ({
-  useAuth: () => ({ isSignedIn: false }),
-}));
+vi.mock("@/lib/clerkCompat", async () => {
+  const { mockClerkCompat } = await import("@/__tests__/testHelpers.auth");
+  return mockClerkCompat({ useAuth: () => ({ isSignedIn: false, isLoaded: true }) });
+});
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({
