@@ -1,5 +1,5 @@
 /**
- * process-large-datasets.ts — One-time script to process files in Large_Datasets/.
+ * process-large-datasets.ts — Script to process files in Large_Datasets/.
  *
  * Walks every object under the `Large_Datasets/` prefix in GCS (App Storage),
  * copies each one into `pending-datasets/<adminUserId>/<uuid>/<filename>`,
@@ -8,6 +8,11 @@
  *
  * Usage:
  *   pnpm --filter @workspace/scripts run process-large-datasets
+ *
+ * Options:
+ *   --skip-processed   Skip any file whose basename already exists under the
+ *                      `processed-datasets/` prefix, preventing duplicates when
+ *                      re-running after new files are added to Large_Datasets/.
  *
  * Environment:
  *   DEFAULT_OBJECT_STORAGE_BUCKET_ID — required; the GCS bucket name.
@@ -18,6 +23,7 @@ import { gcsClient, processObject, getJobByObjectKey } from "../../artifacts/api
 
 const ADMIN_USER_ID = "user_3CXNXKFCFdZJTtcdKojJO0Ia4xB";
 const SOURCE_PREFIX = "Large_Datasets/";
+const PROCESSED_PREFIX = "processed-datasets/";
 
 function getBucketName(): string {
   const id = process.env["DEFAULT_OBJECT_STORAGE_BUCKET_ID"];
@@ -39,13 +45,43 @@ async function copyGcsObject(
   await bucket.file(srcKey).copy(bucket.file(destKey));
 }
 
+/**
+ * Returns the set of basenames (e.g. "survey.csv") that already exist under
+ * the `processed-datasets/` prefix.  Used by --skip-processed.
+ */
+async function fetchProcessedBasenames(bucketName: string): Promise<Set<string>> {
+  const [files] = await gcsClient
+    .bucket(bucketName)
+    .getFiles({ prefix: PROCESSED_PREFIX });
+
+  const basenames = new Set<string>();
+  for (const f of files) {
+    if (!f.name.endsWith("/")) {
+      basenames.add(path.basename(f.name));
+    }
+  }
+  return basenames;
+}
+
 async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+  const skipProcessed = args.includes("--skip-processed");
+
   const bucketName = getBucketName();
 
   console.log(`\n=== process-large-datasets ===`);
-  console.log(`Bucket : ${bucketName}`);
-  console.log(`Prefix : ${SOURCE_PREFIX}`);
-  console.log(`Owner  : ${ADMIN_USER_ID}\n`);
+  console.log(`Bucket         : ${bucketName}`);
+  console.log(`Prefix         : ${SOURCE_PREFIX}`);
+  console.log(`Owner          : ${ADMIN_USER_ID}`);
+  console.log(`Skip processed : ${skipProcessed}\n`);
+
+  // If requested, collect already-processed filenames up front.
+  let processedBasenames: Set<string> = new Set();
+  if (skipProcessed) {
+    console.log("Fetching processed-datasets/ to find already-processed files…");
+    processedBasenames = await fetchProcessedBasenames(bucketName);
+    console.log(`  ${processedBasenames.size} already-processed filename(s) found.\n`);
+  }
 
   console.log("Listing objects…");
   const [files] = await gcsClient.bucket(bucketName).getFiles({ prefix: SOURCE_PREFIX });
@@ -57,17 +93,26 @@ async function main(): Promise<void> {
     return;
   }
 
-  console.log(`Found ${objects.length} file(s) to process.\n`);
+  console.log(`Found ${objects.length} file(s) under Large_Datasets/.\n`);
 
   let succeeded = 0;
   let failed = 0;
+  let skipped = 0;
 
   for (let i = 0; i < objects.length; i++) {
     const srcKey = objects[i]!.name;
     const fileName = path.basename(srcKey);
+    const label = `[${i + 1}/${objects.length}] ${fileName}`;
+
+    // --skip-processed: skip files whose basename is already in processed-datasets/
+    if (skipProcessed && processedBasenames.has(fileName)) {
+      console.log(`${label} — skipped (already processed)`);
+      skipped++;
+      continue;
+    }
+
     const uuid = crypto.randomUUID();
     const destKey = `pending-datasets/${ADMIN_USER_ID}/${uuid}/${fileName}`;
-    const label = `[${i + 1}/${objects.length}] ${fileName}`;
 
     process.stdout.write(`${label} — copying… `);
 
@@ -103,6 +148,7 @@ async function main(): Promise<void> {
 
   console.log(`\n=== Summary ===`);
   console.log(`  Succeeded : ${succeeded}`);
+  console.log(`  Skipped   : ${skipped}`);
   console.log(`  Failed    : ${failed}`);
   console.log(`  Total     : ${objects.length}\n`);
 
