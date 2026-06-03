@@ -19,6 +19,7 @@ import { fromArrayBuffer } from "geotiff";
 import { NetCDFReader } from "netcdfjs";
 import { createLazPerf } from "laz-perf";
 import { ready as h5wasmReady, File as H5wFile, Group as H5Group, Dataset as H5Dataset } from "h5wasm";
+import { parseXyzCsv } from "./terrain.js";
 
 // ---------------------------------------------------------------------------
 // Shared type (mirrors terrain.ts RawPoint — re-exported to avoid circular dep)
@@ -52,6 +53,126 @@ function yieldToEventLoop(): Promise<void> {
 const GEOTIFF_YIELD_BATCH = 200_000;
 
 // ---------------------------------------------------------------------------
+// Magic-byte format sniffer
+// ---------------------------------------------------------------------------
+
+/**
+ * Scan the Variable Length Records of a LAS/LAZ buffer to detect whether the
+ * file uses LASzip compression.  Returns true when any VLR carries a User ID
+ * starting with "laszip" (case-insensitive), which is the standard marker
+ * written by laz-perf and LASzip-compatible writers.
+ *
+ * LAS public header layout (ASPRS LAS 1.x):
+ *   offset 94  — Header Size (uint16 LE)
+ *   offset 100 — Number of VLRs (uint32 LE)
+ * Each VLR:
+ *   +0  Reserved           2 bytes
+ *   +2  User ID            16 bytes (null-terminated ASCII)
+ *   +18 Record ID          2 bytes
+ *   +20 Record Length      2 bytes
+ *   +22 Description        32 bytes
+ *   +54 Data               recordLength bytes
+ */
+function containsLazVlr(buffer: Buffer): boolean {
+  const LAS_HDR_MIN = 227;
+  if (buffer.length < LAS_HDR_MIN) return false;
+  const headerSize = buffer.readUInt16LE(94);
+  const numVlrs = buffer.readUInt32LE(100);
+  let pos = headerSize;
+  for (let i = 0; i < numVlrs && pos + 54 <= buffer.length; i++) {
+    const userId = buffer
+      .slice(pos + 2, pos + 18)
+      .toString("ascii")
+      .replace(/\0.*/, "")
+      .toLowerCase();
+    if (userId.startsWith("laszip")) return true;
+    const recordLength = buffer.readUInt16LE(pos + 20);
+    pos += 54 + recordLength;
+  }
+  return false;
+}
+
+/**
+ * Inspect the first bytes of a buffer and return a format hint string, or
+ * `null` when the content cannot be identified.
+ *
+ * Magic signatures:
+ *   GeoTIFF  — `II*\0` (LE) or `MM\0*` (BE)
+ *   LAS      — `LASF` without a LASzip VLR
+ *   LAZ      — `LASF` with a LASzip VLR (User ID starts with "laszip")
+ *   HDF5/BAG — `\x89HDF\r\n\x1a\n`
+ *   NetCDF   — `CDF\x01`
+ *   GPX/XML  — UTF-8 text containing `<?xml` and `<gpx`
+ *   NMEA     — first non-blank line starts with `$`
+ *   CSV/TXT  — lines of comma/space-separated numbers (fallback text check)
+ */
+export function sniffFormat(
+  buffer: Buffer,
+): "tif" | "las" | "laz" | "bag" | "nc" | "gpx" | "nmea" | "csv" | null {
+  if (buffer.length < 4) return null;
+
+  // GeoTIFF — little-endian TIFF (II*\0) or big-endian TIFF (MM\0*)
+  if (
+    (buffer[0] === 0x49 && buffer[1] === 0x49 && buffer[2] === 0x2a && buffer[3] === 0x00) ||
+    (buffer[0] === 0x4d && buffer[1] === 0x4d && buffer[2] === 0x00 && buffer[3] === 0x2a)
+  ) {
+    return "tif";
+  }
+
+  // LAS / LAZ — "LASF" file-signature; distinguish by VLR content
+  if (
+    buffer[0] === 0x4c && buffer[1] === 0x41 && buffer[2] === 0x53 && buffer[3] === 0x46
+  ) {
+    return containsLazVlr(buffer) ? "laz" : "las";
+  }
+
+  // HDF5 / BAG — 8-byte HDF5 superblock signature
+  if (
+    buffer.length >= 8 &&
+    buffer[0] === 0x89 && buffer[1] === 0x48 && buffer[2] === 0x44 && buffer[3] === 0x46 &&
+    buffer[4] === 0x0d && buffer[5] === 0x0a && buffer[6] === 0x1a && buffer[7] === 0x0a
+  ) {
+    return "bag";
+  }
+
+  // NetCDF classic — "CDF\x01"
+  if (
+    buffer[0] === 0x43 && buffer[1] === 0x44 && buffer[2] === 0x46 && buffer[3] === 0x01
+  ) {
+    return "nc";
+  }
+
+  // GPX / XML — look for <?xml … <gpx in the first 512 bytes
+  const head = buffer.slice(0, Math.min(buffer.length, 512)).toString("utf8");
+  if (head.includes("<?xml") && head.toLowerCase().includes("<gpx")) {
+    return "gpx";
+  }
+
+  // NMEA — first non-blank line starts with '$'
+  if (head.trimStart().startsWith("$")) {
+    return "nmea";
+  }
+
+  // CSV / XYZ / TXT — check whether any of the first non-blank lines look like
+  // comma/whitespace-separated numbers (handles optional header rows).
+  const lines = head
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !l.startsWith("#"));
+  for (const line of lines.slice(0, 5)) {
+    const parts = line.split(/[,\s\t]+/);
+    if (
+      parts.length >= 2 &&
+      parts.filter((p) => p.length > 0 && !isNaN(parseFloat(p))).length >= 2
+    ) {
+      return "csv";
+    }
+  }
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Top-level dispatcher
 // ---------------------------------------------------------------------------
 
@@ -59,9 +180,14 @@ const GEOTIFF_YIELD_BATCH = 200_000;
  * Route an uploaded file buffer to the correct format parser based on file
  * extension.  Returns an array of { lon, lat, depth } points.
  *
- * Existing CSV/XYZ/TXT path is NOT handled here — the caller (datasets.ts)
- * continues to use parseXyzCsv for those extensions. This dispatcher only
- * covers the new binary/structured formats.
+ * When the file extension does not match a known format (e.g. a `.gz` file
+ * whose base name carries no inner extension), `sniffFormat` is called on the
+ * buffer as a fallback.  This makes uploads like
+ * `alaska-bathymetric-data-h09092.gz` work regardless of how the file was
+ * named on the user's machine.
+ *
+ * Existing CSV/XYZ/TXT path is also handled here via the sniff fallback so
+ * that callers do not need to duplicate the routing logic.
  */
 export async function parseUploadedFile(
   buffer: Buffer,
@@ -86,11 +212,33 @@ export async function parseUploadedFile(
     case "nmea":
     case "nme":
       return parseNmea(buffer.toString("utf8"));
-    default:
-      throw new Error(
-        `Unsupported file extension ".${ext}". Supported formats: ` +
-          `.tif, .tiff, .bag, .las, .laz, .nc, .gpx, .nmea, .nme, .csv, .xyz, .txt`,
-      );
+    default: {
+      // Extension alone didn't resolve — fall back to magic-byte detection.
+      const sniffed = sniffFormat(buffer);
+      switch (sniffed) {
+        case "tif":
+          return parseGeoTiff(buffer);
+        case "nc":
+          return parseNetCdf(buffer);
+        case "las":
+          return parseLasLaz(buffer, "sniffed.las");
+        case "laz":
+          return parseLasLaz(buffer, "sniffed.laz");
+        case "bag":
+          return parseBag(buffer);
+        case "gpx":
+          return parseGpxTerrain(buffer.toString("utf8"));
+        case "nmea":
+          return parseNmea(buffer.toString("utf8"));
+        case "csv":
+          return parseXyzCsv(buffer.toString("utf8"), "sniffed.csv");
+        default:
+          throw new Error(
+            "Could not detect the file format. " +
+              "Ensure the .gz contains a supported type (GeoTIFF, LAS, CSV, etc.).",
+          );
+      }
+    }
   }
 }
 
