@@ -2558,6 +2558,29 @@ export type AdminBucketMonitor200 = {
   lifecycle?: AdminBucketMonitor200Lifecycle;
 };
 
+export type AdminLargeDatasetsDiff200EntriesItemStatus = typeof AdminLargeDatasetsDiff200EntriesItemStatus[keyof typeof AdminLargeDatasetsDiff200EntriesItemStatus];
+
+
+export const AdminLargeDatasetsDiff200EntriesItemStatus = {
+  changed: 'changed',
+  unimported: 'unimported',
+} as const;
+
+export type AdminLargeDatasetsDiff200EntriesItem = {
+  filename: string;
+  largeDatasetsMd5?: string | null;
+  recordedSourceMd5?: string | null;
+  status: AdminLargeDatasetsDiff200EntriesItemStatus;
+};
+
+export type AdminLargeDatasetsDiff200 = {
+  /** Number of files that were imported but have since changed. */
+  changedCount: number;
+  /** Number of Large_Datasets files that have never been imported. */
+  unimportedCount: number;
+  entries: AdminLargeDatasetsDiff200EntriesItem[];
+};
+
 export type ExportUserData200Settings = { [key: string]: unknown } | null;
 
 export type ExportUserData200MarkersItem = { [key: string]: unknown };

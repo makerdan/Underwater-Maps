@@ -21,6 +21,7 @@ import type {
 
 import type {
   AdminBucketMonitor200,
+  AdminLargeDatasetsDiff200,
   ApiError,
   ClassifyResult,
   CreateDatasetFolderBody,
@@ -5716,6 +5717,85 @@ export function useAdminBucketMonitor<TData = Awaited<ReturnType<typeof adminBuc
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getAdminBucketMonitorQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getAdminLargeDatasetsDiffUrl = () => {
+
+
+
+
+  return `/api/admin/large-datasets-diff`
+}
+
+/**
+ * Compares each file under the Large_Datasets/ GCS prefix against the x-goog-meta-source-md5 stamped on the corresponding processed-datasets/ copy at import time. Returns entries for files whose content has changed ("changed") or that have never been imported ("unimported"). Restricted to admin users.
+
+ * @summary Detect Large_Datasets files that have changed since last import
+ */
+export const adminLargeDatasetsDiff = async ( options?: RequestInit): Promise<AdminLargeDatasetsDiff200> => {
+
+  return customFetch<AdminLargeDatasetsDiff200>(getAdminLargeDatasetsDiffUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getAdminLargeDatasetsDiffQueryKey = () => {
+    return [
+    `/api/admin/large-datasets-diff`
+    ] as const;
+    }
+
+
+export const getAdminLargeDatasetsDiffQueryOptions = <TData = Awaited<ReturnType<typeof adminLargeDatasetsDiff>>, TError = ErrorType<ApiError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof adminLargeDatasetsDiff>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getAdminLargeDatasetsDiffQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof adminLargeDatasetsDiff>>> = ({ signal }) => adminLargeDatasetsDiff({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof adminLargeDatasetsDiff>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type AdminLargeDatasetsDiffQueryResult = NonNullable<Awaited<ReturnType<typeof adminLargeDatasetsDiff>>>
+export type AdminLargeDatasetsDiffQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Detect Large_Datasets files that have changed since last import
+ */
+
+export function useAdminLargeDatasetsDiff<TData = Awaited<ReturnType<typeof adminLargeDatasetsDiff>>, TError = ErrorType<ApiError>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof adminLargeDatasetsDiff>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getAdminLargeDatasetsDiffQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

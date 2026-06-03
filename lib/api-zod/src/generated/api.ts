@@ -2600,6 +2600,23 @@ export const AdminBucketMonitorResponse = zod.object({
 
 
 /**
+ * Compares each file under the Large_Datasets/ GCS prefix against the x-goog-meta-source-md5 stamped on the corresponding processed-datasets/ copy at import time. Returns entries for files whose content has changed ("changed") or that have never been imported ("unimported"). Restricted to admin users.
+
+ * @summary Detect Large_Datasets files that have changed since last import
+ */
+export const AdminLargeDatasetsDiffResponse = zod.object({
+  "changedCount": zod.number().describe('Number of files that were imported but have since changed.'),
+  "unimportedCount": zod.number().describe('Number of Large_Datasets files that have never been imported.'),
+  "entries": zod.array(zod.object({
+  "filename": zod.string(),
+  "largeDatasetsMd5": zod.string().nullish(),
+  "recordedSourceMd5": zod.string().nullish(),
+  "status": zod.enum(['changed', 'unimported'])
+}))
+})
+
+
+/**
  * Returns markers, custom datasets, GPS trails, and settings as a JSON attachment. Used by Settings → Account & Privacy.
  * @summary Export all user data as a downloadable JSON file
  */
