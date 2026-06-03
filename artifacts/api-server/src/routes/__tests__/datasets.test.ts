@@ -74,15 +74,15 @@ beforeEach(() => {
 // GET /api/datasets/:id/overview
 //
 // UUID-format IDs that are not in the preset catalog require:
-//   • authentication (401 if missing)
-//   • ownership (404 if the dataset exists but belongs to another user)
+//   • ownership (404 if missing or dataset belongs to another user)
+//   • unauthenticated callers get 404 (not 401) to avoid confirming existence
 // Preset IDs remain publicly accessible regardless of auth state.
 // ---------------------------------------------------------------------------
 
 const TEST_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 
 describe("GET /api/datasets/:id/terrain — custom dataset auth guard", () => {
-  it("returns 401 for a UUID-format dataset id when the caller is not authenticated", async () => {
+  it("returns 404 for a UUID-format dataset id when the caller is not authenticated", async () => {
     // Ensure getAuth returns no userId (default mock, but make explicit)
     vi.mocked(getAuth).mockReturnValueOnce({ userId: null } as ReturnType<typeof getAuth>);
     // Unset bypass so requireAuth doesn't short-circuit (this test exercises
@@ -90,8 +90,9 @@ describe("GET /api/datasets/:id/terrain — custom dataset auth guard", () => {
     vi.unstubAllEnvs();
 
     const res = await request(app).get(`/api/datasets/${TEST_UUID}/terrain`);
-    expect(res.status).toBe(401);
-    expect(res.body).toMatchObject({ error: "unauthenticated" });
+    // Unauthenticated requests get 404 (not 401) to avoid confirming dataset existence
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ error: "not_found" });
   });
 
   it("returns 404 when an authenticated user requests a UUID dataset they do not own", async () => {
@@ -107,13 +108,14 @@ describe("GET /api/datasets/:id/terrain — custom dataset auth guard", () => {
 });
 
 describe("GET /api/datasets/:id/overview — custom dataset auth guard", () => {
-  it("returns 401 for a UUID-format dataset id when the caller is not authenticated", async () => {
+  it("returns 404 for a UUID-format dataset id when the caller is not authenticated", async () => {
     vi.mocked(getAuth).mockReturnValueOnce({ userId: null } as ReturnType<typeof getAuth>);
     vi.unstubAllEnvs();
 
     const res = await request(app).get(`/api/datasets/${TEST_UUID}/overview`);
-    expect(res.status).toBe(401);
-    expect(res.body).toMatchObject({ error: "unauthenticated" });
+    // Unauthenticated requests get 404 (not 401) to avoid confirming dataset existence
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ error: "not_found" });
   });
 
   it("returns 404 when an authenticated user requests a UUID dataset they do not own", async () => {
@@ -130,9 +132,9 @@ describe("GET /api/datasets/:id/overview — custom dataset auth guard", () => {
 // ---------------------------------------------------------------------------
 // GET /api/datasets/:id/zones — auth + ownership guard
 //
-// UUID-format IDs require authentication (401) and ownership (404 for cross-
-// user access). The 404 (not 403) response avoids leaking dataset existence,
-// consistent with the terrain and overview routes.
+// UUID-format IDs require ownership (404 for cross-user access and for
+// unauthenticated callers). The 404 (not 403) response avoids leaking dataset
+// existence, consistent with the terrain and overview routes.
 // ---------------------------------------------------------------------------
 
 const VALID_GRID_HASH = "abcdef12"; // 8-char lowercase hex satisfies ZonesQuerySchema

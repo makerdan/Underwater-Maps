@@ -23,6 +23,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
+import { getAuth } from "@clerk/express";
 
 vi.mock("@workspace/db", () => ({
   db: {
@@ -133,13 +134,32 @@ describe("GET /api/datasets/:id/terrain — param validation", () => {
     expect(res.body).toMatchObject({ error: "not_found" });
   });
 
-  it("returns 401 (not 400) for a UUID-style id when unauthenticated", async () => {
-    // UUID-format custom dataset IDs require authentication; the auth check
-    // runs before the DB lookup, so an unauthenticated caller gets 401, not 404.
+  it("returns 404 (not 400) for a UUID-style id not in the database", async () => {
+    // UUID-format custom dataset IDs use a 404 (not 401) for unauthenticated or
+    // non-owner requests to avoid confirming dataset existence.
     const res = await request(app).get(
       "/api/datasets/550e8400-e29b-41d4-a716-446655440000/terrain",
     );
-    expect(res.status).toBe(401);
-    expect(res.body).toMatchObject({ error: "unauthenticated" });
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ error: "not_found" });
+  });
+});
+
+describe("GET /api/datasets/:id/terrain — cross-user ownership guard", () => {
+  const OTHER_USER_UUID = "550e8400-e29b-41d4-a716-446655440000";
+
+  it("returns 404 (not 401) for an unauthenticated request to a UUID-style dataset id", async () => {
+    vi.mocked(getAuth).mockReturnValueOnce({ userId: null } as ReturnType<typeof getAuth>);
+    const res = await request(app).get(`/api/datasets/${OTHER_USER_UUID}/terrain`);
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ error: "not_found" });
+  });
+
+  it("returns 404 (not 403) when an authenticated user requests a UUID dataset they do not own", async () => {
+    vi.mocked(getAuth).mockReturnValueOnce({ userId: "user-requesting" } as ReturnType<typeof getAuth>);
+    // DB mock returns [] (no row found for this UUID), so ownership check fails → 404
+    const res = await request(app).get(`/api/datasets/${OTHER_USER_UUID}/terrain`);
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ error: "not_found" });
   });
 });

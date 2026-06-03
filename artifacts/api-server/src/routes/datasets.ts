@@ -695,11 +695,12 @@ router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRat
 
   // Auth + ownership guard for custom (UUID-format) dataset IDs.
   // Preset/catalog dataset IDs remain publicly accessible.
-  // Non-owner requests return 404 (not 403) to avoid confirming existence.
+  // Non-owner requests (including unauthenticated) return 404 (not 401/403)
+  // to avoid confirming existence of datasets belonging to other users.
   if (CUSTOM_DATASET_UUID_RE.test(id) && !ALL_PRESET_DATASETS.some((d) => d.id === id)) {
     const callerId = getAuth(req)?.userId ?? null;
     if (!callerId) {
-      res.status(401).json({ error: "unauthenticated", details: "Authentication required" });
+      res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
       return;
     }
     const [ownRow] = await db
@@ -772,11 +773,12 @@ router.get("/datasets/:id/overview", asyncHandler(async (req, res): Promise<void
 
   // Auth + ownership guard for custom (UUID-format) dataset IDs.
   // Preset/catalog dataset IDs remain publicly accessible.
-  // Non-owner requests return 404 (not 403) to avoid confirming existence.
+  // Non-owner requests (including unauthenticated) return 404 (not 401/403)
+  // to avoid confirming existence of datasets belonging to other users.
   if (CUSTOM_DATASET_UUID_RE.test(id) && !ALL_PRESET_DATASETS.some((d) => d.id === id)) {
     const callerId = getAuth(req)?.userId ?? null;
     if (!callerId) {
-      res.status(401).json({ error: "unauthenticated", details: "Authentication required" });
+      res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
       return;
     }
     const [ownRow] = await db
