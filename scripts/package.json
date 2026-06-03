@@ -23,6 +23,7 @@
     "scheduled-refresh-tx-freshwater-efh": "tsx ./src/scheduled-refresh-tx-freshwater-efh.ts",
     "build-aoos-intertidal-pow": "tsx ./src/build-aoos-intertidal-pow.ts",
     "scheduled-refresh-aoos-intertidal-pow": "tsx ./src/scheduled-refresh-aoos-intertidal-pow.ts",
+    "process-large-datasets": "tsx ./src/process-large-datasets.ts",
     "test": "node --import tsx --test ./src/lib/scheduled-refresh.test.ts",
     "test:unit": "node --import tsx --test ./src/lib/scheduled-refresh.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
