@@ -71,6 +71,10 @@ interface JobState {
   error?: string;
   datasetId?: string;
   userId: string; // enforced on poll — only the owner can read job status
+  /** Count of archive entries intentionally skipped (unsupported formats). */
+  skippedCount?: number;
+  /** Unique file extensions of skipped entries, e.g. [".sid.gz", ".pdf"]. */
+  skippedFormats?: string[];
 }
 const uploadJobs = new Map<string, JobState>();
 registerCache(() => uploadJobs.clear());
@@ -430,11 +434,32 @@ async function processUploadJob(
         // merge all sounding points into a single array.  Throws with code
         // "NO_PARSEABLE_DATA" if nothing in the archive is parseable, or
         // "PARSER_NOT_IMPLEMENTED" for recognised-but-not-yet-implemented types.
-        const { points: tarPoints, datasetName: tarDatasetName, hyd93Features: tarHyd93Features } = await routeTarEntries(
+        const { points: tarPoints, datasetName: tarDatasetName, hyd93Features: tarHyd93Features, skipped: tarSkipped } = await routeTarEntries(
           tarExtractedDir,
           entries,
           fileName,
         );
+
+        // Compute skipped-file summary for the job-poll response.
+        // Only "unsupported-format" entries are surfaced — metadata-only and
+        // superseded files are expected NOAA archive artefacts, not user-visible
+        // problems.
+        const unsupportedSkipped = tarSkipped.filter((s) => s.reason === "unsupported-format");
+        if (unsupportedSkipped.length > 0) {
+          job.skippedCount = unsupportedSkipped.length;
+          job.skippedFormats = [...new Set(
+            unsupportedSkipped.map((s) => {
+              const name = s.path.split("/").pop() ?? s.path;
+              if (name.toLowerCase().endsWith(".gz")) {
+                const withoutGz = name.slice(0, -3);
+                const dot = withoutGz.lastIndexOf(".");
+                return dot !== -1 ? withoutGz.slice(dot) + ".gz" : ".gz";
+              }
+              const dot = name.lastIndexOf(".");
+              return dot !== -1 ? name.slice(dot) : name;
+            }),
+          )];
+        }
 
         const gridId = crypto.randomUUID();
         job.progress = 35;
@@ -1686,6 +1711,8 @@ router.get(
         progress: memJob.progress,
         ...(memJob.error !== undefined ? { error: memJob.error } : {}),
         ...(memJob.datasetId !== undefined ? { datasetId: memJob.datasetId } : {}),
+        ...(memJob.skippedCount !== undefined ? { skippedCount: memJob.skippedCount } : {}),
+        ...(memJob.skippedFormats !== undefined ? { skippedFormats: memJob.skippedFormats } : {}),
       });
       return;
     }
@@ -1716,6 +1743,10 @@ router.get(
       ...(dbJob.error !== null ? { error: dbJob.error } : {}),
       ...(dbJob.datasetId !== null ? { datasetId: dbJob.datasetId } : {}),
     });
+    // Note: skippedCount/skippedFormats are in-memory only and not persisted to
+    // DB (they are cosmetic toast metadata, not durable state).  After a server
+    // restart the fields are simply absent, which the frontend handles gracefully
+    // by showing no skipped note.
   }),
 );
 
