@@ -35,6 +35,8 @@ import {
   getGetSubstrateQueryKey,
 } from "@workspace/api-client-react";
 import { useSubstrateErrorToast } from "@/hooks/useSubstrateErrorToast";
+import { useSubstrateCoverageToast } from "@/hooks/useSubstrateCoverageToast";
+import { useTerrainStore } from "@/lib/terrainStore";
 import type {
   SubstrateFeature,
   SubstrateFeatureCollection,
@@ -366,6 +368,10 @@ export const SubstrateLayer: React.FC = () => {
   const zoneSlots = useZoneOverlayStore((s) => s.slots);
 
   const datasetId = terrain?.datasetId ?? "";
+  const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
+  const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
+  const isUserDataset =
+    visibleDatasets.find((v) => v.datasetId === primaryDatasetId)?.source === "user";
 
   const { data: collection, isError: substrateIsError } = useGetSubstrate(
     datasetId,
@@ -378,11 +384,20 @@ export const SubstrateLayer: React.FC = () => {
     },
   );
 
+  const substrateEnabled = !!datasetId && substrateColorMode;
+
   useSubstrateErrorToast({
     isError: substrateIsError,
     isEmpty: !substrateIsError && collection !== undefined && collection.features.length === 0,
     datasetId,
-    enabled: !!datasetId && substrateColorMode,
+    enabled: substrateEnabled,
+  });
+
+  useSubstrateCoverageToast({
+    hasFeatures: !substrateIsError && (collection?.features?.length ?? 0) > 0,
+    isUserDataset,
+    datasetId,
+    enabled: substrateEnabled,
   });
 
   const meta = (collection as SubstrateFeatureCollection | undefined)?.metadata as

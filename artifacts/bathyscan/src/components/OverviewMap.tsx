@@ -99,6 +99,7 @@ import {
   registerRawsCanvasPositionGetter,
 } from "@/lib/testHelpers";
 import { useSubstrateErrorToast } from "@/hooks/useSubstrateErrorToast";
+import { useSubstrateCoverageToast } from "@/hooks/useSubstrateCoverageToast";
 
 interface TooltipState {
   visible: boolean;
@@ -546,12 +547,24 @@ export const OverviewMap: React.FC = () => {
     },
   });
 
+  const substrateEnabled = !!datasetId && substrateColorMode;
+  const primaryIsUserDataset =
+    visibleDatasets.find((v) => v.datasetId === primaryDatasetId)?.source === "user";
+
   useSubstrateErrorToast({
     isError: substrateIsError,
     isEmpty: !substrateIsError && substrateCollection !== undefined && substrateCollection.features.length === 0,
     datasetId,
-    enabled: !!datasetId && substrateColorMode,
+    enabled: substrateEnabled,
   });
+
+  useSubstrateCoverageToast({
+    hasFeatures: !substrateIsError && (substrateCollection?.features?.length ?? 0) > 0,
+    isUserDataset: primaryIsUserDataset,
+    datasetId,
+    enabled: substrateEnabled,
+  });
+
   const substrateMeta = (substrateCollection as SubstrateFeatureCollection | undefined)
     ?.metadata as { sourceName?: string; creditUrl?: string } | undefined;
   const substrateSourceName =
