@@ -28,10 +28,10 @@
  * does not provide a WebGL context. The Delete-from-DB half of the
  * "delete marker" flow is what this spec covers end-to-end.
  */
-import { test, expect, type Page, type APIResponse, API_URL } from "./fixtures";
+import { test, expect, type Page, type APIResponse, API_URL, E2E_USER_ID } from "./fixtures";
 
 const DATASET_ID = "thorne-bay";
-const TEST_USER_ID = "e2e-user";
+const TEST_USER_ID = E2E_USER_ID;
 const API_BASE = API_URL;
 
 interface Marker {
