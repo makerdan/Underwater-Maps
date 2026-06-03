@@ -56,6 +56,7 @@ async function mockReadySurfaceConditions(page: Page): Promise<void> {
       contentType: "application/json",
       body: JSON.stringify({
         forecast48h: hours,
+        hours: hours.slice(0, 24),
         estimatedConditions: false,
         tidalDataSource: "noaa",
         tidalStationName: "Mock Station",
