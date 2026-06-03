@@ -28,6 +28,11 @@ import * as fs from "fs";
 import * as path from "path";
 import { logger } from "./logger.js";
 import type { RawPoint } from "./uploadParsers.js";
+import { parseGeoTiff } from "./uploadParsers.js";
+import { gunzipBounded } from "./gunzipBounded.js";
+
+/** 200 MB cap for inner tif.gz decompression — same as the top-level gz cap. */
+const INNER_GZ_MAX_BYTES = 200 * 1024 * 1024;
 
 // ---------------------------------------------------------------------------
 // Parser key type
@@ -187,12 +192,71 @@ export async function parseBottomSamples(_filePath: string): Promise<RawPoint[]>
 /**
  * Parse a Smooth_Sheets inner tif.gz GeoTIFF raster.
  *
- * Stub — body to be implemented in the "Load Smooth_Sheets inner tif.gz as
- * GeoTIFF raster" task.
+ * Decompresses the inner `.tif.gz` entry, then delegates to the existing
+ * `parseGeoTiff` function.  If the TIF has no embedded georeferencing tags
+ * (ModelTiepoint, ModelPixelScale, or ModelTransformation) — common for older
+ * NOAA smooth sheets — the function logs a structured warning and returns an
+ * empty array rather than propagating the error.  The upload job will still
+ * succeed using whatever sounding points were gathered from other entries.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function parseSmoothSheetsGeoTiff(_filePath: string): Promise<RawPoint[]> {
-  parserNotImplemented("inner-geotiff", _filePath);
+export async function parseSmoothSheetsGeoTiff(filePath: string): Promise<RawPoint[]> {
+  let compressed: Buffer;
+  try {
+    compressed = await fs.promises.readFile(filePath);
+  } catch (err) {
+    throw new Error(
+      `Failed to read inner tif.gz "${path.basename(filePath)}": ` +
+        `${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  let tifBuffer: Buffer;
+  try {
+    tifBuffer = await gunzipBounded(compressed, INNER_GZ_MAX_BYTES);
+  } catch (err) {
+    const code = (err as { code?: string })?.code;
+    if (code === "DECOMPRESS_TOO_LARGE") {
+      throw new Error(
+        `Inner GeoTIFF "${path.basename(filePath)}" exceeds the ` +
+          `${Math.round(INNER_GZ_MAX_BYTES / 1024 / 1024)} MB decompression limit.`,
+      );
+    }
+    throw new Error(
+      `Failed to decompress inner tif.gz "${path.basename(filePath)}": ` +
+        `${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  try {
+    return await parseGeoTiff(tifBuffer);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+
+    // Older NOAA smooth sheets frequently lack ModelTiepoint / ModelPixelScale
+    // tags.  Treat missing georeferencing as a recoverable warning rather than
+    // a hard failure — the upload completes using depth points from other
+    // entries (e.g. surveys.xyz / GEODAS) while the raster is noted as
+    // needing manual georeferencing.
+    if (
+      msg.includes("ModelPixelScale") ||
+      msg.includes("ModelTiepoint") ||
+      msg.includes("ModelTransformation") ||
+      msg.includes("Cannot derive geographic coordinates")
+    ) {
+      logger.warn(
+        { entry: path.basename(filePath) },
+        `[noaa-tar-router] inner GeoTIFF "${path.basename(filePath)}" has no ` +
+          `georeferencing tags — raster loaded but needs manual georeferencing; skipping coordinate extraction`,
+      );
+      return [];
+    }
+
+    // All other GeoTIFF parse errors are unexpected; re-throw so the job fails
+    // with a clear diagnostic rather than silently dropping data.
+    throw new Error(
+      `Failed to parse inner GeoTIFF "${path.basename(filePath)}": ${msg}`,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -324,12 +388,21 @@ export async function routeTarEntries(
     }
   }
 
-  // Warn about each skipped entry so the server log records what was ignored
+  // Log each skipped entry.  MrSID gets a specific INFO-level note; everything
+  // else is WARN so it stands out in server logs as something unexpected.
   for (const s of skipped) {
-    logger.warn(
-      { entry: s },
-      `[noaa-tar-router] skipping unsupported or unrecognised entry: ${path.basename(s)}`,
-    );
+    const lp = s.toLowerCase().replace(/\\/g, "/");
+    if (lp.endsWith(".sid") || lp.endsWith(".sid.gz")) {
+      logger.info(
+        { entry: s },
+        `[noaa-tar-router] MrSID format not supported; skipping`,
+      );
+    } else {
+      logger.warn(
+        { entry: s },
+        `[noaa-tar-router] skipping unsupported or unrecognised entry: ${path.basename(s)}`,
+      );
+    }
   }
 
   // Fail early with a clear user-facing message when nothing is parseable
