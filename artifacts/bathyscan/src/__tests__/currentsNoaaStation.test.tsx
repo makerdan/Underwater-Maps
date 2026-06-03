@@ -104,11 +104,12 @@ describe("CurrentsPanel — NOAA station readout (Task #167)", () => {
     expect(screen.getByTestId("currents-noaa-switch-manual")).toBeDefined();
   });
 
-  it("shows idle (empty) state when tidalStatus is 'idle'", () => {
+  it("shows connecting indicator when tidalStatus is 'idle'", () => {
     resetStores("idle");
     render(<CurrentsPanel />);
     const readout = screen.getByTestId("currents-noaa-readout");
-    expect(readout.textContent).toBe("");
+    expect(readout.textContent).toContain("Connecting to NOAA");
+    expect(screen.getByTestId("currents-noaa-idle")).toBeDefined();
   });
 });
 
