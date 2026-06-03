@@ -389,6 +389,491 @@ describe("PUT /api/settings — globalFontSize (new v16 field)", () => {
   });
 });
 
+describe("PUT /api/settings — paletteShallow", () => {
+  it("accepts a valid 6-digit hex colour", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ paletteShallow: "#ab12cd" });
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("paletteShallow", "#ab12cd");
+  });
+
+  it("accepts uppercase hex digits", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ paletteShallow: "#FF00AA" });
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("paletteShallow", "#FF00AA");
+  });
+
+  it("returns 400 when paletteShallow is not a hex colour (plain word)", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ paletteShallow: "blue" });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when paletteShallow has only 3 hex digits", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ paletteShallow: "#abc" });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when paletteShallow is missing the leading #", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ paletteShallow: "00e5ff" });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when paletteShallow is a number", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ paletteShallow: 0x00e5ff });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+});
+
+describe("PUT /api/settings — paletteDeep", () => {
+  it("accepts a valid 6-digit hex colour", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ paletteDeep: "#1a237e" });
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("paletteDeep", "#1a237e");
+  });
+
+  it("returns 400 when paletteDeep has 7 hex digits (too long)", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ paletteDeep: "#1234567" });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when paletteDeep contains invalid characters", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ paletteDeep: "#gg0000" });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when paletteDeep is null", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ paletteDeep: null });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+});
+
+describe("PUT /api/settings — customStops", () => {
+  it("accepts a valid 4-stop array", async () => {
+    const stops = [
+      { position: 0.0, hex: "#00e5ff" },
+      { position: 0.3, hex: "#0d47a1" },
+      { position: 0.65, hex: "#1a237e" },
+      { position: 1.0, hex: "#283593" },
+    ];
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ customStops: stops });
+    expect(res.status).toBe(200);
+    expect(res.body.customStops).toHaveLength(4);
+    expect(res.body.customStops[0]).toMatchObject({ position: 0, hex: "#00e5ff" });
+  });
+
+  it("accepts the minimum 2-stop array", async () => {
+    const stops = [
+      { position: 0.0, hex: "#ffffff" },
+      { position: 1.0, hex: "#000000" },
+    ];
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ customStops: stops });
+    expect(res.status).toBe(200);
+    expect(res.body.customStops).toHaveLength(2);
+  });
+
+  it("returns 400 when customStops has only 1 element (below min of 2)", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ customStops: [{ position: 0.0, hex: "#00e5ff" }] });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when customStops is an empty array", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ customStops: [] });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when a stop has a position above 1", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({
+        customStops: [
+          { position: 0.0, hex: "#00e5ff" },
+          { position: 1.5, hex: "#283593" },
+        ],
+      });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when a stop has a position below 0", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({
+        customStops: [
+          { position: -0.1, hex: "#00e5ff" },
+          { position: 1.0, hex: "#283593" },
+        ],
+      });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when a stop hex is not a valid hex colour", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({
+        customStops: [
+          { position: 0.0, hex: "red" },
+          { position: 1.0, hex: "#283593" },
+        ],
+      });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when a stop is missing the hex field", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({
+        customStops: [
+          { position: 0.0 },
+          { position: 1.0, hex: "#283593" },
+        ],
+      });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when customStops is not an array", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ customStops: "gradient" });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+});
+
+describe("PUT /api/settings — bandColors", () => {
+  const TEN_COLORS = [
+    "#00e5ff", "#00c8de", "#00a8d0", "#0288d1", "#0277bd",
+    "#1565c0", "#0d47a1", "#1a237e", "#283593", "#1e2b6e",
+  ];
+
+  it("accepts exactly 10 valid hex colours", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandColors: TEN_COLORS });
+    expect(res.status).toBe(200);
+    expect(res.body.bandColors).toHaveLength(10);
+    expect(res.body.bandColors[0]).toBe("#00e5ff");
+  });
+
+  it("returns 400 when bandColors has only 9 entries (below min of 10)", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandColors: TEN_COLORS.slice(0, 9) });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when bandColors has 11 entries (above max of 10)", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandColors: [...TEN_COLORS, "#ffffff"] });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when one of the bandColors is not a valid hex colour", async () => {
+    const bad = [...TEN_COLORS];
+    bad[3] = "navy";
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandColors: bad });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when one bandColor has a 3-digit hex shorthand", async () => {
+    const bad = [...TEN_COLORS];
+    bad[0] = "#fff";
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandColors: bad });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when bandColors is not an array", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandColors: "#00e5ff" });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+});
+
+describe("PUT /api/settings — bandBoundaries", () => {
+  const VALID_BOUNDARIES = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000];
+
+  it("accepts a valid 11-element strictly-increasing boundary array", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandBoundaries: VALID_BOUNDARIES });
+    expect(res.status).toBe(200);
+    expect(res.body.bandBoundaries).toEqual(VALID_BOUNDARIES);
+  });
+
+  it("accepts custom interior values that are still strictly increasing", async () => {
+    const custom = [0, 40, 90, 140, 190, 240, 290, 340, 430, 580, 2000];
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandBoundaries: custom });
+    expect(res.status).toBe(200);
+    expect(res.body.bandBoundaries).toEqual(custom);
+  });
+
+  it("returns 400 when bandBoundaries has only 10 elements (below min of 11)", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandBoundaries: VALID_BOUNDARIES.slice(0, 10) });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when bandBoundaries has 12 elements (above max of 11)", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandBoundaries: [...VALID_BOUNDARIES, 3000] });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when the first element is not 0", async () => {
+    const bad = [1, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000];
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandBoundaries: bad });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when the last element is not 2000", async () => {
+    const bad = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 1999];
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandBoundaries: bad });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when interior values are not strictly increasing (duplicate)", async () => {
+    const bad = [0, 50, 100, 150, 150, 250, 300, 350, 450, 600, 2000];
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandBoundaries: bad });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when interior values are decreasing", async () => {
+    const bad = [0, 50, 100, 150, 200, 180, 300, 350, 450, 600, 2000];
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandBoundaries: bad });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when an element is above the item max of 2000", async () => {
+    const bad = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2001];
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandBoundaries: bad });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when bandBoundaries is not an array", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandBoundaries: "0,50,100" });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+});
+
+describe("PUT /api/settings — zoneOverlaySlots", () => {
+  const FOUR_SLOTS = [
+    { color: "#f5d58a", visible: true },
+    { color: "#c49a6c", visible: true },
+    { color: "#8ab4d0", visible: false },
+    { color: "#b06060", visible: true },
+  ];
+
+  it("accepts a valid saltwater array of 4 slots", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ zoneOverlaySlots: { saltwater: FOUR_SLOTS } });
+    expect(res.status).toBe(200);
+    expect(res.body.zoneOverlaySlots.saltwater).toHaveLength(4);
+    expect(res.body.zoneOverlaySlots.saltwater[2]).toMatchObject({ color: "#8ab4d0", visible: false });
+  });
+
+  it("accepts a valid freshwater array of 4 slots", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ zoneOverlaySlots: { freshwater: FOUR_SLOTS } });
+    expect(res.status).toBe(200);
+    expect(res.body.zoneOverlaySlots.freshwater).toHaveLength(4);
+  });
+
+  it("accepts both saltwater and freshwater together", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ zoneOverlaySlots: { saltwater: FOUR_SLOTS, freshwater: FOUR_SLOTS } });
+    expect(res.status).toBe(200);
+    expect(res.body.zoneOverlaySlots.saltwater).toHaveLength(4);
+    expect(res.body.zoneOverlaySlots.freshwater).toHaveLength(4);
+  });
+
+  it("returns 400 when saltwater has only 3 slots (below min of 4)", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ zoneOverlaySlots: { saltwater: FOUR_SLOTS.slice(0, 3) } });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when saltwater has 5 slots (above max of 4)", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({
+        zoneOverlaySlots: {
+          saltwater: [...FOUR_SLOTS, { color: "#ffffff", visible: true }],
+        },
+      });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when freshwater has only 3 slots (below min of 4)", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ zoneOverlaySlots: { freshwater: FOUR_SLOTS.slice(0, 3) } });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when a slot color is not a valid hex colour", async () => {
+    const bad = [...FOUR_SLOTS.slice(0, 3), { color: "goldenrod", visible: true }];
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ zoneOverlaySlots: { saltwater: bad } });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when a slot color uses a 3-digit hex shorthand", async () => {
+    const bad = [...FOUR_SLOTS.slice(0, 3), { color: "#fff", visible: false }];
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ zoneOverlaySlots: { saltwater: bad } });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when a slot visible field is not a boolean", async () => {
+    const bad = [
+      ...FOUR_SLOTS.slice(0, 3),
+      { color: "#b06060", visible: "yes" },
+    ];
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ zoneOverlaySlots: { saltwater: bad } });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when zoneOverlaySlots is an array instead of an object", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ zoneOverlaySlots: FOUR_SLOTS });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+});
+
 describe("PUT /api/settings — unknown fields round-trip via extras path", () => {
   it("stores and returns a genuinely unrecognised field verbatim", async () => {
     // A field that is not in PutSettingsBody at all must still be stored and
