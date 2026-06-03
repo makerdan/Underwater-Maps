@@ -234,6 +234,7 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     // by <SubstrateLayer> instead; the terrain mesh keeps its depth colormap.
     const terrainExaggeration = useSettingsStore((s) => s.terrainExaggeration);
     const habitatOverlayIntensity = useSettingsStore((s) => s.habitatOverlayIntensity);
+    const habitatOverlayColor = useSettingsStore((s) => s.habitatOverlayColor);
 
     // Sync grid depth range into shader when grid changes.
     useEffect(() => {
@@ -378,6 +379,7 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       // Habitat overlay — suppressed when float-texture linear filtering is unsupported
       material.uniforms["uShowHabitat"]!.value = (activeSpecies && floatTextureLinear) ? 1 : 0;
       material.uniforms["uHabitatIntensity"]!.value = habitatOverlayIntensity;
+      material.uniforms["uHabitatColor"]!.value.set(habitatOverlayColor);
     });
 
     // Apply terrain vertical exaggeration via a group scale on Y. Wrapping

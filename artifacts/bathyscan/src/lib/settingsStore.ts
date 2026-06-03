@@ -307,8 +307,10 @@ export interface SettingsState {
   // ── Habitat & Zone Defaults ──────────────────────────────────────────
   autoShowZoneOverlay: boolean;
   defaultHabitatSpecies: string;
-  /** Habitat suitability overlay blend strength (0=invisible, 1=fully opaque amber). */
+  /** Habitat suitability overlay blend strength (0=invisible, 1=fully opaque). */
   habitatOverlayIntensity: number;
+  /** Habitat suitability overlay tint colour (hex, default amber #ff9919). */
+  habitatOverlayColor: string;
 
   // ── GPS & Trail ──────────────────────────────────────────────────────
   autoStartTrailRecording: boolean;
@@ -816,6 +818,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   autoShowZoneOverlay: false,
   defaultHabitatSpecies: "",
   habitatOverlayIntensity: 0.4,
+  habitatOverlayColor: "#ff9919",
 
   // GPS / Trail
   autoStartTrailRecording: false,
@@ -916,7 +919,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "currentsShowParticles", "currentsShowArrows", "currentsShowStreamlines",
   ],
   habitat: [
-    "autoShowZoneOverlay", "defaultHabitatSpecies", "habitatOverlayIntensity",
+    "autoShowZoneOverlay", "defaultHabitatSpecies", "habitatOverlayIntensity", "habitatOverlayColor",
     "zonePaintBrushRadius", "zoneOverlayEnabled", "zonePaintMode", "zonePaintSlot",
     "substrateColorMode", "hiddenSubstrateClasses",
     "intertidalHotspotsEnabled", "intertidalScoreMode",
@@ -1092,6 +1095,7 @@ export const useSettingsStore = create<SettingsStore>()(
         setAutoShowZoneOverlay: setter("autoShowZoneOverlay"),
         setDefaultHabitatSpecies: setter("defaultHabitatSpecies"),
         setHabitatOverlayIntensity: setter("habitatOverlayIntensity"),
+        setHabitatOverlayColor: setter("habitatOverlayColor"),
 
         // GPS / Trail
         setAutoStartTrailRecording: setter("autoStartTrailRecording"),

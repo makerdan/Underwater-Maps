@@ -267,6 +267,8 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
   const autoShowZoneOverlay = useSettingsStore((s) => s.autoShowZoneOverlay);
   const habitatOverlayIntensity = useSettingsStore((s) => s.habitatOverlayIntensity);
   const setHabitatOverlayIntensity = useSettingsStore((s) => s.setHabitatOverlayIntensity);
+  const habitatOverlayColor = useSettingsStore((s) => s.habitatOverlayColor);
+  const setHabitatOverlayColor = useSettingsStore((s) => s.setHabitatOverlayColor);
   const setScrubDatetime = useUiStore((s) => s.setScrubDatetime);
   const scrubDatetime = useUiStore((s) => s.scrubDatetime);
 
@@ -534,10 +536,74 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
             </div>
           )}
 
+          {/* Overlay colour — preset swatches + custom picker */}
+          {showOverlay && (
+            <div style={{ marginBottom: 8 }}>
+              <div
+                style={{
+                  fontSize: 10,
+                  color: "#cbd5e1",
+                  letterSpacing: "0.08em",
+                  marginBottom: 4,
+                }}
+              >
+                OVERLAY COLOR
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+                {[
+                  { hex: "#ff9919", label: "Amber" },
+                  { hex: "#22d3ee", label: "Cyan" },
+                  { hex: "#4ade80", label: "Green" },
+                  { hex: "#f472b6", label: "Pink" },
+                  { hex: "#a78bfa", label: "Violet" },
+                  { hex: "#ef4444", label: "Red" },
+                  { hex: "#ffffff", label: "White" },
+                ].map(({ hex, label }) => (
+                  <button
+                    key={hex}
+                    title={label}
+                    aria-label={`Set overlay color to ${label}`}
+                    onClick={() => setHabitatOverlayColor(hex)}
+                    style={{
+                      width: 18,
+                      height: 18,
+                      borderRadius: 3,
+                      background: hex,
+                      border: habitatOverlayColor === hex
+                        ? "2px solid #fff"
+                        : "1px solid rgba(255,255,255,0.18)",
+                      cursor: "pointer",
+                      padding: 0,
+                      flexShrink: 0,
+                      boxShadow: habitatOverlayColor === hex ? `0 0 0 1px ${hex}` : "none",
+                    }}
+                  />
+                ))}
+                <input
+                  type="color"
+                  value={habitatOverlayColor}
+                  onChange={(e) => setHabitatOverlayColor(e.target.value)}
+                  aria-label="Custom overlay color"
+                  title="Custom color"
+                  style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: 3,
+                    border: "1px solid rgba(255,255,255,0.18)",
+                    cursor: "pointer",
+                    padding: 0,
+                    background: "none",
+                    flexShrink: 0,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Status */}
           {showOverlay && (
             <div style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 6, letterSpacing: "0.04em" }}>
-              Amber overlay active on terrain
+              Overlay active on terrain
             </div>
           )}
 

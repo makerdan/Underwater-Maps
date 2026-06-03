@@ -92,6 +92,7 @@ const fragmentShader = /* glsl */ `
   uniform sampler2D uHabitatTex;       // Red channel = habitat score [0,1]
   uniform float     uShowHabitat;      // 0=off 1=on
   uniform float     uHabitatIntensity; // Blend strength multiplier [0,1]
+  uniform vec3      uHabitatColor;     // Overlay tint colour (default amber)
 
   varying vec2  vUv;
   varying vec4  vZoneWeight;
@@ -208,13 +209,12 @@ const fragmentShader = /* glsl */ `
     }
 
     // ── Habitat suitability overlay ────────────────────────────────────────
-    // Samples the precomputed score texture and blends an amber glow.
+    // Samples the precomputed score texture and blends a user-chosen tint.
     if (uShowHabitat > 0.5) {
       float score = texture2D(uHabitatTex, vUv).r;
       if (score > 0.0) {
-        vec3 amber = vec3(1.0, 0.6, 0.1);
         float alpha = clamp(score * uHabitatIntensity, 0.0, 1.0);
-        finalColor = mix(finalColor, amber * lighting, alpha);
+        finalColor = mix(finalColor, uHabitatColor * lighting, alpha);
       }
     }
 
@@ -274,6 +274,7 @@ export function createTerrainShaderMaterial(
       uHabitatTex:       { value: new THREE.DataTexture(new Uint8Array([0]), 1, 1, THREE.RedFormat, THREE.UnsignedByteType) },
       uShowHabitat:      { value: 0 },
       uHabitatIntensity: { value: 0.4 },
+      uHabitatColor:     { value: new THREE.Color(1.0, 0.6, 0.1) }, // default amber
     },
     transparent: true,
     side: THREE.DoubleSide,
