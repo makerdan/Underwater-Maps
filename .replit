@@ -48,6 +48,10 @@ args = "test-settings-validation"
 task = "workflow.run"
 args = "test-all"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "check:e2e-user-ids"
+
 [[workflows.workflow]]
 name = "typecheck"
 author = "agent"
@@ -132,6 +136,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm run test-all"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "check:e2e-user-ids"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm run check:e2e-user-ids"
 
 [workflows.workflow.metadata]
 isValidation = true
