@@ -203,22 +203,30 @@ describe("routeTarEntries", () => {
     expect(result.points).toHaveLength(0);
   });
 
-  it("throws PARSER_NOT_IMPLEMENTED for GEODAS xyz.gz entry (nested)", async () => {
+  it("dispatches GEODAS xyz.gz entry to geodas-xyz parser (nested)", async () => {
     const geodasDir = path.join(tmpDir, "H09084", "GEODAS");
     await fs.promises.mkdir(geodasDir, { recursive: true });
     await fs.promises.writeFile(path.join(geodasDir, "h09084.xyz.gz"), "placeholder");
-    await expect(
-      routeTarEntries(tmpDir, ["H09084/GEODAS/h09084.xyz.gz"], "H09084.tar.gz"),
-    ).rejects.toMatchObject({ code: "PARSER_NOT_IMPLEMENTED", parserKey: "geodas-xyz" });
+    mockParser("geodas-xyz", makePts(5));
+    const result = await routeTarEntries(
+      tmpDir,
+      ["H09084/GEODAS/h09084.xyz.gz"],
+      "H09084.tar.gz",
+    );
+    expect(result.points).toHaveLength(5);
   });
 
-  it("throws PARSER_NOT_IMPLEMENTED for root-level GEODAS xyz.gz entry", async () => {
+  it("dispatches GEODAS xyz.gz entry to geodas-xyz parser (root-level)", async () => {
     const geodasDir = path.join(tmpDir, "GEODAS");
     await fs.promises.mkdir(geodasDir, { recursive: true });
     await fs.promises.writeFile(path.join(geodasDir, "h09084.xyz.gz"), "placeholder");
-    await expect(
-      routeTarEntries(tmpDir, ["GEODAS/h09084.xyz.gz"], "H09084.tar.gz"),
-    ).rejects.toMatchObject({ code: "PARSER_NOT_IMPLEMENTED", parserKey: "geodas-xyz" });
+    mockParser("geodas-xyz", makePts(7));
+    const result = await routeTarEntries(
+      tmpDir,
+      ["GEODAS/h09084.xyz.gz"],
+      "H09084.tar.gz",
+    );
+    expect(result.points).toHaveLength(7);
   });
 
   it("throws PARSER_NOT_IMPLEMENTED for HYD93 a93.gz entry", async () => {

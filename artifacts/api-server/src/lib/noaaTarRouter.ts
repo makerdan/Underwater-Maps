@@ -35,6 +35,9 @@ import { gunzipBounded } from "./gunzipBounded.js";
 /** 200 MB cap for inner tif.gz decompression — same as the top-level gz cap. */
 const INNER_GZ_MAX_BYTES = 200 * 1024 * 1024;
 
+/** 500 MB decompression cap for GEODAS sounding files */
+const GEODAS_MAX_DECOMP_BYTES = 500 * 1024 * 1024;
+
 // ---------------------------------------------------------------------------
 // Shared types
 // ---------------------------------------------------------------------------
@@ -431,12 +434,111 @@ export async function parseNoaaSurveysXyz(filePath: string): Promise<RawPoint[]>
 /**
  * Parse a GEODAS xyz.gz sounding CSV.
  *
- * Stub — body to be implemented in the "Parse GEODAS xyz.gz soundings with
- * quality filtering" task.
+ * File format (CSV with header):
+ *   survey_id, lat, lon, depth, quality_code, active
+ *
+ * Quality filter: rows where quality_code != 1 or active != 1 are excluded.
+ * Depth convention: GEODAS depths are positive-downward (matches BathyScan).
+ * Negative depths (elevations above datum) are skipped.
+ *
+ * @param filePath Absolute path to the .xyz.gz file on disk.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function parseGeodasXyz(_filePath: string): Promise<RawPoint[]> {
-  parserNotImplemented("geodas-xyz", _filePath);
+export async function parseGeodasXyz(filePath: string): Promise<RawPoint[]> {
+  const compressed = await fs.promises.readFile(filePath);
+  let decompressed: Buffer;
+  try {
+    decompressed = await gunzipBounded(compressed, GEODAS_MAX_DECOMP_BYTES);
+  } catch (err: unknown) {
+    const e = err as NodeJS.ErrnoException;
+    if (e.code === "DECOMPRESS_TOO_LARGE") {
+      throw new Error(
+        `GEODAS xyz.gz file exceeds the ${GEODAS_MAX_DECOMP_BYTES / 1024 / 1024} MB decompression limit: ${path.basename(filePath)}`,
+      );
+    }
+    throw new Error(
+      `Failed to decompress GEODAS xyz.gz file "${path.basename(filePath)}": ${e.message}`,
+    );
+  }
+
+  const text = decompressed.toString("utf8");
+  const lines = text.split(/\r?\n/);
+
+  // Parse the header row to find column indices (case-insensitive, whitespace-tolerant)
+  const headerLine = lines[0];
+  if (!headerLine) {
+    throw new Error(`GEODAS xyz.gz file "${path.basename(filePath)}" is empty or has no header.`);
+  }
+  const headers = headerLine.split(",").map((h) => h.trim().toLowerCase());
+
+  const idxLat = headers.indexOf("lat");
+  const idxLon = headers.indexOf("lon");
+  const idxDepth = headers.indexOf("depth");
+  const idxQuality = headers.indexOf("quality_code");
+  const idxActive = headers.indexOf("active");
+
+  if (idxLat === -1 || idxLon === -1 || idxDepth === -1) {
+    throw new Error(
+      `GEODAS xyz.gz file "${path.basename(filePath)}" is missing required columns. ` +
+        `Found: ${headers.join(", ")}. Expected: lat, lon, depth.`,
+    );
+  }
+
+  const points: RawPoint[] = [];
+  let totalRows = 0;
+  let filteredQuality = 0;
+  let filteredNegativeDepth = 0;
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i]!.trim();
+    if (!line) continue;
+
+    totalRows++;
+    const cols = line.split(",");
+
+    // Quality filter — reject if quality_code or active fields are present and != 1
+    if (idxQuality !== -1) {
+      const qc = parseInt(cols[idxQuality]?.trim() ?? "", 10);
+      if (qc !== 1) {
+        filteredQuality++;
+        continue;
+      }
+    }
+    if (idxActive !== -1) {
+      const active = parseInt(cols[idxActive]?.trim() ?? "", 10);
+      if (active !== 1) {
+        filteredQuality++;
+        continue;
+      }
+    }
+
+    const lat = parseFloat(cols[idxLat]?.trim() ?? "");
+    const lon = parseFloat(cols[idxLon]?.trim() ?? "");
+    const depth = parseFloat(cols[idxDepth]?.trim() ?? "");
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(depth)) continue;
+
+    // Negative depths are elevations above datum — skip
+    if (depth < 0) {
+      filteredNegativeDepth++;
+      continue;
+    }
+
+    points.push({ lat, lon, depth });
+  }
+
+  logger.info(
+    {
+      file: path.basename(filePath),
+      loaded: points.length,
+      totalRows,
+      filteredQuality,
+      filteredNegativeDepth,
+    },
+    `[geodas-xyz] loaded ${points.length} / ${totalRows} soundings ` +
+      `(${filteredQuality} filtered by quality/active, ${filteredNegativeDepth} above-datum skipped)`,
+  );
+
+  return points;
 }
 
 /**
