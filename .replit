@@ -174,7 +174,7 @@ externalPort = 3000
 channel = "stable-25_05"
 
 [objectStorage]
-defaultBucketID = "replit-objstore-7d763d9b-7f87-4c5c-8bf1-317ab19f2828"
+defaultBucketID = "replit-objstore-418d7d44-3c27-4d35-900e-1aeaca7de1ff"
 
 [userenv]
 
