@@ -181,8 +181,8 @@ interface UiStore {
   /**
    * The subset of HYD93 feature codes currently visible.
    * Codes: 89 (Rocks), 103 (Kelp), 146 (Ledge), 530 (Rocky reef), 988 (Obstruction).
-   * Defaults to all five when the master toggle is first enabled.
-   * Intentionally transient — resets to all-on each session.
+   * Defaults to all five codes. Persisted via settingsStore so the user's
+   * filter choices survive page reloads and sync cross-device.
    */
   hyd93ActiveFeatureCodes: Set<number>;
   toggleHyd93FeatureCode: (code: number) => void;
@@ -312,6 +312,7 @@ function applySettingsToUiStore(s: typeof DEFAULT_SETTINGS) {
     intertidalScoreMode: s.intertidalScoreMode ?? 'tidepool',
     efhOverlayEnabled: s.efhOverlayEnabled,
     hiddenEfhSpecies: new Set<string>(s.hiddenEfhSpecies ?? []),
+    hyd93ActiveFeatureCodes: new Set<number>(s.hyd93ActiveFeatureCodes ?? [89, 103, 146, 530, 988]),
     weatherStationsActive: s.weatherStationsActive,
     rawsOverlayActive: s.rawsOverlayActive,
     windOverlayActive: s.windOverlayActive,
@@ -442,8 +443,9 @@ export const useUiStore = create<UiStore>((set) => {
     hyd93FeaturesEnabled: false,
     setHyd93FeaturesEnabled: (enabled) => set({ hyd93FeaturesEnabled: enabled }),
 
-    // hyd93ActiveFeatureCodes is intentionally transient — resets to all-on each session.
-    hyd93ActiveFeatureCodes: new Set<number>([89, 103, 146, 530, 988]),
+    // hyd93ActiveFeatureCodes is persisted via settingsStore so power users'
+    // filter choices survive page reloads and sync cross-device.
+    hyd93ActiveFeatureCodes: new Set<number>(s.hyd93ActiveFeatureCodes ?? [89, 103, 146, 530, 988]),
     toggleHyd93FeatureCode: (code) => set((state) => {
       const next = new Set(state.hyd93ActiveFeatureCodes);
       if (next.has(code)) {
@@ -451,6 +453,7 @@ export const useUiStore = create<UiStore>((set) => {
       } else {
         next.add(code);
       }
+      useSettingsStore.setState({ hyd93ActiveFeatureCodes: [...next] });
       return { hyd93ActiveFeatureCodes: next };
     }),
 

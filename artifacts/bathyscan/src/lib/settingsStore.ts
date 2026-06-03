@@ -52,7 +52,7 @@ import {
 } from "./keyBindings";
 import { usePanelCollapseStore, type PanelId } from "./panelCollapseStore";
 
-export const SETTINGS_SCHEMA_VERSION = 16;
+export const SETTINGS_SCHEMA_VERSION = 17;
 
 /**
  * Standard-mapping gamepad button index used to trigger the crosshair
@@ -417,6 +417,13 @@ export interface SettingsState {
    * Stored as a plain array for JSON serialisability; uiStore converts to Set.
    */
   hiddenEfhSpecies: string[];
+  /**
+   * HYD93 feature type codes currently visible.
+   * Codes: 89 (Rocks), 103 (Kelp), 146 (Ledge), 530 (Rocky reef), 988 (Obstruction).
+   * Stored as a plain array for JSON serialisability; uiStore converts to Set.
+   * Default = all five codes visible.
+   */
+  hyd93ActiveFeatureCodes: number[];
 
   // ── Shortcuts (remappable bindings) ──────────────────────────────────
   /**
@@ -611,6 +618,7 @@ interface SettingsActions {
   setIntertidalScoreMode: (v: 'tidepool' | 'beachcombing') => void;
   setEfhOverlayEnabled: (v: boolean) => void;
   setHiddenEfhSpecies: (v: string[]) => void;
+  setHyd93ActiveFeatureCodes: (v: number[]) => void;
 
   // Shortcuts
   setKeyBinding: (action: ShortcutActionId, code: string) => void;
@@ -872,6 +880,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   intertidalScoreMode: 'tidepool',
   efhOverlayEnabled: false,
   hiddenEfhSpecies: [],
+  hyd93ActiveFeatureCodes: [89, 103, 146, 530, 988],
 
   // Shortcuts
   keyBindings: { ...DEFAULT_KEY_BINDINGS },
@@ -925,6 +934,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "substrateColorMode", "hiddenSubstrateClasses",
     "intertidalHotspotsEnabled", "intertidalScoreMode",
     "efhOverlayEnabled", "hiddenEfhSpecies",
+    "hyd93ActiveFeatureCodes",
   ],
   gps: [
     "autoStartTrailRecording", "defaultTrailColor", "gpsRecordingInterval", "trailRetention",
@@ -1205,6 +1215,7 @@ export const useSettingsStore = create<SettingsStore>()(
         setIntertidalScoreMode: setter("intertidalScoreMode"),
         setEfhOverlayEnabled: setter("efhOverlayEnabled"),
         setHiddenEfhSpecies: setter("hiddenEfhSpecies"),
+        setHyd93ActiveFeatureCodes: setter("hyd93ActiveFeatureCodes"),
 
         // Shortcuts
         setKeyBinding: (action, code) =>
@@ -1426,6 +1437,13 @@ export const useSettingsStore = create<SettingsStore>()(
               ? "large"
               : "medium";
           }
+          // v16 → v17: inject hyd93ActiveFeatureCodes default for existing stored settings.
+          // Previously transient (reset each session); now persisted so power users'
+          // filter choices survive page reloads.
+          const migratedHyd93: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).hyd93ActiveFeatureCodes === undefined) {
+            migratedHyd93.hyd93ActiveFeatureCodes = DEFAULT_SETTINGS.hyd93ActiveFeatureCodes;
+          }
           return {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -1433,6 +1451,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedContours,
             ...migratedOverlays,
             ...migratedFontSize,
+            ...migratedHyd93,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,

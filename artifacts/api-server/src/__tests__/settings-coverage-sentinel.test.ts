@@ -118,6 +118,9 @@ const SETTINGS_TESTED_FIELDS = new Set<string>([
 
   // ── v16 accessibility (me.test.ts) ───────────────────────────────────────
   "globalFontSize",
+
+  // ── v17 HYD93 feature filter (me.test.ts) ────────────────────────────────
+  "hyd93ActiveFeatureCodes",
 ]);
 
 describe("PutSettingsBody field-coverage sentinel", () => {

@@ -901,6 +901,44 @@ describe("PUT /api/settings — unknown fields round-trip via extras path", () =
   });
 });
 
+describe("PUT /api/settings — hyd93ActiveFeatureCodes (v17)", () => {
+  it("accepts a valid hyd93ActiveFeatureCodes array", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ hyd93ActiveFeatureCodes: [89, 103] });
+    expect(res.status).toBe(200);
+    expect(res.body.hyd93ActiveFeatureCodes).toEqual([89, 103]);
+  });
+
+  it("accepts the full default set of all five codes", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ hyd93ActiveFeatureCodes: [89, 103, 146, 530, 988] });
+    expect(res.status).toBe(200);
+    expect(res.body.hyd93ActiveFeatureCodes).toEqual([89, 103, 146, 530, 988]);
+  });
+
+  it("rejects a non-array value", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ hyd93ActiveFeatureCodes: "89,103" });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("rejects an array containing non-integer values", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ hyd93ActiveFeatureCodes: [89.5, 103] });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+});
+
 describe("PUT /api/settings — combined payload with all 17 new fields", () => {
   it("accepts a full valid payload containing all 17 new v15 fields", async () => {
     const payload = {

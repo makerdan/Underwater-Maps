@@ -4359,6 +4359,12 @@ components:
             type: string
           default: []
           description: Species names whose EFH polygons are hidden from the overlay.
+        hyd93ActiveFeatureCodes:
+          type: array
+          items:
+            type: integer
+          default: [89, 103, 146, 530, 988]
+          description: HYD93 feature type codes currently visible (89=Rocks, 103=Kelp, 146=Ledge, 530=Rocky reef, 988=Obstruction).
         globalFontSize:
           type: string
           enum: [smallest, small, medium, large, x-large, largest]

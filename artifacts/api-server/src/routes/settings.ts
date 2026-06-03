@@ -71,6 +71,7 @@ export const DEFAULT_SETTINGS = {
   intertidalScoreMode: "tidepool",
   efhOverlayEnabled: false,
   hiddenEfhSpecies: [] as string[],
+  hyd93ActiveFeatureCodes: [89, 103, 146, 530, 988] as number[],
   globalFontSize: "medium",
   paletteShallow: "#00e5ff",
   paletteDeep: "#283593",
