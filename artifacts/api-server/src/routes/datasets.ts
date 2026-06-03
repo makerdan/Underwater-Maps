@@ -862,17 +862,24 @@ router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> =
     // For "upload" placeholder ID, auth is sufficient; no DB row exists.
   }
 
-  // --- Cache lookup by sha256(gridHash + "|" + waterType) ---
+  // --- Cache lookup by sha256(userId + "|" + gridHash + "|" + waterType + "|" + substrateFp) ---
   // The zone cache only ever stores AI results — heuristic fallbacks are not
   // persisted — so every hit reports `source: "ai"`. We default the field on
-  // the response so older cached entries written before the field existed
+  // the response so older cached entries written before the field existed.
+  //
+  // userId partitions the cache so two users who upload identical bathymetry
+  // data cannot share each other's classification results. Preset datasets are
+  // public and classified independently of any user, so they use "" as the
+  // userId (a stable, well-known sentinel that never collides with a real
+  // Clerk userId).
+  const cacheUserId = isPreset ? "" : (getAuth(req).userId ?? "");
   const substrateFp = substrateFingerprintForDataset(id);
   // Under the new sha256-namespaced cache scheme there are no "bare gridHash"
   // legacy entries — the hydrate pass unlinks any non-64-char files on
   // startup — so we look up only the namespaced key. Datasets with no
   // substrate coverage collapse to fp "00000000", which still produces a
   // stable namespaced key, so behaviour is unchanged for uploads.
-  const namespacedKey = zoneCacheKey(gridHash, waterType, substrateFp);
+  const namespacedKey = zoneCacheKey(cacheUserId, gridHash, waterType, substrateFp);
   const inMemory = datasetZonesCache.get(namespacedKey);
   if (inMemory && inMemory.waterType === waterType) {
     res.json({
@@ -885,7 +892,7 @@ router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> =
     return;
   }
 
-  const onDisk = await readZoneDiskByHash(gridHash, waterType, substrateFp);
+  const onDisk = await readZoneDiskByHash(cacheUserId, gridHash, waterType, substrateFp);
   if (onDisk && onDisk.waterType === waterType) {
     datasetZonesCache.set(namespacedKey, onDisk);
     res.json({

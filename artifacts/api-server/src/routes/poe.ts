@@ -244,12 +244,13 @@ export { datasetZonesCache };
  * hex sha256 string, safe to use as both an in-memory map key and a filename.
  */
 export function zoneCacheKey(
+  userId: string,
   gridHash: string,
   waterType: "saltwater" | "freshwater",
   substrateFp: string,
 ): string {
   return createHash("sha256")
-    .update(`${gridHash}|${waterType}|${substrateFp}`)
+    .update(`${userId}|${gridHash}|${waterType}|${substrateFp}`)
     .digest("hex");
 }
 
@@ -295,11 +296,12 @@ export async function readZoneDiskByKey(cacheKey: string): Promise<CachedZones |
  * guard against on-disk tampering or stale-format files.
  */
 export async function readZoneDiskByHash(
+  userId: string,
   gridHash: string,
   waterType: "saltwater" | "freshwater",
   substrateFp: string,
 ): Promise<CachedZones | null> {
-  const entry = await readZoneDiskByKey(zoneCacheKey(gridHash, waterType, substrateFp));
+  const entry = await readZoneDiskByKey(zoneCacheKey(userId, gridHash, waterType, substrateFp));
   if (!entry) return null;
   if (entry.waterType !== waterType) return null;
   return entry;
@@ -899,7 +901,7 @@ router.post("/classify", asyncHandler(async (req, res) => {
   if (cached) {
     const zones = JSON.parse(cached) as string[];
     const secondary = gridHash
-      ? datasetZonesCache.get(zoneCacheKey(gridHash, waterType, substrateFp))
+      ? datasetZonesCache.get(zoneCacheKey(userId, gridHash, waterType, substrateFp))
       : null;
     const coarseWidth = secondary?.coarseWidth ?? TILE_SIZE;
     const coarseHeight = secondary?.coarseHeight ?? TILE_SIZE;
@@ -920,7 +922,7 @@ router.post("/classify", asyncHandler(async (req, res) => {
   // substrateFp) cache before serving a cached entry from a different grid.
   const contentHash = createHash("sha256").update(gridBase64).digest("hex");
   if (gridHash) {
-    const secondaryKey = zoneCacheKey(gridHash, waterType, substrateFp);
+    const secondaryKey = zoneCacheKey(userId, gridHash, waterType, substrateFp);
     const inMemoryHit = datasetZonesCache.get(secondaryKey);
     const diskHit = inMemoryHit ?? (await readZoneDiskByKey(secondaryKey));
     if (
@@ -979,7 +981,7 @@ router.post("/classify", asyncHandler(async (req, res) => {
         // and contentHash for collision detection on read.
         globalPoeCache.set(cacheKey, JSON.stringify(out.zones));
         if (gridHash) {
-          const secondaryKey = zoneCacheKey(gridHash, waterType, substrateFp);
+          const secondaryKey = zoneCacheKey(userId, gridHash, waterType, substrateFp);
           const cachedEntry: CachedZones = {
             zones: out.zones,
             waterType,
@@ -1112,7 +1114,7 @@ router.post("/classify", asyncHandler(async (req, res) => {
     // lets future reads detect FNV-1a 32-bit collisions between two unrelated
     // depth payloads before serving stale labels.
     if (gridHash) {
-      const secondaryKey = zoneCacheKey(gridHash, waterType, substrateFp);
+      const secondaryKey = zoneCacheKey(userId, gridHash, waterType, substrateFp);
       const cachedEntry: CachedZones = {
         zones,
         waterType,
