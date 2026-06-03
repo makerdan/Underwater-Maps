@@ -29,6 +29,7 @@ export const DEFAULT_SETTINGS = {
   colormapTheme: "ocean",
   showCompassMinimap: true,
   hasSeenOnboarding: true,
+  panelCollapse: {},
 } as const;
 
 export const test = base.extend<{ resetSettings: void }>({
