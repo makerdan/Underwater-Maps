@@ -171,23 +171,36 @@ describe("routeTarEntries", () => {
     ).rejects.toMatchObject({ code: "NO_PARSEABLE_DATA" });
   });
 
-  it("throws PARSER_NOT_IMPLEMENTED for surveys.xyz (parser not yet implemented)", async () => {
+  it("surveys.xyz with a valid header+data row returns points (parser is implemented)", async () => {
     await fs.promises.mkdir(path.join(tmpDir, "H09084"), { recursive: true });
-    await fs.promises.writeFile(path.join(tmpDir, "H09084", "surveys.xyz"), "placeholder");
-    await expect(
-      routeTarEntries(tmpDir, ["H09084/surveys.xyz"], "H09084.tar.gz"),
-    ).rejects.toMatchObject({ code: "PARSER_NOT_IMPLEMENTED", parserKey: "noaa-surveys-xyz" });
+    const content = [
+      "SURVEY\tLON\tLAT\tDEPTH",
+      "H09084\t-132.530\t55.690\t42.5",
+    ].join("\n");
+    await fs.promises.writeFile(path.join(tmpDir, "H09084", "surveys.xyz"), content);
+
+    const result = await routeTarEntries(
+      tmpDir,
+      ["H09084/surveys.xyz"],
+      "H09084.tar.gz",
+    );
+
+    expect(result.points).toHaveLength(1);
+    expect(result.points[0]).toMatchObject({ lon: -132.53, lat: 55.69, depth: 42.5 });
   });
 
-  it("PARSER_NOT_IMPLEMENTED error includes the entry filename and a hint", async () => {
+  it("surveys.xyz with no valid data rows returns an empty points array", async () => {
     await fs.promises.mkdir(path.join(tmpDir, "H09084"), { recursive: true });
-    await fs.promises.writeFile(path.join(tmpDir, "H09084", "surveys.xyz"), "placeholder");
-    await expect(
-      routeTarEntries(tmpDir, ["H09084/surveys.xyz"], "H09084.tar.gz"),
-    ).rejects.toMatchObject({
-      code: "PARSER_NOT_IMPLEMENTED",
-      message: expect.stringMatching(/surveys\.xyz.*planned/i),
-    });
+    const content = "SURVEY\tLON\tLAT\tDEPTH\nH09084\t-132.530\t55.690\t99999.9\n";
+    await fs.promises.writeFile(path.join(tmpDir, "H09084", "surveys.xyz"), content);
+
+    const result = await routeTarEntries(
+      tmpDir,
+      ["H09084/surveys.xyz"],
+      "H09084.tar.gz",
+    );
+
+    expect(result.points).toHaveLength(0);
   });
 
   it("throws PARSER_NOT_IMPLEMENTED for GEODAS xyz.gz entry (nested)", async () => {

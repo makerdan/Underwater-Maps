@@ -303,15 +303,129 @@ function parserNotImplemented(key: TarParserKey, entryPath: string): never {
   );
 }
 
+/** NOAA null-depth sentinel — rows with this exact depth value are discarded. */
+const NOAA_NULL_DEPTH = 99999.9;
+
 /**
- * Parse a NOAA surveys.xyz TSV sounding file.
+ * Parse a NOAA `surveys.xyz` TSV sounding file.
  *
- * Stub — body to be implemented in the "Parse NOAA surveys.xyz TSV sounding
- * files" task.  Signature must remain `(filePath: string) => Promise<RawPoint[]>`.
+ * The file is tab-separated with a mandatory header row in the form:
+ *   SURVEY\tLON\tLAT\tDEPTH
+ *
+ * Note that LON precedes LAT — the opposite of the conventional column order
+ * used elsewhere in BathyScan.  This parser detects the header, maps columns
+ * by name (case-insensitive, trimmed), and returns correctly ordered
+ * `{ lon, lat, depth }` triples.
+ *
+ * Filtering rules:
+ *   - Rows where DEPTH is absent, non-numeric, or non-finite are skipped.
+ *   - Rows where DEPTH equals 99999.9 (NOAA null sentinel) are skipped.
+ *   - Rows with coordinates outside valid WGS84 bounds are skipped.
+ *
+ * Depth values are already positive-downward metres; no sign flip is needed.
+ *
+ * @param filePath Absolute path to the extracted `surveys.xyz` file.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function parseNoaaSurveysXyz(_filePath: string): Promise<RawPoint[]> {
-  parserNotImplemented("noaa-surveys-xyz", _filePath);
+export async function parseNoaaSurveysXyz(filePath: string): Promise<RawPoint[]> {
+  let text: string;
+  try {
+    text = await fs.promises.readFile(filePath, "utf8");
+  } catch (err) {
+    throw new Error(
+      `Failed to read surveys.xyz: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  const lines = text.split(/\r?\n/);
+  if (lines.length === 0) {
+    throw new Error("surveys.xyz is empty.");
+  }
+
+  // Locate and parse the header row — the first non-empty, non-comment line.
+  let headerLineIdx = -1;
+  let lonCol = -1;
+  let latCol = -1;
+  let depthCol = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i]!.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+
+    const cols = trimmed.split("\t").map((c) => c.trim().toLowerCase());
+    const surveyIdx = cols.indexOf("survey");
+    const lonIdx = cols.indexOf("lon");
+    const latIdx = cols.indexOf("lat");
+    const depthIdx = cols.indexOf("depth");
+
+    if (surveyIdx !== -1 && lonIdx !== -1 && latIdx !== -1 && depthIdx !== -1) {
+      headerLineIdx = i;
+      lonCol = lonIdx;
+      latCol = latIdx;
+      depthCol = depthIdx;
+      break;
+    }
+
+    // If the first content line isn't a header, the format is unrecognised.
+    throw new Error(
+      `surveys.xyz: expected header row with columns SURVEY, LON, LAT, DEPTH ` +
+        `(tab-separated, case-insensitive). First content line was: "${trimmed.slice(0, 120)}"`,
+    );
+  }
+
+  if (headerLineIdx === -1) {
+    throw new Error("surveys.xyz: file contains no recognisable header row.");
+  }
+
+  const points: RawPoint[] = [];
+  let skipped = 0;
+
+  for (let i = headerLineIdx + 1; i < lines.length; i++) {
+    const line = lines[i]!.trim();
+    if (!line || line.startsWith("#")) continue;
+
+    const cols = line.split("\t");
+
+    const rawLon = cols[lonCol];
+    const rawLat = cols[latCol];
+    const rawDepth = cols[depthCol];
+
+    if (rawLon === undefined || rawLat === undefined || rawDepth === undefined) {
+      skipped++;
+      continue;
+    }
+
+    const lon = parseFloat(rawLon);
+    const lat = parseFloat(rawLat);
+    const depth = parseFloat(rawDepth);
+
+    if (!Number.isFinite(depth) || depth === NOAA_NULL_DEPTH) {
+      skipped++;
+      continue;
+    }
+
+    if (
+      !Number.isFinite(lon) ||
+      !Number.isFinite(lat) ||
+      lat < -90 ||
+      lat > 90 ||
+      lon < -180 ||
+      lon > 180
+    ) {
+      skipped++;
+      continue;
+    }
+
+    points.push({ lon, lat, depth });
+  }
+
+  if (skipped > 0) {
+    logger.info(
+      { filePath: path.basename(filePath), skipped },
+      `[noaa-surveys-xyz] skipped ${skipped} invalid/null row(s)`,
+    );
+  }
+
+  return points;
 }
 
 /**
