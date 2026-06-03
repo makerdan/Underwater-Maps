@@ -9,7 +9,8 @@
  *   GEODAS/<name>.a93.gz           — HYD93 fixed-width soundings (compressed)
  *   Bottom_Samples/<n>_BSText.txt  — substrate annotation text files
  *   Smooth_Sheets/<n>.tif.gz       — inner GeoTIFF rasters (compressed)
- *   *.sid / *.pdf / *.htm          — unsupported; skipped with a log warning
+ *   *.sid / *.pdf / *.htm          — unsupported; skipped with a log info
+ *   surveys.txt                    — metadata only; skipped
  *
  * This module:
  *   1. Classifies each extracted entry path against the routing table.
@@ -72,6 +73,25 @@ export type TarParserKey =
   | "skip";
 
 // ---------------------------------------------------------------------------
+// Skip reason type
+// ---------------------------------------------------------------------------
+
+export type SkipReason =
+  /** File format is not supported by BathyScan (e.g. .sid.gz, .pdf, .htm). */
+  | "unsupported-format"
+  /** File contains only metadata, no depth soundings (e.g. surveys.txt). */
+  | "metadata-only"
+  /** An .xyz.gz quality-coded sibling exists in the same survey folder;
+   *  the .a93.gz legacy version is redundant and skipped. */
+  | "superseded-by-xyz";
+
+export interface SkippedEntry {
+  /** Relative path within the archive. */
+  path: string;
+  reason: SkipReason;
+}
+
+// ---------------------------------------------------------------------------
 // Result type
 // ---------------------------------------------------------------------------
 
@@ -86,6 +106,8 @@ export interface TarRouteResult {
    * depth data can safely ignore this field.
    */
   substratePoints: SubstratePoint[];
+  /** Entries that were intentionally skipped, with their skip reason. */
+  skipped: SkippedEntry[];
 }
 
 // ---------------------------------------------------------------------------
@@ -104,13 +126,15 @@ export interface TarRouteResult {
  *   `.../GEODAS/<name>.a93.gz`                 → hyd93-a93
  *   `.../Bottom_Samples/<name>_BSText.txt`     → bottom-samples
  *   `.../Smooth_Sheets/<name>.tif.gz`          → inner-geotiff
- *   `*.sid` / `*.sid.gz` / `*.pdf` / `*.htm`  → skip (unsupported)
- *   Everything else (metadata, index, etc.)   → skip (unrecognised)
+ *   `*.sid` / `*.sid.gz` / `*.pdf` / `*.htm` / `*.html`
+ *                                              → skip (unsupported format)
+ *   `surveys.txt` (at any depth)               → skip (metadata-only)
+ *   Everything else (index HTML, thumbnails…)  → skip (unrecognised)
  */
 export function classifyTarEntry(relativePath: string): TarParserKey {
   const p = relativePath.toLowerCase().replace(/\\/g, "/");
 
-  // Explicitly unsupported types — log at call site
+  // Explicitly unsupported formats
   if (
     p.endsWith(".sid") ||
     p.endsWith(".sid.gz") ||
@@ -118,6 +142,11 @@ export function classifyTarEntry(relativePath: string): TarParserKey {
     p.endsWith(".htm") ||
     p.endsWith(".html")
   ) {
+    return "skip";
+  }
+
+  // Metadata-only: surveys.txt has survey metadata but no depth soundings
+  if (p === "surveys.txt" || p.endsWith("/surveys.txt")) {
     return "skip";
   }
 
@@ -133,6 +162,8 @@ export function classifyTarEntry(relativePath: string): TarParserKey {
   }
 
   // HYD93 fixed-width .a93.gz (also lives under GEODAS/)
+  // Note: routeTarEntries may further demote to skip when an .xyz.gz sibling
+  // is present in the same survey folder.
   if (/(?:^|\/)geodas\/[^/]+\.a93\.gz$/.test(p)) {
     return "hyd93-a93";
   }
@@ -147,7 +178,7 @@ export function classifyTarEntry(relativePath: string): TarParserKey {
     return "inner-geotiff";
   }
 
-  // Unrecognised entry (surveys.txt, index HTML, thumbnails, etc.) — skip
+  // Unrecognised entry (index HTML, thumbnails, etc.) — skip
   return "skip";
 }
 
@@ -709,8 +740,31 @@ function nameFromArchiveFilename(archiveFileName: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Sibling detection — .a93.gz superseded by .xyz.gz in the same folder
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a set of normalised directory prefixes that have at least one
+ * `.xyz.gz` entry classified as `geodas-xyz`.  Used to detect when an
+ * `.a93.gz` sibling in the same folder should be skipped in favour of
+ * the quality-coded XYZ version.
+ */
+function buildXyzGzDirs(entries: string[]): Set<string> {
+  const dirs = new Set<string>();
+  for (const entry of entries) {
+    const p = entry.toLowerCase().replace(/\\/g, "/");
+    if (/(?:^|\/)geodas\/[^/]+\.xyz\.gz$/.test(p)) {
+      dirs.add(p.substring(0, p.lastIndexOf("/")));
+    }
+  }
+  return dirs;
+}
+
+// ---------------------------------------------------------------------------
 // Main router entry point
 // ---------------------------------------------------------------------------
+
+const NO_PARSEABLE_DATA_MESSAGE = "No parseable bathymetric data found in this archive.";
 
 /**
  * Walk the entries extracted from a NOAA tar.gz archive, dispatch each
@@ -721,15 +775,16 @@ function nameFromArchiveFilename(archiveFileName: string): string {
  * to `result.points`.  Bottom_Samples substrate files contribute exclusively to
  * `result.substratePoints` and do not add sounding depth data.
  *
- * Skipped entries (`.sid`, `.pdf`, `.htm`, unrecognised metadata files) are
- * logged at WARN level but never cause the upload to fail.
+ * Skipped entries (`.sid`, `.pdf`, `.htm`, `surveys.txt`, unrecognised
+ * metadata files) are logged at INFO level since skipping is expected
+ * behaviour for mixed-content NOAA archives.
  *
  * @param extractedDir    Directory where the tar was extracted.
  * @param entries         Relative entry paths from extractTarFile / extractTarBuffer.
  * @param archiveFileName Original archive filename used as the name fallback.
  *
  * @throws {Error} code `"NO_PARSEABLE_DATA"` — archive contains no entries
- *   that match a known NOAA format.
+ *   that match a known NOAA format, or all matched entries produced zero points.
  * @throws {Error} code `"PARSER_NOT_IMPLEMENTED"` — a recognised entry type
  *   was matched but its parser is not yet implemented.
  */
@@ -741,9 +796,13 @@ export async function routeTarEntries(
   const allPoints: RawPoint[] = [];
   const allSubstratePoints: SubstratePoint[] = [];
 
+  // Build the set of GEODAS directories that have at least one .xyz.gz so we
+  // can detect .a93.gz files that are superseded by a quality-coded sibling.
+  const xyzGzDirs = buildXyzGzDirs(entries);
+
   // Classify every non-directory entry
   const recognised: Array<{ relativePath: string; key: Exclude<TarParserKey, "skip"> }> = [];
-  const skipped: string[] = [];
+  const skipped: SkippedEntry[] = [];
 
   for (const entry of entries) {
     // Skip bare directory entries emitted by the tar extractor
@@ -751,42 +810,51 @@ export async function routeTarEntries(
     if (normalised.endsWith("/")) continue;
 
     const key = classifyTarEntry(entry);
+
     if (key === "skip") {
-      skipped.push(entry);
+      const p = normalised.toLowerCase();
+      let reason: SkipReason;
+      if (p === "surveys.txt" || p.endsWith("/surveys.txt")) {
+        reason = "metadata-only";
+      } else if (
+        p.endsWith(".sid") ||
+        p.endsWith(".sid.gz") ||
+        p.endsWith(".pdf") ||
+        p.endsWith(".htm") ||
+        p.endsWith(".html")
+      ) {
+        reason = "unsupported-format";
+      } else {
+        reason = "unsupported-format";
+      }
+      skipped.push({ path: entry, reason });
+    } else if (key === "hyd93-a93") {
+      // Prefer the quality-coded .xyz.gz when one exists in the same folder
+      const pNorm = normalised.toLowerCase();
+      const dir = pNorm.substring(0, pNorm.lastIndexOf("/"));
+      if (xyzGzDirs.has(dir)) {
+        skipped.push({ path: entry, reason: "superseded-by-xyz" });
+      } else {
+        recognised.push({ relativePath: entry, key });
+      }
     } else {
       recognised.push({ relativePath: entry, key });
     }
   }
 
-  // Log each skipped entry.  MrSID gets a specific INFO-level note; everything
-  // else is WARN so it stands out in server logs as something unexpected.
+  // Log each skipped entry at INFO (skipping is expected in NOAA archives)
   for (const s of skipped) {
-    const lp = s.toLowerCase().replace(/\\/g, "/");
-    if (lp.endsWith(".sid") || lp.endsWith(".sid.gz")) {
-      logger.info(
-        { entry: s },
-        `[noaa-tar-router] MrSID format not supported; skipping`,
-      );
-    } else {
-      logger.warn(
-        { entry: s },
-        `[noaa-tar-router] skipping unsupported or unrecognised entry: ${path.basename(s)}`,
-      );
-    }
+    logger.info(
+      { entry: s.path, reason: s.reason },
+      `[noaa-tar-router] skipping "${path.basename(s.path)}" (${s.reason})`,
+    );
   }
 
   // Fail early with a clear user-facing message when nothing is parseable
   if (recognised.length === 0) {
-    throw Object.assign(
-      new Error(
-        "No parseable data files found in archive. " +
-          `The archive contained ${entries.filter((e) => !e.replace(/\\/g, "/").endsWith("/")).length} file(s) ` +
-          "but none matched a known NOAA format. " +
-          "Expected at least one of: surveys.xyz, GEODAS/*.xyz.gz, GEODAS/*.a93.gz, " +
-          "Bottom_Samples/*_BSText.txt, or Smooth_Sheets/*.tif.gz.",
-      ),
-      { code: "NO_PARSEABLE_DATA" },
-    );
+    throw Object.assign(new Error(NO_PARSEABLE_DATA_MESSAGE), {
+      code: "NO_PARSEABLE_DATA",
+    });
   }
 
   // Dispatch each recognised entry to its parser and accumulate points
@@ -822,9 +890,18 @@ export async function routeTarEntries(
     }
   }
 
+  // Post-parse guard: recognised entries may produce zero points (e.g. all
+  // parsers returned empty arrays).  Surface a clear error rather than
+  // silently producing an unusable empty dataset.
+  if (allPoints.length === 0) {
+    throw Object.assign(new Error(NO_PARSEABLE_DATA_MESSAGE), {
+      code: "NO_PARSEABLE_DATA",
+    });
+  }
+
   // Derive dataset name — surveys.txt H-number first, archive filename as fallback
   const metaName = await extractSurveyNameFromMetadata(extractedDir, entries);
   const datasetName = metaName ?? nameFromArchiveFilename(archiveFileName);
 
-  return { points: allPoints, datasetName, substratePoints: allSubstratePoints };
+  return { points: allPoints, datasetName, substratePoints: allSubstratePoints, skipped };
 }

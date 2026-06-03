@@ -153,7 +153,7 @@ describe("routeTarEntries", () => {
     await expect(
       routeTarEntries(tmpDir, entries, "H09084.tar.gz"),
     ).rejects.toMatchObject({
-      message: expect.stringContaining("No parseable data files found"),
+      message: "No parseable bathymetric data found in this archive.",
       code: "NO_PARSEABLE_DATA",
     });
   });
@@ -316,11 +316,12 @@ describe("routeTarEntries", () => {
     expect(result.points).toHaveLength(10);
   });
 
-  it("NO_PARSEABLE_DATA error message lists expected file types", async () => {
+  it("NO_PARSEABLE_DATA error has the canonical user-facing message", async () => {
     await expect(
       routeTarEntries(tmpDir, ["H09084/scan.sid"], "H09084.tar.gz"),
     ).rejects.toMatchObject({
-      message: expect.stringContaining("surveys.xyz"),
+      message: "No parseable bathymetric data found in this archive.",
+      code: "NO_PARSEABLE_DATA",
     });
   });
 });
