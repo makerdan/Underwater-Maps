@@ -4,11 +4,14 @@
  * Covers:
  * - When poeClassify rejects with poe_point_balance_zero, the toast fires
  *   with title "Seafloor classification unavailable" and a description
- *   mentioning "Poe account balance".
+ *   mentioning "Poe account balance", and includes a "Try again" action.
  * - When poeClassify rejects with poe_circuit_open, the toast fires with
- *   a description mentioning "temporarily unavailable".
+ *   a description mentioning "temporarily unavailable" and includes a "Try again" action.
  * - When poeClassify rejects with a generic error, the toast fires with
- *   a description mentioning "Check your connection".
+ *   a description mentioning "Check your connection" and includes a "Try again" action.
+ * - When poeClassify rejects with missing_key or unauthorized, the toast fires
+ *   without a "Try again" action (retrying without fixing the key is pointless).
+ * - lastFailedGrid is stored in state on any failure.
  * - When the server cache (GET /zones) returns 200, poeClassify is not
  *   called and no failure toast fires.
  *
@@ -17,6 +20,7 @@
  * - Mock global fetch to always return 404 (server cache miss) so tests
  *   always fall through to the poeClassify step.
  * - Mock @/hooks/use-toast so toast calls are captured.
+ * - Mock @/components/ui/toast so ToastAction is a lightweight stub.
  * - Use a fresh Zustand store state (clearZoneMap) before each test.
  */
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
@@ -50,6 +54,10 @@ const makeApiClientMock = vi.hoisted(() => {
 vi.mock("@/hooks/use-toast", () => ({
   toast: mockToast,
   useToast: () => ({ toast: mockToast }),
+}));
+
+vi.mock("@/components/ui/toast", () => ({
+  ToastAction: "button",
 }));
 
 vi.mock("@workspace/api-client-react", () =>
@@ -159,6 +167,100 @@ describe("classificationStore — zone classification failure toast", () => {
         description: expect.stringMatching(/Check your connection/i),
       }),
     );
+  });
+
+  it("includes a 'Try again' action on poe_point_balance_zero toast", async () => {
+    mockFetchCacheMiss();
+    mockPoeClassify.mockRejectedValue({
+      status: 402,
+      data: { error: "poe_point_balance_zero", details: "Poe balance exhausted" },
+      message: "Payment Required",
+    });
+
+    await useClassificationStore.getState().classify(makeGrid(5));
+
+    const call = mockToast.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(call).toHaveProperty("action");
+    expect(call.action).not.toBeNull();
+    expect(call.action).not.toBeUndefined();
+  });
+
+  it("includes a 'Try again' action on poe_circuit_open toast", async () => {
+    mockFetchCacheMiss();
+    mockPoeClassify.mockRejectedValue({
+      status: 503,
+      data: { error: "poe_circuit_open", details: "Circuit breaker open" },
+      message: "Service Unavailable",
+    });
+
+    await useClassificationStore.getState().classify(makeGrid(6));
+
+    const call = mockToast.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(call).toHaveProperty("action");
+    expect(call.action).not.toBeNull();
+  });
+
+  it("includes a 'Try again' action on generic network error toast", async () => {
+    mockFetchCacheMiss();
+    mockPoeClassify.mockRejectedValue(new Error("Network request failed"));
+
+    await useClassificationStore.getState().classify(makeGrid(7));
+
+    const call = mockToast.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(call).toHaveProperty("action");
+    expect(call.action).not.toBeNull();
+  });
+
+  it("omits the 'Try again' action on missing_key toast", async () => {
+    mockFetchCacheMiss();
+    mockPoeClassify.mockRejectedValue({
+      status: 500,
+      data: { error: "poe_error", details: "POE_API_KEY environment variable is not set." },
+      message: "Internal Server Error",
+    });
+
+    await useClassificationStore.getState().classify(makeGrid(8));
+
+    expect(mockToast).toHaveBeenCalledTimes(1);
+    const call = mockToast.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(call.action).toBeUndefined();
+  });
+
+  it("omits the 'Try again' action on unauthorized toast", async () => {
+    mockFetchCacheMiss();
+    mockPoeClassify.mockRejectedValue({
+      status: 401,
+      data: { error: "auth_error", details: "Invalid API key" },
+      message: "Unauthorized",
+    });
+
+    await useClassificationStore.getState().classify(makeGrid(9));
+
+    expect(mockToast).toHaveBeenCalledTimes(1);
+    const call = mockToast.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(call.action).toBeUndefined();
+  });
+
+  it("stores the failed grid in lastFailedGrid state on any failure", async () => {
+    mockFetchCacheMiss();
+    const grid = makeGrid(10);
+    mockPoeClassify.mockRejectedValue(new Error("Network request failed"));
+
+    await useClassificationStore.getState().classify(grid);
+
+    const { lastFailedGrid } = useClassificationStore.getState();
+    expect(lastFailedGrid).not.toBeNull();
+    expect(lastFailedGrid?.datasetId).toBe(grid.datasetId);
+  });
+
+  it("clears lastFailedGrid when clearZoneMap is called", async () => {
+    mockFetchCacheMiss();
+    mockPoeClassify.mockRejectedValue(new Error("Network request failed"));
+    await useClassificationStore.getState().classify(makeGrid(11));
+
+    useClassificationStore.getState().clearZoneMap();
+
+    expect(useClassificationStore.getState().lastFailedGrid).toBeNull();
   });
 
   it("does not fire the failure toast when the server zone cache returns 200", async () => {

@@ -19,9 +19,12 @@
  *   currentDatasetId tracks the in-progress dataset. Every async checkpoint
  *   re-checks it before writing state so stale responses silently drop.
  */
+import React from "react";
 import { create } from "zustand";
 import { poeClassify } from "@workspace/api-client-react";
 import { toast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
+import type { ToastActionElement } from "@/components/ui/toast";
 import type { TerrainData, PoeClassifyRequest } from "@workspace/api-client-react";
 import { gridToBase64Png } from "./gridToImage";
 import type { ClassifyResultSource } from "@workspace/api-client-react";
@@ -232,6 +235,12 @@ interface ClassificationState {
   paintUndoStack: Uint8Array[];
   /** Per-stroke redo snapshots. Cleared when a new stroke is painted. */
   paintRedoStack: Uint8Array[];
+  /**
+   * The last grid that failed AI classification. Stored so the "Try again"
+   * toast action can re-invoke classify() without the caller needing to
+   * pass the grid reference again.
+   */
+  lastFailedGrid: TerrainData | null;
 
   classify: (grid: TerrainData) => Promise<void>;
   clearZoneMap: () => void;
@@ -269,9 +278,10 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
   source: null,
   paintUndoStack: [],
   paintRedoStack: [],
+  lastFailedGrid: null,
 
   clearZoneMap: () =>
-    set({ zoneMap: null, aiZoneMap: null, hasEdits: false, error: null, currentGridHash: null, currentSubstrateFp: null, source: null, paintUndoStack: [], paintRedoStack: [] }),
+    set({ zoneMap: null, aiZoneMap: null, hasEdits: false, error: null, currentGridHash: null, currentSubstrateFp: null, source: null, paintUndoStack: [], paintRedoStack: [], lastFailedGrid: null }),
 
   paintSlot: (row, col, radius, slot, waterType, resolution) => {
     const { zoneMap, currentGridHash, paintUndoStack } = get();
@@ -544,7 +554,7 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
         if (get().currentGridHash !== gridHash) return;
         const categorized = categorizeClassificationError(err);
         console.warn("[BathyScan] AI classification failed:", categorized.detail);
-        set({ loading: false, error: categorized, zoneMap: null, aiZoneMap: null, hasEdits: false, source: null });
+        set({ loading: false, error: categorized, zoneMap: null, aiZoneMap: null, hasEdits: false, source: null, lastFailedGrid: grid });
 
         const e = err as { data?: { error?: string } };
         const errorCode = typeof e?.data?.error === "string" ? e.data.error : null;
@@ -566,10 +576,26 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
             "AI seafloor classification could not be completed. Check your connection and try again.";
         }
 
+        const isRetryable =
+          categorized.category !== "missing_key" &&
+          categorized.category !== "unauthorized";
+
         toast({
           title: "Seafloor classification unavailable",
           description,
           variant: "destructive",
+          ...(isRetryable && {
+            action: React.createElement(
+              ToastAction,
+              {
+                altText: "Try again",
+                onClick: () => {
+                  void useClassificationStore.getState().classify(grid);
+                },
+              },
+              "Try again",
+            ) as unknown as ToastActionElement,
+          }),
         });
       }
     })();
