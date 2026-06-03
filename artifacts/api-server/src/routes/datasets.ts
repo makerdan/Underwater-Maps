@@ -31,6 +31,7 @@ import {
   type TerrainGrid,
 } from "../lib/terrain.js";
 import { parseUploadedFile } from "../lib/uploadParsers.js";
+import { routeTarEntries } from "../lib/noaaTarRouter.js";
 import { gunzipBounded } from "../lib/gunzipBounded.js";
 import { isTarBuffer, extractTarBuffer, isTarFile, extractTarFile } from "../lib/tarDetect.js";
 import { fetchCopernicusDem } from "../lib/copernicusDem.js";
@@ -298,7 +299,7 @@ interface ParseWorkerResult {
  * worker finishes and posts its structured result.
  *
  * Progress milestones posted by the worker (matching the old inline values):
- *   40 → file read complete
+ *   40 → file read complete (or pre-points accepted)
  *   55 → parse complete
  *   60 → terrain grid starting
  *   80 → terrain grid done / overview grid starting
@@ -310,6 +311,9 @@ interface ParseWorkerResult {
  * @param gridId     UUID assigned to this dataset.
  * @param datasetName Display name derived from the filename.
  * @param smoothing  Whether to run the spike-smoothing pass.
+ * @param prePoints  Pre-parsed points — when supplied, the worker skips the
+ *                   file-read + parse steps and grids these points directly.
+ *                   Used by the NOAA tar.gz router.
  * @param onProgress Callback invoked with each progress milestone.
  */
 export function runParseWorker(params: {
@@ -319,6 +323,7 @@ export function runParseWorker(params: {
   gridId: string;
   datasetName: string;
   smoothing: boolean;
+  prePoints?: { lon: number; lat: number; depth: number }[];
   onProgress: (progress: number) => void;
 }): Promise<ParseWorkerResult> {
   return new Promise((resolve, reject) => {
@@ -332,6 +337,7 @@ export function runParseWorker(params: {
         gridId: params.gridId,
         datasetName: params.datasetName,
         smoothing: params.smoothing,
+        prePoints: params.prePoints,
       },
     });
 
@@ -414,21 +420,56 @@ async function processUploadJob(
 
       // Detect tar-inside-gz: NOAA smooth sheet archives are .tar.gz (a tar
       // wrapped in gzip), not a single file wrapped in gzip.  When detected,
-      // extract all entries to a temp directory so the next processing stage
-      // can route each entry to the appropriate parser.
+      // extract all entries to a temp directory and route each entry to its
+      // parser via the NOAA tar router.
       if (await isTarFile(decompressedPath)) {
         const entries = await extractTarFile(decompressedPath, tarExtractedDir);
         await fs.promises.unlink(decompressedPath).catch(() => undefined);
-        const preview = entries.slice(0, 5).join(", ");
-        const more = entries.length > 5 ? ` … +${entries.length - 5} more` : "";
-        throw Object.assign(
-          new Error(
-            `NOAA tar.gz archive detected: ${entries.length} entr${entries.length === 1 ? "y" : "ies"} extracted ` +
-            `(${preview}${more}). Full tar.gz parsing is not yet supported — ` +
-            `please extract the archive and upload individual files.`,
-          ),
-          { code: "TAR_ARCHIVE_DETECTED" },
+
+        // Walk entries, classify by path pattern, dispatch to parsers, and
+        // merge all sounding points into a single array.  Throws with code
+        // "NO_PARSEABLE_DATA" if nothing in the archive is parseable, or
+        // "PARSER_NOT_IMPLEMENTED" for recognised-but-not-yet-implemented types.
+        const { points: tarPoints, datasetName: tarDatasetName } = await routeTarEntries(
+          tarExtractedDir,
+          entries,
+          fileName,
         );
+
+        const gridId = crypto.randomUUID();
+        job.progress = 35;
+
+        // Grid the merged points in a worker thread — same pipeline as
+        // single-file uploads, but with pre-parsed points supplied directly.
+        const { terrain, overview } = await runParseWorker({
+          filePath: "",
+          fileName,
+          resolution,
+          gridId,
+          datasetName: tarDatasetName,
+          smoothing,
+          prePoints: tarPoints,
+          onProgress: (p) => { job.progress = p; },
+        });
+
+        const [saved] = await db
+          .insert(customDatasetsTable)
+          .values({
+            id: gridId,
+            userId,
+            name: tarDatasetName,
+            minDepth: terrain.minDepth,
+            maxDepth: terrain.maxDepth,
+            terrainJson: terrain as unknown as StoredTerrainJson,
+            overviewJson: overview as unknown as StoredTerrainJson,
+          })
+          .returning({ id: customDatasetsTable.id });
+
+        job.progress = 100;
+        job.status = "done";
+        job.datasetId = saved?.id ?? gridId;
+        await persistJobToDB(jobId, { ...job });
+        return;
       }
 
       processPath = decompressedPath;

@@ -671,7 +671,7 @@ describe("parseUploadedFile dispatcher", () => {
   it("throws for unsupported extensions with a helpful message", async () => {
     const buf = Buffer.from("dummy");
     await expect(parseUploadedFile(buf, "survey.shp")).rejects.toThrow(
-      /Unsupported file extension/i,
+      /Could not detect the file format/i,
     );
   });
 

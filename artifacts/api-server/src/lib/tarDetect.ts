@@ -20,6 +20,7 @@
 import * as fs from "fs";
 import { Readable } from "stream";
 import * as tar from "tar";
+import type { ReadEntry } from "tar";
 
 // ---------------------------------------------------------------------------
 // Result type
@@ -84,7 +85,7 @@ export async function extractTarBuffer(
   await new Promise<void>((resolve, reject) => {
     const extract = tar.x({
       cwd: extractedDir,
-      onentry: (entry) => {
+      onentry: (entry: ReadEntry) => {
         entries.push(entry.path);
       },
     });
@@ -113,7 +114,7 @@ export async function extractTarFile(
   await tar.x({
     file: srcPath,
     cwd: extractedDir,
-    onentry: (entry) => {
+    onentry: (entry: ReadEntry) => {
       entries.push(entry.path);
     },
   });

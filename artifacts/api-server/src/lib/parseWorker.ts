@@ -17,7 +17,7 @@
 import { workerData, parentPort } from "worker_threads";
 import * as fs from "fs";
 import { parseXyzCsv, gridPoints } from "./terrain.js";
-import { parseUploadedFile } from "./uploadParsers.js";
+import { parseUploadedFile, type RawPoint } from "./uploadParsers.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,6 +30,13 @@ export interface ParseWorkerInput {
   gridId: string;
   datasetName: string;
   smoothing: boolean;
+  /**
+   * Pre-parsed points — when present, the file-read and parse steps are
+   * skipped and these points are used directly for gridding.  Used by the
+   * NOAA tar.gz router which aggregates points from multiple inner files
+   * before dispatching to the worker.
+   */
+  prePoints?: RawPoint[];
 }
 
 export type ParseWorkerMessage =
@@ -51,29 +58,38 @@ async function run(): Promise<void> {
     gridId,
     datasetName,
     smoothing,
+    prePoints,
   } = workerData as ParseWorkerInput;
 
   const port = parentPort!;
 
-  // Derive extension from inner filename (strip .gz if present)
-  const baseFileName = fileName.toLowerCase().endsWith(".gz")
-    ? fileName.slice(0, -3)
-    : fileName;
-  const fileExt = baseFileName.split(".").pop() ?? "";
-
   // ── Step 1: Read + Parse ──────────────────────────────────────────────────
-  // Note: when fileName ends in .gz, filePath already points to the
-  // decompressed file (datasets.ts strips the gz before spawning the worker).
-  // We pass baseFileName to the parsers so they route on the real extension.
-  let points;
-  if (TEXT_EXTENSIONS.has(fileExt)) {
-    const fileContent = await fs.promises.readFile(filePath, "utf8");
+  let points: RawPoint[];
+
+  if (Array.isArray(prePoints)) {
+    // Pre-parsed points supplied by the caller (e.g. NOAA tar.gz router).
+    // Skip the file-read and parse steps entirely.
     port.postMessage({ type: "progress", progress: 40 } satisfies ParseWorkerMessage);
-    points = parseXyzCsv(fileContent, baseFileName);
+    points = prePoints;
   } else {
-    const raw = await fs.promises.readFile(filePath);
-    port.postMessage({ type: "progress", progress: 40 } satisfies ParseWorkerMessage);
-    points = await parseUploadedFile(raw, baseFileName);
+    // Derive extension from inner filename (strip .gz if present)
+    const baseFileName = fileName.toLowerCase().endsWith(".gz")
+      ? fileName.slice(0, -3)
+      : fileName;
+    const fileExt = baseFileName.split(".").pop() ?? "";
+
+    // Note: when fileName ends in .gz, filePath already points to the
+    // decompressed file (datasets.ts strips the gz before spawning the worker).
+    // We pass baseFileName to the parsers so they route on the real extension.
+    if (TEXT_EXTENSIONS.has(fileExt)) {
+      const fileContent = await fs.promises.readFile(filePath, "utf8");
+      port.postMessage({ type: "progress", progress: 40 } satisfies ParseWorkerMessage);
+      points = parseXyzCsv(fileContent, baseFileName);
+    } else {
+      const raw = await fs.promises.readFile(filePath);
+      port.postMessage({ type: "progress", progress: 40 } satisfies ParseWorkerMessage);
+      points = await parseUploadedFile(raw, baseFileName);
+    }
   }
 
   port.postMessage({ type: "progress", progress: 55 } satisfies ParseWorkerMessage);
