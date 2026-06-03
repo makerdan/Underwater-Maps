@@ -15,7 +15,8 @@
  *   1. Classifies each extracted entry path against the routing table.
  *   2. Dispatches recognised entries to their parser stubs.
  *   3. Aggregates all sounding points into a single array.
- *   4. Derives a human-readable dataset name from the surveys.txt H-number
+ *   4. Aggregates substrate annotation points into a separate array.
+ *   5. Derives a human-readable dataset name from the surveys.txt H-number
  *      metadata file when present, falling back to the archive filename.
  *
  * Individual parser implementations are each their own downstream task.
@@ -33,6 +34,27 @@ import { gunzipBounded } from "./gunzipBounded.js";
 
 /** 200 MB cap for inner tif.gz decompression — same as the top-level gz cap. */
 const INNER_GZ_MAX_BYTES = 200 * 1024 * 1024;
+
+// ---------------------------------------------------------------------------
+// Shared types
+// ---------------------------------------------------------------------------
+
+export interface RawPoint_ extends RawPoint {}
+
+/**
+ * A single geolocated substrate observation from a NOAA Bottom_Samples file.
+ * `substrateType` is a normalised label (mud / rock / sand / gravel / kelp)
+ * derived from the raw verbal description.  When no keyword matches,
+ * `substrateType` contains the raw label so the data is never silently lost.
+ */
+export interface SubstratePoint {
+  lat: number;
+  lon: number;
+  /** Normalised category: "mud" | "rock" | "sand" | "gravel" | "kelp" | <raw> */
+  substrateType: string;
+  /** The unmodified COLOUR+NAT string as it appears in the source file. */
+  rawLabel: string;
+}
 
 // ---------------------------------------------------------------------------
 // Parser key type
@@ -55,6 +77,12 @@ export interface TarRouteResult {
   points: RawPoint[];
   /** Human-readable name derived from surveys.txt H-number or archive filename. */
   datasetName: string;
+  /**
+   * Substrate annotation points from Bottom_Samples files.  Empty when no
+   * BSText file is present in the archive.  Callers that only need sounding
+   * depth data can safely ignore this field.
+   */
+  substratePoints: SubstratePoint[];
 }
 
 // ---------------------------------------------------------------------------
@@ -121,7 +149,138 @@ export function classifyTarEntry(relativePath: string): TarParserKey {
 }
 
 // ---------------------------------------------------------------------------
-// Parser stubs
+// Substrate normalisation
+// ---------------------------------------------------------------------------
+
+/**
+ * Keyword-to-category mapping for NOAA BSText verbal descriptions.
+ *
+ * The combined COLOUR+NAT string is upper-cased and searched for each keyword
+ * in order.  The first match wins.  The order is intentional: more specific
+ * terms (BEDROCK, BOULDER) are checked before generic ones (ROCK) to avoid
+ * incorrect early matches.
+ */
+const SUBSTRATE_KEYWORDS: Array<{ keywords: string[]; category: string }> = [
+  // Mud family
+  { keywords: ["MUD", "SILT", "OOZE", "CLAY"], category: "mud" },
+  // Rock family — bedrock/boulder before generic rock.
+  // Note: "HARD" is deliberately excluded — it appears as a NAT (consistency)
+  // descriptor (e.g. "CORAL HARD") and is not itself a rock-family indicator.
+  // "HARD ROCK" is correctly caught by the "ROCK" keyword.
+  { keywords: ["BEDROCK", "BOULDER", "ROCK", "SHORE", "STONE"], category: "rock" },
+  // Sand
+  { keywords: ["SAND"], category: "sand" },
+  // Gravel / shell / pebble
+  { keywords: ["PEBBLE", "GRAVEL", "SHELL", "COQUINA"], category: "gravel" },
+  // Kelp / seaweed
+  { keywords: ["KELP", "SEAWEED", "WEED"], category: "kelp" },
+];
+
+/**
+ * Normalise a combined verbal description string (e.g. "MUD GREEN,SHELLS BROKEN")
+ * to a canonical substrate category.  Returns the raw string when no keyword
+ * matches so that unrecognised descriptions are preserved rather than silently
+ * discarded.
+ */
+export function normaliseSubstrate(rawLabel: string): string {
+  const upper = rawLabel.toUpperCase();
+  for (const { keywords, category } of SUBSTRATE_KEYWORDS) {
+    for (const kw of keywords) {
+      if (upper.includes(kw)) return category;
+    }
+  }
+  return rawLabel.trim() || "unknown";
+}
+
+// ---------------------------------------------------------------------------
+// parseBottomSamples — NOAA BSText substrate annotation parser
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a NOAA `Bottom_Samples/*_BSText.txt` tab-delimited substrate
+ * annotation file into an array of geolocated substrate observations.
+ *
+ * File format (tab-delimited, first row is a header):
+ *   SHT_NUM  TRACK_NUM  STA_NUM  LAT  LON  DEPTH  COLOUR  NAT  DESCRIP  …
+ *
+ * Column semantics:
+ *   LAT     — decimal-degrees latitude (positive north)
+ *   LON     — decimal-degrees longitude (negative west in the western hemisphere)
+ *   COLOUR  — colour/texture description (e.g. "MUD GREEN", "HARD ROCK")
+ *   NAT     — nature/consistency (e.g. "SOFT", "FIRM")
+ *   DESCRIP — optional free-text description (may be absent)
+ *
+ * The COLOUR and NAT fields are concatenated (space-separated) to form the
+ * `rawLabel` that is passed to `normaliseSubstrate`.  When either field is
+ * blank or absent, only the non-blank field is used.
+ *
+ * Rows with missing or non-finite lat/lon values are silently skipped.
+ *
+ * @param filePath  Absolute path to the _BSText.txt file.
+ * @returns Array of `SubstratePoint` objects — empty when the file has no
+ *   parseable rows (e.g. header-only or all rows have missing coordinates).
+ */
+export async function parseBottomSamples(filePath: string): Promise<SubstratePoint[]> {
+  let text: string;
+  try {
+    text = await fs.promises.readFile(filePath, "utf8");
+  } catch (err) {
+    throw new Error(
+      `parseBottomSamples: failed to read "${path.basename(filePath)}": ` +
+        `${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  const lines = text.split(/\r?\n/);
+  if (lines.length === 0) return [];
+
+  // Parse header row to discover column indices (case-insensitive)
+  const headerLine = lines[0] ?? "";
+  const headers = headerLine.split("\t").map((h) => h.trim().toUpperCase());
+
+  const colIdx = (name: string): number => headers.indexOf(name);
+  const latCol = colIdx("LAT");
+  const lonCol = colIdx("LON");
+  const colourCol = colIdx("COLOUR");
+  const natCol = colIdx("NAT");
+
+  if (latCol === -1 || lonCol === -1) {
+    throw new Error(
+      `parseBottomSamples: "${path.basename(filePath)}" has no LAT or LON column. ` +
+        `Found headers: ${headers.join(", ")}.`,
+    );
+  }
+
+  const points: SubstratePoint[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line || line.trim() === "") continue;
+
+    const cols = line.split("\t");
+
+    const latStr = cols[latCol]?.trim() ?? "";
+    const lonStr = cols[lonCol]?.trim() ?? "";
+    const lat = parseFloat(latStr);
+    const lon = parseFloat(lonStr);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+
+    const colour = colourCol !== -1 ? (cols[colourCol]?.trim() ?? "") : "";
+    const nat = natCol !== -1 ? (cols[natCol]?.trim() ?? "") : "";
+
+    // Combine COLOUR and NAT into a single raw label for normalisation
+    const rawLabel = [colour, nat].filter((s) => s.length > 0).join(" ");
+    const substrateType = normaliseSubstrate(rawLabel);
+
+    points.push({ lat, lon, substrateType, rawLabel });
+  }
+
+  return points;
+}
+
+// ---------------------------------------------------------------------------
+// Parser stubs (depth-bearing parsers)
 //
 // Each stub throws PARSER_NOT_IMPLEMENTED with a clear, specific message.
 // When a recognised NOAA file type is encountered but its parser is not yet
@@ -175,18 +334,6 @@ export async function parseGeodasXyz(_filePath: string): Promise<RawPoint[]> {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function parseHyd93A93(_filePath: string): Promise<RawPoint[]> {
   parserNotImplemented("hyd93-a93", _filePath);
-}
-
-/**
- * Parse a NOAA Bottom_Samples substrate annotation file.
- *
- * Substrate annotations do not contribute sounding depth points to the
- * terrain grid.  Stub — body to be implemented in the "Parse NOAA
- * Bottom_Samples substrate annotation files" task.
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function parseBottomSamples(_filePath: string): Promise<RawPoint[]> {
-  parserNotImplemented("bottom-samples", _filePath);
 }
 
 /**
@@ -260,7 +407,10 @@ export async function parseSmoothSheetsGeoTiff(filePath: string): Promise<RawPoi
 }
 
 // ---------------------------------------------------------------------------
-// Parser dispatch table — maps each recognised key to its implementation
+// Parser dispatch table — depth-bearing parsers only
+//
+// `bottom-samples` is intentionally excluded: it returns SubstratePoint[]
+// rather than RawPoint[] and is dispatched separately in routeTarEntries.
 //
 // Exported so test code can replace individual entries with mocks without
 // needing to spy on the ESM live bindings (which bypasses the local closure).
@@ -268,13 +418,12 @@ export async function parseSmoothSheetsGeoTiff(filePath: string): Promise<RawPoi
 // ---------------------------------------------------------------------------
 
 export const parserDispatch: Record<
-  Exclude<TarParserKey, "skip">,
+  Exclude<TarParserKey, "skip" | "bottom-samples">,
   (filePath: string) => Promise<RawPoint[]>
 > = {
   "noaa-surveys-xyz": parseNoaaSurveysXyz,
   "geodas-xyz": parseGeodasXyz,
   "hyd93-a93": parseHyd93A93,
-  "bottom-samples": parseBottomSamples,
   "inner-geotiff": parseSmoothSheetsGeoTiff,
 };
 
@@ -350,7 +499,11 @@ function nameFromArchiveFilename(archiveFileName: string): string {
 /**
  * Walk the entries extracted from a NOAA tar.gz archive, dispatch each
  * recognised entry to its parser, and return merged sounding points with a
- * human-readable dataset name.
+ * human-readable dataset name and any substrate annotation points.
+ *
+ * Depth-bearing parsers (surveys.xyz, GEODAS, HYD93, Smooth_Sheets) contribute
+ * to `result.points`.  Bottom_Samples substrate files contribute exclusively to
+ * `result.substratePoints` and do not add sounding depth data.
  *
  * Skipped entries (`.sid`, `.pdf`, `.htm`, unrecognised metadata files) are
  * logged at WARN level but never cause the upload to fail.
@@ -370,6 +523,7 @@ export async function routeTarEntries(
   archiveFileName: string,
 ): Promise<TarRouteResult> {
   const allPoints: RawPoint[] = [];
+  const allSubstratePoints: SubstratePoint[] = [];
 
   // Classify every non-directory entry
   const recognised: Array<{ relativePath: string; key: Exclude<TarParserKey, "skip"> }> = [];
@@ -428,20 +582,33 @@ export async function routeTarEntries(
       `[noaa-tar-router] dispatching "${path.basename(relativePath)}" to parser "${key}"`,
     );
 
-    const parser = parserDispatch[key];
-    const points = await parser(absolutePath);
+    if (key === "bottom-samples") {
+      // Substrate annotations go into a separate collection — they do not
+      // contribute to the sounding depth grid.
+      const spts = await parseBottomSamples(absolutePath);
 
-    logger.info(
-      { entry: relativePath, key, pointCount: points.length },
-      `[noaa-tar-router] parser "${key}" returned ${points.length} point(s)`,
-    );
+      logger.info(
+        { entry: relativePath, key, pointCount: spts.length },
+        `[noaa-tar-router] parser "${key}" returned ${spts.length} substrate point(s)`,
+      );
 
-    allPoints.push(...points);
+      allSubstratePoints.push(...spts);
+    } else {
+      const parser = parserDispatch[key];
+      const points = await parser(absolutePath);
+
+      logger.info(
+        { entry: relativePath, key, pointCount: points.length },
+        `[noaa-tar-router] parser "${key}" returned ${points.length} point(s)`,
+      );
+
+      allPoints.push(...points);
+    }
   }
 
   // Derive dataset name — surveys.txt H-number first, archive filename as fallback
   const metaName = await extractSurveyNameFromMetadata(extractedDir, entries);
   const datasetName = metaName ?? nameFromArchiveFilename(archiveFileName);
 
-  return { points: allPoints, datasetName };
+  return { points: allPoints, datasetName, substratePoints: allSubstratePoints };
 }
