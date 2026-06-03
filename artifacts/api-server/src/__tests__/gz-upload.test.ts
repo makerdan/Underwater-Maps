@@ -58,7 +58,8 @@ vi.mock("zlib", async (importOriginal) => {
 
 // ── Remaining mocks ────────────────────────────────────────────────────────────
 
-vi.mock("@workspace/db", () => {
+vi.mock("@workspace/db", async () => {
+  const { createDbMock } = await import("./helpers/db-mock.js");
   const insertReturningMock = vi.fn().mockResolvedValue([
     {
       id: "gz-test-dataset-id",
@@ -69,30 +70,14 @@ vi.mock("@workspace/db", () => {
     },
   ]);
   const valuesMock = vi.fn().mockReturnValue({ returning: insertReturningMock });
-
   const selectWhereMock = vi.fn().mockResolvedValue([]);
   const fromMock = vi.fn().mockReturnValue({ where: selectWhereMock });
-
-  return {
+  return createDbMock({
     db: {
       select: vi.fn().mockReturnValue({ from: fromMock }),
       insert: vi.fn().mockReturnValue({ values: valuesMock }),
     },
-    customDatasetsTable: {
-      id: "id",
-      userId: "userId",
-      name: "name",
-      minDepth: "minDepth",
-      maxDepth: "maxDepth",
-      terrainJson: "terrainJson",
-      overviewJson: "overviewJson",
-      createdAt: "createdAt",
-    },
-    userSettingsTable: {
-      userId: "userId",
-      settings: "settings",
-    },
-  };
+  });
 });
 
 vi.mock("drizzle-orm", () => ({

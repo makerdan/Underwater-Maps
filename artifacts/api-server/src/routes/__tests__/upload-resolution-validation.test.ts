@@ -13,33 +13,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 
-vi.mock("@workspace/db", () => ({
-  db: {
-    select: () => ({
-      from: () => ({
-        where: () => Promise.resolve([]),
-      }),
-    }),
-    insert: () => ({
-      values: () => ({
-        returning: () => Promise.resolve([]),
-        onConflictDoUpdate: () => Promise.resolve([]),
-        onConflictDoNothing: () => Promise.resolve([]),
-      }),
-    }),
-    update: () => ({
-      set: () => ({
-        where: () => Promise.resolve([]),
-      }),
-    }),
-    transaction: async <T>(cb: (tx: unknown) => Promise<T>) => cb({}),
-  },
-  customDatasetsTable: {},
-  userSettingsTable: {},
-  uploadJobsTable: {},
-  disabledPresetsTable: {},
-  pool: { end: vi.fn() },
-}));
+vi.mock("@workspace/db", async () => {
+  const { createDbMock } = await import("../../__tests__/helpers/db-mock.js");
+  return createDbMock();
+});
 
 vi.mock("@clerk/express", () => ({
   clerkMiddleware: vi.fn(
