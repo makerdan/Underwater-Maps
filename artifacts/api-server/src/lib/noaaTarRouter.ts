@@ -127,6 +127,13 @@ export interface TarRouteResult {
    * depth data can safely ignore this field.
    */
   substratePoints: SubstratePoint[];
+  /**
+   * HYD93 cartographic annotation points (kelp patches, rocks, rocky reefs,
+   * ledges, obstructions) extracted from .a93.gz files.  Empty when no HYD93
+   * files were parsed or all contained only sounding rows (feature code 711).
+   * Callers that only need depth data can safely ignore this field.
+   */
+  hyd93Features: Hyd93AnnotationPoint[];
   /** Entries that were intentionally skipped, with their skip reason. */
   skipped: SkippedEntry[];
 }
@@ -333,6 +340,7 @@ export async function parseBottomSamples(filePath: string): Promise<SubstratePoi
 
   return points;
 }
+
 
 /** NOAA null-depth sentinel — rows with this exact depth value are discarded. */
 const NOAA_NULL_DEPTH = 99999.9;
@@ -666,18 +674,17 @@ export function parseHyd93Text(text: string): Hyd93ParseResult {
  * Parse a HYD93 a93.gz fixed-width sounding file.
  *
  * Reads and decompresses the .a93.gz file at `filePath`, then delegates to
- * `parseHyd93Text`.  Only sounding rows (feature code 711) contribute to the
- * returned RawPoint array; annotation rows are parsed but discarded here
- * (feature overlay rendering is a separate concern).
+ * `parseHyd93Text`.  Returns both the depth soundings (feature code 711) and
+ * cartographic annotation points (kelp, rocks, rocky reefs, ledges,
+ * obstructions).
  *
  * @throws if the file cannot be read or decompressed.
  */
-export async function parseHyd93A93(filePath: string): Promise<RawPoint[]> {
+export async function parseHyd93A93(filePath: string): Promise<Hyd93ParseResult> {
   const raw = await fs.promises.readFile(filePath);
   const decompressed = await gunzipBounded(raw, 500 * 1024 * 1024);
   const text = decompressed.toString("ascii");
-  const { soundings } = parseHyd93Text(text);
-  return soundings;
+  return parseHyd93Text(text);
 }
 
 /**
@@ -755,6 +762,9 @@ export async function parseSmoothSheetsGeoTiff(filePath: string): Promise<RawPoi
 //
 // `bottom-samples` is intentionally excluded: it returns SubstratePoint[]
 // rather than RawPoint[] and is dispatched separately in routeTarEntries.
+// `hyd93-a93` is also excluded: it returns Hyd93ParseResult (soundings +
+// annotation features) and is dispatched separately so both arrays can be
+// collected independently without double-reading the compressed file.
 //
 // Exported so test code can replace individual entries with mocks without
 // needing to spy on the ESM live bindings (which bypasses the local closure).
@@ -762,12 +772,11 @@ export async function parseSmoothSheetsGeoTiff(filePath: string): Promise<RawPoi
 // ---------------------------------------------------------------------------
 
 export const parserDispatch: Record<
-  Exclude<TarParserKey, "skip" | "bottom-samples">,
+  Exclude<TarParserKey, "skip" | "bottom-samples" | "hyd93-a93">,
   (filePath: string) => Promise<RawPoint[]>
 > = {
   "noaa-surveys-xyz": parseNoaaSurveysXyz,
   "geodas-xyz": parseGeodasXyz,
-  "hyd93-a93": parseHyd93A93,
   "inner-geotiff": parseSmoothSheetsGeoTiff,
 };
 
@@ -892,6 +901,7 @@ export async function routeTarEntries(
 ): Promise<TarRouteResult> {
   const allPoints: RawPoint[] = [];
   const allSubstratePoints: SubstratePoint[] = [];
+  const allHyd93Features: Hyd93AnnotationPoint[] = [];
 
   // Build the set of GEODAS directories that have at least one .xyz.gz so we
   // can detect .a93.gz files that are superseded by a quality-coded sibling.
@@ -992,6 +1002,18 @@ export async function routeTarEntries(
       );
 
       allSubstratePoints.push(...spts);
+    } else if (key === "hyd93-a93") {
+      // HYD93 a93.gz files return both depth soundings AND cartographic
+      // annotation features.  Parse once, distribute to both collections.
+      const { soundings, features } = await parseHyd93A93(absolutePath);
+
+      logger.info(
+        { entry: relativePath, key, soundingCount: soundings.length, featureCount: features.length },
+        `[noaa-tar-router] parser "${key}" returned ${soundings.length} sounding(s) and ${features.length} annotation feature(s)`,
+      );
+
+      allPoints.push(...soundings);
+      allHyd93Features.push(...features);
     } else {
       const parser = parserDispatch[key];
       const points = await parser(absolutePath);
@@ -1018,5 +1040,5 @@ export async function routeTarEntries(
   const metaName = await extractSurveyNameFromMetadata(extractedDir, entries);
   const datasetName = metaName ?? nameFromArchiveFilename(archiveFileName);
 
-  return { points: allPoints, datasetName, substratePoints: allSubstratePoints, skipped };
+  return { points: allPoints, datasetName, substratePoints: allSubstratePoints, hyd93Features: allHyd93Features, skipped };
 }

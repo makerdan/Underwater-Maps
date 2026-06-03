@@ -447,6 +447,37 @@ export const GetUserDatasetsIdOverviewResponse = zod.object({
 
 
 /**
+ * Returns the array of cartographic annotation points extracted from HYD93
+`.a93.gz` files when the dataset was uploaded.  Feature codes indicate the
+type of seafloor hazard or biological feature:
+
+| Code | Label        |
+|------|--------------|
+| 89   | Rocks        |
+| 103  | Kelp         |
+| 146  | Ledge        |
+| 530  | Rocky reef   |
+| 988  | Obstruction  |
+
+Returns an empty array (`[]`) when the dataset was not sourced from a HYD93
+archive or contained no annotation rows — this is the normal case for most
+datasets and is not an error condition.
+
+ * @summary Get HYD93 cartographic annotation features for a saved user dataset
+ */
+export const GetUserDatasetsIdHyd93FeaturesParams = zod.object({
+  "id": zod.coerce.string().describe('User dataset identifier')
+})
+
+export const GetUserDatasetsIdHyd93FeaturesResponseItem = zod.object({
+  "lon": zod.number().describe('Longitude in decimal degrees (negative = West)'),
+  "lat": zod.number().describe('Latitude in decimal degrees'),
+  "featureCode": zod.number().describe('HYD93 feature code (89, 103, 146, 530, or 988)')
+}).describe('A single cartographic annotation point extracted from a HYD93 `.a93.gz`\nfile during dataset upload.  Feature codes identify the type of seafloor\nhazard or biological feature (89=rocks, 103=kelp, 146=ledges,\n530=rocky reefs, 988=obstructions\/wrecks).\n')
+export const GetUserDatasetsIdHyd93FeaturesResponse = zod.array(GetUserDatasetsIdHyd93FeaturesResponseItem)
+
+
+/**
  * @summary Delete a saved user terrain dataset
  */
 export const DeleteUserDatasetsIdParams = zod.object({

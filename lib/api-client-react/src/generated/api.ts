@@ -83,6 +83,7 @@ import type {
   GpsTrail,
   GpsTrailInput,
   HealthStatus,
+  Hyd93AnnotationPoint,
   IntertidalSpotFeatureCollection,
   ListGithubRepos200Item,
   ListGithubWorkflowRuns200,
@@ -792,6 +793,99 @@ export function useGetUserDatasetsIdOverview<TData = Awaited<ReturnType<typeof g
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetUserDatasetsIdOverviewQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetUserDatasetsIdHyd93FeaturesUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/datasets/${id}/hyd93-features`
+}
+
+/**
+ * Returns the array of cartographic annotation points extracted from HYD93
+`.a93.gz` files when the dataset was uploaded.  Feature codes indicate the
+type of seafloor hazard or biological feature:
+
+| Code | Label        |
+|------|--------------|
+| 89   | Rocks        |
+| 103  | Kelp         |
+| 146  | Ledge        |
+| 530  | Rocky reef   |
+| 988  | Obstruction  |
+
+Returns an empty array (`[]`) when the dataset was not sourced from a HYD93
+archive or contained no annotation rows — this is the normal case for most
+datasets and is not an error condition.
+
+ * @summary Get HYD93 cartographic annotation features for a saved user dataset
+ */
+export const getUserDatasetsIdHyd93Features = async (id: string, options?: RequestInit): Promise<Hyd93AnnotationPoint[]> => {
+
+  return customFetch<Hyd93AnnotationPoint[]>(getGetUserDatasetsIdHyd93FeaturesUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUserDatasetsIdHyd93FeaturesQueryKey = (id: string,) => {
+    return [
+    `/api/user/datasets/${id}/hyd93-features`
+    ] as const;
+    }
+
+
+export const getGetUserDatasetsIdHyd93FeaturesQueryOptions = <TData = Awaited<ReturnType<typeof getUserDatasetsIdHyd93Features>>, TError = ErrorType<ApiError>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserDatasetsIdHyd93Features>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUserDatasetsIdHyd93FeaturesQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUserDatasetsIdHyd93Features>>> = ({ signal }) => getUserDatasetsIdHyd93Features(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUserDatasetsIdHyd93Features>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUserDatasetsIdHyd93FeaturesQueryResult = NonNullable<Awaited<ReturnType<typeof getUserDatasetsIdHyd93Features>>>
+export type GetUserDatasetsIdHyd93FeaturesQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get HYD93 cartographic annotation features for a saved user dataset
+ */
+
+export function useGetUserDatasetsIdHyd93Features<TData = Awaited<ReturnType<typeof getUserDatasetsIdHyd93Features>>, TError = ErrorType<ApiError>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserDatasetsIdHyd93Features>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUserDatasetsIdHyd93FeaturesQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

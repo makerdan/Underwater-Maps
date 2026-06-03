@@ -11,6 +11,7 @@ import { TerrainMesh } from "@/components/TerrainMesh";
 import { EfhZoneLayer } from "@/components/EfhZoneLayer";
 import { SubstrateLayer } from "@/components/SubstrateLayer";
 import { IntertidalHotspotsLayer } from "@/components/IntertidalHotspotsLayer";
+import { Hyd93FeaturesLayer } from "@/components/Hyd93FeaturesLayer";
 import { Particles } from "@/components/Particles";
 import { Caustics } from "@/components/Caustics";
 import { useFlyControls } from "@/hooks/useFlyControls";
@@ -509,6 +510,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
       <EfhZoneLayer />
       <SubstrateLayer />
       <IntertidalHotspotsLayer />
+      <Hyd93FeaturesLayer />
       <Caustics />
 
       {tidalOverlay && terrain ? (

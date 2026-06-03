@@ -5,6 +5,22 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+/**
+ * A single cartographic annotation point extracted from a HYD93 `.a93.gz`
+file during dataset upload.  Feature codes identify the type of seafloor
+hazard or biological feature (89=rocks, 103=kelp, 146=ledges,
+530=rocky reefs, 988=obstructions/wrecks).
+
+ */
+export interface Hyd93AnnotationPoint {
+  /** Longitude in decimal degrees (negative = West) */
+  lon: number;
+  /** Latitude in decimal degrees */
+  lat: number;
+  /** HYD93 feature code (89, 103, 146, 530, or 988) */
+  featureCode: number;
+}
+
 export interface HealthStatus {
   status: string;
 }

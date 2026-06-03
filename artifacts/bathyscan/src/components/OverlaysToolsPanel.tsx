@@ -11,6 +11,11 @@ import React, { useEffect, useMemo, useRef } from "react";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { useTerrainStore } from "@/lib/terrainStore";
+import {
+  useGetUserDatasetsIdHyd93Features,
+  getGetUserDatasetsIdHyd93FeaturesQueryKey,
+} from "@workspace/api-client-react";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import {
   useGetDatasets,
@@ -114,6 +119,14 @@ export const OverlaysToolsPanel: React.FC = () => {
   const collapsed = usePanelCollapseStore((s) => s.collapsed.overlaysTools);
   const toggle = usePanelCollapseStore((s) => s.toggle);
 
+  const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
+  const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
+  const isUserDataset =
+    visibleDatasets.find((v) => v.datasetId === primaryDatasetId)?.source === "user";
+
+  const hyd93FeaturesEnabled = useUiStore((s) => s.hyd93FeaturesEnabled);
+  const setHyd93FeaturesEnabled = useUiStore((s) => s.setHyd93FeaturesEnabled);
+
   const overviewOpen = useUiStore((s) => s.overviewOpen);
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
   const findDataPanelOpen = useUiStore((s) => s.findDataPanelOpen);
@@ -145,6 +158,18 @@ export const OverlaysToolsPanel: React.FC = () => {
 
   const datasetId = terrain?.datasetId ?? "";
   const embeddedPolygons = terrain?.habitatPolygons ?? null;
+
+  const { data: hyd93FeaturesData } = useGetUserDatasetsIdHyd93Features(
+    datasetId,
+    {
+      query: {
+        enabled: !!datasetId && isUserDataset,
+        queryKey: getGetUserDatasetsIdHyd93FeaturesQueryKey(datasetId),
+        staleTime: 10 * 60 * 1000,
+      },
+    },
+  );
+  const hasHyd93Features = isUserDataset && Array.isArray(hyd93FeaturesData) && hyd93FeaturesData.length > 0;
   const hasEfh =
     !!datasets?.find((d) => d.id === datasetId)?.hasEfh ||
     !!embeddedPolygons;
@@ -674,6 +699,19 @@ export const OverlaysToolsPanel: React.FC = () => {
                 Opacity ∝ score intensity. Click polygon for score card.
               </span>
             </div>
+          )}
+
+          {hasHyd93Features && (
+            <ToggleButton
+              active={hyd93FeaturesEnabled}
+              onClick={() => setHyd93FeaturesEnabled(!hyd93FeaturesEnabled)}
+              label="🗺 HYD93 FEATURES"
+              tooltip="Show kelp, rocks, rocky reefs, ledges and obstructions from the HYD93 survey archive"
+              activeBg="rgba(14,165,233,0.15)"
+              activeBorder="rgba(14,165,233,0.55)"
+              activeColor="#38bdf8"
+              activeGlow="0 0 6px rgba(14,165,233,0.5)"
+            />
           )}
 
           {hasEfh && (

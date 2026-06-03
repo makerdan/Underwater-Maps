@@ -44,6 +44,13 @@ export interface StoredTerrainJson {
   };
 }
 
+/** A single HYD93 cartographic annotation point stored alongside a dataset. */
+export interface StoredHyd93Feature {
+  lon: number;
+  lat: number;
+  featureCode: number;
+}
+
 export const customDatasetsTable = pgTable("custom_datasets", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id").notNull(),
@@ -54,6 +61,13 @@ export const customDatasetsTable = pgTable("custom_datasets", {
   overviewJson: jsonb("overview_json").notNull().$type<StoredTerrainJson>(),
   folderId: uuid("folder_id").references(() => datasetFoldersTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  /**
+   * HYD93 cartographic annotation points extracted from .a93.gz files during
+   * upload (feature codes 89=rocks, 103=kelp, 146=ledges, 530=rocky reefs,
+   * 988=obstructions). Null when the dataset was not sourced from a HYD93 archive
+   * or the archive contained no annotation rows.
+   */
+  hyd93FeaturesJson: jsonb("hyd93_features_json").$type<StoredHyd93Feature[]>(),
 }, (table) => [
   index("custom_datasets_user_id_idx").on(table.userId),
 ]);

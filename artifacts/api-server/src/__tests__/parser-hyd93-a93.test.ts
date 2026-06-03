@@ -174,13 +174,13 @@ describe("parseHyd93A93 — file-based parsing", () => {
   });
 
   it("reads and decompresses the .a93.gz file and returns soundings", async () => {
-    const points = await parseHyd93A93(a93GzPath);
-    expect(points).toHaveLength(6);
+    const { soundings } = await parseHyd93A93(a93GzPath);
+    expect(soundings).toHaveLength(6);
   });
 
   it("returns only RawPoint objects with finite lon/lat/depth", async () => {
-    const points = await parseHyd93A93(a93GzPath);
-    for (const p of points) {
+    const { soundings } = await parseHyd93A93(a93GzPath);
+    for (const p of soundings) {
       expect(Number.isFinite(p.lon)).toBe(true);
       expect(Number.isFinite(p.lat)).toBe(true);
       expect(Number.isFinite(p.depth)).toBe(true);
@@ -188,8 +188,8 @@ describe("parseHyd93A93 — file-based parsing", () => {
   });
 
   it("decoded lat/lon matches expected decimal-degree values", async () => {
-    const points = await parseHyd93A93(a93GzPath);
-    const first = points[0]!;
+    const { soundings } = await parseHyd93A93(a93GzPath);
+    const first = soundings[0]!;
     expect(first.lat).toBeCloseTo(55.682411, 6);
     expect(first.lon).toBeCloseTo(-132.500123, 6);
   });

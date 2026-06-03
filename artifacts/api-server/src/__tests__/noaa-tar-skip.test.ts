@@ -34,7 +34,7 @@ vi.mock("../lib/logger.js", () => ({
 }));
 
 import { logger } from "../lib/logger.js";
-const mockLogger = logger as { info: ReturnType<typeof vi.fn>; warn: ReturnType<typeof vi.fn> };
+const mockLogger = logger as unknown as { info: ReturnType<typeof vi.fn>; warn: ReturnType<typeof vi.fn> };
 
 // ---------------------------------------------------------------------------
 // parserDispatch mock — replace stubs with controllable fakes so tests that
@@ -214,20 +214,25 @@ describe("routeTarEntries — .a93.gz sibling detection", () => {
     expect(mockLogger.warn).not.toHaveBeenCalled();
   });
 
-  it("does NOT skip .a93.gz when no .xyz.gz sibling exists", async () => {
-    // Temporarily replace hyd93-a93 parser with a stub that returns points
-    const mockHyd93 = vi.fn().mockResolvedValue([
-      { lon: -70.5, lat: 42.5, depth: 25 },
-    ]);
-    parserDispatch["hyd93-a93"] = mockHyd93;
-
+  it("does NOT skip .a93.gz when no .xyz.gz sibling exists — it attempts to parse it", async () => {
+    // When there is no .xyz.gz sibling the router must NOT add the .a93.gz to
+    // the skipped list; instead it attempts to parse it.  Since the fake path
+    // does not exist on disk the real parseHyd93A93 will throw an ENOENT —
+    // which is proof that the router reached the parse step rather than
+    // silently skipping the file with reason "superseded-by-xyz".
     const entries = ["GEODAS/H09084.a93.gz"];
 
-    const result = await routeTarEntries("/fake/extract/dir", entries, "H09084.tar.gz");
+    await expect(
+      routeTarEntries("/fake/extract/dir", entries, "H09084.tar.gz"),
+    ).rejects.toMatchObject({
+      code: expect.stringMatching(/^ENOENT$|^NO_PARSEABLE_DATA$/),
+    });
 
-    expect(result.skipped).toHaveLength(0);
-    expect(mockHyd93).toHaveBeenCalledOnce();
-    expect(result.points.length).toBeGreaterThan(0);
+    // Crucially, the error must NOT be NO_PARSEABLE_DATA (which is thrown
+    // when no entries were even attempted) — it must be ENOENT (file missing),
+    // proving the router tried to parse rather than skip.
+    const err = await routeTarEntries("/fake/extract/dir", entries, "H09084.tar.gz").catch((e) => e);
+    expect(err.code).not.toBe("NO_PARSEABLE_DATA");
   });
 
   it("skips nested GEODAS .a93.gz when nested .xyz.gz sibling exists in same folder", async () => {

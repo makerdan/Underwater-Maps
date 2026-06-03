@@ -430,7 +430,7 @@ async function processUploadJob(
         // merge all sounding points into a single array.  Throws with code
         // "NO_PARSEABLE_DATA" if nothing in the archive is parseable, or
         // "PARSER_NOT_IMPLEMENTED" for recognised-but-not-yet-implemented types.
-        const { points: tarPoints, datasetName: tarDatasetName } = await routeTarEntries(
+        const { points: tarPoints, datasetName: tarDatasetName, hyd93Features: tarHyd93Features } = await routeTarEntries(
           tarExtractedDir,
           entries,
           fileName,
@@ -462,6 +462,7 @@ async function processUploadJob(
             maxDepth: terrain.maxDepth,
             terrainJson: terrain as unknown as StoredTerrainJson,
             overviewJson: overview as unknown as StoredTerrainJson,
+            hyd93FeaturesJson: tarHyd93Features.length > 0 ? tarHyd93Features : null,
           })
           .returning({ id: customDatasetsTable.id });
 

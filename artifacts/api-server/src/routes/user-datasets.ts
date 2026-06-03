@@ -243,6 +243,26 @@ router.get("/user/datasets/:id/overview", requireAuth, asyncHandler(async (req, 
   res.json(GetUserDatasetsIdOverviewResponse.parse(row.overviewJson));
 }));
 
+// ── GET /user/datasets/:id/hyd93-features ──────────────────────────────────
+router.get("/user/datasets/:id/hyd93-features", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+  const userId = (req as AuthenticatedRequest).clerkUserId;
+  const id = String(req.params["id"] ?? "");
+
+  const [row] = await db
+    .select({ hyd93FeaturesJson: customDatasetsTable.hyd93FeaturesJson })
+    .from(customDatasetsTable)
+    .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, userId)));
+
+  if (!row) {
+    res.status(404).json({ error: "not_found", details: `User dataset '${id}' not found` });
+    return;
+  }
+
+  // Return an empty array when the dataset has no HYD93 annotation features
+  // (e.g. it was not sourced from an a93.gz archive, or contained no annotation rows).
+  res.json(row.hyd93FeaturesJson ?? []);
+}));
+
 // ── DELETE /user/datasets/:id ───────────────────────────────────────────────
 router.delete("/user/datasets/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;

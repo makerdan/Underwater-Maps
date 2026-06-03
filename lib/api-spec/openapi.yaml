@@ -321,6 +321,58 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /user/datasets/{id}/hyd93-features:
+    get:
+      operationId: getUserDatasetsIdHyd93Features
+      tags: [user-datasets]
+      summary: Get HYD93 cartographic annotation features for a saved user dataset
+      description: |
+        Returns the array of cartographic annotation points extracted from HYD93
+        `.a93.gz` files when the dataset was uploaded.  Feature codes indicate the
+        type of seafloor hazard or biological feature:
+
+        | Code | Label        |
+        |------|--------------|
+        | 89   | Rocks        |
+        | 103  | Kelp         |
+        | 146  | Ledge        |
+        | 530  | Rocky reef   |
+        | 988  | Obstruction  |
+
+        Returns an empty array (`[]`) when the dataset was not sourced from a HYD93
+        archive or contained no annotation rows — this is the normal case for most
+        datasets and is not an error condition.
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: User dataset identifier
+      responses:
+        "200":
+          description: Array of HYD93 annotation feature points (may be empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Hyd93AnnotationPoint"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Dataset not found or does not belong to current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /user/datasets/{id}:
     delete:
       operationId: deleteUserDatasetsId
@@ -3761,6 +3813,28 @@ paths:
 
 components:
   schemas:
+    Hyd93AnnotationPoint:
+      type: object
+      description: |
+        A single cartographic annotation point extracted from a HYD93 `.a93.gz`
+        file during dataset upload.  Feature codes identify the type of seafloor
+        hazard or biological feature (89=rocks, 103=kelp, 146=ledges,
+        530=rocky reefs, 988=obstructions/wrecks).
+      properties:
+        lon:
+          type: number
+          description: Longitude in decimal degrees (negative = West)
+        lat:
+          type: number
+          description: Latitude in decimal degrees
+        featureCode:
+          type: integer
+          description: HYD93 feature code (89, 103, 146, 530, or 988)
+      required:
+        - lon
+        - lat
+        - featureCode
+
     HealthStatus:
       type: object
       properties:

@@ -171,6 +171,14 @@ interface UiStore {
   efhOverlayEnabled: boolean;
   setEfhOverlayEnabled: (enabled: boolean) => void;
   /**
+   * Show HYD93 cartographic annotation points (kelp, rocks, rocky reefs,
+   * ledges, obstructions) as a labelled overlay in the 3D scene.
+   * Only meaningful when the active dataset was sourced from a HYD93 archive.
+   * Intentionally transient (not persisted) — resets to false on each session.
+   */
+  hyd93FeaturesEnabled: boolean;
+  setHyd93FeaturesEnabled: (enabled: boolean) => void;
+  /**
    * Currently selected EFH species (set on click in the OverviewMap or in
    * the 3D scene). When non-null, the shared EfhDetailPanel renders the
    * species info card. Null = panel closed.
@@ -421,6 +429,10 @@ export const useUiStore = create<UiStore>((set) => {
         : { efhOverlayEnabled: false, selectedEfh: null, hiddenEfhSpecies: new Set<string>() });
       if (!enabled) useSettingsStore.setState({ hiddenEfhSpecies: [] });
     },
+
+    // hyd93FeaturesEnabled is intentionally transient — not wired to settingsStore.
+    hyd93FeaturesEnabled: false,
+    setHyd93FeaturesEnabled: (enabled) => set({ hyd93FeaturesEnabled: enabled }),
 
     hiddenEfhSpecies: new Set<string>(s.hiddenEfhSpecies ?? []),
     toggleEfhSpecies: (commonName) => set((state) => {
