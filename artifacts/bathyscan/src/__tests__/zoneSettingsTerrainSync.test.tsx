@@ -141,6 +141,7 @@ const mockMatHolder = vi.hoisted(() => {
         uHabitatColor: { value: { set: (_v: string) => {} } },
         uHabitatTex: { value: null },
         uHabitatMix: { value: 0 },
+        uHabitatColor: { value: makeColor() },
       };
       const uniforms: Record<string, { value: unknown }> = new Proxy(explicit, {
         get(target, prop) {
