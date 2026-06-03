@@ -38,6 +38,7 @@ vi.mock("@workspace/db", () => ({
   userSettingsTable: {},
   uploadJobsTable: {},
   disabledPresetsTable: {},
+  pool: { end: vi.fn() },
 }));
 
 vi.mock("@clerk/express", () => ({
