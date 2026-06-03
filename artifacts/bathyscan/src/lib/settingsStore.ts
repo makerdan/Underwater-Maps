@@ -18,7 +18,9 @@
  *   page reload or sign-in from a different device MUST be added here:
  *     1. Add a typed field to `SettingsState`.
  *     2. Add a default value to `DEFAULT_SETTINGS`.
- *     3. Add a setter to `SettingsActions` and implement it below.
+ *     3. Add a setter to `SettingsActions` and implement it in the `create()`
+ *        factory below. The `satisfies SettingsStore` guard at the end of the
+ *        factory will produce a TypeScript error if you forget either side.
  *     4. Add the key to the relevant section in `SECTION_KEYS`.
  *     5. Bump `SETTINGS_SCHEMA_VERSION` by 1 and add a v(n-1)→v(n) migration
  *        entry in the `migrate` function that injects the new default so
@@ -1337,7 +1339,12 @@ export const useSettingsStore = create<SettingsStore>()(
                 ? new Date().toISOString()
                 : lastSyncedAt,
           })),
-      };
+      } satisfies SettingsStore;
+      // ↑ DRIFT GUARD: `satisfies` performs excess-property checking on the
+      // object literal, so TypeScript will error here if any action is
+      // implemented without a matching declaration in SettingsActions (or
+      // SettingsState). Without this, function return values are only checked
+      // structurally and extra keys are silently ignored.
     },
     {
       name: "bathyscan:settings",
