@@ -546,6 +546,7 @@ interface SettingsActions {
   setAutoShowZoneOverlay: (v: boolean) => void;
   setDefaultHabitatSpecies: (v: string) => void;
   setHabitatOverlayIntensity: (v: number) => void;
+  setHabitatOverlayColor: (color: string) => void;
 
   // GPS / Trail
   setAutoStartTrailRecording: (v: boolean) => void;

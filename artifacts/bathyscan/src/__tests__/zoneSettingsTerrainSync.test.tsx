@@ -138,6 +138,7 @@ const mockMatHolder = vi.hoisted(() => {
         uHighlightMax: { value: 0 },
         uShowHabitat: { value: 0 },
         uHabitatIntensity: { value: 0 },
+        uHabitatColor: { value: { set: (_v: string) => {} } },
         uHabitatTex: { value: null },
         uHabitatMix: { value: 0 },
       };
