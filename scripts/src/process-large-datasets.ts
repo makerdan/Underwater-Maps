@@ -15,6 +15,11 @@
  *                      match what was recorded at import time.  If either
  *                      piece of metadata is unavailable the check falls back
  *                      to basename-only matching (legacy behaviour).
+ *   --file=<filename>  Limit processing to a single named file under
+ *                      Large_Datasets/.  Combine with --skip-processed for a
+ *                      safe, targeted retry of a previously-failed file.
+ *                      Prints a clear error and exits non-zero if the named
+ *                      file is not found under the source prefix.
  *
  * Environment:
  *   DEFAULT_OBJECT_STORAGE_BUCKET_ID — required; the GCS bucket name.
@@ -184,13 +189,21 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const skipProcessed = args.includes("--skip-processed");
 
+  // --file=<filename>: optional filter to process only one named file.
+  const fileArg = args.find((a) => a.startsWith("--file="));
+  const targetFile = fileArg ? fileArg.slice("--file=".length).trim() : null;
+
   const bucketName = getBucketName();
 
   console.log(`\n=== process-large-datasets ===`);
   console.log(`Bucket         : ${bucketName}`);
   console.log(`Prefix         : ${SOURCE_PREFIX}`);
   console.log(`Owner          : ${ADMIN_USER_ID}`);
-  console.log(`Skip processed : ${skipProcessed}\n`);
+  console.log(`Skip processed : ${skipProcessed}`);
+  if (targetFile) {
+    console.log(`Target file    : ${targetFile}`);
+  }
+  console.log();
 
   // If requested, collect already-processed file fingerprints up front.
   let processedInfo: Map<string, ProcessedFileInfo> = new Map();
@@ -203,14 +216,29 @@ async function main(): Promise<void> {
   console.log("Listing objects…");
   const [files] = await gcsClient.bucket(bucketName).getFiles({ prefix: SOURCE_PREFIX });
 
-  const objects = files.filter((f) => !f.name.endsWith("/"));
+  const allObjects = files.filter((f) => !f.name.endsWith("/"));
 
-  if (objects.length === 0) {
-    console.log("No files found under Large_Datasets/. Nothing to do.");
-    return;
+  // --file=<filename>: narrow the work list to just the requested file.
+  // This check runs before the empty-prefix early return so that a missing
+  // named file always produces a clear error, even when Large_Datasets/ is empty.
+  let objects = allObjects;
+  if (targetFile) {
+    objects = allObjects.filter((f) => path.basename(f.name) === targetFile);
+    if (objects.length === 0) {
+      console.error(
+        `Error: "${targetFile}" was not found under ${SOURCE_PREFIX}. ` +
+          `Check the filename and try again.`
+      );
+      process.exit(1);
+    }
+    console.log(`Found ${allObjects.length} file(s) under Large_Datasets/; targeting 1 ("${targetFile}").\n`);
+  } else {
+    if (objects.length === 0) {
+      console.log("No files found under Large_Datasets/. Nothing to do.");
+      return;
+    }
+    console.log(`Found ${objects.length} file(s) under Large_Datasets/.\n`);
   }
-
-  console.log(`Found ${objects.length} file(s) under Large_Datasets/.\n`);
 
   let succeeded = 0;
   let failed = 0;
