@@ -62,15 +62,18 @@ async function run(): Promise<void> {
   const fileExt = baseFileName.split(".").pop() ?? "";
 
   // ── Step 1: Read + Parse ──────────────────────────────────────────────────
+  // Note: when fileName ends in .gz, filePath already points to the
+  // decompressed file (datasets.ts strips the gz before spawning the worker).
+  // We pass baseFileName to the parsers so they route on the real extension.
   let points;
   if (TEXT_EXTENSIONS.has(fileExt)) {
     const fileContent = await fs.promises.readFile(filePath, "utf8");
     port.postMessage({ type: "progress", progress: 40 } satisfies ParseWorkerMessage);
-    points = parseXyzCsv(fileContent, fileName);
+    points = parseXyzCsv(fileContent, baseFileName);
   } else {
     const raw = await fs.promises.readFile(filePath);
     port.postMessage({ type: "progress", progress: 40 } satisfies ParseWorkerMessage);
-    points = await parseUploadedFile(raw, fileName);
+    points = await parseUploadedFile(raw, baseFileName);
   }
 
   port.postMessage({ type: "progress", progress: 55 } satisfies ParseWorkerMessage);
