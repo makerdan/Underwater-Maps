@@ -208,6 +208,29 @@ describe("POST /api/poe/classify — Zod validation", () => {
       .send({ gridBase64: "dGVzdA==" });
     expect(res.status).not.toBe(400);
   });
+
+  it("SSE header guard: if the response ever streams, content-type must be text/event-stream, content-length must be absent, and transfer-encoding must not coexist with content-length", async () => {
+    const res = await request(app)
+      .post("/api/poe/classify")
+      .set("x-e2e-user-id", "user-poe-test")
+      .send({ gridBase64: "dGVzdA==" });
+
+    const contentType = res.headers["content-type"] as string | undefined;
+    if (contentType && /text\/event-stream/.test(contentType)) {
+      expect(res.headers["content-length"]).toBeUndefined();
+
+      const transferEncoding = res.headers["transfer-encoding"];
+      if (transferEncoding !== undefined) {
+        expect(transferEncoding).toBe("chunked");
+      }
+
+      if (transferEncoding !== undefined && res.headers["content-length"] !== undefined) {
+        throw new Error(
+          `transfer-encoding: chunked and content-length must not coexist on an SSE response (got transfer-encoding=${transferEncoding}, content-length=${res.headers["content-length"]})`,
+        );
+      }
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -320,6 +343,29 @@ describe("POST /api/poe/query — Zod validation", () => {
         ],
       });
     expect(res.status).not.toBe(400);
+  });
+
+  it("SSE header guard: if the response ever streams, content-type must be text/event-stream, content-length must be absent, and transfer-encoding must not coexist with content-length", async () => {
+    const res = await request(app)
+      .post("/api/poe/query")
+      .set("x-e2e-user-id", "user-poe-test")
+      .send({ userMessage: "show me the deepest point" });
+
+    const contentType = res.headers["content-type"] as string | undefined;
+    if (contentType && /text\/event-stream/.test(contentType)) {
+      expect(res.headers["content-length"]).toBeUndefined();
+
+      const transferEncoding = res.headers["transfer-encoding"];
+      if (transferEncoding !== undefined) {
+        expect(transferEncoding).toBe("chunked");
+      }
+
+      if (transferEncoding !== undefined && res.headers["content-length"] !== undefined) {
+        throw new Error(
+          `transfer-encoding: chunked and content-length must not coexist on an SSE response (got transfer-encoding=${transferEncoding}, content-length=${res.headers["content-length"]})`,
+        );
+      }
+    }
   });
 });
 
