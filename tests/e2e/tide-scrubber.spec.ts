@@ -160,10 +160,13 @@ test.describe("Tide HUD scrubber slack visuals", () => {
     // TidePanel only fetches tidal data once a dataset is active (it needs
     // the dataset centre coordinates). Wait for terrain to load so the tidal
     // API call fires and our mock can respond.
+    // Cap the natural-terrain wait at 5 s — in CI the API is often
+    // unreliable so we fall through to the seed path quickly instead of
+    // burning 25 s of the 90 s budget on a wait that rarely succeeds.
     await page.waitForFunction(
       () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
       null,
-      { timeout: 25_000 },
+      { timeout: 5_000 },
     ).catch(() => {});
     // If terrain didn't load in time, seed synthetic terrain so that
     // useTidalData receives non-null lat/lon and fires the fetch.
@@ -171,6 +174,16 @@ test.describe("Tide HUD scrubber slack visuals", () => {
       () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
     ).catch(() => false);
     if (!hasTerrain) {
+      // Ensure the TestBridge has fully registered (registerTestBridge runs
+      // in a useEffect, which is asynchronous). The natural-terrain wait
+      // above usually gives it enough time, but under load the effect may not
+      // have fired yet. Waiting explicitly prevents seedTerrain() from
+      // silently returning false and leaving lat/lon null.
+      await page.waitForFunction(
+        () => Boolean(window.__bathyTest?.isTestBridgeReady?.()),
+        null,
+        { timeout: 10_000 },
+      ).catch(() => {});
       const seeded = await page.evaluate(
         () => window.__bathyTest?.seedTerrain?.(),
       ).catch(() => false);

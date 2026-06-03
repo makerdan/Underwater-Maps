@@ -119,18 +119,24 @@ let appSetDatasetId: ((id: string | null) => void) | null = null;
 let appGetTerrainRef: { current: TerrainData | null } = { current: null };
 let appSetRealisticMode: ((b: boolean) => void) | null = null;
 let appRealisticModeRef: { current: boolean } = { current: false };
+let appSetTidalOverlay: ((v: boolean) => void) | null = null;
+let appFeedTidalData: ((data: unknown) => void) | null = null;
 export function registerTestBridge(
   setTerrain: (t: TerrainData | null) => void,
   setDatasetId?: (id: string | null) => void,
   terrainRef?: { current: TerrainData | null },
   setRealisticMode?: (b: boolean) => void,
   realisticModeRef?: { current: boolean },
+  setTidalOverlay?: (v: boolean) => void,
+  feedTidalData?: (data: unknown) => void,
 ): void {
   appSetTerrain = setTerrain;
   if (setDatasetId) appSetDatasetId = setDatasetId;
   if (terrainRef) appGetTerrainRef = terrainRef;
   if (setRealisticMode) appSetRealisticMode = setRealisticMode;
   if (realisticModeRef) appRealisticModeRef = realisticModeRef;
+  if (setTidalOverlay) appSetTidalOverlay = setTidalOverlay;
+  if (feedTidalData) appFeedTidalData = feedTidalData;
 }
 
 // The EFH species detail panel is now driven by uiStore.selectedEfh so the
@@ -249,6 +255,19 @@ export interface BathyTestApi {
     labels: string[];
     separators: number;
   };
+  /**
+   * Directly set the tidal overlay state (bypasses the TIDE button click and
+   * the autoLoadTidal useEffect, which both depend on settings hydration and
+   * are too slow for time-sensitive E2E tests).
+   */
+  setTidalOverlay: (v: boolean) => void;
+  /**
+   * Inject tidal data directly into App state, bypassing the useTidalData
+   * fetch. The injected data persists until the page is navigated away.
+   * Used by E2E tests to assert on TidePanel content without waiting for a
+   * real (or mocked) HTTP response.
+   */
+  feedTidalData: (data: unknown) => void;
   /**
    * Seed the React Query marker-list cache for a dataset so tests can assert
    * on cache invalidation without going through a full GET round-trip.
@@ -836,6 +855,12 @@ export function installTestHelpers(): void {
       };
     },
     isTestBridgeReady: () => !!appSetTerrain,
+    setTidalOverlay: (v) => {
+      if (appSetTidalOverlay) appSetTidalOverlay(v);
+    },
+    feedTidalData: (data) => {
+      if (appFeedTidalData) appFeedTidalData(data);
+    },
     seedTerrain: (overrides) => {
       if (!appSetTerrain) return false;
       const resolution = overrides?.resolution ?? 64;

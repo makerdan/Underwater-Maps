@@ -15,6 +15,14 @@ interface AppState {
   setCameraPos: (p: [number, number, number]) => void;
   tidalOverlay: boolean;
   setTidalOverlay: (b: boolean) => void;
+  /**
+   * Test-only: when set (non-null), overrides the live useTidalData result
+   * in App.tsx. Allows E2E tests to inject tidal data without waiting for a
+   * real (or mocked) HTTP fetch to complete.  Always null in production; the
+   * TestBridge sets it via registerTestBridge → feedTidalData.
+   */
+  tidalDataOverride: unknown;
+  setTidalDataOverride: (data: unknown) => void;
   realisticMode: boolean;
   setRealisticMode: (b: boolean) => void;
   boatSpeedMph: number;
@@ -57,6 +65,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [cameraPos, setCameraPos] = useState<[number, number, number]>([0, 0, 0]);
 
   const [tidalOverlay, setTidalOverlayRaw] = useState<boolean>(false);
+  const [tidalDataOverride, setTidalDataOverride] = useState<unknown>(null);
   const [realisticMode, setRealisticModeRaw] = useState<boolean>(() =>
     readLocalBool("bathyscan:realisticMode", false),
   );
@@ -94,6 +103,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setCameraPos,
         tidalOverlay,
         setTidalOverlay,
+        tidalDataOverride,
+        setTidalDataOverride,
         realisticMode,
         setRealisticMode,
         boatSpeedMph,

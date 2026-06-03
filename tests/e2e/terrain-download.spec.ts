@@ -116,8 +116,23 @@ async function drawDownloadBbox(
   const x1 = box.x + box.width * 0.7;
   const y1 = box.y + box.height * 0.7;
 
+  // Move first so Playwright's internal pointer is at the right position for
+  // the subsequent move/up events (which fire on window and don't need a hit-
+  // test). The mousedown is dispatched directly on the canvas element to
+  // bypass z-order interception: in headless Chromium the Three.js scene
+  // canvas (or another overlay) sits above the OverviewMap canvas in the
+  // stacking context, so page.mouse.down() lands on the wrong element and
+  // handleMouseDown never fires. dispatchEvent targets the element directly,
+  // exactly like the overview-map.spec.ts contextmenu workaround.
   await page.mouse.move(x0, y0);
-  await page.mouse.down();
+  await canvas.dispatchEvent("mousedown", {
+    bubbles: true,
+    cancelable: true,
+    button: 0,
+    buttons: 1,
+    clientX: x0,
+    clientY: y0,
+  });
   await page.mouse.move(x1, y1, { steps: 10 });
   await page.mouse.up();
 }

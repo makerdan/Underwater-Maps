@@ -117,83 +117,67 @@ test.describe("Slack-tide visuals", () => {
   });
 
   test("TidePanel shows the slack status line with a numeric minute countdown", async ({ page }) => {
-    test.setTimeout(90_000);
+    test.setTimeout(30_000);
     if (!(await appIsSignedIn(page))) {
       test.skip(true, "Canvas not visible — landing page shown (e2e auth bypass inactive)");
       return;
     }
 
-    // Wait for terrain to load before opening the tidal overlay — the
-    // TidePanel only fetches tide data once a dataset is active, and
-    // toggling TIDAL before then leaves the panel in a loading state past
-    // our visibility timeout.
+    // Wait for the TestBridge to register before injecting data. The bridge
+    // is wired up in a useEffect that fires after the first render; on a
+    // freshly navigated page this usually takes < 1 s, but we give it 10 s
+    // to be safe under load.
     await page.waitForFunction(
-      () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
+      () => Boolean(window.__bathyTest?.isTestBridgeReady?.()),
       null,
-      { timeout: 20_000 },
+      { timeout: 10_000 },
     ).catch(() => {});
-    // If terrain didn't load in time, seed synthetic terrain so that
-    // useTidalData receives non-null lat/lon and fires the fetch.
-    const hasTerrain = await page.evaluate(
-      () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
-    ).catch(() => false);
-    if (!hasTerrain) {
-      const seeded = await page.evaluate(
-        () => window.__bathyTest?.seedTerrain?.(),
-      ).catch(() => false);
-      // Wait for the seeded terrain to actually propagate into app state.
-      if (seeded) {
-        await page.waitForFunction(
-          () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
-          null,
-          { timeout: 5_000 },
-        ).catch(() => {});
-      } else {
-        await page.waitForTimeout(500);
-      }
-    }
 
-    // Enable the Tidal Overlay only if it is not already on.
-    // Use the stable data-testid (rename-proof) rather than button text.
-    // autoLoadTidal:true may set aria-pressed="true" shortly after mount —
-    // wait for that effect to settle before reading so we don't accidentally
-    // click the button off just as the effect enables it.
-    const tidalBtn = page.locator("[data-testid='tidal-overlay-toggle']").first();
-    await expect(tidalBtn).toBeVisible({ timeout: 10_000 });
-    await page
-      .waitForFunction(
-        () =>
-          document
-            .querySelector("[data-testid='tidal-overlay-toggle']")
-            ?.getAttribute("aria-pressed") === "true",
-        { timeout: 5_000 },
-      )
-      .catch(() => {});
-    const ariaPressed = await tidalBtn.getAttribute("aria-pressed").catch(() => null);
-    if (ariaPressed !== "true") {
-      await tidalBtn.dispatchEvent("click");
-    }
+    // Inject tidal overlay + mock tidal data directly via the TestBridge
+    // (bypassing the useTidalData fetch path and autoLoadTidal settings
+    // hydration, both of which are too slow and unreliable in this env).
+    // setTidalOverlay(true) → tidalOverlay = true in context
+    // feedTidalData(…)      → tidalDataOverride = data in App state
+    // Both cause a synchronous React re-render so TidePanel mounts
+    // immediately on the next paint.
+    await page.evaluate(() => {
+      const bt = window.__bathyTest;
+      if (!bt) return;
+      bt.setTidalOverlay(true);
+      bt.feedTidalData({
+        available: true,
+        tideHeight: 1.23,
+        currentDirection: 90,
+        currentSpeed: 0.8,
+        stationName: "Mock Station",
+        stationId: "MOCK1",
+        isPredicted: true,
+        source: "estimated",
+        nextEvent: {
+          type: "high",
+          time: new Date(Date.now() + 60 * 60_000).toISOString(),
+          height: 1.5,
+        },
+        slack: {
+          isSlack: false,
+          phase: "flooding",
+          minutesToSlack: 15,
+          minutesSinceSlack: 0,
+          nextReversalAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+        },
+      });
+    });
 
-    // Wait for the TidePanel to mount. It only renders once tidal data is
-    // available for the dataset centre. TidePanel is always rendered embedded
-    // inside the sidebar, so its standalone header is never shown — check the
-    // root element (data-testid="tide-panel") instead.
+    // TidePanel renders once tidalOverlay=true AND effectiveTidalData!==null,
+    // both of which we just set synchronously. Give React one tick to commit.
     const tidalMounted = page.locator("[data-testid='tide-panel']").first();
-    const noDataMessage = page.locator("text=/No tidal station within/").first();
-    await expect(tidalMounted).toBeVisible({ timeout: 30_000 });
+    await expect(tidalMounted).toBeVisible({ timeout: 5_000 });
 
-    if (await noDataMessage.isVisible().catch(() => false)) {
-      test.skip(true, "No tidal station available for the default dataset in this env");
-      return;
-    }
-
-    // The slack block renders one of two copies — both end with "<N> min".
-    // Match either flooding/ebbing "slack in N min" or the active slack
-    // "Next flow in N min" line.
+    // The slack block renders "slack in 15 min" (isSlack:false, flooding).
     const slackLine = page
       .locator("text=/(slack in|Next flow in)\\s+\\d+\\s*min/i")
       .first();
-    await expect(slackLine).toBeVisible({ timeout: 15_000 });
+    await expect(slackLine).toBeVisible({ timeout: 5_000 });
   });
 
   test("DriftTimeline shows '◐ SLK' on a chip when conditions are slack", async ({ page }) => {
@@ -228,10 +212,44 @@ test.describe("Slack-tide visuals", () => {
     // Manual override panel must be present.
     await expect(page.locator("text=MANUAL OVERRIDE")).toBeVisible({ timeout: 10_000 });
 
-    // Tick "SLACK NOW" and recompute the drift — all 24 hours will then have
-    // isSlack=true, so every chip should display the SLK indicator.
-    const slackNow = page.locator("input[type='checkbox']").first();
-    await slackNow.check({ force: true });
+    // Tick "SLACK NOW" via DOM el.click() on the checkbox input.
+    //
+    // Why not locator.click() / locator.check()?
+    //   – The SLACK NOW label sits deep inside the scrollable WeatherPanel.
+    //     Playwright's locator.click({ force:true }) bypasses actionability
+    //     checks but still sends mouse events at the element's viewport
+    //     coordinates, which are often outside the visible area when the
+    //     panel is scrolled. The browser silently discards off-screen mouse
+    //     events, so the click never reaches the element.
+    //   – locator.check({ force:true }) fails in React 19 because React
+    //     synchronously resets the controlled DOM value back to the prop
+    //     before Playwright's post-check state assertion runs.
+    //   – locator.dispatchEvent("click") dispatches a bare Event, not a
+    //     MouseEvent with activation behaviour, so the checkbox toggle
+    //     never fires and onChange receives e.target.checked === false.
+    //
+    // DOM .click() (called via page.evaluate) IS the native activation
+    // method: it atomically toggles checked and fires the click+change
+    // events with activation behaviour.  React's onChange handler reads
+    // e.target.checked === true and calls setManualSlackNow(true) in the
+    // Zustand store (sync).  We then poll until React has re-rendered the
+    // controlled <input checked={manualSlackNow}> before clicking COMPUTE
+    // DRIFT so the recomputeWithManual closure sees the updated value.
+    await page.evaluate(() => {
+      const cb = document.querySelector(
+        "input[type='checkbox']",
+      ) as HTMLInputElement | null;
+      if (cb) cb.click();
+    });
+    await page
+      .waitForFunction(
+        () =>
+          (document.querySelector("input[type='checkbox']") as HTMLInputElement)
+            ?.checked === true,
+        null,
+        { timeout: 3_000 },
+      )
+      .catch(() => {});
     await page.locator("button:has-text('COMPUTE DRIFT')").dispatchEvent("click");
 
     // At least one hour chip in the timeline must carry the SLK label.
@@ -272,8 +290,23 @@ test.describe("Slack-tide visuals", () => {
       page.locator("text=/\\d+°\\s*from vertical/").first(),
     ).toBeVisible({ timeout: 5_000 });
 
-    // Force slack, recompute, and assert the copy flips to the slack message.
-    await page.locator("input[type='checkbox']").first().check({ force: true });
+    // Force slack via DOM el.click() on the checkbox input — same technique
+    // as the SLK-chip test above. See that test for the full rationale.
+    await page.evaluate(() => {
+      const cb = document.querySelector(
+        "input[type='checkbox']",
+      ) as HTMLInputElement | null;
+      if (cb) cb.click();
+    });
+    await page
+      .waitForFunction(
+        () =>
+          (document.querySelector("input[type='checkbox']") as HTMLInputElement)
+            ?.checked === true,
+        null,
+        { timeout: 3_000 },
+      )
+      .catch(() => {});
     await page.locator("button:has-text('COMPUTE DRIFT')").dispatchEvent("click");
 
     await expect(

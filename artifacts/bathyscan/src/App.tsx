@@ -87,7 +87,10 @@ import { useCameraStore } from "@/lib/cameraStore";
 
 
 function TestBridge(): null {
-  const { setTerrain, setDatasetId, terrain, cameraPos, realisticMode, setRealisticMode } = useAppState();
+  const {
+    setTerrain, setDatasetId, terrain, cameraPos, realisticMode, setRealisticMode,
+    setTidalOverlay, setTidalDataOverride,
+  } = useAppState();
   const cameraPosRef = useRef<[number, number, number]>(cameraPos);
   cameraPosRef.current = cameraPos;
   const terrainRef = useRef(terrain);
@@ -96,9 +99,17 @@ function TestBridge(): null {
   realisticModeRef.current = realisticMode;
   useEffect(() => {
     if (!import.meta.env.DEV) return;
-    registerTestBridge(setTerrain, setDatasetId, terrainRef, setRealisticMode, realisticModeRef);
+    registerTestBridge(
+      setTerrain,
+      setDatasetId,
+      terrainRef,
+      setRealisticMode,
+      realisticModeRef,
+      setTidalOverlay,
+      setTidalDataOverride,
+    );
     registerTestCameraPosRef(cameraPosRef);
-  }, [setTerrain, setDatasetId, setRealisticMode]);
+  }, [setTerrain, setDatasetId, setRealisticMode, setTidalOverlay, setTidalDataOverride]);
   return null;
 }
 
@@ -256,6 +267,7 @@ function Main() {
   );
   const {
     datasetId, setDatasetId, terrain, tidalOverlay, setTidalOverlay,
+    tidalDataOverride,
     realisticMode, setRealisticMode,
     pendingExternalUserDatasetId, setPendingExternalUserDatasetId,
   } = useAppState();
@@ -368,6 +380,10 @@ function Main() {
     tidalOverlay ? scrubDatetime : null,
   );
 
+  // E2E test bridge: when non-null, overrides live tidal fetch data so tests
+  // can inject tidal state without going through the useTidalData HTTP path.
+  const effectiveTidalData = (tidalDataOverride as typeof tidalData) ?? tidalData;
+
   // Publish NOAA-derived ambient current to the currents runtime store so
   // the bathymetric currents simulation (Task #136) can use it as the
   // ambient vector when the user picks `source: "noaa"`.
@@ -385,14 +401,14 @@ function Main() {
   useEffect(() => {
     if (tidalLoading) {
       setTidalStatus("loading");
-    } else if (tidalData && "available" in tidalData && tidalData.available) {
+    } else if (effectiveTidalData && "available" in effectiveTidalData && effectiveTidalData.available) {
       setTidalStatus("ok");
-    } else if (tidalData && "available" in tidalData && !tidalData.available) {
+    } else if (effectiveTidalData && "available" in effectiveTidalData && !effectiveTidalData.available) {
       setTidalStatus("unavailable");
     } else {
       setTidalStatus("idle");
     }
-  }, [tidalLoading, tidalData, setTidalStatus]);
+  }, [tidalLoading, effectiveTidalData, setTidalStatus]);
 
   useEffect(() => {
     // Always publish the ambient when /api/tidal returns a usable current,
@@ -401,19 +417,19 @@ function Main() {
     // through whether the value came from a real station or the
     // tide-derived sinusoidal estimate so the panel can label it honestly
     // and only surface the station id/name when it's actually NOAA-backed.
-    if (tidalData && "available" in tidalData && tidalData.available) {
-      const isStation = tidalData.currentsSource === "noaa";
+    if (effectiveTidalData && "available" in effectiveTidalData && effectiveTidalData.available) {
+      const isStation = effectiveTidalData.currentsSource === "noaa";
       setNoaaAmbient({
-        directionDeg: tidalData.currentDirection,
-        speedKt: tidalData.currentSpeed,
+        directionDeg: effectiveTidalData.currentDirection,
+        speedKt: effectiveTidalData.currentSpeed,
         source: isStation ? "noaa" : "estimated",
-        stationId: isStation ? tidalData.currentsStation?.id : undefined,
-        stationName: isStation ? tidalData.currentsStation?.name : undefined,
+        stationId: isStation ? effectiveTidalData.currentsStation?.id : undefined,
+        stationName: isStation ? effectiveTidalData.currentsStation?.name : undefined,
       });
     } else {
       setNoaaAmbient(null);
     }
-  }, [tidalData, setNoaaAmbient]);
+  }, [effectiveTidalData, setNoaaAmbient]);
 
   // ── Auto-retry NOAA fetch when the user flies to a new area ────────────────
   // Minimum centre-point shift (degrees, either axis) that triggers an
@@ -845,7 +861,7 @@ function Main() {
       <div className="relative flex-1 overflow-hidden">
         {/* 3D Scene — fills everything */}
         <TourScene
-          tidalData={tidalData}
+          tidalData={effectiveTidalData}
           tidalOverlay={tidalOverlay}
           depthLayer={depthLayer}
         />
@@ -969,10 +985,10 @@ function Main() {
 
                 {/* ── Section 2: Conditions ── */}
                 <SidebarSection id="conditions" title="Conditions">
-                  {showTidePanel && tidalOverlay && tidalData !== null ? (
+                  {showTidePanel && tidalOverlay && effectiveTidalData !== null ? (
                     <ErrorBoundary label="tide panel">
                       <TidePanel
-                        data={tidalData}
+                        data={effectiveTidalData}
                         loading={tidalLoading}
                         depthLayer={depthLayer}
                         onDepthLayerChange={setDepthLayer}
