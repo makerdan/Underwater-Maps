@@ -66,12 +66,22 @@ function isBuildStale(): boolean {
   const distMtime = mtimeMs(distEntry);
   if (distMtime === 0) return true; // dist doesn't exist yet
 
-  // Source inputs that should trigger a rebuild when changed
+  // Source inputs that should trigger a rebuild when changed.
+  // Also include workspace lib packages that api-server depends on so that a
+  // change in a shared library is not silently ignored.
+  const workspaceLibs = [
+    "lib/api-zod",
+    "lib/db",
+    "lib/integrations-openai-ai-server",
+    "lib/poe",
+  ];
+
   const sourceRoots = [
     resolve(apiServerDir, "src"),
     resolve(apiServerDir, "build.mjs"),
     resolve(apiServerDir, "package.json"),
     resolve(apiServerDir, "tsconfig.json"),
+    ...workspaceLibs.map((lib) => resolve(root, lib, "src")),
   ];
 
   for (const src of sourceRoots) {
