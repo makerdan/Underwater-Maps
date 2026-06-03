@@ -79,6 +79,8 @@ interface Props {
   externalMoveSignal?: { id: string; name: string; folderId: string | null; seq: number } | null;
   /** Set to begin inline rename for a specific user dataset. */
   externalRenameSignal?: { id: string; name: string; seq: number } | null;
+  /** Called when the user clicks the GEOREFERENCE badge on a dataset that needs georeferencing. */
+  onGeoreference?: (ds: UserDatasetMeta) => void;
 }
 
 type DragKind = "folder" | "dataset";
@@ -108,6 +110,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
   bulkDeleteSignal,
   externalMoveSignal,
   externalRenameSignal,
+  onGeoreference,
 }) => {
   const qc = useQueryClient();
   const expanded = useSettingsStore((s) => s.datasetFolderExpanded);
@@ -1222,6 +1225,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
         onDelete={() =>
           setConfirmDelete({ kind: "dataset", id: ds.id, name: ds.name })
         }
+        onGeoreference={onGeoreference ? () => onGeoreference(ds) : undefined}
         isRenaming={isRenaming}
         renameInput={isRenaming ? renderRenameInput(ds.name) : null}
         isDragging={dragging?.kind === "dataset" && dragging.id === ds.id}
@@ -1570,6 +1574,7 @@ interface DatasetRowProps {
   onContextMenu?: (e: React.MouseEvent) => void;
   onDoubleClick?: () => void;
   onDelete: () => void;
+  onGeoreference?: () => void;
   registerRow: (kind: "folder" | "dataset", id: string, el: HTMLElement | null) => void;
   selectionMode?: boolean;
   isSelected?: boolean;
@@ -1590,6 +1595,7 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
   onContextMenu,
   onDoubleClick,
   onDelete,
+  onGeoreference,
   registerRow,
   selectionMode = false,
   isSelected = false,
@@ -1729,6 +1735,32 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
         </span>
         <span style={{ color: "#1e293b", flexShrink: 0 }}>{date}</span>
       </div>
+      {ds.needsGeoreferencing && !selectionMode && !deleting && (
+        <button
+          type="button"
+          data-testid={`btn-georeference-${ds.id}`}
+          onClick={(e) => { e.stopPropagation(); onGeoreference?.(); }}
+          style={{
+            marginTop: 4,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            padding: "2px 7px",
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+            color: "#f59e0b",
+            background: "rgba(245,158,11,0.12)",
+            border: "1px solid rgba(245,158,11,0.45)",
+            borderRadius: 3,
+            cursor: "pointer",
+            textTransform: "uppercase",
+          }}
+        >
+          <span style={{ fontSize: 10 }}>⊕</span>
+          Georeference
+        </button>
+      )}
     </div>
   );
 };

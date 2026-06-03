@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq, and, desc, sql } from "drizzle-orm";
-import { db, customDatasetsTable, datasetFoldersTable, type StoredTerrainJson } from "@workspace/db";
+import { db, customDatasetsTable, datasetFoldersTable, type StoredTerrainJson, type GeorefControlPoint } from "@workspace/db";
 import { MAX_TERRAIN_JSON_BYTES } from "../lib/constants.js";
 import {
   GetUserDatasetsResponse,
@@ -11,6 +11,9 @@ import {
   PatchUserDatasetsIdRenameBody,
   PatchUserDatasetsIdRenameResponse,
 } from "@workspace/api-zod";
+import { z } from "zod";
+import { gunzipBounded } from "../lib/gunzipBounded.js";
+import sharp from "sharp";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
@@ -38,6 +41,8 @@ function metaJson(row: {
   maxDepth: number;
   folderId: string | null;
   createdAt: Date;
+  needsGeoreferencing?: boolean | null;
+  pendingRasterGzBase64?: string | null;
 }) {
   return {
     id: row.id,
@@ -46,8 +51,25 @@ function metaJson(row: {
     maxDepth: row.maxDepth,
     folderId: row.folderId,
     createdAt: row.createdAt.toISOString(),
+    ...(row.needsGeoreferencing ? { needsGeoreferencing: true as const } : {}),
+    ...(row.needsGeoreferencing && row.pendingRasterGzBase64
+      ? { hasRasterImage: true as const }
+      : {}),
   };
 }
+
+/** Zod schema for a single georeferencing control point. */
+const GeorefControlPointSchema = z.object({
+  px: z.number().finite().nonnegative(),
+  py: z.number().finite().nonnegative(),
+  lon: z.number().finite().min(-180).max(180),
+  lat: z.number().finite().min(-90).max(90),
+});
+
+/** Body schema for POST /user/datasets/:id/georef. */
+const GeorefBodySchema = z.object({
+  controlPoints: z.array(GeorefControlPointSchema).min(2).max(4),
+});
 
 // ── GET /user/datasets ─────────────────────────────────────────────────────
 router.get("/user/datasets", requireAuth, asyncHandler(async (req, res): Promise<void> => {
@@ -61,6 +83,8 @@ router.get("/user/datasets", requireAuth, asyncHandler(async (req, res): Promise
       maxDepth: customDatasetsTable.maxDepth,
       folderId: customDatasetsTable.folderId,
       createdAt: customDatasetsTable.createdAt,
+      needsGeoreferencing: customDatasetsTable.needsGeoreferencing,
+      pendingRasterGzBase64: customDatasetsTable.pendingRasterGzBase64,
     })
     .from(customDatasetsTable)
     .where(eq(customDatasetsTable.userId, userId))
@@ -241,6 +265,120 @@ router.get("/user/datasets/:id/overview", requireAuth, asyncHandler(async (req, 
   }
 
   res.json(GetUserDatasetsIdOverviewResponse.parse(row.overviewJson));
+}));
+
+// ── GET /user/datasets/:id/raster-image ────────────────────────────────────
+// Returns the stored pending raster as a JSON envelope containing base64 gzip
+// bytes.  The client decodes → decompresses → parses via geotiff.js and renders
+// to a canvas for the georeferencing wizard.
+router.get("/user/datasets/:id/raster-image", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+  const userId = (req as AuthenticatedRequest).clerkUserId;
+  const id = String(req.params["id"] ?? "");
+
+  const [row] = await db
+    .select({
+      pendingRasterGzBase64: customDatasetsTable.pendingRasterGzBase64,
+      needsGeoreferencing: customDatasetsTable.needsGeoreferencing,
+    })
+    .from(customDatasetsTable)
+    .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, userId)));
+
+  if (!row) {
+    res.status(404).json({ error: "not_found", details: `User dataset '${id}' not found` });
+    return;
+  }
+
+  if (!row.needsGeoreferencing || !row.pendingRasterGzBase64) {
+    res.status(404).json({ error: "no_raster", details: "This dataset has no pending raster image available for georeferencing." });
+    return;
+  }
+
+  // Decompress gz → raw TIF bytes
+  const gzBuf = Buffer.from(row.pendingRasterGzBase64, "base64");
+  let tifBuf: Buffer;
+  try {
+    tifBuf = await gunzipBounded(gzBuf, 200 * 1024 * 1024);
+  } catch {
+    res.status(500).json({ error: "decompress_failed", details: "Could not decompress the raster image." });
+    return;
+  }
+
+  // Convert TIFF to JPEG via sharp (TIFF may be grayscale or RGB)
+  let pngBuf: Buffer;
+  try {
+    pngBuf = await sharp(tifBuf)
+      .toColorspace("srgb")
+      .jpeg({ quality: 85 })
+      .toBuffer();
+  } catch {
+    res.status(500).json({ error: "convert_failed", details: "Could not convert raster to JPEG." });
+    return;
+  }
+
+  res.set("Content-Type", "image/jpeg");
+  res.set("Cache-Control", "private, max-age=3600");
+  res.send(pngBuf);
+}));
+
+// ── POST /user/datasets/:id/georef ─────────────────────────────────────────
+// Accepts 2–4 control points mapping pixel coordinates to WGS84 lon/lat,
+// persists them, clears the pending raster blob (to save DB space), and
+// marks the dataset as no longer requiring georeferencing.
+router.post("/user/datasets/:id/georef", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+  const userId = (req as AuthenticatedRequest).clerkUserId;
+  const id = String(req.params["id"] ?? "");
+
+  const parsed = GeorefBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({
+      error: "invalid_request",
+      details: parsed.error.issues[0]?.message ?? parsed.error.message,
+    });
+    return;
+  }
+
+  const controlPoints: GeorefControlPoint[] = parsed.data.controlPoints;
+
+  const [row] = await db
+    .select({ id: customDatasetsTable.id, needsGeoreferencing: customDatasetsTable.needsGeoreferencing })
+    .from(customDatasetsTable)
+    .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, userId)));
+
+  if (!row) {
+    res.status(404).json({ error: "not_found", details: `User dataset '${id}' not found` });
+    return;
+  }
+
+  if (!row.needsGeoreferencing) {
+    res.status(409).json({ error: "not_pending", details: "This dataset does not have a pending georeferencing request." });
+    return;
+  }
+
+  const [updated] = await db
+    .update(customDatasetsTable)
+    .set({
+      georefControlPointsJson: controlPoints,
+      needsGeoreferencing: false,
+      pendingRasterGzBase64: null,
+    })
+    .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, userId)))
+    .returning({
+      id: customDatasetsTable.id,
+      name: customDatasetsTable.name,
+      minDepth: customDatasetsTable.minDepth,
+      maxDepth: customDatasetsTable.maxDepth,
+      folderId: customDatasetsTable.folderId,
+      createdAt: customDatasetsTable.createdAt,
+      needsGeoreferencing: customDatasetsTable.needsGeoreferencing,
+      pendingRasterGzBase64: customDatasetsTable.pendingRasterGzBase64,
+    });
+
+  if (!updated) {
+    res.status(500).json({ error: "db_error", details: "Could not update dataset" });
+    return;
+  }
+
+  res.json(metaJson(updated));
 }));
 
 // ── GET /user/datasets/:id/hyd93-features ──────────────────────────────────

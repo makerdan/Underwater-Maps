@@ -322,6 +322,8 @@ All routes are served under the `/api` prefix by the Express 5 server.
 | GET | `/user/datasets/:id/terrain` | Get full terrain grid for a saved user dataset |
 | GET | `/user/datasets/:id/overview` | Get low-resolution overview grid for a saved user dataset |
 | GET | `/user/datasets/:id/hyd93-features` | Get HYD93 cartographic annotation features for a saved user dataset |
+| GET | `/user/datasets/:id/raster-image` | Get the scanned raster image for a dataset pending georeferencing |
+| POST | `/user/datasets/:id/georef` | Submit georeferencing control points for a pending raster |
 | DELETE | `/user/datasets/:id` | Delete a saved user terrain dataset |
 | PATCH | `/user/datasets/:id/move` | Move a user dataset into a folder (or to the root) |
 | POST | `/user/datasets/:id/duplicate` | Duplicate a user dataset into the same folder |

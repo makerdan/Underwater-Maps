@@ -37,6 +37,15 @@ import { gunzipBounded } from "./gunzipBounded.js";
 /** 200 MB cap for inner tif.gz decompression — same as the top-level gz cap. */
 const INNER_GZ_MAX_BYTES = 200 * 1024 * 1024;
 
+/**
+ * Maximum compressed size of a smooth-sheet raster we are willing to store
+ * in the database for the interactive georeferencing wizard.  Rasters larger
+ * than this are not stored and the dataset is still flagged
+ * `needsGeoreferencing`; the user will be informed that the image is
+ * unavailable but can still submit control points against an external map.
+ */
+const MAX_RASTER_STORE_BYTES = 20 * 1024 * 1024; // 20 MB compressed
+
 /** 500 MB decompression cap for GEODAS sounding files */
 const GEODAS_MAX_DECOMP_BYTES = 500 * 1024 * 1024;
 
@@ -137,6 +146,15 @@ export interface TarRouteResult {
   hyd93Features: Hyd93AnnotationPoint[];
   /** Entries that were intentionally skipped, with their skip reason. */
   skipped: SkippedEntry[];
+  /**
+   * Compressed .tif.gz bytes from a Smooth_Sheets inner GeoTIFF that lacked
+   * georeferencing tags.  Present only when such a raster was encountered AND
+   * the compressed size is ≤ MAX_RASTER_STORE_BYTES.  Callers should persist
+   * this alongside the dataset and flag it as needing manual georeferencing.
+   */
+  smoothSheetRasterBuffer?: Buffer;
+  /** Original filename (basename) of the ungeoreferenced inner GeoTIFF. */
+  smoothSheetRasterFilename?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -1043,6 +1061,12 @@ export async function routeTarEntries(
     );
   }
 
+  // Track the first ungeoreferenced smooth-sheet raster encountered.
+  // Only one is captured — archives with multiple un-georef'd rasters are rare
+  // and capturing all would risk large DB payloads.
+  let smoothSheetRasterBuffer: Buffer | undefined;
+  let smoothSheetRasterFilename: string | undefined;
+
   // Dispatch each recognised entry to its parser and accumulate points
   for (const { relativePath, key } of dispatching) {
     const absolutePath = path.join(extractedDir, relativePath);
@@ -1075,6 +1099,47 @@ export async function routeTarEntries(
 
       allPoints.push(...soundings);
       allHyd93Features.push(...features);
+    } else if (key === "inner-geotiff") {
+      // Smooth-sheet GeoTIFFs go through parseSmoothSheetsGeoTiff which already
+      // handles the no-georef case by returning [].  When it does return [],
+      // capture the raw compressed bytes so the caller can store them for the
+      // interactive georeferencing wizard.
+      // Use parserDispatch so tests can mock this entry without side-effects.
+      const points = await parserDispatch["inner-geotiff"](absolutePath);
+
+      if (points.length === 0) {
+        // The raster had no georeferencing tags — capture it for manual pinning.
+        // Only store if size is within budget and we haven't captured one yet.
+        if (!smoothSheetRasterBuffer) {
+          try {
+            const gzBytes = await fs.promises.readFile(absolutePath);
+            if (gzBytes.length <= MAX_RASTER_STORE_BYTES) {
+              smoothSheetRasterBuffer = gzBytes;
+              smoothSheetRasterFilename = path.basename(relativePath);
+              logger.info(
+                { entry: relativePath, sizeBytes: gzBytes.length },
+                `[noaa-tar-router] captured ungeoreferenced smooth-sheet raster (${gzBytes.length} bytes) for georef wizard`,
+              );
+            } else {
+              logger.warn(
+                { entry: relativePath, sizeBytes: gzBytes.length, limitBytes: MAX_RASTER_STORE_BYTES },
+                `[noaa-tar-router] ungeoreferenced smooth-sheet raster exceeds storage cap — georef wizard image unavailable`,
+              );
+            }
+          } catch (readErr) {
+            logger.warn(
+              { entry: relativePath, err: readErr instanceof Error ? readErr.message : String(readErr) },
+              `[noaa-tar-router] could not re-read smooth-sheet gz for georef wizard storage`,
+            );
+          }
+        }
+      } else {
+        logger.info(
+          { entry: relativePath, key, pointCount: points.length },
+          `[noaa-tar-router] parser "${key}" returned ${points.length} point(s)`,
+        );
+        allPoints.push(...points);
+      }
     } else {
       const parser = parserDispatch[key];
       const points = await parser(absolutePath);
@@ -1088,9 +1153,28 @@ export async function routeTarEntries(
     }
   }
 
+  // Post-parse guard: throw when no useful data was extracted at all.
+  // Bottom-samples-only archives (allSubstratePoints > 0) and archives whose
+  // smooth-sheet raster was captured for the georeferencing wizard
+  // (smoothSheetRasterBuffer set) are considered "useful" even with zero depth
+  // soundings.  Only throw when ALL three collections are empty.
+  if (allPoints.length === 0 && allSubstratePoints.length === 0 && !smoothSheetRasterBuffer) {
+    throw Object.assign(new Error(NO_PARSEABLE_DATA_MESSAGE), {
+      code: "NO_PARSEABLE_DATA",
+    });
+  }
+
   // Derive dataset name — surveys.txt H-number first, archive filename as fallback
   const metaName = await extractSurveyNameFromMetadata(extractedDir, entries);
   const datasetName = metaName ?? nameFromArchiveFilename(archiveFileName);
 
-  return { points: allPoints, datasetName, substratePoints: allSubstratePoints, hyd93Features: allHyd93Features, skipped };
+  return {
+    points: allPoints,
+    datasetName,
+    substratePoints: allSubstratePoints,
+    hyd93Features: allHyd93Features,
+    skipped,
+    smoothSheetRasterBuffer,
+    smoothSheetRasterFilename,
+  };
 }

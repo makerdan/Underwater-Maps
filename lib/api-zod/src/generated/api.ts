@@ -313,7 +313,9 @@ export const PostDatasetsUploadResponse = zod.object({
   "minDepth": zod.number(),
   "maxDepth": zod.number(),
   "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "needsGeoreferencing": zod.boolean().optional().describe('True when an inner GeoTIFF from a Smooth_Sheets NOAA archive lacked\ngeoreferencing tags and the user must manually pin it to geographic\ncoordinates using the georeferencing wizard. Absent (falsy) once\ncontrol points have been submitted.\n'),
+  "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n')
 }).optional().describe('Metadata for the freshly-saved row, suitable for optimistically inserting into the \"My Uploads\" list without a refetch'),
   "saveError": zod.string().optional().describe('Human-readable error string returned when the auto-save to the user\'s account failed. The terrain itself is still returned so the session is usable.')
 }).describe('Full terrain and overview grids generated from an uploaded file. The upload is always persisted into the caller\'s dataset library; `savedDatasetId` carries the new row\'s UUID.')
@@ -329,7 +331,9 @@ export const GetUserDatasetsResponseItem = zod.object({
   "minDepth": zod.number(),
   "maxDepth": zod.number(),
   "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "needsGeoreferencing": zod.boolean().optional().describe('True when an inner GeoTIFF from a Smooth_Sheets NOAA archive lacked\ngeoreferencing tags and the user must manually pin it to geographic\ncoordinates using the georeferencing wizard. Absent (falsy) once\ncontrol points have been submitted.\n'),
+  "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n')
 }).describe('Metadata for a user-saved custom terrain dataset')
 export const GetUserDatasetsResponse = zod.array(GetUserDatasetsResponseItem)
 
@@ -478,6 +482,58 @@ export const GetUserDatasetsIdHyd93FeaturesResponse = zod.array(GetUserDatasetsI
 
 
 /**
+ * Returns the raw scanned chart image (JPEG) for a dataset whose inner
+GeoTIFF lacked georeferencing tags during upload.  Only available when
+`needsGeoreferencing` is true on the dataset and the raster was within
+the storage size cap.  Used to display the scanned chart in the
+interactive georeferencing wizard so the user can place control points.
+
+ * @summary Get the scanned raster image for a dataset pending georeferencing
+ */
+export const GetUserDatasetsIdRasterImageParams = zod.object({
+  "id": zod.coerce.string().describe('User dataset identifier')
+})
+
+
+/**
+ * Accepts 2–4 control points that map pixel coordinates on the scanned
+raster to real-world WGS84 lon/lat positions.  Stores the control
+points, marks the dataset as georeferenced, and discards the pending
+raster blob to save storage.  Returns the updated dataset metadata.
+
+ * @summary Submit georeferencing control points for a pending raster
+ */
+export const PostUserDatasetsIdGeorefParams = zod.object({
+  "id": zod.coerce.string().describe('User dataset identifier')
+})
+
+export const postUserDatasetsIdGeorefBodyControlPointsMin = 2;
+export const postUserDatasetsIdGeorefBodyControlPointsMax = 4;
+
+
+
+export const PostUserDatasetsIdGeorefBody = zod.object({
+  "controlPoints": zod.array(zod.object({
+  "px": zod.number().describe('Pixel X coordinate (column) in the image, measured from the left edge'),
+  "py": zod.number().describe('Pixel Y coordinate (row) in the image, measured from the top edge'),
+  "lon": zod.number().describe('WGS84 longitude in decimal degrees (−180 to +180)'),
+  "lat": zod.number().describe('WGS84 latitude in decimal degrees (−90 to +90)')
+}).describe('A single control point mapping a pixel coordinate on the scanned raster to a real-world WGS84 lon\/lat position')).min(postUserDatasetsIdGeorefBodyControlPointsMin).max(postUserDatasetsIdGeorefBodyControlPointsMax).describe('2–4 control points that anchor the scanned image to real-world coordinates')
+}).describe('Control points for georeferencing a pending raster scan')
+
+export const PostUserDatasetsIdGeorefResponse = zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "name": zod.string().describe('Dataset name derived from the uploaded filename'),
+  "minDepth": zod.number(),
+  "maxDepth": zod.number(),
+  "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
+  "createdAt": zod.coerce.date(),
+  "needsGeoreferencing": zod.boolean().optional().describe('True when an inner GeoTIFF from a Smooth_Sheets NOAA archive lacked\ngeoreferencing tags and the user must manually pin it to geographic\ncoordinates using the georeferencing wizard. Absent (falsy) once\ncontrol points have been submitted.\n'),
+  "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n')
+}).describe('Metadata for a user-saved custom terrain dataset')
+
+
+/**
  * @summary Delete a saved user terrain dataset
  */
 export const DeleteUserDatasetsIdParams = zod.object({
@@ -502,7 +558,9 @@ export const PatchUserDatasetsIdMoveResponse = zod.object({
   "minDepth": zod.number(),
   "maxDepth": zod.number(),
   "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "needsGeoreferencing": zod.boolean().optional().describe('True when an inner GeoTIFF from a Smooth_Sheets NOAA archive lacked\ngeoreferencing tags and the user must manually pin it to geographic\ncoordinates using the georeferencing wizard. Absent (falsy) once\ncontrol points have been submitted.\n'),
+  "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n')
 }).describe('Metadata for a user-saved custom terrain dataset')
 
 
@@ -531,7 +589,9 @@ export const PatchUserDatasetsIdRenameResponse = zod.object({
   "minDepth": zod.number(),
   "maxDepth": zod.number(),
   "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "needsGeoreferencing": zod.boolean().optional().describe('True when an inner GeoTIFF from a Smooth_Sheets NOAA archive lacked\ngeoreferencing tags and the user must manually pin it to geographic\ncoordinates using the georeferencing wizard. Absent (falsy) once\ncontrol points have been submitted.\n'),
+  "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n')
 }).describe('Metadata for a user-saved custom terrain dataset')
 
 

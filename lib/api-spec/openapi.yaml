@@ -373,6 +373,104 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /user/datasets/{id}/raster-image:
+    get:
+      operationId: getUserDatasetsIdRasterImage
+      tags: [user-datasets]
+      summary: Get the scanned raster image for a dataset pending georeferencing
+      description: |
+        Returns the raw scanned chart image (JPEG) for a dataset whose inner
+        GeoTIFF lacked georeferencing tags during upload.  Only available when
+        `needsGeoreferencing` is true on the dataset and the raster was within
+        the storage size cap.  Used to display the scanned chart in the
+        interactive georeferencing wizard so the user can place control points.
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: User dataset identifier
+      responses:
+        "200":
+          description: JPEG image of the scanned raster
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Dataset not found or has no pending raster image
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /user/datasets/{id}/georef:
+    post:
+      operationId: postUserDatasetsIdGeoref
+      tags: [user-datasets]
+      summary: Submit georeferencing control points for a pending raster
+      description: |
+        Accepts 2–4 control points that map pixel coordinates on the scanned
+        raster to real-world WGS84 lon/lat positions.  Stores the control
+        points, marks the dataset as georeferenced, and discards the pending
+        raster blob to save storage.  Returns the updated dataset metadata.
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: User dataset identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeorefBody"
+      responses:
+        "200":
+          description: Updated dataset metadata (needsGeoreferencing now absent/false)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDatasetMeta"
+        "400":
+          description: Invalid control points
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Dataset not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Dataset does not have a pending georeferencing request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /user/datasets/{id}:
     delete:
       operationId: deleteUserDatasetsId
@@ -4671,12 +4769,56 @@ components:
         createdAt:
           type: string
           format: date-time
+        needsGeoreferencing:
+          type: boolean
+          description: |
+            True when an inner GeoTIFF from a Smooth_Sheets NOAA archive lacked
+            georeferencing tags and the user must manually pin it to geographic
+            coordinates using the georeferencing wizard. Absent (falsy) once
+            control points have been submitted.
+        hasRasterImage:
+          type: boolean
+          description: |
+            True when a pending raster image is stored and available from
+            GET /user/datasets/{id}/raster-image for display in the wizard.
+            Absent when the raster exceeded the storage cap or has been cleared.
       required:
         - id
         - name
         - minDepth
         - maxDepth
         - createdAt
+
+    GeorefControlPoint:
+      type: object
+      description: A single control point mapping a pixel coordinate on the scanned raster to a real-world WGS84 lon/lat position
+      properties:
+        px:
+          type: number
+          description: Pixel X coordinate (column) in the image, measured from the left edge
+        py:
+          type: number
+          description: Pixel Y coordinate (row) in the image, measured from the top edge
+        lon:
+          type: number
+          description: WGS84 longitude in decimal degrees (−180 to +180)
+        lat:
+          type: number
+          description: WGS84 latitude in decimal degrees (−90 to +90)
+      required: [px, py, lon, lat]
+
+    GeorefBody:
+      type: object
+      description: Control points for georeferencing a pending raster scan
+      properties:
+        controlPoints:
+          type: array
+          description: "2–4 control points that anchor the scanned image to real-world coordinates"
+          minItems: 2
+          maxItems: 4
+          items:
+            $ref: "#/components/schemas/GeorefControlPoint"
+      required: [controlPoints]
 
     DatasetFolder:
       type: object

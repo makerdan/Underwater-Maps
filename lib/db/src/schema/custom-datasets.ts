@@ -64,6 +64,21 @@ export interface StoredNoaaSubstrateSample {
   rawLabel: string;
 }
 
+/**
+ * A single georeferencing control point: maps a pixel coordinate on the
+ * scanned raster to a real-world WGS84 longitude/latitude.
+ */
+export interface GeorefControlPoint {
+  /** Pixel X (column), 0 = left edge of image. */
+  px: number;
+  /** Pixel Y (row), 0 = top edge of image. */
+  py: number;
+  /** WGS84 longitude (decimal degrees, negative west). */
+  lon: number;
+  /** WGS84 latitude (decimal degrees, positive north). */
+  lat: number;
+}
+
 export const customDatasetsTable = pgTable("custom_datasets", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id").notNull(),
@@ -88,6 +103,24 @@ export const customDatasetsTable = pgTable("custom_datasets", {
    * category label.  Null when the archive contained no BSText file.
    */
   noaaSubstrateSamplesJson: jsonb("noaa_substrate_samples_json").$type<StoredNoaaSubstrateSample[]>(),
+  /**
+   * True when an inner GeoTIFF from a Smooth_Sheets archive lacked georeferencing
+   * tags and the user needs to manually pin it to geographic coordinates.
+   * Cleared to false once control points have been submitted.
+   */
+  needsGeoreferencing: jsonb("needs_georeferencing").$type<boolean>(),
+  /**
+   * Base64-encoded gzip bytes of the raw inner .tif.gz raster, stored only
+   * when needsGeoreferencing is true.  Used to serve a preview image in the
+   * georeferencing wizard and cleared once the user has submitted control
+   * points.  Capped at MAX_RASTER_STORE_BYTES during upload.
+   */
+  pendingRasterGzBase64: text("pending_raster_gz_base64"),
+  /**
+   * User-supplied control points mapping pixel coords → WGS84 lon/lat.
+   * Set when the user submits the georeferencing wizard; null until then.
+   */
+  georefControlPointsJson: jsonb("georef_control_points_json").$type<GeorefControlPoint[]>(),
 }, (table) => [
   index("custom_datasets_user_id_idx").on(table.userId),
 ]);

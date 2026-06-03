@@ -926,6 +926,17 @@ export interface UserDatasetMeta {
   /** Parent folder UUID, or null when at the library root */
   folderId?: string | null;
   createdAt: string;
+  /** True when an inner GeoTIFF from a Smooth_Sheets NOAA archive lacked
+  georeferencing tags and the user must manually pin it to geographic
+  coordinates using the georeferencing wizard. Absent (falsy) once
+  control points have been submitted.
+   */
+  needsGeoreferencing?: boolean;
+  /** True when a pending raster image is stored and available from
+  GET /user/datasets/{id}/raster-image for display in the wizard.
+  Absent when the raster exceeded the storage cap or has been cleared.
+   */
+  hasRasterImage?: boolean;
 }
 
 /**
@@ -940,6 +951,32 @@ export interface UploadResult {
   savedDatasetMeta?: UserDatasetMeta;
   /** Human-readable error string returned when the auto-save to the user's account failed. The terrain itself is still returned so the session is usable. */
   saveError?: string;
+}
+
+/**
+ * A single control point mapping a pixel coordinate on the scanned raster to a real-world WGS84 lon/lat position
+ */
+export interface GeorefControlPoint {
+  /** Pixel X coordinate (column) in the image, measured from the left edge */
+  px: number;
+  /** Pixel Y coordinate (row) in the image, measured from the top edge */
+  py: number;
+  /** WGS84 longitude in decimal degrees (−180 to +180) */
+  lon: number;
+  /** WGS84 latitude in decimal degrees (−90 to +90) */
+  lat: number;
+}
+
+/**
+ * Control points for georeferencing a pending raster scan
+ */
+export interface GeorefBody {
+  /**
+     * 2–4 control points that anchor the scanned image to real-world coordinates
+     * @minItems 2
+     * @maxItems 4
+     */
+  controlPoints: GeorefControlPoint[];
 }
 
 /**

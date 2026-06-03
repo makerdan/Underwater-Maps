@@ -437,9 +437,12 @@ async function processUploadJob(
         const {
           points: tarPoints,
           datasetName: tarDatasetName,
+          substratePoints: tarSubstratePoints,
           hyd93Features: tarHyd93Features,
           substratePoints: tarSubstratePoints,
           skipped: tarSkipped,
+          smoothSheetRasterBuffer,
+          smoothSheetRasterFilename: _smoothSheetRasterFilename,
         } = await routeTarEntries(
           tarExtractedDir,
           entries,
@@ -494,6 +497,12 @@ async function processUploadJob(
           onProgress: (p) => { job.progress = p; },
         });
 
+        // Encode the ungeoreferenced smooth-sheet raster for DB storage (if present).
+        const pendingRasterGzBase64 = smoothSheetRasterBuffer
+          ? smoothSheetRasterBuffer.toString("base64")
+          : undefined;
+        const needsGeoreferencing = smoothSheetRasterBuffer != null ? true : undefined;
+
         const [saved] = await db
           .insert(customDatasetsTable)
           .values({
@@ -504,8 +513,11 @@ async function processUploadJob(
             maxDepth: terrain.maxDepth,
             terrainJson: terrain as unknown as StoredTerrainJson,
             overviewJson: overview as unknown as StoredTerrainJson,
+            noaaSubstrateSamplesJson: tarSubstratePoints.length > 0 ? tarSubstratePoints : null,
             hyd93FeaturesJson: tarHyd93Features.length > 0 ? tarHyd93Features : null,
             noaaSubstrateSamplesJson: tarSubstratePoints.length > 0 ? tarSubstratePoints : null,
+            needsGeoreferencing: needsGeoreferencing ?? null,
+            pendingRasterGzBase64: pendingRasterGzBase64 ?? null,
           })
           .returning({ id: customDatasetsTable.id });
 

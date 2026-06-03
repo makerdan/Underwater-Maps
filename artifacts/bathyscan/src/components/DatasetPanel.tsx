@@ -51,6 +51,7 @@ import { SUPPORTED_EXTENSIONS } from "@/components/FileUpload";
 import { useActiveLoadStore } from "@/lib/activeLoadStore";
 import { fetchJsonWithProgress } from "@/lib/fetchWithProgress";
 import { OfflinePackModal } from "@/components/OfflinePackModal";
+import { GeoreferenceModal } from "@/components/GeoreferenceModal";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import {
@@ -1547,6 +1548,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null;
   } | null>(null);
 
+  // ─── Georeferencing wizard modal ──────────────────────────────────────────
+  const [georefDataset, setGeorefDataset] = useState<UserDatasetMeta | null>(null);
+
   // ─── Render ────────────────────────────────────────────────────────────────
   const anyLoading = datasetsLoading || userDatasetsLoading;
 
@@ -1735,6 +1739,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                         bulkDeleteSignal={libraryBulkDeleteSignal}
                         externalMoveSignal={libraryMoveSignal}
                         externalRenameSignal={libraryRenameSignal}
+                        onGeoreference={setGeorefDataset}
                       />
                     </ErrorBoundary>
                   </>
@@ -2639,6 +2644,17 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         <OfflinePackModal
           dataset={offlinePackDataset}
           onClose={() => setOfflinePackDataset(null)}
+        />
+      )}
+
+      {georefDataset && (
+        <GeoreferenceModal
+          dataset={georefDataset}
+          onClose={() => setGeorefDataset(null)}
+          onSuccess={() => {
+            setGeorefDataset(null);
+            void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+          }}
         />
       )}
     </div>

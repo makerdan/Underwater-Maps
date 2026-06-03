@@ -42,6 +42,7 @@ import type {
   ExportUserData200,
   FinalizeChunkedUpload200,
   FinalizeChunkedUploadBody,
+  GeorefBody,
   GetDatasetZonesParams,
   GetDatasetsCatalogParams,
   GetDatasetsCatalogSearchParams,
@@ -897,6 +898,166 @@ export function useGetUserDatasetsIdHyd93Features<TData = Awaited<ReturnType<typ
 
 
 
+
+export const getGetUserDatasetsIdRasterImageUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/datasets/${id}/raster-image`
+}
+
+/**
+ * Returns the raw scanned chart image (JPEG) for a dataset whose inner
+GeoTIFF lacked georeferencing tags during upload.  Only available when
+`needsGeoreferencing` is true on the dataset and the raster was within
+the storage size cap.  Used to display the scanned chart in the
+interactive georeferencing wizard so the user can place control points.
+
+ * @summary Get the scanned raster image for a dataset pending georeferencing
+ */
+export const getUserDatasetsIdRasterImage = async (id: string, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetUserDatasetsIdRasterImageUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUserDatasetsIdRasterImageQueryKey = (id: string,) => {
+    return [
+    `/api/user/datasets/${id}/raster-image`
+    ] as const;
+    }
+
+
+export const getGetUserDatasetsIdRasterImageQueryOptions = <TData = Awaited<ReturnType<typeof getUserDatasetsIdRasterImage>>, TError = ErrorType<ApiError>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserDatasetsIdRasterImage>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUserDatasetsIdRasterImageQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUserDatasetsIdRasterImage>>> = ({ signal }) => getUserDatasetsIdRasterImage(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUserDatasetsIdRasterImage>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUserDatasetsIdRasterImageQueryResult = NonNullable<Awaited<ReturnType<typeof getUserDatasetsIdRasterImage>>>
+export type GetUserDatasetsIdRasterImageQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get the scanned raster image for a dataset pending georeferencing
+ */
+
+export function useGetUserDatasetsIdRasterImage<TData = Awaited<ReturnType<typeof getUserDatasetsIdRasterImage>>, TError = ErrorType<ApiError>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserDatasetsIdRasterImage>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUserDatasetsIdRasterImageQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPostUserDatasetsIdGeorefUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/datasets/${id}/georef`
+}
+
+/**
+ * Accepts 2–4 control points that map pixel coordinates on the scanned
+raster to real-world WGS84 lon/lat positions.  Stores the control
+points, marks the dataset as georeferenced, and discards the pending
+raster blob to save storage.  Returns the updated dataset metadata.
+
+ * @summary Submit georeferencing control points for a pending raster
+ */
+export const postUserDatasetsIdGeoref = async (id: string,
+    georefBody: GeorefBody, options?: RequestInit): Promise<UserDatasetMeta> => {
+
+  return customFetch<UserDatasetMeta>(getPostUserDatasetsIdGeorefUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      georefBody,)
+  }
+);}
+
+
+
+
+export const getPostUserDatasetsIdGeorefMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postUserDatasetsIdGeoref>>, TError,{id: string;data: BodyType<GeorefBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postUserDatasetsIdGeoref>>, TError,{id: string;data: BodyType<GeorefBody>}, TContext> => {
+
+const mutationKey = ['postUserDatasetsIdGeoref'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postUserDatasetsIdGeoref>>, {id: string;data: BodyType<GeorefBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  postUserDatasetsIdGeoref(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostUserDatasetsIdGeorefMutationResult = NonNullable<Awaited<ReturnType<typeof postUserDatasetsIdGeoref>>>
+    export type PostUserDatasetsIdGeorefMutationBody = BodyType<GeorefBody>
+    export type PostUserDatasetsIdGeorefMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Submit georeferencing control points for a pending raster
+ */
+export const usePostUserDatasetsIdGeoref = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postUserDatasetsIdGeoref>>, TError,{id: string;data: BodyType<GeorefBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postUserDatasetsIdGeoref>>,
+        TError,
+        {id: string;data: BodyType<GeorefBody>},
+        TContext
+      > => {
+      return useMutation(getPostUserDatasetsIdGeorefMutationOptions(options));
+    }
 
 export const getDeleteUserDatasetsIdUrl = (id: string,) => {
 
