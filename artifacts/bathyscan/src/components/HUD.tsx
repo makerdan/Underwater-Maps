@@ -153,7 +153,13 @@ export const HUD: React.FC = () => {
 
   const fmtDepth = (metres: number | null): string => {
     if (metres === null) return "—";
-    return formatDepth(metres, { units }).toUpperCase();
+    // Convention: below sea level = negative, above = positive.
+    // Stored depth values are positive = below water, so negate for display.
+    const signed = -metres;
+    const formatted = formatDepth(Math.abs(signed), { units }).toUpperCase();
+    if (signed > 0) return `+${formatted}`;
+    if (signed < 0) return `-${formatted}`;
+    return formatted;
   };
 
   const gpsFollowMode = useCameraStore((s) => s.gpsFollowMode);
