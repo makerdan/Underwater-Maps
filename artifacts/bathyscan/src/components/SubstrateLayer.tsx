@@ -380,6 +380,7 @@ export const SubstrateLayer: React.FC = () => {
 
   useSubstrateErrorToast({
     isError: substrateIsError,
+    isEmpty: !substrateIsError && collection !== undefined && collection.features.length === 0,
     datasetId,
     enabled: !!datasetId && substrateColorMode,
   });

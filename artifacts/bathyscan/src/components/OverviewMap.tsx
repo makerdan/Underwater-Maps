@@ -548,6 +548,7 @@ export const OverviewMap: React.FC = () => {
 
   useSubstrateErrorToast({
     isError: substrateIsError,
+    isEmpty: !substrateIsError && substrateCollection !== undefined && substrateCollection.features.length === 0,
     datasetId,
     enabled: !!datasetId && substrateColorMode,
   });

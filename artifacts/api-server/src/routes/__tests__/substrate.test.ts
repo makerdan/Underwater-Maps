@@ -27,7 +27,7 @@ vi.mock("@workspace/db", () => ({
       }),
     }),
   },
-  customDatasetsTable: { id: "id", userId: "userId" },
+  customDatasetsTable: { id: "id", userId: "userId", terrainJson: "terrainJson" },
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -176,6 +176,36 @@ describe("GET /substrate/:id — custom dataset (UUID) auth guard", () => {
     const res = await request(makeApp()).get(`/substrate/${SUBSTRATE_UUID}`);
     expect(res.status).toBe(404);
     expect(res.body).toMatchObject({ error: "not_found" });
+  });
+
+  it("returns 200 with substrate data for an owned custom UUID dataset whose bbox overlaps coverage", async () => {
+    vi.mocked(getAuth).mockReturnValueOnce({ userId: "user-a" } as ReturnType<typeof getAuth>);
+    dbState.ownerRows = [{
+      userId: "user-a",
+      terrainJson: { minLon: -137.0, minLat: 58.2, maxLon: -135.0, maxLat: 59.2 },
+    }];
+    getSubstrateForDatasetMock.mockReturnValue(MOCK_SLICE_WITH_FEATURES);
+    const res = await request(makeApp()).get(`/substrate/${SUBSTRATE_UUID}`);
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe("FeatureCollection");
+    expect(res.body.features).toHaveLength(1);
+    expect(res.body.metadata.datasetId).toBe(SUBSTRATE_UUID);
+    expect(res.body.metadata).toHaveProperty("datasetBbox");
+  });
+
+  it("returns 200 with empty features and nearestCoverage for an owned custom UUID dataset outside coverage", async () => {
+    vi.mocked(getAuth).mockReturnValueOnce({ userId: "user-a" } as ReturnType<typeof getAuth>);
+    dbState.ownerRows = [{
+      userId: "user-a",
+      terrainJson: { minLon: -80.0, minLat: 25.0, maxLon: -79.0, maxLat: 26.0 },
+    }];
+    getSubstrateForDatasetMock.mockReturnValue(MOCK_SLICE_EMPTY);
+    const res = await request(makeApp()).get(`/substrate/${SUBSTRATE_UUID}`);
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe("FeatureCollection");
+    expect(res.body.features).toHaveLength(0);
+    expect(res.body.metadata).toHaveProperty("nearestCoverage");
+    expect(res.body.metadata.nearestCoverage.distanceKm).toBe(42);
   });
 
   it("does not require auth for a known preset dataset id", async () => {

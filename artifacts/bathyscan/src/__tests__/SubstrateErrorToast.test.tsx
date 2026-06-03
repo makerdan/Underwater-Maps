@@ -3,9 +3,10 @@
  *
  * Covers:
  * - When isError is true and enabled, fires the branded toast exactly once.
+ * - When isEmpty is true and enabled, fires the "no coverage" toast exactly once.
  * - Does not fire again on re-render with the same props.
  * - Does not fire when enabled is false.
- * - Does not fire when isError is false (data present).
+ * - Does not fire when isError=false and isEmpty=false (data present).
  * - Does not fire when datasetId is empty.
  * - Fires again for a new datasetId after the previous one unmounts.
  * - The module-level Set prevents double-fire when two component instances
@@ -25,14 +26,16 @@ vi.mock("@/hooks/use-toast", () => ({
 
 function Harness({
   isError,
+  isEmpty,
   datasetId,
   enabled,
 }: {
   isError: boolean;
+  isEmpty: boolean;
   datasetId: string;
   enabled: boolean;
 }) {
-  useSubstrateErrorToast({ isError, datasetId, enabled });
+  useSubstrateErrorToast({ isError, isEmpty, datasetId, enabled });
   return null;
 }
 
@@ -47,7 +50,7 @@ afterEach(() => {
 describe("useSubstrateErrorToast", () => {
   it("fires the toast when isError=true and enabled=true", () => {
     act(() => {
-      render(<Harness isError datasetId="ds-upload" enabled />);
+      render(<Harness isError isEmpty={false} datasetId="ds-upload" enabled />);
     });
 
     expect(mockToast).toHaveBeenCalledTimes(1);
@@ -59,9 +62,35 @@ describe("useSubstrateErrorToast", () => {
     );
   });
 
-  it("does not fire the toast when isError=false (data is present)", () => {
+  it("fires the toast when isEmpty=true and enabled=true", () => {
     act(() => {
-      render(<Harness isError={false} datasetId="ds-normal" enabled />);
+      render(<Harness isError={false} isEmpty datasetId="ds-empty-coverage" enabled />);
+    });
+
+    expect(mockToast).toHaveBeenCalledTimes(1);
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "No substrate map available",
+        variant: "destructive",
+      }),
+    );
+  });
+
+  it("isEmpty toast description mentions bundled substrate polygons", () => {
+    act(() => {
+      render(<Harness isError={false} isEmpty datasetId="ds-empty-desc" enabled />);
+    });
+
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: expect.stringMatching(/bundled substrate polygon/i),
+      }),
+    );
+  });
+
+  it("does not fire the toast when isError=false and isEmpty=false (data is present)", () => {
+    act(() => {
+      render(<Harness isError={false} isEmpty={false} datasetId="ds-normal" enabled />);
     });
 
     expect(mockToast).not.toHaveBeenCalled();
@@ -69,7 +98,7 @@ describe("useSubstrateErrorToast", () => {
 
   it("does not fire the toast when enabled=false", () => {
     act(() => {
-      render(<Harness isError datasetId="ds-disabled" enabled={false} />);
+      render(<Harness isError isEmpty={false} datasetId="ds-disabled" enabled={false} />);
     });
 
     expect(mockToast).not.toHaveBeenCalled();
@@ -77,22 +106,22 @@ describe("useSubstrateErrorToast", () => {
 
   it("does not fire the toast when datasetId is empty", () => {
     act(() => {
-      render(<Harness isError datasetId="" enabled />);
+      render(<Harness isError isEmpty={false} datasetId="" enabled />);
     });
 
     expect(mockToast).not.toHaveBeenCalled();
   });
 
   it("does not fire the toast a second time on re-render with the same props", () => {
-    const { rerender } = render(<Harness isError datasetId="ds-rerender" enabled />);
+    const { rerender } = render(<Harness isError isEmpty={false} datasetId="ds-rerender" enabled />);
 
     expect(mockToast).toHaveBeenCalledTimes(1);
 
     act(() => {
-      rerender(<Harness isError datasetId="ds-rerender" enabled />);
+      rerender(<Harness isError isEmpty={false} datasetId="ds-rerender" enabled />);
     });
     act(() => {
-      rerender(<Harness isError datasetId="ds-rerender" enabled />);
+      rerender(<Harness isError isEmpty={false} datasetId="ds-rerender" enabled />);
     });
 
     expect(mockToast).toHaveBeenCalledTimes(1);
@@ -100,19 +129,19 @@ describe("useSubstrateErrorToast", () => {
 
   it("does not fire when overlay is toggled on after a non-error state", () => {
     const { rerender } = render(
-      <Harness isError={false} datasetId="ds-toggle" enabled={false} />,
+      <Harness isError={false} isEmpty={false} datasetId="ds-toggle" enabled={false} />,
     );
 
     act(() => {
-      rerender(<Harness isError={false} datasetId="ds-toggle" enabled />);
+      rerender(<Harness isError={false} isEmpty={false} datasetId="ds-toggle" enabled />);
     });
 
     expect(mockToast).not.toHaveBeenCalled();
   });
 
-  it("the description mentions substrate coverage and built-in survey regions", () => {
+  it("the isError description mentions built-in survey regions", () => {
     act(() => {
-      render(<Harness isError datasetId="ds-desc" enabled />);
+      render(<Harness isError isEmpty={false} datasetId="ds-desc" enabled />);
     });
 
     expect(mockToast).toHaveBeenCalledWith(

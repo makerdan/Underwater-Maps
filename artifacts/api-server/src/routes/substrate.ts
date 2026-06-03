@@ -150,13 +150,95 @@ router.get("/substrate/:id", async (req, res) => {
       return;
     }
     const [ownRow] = await db
-      .select({ userId: customDatasetsTable.userId })
+      .select({ userId: customDatasetsTable.userId, terrainJson: customDatasetsTable.terrainJson })
       .from(customDatasetsTable)
       .where(and(eq(customDatasetsTable.id, datasetId), eq(customDatasetsTable.userId, callerId)));
     if (!ownRow) {
       res.status(404).json({ error: "not_found", details: `Dataset '${datasetId}' not found` });
       return;
     }
+
+    // Resolve the custom dataset's bbox from its stored terrainJson and return
+    // substrate coverage using the same spatial index as preset datasets.
+    const tj = ownRow.terrainJson;
+    const customBbox = {
+      minLon: tj.minLon,
+      minLat: tj.minLat,
+      maxLon: tj.maxLon,
+      maxLat: tj.maxLat,
+    };
+    const customSlice = getSubstrateForDataset(datasetId, customBbox);
+    const customSources = customSlice.sources
+      .filter((s) => s.featureCount > 0)
+      .map((s) => ({ ...SOURCE_PROVENANCE[s.source], source: s.source, featureCount: s.featureCount }));
+    const customBaseMetadata = {
+      datasetId,
+      datasetBbox: customBbox,
+      source:        "alaska-shorezone" as const,
+      sourceName:    ALASKA_SHOREZONE.metadata.sourceName,
+      sourceLayer:   ALASKA_SHOREZONE.metadata.sourceLayer,
+      sourceService: ALASKA_SHOREZONE.metadata.sourceService,
+      sourceRegion:  ALASKA_SHOREZONE.metadata.region,
+      sourceBbox:    ALASKA_SHOREZONE.metadata.bbox,
+      creditUrl:     ALASKA_SHOREZONE.metadata.creditUrl,
+      fetchedAt:     ALASKA_SHOREZONE.metadata.fetchedAt,
+      featureCount:  customSlice.features.length,
+      totalFeatures: customSlice.features.length,
+      region:        customSlice.region,
+      coverageBbox:  customSlice.coverageBbox,
+      sources:       customSources,
+      methodology:
+        "Substrate polygons merged from two authoritative sources: " +
+        "(1) Alaska ShoreZone AK_SZ_ITZ_Polygons (NOAA AKR / ADF&G) — " +
+        "intertidal-zone polygons classified into CMECS broad substrate " +
+        "categories (bedrock / gravel / sand / mud) via Mat_Desc + Form_Desc; " +
+        "(2) NOAA ENC Coastal.Seabed_Area (S-57 SBDARE) — chart-derived " +
+        "seabed polygons classified via the NATSUR attribute. Both regional " +
+        "bundles are clipped to the dataset AOI bbox at request time, and " +
+        "each feature carries `properties.source` for per-feature attribution.",
+      credit:
+        "Alaska ShoreZone (NOAA AKR / ADF&G) and NOAA Office of Coast Survey " +
+        "Electronic Navigational Charts — both public domain.",
+    };
+
+    if (!customSlice.hasCoverage) {
+      const distanceKm = Math.round(customSlice.nearestCoverageKm);
+      const NEAREST_BUNDLE_BY_SOURCE: Record<SubstrateSource, ShoreZoneFeatureCollection> = {
+        "alaska-shorezone":    ALASKA_SHOREZONE,
+        "noaa-enc-coastal":    ENC_SE_ALASKA_SUBSTRATE,
+        "noaa-enc-conus":      ENC_CONUS_SUBSTRATE,
+        "tpwd-tx-reservoirs":  TX_LAKE_SUBSTRATE,
+        "aoos-intertidal-pow": AOOS_INTERTIDAL_POW,
+      };
+      const nearestBundle =
+        (customSlice.nearestSource && NEAREST_BUNDLE_BY_SOURCE[customSlice.nearestSource]) ||
+        ALASKA_SHOREZONE;
+      res.json({
+        type: "FeatureCollection",
+        features: [],
+        metadata: {
+          ...customBaseMetadata,
+          nearestCoverage: {
+            source:     nearestBundle.metadata.source,
+            region:     nearestBundle.metadata.region,
+            bbox:       nearestBundle.metadata.bbox,
+            distanceKm,
+          },
+          note:
+            `No published substrate polygons (ShoreZone or ENC) intersect the ` +
+            `uploaded dataset '${datasetId}' AOI bbox. Nearest real coverage is the ` +
+            `${nearestBundle.metadata.region}, ~${distanceKm} km away.`,
+        },
+      });
+      return;
+    }
+
+    res.json({
+      type: "FeatureCollection",
+      features: customSlice.features,
+      metadata: customBaseMetadata,
+    });
+    return;
   }
 
   const meta = ALL_PRESET_DATASETS.find((d) => d.id === datasetId);

@@ -1,6 +1,14 @@
 /**
- * useSubstrateErrorToast — fires a branded one-shot toast when the substrate
- * query errors for a given dataset.
+ * useSubstrateErrorToast — fires a branded one-shot toast when substrate
+ * coverage is unavailable for a given dataset.
+ *
+ * Two distinct conditions trigger the toast:
+ *   - `isEmpty`: the server returned a 200 with an empty FeatureCollection,
+ *     meaning the dataset's AOI genuinely has no bundled substrate polygons.
+ *     This is the expected signal for uploaded datasets outside any covered
+ *     region after the backend bbox-lookup fix.
+ *   - `isError`: an HTTP error (e.g. 404 or network failure) occurred while
+ *     fetching substrate data.
  *
  * A module-level Set deduplicates across both SubstrateLayer (3D) and
  * OverviewMap (2D), which are often mounted simultaneously. Each component
@@ -17,10 +25,13 @@ const firedForDatasetIds = new Set<string>();
 
 export function useSubstrateErrorToast({
   isError,
+  isEmpty,
   datasetId,
   enabled,
 }: {
   isError: boolean;
+  /** True when the server returned a 200 with zero substrate features. */
+  isEmpty: boolean;
   datasetId: string;
   enabled: boolean;
 }): void {
@@ -31,7 +42,9 @@ export function useSubstrateErrorToast({
       firedRef.current = null;
       return;
     }
-    if (!isError || !datasetId) return;
+    if (!datasetId) return;
+    const shouldFire = isEmpty || isError;
+    if (!shouldFire) return;
     if (firedRef.current === datasetId) return;
     if (firedForDatasetIds.has(datasetId)) {
       firedRef.current = datasetId;
@@ -41,14 +54,25 @@ export function useSubstrateErrorToast({
     firedForDatasetIds.add(datasetId);
     firedRef.current = datasetId;
 
-    toast({
-      title: "No substrate map available",
-      description:
-        "Substrate coverage is only bundled for built-in survey regions. " +
-        "Uploaded datasets do not have substrate data — the overlay will show no polygons.",
-      variant: "destructive",
-    });
-  }, [isError, datasetId, enabled]);
+    if (isEmpty) {
+      toast({
+        title: "No substrate map available",
+        description:
+          "No bundled substrate polygons (ShoreZone or NOAA ENC) intersect " +
+          "this dataset's area. The overlay will show no polygons. Coverage is " +
+          "available for built-in survey regions in SE Alaska and select CONUS coasts.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "No substrate map available",
+        description:
+          "Substrate coverage is only bundled for built-in survey regions. " +
+          "Uploaded datasets do not have substrate data — the overlay will show no polygons.",
+        variant: "destructive",
+      });
+    }
+  }, [isError, isEmpty, datasetId, enabled]);
 
   useEffect(() => {
     const id = datasetId;
