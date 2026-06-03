@@ -92,36 +92,55 @@ const BUNDLE: BundledDatasets = (
  * but real NHD waterbody / flowline polygons are MultiPolygons. Explode any
  * MultiPolygons into multiple Polygon features so the existing consumer
  * shape stays unchanged.
+ *
+ * Source normalisation: every feature in a TX freshwater collection is
+ * TPWD-managed priority habitat. When the polygon geometry comes from the
+ * USGS National Hydrography Dataset (NHD), TPWD selected and published it —
+ * the NHD is merely the geometry source. We prefix the source string with
+ * "TPWD" and point creditUrl at the TPWD lake page (stored in the collection
+ * metadata) so the frontend popover's `source.startsWith("TPWD")` check and
+ * the "↗ TPWD lake page" credit link work correctly for all TX reservoirs,
+ * including those (like Lake Ray Roberts) that have only NHD geometry features
+ * and no TPWD fish-habitat-structure points.
  */
 function explodeToPolygons(fc: BundledCollection): EfhFeatureCollection {
-  // Sort so TPWD-sourced features come first. The frontend popover branches
-  // on `source.startsWith("TPWD")` to decide whether to show the TPWD-state
-  // disclaimer vs the NOAA federal-EFH credit; if the first feature in the
-  // collection is the NHD waterbody polygon (USGS, non-TPWD) the e2e
-  // attribution check fails even though the dataset is a Texas reservoir.
-  // Putting the TPWD-attributed features first preserves the "this dataset
-  // is curated by TPWD" framing on the very first hit-test.
+  // Sort so natively-TPWD-sourced features still come first when present.
   const sorted = [...fc.features].sort((a, b) => {
     const aT = a.properties.source.startsWith("TPWD") ? 0 : 1;
     const bT = b.properties.source.startsWith("TPWD") ? 0 : 1;
     return aT - bT;
   });
 
+  // The collection metadata creditUrl always points at the TPWD lake page.
+  const tpwdCreditUrl = fc.metadata.creditUrl;
+
   const features: EfhFeature[] = [];
   for (const f of sorted) {
     const { sourceLayer: _ignored, ...props } = f.properties;
     void _ignored;
+
+    // Normalise attribution: NHD-geometry features in a TPWD dataset are
+    // still TPWD-curated; rewrite source + creditUrl so the popover branch
+    // fires correctly.
+    const normalizedProps = props.source.startsWith("TPWD")
+      ? props
+      : {
+          ...props,
+          source: `TPWD (geometry from ${props.source})`,
+          creditUrl: tpwdCreditUrl,
+        };
+
     if (f.geometry.type === "Polygon") {
       features.push({
         type: "Feature",
-        properties: props,
+        properties: normalizedProps,
         geometry: { type: "Polygon", coordinates: f.geometry.coordinates },
       });
     } else {
       for (const polyCoords of f.geometry.coordinates) {
         features.push({
           type: "Feature",
-          properties: props,
+          properties: normalizedProps,
           geometry: { type: "Polygon", coordinates: polyCoords },
         });
       }
