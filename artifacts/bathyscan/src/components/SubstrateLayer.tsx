@@ -34,6 +34,7 @@ import {
   useGetSubstrate,
   getGetSubstrateQueryKey,
 } from "@workspace/api-client-react";
+import { useSubstrateErrorToast } from "@/hooks/useSubstrateErrorToast";
 import type {
   SubstrateFeature,
   SubstrateFeatureCollection,
@@ -366,7 +367,7 @@ export const SubstrateLayer: React.FC = () => {
 
   const datasetId = terrain?.datasetId ?? "";
 
-  const { data: collection } = useGetSubstrate(
+  const { data: collection, isError: substrateIsError } = useGetSubstrate(
     datasetId,
     {
       query: {
@@ -376,6 +377,12 @@ export const SubstrateLayer: React.FC = () => {
       },
     },
   );
+
+  useSubstrateErrorToast({
+    isError: substrateIsError,
+    datasetId,
+    enabled: !!datasetId && substrateColorMode,
+  });
 
   const meta = (collection as SubstrateFeatureCollection | undefined)?.metadata as
     | { sourceName?: string; creditUrl?: string }

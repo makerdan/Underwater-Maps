@@ -98,6 +98,7 @@ import {
   registerRawsPopupHandlers,
   registerRawsCanvasPositionGetter,
 } from "@/lib/testHelpers";
+import { useSubstrateErrorToast } from "@/hooks/useSubstrateErrorToast";
 
 interface TooltipState {
   visible: boolean;
@@ -537,12 +538,18 @@ export const OverviewMap: React.FC = () => {
     rawsDataRef.current = m;
   }, [rawsStations, rawsOverlayActive]);
 
-  const { data: substrateCollection } = useGetSubstrate(datasetId, {
+  const { data: substrateCollection, isError: substrateIsError } = useGetSubstrate(datasetId, {
     query: {
       enabled: !!datasetId && substrateColorMode,
       queryKey: getGetSubstrateQueryKey(datasetId),
       staleTime: 5 * 60 * 1000,
     },
+  });
+
+  useSubstrateErrorToast({
+    isError: substrateIsError,
+    datasetId,
+    enabled: !!datasetId && substrateColorMode,
   });
   const substrateMeta = (substrateCollection as SubstrateFeatureCollection | undefined)
     ?.metadata as { sourceName?: string; creditUrl?: string } | undefined;

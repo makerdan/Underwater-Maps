@@ -21,6 +21,7 @@
  */
 import { create } from "zustand";
 import { poeClassify } from "@workspace/api-client-react";
+import { toast } from "@/hooks/use-toast";
 import type { TerrainData, PoeClassifyRequest } from "@workspace/api-client-react";
 import { gridToBase64Png } from "./gridToImage";
 import type { ClassifyResultSource } from "@workspace/api-client-react";
@@ -544,6 +545,32 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
         const categorized = categorizeClassificationError(err);
         console.warn("[BathyScan] AI classification failed:", categorized.detail);
         set({ loading: false, error: categorized, zoneMap: null, aiZoneMap: null, hasEdits: false, source: null });
+
+        const e = err as { data?: { error?: string } };
+        const errorCode = typeof e?.data?.error === "string" ? e.data.error : null;
+
+        let description: string;
+        if (errorCode === "poe_point_balance_zero") {
+          description =
+            "Your Poe point balance is exhausted. Check your Poe account balance to continue AI seafloor classification.";
+        } else if (errorCode === "poe_circuit_open") {
+          description =
+            "The AI classification service is temporarily unavailable. Try again in a few minutes.";
+        } else if (
+          categorized.category === "missing_key" ||
+          categorized.category === "unauthorized"
+        ) {
+          description = categorized.reason;
+        } else {
+          description =
+            "AI seafloor classification could not be completed. Check your connection and try again.";
+        }
+
+        toast({
+          title: "Seafloor classification unavailable",
+          description,
+          variant: "destructive",
+        });
       }
     })();
 
