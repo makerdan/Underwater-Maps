@@ -11,7 +11,10 @@ globalThis.require = createRequire(import.meta.url);
 const artifactDir = path.dirname(fileURLToPath(import.meta.url));
 
 async function buildAll() {
-  const distDir = path.resolve(artifactDir, "dist");
+  // Allow callers to redirect the output directory so parallel build invocations
+  // (e.g. the regular dev workflow vs the E2E webServer) don't race on the same
+  // `dist/` folder. The E2E webServer sets DIST_DIR=dist-e2e via `dev:e2e`.
+  const distDir = path.resolve(artifactDir, process.env["DIST_DIR"] ?? "dist");
   await rm(distDir, { recursive: true, force: true });
 
   await esbuild({
@@ -129,7 +132,7 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
 
   // Copy runtime JSON assets next to the bundled entrypoint so
   // `fs.readFileSync(resolve(__dirname, '...gen.json'))` works in the
-  // production build. __dirname in dist/index.mjs resolves to `dist/`,
+  // production build. __dirname in dist/index.mjs resolves to `distDir/`,
   // so the files must live there.
   const libDir = path.resolve(artifactDir, "src/lib");
   const libFiles = await readdir(libDir);

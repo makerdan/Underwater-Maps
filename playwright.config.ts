@@ -68,12 +68,24 @@ export default defineConfig({
   // exercise real auth-gated routes end-to-end.
   webServer: [
     {
+      // Uses `dev:e2e` (not `dev`) so the E2E build writes to `dist-e2e/`
+      // instead of `dist/`. The regular API Server dev workflow runs
+      // simultaneously and also builds to `dist/`; without the separate output
+      // directory both processes call `rm -rf dist/` concurrently, creating a
+      // race that leaves the runtime gen.json assets missing from dist/ when
+      // the server starts — causing ENOENT at module load time and therefore
+      // ECONNREFUSED on port 3151 before any test runs.
+      //
+      // Health-check URL is /api/healthz (a public, no-auth endpoint that
+      // always returns 200 immediately) rather than /api/datasets (which would
+      // require an x-e2e-user-id header to avoid a 401 and performs a DB query
+      // on every poll, masking startup failures under slow queries).
       command:
-        "PORT=3151 E2E_AUTH_BYPASS=1 pnpm --filter @workspace/api-server run dev",
-      url: "http://127.0.0.1:3151/api/datasets",
+        "PORT=3151 E2E_AUTH_BYPASS=1 DIST_DIR=dist-e2e pnpm --filter @workspace/api-server run dev:e2e",
+      url: "http://127.0.0.1:3151/api/healthz",
       reuseExistingServer: !process.env["CI"],
       timeout: 60_000,
-      stdout: "ignore",
+      stdout: "pipe",
       stderr: "pipe",
     },
     {
