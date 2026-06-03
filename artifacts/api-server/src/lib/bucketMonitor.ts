@@ -489,6 +489,89 @@ export async function getBucketStatus(): Promise<BucketStatusSummary> {
   };
 }
 
+// ─── Large_Datasets drift detection ──────────────────────────────────────
+
+const LARGE_DATASETS_PREFIX = "Large_Datasets/";
+const META_SOURCE_MD5 = "x-goog-meta-source-md5";
+
+export interface LargeDatasetsDiffEntry {
+  /** Base filename (no path prefix). */
+  filename: string;
+  /** GCS md5Hash of the current Large_Datasets/ object, if available. */
+  largeDatasetsMd5?: string;
+  /** x-goog-meta-source-md5 stamped on the processed-datasets/ copy at import time, if available. */
+  recordedSourceMd5?: string;
+  /**
+   * "changed"    — file exists in processed-datasets/ but its md5 differs from what was imported.
+   * "unimported" — file exists in Large_Datasets/ but has no matching processed-datasets/ copy.
+   */
+  status: "changed" | "unimported";
+}
+
+export interface LargeDatasetsDiff {
+  /** Number of files that were imported but whose content has since changed. */
+  changedCount: number;
+  /** Number of files in Large_Datasets/ that have never been imported. */
+  unimportedCount: number;
+  entries: LargeDatasetsDiffEntry[];
+}
+
+/**
+ * Compares every file under Large_Datasets/ against the corresponding
+ * processed-datasets/ copy to detect files that have been modified since
+ * their last import.
+ *
+ * Matching is done by base filename.  For each Large_Datasets file:
+ *   - If no processed-datasets/ copy exists → status "unimported".
+ *   - If both md5Hashes are available and differ → status "changed".
+ *   - If md5Hash metadata is unavailable on either side → entry is omitted
+ *     (we cannot make a reliable determination).
+ */
+export async function getLargeDatasetsDiff(): Promise<LargeDatasetsDiff> {
+  const bucketName = getBucketName();
+  const bucket = gcsClient.bucket(bucketName);
+
+  const [largeFiles] = await bucket.getFiles({ prefix: LARGE_DATASETS_PREFIX });
+  const [processedFiles] = await bucket.getFiles({ prefix: "processed-datasets/" });
+
+  // Build basename → recorded source md5 from processed-datasets/ custom metadata.
+  const processedMap = new Map<string, string | undefined>();
+  for (const f of processedFiles) {
+    if (f.name.endsWith("/")) continue;
+    const basename = path.basename(f.name);
+    const meta = (f.metadata as { metadata?: Record<string, string> }).metadata ?? {};
+    processedMap.set(basename, meta[META_SOURCE_MD5]);
+  }
+
+  const entries: LargeDatasetsDiffEntry[] = [];
+
+  for (const f of largeFiles) {
+    if (f.name.endsWith("/")) continue;
+    const filename = path.basename(f.name);
+    const largeDatasetsMd5 = (f.metadata as { md5Hash?: string }).md5Hash;
+
+    if (!processedMap.has(filename)) {
+      entries.push({ filename, largeDatasetsMd5, status: "unimported" });
+      continue;
+    }
+
+    const recordedSourceMd5 = processedMap.get(filename);
+
+    // Skip entries where we cannot make a reliable comparison.
+    if (!largeDatasetsMd5 || !recordedSourceMd5) continue;
+
+    if (largeDatasetsMd5 !== recordedSourceMd5) {
+      entries.push({ filename, largeDatasetsMd5, recordedSourceMd5, status: "changed" });
+    }
+  }
+
+  return {
+    changedCount: entries.filter((e) => e.status === "changed").length,
+    unimportedCount: entries.filter((e) => e.status === "unimported").length,
+    entries,
+  };
+}
+
 // ─── Lifecycle rules ──────────────────────────────────────────────────────
 
 /**

@@ -2,11 +2,20 @@
  * admin.test.ts — integration tests for the admin routes.
  *
  * Covers:
- *   GET /admin/bucket-monitor — auth-gated, admin-only bucket status
+ *   GET /admin/bucket-monitor      — auth-gated, admin-only bucket status
+ *   GET /admin/large-datasets-diff — auth-gated, admin-only drift detection
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
+
+const { mockGetLargeDatasetsDiff } = vi.hoisted(() => ({
+  mockGetLargeDatasetsDiff: vi.fn().mockResolvedValue({
+    changedCount: 0,
+    unimportedCount: 0,
+    entries: [],
+  }),
+}));
 
 vi.mock("../../lib/bucketMonitor.js", () => ({
   getBucketStatus: vi.fn().mockResolvedValue({
@@ -18,6 +27,7 @@ vi.mock("../../lib/bucketMonitor.js", () => ({
   }),
   getLifecycleApplyStatus: vi.fn().mockReturnValue({ appliedAt: null, error: null }),
   LIFECYCLE_TTLS: { processedDays: 30, failedDays: 14 },
+  getLargeDatasetsDiff: mockGetLargeDatasetsDiff,
 }));
 
 vi.mock("@clerk/express", () => ({
@@ -87,6 +97,85 @@ describe("GET /admin/bucket-monitor — authentication", () => {
     expect(res.body.lifecycle).toMatchObject({
       processedDatasetsTtlDays: 30,
       failedDatasetsTtlDays: 14,
+    });
+  });
+});
+
+describe("GET /admin/large-datasets-diff — authentication", () => {
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+    vi.stubEnv("E2E_AUTH_BYPASS", "1");
+    mockGetLargeDatasetsDiff.mockResolvedValue({
+      changedCount: 0,
+      unimportedCount: 0,
+      entries: [],
+    });
+  });
+
+  it("returns 401 when the request is unauthenticated", async () => {
+    vi.stubEnv("E2E_AUTH_BYPASS", "0");
+    const res = await request(makeApp()).get("/admin/large-datasets-diff");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 403 when the user is not an admin", async () => {
+    vi.stubEnv("BUCKET_MONITOR_ADMIN", "0");
+    vi.stubEnv("ADMIN_USER_IDS", "other_user");
+    const res = await request(makeApp())
+      .get("/admin/large-datasets-diff")
+      .set("x-e2e-user-id", E2E_USER);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("forbidden");
+  });
+
+  it("returns 200 with empty diff when all files match", async () => {
+    vi.stubEnv("BUCKET_MONITOR_ADMIN", "1");
+    const res = await request(makeApp())
+      .get("/admin/large-datasets-diff")
+      .set("x-e2e-user-id", E2E_USER);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      changedCount: 0,
+      unimportedCount: 0,
+      entries: [],
+    });
+  });
+
+  it("returns changed and unimported entries when files have drifted", async () => {
+    vi.stubEnv("BUCKET_MONITOR_ADMIN", "1");
+    mockGetLargeDatasetsDiff.mockResolvedValue({
+      changedCount: 1,
+      unimportedCount: 1,
+      entries: [
+        {
+          filename: "survey_2024.xyz",
+          largeDatasetsMd5: "newHash==",
+          recordedSourceMd5: "oldHash==",
+          status: "changed",
+        },
+        {
+          filename: "new_survey.xyz",
+          largeDatasetsMd5: "abc123==",
+          status: "unimported",
+        },
+      ],
+    });
+    const res = await request(makeApp())
+      .get("/admin/large-datasets-diff")
+      .set("x-e2e-user-id", E2E_USER);
+    expect(res.status).toBe(200);
+    expect(res.body.changedCount).toBe(1);
+    expect(res.body.unimportedCount).toBe(1);
+    expect(res.body.entries).toHaveLength(2);
+    const changed = res.body.entries.find((e: { status: string }) => e.status === "changed");
+    expect(changed).toMatchObject({
+      filename: "survey_2024.xyz",
+      status: "changed",
+    });
+    const unimported = res.body.entries.find((e: { status: string }) => e.status === "unimported");
+    expect(unimported).toMatchObject({
+      filename: "new_survey.xyz",
+      status: "unimported",
     });
   });
 });

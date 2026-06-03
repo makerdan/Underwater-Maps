@@ -1,7 +1,12 @@
 import { Router } from "express";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
-import { getBucketStatus, LIFECYCLE_TTLS, getLifecycleApplyStatus } from "../lib/bucketMonitor.js";
+import {
+  getBucketStatus,
+  LIFECYCLE_TTLS,
+  getLifecycleApplyStatus,
+  getLargeDatasetsDiff,
+} from "../lib/bucketMonitor.js";
 
 const router = Router();
 
@@ -54,6 +59,33 @@ router.get(
         lastApplyError: applyStatus.error,
       },
     });
+  }),
+);
+
+/**
+ * GET /admin/large-datasets-diff
+ *
+ * Compares every file in the Large_Datasets/ GCS prefix against its
+ * corresponding processed-datasets/ copy and returns any files whose
+ * content hash (md5Hash) has changed since they were last imported, as
+ * well as any files that have never been imported at all.
+ *
+ * Access: auth-required; restricted to admin users (same rules as
+ * /admin/bucket-monitor).
+ */
+router.get(
+  "/admin/large-datasets-diff",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const userId = (req as AuthenticatedRequest).clerkUserId;
+
+    if (!isAdmin(userId)) {
+      res.status(403).json({ error: "forbidden", details: "Admin access required" });
+      return;
+    }
+
+    const diff = await getLargeDatasetsDiff();
+    res.json(diff);
   }),
 );
 
