@@ -1622,9 +1622,17 @@ export interface RawsStationPin {
 
 /**
  * Render AOOS RAWS land-weather station pins on the overview canvas.
- * Uses a green diamond-style pin with "R" label to distinguish from
- * aviation (yellow W) and bathymetric (teal dot) markers.
+ * Uses a green circle pin with "R" label to distinguish from aviation (yellow W)
+ * and bathymetric (teal dot) markers.
  * Returns an array of { datasetId, cx, cy } so the caller can hit-test clicks.
+ *
+ * Bounds contract: only stations whose projected canvas position falls within
+ * the visible canvas area (± MARGIN px tolerance for the pin radius + glow) are
+ * drawn and added to the returned array. Stations outside the terrain bounding box
+ * project to off-canvas coordinates and are silently skipped — they are NOT added
+ * to positions. This ensures rawsCanvasPositionsRef only ever holds coordinates
+ * that a user can actually click, and E2E polls on that array will only resolve
+ * once terrain bounds actually contain the target station.
  */
 export function renderRawsStations(
   ctx: CanvasRenderingContext2D,
@@ -1632,11 +1640,24 @@ export function renderRawsStations(
   grid: TerrainData,
   t: OverviewTransform,
   selectedId: string | null,
+  canvasW: number,
+  canvasH: number,
 ): Array<{ datasetId: string; cx: number; cy: number }> {
   const positions: Array<{ datasetId: string; cx: number; cy: number }> = [];
+  // Tolerance: max pin radius (7) + glow ring (4) = 11 px so partially-visible
+  // selected pins at the edge are still recorded and clickable.
+  const MARGIN = 11;
 
   for (const s of stations) {
     const [cx, cy] = lonLatToCanvas(s.lon, s.lat, grid, t);
+
+    // Skip pins that project outside the visible canvas area — they cannot be
+    // clicked and recording their off-canvas coordinates would silently corrupt
+    // the hit-test array (see bounds contract comment above).
+    if (cx < -MARGIN || cx > canvasW + MARGIN || cy < -MARGIN || cy > canvasH + MARGIN) {
+      continue;
+    }
+
     positions.push({ datasetId: s.datasetId, cx, cy });
 
     const isSelected = s.datasetId === selectedId;
@@ -1677,6 +1698,11 @@ export function renderRawsStations(
 /**
  * Render NOAA ASOS/AWOS station pins on the overview canvas.
  * Returns an array of { id, cx, cy } so the caller can hit-test clicks.
+ *
+ * Same bounds contract as renderRawsStations: only stations whose projected
+ * canvas position falls within the visible canvas area (± MARGIN px) are
+ * drawn and included in the returned positions array.  Off-canvas stations
+ * are silently skipped so the hit-test array never contains unclickable entries.
  */
 export function renderWeatherStations(
   ctx: CanvasRenderingContext2D,
@@ -1684,11 +1710,19 @@ export function renderWeatherStations(
   grid: TerrainData,
   t: OverviewTransform,
   selectedId: string | null,
+  canvasW: number,
+  canvasH: number,
 ): Array<{ id: string; cx: number; cy: number }> {
   const positions: Array<{ id: string; cx: number; cy: number }> = [];
+  const MARGIN = 11;
 
   for (const s of stations) {
     const [cx, cy] = lonLatToCanvas(s.lon, s.lat, grid, t);
+
+    if (cx < -MARGIN || cx > canvasW + MARGIN || cy < -MARGIN || cy > canvasH + MARGIN) {
+      continue;
+    }
+
     positions.push({ id: s.id, cx, cy });
 
     const isSelected = s.id === selectedId;

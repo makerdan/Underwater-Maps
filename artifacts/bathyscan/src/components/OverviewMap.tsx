@@ -987,6 +987,8 @@ export const OverviewMap: React.FC = () => {
           grid,
           t,
           rawsSelectedIdRef.current,
+          cW,
+          cH,
         );
       } else {
         rawsCanvasPositionsRef.current = [];
@@ -1000,6 +1002,8 @@ export const OverviewMap: React.FC = () => {
           grid,
           t,
           weatherStationSelectedIdRef.current,
+          cW,
+          cH,
         );
       } else {
         weatherStationCanvasPositionsRef.current = [];
