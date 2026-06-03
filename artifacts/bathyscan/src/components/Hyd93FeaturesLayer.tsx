@@ -131,6 +131,7 @@ const AnnotationSprite: React.FC<SpriteProps> = ({ x, y, z, texture }) => {
 export const Hyd93FeaturesLayer: React.FC = () => {
   const { terrain } = useAppState();
   const hyd93FeaturesEnabled = useUiStore((s) => s.hyd93FeaturesEnabled);
+  const hyd93ActiveFeatureCodes = useUiStore((s) => s.hyd93ActiveFeatureCodes);
   const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
   const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
 
@@ -175,13 +176,15 @@ export const Hyd93FeaturesLayer: React.FC = () => {
 
   const sprites = useMemo((): Array<{ key: string; x: number; y: number; z: number; texture: THREE.CanvasTexture }> => {
     if (!features?.length || !terrain) return [];
-    return (features as AnnotationPoint[]).map((pt, i) => {
-      const x = lonToWorldX(pt.lon, minLon, lonRange);
-      const z = latToWorldZ(pt.lat, minLat, latRange);
-      const texture = textures.get(pt.featureCode) ?? textures.get(89)!;
-      return { key: `${pt.featureCode}-${i}`, x, y: SPRITE_Y, z, texture };
-    });
-  }, [features, terrain, minLon, lonRange, minLat, latRange, textures]);
+    return (features as AnnotationPoint[])
+      .filter((pt) => hyd93ActiveFeatureCodes.has(pt.featureCode))
+      .map((pt, i) => {
+        const x = lonToWorldX(pt.lon, minLon, lonRange);
+        const z = latToWorldZ(pt.lat, minLat, latRange);
+        const texture = textures.get(pt.featureCode) ?? textures.get(89)!;
+        return { key: `${pt.featureCode}-${i}`, x, y: SPRITE_Y, z, texture };
+      });
+  }, [features, terrain, minLon, lonRange, minLat, latRange, textures, hyd93ActiveFeatureCodes]);
 
   if (!hyd93FeaturesEnabled || !sprites.length) return null;
 

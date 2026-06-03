@@ -179,6 +179,14 @@ interface UiStore {
   hyd93FeaturesEnabled: boolean;
   setHyd93FeaturesEnabled: (enabled: boolean) => void;
   /**
+   * The subset of HYD93 feature codes currently visible.
+   * Codes: 89 (Rocks), 103 (Kelp), 146 (Ledge), 530 (Rocky reef), 988 (Obstruction).
+   * Defaults to all five when the master toggle is first enabled.
+   * Intentionally transient — resets to all-on each session.
+   */
+  hyd93ActiveFeatureCodes: Set<number>;
+  toggleHyd93FeatureCode: (code: number) => void;
+  /**
    * Currently selected EFH species (set on click in the OverviewMap or in
    * the 3D scene). When non-null, the shared EfhDetailPanel renders the
    * species info card. Null = panel closed.
@@ -433,6 +441,18 @@ export const useUiStore = create<UiStore>((set) => {
     // hyd93FeaturesEnabled is intentionally transient — not wired to settingsStore.
     hyd93FeaturesEnabled: false,
     setHyd93FeaturesEnabled: (enabled) => set({ hyd93FeaturesEnabled: enabled }),
+
+    // hyd93ActiveFeatureCodes is intentionally transient — resets to all-on each session.
+    hyd93ActiveFeatureCodes: new Set<number>([89, 103, 146, 530, 988]),
+    toggleHyd93FeatureCode: (code) => set((state) => {
+      const next = new Set(state.hyd93ActiveFeatureCodes);
+      if (next.has(code)) {
+        if (next.size > 1) next.delete(code);
+      } else {
+        next.add(code);
+      }
+      return { hyd93ActiveFeatureCodes: next };
+    }),
 
     hiddenEfhSpecies: new Set<string>(s.hiddenEfhSpecies ?? []),
     toggleEfhSpecies: (commonName) => set((state) => {

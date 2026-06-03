@@ -126,6 +126,8 @@ export const OverlaysToolsPanel: React.FC = () => {
 
   const hyd93FeaturesEnabled = useUiStore((s) => s.hyd93FeaturesEnabled);
   const setHyd93FeaturesEnabled = useUiStore((s) => s.setHyd93FeaturesEnabled);
+  const hyd93ActiveFeatureCodes = useUiStore((s) => s.hyd93ActiveFeatureCodes);
+  const toggleHyd93FeatureCode = useUiStore((s) => s.toggleHyd93FeatureCode);
 
   const overviewOpen = useUiStore((s) => s.overviewOpen);
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
@@ -702,16 +704,93 @@ export const OverlaysToolsPanel: React.FC = () => {
           )}
 
           {hasHyd93Features && (
-            <ToggleButton
-              active={hyd93FeaturesEnabled}
-              onClick={() => setHyd93FeaturesEnabled(!hyd93FeaturesEnabled)}
-              label="🗺 HYD93 FEATURES"
-              tooltip="Show kelp, rocks, rocky reefs, ledges and obstructions from the HYD93 survey archive"
-              activeBg="rgba(14,165,233,0.15)"
-              activeBorder="rgba(14,165,233,0.55)"
-              activeColor="#38bdf8"
-              activeGlow="0 0 6px rgba(14,165,233,0.5)"
-            />
+            <>
+              <ToggleButton
+                active={hyd93FeaturesEnabled}
+                onClick={() => setHyd93FeaturesEnabled(!hyd93FeaturesEnabled)}
+                label="🗺 HYD93 FEATURES"
+                tooltip="Show kelp, rocks, rocky reefs, ledges and obstructions from the HYD93 survey archive"
+                activeBg="rgba(14,165,233,0.15)"
+                activeBorder="rgba(14,165,233,0.55)"
+                activeColor="#38bdf8"
+                activeGlow="0 0 6px rgba(14,165,233,0.5)"
+              />
+              {hyd93FeaturesEnabled && (
+                <div
+                  style={{
+                    marginTop: 2,
+                    paddingLeft: 8,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 2,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 9,
+                      letterSpacing: "0.12em",
+                      color: "#94a3b8",
+                      textTransform: "uppercase",
+                      paddingBottom: 2,
+                    }}
+                  >
+                    Filter by type
+                  </span>
+                  {([
+                    { code: 89,  label: "Rocks",       color: "#ef4444" },
+                    { code: 103, label: "Kelp",        color: "#22c55e" },
+                    { code: 146, label: "Ledge",       color: "#eab308" },
+                    { code: 530, label: "Rocky reef",  color: "#f97316" },
+                    { code: 988, label: "Obstruction", color: "#a855f7" },
+                  ] as const).map(({ code, label, color }) => {
+                    const active = hyd93ActiveFeatureCodes.has(code);
+                    return (
+                      <ViewscreenTooltip
+                        key={code}
+                        label={active ? `Hide ${label}` : `Show ${label}`}
+                        side="right"
+                      >
+                        <button
+                          aria-pressed={active}
+                          onClick={() => toggleHyd93FeatureCode(code)}
+                          style={{
+                            width: "100%",
+                            textAlign: "left",
+                            background: active ? "rgba(0,10,20,0.45)" : "transparent",
+                            border: `1px solid ${active ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)"}`,
+                            borderRadius: 3,
+                            color: active ? "#cbd5e1" : "#64748b",
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 10,
+                            padding: "3px 8px",
+                            cursor: "pointer",
+                            letterSpacing: "0.08em",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            transition: "all 0.12s ease",
+                            opacity: active ? 1 : 0.5,
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: 2,
+                              background: active ? color : "transparent",
+                              border: `1px solid ${color}`,
+                              flexShrink: 0,
+                              transition: "background 0.12s ease",
+                            }}
+                          />
+                          {label.toUpperCase()}
+                        </button>
+                      </ViewscreenTooltip>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
 
           {hasEfh && (
