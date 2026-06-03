@@ -240,13 +240,47 @@ const SUBSTRATE_KEYWORDS: Array<{ keywords: string[]; category: string }> = [
 ];
 
 /**
+ * Extract a numerical phi (φ) grain-size value from an upper-cased label
+ * string.  Recognises explicit "PHI" unit suffixes (e.g. "-2 PHI", "4PHI")
+ * and bare numbers that constitute the entire label (e.g. "-2", "4").
+ * Returns `null` when no phi value is present.
+ */
+function extractPhiValue(upper: string): number | null {
+  const withUnit = upper.match(/([+-]?\d+(?:\.\d+)?)\s*PHI\b/);
+  if (withUnit) return parseFloat(withUnit[1]!);
+
+  const bareNum = upper.trim().match(/^[+-]?\d+(?:\.\d+)?$/);
+  if (bareNum) return parseFloat(bareNum[0]);
+
+  return null;
+}
+
+/**
+ * Map a Wentworth phi (φ) value to a canonical substrate category.
+ *
+ *   phi < -1        → gravel  (granules and coarser)
+ *   -1 ≤ phi < 4    → sand
+ *   phi ≥ 4         → mud     (silt and clay)
+ */
+function phiToCategory(phi: number): string {
+  if (phi < -1) return "gravel";
+  if (phi < 4) return "sand";
+  return "mud";
+}
+
+/**
  * Normalise a combined verbal description string (e.g. "MUD GREEN,SHELLS BROKEN")
- * to a canonical substrate category.  Returns the raw string when no keyword
- * matches so that unrecognised descriptions are preserved rather than silently
- * discarded.
+ * to a canonical substrate category.  Phi-scale grain-size values are checked
+ * first; the keyword table is applied when no phi value is found.  Returns the
+ * raw string when neither matches so that unrecognised descriptions are
+ * preserved rather than silently discarded.
  */
 export function normaliseSubstrate(rawLabel: string): string {
   const upper = rawLabel.toUpperCase();
+
+  const phi = extractPhiValue(upper);
+  if (phi !== null) return phiToCategory(phi);
+
   for (const { keywords, category } of SUBSTRATE_KEYWORDS) {
     for (const kw of keywords) {
       if (upper.includes(kw)) return category;

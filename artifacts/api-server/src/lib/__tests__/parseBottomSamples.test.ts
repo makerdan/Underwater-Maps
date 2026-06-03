@@ -117,6 +117,64 @@ describe("normaliseSubstrate", () => {
 });
 
 // ---------------------------------------------------------------------------
+// normaliseSubstrate — Wentworth phi-scale parsing
+// ---------------------------------------------------------------------------
+
+describe("normaliseSubstrate — phi-scale grain-size values", () => {
+  it("phi < -1 maps to gravel (-2 PHI)", () => {
+    expect(normaliseSubstrate("-2 PHI")).toBe("gravel");
+  });
+
+  it("phi < -1 maps to gravel (-5 PHI, coarse cobble)", () => {
+    expect(normaliseSubstrate("-5 PHI")).toBe("gravel");
+  });
+
+  it("phi = -1 maps to sand (boundary — lower sand limit)", () => {
+    expect(normaliseSubstrate("-1 PHI")).toBe("sand");
+  });
+
+  it("phi 0 maps to sand (medium sand)", () => {
+    expect(normaliseSubstrate("0 PHI")).toBe("sand");
+  });
+
+  it("phi 3 maps to sand (very fine sand)", () => {
+    expect(normaliseSubstrate("3 PHI")).toBe("sand");
+  });
+
+  it("phi = 4 maps to mud (boundary — coarse silt)", () => {
+    expect(normaliseSubstrate("4 PHI")).toBe("mud");
+  });
+
+  it("phi 7 maps to mud (medium silt)", () => {
+    expect(normaliseSubstrate("7 PHI")).toBe("mud");
+  });
+
+  it("phi > 8 maps to mud (clay)", () => {
+    expect(normaliseSubstrate("9 PHI")).toBe("mud");
+  });
+
+  it("recognises PHI suffix without a space (e.g. '4PHI')", () => {
+    expect(normaliseSubstrate("4PHI")).toBe("mud");
+  });
+
+  it("recognises a bare negative integer as a phi value (e.g. '-2')", () => {
+    expect(normaliseSubstrate("-2")).toBe("gravel");
+  });
+
+  it("recognises a bare positive integer as a phi value (e.g. '5')", () => {
+    expect(normaliseSubstrate("5")).toBe("mud");
+  });
+
+  it("phi parsing is case-insensitive ('2 phi' lower-case)", () => {
+    expect(normaliseSubstrate("2 phi")).toBe("sand");
+  });
+
+  it("verbal keyword still matches when no phi value present", () => {
+    expect(normaliseSubstrate("SAND FIRM")).toBe("sand");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // parseBottomSamples — 5-row H09084 fixture
 // ---------------------------------------------------------------------------
 
