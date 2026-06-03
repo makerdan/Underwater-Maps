@@ -55,7 +55,7 @@ vi.mock("three", () => {
     TextureLoader: Stub, Texture: Stub, DataTexture: Stub,
     Mesh: Stub, Points: Stub, LineSegments: Stub, Line: Stub, LineLoop: Stub,
     Group: Stub, Object3D: Stub, Raycaster: Stub, Sphere: Stub, Box3: Stub,
-    Shape: Stub, Path: Stub, ShapeGeometry: Stub,
+    Shape: Stub, Path: Stub, ShapeGeometry: Stub, CircleGeometry: Stub,
     CatmullRomCurve3: class extends Stub { getPoints() { return []; } },
     DoubleSide: 0, FrontSide: 0, BackSide: 1,
     AdditiveBlending: 1, NormalBlending: 2,

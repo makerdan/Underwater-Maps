@@ -250,20 +250,21 @@ describe("routeTarEntries — .a93.gz sibling detection", () => {
 });
 
 // ---------------------------------------------------------------------------
-// routeTarEntries — post-parse zero-points guard
+// routeTarEntries — post-parse zero-points behaviour
 // ---------------------------------------------------------------------------
+// The NO_PARSEABLE_DATA guard was moved to the upload route (datasets.ts)
+// so that substrate-only archives (BSText) and archives where all sounding
+// rows are null-sentinel values can still resolve successfully.  routeTarEntries
+// itself now resolves with points:[] and lets the caller decide.
 
 describe("routeTarEntries — zero points guard", () => {
-  it("throws NO_PARSEABLE_DATA when all parsers return empty arrays", async () => {
+  it("resolves with empty points array when all parsers return empty arrays", async () => {
     parserDispatch["geodas-xyz"] = vi.fn().mockResolvedValue([]);
 
     const entries = ["GEODAS/H09084.xyz.gz"];
 
-    await expect(
-      routeTarEntries("/fake/extract/dir", entries, "H09084.tar.gz"),
-    ).rejects.toMatchObject({
-      message: "No parseable bathymetric data found in this archive.",
-      code: "NO_PARSEABLE_DATA",
-    });
+    const result = await routeTarEntries("/fake/extract/dir", entries, "H09084.tar.gz");
+    expect(result.points).toHaveLength(0);
+    expect(result.substratePoints).toHaveLength(0);
   });
 });

@@ -42,7 +42,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
-import { db, customDatasetsTable } from "@workspace/db";
+import { db, customDatasetsTable, type StoredNoaaSubstrateSample } from "@workspace/db";
 import { ALL_PRESET_DATASETS } from "../lib/terrain.js";
 import {
   ALASKA_SHOREZONE,
@@ -54,6 +54,70 @@ import {
   type SubstrateSource,
   type ShoreZoneFeatureCollection,
 } from "../lib/shoreZoneData.js";
+
+// ---------------------------------------------------------------------------
+// NOAA historical bottom-sample point → GeoJSON Feature conversion
+// ---------------------------------------------------------------------------
+
+/**
+ * Hex fill colors for each normalised substrate category.
+ * These mirror the palette used by the ShoreZone/ENC polygon renderer so that
+ * historical sample points blend visually with the polygon overlay.
+ */
+const NOAA_SAMPLE_COLORS: Record<string, string> = {
+  mud:    "#9e8c6a",
+  rock:   "#6e7070",
+  sand:   "#f5d58a",
+  gravel: "#b8a088",
+  kelp:   "#4a7c4e",
+};
+
+/** Map normalised BSText substrate types to the nearest SubstrateProperties enum value. */
+function normaliseToSubstrateClass(substrateType: string): string {
+  switch (substrateType) {
+    case "rock":   return "bedrock";
+    case "mud":    return "mud";
+    case "sand":   return "sand";
+    case "gravel": return "gravel";
+    case "kelp":   return "kelp";
+    default:       return substrateType.toLowerCase().slice(0, 32);
+  }
+}
+
+/**
+ * Convert an array of stored NOAA bottom-sample points into GeoJSON Point
+ * features compatible with the SubstrateFeature schema.  Each feature carries
+ * `properties.source = "noaa-historical-samples"` so clients can distinguish
+ * polygon-source features from point-source observations.
+ */
+function noaaSamplesToGeoJson(
+  samples: StoredNoaaSubstrateSample[],
+): Array<{
+  type: "Feature";
+  properties: Record<string, unknown>;
+  geometry: { type: "Point"; coordinates: [number, number] };
+}> {
+  return samples.map((s, i) => {
+    const substrateClass = normaliseToSubstrateClass(s.substrateType);
+    const color = NOAA_SAMPLE_COLORS[s.substrateType] ?? "#888888";
+    return {
+      type: "Feature" as const,
+      properties: {
+        unitId:        `noaa-sample-${i}`,
+        substrate:     substrateClass,
+        shoreZoneClass: s.rawLabel || s.substrateType,
+        cmecsCode:     "NOAA Historical Bottom Sample",
+        color,
+        source:        "noaa-historical-samples",
+        rawLabel:      s.rawLabel,
+      },
+      geometry: {
+        type: "Point" as const,
+        coordinates: [s.lon, s.lat] as [number, number],
+      },
+    };
+  });
+}
 
 const DatasetIdParamSchema = z.object({
   id: z.string().min(1, "Dataset ID is required"),
@@ -150,13 +214,22 @@ router.get("/substrate/:id", async (req, res) => {
       return;
     }
     const [ownRow] = await db
-      .select({ userId: customDatasetsTable.userId, terrainJson: customDatasetsTable.terrainJson })
+      .select({
+        userId:                  customDatasetsTable.userId,
+        terrainJson:             customDatasetsTable.terrainJson,
+        noaaSubstrateSamplesJson: customDatasetsTable.noaaSubstrateSamplesJson,
+      })
       .from(customDatasetsTable)
       .where(and(eq(customDatasetsTable.id, datasetId), eq(customDatasetsTable.userId, callerId)));
     if (!ownRow) {
       res.status(404).json({ error: "not_found", details: `Dataset '${datasetId}' not found` });
       return;
     }
+
+    // Convert any stored NOAA historical bottom-sample points to GeoJSON Point features.
+    const noaaSampleFeatures = ownRow.noaaSubstrateSamplesJson
+      ? noaaSamplesToGeoJson(ownRow.noaaSubstrateSamplesJson)
+      : [];
 
     // Resolve the custom dataset's bbox from its stored terrainJson and return
     // substrate coverage using the same spatial index as preset datasets.
@@ -171,6 +244,11 @@ router.get("/substrate/:id", async (req, res) => {
     const customSources = customSlice.sources
       .filter((s) => s.featureCount > 0)
       .map((s) => ({ ...SOURCE_PROVENANCE[s.source], source: s.source, featureCount: s.featureCount }));
+
+    // Merge NOAA sample point features with any regional polygon features.
+    // Sample points are appended after polygon features so they draw on top.
+    const mergedFeatures = [...customSlice.features, ...noaaSampleFeatures];
+
     const customBaseMetadata = {
       datasetId,
       datasetBbox: customBbox,
@@ -182,11 +260,12 @@ router.get("/substrate/:id", async (req, res) => {
       sourceBbox:    ALASKA_SHOREZONE.metadata.bbox,
       creditUrl:     ALASKA_SHOREZONE.metadata.creditUrl,
       fetchedAt:     ALASKA_SHOREZONE.metadata.fetchedAt,
-      featureCount:  customSlice.features.length,
-      totalFeatures: customSlice.features.length,
+      featureCount:  mergedFeatures.length,
+      totalFeatures: mergedFeatures.length,
       region:        customSlice.region,
       coverageBbox:  customSlice.coverageBbox,
       sources:       customSources,
+      noaaSampleCount: noaaSampleFeatures.length,
       methodology:
         "Substrate polygons merged from two authoritative sources: " +
         "(1) Alaska ShoreZone AK_SZ_ITZ_Polygons (NOAA AKR / ADF&G) — " +
@@ -201,7 +280,10 @@ router.get("/substrate/:id", async (req, res) => {
         "Electronic Navigational Charts — both public domain.",
     };
 
-    if (!customSlice.hasCoverage) {
+    // When no regional polygon coverage exists but NOAA sample points are
+    // present, return those sample points with a metadata note rather than
+    // the "no coverage" early-exit, so the substrate overlay populates.
+    if (!customSlice.hasCoverage && noaaSampleFeatures.length === 0) {
       const distanceKm = Math.round(customSlice.nearestCoverageKm);
       const NEAREST_BUNDLE_BY_SOURCE: Record<SubstrateSource, ShoreZoneFeatureCollection> = {
         "alaska-shorezone":    ALASKA_SHOREZONE,
@@ -235,7 +317,7 @@ router.get("/substrate/:id", async (req, res) => {
 
     res.json({
       type: "FeatureCollection",
-      features: customSlice.features,
+      features: mergedFeatures,
       metadata: customBaseMetadata,
     });
     return;

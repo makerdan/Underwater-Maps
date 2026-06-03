@@ -51,6 +51,19 @@ export interface StoredHyd93Feature {
   featureCode: number;
 }
 
+/**
+ * A single NOAA historical bottom-sample point extracted from a
+ * `Bottom_Samples/*_BSText.txt` file inside a NOAA tar.gz archive.
+ */
+export interface StoredNoaaSubstrateSample {
+  lat: number;
+  lon: number;
+  /** Normalised substrate category (mud / rock / sand / gravel / kelp / <raw>) */
+  substrateType: string;
+  /** Unmodified COLOUR+NAT string from the source file */
+  rawLabel: string;
+}
+
 export const customDatasetsTable = pgTable("custom_datasets", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id").notNull(),
@@ -68,6 +81,13 @@ export const customDatasetsTable = pgTable("custom_datasets", {
    * or the archive contained no annotation rows.
    */
   hyd93FeaturesJson: jsonb("hyd93_features_json").$type<StoredHyd93Feature[]>(),
+  /**
+   * NOAA historical bottom-sample points extracted from
+   * `Bottom_Samples/*_BSText.txt` files inside a NOAA tar.gz archive.
+   * Each entry carries a geolocated substrate observation with a normalised
+   * category label.  Null when the archive contained no BSText file.
+   */
+  noaaSubstrateSamplesJson: jsonb("noaa_substrate_samples_json").$type<StoredNoaaSubstrateSample[]>(),
 }, (table) => [
   index("custom_datasets_user_id_idx").on(table.userId),
 ]);

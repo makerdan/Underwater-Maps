@@ -647,11 +647,26 @@ export function renderSubstrateOverlay(
     const geom = feature.geometry as
       | { type: "Polygon"; coordinates: number[][][] }
       | { type: "MultiPolygon"; coordinates: number[][][][] }
+      | { type: "Point"; coordinates: [number, number] }
       | { type?: string };
     const color = feature.properties.color ?? "#e2d5a0";
     const selected = selectedUnitId === feature.properties.unitId;
     const fillAlpha = selected ? 0.45 : 0.25;
     const strokeAlpha = selected ? 1.0 : 0.8;
+
+    if (geom.type === "Point") {
+      const coords = (geom as { type: "Point"; coordinates: [number, number] }).coordinates;
+      const [cx, cy] = lonLatToCanvas(coords[0] ?? 0, coords[1] ?? 0, grid, t);
+      const radius = selected ? 5 : 3.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fillStyle = hexToRgba(color, selected ? 0.9 : 0.75);
+      ctx.fill();
+      ctx.lineWidth = selected ? 1.75 : 1;
+      ctx.strokeStyle = hexToRgba(color, 1.0);
+      ctx.stroke();
+      continue;
+    }
 
     const ringsList: number[][][][] = [];
     if (geom.type === "Polygon" && Array.isArray((geom as { coordinates?: unknown }).coordinates)) {
@@ -683,8 +698,18 @@ export function renderSubstrateOverlay(
 }
 
 /**
- * Hit-test a lon/lat point against substrate polygon features. Returns the
- * topmost (last-drawn) feature whose outer ring contains the point, or null.
+ * Approximate lon/lat proximity radius for hit-testing NOAA bottom-sample
+ * Point features.  ~0.005° ≈ ~500 m, large enough to be tappable but tight
+ * enough to avoid accidentally selecting distant points.
+ */
+const POINT_HIT_RADIUS_DEG = 0.005;
+
+/**
+ * Hit-test a lon/lat point against substrate features (Polygon, MultiPolygon,
+ * and Point).  Returns the topmost matching feature, or null.
+ *
+ * Point features use a fixed lon/lat proximity radius instead of a
+ * ring-containment test.
  */
 export function hitTestSubstrate(
   lon: number,
@@ -699,8 +724,14 @@ export function hitTestSubstrate(
     const geom = f.geometry as
       | { type: "Polygon"; coordinates: number[][][] }
       | { type: "MultiPolygon"; coordinates: number[][][][] }
+      | { type: "Point"; coordinates: [number, number] }
       | { type?: string };
-    if (geom.type === "Polygon" && Array.isArray((geom as { coordinates?: unknown }).coordinates)) {
+    if (geom.type === "Point") {
+      const [pLon, pLat] = (geom as { type: "Point"; coordinates: [number, number] }).coordinates;
+      const dx = (lon - (pLon ?? 0));
+      const dy = (lat - (pLat ?? 0));
+      if (Math.sqrt(dx * dx + dy * dy) <= POINT_HIT_RADIUS_DEG) return f;
+    } else if (geom.type === "Polygon" && Array.isArray((geom as { coordinates?: unknown }).coordinates)) {
       const outer = (geom as { coordinates: number[][][] }).coordinates[0];
       if (outer && pointInRing(lon, lat, outer)) return f;
     } else if (

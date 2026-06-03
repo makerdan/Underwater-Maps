@@ -434,7 +434,13 @@ async function processUploadJob(
         // merge all sounding points into a single array.  Throws with code
         // "NO_PARSEABLE_DATA" if nothing in the archive is parseable, or
         // "PARSER_NOT_IMPLEMENTED" for recognised-but-not-yet-implemented types.
-        const { points: tarPoints, datasetName: tarDatasetName, hyd93Features: tarHyd93Features, skipped: tarSkipped } = await routeTarEntries(
+        const {
+          points: tarPoints,
+          datasetName: tarDatasetName,
+          hyd93Features: tarHyd93Features,
+          substratePoints: tarSubstratePoints,
+          skipped: tarSkipped,
+        } = await routeTarEntries(
           tarExtractedDir,
           entries,
           fileName,
@@ -459,6 +465,17 @@ async function processUploadJob(
               return dot !== -1 ? name.slice(dot) : name;
             }),
           )];
+        }
+
+        // Require at least one depth sounding to produce a usable terrain grid.
+        // Archives that contain only substrate annotations (BSText files) but
+        // no sounding data cannot be gridded — surface a clear error instead of
+        // calling runParseWorker with an empty points array.
+        if (tarPoints.length === 0) {
+          throw Object.assign(
+            new Error("No parseable bathymetric data found in this archive."),
+            { code: "NO_PARSEABLE_DATA" },
+          );
         }
 
         const gridId = crypto.randomUUID();
@@ -488,6 +505,7 @@ async function processUploadJob(
             terrainJson: terrain as unknown as StoredTerrainJson,
             overviewJson: overview as unknown as StoredTerrainJson,
             hyd93FeaturesJson: tarHyd93Features.length > 0 ? tarHyd93Features : null,
+            noaaSubstrateSamplesJson: tarSubstratePoints.length > 0 ? tarSubstratePoints : null,
           })
           .returning({ id: customDatasetsTable.id });
 

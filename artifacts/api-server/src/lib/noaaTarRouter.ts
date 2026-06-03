@@ -1088,15 +1088,6 @@ export async function routeTarEntries(
     }
   }
 
-  // Post-parse guard: recognised entries may produce zero points (e.g. all
-  // parsers returned empty arrays).  Surface a clear error rather than
-  // silently producing an unusable empty dataset.
-  if (allPoints.length === 0) {
-    throw Object.assign(new Error(NO_PARSEABLE_DATA_MESSAGE), {
-      code: "NO_PARSEABLE_DATA",
-    });
-  }
-
   // Derive dataset name — surveys.txt H-number first, archive filename as fallback
   const metaName = await extractSurveyNameFromMetadata(extractedDir, entries);
   const datasetName = metaName ?? nameFromArchiveFilename(archiveFileName);

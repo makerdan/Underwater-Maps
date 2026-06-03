@@ -146,6 +146,17 @@ interface PolyRender {
   stableKey: string;
 }
 
+/** Render descriptor for a NOAA historical bottom-sample Point feature. */
+interface PointRender {
+  /** World-space X position (matching lonToWorldX). */
+  worldX: number;
+  /** World-space Z position (matching latToWorldZ). */
+  worldZ: number;
+  color: string;
+  feature: SubstrateFeature;
+  stableKey: string;
+}
+
 /**
  * Pure helper: filters a SubstrateFeature array down to the classes that are
  * NOT in `hiddenSubstrateClasses`.
@@ -194,6 +205,36 @@ export function computePolyZoneProps(
     }
   }
   return { colorOverride, isVisible: classVisible && zoneVisible };
+}
+
+/**
+ * Pure helper: converts an array of SubstrateFeatures with Point geometry
+ * into PointRender descriptors used to draw sample-point markers in the 3D scene.
+ *
+ * Polygon/MultiPolygon features are silently skipped; only Point features are
+ * converted.  Exported for unit testing.
+ */
+export function buildPointMarkers(
+  features: SubstrateFeature[],
+  minLon: number, maxLon: number,
+  minLat: number, maxLat: number,
+): PointRender[] {
+  const lonRange = maxLon - minLon || 1;
+  const latRange = maxLat - minLat || 1;
+  const out: PointRender[] = [];
+  for (const feature of features) {
+    const geom = feature.geometry as { type?: string; coordinates?: unknown };
+    if (geom.type !== "Point" || !Array.isArray(geom.coordinates)) continue;
+    const [lon, lat] = geom.coordinates as [number, number];
+    out.push({
+      worldX: lonToWorldX(lon ?? 0, minLon, lonRange),
+      worldZ: latToWorldZ(lat ?? 0, minLat, latRange),
+      color: feature.properties.color ?? "#888888",
+      feature,
+      stableKey: feature.properties.unitId,
+    });
+  }
+  return out;
 }
 
 /**
@@ -251,6 +292,72 @@ export function buildPolyRenders(
   }
   return out;
 }
+
+/** Radius (world units) of the flat disc used for NOAA sample-point markers. */
+const SAMPLE_POINT_RADIUS = 0.35;
+
+/** Y elevation for NOAA sample point markers — just above the polygon fill. */
+const POINT_Y = 0.9;
+
+/**
+ * Pre-built flat disc geometry shared by all sample-point markers (immutable).
+ * Rotated flat (XZ plane) — world position Y is set per-instance on the mesh.
+ */
+const SAMPLE_DISC_GEO = new THREE.CircleGeometry(SAMPLE_POINT_RADIUS, 12);
+SAMPLE_DISC_GEO.rotateX(-Math.PI / 2);
+
+interface SubstratePointDotProps {
+  pt: PointRender;
+  isVisible: boolean;
+  isSelected: boolean;
+  onClick: (e: import("@react-three/fiber").ThreeEvent<MouseEvent>) => void;
+}
+
+/**
+ * Renders a single NOAA historical bottom-sample point as a flat disc in the
+ * 3D scene.  Uses a shared CircleGeometry so there is no per-point GPU alloc.
+ */
+const SubstratePointDot: React.FC<SubstratePointDotProps> = ({
+  pt,
+  isVisible,
+  isSelected,
+  onClick,
+}) => {
+  const matRef = useRef<THREE.MeshBasicMaterial>(null);
+  const progress = useRef(isVisible ? 1 : 0);
+
+  useFrame((_, delta) => {
+    const target = isVisible ? 1 : 0;
+    const cur = progress.current;
+    if (cur === target) return;
+    const step = delta / FADE_DURATION;
+    progress.current = target > cur
+      ? Math.min(cur + step, target)
+      : Math.max(cur - step, target);
+    if (matRef.current) {
+      matRef.current.opacity = (isSelected ? 0.95 : 0.75) * progress.current;
+    }
+  });
+
+  return (
+    <mesh
+      position={[pt.worldX, POINT_Y, pt.worldZ]}
+      geometry={SAMPLE_DISC_GEO}
+      visible={isVisible || progress.current > 0}
+      renderOrder={6}
+      onClick={isVisible ? onClick : undefined}
+    >
+      <meshBasicMaterial
+        ref={matRef}
+        color={pt.color}
+        transparent
+        opacity={(isSelected ? 0.95 : 0.75) * progress.current}
+        depthWrite={false}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
+};
 
 /** Duration of the fade in/out animation in seconds. */
 const FADE_DURATION = 0.15;
@@ -406,12 +513,22 @@ export const SubstrateLayer: React.FC = () => {
   const sourceName = meta?.sourceName ?? "Alaska ShoreZone (NOAA AKR / ADF&G)";
   const creditUrl = meta?.creditUrl ?? "https://alaskafisheries.noaa.gov/shorezone/";
 
-  // Build geometry for ALL features once. hiddenSubstrateClasses is intentionally
+  // Build geometry for ALL polygon features once. hiddenSubstrateClasses is intentionally
   // excluded from the deps — visibility is toggled via mesh.visible so GPU buffers
   // are never disposed and recreated on a simple filter change.
   const allPolys = useMemo(() => {
     if (!collection?.features?.length || !terrain) return [];
     return buildPolyRenders(
+      collection.features,
+      terrain.minLon, terrain.maxLon,
+      terrain.minLat, terrain.maxLat,
+    );
+  }, [collection, terrain]);
+
+  // Build point marker descriptors for NOAA historical bottom-sample Point features.
+  const allPoints = useMemo(() => {
+    if (!collection?.features?.length || !terrain) return [];
+    return buildPointMarkers(
       collection.features,
       terrain.minLon, terrain.maxLon,
       terrain.minLat, terrain.maxLat,
@@ -437,7 +554,7 @@ export const SubstrateLayer: React.FC = () => {
     [setSelectedSubstrate, sourceName, creditUrl],
   );
 
-  if (!substrateColorMode || !allPolys.length) return null;
+  if (!substrateColorMode || (!allPolys.length && !allPoints.length)) return null;
 
   return (
     <group name="substrate-polygons">
@@ -462,6 +579,21 @@ export const SubstrateLayer: React.FC = () => {
             isSelected={isSelected}
             onClick={handleClick(p.feature)}
             colorOverride={colorOverride}
+          />
+        );
+      })}
+      {allPoints.map((pt) => {
+        const isSelected = selectedSubstrate?.unitId === pt.feature.properties.unitId;
+        const classVisible = !hiddenSubstrateClasses.has(
+          pt.feature.properties.substrate.toLowerCase(),
+        );
+        return (
+          <SubstratePointDot
+            key={pt.stableKey}
+            pt={pt}
+            isVisible={classVisible}
+            isSelected={isSelected}
+            onClick={handleClick(pt.feature)}
           />
         );
       })}
