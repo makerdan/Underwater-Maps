@@ -256,7 +256,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     let markersFail = 0;
     for (const w of wpToImport) {
       const label = sanitize(clamp(w.name || "Imported point", MARKER_LABEL_MAX)) || "Imported point";
-      const notes = w.notes ? sanitize(clamp(w.notes, MARKER_NOTES_MAX)) : null;
+      const notes = w.notes ? sanitize(clamp(w.notes, MARKER_NOTES_MAX)) : undefined;
       // Depth: prefer parsed depth; fall back to 0 (surface) when unknown.
       const depth = Number.isFinite(w.depth) ? (w.depth as number) : 0;
       try {
@@ -268,7 +268,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
             depth,
             type: markerType as MarkerInputType,
             label,
-            notes: notes && notes.length > 0 ? notes : null,
+            notes: notes && notes.length > 0 ? notes : undefined,
           },
         });
         markersOk++;
