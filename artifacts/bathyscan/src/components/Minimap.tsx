@@ -75,8 +75,8 @@ export function drawArrow(
   ctx.lineTo(-size * 0.6, size * 0.6);
   ctx.closePath();
 
-  ctx.fillStyle = "#00e5ff";
-  ctx.shadowColor = "#00e5ff";
+  ctx.fillStyle = "#d4ac0d";
+  ctx.shadowColor = "#d4ac0d";
   ctx.shadowBlur = 6;
   ctx.fill();
 
