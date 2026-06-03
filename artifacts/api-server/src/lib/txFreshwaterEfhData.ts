@@ -162,6 +162,21 @@ export const LAKE_RAY_ROBERTS_EFH: EfhFeatureCollection = explodeToPolygons(
   BUNDLE["lake-ray-roberts"]!,
 );
 
+export const LAKE_FORK_EFH: EfhFeatureCollection = explodeToPolygons(
+  BUNDLE["lake-fork"]!,
+);
+
+export const SAM_RAYBURN_EFH: EfhFeatureCollection = explodeToPolygons(
+  BUNDLE["sam-rayburn"]!,
+);
+
+export const TOLEDO_BEND_EFH: EfhFeatureCollection = explodeToPolygons(
+  BUNDLE["toledo-bend"]!,
+);
+
 export const TX_FRESHWATER_EFH_BY_DATASET: Record<string, EfhFeatureCollection> = {
   "lake-ray-roberts": LAKE_RAY_ROBERTS_EFH,
+  "lake-fork": LAKE_FORK_EFH,
+  "sam-rayburn": SAM_RAYBURN_EFH,
+  "toledo-bend": TOLEDO_BEND_EFH,
 };
