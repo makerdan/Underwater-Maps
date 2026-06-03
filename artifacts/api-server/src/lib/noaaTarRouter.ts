@@ -61,6 +61,27 @@ export interface SubstratePoint {
 }
 
 // ---------------------------------------------------------------------------
+// HYD93 types (exported for tests)
+// ---------------------------------------------------------------------------
+
+/**
+ * An annotation point extracted from a HYD93 a93 file.
+ * Feature codes 89 (rocks), 103 (kelp), 146, 530 (rocky reefs), 988 carry
+ * geographic context but are not depth soundings and must not be gridded.
+ */
+export interface Hyd93AnnotationPoint {
+  lon: number;
+  lat: number;
+  featureCode: number;
+}
+
+/** Combined result from parseHyd93Text — soundings + labelled annotation points. */
+export interface Hyd93ParseResult {
+  soundings: RawPoint[];
+  features: Hyd93AnnotationPoint[];
+}
+
+// ---------------------------------------------------------------------------
 // Parser key type
 // ---------------------------------------------------------------------------
 
@@ -572,15 +593,115 @@ export async function parseGeodasXyz(filePath: string): Promise<RawPoint[]> {
   return points;
 }
 
+// ---------------------------------------------------------------------------
+// HYD93 fixed-width format constants
+// ---------------------------------------------------------------------------
+
+/**
+ * HYD93 (.a93) fixed-width column layout (0-based byte offsets, end exclusive).
+ *
+ * Reference: http://www.ngdc.noaa.gov/mgg/dat/geodas/docs/hyd93.htm
+ *
+ *   survey_id      [0,  8)  — 8 chars, right-padded survey H-number
+ *   lat_millionths [8, 19)  — 11 chars, signed integer; divide by 1e6 → decimal degrees
+ *   lon_millionths [19,31)  — 12 chars, signed integer; negative for West
+ *   depth_cm       [31,38)  — 7 chars, depth in centimetres; 9999999 = null sentinel
+ *   type_of_obs    [38,39)  — 1 char; '6' = "deeper than" sounding → exclude
+ *   feature_code   [39,42)  — 3 chars, right-justified; 711 = true sounding
+ */
+const HYD93_LAT_START = 8;
+const HYD93_LON_START = 19;
+const HYD93_DEPTH_START = 31;
+const HYD93_TYPE_START = 38;
+const HYD93_FC_START = 39;
+const HYD93_LINE_MIN = 42;
+
+/** Feature code for a true depth sounding — contributes to the bathymetric surface. */
+const HYD93_FC_SOUNDING = 711;
+
+/**
+ * Feature codes that represent cartographic annotations, not depth soundings.
+ * These are extracted as labelled points rather than being gridded.
+ *
+ *   89  — rocks (above / awash)
+ *   103 — kelp patches
+ *   146 — ledges
+ *   530 — rocky reefs
+ *   988 — obstruction / wreck
+ */
+const HYD93_ANNOTATION_CODES = new Set([89, 103, 146, 530, 988]);
+
+/** Null-depth sentinel value in centimetres (99999.9 m × 100). */
+const HYD93_NULL_DEPTH_CM = 9999999;
+
+/** type_of_obs value that flags a "deeper than" sounding — must be excluded. */
+const HYD93_TYPE_DEEPER_THAN = "6";
+
+/**
+ * Parse the decompressed ASCII text of a HYD93 a93 file.
+ *
+ * Exported for unit testing without requiring a file on disk.
+ *
+ * @returns `{ soundings, features }` where:
+ *   - `soundings` are feature-code-711 rows decoded to { lon, lat, depth } in
+ *     decimal degrees and positive-downward metres.
+ *   - `features` are non-depth annotation rows carrying their feature code.
+ */
+export function parseHyd93Text(text: string): Hyd93ParseResult {
+  const soundings: RawPoint[] = [];
+  const features: Hyd93AnnotationPoint[] = [];
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    if (rawLine.length < HYD93_LINE_MIN) continue;
+
+    const latInt = parseInt(rawLine.slice(HYD93_LAT_START, HYD93_LON_START).trim(), 10);
+    const lonInt = parseInt(rawLine.slice(HYD93_LON_START, HYD93_DEPTH_START).trim(), 10);
+    const depthInt = parseInt(rawLine.slice(HYD93_DEPTH_START, HYD93_TYPE_START).trim(), 10);
+    const typeOfObs = rawLine[HYD93_TYPE_START]!;
+    const fcInt = parseInt(rawLine.slice(HYD93_FC_START, HYD93_LINE_MIN).trim(), 10);
+
+    if (!Number.isFinite(latInt) || !Number.isFinite(lonInt) || isNaN(latInt) || isNaN(lonInt)) continue;
+
+    const lat = latInt / 1_000_000;
+    const lon = lonInt / 1_000_000;
+
+    if (
+      !Number.isFinite(lat) || !Number.isFinite(lon) ||
+      lat < -90 || lat > 90 || lon < -180 || lon > 180
+    ) continue;
+
+    if (isNaN(fcInt)) continue;
+
+    if (fcInt === HYD93_FC_SOUNDING) {
+      if (depthInt >= HYD93_NULL_DEPTH_CM) continue;
+      if (typeOfObs === HYD93_TYPE_DEEPER_THAN) continue;
+      if (!Number.isFinite(depthInt) || isNaN(depthInt)) continue;
+      const depth = depthInt / 100;
+      soundings.push({ lon, lat, depth });
+    } else if (HYD93_ANNOTATION_CODES.has(fcInt)) {
+      features.push({ lon, lat, featureCode: fcInt });
+    }
+  }
+
+  return { soundings, features };
+}
+
 /**
  * Parse a HYD93 a93.gz fixed-width sounding file.
  *
- * Stub — body to be implemented in the "Parse HYD93 a93.gz fixed-width
- * sounding format" task.
+ * Reads and decompresses the .a93.gz file at `filePath`, then delegates to
+ * `parseHyd93Text`.  Only sounding rows (feature code 711) contribute to the
+ * returned RawPoint array; annotation rows are parsed but discarded here
+ * (feature overlay rendering is a separate concern).
+ *
+ * @throws if the file cannot be read or decompressed.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function parseHyd93A93(_filePath: string): Promise<RawPoint[]> {
-  parserNotImplemented("hyd93-a93", _filePath);
+export async function parseHyd93A93(filePath: string): Promise<RawPoint[]> {
+  const raw = await fs.promises.readFile(filePath);
+  const decompressed = await gunzipBounded(raw, 500 * 1024 * 1024);
+  const text = decompressed.toString("ascii");
+  const { soundings } = parseHyd93Text(text);
+  return soundings;
 }
 
 /**
@@ -857,8 +978,26 @@ export async function routeTarEntries(
     });
   }
 
+  // When both geodas-xyz and hyd93-a93 are present, skip hyd93-a93.
+  // GEODAS xyz carries quality codes and is the preferred source; the a93
+  // file is a fallback for archives that only bundle the HYD93 fixed-width format.
+  const hasGeodasXyz = recognised.some((r) => r.key === "geodas-xyz");
+  const dispatching = hasGeodasXyz
+    ? recognised.filter((r) => r.key !== "hyd93-a93")
+    : recognised;
+
+  if (hasGeodasXyz && dispatching.length < recognised.length) {
+    const skippedA93 = recognised
+      .filter((r) => r.key === "hyd93-a93")
+      .map((r) => path.basename(r.relativePath));
+    logger.info(
+      { skippedA93 },
+      `[noaa-tar-router] geodas-xyz present — skipping hyd93-a93 file(s): ${skippedA93.join(", ")}`,
+    );
+  }
+
   // Dispatch each recognised entry to its parser and accumulate points
-  for (const { relativePath, key } of recognised) {
+  for (const { relativePath, key } of dispatching) {
     const absolutePath = path.join(extractedDir, relativePath);
 
     logger.info(

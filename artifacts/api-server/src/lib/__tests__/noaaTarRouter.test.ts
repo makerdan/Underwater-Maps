@@ -15,6 +15,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import * as zlib from "zlib";
 import type { RawPoint } from "../uploadParsers.js";
 import {
   classifyTarEntry,
@@ -229,13 +230,22 @@ describe("routeTarEntries", () => {
     expect(result.points).toHaveLength(7);
   });
 
-  it("throws PARSER_NOT_IMPLEMENTED for HYD93 a93.gz entry", async () => {
+  it("dispatches HYD93 a93.gz entry and returns sounding points", async () => {
     const geodasDir = path.join(tmpDir, "H09084", "GEODAS");
     await fs.promises.mkdir(geodasDir, { recursive: true });
-    await fs.promises.writeFile(path.join(geodasDir, "h09084.a93.gz"), "placeholder");
-    await expect(
-      routeTarEntries(tmpDir, ["H09084/GEODAS/h09084.a93.gz"], "H09084.tar.gz"),
-    ).rejects.toMatchObject({ code: "PARSER_NOT_IMPLEMENTED", parserKey: "hyd93-a93" });
+    // One valid HYD93 sounding line (42 chars): lat=55.682411, lon=-132.500123, depth=550cm→5.5m
+    const a93Text = "H09084     55682411  -132500123    5500711\n";
+    const gz = zlib.gzipSync(Buffer.from(a93Text, "ascii"));
+    await fs.promises.writeFile(path.join(geodasDir, "h09084.a93.gz"), gz);
+    const result = await routeTarEntries(
+      tmpDir,
+      ["H09084/GEODAS/h09084.a93.gz"],
+      "H09084.tar.gz",
+    );
+    expect(result.points).toHaveLength(1);
+    expect(result.points[0]!.lat).toBeCloseTo(55.682411, 6);
+    expect(result.points[0]!.lon).toBeCloseTo(-132.500123, 6);
+    expect(result.points[0]!.depth).toBeCloseTo(5.5, 6);
   });
 
   it("throws PARSER_NOT_IMPLEMENTED for Smooth_Sheets tif.gz entry", async () => {
