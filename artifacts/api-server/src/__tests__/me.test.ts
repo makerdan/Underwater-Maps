@@ -947,4 +947,107 @@ describe("PUT /api/settings — combined payload with all 17 new fields", () => 
     expect(res.body.efhOverlayEnabled).toBe(true);
     expect(res.body.hiddenEfhSpecies).toEqual(["Halibut"]);
   });
+
+  it("accepts all 17 v15 fields alongside the 6 palette/zone-slot fields without any silent reset", async () => {
+    const SLOTS = [
+      { color: "#f5d58a", visible: true },
+      { color: "#c49a6c", visible: false },
+      { color: "#8ab4d0", visible: true },
+      { color: "#b06060", visible: false },
+    ];
+
+    const payload = {
+      // 17 original v15 fields
+      weatherStationsActive: false,
+      rawsOverlayActive: true,
+      windOverlayActive: false,
+      tideOverlayActive: true,
+      currentOverlayActive: false,
+      currentDepthLayers: ["mid", "near-bottom"],
+      sidePaneCollapsed: true,
+      zonePaintBrushRadius: 12,
+      zoneOverlayEnabled: false,
+      zonePaintMode: true,
+      zonePaintSlot: 3,
+      substrateColorMode: false,
+      hiddenSubstrateClasses: ["bedrock", "sand"],
+      intertidalHotspotsEnabled: false,
+      intertidalScoreMode: "beachcombing",
+      efhOverlayEnabled: false,
+      hiddenEfhSpecies: ["Halibut", "Salmon"],
+      // 6 palette / zone-slot fields
+      paletteShallow: "#1a6b8a",
+      paletteDeep: "#0b1f4a",
+      customStops: [
+        { position: 0.0, hex: "#1a6b8a" },
+        { position: 0.4, hex: "#0d47a1" },
+        { position: 0.75, hex: "#1a237e" },
+        { position: 1.0, hex: "#0b1f4a" },
+      ],
+      bandColors: [
+        "#1a6b8a",
+        "#175f7c",
+        "#13536e",
+        "#0f4760",
+        "#0b3b52",
+        "#082f44",
+        "#062436",
+        "#041828",
+        "#030c1a",
+        "#01000c",
+      ],
+      bandBoundaries: [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000],
+      zoneOverlaySlots: { saltwater: SLOTS, freshwater: SLOTS },
+    };
+
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send(payload);
+    expect(res.status).toBe(200);
+
+    // 17 v15 fields
+    expect(res.body.weatherStationsActive).toBe(false);
+    expect(res.body.rawsOverlayActive).toBe(true);
+    expect(res.body.windOverlayActive).toBe(false);
+    expect(res.body.tideOverlayActive).toBe(true);
+    expect(res.body.currentOverlayActive).toBe(false);
+    expect(res.body.currentDepthLayers).toEqual(["mid", "near-bottom"]);
+    expect(res.body.sidePaneCollapsed).toBe(true);
+    expect(res.body.zonePaintBrushRadius).toBe(12);
+    expect(res.body.zoneOverlayEnabled).toBe(false);
+    expect(res.body.zonePaintMode).toBe(true);
+    expect(res.body.zonePaintSlot).toBe(3);
+    expect(res.body.substrateColorMode).toBe(false);
+    expect(res.body.hiddenSubstrateClasses).toEqual(["bedrock", "sand"]);
+    expect(res.body.intertidalHotspotsEnabled).toBe(false);
+    expect(res.body.intertidalScoreMode).toBe("beachcombing");
+    expect(res.body.efhOverlayEnabled).toBe(false);
+    expect(res.body.hiddenEfhSpecies).toEqual(["Halibut", "Salmon"]);
+
+    // 6 palette / zone-slot fields
+    expect(res.body.paletteShallow).toBe("#1a6b8a");
+    expect(res.body.paletteDeep).toBe("#0b1f4a");
+    expect(res.body.customStops).toEqual([
+      { position: 0.0, hex: "#1a6b8a" },
+      { position: 0.4, hex: "#0d47a1" },
+      { position: 0.75, hex: "#1a237e" },
+      { position: 1.0, hex: "#0b1f4a" },
+    ]);
+    expect(res.body.bandColors).toEqual([
+      "#1a6b8a",
+      "#175f7c",
+      "#13536e",
+      "#0f4760",
+      "#0b3b52",
+      "#082f44",
+      "#062436",
+      "#041828",
+      "#030c1a",
+      "#01000c",
+    ]);
+    expect(res.body.bandBoundaries).toEqual([0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000]);
+    expect(res.body.zoneOverlaySlots.saltwater).toEqual(SLOTS);
+    expect(res.body.zoneOverlaySlots.freshwater).toEqual(SLOTS);
+  });
 });
