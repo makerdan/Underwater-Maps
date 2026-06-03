@@ -22,6 +22,10 @@ import { MPH_TO_KNOTS, MPH_TO_KPH } from "@/lib/units";
 function resetStores(tidalStatus: TidalStatus = "ok") {
   act(() => {
     useCurrentsStore.setState({ field: null, noaaAmbient: null, tidalStatus, retryTidal: () => {} });
+    // IMPORTANT: keep this slice in sync with settingsStore's full shape.
+    // If new persisted fields are added to the store, add them here too or
+    // tests will silently break in concurrent runs (see settingsstore-mock-persist
+    // project memory entry for background on why partial setState is fragile).
     useSettingsStore.setState({
       units: "nautical",
       currentsEnabled: true,

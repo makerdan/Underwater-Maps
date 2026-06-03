@@ -26,6 +26,8 @@ export default defineConfig({
     environment: "node",
     globals: true,
     testTimeout: 30000,
+    pool: "forks",
+    poolOptions: { forks: { singleFork: true } },
     setupFiles: ["./src/__tests__/setup.ts"],
     include: [
       "src/__tests__/gunzipBounded.test.ts",
