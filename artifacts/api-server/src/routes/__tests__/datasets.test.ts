@@ -127,6 +127,42 @@ describe("GET /api/datasets/:id/overview — custom dataset auth guard", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// GET /api/datasets/:id/zones — auth + ownership guard
+//
+// UUID-format IDs require authentication (401) and ownership (404 for cross-
+// user access). The 404 (not 403) response avoids leaking dataset existence,
+// consistent with the terrain and overview routes.
+// ---------------------------------------------------------------------------
+
+const VALID_GRID_HASH = "abcdef12"; // 8-char lowercase hex satisfies ZonesQuerySchema
+
+describe("GET /api/datasets/:id/zones — custom dataset auth guard", () => {
+  it("returns 401 for a UUID-format dataset id when the caller is not authenticated", async () => {
+    vi.mocked(getAuth).mockReturnValueOnce({ userId: null } as ReturnType<typeof getAuth>);
+    vi.unstubAllEnvs();
+
+    const res = await request(app).get(
+      `/api/datasets/${TEST_UUID}/zones?h=${VALID_GRID_HASH}&w=saltwater`,
+    );
+    expect(res.status).toBe(401);
+    expect(res.body).toMatchObject({ error: "unauthenticated" });
+  });
+
+  it("returns 404 (not 403) when an authenticated user requests a UUID dataset they do not own", async () => {
+    vi.mocked(getAuth).mockReturnValueOnce({ userId: "user-a" } as ReturnType<typeof getAuth>);
+    vi.unstubAllEnvs();
+    // DB returns no ownership row — dataset either missing or owned by another user
+    _mockJobRows = [];
+
+    const res = await request(app).get(
+      `/api/datasets/${TEST_UUID}/zones?h=${VALID_GRID_HASH}&w=saltwater`,
+    );
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ error: "not_found" });
+  });
+});
+
 // /datasets/upload is auth-gated (task #433). All requests below carry the
 // e2e bypass header so requireAuth admits the request and the underlying
 // numeric-param validation actually runs.

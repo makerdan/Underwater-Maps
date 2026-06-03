@@ -851,8 +851,9 @@ router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> =
         .from(customDatasetsTable)
         .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, callerId)));
       if (rows.length === 0) {
-        // Either dataset doesn't exist or belongs to a different user
-        res.status(403).json({ error: "forbidden", details: "Access denied" });
+        // Either dataset doesn't exist or belongs to a different user.
+        // Return 404 (not 403) to avoid leaking the existence of the dataset.
+        res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
         return;
       }
     }

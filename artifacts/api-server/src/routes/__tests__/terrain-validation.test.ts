@@ -133,11 +133,13 @@ describe("GET /api/datasets/:id/terrain — param validation", () => {
     expect(res.body).toMatchObject({ error: "not_found" });
   });
 
-  it("returns 404 (not 400) for a UUID-style id not in the database", async () => {
+  it("returns 401 (not 400) for a UUID-style id when unauthenticated", async () => {
+    // UUID-format custom dataset IDs require authentication; the auth check
+    // runs before the DB lookup, so an unauthenticated caller gets 401, not 404.
     const res = await request(app).get(
       "/api/datasets/550e8400-e29b-41d4-a716-446655440000/terrain",
     );
-    expect(res.status).toBe(404);
-    expect(res.body).toMatchObject({ error: "not_found" });
+    expect(res.status).toBe(401);
+    expect(res.body).toMatchObject({ error: "unauthenticated" });
   });
 });
