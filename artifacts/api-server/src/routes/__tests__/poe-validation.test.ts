@@ -421,6 +421,36 @@ describe("POST /api/poe/describe — Zod validation", () => {
       .send({ lon: -90.1, lat: 44.5, depth: 30, waterType: "freshwater" });
     expect(res.status).not.toBe(400);
   });
+
+  it("sends correct SSE headers: content-type is text/event-stream, content-length is absent, transfer-encoding is not chunked alongside content-length", async () => {
+    currentUserId = "user-describe-sse-headers";
+    const res = await request(app)
+      .post("/api/poe/describe")
+      .set("x-e2e-user-id", currentUserId)
+      .send({
+        lon: -122.3,
+        lat: 47.5,
+        depth: 120,
+        zoneName: "sandy_shelf",
+        datasetName: "Puget Sound",
+        waterType: "saltwater",
+      });
+
+    expect(res.headers["content-type"]).toMatch(/text\/event-stream/);
+
+    expect(res.headers["content-length"]).toBeUndefined();
+
+    const transferEncoding = res.headers["transfer-encoding"];
+    if (transferEncoding !== undefined) {
+      expect(transferEncoding).toBe("chunked");
+    }
+
+    if (transferEncoding !== undefined && res.headers["content-length"] !== undefined) {
+      throw new Error(
+        `transfer-encoding: chunked and content-length must not coexist on an SSE response (got transfer-encoding=${transferEncoding}, content-length=${res.headers["content-length"]})`,
+      );
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
