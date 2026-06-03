@@ -334,30 +334,6 @@ export async function parseBottomSamples(filePath: string): Promise<SubstratePoi
   return points;
 }
 
-// ---------------------------------------------------------------------------
-// Parser stubs (depth-bearing parsers)
-//
-// Each stub throws PARSER_NOT_IMPLEMENTED with a clear, specific message.
-// When a recognised NOAA file type is encountered but its parser is not yet
-// implemented, the error propagates to the upload job's catch block, which
-// sets job.status = "error" and surfaces the message to the caller — giving a
-// specific, actionable error rather than a silent empty result that later fails
-// with a generic "< 10 data points" validation error.
-//
-// Downstream tasks only need to replace the body; the router dispatch table
-// and function signatures must remain stable.
-// ---------------------------------------------------------------------------
-
-function parserNotImplemented(key: TarParserKey, entryPath: string): never {
-  throw Object.assign(
-    new Error(
-      `Parser "${key}" is not yet implemented (entry: ${path.basename(entryPath)}). ` +
-        `Support for this file type is planned in a future update.`,
-    ),
-    { code: "PARSER_NOT_IMPLEMENTED", parserKey: key },
-  );
-}
-
 /** NOAA null-depth sentinel — rows with this exact depth value are discarded. */
 const NOAA_NULL_DEPTH = 99999.9;
 
