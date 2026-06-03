@@ -97,6 +97,7 @@ import { useSatelliteTile } from "@/hooks/useSatelliteTile";
 import {
   registerRawsPopupHandlers,
   registerRawsCanvasPositionGetter,
+  registerSubstrateFeatureGetter,
 } from "@/lib/testHelpers";
 import { useSubstrateErrorToast } from "@/hooks/useSubstrateErrorToast";
 import { useSubstrateCoverageToast } from "@/hooks/useSubstrateCoverageToast";
@@ -518,6 +519,7 @@ export const OverviewMap: React.FC = () => {
   useEffect(() => {
     registerRawsPopupHandlers(setSelectedRawsDatasetId, setSelectedRawsPos);
     registerRawsCanvasPositionGetter(() => rawsCanvasPositionsRef.current);
+    registerSubstrateFeatureGetter(() => substrateFeaturesRef.current.length);
   }, []);
   useEffect(() => {
     rawsActiveRef.current = rawsOverlayActive;

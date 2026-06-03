@@ -38,10 +38,12 @@ import {
   getGetMarkersQueryKey,
   getGetDatasetsIdTerrainQueryKey,
   getGetEfhQueryKey,
+  getGetSubstrateQueryKey,
   type Marker,
   type TerrainData,
   type EfhFeatureCollection,
   type EfhSpeciesProperties,
+  type SubstrateFeatureCollection,
 } from "@workspace/api-client-react";
 import { useDepthProfileStore, buildProfile } from "./depthProfileStore";
 import { useSettingsStore } from "./settingsStore";
@@ -81,6 +83,17 @@ function syntheticTestGrid(): TerrainData {
     centerLon: -132.4,
     centerLat: 56.0,
   } as unknown as TerrainData;
+}
+
+// Getter for the number of substrate features currently held in the
+// OverviewMap's substrateFeaturesRef. Registered by OverviewMap via
+// registerSubstrateFeatureGetter so e2e tests can confirm the 2D layer has
+// received the data that will be drawn to the canvas, without needing a pixel
+// assertion.
+let _substrateFeatureGetter: (() => number) | null = null;
+
+export function registerSubstrateFeatureGetter(getter: () => number): void {
+  _substrateFeatureGetter = getter;
 }
 
 // RAWS popup state setters registered by OverviewMap so e2e tests can open
@@ -465,6 +478,43 @@ export interface BathyTestApi {
   setEfhOverlayEnabled: (enabled: boolean) => void;
   isEfhOverlayEnabled: () => boolean;
   getEfhFeatureCount: (datasetId: string) => number;
+  /**
+   * Substrate overlay helpers.
+   *
+   * Toggle the substrate overlay on/off (same uiStore slice the HUD's
+   * SUBSTRATE button and OverviewMap's overlay toggle mutate) and read the
+   * number of substrate features currently in the React Query cache for a
+   * given datasetId. Tests use these to enable the overlay, then poll for a
+   * non-zero feature count — which proves the /substrate/:id fetch fired and
+   * returned data — without requiring headless WebGL or pixel assertions.
+   */
+  setSubstrateOverlayEnabled: (enabled: boolean) => void;
+  isSubstrateOverlayEnabled: () => boolean;
+  /**
+   * Number of substrate features in the React Query cache for the given
+   * datasetId, or -1 when the query has not been fetched yet (no cache entry).
+   * 0 means the server returned 200 with zero features (isEmpty path).
+   */
+  getSubstrateFeatureCount: (datasetId: string) => number;
+  /**
+   * Status snapshot of the /substrate/:id React Query for a given datasetId.
+   * Lets E2E tests poll until the query settles and then distinguish the
+   * isEmpty path (isError=false, featureCount=0) from the isError path.
+   */
+  getSubstrateQueryStatus: (datasetId: string) => {
+    isFetched: boolean;
+    isError: boolean;
+    featureCount: number | null;
+  };
+  /**
+   * Number of substrate features currently held in the OverviewMap's
+   * substrateFeaturesRef — the array the rAF draw loop reads when painting
+   * polygons and the legend to the 2D canvas. Non-zero proves the data
+   * actually reached the 2D renderer, not just the React Query cache.
+   * Returns -1 when the getter has not been registered yet (OverviewMap
+   * not mounted).
+   */
+  getOverviewMapSubstrateFeatureCount: () => number;
   getEfhFeatureProperties: (
     datasetId: string,
     index: number,
@@ -1043,6 +1093,34 @@ export function installTestHelpers(): void {
       return true;
     },
     setWaterType: (wt) => useSettingsStore.getState().setWaterType(wt),
+    setSubstrateOverlayEnabled: (enabled) =>
+      useUiStore.getState().setSubstrateColorMode(enabled),
+    isSubstrateOverlayEnabled: () => useUiStore.getState().substrateColorMode,
+    getSubstrateFeatureCount: (datasetId) => {
+      if (!datasetId) return -1;
+      const state = queryClient.getQueryState<SubstrateFeatureCollection>(
+        getGetSubstrateQueryKey(datasetId),
+      );
+      if (!state || state.status === "pending") return -1;
+      return state.data?.features?.length ?? 0;
+    },
+    getSubstrateQueryStatus: (datasetId) => {
+      const key = getGetSubstrateQueryKey(datasetId);
+      const state = queryClient.getQueryState<SubstrateFeatureCollection>(key);
+      if (!state || state.status === "pending") {
+        return { isFetched: false, isError: false, featureCount: null };
+      }
+      return {
+        isFetched: true,
+        isError: state.status === "error",
+        featureCount:
+          state.status === "success"
+            ? (state.data?.features?.length ?? 0)
+            : null,
+      };
+    },
+    getOverviewMapSubstrateFeatureCount: () =>
+      _substrateFeatureGetter ? _substrateFeatureGetter() : -1,
     setEfhOverlayEnabled: (enabled) =>
       useUiStore.getState().setEfhOverlayEnabled(enabled),
     isEfhOverlayEnabled: () => useUiStore.getState().efhOverlayEnabled,
