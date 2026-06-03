@@ -29,6 +29,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { logger } from "./logger.js";
+import { fromArrayBuffer } from "geotiff";
 import type { RawPoint } from "./uploadParsers.js";
 import { parseGeoTiff } from "./uploadParsers.js";
 import { gunzipBounded } from "./gunzipBounded.js";
@@ -725,34 +726,60 @@ export async function parseSmoothSheetsGeoTiff(filePath: string): Promise<RawPoi
     );
   }
 
+  // Inspect the file-directory tags directly before calling parseGeoTiff so
+  // that missing georeferencing is detected via a structural check rather than
+  // by matching error-message strings (which would silently break if the
+  // geotiff library ever changes its wording).
+  let tiff;
+  try {
+    tiff = await fromArrayBuffer(
+      tifBuffer.buffer.slice(
+        tifBuffer.byteOffset,
+        tifBuffer.byteOffset + tifBuffer.byteLength,
+      ) as ArrayBuffer,
+    );
+  } catch (err) {
+    throw new Error(
+      `Failed to open inner GeoTIFF "${path.basename(filePath)}": ` +
+        `${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  const image = await tiff.getImage();
+
+  // geotiff v3 exposes a lazy IFD via getValue(); fall back to direct property
+  // access for older versions — same pattern as parseGeoTiff in uploadParsers.ts.
+  type IFD = { getValue?: (tag: string) => unknown } & Record<string, unknown>;
+  const fd = image.fileDirectory as unknown as IFD;
+  const getTag = (tag: string): unknown =>
+    typeof fd.getValue === "function" ? fd.getValue(tag) : fd[tag];
+
+  const hasPixelScale = getTag("ModelPixelScale") != null;
+  const hasTiepoint = getTag("ModelTiepoint") != null;
+  const hasTransformation = getTag("ModelTransformation") != null;
+  const hasGeoreferencing = hasTransformation || (hasPixelScale && hasTiepoint);
+
+  if (!hasGeoreferencing) {
+    // Older NOAA smooth sheets frequently lack georeferencing tags.  Treat
+    // this as a recoverable warning — the upload completes using depth points
+    // from other entries (surveys.xyz / GEODAS) while the raster is noted as
+    // needing manual georeferencing.
+    logger.warn(
+      { entry: path.basename(filePath) },
+      `[noaa-tar-router] inner GeoTIFF "${path.basename(filePath)}" has no ` +
+        `georeferencing tags — raster loaded but needs manual georeferencing; skipping coordinate extraction`,
+    );
+    return [];
+  }
+
   try {
     return await parseGeoTiff(tifBuffer);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-
-    // Older NOAA smooth sheets frequently lack ModelTiepoint / ModelPixelScale
-    // tags.  Treat missing georeferencing as a recoverable warning rather than
-    // a hard failure — the upload completes using depth points from other
-    // entries (e.g. surveys.xyz / GEODAS) while the raster is noted as
-    // needing manual georeferencing.
-    if (
-      msg.includes("ModelPixelScale") ||
-      msg.includes("ModelTiepoint") ||
-      msg.includes("ModelTransformation") ||
-      msg.includes("Cannot derive geographic coordinates")
-    ) {
-      logger.warn(
-        { entry: path.basename(filePath) },
-        `[noaa-tar-router] inner GeoTIFF "${path.basename(filePath)}" has no ` +
-          `georeferencing tags — raster loaded but needs manual georeferencing; skipping coordinate extraction`,
-      );
-      return [];
-    }
-
-    // All other GeoTIFF parse errors are unexpected; re-throw so the job fails
-    // with a clear diagnostic rather than silently dropping data.
+    // Georeferencing tags were present but parsing failed for another reason
+    // (e.g. corrupt raster data).  Re-throw with a clear diagnostic.
     throw new Error(
-      `Failed to parse inner GeoTIFF "${path.basename(filePath)}": ${msg}`,
+      `Failed to parse inner GeoTIFF "${path.basename(filePath)}": ` +
+        `${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }
