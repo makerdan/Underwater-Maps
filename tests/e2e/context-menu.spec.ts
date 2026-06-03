@@ -210,6 +210,9 @@ test.describe("BathyScan — Two-click measurement flow", () => {
   test.beforeEach(async ({ page, request }) => {
     // Reset units to metric so the measurement banner shows "m" and "km".
     // A prior test run may have persisted "imperial" for the bypass user.
+    // Patch both server state AND localStorage so the Zustand persist layer
+    // initialises with the correct value on page.goto, independent of any
+    // hydrateFromServer race with the server PUT above.
     await request.put(`${API_URL}/api/settings`, {
       headers: { "x-e2e-user-id": E2E_USER_ID },
       data: { units: "metric" },
@@ -217,6 +220,13 @@ test.describe("BathyScan — Two-click measurement flow", () => {
     await page.addInitScript(() => {
       try {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+      try {
+        const raw = localStorage.getItem("bathyscan:settings");
+        const parsed: { state?: Record<string, unknown>; version?: number } =
+          raw ? JSON.parse(raw) : {};
+        parsed.state = { ...(parsed.state ?? {}), units: "metric" };
+        localStorage.setItem("bathyscan:settings", JSON.stringify(parsed));
       } catch {}
     });
     await page.goto("/");

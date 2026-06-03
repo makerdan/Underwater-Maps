@@ -5,6 +5,9 @@ test.describe("BathyScan — minimap visibility", () => {
     // Reset the toggle that the "disabled" test below flips, so a prior
     // failure can't leave the minimap hidden for this run (or for other
     // specs sharing the dev-user-bypass user).
+    // Patch both server state AND localStorage so the Zustand persist layer
+    // initialises with showCompassMinimap:true on page.goto, independent of
+    // any hydrateFromServer race with the server PUT above.
     await request.put(`${API_URL}/api/settings`, {
       headers: { "x-e2e-user-id": E2E_USER_ID },
       data: { showCompassMinimap: true },
@@ -14,6 +17,13 @@ test.describe("BathyScan — minimap visibility", () => {
     await page.addInitScript(() => {
       try {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+      try {
+        const raw = localStorage.getItem("bathyscan:settings");
+        const parsed: { state?: Record<string, unknown>; version?: number } =
+          raw ? JSON.parse(raw) : {};
+        parsed.state = { ...(parsed.state ?? {}), showCompassMinimap: true };
+        localStorage.setItem("bathyscan:settings", JSON.stringify(parsed));
       } catch {}
     });
     await page.goto("/");

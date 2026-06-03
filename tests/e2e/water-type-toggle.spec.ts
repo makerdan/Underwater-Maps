@@ -31,6 +31,9 @@ test.describe("Water-type toggle", () => {
     // server matches on the `x-e2e-user-id` header that the frontend's
     // devAuth helper injects on every fetch; sending the same header here
     // targets the same row.
+    // Patch both server state AND localStorage so the Zustand persist layer
+    // initialises with the correct waterType on page.goto, independent of any
+    // hydrateFromServer race with the server PUT above.
     await page.request.put(`${API_URL}/api/settings`, {
       headers: { "x-e2e-user-id": E2E_USER_ID },
       data: { waterType: "saltwater", colormapTheme: "ocean" },
@@ -41,6 +44,17 @@ test.describe("Water-type toggle", () => {
     await page.addInitScript(() => {
       try {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+      try {
+        const raw = localStorage.getItem("bathyscan:settings");
+        const parsed: { state?: Record<string, unknown>; version?: number } =
+          raw ? JSON.parse(raw) : {};
+        parsed.state = {
+          ...(parsed.state ?? {}),
+          waterType: "saltwater",
+          colormapTheme: "ocean",
+        };
+        localStorage.setItem("bathyscan:settings", JSON.stringify(parsed));
       } catch {}
     });
 
