@@ -262,6 +262,15 @@ export function zoneCacheKey(
 const ZONE_CACHE_DIR = "/tmp/zone-cache";
 
 /**
+ * Sentinel file that marks the cache directory as having been written with the
+ * userId-partitioned key scheme. Its absence means the directory may contain
+ * files keyed without userId (pre-partitioning), which are now unreachable and
+ * waste memory. On first boot after this sentinel is introduced we wipe all
+ * `.json` files and create it — a one-time migration.
+ */
+const ZONE_CACHE_SENTINEL = path.join(ZONE_CACHE_DIR, ".v2");
+
+/**
  * Strict allow-list for zone-cache filenames: exactly 64 lowercase hex chars
  * (the sha256-derived namespaced key). Anything else is rejected before any
  * filesystem access to prevent path traversal.
@@ -324,25 +333,60 @@ async function writeZoneDisk(cacheKey: string, data: CachedZones): Promise<void>
 }
 
 /**
- * Hydrate in-memory cache from disk on startup (non-blocking). Legacy files
- * (FNV-1a 8-char or `<gridHash>-<substrateFp>` combined keys) written before
- * the sha256-namespaced cache-key change are silently deleted — the cache is
- * intentionally lossy on format change (one-off cleanup, not a migration)
- * since AI re-classification is the only way to know the correct
- * (key, waterType, substrateFp) tuple.
+ * Wipe all `.json` files from the zone-cache directory (best-effort, in
+ * parallel). Used by the sentinel-based migration to purge stale pre-userId
+ * entries that are no longer reachable under the new key scheme.
  */
-async function hydrateCacheFromDisk(): Promise<void> {
+async function purgeZoneCacheJson(files: string[]): Promise<void> {
+  await Promise.all(
+    files
+      .filter((f) => f.endsWith(".json"))
+      .map((f) =>
+        fsPromises.unlink(path.join(ZONE_CACHE_DIR, f)).catch(() => {
+          // best-effort
+        }),
+      ),
+  );
+}
+
+/**
+ * Hydrate in-memory cache from disk on startup (non-blocking).
+ *
+ * **Sentinel migration (v2):** If `/tmp/zone-cache/.v2` does not exist the
+ * directory may contain entries written before the userId-partitioned cache key
+ * was introduced. Those files are keyed by `sha256(gridHash|waterType|substrateFp)`
+ * and produce valid 64-char hex names, so they pass the format check — but they
+ * will never be matched by new queries (which include userId). We therefore wipe
+ * every `.json` file in one pass and create the sentinel so subsequent startups
+ * skip the migration.
+ *
+ * Legacy files with non-hex names (FNV-1a 8-char or `<gridHash>-<substrateFp>`
+ * combined keys) are also silently deleted — the cache is intentionally lossy on
+ * format change since AI re-classification is the only way to recover the correct
+ * (userId, waterType, substrateFp) tuple.
+ */
+export async function hydrateCacheFromDisk(): Promise<void> {
   try {
     await fsPromises.mkdir(ZONE_CACHE_DIR, { recursive: true });
     const files = await fsPromises.readdir(ZONE_CACHE_DIR);
+
+    // --- One-time migration: purge pre-userId-partitioning entries ---
+    const sentinelExists = files.includes(".v2");
+    if (!sentinelExists) {
+      logger.info("[zones] zone-cache sentinel (.v2) missing — purging stale pre-userId entries");
+      await purgeZoneCacheJson(files);
+      await fsPromises.writeFile(ZONE_CACHE_SENTINEL, "", "utf8");
+      // Cache starts empty; next classify calls will repopulate it.
+      return;
+    }
+
+    // --- Normal hydration ---
     await Promise.all(
       files.map(async (f) => {
         if (!f.endsWith(".json")) return;
         const key = f.slice(0, -5);
         if (!isValidZoneCacheKey(key)) {
-          // Stale legacy entry — drop it. We can't deduce the right new key
-          // without the original (waterType, substrateFp), so the cache pays
-          // a one-time miss.
+          // Stale legacy entry — drop it.
           try {
             await fsPromises.unlink(path.join(ZONE_CACHE_DIR, f));
           } catch {
@@ -361,6 +405,9 @@ async function hydrateCacheFromDisk(): Promise<void> {
     logger.warn({ err }, "[zones] hydrateCacheFromDisk failed — starting with empty cache");
   }
 }
+
+/** Exported for tests only — the sentinel path used by hydrateCacheFromDisk. */
+export { ZONE_CACHE_SENTINEL };
 
 // Kick off hydration immediately (no await — non-blocking)
 void hydrateCacheFromDisk();
