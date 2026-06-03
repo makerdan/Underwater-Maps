@@ -390,66 +390,36 @@ describe("POST /api/poe/describe — Zod validation", () => {
 
   it("does not return 400 when an empty body is sent (all fields optional)", async () => {
     currentUserId = "user-describe-empty";
-    let status: number | undefined;
-    try {
-      const res = await request(app)
-        .post("/api/poe/describe")
-        .set("x-e2e-user-id", currentUserId)
-        .send({});
-      status = res.status;
-    } catch (err: unknown) {
-      const msg = (err as Error).message ?? "";
-      if (msg.includes("Content-Length") || msg.includes("Transfer-Encoding") || msg.includes("Parse Error")) {
-        return;
-      }
-      throw err;
-    }
-    expect(status).not.toBe(400);
+    const res = await request(app)
+      .post("/api/poe/describe")
+      .set("x-e2e-user-id", currentUserId)
+      .send({});
+    expect(res.status).not.toBe(400);
   });
 
   it("does not return 400 with a valid full body", async () => {
     currentUserId = "user-describe-full";
-    let status: number | undefined;
-    try {
-      const res = await request(app)
-        .post("/api/poe/describe")
-        .set("x-e2e-user-id", currentUserId)
-        .send({
-          lon: -122.3,
-          lat: 47.5,
-          depth: 120,
-          zoneName: "sandy_shelf",
-          datasetName: "Puget Sound",
-          waterType: "saltwater",
-        });
-      status = res.status;
-    } catch (err: unknown) {
-      const msg = (err as Error).message ?? "";
-      if (msg.includes("Content-Length") || msg.includes("Transfer-Encoding") || msg.includes("Parse Error")) {
-        return;
-      }
-      throw err;
-    }
-    expect(status).not.toBe(400);
+    const res = await request(app)
+      .post("/api/poe/describe")
+      .set("x-e2e-user-id", currentUserId)
+      .send({
+        lon: -122.3,
+        lat: 47.5,
+        depth: 120,
+        zoneName: "sandy_shelf",
+        datasetName: "Puget Sound",
+        waterType: "saltwater",
+      });
+    expect(res.status).not.toBe(400);
   });
 
   it("does not return 400 when waterType is freshwater", async () => {
     currentUserId = "user-describe-fresh";
-    let status: number | undefined;
-    try {
-      const res = await request(app)
-        .post("/api/poe/describe")
-        .set("x-e2e-user-id", currentUserId)
-        .send({ lon: -90.1, lat: 44.5, depth: 30, waterType: "freshwater" });
-      status = res.status;
-    } catch (err: unknown) {
-      const msg = (err as Error).message ?? "";
-      if (msg.includes("Content-Length") || msg.includes("Transfer-Encoding") || msg.includes("Parse Error")) {
-        return;
-      }
-      throw err;
-    }
-    expect(status).not.toBe(400);
+    const res = await request(app)
+      .post("/api/poe/describe")
+      .set("x-e2e-user-id", currentUserId)
+      .send({ lon: -90.1, lat: 44.5, depth: 30, waterType: "freshwater" });
+    expect(res.status).not.toBe(400);
   });
 });
 

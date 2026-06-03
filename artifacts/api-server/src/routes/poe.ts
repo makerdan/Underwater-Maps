@@ -1506,7 +1506,8 @@ router.post("/describe", asyncHandler(async (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
-  res.setHeader("Transfer-Encoding", "chunked");
+  res.removeHeader("Content-Length");
+  res.flushHeaders();
 
   // Abort the upstream stream as soon as the client disconnects so we don't
   // keep paying for tokens (and pinning a worker) for a response nobody is
