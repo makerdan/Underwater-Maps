@@ -262,6 +262,28 @@ export function zoneCacheKey(
 const ZONE_CACHE_DIR = "/tmp/zone-cache";
 
 /**
+ * Maximum age (ms) of a zone-cache entry before it is evicted. Entries whose
+ * `classifiedAt` timestamp is older than this are removed from disk during
+ * hydration. Configurable via ZONE_CACHE_MAX_AGE_MS (default: 7 days).
+ */
+const ZONE_CACHE_MAX_AGE_MS: number = (() => {
+  const raw = process.env.ZONE_CACHE_MAX_AGE_MS;
+  const parsed = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 7 * 24 * 60 * 60 * 1000;
+})();
+
+/**
+ * Maximum number of .json files to keep in the zone-cache directory. When
+ * more files survive the age check than this cap, the oldest (by classifiedAt)
+ * are evicted. Configurable via ZONE_CACHE_MAX_FILES (default: 500).
+ */
+const ZONE_CACHE_MAX_FILES: number = (() => {
+  const raw = process.env.ZONE_CACHE_MAX_FILES;
+  const parsed = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 500;
+})();
+
+/**
  * Sentinel file that marks the cache directory as having been written with the
  * userId-partitioned key scheme. Its absence means the directory may contain
  * files keyed without userId (pre-partitioning), which are now unreachable and
@@ -350,6 +372,77 @@ async function purgeZoneCacheJson(files: string[]): Promise<void> {
 }
 
 /**
+ * Evict zone-cache `.json` files that are too old or exceed the max-file cap.
+ *
+ * Two-phase eviction:
+ *   1. **Age eviction** — any entry whose `classifiedAt` field is older than
+ *      `ZONE_CACHE_MAX_AGE_MS` is deleted from disk immediately.
+ *   2. **Count cap** — if more files survive the age check than
+ *      `ZONE_CACHE_MAX_FILES`, the oldest survivors (by `classifiedAt`) are
+ *      deleted until the directory is within the cap.
+ *
+ * Files that cannot be read or parsed are silently skipped (best-effort);
+ * individual unlink failures are also swallowed so one bad entry cannot
+ * abort the sweep.
+ *
+ * @param jsonFiles - Basenames of `.json` files currently in ZONE_CACHE_DIR.
+ * @returns The set of basenames that survived eviction and should be loaded.
+ */
+export async function evictStaleCacheEntries(jsonFiles: string[]): Promise<Set<string>> {
+  const now = Date.now();
+
+  interface FileEntry {
+    name: string;
+    classifiedAt: number;
+  }
+
+  // Read classifiedAt from each file; entries we cannot parse are omitted
+  // (they will be absent from the survivor set and thus skipped on load).
+  const entries: FileEntry[] = (
+    await Promise.all(
+      jsonFiles.map(async (f): Promise<FileEntry | null> => {
+        try {
+          const raw = await fsPromises.readFile(path.join(ZONE_CACHE_DIR, f), "utf8");
+          const parsed = JSON.parse(raw) as { classifiedAt?: unknown };
+          const classifiedAt =
+            typeof parsed.classifiedAt === "number" ? parsed.classifiedAt : 0;
+          return { name: f, classifiedAt };
+        } catch {
+          return null; // unreadable / unparseable — skip silently
+        }
+      }),
+    )
+  ).filter((e): e is FileEntry => e !== null);
+
+  // Phase 1: age eviction
+  const survivors: FileEntry[] = [];
+  await Promise.all(
+    entries.map(async (e) => {
+      if (now - e.classifiedAt > ZONE_CACHE_MAX_AGE_MS) {
+        await fsPromises.unlink(path.join(ZONE_CACHE_DIR, e.name)).catch(() => {});
+        logger.info({ file: e.name }, "[zones] evicted stale cache entry (age limit)");
+      } else {
+        survivors.push(e);
+      }
+    }),
+  );
+
+  // Phase 2: count cap — evict oldest beyond ZONE_CACHE_MAX_FILES
+  if (survivors.length > ZONE_CACHE_MAX_FILES) {
+    survivors.sort((a, b) => a.classifiedAt - b.classifiedAt);
+    const toEvict = survivors.splice(0, survivors.length - ZONE_CACHE_MAX_FILES);
+    await Promise.all(
+      toEvict.map(async (e) => {
+        await fsPromises.unlink(path.join(ZONE_CACHE_DIR, e.name)).catch(() => {});
+        logger.info({ file: e.name }, "[zones] evicted cache entry (file count cap)");
+      }),
+    );
+  }
+
+  return new Set(survivors.map((e) => e.name));
+}
+
+/**
  * Hydrate in-memory cache from disk on startup (non-blocking).
  *
  * **Sentinel migration (v2):** If `/tmp/zone-cache/.v2` does not exist the
@@ -381,19 +474,35 @@ export async function hydrateCacheFromDisk(): Promise<void> {
     }
 
     // --- Normal hydration ---
+
+    // Separate valid .json files from non-.json / legacy entries so eviction
+    // only operates on well-named candidates.
+    const jsonFiles: string[] = [];
+    const legacyFiles: string[] = [];
+    for (const f of files) {
+      if (!f.endsWith(".json")) continue;
+      const key = f.slice(0, -5);
+      if (isValidZoneCacheKey(key)) {
+        jsonFiles.push(f);
+      } else {
+        legacyFiles.push(f);
+      }
+    }
+
+    // Delete any legacy-format entries first (invalid hex names).
     await Promise.all(
-      files.map(async (f) => {
-        if (!f.endsWith(".json")) return;
+      legacyFiles.map((f) =>
+        fsPromises.unlink(path.join(ZONE_CACHE_DIR, f)).catch(() => {}),
+      ),
+    );
+
+    // Evict stale / excess entries; receive the set of survivors to load.
+    const survivors = await evictStaleCacheEntries(jsonFiles);
+
+    // Load surviving entries into the in-memory cache.
+    await Promise.all(
+      [...survivors].map(async (f) => {
         const key = f.slice(0, -5);
-        if (!isValidZoneCacheKey(key)) {
-          // Stale legacy entry — drop it.
-          try {
-            await fsPromises.unlink(path.join(ZONE_CACHE_DIR, f));
-          } catch {
-            // best-effort
-          }
-          return;
-        }
         const data = await readZoneDiskByKey(key);
         if (data && !datasetZonesCache.has(key)) {
           datasetZonesCache.set(key, data);
@@ -406,8 +515,8 @@ export async function hydrateCacheFromDisk(): Promise<void> {
   }
 }
 
-/** Exported for tests only — the sentinel path used by hydrateCacheFromDisk. */
-export { ZONE_CACHE_SENTINEL };
+/** Exported for tests only — the sentinel path and eviction constants used by hydrateCacheFromDisk. */
+export { ZONE_CACHE_SENTINEL, ZONE_CACHE_MAX_AGE_MS, ZONE_CACHE_MAX_FILES };
 
 // Kick off hydration immediately (no await — non-blocking)
 void hydrateCacheFromDisk();

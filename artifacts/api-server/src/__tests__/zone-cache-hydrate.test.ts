@@ -162,6 +162,9 @@ import {
   hydrateCacheFromDisk,
   datasetZonesCache,
   ZONE_CACHE_SENTINEL,
+  evictStaleCacheEntries,
+  ZONE_CACHE_MAX_AGE_MS,
+  ZONE_CACHE_MAX_FILES,
 } from "../routes/poe.js";
 
 // ---------------------------------------------------------------------------
@@ -173,11 +176,16 @@ const ZONE_CACHE_DIR = "/tmp/zone-cache";
 /** A valid 64-char sha256 hex string to use as a cache filename. */
 const VALID_KEY = createHash("sha256").update("test-key").digest("hex");
 
-/** Minimal valid CachedZones payload. */
+/**
+ * Minimal valid CachedZones payload.
+ * classifiedAt is set to "now" so eviction (age-check) never removes it
+ * during normal-hydration tests.
+ */
+const FRESH_CLASSIFIED_AT = Date.now();
 const VALID_ENTRY = JSON.stringify({
   zones: ["sandy_shelf"],
   waterType: "saltwater",
-  classifiedAt: 1_700_000_000_000,
+  classifiedAt: FRESH_CLASSIFIED_AT,
   source: "ai",
 });
 
@@ -333,5 +341,170 @@ describe("hydrateCacheFromDisk — error resilience", () => {
 
     await expect(hydrateCacheFromDisk()).resolves.toBeUndefined();
     expect(datasetZonesCache.size).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// evictStaleCacheEntries — direct unit tests
+// ---------------------------------------------------------------------------
+
+describe("evictStaleCacheEntries — age eviction", () => {
+  it("evicts a file whose classifiedAt is older than ZONE_CACHE_MAX_AGE_MS", async () => {
+    const staleAt = Date.now() - ZONE_CACHE_MAX_AGE_MS - 1_000; // 1 s past TTL
+    const staleEntry = JSON.stringify({ zones: [], waterType: "saltwater", classifiedAt: staleAt });
+    const staleFile = `${VALID_KEY}.json`;
+
+    mockReadFile.mockResolvedValue(staleEntry);
+
+    const survivors = await evictStaleCacheEntries([staleFile]);
+
+    expect(survivors.has(staleFile)).toBe(false);
+    expect(mockUnlink).toHaveBeenCalledWith(`${ZONE_CACHE_DIR}/${staleFile}`);
+  });
+
+  it("keeps a file whose classifiedAt is within ZONE_CACHE_MAX_AGE_MS", async () => {
+    const freshEntry = VALID_ENTRY; // classifiedAt = Date.now()
+    const freshFile = `${VALID_KEY}.json`;
+
+    mockReadFile.mockResolvedValue(freshEntry);
+
+    const survivors = await evictStaleCacheEntries([freshFile]);
+
+    expect(survivors.has(freshFile)).toBe(true);
+    expect(mockUnlink).not.toHaveBeenCalled();
+  });
+
+  it("returns an empty set and unlinks a stale file even if unlink fails", async () => {
+    const staleAt = Date.now() - ZONE_CACHE_MAX_AGE_MS - 1_000;
+    const staleEntry = JSON.stringify({ zones: [], waterType: "saltwater", classifiedAt: staleAt });
+
+    mockReadFile.mockResolvedValue(staleEntry);
+    mockUnlink.mockRejectedValue(new Error("EPERM"));
+
+    const survivors = await evictStaleCacheEntries([`${VALID_KEY}.json`]);
+
+    expect(survivors.size).toBe(0);
+  });
+
+  it("treats an entry with no classifiedAt field as age 0 (epoch) and evicts it", async () => {
+    const noTimestamp = JSON.stringify({ zones: [], waterType: "saltwater" });
+    const file = `${VALID_KEY}.json`;
+
+    mockReadFile.mockResolvedValue(noTimestamp);
+
+    const survivors = await evictStaleCacheEntries([file]);
+
+    expect(survivors.has(file)).toBe(false);
+    expect(mockUnlink).toHaveBeenCalledWith(`${ZONE_CACHE_DIR}/${file}`);
+  });
+
+  it("skips a file that cannot be read (returns no survivor, no unlink)", async () => {
+    mockReadFile.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+
+    const survivors = await evictStaleCacheEntries([`${VALID_KEY}.json`]);
+
+    expect(survivors.size).toBe(0);
+    expect(mockUnlink).not.toHaveBeenCalled();
+  });
+
+  it("returns an empty set for an empty input list", async () => {
+    const survivors = await evictStaleCacheEntries([]);
+    expect(survivors.size).toBe(0);
+    expect(mockReadFile).not.toHaveBeenCalled();
+    expect(mockUnlink).not.toHaveBeenCalled();
+  });
+});
+
+describe("evictStaleCacheEntries — file count cap", () => {
+  const makeKey = (seed: string) => createHash("sha256").update(seed).digest("hex");
+
+  it("evicts oldest files when count exceeds ZONE_CACHE_MAX_FILES", async () => {
+    // Build ZONE_CACHE_MAX_FILES + 2 fresh files with distinct classifiedAt values.
+    const count = ZONE_CACHE_MAX_FILES + 2;
+    const keys: string[] = [];
+    const entries: { file: string; classifiedAt: number }[] = [];
+
+    for (let i = 0; i < count; i++) {
+      const key = makeKey(`count-test-${i}`);
+      const file = `${key}.json`;
+      // Spread classifiedAt so sort order is deterministic; all are recent (not age-evicted).
+      const classifiedAt = Date.now() - (count - i) * 1_000; // oldest has smallest i
+      keys.push(key);
+      entries.push({ file, classifiedAt });
+    }
+
+    const allFiles = entries.map((e) => e.file);
+
+    // readFile returns the matching entry JSON based on the filename argument.
+    mockReadFile.mockImplementation((p: string) => {
+      const basename = (p as string).split("/").pop()!;
+      const entry = entries.find((e) => e.file === basename);
+      if (!entry) return Promise.reject(new Error("ENOENT"));
+      return Promise.resolve(
+        JSON.stringify({ zones: [], waterType: "saltwater", classifiedAt: entry.classifiedAt }),
+      );
+    });
+
+    const survivors = await evictStaleCacheEntries(allFiles);
+
+    // Exactly ZONE_CACHE_MAX_FILES must survive.
+    expect(survivors.size).toBe(ZONE_CACHE_MAX_FILES);
+
+    // The two oldest files (entries[0] and entries[1]) must be evicted.
+    expect(survivors.has(entries[0]!.file)).toBe(false);
+    expect(survivors.has(entries[1]!.file)).toBe(false);
+
+    // The most recent files must survive.
+    expect(survivors.has(entries[count - 1]!.file)).toBe(true);
+    expect(survivors.has(entries[count - 2]!.file)).toBe(true);
+
+    // Two unlink calls for the two evicted files.
+    expect(mockUnlink).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not evict anything when count equals ZONE_CACHE_MAX_FILES", async () => {
+    const count = ZONE_CACHE_MAX_FILES;
+    const allFiles: string[] = [];
+
+    for (let i = 0; i < count; i++) {
+      allFiles.push(`${makeKey(`exact-cap-${i}`)}.json`);
+    }
+
+    mockReadFile.mockResolvedValue(VALID_ENTRY); // all fresh
+
+    const survivors = await evictStaleCacheEntries(allFiles);
+
+    expect(survivors.size).toBe(ZONE_CACHE_MAX_FILES);
+    expect(mockUnlink).not.toHaveBeenCalled();
+  });
+});
+
+describe("hydrateCacheFromDisk — eviction integration", () => {
+  it("does not load a stale entry (age limit) into the in-memory cache", async () => {
+    const staleAt = Date.now() - ZONE_CACHE_MAX_AGE_MS - 1_000;
+    const staleEntry = JSON.stringify({
+      zones: ["sandy_shelf"],
+      waterType: "saltwater",
+      classifiedAt: staleAt,
+      source: "ai",
+    });
+
+    mockReaddir.mockResolvedValue([".v2", `${VALID_KEY}.json`]);
+    mockReadFile.mockResolvedValue(staleEntry);
+
+    await hydrateCacheFromDisk();
+
+    expect(mockUnlink).toHaveBeenCalledWith(`${ZONE_CACHE_DIR}/${VALID_KEY}.json`);
+    expect(datasetZonesCache.size).toBe(0);
+  });
+
+  it("loads a fresh entry into the in-memory cache after eviction pass", async () => {
+    mockReaddir.mockResolvedValue([".v2", `${VALID_KEY}.json`]);
+    mockReadFile.mockResolvedValue(VALID_ENTRY); // fresh classifiedAt
+
+    await hydrateCacheFromDisk();
+
+    expect(datasetZonesCache.has(VALID_KEY)).toBe(true);
+    expect(datasetZonesCache.get(VALID_KEY)?.zones).toContain("sandy_shelf");
   });
 });
