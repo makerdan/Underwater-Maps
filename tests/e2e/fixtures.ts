@@ -13,6 +13,20 @@ import type { Page, Locator, APIRequestContext, APIResponse } from "@playwright/
  * true). It issues a single PUT /api/settings with the complete set of
  * default values that specs care about, so each spec starts from a clean
  * baseline without duplicating the reset logic.
+ *
+ * ─── USER IDENTITY RULE ────────────────────────────────────────────────────
+ * Never write a raw user-ID string literal ("e2e-user", "dev-user-bypass",
+ * etc.) in any spec file. Always import and use the E2E_USER_ID constant
+ * exported from this file:
+ *
+ *   import { E2E_USER_ID, test, expect } from "./fixtures";
+ *
+ * The post-merge lint step runs scripts/check-e2e-user-ids.sh, which greps
+ * every tests/e2e/**‌/*.ts file for quoted strings matching the "*-user*"
+ * pattern and exits non-zero if any are found outside this file. A raw
+ * string literal that diverges from the actual bypass identity causes silent
+ * auth failures in DELETE / PUT calls — the very bug this constant prevents.
+ * ───────────────────────────────────────────────────────────────────────────
  */
 
 export const API_URL = process.env["E2E_API_BASE_URL"] ?? "http://127.0.0.1:3151";

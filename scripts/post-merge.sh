@@ -13,6 +13,9 @@ pnpm --filter db push
 # unit-test failures from blocking CI"). Running them here with || true
 # surfaces the output without failing the post-merge setup.
 pnpm run typecheck && pnpm run lint
+# Guardrail: catch hardcoded user-ID string literals in e2e specs before they ship.
+# Any string matching the "*-user*" pattern outside tests/e2e/fixtures.ts is flagged.
+bash scripts/check-e2e-user-ids.sh
 # Unit tests are intentionally not run here — the full recursive test suite
 # consumes enough memory to get OOM-killed mid-run. Tests are covered by the
 # validation system (test-unit workflow) and pre-existing failures are tracked
