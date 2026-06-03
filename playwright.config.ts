@@ -68,20 +68,20 @@ export default defineConfig({
   // exercise real auth-gated routes end-to-end.
   webServer: [
     {
-      // Uses `dev:e2e` (not `dev`) so the E2E build writes to `dist-e2e/`
-      // instead of `dist/`. The regular API Server dev workflow runs
-      // simultaneously and also builds to `dist/`; without the separate output
-      // directory both processes call `rm -rf dist/` concurrently, creating a
-      // race that leaves the runtime gen.json assets missing from dist/ when
-      // the server starts — causing ENOENT at module load time and therefore
-      // ECONNREFUSED on port 3151 before any test runs.
+      // Uses `start:e2e` (not `dev:e2e`) so the webServer skips the esbuild
+      // bundle step. The build is handled earlier by global-setup.ts, which
+      // checks whether dist-e2e/index.mjs is newer than all source inputs and
+      // only rebuilds when stale. On a warm dev loop this saves 5–7 s per run.
+      //
+      // The output directory is dist-e2e/ (not dist/) so this process never
+      // races with the regular API Server dev workflow over the same folder.
       //
       // Health-check URL is /api/healthz (a public, no-auth endpoint that
       // always returns 200 immediately) rather than /api/datasets (which would
       // require an x-e2e-user-id header to avoid a 401 and performs a DB query
       // on every poll, masking startup failures under slow queries).
       command:
-        "PORT=3151 E2E_AUTH_BYPASS=1 DIST_DIR=dist-e2e pnpm --filter @workspace/api-server run dev:e2e",
+        "PORT=3151 E2E_AUTH_BYPASS=1 pnpm --filter @workspace/api-server run start:e2e",
       url: "http://127.0.0.1:3151/api/healthz",
       reuseExistingServer: !process.env["CI"],
       timeout: 60_000,

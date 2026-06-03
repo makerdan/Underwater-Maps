@@ -8,6 +8,7 @@
     "dev:e2e": "export NODE_ENV=development && node ./build.mjs && node --enable-source-maps ./dist-e2e/index.mjs",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
+    "start:e2e": "node --enable-source-maps ./dist-e2e/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
     "typecheck:tests": "tsc -p tsconfig.test.json",
     "test": "vitest run",
