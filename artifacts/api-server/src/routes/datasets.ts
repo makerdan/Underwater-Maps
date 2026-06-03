@@ -32,6 +32,7 @@ import {
 } from "../lib/terrain.js";
 import { parseUploadedFile } from "../lib/uploadParsers.js";
 import { gunzipBounded } from "../lib/gunzipBounded.js";
+import { isTarBuffer, extractTarBuffer, isTarFile, extractTarFile } from "../lib/tarDetect.js";
 import { fetchCopernicusDem } from "../lib/copernicusDem.js";
 import { fetchSatelliteTile } from "../lib/satelliteTile.js";
 import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
@@ -391,6 +392,7 @@ async function processUploadJob(
 
   const assembledPath = path.join(CHUNK_BASE_DIR, `${uploadId}-assembled`);
   const decompressedPath = `${assembledPath}-decompressed`;
+  const tarExtractedDir = path.join(CHUNK_BASE_DIR, `${uploadId}-tarcontents`);
 
   try {
     job.status = "processing";
@@ -409,6 +411,26 @@ async function processUploadJob(
       // Stream-decompress with size guard; avoids full gz buffer in RAM.
       await streamGunzipToFile(assembledPath, decompressedPath, DECOMPRESS_MAX_BYTES);
       await fs.promises.unlink(assembledPath).catch(() => undefined);
+
+      // Detect tar-inside-gz: NOAA smooth sheet archives are .tar.gz (a tar
+      // wrapped in gzip), not a single file wrapped in gzip.  When detected,
+      // extract all entries to a temp directory so the next processing stage
+      // can route each entry to the appropriate parser.
+      if (await isTarFile(decompressedPath)) {
+        const entries = await extractTarFile(decompressedPath, tarExtractedDir);
+        await fs.promises.unlink(decompressedPath).catch(() => undefined);
+        const preview = entries.slice(0, 5).join(", ");
+        const more = entries.length > 5 ? ` … +${entries.length - 5} more` : "";
+        throw Object.assign(
+          new Error(
+            `NOAA tar.gz archive detected: ${entries.length} entr${entries.length === 1 ? "y" : "ies"} extracted ` +
+            `(${preview}${more}). Full tar.gz parsing is not yet supported — ` +
+            `please extract the archive and upload individual files.`,
+          ),
+          { code: "TAR_ARCHIVE_DETECTED" },
+        );
+      }
+
       processPath = decompressedPath;
     } else {
       // Enforce the same 200 MB cap for uncompressed files before reading.
@@ -472,6 +494,7 @@ async function processUploadJob(
     await cleanupChunks(uploadId, totalChunks);
     await fs.promises.unlink(assembledPath).catch(() => undefined);
     await fs.promises.unlink(decompressedPath).catch(() => undefined);
+    await fs.promises.rm(tarExtractedDir, { recursive: true, force: true }).catch(() => undefined);
   }
 }
 
@@ -1156,6 +1179,33 @@ router.post(
       }
       return;
     }
+    // Detect tar-inside-gz: NOAA smooth sheet archives are .tar.gz (a tar
+    // wrapped in gzip), not a single file wrapped in gzip.  When detected,
+    // extract all entries to a temp directory so the next processing stage
+    // can route each entry to the appropriate parser.
+    if (isTarBuffer(decompressed)) {
+      const tarId = crypto.randomUUID();
+      const tarDir = path.join(CHUNK_BASE_DIR, `${tarId}-tarcontents`);
+      let entries: string[] = [];
+      try {
+        await fs.promises.mkdir(CHUNK_BASE_DIR, { recursive: true });
+        entries = await extractTarBuffer(decompressed, tarDir);
+      } finally {
+        await fs.promises.rm(tarDir, { recursive: true, force: true }).catch(() => undefined);
+      }
+      const preview = entries.slice(0, 5).join(", ");
+      const more = entries.length > 5 ? ` … and ${entries.length - 5} more` : "";
+      res.status(422).json({
+        error: "tar_archive_detected",
+        details:
+          `This .gz file is a NOAA tar.gz archive containing ${entries.length} ` +
+          `entr${entries.length === 1 ? "y" : "ies"}: ${preview}${more}. ` +
+          `Full tar.gz parsing is not yet supported — please extract the archive ` +
+          `and upload individual files.`,
+      });
+      return;
+    }
+
     decompressedBuffer = decompressed;
     fileContent = decompressed.toString("utf8");
   } else {
