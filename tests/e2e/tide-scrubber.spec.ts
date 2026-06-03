@@ -19,34 +19,6 @@ async function appIsSignedIn(page: Page): Promise<boolean> {
     .catch(() => false);
 }
 
-/** Enable the Tidal overlay if it isn't already on.
- *  Uses the stable data-testid + aria-pressed strategy (rename-proof) so a
- *  future button-label change (e.g. Task #836) doesn't silently break this.
- *  Clicking when already-on would *disable* the overlay and unmount TidePanel,
- *  so we always check aria-pressed before dispatching the click. */
-async function ensureTidalOverlayEnabled(page: Page): Promise<void> {
-  const btn = page.locator("[data-testid='tidal-overlay-toggle']").first();
-  await expect(btn).toBeVisible({ timeout: 10_000 });
-  // autoLoadTidal may fire a useEffect that enables the overlay shortly after
-  // mount — wait for it to settle before reading state.
-  await page
-    .waitForFunction(
-      () =>
-        document
-          .querySelector("[data-testid='tidal-overlay-toggle']")
-          ?.getAttribute("aria-pressed") === "true",
-      undefined,
-      { timeout: 5_000 },
-    )
-    .catch(() => {});
-  const ariaPressed = await btn.getAttribute("aria-pressed").catch(() => null);
-  if (ariaPressed !== "true") {
-    // Use dispatchEvent to bypass any canvas element that may intercept
-    // the click in headless mode (z-order overlap with HUD).
-    await btn.dispatchEvent("click");
-  }
-}
-
 /** Build a deterministic 7-day slack schedule rooted at today's UTC midnight
  *  so the slack bands & badges always have something to render regardless of
  *  whether the real NOAA station is reachable. */
@@ -157,54 +129,63 @@ test.describe("Tide HUD scrubber slack visuals", () => {
       return;
     }
 
-    // TidePanel only fetches tidal data once a dataset is active (it needs
-    // the dataset centre coordinates). Wait for terrain to load so the tidal
-    // API call fires and our mock can respond.
-    // Cap the natural-terrain wait at 5 s — in CI the API is often
-    // unreliable so we fall through to the seed path quickly instead of
-    // burning 25 s of the 90 s budget on a wait that rarely succeeds.
+    // Wait for the TestBridge to register before injecting data. The bridge
+    // is wired up in a useEffect that fires after the first render; on a
+    // freshly navigated page this usually takes < 1 s, but we give it 10 s
+    // to be safe under load.
     await page.waitForFunction(
-      () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
+      () => Boolean(window.__bathyTest?.isTestBridgeReady?.()),
       null,
-      { timeout: 5_000 },
+      { timeout: 10_000 },
     ).catch(() => {});
-    // If terrain didn't load in time, seed synthetic terrain so that
-    // useTidalData receives non-null lat/lon and fires the fetch.
-    const hasTerrain = await page.evaluate(
-      () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
-    ).catch(() => false);
-    if (!hasTerrain) {
-      // Ensure the TestBridge has fully registered (registerTestBridge runs
-      // in a useEffect, which is asynchronous). The natural-terrain wait
-      // above usually gives it enough time, but under load the effect may not
-      // have fired yet. Waiting explicitly prevents seedTerrain() from
-      // silently returning false and leaving lat/lon null.
-      await page.waitForFunction(
-        () => Boolean(window.__bathyTest?.isTestBridgeReady?.()),
-        null,
-        { timeout: 10_000 },
-      ).catch(() => {});
-      const seeded = await page.evaluate(
-        () => window.__bathyTest?.seedTerrain?.(),
-      ).catch(() => false);
-      // Wait for the seeded terrain to actually propagate into app state.
-      if (seeded) {
-        await page.waitForFunction(
-          () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
-          null,
-          { timeout: 5_000 },
-        ).catch(() => {});
-      } else {
-        await page.waitForTimeout(500);
-      }
-    }
 
-    await ensureTidalOverlayEnabled(page);
+    // Inject terrain + tidal overlay + mock tidal data directly via the
+    // TestBridge, bypassing the button click (which fails in headless mode
+    // due to canvas z-order overlap) and the useTidalData fetch path.
+    //
+    // seedTerrain()         → sets centerLat/centerLon (defaults to 0,0)
+    //                         so TidePanel's useTidalSchedule(lat, lon, 7)
+    //                         fires and fetches /api/tidal/schedule (mocked
+    //                         in beforeEach to return the deterministic
+    //                         7-day schedule that drives day badges).
+    // setTidalOverlay(true) → tidalOverlay = true in context
+    // feedTidalData(…)      → tidalDataOverride = data in App state
+    // All three cause synchronous React state updates; React batches them
+    // into a single re-render so TidePanel mounts immediately on the next
+    // paint with lat=0, lon=0 wired up for the schedule fetch.
+    await page.evaluate(() => {
+      const bt = window.__bathyTest;
+      if (!bt) return;
+      bt.seedTerrain();
+      bt.setTidalOverlay(true);
+      bt.feedTidalData({
+        available: true,
+        tideHeight: 1.23,
+        currentDirection: 90,
+        currentSpeed: 0.8,
+        stationName: "Mock Station",
+        stationId: "MOCK1",
+        isPredicted: true,
+        source: "estimated",
+        nextEvent: {
+          type: "high",
+          time: new Date(Date.now() + 60 * 60_000).toISOString(),
+          height: 1.5,
+        },
+        slack: {
+          isSlack: false,
+          phase: "flooding",
+          minutesToSlack: 42,
+          minutesSinceSlack: 0,
+          nextReversalAt: new Date(Date.now() + 42 * 60_000).toISOString(),
+        },
+      });
+    });
 
     // Wait for the TidePanel to mount. TidePanel is always rendered embedded
     // inside the sidebar so its standalone "TIDAL OVERLAY" header is never
     // shown — check the root element (data-testid="tide-panel") instead.
-    await expect(page.locator("[data-testid='tide-panel']")).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("[data-testid='tide-panel']")).toBeVisible({ timeout: 5_000 });
 
     // The "Time scrub" section is always rendered, even if the station data
     // itself is unavailable, so the day-badge + band assertions below don't
