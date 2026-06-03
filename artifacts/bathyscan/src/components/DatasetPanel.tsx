@@ -19,6 +19,7 @@ import {
   getGetUserDatasetsIdOverviewQueryKey,
   getGetMarkersQueryKey,
   usePostDatasetsUpload,
+  getGetSubstrateQueryKey,
 } from "@workspace/api-client-react";
 import type { DatasetMeta, UserDatasetMeta } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
@@ -718,6 +719,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     if (ds.id === activeUserDatasetId && !pendingUserDatasetId) return;
     setUserLoadError(null);
     setPresetLoadError(null);
+    void qc.invalidateQueries({ queryKey: getGetSubstrateQueryKey(ds.id) });
     setLoadingId(ds.id);
     beginActiveLoad(ds.id);
     setPendingUserDatasetId(ds.id);
@@ -763,6 +765,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     setPendingExternalUserDatasetId(null);
     // Make sure /user/datasets list reflects the brand-new row.
     void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+    void qc.invalidateQueries({ queryKey: getGetSubstrateQueryKey(pendingExternalUserDatasetId) });
   }, [
     pendingExternalUserDatasetId,
     activeUserDatasetId,
@@ -850,6 +853,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           setLastChunkedFile(null);
           setChunkedError(null);
           void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+          void qc.invalidateQueries({ queryKey: getGetSubstrateQueryKey(data.datasetId) });
           setActiveUserDatasetId(data.datasetId);
           setLoadingId(data.datasetId);
           setPendingUserDatasetId(data.datasetId);
@@ -934,6 +938,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                 );
               }
               void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+              void qc.invalidateQueries({ queryKey: getGetSubstrateQueryKey(data.savedDatasetId) });
               setSaveError(null);
               setLastUploadedFile(null);
               setSavingToAccount(false);
@@ -1124,6 +1129,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           if (job.status === "done" && job.datasetId) {
             clearInterval(pollIntervalId);
             void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+            void qc.invalidateQueries({ queryKey: getGetSubstrateQueryKey(job.datasetId) });
             setGcsPhase("idle");
             setGcsError(null);
 
