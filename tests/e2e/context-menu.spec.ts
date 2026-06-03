@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "./fixtures";
+import { test, expect, type Page, API_URL, E2E_USER_ID } from "./fixtures";
 
 /**
  * Right-click Context Menu E2E tests.
@@ -207,7 +207,13 @@ test.describe("BathyScan — Context menu rendering & keyboard nav", () => {
 });
 
 test.describe("BathyScan — Two-click measurement flow", () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, request }) => {
+    // Reset units to metric so the measurement banner shows "m" and "km".
+    // A prior test run may have persisted "imperial" for the bypass user.
+    await request.put(`${API_URL}/api/settings`, {
+      headers: { "x-e2e-user-id": E2E_USER_ID },
+      data: { units: "metric" },
+    });
     await page.addInitScript(() => {
       try {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");

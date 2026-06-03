@@ -78,6 +78,13 @@ test.describe("BathyScan — minimap visibility", () => {
       return;
     }
 
+    // Seed terrain so the Minimap canvas renders (without terrain the Minimap
+    // returns null, leaving the container as an empty zero-height div that
+    // Playwright considers hidden).
+    await page.evaluate(() => {
+      (window as unknown as { __bathyTest?: { seedTerrain?: () => void } }).__bathyTest?.seedTerrain?.();
+    });
+
     // Sanity: minimap is on by default.
     const minimap = page.locator("[data-testid='minimap-container']");
     await expect(minimap).toBeVisible({ timeout: 25_000 });

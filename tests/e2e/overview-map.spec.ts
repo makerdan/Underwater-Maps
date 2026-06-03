@@ -401,6 +401,19 @@ test.describe("BathyScan — Overview Map", () => {
       await page.goto("/", { waitUntil: "domcontentloaded" });
       if (!(await ensureSignedInOrSkip(page))) return;
 
+      // Re-seed terrain after the explicit goto (the beforeEach seed is lost
+      // on page reload). Without overviewGrid the OverviewMap's mouseup handler
+      // cannot project canvas coords to lat/lon and silently no-ops — the bbox
+      // panel never appears.
+      await page.evaluate(() => window.__bathyTest?.seedTerrain?.()).catch(() => {});
+      await page
+        .waitForFunction(
+          () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
+          null,
+          { timeout: 5_000 },
+        )
+        .catch(() => {});
+
       // Open via the new HUD button (mirrors the O shortcut).
       const hudBtn = page.getByTestId("hud-toggle-overview");
       await expect(hudBtn).toBeVisible({ timeout: 10_000 });
