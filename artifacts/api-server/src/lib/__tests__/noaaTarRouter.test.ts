@@ -9,6 +9,7 @@
  *   - routeTarEntries: derives dataset name from surveys.txt H-number
  *   - routeTarEntries: falls back to archive filename when surveys.txt absent
  *   - routeTarEntries: aggregates points from multiple entries
+ *   - parseSmoothSheetsGeoTiff: gunzips inner tif.gz and delegates to parseGeoTiff
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -16,11 +17,13 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import * as zlib from "zlib";
+import { writeArrayBuffer } from "geotiff";
 import type { RawPoint } from "../uploadParsers.js";
 import {
   classifyTarEntry,
   routeTarEntries,
   parserDispatch,
+  parseSmoothSheetsGeoTiff,
 } from "../noaaTarRouter.js";
 
 // ---------------------------------------------------------------------------
@@ -248,13 +251,17 @@ describe("routeTarEntries", () => {
     expect(result.points[0]!.depth).toBeCloseTo(5.5, 6);
   });
 
-  it("throws PARSER_NOT_IMPLEMENTED for Smooth_Sheets tif.gz entry", async () => {
+  it("dispatches Smooth_Sheets tif.gz entry to inner-geotiff parser and merges points", async () => {
     const ssDir = path.join(tmpDir, "H09084", "Smooth_Sheets");
     await fs.promises.mkdir(ssDir, { recursive: true });
     await fs.promises.writeFile(path.join(ssDir, "H09084.tif.gz"), "placeholder");
-    await expect(
-      routeTarEntries(tmpDir, ["H09084/Smooth_Sheets/H09084.tif.gz"], "H09084.tar.gz"),
-    ).rejects.toMatchObject({ code: "PARSER_NOT_IMPLEMENTED", parserKey: "inner-geotiff" });
+    mockParser("inner-geotiff", makePts(8));
+    const result = await routeTarEntries(
+      tmpDir,
+      ["H09084/Smooth_Sheets/H09084.tif.gz"],
+      "H09084.tar.gz",
+    );
+    expect(result.points).toHaveLength(8);
   });
 
   it("derives dataset name from surveys.txt H-number and area", async () => {
@@ -333,5 +340,76 @@ describe("routeTarEntries", () => {
       message: "No parseable bathymetric data found in this archive.",
       code: "NO_PARSEABLE_DATA",
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseSmoothSheetsGeoTiff — gunzip + parseGeoTiff delegation
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a minimal 2×2 float32 GeoTIFF with proper georeferencing tags and
+ * return it as a gzip-compressed Buffer suitable for use as a .tif.gz fixture.
+ *
+ * Uses the same `writeArrayBuffer` helper as generate.mjs so the structure
+ * is guaranteed to be parseable by the geotiff library.  Depth values are
+ * stored as positive numbers (positive-downward) to avoid the sign-flip
+ * applied by parseGeoTiff.
+ */
+async function buildMinimalTifGz(): Promise<Buffer> {
+  const WIDTH = 2;
+  const HEIGHT = 2;
+  const flatData = new Float32Array([10, 20, 30, 40]);
+
+  const ab = await writeArrayBuffer(flatData, {
+    width: WIDTH,
+    height: HEIGHT,
+    ModelPixelScale: [0.01, 0.01, 0],
+    ModelTiepoint: [0, 0, 0, -132.5, 55.71, 0],
+  });
+
+  const tifBuffer = Buffer.from(ab);
+  return zlib.gzipSync(tifBuffer);
+}
+
+describe("parseSmoothSheetsGeoTiff", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "smooth-sheets-test-"));
+  });
+
+  afterEach(async () => {
+    await fs.promises.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("gunzips the inner tif.gz and returns depth points (georeferenced case)", async () => {
+    const tifGzBuffer = await buildMinimalTifGz();
+    const filePath = path.join(tmpDir, "H09084.tif.gz");
+    await fs.promises.writeFile(filePath, tifGzBuffer);
+
+    const points = await parseSmoothSheetsGeoTiff(filePath);
+
+    expect(points.length).toBeGreaterThan(0);
+    for (const p of points) {
+      expect(Number.isFinite(p.lon)).toBe(true);
+      expect(Number.isFinite(p.lat)).toBe(true);
+      expect(Number.isFinite(p.depth)).toBe(true);
+      expect(p.depth).toBeGreaterThan(0);
+    }
+  });
+
+  it("throws when the file cannot be read", async () => {
+    await expect(
+      parseSmoothSheetsGeoTiff(path.join(tmpDir, "missing.tif.gz")),
+    ).rejects.toThrow(/Failed to read inner tif\.gz/);
+  });
+
+  it("throws when the file is not valid gzip data", async () => {
+    const filePath = path.join(tmpDir, "corrupt.tif.gz");
+    await fs.promises.writeFile(filePath, Buffer.from("not-gzip-data"));
+    await expect(parseSmoothSheetsGeoTiff(filePath)).rejects.toThrow(
+      /Failed to decompress inner tif\.gz/,
+    );
   });
 });
