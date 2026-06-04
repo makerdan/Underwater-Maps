@@ -118,8 +118,11 @@ export default function globalSetup() {
   // --- E2E server build ---
   if (isBuildStale()) {
     console.log("[global-setup] dist-e2e/ is missing or stale — building api-server…");
-    execSync("pnpm --filter @workspace/api-server run build", {
-      cwd: root,
+    // Call build.mjs directly (not via `pnpm run build`) so that DIST_DIR is
+    // unambiguously inherited by the Node.js process and not at risk of being
+    // dropped or overridden by pnpm's script runner.
+    execSync("node ./build.mjs", {
+      cwd: apiServerDir,
       stdio: "inherit",
       env: { ...process.env, DIST_DIR: "dist-e2e" },
     });

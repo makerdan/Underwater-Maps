@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "export NODE_ENV=development && export PORT=${PORT:-8080} && pnpm run build && pnpm run start",
-    "dev:e2e": "export NODE_ENV=development && node ./build.mjs && node --enable-source-maps ./dist-e2e/index.mjs",
+    "dev:e2e": "export NODE_ENV=development && DIST_DIR=dist-e2e node ./build.mjs && node --enable-source-maps ./dist-e2e/index.mjs",
     "build": "node ./build.mjs",
+    "build:e2e": "DIST_DIR=dist-e2e node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "start:e2e": "node --enable-source-maps ./dist-e2e/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",

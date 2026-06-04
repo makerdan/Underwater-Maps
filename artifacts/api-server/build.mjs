@@ -13,7 +13,11 @@ const artifactDir = path.dirname(fileURLToPath(import.meta.url));
 async function buildAll() {
   // Allow callers to redirect the output directory so parallel build invocations
   // (e.g. the regular dev workflow vs the E2E webServer) don't race on the same
-  // `dist/` folder. The E2E webServer sets DIST_DIR=dist-e2e via `dev:e2e`.
+  // `dist/` folder.
+  //   • tests/e2e/global-setup.ts sets DIST_DIR=dist-e2e before Playwright
+  //     starts the webServer, guaranteeing dist-e2e/index.mjs exists.
+  //   • The `build:e2e` and `dev:e2e` scripts also set DIST_DIR=dist-e2e.
+  //   • The regular `build` / `dev` scripts leave DIST_DIR unset → dist/.
   const distDir = path.resolve(artifactDir, process.env["DIST_DIR"] ?? "dist");
   await rm(distDir, { recursive: true, force: true });
 
