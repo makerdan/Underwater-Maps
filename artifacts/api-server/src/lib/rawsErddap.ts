@@ -21,6 +21,7 @@
 import { registerCache } from "./cacheRegistry.js";
 import { db, rawsObservationCacheTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { logger } from "./logger.js";
 
 const ERDDAP_BASE = "https://erddap.aoos.org/erddap";
 const FETCH_TIMEOUT_MS = 8_000;
@@ -278,7 +279,7 @@ async function persistToDb(datasetId: string, observation: RawsObservation): Pro
         },
       });
   } catch (err) {
-    console.warn("[raws-erddap] Failed to persist to DB:", (err as Error).message);
+    logger.warn({ err }, "[raws-erddap] Failed to persist to DB");
   }
 }
 
@@ -303,7 +304,7 @@ async function loadFromDb(
       fetchedAt: row.fetchedAt,
     };
   } catch (err) {
-    console.warn("[raws-erddap] Failed to load from DB:", (err as Error).message);
+    logger.warn({ err }, "[raws-erddap] Failed to load from DB");
     return null;
   }
 }
@@ -349,7 +350,8 @@ export async function fetchRawsObservation(
   if (dbEntry) {
     const ageMs = now - dbEntry.fetchedAt.getTime();
     const stale = ageMs > STALE_THRESHOLD_MS;
-    console.info(
+    logger.info(
+      { datasetId, ageMs, stale },
       `[raws-erddap] Serving DB fallback for ${datasetId} (age=${Math.round(ageMs / 1000)}s, stale=${stale})`,
     );
     // Cache the fallback result (not null) so concurrent/subsequent requests

@@ -12,6 +12,7 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { createRateLimit, stampBaselineRateLimitHeaders } from "../middlewares/rateLimit.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -292,7 +293,7 @@ router.post(
     res.json({ toolCalls, textResponse });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
-    console.error("[query] OpenAI error:", msg);
+    logger.error({ err, msg }, "[query] OpenAI error");
     res.status(502).json({ error: "llm_error", details: msg });
   }
   }),

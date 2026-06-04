@@ -28,6 +28,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { logger } from "../lib/logger.js";
 
 const FolderIdParamSchema = z.string().uuid("Folder id must be a valid UUID");
 
@@ -342,7 +343,7 @@ router.post("/user/folders/:id/duplicate", requireAuth, asyncHandler(async (req,
 
     res.status(201).json(folderToJson(newRoot));
   } catch (err) {
-    console.error(`[folders] duplicate failed for ${id}:`, err);
+    logger.error({ err, folderId: id }, `[folders] duplicate failed for ${id}`);
     res.status(500).json({ error: "db_error", details: "Could not duplicate folder" });
   }
 }));
@@ -423,7 +424,7 @@ router.delete("/user/folders/:id", requireAuth, asyncHandler(async (req, res): P
       });
     }
   } catch (err) {
-    console.error(`[folders] delete (${mode}) failed for ${id}:`, err);
+    logger.error({ err, folderId: id, mode }, `[folders] delete (${mode}) failed for ${id}`);
     res.status(500).json({ error: "db_error", details: "Could not delete folder" });
     return;
   }

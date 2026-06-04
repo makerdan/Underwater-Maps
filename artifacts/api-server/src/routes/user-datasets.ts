@@ -17,6 +17,7 @@ import sharp from "sharp";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -225,7 +226,8 @@ router.get("/user/datasets/:id/terrain", terrainFetchIpRateLimit, requireAuth, t
   }
 
   if (sizeRow.size > MAX_TERRAIN_JSON_BYTES) {
-    console.warn(
+    logger.warn(
+      { datasetId: id, sizeBytes: sizeRow.size, limitBytes: MAX_TERRAIN_JSON_BYTES },
       `[terrain] dataset ${id} terrain_json is ${sizeRow.size} bytes ` +
       `(limit ${MAX_TERRAIN_JSON_BYTES}) — returning 413`,
     );

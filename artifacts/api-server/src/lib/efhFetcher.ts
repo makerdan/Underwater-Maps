@@ -29,6 +29,7 @@
 import { promises as fsPromises } from "fs";
 import path from "path";
 import type { EfhFeature, EfhFeatureCollection } from "./efhData.js";
+import { logger } from "./logger.js";
 
 // ---------------------------------------------------------------------------
 // Cache versioning — bump whenever the normalization logic, layer selection,
@@ -76,7 +77,8 @@ export const MAX_CACHE_AGE_MS: number = (() => {
   if (raw === undefined) return DEFAULT_CACHE_AGE_MS;
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || parsed <= 0) {
-    console.warn(
+    logger.warn(
+      { raw, defaultMs: DEFAULT_CACHE_AGE_MS },
       `[efh-fetcher] EFH_CACHE_MAX_AGE_MS="${raw}" is not a positive finite number; ` +
       `falling back to default ${DEFAULT_CACHE_AGE_MS}ms (7 days).`,
     );
@@ -340,7 +342,8 @@ async function fetchLayerFeatures(
     }
 
     if (!resp.ok) {
-      console.warn(
+      logger.warn(
+        { layerId, status: resp.status, offset },
         `[efh-fetcher] Layer ${layerId}: HTTP ${resp.status} at offset ${offset}; skipping layer.`,
       );
       return all;
@@ -353,7 +356,8 @@ async function fetchLayerFeatures(
     };
 
     if (json.error) {
-      console.warn(
+      logger.warn(
+        { layerId, arcgisError: json.error },
         `[efh-fetcher] Layer ${layerId}: ArcGIS error ${json.error.code}: ${json.error.message}; skipping.`,
       );
       return all;
@@ -441,7 +445,8 @@ export async function readDiskCache(): Promise<EfhFeature[] | null> {
     const raw = await fsPromises.readFile(file, "utf8");
     const parsed = JSON.parse(raw) as DiskCache;
     if ((parsed.version ?? 0) < EFH_CACHE_VERSION) {
-      console.info(
+      logger.info(
+        { cacheVersion: parsed.version, currentVersion: EFH_CACHE_VERSION },
         `[efh-fetcher] Discarding stale EFH cache (v${parsed.version} < v${EFH_CACHE_VERSION})`,
       );
       fsPromises.unlink(file).catch(() => {});
@@ -449,13 +454,15 @@ export async function readDiskCache(): Promise<EfhFeature[] | null> {
     }
     const ageMs = Date.now() - new Date(parsed.fetchedAt).getTime();
     if (ageMs > MAX_CACHE_AGE_MS) {
-      console.info(
+      logger.info(
+        { ageMs, maxAgeMs: MAX_CACHE_AGE_MS },
         `[efh-fetcher] Discarding expired EFH disk cache (age ${Math.round(ageMs / 86_400_000)}d > max ${Math.round(MAX_CACHE_AGE_MS / 86_400_000)}d); will re-fetch.`,
       );
       fsPromises.unlink(file).catch(() => {});
       return null;
     }
-    console.info(
+    logger.info(
+      { featureCount: parsed.features.length, fetchedAt: parsed.fetchedAt },
       `[efh-fetcher] Loaded ${parsed.features.length} EFH features from disk cache (${parsed.fetchedAt})`,
     );
     return parsed.features;
@@ -474,9 +481,9 @@ async function writeDiskCache(features: EfhFeature[]): Promise<void> {
       features,
     };
     await fsPromises.writeFile(file, JSON.stringify(payload), "utf8");
-    console.info(`[efh-fetcher] Cached ${features.length} EFH features to disk.`);
+    logger.info({ featureCount: features.length }, `[efh-fetcher] Cached ${features.length} EFH features to disk.`);
   } catch (err) {
-    console.warn(`[efh-fetcher] Failed to write EFH disk cache: ${(err as Error).message}`);
+    logger.warn({ err }, `[efh-fetcher] Failed to write EFH disk cache: ${(err as Error).message}`);
   }
 }
 
@@ -515,7 +522,8 @@ export async function fetchNoaaAlaskaEfh(): Promise<EfhFeature[] | null> {
   }
 
   // 3. Live fetch — query all GOA_LAYER_SPECS layers in parallel
-  console.info(
+  logger.info(
+    { layerCount: GOA_LAYER_SPECS.length },
     `[efh-fetcher] Fetching ${GOA_LAYER_SPECS.length} EFH layers from NOAA GulfOfAlaska FeatureServer…`,
   );
 
@@ -531,7 +539,8 @@ export async function fetchNoaaAlaskaEfh(): Promise<EfhFeature[] | null> {
         try {
           rawFeatures = await fetchLayerFeatures(GOA_BASE_URL, spec.layerId);
         } catch (err) {
-          console.warn(
+          logger.warn(
+            { err, layerId: spec.layerId, species: spec.commonName },
             `[efh-fetcher] Layer ${spec.layerId} (${spec.commonName}): transport error — ` +
             `${(err as Error).message}; skipping layer.`,
           );
@@ -558,13 +567,15 @@ export async function fetchNoaaAlaskaEfh(): Promise<EfhFeature[] | null> {
     }
 
     if (allFeatures.length === 0) {
-      console.warn(
+      logger.warn(
+        { layerCount: GOA_LAYER_SPECS.length },
         `[efh-fetcher] All ${GOA_LAYER_SPECS.length} GOA layers returned 0 usable features; will use bundled data.`,
       );
       return null;
     }
 
-    console.info(
+    logger.info(
+      { totalPolygons, totalRaw, layerCount: GOA_LAYER_SPECS.length },
       `[efh-fetcher] Fetched ${totalPolygons} polygon parts from ${totalRaw} raw features ` +
       `across ${GOA_LAYER_SPECS.length} NOAA EFH layers.`,
     );
@@ -573,7 +584,8 @@ export async function fetchNoaaAlaskaEfh(): Promise<EfhFeature[] | null> {
     void writeDiskCache(allFeatures);
     return allFeatures;
   } catch (err) {
-    console.warn(
+    logger.warn(
+      { err },
       `[efh-fetcher] NOAA EFH fetch failed: ${(err as Error).message}; will use bundled data.`,
     );
     return null;

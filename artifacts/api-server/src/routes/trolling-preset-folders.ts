@@ -13,6 +13,7 @@ import {
   PatchTrollingPresetFoldersIdBody,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -76,7 +77,7 @@ router.post("/trolling-preset-folders", requireAuth, async (req, res): Promise<v
     }
     res.status(201).json(folderToJson(created));
   } catch (err) {
-    console.error("[trolling-preset-folders] create failed:", err);
+    logger.error({ err }, "[trolling-preset-folders] create failed");
     res.status(500).json({ error: "db_error", details: "Could not create folder" });
   }
 });

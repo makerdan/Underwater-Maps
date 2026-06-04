@@ -3,6 +3,7 @@ import path from "path";
 import { dirname, resolve as resolvePath } from "path";
 import { fileURLToPath } from "url";
 import { registerCache } from "./cacheRegistry.js";
+import { logger } from "./logger.js";
 
 /**
  * Which upstream data service produced this grid.
@@ -553,18 +554,20 @@ export async function resolveBathymetrySource(
   for (const sourceId of ranked) {
     const source = BATHYMETRY_SOURCES[sourceId];
     if (!source) {
-      console.warn(`[terrain] Unknown source '${sourceId}' for ${meta.id}; skipping.`);
+      logger.warn({ sourceId, datasetId: meta.id }, `[terrain] Unknown source '${sourceId}' for ${meta.id}; skipping.`);
       continue;
     }
     try {
-      console.info(
+      logger.info(
+        { sourceId, datasetId: meta.id, resolution: N },
         `[terrain] Trying ${source.label} (${source.scope}) for ${meta.id} at ${N}×${N}…`,
       );
       const result = await source.fetch(meta, N);
-      console.info(`[terrain] ${source.label} resolved successfully for ${meta.id}.`);
+      logger.info({ sourceId, datasetId: meta.id }, `[terrain] ${source.label} resolved successfully for ${meta.id}.`);
       return { source, result };
     } catch (err) {
-      console.info(
+      logger.info(
+        { err, sourceId, datasetId: meta.id },
         `[terrain] ${source.label} unavailable for ${meta.id}: ${(err as Error).message}.`,
       );
     }
@@ -848,7 +851,7 @@ function loadBundledTerrain(fileName: string): BundledTerrain | null {
     const raw = readFileSync(resolvePath(__terrainDir, fileName), "utf8");
     return JSON.parse(raw) as BundledTerrain;
   } catch (err) {
-    console.warn(`[terrain] Bundled terrain '${fileName}' unavailable: ${(err as Error).message}`);
+    logger.warn({ err, fileName }, `[terrain] Bundled terrain '${fileName}' unavailable: ${(err as Error).message}`);
     return null;
   }
 }
@@ -928,8 +931,9 @@ async function readDiskCache(key: string): Promise<TerrainGrid | null> {
     const parsed = JSON.parse(raw) as TerrainGrid;
     const version = parsed.version ?? 1;
     if (version < TERRAIN_CACHE_VERSION) {
-      console.info(
-        `[terrain] Discarding stale cache ${key} (v${version} < v${TERRAIN_CACHE_VERSION})`
+      logger.info(
+        { key, cacheVersion: version, currentVersion: TERRAIN_CACHE_VERSION },
+        `[terrain] Discarding stale cache ${key} (v${version} < v${TERRAIN_CACHE_VERSION})`,
       );
       // Best-effort removal so the stale file doesn't linger on disk.
       fsPromises.unlink(file).catch(() => {});
@@ -948,7 +952,7 @@ async function writeDiskCache(key: string, grid: TerrainGrid): Promise<void> {
     const stamped: TerrainGrid = { ...grid, version: TERRAIN_CACHE_VERSION };
     await fsPromises.writeFile(file, JSON.stringify(stamped), "utf8");
   } catch (err) {
-    console.warn(`[terrain] Failed to write disk cache for ${key}: ${(err as Error).message}`);
+    logger.warn({ err, key }, `[terrain] Failed to write disk cache for ${key}: ${(err as Error).message}`);
   }
 }
 
@@ -1261,7 +1265,7 @@ export async function buildTerrainGrid(
   // 2. Disk cache
   const disk = await readDiskCache(cacheKey);
   if (disk) {
-    console.info(`[terrain] Disk cache hit: ${cacheKey}`);
+    logger.info({ cacheKey }, `[terrain] Disk cache hit: ${cacheKey}`);
     memoryCache.set(cacheKey, disk);
     return disk;
   }
@@ -1311,7 +1315,8 @@ export async function buildTerrainGrid(
       topographyCreditUrl = topoProv.creditUrl;
     }
   } else {
-    console.warn(
+    logger.warn(
+      { datasetId },
       `[terrain] All ranked sources failed for ${datasetId}; using synthetic fallback.`,
     );
     const synth = buildSyntheticGrid(datasetId, N, meta);

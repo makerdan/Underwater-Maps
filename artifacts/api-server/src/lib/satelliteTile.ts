@@ -3,6 +3,7 @@ import path from "path";
 import { createHash } from "crypto";
 import { PNG } from "pngjs";
 import { registerCache } from "./cacheRegistry.js";
+import { logger } from "./logger.js";
 
 /**
  * A cached satellite/aerial image tile for a given geographic bounding box.
@@ -54,9 +55,7 @@ async function writeSatelliteDiskCache(key: string, data: Buffer): Promise<void>
     const file = path.join(SATELLITE_CACHE_DIR, `${key}.png`);
     await fsPromises.writeFile(file, data);
   } catch (err) {
-    console.warn(
-      `[satellite-tile] Failed to write disk cache for ${key}: ${(err as Error).message}`,
-    );
+    logger.warn({ err, key }, `[satellite-tile] Failed to write disk cache for ${key}: ${(err as Error).message}`);
   }
 }
 
@@ -210,7 +209,8 @@ export async function fetchSatelliteTile(
     const westPxWidth = Math.min(size - 1, Math.max(1, Math.round((westSpan / totalSpan) * size)));
     const eastPxWidth = size - westPxWidth;
 
-    console.info(
+    logger.info(
+      { bbox, westPxWidth, eastPxWidth, size },
       `[satellite-tile] Antimeridian split: west (${bbox.minLon}→180, ${westPxWidth}px) + east (-180→${bbox.maxLon}, ${eastPxWidth}px) at ${size}px tall`,
     );
 
@@ -228,14 +228,15 @@ export async function fetchSatelliteTile(
     ]);
 
     data = await compositeHorizontal(westBuf, eastBuf);
-    console.info(`[satellite-tile] Antimeridian composite complete — ${data.length} bytes`);
+    logger.info({ bytes: data.length }, `[satellite-tile] Antimeridian composite complete — ${data.length} bytes`);
   } else {
     // ── Normal (non-crossing) bbox ────────────────────────────────────────────
-    console.info(
+    logger.info(
+      { bbox, size },
       `[satellite-tile] Fetching ESRI World Imagery for bbox (${bbox.minLon},${bbox.minLat})→(${bbox.maxLon},${bbox.maxLat}) at ${size}×${size}…`,
     );
     data = await fetchSatelliteTileFromEsri(bbox, size, size);
-    console.info(`[satellite-tile] Fetch complete — ${data.length} bytes`);
+    logger.info({ bytes: data.length }, `[satellite-tile] Fetch complete — ${data.length} bytes`);
   }
 
   satelliteMemoryCache.set(key, data);

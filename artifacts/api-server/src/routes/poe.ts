@@ -175,7 +175,7 @@ async function logUsage(
       estimatedPoints: estimatePoints(model, totalTokens),
     });
   } catch (err) {
-    console.warn("[poe] logUsage failed:", (err as Error)?.message ?? err);
+    logger.warn({ err }, "[poe] logUsage failed");
   }
 }
 
@@ -340,7 +340,7 @@ export async function readZoneDiskByHash(
 
 async function writeZoneDisk(cacheKey: string, data: CachedZones): Promise<void> {
   if (!isValidZoneCacheKey(cacheKey)) {
-    console.warn(`[zones] Rejected write for invalid cacheKey: ${JSON.stringify(cacheKey)}`);
+    logger.warn({ cacheKey }, `[zones] Rejected write for invalid cacheKey: ${JSON.stringify(cacheKey)}`);
     return;
   }
   try {
@@ -350,7 +350,7 @@ async function writeZoneDisk(cacheKey: string, data: CachedZones): Promise<void>
     if (!resolved.startsWith(path.resolve(ZONE_CACHE_DIR) + path.sep)) return;
     await fsPromises.writeFile(resolved, JSON.stringify(data), "utf8");
   } catch (err) {
-    console.warn(`[zones] Failed to write disk cache for ${cacheKey}: ${(err as Error).message}`);
+    logger.warn({ err, cacheKey }, `[zones] Failed to write disk cache for ${cacheKey}: ${(err as Error).message}`);
   }
 }
 
@@ -965,7 +965,8 @@ async function runTiledClassify(opts: {
       } catch (err) {
         // Partial failure — return null so stitch() can fill this tile from
         // the depth-based heuristic without sinking the whole request.
-        console.warn(
+        logger.warn(
+          { err, tileIndex: i, tileRow: plan.tiles[i]?.tileRow, tileCol: plan.tiles[i]?.tileCol },
           `[poe/classify] tile ${i} (${plan.tiles[i]?.tileRow},${plan.tiles[i]?.tileCol}) failed: ${
             (err as Error)?.message ?? "unknown"
           }`,
@@ -1167,7 +1168,8 @@ router.post("/classify", asyncHandler(async (req, res) => {
         // If the *driver itself* explodes (not just per-tile failures —
         // those are absorbed inside runTiledClassify), drop through to the
         // single-tile/heuristic fallback below.
-        console.warn(
+        logger.warn(
+          { err },
           `[poe/classify] tiled path failed, falling back to single-tile: ${
             (err as Error)?.message ?? "unknown"
           }`,
@@ -1324,7 +1326,8 @@ router.post("/classify", asyncHandler(async (req, res) => {
     // over and be cached normally. We still ground covered cells in observed
     // substrate so the overlay matches surveyed reality where available.
     if (Array.isArray(depths32) && depths32.length === 1024) {
-      console.warn(
+      logger.warn(
+        { err },
         `[poe/classify] AI unavailable (${(err as Error)?.message ?? "unknown"}) — returning depth-based heuristic`,
       );
       const substrateZoneLabels = substrate.hasCoverage
@@ -1767,7 +1770,7 @@ function loadHelpContext(): string {
   if (helpContextCache !== null) return helpContextCache;
   const dir = resolveHelpDir();
   if (!dir) {
-    console.warn("[poe/help] Could not locate bathyscan/help/articles directory");
+    logger.warn("[poe/help] Could not locate bathyscan/help/articles directory");
     helpContextCache = "";
     return helpContextCache;
   }
@@ -1780,9 +1783,9 @@ function loadHelpContext(): string {
       chunks.push(`# Article: ${f}\n\n${stripped}`);
     }
     helpContextCache = chunks.join("\n\n---\n\n");
-    console.log(`[poe/help] Loaded ${files.length} help articles from ${dir}`);
+    logger.info({ articleCount: files.length, dir }, `[poe/help] Loaded ${files.length} help articles from ${dir}`);
   } catch (err) {
-    console.warn("[poe/help] Could not load help articles:", (err as Error).message);
+    logger.warn({ err }, "[poe/help] Could not load help articles");
     helpContextCache = "";
   }
   return helpContextCache;

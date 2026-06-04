@@ -18,6 +18,7 @@ import { fetchWeatherStations, NoaaUnavailableError } from "../lib/noaaWeatherFe
 import type { WeatherStation } from "../lib/noaaWeatherFetcher.js";
 import { LatLonQuerySchema } from "./schemas.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { logger } from "../lib/logger.js";
 
 const WeatherStationsQuerySchema = LatLonQuerySchema.extend({
   radiusMiles: z.coerce
@@ -46,14 +47,14 @@ router.get("/weather-stations", asyncHandler(async (req, res): Promise<void> => 
     res.json(result);
   } catch (err) {
     if (err instanceof NoaaUnavailableError) {
-      console.warn("[weather-stations] NOAA unavailable, no cached data:", (err as Error).message);
+      logger.warn({ err }, "[weather-stations] NOAA unavailable, no cached data");
       res.status(503).json({
         error: "noaa_unavailable",
         details: "NOAA weather data is currently unavailable and there is no cached data for this location. Please try again later.",
       });
       return;
     }
-    console.error("[weather-stations] Fetch failed:", (err as Error).message);
+    logger.error({ err }, "[weather-stations] Fetch failed");
     res.status(502).json({
       error: "upstream_error",
       details: "Could not fetch NOAA weather station data",

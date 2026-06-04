@@ -2,6 +2,7 @@ import { promises as fsPromises } from "fs";
 import path from "path";
 import { createHash } from "crypto";
 import { registerCache } from "./cacheRegistry.js";
+import { logger } from "./logger.js";
 
 /**
  * A flat land-elevation grid derived from Copernicus DEM 90 m data.
@@ -57,7 +58,7 @@ async function writeLandDiskCache(key: string, grid: LandGrid): Promise<void> {
     const file = path.join(LAND_CACHE_DIR, `${key}.json`);
     await fsPromises.writeFile(file, JSON.stringify(grid), "utf8");
   } catch (err) {
-    console.warn(`[land-dem] Failed to write disk cache for ${key}: ${(err as Error).message}`);
+    logger.warn({ err, key }, `[land-dem] Failed to write disk cache for ${key}: ${(err as Error).message}`);
   }
 }
 
@@ -226,16 +227,18 @@ export async function fetchCopernicusDem(
   let maxElevation: number;
 
   try {
-    console.info(
+    logger.info(
+      { bbox, gridSize },
       `[land-dem] Fetching Copernicus DEM 90 m for bbox (${bbox.minLon},${bbox.minLat})→(${bbox.maxLon},${bbox.maxLat}) at ${gridSize}×${gridSize}…`,
     );
     const result = await fetchLandElevationFromGebco(bbox, gridSize);
     elevation = result.elevation;
     minElevation = result.minElevation;
     maxElevation = result.maxElevation;
-    console.info(`[land-dem] Fetch complete — maxElev=${maxElevation.toFixed(1)} m`);
+    logger.info({ maxElevation }, `[land-dem] Fetch complete — maxElev=${maxElevation.toFixed(1)} m`);
   } catch (err) {
-    console.warn(
+    logger.warn(
+      { err },
       `[land-dem] Upstream fetch failed — falling back to flat plane: ${(err as Error).message}`,
     );
     elevation = new Array<number>(gridSize * gridSize).fill(0);

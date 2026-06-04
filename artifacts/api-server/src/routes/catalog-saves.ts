@@ -28,6 +28,7 @@
 import { Router } from "express";
 import { eq, and, lt } from "drizzle-orm";
 import { z } from "zod";
+import { logger } from "../lib/logger.js";
 import { CatalogSearchQuerySchema } from "./schemas.js";
 import { db, userCatalogSavesTable, customDatasetsTable, type StoredTerrainJson } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
@@ -89,12 +90,13 @@ async function recoverStuckSaves(): Promise<void> {
       )
       .returning({ id: userCatalogSavesTable.id });
     if (updated.length > 0) {
-      console.warn(
+      logger.warn(
+        { count: updated.length },
         `[catalog-saves] recoverStuckSaves: marked ${updated.length} stuck processing row(s) as failed`,
       );
     }
   } catch (err) {
-    console.warn(`[catalog-saves] recoverStuckSaves failed: ${(err as Error).message}`);
+    logger.warn({ err }, `[catalog-saves] recoverStuckSaves failed: ${(err as Error).message}`);
   }
 }
 void recoverStuckSaves();
@@ -379,7 +381,7 @@ export async function materializeSave(
         .where(eq(userCatalogSavesTable.id, saveId));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Materialization failed";
-      console.warn(`[catalog-saves] materialize ${saveId} (${entry.id}) failed: ${message}`);
+      logger.warn({ saveId, entryId: entry.id, message }, `[catalog-saves] materialize ${saveId} (${entry.id}) failed: ${message}`);
       await db
         .update(userCatalogSavesTable)
         .set({ status: "failed", errorMessage: message })
@@ -390,9 +392,9 @@ export async function materializeSave(
     // error handler failed). Make one unconditional last-ditch attempt to
     // surface a visible error state rather than leaving the row stuck in
     // "processing" indefinitely.
-    console.error(
-      `[catalog-saves] materialize ${saveId} outer-catch (status update may have failed):`,
-      outerErr,
+    logger.error(
+      { err: outerErr, saveId },
+      `[catalog-saves] materialize ${saveId} outer-catch (status update may have failed)`,
     );
     try {
       await db
@@ -587,23 +589,26 @@ export async function buildEfhHabitatCollection(
       );
       // If the live data yielded features for this species, use it.
       if (collection.features.length > 0) {
-        console.info(
+        logger.info(
+          { featureCount: collection.features.length, entryId: entry.id },
           `[efh] Using ${collection.features.length} real NOAA features for ${entry.id}.`,
         );
         return collection;
       }
-      console.info(
+      logger.info(
+        { entryId: entry.id },
         `[efh] Live NOAA data had 0 matching features for ${entry.id}; falling back to bundled data.`,
       );
     }
   } catch (err) {
-    console.warn(
+    logger.warn(
+      { err, entryId: entry.id },
       `[efh] Live NOAA fetch error for ${entry.id}: ${(err as Error).message}; falling back to bundled data.`,
     );
   }
 
   // --- Fallback: bundled hand-simplified SE Alaska polygons ---------------
-  console.info(`[efh] Building ${entry.id} from bundled EFH data.`);
+  logger.info({ entryId: entry.id }, `[efh] Building ${entry.id} from bundled EFH data.`);
   const features: EfhFeature[] = [];
   for (const region of Object.values(SALTWATER_EFH_BY_DATASET)) {
     for (const feature of region.features) {

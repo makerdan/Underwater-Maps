@@ -18,6 +18,7 @@ import { db, datasetCatalogTable, disabledPresetsTable } from "@workspace/db";
 import { inArray, notInArray, sql } from "drizzle-orm";
 import type { CatalogSearchQuery } from "../routes/schemas.js";
 import { ALL_PRESET_DATASETS, NCEI_DATASET_COVERAGES } from "./terrain.js";
+import { logger } from "./logger.js";
 
 export interface CatalogSeedEntry {
   id: string;
@@ -762,9 +763,7 @@ export async function seedDatasetCatalog(opts: { force?: boolean } = {}): Promis
       (purged as { rowCount?: number | null }).rowCount ?? 0,
     );
     if (purgedCount > 0) {
-      console.info(
-        `[catalog] Purged ${purgedCount} stale preset-* rows no longer in registry.`,
-      );
+      logger.info({ purgedCount }, `[catalog] Purged ${purgedCount} stale preset-* rows no longer in registry.`);
     }
 
     let retiredCount = 0;
@@ -776,9 +775,7 @@ export async function seedDatasetCatalog(opts: { force?: boolean } = {}): Promis
         (retired as unknown as { rowCount?: number | null }).rowCount ?? 0,
       );
       if (retiredCount > 0) {
-        console.info(
-          `[catalog] Purged ${retiredCount} retired non-preset row(s).`,
-        );
+        logger.info({ retiredCount }, `[catalog] Purged ${retiredCount} retired non-preset row(s).`);
       }
     }
 
@@ -813,9 +810,9 @@ export async function seedDatasetCatalog(opts: { force?: boolean } = {}): Promis
       });
 
     inMemoryCatalog = null;
-    console.info(`[catalog] Reconciled ${entries.length} catalog entries.`);
+    logger.info({ entryCount: entries.length }, `[catalog] Reconciled ${entries.length} catalog entries.`);
   } catch (err) {
-    console.warn(`[catalog] Seed failed (non-fatal): ${(err as Error).message}`);
+    logger.warn({ err }, `[catalog] Seed failed (non-fatal): ${(err as Error).message}`);
     seeded = false;
   }
 }

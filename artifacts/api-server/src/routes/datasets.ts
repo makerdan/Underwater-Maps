@@ -113,7 +113,7 @@ async function persistJobToDB(jobId: string, state: JobState): Promise<void> {
     // Persistence failure is non-fatal during processing — the in-memory state
     // is still the source of truth for the current server process.
     const errMsg = err instanceof Error ? err.message : String(err);
-    console.warn(`[upload-job] persist failed { jobId: "${jobId}", status: "${state.status}", error: ${JSON.stringify(errMsg)} }`);
+    logger.warn({ jobId, status: state.status, errMsg }, `[upload-job] persist failed { jobId: "${jobId}", status: "${state.status}", error: ${JSON.stringify(errMsg)} }`);
   }
 }
 
@@ -147,13 +147,14 @@ export async function recoverStaleUploadJobs(): Promise<void> {
       })
       .where(inArray(uploadJobsTable.id, ids));
 
-    console.info(
+    logger.info(
+      { count: ids.length },
       `[upload-jobs] marked ${ids.length} stale job(s) as error after restart`,
     );
   } catch (err) {
     // Non-fatal — the server continues; stale jobs will surface as 404 on poll
     // (still better than an eternal spinner) if the DB update fails.
-    console.error("[upload-jobs] failed to recover stale jobs on startup:", err);
+    logger.error({ err }, "[upload-jobs] failed to recover stale jobs on startup");
   }
 }
 
@@ -189,11 +190,11 @@ const uploadChunkMiddleware = multer({
 export async function cleanupStaleChunks(): Promise<void> {
   try {
     await fs.promises.rm(CHUNK_BASE_DIR, { recursive: true, force: true });
-    console.info("[upload-chunks] purged stale chunk directory on startup");
+    logger.info("[upload-chunks] purged stale chunk directory on startup");
   } catch (err) {
     // Non-fatal — worst case the orphaned files persist until the OS clears /tmp.
     const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[upload-chunks] could not purge chunk directory: ${msg}`);
+    logger.warn({ msg }, `[upload-chunks] could not purge chunk directory: ${msg}`);
   }
 }
 
@@ -203,7 +204,7 @@ async function cleanupChunks(uploadId: string, totalChunks: number): Promise<voi
     await fs.promises.unlink(p).catch((err: unknown) => {
       const code = (err as { code?: string })?.code ?? "UNKNOWN";
       if (code !== "ENOENT") {
-        console.warn(`[cleanup-chunks:${uploadId}] failed to unlink chunk ${i} (${p}): code=${code}`, err);
+        logger.warn({ uploadId, chunkIndex: i, path: p, code, err }, `[cleanup-chunks:${uploadId}] failed to unlink chunk ${i} (${p}): code=${code}`);
       }
     });
   }
@@ -582,7 +583,7 @@ async function processUploadJob(
     const msg = err instanceof Error ? err.message : "Processing failed";
     job.status = "error";
     job.error = msg;
-    console.error(`[chunk-job:${jobId}] failed:`, err);
+    logger.error({ err, jobId }, `[chunk-job:${jobId}] failed`);
     // Persist the error state so polls return a clear failure instead of a
     // stale "processing" status. The in-memory state is already "error" above,
     // so subsequent polls on this process will be correct even if the DB write
@@ -710,7 +711,7 @@ async function getSmoothingPreference(req: import("express").Request): Promise<b
     return typeof value === "boolean" ? value : true;
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    console.warn(`[getSmoothingPreference] DB lookup failed for userId="${userId}", defaulting to true: ${errMsg}`);
+    logger.warn({ userId, errMsg }, `[getSmoothingPreference] DB lookup failed for userId="${userId}", defaulting to true: ${errMsg}`);
     return true;
   }
 }
@@ -1424,15 +1425,16 @@ router.post(
       };
     } else {
       saveError = "Database insert returned no row";
-      console.warn(
+      logger.warn(
+        { userId: effectiveUserId, datasetName },
         `[datasets/upload] authenticated upload returned without savedDatasetId (userId=${effectiveUserId}, name=${datasetName})`,
       );
     }
   } catch (err) {
     saveError = err instanceof Error ? err.message : "Failed to save upload to account";
-    console.error(
-      `[datasets/upload] failed to persist authenticated upload (userId=${effectiveUserId}, name=${datasetName}):`,
-      err,
+    logger.error(
+      { err, userId: effectiveUserId, datasetName },
+      `[datasets/upload] failed to persist authenticated upload (userId=${effectiveUserId}, name=${datasetName})`,
     );
   }
 

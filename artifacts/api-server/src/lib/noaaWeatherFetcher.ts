@@ -18,6 +18,7 @@
 import { registerCache } from "./cacheRegistry.js";
 import { db, weatherStationCacheTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { logger } from "./logger.js";
 
 const NOAA_API_BASE = "https://api.weather.gov";
 const FETCH_TIMEOUT_MS = 12_000;
@@ -148,10 +149,10 @@ async function fetchNearbyStations(
       if (res.status === 400) {
         // NOAA returns 400 for coordinates outside its coverage area (e.g. Alaska,
         // US territories, open ocean). This is expected — not a server error.
-        console.info(`[noaaWeatherFetcher] NOAA stations 400 (no coverage) for point=${lat.toFixed(4)},${lon.toFixed(4)}`);
+        logger.info({ lat, lon, status: res.status }, `[noaaWeatherFetcher] NOAA stations 400 (no coverage) for point=${lat.toFixed(4)},${lon.toFixed(4)}`);
         return [];
       }
-      console.error(`[noaaWeatherFetcher] NOAA stations HTTP ${res.status} for point=${lat.toFixed(4)},${lon.toFixed(4)}`);
+      logger.error({ lat, lon, status: res.status }, `[noaaWeatherFetcher] NOAA stations HTTP ${res.status} for point=${lat.toFixed(4)},${lon.toFixed(4)}`);
       return null;
     }
     const json = (await res.json()) as { features?: RawStation[] };
@@ -168,7 +169,7 @@ async function fetchNearbyStations(
         };
       });
   } catch (err) {
-    console.error(`[noaaWeatherFetcher] NOAA stations fetch error for point=${lat.toFixed(4)},${lon.toFixed(4)}:`, (err as Error).message);
+    logger.error({ err, lat, lon }, `[noaaWeatherFetcher] NOAA stations fetch error for point=${lat.toFixed(4)},${lon.toFixed(4)}`);
     return null;
   }
 }
@@ -295,7 +296,7 @@ async function persistToDb(key: string, result: WeatherStationsResult): Promise<
         },
       });
   } catch (err) {
-    console.warn("[noaa-weather] Failed to persist to DB:", (err as Error).message);
+    logger.warn({ err }, "[noaa-weather] Failed to persist to DB");
   }
 }
 
@@ -313,7 +314,7 @@ async function loadFromDb(key: string): Promise<WeatherStationsResult | null> {
     if (ageMs > DB_STALE_FALLBACK_MS) return null;
     return row.result as unknown as WeatherStationsResult;
   } catch (err) {
-    console.warn("[noaa-weather] Failed to load from DB:", (err as Error).message);
+    logger.warn({ err }, "[noaa-weather] Failed to load from DB");
     return null;
   }
 }
@@ -406,7 +407,8 @@ export async function fetchWeatherStations(
       void persistToDb(key, result);
     }
 
-    console.info(
+    logger.info(
+      { stationCount: stations.length, lat, lon, stateCode },
       `[noaa-weather] Fetched ${stations.length} stations near ${lat.toFixed(3)},${lon.toFixed(3)} ` +
       `(state=${stateCode ?? "unknown"})`,
     );
@@ -414,14 +416,13 @@ export async function fetchWeatherStations(
     return result;
   } catch (err) {
     // 3. NOAA failed — try DB fallback (up to 1 hour old)
-    console.warn(
+    logger.warn(
+      { err },
       `[noaa-weather] Live fetch failed (${(err as Error).message}), trying DB fallback`,
     );
     const dbResult = await loadFromDb(key);
     if (dbResult) {
-      console.info(
-        `[noaa-weather] Serving stale DB cache for ${key}`,
-      );
+      logger.info({ key }, `[noaa-weather] Serving stale DB cache for ${key}`);
       const staleResult: WeatherStationsResult = { ...dbResult, stale: true };
       // Warm the in-memory cache too so concurrent requests don't all hit the DB
       cache.set(key, { result: staleResult, fetchedAt: Date.now() - CACHE_TTL_MS + 60_000 });
