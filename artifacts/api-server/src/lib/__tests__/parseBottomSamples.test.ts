@@ -172,6 +172,22 @@ describe("normaliseSubstrate — phi-scale grain-size values", () => {
   it("verbal keyword still matches when no phi value present", () => {
     expect(normaliseSubstrate("SAND FIRM")).toBe("sand");
   });
+
+  it("decimal phi with PHI suffix — 2.5 PHI → sand", () => {
+    expect(normaliseSubstrate("2.5 PHI")).toBe("sand");
+  });
+
+  it("decimal phi with PHI suffix — 4.5 PHI → mud", () => {
+    expect(normaliseSubstrate("4.5 PHI")).toBe("mud");
+  });
+
+  it("decimal phi with PHI suffix — -1.5 PHI → gravel", () => {
+    expect(normaliseSubstrate("-1.5 PHI")).toBe("gravel");
+  });
+
+  it("bare decimal is treated as a phi value — 2.5 → sand", () => {
+    expect(normaliseSubstrate("2.5")).toBe("sand");
+  });
 });
 
 // ---------------------------------------------------------------------------
