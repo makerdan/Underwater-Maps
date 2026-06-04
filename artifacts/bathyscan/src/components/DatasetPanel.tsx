@@ -69,6 +69,30 @@ import type { TerrainData } from "@workspace/api-client-react";
 // a hook deps entry.
 const AUTO_RETRY_DELAYS_MS = [500, 1500];
 
+/**
+ * Build a human-readable import summary for an archive upload result.
+ *
+ * Distinguishes three cases so the user always understands what was captured:
+ *   - substrate-only  → "Imported 47 substrate annotations"
+ *   - sounding-only   → "Imported 12,340 depth soundings"
+ *   - mixed           → "Imported 12,340 depth soundings · 47 substrate annotations"
+ *   - unknown (no count data, e.g. non-archive file) → generic fallback
+ */
+function buildImportDescription(soundingCount?: number, substrateCount?: number): string {
+  const hasSoundings = typeof soundingCount === "number" && soundingCount > 0;
+  const hasSubstrate = typeof substrateCount === "number" && substrateCount > 0;
+  if (hasSoundings && hasSubstrate) {
+    return `Imported ${soundingCount.toLocaleString()} depth soundings · ${substrateCount.toLocaleString()} substrate annotations`;
+  }
+  if (hasSoundings) {
+    return `Imported ${soundingCount.toLocaleString()} depth soundings`;
+  }
+  if (hasSubstrate) {
+    return `Imported ${substrateCount.toLocaleString()} substrate annotations`;
+  }
+  return "Your file has finished processing";
+}
+
 // Stable empty-array fallback used by the bookmarks selector so that
 // getSnapshot always returns the same reference when there are no bookmarks.
 // A new [] literal inside the selector would cause React 18 Concurrent Mode
@@ -1141,7 +1165,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       void fetch(`/api/datasets/upload/gcs-job-status?objectKey=${encodeURIComponent(objectKey)}`, {
         headers: authHeader,
       })
-        .then((r) => r.json() as Promise<{ status: string; datasetId?: string; error?: string; skippedCount?: number; skippedFormats?: string[] }>)
+        .then((r) => r.json() as Promise<{ status: string; datasetId?: string; error?: string; skippedCount?: number; skippedFormats?: string[]; soundingCount?: number; substrateCount?: number }>)
         .then((job) => {
           if (job.status === "done" && job.datasetId) {
             clearInterval(pollIntervalId);
@@ -1170,7 +1194,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
             toast({
               title: `Dataset ready: ${displayName}`,
-              description: `Your file has finished processing.${skippedNote}`,
+              description: `${buildImportDescription(job.soundingCount, job.substrateCount)}${skippedNote}`,
               action: (
                 <ToastAction altText="Load dataset now" onClick={triggerLoad}>
                   Load now
@@ -1247,7 +1271,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       void fetch(`/api/datasets/upload/jobs/${encodeURIComponent(chunkedJobId)}`, {
         credentials: "include",
       })
-        .then((r) => r.json() as Promise<{ status: string; progress: number; error?: string; datasetId?: string; skippedCount?: number; skippedFormats?: string[] }>)
+        .then((r) => r.json() as Promise<{ status: string; progress: number; error?: string; datasetId?: string; skippedCount?: number; skippedFormats?: string[]; soundingCount?: number; substrateCount?: number }>)
         .then((job) => {
           if (stopped) return;
           if (typeof job.progress === "number") {
@@ -1281,7 +1305,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
             toast({
               title: `Dataset ready: ${displayName}`,
-              description: `Your file has finished processing.${skippedNote}`,
+              description: `${buildImportDescription(job.soundingCount, job.substrateCount)}${skippedNote}`,
               action: (
                 <ToastAction altText="Load dataset now" onClick={triggerLoad}>
                   Load now

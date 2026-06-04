@@ -75,6 +75,10 @@ interface JobState {
   skippedCount?: number;
   /** Unique file extensions of skipped entries, e.g. [".sid.gz", ".pdf"]. */
   skippedFormats?: string[];
+  /** Raw sounding points extracted from the archive (0 for substrate-only). */
+  soundingCount?: number;
+  /** Substrate annotation points extracted from the archive. */
+  substrateCount?: number;
 }
 const uploadJobs = new Map<string, JobState>();
 registerCache(() => uploadJobs.clear());
@@ -472,6 +476,12 @@ async function processUploadJob(
             }),
           )];
         }
+
+        // Record sounding and substrate counts so the client can display a
+        // meaningful import summary (e.g. "47 substrate annotations" for a
+        // substrate-only archive instead of a confusing "0 soundings").
+        job.soundingCount = tarPoints.length;
+        job.substrateCount = tarSubstratePoints.length;
 
         // Guard: at least one of sounding points, substrate annotations, or a
         // captured smooth-sheet raster must be present.  Substrate-only archives
@@ -1716,6 +1726,8 @@ router.get(
       ...(job.error !== undefined ? { error: job.error } : {}),
       ...(job.skippedCount !== undefined ? { skippedCount: job.skippedCount } : {}),
       ...(job.skippedFormats !== undefined ? { skippedFormats: job.skippedFormats } : {}),
+      ...(job.soundingCount !== undefined ? { soundingCount: job.soundingCount } : {}),
+      ...(job.substrateCount !== undefined ? { substrateCount: job.substrateCount } : {}),
     });
   }),
 );
@@ -1748,6 +1760,8 @@ router.get(
         ...(memJob.datasetId !== undefined ? { datasetId: memJob.datasetId } : {}),
         ...(memJob.skippedCount !== undefined ? { skippedCount: memJob.skippedCount } : {}),
         ...(memJob.skippedFormats !== undefined ? { skippedFormats: memJob.skippedFormats } : {}),
+        ...(memJob.soundingCount !== undefined ? { soundingCount: memJob.soundingCount } : {}),
+        ...(memJob.substrateCount !== undefined ? { substrateCount: memJob.substrateCount } : {}),
       });
       return;
     }

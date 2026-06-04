@@ -98,6 +98,10 @@ export interface BucketJob {
   skippedCount?: number;
   /** Unique file extensions of skipped entries, e.g. [".sid.gz", ".pdf"]. */
   skippedFormats?: string[];
+  /** Raw sounding points extracted from the archive (0 for substrate-only). */
+  soundingCount?: number;
+  /** Substrate annotation points extracted from the archive. */
+  substrateCount?: number;
 }
 
 const activeJobs = new Map<string, BucketJob>();
@@ -236,7 +240,7 @@ export async function processObject(bucketName: string, objectKey: string): Prom
       // NOAA smooth-sheet archives: .tar.gz (tar wrapped in gzip).
       // Extract all entries and route each to its parser via the NOAA tar router.
       const entries = await extractTarFile(processPath, tarExtractedDir);
-      const { points: tarPoints, skipped: tarSkipped } = await routeTarEntries(
+      const { points: tarPoints, substratePoints: tarSubstratePoints, skipped: tarSkipped } = await routeTarEntries(
         tarExtractedDir,
         entries,
         baseName,
@@ -261,6 +265,10 @@ export async function processObject(bucketName: string, objectKey: string): Prom
           }),
         )];
       }
+
+      // Record sounding and substrate counts for meaningful import summary.
+      job.soundingCount = tarPoints.length;
+      job.substrateCount = tarSubstratePoints.length;
 
       points = tarPoints;
     } else if (TEXT_EXTENSIONS.has(ext)) {
