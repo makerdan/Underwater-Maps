@@ -10,6 +10,12 @@
  * substrate slice contains no SE Alaska features (e.g. TX reservoirs) receive
  * an empty FeatureCollection rather than nonsensical freshwater scores.
  *
+ * Auth rules (mirrors the substrate route pattern):
+ *  - Preset/catalog dataset IDs → public, no auth required.
+ *  - UUID-format (custom) dataset IDs → require auth + ownership check.
+ *    Non-owner / non-existent custom datasets return 404 (not 403) to avoid
+ *    confirming existence to unauthenticated or cross-user callers.
+ *
  * Query params:
  *   type     — "tidepool" | "beachcombing" | "both" (default: "both")
  *   minScore — integer 0–100, inclusive filter (default: 0)
@@ -22,6 +28,10 @@
 
 import { Router } from "express";
 import { z } from "zod";
+import { eq, and } from "drizzle-orm";
+import { getAuth } from "@clerk/express";
+import { db, customDatasetsTable } from "@workspace/db";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { ALL_PRESET_DATASETS } from "../lib/terrain.js";
 import {
   getSubstrateForDataset,
@@ -51,6 +61,10 @@ const SE_ALASKA_SOURCES = new Set<SubstrateSource>([
   "aoos-intertidal-pow",
 ]);
 
+// UUID pattern for custom (user-uploaded) dataset IDs.
+const CUSTOM_DATASET_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function featureToScoringProps(f: ShoreZoneFeature): IntertidalScoringProps {
   const p = f.properties;
   return {
@@ -73,40 +87,37 @@ function featureToScoringProps(f: ShoreZoneFeature): IntertidalScoringProps {
 }
 
 /**
- * GET /intertidal-spots/:id
- *
- * Responds 404 for unknown dataset ids. For SE Alaska datasets returns a
- * scored FeatureCollection sorted by dominant score. Non-SE-Alaska datasets
- * (freshwater Texas reservoirs, etc.) receive an empty FeatureCollection.
+ * Shared scoring + response logic — converts a substrate slice into a scored
+ * intertidal FeatureCollection and writes the JSON response.
  */
-router.get("/intertidal-spots/:id", (req, res) => {
-  const datasetId = req.params["id"]!;
-  const meta = ALL_PRESET_DATASETS.find((d) => d.id === datasetId);
-  if (!meta) {
-    res.status(404).json({ error: "not_found", details: `Dataset '${datasetId}' not found` });
-    return;
-  }
+function buildAndSendResponse(
+  res: Parameters<Parameters<typeof router.get>[1]>[1],
+  datasetId: string,
+  slice: ReturnType<typeof getSubstrateForDataset>,
+  typeParam: "tidepool" | "beachcombing" | "both",
+  minScore: number,
+): void {
+  const seAlaskaFeatures = slice.features.filter((f) => SE_ALASKA_SOURCES.has(f.properties.source));
 
-  const queryParsed = IntertidalSpotsQuerySchema.safeParse(req.query);
-  if (!queryParsed.success) {
-    res.status(400).json({
-      error: "invalid_params",
-      details: queryParsed.error.issues.map((i) => i.message).join("; "),
+  if (seAlaskaFeatures.length === 0) {
+    res.json({
+      type: "FeatureCollection",
+      features: [],
+      metadata: {
+        datasetId,
+        type: typeParam,
+        minScore,
+        featureCount: 0,
+        sources: slice.sources,
+        sourceCredit:
+          "Alaska ShoreZone (NOAA AKR / ADF&G) and AOOS Alaska Coastal Habitats — both public domain.",
+      },
     });
     return;
   }
-  const typeParam = queryParsed.data.type;
-  const minScore = queryParsed.data.minScore;
-
-  const slice = getSubstrateForDataset(datasetId, meta.bbox);
-
-  // Only include SE Alaska intertidal features — exclude freshwater / non-intertidal sources.
-  const seAlaskaFeatures = slice.features.filter((f) => SE_ALASKA_SOURCES.has(f.properties.source));
 
   const scored = seAlaskaFeatures.map((f) => {
     const props = featureToScoringProps(f);
-    // Use pre-computed scores when available (applied at module load by applyScoresInPlace);
-    // fall back to on-demand scoring for features that arrived without pre-scoring.
     const tidepoolScore = f.properties.tidepoolScore ?? scoreTidepool(props);
     const beachcombingScore = f.properties.beachcombingScore ?? scoreBeachcombing(props);
     return { f, tidepoolScore, beachcombingScore, props };
@@ -153,6 +164,80 @@ router.get("/intertidal-spots/:id", (req, res) => {
         "Alaska ShoreZone (NOAA AKR / ADF&G) and AOOS Alaska Coastal Habitats — both public domain.",
     },
   });
-});
+}
+
+/**
+ * GET /intertidal-spots/:id
+ *
+ * UUID-format dataset IDs require auth + ownership. Preset IDs are public.
+ * For SE Alaska datasets returns a scored FeatureCollection sorted by
+ * dominant score. Non-SE-Alaska datasets receive an empty FeatureCollection
+ * (HTTP 200, no error) since there is simply no intertidal coverage there.
+ */
+router.get("/intertidal-spots/:id", asyncHandler(async (req, res) => {
+  const datasetId = req.params["id"]!;
+
+  // ── UUID / custom-upload path ─────────────────────────────────────────────
+  if (CUSTOM_DATASET_UUID_RE.test(datasetId) && !ALL_PRESET_DATASETS.some((d) => d.id === datasetId)) {
+    const callerId = getAuth(req)?.userId ?? null;
+    if (!callerId) {
+      res.status(401).json({ error: "unauthenticated", details: "Authentication required" });
+      return;
+    }
+
+    const [ownRow] = await db
+      .select({
+        userId:      customDatasetsTable.userId,
+        terrainJson: customDatasetsTable.terrainJson,
+      })
+      .from(customDatasetsTable)
+      .where(and(eq(customDatasetsTable.id, datasetId), eq(customDatasetsTable.userId, callerId)));
+
+    if (!ownRow) {
+      res.status(404).json({ error: "not_found", details: `Dataset '${datasetId}' not found` });
+      return;
+    }
+
+    const queryParsed = IntertidalSpotsQuerySchema.safeParse(req.query);
+    if (!queryParsed.success) {
+      res.status(400).json({
+        error: "invalid_params",
+        details: queryParsed.error.issues.map((i) => i.message).join("; "),
+      });
+      return;
+    }
+
+    const tj = ownRow.terrainJson;
+    const customBbox = {
+      minLon: tj.minLon,
+      minLat: tj.minLat,
+      maxLon: tj.maxLon,
+      maxLat: tj.maxLat,
+    };
+
+    const slice = getSubstrateForDataset(datasetId, customBbox);
+    buildAndSendResponse(res, datasetId, slice, queryParsed.data.type, queryParsed.data.minScore);
+    return;
+  }
+
+  // ── Preset dataset path ───────────────────────────────────────────────────
+  const meta = ALL_PRESET_DATASETS.find((d) => d.id === datasetId);
+  if (!meta) {
+    res.status(404).json({ error: "not_found", details: `Dataset '${datasetId}' not found` });
+    return;
+  }
+
+  const queryParsed = IntertidalSpotsQuerySchema.safeParse(req.query);
+  if (!queryParsed.success) {
+    res.status(400).json({
+      error: "invalid_params",
+      details: queryParsed.error.issues.map((i) => i.message).join("; "),
+    });
+    return;
+  }
+
+  const slice = getSubstrateForDataset(datasetId, meta.bbox);
+  buildAndSendResponse(res, datasetId, slice, queryParsed.data.type, queryParsed.data.minScore);
+}));
 
 export default router;
