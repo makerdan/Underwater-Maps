@@ -13,7 +13,7 @@ import {
   PatchTrollingPresetFoldersIdBody,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
-import { logger } from "../lib/logger.js";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 
 const router = Router();
 
@@ -33,16 +33,16 @@ function trimName(raw: unknown): string | null {
   return t;
 }
 
-router.get("/trolling-preset-folders", requireAuth, async (req, res): Promise<void> => {
+router.get("/trolling-preset-folders", requireAuth, asyncHandler(async (req, res) => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const rows = await db
     .select()
     .from(trollingPresetFoldersTable)
     .where(eq(trollingPresetFoldersTable.userId, userId));
   res.json(rows.map(folderToJson));
-});
+}));
 
-router.post("/trolling-preset-folders", requireAuth, async (req, res): Promise<void> => {
+router.post("/trolling-preset-folders", requireAuth, asyncHandler(async (req, res) => {
   const parsed = PostTrollingPresetFoldersBody.safeParse(req.body ?? {});
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: parsed.error.message });
@@ -66,23 +66,18 @@ router.post("/trolling-preset-folders", requireAuth, async (req, res): Promise<v
     return;
   }
 
-  try {
-    const [created] = await db
-      .insert(trollingPresetFoldersTable)
-      .values({ userId, name })
-      .returning();
-    if (!created) {
-      res.status(500).json({ error: "db_error", details: "Could not create folder" });
-      return;
-    }
-    res.status(201).json(folderToJson(created));
-  } catch (err) {
-    logger.error({ err }, "[trolling-preset-folders] create failed");
+  const [created] = await db
+    .insert(trollingPresetFoldersTable)
+    .values({ userId, name })
+    .returning();
+  if (!created) {
     res.status(500).json({ error: "db_error", details: "Could not create folder" });
+    return;
   }
-});
+  res.status(201).json(folderToJson(created));
+}));
 
-router.patch("/trolling-preset-folders/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/trolling-preset-folders/:id", requireAuth, asyncHandler(async (req, res) => {
   const parsed = PatchTrollingPresetFoldersIdBody.safeParse(req.body ?? {});
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: parsed.error.message });
@@ -127,9 +122,9 @@ router.patch("/trolling-preset-folders/:id", requireAuth, async (req, res): Prom
     return;
   }
   res.json(folderToJson(updated));
-});
+}));
 
-router.delete("/trolling-preset-folders/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/trolling-preset-folders/:id", requireAuth, asyncHandler(async (req, res) => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
   // FK onDelete:set null in the trolling_presets table moves any presets in
@@ -148,6 +143,6 @@ router.delete("/trolling-preset-folders/:id", requireAuth, async (req, res): Pro
     return;
   }
   res.status(204).send();
-});
+}));
 
 export default router;

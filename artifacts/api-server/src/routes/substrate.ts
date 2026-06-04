@@ -39,6 +39,7 @@
  */
 
 import { Router } from "express";
+import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
@@ -195,7 +196,7 @@ const CUSTOM_DATASET_UUID_RE =
  *    Non-owner / non-existent custom datasets return 404 (not 403) to avoid
  *    confirming existence to unauthenticated or cross-user callers.
  */
-router.get("/substrate/:id", async (req, res) => {
+router.get("/substrate/:id", asyncHandler(async (req, res) => {
   const paramParsed = DatasetIdParamSchema.safeParse(req.params);
   if (!paramParsed.success) {
     res.status(400).json({
@@ -413,6 +414,6 @@ router.get("/substrate/:id", async (req, res) => {
     features: slice.features,
     metadata: baseMetadata,
   });
-});
+}));
 
 export default router;
