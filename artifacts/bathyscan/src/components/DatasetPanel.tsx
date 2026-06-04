@@ -20,6 +20,8 @@ import {
   getGetMarkersQueryKey,
   usePostDatasetsUpload,
   getGetSubstrateQueryKey,
+  getAuthToken,
+  hasAuthTokenGetter,
 } from "@workspace/api-client-react";
 import type { DatasetMeta, UserDatasetMeta } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
@@ -1063,14 +1065,28 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     setGcsUploadProgress(0);
     setGcsError(null);
 
+    // Resolve the auth token before making any authenticated requests.
+    // getAuthToken() reads the same getter wired by ClerkAuthTokenWirer so it
+    // always reflects the current session without needing a React hook.
+    const authToken = await getAuthToken();
+    if (!authToken && hasAuthTokenGetter()) {
+      // A getter is registered (i.e. we are in a real auth context) but it
+      // returned no token — the session has probably expired.
+      setGcsPhase("error");
+      setGcsError("Authentication required. Please sign in and try again.");
+      return;
+    }
+    const authHeader: Record<string, string> = authToken
+      ? { Authorization: `Bearer ${authToken}` }
+      : {};
+
     // Step 1: get presigned URL
     let uploadUrl: string;
     let objectKey: string;
     try {
       const resp = await fetch("/api/datasets/upload/request-gcs-url", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        headers: { "Content-Type": "application/json", ...authHeader },
         body: JSON.stringify({ fileName: file.name }),
       });
       if (!resp.ok) {
@@ -1123,7 +1139,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     // upload finishes concurrently.
     const pollIntervalId = setInterval(() => {
       void fetch(`/api/datasets/upload/gcs-job-status?objectKey=${encodeURIComponent(objectKey)}`, {
-        credentials: "include",
+        headers: authHeader,
       })
         .then((r) => r.json() as Promise<{ status: string; datasetId?: string; error?: string; skippedCount?: number; skippedFormats?: string[] }>)
         .then((job) => {

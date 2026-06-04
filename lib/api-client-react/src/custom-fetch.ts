@@ -44,6 +44,30 @@ export function setAuthTokenGetter(getter: AuthTokenGetter | null): void {
   _authTokenGetter = getter;
 }
 
+/**
+ * Invoke the currently-registered auth token getter and return the token, or
+ * `null` if no getter has been registered or the getter returns a nullish value.
+ *
+ * Intended for use outside the axios layer (e.g. bare `fetch` calls that need
+ * an `Authorization: Bearer <token>` header but can't go through `customFetch`).
+ */
+export async function getAuthToken(): Promise<string | null> {
+  if (!_authTokenGetter) return null;
+  const token = await _authTokenGetter();
+  return token ?? null;
+}
+
+/**
+ * Returns `true` if an auth token getter is currently registered.
+ *
+ * Useful for distinguishing "no getter installed (test/dev)" from "getter
+ * installed but returned null (session expired)" so callers can surface a
+ * meaningful error only in the latter case.
+ */
+export function hasAuthTokenGetter(): boolean {
+  return _authTokenGetter !== null;
+}
+
 function isRequest(input: RequestInfo | URL): input is Request {
   return typeof Request !== "undefined" && input instanceof Request;
 }
