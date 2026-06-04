@@ -982,19 +982,7 @@ export const GetSettingsResponse = zod.object({
   "hex": zod.string().regex(getSettingsResponseCustomStopsItemHexRegExp)
 })).min(getSettingsResponseCustomStopsMin).default(getSettingsResponseCustomStopsDefault).describe('Ordered colour stops for the user\'s Custom depth palette (min 2). Positions are normalised to [0, 1] along the depth axis.'),
   "bandColors": zod.array(zod.string().regex(getSettingsResponseBandColorsItemRegExp)).min(getSettingsResponseBandColorsMin).max(getSettingsResponseBandColorsMax).default(getSettingsResponseBandColorsDefault).describe('Per-band hex colours for the Ocean theme. Exactly 10 entries, one per depth band lower boundary (0, 50, 100, 150, 200, 250, 300, 350, 450, 600 ft). Persisted server-side so the palette is consistent across devices.'),
-  "bandBoundaries": zod.array(zod.number().min(getSettingsResponseBandBoundariesItemMin).max(getSettingsResponseBandBoundariesItemMax)).min(getSettingsResponseBandBoundariesMin).max(getSettingsResponseBandBoundariesMax).default(getSettingsResponseBandBoundariesDefault).describe('Depth band boundaries in feet. Exactly 11 integers, strictly increasing, first must be 0, last must be 2000. The 9 interior values are user-editable. Persisted server-side so customised boundaries survive across devices.').superRefine((arr, ctx) => {
-  if (arr[0] !== 0) {
-    ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries first element must be 0", path: [0] });
-  }
-  if (arr[arr.length - 1] !== 2000) {
-    ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries last element must be 2000", path: [arr.length - 1] });
-  }
-  for (let i = 1; i < arr.length; i++) {
-    if (arr[i]! <= arr[i - 1]!) {
-      ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries must be strictly increasing", path: [i] });
-    }
-  }
-}),
+  "bandBoundaries": zod.array(zod.number().min(getSettingsResponseBandBoundariesItemMin).max(getSettingsResponseBandBoundariesItemMax)).min(getSettingsResponseBandBoundariesMin).max(getSettingsResponseBandBoundariesMax).default(getSettingsResponseBandBoundariesDefault).describe('Depth band boundaries in feet. Exactly 11 integers, strictly increasing, first must be 0, last must be 2000. The 9 interior values are user-editable. Persisted server-side so customised boundaries survive across devices.'),
   "lampIntensity": zod.number().min(getSettingsResponseLampIntensityMin).max(getSettingsResponseLampIntensityMax).default(getSettingsResponseLampIntensityDefault),
   "defaultSpeedTier": zod.number().min(getSettingsResponseDefaultSpeedTierMin).max(getSettingsResponseDefaultSpeedTierMax).int().default(getSettingsResponseDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(getSettingsResponseInvertMouseYDefault),
@@ -1178,19 +1166,7 @@ export const PutSettingsBody = zod.object({
   "hex": zod.string().regex(putSettingsBodyCustomStopsItemHexRegExp)
 })).min(putSettingsBodyCustomStopsMin).default(putSettingsBodyCustomStopsDefault).describe('Ordered colour stops for the user\'s Custom depth palette (min 2). Positions are normalised to [0, 1] along the depth axis.'),
   "bandColors": zod.array(zod.string().regex(putSettingsBodyBandColorsItemRegExp)).min(putSettingsBodyBandColorsMin).max(putSettingsBodyBandColorsMax).default(putSettingsBodyBandColorsDefault).describe('Per-band hex colours for the Ocean theme. Exactly 10 entries, one per depth band lower boundary (0, 50, 100, 150, 200, 250, 300, 350, 450, 600 ft). Persisted server-side so the palette is consistent across devices.'),
-  "bandBoundaries": zod.array(zod.number().min(putSettingsBodyBandBoundariesItemMin).max(putSettingsBodyBandBoundariesItemMax)).min(putSettingsBodyBandBoundariesMin).max(putSettingsBodyBandBoundariesMax).default(putSettingsBodyBandBoundariesDefault).describe('Depth band boundaries in feet. Exactly 11 integers, strictly increasing, first must be 0, last must be 2000. The 9 interior values are user-editable. Persisted server-side so customised boundaries survive across devices.').superRefine((arr, ctx) => {
-  if (arr[0] !== 0) {
-    ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries first element must be 0", path: [0] });
-  }
-  if (arr[arr.length - 1] !== 2000) {
-    ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries last element must be 2000", path: [arr.length - 1] });
-  }
-  for (let i = 1; i < arr.length; i++) {
-    if (arr[i]! <= arr[i - 1]!) {
-      ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries must be strictly increasing", path: [i] });
-    }
-  }
-}),
+  "bandBoundaries": zod.array(zod.number().min(putSettingsBodyBandBoundariesItemMin).max(putSettingsBodyBandBoundariesItemMax)).min(putSettingsBodyBandBoundariesMin).max(putSettingsBodyBandBoundariesMax).default(putSettingsBodyBandBoundariesDefault).describe('Depth band boundaries in feet. Exactly 11 integers, strictly increasing, first must be 0, last must be 2000. The 9 interior values are user-editable. Persisted server-side so customised boundaries survive across devices.'),
   "lampIntensity": zod.number().min(putSettingsBodyLampIntensityMin).max(putSettingsBodyLampIntensityMax).default(putSettingsBodyLampIntensityDefault),
   "defaultSpeedTier": zod.number().min(putSettingsBodyDefaultSpeedTierMin).max(putSettingsBodyDefaultSpeedTierMax).int().default(putSettingsBodyDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(putSettingsBodyInvertMouseYDefault),
@@ -1369,19 +1345,7 @@ export const PutSettingsResponse = zod.object({
   "hex": zod.string().regex(putSettingsResponseCustomStopsItemHexRegExp)
 })).min(putSettingsResponseCustomStopsMin).default(putSettingsResponseCustomStopsDefault).describe('Ordered colour stops for the user\'s Custom depth palette (min 2). Positions are normalised to [0, 1] along the depth axis.'),
   "bandColors": zod.array(zod.string().regex(putSettingsResponseBandColorsItemRegExp)).min(putSettingsResponseBandColorsMin).max(putSettingsResponseBandColorsMax).default(putSettingsResponseBandColorsDefault).describe('Per-band hex colours for the Ocean theme. Exactly 10 entries, one per depth band lower boundary (0, 50, 100, 150, 200, 250, 300, 350, 450, 600 ft). Persisted server-side so the palette is consistent across devices.'),
-  "bandBoundaries": zod.array(zod.number().min(putSettingsResponseBandBoundariesItemMin).max(putSettingsResponseBandBoundariesItemMax)).min(putSettingsResponseBandBoundariesMin).max(putSettingsResponseBandBoundariesMax).default(putSettingsResponseBandBoundariesDefault).describe('Depth band boundaries in feet. Exactly 11 integers, strictly increasing, first must be 0, last must be 2000. The 9 interior values are user-editable. Persisted server-side so customised boundaries survive across devices.').superRefine((arr, ctx) => {
-  if (arr[0] !== 0) {
-    ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries first element must be 0", path: [0] });
-  }
-  if (arr[arr.length - 1] !== 2000) {
-    ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries last element must be 2000", path: [arr.length - 1] });
-  }
-  for (let i = 1; i < arr.length; i++) {
-    if (arr[i]! <= arr[i - 1]!) {
-      ctx.addIssue({ code: zod.ZodIssueCode.custom, message: "bandBoundaries must be strictly increasing", path: [i] });
-    }
-  }
-}),
+  "bandBoundaries": zod.array(zod.number().min(putSettingsResponseBandBoundariesItemMin).max(putSettingsResponseBandBoundariesItemMax)).min(putSettingsResponseBandBoundariesMin).max(putSettingsResponseBandBoundariesMax).default(putSettingsResponseBandBoundariesDefault).describe('Depth band boundaries in feet. Exactly 11 integers, strictly increasing, first must be 0, last must be 2000. The 9 interior values are user-editable. Persisted server-side so customised boundaries survive across devices.'),
   "lampIntensity": zod.number().min(putSettingsResponseLampIntensityMin).max(putSettingsResponseLampIntensityMax).default(putSettingsResponseLampIntensityDefault),
   "defaultSpeedTier": zod.number().min(putSettingsResponseDefaultSpeedTierMin).max(putSettingsResponseDefaultSpeedTierMax).int().default(putSettingsResponseDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(putSettingsResponseInvertMouseYDefault),

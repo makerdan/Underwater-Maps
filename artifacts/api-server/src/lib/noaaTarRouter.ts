@@ -734,10 +734,58 @@ export function parseHyd93Text(text: string): Hyd93ParseResult {
  * @throws if the file cannot be read or decompressed.
  */
 export async function parseHyd93A93(filePath: string): Promise<Hyd93ParseResult> {
-  const raw = await fs.promises.readFile(filePath);
-  const decompressed = await gunzipBounded(raw, 500 * 1024 * 1024);
+  let raw: Buffer;
+  try {
+    raw = await fs.promises.readFile(filePath);
+  } catch (err) {
+    const originalCode = (err as NodeJS.ErrnoException).code;
+    const wrapped = Object.assign(
+      new Error(
+        `parseHyd93A93: failed to read "${path.basename(filePath)}": ` +
+          `${err instanceof Error ? err.message : String(err)}`,
+      ),
+      originalCode ? { code: originalCode } : {},
+    );
+    throw wrapped;
+  }
+
+  let decompressed: Buffer;
+  try {
+    decompressed = await gunzipBounded(raw, 500 * 1024 * 1024);
+  } catch (err) {
+    const code = (err as { code?: string })?.code;
+    if (code === "DECOMPRESS_TOO_LARGE") {
+      throw new Error(
+        `parseHyd93A93: "${path.basename(filePath)}" exceeds the 500 MB decompression limit.`,
+      );
+    }
+    throw new Error(
+      `parseHyd93A93: failed to decompress "${path.basename(filePath)}": ` +
+        `${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
   const text = decompressed.toString("ascii");
-  return parseHyd93Text(text);
+
+  // Count total non-empty lines for the parse summary
+  const totalLines = text.split(/\r?\n/).filter((l) => l.length >= HYD93_LINE_MIN).length;
+
+  const result = parseHyd93Text(text);
+  const filtered = totalLines - result.soundings.length - result.features.length;
+
+  logger.info(
+    {
+      file: path.basename(filePath),
+      totalLines,
+      soundings: result.soundings.length,
+      features: result.features.length,
+      filtered,
+    },
+    `[hyd93-a93] loaded ${result.soundings.length} sounding(s) and ${result.features.length} annotation feature(s) ` +
+      `from ${totalLines} line(s) (${filtered} filtered/unrecognised)`,
+  );
+
+  return result;
 }
 
 /**
