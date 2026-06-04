@@ -27,6 +27,7 @@ export const rateLimitEventsTable = pgTable(
       t.bucketKey,
       t.createdAt,
     ),
+    createdAtIdx: index("rate_limit_events_created_at_idx").on(t.createdAt),
   }),
 );
 

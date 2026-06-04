@@ -176,6 +176,62 @@ describe("rate-limit pgBackend — limit exceeded returns 429", () => {
 // Suite 3: DB error → fallback to in-memory backend
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Suite 4: prune CTE — old rows are deleted on every consume call
+// ---------------------------------------------------------------------------
+
+describe("rate-limit pgBackend — prune CTE deletes stale rows", () => {
+  it("sends a DELETE for rows older than windowMs in the consume SQL", async () => {
+    let capturedSql = "";
+    let capturedParams: unknown[] = [];
+
+    const { pool } = await import("@workspace/db");
+    (pool.query as ReturnType<typeof vi.fn>).mockImplementationOnce(
+      (sql: string, params: unknown[]) => {
+        capturedSql = sql;
+        capturedParams = params ?? [];
+        return Promise.resolve({ rows: [{ count: 1, oldest_epoch: Date.now() / 1000 }] });
+      },
+    );
+
+    await request(app)
+      .post("/api/datasets/upload")
+      .set("x-e2e-user-id", E2E_USER)
+      .set("x-forwarded-for", TEST_IP)
+      .field("resolution", "not-a-number")
+      .attach("file", Buffer.from(MINIMAL_CSV), "test.csv");
+
+    expect(capturedSql).toMatch(/DELETE FROM rate_limit_events/i);
+    expect(capturedSql).toMatch(/created_at < now\(\)/i);
+    expect(capturedParams[1]).toBe(60_000);
+  });
+
+  it("passes windowMs as the prune threshold parameter", async () => {
+    let capturedParams: unknown[] = [];
+
+    const { pool } = await import("@workspace/db");
+    (pool.query as ReturnType<typeof vi.fn>).mockImplementationOnce(
+      (_sql: string, params: unknown[]) => {
+        capturedParams = params ?? [];
+        return Promise.resolve({ rows: [{ count: 1, oldest_epoch: Date.now() / 1000 }] });
+      },
+    );
+
+    await request(app)
+      .post("/api/datasets/upload")
+      .set("x-e2e-user-id", E2E_USER)
+      .set("x-forwarded-for", TEST_IP)
+      .field("resolution", "not-a-number")
+      .attach("file", Buffer.from(MINIMAL_CSV), "test.csv");
+
+    const windowMs = capturedParams[1] as number;
+    expect(typeof windowMs).toBe("number");
+    expect(windowMs).toBeGreaterThan(0);
+    const pruneThresholdSec = windowMs / 1000;
+    expect(pruneThresholdSec).toBeGreaterThanOrEqual(60);
+  });
+});
+
 describe("rate-limit pgBackend — DB error falls back to in-memory", () => {
   it("allows the request when pool.query throws (falls back to memory)", async () => {
     _pgQueryImpl = async () => {

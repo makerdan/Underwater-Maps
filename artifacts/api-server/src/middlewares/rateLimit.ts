@@ -97,7 +97,11 @@ export function __resetRateLimitMemory(): void {
 // ---------------------------------------------------------------------------
 
 const PG_CONSUME_SQL = `
-  WITH ins AS (
+  WITH prune AS (
+    DELETE FROM rate_limit_events
+    WHERE created_at < now() - ($2::bigint || ' milliseconds')::interval
+  ),
+  ins AS (
     INSERT INTO rate_limit_events (bucket_key) VALUES ($1) RETURNING created_at
   ),
   window_rows AS (
