@@ -319,27 +319,36 @@ import * as fs2 from "fs";
 import { routeTarEntries } from "../noaaTarRouter.js";
 
 describe("routeTarEntries — bottom-samples integration", () => {
-  it("populates substratePoints from a BSText file without throwing", async () => {
+  it("populates substratePoints from a BSText file alongside a sounding file", async () => {
     const bsDir = path.join(tmpDir, "Bottom_Samples");
     await fs2.promises.mkdir(bsDir, { recursive: true });
 
     const bsFile = path.join(bsDir, "h09084_BSText.txt");
-    const content = [
+    const bsContent = [
       "LAT\tLON\tCOLOUR\tNAT",
       "55.70\t-132.50\tSAND\tFIRM",
       "55.71\t-132.51\tMUD\tSOFT",
     ].join("\n");
-    await fs2.promises.writeFile(bsFile, content, "utf8");
+    await fs2.promises.writeFile(bsFile, bsContent, "utf8");
+
+    // A surveys.xyz file provides at least one depth sounding so the router
+    // does not throw NO_PARSEABLE_DATA (which it does when allPoints is empty).
+    const xyzContent = [
+      "SURVEY\tLON\tLAT\tDEPTH",
+      "H09084\t-132.530\t55.690\t42.5",
+    ].join("\n");
+    await fs2.promises.writeFile(path.join(tmpDir, "surveys.xyz"), xyzContent, "utf8");
 
     const result = await routeTarEntries(
       tmpDir,
-      ["Bottom_Samples/h09084_BSText.txt"],
+      ["surveys.xyz", "Bottom_Samples/h09084_BSText.txt"],
       "H09084.tar.gz",
     );
 
     expect(result.substratePoints).toHaveLength(2);
     expect(result.substratePoints[0]!.substrateType).toBe("sand");
     expect(result.substratePoints[1]!.substrateType).toBe("mud");
-    expect(result.points).toHaveLength(0);
+    expect(result.points).toHaveLength(1);
+    expect(result.points[0]).toMatchObject({ lon: -132.53, lat: 55.69, depth: 42.5 });
   });
 });
