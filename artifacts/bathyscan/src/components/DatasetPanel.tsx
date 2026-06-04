@@ -127,6 +127,27 @@ const CHUNKED_THRESHOLD = 10 * 1024 * 1024; // files above 10 MB use chunked pat
 const CHUNK_SIZE = 5 * 1024 * 1024;          // 5 MB per chunk
 const GCS_THRESHOLD = 50 * 1024 * 1024;      // files above 50 MB go straight to GCS
 
+const UPLOAD_SESSION_KEY = "bathyscan_upload_session";
+interface SavedUploadSession {
+  uploadId: string;
+  fileName: string;
+  fileSize: number;
+  lastModified: number;
+  totalChunks: number;
+}
+function saveUploadSession(s: SavedUploadSession) {
+  try { sessionStorage.setItem(UPLOAD_SESSION_KEY, JSON.stringify(s)); } catch { /* ignore */ }
+}
+function clearUploadSession() {
+  try { sessionStorage.removeItem(UPLOAD_SESSION_KEY); } catch { /* ignore */ }
+}
+function loadUploadSession(): SavedUploadSession | null {
+  try {
+    const raw = sessionStorage.getItem(UPLOAD_SESSION_KEY);
+    return raw ? (JSON.parse(raw) as SavedUploadSession) : null;
+  } catch { return null; }
+}
+
 const PANEL: React.CSSProperties = {
   background: "rgba(0,10,20,0.82)",
   border: "1px solid rgba(0,229,255,0.18)",
@@ -547,6 +568,15 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const [gcsPhase, setGcsPhase] = useState<GcsPhase>("idle");
   const [gcsUploadProgress, setGcsUploadProgress] = useState(0);
   const [gcsError, setGcsError] = useState<string | null>(null);
+
+  // ─── Interrupted upload session (survives page reload via sessionStorage) ──
+  // On mount we check for a saved session from a previous upload that was
+  // interrupted by a page reload (e.g. from a server restart during dev).
+  // We show a banner so the user knows they can resume by re-selecting the file.
+  const [interruptedSession, setInterruptedSession] = useState<SavedUploadSession | null>(() => loadUploadSession());
+  // Once the user picks a file whose name+size matches the saved session,
+  // we resume from the server-acknowledged chunk rather than starting fresh.
+  const pendingResumeRef = useRef<SavedUploadSession | null>(null);
 
   const waterType = useSettingsStore((s) => s.waterType);
   const units = useSettingsStore((s) => s.units);
@@ -1070,6 +1100,18 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       fd.append("totalChunks", String(totalChunks));
       fd.append("file", chunk, file.name);
 
+      // Persist the session on chunk 0 so a page reload can show a resume banner.
+      if (i === 0) {
+        saveUploadSession({
+          uploadId,
+          fileName: file.name,
+          fileSize: file.size,
+          lastModified: file.lastModified,
+          totalChunks,
+        });
+        setInterruptedSession(null);
+      }
+
       let resp: Response;
       try {
         resp = await fetch("/api/datasets/upload/chunk", {
@@ -1123,6 +1165,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     }
 
     const { jobId } = await finalResp.json() as { jobId: string };
+    // Finalize accepted — the session is safely handed off to the server.
+    clearUploadSession();
     setChunkedPhase("processing");
     setChunkedJobId(jobId);
     return true;
@@ -1380,6 +1424,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           });
         } else if (job.status === "error") {
           stopped = true;
+          clearUploadSession();
           setChunkedPhase("error");
           setChunkedError(job.error ?? "Processing failed. Please try uploading again.");
         } else {
@@ -1431,6 +1476,53 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     };
   }, [chunkedPhase, chunkedJobId, qc, lastChunkedFile, toast, setUploadOpen]);
 
+  // Async resume helper extracted so onDrop can stay synchronous (useCallback
+  // type inference doesn't allow async callbacks in strict mode here).
+  const doResumeChunkedUpload = useCallback(async (file: File, saved: SavedUploadSession) => {
+    pendingResumeRef.current = null;
+    setInterruptedSession(null);
+    clearUploadSession();
+
+    setLastChunkedFile(file);
+    setChunkedPhase("uploading");
+    setChunkedError(null);
+    setChunkedJobId(null);
+    chunkedUploadIdRef.current = saved.uploadId;
+    chunkedFailedAtRef.current = null;
+
+    // Ask the server which chunks it already has so we skip them.
+    let resumeFrom = 0;
+    try {
+      const statusResp = await fetch(
+        `/api/datasets/upload/chunk/status/${encodeURIComponent(saved.uploadId)}`,
+        { credentials: "include" },
+      );
+      if (statusResp.ok) {
+        const { receivedChunks } = await statusResp.json() as { receivedChunks: number[] };
+        const receivedSet = new Set(receivedChunks);
+        let firstMissing = 0;
+        while (firstMissing < saved.totalChunks && receivedSet.has(firstMissing)) firstMissing++;
+        resumeFrom = firstMissing;
+      }
+    } catch { /* fall back to 0 */ }
+
+    // Re-persist the session so it survives any further reloads during transfer.
+    saveUploadSession(saved);
+    setChunkedUploadProgress(Math.round((resumeFrom / saved.totalChunks) * 100));
+    setChunkedJobProgress(0);
+
+    toast({
+      title: "Upload resumed",
+      description: resumeFrom > 0
+        ? `Continuing from chunk ${resumeFrom + 1} of ${saved.totalChunks}`
+        : "Restarting upload from the beginning",
+    });
+
+    const ok = await doSendChunks(file, saved.uploadId, resumeFrom);
+    if (!ok) return;
+    await doFinalizeChunks(file, saved.uploadId);
+  }, [doSendChunks, doFinalizeChunks, toast]);
+
   const onDrop = useCallback(
     (accepted: File[], rejected: FileRejection[]) => {
       setUploadError(null);
@@ -1455,6 +1547,21 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         autoRetryTimer.current = null;
       }
       setSavingToAccount(false);
+
+      // If this file matches a saved interrupted session, resume it.
+      const saved = pendingResumeRef.current ?? interruptedSession;
+      if (
+        saved &&
+        file.size > CHUNKED_THRESHOLD &&
+        file.size <= GCS_THRESHOLD &&
+        file.name === saved.fileName &&
+        file.size === saved.fileSize &&
+        file.lastModified === saved.lastModified
+      ) {
+        void doResumeChunkedUpload(file, saved);
+        return;
+      }
+
       if (file.size > GCS_THRESHOLD) {
         // Files above 50 MB bypass the API server entirely: upload directly to
         // GCS via a presigned URL, then the bucket monitor processes them.
@@ -1465,7 +1572,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         uploadFile(file);
       }
     },
-    [uploadFile, chunkedUploadFile, gcsUploadFile],
+    [uploadFile, chunkedUploadFile, gcsUploadFile, interruptedSession, doResumeChunkedUpload],
   );
 
   const handleRetrySave = useCallback(() => {
@@ -2647,6 +2754,46 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                         </div>
                       ) : (
                         <>
+                          {interruptedSession && chunkedPhase === "idle" && (
+                            <div
+                              data-testid="interrupted-upload-banner"
+                              style={{
+                                marginBottom: 8,
+                                padding: "6px 8px",
+                                border: "1px solid rgba(251,191,36,0.4)",
+                                background: "rgba(251,191,36,0.07)",
+                                borderRadius: 4,
+                                fontSize: 10,
+                                color: "#fde68a",
+                                textAlign: "left",
+                              }}
+                            >
+                              <div style={{ marginBottom: 4 }}>
+                                ⚠ Upload interrupted — <strong>{interruptedSession.fileName}</strong>
+                              </div>
+                              <div style={{ fontSize: 9, color: "#94a3b8", marginBottom: 5 }}>
+                                Drop or select the same file to resume from where it left off.
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  clearUploadSession();
+                                  setInterruptedSession(null);
+                                }}
+                                style={{
+                                  fontSize: 9,
+                                  color: "#94a3b8",
+                                  background: "transparent",
+                                  border: "1px solid rgba(148,163,184,0.3)",
+                                  borderRadius: 3,
+                                  padding: "1px 6px",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Dismiss
+                              </button>
+                            </div>
+                          )}
                           <div style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 3 }}>
                             Drop file here, or click to browse
                           </div>
