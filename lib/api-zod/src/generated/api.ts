@@ -967,6 +967,7 @@ export const getSettingsResponseIntertidalScoreModeDefault = `tidepool`;
 export const getSettingsResponseEfhOverlayEnabledDefault = false;
 export const getSettingsResponseHiddenEfhSpeciesDefault = [];
 export const getSettingsResponseHyd93ActiveFeatureCodesDefault = [89, 103, 146, 530, 988];
+export const getSettingsResponseHyd93FeaturesEnabledDefault = false;
 export const getSettingsResponseGlobalFontSizeDefault = `medium`;
 
 export const GetSettingsResponse = zod.object({
@@ -1050,6 +1051,7 @@ export const GetSettingsResponse = zod.object({
   "efhOverlayEnabled": zod.boolean().default(getSettingsResponseEfhOverlayEnabledDefault).describe('Whether the Essential Fish Habitat overlay is visible.'),
   "hiddenEfhSpecies": zod.array(zod.string()).default(getSettingsResponseHiddenEfhSpeciesDefault).describe('Species names whose EFH polygons are hidden from the overlay.'),
   "hyd93ActiveFeatureCodes": zod.array(zod.number()).default(getSettingsResponseHyd93ActiveFeatureCodesDefault).describe('HYD93 feature type codes currently visible (89=Rocks, 103=Kelp, 146=Ledge, 530=Rocky reef, 988=Obstruction).'),
+  "hyd93FeaturesEnabled": zod.boolean().default(getSettingsResponseHyd93FeaturesEnabledDefault).describe('Whether the master HYD93 cartographic annotation overlay is visible (kelp, rocks, rocky reefs, ledges, obstructions).'),
   "globalFontSize": zod.enum(['smallest', 'small', 'medium', 'large', 'x-large', 'largest']).default(getSettingsResponseGlobalFontSizeDefault).describe('Global UI font size level applied throughout the application.')
 }).describe('Per-user application settings with sensible defaults')
 
@@ -1163,6 +1165,7 @@ export const putSettingsBodyIntertidalScoreModeDefault = `tidepool`;
 export const putSettingsBodyEfhOverlayEnabledDefault = false;
 export const putSettingsBodyHiddenEfhSpeciesDefault = [];
 export const putSettingsBodyHyd93ActiveFeatureCodesDefault = [89, 103, 146, 530, 988];
+export const putSettingsBodyHyd93FeaturesEnabledDefault = false;
 export const putSettingsBodyGlobalFontSizeDefault = `medium`;
 
 export const PutSettingsBody = zod.object({
@@ -1246,6 +1249,7 @@ export const PutSettingsBody = zod.object({
   "efhOverlayEnabled": zod.boolean().default(putSettingsBodyEfhOverlayEnabledDefault).describe('Whether the Essential Fish Habitat overlay is visible.'),
   "hiddenEfhSpecies": zod.array(zod.string()).default(putSettingsBodyHiddenEfhSpeciesDefault).describe('Species names whose EFH polygons are hidden from the overlay.'),
   "hyd93ActiveFeatureCodes": zod.array(zod.number()).default(putSettingsBodyHyd93ActiveFeatureCodesDefault).describe('HYD93 feature type codes currently visible (89=Rocks, 103=Kelp, 146=Ledge, 530=Rocky reef, 988=Obstruction).'),
+  "hyd93FeaturesEnabled": zod.boolean().default(putSettingsBodyHyd93FeaturesEnabledDefault).describe('Whether the master HYD93 cartographic annotation overlay is visible (kelp, rocks, rocky reefs, ledges, obstructions).'),
   "globalFontSize": zod.enum(['smallest', 'small', 'medium', 'large', 'x-large', 'largest']).default(putSettingsBodyGlobalFontSizeDefault).describe('Global UI font size level applied throughout the application.')
 }).describe('Per-user application settings with sensible defaults')
 
@@ -1354,6 +1358,7 @@ export const putSettingsResponseIntertidalScoreModeDefault = `tidepool`;
 export const putSettingsResponseEfhOverlayEnabledDefault = false;
 export const putSettingsResponseHiddenEfhSpeciesDefault = [];
 export const putSettingsResponseHyd93ActiveFeatureCodesDefault = [89, 103, 146, 530, 988];
+export const putSettingsResponseHyd93FeaturesEnabledDefault = false;
 export const putSettingsResponseGlobalFontSizeDefault = `medium`;
 
 export const PutSettingsResponse = zod.object({
@@ -1437,6 +1442,7 @@ export const PutSettingsResponse = zod.object({
   "efhOverlayEnabled": zod.boolean().default(putSettingsResponseEfhOverlayEnabledDefault).describe('Whether the Essential Fish Habitat overlay is visible.'),
   "hiddenEfhSpecies": zod.array(zod.string()).default(putSettingsResponseHiddenEfhSpeciesDefault).describe('Species names whose EFH polygons are hidden from the overlay.'),
   "hyd93ActiveFeatureCodes": zod.array(zod.number()).default(putSettingsResponseHyd93ActiveFeatureCodesDefault).describe('HYD93 feature type codes currently visible (89=Rocks, 103=Kelp, 146=Ledge, 530=Rocky reef, 988=Obstruction).'),
+  "hyd93FeaturesEnabled": zod.boolean().default(putSettingsResponseHyd93FeaturesEnabledDefault).describe('Whether the master HYD93 cartographic annotation overlay is visible (kelp, rocks, rocky reefs, ledges, obstructions).'),
   "globalFontSize": zod.enum(['smallest', 'small', 'medium', 'large', 'x-large', 'largest']).default(putSettingsResponseGlobalFontSizeDefault).describe('Global UI font size level applied throughout the application.')
 }).describe('Per-user application settings with sensible defaults')
 

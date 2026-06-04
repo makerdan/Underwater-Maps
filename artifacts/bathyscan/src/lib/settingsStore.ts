@@ -54,7 +54,7 @@ import {
 } from "./keyBindings";
 import { usePanelCollapseStore, type PanelId } from "./panelCollapseStore";
 
-export const SETTINGS_SCHEMA_VERSION = 17;
+export const SETTINGS_SCHEMA_VERSION = 18;
 
 /**
  * Standard-mapping gamepad button index used to trigger the crosshair
@@ -426,6 +426,12 @@ export interface SettingsState {
    * Default = all five codes visible.
    */
   hyd93ActiveFeatureCodes: number[];
+  /**
+   * Master toggle for the HYD93 cartographic annotation overlay (kelp,
+   * rocks, rocky reefs, ledges, obstructions). Persisted so power users
+   * who always work with HYD93 datasets keep the overlay on between sessions.
+   */
+  hyd93FeaturesEnabled: boolean;
 
   // ── Shortcuts (remappable bindings) ──────────────────────────────────
   /**
@@ -621,6 +627,7 @@ interface SettingsActions {
   setEfhOverlayEnabled: (v: boolean) => void;
   setHiddenEfhSpecies: (v: string[]) => void;
   setHyd93ActiveFeatureCodes: (v: number[]) => void;
+  setHyd93FeaturesEnabled: (v: boolean) => void;
 
   // Shortcuts
   setKeyBinding: (action: ShortcutActionId, code: string) => void;
@@ -883,6 +890,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   efhOverlayEnabled: false,
   hiddenEfhSpecies: [],
   hyd93ActiveFeatureCodes: [89, 103, 146, 530, 988],
+  hyd93FeaturesEnabled: false,
 
   // Shortcuts
   keyBindings: { ...DEFAULT_KEY_BINDINGS },
@@ -936,7 +944,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "substrateColorMode", "hiddenSubstrateClasses",
     "intertidalHotspotsEnabled", "intertidalScoreMode",
     "efhOverlayEnabled", "hiddenEfhSpecies",
-    "hyd93ActiveFeatureCodes",
+    "hyd93ActiveFeatureCodes", "hyd93FeaturesEnabled",
   ],
   gps: [
     "autoStartTrailRecording", "defaultTrailColor", "gpsRecordingInterval", "trailRetention",
@@ -1218,6 +1226,7 @@ export const useSettingsStore = create<SettingsStore>()(
         setEfhOverlayEnabled: setter("efhOverlayEnabled"),
         setHiddenEfhSpecies: setter("hiddenEfhSpecies"),
         setHyd93ActiveFeatureCodes: setter("hyd93ActiveFeatureCodes"),
+        setHyd93FeaturesEnabled: setter("hyd93FeaturesEnabled"),
 
         // Shortcuts
         setKeyBinding: (action, code) =>
@@ -1450,6 +1459,13 @@ export const useSettingsStore = create<SettingsStore>()(
           const migratedHyd93: Partial<SettingsState> = {};
           if ((rest as Record<string, unknown>).hyd93ActiveFeatureCodes === undefined) {
             migratedHyd93.hyd93ActiveFeatureCodes = DEFAULT_SETTINGS.hyd93ActiveFeatureCodes;
+          }
+          // v17 → v18: inject hyd93FeaturesEnabled default for existing stored settings.
+          // The master HYD93 overlay toggle was previously intentionally transient
+          // (reset to false each session); now persisted so power users who always
+          // want the overlay on keep it on between sessions.
+          if ((rest as Record<string, unknown>).hyd93FeaturesEnabled === undefined) {
+            migratedHyd93.hyd93FeaturesEnabled = DEFAULT_SETTINGS.hyd93FeaturesEnabled;
           }
           return {
             ...DEFAULT_SETTINGS,

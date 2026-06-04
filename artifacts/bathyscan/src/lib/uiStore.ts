@@ -174,7 +174,8 @@ interface UiStore {
    * Show HYD93 cartographic annotation points (kelp, rocks, rocky reefs,
    * ledges, obstructions) as a labelled overlay in the 3D scene.
    * Only meaningful when the active dataset was sourced from a HYD93 archive.
-   * Intentionally transient (not persisted) — resets to false on each session.
+   * Persisted via settingsStore so power users who always want the overlay on
+   * keep it on between sessions.
    */
   hyd93FeaturesEnabled: boolean;
   setHyd93FeaturesEnabled: (enabled: boolean) => void;
@@ -313,6 +314,7 @@ function applySettingsToUiStore(s: typeof DEFAULT_SETTINGS) {
     efhOverlayEnabled: s.efhOverlayEnabled,
     hiddenEfhSpecies: new Set<string>(s.hiddenEfhSpecies ?? []),
     hyd93ActiveFeatureCodes: new Set<number>(s.hyd93ActiveFeatureCodes ?? [89, 103, 146, 530, 988]),
+    hyd93FeaturesEnabled: s.hyd93FeaturesEnabled,
     weatherStationsActive: s.weatherStationsActive,
     rawsOverlayActive: s.rawsOverlayActive,
     windOverlayActive: s.windOverlayActive,
@@ -439,9 +441,13 @@ export const useUiStore = create<UiStore>((set) => {
       if (!enabled) useSettingsStore.setState({ hiddenEfhSpecies: [] });
     },
 
-    // hyd93FeaturesEnabled is intentionally transient — not wired to settingsStore.
-    hyd93FeaturesEnabled: false,
-    setHyd93FeaturesEnabled: (enabled) => set({ hyd93FeaturesEnabled: enabled }),
+    // hyd93FeaturesEnabled is persisted via settingsStore so the overlay stays on
+    // between sessions for power users who always work with HYD93 datasets.
+    hyd93FeaturesEnabled: s.hyd93FeaturesEnabled,
+    setHyd93FeaturesEnabled: (enabled) => {
+      useSettingsStore.setState({ hyd93FeaturesEnabled: enabled });
+      set({ hyd93FeaturesEnabled: enabled });
+    },
 
     // hyd93ActiveFeatureCodes is persisted via settingsStore so power users'
     // filter choices survive page reloads and sync cross-device.

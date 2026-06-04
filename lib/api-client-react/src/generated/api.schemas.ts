@@ -616,6 +616,8 @@ export interface UserSettings {
   hiddenEfhSpecies?: string[];
   /** HYD93 feature type codes currently visible (89=Rocks, 103=Kelp, 146=Ledge, 530=Rocky reef, 988=Obstruction). */
   hyd93ActiveFeatureCodes?: number[];
+  /** Whether the master HYD93 cartographic annotation overlay is visible (kelp, rocks, rocky reefs, ledges, obstructions). */
+  hyd93FeaturesEnabled?: boolean;
   /** Global UI font size level applied throughout the application. */
   globalFontSize?: UserSettingsGlobalFontSize;
 }

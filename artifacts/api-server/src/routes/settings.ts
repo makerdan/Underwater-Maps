@@ -72,6 +72,7 @@ export const DEFAULT_SETTINGS = {
   efhOverlayEnabled: false,
   hiddenEfhSpecies: [] as string[],
   hyd93ActiveFeatureCodes: [89, 103, 146, 530, 988] as number[],
+  hyd93FeaturesEnabled: false,
   globalFontSize: "medium",
   paletteShallow: "#00e5ff",
   paletteDeep: "#283593",
