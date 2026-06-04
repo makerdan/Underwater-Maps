@@ -16,6 +16,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { loggerMockFactory } from "./helpers/mockLogger.js";
 
 // ── GCS mock ──────────────────────────────────────────────────────────────────
 // mockGetMetadata is keyed by object name so each file can return different
@@ -47,9 +48,7 @@ vi.mock("@workspace/db", () => ({
 }));
 
 // ── logger mock ───────────────────────────────────────────────────────────────
-vi.mock("../lib/logger.js", () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-}));
+vi.mock("../lib/logger.js", () => loggerMockFactory());
 
 // ── terrain / parsers mocks ───────────────────────────────────────────────────
 vi.mock("../lib/terrain.js", () => ({

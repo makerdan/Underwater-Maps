@@ -19,9 +19,12 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { routeTarEntries, classifyTarEntry, parserDispatch } from "../lib/noaaTarRouter.js";
+import { getMockLogger } from "./helpers/mockLogger.js";
 
 // ---------------------------------------------------------------------------
-// Logger mock — capture info calls so we can assert on skip logging
+// Logger mock — capture info calls so we can assert on skip logging.
+// Factory is inline because noaaTarRouter transitively imports logger, so
+// Vitest resolves the factory before helper imports are initialized.
 // ---------------------------------------------------------------------------
 
 vi.mock("../lib/logger.js", () => ({
@@ -34,7 +37,7 @@ vi.mock("../lib/logger.js", () => ({
 }));
 
 import { logger } from "../lib/logger.js";
-const mockLogger = logger as unknown as { info: ReturnType<typeof vi.fn>; warn: ReturnType<typeof vi.fn> };
+const mockLogger = getMockLogger(logger);
 
 // ---------------------------------------------------------------------------
 // parserDispatch mock — replace stubs with controllable fakes so tests that

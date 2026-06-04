@@ -14,6 +14,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { promises as fs } from "fs";
 import path from "path";
+import { loggerMockFactory } from "./helpers/mockLogger.js";
 
 // ---------------------------------------------------------------------------
 // Stub every heavy import that poe.ts pulls in at module load time so we can
@@ -78,9 +79,7 @@ vi.mock("../middlewares/rateLimit.js", () => ({
   stampBaselineRateLimitHeaders: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
 }));
 
-vi.mock("../lib/logger.js", () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
-}));
+vi.mock("../lib/logger.js", () => loggerMockFactory());
 
 vi.mock("../lib/substrateGrid.js", () => ({
   sampleSubstrateGrid: vi.fn(),

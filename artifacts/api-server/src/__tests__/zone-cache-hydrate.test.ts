@@ -19,6 +19,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createHash } from "crypto";
+import { loggerMockFactory } from "./helpers/mockLogger.js";
 
 // ---------------------------------------------------------------------------
 // Hoist fs mock fns so they are available before any import() call
@@ -146,14 +147,7 @@ vi.mock("../lib/tileClassify.js", () => ({
   tileDepthsToPngDataUrl: vi.fn(),
 }));
 
-vi.mock("../lib/logger.js", () => ({
-  logger: {
-    warn: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    debug: vi.fn(),
-  },
-}));
+vi.mock("../lib/logger.js", () => loggerMockFactory());
 
 // ---------------------------------------------------------------------------
 // Import the module under test AFTER all mocks are in place

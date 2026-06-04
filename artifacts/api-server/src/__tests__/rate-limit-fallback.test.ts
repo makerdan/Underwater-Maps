@@ -17,6 +17,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
+import { loggerMockFactory } from "./helpers/mockLogger.js";
 
 const mockPoolQuery = vi.hoisted(() =>
   vi.fn().mockRejectedValue(new Error("DB unavailable")),
@@ -26,14 +27,7 @@ vi.mock("@workspace/db", () => ({
   pool: { query: mockPoolQuery },
 }));
 
-vi.mock("../lib/logger.js", () => ({
-  logger: {
-    warn: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    debug: vi.fn(),
-  },
-}));
+vi.mock("../lib/logger.js", () => loggerMockFactory());
 
 import {
   createRateLimit,
