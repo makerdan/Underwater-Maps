@@ -3,8 +3,8 @@ import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from "@/lib/cl
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 import { Switch, Route, useLocation, Router as WouterRouter } from "wouter";
-import { QueryClientProvider, useQueryClient, useIsFetching } from "@tanstack/react-query";
-import { queryClient, useHas502 } from "@/lib/queryClient";
+import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { queryClient, useIsConnecting, useHealthResponseTime } from "@/lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useGetDatasets, useGetUserDatasets, getGetDatasetsQueryKey, getGetUserDatasetsQueryKey, setAuthTokenGetter } from "@workspace/api-client-react";
@@ -253,12 +253,12 @@ function Main() {
   // saved defaultMapLoad before committing to a dataset.
   const { settingsReady } = useServerSettingsSync();
 
-  // Server-warming indicator: true while any query is fetching AND at least
-  // one query has previously returned 502 (API server still starting up).
-  // The banner dismisses itself automatically once all queries succeed.
-  const has502 = useHas502();
-  const isFetching = useIsFetching();
-  const serverWarmingUp = has502 && isFetching > 0;
+  // Server-connectivity indicator: true from the first 502 / network error
+  // until the health poll confirms the server is back (or any query succeeds).
+  // Shown regardless of whether there are active in-flight queries so the
+  // banner stays visible even after TanStack Query exhausts its retry budget.
+  const serverWarmingUp = useIsConnecting();
+  const healthResponseMs = useHealthResponseTime();
   const waterTypeForDatasets = useSettingsStore((s) => s.waterType);
   void waterTypeForDatasets;
   const { data: datasets } = useGetDatasets(
@@ -829,9 +829,9 @@ function Main() {
     <div className="relative w-screen h-screen overflow-hidden bg-[#040810] flex flex-col">
       <VisibleDatasetsLoader />
 
-      {/* Connecting banner — shown while the API server is still warming up
-          after a cold start (502 retries in flight). Dismisses automatically
-          once all queries succeed. Non-alarming: no red, no destructive tone. */}
+      {/* Connecting banner — shown from the first 502 / network error until
+          the health poll confirms the server is back. Stays visible even after
+          TanStack Query exhausts its retry budget. Non-alarming: no red. */}
       {serverWarmingUp && (
         <div
           role="status"
@@ -852,7 +852,36 @@ function Main() {
           >
             <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
           </svg>
-          Connecting to server…
+          Reconnecting…
+        </div>
+      )}
+
+      {/* Dev-only health probe response-time badge — bottom-right corner.
+          Shows the round-trip latency of the most recent GET /health probe
+          so developers can verify connectivity without opening DevTools.
+          Stripped from production builds via import.meta.env.DEV. */}
+      {import.meta.env.DEV && healthResponseMs !== null && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "fixed",
+            bottom: 8,
+            right: 8,
+            zIndex: 9999,
+            background: "rgba(0,10,20,0.82)",
+            border: "1px solid rgba(0,229,255,0.22)",
+            borderRadius: 4,
+            padding: "2px 7px",
+            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            fontSize: 9,
+            letterSpacing: "0.08em",
+            color: healthResponseMs < 200 ? "#34d399" : healthResponseMs < 600 ? "#fbbf24" : "#f87171",
+            pointerEvents: "none",
+            userSelect: "none",
+            backdropFilter: "blur(4px)",
+          }}
+        >
+          /health {healthResponseMs} ms
         </div>
       )}
 

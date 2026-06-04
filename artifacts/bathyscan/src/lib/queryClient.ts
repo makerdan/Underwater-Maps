@@ -101,6 +101,33 @@ export function useHas502(): boolean {
   return useIsConnecting();
 }
 
+// ─── Health probe response-time tracking ──────────────────────────────────────
+// Updated each time runHealthProbe completes (success or failure).
+// null = no probe has run yet in this session.
+let _lastHealthResponseMs: number | null = null;
+const _healthResponseListeners = new Set<() => void>();
+
+function setLastHealthResponseMs(ms: number): void {
+  _lastHealthResponseMs = ms;
+  _healthResponseListeners.forEach((fn) => fn());
+}
+
+/**
+ * Reactive hook: returns the round-trip time (ms) of the most recent
+ * /health probe, or null if no probe has run yet.
+ * Intended for dev-only debug overlays.
+ */
+export function useHealthResponseTime(): number | null {
+  return useSyncExternalStore(
+    (cb) => {
+      _healthResponseListeners.add(cb);
+      return () => _healthResponseListeners.delete(cb);
+    },
+    () => _lastHealthResponseMs,
+    () => null,
+  );
+}
+
 // ─── Health poll ──────────────────────────────────────────────────────────────
 // Polls GET /health (no auth required) with exponential back-off (1 s → 15 s
 // max) whenever the server appears unreachable. Clears the connecting flag and
@@ -125,11 +152,13 @@ function scheduleHealthPoll(): void {
 }
 
 async function runHealthProbe(): Promise<void> {
+  const t0 = performance.now();
   try {
     const resp = await fetch("/health", {
       signal: AbortSignal.timeout(5_000),
       cache: "no-store",
     });
+    setLastHealthResponseMs(Math.round(performance.now() - t0));
     if (resp.ok) {
       // Server is back — clear the connecting flag (which also notifies
       // reconnect subscribers and cancels further polling via setIsConnecting).
@@ -138,6 +167,7 @@ async function runHealthProbe(): Promise<void> {
     }
   } catch {
     // Still unreachable — keep back-off going.
+    setLastHealthResponseMs(Math.round(performance.now() - t0));
   }
 
   // Only schedule the next probe if we're still in connecting state.

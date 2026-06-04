@@ -1543,6 +1543,12 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         // Status endpoint unreachable — fall back to the in-memory failed index.
       }
 
+      const resumeChunkDisplay = Math.min(resumeFrom + 1, totalChunks);
+      toast({
+        title: "Upload resumed",
+        description: `Reconnected — resuming from chunk ${resumeChunkDisplay} of ${totalChunks}`,
+      });
+
       setChunkedPhase("uploading");
       setChunkedError(null);
       setChunkedUploadProgress(Math.round((Math.min(resumeFrom, totalChunks) / totalChunks) * 100));
@@ -1557,7 +1563,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     });
 
     return unsubscribe;
-  }, [chunkedPhase, lastChunkedFile, doSendChunks, doFinalizeChunks]);
+  }, [chunkedPhase, lastChunkedFile, doSendChunks, doFinalizeChunks, toast]);
 
   const isAnyUploadBusy = postDatasetsUpload.isPending || chunkedPhase === "uploading" || chunkedPhase === "processing" || gcsPhase === "uploading" || gcsPhase === "processing";
 
