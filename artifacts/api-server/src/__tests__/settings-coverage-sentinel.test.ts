@@ -121,6 +121,7 @@ const SETTINGS_TESTED_FIELDS = new Set<string>([
 
   // ── v17 HYD93 feature filter (me.test.ts) ────────────────────────────────
   "hyd93ActiveFeatureCodes",
+  "hyd93FeaturesEnabled",
 ]);
 
 describe("PutSettingsBody field-coverage sentinel", () => {

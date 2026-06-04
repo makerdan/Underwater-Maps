@@ -434,6 +434,9 @@ async function processUploadJob(
         // merge all sounding points into a single array.  Throws with code
         // "NO_PARSEABLE_DATA" if nothing in the archive is parseable, or
         // "PARSER_NOT_IMPLEMENTED" for recognised-but-not-yet-implemented types.
+        // IMPORTANT: every destructured key alias (tarPoints, tarDatasetName, …)
+        // must be unique — TypeScript TS2451 will block compilation if the same
+        // alias appears twice.  Check carefully when adding new fields.
         const {
           points: tarPoints,
           datasetName: tarDatasetName,

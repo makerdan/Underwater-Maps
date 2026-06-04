@@ -939,6 +939,35 @@ describe("PUT /api/settings — hyd93ActiveFeatureCodes (v17)", () => {
   });
 });
 
+describe("PUT /api/settings — hyd93FeaturesEnabled (v17)", () => {
+  it("accepts true to show the HYD93 annotation overlay", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ hyd93FeaturesEnabled: true });
+    expect(res.status).toBe(200);
+    expect(res.body.hyd93FeaturesEnabled).toBe(true);
+  });
+
+  it("accepts false to hide the HYD93 annotation overlay", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ hyd93FeaturesEnabled: false });
+    expect(res.status).toBe(200);
+    expect(res.body.hyd93FeaturesEnabled).toBe(false);
+  });
+
+  it("rejects a non-boolean value", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ hyd93FeaturesEnabled: "yes" });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+});
+
 describe("PUT /api/settings — combined payload with all 17 new fields", () => {
   it("accepts a full valid payload containing all 17 new v15 fields", async () => {
     const payload = {
