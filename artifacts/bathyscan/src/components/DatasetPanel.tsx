@@ -1197,20 +1197,35 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       ? { Authorization: `Bearer ${authToken}` }
       : {};
 
-    // Step 1: get presigned URL
+    // Step 1: get presigned URL — retry up to 2 extra times on 401 to handle
+    // Clerk's short-lived token expiry window (~60 s). If the token expired just
+    // before this call, waiting 3 s lets the SDK issue a fresh one automatically.
     let uploadUrl: string;
     let objectKey: string;
     try {
-      const resp = await fetch("/api/datasets/upload/request-gcs-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeader },
-        body: JSON.stringify({ fileName: file.name }),
-      });
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({})) as { details?: string; error?: string };
+      let currentAuthHeader = authHeader;
+      let lastResp: Response | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const resp = await fetch("/api/datasets/upload/request-gcs-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...currentAuthHeader },
+          body: JSON.stringify({ fileName: file.name }),
+        });
+        if (resp.status === 401 && attempt < 2 && hasAuthTokenGetter()) {
+          // Token expired mid-request. Give Clerk 3 s to refresh it, then retry.
+          await new Promise<void>((r) => setTimeout(r, 3_000));
+          const freshToken = await getAuthToken();
+          currentAuthHeader = freshToken ? { Authorization: `Bearer ${freshToken}` } : {};
+          continue;
+        }
+        lastResp = resp;
+        break;
+      }
+      if (!lastResp!.ok) {
+        const err = await lastResp!.json().catch(() => ({})) as { details?: string; error?: string };
         throw new Error(err.details ?? err.error ?? "Failed to get upload URL");
       }
-      const data = await resp.json() as { uploadUrl: string; objectKey: string };
+      const data = await lastResp!.json() as { uploadUrl: string; objectKey: string };
       uploadUrl = data.uploadUrl;
       objectKey = data.objectKey;
     } catch (err) {

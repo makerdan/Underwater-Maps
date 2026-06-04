@@ -415,4 +415,60 @@ describe("DatasetPanel — gcsUploadFile Authorization header", () => {
     const headers = new Headers(init?.headers as HeadersInit);
     expect(headers.get("authorization")).toBeNull();
   });
+
+  it("retries with a fresh token when request-gcs-url returns 401 (Clerk token expiry race)", async () => {
+    vi.useFakeTimers();
+
+    // First getAuthToken call returns a stale token; second returns a fresh one.
+    authMock.getAuthToken
+      .mockResolvedValueOnce("stale-token-expired")
+      .mockResolvedValueOnce("fresh-token-after-refresh");
+    authMock.hasAuthTokenGetter.mockReturnValue(true);
+
+    // First fetch → 401 (expired token). Second fetch → presigned URL (fresh token).
+    const fetchSpy = vi.spyOn(global, "fetch")
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: async () => ({ error: "Unauthorized" }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          uploadUrl: "https://storage.googleapis.com/bucket/pending/survey.csv?sig=ok",
+          objectKey: "pending/survey.csv",
+        }),
+      } as Response);
+
+    render(<DatasetPanel />);
+
+    const file = makeFakeFile("survey.csv", "text/csv", 60 * 1024 * 1024);
+
+    // Kick off the upload, advance past the 3-second retry delay, then settle.
+    let dropPromise: Promise<void>;
+    await act(async () => {
+      dropPromise = new Promise<void>((resolve) => {
+        setTimeout(resolve, 10_000);
+      });
+      dropzoneMock.trigger([file]);
+      await vi.advanceTimersByTimeAsync(3_500);
+    });
+
+    vi.useRealTimers();
+
+    // Two calls to request-gcs-url should have been made.
+    const presignedCalls = fetchSpy.mock.calls.filter(([url]) =>
+      typeof url === "string" && url.includes("request-gcs-url"),
+    );
+    expect(presignedCalls).toHaveLength(2);
+
+    // First call used the stale token.
+    const firstHeaders = new Headers(presignedCalls[0][1]?.headers as HeadersInit);
+    expect(firstHeaders.get("authorization")).toBe("Bearer stale-token-expired");
+
+    // Second call used the fresh token.
+    const secondHeaders = new Headers(presignedCalls[1][1]?.headers as HeadersInit);
+    expect(secondHeaders.get("authorization")).toBe("Bearer fresh-token-after-refresh");
+  });
 });
