@@ -32,8 +32,27 @@ vi.mock("@workspace/db", () => {
     db: {
       select: vi.fn().mockReturnValue({ from: fromMock }),
       insert: vi.fn().mockReturnValue({ values: valuesMock }),
+      update: vi.fn().mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([]),
+          }),
+        }),
+      }),
     },
     userSettingsTable: { userId: "userId", settings: "settings" },
+    userCatalogSavesTable: {
+      id: "id",
+      userId: "userId",
+      catalogId: "catalogId",
+      status: "status",
+      requestedAt: "requestedAt",
+      readyAt: "readyAt",
+      cacheKey: "cacheKey",
+      errorMessage: "errorMessage",
+      folderId: "folderId",
+      datasetId: "datasetId",
+    },
     _stored: stored,
   };
 });

@@ -38,7 +38,7 @@ vi.mock("@workspace/db", () => ({
     }),
     update: () => ({
       set: () => ({
-        where: () => Promise.resolve([]),
+        where: () => ({ returning: () => Promise.resolve([]) }),
       }),
     }),
     transaction: async <T>(cb: (tx: unknown) => Promise<T>) => cb({}),
@@ -50,7 +50,18 @@ vi.mock("@workspace/db", () => ({
   gpsTrailPointsTable: {},
   customDatasetsTable: {},
   datasetFoldersTable: {},
-  userCatalogSavesTable: {},
+  userCatalogSavesTable: {
+    id: "id",
+    userId: "userId",
+    catalogId: "catalogId",
+    status: "status",
+    requestedAt: "requestedAt",
+    readyAt: "readyAt",
+    cacheKey: "cacheKey",
+    errorMessage: "errorMessage",
+    folderId: "folderId",
+    datasetId: "datasetId",
+  },
   datasetCatalogTable: {},
   trollingPresetsTable: {},
   trollingPresetFoldersTable: {},
