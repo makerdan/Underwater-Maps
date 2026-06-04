@@ -57,6 +57,13 @@ const UNDOCUMENTED_ALLOWLIST = new Set([
   // Internal admin endpoint: clears the in-memory NOAA station cache.
   // Not part of the public API surface; only callable by admin user IDs.
   "POST /tidal/admin/refresh-stations",
+  // Internal admin endpoint: returns per-key rate-limit usage counters.
+  // Not part of the public API surface; only callable by admin user IDs.
+  "GET /admin/rate-limit/usage",
+  // Internal upload-session endpoint: returns which chunk indices are on disk
+  // for a given uploadId.  Used by the frontend auto-resume logic after a
+  // server reconnect; not part of the public OpenAPI surface.
+  "GET /datasets/upload/chunk/status/{uploadId}",
 ]);
 
 // ---------------------------------------------------------------------------

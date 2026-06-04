@@ -120,6 +120,8 @@ vi.mock("@tanstack/react-query", () => ({
     fetchQuery = vi.fn();
     invalidateQueries = vi.fn();
   },
+  QueryCache: class { constructor(_opts?: unknown) {} },
+  MutationCache: class { constructor(_opts?: unknown) {} },
 }));
 
 vi.mock("@/lib/terrainStore", () => {

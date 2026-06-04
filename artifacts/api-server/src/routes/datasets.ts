@@ -122,17 +122,36 @@ async function persistJobToDB(jobId: string, state: JobState): Promise<void> {
 }
 
 /**
+ * Metadata sidecar persisted alongside each job's assembled source file.
+ * Written in the finalize route before spawning processUploadJob so that a
+ * fresh server process can reconstruct the parameters needed to re-queue
+ * the job without a DB schema change.
+ */
+interface JobMeta {
+  uploadId: string;
+  fileName: string;
+  totalChunks: number;
+  resolution: number;
+  userId: string;
+  smoothing: boolean;
+}
+
+/**
  * On server startup, scan the database for any upload jobs that are still
  * queued or processing (meaning the previous process was killed mid-flight).
- * Mark them as error so the client gets a clear "re-upload" message instead
- * of polling forever.
  *
- * Called once from the server's startup sequence in index.ts.
+ * For each stale job, checks whether a metadata sidecar and the assembled
+ * source file (or individual chunk files) still exist on disk.  When the
+ * source is recoverable, the job is re-queued so processing resumes
+ * transparently.  Only jobs with no recoverable source are marked as error.
+ *
+ * Called once from the server's startup sequence in index.ts, before
+ * cleanupStaleChunks() runs.
  */
 export async function recoverStaleUploadJobs(): Promise<void> {
   try {
     const staleJobs = await db
-      .select({ id: uploadJobsTable.id })
+      .select({ id: uploadJobsTable.id, userId: uploadJobsTable.userId })
       .from(uploadJobsTable)
       .where(or(
         eq(uploadJobsTable.status, "queued"),
@@ -141,23 +160,84 @@ export async function recoverStaleUploadJobs(): Promise<void> {
 
     if (staleJobs.length === 0) return;
 
-    const ids = staleJobs.map((j) => j.id);
-    await db
-      .update(uploadJobsTable)
-      .set({
-        status: "error",
-        error: "Server restarted while this job was in progress — please re-upload your file.",
-        updatedAt: new Date(),
-      })
-      .where(inArray(uploadJobsTable.id, ids));
+    const recoverable: string[] = [];
+    const failed: string[] = [];
 
-    logger.info(
-      { count: ids.length },
-      `[upload-jobs] marked ${ids.length} stale job(s) as error after restart`,
-    );
+    for (const job of staleJobs) {
+      const metaPath = path.join(CHUNK_BASE_DIR, `${job.id}-meta.json`);
+      let meta: JobMeta | null = null;
+
+      try {
+        const raw = await fs.promises.readFile(metaPath, "utf8");
+        meta = JSON.parse(raw) as JobMeta;
+      } catch {
+        // No sidecar — job predates this recovery scheme or was never written.
+      }
+
+      if (meta) {
+        // Check whether the assembled file or at least chunk 0 still exists.
+        const assembledPath = path.join(CHUNK_BASE_DIR, `${job.id}-assembled`);
+        const assembledExists = await fs.promises.access(assembledPath)
+          .then(() => true).catch(() => false);
+
+        const chunk0Path = path.join(CHUNK_BASE_DIR, `${meta.uploadId}-chunk-0`);
+        const chunksExist = !assembledExists && await fs.promises.access(chunk0Path)
+          .then(() => true).catch(() => false);
+
+        if (assembledExists || chunksExist) {
+          // Restore the in-memory upload session so chunk-status queries work.
+          uploadSessions.set(meta.uploadId, { userId: meta.userId });
+
+          // Re-queue the job with its original parameters.
+          const requeued: JobState = { status: "queued", progress: 0, userId: meta.userId };
+          uploadJobs.set(job.id, requeued);
+          await persistJobToDB(job.id, requeued);
+
+          void processUploadJob(
+            job.id,
+            meta.uploadId,
+            meta.totalChunks,
+            meta.fileName,
+            meta.resolution,
+            meta.userId,
+            meta.smoothing,
+          ).catch((err: unknown) => {
+            logger.error({ err, jobId: job.id }, "[upload-jobs] recovered job failed");
+          });
+
+          recoverable.push(job.id);
+          continue;
+        }
+      }
+
+      failed.push(job.id);
+    }
+
+    if (failed.length > 0) {
+      await db
+        .update(uploadJobsTable)
+        .set({
+          status: "error",
+          error: "Server restarted while this job was in progress — please re-upload your file.",
+          updatedAt: new Date(),
+        })
+        .where(inArray(uploadJobsTable.id, failed));
+    }
+
+    if (recoverable.length > 0) {
+      logger.info(
+        { count: recoverable.length },
+        `[upload-jobs] recovered and re-queued ${recoverable.length} stale job(s) after restart`,
+      );
+    }
+    if (failed.length > 0) {
+      logger.info(
+        { count: failed.length },
+        `[upload-jobs] marked ${failed.length} stale job(s) as error after restart (no recoverable source)`,
+      );
+    }
   } catch (err) {
-    // Non-fatal — the server continues; stale jobs will surface as 404 on poll
-    // (still better than an eternal spinner) if the DB update fails.
+    // Non-fatal — the server continues; stale jobs will surface as error on poll.
     logger.error({ err }, "[upload-jobs] failed to recover stale jobs on startup");
   }
 }
@@ -182,23 +262,42 @@ const uploadChunkMiddleware = multer({
 });
 
 /**
- * Purge the entire chunk staging directory on server startup.
+ * Purge raw chunk slice files from the staging directory on server startup.
  *
- * Any chunk files still present at startup belong to upload sessions that were
- * in flight when the previous process was killed — those jobs are already
- * marked "error" by recoverStaleUploadJobs() so no valid session can continue
- * to reference them. Removing the directory prevents unbounded /tmp growth.
+ * Only files matching the `<uploadId>-chunk-<N>` pattern are removed so that
+ * assembled source files and their recovery sidecars (written by
+ * recoverStaleUploadJobs()) are preserved for in-flight job recovery.
+ * Assembled and meta files for recovered jobs are cleaned up naturally by
+ * processUploadJob when those jobs finish successfully.
  *
- * Called once from index.ts after the server begins listening.
+ * Called once from index.ts after recoverStaleUploadJobs() has run.
  */
 export async function cleanupStaleChunks(): Promise<void> {
   try {
-    await fs.promises.rm(CHUNK_BASE_DIR, { recursive: true, force: true });
-    logger.info("[upload-chunks] purged stale chunk directory on startup");
+    let entries: string[];
+    try {
+      entries = await fs.promises.readdir(CHUNK_BASE_DIR);
+    } catch {
+      // Directory doesn't exist yet — nothing to clean up.
+      return;
+    }
+
+    const CHUNK_PATTERN = /-chunk-\d+$/;
+    let removed = 0;
+    for (const entry of entries) {
+      if (CHUNK_PATTERN.test(entry)) {
+        await fs.promises.unlink(path.join(CHUNK_BASE_DIR, entry)).catch(() => undefined);
+        removed++;
+      }
+    }
+
+    if (removed > 0) {
+      logger.info({ removed }, "[upload-chunks] purged stale chunk files on startup");
+    }
   } catch (err) {
     // Non-fatal — worst case the orphaned files persist until the OS clears /tmp.
     const msg = err instanceof Error ? err.message : String(err);
-    logger.warn({ msg }, `[upload-chunks] could not purge chunk directory: ${msg}`);
+    logger.warn({ msg }, `[upload-chunks] could not purge chunk files: ${msg}`);
   }
 }
 
@@ -405,7 +504,9 @@ async function processUploadJob(
   const job = uploadJobs.get(jobId);
   if (!job) return;
 
-  const assembledPath = path.join(CHUNK_BASE_DIR, `${uploadId}-assembled`);
+  // Use jobId (not uploadId) as the assembled-file prefix so the crash-recovery
+  // path in recoverStaleUploadJobs() can locate the file by jobId alone.
+  const assembledPath = path.join(CHUNK_BASE_DIR, `${jobId}-assembled`);
   const decompressedPath = `${assembledPath}-decompressed`;
   const tarExtractedDir = path.join(CHUNK_BASE_DIR, `${uploadId}-tarcontents`);
 
@@ -614,6 +715,11 @@ async function processUploadJob(
     await fs.promises.unlink(assembledPath).catch(() => undefined);
     await fs.promises.unlink(decompressedPath).catch(() => undefined);
     await fs.promises.rm(tarExtractedDir, { recursive: true, force: true }).catch(() => undefined);
+    // Remove the recovery sidecar — the job has reached a terminal state and
+    // its parameters are no longer needed for crash recovery.
+    await fs.promises
+      .unlink(path.join(CHUNK_BASE_DIR, `${jobId}-meta.json`))
+      .catch(() => undefined);
   }
 }
 
@@ -1539,6 +1645,46 @@ router.post(
   }),
 );
 
+// ── GET /datasets/upload/chunk/status/:uploadId ───────────────────────────────
+// Returns which chunk indices have been received on disk for the given upload
+// session.  Used by the frontend auto-resume logic after a server reconnect:
+// the client fetches this endpoint to determine the next missing chunk and
+// resumes the upload from that point rather than starting over.
+router.get(
+  "/datasets/upload/chunk/status/:uploadId",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const { uploadId } = req.params as { uploadId: string };
+    const userId = (req as AuthenticatedRequest).clerkUserId;
+
+    // Only allow the user who owns the upload session to query its status.
+    // If the server was restarted, recoverStaleUploadJobs() restores the
+    // in-memory session, so the ownership check still works.
+    const session = uploadSessions.get(uploadId);
+    if (!session || session.userId !== userId) {
+      res.status(404).json({ error: "upload_not_found" });
+      return;
+    }
+
+    const receivedChunks: number[] = [];
+    try {
+      const entries = await fs.promises.readdir(CHUNK_BASE_DIR).catch(() => [] as string[]);
+      const prefix = `${uploadId}-chunk-`;
+      for (const entry of entries) {
+        if (entry.startsWith(prefix)) {
+          const idx = parseInt(entry.slice(prefix.length), 10);
+          if (!Number.isNaN(idx)) receivedChunks.push(idx);
+        }
+      }
+    } catch {
+      // CHUNK_BASE_DIR doesn't exist yet — no chunks received.
+    }
+
+    receivedChunks.sort((a, b) => a - b);
+    res.json({ uploadId, receivedChunks });
+  }),
+);
+
 // ── POST /datasets/upload/chunk/finalize ──────────────────────────────────────
 // Called after all chunks have been sent. Enqueues an async job that reassembles
 // the chunks, parses the file, builds the terrain grid, and saves to DB.
@@ -1636,6 +1782,19 @@ router.post(
     // Persist initial "queued" state to DB before firing the job so that if
     // the process dies immediately the row exists and can be recovered.
     await persistJobToDB(jobId, initialState);
+
+    // Write a metadata sidecar alongside the (not yet created) assembled file
+    // so recoverStaleUploadJobs() can re-queue this job on the next startup
+    // without DB schema changes.  Non-fatal if the write fails.
+    await fs.promises.mkdir(CHUNK_BASE_DIR, { recursive: true }).catch(() => undefined);
+    await fs.promises
+      .writeFile(
+        path.join(CHUNK_BASE_DIR, `${jobId}-meta.json`),
+        JSON.stringify({ uploadId, fileName, totalChunks, resolution, userId, smoothing } satisfies JobMeta),
+      )
+      .catch((err: unknown) => {
+        logger.warn({ err, jobId }, "[upload-jobs] failed to write recovery meta sidecar (non-fatal)");
+      });
 
     // Fire-and-forget — the client polls /jobs/:jobId
     void processUploadJob(jobId, uploadId, totalChunks, fileName, resolution, userId, smoothing);

@@ -20,35 +20,134 @@ function is502(error: unknown): boolean {
   );
 }
 
-// ─── Server-warming signal ────────────────────────────────────────────────────
-// Tracks whether any query has returned a 502 since the app loaded.
-// Set to true on first 502; cleared when any query subsequently succeeds.
-// Consumed by useHas502() so App.tsx can show a "Connecting…" banner instead
-// of a destructive toast during the API server's startup window.
-let _has502 = false;
-const _has502Listeners = new Set<() => void>();
+/**
+ * Returns true for network-level failures that indicate the server is
+ * temporarily unreachable rather than returning a structured error response.
+ * These should be treated identically to HTTP 502: show the connecting banner
+ * and retry rather than surfacing a destructive toast.
+ */
+function isNetworkError(error: unknown): boolean {
+  if (!(error instanceof TypeError)) return false;
+  const msg = error.message;
+  return (
+    msg.includes("Failed to fetch") ||
+    msg.includes("NetworkError") ||
+    msg.includes("network error") ||
+    msg.includes("Load failed")
+  );
+}
 
-function setHas502(value: boolean): void {
-  if (_has502 === value) return;
-  _has502 = value;
-  _has502Listeners.forEach((fn) => fn());
+// ─── Server-connectivity signal ───────────────────────────────────────────────
+// Set to true when any query returns 502 or a network-level error; cleared
+// when any query succeeds or the health-poll confirms the server is back.
+// Drives useIsConnecting() so App.tsx can show a "Connecting…" banner.
+let _isConnecting = false;
+const _connectingListeners = new Set<() => void>();
+
+// Listeners notified specifically on the transition connecting→false (i.e.
+// the server just came back online).  Used by DatasetPanel to auto-resume
+// in-flight chunked uploads.
+const _reconnectListeners = new Set<() => void>();
+
+function notifyConnecting(): void {
+  _connectingListeners.forEach((fn) => fn());
+}
+
+function setIsConnecting(value: boolean): void {
+  if (_isConnecting === value) return;
+  const wasConnecting = _isConnecting;
+  _isConnecting = value;
+  notifyConnecting();
+
+  if (value) {
+    startHealthPoll();
+  } else if (wasConnecting) {
+    // Transition: connecting → connected — notify any upload resumption hooks.
+    _reconnectListeners.forEach((fn) => fn());
+  }
 }
 
 /**
- * Reactive hook that returns true when at least one query has returned 502
- * and no subsequent query has succeeded yet. Resets to false once the server
- * is back up and a query completes successfully.
+ * Subscribe to the "server came back online" event. The callback fires once
+ * each time the connectivity state transitions from connecting → reachable.
+ * Returns an unsubscribe function.
  */
-export function useHas502(): boolean {
+export function subscribeToReconnect(cb: () => void): () => void {
+  _reconnectListeners.add(cb);
+  return () => _reconnectListeners.delete(cb);
+}
+
+/**
+ * Reactive hook: true while the server is unreachable (502 or network error)
+ * and no successful query has returned yet. Resets to false once the health
+ * poll confirms the server is up.
+ */
+export function useIsConnecting(): boolean {
   return useSyncExternalStore(
     (cb) => {
-      _has502Listeners.add(cb);
-      return () => _has502Listeners.delete(cb);
+      _connectingListeners.add(cb);
+      return () => _connectingListeners.delete(cb);
     },
-    () => _has502,
+    () => _isConnecting,
     () => false,
   );
 }
+
+/**
+ * @deprecated Use useIsConnecting() instead.
+ * Kept for backward-compatibility with existing callers (App.tsx).
+ */
+export function useHas502(): boolean {
+  return useIsConnecting();
+}
+
+// ─── Health poll ──────────────────────────────────────────────────────────────
+// Polls GET /health (no auth required) with exponential back-off (1 s → 15 s
+// max) whenever the server appears unreachable. Clears the connecting flag and
+// cancels the poll as soon as the endpoint returns 200.
+
+let _healthPollTimer: ReturnType<typeof setTimeout> | null = null;
+let _healthPollAttempt = 0;
+
+function startHealthPoll(): void {
+  // Don't start a second poll if one is already running.
+  if (_healthPollTimer !== null) return;
+  _healthPollAttempt = 0;
+  scheduleHealthPoll();
+}
+
+function scheduleHealthPoll(): void {
+  const delay = Math.min(1_000 * 2 ** _healthPollAttempt, 15_000);
+  _healthPollTimer = setTimeout(() => {
+    _healthPollTimer = null;
+    void runHealthProbe();
+  }, delay);
+}
+
+async function runHealthProbe(): Promise<void> {
+  try {
+    const resp = await fetch("/health", {
+      signal: AbortSignal.timeout(5_000),
+      cache: "no-store",
+    });
+    if (resp.ok) {
+      // Server is back — clear the connecting flag (which also notifies
+      // reconnect subscribers and cancels further polling via setIsConnecting).
+      setIsConnecting(false);
+      return;
+    }
+  } catch {
+    // Still unreachable — keep back-off going.
+  }
+
+  // Only schedule the next probe if we're still in connecting state.
+  if (_isConnecting) {
+    _healthPollAttempt++;
+    scheduleHealthPoll();
+  }
+}
+
+// ─── Error handlers ───────────────────────────────────────────────────────────
 
 function handleQueryError(error: unknown) {
   // 401s fired before Clerk has attached a session token are transient —
@@ -56,12 +155,14 @@ function handleQueryError(error: unknown) {
   // so the user never sees a red "Unauthorized" flash on startup.
   if (is401(error)) return;
 
-  // 502s during startup mean the API server is still warming up. The
-  // connecting banner (driven by useHas502 + useIsFetching in App.tsx) covers
-  // this case visually, so we suppress the destructive toast to avoid
-  // alarming the user. The flag clears automatically once a query succeeds.
-  if (is502(error)) {
-    setHas502(true);
+  // 502s during startup mean the API server is still warming up. Network
+  // errors (TypeError: Failed to fetch / NetworkError) are also transient —
+  // both indicate the server is temporarily unreachable. The connecting banner
+  // (driven by useIsConnecting + useIsFetching in App.tsx) covers this case
+  // visually, so we suppress the destructive toast. The flag clears when the
+  // health poll confirms the server is back.
+  if (is502(error) || isNetworkError(error)) {
+    setIsConnecting(true);
     return;
   }
 
@@ -78,9 +179,9 @@ export const queryClient = new QueryClient({
   queryCache: new QueryCache({
     onError: handleQueryError,
     onSuccess: () => {
-      // Any successful query means the server is up — clear the 502 flag so
-      // the connecting banner can dismiss itself.
-      setHas502(false);
+      // Any successful query means the server is up — clear the connecting
+      // flag so the banner can dismiss itself.
+      setIsConnecting(false);
     },
   }),
   mutationCache: new MutationCache({
@@ -89,9 +190,9 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: (failureCount, error) => {
-        // Allow more retries for 502 (server still starting up) than for
-        // other errors where retrying is unlikely to help.
-        const limit = is502(error) ? 5 : 2;
+        // Allow more retries for server-unreachable conditions (502 or network
+        // error) than for other errors where retrying is unlikely to help.
+        const limit = is502(error) || isNetworkError(error) ? 5 : 2;
         return failureCount < limit;
       },
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 15_000),

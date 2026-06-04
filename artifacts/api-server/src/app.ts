@@ -13,6 +13,16 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 
+// ---------------------------------------------------------------------------
+// /health — lightweight liveness probe (no auth required)
+// ---------------------------------------------------------------------------
+// Registered before all middleware so it returns 200 immediately even during
+// startup, reconnection, or Clerk key mis-configuration. The frontend
+// warm-up banner polls this path to know when the server is reachable.
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", uptime: process.uptime() });
+});
+
 // 1. Stamp X-Request-Id first so every downstream middleware and log line
 //    carries the same correlation token.
 app.use(correlationIdMiddleware);
