@@ -50,6 +50,28 @@ export function isTarBuffer(buffer: Buffer): boolean {
     .equals(TAR_MAGIC);
 }
 
+/** Gzip magic bytes: 0x1F 0x8B */
+const GZ_MAGIC = Buffer.from([0x1f, 0x8b]);
+
+/**
+ * Return true when the file at `filePath` is a gzip stream.
+ * Reads only the first 2 bytes to check for the gzip magic number (0x1F 0x8B).
+ * Useful for detecting NOAA archives that arrive with a descriptive filename
+ * (e.g. "h09092.alaska - tolstoi bay - bathymetric data - h09092") that has no
+ * ".gz" extension even though the content is gzip-compressed.
+ */
+export async function isGzipFile(filePath: string): Promise<boolean> {
+  const fd = await fs.promises.open(filePath, "r");
+  try {
+    const buf = Buffer.alloc(2);
+    const { bytesRead } = await fd.read(buf, 0, 2, 0);
+    if (bytesRead < 2) return false;
+    return buf[0] === GZ_MAGIC[0] && buf[1] === GZ_MAGIC[1];
+  } finally {
+    await fd.close();
+  }
+}
+
 /**
  * Return true when the file at `filePath` contains a POSIX tar archive.
  * Reads only the first 512 bytes (one tar block) to avoid loading the file.

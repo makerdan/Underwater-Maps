@@ -19,7 +19,7 @@ import { db, customDatasetsTable, type StoredTerrainJson } from "@workspace/db";
 import { logger } from "./logger.js";
 import { parseXyzCsv, gridPoints } from "./terrain.js";
 import { parseUploadedFile } from "./uploadParsers.js";
-import { isTarFile, extractTarFile } from "./tarDetect.js";
+import { isTarFile, extractTarFile, isGzipFile } from "./tarDetect.js";
 import { routeTarEntries } from "./noaaTarRouter.js";
 import { registerCache } from "./cacheRegistry.js";
 
@@ -217,7 +217,12 @@ export async function processObject(bucketName: string, objectKey: string): Prom
     let processPath = downloadedPath;
 
     const lowerName = fileName.toLowerCase();
-    if (lowerName.endsWith(".gz")) {
+    // Detect gzip by magic bytes as a fallback for NOAA files with descriptive
+    // names that carry no ".gz" extension (e.g. "h09092.alaska - tolstoi bay...").
+    const looksLikeGzip =
+      lowerName.endsWith(".gz") || await isGzipFile(downloadedPath);
+
+    if (looksLikeGzip) {
       await streamGunzip(downloadedPath, decompressedPath);
       processPath = decompressedPath;
     } else {
@@ -230,6 +235,7 @@ export async function processObject(bucketName: string, objectKey: string): Prom
       }
     }
 
+    // Strip ".gz" only when the name actually ends in it.
     const baseName = lowerName.endsWith(".gz") ? fileName.slice(0, -3) : fileName;
     const ext = baseName.split(".").pop()?.toLowerCase() ?? "";
 

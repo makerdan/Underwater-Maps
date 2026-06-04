@@ -33,7 +33,7 @@ import {
 import { parseUploadedFile } from "../lib/uploadParsers.js";
 import { routeTarEntries } from "../lib/noaaTarRouter.js";
 import { gunzipBounded } from "../lib/gunzipBounded.js";
-import { isTarBuffer, extractTarBuffer, isTarFile, extractTarFile } from "../lib/tarDetect.js";
+import { isTarBuffer, extractTarBuffer, isTarFile, extractTarFile, isGzipFile } from "../lib/tarDetect.js";
 import { fetchCopernicusDem } from "../lib/copernicusDem.js";
 import { fetchSatelliteTile } from "../lib/satelliteTile.js";
 import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
@@ -422,7 +422,14 @@ async function processUploadJob(
 
     let processPath = assembledPath;
 
-    if (fileName.toLowerCase().endsWith(".gz")) {
+    // Detect gzip by magic bytes (0x1F 0x8B) as a fallback when the filename
+    // does not carry a ".gz" extension.  NOAA archives are frequently downloaded
+    // with descriptive names like "h09092.alaska - tolstoi bay - h09092" that
+    // contain no extension hint even though the content is gzip-compressed.
+    const looksLikeGzip =
+      fileName.toLowerCase().endsWith(".gz") || await isGzipFile(assembledPath);
+
+    if (looksLikeGzip) {
       // Stream-decompress with size guard; avoids full gz buffer in RAM.
       await streamGunzipToFile(assembledPath, decompressedPath, DECOMPRESS_MAX_BYTES);
       await fs.promises.unlink(assembledPath).catch(() => undefined);
@@ -555,6 +562,9 @@ async function processUploadJob(
     job.progress = 35;
 
     // Derive names before spawning the worker (cheap, main-thread-safe).
+    // Strip ".gz" only when the name actually ends in it — for gzip-by-content
+    // files with descriptive NOAA names we keep the full name so dataset naming
+    // stays readable (routeTarEntries will derive a name from archive internals).
     const baseFileName = fileName.toLowerCase().endsWith(".gz") ? fileName.slice(0, -3) : fileName;
     const datasetName = baseFileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
     const gridId = crypto.randomUUID();
