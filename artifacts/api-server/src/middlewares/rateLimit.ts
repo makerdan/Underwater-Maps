@@ -47,6 +47,77 @@ export interface RateLimitOptions {
   skipIfNoUser?: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Route registry — populated by createRateLimit so the admin usage endpoint
+// can resolve max / windowMs for each observed bucket_key.
+// ---------------------------------------------------------------------------
+
+interface RouteRegistryEntry {
+  route: string;
+  mode: RateLimitKeyMode;
+  max: number;
+  windowMs: number;
+}
+
+const routeRegistry: RouteRegistryEntry[] = [];
+
+/** Returns a snapshot of every route/mode pair that has been registered. */
+export function getRouteRegistry(): Readonly<RouteRegistryEntry[]> {
+  return routeRegistry;
+}
+
+// ---------------------------------------------------------------------------
+// Admin usage query — reads the rate_limit_events table and returns the
+// top-N bucket_keys by event count within the given window.
+// ---------------------------------------------------------------------------
+
+export interface RateLimitUsageRow {
+  bucket_key: string;
+  route: string;
+  mode: RateLimitKeyMode;
+  count: number;
+  max: number | null;
+  remaining: number | null;
+}
+
+const USAGE_SQL = `
+  SELECT bucket_key, COUNT(*)::int AS count
+  FROM rate_limit_events
+  WHERE created_at > NOW() - ($1::bigint || ' milliseconds')::interval
+  GROUP BY bucket_key
+  ORDER BY count DESC
+  LIMIT $2
+`;
+
+/**
+ * Queries the live rate_limit_events table for aggregated window usage.
+ *
+ * @param windowMs  - The sliding window size in ms. Defaults to 60 000 (1 min).
+ * @param topN      - Maximum number of bucket_keys to return. Defaults to 25.
+ */
+export async function queryRateLimitUsage(
+  windowMs = 60_000,
+  topN = 25,
+): Promise<RateLimitUsageRow[]> {
+  const result = await pool.query<{ bucket_key: string; count: number }>(USAGE_SQL, [
+    windowMs,
+    topN,
+  ]);
+
+  return result.rows.map((row) => {
+    const parts = row.bucket_key.split(":");
+    const modeChar = parts[0] ?? "";
+    const route = parts[1] ?? row.bucket_key;
+    const mode: RateLimitKeyMode = modeChar === "i" ? "ip" : "user";
+
+    const entry = routeRegistry.find((e) => e.route === route && e.mode === mode);
+    const max = entry?.max ?? null;
+    const remaining = max !== null ? Math.max(0, max - row.count) : null;
+
+    return { bucket_key: row.bucket_key, route, mode, count: row.count, max, remaining };
+  });
+}
+
 interface ConsumeResult {
   allowed: boolean;
   /** Requests still permitted in the current window (>= 0). */
@@ -181,6 +252,13 @@ function clientIp(req: Request): string {
 }
 
 export function createRateLimit(opts: RateLimitOptions): RequestHandler {
+  const alreadyRegistered = routeRegistry.some(
+    (e) => e.route === opts.route && e.mode === opts.mode,
+  );
+  if (!alreadyRegistered) {
+    routeRegistry.push({ route: opts.route, mode: opts.mode, max: opts.max, windowMs: opts.windowMs });
+  }
+
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const userId = (req as AuthenticatedRequest).clerkUserId;
     let key: string;

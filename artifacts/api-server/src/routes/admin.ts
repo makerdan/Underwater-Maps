@@ -7,6 +7,7 @@ import {
   getLifecycleApplyStatus,
   getLargeDatasetsDiff,
 } from "../lib/bucketMonitor.js";
+import { queryRateLimitUsage } from "../middlewares/rateLimit.js";
 
 const router = Router();
 
@@ -87,6 +88,55 @@ router.get(
 
     const diff = await getLargeDatasetsDiff();
     res.json(diff);
+  }),
+);
+
+/**
+ * GET /admin/rate-limit/usage
+ *
+ * Returns the top-N bucket_keys by event count within the active sliding
+ * window. Useful for identifying top consumers and routes approaching their
+ * quota without needing direct database access.
+ *
+ * Query params:
+ *   windowMs  (number, default 60000) — window size in milliseconds.
+ *   limit     (number, default 25)    — max rows to return.
+ *
+ * Response shape per entry:
+ *   bucket_key  — raw key (e.g. "u:query:user_abc123")
+ *   route       — logical route name extracted from the key
+ *   mode        — "user" or "ip"
+ *   count       — events observed in the window
+ *   max         — configured request ceiling (null if route not yet registered)
+ *   remaining   — requests still allowed (null if max is unknown)
+ *
+ * Access: auth-required; restricted to admin users (same rules as
+ * /admin/bucket-monitor).
+ */
+router.get(
+  "/admin/rate-limit/usage",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const userId = (req as AuthenticatedRequest).clerkUserId;
+
+    if (!isAdmin(userId)) {
+      res.status(403).json({ error: "forbidden", details: "Admin access required" });
+      return;
+    }
+
+    const rawWindowMs = Number(req.query["windowMs"]);
+    const rawLimit = Number(req.query["limit"]);
+    const windowMs = Number.isFinite(rawWindowMs) && rawWindowMs > 0 ? rawWindowMs : 60_000;
+    const topN = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 200) : 25;
+
+    const rows = await queryRateLimitUsage(windowMs, topN);
+
+    res.json({
+      windowMs,
+      generatedAt: new Date().toISOString(),
+      count: rows.length,
+      rows,
+    });
   }),
 );
 
