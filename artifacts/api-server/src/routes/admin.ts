@@ -55,6 +55,7 @@ router.get(
         processedDatasetsTtlDays: LIFECYCLE_TTLS.processedDays,
         failedDatasetsTtlDays: LIFECYCLE_TTLS.failedDays,
         note: "GCS lifecycle rules automatically delete objects in processed-datasets/ after 30 days and failed-datasets/ after 14 days.",
+        permissionDenied: applyStatus.permissionDenied ?? false,
         lastAppliedAt: applyStatus.appliedAt,
         lastApplyError: applyStatus.error,
       },

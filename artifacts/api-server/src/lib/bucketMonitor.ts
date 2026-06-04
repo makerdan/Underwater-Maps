@@ -630,6 +630,12 @@ const MANAGED_PREFIXES = ["processed-datasets/", "failed-datasets/"] as const;
 export interface LifecycleApplyStatus {
   appliedAt: number | null;
   error: string | null;
+  /**
+   * Set to true when the GCS service account lacks storage.buckets.get /
+   * storage.buckets.update permissions (HTTP 403). Lifecycle rules must be
+   * configured manually in the GCS Console in that case.
+   */
+  permissionDenied?: boolean;
 }
 
 let lifecycleApplyStatus: LifecycleApplyStatus = { appliedAt: null, error: null };
@@ -655,9 +661,31 @@ export async function applyBucketLifecycleRules(): Promise<void> {
   const bucketName = getBucketName();
   const bucket = gcsClient.bucket(bucketName);
 
-  const [metadata] = await bucket.getMetadata();
+  // Fetch current bucket metadata. A 403 here means the Replit-managed service
+  // account lacks storage.buckets.get (and almost certainly storage.buckets.update).
+  // Those permissions cannot be granted on Replit-managed accounts, so we degrade
+  // gracefully: log once at INFO, record the permissionDenied flag, and return
+  // without throwing so the scan loop is unaffected.
+  let rawMetadata: unknown;
+  try {
+    const result = await bucket.getMetadata();
+    rawMetadata = result[0];
+  } catch (err: unknown) {
+    if ((err as { code?: number }).code === 403) {
+      lifecycleApplyStatus = { appliedAt: null, error: null, permissionDenied: true };
+      logger.info(
+        { bucket: bucketName },
+        "[bucket-monitor] lifecycle rules cannot be managed from this service account " +
+          "(storage.buckets.get / storage.buckets.update permissions required) — " +
+          "configure lifecycle rules manually in the GCS Console",
+      );
+      return;
+    }
+    throw err;
+  }
+
   const existingRules: LifecycleRule[] =
-    (metadata as { lifecycle?: { rule?: LifecycleRule[] } })?.lifecycle?.rule ?? [];
+    (rawMetadata as { lifecycle?: { rule?: LifecycleRule[] } })?.lifecycle?.rule ?? [];
 
   const unmanagedRules = existingRules.filter((rule) => {
     const prefixes: unknown[] = (rule.condition["matchesPrefix"] as unknown[]) ?? [];
