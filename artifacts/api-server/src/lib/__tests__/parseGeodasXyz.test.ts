@@ -169,6 +169,50 @@ describe("parseGeodasXyz", () => {
   });
 
   // -------------------------------------------------------------------------
+  // Fuzzy / synonym column-name matching
+  // -------------------------------------------------------------------------
+
+  it("accepts 'long' as a synonym for lon", async () => {
+    const csv = `survey_id,lat,long,depth\nH09084,55.7,-132.5,10.0\n`;
+    const filePath = await writeTmp(tmpDir, "h09084.xyz.gz", makeGeodasGz(csv));
+    const pts = await parseGeodasXyz(filePath);
+    expect(pts).toHaveLength(1);
+    expect(pts[0]).toMatchObject({ lat: 55.7, lon: -132.5, depth: 10.0 });
+  });
+
+  it("accepts 'latitude' as a synonym for lat", async () => {
+    const csv = `survey_id,latitude,lon,depth\nH09084,55.7,-132.5,10.0\n`;
+    const filePath = await writeTmp(tmpDir, "h09084.xyz.gz", makeGeodasGz(csv));
+    const pts = await parseGeodasXyz(filePath);
+    expect(pts).toHaveLength(1);
+    expect(pts[0]).toMatchObject({ lat: 55.7, lon: -132.5, depth: 10.0 });
+  });
+
+  it("accepts 'elev' as a synonym for depth (positive → kept, negative → skipped)", async () => {
+    const csv = `survey_id,lat,lon,elev\nH09084,55.7,-132.5,25.3\nH09084,55.8,-132.6,-1.0\n`;
+    const filePath = await writeTmp(tmpDir, "h09084.xyz.gz", makeGeodasGz(csv));
+    const pts = await parseGeodasXyz(filePath);
+    expect(pts).toHaveLength(1);
+    expect(pts[0]!.depth).toBeCloseTo(25.3, 3);
+  });
+
+  it("accepts 'qc' as a synonym for quality_code and still filters on it", async () => {
+    const csv = `survey_id,lat,lon,depth,qc\nH09084,55.7,-132.5,10.0,1\nH09084,55.8,-132.6,12.0,0\n`;
+    const filePath = await writeTmp(tmpDir, "h09084.xyz.gz", makeGeodasGz(csv));
+    const pts = await parseGeodasXyz(filePath);
+    expect(pts).toHaveLength(1);
+    expect(pts[0]!.depth).toBeCloseTo(10.0, 3);
+  });
+
+  it("accepts 'status' as a synonym for active and still filters on it", async () => {
+    const csv = `survey_id,lat,lon,depth,status\nH09084,55.7,-132.5,10.0,1\nH09084,55.8,-132.6,12.0,0\n`;
+    const filePath = await writeTmp(tmpDir, "h09084.xyz.gz", makeGeodasGz(csv));
+    const pts = await parseGeodasXyz(filePath);
+    expect(pts).toHaveLength(1);
+    expect(pts[0]!.depth).toBeCloseTo(10.0, 3);
+  });
+
+  // -------------------------------------------------------------------------
   // Error handling
   // -------------------------------------------------------------------------
 
@@ -176,6 +220,12 @@ describe("parseGeodasXyz", () => {
     const csv = `survey_id,lon,depth,quality_code,active\nH09084,-132.5,10.0,1,1\n`;
     const filePath = await writeTmp(tmpDir, "h09084.xyz.gz", makeGeodasGz(csv));
     await expect(parseGeodasXyz(filePath)).rejects.toThrow(/missing required columns/i);
+  });
+
+  it("error message for missing columns lists the accepted synonym sets", async () => {
+    const csv = `survey_id,lon,depth,quality_code,active\nH09084,-132.5,10.0,1,1\n`;
+    const filePath = await writeTmp(tmpDir, "h09084.xyz.gz", makeGeodasGz(csv));
+    await expect(parseGeodasXyz(filePath)).rejects.toThrow(/accepted:/i);
   });
 
   it("throws a descriptive error when given invalid gzip content", async () => {

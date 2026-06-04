@@ -520,6 +520,43 @@ export async function parseNoaaSurveysXyz(filePath: string): Promise<RawPoint[]>
   return points;
 }
 
+// ---------------------------------------------------------------------------
+// Synonym tables for GEODAS xyz column resolution
+// ---------------------------------------------------------------------------
+
+const GEODAS_COL_SYNONYMS = {
+  lat: ["lat", "latitude", "latitiude", "latitide", "lati", "y_coord", "y"],
+  lon: ["lon", "long", "longitude", "longitide", "longitiude", "lng", "x_coord", "x"],
+  depth: [
+    "depth",
+    "dept",
+    "deepth",
+    "dpth",
+    "dep",
+    "z",
+    "elevation",
+    "elev",
+    "altitude",
+    "alt",
+    "height",
+    "bathy",
+    "bathymetry",
+  ],
+  quality_code: ["quality_code", "quality", "qualitycode", "qc", "flag", "qual_code", "qual"],
+  active: ["active", "status", "valid", "enabled", "use", "include"],
+} as const;
+
+/**
+ * Return the first index in `headers` that matches any synonym (case-insensitive,
+ * already trimmed/lowercased). Returns -1 when no match is found.
+ */
+function resolveCol(headers: string[], synonyms: readonly string[]): number {
+  for (let i = 0; i < headers.length; i++) {
+    if (synonyms.includes(headers[i] as (typeof synonyms)[number])) return i;
+  }
+  return -1;
+}
+
 /**
  * Parse a GEODAS xyz.gz sounding CSV.
  *
@@ -529,6 +566,10 @@ export async function parseNoaaSurveysXyz(filePath: string): Promise<RawPoint[]>
  * Quality filter: rows where quality_code != 1 or active != 1 are excluded.
  * Depth convention: GEODAS depths are positive-downward (matches BathyScan).
  * Negative depths (elevations above datum) are skipped.
+ *
+ * Column names are matched case-insensitively against the synonym tables in
+ * GEODAS_COL_SYNONYMS, so common alternate spellings (e.g. "long", "latitude",
+ * "elev") are accepted without renaming the file.
  *
  * @param filePath Absolute path to the .xyz.gz file on disk.
  */
@@ -559,16 +600,23 @@ export async function parseGeodasXyz(filePath: string): Promise<RawPoint[]> {
   }
   const headers = headerLine.split(",").map((h) => h.trim().toLowerCase());
 
-  const idxLat = headers.indexOf("lat");
-  const idxLon = headers.indexOf("lon");
-  const idxDepth = headers.indexOf("depth");
-  const idxQuality = headers.indexOf("quality_code");
-  const idxActive = headers.indexOf("active");
+  const idxLat = resolveCol(headers, GEODAS_COL_SYNONYMS.lat);
+  const idxLon = resolveCol(headers, GEODAS_COL_SYNONYMS.lon);
+  const idxDepth = resolveCol(headers, GEODAS_COL_SYNONYMS.depth);
+  const idxQuality = resolveCol(headers, GEODAS_COL_SYNONYMS.quality_code);
+  const idxActive = resolveCol(headers, GEODAS_COL_SYNONYMS.active);
 
   if (idxLat === -1 || idxLon === -1 || idxDepth === -1) {
+    const missing: string[] = [];
+    if (idxLat === -1)
+      missing.push(`lat (accepted: ${GEODAS_COL_SYNONYMS.lat.join(", ")})`);
+    if (idxLon === -1)
+      missing.push(`lon (accepted: ${GEODAS_COL_SYNONYMS.lon.join(", ")})`);
+    if (idxDepth === -1)
+      missing.push(`depth (accepted: ${GEODAS_COL_SYNONYMS.depth.join(", ")})`);
     throw new Error(
       `GEODAS xyz.gz file "${path.basename(filePath)}" is missing required columns. ` +
-        `Found: ${headers.join(", ")}. Expected: lat, lon, depth.`,
+        `Found: ${headers.join(", ")}. Missing: ${missing.join("; ")}.`,
     );
   }
 
