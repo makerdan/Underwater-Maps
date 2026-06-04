@@ -264,6 +264,56 @@ describe("routeTarEntries", () => {
     expect(result.points).toHaveLength(8);
   });
 
+  it("raster-only archive (Smooth_Sheets, no xyz soundings) passes when inner-geotiff returns points", async () => {
+    // Regression guard: an archive whose ONLY parseable entry is a Smooth_Sheets
+    // GeoTIFF must NOT hit the NO_PARSEABLE_DATA guard — the raster path populates
+    // allPoints just like the sounding parsers do.
+    const ssDir = path.join(tmpDir, "H09084", "Smooth_Sheets");
+    await fs.promises.mkdir(ssDir, { recursive: true });
+    // Write a placeholder .tif.gz — the inner-geotiff parser is mocked below.
+    await fs.promises.writeFile(path.join(ssDir, "H09084.tif.gz"), "placeholder");
+    mockParser("inner-geotiff", makePts(6));
+
+    const result = await routeTarEntries(
+      tmpDir,
+      [
+        // Only smooth-sheet raster — no surveys.xyz, no GEODAS, no BSText
+        "H09084/Smooth_Sheets/H09084.tif.gz",
+      ],
+      "H09084.tar.gz",
+    );
+
+    expect(result.points).toHaveLength(6);
+    expect(result.substratePoints).toHaveLength(0);
+  });
+
+  it("raster-only archive where inner-geotiff returns [] captures raster buffer (no throw)", async () => {
+    // When parseSmoothSheetsGeoTiff returns [] it means the raster has no
+    // georeferencing tags.  The router must NOT throw NO_PARSEABLE_DATA in this
+    // case — instead it captures the raw .tif.gz bytes in smoothSheetRasterBuffer
+    // so the caller can persist them for the interactive georeferencing wizard.
+    // The post-parse guard fires only when allPoints, allSubstratePoints, AND
+    // smoothSheetRasterBuffer are all empty simultaneously.
+    const ssDir = path.join(tmpDir, "H09084", "Smooth_Sheets");
+    await fs.promises.mkdir(ssDir, { recursive: true });
+    const gzPayload = Buffer.from("placeholder");
+    await fs.promises.writeFile(path.join(ssDir, "H09084.tif.gz"), gzPayload);
+    mockParser("inner-geotiff", []);
+
+    const result = await routeTarEntries(
+      tmpDir,
+      ["H09084/Smooth_Sheets/H09084.tif.gz"],
+      "H09084.tar.gz",
+    );
+
+    // No depth soundings were parsed — but the archive is still valid because
+    // the raster buffer was captured for later georeferencing.
+    expect(result.points).toHaveLength(0);
+    expect(result.smoothSheetRasterBuffer).toEqual(gzPayload);
+    expect(result.smoothSheetRasterFilename).toBe("H09084.tif.gz");
+    expect(result.substratePoints).toHaveLength(0);
+  });
+
   it("derives dataset name from surveys.txt H-number and area", async () => {
     // Write surveys.txt and a surveys.xyz placeholder
     await fs.promises.writeFile(
