@@ -2488,6 +2488,52 @@ export const GetEfhResponse = zod.object({
 
 
 /**
+ * Returns GeoJSON Essential Fish Habitat zone polygons for the given dataset.
+
+Preset/catalog dataset IDs are public (no auth required). UUID-format (custom
+user-uploaded) dataset IDs require authentication and ownership — callers that
+are not the owner receive 404 rather than 403 to avoid confirming existence.
+
+If no EFH data is bundled for the requested dataset (e.g. a freshwater upload
+outside NOAA EFH coverage) the response is an empty FeatureCollection with
+HTTP 200.
+
+Data credit: NOAA Fisheries / NMFS Alaska Region.
+https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles
+
+ * @summary Essential Fish Habitat zones for a specific dataset
+ */
+export const GetEfhByIdParams = zod.object({
+  "id": zod.coerce.string().describe('Dataset ID (preset slug or UUID for a user-uploaded dataset)')
+})
+
+export const GetEfhByIdQueryParams = zod.object({
+  "species": zod.coerce.string().optional().describe('Comma-separated species names or common names to filter')
+})
+
+export const GetEfhByIdResponse = zod.object({
+  "type": zod.enum(['FeatureCollection']),
+  "features": zod.array(zod.object({
+  "type": zod.enum(['Feature']),
+  "properties": zod.object({
+  "species": zod.string().describe('Scientific species name (snake_case)'),
+  "commonName": zod.string(),
+  "fmp": zod.string().describe('Fishery Management Plan name'),
+  "depthRangeM": zod.array(zod.number()).describe('[minDepth, maxDepth] in metres'),
+  "habitatDescription": zod.string(),
+  "lifeStage": zod.string().optional().describe('Life stages covered by this Essential Fish Habitat polygon (e.g. \"Juveniles & Adults\")'),
+  "season": zod.string().optional().describe('Seasonality \/ temporal window for this Essential Fish Habitat designation (e.g. \"Year-round\", \"Spawning Feb–Apr\")'),
+  "source": zod.string(),
+  "creditUrl": zod.string(),
+  "color": zod.string().describe('Suggested hex color for rendering')
+}),
+  "geometry": zod.record(zod.string(), zod.unknown())
+})),
+  "metadata": zod.record(zod.string(), zod.unknown()).optional()
+})
+
+
+/**
  * Returns 1024 zone labels for the 32×32 coarse grid. Results are cached; a stable gridHash avoids redundant AI calls.
  * @summary Get AI-classified seafloor/lake-bed zones for a dataset
  */

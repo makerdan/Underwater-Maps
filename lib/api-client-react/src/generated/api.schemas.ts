@@ -2406,6 +2406,13 @@ datasetId?: string;
 species?: string;
 };
 
+export type GetEfhByIdParams = {
+/**
+ * Comma-separated species names or common names to filter
+ */
+species?: string;
+};
+
 export type GetDatasetZonesParams = {
 /**
  * Lowercase hex hash of the depth grid (8-char FNV-1a or 64-char SHA-256) for cache keying

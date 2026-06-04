@@ -48,6 +48,7 @@ import type {
   GetDatasetsCatalogSearchParams,
   GetDatasetsIdTerrainParams,
   GetDatasetsParams,
+  GetEfhByIdParams,
   GetEfhParams,
   GetGcsJobStatus200,
   GetGcsJobStatusParams,
@@ -5172,6 +5173,108 @@ export function useGetEfh<TData = Awaited<ReturnType<typeof getEfh>>, TError = E
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetEfhQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetEfhByIdUrl = (id: string,
+    params?: GetEfhByIdParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/efh/${id}?${stringifiedParams}` : `/api/efh/${id}`
+}
+
+/**
+ * Returns GeoJSON Essential Fish Habitat zone polygons for the given dataset.
+
+Preset/catalog dataset IDs are public (no auth required). UUID-format (custom
+user-uploaded) dataset IDs require authentication and ownership — callers that
+are not the owner receive 404 rather than 403 to avoid confirming existence.
+
+If no EFH data is bundled for the requested dataset (e.g. a freshwater upload
+outside NOAA EFH coverage) the response is an empty FeatureCollection with
+HTTP 200.
+
+Data credit: NOAA Fisheries / NMFS Alaska Region.
+https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles
+
+ * @summary Essential Fish Habitat zones for a specific dataset
+ */
+export const getEfhById = async (id: string,
+    params?: GetEfhByIdParams, options?: RequestInit): Promise<EfhFeatureCollection> => {
+
+  return customFetch<EfhFeatureCollection>(getGetEfhByIdUrl(id,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetEfhByIdQueryKey = (id: string,
+    params?: GetEfhByIdParams,) => {
+    return [
+    `/api/efh/${id}`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetEfhByIdQueryOptions = <TData = Awaited<ReturnType<typeof getEfhById>>, TError = ErrorType<ApiError>>(id: string,
+    params?: GetEfhByIdParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEfhById>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetEfhByIdQueryKey(id,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getEfhById>>> = ({ signal }) => getEfhById(id,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getEfhById>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetEfhByIdQueryResult = NonNullable<Awaited<ReturnType<typeof getEfhById>>>
+export type GetEfhByIdQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Essential Fish Habitat zones for a specific dataset
+ */
+
+export function useGetEfhById<TData = Awaited<ReturnType<typeof getEfhById>>, TError = ErrorType<ApiError>>(
+ id: string,
+    params?: GetEfhByIdParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEfhById>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetEfhByIdQueryOptions(id,params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

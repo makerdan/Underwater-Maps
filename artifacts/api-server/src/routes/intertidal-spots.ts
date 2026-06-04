@@ -175,7 +175,7 @@ function buildAndSendResponse(
  * (HTTP 200, no error) since there is simply no intertidal coverage there.
  */
 router.get("/intertidal-spots/:id", asyncHandler(async (req, res) => {
-  const datasetId = req.params["id"]!;
+  const datasetId = String(req.params["id"]);
 
   // ── UUID / custom-upload path ─────────────────────────────────────────────
   if (CUSTOM_DATASET_UUID_RE.test(datasetId) && !ALL_PRESET_DATASETS.some((d) => d.id === datasetId)) {
