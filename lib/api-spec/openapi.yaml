@@ -2238,6 +2238,57 @@ paths:
               schema:
                 $ref: "#/components/schemas/EfhFeatureCollection"
 
+  /efh/{id}:
+    get:
+      operationId: getEfhById
+      tags: [datasets]
+      summary: Essential Fish Habitat zones for a specific dataset
+      description: |
+        Returns GeoJSON Essential Fish Habitat zone polygons for the given dataset.
+
+        Preset/catalog dataset IDs are public (no auth required). UUID-format (custom
+        user-uploaded) dataset IDs require authentication and ownership — callers that
+        are not the owner receive 404 rather than 403 to avoid confirming existence.
+
+        If no EFH data is bundled for the requested dataset (e.g. a freshwater upload
+        outside NOAA EFH coverage) the response is an empty FeatureCollection with
+        HTTP 200.
+
+        Data credit: NOAA Fisheries / NMFS Alaska Region.
+        https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Dataset ID (preset slug or UUID for a user-uploaded dataset)
+        - in: query
+          name: species
+          required: false
+          schema:
+            type: string
+          description: Comma-separated species names or common names to filter
+      responses:
+        "200":
+          description: GeoJSON FeatureCollection of Essential Fish Habitat zone polygons (may be empty)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EfhFeatureCollection"
+        "401":
+          description: Unauthenticated — UUID dataset IDs require a valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Dataset not found or caller does not own the requested UUID dataset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /datasets/{id}/zones:
     get:
       operationId: getDatasetZones
