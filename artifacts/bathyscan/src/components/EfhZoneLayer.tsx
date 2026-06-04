@@ -25,6 +25,8 @@ import { WORLD_SIZE } from "@/lib/terrain";
 import {
   useGetEfh,
   getGetEfhQueryKey,
+  useGetEfhById,
+  getGetEfhByIdQueryKey,
   useGetDatasets,
   getGetDatasetsQueryKey,
 } from "@workspace/api-client-react";
@@ -34,6 +36,10 @@ import type { ThreeEvent } from "@react-three/fiber";
 import { toast } from "@/hooks/use-toast";
 import { polygonIntersectsBbox } from "@/lib/efhBboxFilter";
 import type { Bbox } from "@/lib/efhBboxFilter";
+/** UUID format: custom (user-uploaded) dataset IDs. */
+const CUSTOM_DATASET_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Y elevation for EFH filled polygons — just above ocean surface (Y=0). */
 const EFH_FILL_Y = 1.0;
 /** Y elevation for EFH outlines — slightly above the fill so they are not z-fought. */
@@ -172,6 +178,9 @@ export const EfhZoneLayer: React.FC = () => {
 
   const datasetId = terrain?.datasetId ?? "";
 
+  // True when the active dataset is a user-uploaded custom dataset (UUID format).
+  const isUuidDataset = CUSTOM_DATASET_UUID_RE.test(datasetId);
+
   // For user-saved noaa-efh-* datasets, the polygons are embedded directly in
   // the terrain response under `habitatPolygons` — no secondary /efh fetch needed.
   const embeddedPolygons = terrain?.habitatPolygons ?? null;
@@ -183,15 +192,23 @@ export const EfhZoneLayer: React.FC = () => {
   );
   const hasEfh = !!allDatasets?.find((d) => d.id === datasetId)?.hasEfh;
 
+  // UUID (user-uploaded) datasets use the path-param route GET /efh/:id which
+  // performs an auth + ownership check server-side.
+  const { data: efhByIdData } = useGetEfhById(
+    datasetId,
+    undefined,
+    { query: { enabled: isUuidDataset && efhOverlayEnabled && !embeddedPolygons, queryKey: getGetEfhByIdQueryKey(datasetId) } },
+  );
+
   // Only fetch from /efh for preset datasets (hasEfh flag). For user-saved EFH
   // datasets the polygons arrive via `habitatPolygons` on the terrain object.
   const { data: efhData } = useGetEfh(
     { datasetId },
-    { query: { enabled: hasEfh && efhOverlayEnabled && !embeddedPolygons, queryKey: getGetEfhQueryKey({ datasetId }) } },
+    { query: { enabled: hasEfh && efhOverlayEnabled && !embeddedPolygons && !isUuidDataset, queryKey: getGetEfhQueryKey({ datasetId }) } },
   );
 
-  // Prefer embedded polygons (user-saved datasets) over the fetched preset data.
-  const activeFeatures = embeddedPolygons?.features ?? efhData?.features ?? null;
+  // Prefer embedded polygons (user-saved datasets), then UUID-route data, then preset data.
+  const activeFeatures = embeddedPolygons?.features ?? efhByIdData?.features ?? efhData?.features ?? null;
 
   const zones = useMemo(() => {
     if (!activeFeatures || !terrain) return [];

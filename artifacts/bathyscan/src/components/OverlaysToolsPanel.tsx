@@ -22,6 +22,8 @@ import {
   getGetDatasetsQueryKey,
   useGetEfh,
   getGetEfhQueryKey,
+  useGetEfhById,
+  getGetEfhByIdQueryKey,
 } from "@workspace/api-client-react";
 import type { EfhFeature } from "@workspace/api-client-react";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
@@ -174,7 +176,8 @@ export const OverlaysToolsPanel: React.FC = () => {
   const hasHyd93Features = isUserDataset && Array.isArray(hyd93FeaturesData) && hyd93FeaturesData.length > 0;
   const hasEfh =
     !!datasets?.find((d) => d.id === datasetId)?.hasEfh ||
-    !!embeddedPolygons;
+    !!embeddedPolygons ||
+    isUserDataset;
 
   // Surface conditions loading/error state — shared across Wind, Tide, Current.
   // React Query dedupes with ConditionsOverlays so no extra network request.
@@ -194,23 +197,48 @@ export const OverlaysToolsPanel: React.FC = () => {
     faaWeatherCamsUrl,
   } = useWeatherStations();
 
+  // User-uploaded datasets use the path-param route GET /efh/:id which performs
+  // an auth + ownership check server-side and returns an empty FeatureCollection
+  // (HTTP 200) when no EFH data is bundled for the upload area.
+  const {
+    isLoading: efhByIdLoading,
+    isError: efhByIdError,
+    data: efhByIdData,
+  } = useGetEfhById(
+    datasetId,
+    undefined,
+    {
+      query: {
+        enabled: isUserDataset && efhOverlayEnabled && !embeddedPolygons && !!datasetId,
+        queryKey: getGetEfhByIdQueryKey(datasetId),
+      },
+    },
+  );
+
   // EFH loading/error state + feature data — mirrors the enabled condition in EfhZoneLayer.
   // We also capture the feature data here to derive the per-species legend.
-  const { isLoading: efhLoading, isError: efhError, data: efhData } = useGetEfh(
+  const { isLoading: efhPresetLoading, isError: efhPresetError, data: efhData } = useGetEfh(
     { datasetId },
     {
       query: {
-        enabled: hasEfh && efhOverlayEnabled && !embeddedPolygons && !!datasetId,
+        enabled: hasEfh && efhOverlayEnabled && !embeddedPolygons && !isUserDataset && !!datasetId,
         queryKey: getGetEfhQueryKey({ datasetId }),
       },
     },
   );
 
+  const efhLoading = isUserDataset ? efhByIdLoading : efhPresetLoading;
+  const efhError = isUserDataset ? efhByIdError : efhPresetError;
+
   // Derive unique species entries for the per-species filter legend.
-  // Prefer embedded polygons (user-saved datasets) over fetched preset data.
+  // Prefer embedded polygons (user-saved datasets), then UUID-route data, then preset data.
   const activeEfhFeatures: EfhFeature[] = useMemo(
-    () => (embeddedPolygons?.features as EfhFeature[] | undefined) ?? efhData?.features ?? [],
-    [embeddedPolygons, efhData],
+    () =>
+      (embeddedPolygons?.features as EfhFeature[] | undefined) ??
+      (efhByIdData?.features as EfhFeature[] | undefined) ??
+      efhData?.features ??
+      [],
+    [embeddedPolygons, efhByIdData, efhData],
   );
   const efhSpeciesEntries = useMemo(() => {
     const seen = new Map<string, string>();
@@ -805,6 +833,20 @@ export const OverlaysToolsPanel: React.FC = () => {
                 activeColor="#4ade80"
                 isLoading={efhOverlayEnabled && efhLoading}
               />
+              {efhOverlayEnabled && isUserDataset && !efhByIdLoading && activeEfhFeatures.length === 0 && (
+                <div
+                  style={{
+                    marginTop: 4,
+                    paddingLeft: 8,
+                    fontSize: 9,
+                    color: "#94a3b8",
+                    fontStyle: "italic",
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  No EFH coverage for this upload area.
+                </div>
+              )}
               {efhOverlayEnabled && efhSpeciesEntries.length > 0 && (
                 <div
                   style={{
