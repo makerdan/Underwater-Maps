@@ -469,11 +469,11 @@ async function processUploadJob(
           )];
         }
 
-        // Require at least one depth sounding to produce a usable terrain grid.
-        // Archives that contain only substrate annotations (BSText files) but
-        // no sounding data cannot be gridded — surface a clear error instead of
-        // calling runParseWorker with an empty points array.
-        if (tarPoints.length === 0) {
+        // Guard: at least one of sounding points, substrate annotations, or a
+        // captured smooth-sheet raster must be present.  Substrate-only archives
+        // (BSText with no XYZ soundings) are valid — they skip the gridding step
+        // below but their substrate data is still persisted.
+        if (tarPoints.length === 0 && tarSubstratePoints.length === 0 && !smoothSheetRasterBuffer) {
           throw Object.assign(
             new Error("No parseable bathymetric data found in this archive."),
             { code: "NO_PARSEABLE_DATA" },

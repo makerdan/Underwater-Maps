@@ -193,20 +193,18 @@ describe("routeTarEntries", () => {
     expect(result.points[0]).toMatchObject({ lon: -132.53, lat: 55.69, depth: 42.5 });
   });
 
-  it("surveys.xyz with no valid data rows throws NO_PARSEABLE_DATA", async () => {
+  it("surveys.xyz with no valid data rows resolves with empty points (caller guards)", async () => {
     await fs.promises.mkdir(path.join(tmpDir, "H09084"), { recursive: true });
     // depth 99999.9 is the NOAA no-data sentinel — filtered out by the parser.
-    // The archive produces zero soundings, zero substrate points, and no
-    // smooth-sheet raster, so the post-parse guard should fire.
+    // routeTarEntries itself no longer throws when all collections are empty;
+    // the NO_PARSEABLE_DATA guard lives in the upload route (datasets.ts) so
+    // substrate-only archives can succeed without depth soundings.
     const content = "SURVEY\tLON\tLAT\tDEPTH\nH09084\t-132.530\t55.690\t99999.9\n";
     await fs.promises.writeFile(path.join(tmpDir, "H09084", "surveys.xyz"), content);
 
-    await expect(
-      routeTarEntries(tmpDir, ["H09084/surveys.xyz"], "H09084.tar.gz"),
-    ).rejects.toMatchObject({
-      message: "No parseable bathymetric data found in this archive.",
-      code: "NO_PARSEABLE_DATA",
-    });
+    const result = await routeTarEntries(tmpDir, ["H09084/surveys.xyz"], "H09084.tar.gz");
+    expect(result.points).toHaveLength(0);
+    expect(result.substratePoints).toHaveLength(0);
   });
 
   it("dispatches GEODAS xyz.gz entry to geodas-xyz parser (nested)", async () => {
@@ -342,6 +340,35 @@ describe("routeTarEntries", () => {
       message: "No parseable bathymetric data found in this archive.",
       code: "NO_PARSEABLE_DATA",
     });
+  });
+
+  it("substrate-only archive (BSText with no soundings) succeeds without throwing", async () => {
+    // Archives that ship only a BSText file (no XYZ soundings) must not be
+    // rejected.  The post-parse guard should pass because substratePoints > 0.
+    const bsDir = path.join(tmpDir, "Bottom_Samples");
+    await fs.promises.mkdir(bsDir, { recursive: true });
+
+    const bsContent = [
+      "LAT\tLON\tCOLOUR\tNAT",
+      "55.70\t-132.50\tSAND\tFIRM",
+      "55.71\t-132.51\tMUD\tSOFT",
+    ].join("\n");
+    await fs.promises.writeFile(
+      path.join(bsDir, "h09084_BSText.txt"),
+      bsContent,
+      "utf8",
+    );
+
+    const result = await routeTarEntries(
+      tmpDir,
+      ["Bottom_Samples/h09084_BSText.txt"],
+      "H09084.tar.gz",
+    );
+
+    expect(result.points).toHaveLength(0);
+    expect(result.substratePoints).toHaveLength(2);
+    expect(result.substratePoints[0]!.substrateType).toBe("sand");
+    expect(result.substratePoints[1]!.substrateType).toBe("mud");
   });
 });
 

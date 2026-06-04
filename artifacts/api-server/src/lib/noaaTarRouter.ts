@@ -1201,17 +1201,6 @@ export async function routeTarEntries(
     }
   }
 
-  // Post-parse guard: throw when no useful data was extracted at all.
-  // Bottom-samples-only archives (allSubstratePoints > 0) and archives whose
-  // smooth-sheet raster was captured for the georeferencing wizard
-  // (smoothSheetRasterBuffer set) are considered "useful" even with zero depth
-  // soundings.  Only throw when ALL three collections are empty.
-  if (allPoints.length === 0 && allSubstratePoints.length === 0 && !smoothSheetRasterBuffer) {
-    throw Object.assign(new Error(NO_PARSEABLE_DATA_MESSAGE), {
-      code: "NO_PARSEABLE_DATA",
-    });
-  }
-
   // Derive dataset name — surveys.txt H-number first, archive filename as fallback
   const metaName = await extractSurveyNameFromMetadata(extractedDir, entries);
   const datasetName = metaName ?? nameFromArchiveFilename(archiveFileName);

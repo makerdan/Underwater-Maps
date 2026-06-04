@@ -347,8 +347,8 @@ describe("routeTarEntries — bottom-samples integration", () => {
     ].join("\n");
     await fs2.promises.writeFile(bsFile, bsContent, "utf8");
 
-    // A surveys.xyz file provides at least one depth sounding so the router
-    // does not throw NO_PARSEABLE_DATA (which it does when allPoints is empty).
+    // A surveys.xyz file alongside the BSText file so the result carries both
+    // sounding points and substrate points.
     const xyzContent = [
       "SURVEY\tLON\tLAT\tDEPTH",
       "H09084\t-132.530\t55.690\t42.5",
