@@ -1201,6 +1201,20 @@ export async function routeTarEntries(
     }
   }
 
+  // Post-dispatch guard: if every collection is empty and there is no raster
+  // buffer, nothing useful came out of parsing — treat it as a failure.
+  // Substrate-only archives (allSubstratePoints non-empty) and archives with
+  // an ungeoreferenced raster are still valid success paths.
+  if (
+    allPoints.length === 0 &&
+    allSubstratePoints.length === 0 &&
+    !smoothSheetRasterBuffer
+  ) {
+    throw Object.assign(new Error(NO_PARSEABLE_DATA_MESSAGE), {
+      code: "NO_PARSEABLE_DATA",
+    });
+  }
+
   // Derive dataset name — surveys.txt H-number first, archive filename as fallback
   const metaName = await extractSurveyNameFromMetadata(extractedDir, entries);
   const datasetName = metaName ?? nameFromArchiveFilename(archiveFileName);

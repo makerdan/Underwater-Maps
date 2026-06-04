@@ -193,18 +193,20 @@ describe("routeTarEntries", () => {
     expect(result.points[0]).toMatchObject({ lon: -132.53, lat: 55.69, depth: 42.5 });
   });
 
-  it("surveys.xyz with no valid data rows resolves with empty points (caller guards)", async () => {
+  it("surveys.xyz with no valid data rows throws NO_PARSEABLE_DATA", async () => {
     await fs.promises.mkdir(path.join(tmpDir, "H09084"), { recursive: true });
     // depth 99999.9 is the NOAA no-data sentinel — filtered out by the parser.
-    // routeTarEntries itself no longer throws when all collections are empty;
-    // the NO_PARSEABLE_DATA guard lives in the upload route (datasets.ts) so
-    // substrate-only archives can succeed without depth soundings.
+    // When all points/substrate/raster collections remain empty after dispatch,
+    // routeTarEntries throws NO_PARSEABLE_DATA so the caller gets a clear error.
     const content = "SURVEY\tLON\tLAT\tDEPTH\nH09084\t-132.530\t55.690\t99999.9\n";
     await fs.promises.writeFile(path.join(tmpDir, "H09084", "surveys.xyz"), content);
 
-    const result = await routeTarEntries(tmpDir, ["H09084/surveys.xyz"], "H09084.tar.gz");
-    expect(result.points).toHaveLength(0);
-    expect(result.substratePoints).toHaveLength(0);
+    await expect(
+      routeTarEntries(tmpDir, ["H09084/surveys.xyz"], "H09084.tar.gz"),
+    ).rejects.toMatchObject({
+      message: "No parseable bathymetric data found in this archive.",
+      code: "NO_PARSEABLE_DATA",
+    });
   });
 
   it("dispatches GEODAS xyz.gz entry to geodas-xyz parser (nested)", async () => {
