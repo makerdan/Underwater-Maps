@@ -439,7 +439,6 @@ async function processUploadJob(
           datasetName: tarDatasetName,
           substratePoints: tarSubstratePoints,
           hyd93Features: tarHyd93Features,
-          substratePoints: tarSubstratePoints,
           skipped: tarSkipped,
           smoothSheetRasterBuffer,
           smoothSheetRasterFilename: _smoothSheetRasterFilename,
@@ -515,7 +514,6 @@ async function processUploadJob(
             overviewJson: overview as unknown as StoredTerrainJson,
             noaaSubstrateSamplesJson: tarSubstratePoints.length > 0 ? tarSubstratePoints : null,
             hyd93FeaturesJson: tarHyd93Features.length > 0 ? tarHyd93Features : null,
-            noaaSubstrateSamplesJson: tarSubstratePoints.length > 0 ? tarSubstratePoints : null,
             needsGeoreferencing: needsGeoreferencing ?? null,
             pendingRasterGzBase64: pendingRasterGzBase64 ?? null,
           })
