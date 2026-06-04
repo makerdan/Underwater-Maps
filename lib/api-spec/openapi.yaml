@@ -4258,7 +4258,7 @@ components:
           default: 1.0
         cameraSpawnBehaviour:
           type: string
-          enum: [deepest, home, last]
+          enum: [deepest, home, last, center]
           default: deepest
         showCrosshairGps:
           type: boolean

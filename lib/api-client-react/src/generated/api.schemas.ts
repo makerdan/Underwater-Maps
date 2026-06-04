@@ -225,6 +225,7 @@ export const UserSettingsCameraSpawnBehaviour = {
   deepest: 'deepest',
   home: 'home',
   last: 'last',
+  center: 'center',
 } as const;
 
 export type UserSettingsCoordinateFormat = typeof UserSettingsCoordinateFormat[keyof typeof UserSettingsCoordinateFormat];

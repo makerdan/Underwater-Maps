@@ -201,6 +201,18 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       // No saved session yet — fall through to deepest-point spawn.
     }
 
+    // "center" — place camera above the geographic (lon/lat) centroid of the dataset.
+    if (spawnBehaviour === "center") {
+      const centerLon = (grid.minLon + grid.maxLon) / 2;
+      const centerLat = (grid.minLat + grid.maxLat) / 2;
+      const { x, z } = lonLatToWorldXZ(centerLon, centerLat, grid);
+      const centerY = -(MAX_DEPTH_WORLD / 2);
+      camera.position.set(x, centerY + 10, z);
+      euler.current.set(-0.25, 0, 0);
+      camera.quaternion.setFromEuler(euler.current);
+      return;
+    }
+
     // "home" — spawn at the per-dataset saved home position if one is set.
     if (spawnBehaviour === "home") {
       const home = settings.datasetHomePositions[grid.datasetId];

@@ -1160,6 +1160,7 @@ function NavigationSection() {
               { value: "last", label: "Resume last session" },
               { value: "home", label: "Home position" },
               { value: "deepest", label: "Deepest point" },
+              { value: "center", label: "Geographic center" },
             ]}
             sublabel="Where to place the camera on the next visit"
           />

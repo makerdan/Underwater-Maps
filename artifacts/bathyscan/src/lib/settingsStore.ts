@@ -116,7 +116,7 @@ export type UnitsSystem = "metric" | "imperial" | "nautical";
  * unit regardless of the global selector — mirrors how `depthUnit` works.
  */
 export type TemperatureUnit = "auto" | "celsius" | "fahrenheit";
-export type CameraSpawnBehaviour = "deepest" | "home" | "last";
+export type CameraSpawnBehaviour = "deepest" | "home" | "last" | "center";
 export type MarkerType = "fish" | "shipwreck" | "coral" | "vent" | "custom" | "depth_pole" | "log" | "vegetation" | "sample" | "bass" | "trout" | "pike" | "walleye" | "crayfish";
 export type JoystickMode = "auto" | "always" | "off";
 
