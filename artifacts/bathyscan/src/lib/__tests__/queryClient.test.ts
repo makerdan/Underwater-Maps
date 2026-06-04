@@ -1,6 +1,6 @@
 /**
  * Unit tests for queryClient.ts — retry policy, toast suppression, the
- * _has502 server-warming flag, and the useHas502 reactive hook.
+ * _isConnecting server-warming flag, and the useIsConnecting reactive hook.
  *
  * Covers:
  *  - retry(failureCount, error) returns true for 502 up to 5 attempts
@@ -10,9 +10,9 @@
  *  - QueryCache onError suppresses toast for 401
  *  - QueryCache onError suppresses toast for 502 (server still warming up)
  *  - QueryCache onError fires a destructive toast for all other errors
- *  - QueryCache onSuccess resets _has502 to false
+ *  - QueryCache onSuccess resets _isConnecting to false
  *  - MutationCache onError follows the same suppression rules
- *  - useHas502 starts false, reacts to 502 errors, resets after success
+ *  - useIsConnecting starts false, reacts to 502 errors, resets after success
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -29,7 +29,7 @@ vi.mock("@/hooks/use-toast", () => ({
 }));
 
 // Import after the mock is registered (vi.mock is hoisted, so this is safe).
-import { queryClient, useHas502 } from "@/lib/queryClient";
+import { queryClient, useIsConnecting } from "@/lib/queryClient";
 
 // ── Cache config helpers ──────────────────────────────────────────────────────
 
@@ -69,7 +69,7 @@ function makeStatusError(status: number, message = "error"): Error & { status: n
 }
 
 // ── Reset shared module state between tests ───────────────────────────────────
-// _has502 is module-level mutable state; drive it back to false via the
+// _isConnecting is module-level mutable state; drive it back to false via the
 // public onSuccess path so each test starts from a clean baseline.
 beforeEach(() => {
   mockToast.mockReset();
@@ -259,17 +259,17 @@ describe("queryClient MutationCache onError — toast suppression", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// useHas502 reactive hook
+// useIsConnecting reactive hook
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("useHas502 hook", () => {
+describe("useIsConnecting hook", () => {
   it("returns false initially (no 502 has occurred yet)", () => {
-    const { result } = renderHook(() => useHas502());
+    const { result } = renderHook(() => useIsConnecting());
     expect(result.current).toBe(false);
   });
 
   it("returns true after a 502 query error", () => {
-    const { result } = renderHook(() => useHas502());
+    const { result } = renderHook(() => useIsConnecting());
 
     act(() => {
       triggerQueryError(makeStatusError(502));
@@ -279,7 +279,7 @@ describe("useHas502 hook", () => {
   });
 
   it("resets to false when a subsequent query succeeds", () => {
-    const { result } = renderHook(() => useHas502());
+    const { result } = renderHook(() => useIsConnecting());
 
     act(() => {
       triggerQueryError(makeStatusError(502));
@@ -293,7 +293,7 @@ describe("useHas502 hook", () => {
   });
 
   it("stays false when only non-502 errors occur", () => {
-    const { result } = renderHook(() => useHas502());
+    const { result } = renderHook(() => useIsConnecting());
 
     act(() => {
       triggerQueryError(makeStatusError(500));
@@ -305,7 +305,7 @@ describe("useHas502 hook", () => {
   });
 
   it("stays true across multiple 502s until a success clears it", () => {
-    const { result } = renderHook(() => useHas502());
+    const { result } = renderHook(() => useIsConnecting());
 
     act(() => {
       triggerQueryError(makeStatusError(502));
@@ -321,7 +321,7 @@ describe("useHas502 hook", () => {
   });
 
   it("can cycle between true and false across multiple 502/success pairs", () => {
-    const { result } = renderHook(() => useHas502());
+    const { result } = renderHook(() => useIsConnecting());
 
     act(() => { triggerQueryError(makeStatusError(502)); });
     expect(result.current).toBe(true);
@@ -337,24 +337,24 @@ describe("useHas502 hook", () => {
   });
 
   it("remains true (no extra re-render) when a second 502 arrives while already true", () => {
-    const { result } = renderHook(() => useHas502());
+    const { result } = renderHook(() => useIsConnecting());
 
     act(() => { triggerQueryError(makeStatusError(502)); });
     expect(result.current).toBe(true);
 
-    // A second 502 should keep the value at true (setHas502 guards same-value writes).
+    // A second 502 should keep the value at true (setIsConnecting guards same-value writes).
     act(() => { triggerQueryError(makeStatusError(502)); });
     expect(result.current).toBe(true);
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Interaction: 502 flag does not interfere with other-error toast
+// Interaction: connecting flag does not interfere with other-error toast
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("_has502 flag — interaction with other error toasts", () => {
+describe("_isConnecting flag — interaction with other error toasts", () => {
   it("a 502 followed by a 500 still fires a toast for the 500", () => {
-    triggerQueryError(makeStatusError(502)); // suppressed, sets _has502
+    triggerQueryError(makeStatusError(502)); // suppressed, sets _isConnecting
     mockToast.mockClear();
 
     triggerQueryError(makeStatusError(500, "real server error"));

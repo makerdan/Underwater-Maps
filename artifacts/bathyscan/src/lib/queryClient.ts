@@ -93,14 +93,6 @@ export function useIsConnecting(): boolean {
   );
 }
 
-/**
- * @deprecated Use useIsConnecting() instead.
- * Kept for backward-compatibility with existing callers (App.tsx).
- */
-export function useHas502(): boolean {
-  return useIsConnecting();
-}
-
 // ─── Health probe response-time tracking ──────────────────────────────────────
 // Updated each time runHealthProbe completes (success or failure).
 // null = no probe has run yet in this session.
