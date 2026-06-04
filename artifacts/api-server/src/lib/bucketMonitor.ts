@@ -19,6 +19,8 @@ import { db, customDatasetsTable, type StoredTerrainJson } from "@workspace/db";
 import { logger } from "./logger.js";
 import { parseXyzCsv, gridPoints } from "./terrain.js";
 import { parseUploadedFile } from "./uploadParsers.js";
+import { isTarFile, extractTarFile } from "./tarDetect.js";
+import { routeTarEntries } from "./noaaTarRouter.js";
 import { registerCache } from "./cacheRegistry.js";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
@@ -92,6 +94,10 @@ export interface BucketJob {
   error?: string;
   userId?: string;
   datasetId?: string;
+  /** Count of archive entries intentionally skipped (unsupported formats). */
+  skippedCount?: number;
+  /** Unique file extensions of skipped entries, e.g. [".sid.gz", ".pdf"]. */
+  skippedFormats?: string[];
 }
 
 const activeJobs = new Map<string, BucketJob>();
@@ -223,8 +229,41 @@ export async function processObject(bucketName: string, objectKey: string): Prom
     const baseName = lowerName.endsWith(".gz") ? fileName.slice(0, -3) : fileName;
     const ext = baseName.split(".").pop()?.toLowerCase() ?? "";
 
+    const tarExtractedDir = `${tmpBase}-tarcontents`;
     let points;
-    if (TEXT_EXTENSIONS.has(ext)) {
+
+    if (await isTarFile(processPath)) {
+      // NOAA smooth-sheet archives: .tar.gz (tar wrapped in gzip).
+      // Extract all entries and route each to its parser via the NOAA tar router.
+      const entries = await extractTarFile(processPath, tarExtractedDir);
+      const { points: tarPoints, skipped: tarSkipped } = await routeTarEntries(
+        tarExtractedDir,
+        entries,
+        baseName,
+      );
+
+      // Capture skipped-file metadata on the job (unsupported-format only).
+      // metadata-only and superseded entries are expected NOAA archive artefacts,
+      // not something users need to act on.
+      const unsupportedSkipped = tarSkipped.filter((s) => s.reason === "unsupported-format");
+      if (unsupportedSkipped.length > 0) {
+        job.skippedCount = unsupportedSkipped.length;
+        job.skippedFormats = [...new Set(
+          unsupportedSkipped.map((s) => {
+            const name = s.path.split("/").pop() ?? s.path;
+            if (name.toLowerCase().endsWith(".gz")) {
+              const withoutGz = name.slice(0, -3);
+              const dot = withoutGz.lastIndexOf(".");
+              return dot !== -1 ? withoutGz.slice(dot) + ".gz" : ".gz";
+            }
+            const dot = name.lastIndexOf(".");
+            return dot !== -1 ? name.slice(dot) : name;
+          }),
+        )];
+      }
+
+      points = tarPoints;
+    } else if (TEXT_EXTENSIONS.has(ext)) {
       const content = await fs.promises.readFile(processPath, "utf8");
       points = parseXyzCsv(content, fileName);
     } else {
@@ -275,6 +314,7 @@ export async function processObject(bucketName: string, objectKey: string): Prom
   } finally {
     await fs.promises.unlink(downloadedPath).catch(() => undefined);
     await fs.promises.unlink(decompressedPath).catch(() => undefined);
+    await fs.promises.rm(`${tmpBase}-tarcontents`, { recursive: true, force: true }).catch(() => undefined);
   }
 }
 

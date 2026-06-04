@@ -1711,6 +1711,8 @@ router.get(
       status: job.status,
       ...(job.datasetId !== undefined ? { datasetId: job.datasetId } : {}),
       ...(job.error !== undefined ? { error: job.error } : {}),
+      ...(job.skippedCount !== undefined ? { skippedCount: job.skippedCount } : {}),
+      ...(job.skippedFormats !== undefined ? { skippedFormats: job.skippedFormats } : {}),
     });
   }),
 );

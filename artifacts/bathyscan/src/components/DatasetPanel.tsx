@@ -1125,7 +1125,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       void fetch(`/api/datasets/upload/gcs-job-status?objectKey=${encodeURIComponent(objectKey)}`, {
         credentials: "include",
       })
-        .then((r) => r.json() as Promise<{ status: string; datasetId?: string; error?: string }>)
+        .then((r) => r.json() as Promise<{ status: string; datasetId?: string; error?: string; skippedCount?: number; skippedFormats?: string[] }>)
         .then((job) => {
           if (job.status === "done" && job.datasetId) {
             clearInterval(pollIntervalId);
@@ -1144,9 +1144,17 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
               setUploadOpen(false);
             };
 
+            const skippedNote =
+              job.skippedCount && job.skippedCount > 0
+                ? ` · ${job.skippedCount} file${job.skippedCount === 1 ? "" : "s"} skipped` +
+                  (job.skippedFormats && job.skippedFormats.length > 0
+                    ? ` (unsupported formats: ${job.skippedFormats.join(", ")})`
+                    : "")
+                : "";
+
             toast({
               title: `Dataset ready: ${displayName}`,
-              description: "Your file has finished processing.",
+              description: `Your file has finished processing.${skippedNote}`,
               action: (
                 <ToastAction altText="Load dataset now" onClick={triggerLoad}>
                   Load now
