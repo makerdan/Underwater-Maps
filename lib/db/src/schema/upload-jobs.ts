@@ -19,7 +19,7 @@ import { pgTable, text, integer, boolean, timestamp, uuid, index } from "drizzle
 export const uploadJobsTable = pgTable("upload_jobs", {
   id: uuid("id").primaryKey(),
   userId: text("user_id").notNull(),
-  status: text("status").notNull().$type<"queued" | "processing" | "done" | "error">(),
+  status: text("status").notNull().$type<"uploading" | "queued" | "processing" | "done" | "error">(),
   progress: integer("progress").notNull().default(0),
   error: text("error"),
   datasetId: uuid("dataset_id"),

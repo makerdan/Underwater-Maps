@@ -61,6 +61,13 @@ interface UploadSession {
   finalizing?: boolean;
   /** Set when finalize has been called; prevents double-processing the same upload. */
   activeJobId?: string;
+  /**
+   * Pre-generated UUID created on chunk 0 and persisted to the DB as an
+   * "uploading" row.  Reused as the finalize jobId so the same DB row
+   * transitions uploading → queued → processing → done without spawning a
+   * second row per upload.
+   */
+  sessionJobId?: string;
 }
 const uploadSessions = new Map<string, UploadSession>();
 registerCache(() => uploadSessions.clear());
@@ -164,6 +171,61 @@ async function persistJobToDB(
 }
 
 /**
+ * Creates an "uploading" row in the DB when chunk 0 is received.
+ * This lets the chunk-status endpoint reconstruct progress after a server
+ * restart that wiped /tmp — the row is later promoted to "queued" by
+ * persistJobToDB() during finalize (same row id = sessionJobId).
+ */
+async function createUploadSessionRow(
+  sessionJobId: string,
+  userId: string,
+  uploadId: string,
+  totalChunks: number,
+): Promise<void> {
+  try {
+    await db
+      .insert(uploadJobsTable)
+      .values({
+        id: sessionJobId,
+        userId,
+        status: "uploading",
+        progress: 0,
+        uploadId,
+        totalChunks,
+        chunksReceived: 1,
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing();
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    logger.warn({ sessionJobId, uploadId, errMsg }, `[upload-session] createUploadSessionRow failed`);
+  }
+}
+
+/**
+ * Increments chunksReceived in the DB for an active upload session.
+ * Called after each successful chunk write (except chunk 0, which is set
+ * to 1 at row creation time).  Fire-and-forget — non-fatal on failure.
+ */
+async function updateChunksReceivedInDB(
+  uploadId: string,
+  chunksReceived: number,
+): Promise<void> {
+  try {
+    await db
+      .update(uploadJobsTable)
+      .set({ chunksReceived, updatedAt: new Date() })
+      .where(and(
+        eq(uploadJobsTable.uploadId, uploadId),
+        eq(uploadJobsTable.status, "uploading"),
+      ));
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    logger.warn({ uploadId, chunksReceived, errMsg }, `[upload-session] updateChunksReceivedInDB failed`);
+  }
+}
+
+/**
  * On server startup, scan the database for any upload jobs that are still
  * queued or processing (meaning the previous process was killed mid-flight).
  *
@@ -243,7 +305,9 @@ export async function recoverStaleUploadJobs(): Promise<void> {
 
         if (assembledExists || chunksExist) {
           // Restore the in-memory upload session so chunk-status queries work.
-          uploadSessions.set(uploadId, { userId: job.userId });
+          // Include sessionJobId so that if the client retries finalize the
+          // same DB row is reused instead of spawning a second one.
+          uploadSessions.set(uploadId, { userId: job.userId, sessionJobId: job.id });
 
           // Re-queue the job with its original parameters.
           const requeued: JobState = { status: "queued", progress: 0, userId: job.userId };
@@ -1684,7 +1748,14 @@ router.post(
 
     if (chunkIndex === 0) {
       // First chunk: create the upload session bound to this user.
-      uploadSessions.set(uploadId, { userId });
+      // Pre-generate the job UUID now so it can be reused as the finalize
+      // jobId — this lets the same DB row transition uploading→queued rather
+      // than spawning a second row per upload.
+      const sessionJobId = crypto.randomUUID();
+      uploadSessions.set(uploadId, { userId, sessionJobId });
+      // Persist to DB so chunk-status can reconstruct progress after a
+      // server restart that wiped /tmp.  Fire-and-forget — non-fatal.
+      void createUploadSessionRow(sessionJobId, userId, uploadId, totalChunks);
     } else {
       // Subsequent chunks: verify ownership.
       const session = uploadSessions.get(uploadId);
@@ -1708,6 +1779,13 @@ router.post(
       await fs.promises.unlink(file.path).catch(() => undefined);
       res.status(500).json({ error: "chunk_write_error", details: "Failed to store chunk." });
       return;
+    }
+
+    // Update chunksReceived in DB after successful disk write.
+    // Chunk 0 already set chunksReceived=1 in createUploadSessionRow; only
+    // subsequent chunks need an increment here.
+    if (chunkIndex > 0) {
+      void updateChunksReceivedInDB(uploadId, chunkIndex + 1);
     }
 
     res.json({ received: chunkIndex });
@@ -1735,15 +1813,20 @@ router.get(
     // Fast path: in-memory session (current process lifetime).
     let session = uploadSessions.get(uploadId);
 
+    // DB chunksReceived is captured here so it is available for the disk-empty
+    // fallback below even when the in-memory session already existed.
+    let dbChunksReceived: number | null = null;
+
     if (!session) {
       // DB fallback — handles the case where the server restarted between
-      // chunk uploads and the in-memory session was lost.  The upload_jobs
-      // row (written at finalize time) carries the uploadId so we can
-      // reconstruct ownership without the sidecar JSON file.
+      // chunk uploads and the in-memory session was lost.  An "uploading"
+      // row (written on chunk 0) carries the uploadId and chunksReceived so
+      // we can reconstruct ownership and progress without any on-disk state.
       const [dbJob] = await db
         .select({
           userId: uploadJobsTable.userId,
           chunksReceived: uploadJobsTable.chunksReceived,
+          sessionJobId: uploadJobsTable.id,
         })
         .from(uploadJobsTable)
         .where(eq(uploadJobsTable.uploadId, uploadId));
@@ -1751,8 +1834,9 @@ router.get(
       if (dbJob) {
         // Restore the in-memory session so future requests in this process
         // take the fast path.
-        session = { userId: dbJob.userId };
+        session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId };
         uploadSessions.set(uploadId, session);
+        dbChunksReceived = dbJob.chunksReceived ?? null;
       }
     }
 
@@ -1761,9 +1845,11 @@ router.get(
       return;
     }
 
-    // Scan disk for the authoritative received-set — the DB chunksReceived
-    // column stores the count at finalize time, but during an active upload
-    // the disk is always the ground truth for which specific indices exist.
+    // Scan disk for the authoritative received-set — disk is always the ground
+    // truth while chunks are actively arriving.  After a server restart where
+    // /tmp was wiped we fall back to the DB chunksReceived count and synthesise
+    // a contiguous list [0, 1, …, chunksReceived-1] so the client can resume
+    // from exactly where it left off without re-sending earlier chunks.
     const receivedChunks: number[] = [];
     const entries = await fs.promises.readdir(CHUNK_BASE_DIR).catch(() => [] as string[]);
     const prefix = `${uploadId}-chunk-`;
@@ -1772,6 +1858,13 @@ router.get(
         const idx = parseInt(entry.slice(prefix.length), 10);
         if (!Number.isNaN(idx)) receivedChunks.push(idx);
       }
+    }
+
+    if (receivedChunks.length === 0 && dbChunksReceived !== null && dbChunksReceived > 0) {
+      // Disk was wiped (container restart) but the DB still knows how many
+      // chunks arrived.  Synthesise the contiguous list so the client can ask
+      // for only the next missing chunk rather than starting over.
+      for (let i = 0; i < dbChunksReceived; i++) receivedChunks.push(i);
     }
 
     receivedChunks.sort((a, b) => a - b);
@@ -1857,7 +1950,9 @@ router.post(
     let jobId: string;
     try {
       smoothing = await getSmoothingPreference(req);
-      jobId = crypto.randomUUID();
+      // Reuse the UUID generated on chunk 0 so the "uploading" DB row
+      // transitions to "queued" in-place rather than creating a second row.
+      jobId = session.sessionJobId ?? crypto.randomUUID();
     } catch (err) {
       // Release lock so the client can retry.
       session.finalizing = false;
