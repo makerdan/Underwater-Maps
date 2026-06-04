@@ -464,11 +464,11 @@ describe("DatasetPanel — gcsUploadFile Authorization header", () => {
     expect(presignedCalls).toHaveLength(2);
 
     // First call used the stale token.
-    const firstHeaders = new Headers(presignedCalls[0][1]?.headers as HeadersInit);
+    const firstHeaders = new Headers(presignedCalls[0]![1]?.headers as HeadersInit);
     expect(firstHeaders.get("authorization")).toBe("Bearer stale-token-expired");
 
     // Second call used the fresh token.
-    const secondHeaders = new Headers(presignedCalls[1][1]?.headers as HeadersInit);
+    const secondHeaders = new Headers(presignedCalls[1]![1]?.headers as HeadersInit);
     expect(secondHeaders.get("authorization")).toBe("Bearer fresh-token-after-refresh");
   });
 });

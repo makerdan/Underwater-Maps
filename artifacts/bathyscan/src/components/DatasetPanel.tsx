@@ -581,6 +581,34 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const waterType = useSettingsStore((s) => s.waterType);
   const units = useSettingsStore((s) => s.units);
 
+  // Accent colour tracks waterType: cyan for saltwater, green for freshwater.
+  const accent = waterType === "freshwater" ? "#4ade80" : "#00e5ff";
+
+  // ─── Upload error popup ────────────────────────────────────────────────────
+  const [copiedErrorHint, setCopiedErrorHint] = useState(false);
+
+  // Coalesce all three upload-error states into one dismissable message.
+  const activeUploadError: string | null =
+    gcsPhase === "error" && gcsError ? gcsError :
+    chunkedPhase === "error" && chunkedError ? chunkedError :
+    uploadError ?? null;
+
+  const dismissUploadError = useCallback(() => {
+    setCopiedErrorHint(false);
+    if (gcsPhase === "error") { setGcsPhase("idle"); setGcsError(null); }
+    if (chunkedPhase === "error") { setChunkedPhase("idle"); setChunkedError(null); }
+    setUploadError(null);
+  }, [gcsPhase, chunkedPhase]);
+
+  useEffect(() => {
+    if (!activeUploadError) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.stopPropagation(); dismissUploadError(); }
+    };
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, [activeUploadError, dismissUploadError]);
+
   // ─── Fetch dataset lists ───────────────────────────────────────────────────
   const { data: datasets, isLoading: datasetsLoading } = useGetDatasets(
     { waterType },
@@ -2818,14 +2846,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 4 }}>
                             {SUPPORTED_EXTENSIONS}
                           </div>
-                          {gcsPhase === "error" && gcsError && (
-                            <div style={{ fontSize: 9, color: "#f87171", marginTop: 4 }}>⚠ {gcsError}</div>
-                          )}
-                          {chunkedPhase === "error" && chunkedError && (
-                            <div style={{ fontSize: 9, color: "#f87171", marginTop: 4 }}>⚠ {chunkedError}</div>
-                          )}
-                          {uploadError && (
-                            <div style={{ fontSize: 9, color: "#f87171", marginTop: 4 }}>⚠ {uploadError}</div>
+                          {activeUploadError && (
+                            <div style={{ fontSize: 9, color: "#f87171", marginTop: 4 }}>⚠ upload error — click for details</div>
                           )}
                         </>
                       )}
@@ -2995,6 +3017,109 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                   fontFamily: "inherit",
                 }}
               >Remove</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeUploadError && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Upload error"
+          onClick={dismissUploadError}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1100,
+            background: "rgba(2,8,18,0.72)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "rgba(2,8,18,0.98)",
+              border: `1px solid ${accent}44`,
+              borderRadius: 8,
+              color: "#cbd5e1",
+              maxWidth: 480,
+              width: "100%",
+              padding: "20px 24px",
+              boxShadow: `0 0 32px ${accent}22`,
+              fontFamily: "'JetBrains Mono','Fira Code',monospace",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#f87171", letterSpacing: "0.1em" }}>
+                ⚠ UPLOAD ERROR
+              </span>
+              <button
+                aria-label="Close error dialog"
+                onClick={dismissUploadError}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#94a3b8",
+                  cursor: "pointer",
+                  fontSize: 16,
+                  padding: "0 2px",
+                  lineHeight: 1,
+                }}
+              >✕</button>
+            </div>
+            <p
+              style={{
+                fontSize: 11,
+                color: "#e2e8f0",
+                lineHeight: 1.6,
+                margin: "0 0 16px 0",
+                userSelect: "text",
+                wordBreak: "break-word",
+              }}
+            >
+              {activeUploadError}
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                onClick={() => {
+                  void navigator.clipboard.writeText(activeUploadError).then(() => {
+                    setCopiedErrorHint(true);
+                    setTimeout(() => setCopiedErrorHint(false), 2000);
+                  });
+                }}
+                style={{
+                  fontSize: 10,
+                  color: accent,
+                  background: "transparent",
+                  border: `1px solid ${accent}55`,
+                  borderRadius: 3,
+                  padding: "3px 10px",
+                  cursor: "pointer",
+                  letterSpacing: "0.08em",
+                  fontFamily: "inherit",
+                }}
+              >
+                {copiedErrorHint ? "COPIED ✓" : "COPY"}
+              </button>
+              <button
+                onClick={dismissUploadError}
+                style={{
+                  fontSize: 10,
+                  color: "#94a3b8",
+                  background: "transparent",
+                  border: "1px solid rgba(148,163,184,0.3)",
+                  borderRadius: 3,
+                  padding: "3px 10px",
+                  cursor: "pointer",
+                  letterSpacing: "0.08em",
+                  fontFamily: "inherit",
+                }}
+              >DISMISS</button>
             </div>
           </div>
         </div>
