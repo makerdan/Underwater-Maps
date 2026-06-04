@@ -3,7 +3,7 @@ import { logger } from "./lib/logger";
 import { seedDatasetCatalog } from "./lib/catalogSeeder.js";
 import { startBucketMonitor } from "./lib/bucketMonitor.js";
 import { startWeatherCacheRefresher } from "./lib/weatherCacheRefresher.js";
-import { recoverStaleUploadJobs, cleanupStaleChunks } from "./routes/datasets.js";
+import { recoverStaleUploadJobs, cleanupStaleChunks, cleanupAbandonedUploadJobs } from "./routes/datasets.js";
 import type * as http from "http";
 
 // ---------------------------------------------------------------------------
@@ -155,6 +155,13 @@ function tryBind(port: number, retriesLeft: number): void {
     // recovered jobs are preserved and cleaned up by processUploadJob).
     void cleanupStaleChunks().catch((cleanErr: unknown) => {
       logger.warn({ err: cleanErr }, "Stale chunk cleanup failed (non-critical)");
+    });
+
+    // Delete upload_jobs rows stuck in "uploading" status beyond the configured
+    // threshold (default 24 h).  These arise when a client starts a chunked
+    // upload but never calls finalize (e.g. browser closed mid-transfer).
+    void cleanupAbandonedUploadJobs().catch((abandonErr: unknown) => {
+      logger.warn({ err: abandonErr }, "Abandoned upload job cleanup failed (non-critical)");
     });
 
     // Seed the dataset discovery catalog on startup (idempotent).

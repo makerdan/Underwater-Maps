@@ -6,7 +6,7 @@ import * as os from "os";
 import { Worker } from "worker_threads";
 import { fileURLToPath } from "url";
 import multer from "multer";
-import { eq, and, inArray, or } from "drizzle-orm";
+import { eq, and, inArray, or, lt } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { z } from "zod";
 import { db, customDatasetsTable, userSettingsTable, uploadJobsTable, disabledPresetsTable, type StoredTerrainJson } from "@workspace/db";
@@ -431,6 +431,47 @@ export async function cleanupStaleChunks(): Promise<void> {
     // Non-fatal — worst case the orphaned files persist until the OS clears /tmp.
     const msg = err instanceof Error ? err.message : String(err);
     logger.warn({ msg }, `[upload-chunks] could not purge chunk files: ${msg}`);
+  }
+}
+
+/**
+ * Delete upload_jobs rows that are still in "uploading" status and are older
+ * than ABANDONED_UPLOAD_THRESHOLD_MS (default 24 h).
+ *
+ * These rows are created on the first chunk of a multi-part upload.  If the
+ * client never calls finalize (browser closed, network dropped, tab killed)
+ * the row stays "uploading" forever.  Because recoverStaleUploadJobs() only
+ * handles "queued" and "processing" rows, abandoned "uploading" rows would
+ * otherwise accumulate without bound.
+ *
+ * Called once from the server's startup sequence in index.ts, after
+ * recoverStaleUploadJobs() and cleanupStaleChunks() have run.
+ */
+export const ABANDONED_UPLOAD_THRESHOLD_MS =
+  Number(process.env.ABANDONED_UPLOAD_THRESHOLD_MS) || 24 * 60 * 60 * 1000; // 24 h
+
+export async function cleanupAbandonedUploadJobs(): Promise<void> {
+  try {
+    const cutoff = new Date(Date.now() - ABANDONED_UPLOAD_THRESHOLD_MS);
+    const deleted = await db
+      .delete(uploadJobsTable)
+      .where(
+        and(
+          eq(uploadJobsTable.status, "uploading"),
+          lt(uploadJobsTable.createdAt, cutoff),
+        ),
+      )
+      .returning({ id: uploadJobsTable.id });
+
+    if (deleted.length > 0) {
+      logger.info(
+        { count: deleted.length, thresholdMs: ABANDONED_UPLOAD_THRESHOLD_MS, cutoff },
+        `[upload-jobs] purged ${deleted.length} abandoned "uploading" job(s) older than ${ABANDONED_UPLOAD_THRESHOLD_MS} ms`,
+      );
+    }
+  } catch (err) {
+    // Non-fatal — stale rows accumulate but the server remains healthy.
+    logger.error({ err }, "[upload-jobs] failed to purge abandoned upload jobs on startup");
   }
 }
 
