@@ -1695,6 +1695,14 @@ export function parseXyzCsv(content: string, fileName: string): RawPoint[] {
   let lonIdx = 0;
   let latIdx = 1;
   let depthIdx = 2;
+  // GEODAS-specific quality-control columns.  We match only the unambiguous
+  // canonical names ("quality_code" and "active") so that generic CSV files
+  // containing common columns like "status" or "flag" are never accidentally
+  // filtered.  Synonym resolution (qc, status, flag, …) is handled by
+  // parseGeodasXyz in the NOAA tar-router path, which has authoritative
+  // GEODAS context.
+  let qualityIdx = -1;
+  let activeIdx = -1;
 
   const first = lines[0]?.trim() ?? "";
   const firstNum = parseFloat(first.split(sep)[0] ?? "");
@@ -1709,6 +1717,11 @@ export function parseXyzCsv(content: string, fileName: string): RawPoint[] {
       (h) => h.includes("dep") || h.includes("z") || h.includes("depth") || h.includes("elev")
     );
     depthIdx = dIdx >= 0 ? dIdx : 2;
+    // Exact-name match only — no synonyms — to avoid false positives in
+    // non-GEODAS files.  "qualitycode" covers the no-underscore variant seen
+    // in some older GEODAS exports.
+    qualityIdx = headers.findIndex((h) => h === "quality_code" || h === "qualitycode");
+    activeIdx = headers.findIndex((h) => h === "active");
   }
 
   const points: RawPoint[] = [];
@@ -1718,6 +1731,10 @@ export function parseXyzCsv(content: string, fileName: string): RawPoint[] {
     const lat = parseFloat(parts[latIdx] ?? "");
     let z = parseFloat(parts[depthIdx] ?? "");
     if (Number.isNaN(lon) || Number.isNaN(lat) || Number.isNaN(z)) continue;
+    // Apply GEODAS quality filtering when the canonical columns are present.
+    // A row must have quality_code == 1 AND active == 1 to be included.
+    if (qualityIdx !== -1 && parseFloat(parts[qualityIdx] ?? "") !== 1) continue;
+    if (activeIdx !== -1 && parseFloat(parts[activeIdx] ?? "") !== 1) continue;
     if (z < 0) z = -z;
     points.push({ lon, lat, depth: z });
   }
