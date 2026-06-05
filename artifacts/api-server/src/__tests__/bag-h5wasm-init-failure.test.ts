@@ -1,50 +1,29 @@
 /**
- * bag-h5wasm-init-failure.test.ts
+ * bag-parse-failure.test.ts
  *
- * Isolates the parseBag error path triggered when the h5wasm WASM module
- * fails to initialise (e.g. unsupported runtime, WASM disabled, CORS block).
- *
- * This path lives in a separate file so vi.mock("h5wasm") can override the
- * module registry before uploadParsers.ts loads, without affecting the main
- * real-file-integration suite which requires the real h5wasm.
+ * Verifies that parseBag surfaces a human-readable error when the input is
+ * not a valid HDF5 / BAG file.  The underlying parser is now bag_parser.py
+ * (h5py + pyproj) rather than h5wasm, so we test the Python-subprocess error
+ * path directly rather than mocking a WASM module.
  */
 
-import { vi, describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest";
+import { parseBag } from "../lib/uploadParsers.js";
 
-// vi.mock is hoisted by Vitest's transform — it runs before any import, so
-// uploadParsers.ts will receive the mocked "h5wasm" module when it imports
-// `ready` for the first time in this worker.
-vi.mock("h5wasm", () => {
-  // Attach a no-op catch so Node.js does not emit an UnhandledPromiseRejection
-  // warning at module-load time.  parseBag itself awaits the promise inside a
-  // try/catch, so the rejection is handled correctly during the test.
-  const readyRejection = Promise.reject(
-    new Error("WASM module not available in this environment"),
+describe("BAG parser — invalid-file error path", () => {
+  it(
+    "throws a descriptive error when the buffer is not a valid HDF5/BAG file",
+    async () => {
+      const junk = Buffer.from("this is definitely not an HDF5 / BAG file at all");
+      const err = await parseBag(junk).catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(Error);
+      const msg = (err as Error).message;
+
+      // Must contain something about BAG or the parse failure so the user
+      // gets actionable feedback instead of a generic "non-zero exit" message.
+      expect(msg.toLowerCase()).toMatch(/bag/i);
+    },
+    30_000,
   );
-  readyRejection.catch(() => {});
-  return {
-    ready: readyRejection,
-    File: class MockH5wFile {},
-    Group: class MockH5Group {},
-    Dataset: class MockH5Dataset {},
-  };
-});
-
-// Dynamic import so the module sees the mock established above.
-const { parseBag } = await import("../lib/uploadParsers.js");
-
-describe("BAG parser — h5wasm initialisation failure", () => {
-  it("wraps the WASM error in a human-readable guidance message", async () => {
-    const buf = Buffer.from("irrelevant — init fails before file is read");
-    const err = await parseBag(buf).catch((e: unknown) => e);
-
-    expect(err).toBeInstanceOf(Error);
-    const msg = (err as Error).message;
-
-    // Must name the underlying cause so developers can diagnose the issue.
-    expect(msg).toMatch(/h5wasm initialisation failed/i);
-    // Must provide a concrete conversion path so end-users are not stuck.
-    expect(msg).toMatch(/gdal_translate/i);
-    expect(msg).toMatch(/\.bag.*GeoTIFF|GeoTIFF.*\.bag/i);
-  });
 });

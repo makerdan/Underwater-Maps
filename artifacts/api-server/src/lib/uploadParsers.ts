@@ -10,16 +10,25 @@
  *   NetCDF   (.nc)           — gridded dataset, common depth/elevation aliases
  *   LAS 1.x  (.las)          — point-cloud binary, header-derived scale+offset
  *   LAZ      (.laz)          — compressed LAS; requires laz-perf WASM
- *   BAG      (.bag)          — HDF5 survey archive; requires h5wasm WASM
+ *   BAG      (.bag)          — HDF5 survey archive; parsed via bag_parser.py
+ *                              (h5py + pyproj; handles standard and VR BAGs,
+ *                               reprojects any projected CRS to WGS84)
  *   GPX      (.gpx)          — track points with <ele> depth log (server-side)
  *   NMEA     (.nmea)         — depth-sounder + position sentence log
  */
 
+import { execFile } from "child_process";
+import { promisify } from "util";
+import { existsSync, writeFileSync, rmSync } from "fs";
+import { tmpdir } from "os";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 import { fromArrayBuffer } from "geotiff";
 import { NetCDFReader } from "netcdfjs";
 import { createLazPerf } from "laz-perf";
-import { ready as h5wasmReady, File as H5wFile, Group as H5Group, Dataset as H5Dataset } from "h5wasm";
 import { parseXyzCsv } from "./terrain.js";
+
+const execFileAsync = promisify(execFile);
 
 // ---------------------------------------------------------------------------
 // Shared type (mirrors terrain.ts RawPoint — re-exported to avoid circular dep)
@@ -753,70 +762,109 @@ function lasPointsToRaw(points: { x: number; y: number; z: number }[]): RawPoint
 /**
  * Parse a BAG (Bathymetric Attributed Grid) HDF5 file.
  *
- * Uses h5wasm (WASM-based, no native bindings) to open the file buffer, read
- * the `BAG_root/elevation` dataset, and derive geolocation parameters from
- * the `BAG_root/metadata` XML.  If h5wasm cannot be loaded in the current
- * environment, a clear error is returned directing the user to convert via GDAL.
+ * Delegates to `bag_parser.py` (Python / h5py / pyproj) via a child-process
+ * call so that both standard uniform-grid BAGs and Variable Resolution (VR)
+ * BAGs are handled, with proper CRS reprojection to WGS84 when the file uses
+ * a projected coordinate system (UTM, State Plane, etc.).
+ *
+ * The Python script is located next to this module at build time
+ * (`dist/bag_parser.py`) and in the source tree during tests
+ * (`src/lib/bag_parser.py`).
  */
+
+/**
+ * Locate `bag_parser.py` by walking up from this module's directory.
+ * Checks the module directory first (dev / production main-server path),
+ * then one level up (production worker-thread path: dist/lib/ → dist/).
+ */
+function findBagParserScript(): string {
+  const thisDir = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    join(thisDir, "bag_parser.py"),        // dev: src/lib/  |  prod main: dist/
+    join(thisDir, "..", "bag_parser.py"),  // prod worker: dist/lib/ → dist/
+  ];
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+  throw new Error(
+    `bag_parser.py not found. Searched: ${candidates.join(", ")}. ` +
+      "Rebuild the server with `pnpm build` to copy the script to dist/.",
+  );
+}
+
+/**
+ * Locate the Python user-site root (.pythonlibs) that contains h5py/pyproj.
+ * Walks up from the bag_parser.py script looking for a `.pythonlibs` dir.
+ */
+function findPythonUserBase(scriptPath: string): string | undefined {
+  let dir = dirname(scriptPath);
+  for (let i = 0; i < 6; i++) {
+    const candidate = join(dir, ".pythonlibs");
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) break; // filesystem root
+    dir = parent;
+  }
+  return undefined;
+}
+
 export async function parseBag(buffer: Buffer): Promise<RawPoint[]> {
-  // Await h5wasm WASM initialisation — provides the virtual filesystem (FS).
-  let mod: Awaited<typeof h5wasmReady>;
-  try {
-    mod = await h5wasmReady;
-  } catch (err) {
-    throw new Error(
-      `h5wasm initialisation failed: ${err instanceof Error ? err.message : String(err)}. ` +
-        "Please convert your .bag file to GeoTIFF first using GDAL: gdal_translate -of GTiff input.bag output.tif",
-    );
-  }
+  const scriptPath = findBagParserScript();
 
-  const FS = mod.FS;
-
-  // Write buffer to h5wasm virtual filesystem
-  const tmpPath = "/tmp_bag_input.bag";
-  try {
-    FS.writeFile(tmpPath, new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength));
-  } catch (err) {
-    throw new Error(`Failed to write BAG to virtual FS: ${err instanceof Error ? err.message : String(err)}`);
-  }
+  // Write the buffer to a temp file that Python can open
+  const tmpPath = join(
+    tmpdir(),
+    `bag_${Date.now()}_${Math.random().toString(36).slice(2)}.bag`,
+  );
 
   try {
-    const f = new H5wFile(tmpPath, "r");
+    writeFileSync(tmpPath, buffer);
 
-    // Read elevation dataset
-    const bagRoot = f.get("BAG_root") as H5Group | undefined;
-    if (!bagRoot) throw new Error("BAG file does not contain a 'BAG_root' group.");
+    const pythonUserBase = findPythonUserBase(scriptPath);
+    const childEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      ...(pythonUserBase ? { PYTHONUSERBASE: pythonUserBase } : {}),
+    };
 
-    const elevDs = bagRoot.get("elevation");
-    if (!elevDs) throw new Error("BAG_root/elevation dataset not found.");
+    let stdout: string;
+    let stderr: string;
+    try {
+      ({ stdout, stderr } = await execFileAsync("python3", [scriptPath, tmpPath], {
+        env: childEnv,
+        // 128 MB covers up to ~4 M rows of CSV (lon,lat,depth ≈ 30 bytes each)
+        maxBuffer: 128 * 1024 * 1024,
+        // 5-minute ceiling for very large VR surveys
+        timeout: 5 * 60 * 1000,
+      }));
+    } catch (execErr) {
+      // execFile rejects on non-zero exit code; extract the stderr message
+      const stderrMsg =
+        (execErr && typeof execErr === "object" && "stderr" in execErr)
+          ? String((execErr as { stderr: unknown }).stderr).trim()
+          : String(execErr);
+      throw new Error(
+        stderrMsg
+          ? `BAG parse error: ${stderrMsg}`
+          : "BAG parsing failed (python3 exited with a non-zero status).",
+      );
+    }
 
-    const elevData = (elevDs as unknown as H5Dataset).value as number[][] | Float32Array;
-
-    // Read metadata XML for geolocation
-    const metaDs = bagRoot.get("metadata");
-    const metaXml = metaDs ? String((metaDs as unknown as H5Dataset).value ?? "") : "";
-
-    f.close();
-
-    // Parse geolocation from BAG metadata XML
-    const { lon0, lat0, dLon, dLat, cols, rows } = extractBagGeolocation(metaXml, elevData);
+    if (stderr?.trim()) {
+      // Python wrote warnings to stderr but still succeeded — log and continue
+      // (callers can suppress this; it's surfaced for diagnostics only)
+    }
 
     const points: RawPoint[] = [];
-    const nrows = Array.isArray(elevData) ? elevData.length : rows;
-    const ncols = Array.isArray(elevData) ? (elevData[0] as number[])?.length ?? cols : cols;
-
-    for (let ri = 0; ri < nrows; ri++) {
-      for (let ci = 0; ci < ncols; ci++) {
-        const val = Array.isArray(elevData)
-          ? ((elevData as number[][])[ri]?.[ci] ?? NaN)
-          : (elevData as Float32Array)[ri * ncols + ci]!;
-        if (!Number.isFinite(val) || val === 1_000_000) continue; // BAG fill = 1e6
-        const lon = lon0 + ci * dLon;
-        const lat = lat0 + ri * dLat;
-        if (!isValidCoord(lon, lat)) continue;
-        const depth = val < 0 ? -val : val;
-        points.push({ lon, lat, depth });
-      }
+    for (const line of stdout.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const parts = trimmed.split(",");
+      if (parts.length !== 3) continue;
+      const lon = parseFloat(parts[0]!);
+      const lat = parseFloat(parts[1]!);
+      const depth = parseFloat(parts[2]!);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat) || !Number.isFinite(depth)) continue;
+      points.push({ lon, lat, depth });
     }
 
     if (points.length === 0) {
@@ -825,55 +873,11 @@ export async function parseBag(buffer: Buffer): Promise<RawPoint[]> {
     return points;
   } finally {
     try {
-      FS.unlink(tmpPath);
+      rmSync(tmpPath);
     } catch {
       // ignore cleanup errors
     }
   }
-}
-
-/** Extract geolocation parameters from BAG metadata XML string. */
-function extractBagGeolocation(
-  xml: string,
-  elevData: number[][] | Float32Array,
-): { lon0: number; lat0: number; dLon: number; dLat: number; cols: number; rows: number } {
-  const nrows = Array.isArray(elevData) ? elevData.length : 0;
-  const ncols = Array.isArray(elevData) && elevData[0] ? (elevData[0] as number[]).length : 0;
-
-  const extract = (tag: string): number | undefined => {
-    const m = new RegExp(`<${tag}[^>]*>([^<]+)</${tag}>`).exec(xml);
-    return m ? parseFloat(m[1]!) : undefined;
-  };
-
-  const westBound = extract("westBoundLongitude") ?? extract("gmd:westBoundLongitude");
-  const eastBound = extract("eastBoundLongitude") ?? extract("gmd:eastBoundLongitude");
-  const southBound = extract("southBoundLatitude") ?? extract("gmd:southBoundLatitude");
-  const northBound = extract("northBoundLatitude") ?? extract("gmd:northBoundLatitude");
-
-  if (
-    westBound !== undefined && eastBound !== undefined &&
-    southBound !== undefined && northBound !== undefined
-  ) {
-    const cols = ncols || Math.max(1, Math.round((eastBound - westBound) / 0.001));
-    const rows = nrows || Math.max(1, Math.round((northBound - southBound) / 0.001));
-    return {
-      lon0: westBound,
-      lat0: southBound,
-      dLon: (eastBound - westBound) / cols,
-      dLat: (northBound - southBound) / rows,
-      cols,
-      rows,
-    };
-  }
-
-  // No valid bounding-box coordinates found in the XML — throw a structured
-  // error so the upload fails loudly rather than silently placing data at the
-  // Antarctic sentinel coordinates (-180 lon, -90 lat).
-  throw new Error(
-    "BAG metadata missing geolocation: could not extract westBoundLongitude / " +
-      "eastBoundLongitude / southBoundLatitude / northBoundLatitude from BAG XML metadata. " +
-      "Ensure the .bag file contains a valid ISO 19115 spatial-extent element.",
-  );
 }
 
 // ---------------------------------------------------------------------------

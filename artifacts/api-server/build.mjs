@@ -142,7 +142,7 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
   const libFiles = await readdir(libDir);
   await mkdir(distDir, { recursive: true });
   for (const name of libFiles) {
-    if (name.endsWith(".gen.json")) {
+    if (name.endsWith(".gen.json") || name.endsWith(".py")) {
       await copyFile(path.join(libDir, name), path.join(distDir, name));
       console.log(`  copied runtime asset: ${name}`);
     }

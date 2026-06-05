@@ -85,9 +85,9 @@ describe("BAG (HDF5) — realistic NOAA hydrographic survey fixture", () => {
   });
 
   it("throws a descriptive error for a non-HDF5 buffer", async () => {
-    // h5wasm silently accepts invalid data without throwing; parseBag must
-    // still surface a human-readable error when the file yields no valid points.
+    // bag_parser.py exits non-zero when h5py cannot open the file; parseBag
+    // must surface a human-readable error so the caller can diagnose the issue.
     const junk = Buffer.from("not an hdf5 file at all");
-    await expect(parseBag(junk)).rejects.toThrow(/BAG file/i);
+    await expect(parseBag(junk)).rejects.toThrow(/BAG/i);
   });
 });
