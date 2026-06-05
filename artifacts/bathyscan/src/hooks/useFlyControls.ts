@@ -12,6 +12,7 @@ import { useDriftStore } from "@/lib/driftStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
 import { worldXZToLonLat, worldYToMetres, lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
+import { registerResetCameraFn } from "@/lib/resetCameraRegistry";
 import { useJoystickStore } from "@/components/VirtualJoystick";
 import { computeMetersPerWorldUnit, boatMphToWorldUnitsPerSecond, BOAT_MIN_MPH, BOAT_MAX_MPH } from "@/lib/boatSpeed";
 import { tidalToWorldVelocity } from "@/lib/boatPhysics";
@@ -198,7 +199,16 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         camera.quaternion.setFromEuler(euler.current);
         return;
       }
-      // No saved session yet — fall through to deepest-point spawn.
+      // No saved session yet — place camera at the geographic center so the
+      // user gets a meaningful overview of the whole survey area on first load.
+      const centerLon = (grid.minLon + grid.maxLon) / 2;
+      const centerLat = (grid.minLat + grid.maxLat) / 2;
+      const { x, z } = lonLatToWorldXZ(centerLon, centerLat, grid);
+      const centerY = -(MAX_DEPTH_WORLD / 2);
+      camera.position.set(x, centerY + 10, z);
+      euler.current.set(-0.25, 0, 0);
+      camera.quaternion.setFromEuler(euler.current);
+      return;
     }
 
     // "center" — place camera above the geographic (lon/lat) centroid of the dataset.
@@ -246,6 +256,15 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
     euler.current.set(-0.25, 0, 0);
     camera.quaternion.setFromEuler(euler.current);
   }, [camera]);
+
+  // Register the latest resetCamera callback with the test-helper bridge so
+  // E2E specs can call window.__bathyTest.resetCameraForSpawn() without a
+  // real WebGL canvas. DEV-only: tree-shaken away in production builds via
+  // the same mechanism that gates window.__bathyTest (see testHelpers.ts).
+  useEffect(() => {
+    registerResetCameraFn(resetCamera);
+    return () => registerResetCameraFn(null);
+  }, [resetCamera]);
 
   // Reset camera when a new terrain dataset is loaded for the first time.
   // We gate on _lastSpawnedDatasetId so that WebGL context-recovery remounts

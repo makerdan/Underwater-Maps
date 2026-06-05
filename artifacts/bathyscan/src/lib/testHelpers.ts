@@ -47,7 +47,10 @@ import {
 } from "@workspace/api-client-react";
 import { useDepthProfileStore, buildProfile } from "./depthProfileStore";
 import { useSettingsStore } from "./settingsStore";
+import type { LastSession } from "./settingsStore";
 import { usePaletteStore } from "./paletteStore";
+import { worldXZToLonLat } from "./terrain";
+import { callRegisteredResetCamera } from "./resetCameraRegistry";
 import { hasPendingOrInFlightSettingsSync } from "../hooks/useServerSettingsSync";
 import { processFlyWheel } from "./flyWheel";
 import { useZoneOverlayStore, ZONE_DEFAULT_COLORS } from "./zoneOverlayStore";
@@ -421,6 +424,36 @@ export interface BathyTestApi {
   getDepthProfileSummary: () =>
     | { points: number; totalDistanceM: number; minDepthM: number; maxDepthM: number }
     | null;
+  /**
+   * Trigger the production `resetCamera` callback registered by
+   * `useFlyControls`. Used by camera-spawn E2E tests to exercise the spawn
+   * logic (center vs. saved-session fallback) without a real WebGL canvas.
+   * Returns true when the callback was registered and called, false when
+   * `useFlyControls` has not yet mounted (hook not active on this route).
+   */
+  resetCameraForSpawn: () => boolean;
+  /**
+   * Read the current THREE camera world-space XZ and convert it to
+   * geographic lon/lat using the active terrain grid. Returns null when
+   * either the camera or the terrain is not registered.
+   * Used by camera-spawn E2E tests to assert post-spawn position without
+   * waiting for the `useFrame` → `setCameraGeo` round-trip.
+   */
+  getCameraGeo: () => { lon: number; lat: number } | null;
+  /**
+   * Directly write `cameraSpawnBehaviour` into the settings store.
+   * E2E tests use this to drive different spawn branches without navigating
+   * to /settings.
+   */
+  setCameraSpawnBehaviour: (
+    v: "deepest" | "home" | "last" | "center",
+  ) => void;
+  /**
+   * Write (or clear) `lastSession` in the settings store.
+   * E2E tests use this to simulate "first load" (null) or "returning user"
+   * (a saved session object).
+   */
+  setLastSession: (session: LastSession | null) => void;
   /**
    * Scroll-to-zoom helpers. Tests use these to assert that wheel events
    * actually move the camera, that Shift+wheel steps the speed tier, and
@@ -995,6 +1028,17 @@ export function installTestHelpers(): void {
       for (let i = 0; i < zm.length; i += step) sample.push(zm[i] ?? 0);
       return { length: zm.length, hasEdits: s.hasEdits, hash, sample };
     },
+    resetCameraForSpawn: () => callRegisteredResetCamera(),
+    getCameraGeo: () => {
+      const cam = threeCameraRef;
+      const terrain = appGetTerrainRef.current;
+      if (!cam || !terrain) return null;
+      return worldXZToLonLat(cam.position.x, cam.position.z, terrain);
+    },
+    setCameraSpawnBehaviour: (v) =>
+      useSettingsStore.getState().setCameraSpawnBehaviour(v),
+    setLastSession: (session) =>
+      useSettingsStore.getState().setLastSession(session),
     getCameraPos: () => {
       // Prefer the live THREE camera (mutated synchronously by the wheel
       // handler) so tests don't have to wait for the useFrame → setCameraPos

@@ -86,6 +86,15 @@ vi.mock("@/lib/markerActions", () => ({
   runMarkerDelete: vi.fn(),
 }));
 
+// resetCameraRegistry is a zero-dep module that useFlyControls uses to
+// register its resetCamera callback with the test-helper bridge.
+// Replace with a no-op so this test file does not transitively pull in
+// testHelpers → queryClient → QueryClient (which is not in the RQ mock).
+vi.mock("@/lib/resetCameraRegistry", () => ({
+  registerResetCameraFn: vi.fn(),
+  callRegisteredResetCamera: vi.fn(() => false),
+}));
+
 // ── Imports under test (after the mocks) ─────────────────────────────────
 import { useFlyControls } from "@/hooks/useFlyControls";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
