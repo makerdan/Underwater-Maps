@@ -275,6 +275,32 @@ def parse_vr_bag(bag, meta_xml: str, max_pts: int):
             "bounding box in metadata XML."
         )
 
+    # Mixed-case guard: geo bbox present but CRS could not be resolved.
+    # If the super-cell SW corners look like projected coordinates (outside
+    # geographic range) we must fail loudly instead of treating UTM/State-Plane
+    # metres as degrees and silently returning no points.
+    if transformer is None and geo_bounds is not None:
+        first_sw_x = first_sw_y = None
+        for _r in range(sup_nrows):
+            for _c in range(sup_ncols):
+                try:
+                    _m = vr_meta[_r, _c]
+                    if int(_m["dimensions_x"]) > 0 and int(_m["dimensions_y"]) > 0:
+                        first_sw_x = float(_m["sw_corner_x"])
+                        first_sw_y = float(_m["sw_corner_y"])
+                except (ValueError, KeyError, TypeError):
+                    pass
+                if first_sw_x is not None:
+                    break
+            if first_sw_x is not None:
+                break
+        if first_sw_x is not None and (abs(first_sw_x) > 180 or abs(first_sw_y) > 90):
+            raise ValueError(
+                "VR BAG: data appears to use a projected CRS but no usable EPSG code "
+                "or WKT was found in the metadata XML. Re-export the file with a "
+                "recognised CRS or in WGS 84."
+            )
+
     # Count total valid refinements for step calculation
     depth_field = vr_ref["depth"] if "depth" in vr_ref.dtype.names else vr_ref[vr_ref.dtype.names[0]]
     total_valid = int(np.sum((depth_field < NAN_TEST) & (depth_field != BAG_FILL)))
