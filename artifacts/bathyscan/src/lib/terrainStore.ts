@@ -22,15 +22,32 @@ export interface VisibleDataset {
   overviewGrid: TerrainData | null;
 }
 
+/**
+ * Check whether a given datasetId is a member of the primary set.
+ * In multi-primary mode every visible dataset is primary.
+ */
+export function isPrimary(visibleDatasets: VisibleDataset[], datasetId: string): boolean {
+  return visibleDatasets.some((v) => v.datasetId === datasetId);
+}
+
 interface TerrainStore {
-  /** All datasets currently visible (3D + 2D map). Includes the primary. */
+  /** All datasets currently visible (3D + 2D map). All are treated as primary. */
   visibleDatasets: VisibleDataset[];
-  /** datasetId of the "primary" dataset — drives markers, AI, tides, camera, copy-coords. */
+  /**
+   * IDs of all visible datasets — every visible dataset shares equal primary
+   * status.  Replaces the old single-string `primaryDatasetId`.
+   */
+  primaryDatasetIds: string[];
+  /**
+   * Legacy alias: first visible dataset's ID (null if empty).  Kept so
+   * callers that need a single reference (coordinate frame, Overview Map
+   * centre, etc.) don't need to be updated all at once.
+   */
   primaryDatasetId: string | null;
 
-  /** Convenience: primary's full-res grid (mirrors `activeGrid` field on the primary entry). */
+  /** Convenience: first visible dataset's full-res grid (legacy alias). */
   activeGrid: TerrainData | null;
-  /** Convenience: primary's overview grid (mirrors `overviewGrid` field on the primary entry). */
+  /** Convenience: first visible dataset's overview grid (legacy alias). */
   overviewGrid: TerrainData | null;
 
   /**
@@ -64,16 +81,22 @@ interface TerrainStore {
     grids: { activeGrid?: TerrainData | null; overviewGrid?: TerrainData | null },
   ) => void;
 
-  /** Promote a dataset to primary. If it isn't visible yet, it's added first. */
+  /**
+   * Promote a dataset to the front of visibleDatasets (making it the legacy
+   * primaryDatasetId alias). If it isn't visible yet, it's added first.
+   * In multi-primary mode this does not change which datasets are "primary" —
+   * it only affects the first-entry alias used by legacy callers.
+   */
   setPrimary: (datasetId: string, source?: DatasetSource) => void;
 
   /**
-   * Toggle a dataset's visibility. When hiding the primary, the most-recent
-   * other visible dataset (if any) is promoted to primary.
+   * Toggle a dataset's visibility. When hiding the last dataset the store
+   * becomes empty.  When hiding what was previously the first entry, the
+   * second entry takes over the legacy `primaryDatasetId` alias.
    */
   toggleVisible: (entry: { datasetId: string; source: DatasetSource }) => void;
 
-  /** Remove every visible dataset except the primary. No-op when only primary is visible. */
+  /** Remove every visible dataset except the first one (legacy alias). */
   hideAllOthers: () => void;
 
   /**
@@ -91,21 +114,31 @@ interface TerrainStore {
   clearEviction: () => void;
 }
 
+/**
+ * Derive the multi-primary convenience fields from a visibleDatasets array.
+ * `activeGrid`/`overviewGrid`/`primaryDatasetId` are first-entry aliases kept
+ * for legacy callers; `primaryDatasetIds` is the full set of visible IDs.
+ */
 function syncPrimaryGrids(
   visibleDatasets: VisibleDataset[],
-  primaryDatasetId: string | null,
-): { activeGrid: TerrainData | null; overviewGrid: TerrainData | null } {
-  const primary = primaryDatasetId
-    ? visibleDatasets.find((v) => v.datasetId === primaryDatasetId)
-    : null;
+): {
+  primaryDatasetIds: string[];
+  primaryDatasetId: string | null;
+  activeGrid: TerrainData | null;
+  overviewGrid: TerrainData | null;
+} {
+  const first = visibleDatasets[0] ?? null;
   return {
-    activeGrid: primary?.activeGrid ?? null,
-    overviewGrid: primary?.overviewGrid ?? null,
+    primaryDatasetIds: visibleDatasets.map((v) => v.datasetId),
+    primaryDatasetId: first?.datasetId ?? null,
+    activeGrid: first?.activeGrid ?? null,
+    overviewGrid: first?.overviewGrid ?? null,
   };
 }
 
 export const useTerrainStore = create<TerrainStore>((set) => ({
   visibleDatasets: [],
+  primaryDatasetIds: [],
   primaryDatasetId: null,
   activeGrid: null,
   overviewGrid: null,
@@ -116,7 +149,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
     set((prev) => {
       // setGrids' legacy contract is "this is now THE primary terrain" — so
       // any grid carrying a datasetId promotes that dataset to primary. Fall
-      // back to the existing primary when neither grid carries an id (e.g.
+      // back to the existing first-entry when neither grid carries an id (e.g.
       // when callers clear with `{activeGrid: null}`).
       const explicitId =
         (activeGrid && activeGrid.datasetId) ||
@@ -153,29 +186,30 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       let nextVisible: VisibleDataset[];
       let evictedId: string | null = null;
       if (existing) {
+        // Keep the existing entry in its current position; update grids.
         nextVisible = prev.visibleDatasets.map((v) =>
           v.datasetId === primaryId ? merged : v,
         );
       } else {
-        // Cap-evict oldest non-primary entry when adding a new visible dataset.
+        // Cap-evict oldest non-first entry when adding a new visible dataset.
         let base = prev.visibleDatasets;
         if (base.length >= VISIBLE_DATASETS_CAP) {
-          const evictIdx = base.findIndex(
-            (v) => v.datasetId !== prev.primaryDatasetId,
-          );
+          // Evict the oldest entry that is NOT currently first (legacy alias).
+          const firstId = base[0]?.datasetId ?? null;
+          const evictIdx = base.findIndex((v) => v.datasetId !== firstId);
           if (evictIdx >= 0) {
             evictedId = base[evictIdx]!.datasetId;
             base = [...base.slice(0, evictIdx), ...base.slice(evictIdx + 1)];
           }
         }
-        nextVisible = [...base, merged];
+        // New entry becomes the first (primary alias) — prepend it.
+        nextVisible = [merged, ...base];
       }
 
       return {
         ...prev,
         visibleDatasets: nextVisible,
-        primaryDatasetId: primaryId,
-        ...syncPrimaryGrids(nextVisible, primaryId),
+        ...syncPrimaryGrids(nextVisible),
         ...(evictedId !== null ? { evictedId } : {}),
       };
     }),
@@ -200,7 +234,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       return {
         ...prev,
         visibleDatasets: nextVisible,
-        ...syncPrimaryGrids(nextVisible, prev.primaryDatasetId),
+        ...syncPrimaryGrids(nextVisible),
       };
     }),
 
@@ -209,18 +243,19 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       const existing = prev.visibleDatasets.find((v) => v.datasetId === datasetId);
       let nextVisible = prev.visibleDatasets;
       let evictedId: string | null = null;
+
       if (!existing) {
+        // Dataset not yet visible — add it.
         const entry: VisibleDataset = {
           datasetId,
           source: source ?? "preset",
           activeGrid: null,
           overviewGrid: null,
         };
-        // Evict oldest non-primary if cap exceeded.
         if (nextVisible.length >= VISIBLE_DATASETS_CAP) {
-          const evictIdx = nextVisible.findIndex(
-            (v) => v.datasetId !== prev.primaryDatasetId,
-          );
+          // Evict oldest non-first entry.
+          const firstId = nextVisible[0]?.datasetId ?? null;
+          const evictIdx = nextVisible.findIndex((v) => v.datasetId !== firstId);
           if (evictIdx >= 0) {
             evictedId = nextVisible[evictIdx]!.datasetId;
             nextVisible = [
@@ -229,13 +264,20 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
             ];
           }
         }
-        nextVisible = [...nextVisible, entry];
+        // Prepend so the new entry becomes the legacy primaryDatasetId alias.
+        nextVisible = [entry, ...nextVisible];
+      } else {
+        // Already visible — move it to position 0 for the legacy alias.
+        nextVisible = [
+          existing,
+          ...nextVisible.filter((v) => v.datasetId !== datasetId),
+        ];
       }
+
       return {
         ...prev,
         visibleDatasets: nextVisible,
-        primaryDatasetId: datasetId,
-        ...syncPrimaryGrids(nextVisible, datasetId),
+        ...syncPrimaryGrids(nextVisible),
         ...(evictedId !== null ? { evictedId } : {}),
       };
     }),
@@ -244,28 +286,22 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
     set((prev) => {
       const existing = prev.visibleDatasets.find((v) => v.datasetId === datasetId);
       if (existing) {
+        // Hide: remove from visibleDatasets.
         const nextVisible = prev.visibleDatasets.filter(
           (v) => v.datasetId !== datasetId,
         );
-        let nextPrimary = prev.primaryDatasetId;
-        if (prev.primaryDatasetId === datasetId) {
-          // Hiding the primary: promote the most-recent remaining entry, if any.
-          nextPrimary = nextVisible[nextVisible.length - 1]?.datasetId ?? null;
-        }
         return {
           ...prev,
           visibleDatasets: nextVisible,
-          primaryDatasetId: nextPrimary,
-          ...syncPrimaryGrids(nextVisible, nextPrimary),
+          ...syncPrimaryGrids(nextVisible),
         };
       }
-      // Add new entry (cap-evict oldest non-primary if needed).
+      // Add new entry (cap-evict oldest non-first if needed).
       let nextVisible = prev.visibleDatasets;
       let evictedId: string | null = null;
       if (nextVisible.length >= VISIBLE_DATASETS_CAP) {
-        const evictIdx = nextVisible.findIndex(
-          (v) => v.datasetId !== prev.primaryDatasetId,
-        );
+        const firstId = nextVisible[0]?.datasetId ?? null;
+        const evictIdx = nextVisible.findIndex((v) => v.datasetId !== firstId);
         if (evictIdx >= 0) {
           evictedId = nextVisible[evictIdx]!.datasetId;
           nextVisible = [
@@ -280,28 +316,27 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         activeGrid: null,
         overviewGrid: null,
       };
+      // Append — new entries go to the end, preserving first-entry alias.
       nextVisible = [...nextVisible, entry];
-      const nextPrimary = prev.primaryDatasetId ?? datasetId;
       return {
         ...prev,
         visibleDatasets: nextVisible,
-        primaryDatasetId: nextPrimary,
         multiDatasetMode: true,
-        ...syncPrimaryGrids(nextVisible, nextPrimary),
+        ...syncPrimaryGrids(nextVisible),
         ...(evictedId !== null ? { evictedId } : {}),
       };
     }),
 
   hideAllOthers: () =>
     set((prev) => {
-      if (!prev.primaryDatasetId) return prev;
-      const nextVisible = prev.visibleDatasets.filter(
-        (v) => v.datasetId === prev.primaryDatasetId,
-      );
+      // Keep only the first entry (legacy alias).
+      const first = prev.visibleDatasets[0];
+      if (!first) return prev;
+      const nextVisible = [first];
       return {
         ...prev,
         visibleDatasets: nextVisible,
-        ...syncPrimaryGrids(nextVisible, prev.primaryDatasetId),
+        ...syncPrimaryGrids(nextVisible),
       };
     }),
 
@@ -328,6 +363,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
   clear: () =>
     set({
       visibleDatasets: [],
+      primaryDatasetIds: [],
       primaryDatasetId: null,
       activeGrid: null,
       overviewGrid: null,

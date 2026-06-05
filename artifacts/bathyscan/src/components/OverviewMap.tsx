@@ -568,8 +568,8 @@ export const OverviewMap: React.FC = () => {
   });
 
   const substrateEnabled = !!datasetId && substrateColorMode;
-  const primaryIsUserDataset =
-    visibleDatasets.find((v) => v.datasetId === primaryDatasetId)?.source === "user";
+  // Multi-primary: enable user-dataset overlays if ANY visible dataset is a user upload.
+  const primaryIsUserDataset = visibleDatasets.some((v) => v.source === "user");
 
   useSubstrateErrorToast({
     isError: substrateIsError,

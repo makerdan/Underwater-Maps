@@ -253,4 +253,84 @@ describe("terrainStore multi-dataset", () => {
     useTerrainStore.getState().setSinglePrimary("beta", "preset");
     expect(useTerrainStore.getState().multiDatasetMode).toBe(false);
   });
+
+  // ── primaryDatasetIds — multi-primary broadcast tests ────────────────────
+
+  it("primaryDatasetIds is empty when no datasets are visible", () => {
+    const s = useTerrainStore.getState();
+    expect(s.primaryDatasetIds).toEqual([]);
+  });
+
+  it("primaryDatasetIds contains the single dataset after setGrids", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    const s = useTerrainStore.getState();
+    expect(s.primaryDatasetIds).toEqual(["alpha"]);
+  });
+
+  it("primaryDatasetIds includes ALL visible dataset IDs (multi-primary broadcast)", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    useTerrainStore.getState().toggleVisible({ datasetId: "beta", source: "preset" });
+    useTerrainStore.getState().toggleVisible({ datasetId: "gamma", source: "preset" });
+    const s = useTerrainStore.getState();
+    expect(s.primaryDatasetIds).toContain("alpha");
+    expect(s.primaryDatasetIds).toContain("beta");
+    expect(s.primaryDatasetIds).toContain("gamma");
+    expect(s.primaryDatasetIds).toHaveLength(3);
+  });
+
+  it("removing a dataset removes it from primaryDatasetIds", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    useTerrainStore.getState().toggleVisible({ datasetId: "beta", source: "preset" });
+    useTerrainStore.getState().toggleVisible({ datasetId: "beta", source: "preset" }); // hide
+    const s = useTerrainStore.getState();
+    expect(s.primaryDatasetIds).toEqual(["alpha"]);
+    expect(s.primaryDatasetIds).not.toContain("beta");
+  });
+
+  it("primaryDatasetIds is empty and primaryDatasetId is null after clear", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    useTerrainStore.getState().toggleVisible({ datasetId: "beta", source: "preset" });
+    useTerrainStore.getState().clear();
+    const s = useTerrainStore.getState();
+    expect(s.primaryDatasetIds).toEqual([]);
+    expect(s.primaryDatasetId).toBeNull();
+  });
+
+  it("primaryDatasetId (legacy alias) is always visibleDatasets[0]", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    useTerrainStore.getState().toggleVisible({ datasetId: "beta", source: "preset" });
+    // Before promote: alpha is first
+    let s = useTerrainStore.getState();
+    expect(s.primaryDatasetId).toBe("alpha");
+    // After setPrimary("beta"): beta moves to front
+    useTerrainStore.getState().setPrimary("beta");
+    s = useTerrainStore.getState();
+    expect(s.primaryDatasetId).toBe("beta");
+    expect(s.visibleDatasets[0]!.datasetId).toBe("beta");
+    // primaryDatasetIds still contains both
+    expect(s.primaryDatasetIds).toContain("alpha");
+    expect(s.primaryDatasetIds).toContain("beta");
+  });
+
+  it("primaryDatasetIds tracks evictions — evicted dataset not in primaryDatasetIds", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    for (const id of ["b", "c", "d"]) {
+      useTerrainStore.getState().toggleVisible({ datasetId: id, source: "preset" });
+    }
+    // Evict "b" by adding "e"
+    useTerrainStore.getState().toggleVisible({ datasetId: "e", source: "preset" });
+    const s = useTerrainStore.getState();
+    expect(s.primaryDatasetIds).not.toContain("b");
+    expect(s.primaryDatasetIds).toContain("alpha");
+    expect(s.primaryDatasetIds).toContain("e");
+    expect(s.primaryDatasetIds).toHaveLength(VISIBLE_DATASETS_CAP);
+  });
+
+  it("setSinglePrimary sets primaryDatasetIds to only the new dataset", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    useTerrainStore.getState().toggleVisible({ datasetId: "beta", source: "preset" });
+    useTerrainStore.getState().setSinglePrimary("gamma", "preset");
+    const s = useTerrainStore.getState();
+    expect(s.primaryDatasetIds).toEqual(["gamma"]);
+  });
 });

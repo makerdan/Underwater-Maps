@@ -359,8 +359,7 @@ const RemoveDatasetConfirmDialog: React.FC<{
 // ─── Compact list of visible datasets with per-row remove buttons ─────────────
 const VisibleDatasetRows: React.FC<{
   allDatasets: Array<{ id: string; name: string }>;
-  onPromote: (datasetId: string, source: DatasetSource) => void;
-}> = ({ allDatasets, onPromote }) => {
+}> = ({ allDatasets }) => {
   const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
   const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
   const primaryActiveGrid = useTerrainStore((s) => s.activeGrid);
@@ -394,13 +393,16 @@ const VisibleDatasetRows: React.FC<{
     <>
       {visibleDatasets.map((vd) => {
         const name = nameMap.get(vd.datasetId) ?? vd.datasetId;
-        const isPrimary = vd.datasetId === primaryDatasetId;
+        // Multi-primary: all visible datasets share equal primary status.
+        // `primaryDatasetId` is the legacy first-entry alias used only for the
+        // depth-scale badge (non-first datasets may have compressed Y-axes).
+        const isFirstEntry = vd.datasetId === primaryDatasetId;
         const isLoading = !vd.activeGrid;
 
-        // Depth-scale badge: show when the secondary's depth range exceeds
-        // the primary's (meaning its Y-axis will be clamped/compressed).
+        // Depth-scale badge: show when a non-first dataset's depth range exceeds
+        // the first entry's (meaning its Y-axis will be clamped/compressed).
         let showDepthScaleBadge = false;
-        if (!isPrimary && vd.activeGrid && primaryDepthRange !== null) {
+        if (!isFirstEntry && vd.activeGrid && primaryDepthRange !== null) {
           const secDepthRange = (vd.activeGrid.maxDepth - vd.activeGrid.minDepth) || 1;
           const naturalYScale = secDepthRange / primaryDepthRange;
           showDepthScaleBadge = naturalYScale > 1;
@@ -416,71 +418,30 @@ const VisibleDatasetRows: React.FC<{
               padding: "2px 8px 2px 8px",
               gap: 4,
               fontSize: 10,
-              color: isPrimary ? "#e2e8f0" : "#cbd5e1",
+              color: "#e2e8f0",
               borderBottom: "1px solid rgba(0,229,255,0.05)",
-              background: isPrimary
-                ? "rgba(0,229,255,0.08)"
-                : "rgba(0,229,255,0.02)",
+              background: "rgba(0,229,255,0.08)",
             }}
           >
-            {/* Star button: filled for primary (non-interactive), outlined for others */}
-            {isPrimary ? (
-              <span
-                data-testid={`star-primary-${vd.datasetId}`}
-                title="Primary dataset"
-                style={{
-                  flexShrink: 0,
-                  width: 18,
-                  height: 18,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 12,
-                  color: "#00e5ff",
-                  textShadow: "0 0 6px rgba(0,229,255,0.6)",
-                  lineHeight: 1,
-                }}
-              >
-                ★
-              </span>
-            ) : (
-              <ViewscreenTooltip label="Make primary" side="left">
-                <button
-                  type="button"
-                  data-testid={`btn-promote-primary-${vd.datasetId}`}
-                  aria-label={`Make ${name} the primary dataset`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onPromote(vd.datasetId, vd.source);
-                  }}
-                  style={{
-                    flexShrink: 0,
-                    width: 18,
-                    height: 18,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: "transparent",
-                    border: "none",
-                    color: "#475569",
-                    cursor: "pointer",
-                    fontSize: 12,
-                    lineHeight: 1,
-                    padding: 0,
-                    borderRadius: 2,
-                    transition: "color 0.15s",
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.color = "#00e5ff";
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.color = "#475569";
-                  }}
-                >
-                  ☆
-                </button>
-              </ViewscreenTooltip>
-            )}
+            {/* Multi-primary: all visible datasets show the filled primary star */}
+            <span
+              data-testid={`star-primary-${vd.datasetId}`}
+              title="Primary dataset"
+              style={{
+                flexShrink: 0,
+                width: 18,
+                height: 18,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 12,
+                color: "#00e5ff",
+                textShadow: "0 0 6px rgba(0,229,255,0.6)",
+                lineHeight: 1,
+              }}
+            >
+              ★
+            </span>
 
             <span
               style={{
@@ -495,8 +456,8 @@ const VisibleDatasetRows: React.FC<{
               {name}
             </span>
 
-            {/* Loading indicator for secondary datasets whose grids haven't arrived yet */}
-            {!isPrimary && isLoading && (
+            {/* Loading indicator for any dataset whose grid hasn't arrived yet */}
+            {isLoading && (
               <span
                 data-testid={`loading-badge-${vd.datasetId}`}
                 style={{
@@ -601,7 +562,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const { toast } = useToast();
 
   // ─── Multi-dataset store selectors (placed early; callbacks added after datasets are fetched)
-  const setPrimary = useTerrainStore((s) => s.setPrimary);
+
   const hideAllOthers = useTerrainStore((s) => s.hideAllOthers);
   const evictedId = useTerrainStore((s) => s.evictedId);
   const clearEviction = useTerrainStore((s) => s.clearEviction);
@@ -785,21 +746,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     toast({ title: `${name} removed — 4-dataset limit reached.`, duration: 4000 });
     clearEviction();
   }, [evictedId, datasets, userDatasets, toast, clearEviction]);
-
-  // Promote a dataset to primary and sync AppState.
-  const handlePromotePrimary = useCallback(
-    (promotedId: string, source: DatasetSource) => {
-      const entry = visibleDatasetsForToast.find((v) => v.datasetId === promotedId);
-      setPrimary(promotedId, source);
-      if (source === "preset") {
-        setDatasetId(promotedId);
-      } else {
-        setDatasetId(null);
-        if (entry?.activeGrid) setTerrain(entry.activeGrid);
-      }
-    },
-    [setPrimary, setDatasetId, setTerrain, visibleDatasetsForToast],
-  );
 
   // Hide all non-primary datasets and show a toast with the count removed.
   const handleHideAllOthers = useCallback(() => {
@@ -2314,7 +2260,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                     ...(datasets ?? []).map((d) => ({ id: d.id, name: d.name })),
                     ...(userDatasets ?? []).map((d) => ({ id: d.id, name: d.name })),
                   ]}
-                  onPromote={handlePromotePrimary}
+
                 />
 
                 {isSignedIn && (

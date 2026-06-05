@@ -122,9 +122,8 @@ export const OverlaysToolsPanel: React.FC = () => {
   const toggle = usePanelCollapseStore((s) => s.toggle);
 
   const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
-  const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
-  const isUserDataset =
-    visibleDatasets.find((v) => v.datasetId === primaryDatasetId)?.source === "user";
+  // Multi-primary: enable user-dataset overlays if ANY visible dataset is a user upload.
+  const isUserDataset = visibleDatasets.some((v) => v.source === "user");
 
   const hyd93FeaturesEnabled = useUiStore((s) => s.hyd93FeaturesEnabled);
   const setHyd93FeaturesEnabled = useUiStore((s) => s.setHyd93FeaturesEnabled);

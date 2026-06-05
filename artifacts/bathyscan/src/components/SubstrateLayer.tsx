@@ -475,10 +475,9 @@ export const SubstrateLayer: React.FC = () => {
   const zoneSlots = useZoneOverlayStore((s) => s.slots);
 
   const datasetId = terrain?.datasetId ?? "";
-  const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
   const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
-  const isUserDataset =
-    visibleDatasets.find((v) => v.datasetId === primaryDatasetId)?.source === "user";
+  // Multi-primary: enable the layer if ANY visible dataset is a user upload.
+  const isUserDataset = visibleDatasets.some((v) => v.source === "user");
 
   const { data: collection, isError: substrateIsError } = useGetSubstrate(
     datasetId,

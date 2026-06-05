@@ -6,10 +6,10 @@
  * looking down at the terrain surface below that point.
  *
  * Behaviour:
- * - Bounds-checks GPS lon/lat against the active grid every frame. If the
- *   position leaves the dataset, follow mode is automatically disabled and
- *   a toast is shown.
- * - Clears follow mode whenever the primary dataset ID changes.
+ * - Bounds-checks GPS lon/lat against ALL visible dataset grids each frame.
+ *   Follow mode stays active as long as the position is within ANY one of them;
+ *   it is only disabled when the position falls outside every visible grid.
+ * - Clears follow mode whenever the set of visible dataset IDs changes.
  * - Must be mounted inside a <Canvas> (uses useFrame).
  */
 import { useEffect, useRef } from "react";
@@ -63,12 +63,22 @@ export function useGpsFollowCamera(): void {
 
     const { longitude: lon, latitude: lat } = position;
 
-    if (
-      lat < activeGrid.minLat ||
-      lat > activeGrid.maxLat ||
-      lon < activeGrid.minLon ||
-      lon > activeGrid.maxLon
-    ) {
+    // Multi-primary: stay in follow mode if the GPS position is within ANY
+    // visible dataset's bounds. Only deactivate when outside all of them.
+    // Fallback: if visibleDatasets is empty (e.g. legacy setState path), check
+    // against activeGrid directly so the single-dataset path keeps working.
+    const visibleDatasets = useTerrainStore.getState().visibleDatasets;
+    const gridsToCheck = visibleDatasets.length > 0
+      ? visibleDatasets.filter((v) => v.activeGrid).map((v) => v.activeGrid!)
+      : [activeGrid];
+    const insideAny = gridsToCheck.some((g) =>
+      lat >= g.minLat &&
+      lat <= g.maxLat &&
+      lon >= g.minLon &&
+      lon <= g.maxLon,
+    );
+
+    if (!insideAny) {
       useCameraStore.getState().setGpsFollowMode(false);
       if (!outOfBoundsToastFired.current) {
         outOfBoundsToastFired.current = true;

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from "@/lib/clerkCompat";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
@@ -333,6 +333,18 @@ function Main() {
     ? (terrain.minLon + terrain.maxLon) / 2
     : null;
 
+  // Multi-primary: compute center coords for secondary visible datasets.
+  const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
+  const ds1 = visibleDatasets[1];
+  const ds2 = visibleDatasets[2];
+  const ds3 = visibleDatasets[3];
+  const center1Lat = ds1?.activeGrid ? (ds1.activeGrid.minLat + ds1.activeGrid.maxLat) / 2 : null;
+  const center1Lon = ds1?.activeGrid ? (ds1.activeGrid.minLon + ds1.activeGrid.maxLon) / 2 : null;
+  const center2Lat = ds2?.activeGrid ? (ds2.activeGrid.minLat + ds2.activeGrid.maxLat) / 2 : null;
+  const center2Lon = ds2?.activeGrid ? (ds2.activeGrid.minLon + ds2.activeGrid.maxLon) / 2 : null;
+  const center3Lat = ds3?.activeGrid ? (ds3.activeGrid.minLat + ds3.activeGrid.maxLat) / 2 : null;
+  const center3Lon = ds3?.activeGrid ? (ds3.activeGrid.minLon + ds3.activeGrid.maxLon) / 2 : null;
+
   const currentsSource = useSettingsStore((st) => st.currentsSource);
   const autoLoadTidal = useSettingsStore((st) => st.autoLoadTidal);
 
@@ -387,9 +399,39 @@ function Main() {
     tidalOverlay ? scrubDatetime : null,
   );
 
+  // Multi-primary: tidal data for secondary visible datasets.
+  const { data: tidalData1 } = useTidalData(
+    tidalOverlay ? center1Lat : null,
+    tidalOverlay ? center1Lon : null,
+    tidalOverlay ? scrubDatetime : null,
+  );
+  const { data: tidalData2 } = useTidalData(
+    tidalOverlay ? center2Lat : null,
+    tidalOverlay ? center2Lon : null,
+    tidalOverlay ? scrubDatetime : null,
+  );
+  const { data: tidalData3 } = useTidalData(
+    tidalOverlay ? center3Lat : null,
+    tidalOverlay ? center3Lon : null,
+    tidalOverlay ? scrubDatetime : null,
+  );
+
   // E2E test bridge: when non-null, overrides live tidal fetch data so tests
   // can inject tidal state without going through the useTidalData HTTP path.
   const effectiveTidalData = (tidalDataOverride as typeof tidalData) ?? tidalData;
+
+  // Build tidal data map for multi-primary rendering in TourScene.
+  // The primary (slot 0) uses effectiveTidalData (which may be the test override).
+  const tidalDataMap = useMemo(() => {
+    const map = new Map<string, NonNullable<typeof tidalData>>();
+    const ds0 = visibleDatasets[0];
+    if (ds0 && effectiveTidalData) map.set(ds0.datasetId, effectiveTidalData);
+    if (ds1 && tidalData1) map.set(ds1.datasetId, tidalData1);
+    if (ds2 && tidalData2) map.set(ds2.datasetId, tidalData2);
+    if (ds3 && tidalData3) map.set(ds3.datasetId, tidalData3);
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleDatasets[0]?.datasetId, effectiveTidalData, ds1?.datasetId, tidalData1, ds2?.datasetId, tidalData2, ds3?.datasetId, tidalData3]);
 
   // Publish NOAA-derived ambient current to the currents runtime store so
   // the bathymetric currents simulation (Task #136) can use it as the
@@ -638,14 +680,19 @@ function Main() {
     }
   }, [terrain]);
 
-  // Catch-all: trigger classification whenever terrain changes, regardless of
-  // which code path loaded it (DatasetPanel, auto-select, background refetch, etc.).
-  // classify() is idempotent — it returns immediately on sessionStorage/server cache hit.
+  // Multi-primary: trigger classification for ALL visible datasets whenever the
+  // set of visible grids changes. classify() is idempotent — it returns
+  // immediately on sessionStorage/server cache hit, so calling it for multiple
+  // datasets is safe.
+  const visibleGridIds = visibleDatasets
+    .filter((v) => !!v.activeGrid)
+    .map((v) => v.datasetId)
+    .join(",");
   useEffect(() => {
-    if (terrain) {
-      void useClassificationStore.getState().classify(terrain);
+    for (const vd of useTerrainStore.getState().visibleDatasets) {
+      if (vd.activeGrid) void useClassificationStore.getState().classify(vd.activeGrid);
     }
-  }, [terrain]);
+  }, [visibleGridIds]);
 
   // Sync online/offline state into offlineStore
   useEffect(() => {
@@ -898,6 +945,7 @@ function Main() {
         {/* 3D Scene — fills everything */}
         <TourScene
           tidalData={effectiveTidalData}
+          tidalDataMap={tidalDataMap}
           tidalOverlay={tidalOverlay}
           depthLayer={depthLayer}
         />

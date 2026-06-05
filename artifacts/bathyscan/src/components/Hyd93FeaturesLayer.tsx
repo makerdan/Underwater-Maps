@@ -133,10 +133,8 @@ export const Hyd93FeaturesLayer: React.FC = () => {
   const hyd93FeaturesEnabled = useUiStore((s) => s.hyd93FeaturesEnabled);
   const hyd93ActiveFeatureCodes = useUiStore((s) => s.hyd93ActiveFeatureCodes);
   const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
-  const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
-
-  const isUserDataset =
-    visibleDatasets.find((v) => v.datasetId === primaryDatasetId)?.source === "user";
+  // Multi-primary: enable HYD93 features if ANY visible dataset is a user upload.
+  const isUserDataset = visibleDatasets.some((v) => v.source === "user");
 
   const datasetId = terrain?.datasetId ?? "";
 

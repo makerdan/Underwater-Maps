@@ -258,7 +258,11 @@ const LandTerrainMesh: React.FC = () => {
 const NonPrimaryDatasetMeshes: React.FC<{
   primary: TerrainData;
   showLandmass: boolean;
-}> = ({ primary, showLandmass }) => {
+  tidalDataMap?: Map<string, TidalDataResult>;
+  tidalOverlay?: boolean;
+  depthLayer?: DepthLayer;
+  showWaterSurface?: boolean;
+}> = ({ primary, showLandmass, tidalDataMap, tidalOverlay, depthLayer = "surface", showWaterSurface = true }) => {
   const visible = useTerrainStore((s) => s.visibleDatasets);
   const primaryId = useTerrainStore((s) => s.primaryDatasetId);
   const primaryLonRange = (primary.maxLon - primary.minLon) || 1;
@@ -292,6 +296,10 @@ const NonPrimaryDatasetMeshes: React.FC<{
           const cyMin = extent - MAX_DEPTH_WORLD; // lower bound: bottom rests on floor
           const cyMax = 0;                         // upper bound: top rests at surface
           const cy = Math.max(cyMin, Math.min(cyMax, naturalCy));
+
+          // Multi-primary: tidal overlay for this secondary dataset (if data available)
+          const secTidalData = tidalDataMap?.get(v.datasetId) ?? null;
+
           return (
             <group
               key={v.datasetId}
@@ -300,6 +308,14 @@ const NonPrimaryDatasetMeshes: React.FC<{
             >
               <TerrainMesh grid={g} />
               {showLandmass && <LandmassMesh grid={g} />}
+              {tidalOverlay && secTidalData && (
+                <TidalSceneContents
+                  tidalData={secTidalData}
+                  depthLayer={depthLayer}
+                  terrain={g}
+                  showWaterSurface={showWaterSurface}
+                />
+              )}
             </group>
           );
         })}
@@ -430,6 +446,8 @@ const DriftSceneContents: React.FC = () => {
 interface SceneContentsProps {
   terrainMeshRef: React.RefObject<THREE.Mesh | null>;
   tidalData: TidalDataResult | null;
+  /** Multi-primary: map of tidal data keyed by datasetId. */
+  tidalDataMap?: Map<string, TidalDataResult>;
   tidalOverlay: boolean;
   depthLayer: DepthLayer;
 }
@@ -450,6 +468,7 @@ const TestCameraBridge: React.FC = () => {
 const SceneContents: React.FC<SceneContentsProps> = ({
   terrainMeshRef,
   tidalData,
+  tidalDataMap,
   tidalOverlay,
   depthLayer,
 }) => {
@@ -506,7 +525,16 @@ const SceneContents: React.FC<SceneContentsProps> = ({
           Copernicus DEM surface (LandTerrainMesh) is loaded — never both. */}
       {terrain && showLandmass && !hasLandDem && <LandmassMesh grid={terrain} />}
       {showLandmass && <LandTerrainMesh />}
-      {terrain && <NonPrimaryDatasetMeshes primary={terrain} showLandmass={showLandmass} />}
+      {terrain && (
+        <NonPrimaryDatasetMeshes
+          primary={terrain}
+          showLandmass={showLandmass}
+          tidalDataMap={tidalDataMap}
+          tidalOverlay={tidalOverlay}
+          depthLayer={depthLayer}
+          showWaterSurface={showWaterSurface}
+        />
+      )}
       <EfhZoneLayer />
       <SubstrateLayer />
       <IntertidalHotspotsLayer />
@@ -632,12 +660,15 @@ const CanvasAriaAnnouncer: React.FC = () => {
 // ---------------------------------------------------------------------------
 interface TourSceneProps {
   tidalData?: TidalDataResult | null;
+  /** Multi-primary: map of tidal data keyed by datasetId, one entry per visible dataset. */
+  tidalDataMap?: Map<string, TidalDataResult>;
   tidalOverlay?: boolean;
   depthLayer?: DepthLayer;
 }
 
 export const TourScene: React.FC<TourSceneProps> = ({
   tidalData = null,
+  tidalDataMap,
   tidalOverlay = false,
   depthLayer = "surface",
 }) => {
@@ -798,6 +829,7 @@ export const TourScene: React.FC<TourSceneProps> = ({
           key={recoveryKey}
           terrainMeshRef={terrainMeshRef}
           tidalData={tidalData}
+          tidalDataMap={tidalDataMap}
           tidalOverlay={tidalOverlay}
           depthLayer={depthLayer}
         />
