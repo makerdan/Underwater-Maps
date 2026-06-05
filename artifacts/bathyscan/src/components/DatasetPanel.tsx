@@ -192,9 +192,10 @@ function formatEta(seconds: number | null): string | null {
 }
 
 // ─── Visible-datasets summary header (Task #350) ─────────────────────────────
-const VisibleDatasetsHeader: React.FC = () => {
+const VisibleDatasetsHeader: React.FC<{
+  onHideAllOthers: () => void;
+}> = ({ onHideAllOthers }) => {
   const count = useTerrainStore((s) => s.visibleDatasets.length);
-  const hideAllOthers = useTerrainStore((s) => s.hideAllOthers);
   if (count <= 1) return null;
   const atCap = count >= VISIBLE_DATASETS_CAP;
   return (
@@ -217,7 +218,7 @@ const VisibleDatasetsHeader: React.FC = () => {
       </span>
       <button
         data-testid="btn-hide-all-others"
-        onClick={hideAllOthers}
+        onClick={onHideAllOthers}
         style={{
           fontSize: 9,
           color: "#00e5ff",
@@ -358,8 +359,11 @@ const RemoveDatasetConfirmDialog: React.FC<{
 // ─── Compact list of visible datasets with per-row remove buttons ─────────────
 const VisibleDatasetRows: React.FC<{
   allDatasets: Array<{ id: string; name: string }>;
-}> = ({ allDatasets }) => {
+  onPromote: (datasetId: string, source: DatasetSource) => void;
+}> = ({ allDatasets, onPromote }) => {
   const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
+  const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
+  const primaryActiveGrid = useTerrainStore((s) => s.activeGrid);
   const toggleVisible = useTerrainStore((s) => s.toggleVisible);
   const count = visibleDatasets.length;
   const [pending, setPending] = useState<{
@@ -381,10 +385,27 @@ const VisibleDatasetRows: React.FC<{
 
   const nameMap = new Map(allDatasets.map((d) => [d.id, d.name]));
 
+  // Pre-compute depth ranges for the depth-scale badge.
+  const primaryDepthRange = primaryActiveGrid
+    ? (primaryActiveGrid.maxDepth - primaryActiveGrid.minDepth) || 1
+    : null;
+
   return (
     <>
       {visibleDatasets.map((vd) => {
         const name = nameMap.get(vd.datasetId) ?? vd.datasetId;
+        const isPrimary = vd.datasetId === primaryDatasetId;
+        const isLoading = !vd.activeGrid;
+
+        // Depth-scale badge: show when the secondary's depth range exceeds
+        // the primary's (meaning its Y-axis will be clamped/compressed).
+        let showDepthScaleBadge = false;
+        if (!isPrimary && vd.activeGrid && primaryDepthRange !== null) {
+          const secDepthRange = (vd.activeGrid.maxDepth - vd.activeGrid.minDepth) || 1;
+          const naturalYScale = secDepthRange / primaryDepthRange;
+          showDepthScaleBadge = naturalYScale > 1;
+        }
+
         return (
           <div
             key={vd.datasetId}
@@ -392,14 +413,75 @@ const VisibleDatasetRows: React.FC<{
             style={{
               display: "flex",
               alignItems: "center",
-              padding: "2px 8px 2px 20px",
+              padding: "2px 8px 2px 8px",
               gap: 4,
               fontSize: 10,
-              color: "#cbd5e1",
+              color: isPrimary ? "#e2e8f0" : "#cbd5e1",
               borderBottom: "1px solid rgba(0,229,255,0.05)",
-              background: "rgba(0,229,255,0.02)",
+              background: isPrimary
+                ? "rgba(0,229,255,0.08)"
+                : "rgba(0,229,255,0.02)",
             }}
           >
+            {/* Star button: filled for primary (non-interactive), outlined for others */}
+            {isPrimary ? (
+              <span
+                data-testid={`star-primary-${vd.datasetId}`}
+                title="Primary dataset"
+                style={{
+                  flexShrink: 0,
+                  width: 18,
+                  height: 18,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 12,
+                  color: "#00e5ff",
+                  textShadow: "0 0 6px rgba(0,229,255,0.6)",
+                  lineHeight: 1,
+                }}
+              >
+                ★
+              </span>
+            ) : (
+              <ViewscreenTooltip label="Make primary" side="left">
+                <button
+                  type="button"
+                  data-testid={`btn-promote-primary-${vd.datasetId}`}
+                  aria-label={`Make ${name} the primary dataset`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPromote(vd.datasetId, vd.source);
+                  }}
+                  style={{
+                    flexShrink: 0,
+                    width: 18,
+                    height: 18,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "transparent",
+                    border: "none",
+                    color: "#475569",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    lineHeight: 1,
+                    padding: 0,
+                    borderRadius: 2,
+                    transition: "color 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.color = "#00e5ff";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.color = "#475569";
+                  }}
+                >
+                  ☆
+                </button>
+              </ViewscreenTooltip>
+            )}
+
             <span
               style={{
                 flex: 1,
@@ -412,6 +494,44 @@ const VisibleDatasetRows: React.FC<{
             >
               {name}
             </span>
+
+            {/* Loading indicator for secondary datasets whose grids haven't arrived yet */}
+            {!isPrimary && isLoading && (
+              <span
+                data-testid={`loading-badge-${vd.datasetId}`}
+                style={{
+                  flexShrink: 0,
+                  fontSize: 8,
+                  letterSpacing: "0.06em",
+                  color: "#64748b",
+                  padding: "1px 4px",
+                  border: "1px solid rgba(100,116,139,0.35)",
+                  borderRadius: 2,
+                }}
+              >
+                LOADING…
+              </span>
+            )}
+
+            {/* Depth-scale adjustment badge */}
+            {showDepthScaleBadge && (
+              <span
+                data-testid={`depth-scale-badge-${vd.datasetId}`}
+                title="This dataset's depth range exceeds the primary's — Y-axis is compressed to fit"
+                style={{
+                  flexShrink: 0,
+                  fontSize: 8,
+                  letterSpacing: "0.04em",
+                  color: "#f59e0b",
+                  padding: "1px 4px",
+                  border: "1px solid rgba(245,158,11,0.4)",
+                  borderRadius: 2,
+                }}
+              >
+                ⚠ Scale
+              </span>
+            )}
+
             <ViewscreenTooltip label="Remove from view" side="right">
               <button
                 type="button"
@@ -479,6 +599,13 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const qc = useQueryClient();
   const isOnline = useOfflineStore((s) => s.isOnline);
   const { toast } = useToast();
+
+  // ─── Multi-dataset store selectors (placed early; callbacks added after datasets are fetched)
+  const setPrimary = useTerrainStore((s) => s.setPrimary);
+  const hideAllOthers = useTerrainStore((s) => s.hideAllOthers);
+  const evictedId = useTerrainStore((s) => s.evictedId);
+  const clearEviction = useTerrainStore((s) => s.clearEviction);
+  const visibleDatasetsForToast = useTerrainStore((s) => s.visibleDatasets);
 
   // Track which dataset IDs are available in the service-worker cache
   const [cachedIds, setCachedIds] = useState<Set<string>>(new Set());
@@ -646,6 +773,52 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const { data: userDatasets, isLoading: userDatasetsLoading } = useGetUserDatasets({
     query: { enabled: isLoaded && isSignedIn === true, queryKey: getGetUserDatasetsQueryKey() },
   });
+
+  // ─── Eviction toast: fires when terrainStore silently evicts a dataset ─────
+  useEffect(() => {
+    if (!evictedId) return;
+    const allDs: Array<{ id: string; name: string }> = [
+      ...(datasets ?? []).map((d) => ({ id: d.id, name: d.name })),
+      ...(userDatasets ?? []).map((d) => ({ id: d.id, name: d.name })),
+    ];
+    const name = allDs.find((d) => d.id === evictedId)?.name ?? evictedId;
+    toast({ title: `${name} removed — 4-dataset limit reached.`, duration: 4000 });
+    clearEviction();
+  }, [evictedId, datasets, userDatasets, toast, clearEviction]);
+
+  // Promote a dataset to primary and sync AppState.
+  const handlePromotePrimary = useCallback(
+    (promotedId: string, source: DatasetSource) => {
+      const entry = visibleDatasetsForToast.find((v) => v.datasetId === promotedId);
+      setPrimary(promotedId, source);
+      if (source === "preset") {
+        setDatasetId(promotedId);
+      } else {
+        setDatasetId(null);
+        if (entry?.activeGrid) setTerrain(entry.activeGrid);
+      }
+    },
+    [setPrimary, setDatasetId, setTerrain, visibleDatasetsForToast],
+  );
+
+  // Hide all non-primary datasets and show a toast with the count removed.
+  const handleHideAllOthers = useCallback(() => {
+    const countBefore = visibleDatasetsForToast.length;
+    const primaryId = useTerrainStore.getState().primaryDatasetId;
+    const allDs: Array<{ id: string; name: string }> = [
+      ...(datasets ?? []).map((d) => ({ id: d.id, name: d.name })),
+      ...(userDatasets ?? []).map((d) => ({ id: d.id, name: d.name })),
+    ];
+    hideAllOthers();
+    const removed = countBefore - 1;
+    if (removed > 0) {
+      const primaryName = allDs.find((d) => d.id === primaryId)?.name ?? "primary";
+      toast({
+        title: `${removed} dataset${removed > 1 ? "s" : ""} hidden. Only ${primaryName} remains visible.`,
+        duration: 4000,
+      });
+    }
+  }, [hideAllOthers, visibleDatasetsForToast, datasets, userDatasets, toast]);
 
   // ─── Parallel fetch for pending PRESET dataset ─────────────────────────────
   const { data: pendingTerrain, isError: terrainFetchError } = useGetDatasetsIdTerrain(
@@ -2125,12 +2298,13 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                   </div>
                 )}
 
-                <VisibleDatasetsHeader />
+                <VisibleDatasetsHeader onHideAllOthers={handleHideAllOthers} />
                 <VisibleDatasetRows
                   allDatasets={[
                     ...(datasets ?? []).map((d) => ({ id: d.id, name: d.name })),
                     ...(userDatasets ?? []).map((d) => ({ id: d.id, name: d.name })),
                   ]}
+                  onPromote={handlePromotePrimary}
                 />
 
                 {isSignedIn && (

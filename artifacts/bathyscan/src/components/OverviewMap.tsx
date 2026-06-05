@@ -74,6 +74,8 @@ import {
   getGetSubstrateQueryKey,
   useGetIntertidalSpots,
   getGetIntertidalSpotsQueryKey,
+  useGetUserDatasets,
+  getGetUserDatasetsQueryKey,
 } from "@workspace/api-client-react";
 import type {
   EfhFeature,
@@ -319,7 +321,7 @@ export const OverviewMap: React.FC = () => {
   const bboxQuery = usePostDatasetsBboxQuery();
   const [bboxResults, setBboxResults] = useState<DatasetCatalogSearchResult[] | null>(null);
   const [bboxError, setBboxError] = useState<string | null>(null);
-  const { setDatasetId } = useAppState();
+  const { setDatasetId, setTerrain } = useAppState();
   const saveMutation = usePostDatasetsCatalogIdSave();
   const { data: mySaves = [], refetch: refetchMySaves } = useGetDatasetsMySaves({
     query: { queryKey: getGetDatasetsMySavesQueryKey() },
@@ -427,6 +429,22 @@ export const OverviewMap: React.FC = () => {
     { waterType: waterTypeForDatasets },
     { query: { queryKey: getGetDatasetsQueryKey({ waterType: waterTypeForDatasets }) } },
   );
+  const { data: userDatasetsForNames } = useGetUserDatasets({
+    query: {
+      queryKey: getGetUserDatasetsQueryKey(),
+      retry: false,
+      staleTime: 60_000,
+    },
+  });
+  // Build a ref so the rAF render loop always has fresh dataset names without
+  // re-triggering the expensive draw effect.
+  const datasetNameMapRef = useRef<Map<string, string>>(new Map());
+  useEffect(() => {
+    const m = new Map<string, string>();
+    for (const d of allDatasets ?? []) m.set(d.id, d.name);
+    for (const d of userDatasetsForNames ?? []) m.set(d.id, d.name);
+    datasetNameMapRef.current = m;
+  }, [allDatasets, userDatasetsForNames]);
   const hasEfh = !!allDatasets?.find((d) => d.id === datasetId)?.hasEfh;
   // Only hit /efh for preset datasets — user-saved EFH datasets have polygons
   // already embedded in overviewGrid.habitatPolygons.
@@ -941,7 +959,8 @@ export const OverviewMap: React.FC = () => {
           const [lx, ly] = lonLatToCanvas(og.minLon, og.maxLat, grid, t);
           ctx.fillStyle = "rgba(0,229,255,0.85)";
           ctx.font = "10px monospace";
-          ctx.fillText(`◎ ${og.datasetId}`, lx + 4, ly + 12);
+          const footprintLabel = datasetNameMapRef.current.get(og.datasetId) ?? og.datasetId;
+          ctx.fillText(`◎ ${footprintLabel}`, lx + 4, ly + 12);
           ctx.restore();
         }
       }
@@ -1371,6 +1390,12 @@ export const OverviewMap: React.FC = () => {
           lat <= og.maxLat
         ) {
           useTerrainStore.getState().setPrimary(v.datasetId, v.source);
+          if (v.source === "preset") {
+            setDatasetId(v.datasetId);
+          } else {
+            setDatasetId(null);
+            if (v.activeGrid) setTerrain(v.activeGrid);
+          }
           return;
         }
       }
@@ -1511,7 +1536,7 @@ export const OverviewMap: React.FC = () => {
       canvas.removeEventListener("click", handleClick);
       canvas.removeEventListener("contextmenu", handleContextMenu);
     };
-  }, [overviewGrid, substrateCreditUrl, substrateSourceName]);
+  }, [overviewGrid, substrateCreditUrl, substrateSourceName, setDatasetId, setTerrain]);
 
   // ---------------------------------------------------------------------------
   // Render

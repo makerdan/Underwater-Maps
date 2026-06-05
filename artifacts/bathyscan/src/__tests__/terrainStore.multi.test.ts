@@ -129,4 +129,67 @@ describe("terrainStore multi-dataset", () => {
     expect(s.activeGrid).toBeNull();
     expect(s.overviewGrid).toBeNull();
   });
+
+  // ── New tests added for eviction tracking and promote-to-primary sync ───────
+
+  it("evictedId is set when toggleVisible triggers eviction over the cap", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    // Fill to cap.
+    for (const id of ["b", "c", "d"]) {
+      useTerrainStore.getState().toggleVisible({ datasetId: id, source: "preset" });
+    }
+    // One more push — oldest non-primary "b" should be evicted.
+    useTerrainStore.getState().toggleVisible({ datasetId: "e", source: "preset" });
+    const s = useTerrainStore.getState();
+    expect(s.visibleDatasets.length).toBe(4);
+    expect(s.evictedId).toBe("b");
+    expect(s.visibleDatasets.map((v) => v.datasetId)).not.toContain("b");
+  });
+
+  it("clearEviction resets evictedId to null without touching other state", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    for (const id of ["b", "c", "d", "e"]) {
+      useTerrainStore.getState().toggleVisible({ datasetId: id, source: "preset" });
+    }
+    expect(useTerrainStore.getState().evictedId).toBeTruthy();
+    useTerrainStore.getState().clearEviction();
+    const s = useTerrainStore.getState();
+    expect(s.evictedId).toBeNull();
+    // Visible datasets unchanged.
+    expect(s.visibleDatasets.length).toBe(4);
+    expect(s.primaryDatasetId).toBe("alpha");
+  });
+
+  it("setPrimary syncs activeGrid and overviewGrid from the promoted entry", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    const betaActive = makeGrid("beta");
+    const betaOverview = makeGrid("beta");
+    useTerrainStore.getState().toggleVisible({ datasetId: "beta", source: "user" });
+    useTerrainStore.getState().setDatasetGrids("beta", {
+      activeGrid: betaActive,
+      overviewGrid: betaOverview,
+    });
+    useTerrainStore.getState().setPrimary("beta", "user");
+    const s = useTerrainStore.getState();
+    expect(s.primaryDatasetId).toBe("beta");
+    expect(s.activeGrid).toBe(betaActive);
+    expect(s.overviewGrid).toBe(betaOverview);
+    // Alpha's entry still exists in visibleDatasets.
+    expect(s.visibleDatasets.map((v) => v.datasetId)).toContain("alpha");
+  });
+
+  it("evictedId is set when setGrids evicts over the cap", () => {
+    // Pre-fill to cap then call setGrids with a new dataset to trigger eviction.
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    for (const id of ["b", "c", "d"]) {
+      useTerrainStore.getState().toggleVisible({ datasetId: id, source: "preset" });
+    }
+    expect(useTerrainStore.getState().visibleDatasets.length).toBe(4);
+    // setGrids for a new primary "e" should evict the oldest non-primary ("b").
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("e") });
+    const s = useTerrainStore.getState();
+    expect(s.primaryDatasetId).toBe("e");
+    expect(s.evictedId).toBe("b");
+    expect(s.visibleDatasets.length).toBe(4);
+  });
 });

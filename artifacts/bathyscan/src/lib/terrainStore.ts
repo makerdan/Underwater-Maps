@@ -34,6 +34,13 @@ interface TerrainStore {
   overviewGrid: TerrainData | null;
 
   /**
+   * Set to the datasetId that was most recently evicted to respect VISIBLE_DATASETS_CAP.
+   * Cleared after observers have reacted (call clearEviction()). Used to fire toast
+   * notifications when the cap silently removes a dataset.
+   */
+  evictedId: string | null;
+
+  /**
    * Legacy entry point — sets the primary's grids. If no primary is set yet,
    * one is derived from the grid's datasetId. Keeps existing callers (DatasetPanel,
    * useActiveDatasetSync, App.tsx terrain effect) working unchanged.
@@ -64,6 +71,9 @@ interface TerrainStore {
 
   /** Reset to empty (used by water-type switch). */
   clear: () => void;
+
+  /** Clear the evictedId after observers have read and reacted to it. */
+  clearEviction: () => void;
 }
 
 function syncPrimaryGrids(
@@ -84,6 +94,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
   primaryDatasetId: null,
   activeGrid: null,
   overviewGrid: null,
+  evictedId: null,
 
   setGrids: ({ activeGrid, overviewGrid, source }) =>
     set((prev) => {
@@ -124,6 +135,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       };
 
       let nextVisible: VisibleDataset[];
+      let evictedId: string | null = null;
       if (existing) {
         nextVisible = prev.visibleDatasets.map((v) =>
           v.datasetId === primaryId ? merged : v,
@@ -136,6 +148,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
             (v) => v.datasetId !== prev.primaryDatasetId,
           );
           if (evictIdx >= 0) {
+            evictedId = base[evictIdx]!.datasetId;
             base = [...base.slice(0, evictIdx), ...base.slice(evictIdx + 1)];
           }
         }
@@ -147,6 +160,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         visibleDatasets: nextVisible,
         primaryDatasetId: primaryId,
         ...syncPrimaryGrids(nextVisible, primaryId),
+        ...(evictedId !== null ? { evictedId } : {}),
       };
     }),
 
@@ -178,6 +192,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
     set((prev) => {
       const existing = prev.visibleDatasets.find((v) => v.datasetId === datasetId);
       let nextVisible = prev.visibleDatasets;
+      let evictedId: string | null = null;
       if (!existing) {
         const entry: VisibleDataset = {
           datasetId,
@@ -191,6 +206,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
             (v) => v.datasetId !== prev.primaryDatasetId,
           );
           if (evictIdx >= 0) {
+            evictedId = nextVisible[evictIdx]!.datasetId;
             nextVisible = [
               ...nextVisible.slice(0, evictIdx),
               ...nextVisible.slice(evictIdx + 1),
@@ -204,6 +220,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         visibleDatasets: nextVisible,
         primaryDatasetId: datasetId,
         ...syncPrimaryGrids(nextVisible, datasetId),
+        ...(evictedId !== null ? { evictedId } : {}),
       };
     }),
 
@@ -228,11 +245,13 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       }
       // Add new entry (cap-evict oldest non-primary if needed).
       let nextVisible = prev.visibleDatasets;
+      let evictedId: string | null = null;
       if (nextVisible.length >= VISIBLE_DATASETS_CAP) {
         const evictIdx = nextVisible.findIndex(
           (v) => v.datasetId !== prev.primaryDatasetId,
         );
         if (evictIdx >= 0) {
+          evictedId = nextVisible[evictIdx]!.datasetId;
           nextVisible = [
             ...nextVisible.slice(0, evictIdx),
             ...nextVisible.slice(evictIdx + 1),
@@ -252,6 +271,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         visibleDatasets: nextVisible,
         primaryDatasetId: nextPrimary,
         ...syncPrimaryGrids(nextVisible, nextPrimary),
+        ...(evictedId !== null ? { evictedId } : {}),
       };
     }),
 
@@ -274,5 +294,9 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       primaryDatasetId: null,
       activeGrid: null,
       overviewGrid: null,
+      evictedId: null,
     }),
+
+  clearEviction: () =>
+    set((prev) => (prev.evictedId === null ? prev : { ...prev, evictedId: null })),
 }));
