@@ -2126,7 +2126,28 @@ router.post(
     const userId = (req as AuthenticatedRequest).clerkUserId;
 
     // Verify session ownership before queuing
-    const session = uploadSessions.get(uploadId);
+    let session = uploadSessions.get(uploadId);
+
+    if (!session) {
+      // DB fallback — handles the case where the server restarted between the
+      // last chunk arriving and finalize being called, clearing the in-memory
+      // uploadSessions map.  The "uploading" row (written on chunk 0) carries
+      // the uploadId, userId, and sessionJobId so we can reconstruct the
+      // session and accept the finalize call without requiring a full re-upload.
+      const [dbJob] = await db
+        .select({
+          userId: uploadJobsTable.userId,
+          sessionJobId: uploadJobsTable.id,
+        })
+        .from(uploadJobsTable)
+        .where(eq(uploadJobsTable.uploadId, uploadId));
+
+      if (dbJob) {
+        session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId };
+        uploadSessions.set(uploadId, session);
+      }
+    }
+
     if (!session) {
       res.status(404).json({ error: "session_not_found", details: "Upload session not found. Re-upload from chunk 0." });
       return;

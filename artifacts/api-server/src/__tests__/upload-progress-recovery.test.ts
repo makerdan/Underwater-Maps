@@ -16,6 +16,7 @@
  * existing multer-chunk-limit tests.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import fs from "fs";
 import request from "supertest";
 
 // ── DB mock with per-test configurable select result and call spies ───────────
@@ -215,6 +216,40 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
     // session_not_found, because it falls back to the DB row.
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ received: 1 });
+  });
+
+  it("finalize succeeds via DB fallback when in-memory session is absent (simulated restart)", async () => {
+    // Use an uploadId never sent in this process so the in-memory uploadSessions
+    // map has no entry for it — simulating a server restart between the last
+    // chunk arriving and finalize being called.
+    const uploadId = `finalize-recovery-${Date.now()}`;
+
+    // Seed the DB mock so the fallback returns a valid session row.
+    mockDbSelectResult = [
+      {
+        userId: E2E_USER,
+        sessionJobId: "mock-session-job-finalize",
+      },
+    ];
+
+    // All chunk file paths must appear to exist so the pre-finalize disk check
+    // passes.  Spy on fs.promises.access and always resolve it.
+    const accessSpy = vi
+      .spyOn(fs.promises, "access")
+      .mockResolvedValue(undefined);
+
+    const res = await request(app)
+      .post("/api/datasets/upload/chunk/finalize")
+      .set("x-e2e-user-id", E2E_USER)
+      .send({ uploadId, fileName: "test.csv", totalChunks: 1, resolution: 256 })
+      .set("Content-Type", "application/json");
+
+    accessSpy.mockRestore();
+
+    // The finalize route must succeed (200 + jobId) even though no in-memory
+    // session existed — because it recovered the session from the DB row.
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("jobId");
   });
 
   it("full round-trip: chunk 0 → restart → status re-hydrates → chunk N accepted", async () => {
