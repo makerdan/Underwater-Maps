@@ -26,6 +26,7 @@ export type DbMockDb = {
   select: MockInstance;
   insert: MockInstance;
   update: MockInstance;
+  delete: MockInstance;
   transaction: <T>(cb: (tx: unknown) => Promise<T>) => Promise<T>;
 };
 
@@ -207,10 +208,14 @@ function buildDefaultDb(): DbMockDb {
   const updateWhereMock = vi.fn().mockResolvedValue([]);
   const setMock = vi.fn().mockReturnValue({ where: updateWhereMock });
 
+  const deleteReturningMock = vi.fn().mockResolvedValue([]);
+  const deleteWhereMock = vi.fn().mockReturnValue({ returning: deleteReturningMock });
+
   return {
     select: vi.fn().mockReturnValue({ from: fromMock }),
     insert: vi.fn().mockReturnValue({ values: valuesMock }),
     update: vi.fn().mockReturnValue({ set: setMock }),
+    delete: vi.fn().mockReturnValue({ where: deleteWhereMock }),
     transaction: async <T>(cb: (tx: unknown) => Promise<T>) => cb({}),
   };
 }
