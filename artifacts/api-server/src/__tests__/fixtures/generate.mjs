@@ -419,6 +419,125 @@ function buildLas14() {
   return buf;
 }
 
+// ─── VR BAG (HDF5) ───────────────────────────────────────────────────────────
+
+/**
+ * Build a synthetic Variable-Resolution BAG fixture using h5wasm.
+ *
+ * Layout:
+ *   BAG_root/
+ *     metadata           — ISO 19115 XML string with WGS84 bounding box
+ *     varres_metadata    — compound[2, 2]  (dimensions_x/y, resolution_x/y,
+ *                          sw_corner_x/y — all in WGS84 degrees so no CRS
+ *                          reprojection is needed by bag_parser.py)
+ *     varres_refinements — compound[4, 4]  (depth, depth_uncertainty)
+ *
+ * Super-grid geometry (2×2 super-cells, each 0.01° × 0.01°):
+ *   Cell (0,0): sw = (142.0,  11.0 ),  4 valid refinements
+ *   Cell (0,1): sw = (142.01, 11.0 ),  3 valid + 1 BAG_FILL  ← tests skip path
+ *   Cell (1,0): sw = (142.0,  11.01),  4 valid refinements
+ *   Cell (1,1): sw = (142.01, 11.01),  4 valid refinements
+ *   → 15 valid depth points total
+ *
+ * h5wasm compound write API: data must be a Map<fieldName, TypedArray>.
+ */
+async function buildVrBag() {
+  const FILL = 1_000_000;
+
+  const WEST  = 142.0;
+  const EAST  = 142.02;
+  const SOUTH = 11.0;
+  const NORTH = 11.02;
+
+  const metaXml = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<smXML:MD_Metadata xmlns:smXML="http://metadata.dgiwg.org/smXML"',
+    '  xmlns:gmd="http://www.isotc211.org/2005/gmd">',
+    '  <gmd:identificationInfo>',
+    '    <gmd:MD_DataIdentification>',
+    '      <gmd:extent>',
+    '        <gmd:EX_Extent>',
+    '          <gmd:geographicElement>',
+    '            <gmd:EX_GeographicBoundingBox>',
+    `              <westBoundLongitude>${WEST}</westBoundLongitude>`,
+    `              <eastBoundLongitude>${EAST}</eastBoundLongitude>`,
+    `              <southBoundLatitude>${SOUTH}</southBoundLatitude>`,
+    `              <northBoundLatitude>${NORTH}</northBoundLatitude>`,
+    '            </gmd:EX_GeographicBoundingBox>',
+    '          </gmd:geographicElement>',
+    '        </gmd:EX_Extent>',
+    '      </gmd:extent>',
+    '    </gmd:MD_DataIdentification>',
+    '  </gmd:identificationInfo>',
+    '</smXML:MD_Metadata>',
+  ].join("\n");
+
+  const mod = await h5wasmReady;
+  const FS  = mod.FS;
+  const tmpPath = "/tmp_survey_vr_bag.h5";
+
+  const f       = new H5wFile(tmpPath, "w");
+  const bagRoot = f.create_group("BAG_root");
+
+  // ── metadata XML ──────────────────────────────────────────────────────────
+  bagRoot.create_dataset({ name: "metadata", data: [metaXml], dtype: "S" });
+
+  // ── varres_metadata: compound[2, 2] ───────────────────────────────────────
+  // Column-based Map: each key is a field name, value is a flat TypedArray
+  // of length nrows*ncols = 4, in row-major order: (0,0),(0,1),(1,0),(1,1).
+  const vrMetaData = new Map([
+    ["dimensions_x", new Uint32Array(  [2,     2,     2,     2    ])],
+    ["dimensions_y", new Uint32Array(  [2,     2,     2,     2    ])],
+    ["resolution_x", new Float32Array( [0.005, 0.005, 0.005, 0.005])],
+    ["resolution_y", new Float32Array( [0.005, 0.005, 0.005, 0.005])],
+    ["sw_corner_x",  new Float32Array( [142.0, 142.01,142.0, 142.01])],
+    ["sw_corner_y",  new Float32Array( [11.0,  11.0,  11.01, 11.01 ])],
+  ]);
+  bagRoot.create_dataset({
+    name:  "varres_metadata",
+    data:  vrMetaData,
+    shape: [2, 2],
+    dtype: [
+      ["dimensions_x", "<I"],
+      ["dimensions_y", "<I"],
+      ["resolution_x", "<f"],
+      ["resolution_y", "<f"],
+      ["sw_corner_x",  "<f"],
+      ["sw_corner_y",  "<f"],
+    ],
+  });
+
+  // ── varres_refinements: compound[4, 4] ────────────────────────────────────
+  // Shape [nrows*ncols, max_dim] = [4, 4]; flat_idx 1 has one BAG_FILL cell.
+  const depthValues = new Float32Array([
+    1000,  1200,  1400,  1600,   // flat_idx=0 (cell 0,0): all valid
+    1800,  2000,  FILL,  2200,   // flat_idx=1 (cell 0,1): one fill
+    2400,  2600,  2800,  3000,   // flat_idx=2 (cell 1,0): all valid
+    3200,  3400,  3600,  3800,   // flat_idx=3 (cell 1,1): all valid
+  ]);
+  const vrRefData = new Map([
+    ["depth",             depthValues],
+    ["depth_uncertainty", new Float32Array(16).fill(0.1)],
+  ]);
+  bagRoot.create_dataset({
+    name:  "varres_refinements",
+    data:  vrRefData,
+    shape: [4, 4],
+    dtype: [
+      ["depth",             "<f"],
+      ["depth_uncertainty", "<f"],
+    ],
+  });
+
+  f.flush();
+
+  const bytes = FS.readFile(tmpPath);
+  f.close();
+  try { FS.unlink(tmpPath); } catch { /* ignore */ }
+
+  return Buffer.from(bytes);
+}
+
 // ─── BAG (HDF5) ──────────────────────────────────────────────────────────────
 
 /**
@@ -808,6 +927,10 @@ async function main() {
   const bagBuf = await buildBag();
   await writeFile(join(__dir, "survey.bag"), bagBuf);
   console.log(`survey.bag   ${bagBuf.length} bytes`);
+
+  const vrBagBuf = await buildVrBag();
+  await writeFile(join(__dir, "survey_vr.bag"), vrBagBuf);
+  console.log(`survey_vr.bag ${vrBagBuf.length} bytes`);
 
   const lazBuf = await buildLaz();
   console.log(`survey.laz   ${lazBuf.length} bytes`);

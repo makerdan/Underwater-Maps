@@ -51,6 +51,7 @@ FIXTURES=(
   survey_1_2.las
   survey_1_4.las
   survey.bag
+  survey_vr.bag
   survey.laz
   survey.gpx
   survey.nmea
