@@ -169,13 +169,83 @@ async function runHealthProbe(): Promise<void> {
   }
 }
 
+// ─── Session-expired signal ────────────────────────────────────────────────────
+// Distinguishes startup 401s (Clerk not yet loaded — expected and suppressed)
+// from post-load 401s (Clerk loaded, user nominally signed in, but the server
+// keeps rejecting the token — the session has likely expired).
+//
+// setClerkLoaded(true) is called by ClerkAuthTokenWirer once a session object
+// is available.  From that point, consecutive 401s are counted; reaching the
+// threshold fires signalSessionExpired() and shows the session-expired banner.
+
+let _clerkLoaded = false;
+let _consecutive401Count = 0;
+const SESSION_EXPIRED_401_THRESHOLD = 3;
+let _isSessionExpired = false;
+const _sessionExpiredListeners = new Set<() => void>();
+
+/**
+ * Called by ClerkAuthTokenWirer when a session is attached (`loaded=true`) or
+ * cleared (`loaded=false`).  Resets the consecutive-401 counter on detach so
+ * a page reload doesn't inherit stale count.
+ */
+export function setClerkLoaded(loaded: boolean): void {
+  _clerkLoaded = loaded;
+  if (!loaded) _consecutive401Count = 0;
+}
+
+/**
+ * Directly fire the session-expired signal.  Idempotent — only the first call
+ * notifies listeners.  Used by ClerkAuthTokenWirer when `getToken()` returns
+ * null twice in a row (token-refresh failure path).
+ */
+export function signalSessionExpired(): void {
+  if (_isSessionExpired) return;
+  _isSessionExpired = true;
+  _sessionExpiredListeners.forEach((fn) => fn());
+}
+
+/**
+ * Subscribe to the session-expired event.  The callback fires at most once per
+ * page lifetime (the signal is not reset).  Returns an unsubscribe function.
+ */
+export function subscribeToSessionExpired(cb: () => void): () => void {
+  _sessionExpiredListeners.add(cb);
+  return () => _sessionExpiredListeners.delete(cb);
+}
+
+/**
+ * Reactive hook: true once the session is detected as expired (persistent
+ * post-load 401s or getToken() consistently returning null).
+ * Stays true for the lifetime of the page — the user must reload.
+ */
+export function useIsSessionExpired(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      _sessionExpiredListeners.add(cb);
+      return () => _sessionExpiredListeners.delete(cb);
+    },
+    () => _isSessionExpired,
+    () => false,
+  );
+}
+
 // ─── Error handlers ───────────────────────────────────────────────────────────
 
 function handleQueryError(error: unknown) {
-  // 401s fired before Clerk has attached a session token are transient —
-  // the query will be re-enabled once auth resolves. Suppress the banner
-  // so the user never sees a red "Unauthorized" flash on startup.
-  if (is401(error)) return;
+  // 401s: behaviour depends on whether Clerk has fully loaded yet.
+  // Before load → transient startup 401, suppress silently (the query will
+  // be re-enabled once auth resolves). After load → count consecutive 401s;
+  // reaching the threshold means the session has expired.
+  if (is401(error)) {
+    if (_clerkLoaded) {
+      _consecutive401Count++;
+      if (_consecutive401Count >= SESSION_EXPIRED_401_THRESHOLD) {
+        signalSessionExpired();
+      }
+    }
+    return;
+  }
 
   // 502s during startup mean the API server is still warming up. Network
   // errors (TypeError: Failed to fetch / NetworkError) are also transient —
@@ -202,7 +272,10 @@ export const queryClient = new QueryClient({
     onError: handleQueryError,
     onSuccess: () => {
       // Any successful query means the server is up — clear the connecting
-      // flag so the banner can dismiss itself.
+      // flag so the banner can dismiss itself.  Also reset the consecutive-401
+      // counter so a brief auth blip doesn't permanently trip the session-
+      // expired threshold.
+      _consecutive401Count = 0;
       setIsConnecting(false);
     },
   }),

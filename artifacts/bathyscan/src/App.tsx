@@ -4,7 +4,14 @@ import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 import { Switch, Route, useLocation, Router as WouterRouter } from "wouter";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { queryClient, useIsConnecting, useHealthResponseTime } from "@/lib/queryClient";
+import {
+  queryClient,
+  useIsConnecting,
+  useHealthResponseTime,
+  setClerkLoaded,
+  signalSessionExpired,
+  useIsSessionExpired,
+} from "@/lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useGetDatasets, useGetUserDatasets, getGetDatasetsQueryKey, getGetUserDatasetsQueryKey, setAuthTokenGetter } from "@workspace/api-client-react";
@@ -1543,6 +1550,224 @@ function SettingsRoute() {
   );
 }
 
+// ─── Clerk load-error boundary ────────────────────────────────────────────────
+
+/**
+ * Number of ms to wait before each retry attempt when Clerk's JS bundle fails
+ * to load from the CDN.  Exported so unit tests can control timing.
+ */
+export const CLERK_RETRY_DELAYS_MS = [2_000, 4_000, 8_000] as const;
+
+/** Maximum number of CDN-load retry attempts before showing the final fallback. */
+export const MAX_CLERK_LOAD_RETRIES = CLERK_RETRY_DELAYS_MS.length;
+
+/**
+ * Returns true for the specific error Clerk throws when its JS bundle cannot
+ * be fetched from the CDN.  All other render errors are NOT handled here —
+ * they are re-thrown from render() so they propagate to the nearest parent
+ * error boundary (or React's default unhandled-error path).
+ *
+ * Exported for unit testing.
+ */
+export function isClerkLoadError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const msg = error.message;
+  return (
+    msg.includes("failed_to_load_clerk_js") ||
+    // Older Clerk SDK versions use a different string:
+    msg.includes("ClerkJS could not be loaded") ||
+    msg.includes("Failed to load Clerk")
+  );
+}
+
+interface ClerkLoadErrorBoundaryState {
+  /** Number of consecutive CDN-load failures already attempted. */
+  failureCount: number;
+  /** True while the error boundary is holding an unrecovered error. */
+  hasError: boolean;
+  /** True while the retry timer is running (waiting to remount children). */
+  retrying: boolean;
+  /** The raw error caught — used in render() to decide whether to re-throw. */
+  caughtError: Error | null;
+}
+
+/**
+ * Final fallback shown when all CDN-load retry attempts are exhausted.
+ * Exported for unit testing.
+ */
+export function ClerkLoadFailedFallback() {
+  return (
+    <div
+      role="alert"
+      className="flex flex-col items-center justify-center h-screen bg-[#040810] text-sky-100 gap-4 p-8 text-center"
+    >
+      <p className="text-base font-medium">
+        Authentication service failed to load.
+      </p>
+      <p className="text-sm text-sky-400">
+        This may be a temporary network issue. Try reloading the page.
+      </p>
+      <button
+        onClick={() => window.location.reload()}
+        className="mt-2 px-4 py-2 bg-sky-700 hover:bg-sky-600 rounded text-sm font-medium text-white transition-colors"
+      >
+        Reload page
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Error boundary that wraps ClerkProvider and catches CDN-load failures
+ * (`failed_to_load_clerk_js`).  On failure it retries with exponential
+ * back-off (2 s → 4 s → 8 s).  After exhausting retries it renders
+ * ClerkLoadFailedFallback with a manual "Reload page" button.
+ */
+export class ClerkLoadErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  ClerkLoadErrorBoundaryState
+> {
+  state: ClerkLoadErrorBoundaryState = {
+    failureCount: 0,
+    hasError: false,
+    retrying: false,
+    caughtError: null,
+  };
+
+  private _retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  static getDerivedStateFromError(error: Error): Partial<ClerkLoadErrorBoundaryState> {
+    return { hasError: true, caughtError: error };
+  }
+
+  /**
+   * componentDidCatch fires on every new error (including errors thrown during
+   * retries), unlike componentDidUpdate whose prevState.hasError check would
+   * be true → true after the first failure and therefore never re-schedule.
+   *
+   * Only Clerk CDN load errors are retried here.  Any other render error is
+   * not handled — it propagates via render() re-throwing to the nearest parent
+   * boundary.
+   */
+  componentDidCatch(error: Error, _info: React.ErrorInfo): void {
+    if (!isClerkLoadError(error)) return;
+    // Guard: don't stack a second timer if one is already running.
+    if (this._retryTimer !== null) return;
+    const { failureCount } = this.state;
+    if (failureCount < MAX_CLERK_LOAD_RETRIES) {
+      const delay = CLERK_RETRY_DELAYS_MS[failureCount] ?? 8_000;
+      this.setState({ retrying: true });
+      this._retryTimer = setTimeout(() => {
+        this._retryTimer = null;
+        this.setState((s) => ({
+          hasError: false,
+          caughtError: null,
+          failureCount: s.failureCount + 1,
+          retrying: false,
+        }));
+      }, delay);
+    }
+  }
+
+  componentWillUnmount() {
+    if (this._retryTimer !== null) {
+      clearTimeout(this._retryTimer);
+      this._retryTimer = null;
+    }
+  }
+
+  render() {
+    const { hasError, caughtError, failureCount, retrying } = this.state;
+    if (!hasError) return this.props.children;
+
+    // Non-Clerk render errors are not our responsibility — re-throw so the
+    // nearest parent error boundary (or React's unhandled-error path) handles
+    // them.  This keeps the Clerk boundary tightly scoped.
+    if (caughtError && !isClerkLoadError(caughtError)) throw caughtError;
+
+    if (retrying || failureCount < MAX_CLERK_LOAD_RETRIES) {
+      return (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center justify-center h-screen bg-[#040810] text-sky-400 text-sm gap-2"
+        >
+          <svg
+            aria-hidden="true"
+            className="animate-spin"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          >
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+          </svg>
+          Connecting…
+        </div>
+      );
+    }
+
+    return <ClerkLoadFailedFallback />;
+  }
+}
+
+// ─── Session-expired banner ────────────────────────────────────────────────────
+
+/**
+ * Non-dismissable fixed banner shown when the Clerk session expires during
+ * active use (persistent post-load 401s or getToken() consistently returning
+ * null).  Rendered inside ClerkProvider so it's always in the tree.
+ */
+function SessionExpiredBanner() {
+  const expired = useIsSessionExpired();
+  if (!expired) return null;
+  return (
+    <div
+      role="alert"
+      aria-live="assertive"
+      className="fixed inset-x-0 top-0 z-[9999] flex items-center justify-center gap-3 h-9 bg-amber-950/95 backdrop-blur-sm border-b border-amber-800/50 text-amber-300 text-[12px] font-medium select-none"
+    >
+      Session expired — please reload to continue
+      <button
+        onClick={() => window.location.reload()}
+        className="ml-2 px-2 py-0.5 bg-amber-700 hover:bg-amber-600 rounded text-[11px] text-white transition-colors"
+      >
+        Reload
+      </button>
+    </div>
+  );
+}
+
+// ─── Token retry helper ────────────────────────────────────────────────────────
+
+/** Delay (ms) before the single getToken() retry attempt. Exported for testing. */
+export const GET_TOKEN_RETRY_DELAY_MS = 1_000;
+
+/**
+ * Attempts to obtain a Clerk session token.  If the first call returns null,
+ * one retry is made after `retryDelay` ms.  If both calls return null,
+ * `onExpired` is invoked (to fire the session-expired banner) and null is
+ * returned.
+ *
+ * Extracted from ClerkAuthTokenWirer so it can be unit-tested without React.
+ */
+export async function getTokenWithRetry(
+  getToken: () => Promise<string | null>,
+  onExpired: () => void,
+  retryDelay = GET_TOKEN_RETRY_DELAY_MS,
+): Promise<string | null> {
+  const token = await getToken();
+  if (token !== null) return token;
+  await new Promise<void>((resolve) => setTimeout(resolve, retryDelay));
+  const retried = await getToken();
+  if (retried !== null) return retried;
+  onExpired();
+  return null;
+}
+
 /**
  * Wires Clerk's session token into the API client so every fetch carries
  * `Authorization: Bearer <token>` instead of relying on the __session cookie.
@@ -1550,12 +1775,28 @@ function SettingsRoute() {
  * because Clerk's handshake 307 redirect cannot be followed by XHR/fetch.
  * Using short-lived JWTs from `session.getToken()` bypasses the handshake
  * entirely and works in any proxy or iframe setup.
+ *
+ * Resilience additions:
+ * - Calls setClerkLoaded(true/false) so queryClient can distinguish startup
+ *   401s from post-load 401s.
+ * - Wraps getToken() with getTokenWithRetry() to catch one-off null returns
+ *   (token-refresh hiccups) before triggering the session-expired banner.
  */
-function ClerkAuthTokenWirer() {
+export function ClerkAuthTokenWirer() {
   const { session } = useClerk();
   useEffect(() => {
-    setAuthTokenGetter(session ? () => session.getToken() : null);
-    return () => { setAuthTokenGetter(null); };
+    if (session) {
+      setClerkLoaded(true);
+      setAuthTokenGetter(() =>
+        getTokenWithRetry(() => session.getToken(), signalSessionExpired),
+      );
+    } else {
+      setClerkLoaded(false);
+      setAuthTokenGetter(null);
+    }
+    return () => {
+      setAuthTokenGetter(null);
+    };
   }, [session]);
   return null;
 }
@@ -1589,6 +1830,9 @@ function ClerkProviderWithRoutes() {
       routerPush={(to) => setLocation(stripBase(to))}
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >
+      {/* Session-expired banner — fixed overlay, non-dismissable. Fires when
+          persistent post-load 401s or getToken() null retries exhaust. */}
+      <SessionExpiredBanner />
       <ClerkAuthTokenWirer />
       <QueryClientProvider client={queryClient}>
         <ClerkQueryClientCacheInvalidator />
@@ -1654,7 +1898,9 @@ function App() {
   return (
     <WouterRouter base={basePath}>
       <AccessibilityClassesEffect />
-      <ClerkProviderWithRoutes />
+      <ClerkLoadErrorBoundary>
+        <ClerkProviderWithRoutes />
+      </ClerkLoadErrorBoundary>
     </WouterRouter>
   );
 }

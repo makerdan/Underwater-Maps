@@ -8,3 +8,4 @@
 - [settingsStore mock must include persist+setState](settingsstore-mock-persist.md) — uiStore.ts calls useSettingsStore.persist.hasHydrated() at module init and useSettingsStore.setState() in action handlers; mocks must use importOriginal + Object.assign with persist/setState/getState/subscribe stubs or tests crash.
 - [bypassUseClerk session needs getToken](bypass-use-clerk-session.md) — ClerkAuthTokenWirer in App.tsx calls session.getToken(); the bypass mock must include getToken: async () => null on the session object or every browser-side PUT/GET throws TypeError and waitForServerSettingsSync times out.
 - [BAG parser subprocess pitfalls](bag-parser-subprocess.md) — three non-obvious issues when replacing h5wasm with Python subprocess BAG parsing.
+- [Error boundary retry must use componentDidCatch](error-boundary-retry.md) — componentDidUpdate's prevState.hasError stays true→true on re-catch; use componentDidCatch for retry scheduling instead.
