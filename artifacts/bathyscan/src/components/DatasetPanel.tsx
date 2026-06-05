@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { subscribeToReconnect } from "@/lib/queryClient";
+import { subscribeToReconnect, markServerUnreachable } from "@/lib/queryClient";
 import { useDropzone } from "react-dropzone";
 import type { FileRejection } from "react-dropzone";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1709,6 +1709,10 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
     if (!serverReachable) {
       setChunkedError("Server unreachable — check your connection and try again");
+      // Start the background health poll so the reconnect event fires once the
+      // server comes back, allowing the upload to auto-resume without another
+      // manual Retry click.
+      markServerUnreachable();
       return;
     }
 
@@ -1749,6 +1753,23 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     const unsubscribe = subscribeToReconnect(async () => {
       // Re-read phase at the time of reconnect; it might have changed.
       if (chunkedPhase !== "error") return;
+
+      // Re-probe health before resuming. This is the common path when
+      // handleRetryChunked called markServerUnreachable after a failed probe:
+      // the health poll confirmed the server is back, but we do a direct
+      // /api/healthz check to be sure before re-entering the upload loop.
+      try {
+        const healthProbe = await fetch("/api/healthz", {
+          signal: AbortSignal.timeout(5_000),
+        });
+        if (!healthProbe.ok) {
+          setChunkedError("Server unreachable — check your connection and try again");
+          return;
+        }
+      } catch {
+        setChunkedError("Server unreachable — check your connection and try again");
+        return;
+      }
 
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 

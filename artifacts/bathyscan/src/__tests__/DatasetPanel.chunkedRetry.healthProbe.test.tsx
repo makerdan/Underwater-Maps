@@ -5,7 +5,14 @@
  * the upload loop and, when the server is unreachable, shows a clear
  * "Server unreachable" error message while keeping the retry button visible.
  *
- * Strategy:
+ * Also verifies the auto-retry-on-reconnect path introduced alongside the
+ * health probe: when handleRetryChunked's probe fails it calls
+ * markServerUnreachable() so the background health poll starts. When the
+ * poll detects the server is back it fires the reconnect event, the subscriber
+ * re-probes /api/healthz, and if that succeeds the upload resumes without
+ * requiring the user to click Retry again.
+ *
+ * Strategy (existing probe-failure tests):
  *   1. Drop a fake chunked-size file → doSendChunks → chunk 500 → "error" phase.
  *   2. Replace the global fetch mock so /api/healthz returns a non-OK response
  *      (or throws a TypeError) to simulate the server being unreachable.
@@ -14,6 +21,14 @@
  *   4. Assert the new error message is rendered.
  *   5. Assert the retry button is still visible (chunkedPhase stayed "error").
  *   6. Assert the chunk endpoint was never called during the retry attempt.
+ *
+ * Strategy (new auto-reconnect tests):
+ *   7. After the "Server unreachable" error is set, confirm markServerUnreachable
+ *      was called (so the health poll is started).
+ *   8. Fire the reconnect event via the captured subscribeToReconnect listener.
+ *   9a. When the re-probe still fails: assert "Server unreachable" stays on screen.
+ *   9b. When the re-probe succeeds: assert the chunk upload endpoint is called
+ *       and the retry button disappears (upload auto-resumed).
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -22,6 +37,27 @@ import { render, screen, act, fireEvent } from "@testing-library/react";
 import { DatasetPanel } from "@/components/DatasetPanel";
 
 // ── Hoisted state ──────────────────────────────────────────────────────────────
+
+const reconnectMock = vi.hoisted(() => {
+  const listeners = new Set<() => void | Promise<void>>();
+  return {
+    listeners,
+    subscribe(cb: () => void) {
+      listeners.add(cb);
+      return () => { listeners.delete(cb); };
+    },
+    async fire() {
+      for (const fn of [...listeners]) {
+        await fn();
+      }
+    },
+    markUnreachable: vi.fn(),
+    reset() {
+      listeners.clear();
+      reconnectMock.markUnreachable.mockReset();
+    },
+  };
+});
 
 const makeApiClientMock = vi.hoisted(() => {
   function noop() {}
@@ -80,6 +116,11 @@ const dropzoneMock = vi.hoisted(() => {
 });
 
 // ── Module mocks ───────────────────────────────────────────────────────────────
+
+vi.mock("@/lib/queryClient", () => ({
+  subscribeToReconnect: reconnectMock.subscribe,
+  markServerUnreachable: reconnectMock.markUnreachable,
+}));
 
 vi.mock("react-dropzone", () => ({
   useDropzone: (opts: {
@@ -442,5 +483,165 @@ describe("DatasetPanel — handleRetryChunked health probe", () => {
 
     // Chunk endpoint must not have been called again during the retry.
     expect(chunkPhaseEntered).toBe(false);
+  });
+
+  it("calls markServerUnreachable after a health probe failure so the reconnect poll is started", async () => {
+    reconnectMock.reset();
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : String(input);
+      if (url.includes("/api/healthz")) {
+        throw new TypeError("Failed to fetch");
+      }
+      if (url.includes("/datasets/upload/chunk")) {
+        return {
+          ok: false,
+          status: 500,
+          json: async () => ({ error: "server_error", details: "Simulated failure" }),
+        } as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({}) } as Response;
+    });
+
+    render(<DatasetPanel />);
+
+    const file = makeFakeFile("survey.bag", "application/octet-stream", 15 * 1024 * 1024);
+    await act(async () => { dropzoneMock.trigger([file]); });
+
+    const retryBtn = await screen.findByTestId("btn-retry-chunked-upload");
+
+    await act(async () => { fireEvent.click(retryBtn); });
+
+    expect(
+      screen.getByText(/Server unreachable — check your connection and try again/i),
+    ).toBeInTheDocument();
+
+    // markServerUnreachable must have been called so the health poll starts
+    // and the reconnect event can fire when the server comes back.
+    expect(reconnectMock.markUnreachable).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-probes health on reconnect and stays in error when the re-probe still fails", async () => {
+    reconnectMock.reset();
+
+    let healthProbeCount = 0;
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : String(input);
+      if (url.includes("/api/healthz")) {
+        healthProbeCount++;
+        throw new TypeError("Failed to fetch");
+      }
+      if (url.includes("/datasets/upload/chunk")) {
+        return {
+          ok: false,
+          status: 500,
+          json: async () => ({ error: "server_error", details: "Simulated failure" }),
+        } as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({}) } as Response;
+    });
+
+    render(<DatasetPanel />);
+
+    const file = makeFakeFile("survey.bag", "application/octet-stream", 15 * 1024 * 1024);
+    await act(async () => { dropzoneMock.trigger([file]); });
+
+    const retryBtn = await screen.findByTestId("btn-retry-chunked-upload");
+
+    // Click Retry → health probe fails → "Server unreachable"
+    await act(async () => { fireEvent.click(retryBtn); });
+
+    expect(
+      screen.getByText(/Server unreachable — check your connection and try again/i),
+    ).toBeInTheDocument();
+
+    const probesBefore = healthProbeCount;
+
+    // Fire reconnect — the subscriber re-probes health (still failing)
+    await act(async () => { await reconnectMock.fire(); });
+
+    // Health probe must have been called again during the reconnect handler
+    expect(healthProbeCount).toBeGreaterThan(probesBefore);
+
+    // "Server unreachable" must still be shown — probe still failing
+    expect(
+      screen.getByText(/Server unreachable — check your connection and try again/i),
+    ).toBeInTheDocument();
+
+    // Retry button must still be present
+    expect(screen.getByTestId("btn-retry-chunked-upload")).toBeInTheDocument();
+  });
+
+  it("auto-resumes the upload without a manual click when reconnect fires and the re-probe passes", async () => {
+    reconnectMock.reset();
+
+    let serverBack = false;
+    const chunkCallsAfterReconnect: string[] = [];
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : String(input);
+
+      if (url.includes("/api/healthz")) {
+        if (!serverBack) throw new TypeError("Failed to fetch");
+        return { ok: true, status: 200, json: async () => ({}) } as Response;
+      }
+
+      if (url.includes("/datasets/upload/chunk/status/")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ receivedChunks: [] }),
+        } as Response;
+      }
+
+      if (url.includes("/datasets/upload/chunk/finalize")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ jobId: "fake-job-id" }),
+        } as Response;
+      }
+
+      if (url.includes("/datasets/upload/chunk")) {
+        if (!serverBack) {
+          return {
+            ok: false,
+            status: 500,
+            json: async () => ({ error: "server_error", details: "Simulated failure" }),
+          } as Response;
+        }
+        chunkCallsAfterReconnect.push(url);
+        return { ok: true, status: 200, json: async () => ({}) } as Response;
+      }
+
+      return { ok: true, status: 200, json: async () => ({}) } as Response;
+    });
+
+    render(<DatasetPanel />);
+
+    const file = makeFakeFile("survey.bag", "application/octet-stream", 15 * 1024 * 1024);
+    await act(async () => { dropzoneMock.trigger([file]); });
+
+    const retryBtn = await screen.findByTestId("btn-retry-chunked-upload");
+
+    // Click Retry → health probe fails → "Server unreachable"
+    await act(async () => { fireEvent.click(retryBtn); });
+
+    expect(
+      screen.getByText(/Server unreachable — check your connection and try again/i),
+    ).toBeInTheDocument();
+
+    // Server comes back — fire the reconnect event
+    serverBack = true;
+    await act(async () => { await reconnectMock.fire(); });
+
+    // The reconnect subscriber re-probed health (passed), ran the status
+    // endpoint, and re-entered the upload loop — chunk endpoint must have
+    // been called.
+    expect(chunkCallsAfterReconnect.length).toBeGreaterThan(0);
+
+    // The retry button must be gone — the phase moved past "error".
+    expect(screen.queryByTestId("btn-retry-chunked-upload")).not.toBeInTheDocument();
   });
 });

@@ -78,6 +78,18 @@ export function subscribeToReconnect(cb: () => void): () => void {
 }
 
 /**
+ * Signal that the server appears unreachable (e.g. a manual health probe just
+ * failed). Starts the background health poll so that when connectivity is
+ * restored, the reconnect event fires and any subscribeToReconnect listeners
+ * are notified automatically.
+ *
+ * Safe to call repeatedly: the poll ignores duplicate start requests.
+ */
+export function markServerUnreachable(): void {
+  setIsConnecting(true);
+}
+
+/**
  * Reactive hook: true while the server is unreachable (502 or network error)
  * and no successful query has returned yet. Resets to false once the health
  * poll confirms the server is up.
