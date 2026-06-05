@@ -41,6 +41,13 @@ interface TerrainStore {
   evictedId: string | null;
 
   /**
+   * True when the user has explicitly opted into side-by-side multi-dataset viewing
+   * (via toggleVisible / "Show together"). False in normal sequential navigation.
+   * When false, setSinglePrimary evicts all prior datasets before promoting a new one.
+   */
+  multiDatasetMode: boolean;
+
+  /**
    * Legacy entry point — sets the primary's grids. If no primary is set yet,
    * one is derived from the grid's datasetId. Keeps existing callers (DatasetPanel,
    * useActiveDatasetSync, App.tsx terrain effect) working unchanged.
@@ -69,6 +76,14 @@ interface TerrainStore {
   /** Remove every visible dataset except the primary. No-op when only primary is visible. */
   hideAllOthers: () => void;
 
+  /**
+   * Single-dataset sequential-load entry point. Replaces ALL currently visible
+   * datasets with just the new one and promotes it to primary. Use this instead
+   * of setPrimary when multi-dataset mode is off, so no ghost terrain from a
+   * prior dataset can remain in the scene.
+   */
+  setSinglePrimary: (datasetId: string, source?: DatasetSource) => void;
+
   /** Reset to empty (used by water-type switch). */
   clear: () => void;
 
@@ -95,6 +110,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
   activeGrid: null,
   overviewGrid: null,
   evictedId: null,
+  multiDatasetMode: false,
 
   setGrids: ({ activeGrid, overviewGrid, source }) =>
     set((prev) => {
@@ -270,6 +286,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         ...prev,
         visibleDatasets: nextVisible,
         primaryDatasetId: nextPrimary,
+        multiDatasetMode: true,
         ...syncPrimaryGrids(nextVisible, nextPrimary),
         ...(evictedId !== null ? { evictedId } : {}),
       };
@@ -288,6 +305,26 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       };
     }),
 
+  setSinglePrimary: (datasetId, source) =>
+    set((prev) => {
+      const entry: VisibleDataset = {
+        datasetId,
+        source: source ?? "preset",
+        activeGrid: null,
+        overviewGrid: null,
+      };
+      const nextVisible = [entry];
+      return {
+        ...prev,
+        visibleDatasets: nextVisible,
+        primaryDatasetId: datasetId,
+        multiDatasetMode: false,
+        activeGrid: null,
+        overviewGrid: null,
+        evictedId: null,
+      };
+    }),
+
   clear: () =>
     set({
       visibleDatasets: [],
@@ -295,6 +332,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       activeGrid: null,
       overviewGrid: null,
       evictedId: null,
+      multiDatasetMode: false,
     }),
 
   clearEviction: () =>

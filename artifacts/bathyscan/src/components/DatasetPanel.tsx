@@ -871,6 +871,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     setDatasetId(pendingId);
     setTerrain(pendingTerrain);
     setActiveUserDatasetId(null);
+    if (!useTerrainStore.getState().multiDatasetMode) {
+      useTerrainStore.getState().setSinglePrimary(pendingId, "preset");
+    }
     useTerrainStore.getState().setGrids({ activeGrid: pendingTerrain, overviewGrid: pendingOverview });
     useClassificationStore.getState().clearZoneMap();
     void useClassificationStore.getState().classify(pendingTerrain);
@@ -942,6 +945,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     setTerrain(terrainStamped);
     setDatasetId(null);
     setActiveUserDatasetId(pendingUserDatasetId);
+    if (!useTerrainStore.getState().multiDatasetMode) {
+      useTerrainStore.getState().setSinglePrimary(pendingUserDatasetId, "user");
+    }
     useTerrainStore.getState().setGrids({
       activeGrid: terrainStamped,
       overviewGrid: overviewStamped,
@@ -1249,6 +1255,10 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             if (isFirstTry) {
               setDatasetId(null);
               setTerrain(data.terrain);
+              if (!useTerrainStore.getState().multiDatasetMode) {
+                const uploadedId = data.terrain.datasetId ?? data.savedDatasetId ?? "__upload__";
+                useTerrainStore.getState().setSinglePrimary(uploadedId, "user");
+              }
               useTerrainStore.getState().setGrids({
                 activeGrid: data.terrain,
                 overviewGrid: data.overview,

@@ -192,4 +192,65 @@ describe("terrainStore multi-dataset", () => {
     expect(s.evictedId).toBe("b");
     expect(s.visibleDatasets.length).toBe(4);
   });
+
+  // ── setSinglePrimary / sequential-load (single-dataset mode) ─────────────
+
+  it("setSinglePrimary replaces all visible datasets with only the new one", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    useTerrainStore.getState().setSinglePrimary("beta", "preset");
+    const s = useTerrainStore.getState();
+    expect(s.primaryDatasetId).toBe("beta");
+    expect(s.visibleDatasets).toHaveLength(1);
+    expect(s.visibleDatasets[0]!.datasetId).toBe("beta");
+    // Prior dataset evicted — grids start null pending load.
+    expect(s.activeGrid).toBeNull();
+    expect(s.overviewGrid).toBeNull();
+    expect(s.evictedId).toBeNull();
+    expect(s.multiDatasetMode).toBe(false);
+  });
+
+  it("setSinglePrimary evicts multiple prior datasets including the old primary", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    useTerrainStore.getState().toggleVisible({ datasetId: "beta", source: "preset" });
+    useTerrainStore.getState().toggleVisible({ datasetId: "gamma", source: "preset" });
+    expect(useTerrainStore.getState().visibleDatasets).toHaveLength(3);
+
+    useTerrainStore.getState().setSinglePrimary("delta", "preset");
+    const s = useTerrainStore.getState();
+    expect(s.primaryDatasetId).toBe("delta");
+    expect(s.visibleDatasets).toHaveLength(1);
+    expect(s.visibleDatasets[0]!.datasetId).toBe("delta");
+  });
+
+  it("toggleVisible sets multiDatasetMode to true", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    expect(useTerrainStore.getState().multiDatasetMode).toBe(false);
+    useTerrainStore.getState().toggleVisible({ datasetId: "beta", source: "preset" });
+    expect(useTerrainStore.getState().multiDatasetMode).toBe(true);
+  });
+
+  it("clear resets multiDatasetMode to false", () => {
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
+    useTerrainStore.getState().toggleVisible({ datasetId: "beta", source: "preset" });
+    expect(useTerrainStore.getState().multiDatasetMode).toBe(true);
+    useTerrainStore.getState().clear();
+    expect(useTerrainStore.getState().multiDatasetMode).toBe(false);
+  });
+
+  it("sequential setSinglePrimary calls leave only the latest dataset visible", () => {
+    // Simulate a user flipping through datasets one by one.
+    for (const id of ["alpha", "beta", "gamma", "delta"]) {
+      useTerrainStore.getState().setSinglePrimary(id, "preset");
+      expect(useTerrainStore.getState().visibleDatasets).toHaveLength(1);
+      expect(useTerrainStore.getState().primaryDatasetId).toBe(id);
+    }
+    const s = useTerrainStore.getState();
+    expect(s.visibleDatasets.map((v) => v.datasetId)).toEqual(["delta"]);
+  });
+
+  it("setSinglePrimary does not affect multiDatasetMode when it is already false", () => {
+    useTerrainStore.getState().setSinglePrimary("alpha", "preset");
+    useTerrainStore.getState().setSinglePrimary("beta", "preset");
+    expect(useTerrainStore.getState().multiDatasetMode).toBe(false);
+  });
 });

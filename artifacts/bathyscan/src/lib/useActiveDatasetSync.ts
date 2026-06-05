@@ -52,11 +52,22 @@ export function useActiveDatasetSync(): void {
   // Promote the active preset to primary as soon as the id changes, so the
   // 3D scene + Overview Map start showing the right dataset even before its
   // grids arrive (the slot will just render empty until the loader fills it).
+  //
+  // In single-dataset mode (multiDatasetMode === false) we evict all prior
+  // visible datasets atomically via setSinglePrimary, eliminating ghost terrain
+  // from the previously visible dataset. In multi-dataset mode the user has
+  // explicitly pinned datasets side-by-side, so we fall back to setPrimary to
+  // preserve the accumulation behaviour.
   useEffect(() => {
     if (!id) return;
     if (promotedRef.current === id) return;
     promotedRef.current = id;
-    useTerrainStore.getState().setPrimary(id, "preset");
+    const { multiDatasetMode } = useTerrainStore.getState();
+    if (multiDatasetMode) {
+      useTerrainStore.getState().setPrimary(id, "preset");
+    } else {
+      useTerrainStore.getState().setSinglePrimary(id, "preset");
+    }
   }, [id]);
 
   useEffect(() => {
