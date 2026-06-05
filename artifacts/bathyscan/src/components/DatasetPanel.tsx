@@ -596,6 +596,17 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   // Accent colour tracks waterType: cyan for saltwater, green for freshwater.
   const accent = waterType === "freshwater" ? "#4ade80" : "#00e5ff";
 
+  // ─── Warn before unload while a chunked upload is active ──────────────────
+  useEffect(() => {
+    if (chunkedPhase !== "uploading" && chunkedPhase !== "processing") return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = ""; // required for Chrome/Edge to show the native dialog
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [chunkedPhase]);
+
   // ─── Upload error popup ────────────────────────────────────────────────────
   const [copiedErrorHint, setCopiedErrorHint] = useState(false);
 

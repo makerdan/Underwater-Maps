@@ -298,6 +298,101 @@ test.describe("Chunked upload flow (> 10 MB)", () => {
     },
   );
 
+  // ── beforeunload guard — real dialog fires during upload ─────────────────────
+  test(
+    "beforeunload guard: real browser dialog fires when navigating away while uploading",
+    async ({ page }) => {
+      test.setTimeout(60_000);
+
+      await page.goto("/?noCanvas=1", { waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId("tour-scene-canvas-disabled")).toBeVisible();
+
+      if (!(await openUploadAccordion(page))) {
+        test.skip(true, "Upload accordion or dropzone not visible in this environment");
+        return;
+      }
+
+      // 1. Guard must NOT be active while idle (synthetic check — no navigation needed).
+      const preventedWhenIdle = await page.evaluate(() => {
+        const e = new Event("beforeunload", { cancelable: true });
+        window.dispatchEvent(e);
+        return e.defaultPrevented;
+      });
+      expect(preventedWhenIdle).toBe(false);
+
+      // 2. Start a chunked upload and wait for the uploading phase.
+      const csvBuffer = makeLargeCsv();
+      const filename = `chunked-e2e-beforeunload-${Date.now()}.csv`;
+      await dropBufferOntoDropzone(page, filename, csvBuffer);
+      await expect(page.getByText(/Uploading in chunks/i)).toBeVisible({ timeout: 30_000 });
+
+      // 3. Navigate away while uploading — a real 'beforeunload' dialog must fire.
+      //    page.once('dialog') intercepts the native browser prompt.
+      //    Calling dialog.accept() means "Leave page" so page.goto() can complete.
+      let capturedDialogType: string | null = null;
+      page.once("dialog", async (dialog) => {
+        capturedDialogType = dialog.type();
+        await dialog.accept();
+      });
+      await page.goto("/?noCanvas=1", { waitUntil: "domcontentloaded" });
+      expect(capturedDialogType).toBe("beforeunload");
+    },
+  );
+
+  // ── beforeunload guard — inactive in error and idle states ───────────────────
+  test(
+    "beforeunload guard: does NOT fire when chunked upload is idle or in error state",
+    async ({ page }) => {
+      test.setTimeout(60_000);
+
+      // Intercept only the very first chunk to force the error state.
+      let firstChunkIntercepted = false;
+      await page.route("**/api/datasets/upload/chunk", async (route) => {
+        if (!firstChunkIntercepted) {
+          firstChunkIntercepted = true;
+          await route.fulfill({
+            status: 500,
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ error: "server_error", details: "Simulated chunk failure (beforeunload e2e)" }),
+          });
+        } else {
+          await route.continue();
+        }
+      });
+
+      await page.goto("/?noCanvas=1", { waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId("tour-scene-canvas-disabled")).toBeVisible();
+
+      if (!(await openUploadAccordion(page))) {
+        test.skip(true, "Upload accordion or dropzone not visible in this environment");
+        return;
+      }
+
+      // 1. Guard must NOT be active while idle.
+      const preventedWhenIdle = await page.evaluate(() => {
+        const e = new Event("beforeunload", { cancelable: true });
+        window.dispatchEvent(e);
+        return e.defaultPrevented;
+      });
+      expect(preventedWhenIdle).toBe(false);
+
+      // 2. Trigger a chunk failure to put the upload into the error state.
+      const csvBuffer = makeLargeCsv();
+      const filename = `chunked-e2e-beforeunload-err-${Date.now()}.csv`;
+      await dropBufferOntoDropzone(page, filename, csvBuffer);
+      const retryBtn = page.getByTestId("btn-retry-chunked-upload");
+      await expect(retryBtn).toBeVisible({ timeout: 15_000 });
+
+      // 3. Guard must NOT be active in the error state.
+      const preventedWhenError = await page.evaluate(() => {
+        const e = new Event("beforeunload", { cancelable: true });
+        window.dispatchEvent(e);
+        return e.defaultPrevented;
+      });
+      expect(preventedWhenError).toBe(false);
+    },
+  );
+
   // ── Retry path — only first chunk is mocked to fail ──────────────────────────
   test(
     "retry path: chunk failure surfaces the retry button; clicking it resumes and completes the upload end-to-end via the real server",
