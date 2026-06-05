@@ -185,4 +185,75 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
     // chunksReceived (DB fallback for wiped /tmp).
     expect(res.body.receivedChunks).toEqual([0, 1, 2, 3]);
   });
+
+  it("chunk N > 0 is accepted via DB fallback without requiring chunk 0 to be re-sent (simulated restart)", async () => {
+    // Use an uploadId that was never sent in this process — simulates the
+    // state after a server restart where the in-memory uploadSessions map is
+    // empty but the DB still has the "uploading" row from the original chunk 0.
+    const uploadId = `recovery-test-resume-direct-${Date.now()}`;
+
+    // Seed the DB mock to return a valid row for this uploadId.  The chunk
+    // handler's DB fallback selects { userId, sessionJobId } from upload_jobs.
+    mockDbSelectResult = [
+      {
+        userId: E2E_USER,
+        sessionJobId: "mock-session-job-id-resume",
+        chunksReceived: 1,
+      },
+    ];
+
+    // Send chunk 1 without having sent chunk 0 in this process.
+    const res = await request(app)
+      .post("/api/datasets/upload/chunk")
+      .set("x-e2e-user-id", E2E_USER)
+      .field("uploadId", uploadId)
+      .field("chunkIndex", "1")
+      .field("totalChunks", "3")
+      .attach("file", SMALL_CHUNK, "data.bin");
+
+    // The handler must accept the chunk (200) rather than returning 404
+    // session_not_found, because it falls back to the DB row.
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ received: 1 });
+  });
+
+  it("full round-trip: chunk 0 → restart → status re-hydrates → chunk N accepted", async () => {
+    // Step 1: use a fresh uploadId to simulate the "pre-restart" state where
+    // chunk 0 was sent in a previous server lifetime.  The in-memory session
+    // map is empty for this ID (we never actually send chunk 0 here), but the
+    // DB row is seeded to represent the persisted state left by chunk 0.
+    const uploadId = `recovery-test-roundtrip-${Date.now()}`;
+
+    mockDbSelectResult = [
+      {
+        userId: E2E_USER,
+        sessionJobId: "mock-session-job-id-roundtrip",
+        chunksReceived: 1,
+      },
+    ];
+
+    // Step 2: client calls GET chunk/status after reconnecting — this is the
+    // first thing the resume flow does.  The handler re-hydrates the
+    // in-memory session from the DB row so subsequent chunk POSTs are accepted
+    // without touching the DB again.
+    const statusRes = await request(app)
+      .get(`/api/datasets/upload/chunk/status/${uploadId}`)
+      .set("x-e2e-user-id", E2E_USER);
+
+    expect(statusRes.status).toBe(200);
+    expect(statusRes.body.receivedChunks).toEqual([0]); // chunksReceived = 1 → index 0
+
+    // Step 3: send chunk 1 — this should now hit the in-memory fast path
+    // (session was restored by the status call above).  No DB select needed.
+    const res = await request(app)
+      .post("/api/datasets/upload/chunk")
+      .set("x-e2e-user-id", E2E_USER)
+      .field("uploadId", uploadId)
+      .field("chunkIndex", "1")
+      .field("totalChunks", "3")
+      .attach("file", SMALL_CHUNK, "data.bin");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ received: 1 });
+  });
 });

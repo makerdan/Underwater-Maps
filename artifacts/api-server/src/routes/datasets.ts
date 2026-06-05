@@ -1930,7 +1930,28 @@ router.post(
       void createUploadSessionRow(sessionJobId, userId, uploadId, totalChunks);
     } else {
       // Subsequent chunks: verify ownership.
-      const session = uploadSessions.get(uploadId);
+      let session = uploadSessions.get(uploadId);
+
+      if (!session) {
+        // DB fallback — handles the case where the server restarted between
+        // chunk uploads and the in-memory session was lost.  An "uploading"
+        // row (written on chunk 0) carries the uploadId, userId, and
+        // sessionJobId so we can reconstruct the session and accept the chunk
+        // without requiring chunk 0 to be re-sent.
+        const [dbJob] = await db
+          .select({
+            userId: uploadJobsTable.userId,
+            sessionJobId: uploadJobsTable.id,
+          })
+          .from(uploadJobsTable)
+          .where(eq(uploadJobsTable.uploadId, uploadId));
+
+        if (dbJob) {
+          session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId };
+          uploadSessions.set(uploadId, session);
+        }
+      }
+
       if (!session) {
         await fs.promises.unlink(file.path).catch(() => undefined);
         res.status(404).json({ error: "session_not_found", details: "Upload session not found. Start from chunk 0." });
