@@ -34,10 +34,14 @@ describe("gunzipBounded — happy path", () => {
 
 describe("gunzipBounded — size cap (200 MB)", () => {
   it("rejects with DECOMPRESS_TOO_LARGE when output would exceed maxBytes", async () => {
-    const bigPayload = Buffer.alloc(201 * 1024 * 1024, 0x00);
-    const compressed = zlib.gzipSync(bigPayload);
+    // Use a small payload with a proportionally small cap so the test finishes
+    // in milliseconds. The production cap is MAX_200MB (200 * 1024 * 1024);
+    // the guard logic is identical regardless of the absolute sizes involved.
+    const smallCap = 200;
+    const payload = Buffer.alloc(smallCap + 1, 0x00);
+    const compressed = zlib.gzipSync(payload);
 
-    await expect(gunzipBounded(compressed, MAX_200MB)).rejects.toMatchObject({
+    await expect(gunzipBounded(compressed, smallCap)).rejects.toMatchObject({
       code: "DECOMPRESS_TOO_LARGE",
       message: "DECOMPRESS_TOO_LARGE",
     });
