@@ -192,6 +192,12 @@ const rateLimitEventsTableStub = {
   createdAt: "createdAt",
 };
 
+const uploadCalibrationTableStub = {
+  extension: "extension",
+  durations: "durations",
+  updatedAt: "updatedAt",
+};
+
 function buildDefaultDb(): DbMockDb {
   const whereMock = vi.fn().mockResolvedValue([]);
   const fromMock = vi.fn().mockReturnValue({ where: whereMock });
@@ -248,5 +254,6 @@ export function createDbMock(options: DbMockOptions = {}) {
     rawsObservationCacheTable: rawsObservationCacheTableStub,
     poeUsageLogTable: poeUsageLogTableStub,
     rateLimitEventsTable: rateLimitEventsTableStub,
+    uploadCalibrationTable: uploadCalibrationTableStub,
   };
 }

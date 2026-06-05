@@ -214,6 +214,27 @@ function recordExtensionDuration(ext: string, durationMs: number): void {
   if (ext) schedulePersistCalibrationEntry(ext);
 }
 
+/**
+ * Flush all pending debounced calibration writes immediately.
+ * Exposed for test isolation only — do not call in production code.
+ */
+export async function flushCalibrationPersistForTest(): Promise<void> {
+  const pending = [...calibrationPersistTimers.entries()];
+  for (const [ext, timer] of pending) {
+    clearTimeout(timer);
+    calibrationPersistTimers.delete(ext);
+  }
+  await Promise.all(pending.map(([ext]) => persistCalibrationEntry(ext)));
+}
+
+/**
+ * Schedule a debounced DB persist for the given extension.
+ * Exposed for test isolation only — do not call in production code.
+ */
+export function scheduleCalibrationPersistForTest(ext: string): void {
+  schedulePersistCalibrationEntry(ext);
+}
+
 
 const uploadJobs = new Map<string, JobState>();
 registerCache(() => uploadJobs.clear());
