@@ -3,7 +3,8 @@ import { logger } from "./lib/logger";
 import { seedDatasetCatalog } from "./lib/catalogSeeder.js";
 import { startBucketMonitor } from "./lib/bucketMonitor.js";
 import { startWeatherCacheRefresher } from "./lib/weatherCacheRefresher.js";
-import { recoverStaleUploadJobs, cleanupStaleChunks, cleanupAbandonedUploadJobs } from "./routes/datasets.js";
+import { startUploadCleanupJob } from "./lib/uploadCleanupJob.js";
+import { recoverStaleUploadJobs, cleanupStaleChunks } from "./routes/datasets.js";
 import type * as http from "http";
 
 // ---------------------------------------------------------------------------
@@ -54,6 +55,7 @@ const MAX_PORT_RETRIES = 3;
 const SIGTERM_DRAIN_MS = 10_000;
 
 let activeServer: http.Server | null = null;
+let stopUploadCleanupJob: (() => void) | null = null;
 
 // ---------------------------------------------------------------------------
 // Graceful shutdown on SIGTERM
@@ -65,6 +67,7 @@ process.on("SIGTERM", () => {
   const server = activeServer;
   if (!server) {
     logger.warn("SIGTERM received but no active server — exiting immediately");
+    stopUploadCleanupJob?.();
     process.exit(0);
     return;
   }
@@ -73,6 +76,11 @@ process.on("SIGTERM", () => {
     { drainMs: SIGTERM_DRAIN_MS },
     "SIGTERM received — draining in-flight requests",
   );
+
+  // Stop the periodic cleanup job so its interval cannot fire after shutdown
+  // begins.  Must happen before server.close() to avoid a race where the
+  // interval fires after the DB connection pool starts tearing down.
+  stopUploadCleanupJob?.();
 
   // Stop accepting new connections. Close idle keep-alive sockets immediately
   // so the drain window doesn't stall waiting for them to time out naturally.
@@ -157,13 +165,6 @@ function tryBind(port: number, retriesLeft: number): void {
       logger.warn({ err: cleanErr }, "Stale chunk cleanup failed (non-critical)");
     });
 
-    // Delete upload_jobs rows stuck in "uploading" status beyond the configured
-    // threshold (default 24 h).  These arise when a client starts a chunked
-    // upload but never calls finalize (e.g. browser closed mid-transfer).
-    void cleanupAbandonedUploadJobs().catch((abandonErr: unknown) => {
-      logger.warn({ err: abandonErr }, "Abandoned upload job cleanup failed (non-critical)");
-    });
-
     // Seed the dataset discovery catalog on startup (idempotent).
     void seedDatasetCatalog().catch((seedErr: unknown) => {
       logger.warn({ err: seedErr }, "Catalog seed failed (non-critical)");
@@ -184,6 +185,18 @@ function tryBind(port: number, retriesLeft: number): void {
       startWeatherCacheRefresher();
     } catch (err) {
       logger.error({ err }, "[startup] startWeatherCacheRefresher failed");
+    }
+
+    // Start the background abandoned-upload cleanup job — deletes upload_jobs
+    // rows stuck in "uploading" status beyond ABANDONED_UPLOAD_THRESHOLD_MS
+    // (default 24 h). Runs immediately and then every UPLOAD_CLEANUP_INTERVAL_MS
+    // (default 12 h) so abandoned rows are purged even on long-lived servers.
+    // The returned stop function is stored so the SIGTERM handler can clear
+    // the interval explicitly before the process begins draining connections.
+    try {
+      stopUploadCleanupJob = startUploadCleanupJob();
+    } catch (err) {
+      logger.error({ err }, "[startup] startUploadCleanupJob failed");
     }
   });
 }
