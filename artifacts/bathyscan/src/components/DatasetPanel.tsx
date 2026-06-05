@@ -557,6 +557,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
   // ─── Upload progress (simulated, small-file path) ─────────────────────────
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [smallFileEta, setSmallFileEta] = useState<number | null>(null);
+  const uploadStartedAt = useRef<number | null>(null);
+  const uploadFileSizeBytesRef = useRef<number>(0);
 
   // ─── Chunked-upload state (large-file path > CHUNKED_THRESHOLD) ───────────
   type ChunkedPhase = "idle" | "uploading" | "processing" | "error";
@@ -1009,14 +1012,25 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   useEffect(() => {
     if (postDatasetsUpload.isPending) {
       setUploadProgress(0);
+      setSmallFileEta(null);
+      // Calibrate estimated duration from file size: assume ~400 KB/s
+      // end-to-end (network + server parse).  Floor at 3 s so tiny files
+      // still show a visible countdown instead of jumping to "Almost done".
+      const startedAt = uploadStartedAt.current ?? Date.now();
+      const estimatedMs = Math.max(3_000, (uploadFileSizeBytesRef.current / (400 * 1024)) * 1_000);
       progressTimer.current = setInterval(() => {
-        setUploadProgress((p) => Math.min(88, p + 1.2));
-      }, 60);
+        const elapsed = Date.now() - startedAt;
+        const pct = Math.min(88, (elapsed / estimatedMs) * 88);
+        setUploadProgress(pct);
+        const remainingSecs = Math.max(0, Math.round((estimatedMs - elapsed) / 1_000));
+        setSmallFileEta(remainingSecs);
+      }, 100);
     } else {
       if (progressTimer.current) {
         clearInterval(progressTimer.current);
         progressTimer.current = null;
       }
+      setSmallFileEta(null);
       if (postDatasetsUpload.isSuccess) {
         setUploadProgress(100);
         const t = setTimeout(() => setUploadProgress(0), 700);
@@ -1035,6 +1049,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       file: File,
       { isRetry, autoAttempt = 0 }: { isRetry?: boolean; autoAttempt?: number } = {},
     ) => {
+      uploadStartedAt.current = Date.now();
+      uploadFileSizeBytesRef.current = file.size;
       postDatasetsUpload.mutate(
         { data: { file, resolution: 256 } },
         {
@@ -2777,6 +2793,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                             ◌ Uploading &amp; parsing...
                           </div>
                           <div style={{ fontSize: 10, color: "#cbd5e1" }}>{Math.round(uploadProgress)}%</div>
+                          {formatEta(smallFileEta) && (
+                            <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 2 }}>
+                              {formatEta(smallFileEta)}
+                            </div>
+                          )}
                         </div>
                       ) : chunkedPhase === "uploading" ? (
                         <div>

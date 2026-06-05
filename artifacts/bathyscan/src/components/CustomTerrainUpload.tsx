@@ -14,6 +14,14 @@ import { useClassificationStore } from "@/lib/classificationStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+
+function formatEta(seconds: number | null): string | null {
+  if (seconds === null || seconds <= 0) return null;
+  if (seconds < 5) return "Almost done…";
+  if (seconds < 60) return `~${seconds} sec remaining`;
+  const mins = Math.round(seconds / 60);
+  return `~${mins} min remaining`;
+}
 const AUTO_RETRY_DELAYS_MS = [500, 1500];
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
@@ -34,6 +42,9 @@ export const CustomTerrainUpload: React.FC = () => {
   const [lastUploadedFile, setLastUploadedFile] = useState<File | null>(null);
   const [savingToAccount, setSavingToAccount] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [smallFileEta, setSmallFileEta] = useState<number | null>(null);
+  const uploadStartedAt = useRef<number | null>(null);
+  const uploadFileSizeBytesRef = useRef<number>(0);
 
   const autoRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
@@ -46,14 +57,22 @@ export const CustomTerrainUpload: React.FC = () => {
   useEffect(() => {
     if (postDatasetsUpload.isPending) {
       setUploadProgress(0);
+      setSmallFileEta(null);
+      const startedAt = uploadStartedAt.current ?? Date.now();
+      const estimatedMs = Math.max(3_000, (uploadFileSizeBytesRef.current / (400 * 1024)) * 1_000);
       progressTimer.current = setInterval(() => {
-        setUploadProgress((p) => Math.min(88, p + 1.2));
-      }, 60);
+        const elapsed = Date.now() - startedAt;
+        const pct = Math.min(88, (elapsed / estimatedMs) * 88);
+        setUploadProgress(pct);
+        const remainingSecs = Math.max(0, Math.round((estimatedMs - elapsed) / 1_000));
+        setSmallFileEta(remainingSecs);
+      }, 100);
     } else {
       if (progressTimer.current) {
         clearInterval(progressTimer.current);
         progressTimer.current = null;
       }
+      setSmallFileEta(null);
       if (postDatasetsUpload.isSuccess) {
         setUploadProgress(100);
         const t = setTimeout(() => setUploadProgress(0), 700);
@@ -72,6 +91,8 @@ export const CustomTerrainUpload: React.FC = () => {
       file: File,
       { isRetry, autoAttempt = 0 }: { isRetry?: boolean; autoAttempt?: number } = {},
     ) => {
+      uploadStartedAt.current = Date.now();
+      uploadFileSizeBytesRef.current = file.size;
       postDatasetsUpload.mutate(
         { data: { file, resolution: 256 } },
         {
@@ -253,6 +274,11 @@ export const CustomTerrainUpload: React.FC = () => {
                   ◌ Uploading &amp; parsing...
                 </div>
                 <div style={{ fontSize: 11, color: "#cbd5e1" }}>{Math.round(uploadProgress)}%</div>
+                {formatEta(smallFileEta) && (
+                  <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 2 }}>
+                    {formatEta(smallFileEta)}
+                  </div>
+                )}
               </div>
             ) : (
               <>
