@@ -90,4 +90,5 @@ describe("BAG (HDF5) — realistic NOAA hydrographic survey fixture", () => {
     const junk = Buffer.from("not an hdf5 file at all");
     await expect(parseBag(junk)).rejects.toThrow(/BAG/i);
   });
+
 });

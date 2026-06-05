@@ -27,6 +27,7 @@ import { fromArrayBuffer } from "geotiff";
 import { NetCDFReader } from "netcdfjs";
 import { createLazPerf } from "laz-perf";
 import { parseXyzCsv } from "./terrain.js";
+import { logger } from "./logger.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -850,8 +851,7 @@ export async function parseBag(buffer: Buffer): Promise<RawPoint[]> {
     }
 
     if (stderr?.trim()) {
-      // Python wrote warnings to stderr but still succeeded — log and continue
-      // (callers can suppress this; it's surfaced for diagnostics only)
+      logger.warn({ source: "bag_parser.py" }, stderr.trim());
     }
 
     const points: RawPoint[] = [];
