@@ -155,6 +155,14 @@ export interface TarRouteResult {
   smoothSheetRasterBuffer?: Buffer;
   /** Original filename (basename) of the ungeoreferenced inner GeoTIFF. */
   smoothSheetRasterFilename?: string;
+  /**
+   * Human-readable warnings about non-canonical column names that were
+   * auto-resolved via synonym matching.  Each entry is a complete sentence
+   * describing what was matched and what the canonical name is, e.g.
+   * "Column 'long' was interpreted as longitude. Rename it to 'lon' to
+   * silence this message."  Empty when all column names were canonical.
+   */
+  parseWarnings: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -558,7 +566,24 @@ function resolveCol(headers: string[], synonyms: readonly string[]): number {
 }
 
 /**
- * Parse a GEODAS xyz.gz sounding file.
+ * Like `resolveCol`, but also returns the matched header name so callers can
+ * detect when a non-canonical synonym was used (i.e. the matched name is not
+ * the first entry in the synonym list).
+ */
+function resolveColWithMatch(
+  headers: string[],
+  synonyms: readonly string[],
+): { idx: number; matchedName: string | null } {
+  for (let i = 0; i < headers.length; i++) {
+    if (synonyms.includes(headers[i] as (typeof synonyms)[number])) {
+      return { idx: i, matchedName: headers[i]! };
+    }
+  }
+  return { idx: -1, matchedName: null };
+}
+
+/**
+ * Parse a GEODAS xyz.gz sounding CSV.
  *
  * Supported delimiters (auto-detected from the header line):
  *   - Comma (CSV): `survey_id,lat,lon,depth,quality_code,active`
@@ -573,9 +598,12 @@ function resolveCol(headers: string[], synonyms: readonly string[]): number {
  * GEODAS_COL_SYNONYMS, so common alternate spellings (e.g. "long", "latitude",
  * "elev") are accepted without renaming the file.
  *
- * @param filePath Absolute path to the .xyz.gz file on disk.
+ * @param filePath      Absolute path to the .xyz.gz file on disk.
+ * @param parseWarnings Optional array to collect human-readable warnings about
+ *   non-canonical column names that were auto-resolved via synonym matching.
+ *   When omitted warnings are only logged at INFO level (existing behaviour).
  */
-export async function parseGeodasXyz(filePath: string): Promise<RawPoint[]> {
+export async function parseGeodasXyz(filePath: string, parseWarnings?: string[]): Promise<RawPoint[]> {
   const compressed = await fs.promises.readFile(filePath);
   let decompressed: Buffer;
   try {
@@ -616,11 +644,33 @@ export async function parseGeodasXyz(filePath: string): Promise<RawPoint[]> {
 
   const headers = splitRow(headerLine).map((h) => h.trim().toLowerCase());
 
-  const idxLat = resolveCol(headers, GEODAS_COL_SYNONYMS.lat);
-  const idxLon = resolveCol(headers, GEODAS_COL_SYNONYMS.lon);
-  const idxDepth = resolveCol(headers, GEODAS_COL_SYNONYMS.depth);
+  const { idx: idxLat, matchedName: latName } = resolveColWithMatch(headers, GEODAS_COL_SYNONYMS.lat);
+  const { idx: idxLon, matchedName: lonName } = resolveColWithMatch(headers, GEODAS_COL_SYNONYMS.lon);
+  const { idx: idxDepth, matchedName: depthName } = resolveColWithMatch(headers, GEODAS_COL_SYNONYMS.depth);
   const idxQuality = resolveCol(headers, GEODAS_COL_SYNONYMS.quality_code);
   const idxActive = resolveCol(headers, GEODAS_COL_SYNONYMS.active);
+
+  // Emit warnings when a required column was matched via a non-canonical synonym.
+  // The canonical name is the first entry in each synonym list.
+  const canonicalLat = GEODAS_COL_SYNONYMS.lat[0];
+  const canonicalLon = GEODAS_COL_SYNONYMS.lon[0];
+  const canonicalDepth = GEODAS_COL_SYNONYMS.depth[0];
+
+  if (latName && latName !== canonicalLat) {
+    const msg = `Column '${latName}' was interpreted as latitude. Rename it to '${canonicalLat}' to silence this message.`;
+    logger.info({ file: path.basename(filePath), column: latName, resolvedTo: canonicalLat }, `[geodas-xyz] column '${latName}' resolved to ${canonicalLat}`);
+    parseWarnings?.push(msg);
+  }
+  if (lonName && lonName !== canonicalLon) {
+    const msg = `Column '${lonName}' was interpreted as longitude. Rename it to '${canonicalLon}' to silence this message.`;
+    logger.info({ file: path.basename(filePath), column: lonName, resolvedTo: canonicalLon }, `[geodas-xyz] column '${lonName}' resolved to ${canonicalLon}`);
+    parseWarnings?.push(msg);
+  }
+  if (depthName && depthName !== canonicalDepth) {
+    const msg = `Column '${depthName}' was interpreted as depth. Rename it to '${canonicalDepth}' to silence this message.`;
+    logger.info({ file: path.basename(filePath), column: depthName, resolvedTo: canonicalDepth }, `[geodas-xyz] column '${depthName}' resolved to ${canonicalDepth}`);
+    parseWarnings?.push(msg);
+  }
 
   if (idxLat === -1 || idxLon === -1 || idxDepth === -1) {
     const missing: string[] = [];
@@ -962,12 +1012,35 @@ export async function parseSmoothSheetsGeoTiff(filePath: string): Promise<RawPoi
 // Do NOT mutate in production code.
 // ---------------------------------------------------------------------------
 
+/**
+ * Module-level warning sink populated by `routeTarEntries` immediately before
+ * the dispatch loop and cleared after it.  The `geodasXyzDispatch` entry reads
+ * this sink so that warnings flow into the caller's array without changing the
+ * `(filePath: string) => Promise<RawPoint[]>` signature that tests mock.
+ *
+ * This variable is only written/read on the same microtask tick as the
+ * `routeTarEntries` call; because Node.js is single-threaded and
+ * `routeTarEntries` awaits each parser in sequence, there is no interleaving
+ * risk between concurrent HTTP requests.
+ */
+let _geodasXyzWarningSink: string[] | undefined;
+
+/**
+ * Default `parserDispatch["geodas-xyz"]` entry.  Delegates to `parseGeodasXyz`
+ * and passes the current `_geodasXyzWarningSink` so that `routeTarEntries` can
+ * collect synonym-match warnings.  When tests replace this entry with a mock,
+ * the sink is set but unused — the mock returns fake points as expected.
+ */
+function geodasXyzDispatch(filePath: string): Promise<RawPoint[]> {
+  return parseGeodasXyz(filePath, _geodasXyzWarningSink);
+}
+
 export const parserDispatch: Record<
   Exclude<TarParserKey, "skip" | "bottom-samples" | "hyd93-a93">,
   (filePath: string) => Promise<RawPoint[]>
 > = {
   "noaa-surveys-xyz": parseNoaaSurveysXyz,
-  "geodas-xyz": parseGeodasXyz,
+  "geodas-xyz": geodasXyzDispatch,
   "inner-geotiff": parseSmoothSheetsGeoTiff,
 };
 
@@ -1093,6 +1166,7 @@ export async function routeTarEntries(
   const allPoints: RawPoint[] = [];
   const allSubstratePoints: SubstratePoint[] = [];
   const allHyd93Features: Hyd93AnnotationPoint[] = [];
+  const allParseWarnings: string[] = [];
 
   // Build the set of GEODAS directories that have at least one .xyz.gz so we
   // can detect .a93.gz files that are superseded by a quality-coded sibling.
@@ -1178,6 +1252,12 @@ export async function routeTarEntries(
   // and capturing all would risk large DB payloads.
   let smoothSheetRasterBuffer: Buffer | undefined;
   let smoothSheetRasterFilename: string | undefined;
+
+  // Set the module-level warning sink so geodasXyzDispatch (the parserDispatch
+  // entry for "geodas-xyz") can forward synonym-match warnings into allParseWarnings
+  // without changing the (filePath: string) => Promise<RawPoint[]> signature that
+  // tests mock.  Cleared in the finally block below.
+  _geodasXyzWarningSink = allParseWarnings;
 
   // Dispatch each recognised entry to its parser and accumulate points
   for (const { relativePath, key } of dispatching) {
@@ -1265,6 +1345,9 @@ export async function routeTarEntries(
     }
   }
 
+  // Clear the warning sink now that all geodas-xyz files have been dispatched.
+  _geodasXyzWarningSink = undefined;
+
   // Post-dispatch guard: if every collection is empty and there is no raster
   // buffer, nothing useful came out of parsing — treat it as a failure.
   // Substrate-only archives (allSubstratePoints non-empty) and archives with
@@ -1291,5 +1374,6 @@ export async function routeTarEntries(
     skipped,
     smoothSheetRasterBuffer,
     smoothSheetRasterFilename,
+    parseWarnings: allParseWarnings,
   };
 }

@@ -86,6 +86,12 @@ interface JobState {
   soundingCount?: number;
   /** Substrate annotation points extracted from the archive. */
   substrateCount?: number;
+  /**
+   * Human-readable warnings from the parser about non-canonical column names
+   * that were auto-resolved via synonym matching (e.g. "long" → "lon").
+   * Only present when at least one non-canonical synonym was matched.
+   */
+  parseWarnings?: string[];
 }
 const uploadJobs = new Map<string, JobState>();
 registerCache(() => uploadJobs.clear());
@@ -732,6 +738,7 @@ async function processUploadJob(
           skipped: tarSkipped,
           smoothSheetRasterBuffer,
           smoothSheetRasterFilename: _smoothSheetRasterFilename,
+          parseWarnings: tarParseWarnings,
         } = await routeTarEntries(
           tarExtractedDir,
           entries,
@@ -764,6 +771,12 @@ async function processUploadJob(
         // substrate-only archive instead of a confusing "0 soundings").
         job.soundingCount = tarPoints.length;
         job.substrateCount = tarSubstratePoints.length;
+
+        // Surface any parser warnings about non-canonical column names to the
+        // client so the user knows a synonym was matched (e.g. "long" → "lon").
+        if (tarParseWarnings.length > 0) {
+          job.parseWarnings = tarParseWarnings;
+        }
 
         // Guard: at least one of sounding points, substrate annotations, or a
         // captured smooth-sheet raster must be present.  Substrate-only archives
@@ -2123,6 +2136,7 @@ router.get(
       ...(job.skippedFormats !== undefined ? { skippedFormats: job.skippedFormats } : {}),
       ...(job.soundingCount !== undefined ? { soundingCount: job.soundingCount } : {}),
       ...(job.substrateCount !== undefined ? { substrateCount: job.substrateCount } : {}),
+      ...(job.parseWarnings !== undefined ? { parseWarnings: job.parseWarnings } : {}),
     });
   }),
 );
@@ -2157,6 +2171,7 @@ router.get(
         ...(memJob.skippedFormats !== undefined ? { skippedFormats: memJob.skippedFormats } : {}),
         ...(memJob.soundingCount !== undefined ? { soundingCount: memJob.soundingCount } : {}),
         ...(memJob.substrateCount !== undefined ? { substrateCount: memJob.substrateCount } : {}),
+        ...(memJob.parseWarnings !== undefined ? { parseWarnings: memJob.parseWarnings } : {}),
       });
       return;
     }

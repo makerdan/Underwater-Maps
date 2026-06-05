@@ -102,6 +102,12 @@ export interface BucketJob {
   soundingCount?: number;
   /** Substrate annotation points extracted from the archive. */
   substrateCount?: number;
+  /**
+   * Human-readable warnings about non-canonical column names that were
+   * auto-resolved via synonym matching (e.g. "long" → "lon").
+   * Only present when at least one non-canonical synonym was matched.
+   */
+  parseWarnings?: string[];
 }
 
 const activeJobs = new Map<string, BucketJob>();
@@ -246,7 +252,12 @@ export async function processObject(bucketName: string, objectKey: string): Prom
       // NOAA smooth-sheet archives: .tar.gz (tar wrapped in gzip).
       // Extract all entries and route each to its parser via the NOAA tar router.
       const entries = await extractTarFile(processPath, tarExtractedDir);
-      const { points: tarPoints, substratePoints: tarSubstratePoints, skipped: tarSkipped } = await routeTarEntries(
+      const {
+        points: tarPoints,
+        substratePoints: tarSubstratePoints,
+        skipped: tarSkipped,
+        parseWarnings: tarParseWarnings,
+      } = await routeTarEntries(
         tarExtractedDir,
         entries,
         baseName,
@@ -275,6 +286,12 @@ export async function processObject(bucketName: string, objectKey: string): Prom
       // Record sounding and substrate counts for meaningful import summary.
       job.soundingCount = tarPoints.length;
       job.substrateCount = tarSubstratePoints.length;
+
+      // Surface any parser warnings about non-canonical column names so the
+      // client can display them as a non-blocking advisory.
+      if (tarParseWarnings.length > 0) {
+        job.parseWarnings = tarParseWarnings;
+      }
 
       points = tarPoints;
     } else if (TEXT_EXTENSIONS.has(ext)) {

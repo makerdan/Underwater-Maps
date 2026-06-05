@@ -1301,7 +1301,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       void fetch(`/api/datasets/upload/gcs-job-status?objectKey=${encodeURIComponent(objectKey)}`, {
         headers: authHeader,
       })
-        .then((r) => r.json() as Promise<{ status: string; datasetId?: string; error?: string; skippedCount?: number; skippedFormats?: string[]; soundingCount?: number; substrateCount?: number }>)
+        .then((r) => r.json() as Promise<{ status: string; datasetId?: string; error?: string; skippedCount?: number; skippedFormats?: string[]; soundingCount?: number; substrateCount?: number; parseWarnings?: string[] }>)
         .then((job) => {
           if (job.status === "done" && job.datasetId) {
             clearInterval(pollIntervalId);
@@ -1337,6 +1337,13 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                 </ToastAction>
               ),
             });
+
+            if (job.parseWarnings && job.parseWarnings.length > 0) {
+              toast({
+                title: "Column name advisory",
+                description: job.parseWarnings.join(" "),
+              });
+            }
           } else if (job.status === "failed") {
             clearInterval(pollIntervalId);
             const failMsg = job.error ?? "Processing failed. Please try uploading again.";
@@ -1424,7 +1431,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         const job = await resp.json() as {
           status: string; progress: number; error?: string; datasetId?: string;
           skippedCount?: number; skippedFormats?: string[]; soundingCount?: number;
-          substrateCount?: number;
+          substrateCount?: number; parseWarnings?: string[];
         };
 
         if (stopped) return;
@@ -1465,6 +1472,13 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
               </ToastAction>
             ),
           });
+
+          if (job.parseWarnings && job.parseWarnings.length > 0) {
+            toast({
+              title: "Column name advisory",
+              description: job.parseWarnings.join(" "),
+            });
+          }
         } else if (job.status === "error") {
           stopped = true;
           clearUploadSession();
