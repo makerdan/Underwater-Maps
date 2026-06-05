@@ -31,6 +31,8 @@ import {
   updateProgressWithEta,
   clearCalibrationHistoryForTest,
   CALIBRATION_MAX_SAMPLES,
+  MIN_MILESTONE_DELTA_MS,
+  MIN_MILESTONE_DELTA_PROGRESS,
   type EtaJobState,
 } from "../lib/etaCalibration.js";
 
@@ -440,5 +442,130 @@ describe("updateProgressWithEta — gzip extension key (.gz)", () => {
     updateProgressWithEta(job, 5);
 
     expect(job.eta).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// updateProgressWithEta — rapid-milestone coalescing (out-of-order / burst)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("updateProgressWithEta — rapid small-delta milestones are coalesced", () => {
+  it("skips a milestone that arrives within MIN_MILESTONE_DELTA_MS and MIN_MILESTONE_DELTA_PROGRESS of the previous one", () => {
+    const job = makeJob();
+
+    vi.setSystemTime(0);
+    updateProgressWithEta(job, 35);
+
+    vi.setSystemTime(MIN_MILESTONE_DELTA_MS - 1);
+    updateProgressWithEta(job, 35 + MIN_MILESTONE_DELTA_PROGRESS - 1);
+
+    expect(job.stageTimestamps).toHaveLength(1);
+    expect(job.stageTimestamps![0]!.progress).toBe(35);
+  });
+
+  it("does NOT skip a milestone when deltaMs meets the threshold", () => {
+    const job = makeJob();
+
+    vi.setSystemTime(0);
+    updateProgressWithEta(job, 35);
+
+    vi.setSystemTime(MIN_MILESTONE_DELTA_MS);
+    updateProgressWithEta(job, 36);
+
+    expect(job.stageTimestamps).toHaveLength(2);
+  });
+
+  it("does NOT skip a milestone when deltaProgress meets the threshold", () => {
+    const job = makeJob();
+
+    vi.setSystemTime(0);
+    updateProgressWithEta(job, 35);
+
+    vi.setSystemTime(MIN_MILESTONE_DELTA_MS - 1);
+    updateProgressWithEta(job, 35 + MIN_MILESTONE_DELTA_PROGRESS);
+
+    expect(job.stageTimestamps).toHaveLength(2);
+  });
+
+  it("still updates job.progress and job.stageStartedAt even when the milestone is skipped", () => {
+    const job = makeJob();
+
+    vi.setSystemTime(0);
+    updateProgressWithEta(job, 35);
+
+    vi.setSystemTime(10);
+    updateProgressWithEta(job, 36);
+
+    expect(job.progress).toBe(36);
+    expect(job.stageStartedAt).toEqual(new Date(10));
+    expect(job.stageTimestamps).toHaveLength(1);
+  });
+
+  it("ETA does not jump unrealistically low after a burst of rapid small-step milestones", () => {
+    const job = makeJob({ jobStartedAt: 0 });
+
+    vi.setSystemTime(0);
+    updateProgressWithEta(job, 20);
+
+    vi.setSystemTime(10_000);
+    updateProgressWithEta(job, 35);
+
+    const etaAfterLegitimate = job.eta!;
+    expect(etaAfterLegitimate).toBeGreaterThan(0);
+
+    vi.setSystemTime(10_050);
+    updateProgressWithEta(job, 36);
+
+    vi.setSystemTime(10_100);
+    updateProgressWithEta(job, 37);
+
+    expect(job.stageTimestamps).toHaveLength(2);
+
+    const etaAfterRapidBurst = job.eta!;
+
+    const poisonedRatePerMs = 1 / 50;
+    const remaining = 100 - 37;
+    const poisonedEta = Math.round((remaining / poisonedRatePerMs) / 1000);
+    expect(etaAfterRapidBurst).toBeGreaterThan(poisonedEta);
+
+    expect(etaAfterRapidBurst).toBeGreaterThanOrEqual(etaAfterLegitimate - 3);
+  });
+
+  it("first milestone is always recorded (no previous entry to compare against)", () => {
+    const job = makeJob();
+
+    vi.setSystemTime(0);
+    updateProgressWithEta(job, 10);
+
+    expect(job.stageTimestamps).toHaveLength(1);
+  });
+
+  it("a legitimate milestone after a skipped burst uses the pre-burst entry as its baseline", () => {
+    const job = makeJob({ jobStartedAt: 0 });
+
+    vi.setSystemTime(0);
+    updateProgressWithEta(job, 20);
+
+    vi.setSystemTime(50);
+    updateProgressWithEta(job, 21);
+
+    vi.setSystemTime(100);
+    updateProgressWithEta(job, 22);
+
+    vi.setSystemTime(10_000);
+    updateProgressWithEta(job, 40);
+
+    expect(job.stageTimestamps).toHaveLength(2);
+
+    const [first, second] = job.stageTimestamps!;
+    expect(first!.progress).toBe(20);
+    expect(second!.progress).toBe(40);
+
+    const deltaProgress = 40 - 20;
+    const deltaMs = 10_000 - 0;
+    const ratePerMs = deltaProgress / deltaMs;
+    const remaining = 100 - 40;
+    const expectedEta = Math.max(1, Math.round((remaining / ratePerMs) / 1000));
+    expect(job.eta).toBe(expectedEta);
   });
 });

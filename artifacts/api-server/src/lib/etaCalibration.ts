@@ -14,6 +14,17 @@ export const CALIBRATION_MAX_SAMPLES = 10;
 export const extensionDurationHistory = new Map<string, number[]>();
 
 /**
+ * A milestone is skipped (not pushed to the ring buffer) when BOTH the elapsed
+ * time AND the progress delta since the previous milestone are below these
+ * thresholds.  Coalescing rapid, small-step milestones prevents the next
+ * legitimate delta from spanning a large progress gap over a tiny wall-clock
+ * interval, which would otherwise produce an unrealistically fast rate and a
+ * backwards-jumping ETA.
+ */
+export const MIN_MILESTONE_DELTA_MS = 500;
+export const MIN_MILESTONE_DELTA_PROGRESS = 3;
+
+/**
  * Minimal job-state shape required by updateProgressWithEta.
  * The full JobState in datasets.ts satisfies this interface structurally.
  */
@@ -88,8 +99,17 @@ export function updateProgressWithEta(job: EtaJobState, progress: number): void 
   const now = Date.now();
 
   if (!job.stageTimestamps) job.stageTimestamps = [];
-  job.stageTimestamps.push({ progress, ts: now });
-  if (job.stageTimestamps.length > 5) job.stageTimestamps.shift();
+
+  const lastMilestone = job.stageTimestamps[job.stageTimestamps.length - 1];
+  const shouldSkip =
+    lastMilestone != null &&
+    now - lastMilestone.ts < MIN_MILESTONE_DELTA_MS &&
+    progress - lastMilestone.progress < MIN_MILESTONE_DELTA_PROGRESS;
+
+  if (!shouldSkip) {
+    job.stageTimestamps.push({ progress, ts: now });
+    if (job.stageTimestamps.length > 5) job.stageTimestamps.shift();
+  }
 
   job.stageStartedAt = new Date(now);
 
