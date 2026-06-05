@@ -4,7 +4,7 @@ import { seedDatasetCatalog } from "./lib/catalogSeeder.js";
 import { startBucketMonitor } from "./lib/bucketMonitor.js";
 import { startWeatherCacheRefresher } from "./lib/weatherCacheRefresher.js";
 import { startUploadCleanupJob } from "./lib/uploadCleanupJob.js";
-import { recoverStaleUploadJobs, cleanupStaleChunks } from "./routes/datasets.js";
+import { recoverStaleUploadJobs, cleanupStaleChunks, loadCalibrationFromDb } from "./routes/datasets.js";
 import type * as http from "http";
 
 // ---------------------------------------------------------------------------
@@ -151,6 +151,12 @@ function tryBind(port: number, retriesLeft: number): void {
     // listen address to 127.0.0.1 and using http://127.0.0.1:PORT on the
     // caller side eliminates the ambiguity entirely.
     logger.info({ port: actualPort }, "Server listening on 127.0.0.1");
+
+    // Load per-extension upload duration history so ETA estimates are seeded
+    // from the very first job after a restart (non-critical; errors are caught).
+    void loadCalibrationFromDb().catch((calibErr: unknown) => {
+      logger.warn({ err: calibErr }, "Calibration load failed (non-critical)");
+    });
 
     // Mark any upload jobs that were still queued/processing when the previous
     // process died — re-queues recoverable ones, marks the rest as error.

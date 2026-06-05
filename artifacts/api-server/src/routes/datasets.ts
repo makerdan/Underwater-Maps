@@ -9,7 +9,7 @@ import multer from "multer";
 import { eq, and, inArray, or, lt } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { z } from "zod";
-import { db, customDatasetsTable, userSettingsTable, uploadJobsTable, disabledPresetsTable, type StoredTerrainJson } from "@workspace/db";
+import { db, customDatasetsTable, userSettingsTable, uploadJobsTable, disabledPresetsTable, uploadCalibrationTable, type StoredTerrainJson } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
@@ -136,14 +136,76 @@ interface JobState {
 // Maintains a bounded in-process history of total job durations (ms) keyed by
 // file extension.  The first ETA estimate for a new job seeds from this table
 // when fewer than 2 live milestones have been recorded, then blends out as
-// live milestone data accumulates.  Not persisted across restarts — the table
-// bootstraps itself after the first few jobs of each type in a new process.
+// live milestone data accumulates.  Persisted to the `upload_calibration` DB
+// table so ETAs are available from the very first upload after a restart.
 const CALIBRATION_MAX_SAMPLES = 10;
 const extensionDurationHistory = new Map<string, number[]>();
+
+// Debounce timers for per-extension DB writes (avoid a write on every job).
+const CALIBRATION_PERSIST_DEBOUNCE_MS = 5_000;
+const calibrationPersistTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/**
+ * Upsert one extension's duration array to the DB.  Called via a debounced
+ * timer so concurrent completions collapse into a single write per extension.
+ */
+async function persistCalibrationEntry(ext: string): Promise<void> {
+  const durations = extensionDurationHistory.get(ext);
+  if (!durations) return;
+  try {
+    await db
+      .insert(uploadCalibrationTable)
+      .values({ extension: ext, durations, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: uploadCalibrationTable.extension,
+        set: { durations, updatedAt: new Date() },
+      });
+  } catch (err) {
+    logger.warn({ err, ext }, "[calibration] failed to persist calibration entry");
+  }
+}
+
+/**
+ * Schedule a debounced DB write for the given extension.  If a write is
+ * already queued for this extension, reset the timer so rapid completions
+ * collapse into a single DB round-trip.
+ */
+function schedulePersistCalibrationEntry(ext: string): void {
+  const existing = calibrationPersistTimers.get(ext);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(() => {
+    calibrationPersistTimers.delete(ext);
+    void persistCalibrationEntry(ext);
+  }, CALIBRATION_PERSIST_DEBOUNCE_MS);
+  calibrationPersistTimers.set(ext, timer);
+}
+
+/**
+ * Load previously recorded extension durations from the DB into the in-memory
+ * calibration map.  Called once on server startup so ETAs are immediately
+ * useful for the first upload of each file type after a restart.
+ */
+export async function loadCalibrationFromDb(): Promise<void> {
+  try {
+    const rows = await db.select().from(uploadCalibrationTable);
+    for (const row of rows) {
+      if (Array.isArray(row.durations) && row.durations.length > 0) {
+        extensionDurationHistory.set(row.extension, row.durations as number[]);
+      }
+    }
+    logger.info(
+      { extensions: rows.map((r) => r.extension) },
+      "[calibration] loaded extension duration history from DB",
+    );
+  } catch (err) {
+    logger.warn({ err }, "[calibration] failed to load calibration from DB (non-critical)");
+  }
+}
 
 /**
  * Record a completed job's total wall-clock duration (ms) for the given file
  * extension.  Bounded to the last CALIBRATION_MAX_SAMPLES entries.
+ * Schedules a debounced DB upsert so the history survives server restarts.
  */
 function recordExtensionDuration(ext: string, durationMs: number): void {
   if (!ext) return;
@@ -151,6 +213,7 @@ function recordExtensionDuration(ext: string, durationMs: number): void {
   arr.push(durationMs);
   if (arr.length > CALIBRATION_MAX_SAMPLES) arr.shift();
   extensionDurationHistory.set(ext, arr);
+  schedulePersistCalibrationEntry(ext);
 }
 
 /**
