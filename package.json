@@ -22,7 +22,9 @@
     "check:catalog-coverage": "node scripts/scaffold-catalog-tests.mjs --check",
     "check:routes-documented": "pnpm --filter @workspace/api-server exec vitest run src/__tests__/routes-documented.test.ts",
     "check:e2e-user-ids": "bash scripts/check-e2e-user-ids.sh",
-    "test-all": "pnpm run typecheck && pnpm run lint && pnpm run test:unit && pnpm run check:docs-stale && pnpm run check:catalog-coverage && pnpm run check:e2e-user-ids"
+    "check:e2e-cjs-globals": "bash scripts/check-e2e-cjs-globals.sh",
+    "check:fixture-freshness": "bash artifacts/api-server/src/__tests__/fixtures/check-fixture-freshness.sh",
+    "test-all": "pnpm run typecheck && pnpm run lint && pnpm run test:unit && pnpm run check:docs-stale && pnpm run check:catalog-coverage && pnpm run check:e2e-user-ids && pnpm run check:e2e-cjs-globals && pnpm run check:fixture-freshness"
   },
   "private": true,
   "devDependencies": {
