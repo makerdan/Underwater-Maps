@@ -1679,10 +1679,32 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   // If a chunk transfer failed: resend from that chunk index onwards.
   // If all chunks arrived but finalize failed: skip straight to finalize.
   // Never restarts the whole upload unnecessarily.
+  //
+  // Before re-entering the upload loop we probe GET /api/healthz with a 5 s
+  // timeout. If the server is unreachable we update the error message so the
+  // user sees "Server unreachable" instead of experiencing a silent second
+  // failure, and we leave chunkedPhase as "error" so the retry button stays
+  // visible for when connectivity is restored.
   const handleRetryChunked = useCallback(async () => {
     if (!lastChunkedFile || chunkedPhase === "uploading" || chunkedPhase === "processing") return;
     const uploadId = chunkedUploadIdRef.current;
     if (!uploadId) return;
+
+    // ── Server health probe ────────────────────────────────────────────────────
+    let serverReachable = false;
+    try {
+      const probe = await fetch("/api/healthz", {
+        signal: AbortSignal.timeout(5_000),
+      });
+      serverReachable = probe.ok;
+    } catch {
+      serverReachable = false;
+    }
+
+    if (!serverReachable) {
+      setChunkedError("Server unreachable — check your connection and try again");
+      return;
+    }
 
     const totalChunks = Math.ceil(lastChunkedFile.size / CHUNK_SIZE);
     const failedAt = chunkedFailedAtRef.current ?? 0;
