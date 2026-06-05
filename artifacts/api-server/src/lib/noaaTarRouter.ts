@@ -558,10 +558,12 @@ function resolveCol(headers: string[], synonyms: readonly string[]): number {
 }
 
 /**
- * Parse a GEODAS xyz.gz sounding CSV.
+ * Parse a GEODAS xyz.gz sounding file.
  *
- * File format (CSV with header):
- *   survey_id, lat, lon, depth, quality_code, active
+ * Supported delimiters (auto-detected from the header line):
+ *   - Comma (CSV): `survey_id,lat,lon,depth,quality_code,active`
+ *   - Tab (TSV):   `survey_id\tlat\tlon\tdepth\tquality_code\tactive`
+ *   - 2+ spaces:   `survey_id  lat  lon  depth  quality_code  active`
  *
  * Quality filter: rows where quality_code != 1 or active != 1 are excluded.
  * Depth convention: GEODAS depths are positive-downward (matches BathyScan).
@@ -598,7 +600,21 @@ export async function parseGeodasXyz(filePath: string): Promise<RawPoint[]> {
   if (!headerLine) {
     throw new Error(`GEODAS xyz.gz file "${path.basename(filePath)}" is empty or has no header.`);
   }
-  const headers = headerLine.split(",").map((h) => h.trim().toLowerCase());
+
+  // Auto-detect delimiter: tab → TSV, 2+ consecutive spaces → fixed-width space, else comma
+  const delimiter: "tab" | "spaces" | "comma" = headerLine.includes("\t")
+    ? "tab"
+    : / {2,}/.test(headerLine)
+      ? "spaces"
+      : "comma";
+
+  function splitRow(row: string): string[] {
+    if (delimiter === "tab") return row.split("\t");
+    if (delimiter === "spaces") return row.trim().split(/ {2,}/);
+    return row.split(",");
+  }
+
+  const headers = splitRow(headerLine).map((h) => h.trim().toLowerCase());
 
   const idxLat = resolveCol(headers, GEODAS_COL_SYNONYMS.lat);
   const idxLon = resolveCol(headers, GEODAS_COL_SYNONYMS.lon);
@@ -630,7 +646,7 @@ export async function parseGeodasXyz(filePath: string): Promise<RawPoint[]> {
     if (!line) continue;
 
     totalRows++;
-    const cols = line.split(",");
+    const cols = splitRow(line);
 
     // Quality filter — reject if quality_code or active fields are present and != 1
     if (idxQuality !== -1) {

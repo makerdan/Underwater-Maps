@@ -213,6 +213,40 @@ describe("parseGeodasXyz", () => {
   });
 
   // -------------------------------------------------------------------------
+  // Delimiter auto-detection
+  // -------------------------------------------------------------------------
+
+  it("parses a tab-delimited (TSV) file correctly", async () => {
+    const tsv = `survey_id\tlat\tlon\tdepth\tquality_code\tactive\nH09084\t55.700\t-132.530\t15.2\t1\t1\nH09084\t55.701\t-132.531\t20.0\t0\t1\n`;
+    const filePath = await writeTmp(tmpDir, "h09084.xyz.gz", makeGeodasGz(tsv));
+    const pts = await parseGeodasXyz(filePath);
+    expect(pts).toHaveLength(1);
+    expect(pts[0]).toMatchObject({ lat: 55.7, lon: -132.53, depth: 15.2 });
+  });
+
+  it("parses a tab-delimited file without quality/active columns", async () => {
+    const tsv = `survey_id\tlat\tlon\tdepth\nH09084\t12.345\t67.890\t99.1\n`;
+    const filePath = await writeTmp(tmpDir, "h09084.xyz.gz", makeGeodasGz(tsv));
+    const pts = await parseGeodasXyz(filePath);
+    expect(pts).toHaveLength(1);
+    expect(pts[0]!.depth).toBeCloseTo(99.1, 3);
+  });
+
+  it("parses a space-delimited (2+ spaces) file correctly", async () => {
+    const spaced = `survey_id  lat  lon  depth  quality_code  active\nH09084  55.700  -132.530  15.2  1  1\nH09084  55.701  -132.531  20.0  0  1\n`;
+    const filePath = await writeTmp(tmpDir, "h09084.xyz.gz", makeGeodasGz(spaced));
+    const pts = await parseGeodasXyz(filePath);
+    expect(pts).toHaveLength(1);
+    expect(pts[0]).toMatchObject({ lat: 55.7, lon: -132.53, depth: 15.2 });
+  });
+
+  it("throws a missing-columns error for a TSV file with no lat column", async () => {
+    const tsv = `survey_id\tlon\tdepth\nH09084\t-132.5\t10.0\n`;
+    const filePath = await writeTmp(tmpDir, "h09084.xyz.gz", makeGeodasGz(tsv));
+    await expect(parseGeodasXyz(filePath)).rejects.toThrow(/missing required columns/i);
+  });
+
+  // -------------------------------------------------------------------------
   // Error handling
   // -------------------------------------------------------------------------
 
