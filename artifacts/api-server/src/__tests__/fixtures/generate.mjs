@@ -903,6 +903,92 @@ function buildNmea() {
   return Buffer.from(lines.join("\r\n") + "\r\n", "utf8");
 }
 
+// ─── Standard BAG — projected CRS, no CRS metadata ───────────────────────────
+
+/**
+ * Build a minimal standard BAG fixture whose native-CRS origin is projected
+ * (llCornerX = 300000, outside |x| ≤ 180) but whose metadata XML contains no
+ * EPSG code or WKT — only a geographic bounding box.
+ *
+ * Expected parser behaviour: parse_standard_bag detects llCornerX > 180 while
+ * transformer is None and raises:
+ *   "BAG: data appears to use a projected CRS but no usable EPSG code..."
+ *
+ * Structure:
+ *   BAG_root/elevation  — Float32 4×4 grid, negative values = depth below sea
+ *   BAG_root/metadata   — XML with geographic bbox + projected llCorner, no CRS
+ */
+async function buildStandardBagProjected() {
+  const ROWS = 4;
+  const COLS = 4;
+
+  const elevData = new Float32Array(ROWS * COLS);
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      elevData[r * COLS + c] = -(1000.0 + (r * COLS + c) * 50.0);
+    }
+  }
+
+  const metaXml = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<smXML:MD_Metadata xmlns:smXML="http://metadata.dgiwg.org/smXML"',
+    '  xmlns:gmd="http://www.isotc211.org/2005/gmd"',
+    '  xmlns:bag="http://www.opennavsurf.org/schema/bag">',
+    '  <gmd:identificationInfo>',
+    '    <gmd:MD_DataIdentification>',
+    '      <gmd:extent>',
+    '        <gmd:EX_Extent>',
+    '          <gmd:geographicElement>',
+    '            <gmd:EX_GeographicBoundingBox>',
+    '              <westBoundLongitude>-72.0</westBoundLongitude>',
+    '              <eastBoundLongitude>-71.0</eastBoundLongitude>',
+    '              <southBoundLatitude>41.0</southBoundLatitude>',
+    '              <northBoundLatitude>42.0</northBoundLatitude>',
+    '            </gmd:EX_GeographicBoundingBox>',
+    '          </gmd:geographicElement>',
+    '        </gmd:EX_Extent>',
+    '      </gmd:extent>',
+    '    </gmd:MD_DataIdentification>',
+    '  </gmd:identificationInfo>',
+    '  <bag:BAG_DataIdentification>',
+    '    <llCornerX>300000.0</llCornerX>',
+    '    <llCornerY>4500000.0</llCornerY>',
+    '    <nodeSpacingX>10.0</nodeSpacingX>',
+    '    <nodeSpacingY>10.0</nodeSpacingY>',
+    '  </bag:BAG_DataIdentification>',
+    '</smXML:MD_Metadata>',
+  ].join("\n");
+
+  const mod = await h5wasmReady;
+  const FS = mod.FS;
+  const tmpPath = "/tmp_survey_standard_projected.h5";
+
+  const f = new H5wFile(tmpPath, "w");
+  const bagRoot = f.create_group("BAG_root");
+
+  bagRoot.create_dataset({
+    name: "elevation",
+    data: elevData,
+    shape: [ROWS, COLS],
+    dtype: "<f4",
+  });
+
+  bagRoot.create_dataset({
+    name: "metadata",
+    data: [metaXml],
+    dtype: "S",
+  });
+
+  f.flush();
+
+  const bytes = FS.readFile(tmpPath);
+  f.close();
+
+  try { FS.unlink(tmpPath); } catch { /* ignore */ }
+
+  return Buffer.from(bytes);
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -942,6 +1028,10 @@ async function main() {
   const nmeaBuf = buildNmea();
   await writeFile(join(__dir, "survey.nmea"), nmeaBuf);
   console.log(`survey.nmea  ${nmeaBuf.length} bytes`);
+
+  const standardProjBuf = await buildStandardBagProjected();
+  await writeFile(join(__dir, "survey_standard_projected.bag"), standardProjBuf);
+  console.log(`survey_standard_projected.bag   ${standardProjBuf.length} bytes`);
 
   console.log("All fixtures generated.");
 }

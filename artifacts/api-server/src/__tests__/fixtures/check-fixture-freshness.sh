@@ -55,6 +55,7 @@ FIXTURES=(
   survey.laz
   survey.gpx
   survey.nmea
+  survey_standard_projected.bag
 )
 
 # ── Step 1: Copy committed fixtures to temp dir; set up restoration trap ────

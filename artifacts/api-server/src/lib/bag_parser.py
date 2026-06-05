@@ -211,6 +211,19 @@ def parse_standard_bag(bag, meta_xml: str, max_pts: int):
                     return points
         return points
 
+    # Mixed-case guard: geo bbox present but CRS could not be resolved.
+    # If the native-CRS origin looks like projected coordinates (outside
+    # geographic range) we must fail loudly instead of treating UTM/State-Plane
+    # metres as degrees and silently returning no points.
+    if transformer is None and geo_bounds is not None and native is not None:
+        x0_nat, y0_nat = native[0], native[1]
+        if abs(x0_nat) > 180 or abs(y0_nat) > 90:
+            raise ValueError(
+                "BAG: data appears to use a projected CRS but no usable EPSG code "
+                "or WKT was found in the metadata XML. Re-export the file with a "
+                "recognised CRS or in WGS 84."
+            )
+
     if geo_bounds:
         # Bounding-box linear-interpolation fallback (good enough for small surveys)
         w, e, s, n = geo_bounds

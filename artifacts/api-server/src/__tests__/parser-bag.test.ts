@@ -26,9 +26,13 @@ function assertValidBathyPoints(pts: RawPoint[], minCount = 1): void {
 }
 
 let bagBuf: Buffer;
+let bagProjectedBuf: Buffer;
 
 beforeAll(async () => {
   bagBuf = await readFile(join(FIXTURE_DIR, "survey.bag"));
+  bagProjectedBuf = await readFile(
+    join(FIXTURE_DIR, "survey_standard_projected.bag")
+  );
 });
 
 describe("BAG (HDF5) — realistic NOAA hydrographic survey fixture", () => {
@@ -91,4 +95,16 @@ describe("BAG (HDF5) — realistic NOAA hydrographic survey fixture", () => {
     await expect(parseBag(junk)).rejects.toThrow(/BAG/i);
   });
 
+});
+
+describe("standard BAG — projected-CRS plausibility guard", () => {
+  it("raises a descriptive error when llCornerX signals a projected CRS but no CRS metadata is present", async () => {
+    // The fixture has llCornerX=300000 (UTM easting) + a geographic bbox but
+    // no EPSG code or WKT in the metadata XML.  parse_standard_bag must detect
+    // that the native origin is outside geographic range and raise an error
+    // instead of silently interpolating garbage coordinates.
+    await expect(parseBag(bagProjectedBuf)).rejects.toThrow(
+      /projected CRS/i
+    );
+  });
 });
