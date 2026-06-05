@@ -192,6 +192,112 @@ test.describe("Chunked upload flow (> 10 MB)", () => {
     },
   );
 
+  // ── Mid-stream retry — second chunk (index 1) is mocked to fail ─────────────
+  test(
+    "mid-stream retry: chunk-1 failure surfaces the retry button after partial progress; retry resumes from chunk 1 and completes the upload end-to-end",
+    async ({ page, request }) => {
+      test.setTimeout(180_000);
+
+      // ~10.8 MB CSV → Math.ceil(10.8 MB / 5 MB) = 3 chunks (indices 0, 1, 2).
+      // Chunk 0 (0–5 MB) will complete normally, advancing progress to 33%.
+      // Chunk 1 (5–10 MB) is the one we fail, making this a genuine mid-stream
+      // error rather than an immediate first-chunk failure.
+      const csvBuffer = makeLargeCsv();
+      const totalChunks = Math.ceil(csvBuffer.byteLength / (5 * 1024 * 1024));
+      expect(totalChunks).toBeGreaterThanOrEqual(3); // guard: file must have ≥ 3 chunks
+
+      const filename = `chunked-e2e-midstream-${Date.now()}.csv`;
+      const expectedName = filename.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
+
+      // Track how many times the chunk endpoint is called during each phase.
+      // Phase boundary: after the retry button is clicked.
+      let totalChunkCalls = 0;
+      let chunkCallsAtRetryClick = 0; // captured just before retry click
+
+      // Fail exactly the second chunk request (call #2 = chunkIndex 1).
+      // A brief deliberate delay before returning the 500 gives React time to
+      // flush the 33% progress update from the successful chunk 0, making the
+      // partial-progress assertion reliable without polling.
+      await page.route("**/api/datasets/upload/chunk", async (route) => {
+        totalChunkCalls++;
+        if (totalChunkCalls === 2) {
+          // Let React render the chunk-0 progress (33%) before we surface the error.
+          await new Promise<void>((r) => setTimeout(r, 400));
+          await route.fulfill({
+            status: 500,
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              error: "server_error",
+              details: "Simulated mid-stream chunk failure at index 1 (e2e)",
+            }),
+          });
+        } else {
+          await route.continue();
+        }
+      });
+
+      await page.goto("/?noCanvas=1", { waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId("tour-scene-canvas-disabled")).toBeVisible();
+
+      if (!(await openUploadAccordion(page))) {
+        test.skip(true, "Upload accordion or dropzone not visible in this environment");
+        return;
+      }
+
+      await dropBufferOntoDropzone(page, filename, csvBuffer);
+
+      // 1. The upload enters the chunked uploading phase.
+      await expect(page.getByText(/Uploading in chunks/i)).toBeVisible({
+        timeout: 15_000,
+      });
+
+      // 2. After chunk 0 lands (33% of 3 chunks) the progress percentage must be
+      //    visible before chunk 1 fails.  The 400 ms delay in the route handler
+      //    keeps chunk 1's 500 response pending long enough for this assertion.
+      const progressAfterChunk0 = `${Math.round((1 / totalChunks) * 100)}%`;
+      await expect(page.getByText(progressAfterChunk0)).toBeVisible({
+        timeout: 10_000,
+      });
+
+      // 3. The simulated 500 on chunk 1 must surface the retry button.
+      const retryBtn = page.getByTestId("btn-retry-chunked-upload");
+      await expect(retryBtn).toBeVisible({ timeout: 15_000 });
+
+      // Snapshot the call count before retry so we can measure the retry phase alone.
+      chunkCallsAtRetryClick = totalChunkCalls;
+
+      // ── Click retry — all subsequent chunk/finalize/poll calls are real ───────
+      await retryBtn.click();
+
+      // 4. Retry re-enters the uploading phase (progress bar reappears).
+      await expect(page.getByText(/Uploading in chunks/i)).toBeVisible({
+        timeout: 15_000,
+      });
+
+      // 5. After all retry-chunks land, finalize is called and job polling begins.
+      await expect(page.getByText(/Processing on server/i)).toBeVisible({
+        timeout: 30_000,
+      });
+
+      // 6. The MY UPLOADS row must appear once the job returns "done".
+      const newRow = page
+        .getByTestId(/^btn-user-dataset-/)
+        .filter({ hasText: expectedName });
+      await expect(newRow).toBeVisible({ timeout: 120_000 });
+
+      // ── Verify retry skipped chunk 0 and started from chunk 1 ────────────────
+      // A fresh upload sends `totalChunks` chunk requests; retry must send
+      // exactly `totalChunks - 1` (chunks 1 through totalChunks-1), proving that
+      // chunk 0 was not re-transmitted.
+      const retryChunkCalls = totalChunkCalls - chunkCallsAtRetryClick;
+      expect(retryChunkCalls).toBe(totalChunks - 1);
+
+      // Post-condition: dataset persisted to the real DB.
+      const uploads = await listMyUploads(request);
+      expect(uploads.some((u) => u.name === expectedName)).toBe(true);
+    },
+  );
+
   // ── Retry path — only first chunk is mocked to fail ──────────────────────────
   test(
     "retry path: chunk failure surfaces the retry button; clicking it resumes and completes the upload end-to-end via the real server",
