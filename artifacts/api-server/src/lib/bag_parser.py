@@ -346,7 +346,6 @@ def parse_vr_bag(bag, meta_xml: str, max_pts: int):
 # ── validators ─────────────────────────────────────────────────────────────
 
 def _valid_depth(v: float) -> bool:
-<<<<<<< HEAD
     av = abs(v)
     return (
         isinstance(v, (int, float))
@@ -354,13 +353,6 @@ def _valid_depth(v: float) -> bool:
         and av < NAN_TEST
         and av != BAG_FILL   # BAG nodata sentinel (1 000 000)
         and av > 0.0         # surface points not useful
-=======
-    return (
-        isinstance(v, (int, float))
-        and v == v           # not NaN
-        and abs(v) < NAN_TEST
-        and v != 0.0         # surface point — not useful
->>>>>>> ed96e1af (fix: make chunked uploads fully resumable after server restart)
     )
 
 
@@ -429,12 +421,8 @@ def main():
 
     except Exception as exc:
         import traceback
-<<<<<<< HEAD
         # Node caller prepends "BAG parse error:" so just emit the raw message.
         print(str(exc), file=sys.stderr)
-=======
-        print(f"BAG parse error: {exc}", file=sys.stderr)
->>>>>>> ed96e1af (fix: make chunked uploads fully resumable after server restart)
         traceback.print_exc(file=sys.stderr)
         sys.exit(1)
 

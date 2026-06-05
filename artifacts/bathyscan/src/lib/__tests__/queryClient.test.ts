@@ -13,6 +13,8 @@
  *  - QueryCache onSuccess resets _isConnecting to false
  *  - MutationCache onError follows the same suppression rules
  *  - useIsConnecting starts false, reacts to 502 errors, resets after success
+ *  - useIsConnecting reacts to TypeError network errors ("Failed to fetch", "Load failed")
+ *  - network TypeError errors do not fire a toast
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -345,6 +347,70 @@ describe("useIsConnecting hook", () => {
     // A second 502 should keep the value at true (setIsConnecting guards same-value writes).
     act(() => { triggerQueryError(makeStatusError(502)); });
     expect(result.current).toBe(true);
+  });
+
+  it('returns true after a TypeError("Failed to fetch") network error', () => {
+    const { result } = renderHook(() => useIsConnecting());
+
+    act(() => {
+      triggerQueryError(new TypeError("Failed to fetch"));
+    });
+
+    expect(result.current).toBe(true);
+  });
+
+  it('returns true after a TypeError("Load failed") network error', () => {
+    const { result } = renderHook(() => useIsConnecting());
+
+    act(() => {
+      triggerQueryError(new TypeError("Load failed"));
+    });
+
+    expect(result.current).toBe(true);
+  });
+
+  it("does NOT fire a toast for a TypeError network error", () => {
+    renderHook(() => useIsConnecting());
+
+    act(() => {
+      triggerQueryError(new TypeError("Failed to fetch"));
+    });
+
+    expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  it("resets to false when a query succeeds after a TypeError network error", () => {
+    const { result } = renderHook(() => useIsConnecting());
+
+    act(() => {
+      triggerQueryError(new TypeError("Failed to fetch"));
+    });
+    expect(result.current).toBe(true);
+
+    act(() => {
+      triggerQuerySuccess();
+    });
+    expect(result.current).toBe(false);
+  });
+
+  it("does NOT fire a toast for a TypeError('Load failed') network error", () => {
+    renderHook(() => useIsConnecting());
+
+    act(() => {
+      triggerQueryError(new TypeError("Load failed"));
+    });
+
+    expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  it("stays false when a plain Error (not TypeError) with 'network' in the message occurs", () => {
+    const { result } = renderHook(() => useIsConnecting());
+
+    act(() => {
+      triggerQueryError(new Error("Failed to fetch"));
+    });
+
+    expect(result.current).toBe(false);
   });
 });
 
