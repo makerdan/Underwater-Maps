@@ -118,27 +118,80 @@ interface JobState {
    * in-memory job map is empty.
    */
   stageStartedAt?: Date | null;
+  /**
+   * Lowercase file extension (e.g. ".laz", ".gz", ".nc") derived from the
+   * uploaded filename.  Used as the key into the per-file-type calibration
+   * table so historical throughput can seed the first ETA estimate.
+   */
+  fileExt?: string;
+  /**
+   * Wall-clock timestamp (Date.now() ms) when processUploadJob entered the
+   * "processing" state.  Combined with the completion timestamp to record the
+   * total job duration in the per-extension calibration table.
+   */
+  jobStartedAt?: number;
+}
+
+// ─── Per-file-type throughput calibration ─────────────────────────────────────
+// Maintains a bounded in-process history of total job durations (ms) keyed by
+// file extension.  The first ETA estimate for a new job seeds from this table
+// when fewer than 2 live milestones have been recorded, then blends out as
+// live milestone data accumulates.  Not persisted across restarts — the table
+// bootstraps itself after the first few jobs of each type in a new process.
+const CALIBRATION_MAX_SAMPLES = 10;
+const extensionDurationHistory = new Map<string, number[]>();
+
+/**
+ * Record a completed job's total wall-clock duration (ms) for the given file
+ * extension.  Bounded to the last CALIBRATION_MAX_SAMPLES entries.
+ */
+function recordExtensionDuration(ext: string, durationMs: number): void {
+  if (!ext) return;
+  const arr = extensionDurationHistory.get(ext) ?? [];
+  arr.push(durationMs);
+  if (arr.length > CALIBRATION_MAX_SAMPLES) arr.shift();
+  extensionDurationHistory.set(ext, arr);
+}
+
+/**
+ * Returns the median of recorded durations for an extension, or null if no
+ * history is available.
+ */
+function historicalMedianMs(ext: string): number | null {
+  const arr = extensionDurationHistory.get(ext);
+  if (!arr || arr.length === 0) return null;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1]! + sorted[mid]!) / 2
+    : sorted[mid]!;
 }
 
 /**
  * Record a progress milestone timestamp on the job and recompute ETA.
  *
- * Two-tier estimation strategy:
+ * Three-tier estimation strategy:
  *
- * 1. Pre-40% (assembly / decompression / detection stages): rolling milestone
- *    rate with a file-size-scaled penalty. Assembly and decompression are fast
- *    I/O-bound operations; parsing and gridding are CPU-bound and typically
- *    take much longer per "progress unit".  We apply a 1.5–3× multiplier
- *    based on file size so the early estimate errs on the side of over- rather
- *    than under-estimation (users prefer a conservative ETA that shrinks).
+ * 1. Pre-2-milestones (assembly stage): seeds from the per-extension
+ *    calibration table when history is available, so the very first ETA
+ *    display (at milestone 20 or 35) starts from a realistic baseline rather
+ *    than a null or wildly extrapolated value.
  *
- * 2. Post-60% with soundingCount known (tar archives): after the terrain
+ * 2. 2+ milestones — rolling milestone rate (blended): the live progress-per-ms
+ *    rate is blended with the historical estimate.  The historical weight starts
+ *    at 1.0 at the 2nd milestone and fades linearly to 0 by the 5th milestone,
+ *    after which the live rate drives the ETA entirely.
+ *    Pre-40% estimates also apply the file-size-scaled penalty (1.5–3×) so the
+ *    early estimate errs conservatively.
+ *
+ * 3. Post-60% with soundingCount known (tar archives): after the terrain
  *    gridding step completes (milestone 80), we have an observed pts/ms
  *    throughput rate.  We use it to estimate the remaining overview gridding
  *    time rather than extrapolating from the raw progress rate.
  *
  * - Up to 5 milestone timestamps are kept (bounded memory).
- * - ETA is null until 2 milestones are recorded.
+ * - ETA is null until either 2 milestones are recorded or calibration history
+ *   is available for the file extension.
  * - ETA is 0 once progress reaches 100.
  * - `stageStartedAt` is updated to the current timestamp on every call so the
  *   most recent milestone is always available for DB persistence.
@@ -179,30 +232,61 @@ function updateProgressWithEta(job: JobState, progress: number): void {
     return;
   }
 
-  // ── Generic rolling milestone rate ────────────────────────────────────────
-  if (job.stageTimestamps.length >= 2) {
-    const last = job.stageTimestamps[job.stageTimestamps.length - 1]!;
-    const prev = job.stageTimestamps[job.stageTimestamps.length - 2]!;
-    const deltaProgress = last.progress - prev.progress;
-    const deltaMs = last.ts - prev.ts;
-    if (deltaProgress > 0 && deltaMs > 50) {
-      const ratePerMs = deltaProgress / deltaMs;
-      const remaining = 100 - progress;
+  const remaining = 100 - progress;
+  const milestoneCount = job.stageTimestamps.length;
 
-      // Pre-40%: assembly/decompression is faster than parsing/gridding.
-      // Scale the penalty by file size — larger files have a larger gap
-      // between assembly speed and full parse/grid time.
-      let penalty = 1.0;
-      if (progress < 40) {
-        const mb = (job.fileBytes ?? 0) / (1024 * 1024);
-        // 1.5× for small files, scaling up to 3× for ≥50 MB files.
-        penalty = 1.5 + Math.min(1.5, mb / 50 * 1.5);
-      }
-
-      job.eta = Math.max(1, Math.round(((remaining / ratePerMs) * penalty) / 1000));
+  // ── Historical seed (< 2 milestones) ─────────────────────────────────────
+  // When we don't yet have two live milestones for a rate calculation, seed
+  // from the per-extension calibration table.  Estimate remaining time as
+  // (remaining_fraction × historical_median), which assumes roughly uniform
+  // progress distribution — good enough for an initial display value.
+  if (milestoneCount < 2) {
+    const median = job.fileExt ? historicalMedianMs(job.fileExt) : null;
+    if (median != null && median > 0) {
+      const elapsed = job.jobStartedAt != null ? now - job.jobStartedAt : 0;
+      // Fraction of the job still remaining, anchored to actual elapsed time
+      // when available (avoids underestimating if startup was slow).
+      const estimatedRemaining = Math.max(median - elapsed, median * (remaining / 100));
+      job.eta = Math.max(1, Math.round(estimatedRemaining / 1000));
+    } else {
+      job.eta = null;
     }
-  } else {
-    job.eta = null;
+    return;
+  }
+
+  // ── Rolling milestone rate (blended with historical) ──────────────────────
+  const last = job.stageTimestamps[milestoneCount - 1]!;
+  const prev = job.stageTimestamps[milestoneCount - 2]!;
+  const deltaProgress = last.progress - prev.progress;
+  const deltaMs = last.ts - prev.ts;
+
+  if (deltaProgress > 0 && deltaMs > 50) {
+    const ratePerMs = deltaProgress / deltaMs;
+
+    // Pre-40%: assembly/decompression is faster than parsing/gridding.
+    // Scale the penalty by file size — larger files have a larger gap
+    // between assembly speed and full parse/grid time.
+    let penalty = 1.0;
+    if (progress < 40) {
+      const mb = (job.fileBytes ?? 0) / (1024 * 1024);
+      // 1.5× for small files, scaling up to 3× for ≥50 MB files.
+      penalty = 1.5 + Math.min(1.5, mb / 50 * 1.5);
+    }
+
+    const liveEtaSec = Math.max(1, Math.round(((remaining / ratePerMs) * penalty) / 1000));
+
+    // Blend in the historical estimate: weight starts at 1.0 at the 2nd
+    // milestone and decreases linearly to 0 at the 5th milestone (3 steps).
+    const median = job.fileExt ? historicalMedianMs(job.fileExt) : null;
+    if (median != null && median > 0) {
+      const historicalWeight = Math.max(0, 1 - (milestoneCount - 2) / 3);
+      const elapsed = job.jobStartedAt != null ? now - job.jobStartedAt : 0;
+      const historicalRemaining = Math.max(median - elapsed, median * (remaining / 100));
+      const historicalEtaSec = Math.max(1, Math.round(historicalRemaining / 1000));
+      job.eta = Math.round(historicalWeight * historicalEtaSec + (1 - historicalWeight) * liveEtaSec);
+    } else {
+      job.eta = liveEtaSec;
+    }
   }
 }
 const uploadJobs = new Map<string, JobState>();
@@ -806,6 +890,9 @@ async function processUploadJob(
 
   try {
     job.status = "processing";
+    // Capture wall-clock start time and file extension for the calibration table.
+    job.jobStartedAt = Date.now();
+    job.fileExt = path.extname(fileName).toLowerCase();
     updateProgressWithEta(job, 5);
     // Persist "processing" to DB so a future process knows this job started.
     await persistJobToDB(jobId, { ...job });
@@ -827,6 +914,9 @@ async function processUploadJob(
     // contain no extension hint even though the content is gzip-compressed.
     const looksLikeGzip =
       fileName.toLowerCase().endsWith(".gz") || await isGzipFile(assembledPath);
+    // Normalise the stored extension: gzip-by-content files without a ".gz"
+    // suffix still belong to the ".gz" calibration bucket.
+    if (looksLikeGzip && !job.fileExt) job.fileExt = ".gz";
 
     if (looksLikeGzip) {
       // Stream-decompress with size guard; avoids full gz buffer in RAM.
@@ -946,6 +1036,10 @@ async function processUploadJob(
           })
           .returning({ id: customDatasetsTable.id });
 
+        // Record total job duration for the tar/gz calibration bucket.
+        if (job.fileExt && job.jobStartedAt != null) {
+          recordExtensionDuration(job.fileExt, Date.now() - job.jobStartedAt);
+        }
         updateProgressWithEta(job, 100);
         job.status = "done";
         job.datasetId = saved?.id ?? gridId;
@@ -1001,6 +1095,11 @@ async function processUploadJob(
       })
       .returning({ id: customDatasetsTable.id });
 
+    // Record total job duration in the per-extension calibration table so
+    // subsequent jobs of the same file type start with a realistic ETA seed.
+    if (job.fileExt && job.jobStartedAt != null) {
+      recordExtensionDuration(job.fileExt, Date.now() - job.jobStartedAt);
+    }
     updateProgressWithEta(job, 100);
     job.status = "done";
     job.datasetId = saved?.id ?? gridId;
