@@ -177,6 +177,14 @@ const CYAN: React.CSSProperties = {
   textShadow: "0 0 6px rgba(0,229,255,0.5)",
 };
 
+function formatEta(seconds: number | null): string | null {
+  if (seconds === null || seconds <= 0) return null;
+  if (seconds < 5) return "Almost done…";
+  if (seconds < 60) return `~${seconds} sec remaining`;
+  const mins = Math.round(seconds / 60);
+  return `~${mins} min remaining`;
+}
+
 // ─── Visible-datasets summary header (Task #350) ─────────────────────────────
 const VisibleDatasetsHeader: React.FC = () => {
   const count = useTerrainStore((s) => s.visibleDatasets.length);
@@ -556,6 +564,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const [chunkedUploadProgress, setChunkedUploadProgress] = useState(0);
   const [chunkedJobId, setChunkedJobId] = useState<string | null>(null);
   const [chunkedJobProgress, setChunkedJobProgress] = useState(0);
+  const [chunkedJobEta, setChunkedJobEta] = useState<number | null>(null);
   const [chunkedError, setChunkedError] = useState<string | null>(null);
   const [lastChunkedFile, setLastChunkedFile] = useState<File | null>(null);
 
@@ -1408,6 +1417,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     if (chunkedPhase !== "processing" || !chunkedJobId) return;
 
     setChunkedJobProgress(0);
+    setChunkedJobEta(null);
 
     let stopped = false;
     let backoffMs = 1_500;
@@ -1431,7 +1441,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         const job = await resp.json() as {
           status: string; progress: number; error?: string; datasetId?: string;
           skippedCount?: number; skippedFormats?: string[]; soundingCount?: number;
-          substrateCount?: number; parseWarnings?: string[];
+          substrateCount?: number; parseWarnings?: string[]; eta?: number | null;
         };
 
         if (stopped) return;
@@ -1439,6 +1449,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         if (typeof job.progress === "number") {
           setChunkedJobProgress(job.progress);
         }
+        setChunkedJobEta(typeof job.eta === "number" ? job.eta : null);
 
         if (job.status === "done" && job.datasetId) {
           stopped = true;
@@ -2780,6 +2791,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                             ◌ Processing on server...
                           </div>
                           <div style={{ fontSize: 10, color: "#cbd5e1" }}>{Math.round(chunkedJobProgress)}%</div>
+                          {formatEta(chunkedJobEta) && (
+                            <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 2 }}>
+                              {formatEta(chunkedJobEta)}
+                            </div>
+                          )}
                         </div>
                       ) : gcsPhase === "uploading" ? (
                         <div>

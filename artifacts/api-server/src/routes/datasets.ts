@@ -92,6 +92,118 @@ interface JobState {
    * Only present when at least one non-canonical synonym was matched.
    */
   parseWarnings?: string[];
+  /**
+   * Wall-clock timestamps (Date.now() ms) recorded at each progress milestone.
+   * Used to compute a rolling progress-per-ms rate for ETA estimation.
+   * Up to 5 entries are retained — enough to span the full milestone range.
+   */
+  stageTimestamps?: Array<{ progress: number; ts: number }>;
+  /**
+   * Estimated seconds remaining, derived from the milestone rate.
+   * null = not yet calculable (fewer than 2 milestones recorded).
+   * Omitted once the job reaches a terminal state (done / error).
+   */
+  eta?: number | null;
+  /**
+   * Assembled file size in bytes, recorded after streamChunksToFile.
+   * Used as a proxy for remaining parsing/gridding work in the pre-40% window:
+   * larger files typically take longer to parse and grid, so we apply a scale
+   * factor that grows with file size.
+   */
+  fileBytes?: number;
+  /**
+   * ISO-serializable timestamp of the most recent progress milestone.
+   * Persisted to DB so the DB-fallback path (after a server restart) can
+   * include `currentStageStartedAt` in status responses even when the
+   * in-memory job map is empty.
+   */
+  stageStartedAt?: Date | null;
+}
+
+/**
+ * Record a progress milestone timestamp on the job and recompute ETA.
+ *
+ * Two-tier estimation strategy:
+ *
+ * 1. Pre-40% (assembly / decompression / detection stages): rolling milestone
+ *    rate with a file-size-scaled penalty. Assembly and decompression are fast
+ *    I/O-bound operations; parsing and gridding are CPU-bound and typically
+ *    take much longer per "progress unit".  We apply a 1.5–3× multiplier
+ *    based on file size so the early estimate errs on the side of over- rather
+ *    than under-estimation (users prefer a conservative ETA that shrinks).
+ *
+ * 2. Post-60% with soundingCount known (tar archives): after the terrain
+ *    gridding step completes (milestone 80), we have an observed pts/ms
+ *    throughput rate.  We use it to estimate the remaining overview gridding
+ *    time rather than extrapolating from the raw progress rate.
+ *
+ * - Up to 5 milestone timestamps are kept (bounded memory).
+ * - ETA is null until 2 milestones are recorded.
+ * - ETA is 0 once progress reaches 100.
+ * - `stageStartedAt` is updated to the current timestamp on every call so the
+ *   most recent milestone is always available for DB persistence.
+ */
+function updateProgressWithEta(job: JobState, progress: number): void {
+  job.progress = progress;
+  const now = Date.now();
+
+  if (!job.stageTimestamps) job.stageTimestamps = [];
+  job.stageTimestamps.push({ progress, ts: now });
+  if (job.stageTimestamps.length > 5) job.stageTimestamps.shift();
+
+  // Record current stage start (most recent milestone) for API / DB exposure.
+  job.stageStartedAt = new Date(now);
+
+  if (progress >= 100) {
+    job.eta = 0;
+    return;
+  }
+
+  // ── Post-60% soundingCount-based estimate (tar archives) ─────────────────
+  // After the terrain gridding finishes (milestone 80), we have an observed
+  // gridding time.  The overview grid is fixed 64×64, typically ~30 % of the
+  // terrain time, followed by a DB insert (~500 ms).
+  if (progress === 80 && job.soundingCount != null && job.soundingCount > 0) {
+    const t60entry = job.stageTimestamps.find((m) => m.progress === 60);
+    if (t60entry && now > t60entry.ts) {
+      const terrainMs = now - t60entry.ts;
+      const overviewEstimateMs = terrainMs * 0.3;
+      const dbEstimateMs = 500;
+      job.eta = Math.max(1, Math.round((overviewEstimateMs + dbEstimateMs) / 1000));
+      return;
+    }
+  }
+  if (progress === 88 && job.soundingCount != null) {
+    // Overview done; only DB insert remains.
+    job.eta = 1;
+    return;
+  }
+
+  // ── Generic rolling milestone rate ────────────────────────────────────────
+  if (job.stageTimestamps.length >= 2) {
+    const last = job.stageTimestamps[job.stageTimestamps.length - 1]!;
+    const prev = job.stageTimestamps[job.stageTimestamps.length - 2]!;
+    const deltaProgress = last.progress - prev.progress;
+    const deltaMs = last.ts - prev.ts;
+    if (deltaProgress > 0 && deltaMs > 50) {
+      const ratePerMs = deltaProgress / deltaMs;
+      const remaining = 100 - progress;
+
+      // Pre-40%: assembly/decompression is faster than parsing/gridding.
+      // Scale the penalty by file size — larger files have a larger gap
+      // between assembly speed and full parse/grid time.
+      let penalty = 1.0;
+      if (progress < 40) {
+        const mb = (job.fileBytes ?? 0) / (1024 * 1024);
+        // 1.5× for small files, scaling up to 3× for ≥50 MB files.
+        penalty = 1.5 + Math.min(1.5, mb / 50 * 1.5);
+      }
+
+      job.eta = Math.max(1, Math.round(((remaining / ratePerMs) * penalty) / 1000));
+    }
+  } else {
+    job.eta = null;
+  }
 }
 const uploadJobs = new Map<string, JobState>();
 registerCache(() => uploadJobs.clear());
@@ -137,6 +249,7 @@ async function persistJobToDB(
         error: state.error ?? null,
         datasetId: state.datasetId ?? null,
         updatedAt: new Date(),
+        stageStartedAt: state.stageStartedAt ?? null,
         ...(meta
           ? {
               uploadId: meta.uploadId,
@@ -156,6 +269,7 @@ async function persistJobToDB(
           error: state.error ?? null,
           datasetId: state.datasetId ?? null,
           updatedAt: new Date(),
+          stageStartedAt: state.stageStartedAt ?? null,
           ...(meta
             ? {
                 uploadId: meta.uploadId,
@@ -692,14 +806,18 @@ async function processUploadJob(
 
   try {
     job.status = "processing";
-    job.progress = 5;
+    updateProgressWithEta(job, 5);
     // Persist "processing" to DB so a future process knows this job started.
     await persistJobToDB(jobId, { ...job });
 
     // Stream chunks one-at-a-time into a single assembled file.
     // Peak RAM: one 5 MB chunk. No Buffer.concat across all chunks.
     await streamChunksToFile(uploadId, totalChunks, assembledPath);
-    job.progress = 20;
+    // Record assembled file size for pre-40% ETA calibration (larger files
+    // take proportionally longer to parse and grid than to assemble).
+    job.fileBytes = await fs.promises.stat(assembledPath)
+      .then((s) => s.size).catch(() => 0);
+    updateProgressWithEta(job, 20);
 
     let processPath = assembledPath;
 
@@ -790,7 +908,7 @@ async function processUploadJob(
         }
 
         const gridId = crypto.randomUUID();
-        job.progress = 35;
+        updateProgressWithEta(job, 35);
 
         // Grid the merged points in a worker thread — same pipeline as
         // single-file uploads, but with pre-parsed points supplied directly.
@@ -802,7 +920,7 @@ async function processUploadJob(
           datasetName: tarDatasetName,
           smoothing,
           prePoints: tarPoints,
-          onProgress: (p) => { job.progress = p; },
+          onProgress: (p) => { updateProgressWithEta(job, p); },
         });
 
         // Encode the ungeoreferenced smooth-sheet raster for DB storage (if present).
@@ -828,7 +946,7 @@ async function processUploadJob(
           })
           .returning({ id: customDatasetsTable.id });
 
-        job.progress = 100;
+        updateProgressWithEta(job, 100);
         job.status = "done";
         job.datasetId = saved?.id ?? gridId;
         await persistJobToDB(jobId, { ...job });
@@ -847,7 +965,7 @@ async function processUploadJob(
         );
       }
     }
-    job.progress = 35;
+    updateProgressWithEta(job, 35);
 
     // Derive names before spawning the worker (cheap, main-thread-safe).
     // Strip ".gz" only when the name actually ends in it — for gzip-by-content
@@ -867,7 +985,7 @@ async function processUploadJob(
       gridId,
       datasetName,
       smoothing,
-      onProgress: (p) => { job.progress = p; },
+      onProgress: (p) => { updateProgressWithEta(job, p); },
     });
 
     const [saved] = await db
@@ -883,7 +1001,7 @@ async function processUploadJob(
       })
       .returning({ id: customDatasetsTable.id });
 
-    job.progress = 100;
+    updateProgressWithEta(job, 100);
     job.status = "done";
     job.datasetId = saved?.id ?? gridId;
     await persistJobToDB(jobId, { ...job });
@@ -2162,6 +2280,7 @@ router.get(
         res.status(403).json({ error: "forbidden", details: "This job belongs to a different user." });
         return;
       }
+      const isTerminal = memJob.status === "done" || memJob.status === "error";
       res.json({
         status: memJob.status,
         progress: memJob.progress,
@@ -2172,6 +2291,10 @@ router.get(
         ...(memJob.soundingCount !== undefined ? { soundingCount: memJob.soundingCount } : {}),
         ...(memJob.substrateCount !== undefined ? { substrateCount: memJob.substrateCount } : {}),
         ...(memJob.parseWarnings !== undefined ? { parseWarnings: memJob.parseWarnings } : {}),
+        ...(!isTerminal && memJob.eta !== undefined ? { eta: memJob.eta } : {}),
+        ...(!isTerminal
+          ? { currentStageStartedAt: memJob.stageStartedAt?.toISOString() ?? null }
+          : {}),
       });
       return;
     }
@@ -2196,16 +2319,23 @@ router.get(
       return;
     }
 
+    const isDbTerminal = dbJob.status === "done" || dbJob.status === "error";
     res.json({
       status: dbJob.status,
       progress: dbJob.progress,
       ...(dbJob.error !== null ? { error: dbJob.error } : {}),
       ...(dbJob.datasetId !== null ? { datasetId: dbJob.datasetId } : {}),
+      ...(!isDbTerminal
+        ? { currentStageStartedAt: dbJob.stageStartedAt?.toISOString() ?? null }
+        : {}),
     });
     // Note: skippedCount/skippedFormats are in-memory only and not persisted to
     // DB (they are cosmetic toast metadata, not durable state).  After a server
     // restart the fields are simply absent, which the frontend handles gracefully
     // by showing no skipped note.
+    // Note: eta is also in-memory only (derived from stageTimestamps which are
+    // ephemeral).  After a restart clients see currentStageStartedAt from DB
+    // and can compute elapsed time themselves, but no ETA until re-queued.
   }),
 );
 

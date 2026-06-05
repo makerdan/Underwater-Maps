@@ -35,6 +35,14 @@ export const uploadJobsTable = pgTable("upload_jobs", {
   chunksReceived: integer("chunks_received").default(0),
   resolution: integer("resolution"),
   smoothing: boolean("smoothing"),
+  /**
+   * ISO timestamp of the most recent processing milestone — recorded whenever
+   * updateProgressWithEta() advances the job to a new stage.  Used to expose
+   * `currentStageStartedAt` on the status endpoint so polls (and the DB-
+   * fallback path after a server restart) can tell the client how long the
+   * current stage has been running.
+   */
+  stageStartedAt: timestamp("stage_started_at", { withTimezone: true }),
 }, (table) => [
   index("upload_jobs_user_id_idx").on(table.userId),
   index("upload_jobs_status_idx").on(table.status),
