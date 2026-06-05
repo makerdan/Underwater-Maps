@@ -112,15 +112,21 @@ function makeProgressTerrainFetcher(
   datasetId: string,
   reportProgress: boolean,
 ) {
-  return ({ signal }: { signal?: AbortSignal }): Promise<TerrainData> =>
-    fetchJsonWithProgress<TerrainData>(url, {
+  return async ({ signal }: { signal?: AbortSignal }): Promise<TerrainData> => {
+    const token = await getAuthToken();
+    const headers: Record<string, string> = token
+      ? { Authorization: `Bearer ${token}` }
+      : {};
+    return fetchJsonWithProgress<TerrainData>(url, {
       signal,
+      init: { headers },
       onProgress: reportProgress
         ? ({ loaded, total }) => {
             useActiveLoadStore.getState().update(datasetId, loaded, total);
           }
         : undefined,
     });
+  };
 }
 
 const CHUNKED_THRESHOLD = 10 * 1024 * 1024; // files above 10 MB use chunked path

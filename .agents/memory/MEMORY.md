@@ -9,3 +9,4 @@
 - [bypassUseClerk session needs getToken](bypass-use-clerk-session.md) — ClerkAuthTokenWirer in App.tsx calls session.getToken(); the bypass mock must include getToken: async () => null on the session object or every browser-side PUT/GET throws TypeError and waitForServerSettingsSync times out.
 - [BAG parser subprocess pitfalls](bag-parser-subprocess.md) — three non-obvious issues when replacing h5wasm with Python subprocess BAG parsing.
 - [Error boundary retry must use componentDidCatch](error-boundary-retry.md) — componentDidUpdate's prevState.hasError stays true→true on re-catch; use componentDidCatch for retry scheduling instead.
+- [fetchJsonWithProgress missing Bearer token](fetchjsonwithprogress-auth.md) — fetchJsonWithProgress bypasses customFetch auth wiring; any caller on an authed route must pass getAuthToken() result via init.headers.
