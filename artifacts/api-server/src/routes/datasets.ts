@@ -42,6 +42,11 @@ import { substrateFingerprintForDataset } from "../lib/substrateGrid.js";
 import { registerCache } from "../lib/cacheRegistry.js";
 import { logger } from "../lib/logger.js";
 import {
+  recordExtensionDuration as _recordExtensionDuration,
+  updateProgressWithEta,
+  extensionDurationHistory,
+} from "../lib/etaCalibration.js";
+import {
   DatasetsQuerySchema,
   ZonesQuerySchema,
   TerrainLandQuerySchema,
@@ -132,14 +137,11 @@ interface JobState {
   jobStartedAt?: number;
 }
 
-// ─── Per-file-type throughput calibration ─────────────────────────────────────
-// Maintains a bounded in-process history of total job durations (ms) keyed by
-// file extension.  The first ETA estimate for a new job seeds from this table
-// when fewer than 2 live milestones have been recorded, then blends out as
-// live milestone data accumulates.  Persisted to the `upload_calibration` DB
-// table so ETAs are available from the very first upload after a restart.
-const CALIBRATION_MAX_SAMPLES = 10;
-const extensionDurationHistory = new Map<string, number[]>();
+// ─── Per-file-type throughput calibration — DB persistence layer ──────────────
+// Pure calibration logic (ring buffer, median, ETA blending) lives in
+// lib/etaCalibration.ts and is imported above.  This layer adds debounced DB
+// upserts so the history survives server restarts, and a startup loader that
+// seeds the in-memory map from the `upload_calibration` table.
 
 // Debounce timers for per-extension DB writes (avoid a write on every job).
 const CALIBRATION_PERSIST_DEBOUNCE_MS = 5_000;
@@ -204,154 +206,15 @@ export async function loadCalibrationFromDb(): Promise<void> {
 
 /**
  * Record a completed job's total wall-clock duration (ms) for the given file
- * extension.  Bounded to the last CALIBRATION_MAX_SAMPLES entries.
- * Schedules a debounced DB upsert so the history survives server restarts.
+ * extension.  Delegates to the pure etaCalibration function for the ring-buffer
+ * update, then schedules a debounced DB upsert so the history survives restarts.
  */
 function recordExtensionDuration(ext: string, durationMs: number): void {
-  if (!ext) return;
-  const arr = extensionDurationHistory.get(ext) ?? [];
-  arr.push(durationMs);
-  if (arr.length > CALIBRATION_MAX_SAMPLES) arr.shift();
-  extensionDurationHistory.set(ext, arr);
-  schedulePersistCalibrationEntry(ext);
+  _recordExtensionDuration(ext, durationMs);
+  if (ext) schedulePersistCalibrationEntry(ext);
 }
 
-/**
- * Returns the median of recorded durations for an extension, or null if no
- * history is available.
- */
-function historicalMedianMs(ext: string): number | null {
-  const arr = extensionDurationHistory.get(ext);
-  if (!arr || arr.length === 0) return null;
-  const sorted = [...arr].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[mid - 1]! + sorted[mid]!) / 2
-    : sorted[mid]!;
-}
 
-/**
- * Record a progress milestone timestamp on the job and recompute ETA.
- *
- * Three-tier estimation strategy:
- *
- * 1. Pre-2-milestones (assembly stage): seeds from the per-extension
- *    calibration table when history is available, so the very first ETA
- *    display (at milestone 20 or 35) starts from a realistic baseline rather
- *    than a null or wildly extrapolated value.
- *
- * 2. 2+ milestones — rolling milestone rate (blended): the live progress-per-ms
- *    rate is blended with the historical estimate.  The historical weight starts
- *    at 1.0 at the 2nd milestone and fades linearly to 0 by the 5th milestone,
- *    after which the live rate drives the ETA entirely.
- *    Pre-40% estimates also apply the file-size-scaled penalty (1.5–3×) so the
- *    early estimate errs conservatively.
- *
- * 3. Post-60% with soundingCount known (tar archives): after the terrain
- *    gridding step completes (milestone 80), we have an observed pts/ms
- *    throughput rate.  We use it to estimate the remaining overview gridding
- *    time rather than extrapolating from the raw progress rate.
- *
- * - Up to 5 milestone timestamps are kept (bounded memory).
- * - ETA is null until either 2 milestones are recorded or calibration history
- *   is available for the file extension.
- * - ETA is 0 once progress reaches 100.
- * - `stageStartedAt` is updated to the current timestamp on every call so the
- *   most recent milestone is always available for DB persistence.
- */
-function updateProgressWithEta(job: JobState, progress: number): void {
-  job.progress = progress;
-  const now = Date.now();
-
-  if (!job.stageTimestamps) job.stageTimestamps = [];
-  job.stageTimestamps.push({ progress, ts: now });
-  if (job.stageTimestamps.length > 5) job.stageTimestamps.shift();
-
-  // Record current stage start (most recent milestone) for API / DB exposure.
-  job.stageStartedAt = new Date(now);
-
-  if (progress >= 100) {
-    job.eta = 0;
-    return;
-  }
-
-  // ── Post-60% soundingCount-based estimate (tar archives) ─────────────────
-  // After the terrain gridding finishes (milestone 80), we have an observed
-  // gridding time.  The overview grid is fixed 64×64, typically ~30 % of the
-  // terrain time, followed by a DB insert (~500 ms).
-  if (progress === 80 && job.soundingCount != null && job.soundingCount > 0) {
-    const t60entry = job.stageTimestamps.find((m) => m.progress === 60);
-    if (t60entry && now > t60entry.ts) {
-      const terrainMs = now - t60entry.ts;
-      const overviewEstimateMs = terrainMs * 0.3;
-      const dbEstimateMs = 500;
-      job.eta = Math.max(1, Math.round((overviewEstimateMs + dbEstimateMs) / 1000));
-      return;
-    }
-  }
-  if (progress === 88 && job.soundingCount != null) {
-    // Overview done; only DB insert remains.
-    job.eta = 1;
-    return;
-  }
-
-  const remaining = 100 - progress;
-  const milestoneCount = job.stageTimestamps.length;
-
-  // ── Historical seed (< 2 milestones) ─────────────────────────────────────
-  // When we don't yet have two live milestones for a rate calculation, seed
-  // from the per-extension calibration table.  Estimate remaining time as
-  // (remaining_fraction × historical_median), which assumes roughly uniform
-  // progress distribution — good enough for an initial display value.
-  if (milestoneCount < 2) {
-    const median = job.fileExt ? historicalMedianMs(job.fileExt) : null;
-    if (median != null && median > 0) {
-      const elapsed = job.jobStartedAt != null ? now - job.jobStartedAt : 0;
-      // Fraction of the job still remaining, anchored to actual elapsed time
-      // when available (avoids underestimating if startup was slow).
-      const estimatedRemaining = Math.max(median - elapsed, median * (remaining / 100));
-      job.eta = Math.max(1, Math.round(estimatedRemaining / 1000));
-    } else {
-      job.eta = null;
-    }
-    return;
-  }
-
-  // ── Rolling milestone rate (blended with historical) ──────────────────────
-  const last = job.stageTimestamps[milestoneCount - 1]!;
-  const prev = job.stageTimestamps[milestoneCount - 2]!;
-  const deltaProgress = last.progress - prev.progress;
-  const deltaMs = last.ts - prev.ts;
-
-  if (deltaProgress > 0 && deltaMs > 50) {
-    const ratePerMs = deltaProgress / deltaMs;
-
-    // Pre-40%: assembly/decompression is faster than parsing/gridding.
-    // Scale the penalty by file size — larger files have a larger gap
-    // between assembly speed and full parse/grid time.
-    let penalty = 1.0;
-    if (progress < 40) {
-      const mb = (job.fileBytes ?? 0) / (1024 * 1024);
-      // 1.5× for small files, scaling up to 3× for ≥50 MB files.
-      penalty = 1.5 + Math.min(1.5, mb / 50 * 1.5);
-    }
-
-    const liveEtaSec = Math.max(1, Math.round(((remaining / ratePerMs) * penalty) / 1000));
-
-    // Blend in the historical estimate: weight starts at 1.0 at the 2nd
-    // milestone and decreases linearly to 0 at the 5th milestone (3 steps).
-    const median = job.fileExt ? historicalMedianMs(job.fileExt) : null;
-    if (median != null && median > 0) {
-      const historicalWeight = Math.max(0, 1 - (milestoneCount - 2) / 3);
-      const elapsed = job.jobStartedAt != null ? now - job.jobStartedAt : 0;
-      const historicalRemaining = Math.max(median - elapsed, median * (remaining / 100));
-      const historicalEtaSec = Math.max(1, Math.round(historicalRemaining / 1000));
-      job.eta = Math.round(historicalWeight * historicalEtaSec + (1 - historicalWeight) * liveEtaSec);
-    } else {
-      job.eta = liveEtaSec;
-    }
-  }
-}
 const uploadJobs = new Map<string, JobState>();
 registerCache(() => uploadJobs.clear());
 
