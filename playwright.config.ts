@@ -72,13 +72,12 @@ export default defineConfig({
       // starts any webServer process. global-setup.ts calls `node ./build.mjs`
       // with DIST_DIR=dist-e2e, ensuring dist-e2e/index.mjs exists before
       // `start:e2e` is invoked. Do not remove or move the globalSetup
-      // registration without also making `start:e2e` build-aware (e.g. switch
-      // to `dev:e2e` which builds inline via `build:e2e`).
+      // registration without also making `start:e2e` build-aware.
       //
-      // Uses `start:e2e` (not `dev:e2e`) so the webServer skips the esbuild
-      // bundle step. The build is handled earlier by global-setup.ts, which
-      // checks whether dist-e2e/index.mjs is newer than all source inputs and
-      // only rebuilds when stale. On a warm dev loop this saves 5–7 s per run.
+      // Belt-and-suspenders: `build:e2e` runs inline here as a safety net so
+      // that even if globalSetup fails silently the webServer still gets a
+      // valid dist-e2e/index.mjs. On a warm dev loop esbuild is fast enough
+      // (~1–2 s) that the safety net cost is negligible.
       //
       // The output directory is dist-e2e/ (not dist/) so this process never
       // races with the regular API Server dev workflow over the same folder.
@@ -88,7 +87,7 @@ export default defineConfig({
       // require an x-e2e-user-id header to avoid a 401 and performs a DB query
       // on every poll, masking startup failures under slow queries).
       command:
-        "PORT=3151 E2E_AUTH_BYPASS=1 pnpm --filter @workspace/api-server run start:e2e",
+        "pnpm --filter @workspace/api-server run build:e2e && PORT=3151 E2E_AUTH_BYPASS=1 pnpm --filter @workspace/api-server run start:e2e",
       url: "http://127.0.0.1:3151/api/healthz",
       reuseExistingServer: !process.env["CI"],
       timeout: 60_000,

@@ -2,7 +2,12 @@ import { execSync } from "node:child_process";
 import { existsSync, statSync, readdirSync } from "node:fs";
 import { resolve, join } from "node:path";
 
-const root = resolve(__dirname, "..", "..");
+// Playwright always invokes global-setup from the repo root (where
+// playwright.config.ts lives), so process.cwd() reliably gives us the
+// monorepo root. Avoid __dirname (undefined in ESM) and import.meta.url
+// (forces esbuild into ESM output, which conflicts with the workspace-root
+// "type":"module" when Playwright compiles this file as CJS internally).
+const root = process.cwd();
 const apiServerDir = resolve(root, "artifacts/api-server");
 
 // ---------------------------------------------------------------------------
