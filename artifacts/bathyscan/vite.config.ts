@@ -32,27 +32,19 @@ function hmrNativePingPlugin(): Plugin {
     apply: "serve",
     configureServer(server) {
       const PING_INTERVAL_MS = 15_000;
-      const timers = new Map<object, ReturnType<typeof setInterval>>();
 
-      const onConnect = (client: { socket?: { readyState: number; ping(): void } }) => {
-        const ws = client?.socket;
-        if (!ws || typeof ws.ping !== "function") return;
+      // "connection" is a wsServerEvents member in Vite 7, so server.ws.on
+      // routes it directly to the underlying ws.WebSocketServer and the
+      // callback receives the raw ws.WebSocket instance — which has .ping().
+      // We attach a per-socket interval here and clean up on socket close.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (server.ws.on as any)("connection", (socket: any) => {
+        if (!socket || typeof socket.ping !== "function") return;
         const id = setInterval(() => {
-          if (ws.readyState === 1 /* WebSocket.OPEN */) ws.ping();
+          if (socket.readyState === 1 /* WebSocket.OPEN */) socket.ping();
         }, PING_INTERVAL_MS);
-        timers.set(ws, id);
-      };
-
-      const onDisconnect = (client: { socket?: object }) => {
-        const ws = client?.socket;
-        if (!ws) return;
-        const id = timers.get(ws);
-        if (id !== undefined) { clearInterval(id); timers.delete(ws); }
-      };
-
-      // Vite 7 internal events — types use the public union so cast needed
-      server.ws.on("vite:client:connect" as Parameters<typeof server.ws.on>[0], onConnect as never);
-      server.ws.on("vite:client:disconnect" as Parameters<typeof server.ws.on>[0], onDisconnect as never);
+        socket.on("close", () => clearInterval(id));
+      });
     },
   };
 }

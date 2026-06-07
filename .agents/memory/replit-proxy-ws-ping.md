@@ -1,6 +1,6 @@
 ---
 name: Replit proxy native WS ping
-description: The Replit mTLS proxy drops WebSocket connections after ~30 s of idle time; JSON data frames do NOT reset its timer — only native opcode-0x9 ping frames do.
+description: The Replit mTLS proxy drops WebSocket connections after ~30 s of idle time; only native opcode-0x9 ping frames reset its timer. Use server.ws.on("connection") not "vite:client:connect".
 ---
 
 ## The rule
@@ -8,8 +8,22 @@ Any long-lived WebSocket connection through the Replit mTLS proxy must send a **
 
 **Why:** The proxy tracks idle time at the WebSocket framing layer, looking specifically for native ping/pong frames, not application-layer data. Vite's built-in keepalive sends a JSON `{ type: "ping" }` text frame from the browser every `server.hmr.timeout` ms — the proxy ignores this for idle tracking. When the proxy closes the socket, Vite's reconnect handler calls `location.reload()`, wiping all in-memory state.
 
-**How to apply:** For the Vite HMR socket, the fix is `hmrNativePingPlugin()` in `artifacts/bathyscan/vite.config.ts`. It hooks `vite:client:connect` / `vite:client:disconnect` on `server.ws` to track each raw `ws` WebSocket (accessed as `.socket` on the HotChannelClient wrapper) and calls `ws.ping()` every 15 seconds. This sends an opcode-0x9 frame from the server side, which the proxy does count as activity.
+**How to apply:** Use `server.ws.on("connection", socket => ...)` in a Vite plugin's `configureServer` hook. Vite 7 routes events in `wsServerEvents = ["connection","error","headers","listening","message"]` directly to the underlying `ws.WebSocketServer`, so the callback receives the raw `ws.WebSocket` instance which has `.ping()`. Events NOT in that list (e.g. `"vite:client:connect"`) go through the custom-event/normalizedHotChannel system instead — avoid using those for this purpose as they were found unreliable.
 
-For any other persistent WebSocket (e.g., a custom SSE or WS endpoint in the API server), apply the same pattern: get the raw `ws` instance and call `.ping()` on a 15-second interval.
+```ts
+(server.ws.on as any)("connection", (socket: any) => {
+  if (!socket || typeof socket.ping !== "function") return;
+  const id = setInterval(() => {
+    if (socket.readyState === 1) socket.ping();
+  }, 15_000);
+  socket.on("close", () => clearInterval(id));
+});
+```
 
-**Verification:** After restart, check browser console for `[vite] connecting...` entries. With the fix, no reconnects should appear after the first load beyond 30 seconds of idle.
+This sends an opcode-0x9 frame from the server every 15 s, which the proxy counts as activity and resets its idle timer.
+
+**What does NOT work:**
+- `server.hmr.timeout: 15000` — only reduces the browser-side JSON ping interval; proxy ignores JSON data frames
+- `server.ws.on("vite:client:connect")` — routes to custom-event system, not raw wss; found unreliable in practice
+
+**Verification:** After restart, check browser console for `[vite] connecting...` entries. With the fix active, zero reconnects should appear after the initial page load, even after 60+ seconds of idle.
