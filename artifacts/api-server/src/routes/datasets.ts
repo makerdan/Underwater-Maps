@@ -36,6 +36,7 @@ import { gunzipBounded } from "../lib/gunzipBounded.js";
 import { isTarBuffer, extractTarBuffer, isTarFile, extractTarFile, isGzipFile } from "../lib/tarDetect.js";
 import { fetchCopernicusDem } from "../lib/copernicusDem.js";
 import { fetchSatelliteTile } from "../lib/satelliteTile.js";
+import { fetchTerrainTile } from "../lib/terrainTile.js";
 import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
 import { ChunkUploadBodySchema, ChunkFinalizeBodySchema } from "./schemas.js";
 import { substrateFingerprintForDataset } from "../lib/substrateGrid.js";
@@ -1610,6 +1611,61 @@ router.get("/terrain/satellite-tile", asyncHandler(async (req, res): Promise<voi
     res.end(imageBuffer);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Satellite tile fetch failed";
+    res.status(502).json({ error: "upstream_error", details: msg });
+  }
+}));
+
+// ── GET /terrain/terrain-tile ─────────────────────────────────────────────────
+// Proxies and caches a USGS hillshaded terrain PNG from the USGS National Map
+// Shaded Relief MapServer for the given bounding box. The client draws this as
+// the bottom layer of the OverviewMap (terrain → heatmap → satellite) so the
+// land/water boundary is immediately obvious even without colour data.
+//
+// Query params:
+//   bbox — comma-separated "minLon,minLat,maxLon,maxLat"
+//   size — integer image resolution, clamped to [64, 1024] (default 512)
+//
+// No auth required — the USGS National Map service is public.
+// Returns image/png on success; 502 on upstream failure.
+router.get("/terrain/terrain-tile", asyncHandler(async (req, res): Promise<void> => {
+  // Reuse TerrainSatelliteQuerySchema — bbox/size params are identical.
+  const parsedQuery = TerrainSatelliteQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
+    res.status(400).json({ error: "invalid_param", details });
+    return;
+  }
+
+  const [minLon, minLat, maxLon, maxLat] = parsedQuery.data.bbox;
+
+  // Allow antimeridian-crossing bboxes (minLon > maxLon) — terrainTile.ts
+  // handles the split-and-composite automatically. Only reject degenerate bboxes.
+  if (
+    minLon === maxLon ||
+    minLat >= maxLat ||
+    minLon < -180 || minLon > 180 ||
+    maxLon < -180 || maxLon > 180 ||
+    minLat < -90 ||
+    maxLat > 90
+  ) {
+    res.status(400).json({
+      error: "invalid_bbox",
+      details: "bbox values out of range or degenerate",
+    });
+    return;
+  }
+
+  const rawSizeNum = parsedQuery.data.size;
+  const size = Math.max(64, Math.min(1024, isNaN(rawSizeNum) ? 512 : rawSizeNum));
+
+  try {
+    const imageBuffer = await fetchTerrainTile({ minLon, minLat, maxLon, maxLat }, size);
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=86400, immutable");
+    res.setHeader("Content-Length", String(imageBuffer.length));
+    res.end(imageBuffer);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Terrain tile fetch failed";
     res.status(502).json({ error: "upstream_error", details: msg });
   }
 }));

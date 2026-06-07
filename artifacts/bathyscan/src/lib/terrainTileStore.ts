@@ -1,13 +1,15 @@
 import { create } from "zustand";
 
 /**
- * Holds the satellite imagery texture URL for the currently loaded land terrain.
+ * Holds the USGS hillshaded terrain texture URL for the currently loaded dataset.
  *
  * The URL is an `object URL` (blob:) created from the PNG buffer returned by
- * `/api/terrain/satellite-tile`. It is revoked and replaced whenever a new
- * bbox is loaded so there are no memory leaks.
+ * `/api/terrain/terrain-tile`. It is revoked and replaced whenever a new bbox
+ * is loaded so there are no memory leaks.
+ *
+ * Draw order in OverviewMap: terrain (bottom) → heatmap → satellite (top).
  */
-interface SatelliteTileStore {
+interface TerrainTileStore {
   /** Object URL pointing to the PNG blob, or null while unloaded / loading. */
   tileUrl: string | null;
   /** True while the network request is in flight. */
@@ -24,11 +26,11 @@ interface SatelliteTileStore {
   setTileUrl: (url: string | null, bboxKey: string) => void;
   setLoading: (loading: boolean, bboxKey: string) => void;
   setError: (error: string | null) => void;
-  /** Reset to the initial empty state (called when the active dataset changes). */
+  /** Reset to the initial empty state (called when terrain is toggled off or bbox changes). */
   clear: () => void;
 }
 
-export const useSatelliteTileStore = create<SatelliteTileStore>((set) => ({
+export const useTerrainTileStore = create<TerrainTileStore>((set) => ({
   tileUrl: null,
   isLoading: false,
   error: null,

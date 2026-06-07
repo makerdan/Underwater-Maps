@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useSatelliteTileStore } from "@/lib/satelliteTileStore";
+import { useTerrainTileStore } from "@/lib/terrainTileStore";
 
 interface Bbox {
   minLon: number;
@@ -9,28 +9,24 @@ interface Bbox {
 }
 
 /**
- * Fetches a satellite imagery tile from `/api/terrain/satellite-tile` for
+ * Fetches a USGS hillshaded terrain tile from `/api/terrain/terrain-tile` for
  * the given bounding box and stores the resulting object URL in
- * `useSatelliteTileStore`.
+ * `useTerrainTileStore`.
  *
  * - The store's `bboxKey` persists across OverviewMap remounts: if the component
  *   is torn down and re-mounted with the same bbox (e.g. user closes and reopens
  *   the Overview Map), the hook detects the match and skips the network request.
  * - When bbox changes the previous object URL is revoked before the new fetch.
- * - On failure the store's `error` field is set and `tileUrl` remains null,
- *   letting `LandTerrainMesh` fall back to its procedural colour ramp.
- *
- * `tileSize` controls the texture resolution — 512 gives a sharp result for
- * most coastal extents; 256 is used for larger bounding boxes where the ESRI
- * source data resolution is the limiting factor anyway.
+ * - Pass `bbox = null` (when `terrainImagery` is off) to clear the store
+ *   without making any network request.
  */
-export function useSatelliteTile(bbox: Bbox | null, tileSize = 512): void {
+export function useTerrainTile(bbox: Bbox | null, tileSize = 512): void {
   const abortRef = useRef<AbortController | null>(null);
   const prevUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     const { setLoading, clear, setTileUrl, setError, bboxKey: storedKey, tileUrl: storedUrl } =
-      useSatelliteTileStore.getState();
+      useTerrainTileStore.getState();
 
     if (!bbox) {
       if (prevUrlRef.current) {
@@ -46,19 +42,16 @@ export function useSatelliteTile(bbox: Bbox | null, tileSize = 512): void {
     // If the store already has (or is fetching) the same bbox, reuse it.
     // This covers the case where OverviewMap unmounts and remounts with the
     // same dataset — no second HTTP request fires.
-    if (bboxKey === storedKey && (storedUrl || useSatelliteTileStore.getState().isLoading)) {
+    if (bboxKey === storedKey && (storedUrl || useTerrainTileStore.getState().isLoading)) {
       // Sync the prevUrlRef so we hold a reference for cleanup on unmount.
       if (storedUrl) prevUrlRef.current = storedUrl;
       return;
     }
 
-    // Abort any previous in-flight request.
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
-    // Revoke the previous object URL and clear the store immediately so the
-    // old satellite texture doesn't linger while the new one loads.
     if (prevUrlRef.current) {
       URL.revokeObjectURL(prevUrlRef.current);
       prevUrlRef.current = null;
@@ -67,7 +60,7 @@ export function useSatelliteTile(bbox: Bbox | null, tileSize = 512): void {
     setLoading(true, bboxKey);
 
     const bboxParam = `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat}`;
-    const url = `/api/terrain/satellite-tile?bbox=${encodeURIComponent(bboxParam)}&size=${tileSize}`;
+    const url = `/api/terrain/terrain-tile?bbox=${encodeURIComponent(bboxParam)}&size=${tileSize}`;
 
     let cancelled = false;
 
@@ -87,7 +80,7 @@ export function useSatelliteTile(bbox: Bbox | null, tileSize = 512): void {
         if (cancelled) return;
         if ((err as Error).name === "AbortError") return;
         const msg = err instanceof Error ? err.message : "Unknown error";
-        console.warn(`[useSatelliteTile] fetch failed: ${msg}`);
+        console.warn(`[useTerrainTile] fetch failed: ${msg}`);
         setError(msg);
       });
 

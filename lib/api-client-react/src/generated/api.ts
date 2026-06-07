@@ -68,6 +68,7 @@ import type {
   GetTerrainLand200,
   GetTerrainLandParams,
   GetTerrainSatelliteTileParams,
+  GetTerrainTerrainTileParams,
   GetTidal200,
   GetTidalPack200,
   GetTidalPackParams,
@@ -7328,6 +7329,96 @@ export function useGetTerrainSatelliteTile<TData = Awaited<ReturnType<typeof get
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetTerrainSatelliteTileQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetTerrainTerrainTileUrl = (params: GetTerrainTerrainTileParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/terrain/terrain-tile?${stringifiedParams}` : `/api/terrain/terrain-tile`
+}
+
+/**
+ * Fetches and caches a PNG tile from the USGS National Map Shaded Relief
+MapServer for the given bounding box. Returned as `image/png` and cached
+for 24 hours. The client draws this as the bottom layer of the Overview
+Map (terrain → heatmap → satellite). Antimeridian-crossing bboxes
+(minLon > maxLon) are handled automatically. No authentication required.
+
+ * @summary Proxy a USGS hillshaded terrain PNG for a bounding box
+ */
+export const getTerrainTerrainTile = async (params: GetTerrainTerrainTileParams, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetTerrainTerrainTileUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTerrainTerrainTileQueryKey = (params?: GetTerrainTerrainTileParams,) => {
+    return [
+    `/api/terrain/terrain-tile`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetTerrainTerrainTileQueryOptions = <TData = Awaited<ReturnType<typeof getTerrainTerrainTile>>, TError = ErrorType<ApiError>>(params: GetTerrainTerrainTileParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTerrainTerrainTile>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTerrainTerrainTileQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTerrainTerrainTile>>> = ({ signal }) => getTerrainTerrainTile(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTerrainTerrainTile>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTerrainTerrainTileQueryResult = NonNullable<Awaited<ReturnType<typeof getTerrainTerrainTile>>>
+export type GetTerrainTerrainTileQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Proxy a USGS hillshaded terrain PNG for a bounding box
+ */
+
+export function useGetTerrainTerrainTile<TData = Awaited<ReturnType<typeof getTerrainTerrainTile>>, TError = ErrorType<ApiError>>(
+ params: GetTerrainTerrainTileParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTerrainTerrainTile>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTerrainTerrainTileQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

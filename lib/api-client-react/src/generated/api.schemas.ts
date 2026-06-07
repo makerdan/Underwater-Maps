@@ -2830,6 +2830,19 @@ bbox: string;
 size?: number;
 };
 
+export type GetTerrainTerrainTileParams = {
+/**
+ * "minLon,minLat,maxLon,maxLat" — four comma-separated finite numbers
+ */
+bbox: string;
+/**
+ * Image resolution in pixels, clamped to [64, 1024]
+ * @minimum 64
+ * @maximum 1024
+ */
+size?: number;
+};
+
 export type GetTerrainDownloadInfoParams = {
 north: number;
 south: number;

@@ -3071,6 +3071,27 @@ export const GetTerrainSatelliteTileQueryParams = zod.object({
 
 
 /**
+ * Fetches and caches a PNG tile from the USGS National Map Shaded Relief
+MapServer for the given bounding box. Returned as `image/png` and cached
+for 24 hours. The client draws this as the bottom layer of the Overview
+Map (terrain → heatmap → satellite). Antimeridian-crossing bboxes
+(minLon > maxLon) are handled automatically. No authentication required.
+
+ * @summary Proxy a USGS hillshaded terrain PNG for a bounding box
+ */
+export const getTerrainTerrainTileQuerySizeDefault = 512;
+export const getTerrainTerrainTileQuerySizeMin = 64;
+export const getTerrainTerrainTileQuerySizeMax = 1024;
+
+
+
+export const GetTerrainTerrainTileQueryParams = zod.object({
+  "bbox": zod.coerce.string().describe('\"minLon,minLat,maxLon,maxLat\" — four comma-separated finite numbers'),
+  "size": zod.coerce.number().min(getTerrainTerrainTileQuerySizeMin).max(getTerrainTerrainTileQuerySizeMax).default(getTerrainTerrainTileQuerySizeDefault).describe('Image resolution in pixels, clamped to [64, 1024]')
+})
+
+
+/**
  * Lightweight preflight that resolves the upstream data source, nominal
 resolution, and water-cell fraction for the requested bounding box
 without transferring the full grid. The client uses `waterFraction` to
