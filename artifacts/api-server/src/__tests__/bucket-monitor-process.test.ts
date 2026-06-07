@@ -61,12 +61,10 @@ const dbMocks = vi.hoisted(() => {
   return { valuesMock, insertMock };
 });
 
-vi.mock("@workspace/db", () => ({
-  db: {
-    insert: dbMocks.insertMock,
-  },
-  customDatasetsTable: { id: "id", userId: "userId", name: "name", minDepth: "minDepth", maxDepth: "maxDepth", terrainJson: "terrainJson", overviewJson: "overviewJson" },
-}));
+vi.mock("@workspace/db", async () => {
+  const { createDbMock } = await import("./helpers/db-mock.js");
+  return createDbMock({ db: { insert: dbMocks.insertMock } });
+});
 
 // ── Terrain mock — bypass the real O(N^4) IDW gridder ────────────────────────
 // MOCK_TERRAIN must be defined via vi.hoisted() because vi.mock factories are

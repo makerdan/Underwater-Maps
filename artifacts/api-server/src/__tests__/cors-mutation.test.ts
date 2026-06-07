@@ -18,25 +18,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 
-vi.mock("@workspace/db", () => ({
-  db: {
-    select: () => ({ from: () => ({ where: () => Promise.resolve([]) }) }),
-    insert: () => ({
-      values: () => ({
-        returning: () => Promise.resolve([]),
-        onConflictDoUpdate: () => Promise.resolve([]),
-        onConflictDoNothing: () => Promise.resolve([]),
-      }),
-    }),
-    update: () => ({ set: () => ({ where: () => Promise.resolve([]) }) }),
-    transaction: async <T>(cb: (tx: unknown) => Promise<T>) => cb({}),
-  },
-  customDatasetsTable: {},
-  userSettingsTable: {},
-  uploadJobsTable: {},
-  disabledPresetsTable: {},
-  pool: { query: vi.fn().mockResolvedValue({ rows: [{ count: 1, oldest_epoch: Date.now() / 1000 }] }) },
-}));
+vi.mock("@workspace/db", async () => {
+  const { createDbMock } = await import("./helpers/db-mock.js");
+  const mock = createDbMock();
+  return { ...mock, pool: { query: vi.fn().mockResolvedValue({ rows: [{ count: 1, oldest_epoch: Date.now() / 1000 }] }) } };
+});
 
 vi.mock("@clerk/express", () => ({
   clerkMiddleware: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),

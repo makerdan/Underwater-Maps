@@ -21,40 +21,59 @@ import request from "supertest";
 
 // ── DB mock with per-test configurable select result and call spies ───────────
 
-let mockDbSelectResult: unknown[] = [];
+const {
+  mockDbSelectResult,
+  insertOnConflictDoNothingSpy,
+  insertReturningSpy,
+  insertValuesSpy,
+  updateSetWhereSpy,
+  updateSetSpy,
+} = vi.hoisted(() => {
+  const insertOnConflictDoNothingSpy = vi.fn().mockResolvedValue([]);
+  const insertReturningSpy = vi.fn().mockResolvedValue([]);
+  const insertOnConflictDoUpdateSpy = vi.fn().mockResolvedValue([]);
+  const insertValuesSpy = vi.fn(() => ({
+    onConflictDoNothing: insertOnConflictDoNothingSpy,
+    onConflictDoUpdate: insertOnConflictDoUpdateSpy,
+    returning: insertReturningSpy,
+  }));
+  const updateSetWhereSpy = vi.fn().mockImplementation(() => ({
+    returning: vi.fn().mockResolvedValue([]),
+    then: (resolve: (v: unknown[]) => unknown) => Promise.resolve([]).then(resolve),
+    catch: (reject: (e: unknown) => unknown) => Promise.resolve([]).catch(reject),
+    finally: (fn: () => void) => Promise.resolve([]).finally(fn),
+  }));
+  const updateSetSpy = vi.fn(() => ({
+    where: updateSetWhereSpy,
+  }));
+  return {
+    mockDbSelectResult: { current: [] as unknown[] },
+    insertOnConflictDoNothingSpy,
+    insertReturningSpy,
+    insertValuesSpy,
+    updateSetWhereSpy,
+    updateSetSpy,
+  };
+});
 
-const insertOnConflictDoNothingSpy = vi.fn().mockResolvedValue([]);
-const insertReturningSpy = vi.fn().mockResolvedValue([]);
-const insertValuesSpy = vi.fn(() => ({
-  onConflictDoNothing: insertOnConflictDoNothingSpy,
-  returning: insertReturningSpy,
-}));
-
-const updateSetWhereSpy = vi.fn().mockResolvedValue([]);
-const updateSetSpy = vi.fn(() => ({
-  where: updateSetWhereSpy,
-}));
-
-vi.mock("@workspace/db", () => ({
-  db: {
-    select: () => ({
-      from: () => ({
-        where: () => Promise.resolve(mockDbSelectResult),
-      }),
-    }),
-    insert: () => ({
-      values: insertValuesSpy,
-    }),
-    update: () => ({
-      set: updateSetSpy,
-    }),
-    transaction: async <T>(cb: (tx: unknown) => Promise<T>) => cb({}),
-  },
-  customDatasetsTable: {},
-  userSettingsTable: {},
-  uploadJobsTable: {},
-  pool: {},
-}));
+vi.mock("@workspace/db", async () => {
+  const { createDbMock } = await import("./helpers/db-mock.js");
+  return createDbMock({
+    db: {
+      select: vi.fn().mockImplementation(() => ({
+        from: () => ({
+          where: () => Promise.resolve(mockDbSelectResult.current),
+        }),
+      })),
+      insert: vi.fn().mockImplementation(() => ({
+        values: insertValuesSpy,
+      })),
+      update: vi.fn().mockImplementation(() => ({
+        set: updateSetSpy,
+      })),
+    },
+  });
+});
 
 vi.mock("@clerk/express", () => ({
   clerkMiddleware: vi.fn(
@@ -80,7 +99,7 @@ const SMALL_CHUNK = Buffer.alloc(512, 0x42);
 
 beforeEach(() => {
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
-  mockDbSelectResult = [];
+  mockDbSelectResult.current = [];
   insertValuesSpy.mockClear();
   insertOnConflictDoNothingSpy.mockClear();
   insertReturningSpy.mockClear();
@@ -167,7 +186,7 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
     const uploadId = `recovery-test-status-${Date.now()}`;
 
     // Seed the DB mock so the select fallback returns a row for this uploadId.
-    mockDbSelectResult = [
+    mockDbSelectResult.current = [
       {
         userId: E2E_USER,
         chunksReceived: 4,
@@ -195,7 +214,7 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
 
     // Seed the DB mock to return a valid row for this uploadId.  The chunk
     // handler's DB fallback selects { userId, sessionJobId } from upload_jobs.
-    mockDbSelectResult = [
+    mockDbSelectResult.current = [
       {
         userId: E2E_USER,
         sessionJobId: "mock-session-job-id-resume",
@@ -225,7 +244,7 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
     const uploadId = `finalize-recovery-${Date.now()}`;
 
     // Seed the DB mock so the fallback returns a valid session row.
-    mockDbSelectResult = [
+    mockDbSelectResult.current = [
       {
         userId: E2E_USER,
         sessionJobId: "mock-session-job-finalize",
@@ -259,7 +278,7 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
     // DB row is seeded to represent the persisted state left by chunk 0.
     const uploadId = `recovery-test-roundtrip-${Date.now()}`;
 
-    mockDbSelectResult = [
+    mockDbSelectResult.current = [
       {
         userId: E2E_USER,
         sessionJobId: "mock-session-job-id-roundtrip",

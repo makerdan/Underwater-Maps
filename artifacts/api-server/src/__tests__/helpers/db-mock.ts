@@ -211,7 +211,13 @@ function buildDefaultDb(): DbMockDb {
     onConflictDoNothing: onConflictDoNothingMock,
   });
 
-  const updateWhereMock = vi.fn().mockResolvedValue([]);
+  const updateReturningMock = vi.fn().mockResolvedValue([]);
+  const updateWhereMock = vi.fn().mockImplementation(() => ({
+    returning: updateReturningMock,
+    then: (resolve: (v: unknown[]) => unknown) => Promise.resolve([]).then(resolve),
+    catch: (reject: (e: unknown) => unknown) => Promise.resolve([]).catch(reject),
+    finally: (fn: () => void) => Promise.resolve([]).finally(fn),
+  }));
   const setMock = vi.fn().mockReturnValue({ where: updateWhereMock });
 
   const deleteReturningMock = vi.fn().mockResolvedValue([]);

@@ -11,23 +11,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import EventEmitter from "events";
 
-vi.mock("@workspace/db", () => ({
-  db: {
-    select: () => ({ from: () => ({ where: () => Promise.resolve([]) }) }),
-    insert: () => ({
-      values: () => ({
-        returning: () => Promise.resolve([]),
-        onConflictDoUpdate: () => Promise.resolve([]),
-      }),
-    }),
-    update: () => ({ set: () => ({ where: () => Promise.resolve([]) }) }),
-  },
-  customDatasetsTable: {},
-  userSettingsTable: {},
-  uploadJobsTable: {},
-  disabledPresetsTable: {},
-  pool: {},
-}));
+vi.mock("@workspace/db", async () => {
+  const { createDbMock } = await import("./helpers/db-mock.js");
+  return createDbMock();
+});
 
 vi.mock("@clerk/express", () => ({
   clerkMiddleware: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),

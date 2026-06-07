@@ -39,14 +39,10 @@ vi.mock("@workspace/poe", () => ({
   },
 }));
 
-vi.mock("@workspace/db", () => ({
-  db: {
-    select: vi.fn().mockReturnValue({ from: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue([]) }) }),
-    insert: vi.fn().mockReturnValue({ values: vi.fn().mockReturnValue({ onConflictDoUpdate: vi.fn().mockResolvedValue([]) }) }),
-  },
-  poeUsageLogTable: {},
-  userSettingsTable: {},
-}));
+vi.mock("@workspace/db", async () => {
+  const { createDbMock } = await import("./helpers/db-mock.js");
+  return createDbMock();
+});
 
 vi.mock("@workspace/db/schema", () => ({
   poeUsageLogTable: {},
@@ -54,7 +50,9 @@ vi.mock("@workspace/db/schema", () => ({
 
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn(() => "eq-condition"),
+  and: vi.fn((...args: unknown[]) => args),
   sql: vi.fn(),
+  lt: vi.fn(() => "lt-condition"),
 }));
 
 vi.mock("@clerk/express", () => ({

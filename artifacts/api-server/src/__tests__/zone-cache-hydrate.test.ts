@@ -43,19 +43,10 @@ vi.mock("fs", () => ({
 // ---------------------------------------------------------------------------
 // Mock all heavy poe.ts dependencies so the module loads without side-effects
 // ---------------------------------------------------------------------------
-vi.mock("@workspace/db", () => ({
-  db: {
-    select: () => ({ from: () => ({ where: () => Promise.resolve([]) }) }),
-    insert: () => ({
-      values: () => ({
-        returning: () => Promise.resolve([]),
-        onConflictDoUpdate: () => Promise.resolve([]),
-      }),
-    }),
-    update: () => ({ set: () => ({ where: () => Promise.resolve([]) }) }),
-  },
-  poeUsageLogTable: {},
-}));
+vi.mock("@workspace/db", async () => {
+  const { createDbMock } = await import("./helpers/db-mock.js");
+  return createDbMock();
+});
 
 vi.mock("@workspace/db/schema", () => ({
   poeUsageLogTable: {},

@@ -49,16 +49,15 @@ const {
   };
 });
 
-vi.mock("@workspace/db", () => ({
-  db: {
-    insert: insertMock,
-    select: selectMock,
-  },
-  weatherStationCacheTable: { cacheKey: "cacheKey" },
-}));
+vi.mock("@workspace/db", async () => {
+  const { createDbMock } = await import("./helpers/db-mock.js");
+  return createDbMock({ db: { insert: insertMock, select: selectMock } });
+});
 
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn(() => "eq-condition"),
+  and: vi.fn((...args: unknown[]) => args),
+  lt: vi.fn(() => "lt-condition"),
 }));
 
 import { fetchWeatherStations } from "../lib/noaaWeatherFetcher.js";

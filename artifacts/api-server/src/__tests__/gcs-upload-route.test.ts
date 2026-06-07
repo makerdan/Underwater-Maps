@@ -30,23 +30,15 @@ vi.mock("../lib/bucketMonitor.js", () => ({
 
 // ── Minimal DB stub (datasets route imports db for custom-dataset queries) ──
 
-vi.mock("@workspace/db", () => {
-  const selectWhereMock = vi.fn().mockResolvedValue([]);
-  const fromMock = vi.fn().mockReturnValue({ where: selectWhereMock });
-  const valuesMock = vi.fn().mockResolvedValue([]);
-  return {
-    db: {
-      select: vi.fn().mockReturnValue({ from: fromMock }),
-      insert: vi.fn().mockReturnValue({ values: valuesMock }),
-    },
-    customDatasetsTable: {},
-    userSettingsTable: {},
-  };
+vi.mock("@workspace/db", async () => {
+  const { createDbMock } = await import("./helpers/db-mock.js");
+  return createDbMock();
 });
 
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn(() => "eq-condition"),
   and: vi.fn((...args: unknown[]) => args),
+  lt: vi.fn(() => "lt-condition"),
 }));
 
 // ── Clerk / proxy mocks ───────────────────────────────────────────────────────

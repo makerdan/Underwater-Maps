@@ -4,7 +4,7 @@ import request from "supertest";
 // vi.mock is hoisted above all imports/variable declarations.
 // All data used inside factories must be defined inline.
 
-vi.mock("@workspace/db", () => {
+const markersMocks = vi.hoisted(() => {
   const row = {
     id: "11111111-1111-1111-1111-111111111111",
     datasetId: "thorne-bay",
@@ -17,37 +17,31 @@ vi.mock("@workspace/db", () => {
     userId: "user_test123",
     createdAt: new Date().toISOString(),
   };
-
-  // Chains: db.select().from().where().orderBy() → rows
   const orderByMock = vi.fn().mockResolvedValue([row]);
   const selectWhereMock = vi.fn().mockReturnValue({ orderBy: orderByMock });
   const fromMock = vi.fn().mockReturnValue({ where: selectWhereMock });
-
-  // Chains: db.insert().values().returning() → [row]
   const insertReturningMock = vi.fn().mockResolvedValue([row]);
   const valuesMock = vi.fn().mockReturnValue({ returning: insertReturningMock });
-
-  // Chains: db.delete().where().returning() → [{ id }]
   const deleteReturningMock = vi.fn().mockResolvedValue([{ id: row.id }]);
   const deleteWhereMock = vi.fn().mockReturnValue({ returning: deleteReturningMock });
+  return { row, orderByMock, selectWhereMock, fromMock, insertReturningMock, valuesMock, deleteReturningMock, deleteWhereMock };
+});
 
-  return {
+vi.mock("@workspace/db", async () => {
+  const { createDbMock } = await import("./helpers/db-mock.js");
+  return createDbMock({
     db: {
-      select: vi.fn().mockReturnValue({ from: fromMock }),
-      insert: vi.fn().mockReturnValue({ values: valuesMock }),
-      delete: vi.fn().mockReturnValue({ where: deleteWhereMock }),
+      select: vi.fn().mockReturnValue({ from: markersMocks.fromMock }),
+      insert: vi.fn().mockReturnValue({ values: markersMocks.valuesMock }),
+      delete: vi.fn().mockReturnValue({ where: markersMocks.deleteWhereMock }),
     },
-    markersTable: {
-      datasetId: "datasetId",
-      createdAt: "createdAt",
-      id: "id",
-    },
-  };
+  });
 });
 
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn(() => "eq-condition"),
   and: vi.fn((...args: unknown[]) => args),
+  lt: vi.fn(() => "lt-condition"),
 }));
 
 // Mock @clerk/express so tests control auth without a real Clerk tenant.

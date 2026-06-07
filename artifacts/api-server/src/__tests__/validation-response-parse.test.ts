@@ -34,30 +34,25 @@ vi.mock("@workspace/api-zod", async () => {
   };
 });
 
-vi.mock("@workspace/db", () => {
+const validationMocks = vi.hoisted(() => {
   const selectWhereMock = vi.fn().mockResolvedValue([
-    {
-      settings: {
-        textureQuality: "broken-value-not-in-enum",
-      },
-    },
+    { settings: { textureQuality: "broken-value-not-in-enum" } },
   ]);
   const fromMock = vi.fn().mockReturnValue({ where: selectWhereMock });
-
   const onConflictDoUpdateMock = vi.fn().mockResolvedValue([]);
-  const valuesMock = vi.fn().mockReturnValue({
-    onConflictDoUpdate: onConflictDoUpdateMock,
-  });
+  const valuesMock = vi.fn().mockReturnValue({ onConflictDoUpdate: onConflictDoUpdateMock });
+  return { selectWhereMock, fromMock, onConflictDoUpdateMock, valuesMock };
+});
 
-  return {
+vi.mock("@workspace/db", async () => {
+  const { createDbMock } = await import("./helpers/db-mock.js");
+  const mock = createDbMock({
     db: {
-      select: vi.fn().mockReturnValue({ from: fromMock }),
-      insert: vi.fn().mockReturnValue({ values: valuesMock }),
+      select: vi.fn().mockReturnValue({ from: validationMocks.fromMock }),
+      insert: vi.fn().mockReturnValue({ values: validationMocks.valuesMock }),
     },
-    userSettingsTable: { userId: "userId", settings: "settings" },
-    disabledPresetsTable: { id: "id" },
-    pool: { query: vi.fn().mockResolvedValue({ rows: [] }) },
-  };
+  });
+  return { ...mock, pool: { query: vi.fn().mockResolvedValue({ rows: [] }) } };
 });
 
 vi.mock("drizzle-orm", () => ({
@@ -65,6 +60,7 @@ vi.mock("drizzle-orm", () => ({
   and: vi.fn((...args: unknown[]) => args),
   or: vi.fn((...args: unknown[]) => args),
   inArray: vi.fn(() => "inarray-condition"),
+  lt: vi.fn(() => "lt-condition"),
 }));
 
 vi.mock("@clerk/express", () => ({

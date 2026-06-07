@@ -23,9 +23,11 @@ const mockPoolQuery = vi.hoisted(() =>
   vi.fn().mockRejectedValue(new Error("DB unavailable")),
 );
 
-vi.mock("@workspace/db", () => ({
-  pool: { query: mockPoolQuery },
-}));
+vi.mock("@workspace/db", async () => {
+  const { createDbMock } = await import("./helpers/db-mock.js");
+  const mock = createDbMock();
+  return { ...mock, pool: { query: mockPoolQuery } };
+});
 
 vi.mock("../lib/logger.js", () => loggerMockFactory());
 

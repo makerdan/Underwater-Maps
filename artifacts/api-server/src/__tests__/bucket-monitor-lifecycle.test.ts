@@ -36,10 +36,10 @@ vi.mock("@google-cloud/storage", () => ({
 
 // ── Minimal stubs for transitive imports ─────────────────────────────────────
 
-vi.mock("@workspace/db", () => ({
-  db: { insert: vi.fn() },
-  customDatasetsTable: {},
-}));
+vi.mock("@workspace/db", async () => {
+  const { createDbMock } = await import("./helpers/db-mock.js");
+  return createDbMock();
+});
 
 vi.mock("../lib/terrain.js", () => ({
   parseXyzCsv: vi.fn(),

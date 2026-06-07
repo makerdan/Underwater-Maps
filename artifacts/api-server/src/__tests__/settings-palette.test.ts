@@ -11,24 +11,28 @@
 import { describe, it, expect, vi } from "vitest";
 import request from "supertest";
 
-vi.mock("@workspace/db", () => {
+const settingsPaletteMocks = vi.hoisted(() => {
   const selectWhereMock = vi.fn().mockResolvedValue([]);
   const fromMock = vi.fn().mockReturnValue({ where: selectWhereMock });
-
   const onConflictDoUpdateMock = vi.fn().mockResolvedValue([]);
   const valuesMock = vi.fn().mockReturnValue({ onConflictDoUpdate: onConflictDoUpdateMock });
+  return { selectWhereMock, fromMock, onConflictDoUpdateMock, valuesMock };
+});
 
-  return {
+vi.mock("@workspace/db", async () => {
+  const { createDbMock } = await import("./helpers/db-mock.js");
+  return createDbMock({
     db: {
-      select: vi.fn().mockReturnValue({ from: fromMock }),
-      insert: vi.fn().mockReturnValue({ values: valuesMock }),
+      select: vi.fn().mockReturnValue({ from: settingsPaletteMocks.fromMock }),
+      insert: vi.fn().mockReturnValue({ values: settingsPaletteMocks.valuesMock }),
     },
-    userSettingsTable: { userId: "userId", settings: "settings" },
-  };
+  });
 });
 
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn(() => "eq-condition"),
+  and: vi.fn((...args: unknown[]) => args),
+  lt: vi.fn(() => "lt-condition"),
 }));
 
 vi.mock("@clerk/express", () => ({
