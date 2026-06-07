@@ -135,6 +135,16 @@ vi.mock("@/lib/terrainStore", () => {
     primaryDatasetId: null as string | null,
     hideAllOthers: vi.fn(),
     toggleVisible: vi.fn(),
+    addSelected: vi.fn(),
+    removeSelected: vi.fn(),
+    autoActivate: vi.fn(),
+    autoEvict: vi.fn(),
+    clearAutoEviction: vi.fn(),
+    selectedIds: [] as string[],
+    selectedSources: {} as Record<string, string>,
+    evictedId: null as string | null,
+    autoEvictedId: null as string | null,
+    clearEviction: vi.fn(),
   };
   const useTerrainStore = ((selector?: (s: typeof state) => unknown) =>
     selector ? selector(state) : state) as unknown as {
@@ -142,7 +152,7 @@ vi.mock("@/lib/terrainStore", () => {
     getState: () => typeof state;
   };
   useTerrainStore.getState = () => state;
-  return { useTerrainStore, VISIBLE_DATASETS_CAP: 4 };
+  return { useTerrainStore, VISIBLE_DATASETS_CAP: 3, MAX_ACTIVE_DATASETS: 3 };
 });
 
 vi.mock("@/lib/uiStore", () => ({

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { TerrainData } from "@workspace/api-client-react";
-import { useTerrainStore, VISIBLE_DATASETS_CAP } from "@/lib/terrainStore";
+import { useTerrainStore, MAX_ACTIVE_DATASETS } from "@/lib/terrainStore";
 
 function makeGrid(datasetId: string): TerrainData {
   return {
@@ -103,7 +103,10 @@ describe("terrainStore multi-dataset", () => {
     expect(s.primaryDatasetId).toBe("alpha");
   });
 
-  it("respects the soft cap by evicting the oldest non-primary entry", () => {
+  it("toggleVisible queues datasets beyond MAX_ACTIVE_DATASETS in selectedIds", () => {
+    // With the streaming model, toggleVisible activates immediately only while
+    // visibleDatasets.length < MAX_ACTIVE_DATASETS (3). Beyond that, datasets are
+    // queued in selectedIds for proximity streaming to activate later.
     useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
     const ids = ["b", "c", "d", "e", "f"];
     for (const id of ids) {
@@ -112,12 +115,15 @@ describe("terrainStore multi-dataset", () => {
         .toggleVisible({ datasetId: id, source: "preset" });
     }
     const s = useTerrainStore.getState();
-    expect(s.visibleDatasets.length).toBe(VISIBLE_DATASETS_CAP);
-    // Primary always preserved.
+    // Only MAX_ACTIVE_DATASETS (3) are active at once.
+    expect(s.visibleDatasets.length).toBe(MAX_ACTIVE_DATASETS);
+    // Primary always preserved in active set.
     expect(s.visibleDatasets.find((v) => v.datasetId === "alpha")).toBeDefined();
     expect(s.primaryDatasetId).toBe("alpha");
-    // The most-recent additions remain.
-    expect(s.visibleDatasets.map((v) => v.datasetId)).toContain("f");
+    // Overflow datasets are queued in selectedIds, not lost.
+    expect(s.selectedIds).toContain("d");
+    expect(s.selectedIds).toContain("e");
+    expect(s.selectedIds).toContain("f");
   });
 
   it("clear resets visibleDatasets and primary", () => {
@@ -132,32 +138,44 @@ describe("terrainStore multi-dataset", () => {
 
   // ── New tests added for eviction tracking and promote-to-primary sync ───────
 
-  it("evictedId is set when toggleVisible triggers eviction over the cap", () => {
+  it("toggleVisible beyond MAX_ACTIVE_DATASETS queues into selectedIds without eviction", () => {
+    // The streaming model never cap-evicts on toggleVisible ADD. Datasets queue up
+    // in selectedIds; proximity streaming swaps them in/out later.
     useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
-    // Fill to cap.
-    for (const id of ["b", "c", "d"]) {
+    // Fill to MAX_ACTIVE_DATASETS (3): alpha + b + c
+    for (const id of ["b", "c"]) {
       useTerrainStore.getState().toggleVisible({ datasetId: id, source: "preset" });
     }
-    // One more push — oldest non-primary "b" should be evicted.
-    useTerrainStore.getState().toggleVisible({ datasetId: "e", source: "preset" });
+    expect(useTerrainStore.getState().visibleDatasets.length).toBe(MAX_ACTIVE_DATASETS);
+    // One more — should queue, not evict.
+    useTerrainStore.getState().toggleVisible({ datasetId: "d", source: "preset" });
     const s = useTerrainStore.getState();
-    expect(s.visibleDatasets.length).toBe(4);
-    expect(s.evictedId).toBe("b");
-    expect(s.visibleDatasets.map((v) => v.datasetId)).not.toContain("b");
+    // Active count stays at cap.
+    expect(s.visibleDatasets.length).toBe(MAX_ACTIVE_DATASETS);
+    // No eviction fired.
+    expect(s.evictedId).toBeNull();
+    // "d" is queued, not lost.
+    expect(s.selectedIds).toContain("d");
+    expect(s.visibleDatasets.map((v) => v.datasetId)).not.toContain("d");
   });
 
   it("clearEviction resets evictedId to null without touching other state", () => {
+    // Fill to MAX_ACTIVE_DATASETS (3): alpha + b + c.
     useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
-    for (const id of ["b", "c", "d", "e"]) {
+    for (const id of ["b", "c"]) {
       useTerrainStore.getState().toggleVisible({ datasetId: id, source: "preset" });
     }
+    expect(useTerrainStore.getState().visibleDatasets.length).toBe(MAX_ACTIVE_DATASETS);
+    // setGrids("d") triggers eviction at the unified MAX_ACTIVE_DATASETS cap.
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("d") });
     expect(useTerrainStore.getState().evictedId).toBeTruthy();
+    const visLen = useTerrainStore.getState().visibleDatasets.length;
     useTerrainStore.getState().clearEviction();
     const s = useTerrainStore.getState();
     expect(s.evictedId).toBeNull();
-    // Visible datasets unchanged.
-    expect(s.visibleDatasets.length).toBe(4);
-    expect(s.primaryDatasetId).toBe("alpha");
+    // Visible datasets unchanged after clear.
+    expect(s.visibleDatasets.length).toBe(visLen);
+    expect(s.primaryDatasetId).toBe("d");
   });
 
   it("setPrimary syncs activeGrid and overviewGrid from the promoted entry", () => {
@@ -179,18 +197,21 @@ describe("terrainStore multi-dataset", () => {
   });
 
   it("evictedId is set when setGrids evicts over the cap", () => {
-    // Pre-fill to cap then call setGrids with a new dataset to trigger eviction.
+    // Fill to MAX_ACTIVE_DATASETS (3) via toggleVisible: alpha + b + c.
     useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
-    for (const id of ["b", "c", "d"]) {
+    for (const id of ["b", "c"]) {
       useTerrainStore.getState().toggleVisible({ datasetId: id, source: "preset" });
     }
-    expect(useTerrainStore.getState().visibleDatasets.length).toBe(4);
-    // setGrids for a new primary "e" should evict the oldest non-primary ("b").
-    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("e") });
+    expect(useTerrainStore.getState().visibleDatasets.length).toBe(MAX_ACTIVE_DATASETS);
+    // setGrids("d") triggers eviction at MAX_ACTIVE_DATASETS (3 >= 3).
+    // base = [alpha, b, c]; firstId = "alpha"; evict index 1 → "b".
+    // nextVisible = [d, alpha, c] — still MAX_ACTIVE_DATASETS entries.
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("d") });
     const s = useTerrainStore.getState();
-    expect(s.primaryDatasetId).toBe("e");
+    expect(s.primaryDatasetId).toBe("d");
     expect(s.evictedId).toBe("b");
-    expect(s.visibleDatasets.length).toBe(4);
+    expect(s.visibleDatasets.length).toBe(MAX_ACTIVE_DATASETS);
+    expect(s.visibleDatasets.map((v) => v.datasetId)).not.toContain("b");
   });
 
   // ── setSinglePrimary / sequential-load (single-dataset mode) ─────────────
@@ -313,17 +334,19 @@ describe("terrainStore multi-dataset", () => {
   });
 
   it("primaryDatasetIds tracks evictions — evicted dataset not in primaryDatasetIds", () => {
+    // Fill to MAX_ACTIVE_DATASETS (3) via setGrids + toggleVisible.
     useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
-    for (const id of ["b", "c", "d"]) {
+    for (const id of ["b", "c"]) {
       useTerrainStore.getState().toggleVisible({ datasetId: id, source: "preset" });
     }
-    // Evict "b" by adding "e"
-    useTerrainStore.getState().toggleVisible({ datasetId: "e", source: "preset" });
+    // setGrids("d") triggers eviction at MAX_ACTIVE_DATASETS cap:
+    // base = [alpha, b, c]; firstId = "alpha"; evicts "b"; nextVisible = [d, alpha, c].
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("d") });
     const s = useTerrainStore.getState();
     expect(s.primaryDatasetIds).not.toContain("b");
     expect(s.primaryDatasetIds).toContain("alpha");
-    expect(s.primaryDatasetIds).toContain("e");
-    expect(s.primaryDatasetIds).toHaveLength(VISIBLE_DATASETS_CAP);
+    expect(s.primaryDatasetIds).toContain("d");
+    expect(s.primaryDatasetIds).toHaveLength(MAX_ACTIVE_DATASETS);
   });
 
   it("setSinglePrimary sets primaryDatasetIds to only the new dataset", () => {

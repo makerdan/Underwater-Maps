@@ -30,8 +30,10 @@ import {
 import type { DatasetMeta, UserDatasetMeta } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { requestDatasetSwitch, useSimulatedDataStore } from "@/lib/simulatedDataStore";
-import { useTerrainStore, VISIBLE_DATASETS_CAP } from "@/lib/terrainStore";
+import { useTerrainStore, MAX_ACTIVE_DATASETS } from "@/lib/terrainStore";
 import type { DatasetSource } from "@/lib/terrainStore";
+import { useDatasetProximityStreaming } from "@/hooks/useDatasetProximityStreaming";
+import type { DatasetBbox } from "@/hooks/useDatasetProximityStreaming";
 import { useUiStore } from "@/lib/uiStore";
 import { lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
 import { MARKER_COLOR, MARKER_ICON, SALTWATER_MARKER_TYPES, FRESHWATER_MARKER_TYPES } from "@/lib/markerConstants";
@@ -194,13 +196,15 @@ function formatEta(seconds: number | null): string | null {
   return `~${mins} min remaining`;
 }
 
-// ─── Visible-datasets summary header (Task #350) ─────────────────────────────
+// ─── Visible-datasets summary header ─────────────────────────────────────────
 const VisibleDatasetsHeader: React.FC<{
   onHideAllOthers: () => void;
 }> = ({ onHideAllOthers }) => {
-  const count = useTerrainStore((s) => s.visibleDatasets.length);
-  if (count <= 1) return null;
-  const atCap = count >= VISIBLE_DATASETS_CAP;
+  const activeCount = useTerrainStore((s) => s.visibleDatasets.length);
+  const selectedCount = useTerrainStore((s) => s.selectedIds.length);
+  if (activeCount <= 1 && selectedCount <= 1) return null;
+  const atCap = activeCount >= MAX_ACTIVE_DATASETS;
+  const streamingMode = selectedCount > activeCount;
   return (
     <div
       data-testid="visible-datasets-header"
@@ -217,7 +221,9 @@ const VisibleDatasetsHeader: React.FC<{
       }}
     >
       <span data-testid="visible-datasets-count">
-        VISIBLE DATASETS ({count}){atCap ? " · CAP" : ""}
+        {streamingMode
+          ? `STREAMING · ${activeCount}/${selectedCount} ACTIVE`
+          : `VISIBLE DATASETS (${activeCount})${atCap ? " · CAP" : ""}`}
       </span>
       <button
         data-testid="btn-hide-all-others"
@@ -359,7 +365,7 @@ const RemoveDatasetConfirmDialog: React.FC<{
   );
 };
 
-// ─── Compact list of visible datasets with per-row remove buttons ─────────────
+// ─── Compact list of visible (active) + selected-but-not-active datasets ─────
 const VisibleDatasetRows: React.FC<{
   allDatasets: Array<{ id: string; name: string }>;
 }> = ({ allDatasets }) => {
@@ -367,23 +373,36 @@ const VisibleDatasetRows: React.FC<{
   const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
   const primaryActiveGrid = useTerrainStore((s) => s.activeGrid);
   const toggleVisible = useTerrainStore((s) => s.toggleVisible);
+  const removeSelected = useTerrainStore((s) => s.removeSelected);
+  const selectedIds = useTerrainStore((s) => s.selectedIds);
+  const selectedSources = useTerrainStore((s) => s.selectedSources);
+
   const count = visibleDatasets.length;
   const [pending, setPending] = useState<{
     datasetId: string;
     source: DatasetSource;
     name: string;
+    isSelectedOnly?: boolean;
   } | null>(null);
 
   const handleConfirm = useCallback(() => {
     if (pending) {
-      toggleVisible({ datasetId: pending.datasetId, source: pending.source });
+      if (pending.isSelectedOnly) {
+        removeSelected(pending.datasetId);
+      } else {
+        toggleVisible({ datasetId: pending.datasetId, source: pending.source });
+      }
     }
     setPending(null);
-  }, [pending, toggleVisible]);
+  }, [pending, toggleVisible, removeSelected]);
 
   const handleCancel = useCallback(() => setPending(null), []);
 
-  if (count === 0) return null;
+  // Datasets that are selected by user intent but NOT currently active in the scene.
+  const activeIds = new Set(visibleDatasets.map((v) => v.datasetId));
+  const selectedButNotActive = selectedIds.filter((id) => !activeIds.has(id));
+
+  if (count === 0 && selectedButNotActive.length === 0) return null;
 
   const nameMap = new Map(allDatasets.map((d) => [d.id, d.name]));
 
@@ -394,6 +413,7 @@ const VisibleDatasetRows: React.FC<{
 
   return (
     <>
+      {/* ── Active datasets (in GPU memory, rendered in scene) ── */}
       {visibleDatasets.map((vd) => {
         const name = nameMap.get(vd.datasetId) ?? vd.datasetId;
         // Multi-primary: all visible datasets share equal primary status.
@@ -426,10 +446,10 @@ const VisibleDatasetRows: React.FC<{
               background: "rgba(0,229,255,0.08)",
             }}
           >
-            {/* Multi-primary: all visible datasets show the filled primary star */}
+            {/* Active: filled star indicator */}
             <span
               data-testid={`star-primary-${vd.datasetId}`}
-              title="Primary dataset"
+              title="Active — rendered in scene"
               style={{
                 flexShrink: 0,
                 width: 18,
@@ -535,6 +555,130 @@ const VisibleDatasetRows: React.FC<{
           </div>
         );
       })}
+
+      {/* ── Selected-but-not-active datasets (queued for proximity streaming) ── */}
+      {selectedButNotActive.length > 0 && (
+        <>
+          {count > 0 && (
+            <div style={{
+              padding: "2px 8px",
+              fontSize: 8,
+              letterSpacing: "0.1em",
+              color: "#475569",
+              background: "rgba(0,229,255,0.02)",
+              borderTop: "1px solid rgba(0,229,255,0.06)",
+            }}>
+              SELECTED · WILL LOAD WHEN NEARBY
+            </div>
+          )}
+          {selectedButNotActive.map((id) => {
+            const name = nameMap.get(id) ?? id;
+            const source = selectedSources[id] ?? "preset";
+            return (
+              <div
+                key={id}
+                data-testid={`selected-dataset-row-${id}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "2px 8px 2px 8px",
+                  gap: 4,
+                  fontSize: 10,
+                  color: "#64748b",
+                  borderBottom: "1px solid rgba(0,229,255,0.04)",
+                  background: "rgba(0,229,255,0.03)",
+                }}
+              >
+                {/* Selected-only: dimmed open-circle indicator */}
+                <span
+                  data-testid={`circle-selected-${id}`}
+                  title="Selected — will activate when camera approaches"
+                  style={{
+                    flexShrink: 0,
+                    width: 18,
+                    height: 18,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 11,
+                    color: "rgba(0,229,255,0.35)",
+                    lineHeight: 1,
+                  }}
+                >
+                  ○
+                </span>
+
+                <span
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  {name}
+                </span>
+
+                <span
+                  data-testid={`queued-badge-${id}`}
+                  title="Will load automatically when camera enters proximity"
+                  style={{
+                    flexShrink: 0,
+                    fontSize: 7,
+                    letterSpacing: "0.06em",
+                    color: "rgba(0,229,255,0.3)",
+                    padding: "1px 4px",
+                    border: "1px dashed rgba(0,229,255,0.2)",
+                    borderRadius: 2,
+                  }}
+                >
+                  QUEUED
+                </span>
+
+                <ViewscreenTooltip label="Deselect dataset" side="right">
+                  <button
+                    type="button"
+                    data-testid={`btn-deselect-${id}`}
+                    aria-label={`Deselect ${name}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPending({ datasetId: id, source, name, isSelectedOnly: true });
+                    }}
+                    style={{
+                      flexShrink: 0,
+                      width: 18,
+                      height: 18,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: "transparent",
+                      border: "none",
+                      color: "#334155",
+                      cursor: "pointer",
+                      fontSize: 11,
+                      lineHeight: 1,
+                      padding: 0,
+                      borderRadius: 2,
+                      transition: "color 0.15s",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.color = "#ef4444";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.color = "#334155";
+                    }}
+                  >
+                    ✕
+                  </button>
+                </ViewscreenTooltip>
+              </div>
+            );
+          })}
+        </>
+      )}
+
       {pending && (
         <RemoveDatasetConfirmDialog
           datasetName={pending.name}
@@ -746,7 +890,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       ...(userDatasets ?? []).map((d) => ({ id: d.id, name: d.name })),
     ];
     const name = allDs.find((d) => d.id === evictedId)?.name ?? evictedId;
-    toast({ title: `${name} removed — 4-dataset limit reached.`, duration: 4000 });
+    toast({ title: `${name} unloaded — streaming another dataset into view.`, duration: 4000 });
     clearEviction();
   }, [evictedId, datasets, userDatasets, toast, clearEviction]);
 
@@ -768,6 +912,95 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       });
     }
   }, [hideAllOthers, visibleDatasetsForToast, datasets, userDatasets, toast]);
+
+  // ─── Proximity streaming ──────────────────────────────────────────────────
+  // Build a map from datasetId → bbox for preset catalog datasets that have a
+  // geographic bounding box. User datasets do not have a bbox so they activate
+  // immediately when added to the selected pool (handled in addSelected).
+  const bboxMap = React.useMemo<Record<string, DatasetBbox>>(() => {
+    if (!datasets) return {};
+    const out: Record<string, DatasetBbox> = {};
+    for (const d of datasets) {
+      if (d.bbox) {
+        out[d.id] = {
+          minLon: d.bbox.minLon,
+          maxLon: d.bbox.maxLon,
+          minLat: d.bbox.minLat,
+          maxLat: d.bbox.maxLat,
+        };
+      }
+    }
+    return out;
+  }, [datasets]);
+
+  // Called by the proximity hook when a selected-but-not-active dataset should
+  // be loaded into the scene. Adds it to visibleDatasets (with null grids) and
+  // fetches the terrain+overview via React Query (uses cache when available).
+  const handleProximityActivate = useCallback(
+    async (datasetId: string, source: DatasetSource) => {
+      useTerrainStore.getState().autoActivate(datasetId);
+      try {
+        if (source === "preset") {
+          const [terrainData, overviewData] = await Promise.all([
+            queryClient.fetchQuery({
+              queryKey: getGetDatasetsIdTerrainQueryKey(datasetId),
+              queryFn: makeProgressTerrainFetcher(
+                getGetDatasetsIdTerrainUrl(datasetId),
+                datasetId,
+                false,
+              ),
+              staleTime: Infinity,
+            }),
+            queryClient.fetchQuery({
+              queryKey: getGetDatasetsIdOverviewQueryKey(datasetId),
+              queryFn: makeProgressTerrainFetcher(
+                getGetDatasetsIdOverviewUrl(datasetId),
+                datasetId,
+                false,
+              ),
+              staleTime: Infinity,
+            }),
+          ]);
+          useTerrainStore.getState().setDatasetGrids(datasetId, {
+            activeGrid: terrainData as TerrainData,
+            overviewGrid: overviewData as TerrainData,
+          });
+        } else {
+          // User dataset: load via user-dataset endpoints
+          const [terrainData, overviewData] = await Promise.all([
+            queryClient.fetchQuery({
+              queryKey: getGetUserDatasetsIdTerrainQueryKey(datasetId),
+              queryFn: makeProgressTerrainFetcher(
+                getGetUserDatasetsIdTerrainUrl(datasetId),
+                datasetId,
+                false,
+              ),
+              staleTime: Infinity,
+            }),
+            queryClient.fetchQuery({
+              queryKey: getGetUserDatasetsIdOverviewQueryKey(datasetId),
+              queryFn: makeProgressTerrainFetcher(
+                getGetUserDatasetsIdOverviewUrl(datasetId),
+                datasetId,
+                false,
+              ),
+              staleTime: Infinity,
+            }),
+          ]);
+          useTerrainStore.getState().setDatasetGrids(datasetId, {
+            activeGrid: terrainData as TerrainData,
+            overviewGrid: overviewData as TerrainData,
+          });
+        }
+      } catch {
+        // Load failed — remove from selected pool so it doesn't spin forever.
+        useTerrainStore.getState().removeSelected(datasetId);
+      }
+    },
+    [],
+  );
+
+  useDatasetProximityStreaming({ bboxMap, onActivate: handleProximityActivate });
 
   // ─── Parallel fetch for pending PRESET dataset ─────────────────────────────
   const { data: pendingTerrain, isError: terrainFetchError } = useGetDatasetsIdTerrain(
@@ -2065,21 +2298,21 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     const presetToAdd = [...presetSelectedIds].filter((id) => !visibleIds.has(id));
     const libraryToAdd = [...librarySelectedIds].filter((id) => !visibleIds.has(id));
 
-    // Library datasets carry grids inline — toggle them immediately, no preflight.
+    // Library datasets carry grids inline — add them to the selected pool immediately, no preflight.
     const toggleLibrary = () => {
       const st = useTerrainStore.getState();
-      const vis = new Set(st.visibleDatasets.map((v) => v.datasetId));
+      const selected = new Set(st.selectedIds);
       for (const id of libraryToAdd) {
-        if (!vis.has(id)) st.toggleVisible({ datasetId: id, source: "user" });
+        if (!selected.has(id)) st.addSelected(id, "user");
       }
     };
 
-    // Toggle preset datasets and clear selection after preflight passes.
+    // Add preset datasets to selected pool and clear selection after preflight passes.
     const togglePresetsAndClear = () => {
       const st = useTerrainStore.getState();
-      const vis = new Set(st.visibleDatasets.map((v) => v.datasetId));
+      const selected = new Set(st.selectedIds);
       for (const id of presetToAdd) {
-        if (!vis.has(id)) st.toggleVisible({ datasetId: id, source: "preset" });
+        if (!selected.has(id)) st.addSelected(id, "preset");
       }
       // Drive AppState.datasetId to the first preset so useActiveDatasetSync
       // fetches its terrain into AppState context — the primary TerrainMesh in

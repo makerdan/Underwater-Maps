@@ -2,11 +2,19 @@ import { create } from "zustand";
 import type { TerrainData } from "@workspace/api-client-react";
 
 /**
- * Soft cap on the number of simultaneously visible datasets. Selecting / toggling
- * additional datasets beyond this cap is still allowed (oldest non-primary is
- * evicted), but the UI surfaces an inline warning when the cap is reached.
+ * Alias for MAX_ACTIVE_DATASETS. All mutation paths (setGrids, setPrimary,
+ * toggleVisible) enforce a single unified cap of MAX_ACTIVE_DATASETS = 3.
+ * @deprecated Use MAX_ACTIVE_DATASETS directly. Kept for import compatibility.
  */
-export const VISIBLE_DATASETS_CAP = 4;
+export const VISIBLE_DATASETS_CAP = 3;
+
+/**
+ * Maximum number of datasets that can be simultaneously ACTIVE (in GPU memory
+ * / rendered in the 3D scene). The proximity streaming logic enforces this;
+ * users may SELECT any number of datasets and the streaming engine decides
+ * which MAX_ACTIVE_DATASETS are rendered based on camera distance.
+ */
+export const MAX_ACTIVE_DATASETS = 3;
 
 export type DatasetSource = "preset" | "user";
 
@@ -51,11 +59,29 @@ interface TerrainStore {
   overviewGrid: TerrainData | null;
 
   /**
-   * Set to the datasetId that was most recently evicted to respect VISIBLE_DATASETS_CAP.
-   * Cleared after observers have reacted (call clearEviction()). Used to fire toast
-   * notifications when the cap silently removes a dataset.
+   * Set to the datasetId that was most recently evicted by a MANUAL action
+   * (user-initiated add that pushes past the cap). Cleared after observers
+   * have reacted (call clearEviction()). Used to fire toast notifications.
    */
   evictedId: string | null;
+
+  /**
+   * Set to the datasetId most recently evicted by the PROXIMITY STREAMING
+   * engine (auto, silent — no toast). Cleared by clearAutoEviction().
+   */
+  autoEvictedId: string | null;
+
+  /**
+   * Ordered list of ALL dataset IDs the user has "selected" (intent).
+   * This is a superset of the active visibleDatasets — the streaming engine
+   * decides which MAX_ACTIVE_DATASETS of these are actually rendered.
+   */
+  selectedIds: string[];
+
+  /**
+   * Source for each selected dataset ID.
+   */
+  selectedSources: Record<string, DatasetSource>;
 
   /**
    * True when the user has explicitly opted into side-by-side multi-dataset viewing
@@ -90,13 +116,42 @@ interface TerrainStore {
   setPrimary: (datasetId: string, source?: DatasetSource) => void;
 
   /**
-   * Toggle a dataset's visibility. When hiding the last dataset the store
-   * becomes empty.  When hiding what was previously the first entry, the
-   * second entry takes over the legacy `primaryDatasetId` alias.
+   * Toggle a dataset's visibility.
+   * ADDING: adds to selectedIds; immediately activates if active slots remain
+   *   (< MAX_ACTIVE_DATASETS), otherwise leaves in selected-but-not-active state.
+   *   Never evicts an existing dataset — the streaming engine does that.
+   * REMOVING: removes from both selectedIds AND visibleDatasets (full deselect).
    */
   toggleVisible: (entry: { datasetId: string; source: DatasetSource }) => void;
 
-  /** Remove every visible dataset except the first one (legacy alias). */
+  /**
+   * Add a dataset to the "selected" pool (user intent).
+   * If there is room in active slots (visibleDatasets.length < MAX_ACTIVE_DATASETS),
+   * the dataset is immediately activated. Otherwise it waits for proximity streaming.
+   */
+  addSelected: (datasetId: string, source: DatasetSource) => void;
+
+  /**
+   * Remove a dataset from the selected pool AND from active visibleDatasets.
+   * Called when the user explicitly deselects / removes a dataset.
+   */
+  removeSelected: (datasetId: string) => void;
+
+  /**
+   * Proximity streaming: move a dataset from selected-but-not-active to active.
+   * Caller must ensure capacity (visibleDatasets.length < MAX_ACTIVE_DATASETS)
+   * before calling; this action does NOT evict anything.
+   */
+  autoActivate: (datasetId: string) => void;
+
+  /**
+   * Proximity streaming: remove a dataset from active (visibleDatasets) while
+   * keeping it in selectedIds. Sets autoEvictedId (no toast fired for this).
+   */
+  autoEvict: (datasetId: string) => void;
+
+  /** Remove every visible dataset except the first one (legacy alias).
+   *  Also removes non-first selected IDs so streaming doesn't re-add them. */
   hideAllOthers: () => void;
 
   /**
@@ -112,6 +167,9 @@ interface TerrainStore {
 
   /** Clear the evictedId after observers have read and reacted to it. */
   clearEviction: () => void;
+
+  /** Clear the autoEvictedId after proximity streaming has recorded the eviction. */
+  clearAutoEviction: () => void;
 }
 
 /**
@@ -143,6 +201,9 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
   activeGrid: null,
   overviewGrid: null,
   evictedId: null,
+  autoEvictedId: null,
+  selectedIds: [],
+  selectedSources: {},
   multiDatasetMode: false,
 
   setGrids: ({ activeGrid, overviewGrid, source }) =>
@@ -193,7 +254,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       } else {
         // Cap-evict oldest non-first entry when adding a new visible dataset.
         let base = prev.visibleDatasets;
-        if (base.length >= VISIBLE_DATASETS_CAP) {
+        if (base.length >= MAX_ACTIVE_DATASETS) {
           // Evict the oldest entry that is NOT currently first (legacy alias).
           const firstId = base[0]?.datasetId ?? null;
           const evictIdx = base.findIndex((v) => v.datasetId !== firstId);
@@ -252,7 +313,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
           activeGrid: null,
           overviewGrid: null,
         };
-        if (nextVisible.length >= VISIBLE_DATASETS_CAP) {
+        if (nextVisible.length >= MAX_ACTIVE_DATASETS) {
           // Evict oldest non-first entry.
           const firstId = nextVisible[0]?.datasetId ?? null;
           const evictIdx = nextVisible.findIndex((v) => v.datasetId !== firstId);
@@ -284,46 +345,143 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
 
   toggleVisible: ({ datasetId, source }) =>
     set((prev) => {
-      const existing = prev.visibleDatasets.find((v) => v.datasetId === datasetId);
-      if (existing) {
-        // Hide: remove from visibleDatasets.
+      const existingVisible = prev.visibleDatasets.find((v) => v.datasetId === datasetId);
+      if (existingVisible) {
+        // REMOVE path: full deselect — remove from both selectedIds and visibleDatasets.
         const nextVisible = prev.visibleDatasets.filter(
           (v) => v.datasetId !== datasetId,
         );
+        const nextSelectedIds = prev.selectedIds.filter((id) => id !== datasetId);
+        const nextSelectedSources = { ...prev.selectedSources };
+        delete nextSelectedSources[datasetId];
         return {
           ...prev,
           visibleDatasets: nextVisible,
+          selectedIds: nextSelectedIds,
+          selectedSources: nextSelectedSources,
           ...syncPrimaryGrids(nextVisible),
         };
       }
-      // Add new entry (cap-evict oldest non-first if needed).
-      let nextVisible = prev.visibleDatasets;
-      let evictedId: string | null = null;
-      if (nextVisible.length >= VISIBLE_DATASETS_CAP) {
-        const firstId = nextVisible[0]?.datasetId ?? null;
-        const evictIdx = nextVisible.findIndex((v) => v.datasetId !== firstId);
-        if (evictIdx >= 0) {
-          evictedId = nextVisible[evictIdx]!.datasetId;
-          nextVisible = [
-            ...nextVisible.slice(0, evictIdx),
-            ...nextVisible.slice(evictIdx + 1),
-          ];
-        }
+
+      // ADD path: add to selectedIds; activate immediately if room in active slots.
+      const alreadySelected = prev.selectedIds.includes(datasetId);
+      const nextSelectedIds = alreadySelected
+        ? prev.selectedIds
+        : [...prev.selectedIds, datasetId];
+      const nextSelectedSources = { ...prev.selectedSources, [datasetId]: source };
+
+      if (prev.visibleDatasets.length < MAX_ACTIVE_DATASETS) {
+        // Room available — activate immediately.
+        const entry: VisibleDataset = {
+          datasetId,
+          source,
+          activeGrid: null,
+          overviewGrid: null,
+        };
+        const nextVisible = [...prev.visibleDatasets, entry];
+        return {
+          ...prev,
+          visibleDatasets: nextVisible,
+          selectedIds: nextSelectedIds,
+          selectedSources: nextSelectedSources,
+          multiDatasetMode: true,
+          ...syncPrimaryGrids(nextVisible),
+        };
       }
+
+      // No room — add to selected pool only; proximity streaming handles activation.
+      return {
+        ...prev,
+        selectedIds: nextSelectedIds,
+        selectedSources: nextSelectedSources,
+        multiDatasetMode: true,
+      };
+    }),
+
+  addSelected: (datasetId, source) =>
+    set((prev) => {
+      // Already selected — just update source and activate if room.
+      const alreadySelected = prev.selectedIds.includes(datasetId);
+      const alreadyVisible = prev.visibleDatasets.some((v) => v.datasetId === datasetId);
+
+      const nextSelectedIds = alreadySelected
+        ? prev.selectedIds
+        : [...prev.selectedIds, datasetId];
+      const nextSelectedSources = { ...prev.selectedSources, [datasetId]: source };
+
+      if (!alreadyVisible && prev.visibleDatasets.length < MAX_ACTIVE_DATASETS) {
+        // Room available — activate immediately.
+        const entry: VisibleDataset = {
+          datasetId,
+          source,
+          activeGrid: null,
+          overviewGrid: null,
+        };
+        const nextVisible = [...prev.visibleDatasets, entry];
+        return {
+          ...prev,
+          visibleDatasets: nextVisible,
+          selectedIds: nextSelectedIds,
+          selectedSources: nextSelectedSources,
+          multiDatasetMode: true,
+          ...syncPrimaryGrids(nextVisible),
+        };
+      }
+
+      // No room or already visible — just update selected pool.
+      return {
+        ...prev,
+        selectedIds: nextSelectedIds,
+        selectedSources: nextSelectedSources,
+        multiDatasetMode: true,
+      };
+    }),
+
+  removeSelected: (datasetId) =>
+    set((prev) => {
+      const nextSelectedIds = prev.selectedIds.filter((id) => id !== datasetId);
+      const nextSelectedSources = { ...prev.selectedSources };
+      delete nextSelectedSources[datasetId];
+      const nextVisible = prev.visibleDatasets.filter((v) => v.datasetId !== datasetId);
+      return {
+        ...prev,
+        selectedIds: nextSelectedIds,
+        selectedSources: nextSelectedSources,
+        visibleDatasets: nextVisible,
+        ...syncPrimaryGrids(nextVisible),
+      };
+    }),
+
+  autoActivate: (datasetId) =>
+    set((prev) => {
+      // Must be in selectedIds but NOT in visibleDatasets.
+      if (!prev.selectedIds.includes(datasetId)) return prev;
+      if (prev.visibleDatasets.some((v) => v.datasetId === datasetId)) return prev;
+      // Caller is responsible for ensuring capacity.
+      const source = prev.selectedSources[datasetId] ?? "preset";
       const entry: VisibleDataset = {
         datasetId,
         source,
         activeGrid: null,
         overviewGrid: null,
       };
-      // Append — new entries go to the end, preserving first-entry alias.
-      nextVisible = [...nextVisible, entry];
+      const nextVisible = [...prev.visibleDatasets, entry];
       return {
         ...prev,
         visibleDatasets: nextVisible,
-        multiDatasetMode: true,
         ...syncPrimaryGrids(nextVisible),
-        ...(evictedId !== null ? { evictedId } : {}),
+      };
+    }),
+
+  autoEvict: (datasetId) =>
+    set((prev) => {
+      if (!prev.visibleDatasets.some((v) => v.datasetId === datasetId)) return prev;
+      const nextVisible = prev.visibleDatasets.filter((v) => v.datasetId !== datasetId);
+      return {
+        ...prev,
+        visibleDatasets: nextVisible,
+        autoEvictedId: datasetId,
+        ...syncPrimaryGrids(nextVisible),
       };
     }),
 
@@ -333,9 +491,17 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       const first = prev.visibleDatasets[0];
       if (!first) return prev;
       const nextVisible = [first];
+      // Also remove non-first entries from selectedIds so streaming doesn't re-add them.
+      const nextSelectedIds = prev.selectedIds.filter((id) => id === first.datasetId);
+      const nextSelectedSources: Record<string, DatasetSource> = {};
+      if (prev.selectedSources[first.datasetId]) {
+        nextSelectedSources[first.datasetId] = prev.selectedSources[first.datasetId]!;
+      }
       return {
         ...prev,
         visibleDatasets: nextVisible,
+        selectedIds: nextSelectedIds,
+        selectedSources: nextSelectedSources,
         ...syncPrimaryGrids(nextVisible),
       };
     }),
@@ -352,9 +518,12 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       return {
         ...prev,
         visibleDatasets: nextVisible,
+        selectedIds: [],
+        selectedSources: {},
         ...syncPrimaryGrids(nextVisible),
         multiDatasetMode: false,
         evictedId: null,
+        autoEvictedId: null,
       };
     }),
 
@@ -366,9 +535,15 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       activeGrid: null,
       overviewGrid: null,
       evictedId: null,
+      autoEvictedId: null,
+      selectedIds: [],
+      selectedSources: {},
       multiDatasetMode: false,
     }),
 
   clearEviction: () =>
     set((prev) => (prev.evictedId === null ? prev : { ...prev, evictedId: null })),
+
+  clearAutoEviction: () =>
+    set((prev) => (prev.autoEvictedId === null ? prev : { ...prev, autoEvictedId: null })),
 }));
