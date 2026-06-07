@@ -8,43 +8,69 @@ interface Bbox {
   maxLat: number;
 }
 
+const CACHE_MAX = 6;
+
+/** Module-level LRU: bboxKey → object URL. Persists across hook lifetimes. */
+const terrainTileCache = new Map<string, string>();
+
+function lruGet(key: string): string | undefined {
+  const url = terrainTileCache.get(key);
+  if (url === undefined) return undefined;
+  terrainTileCache.delete(key);
+  terrainTileCache.set(key, url);
+  return url;
+}
+
+function lruPut(key: string, url: string): void {
+  if (terrainTileCache.has(key)) {
+    terrainTileCache.delete(key);
+  } else if (terrainTileCache.size >= CACHE_MAX) {
+    const oldest = terrainTileCache.keys().next().value as string;
+    URL.revokeObjectURL(terrainTileCache.get(oldest)!);
+    terrainTileCache.delete(oldest);
+  }
+  terrainTileCache.set(key, url);
+}
+
 /**
  * Fetches a USGS hillshaded terrain tile from `/api/terrain/terrain-tile` for
  * the given bounding box and stores the resulting object URL in
  * `useTerrainTileStore`.
  *
- * - The store's `bboxKey` persists across OverviewMap remounts: if the component
- *   is torn down and re-mounted with the same bbox (e.g. user closes and reopens
- *   the Overview Map), the hook detects the match and skips the network request.
- * - When bbox changes the previous object URL is revoked before the new fetch.
+ * - A module-level LRU cache (up to 6 entries) keeps object URLs alive across
+ *   store clears. Toggling terrain off and back on for the same bbox reuses the
+ *   cached URL — no second HTTP round-trip fires.
+ * - URLs are revoked only when they age out of the LRU (not on toggle-off or
+ *   bbox change).
+ * - The store's `bboxKey` also guards against duplicate fetches when the
+ *   OverviewMap remounts with the same dataset.
  * - Pass `bbox = null` (when `terrainImagery` is off) to clear the store
  *   without making any network request.
  */
 export function useTerrainTile(bbox: Bbox | null, tileSize = 512): void {
   const abortRef = useRef<AbortController | null>(null);
-  const prevUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     const { setLoading, clear, setTileUrl, setError, bboxKey: storedKey, tileUrl: storedUrl } =
       useTerrainTileStore.getState();
 
     if (!bbox) {
-      if (prevUrlRef.current) {
-        URL.revokeObjectURL(prevUrlRef.current);
-        prevUrlRef.current = null;
-      }
       clear();
       return;
     }
 
     const bboxKey = `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat},${tileSize}`;
 
-    // If the store already has (or is fetching) the same bbox, reuse it.
-    // This covers the case where OverviewMap unmounts and remounts with the
-    // same dataset — no second HTTP request fires.
+    // Store already has (or is fetching) the same bbox — reuse without fetching.
     if (bboxKey === storedKey && (storedUrl || useTerrainTileStore.getState().isLoading)) {
-      // Sync the prevUrlRef so we hold a reference for cleanup on unmount.
-      if (storedUrl) prevUrlRef.current = storedUrl;
+      return;
+    }
+
+    // LRU hit: restore from cache without a network request.
+    const cached = lruGet(bboxKey);
+    if (cached) {
+      clear();
+      setTileUrl(cached, bboxKey);
       return;
     }
 
@@ -52,10 +78,6 @@ export function useTerrainTile(bbox: Bbox | null, tileSize = 512): void {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    if (prevUrlRef.current) {
-      URL.revokeObjectURL(prevUrlRef.current);
-      prevUrlRef.current = null;
-    }
     clear();
     setLoading(true, bboxKey);
 
@@ -73,7 +95,7 @@ export function useTerrainTile(bbox: Bbox | null, tileSize = 512): void {
         const blob = await res.blob();
         if (cancelled) return;
         const objectUrl = URL.createObjectURL(blob);
-        prevUrlRef.current = objectUrl;
+        lruPut(bboxKey, objectUrl);
         setTileUrl(objectUrl, bboxKey);
       })
       .catch((err: unknown) => {

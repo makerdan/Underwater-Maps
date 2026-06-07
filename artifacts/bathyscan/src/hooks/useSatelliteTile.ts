@@ -8,15 +8,42 @@ interface Bbox {
   maxLat: number;
 }
 
+const CACHE_MAX = 6;
+
+/** Module-level LRU: bboxKey → object URL. Persists across hook lifetimes. */
+const satelliteTileCache = new Map<string, string>();
+
+function lruGet(key: string): string | undefined {
+  const url = satelliteTileCache.get(key);
+  if (url === undefined) return undefined;
+  satelliteTileCache.delete(key);
+  satelliteTileCache.set(key, url);
+  return url;
+}
+
+function lruPut(key: string, url: string): void {
+  if (satelliteTileCache.has(key)) {
+    satelliteTileCache.delete(key);
+  } else if (satelliteTileCache.size >= CACHE_MAX) {
+    const oldest = satelliteTileCache.keys().next().value as string;
+    URL.revokeObjectURL(satelliteTileCache.get(oldest)!);
+    satelliteTileCache.delete(oldest);
+  }
+  satelliteTileCache.set(key, url);
+}
+
 /**
  * Fetches a satellite imagery tile from `/api/terrain/satellite-tile` for
  * the given bounding box and stores the resulting object URL in
  * `useSatelliteTileStore`.
  *
- * - The store's `bboxKey` persists across OverviewMap remounts: if the component
- *   is torn down and re-mounted with the same bbox (e.g. user closes and reopens
- *   the Overview Map), the hook detects the match and skips the network request.
- * - When bbox changes the previous object URL is revoked before the new fetch.
+ * - A module-level LRU cache (up to 6 entries) keeps object URLs alive across
+ *   store clears. Toggling satellite off and back on for the same bbox reuses
+ *   the cached URL — no second HTTP round-trip fires.
+ * - URLs are revoked only when they age out of the LRU (not on toggle-off or
+ *   bbox change).
+ * - The store's `bboxKey` also guards against duplicate fetches when the
+ *   OverviewMap remounts with the same dataset.
  * - On failure the store's `error` field is set and `tileUrl` remains null,
  *   letting `LandTerrainMesh` fall back to its procedural colour ramp.
  *
@@ -26,43 +53,35 @@ interface Bbox {
  */
 export function useSatelliteTile(bbox: Bbox | null, tileSize = 512): void {
   const abortRef = useRef<AbortController | null>(null);
-  const prevUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     const { setLoading, clear, setTileUrl, setError, bboxKey: storedKey, tileUrl: storedUrl } =
       useSatelliteTileStore.getState();
 
     if (!bbox) {
-      if (prevUrlRef.current) {
-        URL.revokeObjectURL(prevUrlRef.current);
-        prevUrlRef.current = null;
-      }
       clear();
       return;
     }
 
     const bboxKey = `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat},${tileSize}`;
 
-    // If the store already has (or is fetching) the same bbox, reuse it.
-    // This covers the case where OverviewMap unmounts and remounts with the
-    // same dataset — no second HTTP request fires.
+    // Store already has (or is fetching) the same bbox — reuse without fetching.
     if (bboxKey === storedKey && (storedUrl || useSatelliteTileStore.getState().isLoading)) {
-      // Sync the prevUrlRef so we hold a reference for cleanup on unmount.
-      if (storedUrl) prevUrlRef.current = storedUrl;
       return;
     }
 
-    // Abort any previous in-flight request.
+    // LRU hit: restore from cache without a network request.
+    const cached = lruGet(bboxKey);
+    if (cached) {
+      clear();
+      setTileUrl(cached, bboxKey);
+      return;
+    }
+
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
-    // Revoke the previous object URL and clear the store immediately so the
-    // old satellite texture doesn't linger while the new one loads.
-    if (prevUrlRef.current) {
-      URL.revokeObjectURL(prevUrlRef.current);
-      prevUrlRef.current = null;
-    }
     clear();
     setLoading(true, bboxKey);
 
@@ -80,7 +99,7 @@ export function useSatelliteTile(bbox: Bbox | null, tileSize = 512): void {
         const blob = await res.blob();
         if (cancelled) return;
         const objectUrl = URL.createObjectURL(blob);
-        prevUrlRef.current = objectUrl;
+        lruPut(bboxKey, objectUrl);
         setTileUrl(objectUrl, bboxKey);
       })
       .catch((err: unknown) => {
