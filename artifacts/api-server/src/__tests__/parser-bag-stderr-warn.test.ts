@@ -1,118 +1,101 @@
 /**
  * parser-bag-stderr-warn.test.ts
  *
- * Deterministic unit test for the parseBag stderr → logger.warn path.
+ * Unit tests for parseBag() CSV-parsing and error-propagation behaviour,
+ * using a mocked bagWorker so no real Python subprocess is involved.
  *
- * The integration tests in parser-bag.test.ts rely on a real Python subprocess
- * and cannot guarantee the fixture run emits stderr.  This file mocks
- * child_process.execFile so the subprocess always returns a controlled stderr
- * payload with exit code 0, then asserts logger.warn is called with the
- * expected structured metadata.
+ * The stderr → logger.warn path now lives inside bagWorker.ts (handled via
+ * the spawn stderr event), so this file focuses on parseBag's own logic:
+ *   • correctly parsing CSV returned by bagWorker.parseFile
+ *   • skipping blank / malformed lines
+ *   • propagating rejections from bagWorker as thrown errors
+ *   • throwing when the CSV contains no valid depth points
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 
-// ── Hoisted mock state ───────────────────────────────────────────────────────
-// vi.hoisted runs before vi.mock hoisting, so the references are available
-// inside the factory closure below.
+// ── Mock bagWorker before the subject is imported ────────────────────────────
 
-const { mockCustomImpl } = vi.hoisted(() => {
-  const mockCustomImpl = vi.fn();
-  return { mockCustomImpl };
-});
+vi.mock("../lib/bagWorker.js", () => ({
+  bagWorker: {
+    parseFile: vi.fn(),
+    shutdown: vi.fn(),
+  },
+}));
 
-// ── child_process mock ────────────────────────────────────────────────────────
-// uploadParsers.ts does: const execFileAsync = promisify(execFile)
-// util.promisify respects [util.promisify.custom] on the wrapped function;
-// attaching our own implementation there makes execFileAsync call our mock.
+// ── Subject under test ───────────────────────────────────────────────────────
 
-vi.mock("child_process", async () => {
-  const util = await import("util");
-  const execFile = vi.fn() as ReturnType<typeof vi.fn> & {
-    [key: symbol]: typeof mockCustomImpl;
-  };
-  execFile[util.promisify.custom] = mockCustomImpl;
-  return { execFile };
-});
-
-// ── Subject under test (imported AFTER mock is set up) ────────────────────────
 import { parseBag } from "../lib/uploadParsers.js";
+import { bagWorker } from "../lib/bagWorker.js";
 
-// ── Test data ─────────────────────────────────────────────────────────────────
-const MOCK_STDOUT = "142.005,11.005,1500\n142.006,11.006,2000\n";
-const MOCK_STDERR = "UserWarning: CRS not found; falling back to bounding-box approximation.";
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-describe("parseBag — stderr warn forwarding (mocked subprocess)", () => {
+const mockParseFile = () => vi.mocked(bagWorker.parseFile);
+
+// ── Tests ────────────────────────────────────────────────────────────────────
+
+describe("parseBag — CSV parsing via persistent bagWorker (mocked)", () => {
   afterEach(() => {
-    vi.restoreAllMocks();
-    mockCustomImpl.mockReset();
+    mockParseFile().mockReset();
   });
 
-  it("calls logger.warn with { source: 'bag_parser.py' } and trimmed stderr when exit code is 0", async () => {
-    mockCustomImpl.mockResolvedValue({ stdout: MOCK_STDOUT, stderr: MOCK_STDERR });
-
-    const loggerModule = await import("../lib/logger.js");
-    const warnSpy = vi.spyOn(loggerModule.logger, "warn");
+  it("parses valid CSV returned by bagWorker and returns RawPoint[]", async () => {
+    mockParseFile().mockResolvedValue(
+      "142.005,11.005,1500\n142.006,11.006,2000\n",
+    );
 
     const pts = await parseBag(Buffer.from("fake-bag-bytes"));
 
     expect(pts).toHaveLength(2);
     expect(pts[0]).toMatchObject({ lon: 142.005, lat: 11.005, depth: 1500 });
     expect(pts[1]).toMatchObject({ lon: 142.006, lat: 11.006, depth: 2000 });
-
-    expect(warnSpy).toHaveBeenCalledWith(
-      { source: "bag_parser.py" },
-      MOCK_STDERR,
-    );
   });
 
-  it("does NOT call logger.warn when subprocess stderr is empty", async () => {
-    mockCustomImpl.mockResolvedValue({ stdout: MOCK_STDOUT, stderr: "" });
-
-    const loggerModule = await import("../lib/logger.js");
-    const warnSpy = vi.spyOn(loggerModule.logger, "warn");
-
-    await parseBag(Buffer.from("fake-bag-bytes"));
-
-    const bagWarnCalls = warnSpy.mock.calls.filter(
-      (args) =>
-        args[0] != null &&
-        typeof args[0] === "object" &&
-        (args[0] as Record<string, unknown>)["source"] === "bag_parser.py",
+  it("skips blank lines in the CSV response", async () => {
+    mockParseFile().mockResolvedValue(
+      "\n10.0,20.0,500\n\n-130.0,-45.0,3000\n",
     );
-    expect(bagWarnCalls).toHaveLength(0);
-  });
-
-  it("does NOT call logger.warn when subprocess stderr is whitespace-only", async () => {
-    mockCustomImpl.mockResolvedValue({ stdout: MOCK_STDOUT, stderr: "   \n  " });
-
-    const loggerModule = await import("../lib/logger.js");
-    const warnSpy = vi.spyOn(loggerModule.logger, "warn");
-
-    await parseBag(Buffer.from("fake-bag-bytes"));
-
-    const bagWarnCalls = warnSpy.mock.calls.filter(
-      (args) =>
-        args[0] != null &&
-        typeof args[0] === "object" &&
-        (args[0] as Record<string, unknown>)["source"] === "bag_parser.py",
-    );
-    expect(bagWarnCalls).toHaveLength(0);
-  });
-
-  it("still resolves with valid points even when stderr is non-empty", async () => {
-    mockCustomImpl.mockResolvedValue({
-      stdout: "10.0,20.0,500\n-130.0,-45.0,3000\n",
-      stderr: "DeprecationWarning: pyproj.Proj will be removed in a future version.",
-    });
 
     const pts = await parseBag(Buffer.from("fake-bag-bytes"));
 
     expect(pts).toHaveLength(2);
-    for (const p of pts) {
-      expect(Number.isFinite(p.lon)).toBe(true);
-      expect(Number.isFinite(p.lat)).toBe(true);
-      expect(Number.isFinite(p.depth)).toBe(true);
-    }
+    expect(pts[0]).toMatchObject({ lon: 10.0, lat: 20.0, depth: 500 });
+    expect(pts[1]).toMatchObject({ lon: -130.0, lat: -45.0, depth: 3000 });
+  });
+
+  it("skips malformed (non-numeric) lines without throwing", async () => {
+    mockParseFile().mockResolvedValue(
+      "not_a_number,11.0,500\n10.0,20.0,500\n",
+    );
+
+    const pts = await parseBag(Buffer.from("fake-bag-bytes"));
+
+    expect(pts).toHaveLength(1);
+    expect(pts[0]).toMatchObject({ lon: 10.0, lat: 20.0, depth: 500 });
+  });
+
+  it("throws when bagWorker rejects — error message is preserved", async () => {
+    mockParseFile().mockRejectedValue(
+      new Error("BAG parse error: Not a valid BAG file: missing BAG_root group"),
+    );
+
+    await expect(parseBag(Buffer.from("not-a-bag"))).rejects.toThrow(/BAG/i);
+  });
+
+  it("throws when the CSV contains no valid depth points", async () => {
+    mockParseFile().mockResolvedValue("\n\nbadline\nalso_bad\n");
+
+    await expect(parseBag(Buffer.from("fake-bag-bytes"))).rejects.toThrow(
+      /no valid depth points/i,
+    );
+  });
+
+  it("handles a single valid point correctly", async () => {
+    mockParseFile().mockResolvedValue("-0.5,51.5,42.0\n");
+
+    const pts = await parseBag(Buffer.from("fake-bag-bytes"));
+
+    expect(pts).toHaveLength(1);
+    expect(pts[0]).toMatchObject({ lon: -0.5, lat: 51.5, depth: 42.0 });
   });
 });

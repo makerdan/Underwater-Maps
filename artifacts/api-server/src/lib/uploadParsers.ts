@@ -17,19 +17,14 @@
  *   NMEA     (.nmea)         — depth-sounder + position sentence log
  */
 
-import { execFile } from "child_process";
-import { promisify } from "util";
-import { existsSync, writeFileSync, rmSync } from "fs";
+import { writeFileSync, rmSync } from "fs";
 import { tmpdir } from "os";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+import { join } from "path";
 import { fromArrayBuffer } from "geotiff";
 import { NetCDFReader } from "netcdfjs";
 import { createLazPerf } from "laz-perf";
 import { parseXyzCsv } from "./terrain.js";
-import { logger } from "./logger.js";
-
-const execFileAsync = promisify(execFile);
+import { bagWorker } from "./bagWorker.js";
 
 // ---------------------------------------------------------------------------
 // Shared type (mirrors terrain.ts RawPoint — re-exported to avoid circular dep)
@@ -773,46 +768,8 @@ function lasPointsToRaw(points: { x: number; y: number; z: number }[]): RawPoint
  * (`src/lib/bag_parser.py`).
  */
 
-/**
- * Locate `bag_parser.py` by walking up from this module's directory.
- * Checks the module directory first (dev / production main-server path),
- * then one level up (production worker-thread path: dist/lib/ → dist/).
- */
-function findBagParserScript(): string {
-  const thisDir = dirname(fileURLToPath(import.meta.url));
-  const candidates = [
-    join(thisDir, "bag_parser.py"),        // dev: src/lib/  |  prod main: dist/
-    join(thisDir, "..", "bag_parser.py"),  // prod worker: dist/lib/ → dist/
-  ];
-  for (const c of candidates) {
-    if (existsSync(c)) return c;
-  }
-  throw new Error(
-    `bag_parser.py not found. Searched: ${candidates.join(", ")}. ` +
-      "Rebuild the server with `pnpm build` to copy the script to dist/.",
-  );
-}
-
-/**
- * Locate the Python user-site root (.pythonlibs) that contains h5py/pyproj.
- * Walks up from the bag_parser.py script looking for a `.pythonlibs` dir.
- */
-function findPythonUserBase(scriptPath: string): string | undefined {
-  let dir = dirname(scriptPath);
-  for (let i = 0; i < 6; i++) {
-    const candidate = join(dir, ".pythonlibs");
-    if (existsSync(candidate)) return candidate;
-    const parent = dirname(dir);
-    if (parent === dir) break; // filesystem root
-    dir = parent;
-  }
-  return undefined;
-}
-
 export async function parseBag(buffer: Buffer): Promise<RawPoint[]> {
-  const scriptPath = findBagParserScript();
-
-  // Write the buffer to a temp file that Python can open
+  // Write the buffer to a temp file that the persistent worker can open.
   const tmpPath = join(
     tmpdir(),
     `bag_${Date.now()}_${Math.random().toString(36).slice(2)}.bag`,
@@ -821,41 +778,13 @@ export async function parseBag(buffer: Buffer): Promise<RawPoint[]> {
   try {
     writeFileSync(tmpPath, buffer);
 
-    const pythonUserBase = findPythonUserBase(scriptPath);
-    const childEnv: NodeJS.ProcessEnv = {
-      ...process.env,
-      ...(pythonUserBase ? { PYTHONUSERBASE: pythonUserBase } : {}),
-    };
-
-    let stdout: string;
-    let stderr: string;
-    try {
-      ({ stdout, stderr } = await execFileAsync("python3", [scriptPath, tmpPath], {
-        env: childEnv,
-        // 128 MB covers up to ~4 M rows of CSV (lon,lat,depth ≈ 30 bytes each)
-        maxBuffer: 128 * 1024 * 1024,
-        // 5-minute ceiling for very large VR surveys
-        timeout: 5 * 60 * 1000,
-      }));
-    } catch (execErr) {
-      // execFile rejects on non-zero exit code; extract the stderr message
-      const stderrMsg =
-        (execErr && typeof execErr === "object" && "stderr" in execErr)
-          ? String((execErr as { stderr: unknown }).stderr).trim()
-          : String(execErr);
-      throw new Error(
-        stderrMsg
-          ? `BAG parse error: ${stderrMsg}`
-          : "BAG parsing failed (python3 exited with a non-zero status).",
-      );
-    }
-
-    if (stderr?.trim()) {
-      logger.warn({ source: "bag_parser.py" }, stderr.trim());
-    }
+    // Delegate to the module-level singleton worker process (bag_worker.py).
+    // The worker stays alive between calls so Python + h5py + pyproj are only
+    // loaded once, eliminating the ~500–700 ms cold-start on every invocation.
+    const csv = await bagWorker.parseFile(tmpPath);
 
     const points: RawPoint[] = [];
-    for (const line of stdout.split("\n")) {
+    for (const line of csv.split("\n")) {
       const trimmed = line.trim();
       if (!trimmed) continue;
       const parts = trimmed.split(",");
