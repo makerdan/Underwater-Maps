@@ -7,6 +7,57 @@ import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { VitePWA } from "vite-plugin-pwa";
 
 /**
+ * Send a native WebSocket ping frame (opcode 0x9) from the Vite dev server
+ * to every connected HMR client every 15 seconds.
+ *
+ * Why this is necessary in Replit:
+ *   The Replit mTLS proxy drops idle WebSocket connections after ~30 seconds.
+ *   Vite's built-in keepalive is a JSON application message
+ *   `{ type: "ping" }` sent by the BROWSER every `server.hmr.timeout` ms.
+ *   The proxy does not count application-layer data frames toward its idle
+ *   timeout — it only resets the timer when it sees a native WebSocket ping
+ *   frame (opcode 0x9) originating from the server side.
+ *
+ *   This plugin hooks the `vite:client:connect` / `vite:client:disconnect`
+ *   internal events emitted by Vite's WebSocket server to track each raw
+ *   `ws` WebSocket instance (exposed as `.socket` on the HotChannelClient
+ *   wrapper) and calls `ws.ping()` — which emits an opcode-0x9 frame —
+ *   every 15 seconds. This keeps the proxy alive without any browser-side
+ *   changes and prevents the spurious full page reloads that wiped loaded
+ *   datasets.
+ */
+function hmrNativePingPlugin(): Plugin {
+  return {
+    name: "bathyscan:hmr-native-ping",
+    apply: "serve",
+    configureServer(server) {
+      const PING_INTERVAL_MS = 15_000;
+      const timers = new Map<object, ReturnType<typeof setInterval>>();
+
+      const onConnect = (client: { socket?: { readyState: number; ping(): void } }) => {
+        const ws = client?.socket;
+        if (!ws || typeof ws.ping !== "function") return;
+        const id = setInterval(() => {
+          if (ws.readyState === 1 /* WebSocket.OPEN */) ws.ping();
+        }, PING_INTERVAL_MS);
+        timers.set(ws, id);
+      };
+
+      const onDisconnect = (client: { socket?: object }) => {
+        const ws = client?.socket;
+        if (!ws) return;
+        const id = timers.get(ws);
+        if (id !== undefined) { clearInterval(id); timers.delete(ws); }
+      };
+
+      // Vite 7 internal events — types use the public union so cast needed
+      server.ws.on("vite:client:connect" as Parameters<typeof server.ws.on>[0], onConnect as never);
+      server.ws.on("vite:client:disconnect" as Parameters<typeof server.ws.on>[0], onDisconnect as never);
+    },
+  };
+}
+
+/**
  * Build-time guard: fail the production build if the dev-only e2e test
  * back door (`window.__bathyTest`, installed by `src/lib/testHelpers.ts`)
  * leaks into any emitted chunk. The helpers expose a
@@ -81,6 +132,7 @@ export default defineConfig({
     __BUILD_HASH__: JSON.stringify(buildHash),
   },
   plugins: [
+    hmrNativePingPlugin(),
     failOnTestBackdoor(),
     react(),
     tailwindcss({ optimize: false }),
@@ -142,16 +194,11 @@ export default defineConfig({
     // "Error creating WebGL context" warning in headless Chromium) fires, even
     // after the app has rendered successfully. Disable it under the e2e
     // auth-bypass build so Playwright clicks reach the HUD directly.
-    //
-    // timeout also controls the client-side ping interval (Vite 7 source:
-    // `pingInterval: hmrTimeout`). The Replit mTLS proxy has a ~30 s idle
-    // WebSocket timeout; with the default 30 000 ms there is a race where the
-    // proxy drops the connection just before the ping lands, causing a full
-    // page reload. 15 000 ms keeps the connection alive with comfortable margin.
+    // The actual proxy-keepalive mechanism is hmrNativePingPlugin() above.
     hmr:
       process.env.VITE_DEV_AUTH_BYPASS === "1"
-        ? { overlay: false, timeout: 15000 }
-        : { timeout: 15000 },
+        ? { overlay: false }
+        : undefined,
     // In e2e mode, the api-server is started on a separate port by Playwright
     // and the frontend's relative `/api/*` requests must be proxied to it.
     ...(process.env.E2E_API_SERVER_URL

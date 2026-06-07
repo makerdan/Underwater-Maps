@@ -10,3 +10,4 @@
 - [BAG parser subprocess pitfalls](bag-parser-subprocess.md) — three non-obvious issues when replacing h5wasm with Python subprocess BAG parsing.
 - [Error boundary retry must use componentDidCatch](error-boundary-retry.md) — componentDidUpdate's prevState.hasError stays true→true on re-catch; use componentDidCatch for retry scheduling instead.
 - [fetchJsonWithProgress missing Bearer token](fetchjsonwithprogress-auth.md) — fetchJsonWithProgress bypasses customFetch auth wiring; any caller on an authed route must pass getAuthToken() result via init.headers.
+- [Replit proxy needs native WS ping to stay alive](replit-proxy-ws-ping.md) — Replit mTLS proxy drops WS after ~30 s idle; only opcode-0x9 frames reset the timer, not JSON data frames. Fix: hmrNativePingPlugin() in vite.config.ts.
