@@ -11,7 +11,7 @@
  *   backward path, which is stored in reverseDriftPath for DriftPath to render.
  */
 
-import React, { useRef, useMemo, useCallback } from "react";
+import React, { useRef, useMemo, useCallback, useEffect } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { WORLD_SIZE } from "@/lib/terrain";
@@ -112,6 +112,13 @@ export const DriftWaterPlane: React.FC<DriftWaterPlaneProps> = ({ surfaceY, terr
     geo.rotateX(-Math.PI / 2);
     return geo;
   }, []);
+
+  useEffect(() => {
+    return () => {
+      material.dispose();
+      geometry.dispose();
+    };
+  }, [material, geometry]);
 
   useFrame((_, delta) => {
     timeRef.current += delta;

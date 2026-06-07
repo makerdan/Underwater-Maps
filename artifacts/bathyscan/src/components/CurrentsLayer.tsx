@@ -77,6 +77,14 @@ const CurrentParticleLayer: React.FC<ParticleLayerProps> = ({ field, surfaceY, t
     [],
   );
 
+  useEffect(() => {
+    return () => { geometry.dispose(); };
+  }, [geometry]);
+
+  useEffect(() => {
+    return () => { material.dispose(); };
+  }, [material]);
+
   useFrame((_, delta) => {
     const points = pointsRef.current;
     if (!points) return;
@@ -167,6 +175,13 @@ const CurrentArrowLayer: React.FC<ArrowLayerProps> = ({ field, surfaceY }) => {
       }),
     [],
   );
+
+  useEffect(() => {
+    return () => {
+      geometry.dispose();
+      material.dispose();
+    };
+  }, [geometry, material]);
 
   useEffect(() => {
     const mesh = meshRef.current;

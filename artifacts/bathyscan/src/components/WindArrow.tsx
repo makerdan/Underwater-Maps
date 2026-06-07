@@ -15,7 +15,7 @@
  *   yaw = (90 - windDeg) * π/180 maps compass→R3F.
  */
 
-import React, { useRef, useMemo } from "react";
+import React, { useRef, useMemo, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useDriftStore } from "@/lib/driftStore";
@@ -113,6 +113,15 @@ export const WindArrow: React.FC<WindArrowProps> = ({ surfaceY }) => {
       }),
     [],
   );
+
+  useEffect(() => {
+    return () => {
+      featherGeo.dispose();
+      featherMat.dispose();
+      shaftMat.dispose();
+      headMat.dispose();
+    };
+  }, [featherGeo, featherMat, shaftMat, headMat]);
 
   useFrame((_, delta) => {
     if (!groupRef.current || !wp) return;
