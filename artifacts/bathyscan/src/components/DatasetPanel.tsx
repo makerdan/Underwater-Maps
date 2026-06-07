@@ -2081,6 +2081,10 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       for (const id of presetToAdd) {
         if (!vis.has(id)) st.toggleVisible({ datasetId: id, source: "preset" });
       }
+      // Drive AppState.datasetId to the first preset so useActiveDatasetSync
+      // fetches its terrain into AppState context — the primary TerrainMesh in
+      // SceneContents reads from AppState.terrain, not terrainStore directly.
+      if (presetToAdd[0]) setDatasetId(presetToAdd[0]);
       setPresetSelectedIds(new Set());
       setLibrarySelectedIds(new Set());
     };
@@ -2088,6 +2092,10 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     if (presetToAdd.length === 0) {
       // Only library datasets selected — toggle immediately.
       toggleLibrary();
+      // Drive the primary user dataset through the existing pending-load
+      // pipeline so AppState.terrain (and setGrids) are updated, which is what
+      // SceneContents uses to render the primary TerrainMesh.
+      if (libraryToAdd[0]) setPendingUserDatasetId(libraryToAdd[0]);
       setPresetSelectedIds(new Set());
       setLibrarySelectedIds(new Set());
       return;
@@ -2142,7 +2150,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         setPending(null);
       },
     });
-  }, [presetSelectedIds, librarySelectedIds]);
+  }, [presetSelectedIds, librarySelectedIds, setDatasetId, setPendingUserDatasetId]);
 
   const handleActionDelete = useCallback(() => {
     if (presetSelectedIds.size > 0) {

@@ -1,19 +1,25 @@
 /**
  * VisibleDatasetsLoader — fetches terrain + overview grids for every visible
- * *preset* dataset that doesn't already have them in the store.
+ * dataset that doesn't already have them in the store.
  *
  * Why this exists:
- *   Task #350 lets multiple datasets be visible at once. The primary dataset's
- *   grids are still loaded by `useActiveDatasetSync` (and committed to context
- *   for downstream consumers). Additional non-primary preset datasets need
- *   parallel fetches so their meshes/footprints render too. User-uploaded
- *   datasets carry their grids inline when added, so this loader skips them.
+ *   "Load Together" lets multiple datasets be visible at once. The primary
+ *   dataset's terrain is committed to AppState by useActiveDatasetSync (for
+ *   presets) or DatasetPanel's pending-load pipeline (for user uploads). The
+ *   non-primary (secondary) visible datasets need their grids fetched here so
+ *   NonPrimaryDatasetMeshes in TourScene can render them.
+ *
+ *   Prior to this version the loader only handled preset sources and assumed
+ *   user-uploaded grids were "already inline". That was true for freshly
+ *   uploaded datasets but not for existing library datasets loaded via
+ *   "Load Together" — they also need a /user/datasets/:id/terrain fetch.
  *
  * Implementation:
- *   React hooks can't live in loops, so we mount one `<PresetDatasetLoader>`
- *   child per missing entry. Each child runs the two React Query hooks (dedupe
- *   with `useActiveDatasetSync` via shared query keys) and writes the result
- *   to the terrain store via `setDatasetGrids`.
+ *   React hooks can't live in loops, so we mount one child component per
+ *   missing entry. Each child runs the two React Query hooks (deduped with
+ *   existing fetches via shared query keys) and writes the result to the
+ *   terrain store via setDatasetGrids. Once grids are present the child
+ *   unmounts so we don't keep dangling subscriptions.
  */
 import React, { useEffect } from "react";
 import {
@@ -21,6 +27,10 @@ import {
   useGetDatasetsIdOverview,
   getGetDatasetsIdTerrainQueryKey,
   getGetDatasetsIdOverviewQueryKey,
+  useGetUserDatasetsIdTerrain,
+  useGetUserDatasetsIdOverview,
+  getGetUserDatasetsIdTerrainQueryKey,
+  getGetUserDatasetsIdOverviewQueryKey,
 } from "@workspace/api-client-react";
 import { useTerrainStore } from "@/lib/terrainStore";
 
@@ -52,18 +62,54 @@ const PresetDatasetLoader: React.FC<{ datasetId: string }> = ({ datasetId }) => 
   return null;
 };
 
+const UserDatasetLoader: React.FC<{ datasetId: string }> = ({ datasetId }) => {
+  const { data: terrain } = useGetUserDatasetsIdTerrain(datasetId, {
+    query: {
+      enabled: !!datasetId,
+      queryKey: getGetUserDatasetsIdTerrainQueryKey(datasetId),
+    },
+  });
+  const { data: overview } = useGetUserDatasetsIdOverview(datasetId, {
+    query: {
+      enabled: !!datasetId,
+      queryKey: getGetUserDatasetsIdOverviewQueryKey(datasetId),
+    },
+  });
+
+  useEffect(() => {
+    if (!terrain || !overview) return;
+    // Rebrand stale embedded datasetId (mirrors DatasetPanel's user-load path).
+    const terrainStamped =
+      terrain.datasetId === datasetId ? terrain : { ...terrain, datasetId };
+    const overviewStamped =
+      overview.datasetId === datasetId ? overview : { ...overview, datasetId };
+    useTerrainStore.getState().setDatasetGrids(datasetId, {
+      activeGrid: terrainStamped,
+      overviewGrid: overviewStamped,
+    });
+  }, [datasetId, terrain, overview]);
+
+  return null;
+};
+
 export const VisibleDatasetsLoader: React.FC = () => {
   const visible = useTerrainStore((s) => s.visibleDatasets);
-  // Only preset entries need fetching; user-uploaded grids are already inline.
-  // Only mount a loader if grids are missing — once cached, the child unmounts
-  // so we don't keep dangling React Query subscriptions per dataset.
-  const needsLoad = visible.filter(
+  // Mount a child loader for each entry whose grids haven't arrived yet.
+  // Once grids are present (!activeGrid check fails) the child unmounts,
+  // keeping React Query subscriptions tidy.
+  const presetNeedsLoad = visible.filter(
     (v) => v.source === "preset" && (!v.activeGrid || !v.overviewGrid),
+  );
+  const userNeedsLoad = visible.filter(
+    (v) => v.source === "user" && (!v.activeGrid || !v.overviewGrid),
   );
   return (
     <>
-      {needsLoad.map((v) => (
+      {presetNeedsLoad.map((v) => (
         <PresetDatasetLoader key={v.datasetId} datasetId={v.datasetId} />
+      ))}
+      {userNeedsLoad.map((v) => (
+        <UserDatasetLoader key={v.datasetId} datasetId={v.datasetId} />
       ))}
     </>
   );
