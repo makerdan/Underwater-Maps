@@ -142,10 +142,16 @@ export default defineConfig({
     // "Error creating WebGL context" warning in headless Chromium) fires, even
     // after the app has rendered successfully. Disable it under the e2e
     // auth-bypass build so Playwright clicks reach the HUD directly.
+    //
+    // timeout also controls the client-side ping interval (Vite 7 source:
+    // `pingInterval: hmrTimeout`). The Replit mTLS proxy has a ~30 s idle
+    // WebSocket timeout; with the default 30 000 ms there is a race where the
+    // proxy drops the connection just before the ping lands, causing a full
+    // page reload. 15 000 ms keeps the connection alive with comfortable margin.
     hmr:
       process.env.VITE_DEV_AUTH_BYPASS === "1"
-        ? { overlay: false }
-        : undefined,
+        ? { overlay: false, timeout: 15000 }
+        : { timeout: 15000 },
     // In e2e mode, the api-server is started on a separate port by Playwright
     // and the frontend's relative `/api/*` requests must be proxied to it.
     ...(process.env.E2E_API_SERVER_URL
