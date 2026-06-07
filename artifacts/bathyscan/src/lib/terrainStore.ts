@@ -353,7 +353,6 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         ...prev,
         visibleDatasets: nextVisible,
         ...syncPrimaryGrids(nextVisible),
-        primaryDatasetIds: [datasetId],
         multiDatasetMode: false,
         evictedId: null,
       };

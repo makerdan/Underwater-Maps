@@ -431,6 +431,8 @@ router.post(
     }
     const cleared = stationListsCache.size;
     stationListsCache.clear();
+    stationListsFailureCache.clear();
+    tidalResultCache.clear();
     logger.info({ cleared }, "NOAA station caches cleared via admin endpoint");
     res.json({ ok: true, cleared });
   }),
