@@ -71,8 +71,9 @@ vi.mock("@/lib/context", () => ({
   useAppState: () => appStateValue,
 }));
 
-// MarkerLayer module imports R3F at runtime — replace with a stub.
-vi.mock("@/components/MarkerLayer", () => ({
+// markerGroupRef is now in its own module so MarkerLayer.tsx only exports
+// React components and Fast Refresh works correctly.
+vi.mock("@/lib/markerGroupRef", () => ({
   markerGroupRef: { current: null },
 }));
 

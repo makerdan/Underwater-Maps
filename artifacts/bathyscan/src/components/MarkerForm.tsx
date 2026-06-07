@@ -214,6 +214,9 @@ export const MarkerForm: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Guard against double-submit while a mutation is in-flight.
+    if (postMarkers.isPending || patchMarker.isPending) return;
+
     const labelResult = markerLabelSchema.safeParse(label);
     if (!labelResult.success) {
       setLabelError(labelResult.error.issues[0]?.message ?? "Invalid label");

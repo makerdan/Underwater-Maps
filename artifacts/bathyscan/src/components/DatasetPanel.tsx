@@ -19,6 +19,7 @@ import {
   getGetUserDatasetsIdTerrainQueryKey,
   getGetUserDatasetsIdOverviewQueryKey,
   getGetMarkersQueryKey,
+  getGetSettingsQueryKey,
   usePostDatasetsUpload,
   getGetSubstrateQueryKey,
   getAuthToken,
@@ -1230,6 +1231,14 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
               }
               void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
               void qc.invalidateQueries({ queryKey: getGetSubstrateQueryKey(data.savedDatasetId) });
+              // Invalidate markers for the new dataset so any pre-existing
+              // markers stored server-side appear immediately in the viewer.
+              void qc.invalidateQueries({
+                queryKey: getGetMarkersQueryKey({ datasetId: data.savedDatasetId }),
+              });
+              // Invalidate settings so any server-side defaults for the new
+              // dataset (e.g. waterType) are reflected without a manual reload.
+              void qc.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
               setSaveError(null);
               setLastUploadedFile(null);
               setSavingToAccount(false);
@@ -1755,6 +1764,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
   const onDrop = useCallback(
     (accepted: File[], rejected: FileRejection[]) => {
+      // Guard: ignore new drops while any upload path is already in progress.
+      if (postDatasetsUpload.isPending || chunkedPhase === "uploading" || chunkedPhase === "processing" || gcsPhase === "uploading" || gcsPhase === "processing") return;
+
       setUploadError(null);
       setSaveError(null);
       setChunkedPhase("idle");
@@ -1802,7 +1814,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         uploadFile(file);
       }
     },
-    [uploadFile, chunkedUploadFile, gcsUploadFile, interruptedSession, doResumeChunkedUpload],
+    [uploadFile, chunkedUploadFile, gcsUploadFile, interruptedSession, doResumeChunkedUpload, postDatasetsUpload.isPending, chunkedPhase, gcsPhase],
   );
 
   const handleRetrySave = useCallback(() => {

@@ -65,6 +65,13 @@ export function useTidalData(
     setRetryCount((c) => c + 1);
   }, []);
 
+  // Keep a ref to the latest lat/lon so the interval callback always uses
+  // the current coordinates even when they change between ticks.
+  const latRef = useRef(lat);
+  const lonRef = useRef(lon);
+  useEffect(() => { latRef.current = lat; }, [lat]);
+  useEffect(() => { lonRef.current = lon; }, [lon]);
+
   useEffect(() => {
     if (lat === null || lon === null) return;
 
@@ -72,14 +79,16 @@ export function useTidalData(
     let activeController: AbortController | null = null;
 
     async function fetchTidal() {
-      if (lat === null || lon === null) return;
+      const currentLat = latRef.current;
+      const currentLon = lonRef.current;
+      if (currentLat === null || currentLon === null) return;
       if (activeController) activeController.abort();
       const controller = new AbortController();
       activeController = controller;
       setLoading(true);
       try {
         const base = API_BASE.endsWith("/") ? API_BASE : `${API_BASE}/`;
-        let url = `${base}api/tidal?lat=${lat}&lon=${lon}`;
+        let url = `${base}api/tidal?lat=${currentLat}&lon=${currentLon}`;
         if (scrubDatetime) {
           url += `&datetime=${encodeURIComponent(scrubDatetime.toISOString())}`;
         }
@@ -91,7 +100,7 @@ export function useTidalData(
         if (controller.signal.aborted) return;
         // On network failure, try the offline pack
         if (!cancelled) {
-          const pack = await getPackForLocation(lat, lon).catch(() => null);
+          const pack = await getPackForLocation(currentLat, currentLon).catch(() => null);
           if (pack) {
             const dt = scrubDatetime ?? new Date();
             const packVal = getOfflineTideValue(pack, dt);

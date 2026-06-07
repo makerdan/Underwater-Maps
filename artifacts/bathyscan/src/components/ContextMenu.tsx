@@ -7,6 +7,7 @@
  */
 import React, { useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useLocation } from "wouter";
 import { useContextMenuStore } from "@/lib/contextMenuStore";
 
 const ITEM_HEIGHT = 30;
@@ -20,6 +21,14 @@ export const ContextMenu: React.FC = () => {
   const items = useContextMenuStore((s) => s.items);
   const hide = useContextMenuStore((s) => s.hide);
   const ref = useRef<HTMLUListElement>(null);
+
+  // Close the menu whenever the route changes (e.g. navigating to Settings).
+  const [location] = useLocation();
+  useEffect(() => {
+    if (open) hide();
+    // Intentionally omit `open` and `hide` — we only want to react to location changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location]);
 
   // useLayoutEffect (not useEffect) so the listeners are registered
   // synchronously after the DOM mutation and before the browser paints.

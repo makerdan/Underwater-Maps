@@ -18,7 +18,7 @@ import { computeMetersPerWorldUnit, boatMphToWorldUnitsPerSecond, BOAT_MIN_MPH, 
 import { tidalToWorldVelocity } from "@/lib/boatPhysics";
 import { useDriveBoatStore } from "@/lib/driveBoatStore";
 import { useCurrentsStore } from "@/lib/currentsStore";
-import { markerGroupRef } from "@/components/MarkerLayer";
+import { markerGroupRef } from "@/lib/markerGroupRef";
 import { useContextMenuStore, type ContextMenuItem } from "@/lib/contextMenuStore";
 import { useMarkerDetailStore } from "@/lib/markerDetailStore";
 import { useMarkerEditStore } from "@/lib/markerEditStore";

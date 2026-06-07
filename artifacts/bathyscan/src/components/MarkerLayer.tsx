@@ -17,13 +17,7 @@ import { useTerrainStore, VISIBLE_DATASETS_CAP } from "@/lib/terrainStore";
 import { MarkerSprite } from "./MarkerSprite";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useMarkerLayerStore } from "@/lib/markerLayerStore";
-
-/**
- * Module-level mutable ref to the marker group, consumed by useFlyControls
- * to raycast against marker meshes for right-click context menu detection.
- * Null when no markers are rendered.
- */
-export const markerGroupRef: { current: THREE.Group | null } = { current: null };
+import { markerGroupRef } from "@/lib/markerGroupRef";
 
 // ---------------------------------------------------------------------------
 // Fixed-slot hooks (hooks cannot be called in loops in React).
