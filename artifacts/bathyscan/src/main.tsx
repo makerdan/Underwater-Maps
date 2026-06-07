@@ -6,6 +6,20 @@ import { installTestHelpers } from "./lib/testHelpers";
 import { assertDevAuthBypassSafe, installDevAuthFetchPatch } from "./lib/devAuth";
 import { patchPerformanceMeasure } from "./lib/patchPerformanceMeasure";
 
+// Keep the Replit mTLS proxy from dropping the HMR WebSocket.
+// The server (hmrKeepalivePlugin in vite.config.ts) broadcasts a
+// "vite:keepalive" custom event every 10 s. We respond with hot.send(),
+// which calls ws.send() on the actual HMR WebSocket — creating genuine
+// browser→proxy WebSocket frame traffic that resets the proxy's
+// per-connection idle timer before the 30 s timeout fires.
+// Must live in a real Vite module (not an inline HTML script) so that
+// Vite's transform pipeline injects the import.meta.hot context.
+if (import.meta.env.DEV && import.meta.hot) {
+  import.meta.hot.on("vite:keepalive", () => {
+    import.meta.hot!.send("vite:keepalive-ack", {});
+  });
+}
+
 patchPerformanceMeasure();
 assertDevAuthBypassSafe();
 installDevAuthFetchPatch();

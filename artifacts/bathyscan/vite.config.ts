@@ -37,18 +37,28 @@ function hmrKeepalivePlugin(): Plugin {
     apply: "serve",
 
     configureServer(server) {
-      // ── 1a. HTTP keepalive endpoint ──────────────────────────────────────
-      // Responds 204 with no body. The browser fetches this every 10 s so
-      // that the proxy session (shared with the HMR WS) never goes idle.
-      server.middlewares.use("/__vite_keepalive", (_req, res) => {
-        res.writeHead(204, { "Cache-Control": "no-store" });
-        res.end();
-      });
+      // ── 1. Server→client custom event broadcast ──────────────────────────
+      // Every 10 s the server sends a vite:keepalive custom event to every
+      // connected HMR client. The client (see transformIndexHtml below)
+      // responds immediately with import.meta.hot.send(), which calls
+      // ws.send() on the actual HMR WebSocket — creating genuine
+      // browser→proxy WebSocket frame traffic that resets the proxy's
+      // per-connection idle timer on the browser→proxy leg.
+      //
+      // This is necessary because:
+      //  • Server-side native pings (opcode 0x9) are handled by the proxy
+      //    at its own layer and do NOT reach the browser→proxy idle counter.
+      //  • HTTP fetch keepalives only reset the timer for the first request
+      //    (new TCP connection); subsequent fetches reuse the pooled TCP
+      //    connection and the proxy doesn't count them as new activity.
+      //  • Only actual WebSocket text frames FROM the browser reset the
+      //    browser→proxy leg idle timer reliably.
+      const broadcastId = setInterval(() => {
+        server.ws.send({ type: "custom", event: "vite:keepalive" });
+      }, 10_000);
+      server.httpServer?.once("close", () => clearInterval(broadcastId));
 
-      // ── 1b. Server-side native WS ping (belt-and-suspenders) ─────────────
-      // "connection" is in Vite 7's wsServerEvents so this routes directly
-      // to the underlying ws.WebSocketServer; the callback gets the raw
-      // ws.WebSocket instance which has .ping() for native opcode-0x9 frames.
+      // ── 2. Server-side native WS ping (belt-and-suspenders) ──────────────
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (server.ws.on as any)("connection", (socket: any) => {
         if (!socket || typeof socket.ping !== "function") return;
@@ -57,30 +67,19 @@ function hmrKeepalivePlugin(): Plugin {
         }, 15_000);
         socket.on("close", () => clearInterval(id));
       });
+
+      // ── 3. HTTP keepalive endpoint (belt-and-suspenders fallback) ─────────
+      server.middlewares.use("/__vite_keepalive", (_req, res) => {
+        res.writeHead(204, { "Cache-Control": "no-store" });
+        res.end();
+      });
     },
 
-    // ── 2. Browser heartbeat script ─────────────────────────────────────────
-    // Injected before anything else in <head>. Uses an absolute-path URL
-    // (/__vite_keepalive) so it works regardless of the app's base path.
-    // The fetch goes to the same Replit proxy host as the HMR WebSocket,
-    // resetting the proxy's session idle timer.
-    transformIndexHtml() {
-      return [
-        {
-          tag: "script",
-          attrs: { type: "text/javascript" },
-          injectTo: "head-prepend" as const,
-          children: [
-            "(function(){",
-            "  if(typeof fetch!=='function')return;",
-            "  setInterval(function(){",
-            "    fetch('/__vite_keepalive',{method:'HEAD',cache:'no-store'}).catch(function(){});",
-            "  },10000);",
-            "})();",
-          ].join(""),
-        },
-      ];
-    },
+    // ── 4. Browser-side WS reply handler ────────────────────────────────────
+    // The handler is registered in src/main.tsx (a real Vite module) so that
+    // Vite's transform pipeline injects the import.meta.hot context.
+    // Inline HTML <script type="module"> blocks are NOT transformed by Vite,
+    // so import.meta.hot would be undefined inside them — do not use that.
   };
 }
 
