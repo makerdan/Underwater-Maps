@@ -59,7 +59,7 @@ interface TerrainStore {
 
   /**
    * True when the user has explicitly opted into side-by-side multi-dataset viewing
-   * (via toggleVisible / "Show together"). False in normal sequential navigation.
+   * (via toggleVisible / "Load together"). False in normal sequential navigation.
    * When false, setSinglePrimary evicts all prior datasets before promoting a new one.
    */
   multiDatasetMode: boolean;

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { subscribeToReconnect, markServerUnreachable } from "@/lib/queryClient";
+import { subscribeToReconnect, markServerUnreachable, queryClient } from "@/lib/queryClient";
 import { useDropzone } from "react-dropzone";
 import type { FileRejection } from "react-dropzone";
 import { useQueryClient } from "@tanstack/react-query";
@@ -24,10 +24,12 @@ import {
   getGetSubstrateQueryKey,
   getAuthToken,
   hasAuthTokenGetter,
+  getDatasetsIdPreview,
+  getGetDatasetsIdPreviewQueryKey,
 } from "@workspace/api-client-react";
 import type { DatasetMeta, UserDatasetMeta } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
-import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
+import { requestDatasetSwitch, useSimulatedDataStore } from "@/lib/simulatedDataStore";
 import { useTerrainStore, VISIBLE_DATASETS_CAP } from "@/lib/terrainStore";
 import type { DatasetSource } from "@/lib/terrainStore";
 import { useUiStore } from "@/lib/uiStore";
@@ -2056,23 +2058,90 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   };
 
   // ─── Action-bar handlers ─────────────────────────────────────────────────
-  const handleShowTogether = useCallback(() => {
+  const handleLoadTogether = useCallback(async () => {
     const state = useTerrainStore.getState();
     const visibleIds = new Set(state.visibleDatasets.map((v) => v.datasetId));
-    for (const id of presetSelectedIds) {
-      if (!visibleIds.has(id)) {
-        state.toggleVisible({ datasetId: id, source: "preset" });
-        visibleIds.add(id);
+
+    const presetToAdd = [...presetSelectedIds].filter((id) => !visibleIds.has(id));
+    const libraryToAdd = [...librarySelectedIds].filter((id) => !visibleIds.has(id));
+
+    // Library datasets carry grids inline — toggle them immediately, no preflight.
+    const toggleLibrary = () => {
+      const st = useTerrainStore.getState();
+      const vis = new Set(st.visibleDatasets.map((v) => v.datasetId));
+      for (const id of libraryToAdd) {
+        if (!vis.has(id)) st.toggleVisible({ datasetId: id, source: "user" });
       }
-    }
-    for (const id of librarySelectedIds) {
-      if (!visibleIds.has(id)) {
-        state.toggleVisible({ datasetId: id, source: "user" });
-        visibleIds.add(id);
+    };
+
+    // Toggle preset datasets and clear selection after preflight passes.
+    const togglePresetsAndClear = () => {
+      const st = useTerrainStore.getState();
+      const vis = new Set(st.visibleDatasets.map((v) => v.datasetId));
+      for (const id of presetToAdd) {
+        if (!vis.has(id)) st.toggleVisible({ datasetId: id, source: "preset" });
       }
+      setPresetSelectedIds(new Set());
+      setLibrarySelectedIds(new Set());
+    };
+
+    if (presetToAdd.length === 0) {
+      // Only library datasets selected — toggle immediately.
+      toggleLibrary();
+      setPresetSelectedIds(new Set());
+      setLibrarySelectedIds(new Set());
+      return;
     }
-    setPresetSelectedIds(new Set());
-    setLibrarySelectedIds(new Set());
+
+    const { suppressed, setPending } = useSimulatedDataStore.getState();
+
+    // Toggle library datasets now; they never need a preflight.
+    toggleLibrary();
+
+    if (suppressed) {
+      togglePresetsAndClear();
+      return;
+    }
+
+    // Fetch previews for preset datasets in parallel (errors → proceed).
+    const results = await Promise.all(
+      presetToAdd.map(async (id) => {
+        try {
+          const preview = await queryClient.fetchQuery({
+            queryKey: getGetDatasetsIdPreviewQueryKey(id),
+            queryFn: () => getDatasetsIdPreview(id),
+            staleTime: 30_000,
+          });
+          return { id, preview };
+        } catch {
+          return { id, preview: null };
+        }
+      }),
+    );
+
+    const firstSimulated = results.find(
+      (r) =>
+        r.preview?.dataSource === "synthetic" || r.preview?.dataSource === "unknown",
+    );
+
+    if (!firstSimulated) {
+      togglePresetsAndClear();
+      return;
+    }
+
+    // Show one combined warning dialog for the preset batch.
+    setPending({
+      datasetId: firstSimulated.id,
+      datasetName: firstSimulated.preview?.name ?? firstSimulated.id,
+      preview: firstSimulated.preview!,
+      onConfirm: () => {
+        setPending(null);
+        togglePresetsAndClear();
+      },
+      onCancel: () => {
+        setPending(null);
+      },
+    });
   }, [presetSelectedIds, librarySelectedIds]);
 
   const handleActionDelete = useCallback(() => {
@@ -2507,7 +2576,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                     }}>
                       {presetSelectedIds.size + librarySelectedIds.size} selected
                     </span>
-                    <button data-testid="btn-action-show-together" onClick={handleShowTogether} style={ACTION_BTN_STYLE}>Show Together</button>
+                    <button data-testid="btn-action-load-together" onClick={() => { void handleLoadTogether(); }} style={ACTION_BTN_STYLE}>Load Together</button>
                     <button
                       data-testid="btn-action-delete"
                       onClick={handleActionDelete}
