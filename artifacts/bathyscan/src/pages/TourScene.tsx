@@ -306,7 +306,7 @@ const NonPrimaryDatasetMeshes: React.FC<{
               position={[cx, cy, cz]}
               scale={[xScale, yScale, zScale]}
             >
-              <TerrainMesh grid={g} />
+              <TerrainMesh grid={g} depthBias />
               {showLandmass && <LandmassMesh grid={g} />}
               {tidalOverlay && secTidalData && (
                 <TidalSceneContents

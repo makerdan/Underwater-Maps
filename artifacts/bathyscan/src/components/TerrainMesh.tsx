@@ -28,6 +28,7 @@ const TILING_SCALE = (() => {
 
 interface TerrainMeshProps {
   grid: TerrainData;
+  depthBias?: boolean;
 }
 
 /**
@@ -46,7 +47,7 @@ interface TerrainMeshProps {
  * - Exposes a ref to the underlying THREE.Mesh for raycasting.
  */
 export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
-  ({ grid }, ref) => {
+  ({ grid, depthBias = false }, ref) => {
     const prevGeometryRef = useRef<THREE.BufferGeometry | null>(null);
     const prevSkirtGeometryRef = useRef<THREE.BufferGeometry | null>(null);
     const fadeRef = useRef({ opacity: 0, fading: false });
@@ -159,6 +160,17 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
         opacity: 0,
       });
     }, []);
+
+    // Apply depth bias (polygonOffset) to prevent z-fighting when this mesh
+    // is a secondary dataset overlapping the primary in the same depth range.
+    useEffect(() => {
+      material.polygonOffset = depthBias;
+      material.polygonOffsetFactor = depthBias ? 1 : 0;
+      material.polygonOffsetUnits = depthBias ? 1 : 0;
+      skirtMaterial.polygonOffset = depthBias;
+      skirtMaterial.polygonOffsetFactor = depthBias ? 1 : 0;
+      skirtMaterial.polygonOffsetUnits = depthBias ? 1 : 0;
+    }, [depthBias, material, skirtMaterial]);
 
     // Upgrade zone weights in-place when AI classification arrives.
     // This avoids a full geometry rebuild — only the attribute buffer is updated.
