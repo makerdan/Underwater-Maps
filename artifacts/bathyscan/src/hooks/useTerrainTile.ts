@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useTerrainTileStore } from "@/lib/terrainTileStore";
+import { getPersistentTile, putPersistentTile } from "@/lib/tileCache";
 
 interface Bbox {
   minLon: number;
@@ -8,9 +9,10 @@ interface Bbox {
   maxLat: number;
 }
 
+const CACHE_NAME = "bathyscan-terrain-tiles";
 const CACHE_MAX = 6;
 
-/** Module-level LRU: bboxKey → object URL. Persists across hook lifetimes. */
+/** L1 module-level LRU: bboxKey → object URL. Survives within a page session. */
 const terrainTileCache = new Map<string, string>();
 
 function lruGet(key: string): string | undefined {
@@ -37,13 +39,11 @@ function lruPut(key: string, url: string): void {
  * the given bounding box and stores the resulting object URL in
  * `useTerrainTileStore`.
  *
- * - A module-level LRU cache (up to 6 entries) keeps object URLs alive across
- *   store clears. Toggling terrain off and back on for the same bbox reuses the
- *   cached URL — no second HTTP round-trip fires.
- * - URLs are revoked only when they age out of the LRU (not on toggle-off or
- *   bbox change).
- * - The store's `bboxKey` also guards against duplicate fetches when the
- *   OverviewMap remounts with the same dataset.
+ * Cache hierarchy:
+ *   L1  — module-level LRU (up to 6 object URLs, survives within a page session)
+ *   L2  — browser Cache API (persists across page reloads, 24 h TTL)
+ *   L3  — network fetch from /api/terrain/terrain-tile
+ *
  * - Pass `bbox = null` (when `terrainImagery` is off) to clear the store
  *   without making any network request.
  */
@@ -66,7 +66,7 @@ export function useTerrainTile(bbox: Bbox | null, tileSize = 512): void {
       return;
     }
 
-    // LRU hit: restore from cache without a network request.
+    // L1 hit: restore from in-memory LRU without any async work.
     const cached = lruGet(bboxKey);
     if (cached) {
       clear();
@@ -81,30 +81,46 @@ export function useTerrainTile(bbox: Bbox | null, tileSize = 512): void {
     clear();
     setLoading(true, bboxKey);
 
-    const bboxParam = `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat}`;
-    const url = `/api/terrain/terrain-tile?bbox=${encodeURIComponent(bboxParam)}&size=${tileSize}`;
-
     let cancelled = false;
 
-    fetch(url, { signal: controller.signal })
-      .then(async (res) => {
+    (async () => {
+      // L2: check the persistent Cache API before hitting the network.
+      const persistedBlob = await getPersistentTile(CACHE_NAME, bboxKey);
+      if (cancelled) return;
+
+      if (persistedBlob) {
+        const objectUrl = URL.createObjectURL(persistedBlob);
+        lruPut(bboxKey, objectUrl);
+        setTileUrl(objectUrl, bboxKey);
+        return;
+      }
+
+      // L3: fetch from the network.
+      const bboxParam = `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat}`;
+      const url = `/api/terrain/terrain-tile?bbox=${encodeURIComponent(bboxParam)}&size=${tileSize}`;
+
+      try {
+        const res = await fetch(url, { signal: controller.signal });
         if (cancelled) return;
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
         const blob = await res.blob();
         if (cancelled) return;
+
+        // Persist to L2 (fire-and-forget; errors are swallowed inside putPersistentTile).
+        putPersistentTile(CACHE_NAME, bboxKey, blob).catch(() => undefined);
+
         const objectUrl = URL.createObjectURL(blob);
         lruPut(bboxKey, objectUrl);
         setTileUrl(objectUrl, bboxKey);
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         if (cancelled) return;
         if ((err as Error).name === "AbortError") return;
         const msg = err instanceof Error ? err.message : "Unknown error";
         console.warn(`[useTerrainTile] fetch failed: ${msg}`);
         setError(msg);
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
