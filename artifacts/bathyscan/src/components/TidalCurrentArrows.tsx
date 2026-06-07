@@ -19,6 +19,7 @@ interface TidalCurrentArrowsProps {
   surfaceY: number;
   depthLayer: DepthLayer;
   terrain: TerrainData;
+  depthBias?: boolean;
 }
 
 const DENSITY_MAP: Record<string, number> = {
@@ -69,6 +70,7 @@ export const TidalCurrentArrows: React.FC<TidalCurrentArrowsProps> = ({
   currentSpeed,
   surfaceY,
   depthLayer,
+  depthBias = false,
 }) => {
   const yOffset = LAYER_OFFSETS[depthLayer] ?? 0;
   const attenuate = LAYER_SPEED_ATTENUATE[depthLayer] ?? 1.0;
@@ -91,6 +93,7 @@ export const TidalCurrentArrows: React.FC<TidalCurrentArrowsProps> = ({
       animate
       opacity={layerOpacity}
       renderOrder={3}
+      depthBias={depthBias}
     />
   );
 };

@@ -71,6 +71,13 @@ export interface DirectionArrowFieldProps {
    * Omit for purely flat / heading-only flow.
    */
   terrain?: TerrainData;
+  /**
+   * When true, applies polygonOffset to the arrow material so it pulls
+   * slightly forward in the depth buffer. Use when the arrows are rendered
+   * on top of a secondary-dataset mesh that shares the same depth-buffer
+   * positions as the primary dataset.
+   */
+  depthBias?: boolean;
 }
 
 function buildArrowGeometry(): THREE.BufferGeometry {
@@ -101,6 +108,7 @@ export const DirectionArrowField: React.FC<DirectionArrowFieldProps> = ({
   renderOrder = 3,
   opacity = 0.85,
   terrain,
+  depthBias = false,
 }) => {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const count = positions ? positions.length : density * density;
@@ -119,6 +127,12 @@ export const DirectionArrowField: React.FC<DirectionArrowFieldProps> = ({
       }),
     [color, opacity],
   );
+
+  useEffect(() => {
+    material.polygonOffset = depthBias;
+    material.polygonOffsetFactor = depthBias ? 1 : 0;
+    material.polygonOffsetUnits = depthBias ? 1 : 0;
+  }, [depthBias, material]);
 
   useEffect(() => {
     return () => {

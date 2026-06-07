@@ -7,6 +7,7 @@ import type { TerrainData } from "@workspace/api-client-react";
 interface TidalWaterPlaneProps {
   tideHeight: number;
   terrain: TerrainData;
+  depthBias?: boolean;
 }
 
 function computeSurfaceY(terrain: TerrainData, tideHeightM: number): number {
@@ -16,7 +17,7 @@ function computeSurfaceY(terrain: TerrainData, tideHeightM: number): number {
   return seaSurfaceY + tideOffsetY;
 }
 
-export const TidalWaterPlane: React.FC<TidalWaterPlaneProps> = ({ tideHeight, terrain }) => {
+export const TidalWaterPlane: React.FC<TidalWaterPlaneProps> = ({ tideHeight, terrain, depthBias = false }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const matRef = useRef<THREE.MeshStandardMaterial>(null);
   const targetY = useRef(computeSurfaceY(terrain, tideHeight));
@@ -70,6 +71,9 @@ export const TidalWaterPlane: React.FC<TidalWaterPlaneProps> = ({ tideHeight, te
         depthWrite={false}
         roughness={0.1}
         metalness={0.2}
+        polygonOffset={depthBias}
+        polygonOffsetFactor={depthBias ? 1 : 0}
+        polygonOffsetUnits={depthBias ? 1 : 0}
       />
     </mesh>
   );

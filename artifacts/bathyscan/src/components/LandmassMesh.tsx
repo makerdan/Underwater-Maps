@@ -6,6 +6,7 @@ import type { TerrainData } from "@workspace/api-client-react";
 
 interface LandmassMeshProps {
   grid: TerrainData;
+  depthBias?: boolean;
 }
 
 /** Neutral mid-grey used when the user selects the "flat" landmass style. */
@@ -108,7 +109,7 @@ export function buildLandmassGeometry(
  * array. Coastline cells (elevation = 0) meet the bathymetry at y = 0 with
  * no seam. Only rendered when topography is present on the grid.
  */
-export const LandmassMesh: React.FC<LandmassMeshProps> = ({ grid }) => {
+export const LandmassMesh: React.FC<LandmassMeshProps> = ({ grid, depthBias = false }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const prevGeoRef = useRef<THREE.BufferGeometry | null>(null);
 
@@ -129,6 +130,12 @@ export const LandmassMesh: React.FC<LandmassMeshProps> = ({ grid }) => {
       transparent: true,
     });
   }, []);
+
+  useEffect(() => {
+    material.polygonOffset = depthBias;
+    material.polygonOffsetFactor = depthBias ? 1 : 0;
+    material.polygonOffsetUnits = depthBias ? 1 : 0;
+  }, [depthBias, material]);
 
   useEffect(() => {
     const prev = prevGeoRef.current;

@@ -307,13 +307,14 @@ const NonPrimaryDatasetMeshes: React.FC<{
               scale={[xScale, yScale, zScale]}
             >
               <TerrainMesh grid={g} depthBias />
-              {showLandmass && <LandmassMesh grid={g} />}
+              {showLandmass && <LandmassMesh grid={g} depthBias />}
               {tidalOverlay && secTidalData && (
                 <TidalSceneContents
                   tidalData={secTidalData}
                   depthLayer={depthLayer}
                   terrain={g}
                   showWaterSurface={showWaterSurface}
+                  depthBias
                 />
               )}
             </group>
@@ -378,6 +379,7 @@ interface TidalSceneContentsProps {
   depthLayer: DepthLayer;
   terrain: TerrainData;
   showWaterSurface: boolean;
+  depthBias?: boolean;
 }
 
 const TidalSceneContents: React.FC<TidalSceneContentsProps> = ({
@@ -385,6 +387,7 @@ const TidalSceneContents: React.FC<TidalSceneContentsProps> = ({
   depthLayer,
   terrain,
   showWaterSurface,
+  depthBias = false,
 }) => {
   if (!tidalData?.available) return null;
 
@@ -393,7 +396,7 @@ const TidalSceneContents: React.FC<TidalSceneContentsProps> = ({
   return (
     <>
       {showWaterSurface && (
-        <TidalWaterPlane tideHeight={tidalData.tideHeight} terrain={terrain} />
+        <TidalWaterPlane tideHeight={tidalData.tideHeight} terrain={terrain} depthBias={depthBias} />
       )}
       <TidalCurrentArrows
         currentDirection={tidalData.currentDirection}
@@ -401,6 +404,7 @@ const TidalSceneContents: React.FC<TidalSceneContentsProps> = ({
         surfaceY={surfY + (tidalData.tideHeight / ((terrain.maxDepth - terrain.minDepth) || 1)) * MAX_DEPTH_WORLD}
         depthLayer={depthLayer}
         terrain={terrain}
+        depthBias={depthBias}
       />
     </>
   );
