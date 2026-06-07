@@ -116,6 +116,8 @@ interface TooltipState {
   depth: number;
 }
 
+const tileImageCache = new Map<string, HTMLImageElement>();
+
 export const OverviewMap: React.FC = () => {
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
   const setPendingDropIn = useUiStore((s) => s.setPendingDropIn);
@@ -278,8 +280,18 @@ export const OverviewMap: React.FC = () => {
       dirtyRef.current = true;
       return;
     }
+    const cached = tileImageCache.get(satelliteTileUrl);
+    if (cached) {
+      satelliteImgRef.current = cached;
+      dirtyRef.current = true;
+      return;
+    }
     const img = new Image();
-    img.onload = () => { satelliteImgRef.current = img; dirtyRef.current = true; };
+    img.onload = () => {
+      tileImageCache.set(satelliteTileUrl, img);
+      satelliteImgRef.current = img;
+      dirtyRef.current = true;
+    };
     img.onerror = () => { satelliteImgRef.current = null; dirtyRef.current = true; };
     img.src = satelliteTileUrl;
   }, [satelliteTileUrl]);
@@ -295,8 +307,18 @@ export const OverviewMap: React.FC = () => {
       dirtyRef.current = true;
       return;
     }
+    const cached = tileImageCache.get(terrainTileUrl);
+    if (cached) {
+      terrainImgRef.current = cached;
+      dirtyRef.current = true;
+      return;
+    }
     const img = new Image();
-    img.onload = () => { terrainImgRef.current = img; dirtyRef.current = true; };
+    img.onload = () => {
+      tileImageCache.set(terrainTileUrl, img);
+      terrainImgRef.current = img;
+      dirtyRef.current = true;
+    };
     img.onerror = () => { terrainImgRef.current = null; dirtyRef.current = true; };
     img.src = terrainTileUrl;
   }, [terrainTileUrl]);

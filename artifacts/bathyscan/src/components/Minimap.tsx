@@ -112,6 +112,8 @@ function drawMarkerDots(
   }
 }
 
+const tileImageCache = new Map<string, HTMLImageElement>();
+
 export const Minimap: React.FC = () => {
   const { terrain } = useAppState();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -165,8 +167,24 @@ export const Minimap: React.FC = () => {
       satelliteImgRef.current = null;
       return;
     }
+    const cached = tileImageCache.get(tileUrl);
+    if (cached) {
+      satelliteImgRef.current = cached;
+      // Redraw immediately with the cached image.
+      const canvas = canvasRef.current;
+      if (canvas && terrain) {
+        const ctx = canvas.getContext("2d");
+        if (ctx && heatmapCanvasRef.current) {
+          rebuildStaticLayer(terrain);
+          const camState = useCameraStore.getState();
+          compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading, terrain);
+        }
+      }
+      return;
+    }
     const img = new Image();
     img.onload = () => {
+      tileImageCache.set(tileUrl, img);
       satelliteImgRef.current = img;
       // Redraw immediately so satellite background appears on load.
       const canvas = canvasRef.current;
