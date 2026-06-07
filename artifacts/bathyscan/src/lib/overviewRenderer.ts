@@ -219,6 +219,31 @@ export function renderHeatmap(
   ctx.drawImage(bitmap, t.offsetX, t.offsetY, terrainW, terrainH);
 }
 
+/**
+ * Draw a heatmap bitmap for a dataset whose bounding box is `dataBbox`,
+ * positioned within a world-space coordinate frame defined by `worldGrid` + `t`.
+ *
+ * Used in multi-dataset mode where the transform is derived from the combined
+ * extent of all visible datasets rather than a single dataset's bbox.
+ */
+export function renderHeatmapAtBbox(
+  ctx: CanvasRenderingContext2D,
+  bitmap: HTMLCanvasElement,
+  dataBbox: { minLon: number; maxLon: number; minLat: number; maxLat: number },
+  worldGrid: TerrainData,
+  t: OverviewTransform,
+): void {
+  // Top-left in canvas space = NW corner (minLon, maxLat)
+  // Bottom-right           = SE corner (maxLon, minLat)
+  const [x0, y0] = lonLatToCanvas(dataBbox.minLon, dataBbox.maxLat, worldGrid, t);
+  const [x1, y1] = lonLatToCanvas(dataBbox.maxLon, dataBbox.minLat, worldGrid, t);
+  const w = x1 - x0;
+  const h = y1 - y0;
+  if (w <= 0 || h <= 0) return;
+  ctx.imageSmoothingEnabled = t.scale < 4;
+  ctx.drawImage(bitmap, x0, y0, w, h);
+}
+
 /** Draw lat/lon grid lines with degree labels. Only visible at scale ≥ 2. */
 export function renderGridLines(
   ctx: CanvasRenderingContext2D,

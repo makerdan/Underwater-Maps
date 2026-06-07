@@ -34,6 +34,7 @@ import {
   lonRangeOf,
   normaliseLon,
   renderHeatmap,
+  renderHeatmapAtBbox,
   renderContourLines,
   renderGridLines,
   renderMarkers,
@@ -181,6 +182,14 @@ export const OverviewMap: React.FC = () => {
 
   // --- Stable refs (no React state — updated imperatively in event handlers / rAF) ---
   const bitmapRef = useRef<HTMLCanvasElement | null>(null);
+  /** Offscreen heatmap bitmaps keyed by datasetId for secondary (non-first) visible datasets. */
+  const secondaryBitmapsRef = useRef<Map<string, HTMLCanvasElement>>(new Map());
+  /**
+   * Synthetic world-space reference grid covering the combined lat/lon extent
+   * of all visible datasets that have overview grids loaded. null when only
+   * one dataset is visible (fall back to overviewGrid as coordinate frame).
+   */
+  const worldGridRef = useRef<import("@workspace/api-client-react").TerrainData | null>(null);
   const transformRef = useRef<OverviewTransform | null>(null);
   const markersRef = useRef<Marker[]>([]);
   const savedTrailsRef = useRef<CanvasSavedTrail[]>([]);
@@ -770,11 +779,64 @@ export const OverviewMap: React.FC = () => {
     dirtyRef.current = true;
   }, [overviewGrid, colormapTheme, paletteShallow, paletteDeep, paletteBandColors, paletteCustomStops, paletteBandBoundaries]);
 
-  // Compute initial transform whenever the grid or canvas is ready
+  // Maintain secondary dataset bitmaps and the combined world-space bbox grid.
+  // Runs whenever visibleDatasets changes OR palette/colormap changes so all
+  // secondary bitmaps stay in sync with the primary colormap theme.
+  useEffect(() => {
+    // Collect all entries that have an overview grid, in order.
+    const withGrid = visibleDatasets.filter((v) => !!v.overviewGrid);
+    const primaryId = visibleDatasets[0]?.datasetId ?? null;
+
+    // Remove bitmaps for datasets that are no longer visible.
+    const visibleIds = new Set(withGrid.map((v) => v.datasetId));
+    for (const id of secondaryBitmapsRef.current.keys()) {
+      if (!visibleIds.has(id)) secondaryBitmapsRef.current.delete(id);
+    }
+
+    // Build/rebuild bitmaps for every secondary (non-first) visible dataset.
+    for (const v of withGrid) {
+      if (v.datasetId === primaryId) continue; // primary handled by the effect above
+      const og = v.overviewGrid!;
+      secondaryBitmapsRef.current.set(v.datasetId, buildHeatmapBitmap(og, colormapTheme));
+    }
+
+    // Compute the combined bbox when 2+ datasets have overview grids loaded.
+    if (withGrid.length > 1) {
+      let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+      for (const v of withGrid) {
+        const og = v.overviewGrid!;
+        minLon = Math.min(minLon, og.minLon);
+        maxLon = Math.max(maxLon, og.maxLon);
+        minLat = Math.min(minLat, og.minLat);
+        maxLat = Math.max(maxLat, og.maxLat);
+      }
+      // Cast: only bbox fields are used by projection helpers; depth array is unused.
+      worldGridRef.current = { minLon, maxLon, minLat, maxLat } as unknown as import("@workspace/api-client-react").TerrainData;
+    } else {
+      worldGridRef.current = null;
+    }
+
+    // Re-initialize the canvas transform whenever the visible set changes so
+    // all loaded datasets fit in view at once.  Uses the combined world-space
+    // bbox when multiple datasets are present; falls back to the single loaded
+    // grid otherwise (mirrors what initTransform does on first primary load).
+    const canvas = canvasRef.current;
+    if (canvas && withGrid.length > 0) {
+      const refGrid = worldGridRef.current ?? withGrid[0]!.overviewGrid!;
+      transformRef.current = computeInitialTransform(refGrid, canvas.width, canvas.height);
+    }
+
+    dirtyRef.current = true;
+  }, [visibleDatasets, colormapTheme, paletteShallow, paletteDeep, paletteBandColors, paletteCustomStops, paletteBandBoundaries]);
+
+  // Compute initial transform whenever the grid (or combined world grid) or canvas is ready
   const initTransform = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas || !overviewGrid) return;
-    transformRef.current = computeInitialTransform(overviewGrid, canvas.width, canvas.height);
+    // Use the world grid (combined bbox) when multiple datasets are loaded
+    // so the initial view fits all of them at once.
+    const refGrid = worldGridRef.current ?? overviewGrid;
+    transformRef.current = computeInitialTransform(refGrid, canvas.width, canvas.height);
   }, [overviewGrid]);
 
   useEffect(() => {
@@ -801,6 +863,8 @@ export const OverviewMap: React.FC = () => {
 
     const loop = () => {
       const ctx = canvas.getContext("2d");
+      // `grid` is the primary dataset's overview grid — used for per-dataset data
+      // (depth range for colormap legend, upscale request bbox, satellite tile).
       const grid = overviewGrid;
       const bitmap = bitmapRef.current;
       const t = transformRef.current;
@@ -809,6 +873,12 @@ export const OverviewMap: React.FC = () => {
         rafRef.current = requestAnimationFrame(loop);
         return;
       }
+
+      // When multiple datasets are visible, `worldGrid` is a synthetic TerrainData
+      // whose bbox spans the combined extent of all loaded overview grids.
+      // All lon/lat → canvas projections use this so every dataset sits in a shared
+      // coordinate frame.  Falls back to the primary grid when only one is loaded.
+      const worldGrid = worldGridRef.current ?? grid;
 
       // Skip the draw when nothing has changed. GPS pulsing and trail recording
       // require continuous animation; everything else can wait for a dirty mark.
@@ -842,71 +912,138 @@ export const OverviewMap: React.FC = () => {
       ctx.fillRect(0, 0, cW, cH);
 
       // Satellite imagery background — draw behind the heatmap so real-world
-      // landmarks are visible. Same bounding-box extent as the terrain grid.
+      // landmarks are visible. Positioned at the primary dataset's bbox
+      // within the world coordinate frame.
       const satImg = satelliteImgRef.current;
       if (satImg) {
-        const lonRange = lonRangeOf(grid);
-        const latRange = grid.maxLat - grid.minLat || 1;
-        const terrainW = t.pxPerDeg * lonRange * t.scale;
-        const terrainH = t.pxPerDeg * latRange * t.scale;
+        // Compute the primary grid's pixel rect in world space.
+        const [sx0, sy0] = lonLatToCanvas(grid.minLon, grid.maxLat, worldGrid, t);
+        const [sx1, sy1] = lonLatToCanvas(grid.maxLon, grid.minLat, worldGrid, t);
         ctx.imageSmoothingEnabled = true;
-        ctx.drawImage(satImg, t.offsetX, t.offsetY, terrainW, terrainH);
+        ctx.drawImage(satImg, sx0, sy0, sx1 - sx0, sy1 - sy0);
       }
 
-      // Depth heatmap — draw the Topaz-upscaled bitmap when available,
-      // otherwise fall back to the raw offscreen bitmap. When satellite
-      // imagery is showing, render the heatmap semi-transparently so the
-      // satellite context remains visible.
+      // Multi-dataset heatmap rendering:
+      //   1. Secondary datasets (behind, in dataset order)
+      //   2. Primary dataset (on top so it is never obscured)
+      //
+      // When only one dataset is loaded this collapses to the same single
+      // renderHeatmap call that existed before.
       const heatmapAlpha = satImg ? 0.65 : 1.0;
       ctx.globalAlpha = heatmapAlpha;
+
+      // Secondary heatmaps — rendered first so the primary sits on top.
+      const visibleNow = visibleDatasetsRef.current;
+      const primIdNow = primaryDatasetIdRef.current;
+      if (visibleNow.length > 1) {
+        for (const v of visibleNow) {
+          if (v.datasetId === primIdNow) continue;
+          const og = v.overviewGrid;
+          const secBitmap = og ? secondaryBitmapsRef.current.get(v.datasetId) : undefined;
+          if (!og || !secBitmap) continue;
+          renderHeatmapAtBbox(ctx, secBitmap, og, worldGrid, t);
+        }
+      }
+
+      // Primary heatmap — Topaz-upscaled when available, otherwise raw bitmap.
       const upscaled = upscaledBitmapRef.current;
       if (upscaled) {
-        const lonRange = lonRangeOf(grid);
-        const latRange = grid.maxLat - grid.minLat || 1;
-        const terrainW = t.pxPerDeg * lonRange * t.scale;
-        const terrainH = t.pxPerDeg * latRange * t.scale;
+        // Upscaled image covers the primary grid's bbox within world space.
+        const [px0, py0] = lonLatToCanvas(grid.minLon, grid.maxLat, worldGrid, t);
+        const [px1, py1] = lonLatToCanvas(grid.maxLon, grid.minLat, worldGrid, t);
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(upscaled, t.offsetX, t.offsetY, terrainW, terrainH);
+        ctx.drawImage(upscaled, px0, py0, px1 - px0, py1 - py0);
         ctx.imageSmoothingEnabled = true;
       } else {
-        renderHeatmap(ctx, bitmap, grid, t);
+        // Single-dataset fast path: renderHeatmap uses the legacy
+        // (offsetX/offsetY) coordinates which equal lonLatToCanvas on the
+        // primary grid.  For multi-dataset mode we position via bbox.
+        if (worldGridRef.current) {
+          renderHeatmapAtBbox(ctx, bitmap, grid, worldGrid, t);
+        } else {
+          renderHeatmap(ctx, bitmap, grid, t);
+        }
       }
       ctx.globalAlpha = 1.0;
+
+      // Dataset boundary outlines — thin dashed borders drawn over the heatmap
+      // patches so the edges of each dataset are clearly visible.
+      if (visibleNow.length > 1 && primIdNow) {
+        for (const v of visibleNow) {
+          const og = v.overviewGrid;
+          if (!og) continue;
+          const isPrimDataset = v.datasetId === primIdNow;
+          ctx.save();
+          ctx.beginPath();
+          const corners: Array<[number, number]> = [
+            [og.minLon, og.minLat],
+            [og.maxLon, og.minLat],
+            [og.maxLon, og.maxLat],
+            [og.minLon, og.maxLat],
+          ];
+          corners.forEach(([lon, lat], i) => {
+            const [px, py] = lonLatToCanvas(lon, lat, worldGrid, t);
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          });
+          ctx.closePath();
+          ctx.lineWidth = isPrimDataset ? 1.5 : 1.5;
+          ctx.setLineDash([4, 3]);
+          ctx.strokeStyle = isPrimDataset
+            ? "rgba(255,255,255,0.35)"
+            : "rgba(0,229,255,0.55)";
+          ctx.stroke();
+          ctx.setLineDash([]);
+          // Tiny label at the NW corner so users can identify each patch.
+          const [lx, ly] = lonLatToCanvas(og.minLon, og.maxLat, worldGrid, t);
+          ctx.fillStyle = isPrimDataset
+            ? "rgba(255,255,255,0.70)"
+            : "rgba(0,229,255,0.85)";
+          ctx.font = "10px monospace";
+          const patchLabel = datasetNameMapRef.current.get(og.datasetId) ?? og.datasetId;
+          ctx.fillText(`◎ ${patchLabel}`, lx + 4, ly + 12);
+          ctx.restore();
+        }
+      }
 
       // Contour lines — drawn over the heatmap, under the geographic grid and markers.
       const { overviewShowGrid, overviewShowMarkers, units, colormapTheme: activeTheme } = useSettingsStore.getState();
       if (contoursEnabledRef.current && contourSegmentsRef.current.length > 0) {
+        // renderContourLines uses grid.width/height/minDepth/maxDepth and its own
+        // internal lonLatToCanvas — must stay on the primary dataset's overviewGrid.
         renderContourLines(ctx, contourSegmentsRef.current, grid, t, units, activeTheme);
       }
 
       // Lat/lon grid (gated by user setting; renderGridLines also checks scale ≥ 2 internally)
       if (overviewShowGrid) {
-        renderGridLines(ctx, grid, t, cW, cH);
+        renderGridLines(ctx, worldGrid, t, cW, cH);
       }
 
       // Saved trails (completed)
       if (savedTrailsRef.current.length > 0) {
-        renderSavedTrails(ctx, savedTrailsRef.current, grid, t);
+        renderSavedTrails(ctx, savedTrailsRef.current, worldGrid, t);
       }
 
       // Markers (gated by user setting)
       if (overviewShowMarkers) {
-        renderMarkers(ctx, markersRef.current, grid, t, cW, cH);
+        renderMarkers(ctx, markersRef.current, worldGrid, t, cW, cH);
 
         // Depth poles (drawn above markers so labels are visible)
-        renderDepthPoles(ctx, markersRef.current, grid, t, units);
+        renderDepthPoles(ctx, markersRef.current, worldGrid, t, units);
       }
 
       // Camera arrow — read from Zustand store directly (no React re-render)
       const cam = useCameraStore.getState();
       if (cam.cameraLon !== null && cam.cameraLat !== null) {
-        renderCameraArrow(ctx, cam.cameraLon, cam.cameraLat, cam.heading, grid, t);
+        renderCameraArrow(ctx, cam.cameraLon, cam.cameraLat, cam.heading, worldGrid, t);
       }
 
       // Habitat overlay (drawn above depth heatmap, below markers)
       const habitatScores = useHabitatStore.getState().scores;
       const habitatActive = useHabitatStore.getState().activeSpecies !== null;
       if (habitatActive && habitatScores) {
+        // renderHabitatOverlay scales habitat scores to the primary grid's bbox —
+        // must use overviewGrid, not the synthetic world-extent grid.
         renderHabitatOverlay(ctx, habitatScores, grid, t);
       }
 
@@ -914,10 +1051,10 @@ export const OverviewMap: React.FC = () => {
       if (showEfhRef.current && efhFeaturesRef.current.length > 0) {
         const visibleEfhFeatures = getVisibleEfhFeatures(
           efhFeaturesRef.current,
-          { minLon: grid.minLon, maxLon: grid.maxLon, minLat: grid.minLat, maxLat: grid.maxLat },
+          { minLon: worldGrid.minLon, maxLon: worldGrid.maxLon, minLat: worldGrid.minLat, maxLat: worldGrid.maxLat },
           hiddenEfhSpeciesRef.current,
         );
-        renderEfhOverlay(ctx, visibleEfhFeatures, grid, t);
+        renderEfhOverlay(ctx, visibleEfhFeatures, worldGrid, t);
         efhLegendLayoutRef.current = renderEfhLegend(ctx, efhFeaturesRef.current, cW, cH, hiddenEfhSpeciesRef.current);
       } else {
         efhLegendLayoutRef.current = null;
@@ -930,7 +1067,7 @@ export const OverviewMap: React.FC = () => {
         renderSubstrateOverlay(
           ctx,
           substrateFeaturesRef.current,
-          grid,
+          worldGrid,
           t,
           selectedSubstrateUnitIdRef.current,
           hiddenSubstrateClassesRef.current,
@@ -952,7 +1089,7 @@ export const OverviewMap: React.FC = () => {
       const pulse = Math.abs(Math.sin(pulseRef.current * Math.PI));
 
       if (trail.recording && trail.currentPoints.length > 0) {
-        renderLiveTrail(ctx, trail.currentPoints, grid, t, pulse);
+        renderLiveTrail(ctx, trail.currentPoints, worldGrid, t, pulse);
       }
 
       if (gps.active && gps.position) {
@@ -961,7 +1098,7 @@ export const OverviewMap: React.FC = () => {
           gps.position.longitude,
           gps.position.latitude,
           gps.position.accuracy,
-          grid,
+          worldGrid,
           t,
           cW,
           cH,
@@ -970,53 +1107,13 @@ export const OverviewMap: React.FC = () => {
         );
       }
 
-      // Non-primary dataset footprints (Task #350) — drawn above heatmap
-      // but below markers/scale-bar, projected through the *primary* grid's
-      // coordinate frame so all footprints share one canvas.
-      const visibleNow = visibleDatasetsRef.current;
-      const primIdNow = primaryDatasetIdRef.current;
-      if (visibleNow.length > 1 && primIdNow) {
-        for (const v of visibleNow) {
-          if (v.datasetId === primIdNow) continue;
-          const og = v.overviewGrid;
-          if (!og) continue;
-          const corners: Array<[number, number]> = [
-            [og.minLon, og.minLat],
-            [og.maxLon, og.minLat],
-            [og.maxLon, og.maxLat],
-            [og.minLon, og.maxLat],
-          ];
-          ctx.save();
-          ctx.beginPath();
-          corners.forEach(([lon, lat], i) => {
-            const [px, py] = lonLatToCanvas(lon, lat, grid, t);
-            if (i === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
-          });
-          ctx.closePath();
-          ctx.fillStyle = "rgba(0,229,255,0.06)";
-          ctx.fill();
-          ctx.lineWidth = 1.5;
-          ctx.setLineDash([4, 3]);
-          ctx.strokeStyle = "rgba(0,229,255,0.55)";
-          ctx.stroke();
-          ctx.setLineDash([]);
-          // Tiny label at the top-left corner so users can identify each
-          // footprint and know clicking it promotes-to-primary.
-          const [lx, ly] = lonLatToCanvas(og.minLon, og.maxLat, grid, t);
-          ctx.fillStyle = "rgba(0,229,255,0.85)";
-          ctx.font = "10px monospace";
-          const footprintLabel = datasetNameMapRef.current.get(og.datasetId) ?? og.datasetId;
-          ctx.fillText(`◎ ${footprintLabel}`, lx + 4, ly + 12);
-          ctx.restore();
-        }
-      }
-
       // Scale bar
-      renderScaleBar(ctx, grid, t, cH, units);
+      renderScaleBar(ctx, worldGrid, t, cH, units);
 
       // Colormap legend — top-right gradient strip with depth labels so users
       // can read off what the 2D colours mean, matching the 3D HUD scale bar.
+      // Use the primary grid's depth range so the legend always reflects the
+      // primary dataset's colour mapping.
       renderColormapLegend(ctx, activeTheme, grid.minDepth, grid.maxDepth, cW, cH, units);
 
       // Box-select / Download overlay (in-progress drag + committed bbox).
@@ -1025,20 +1122,14 @@ export const OverviewMap: React.FC = () => {
 
       /** Convert a committed lon/lat bbox to canvas pixel corners */
       const bboxToCanvasCorners = (north: number, south: number, east: number, west: number) => {
-        const lonRange = lonRangeOf(grid);
-        const latRange = grid.maxLat - grid.minLat || 1;
-        const terrainW = t.pxPerDeg * lonRange * t.scale;
-        const terrainH = t.pxPerDeg * latRange * t.scale;
-        const x0 = t.offsetX + ((normaliseLon(west, grid) - grid.minLon) / lonRange) * terrainW;
-        const y0 = t.offsetY + ((north - grid.minLat) / latRange) * terrainH;
-        const x1 = t.offsetX + ((normaliseLon(east, grid) - grid.minLon) / lonRange) * terrainW;
-        const y1 = t.offsetY + ((south - grid.minLat) / latRange) * terrainH;
+        const [x0, y0] = lonLatToCanvas(west, north, worldGrid, t);
+        const [x1, y1] = lonLatToCanvas(east, south, worldGrid, t);
         return { x0, y0, x1, y1 };
       };
 
       if (drag) {
-        const dl = canvasToLonLat(drag.x0, drag.y0, grid, t);
-        const dr = canvasToLonLat(drag.x1, drag.y1, grid, t);
+        const dl = canvasToLonLat(drag.x0, drag.y0, worldGrid, t);
+        const dr = canvasToLonLat(drag.x1, drag.y1, worldGrid, t);
         const isDownload = downloadModeRef.current;
         drawSelectionRect(ctx, drag.x0, drag.y0, drag.x1, drag.y1, {
           width: Math.abs(dr.lon - dl.lon),
@@ -1073,7 +1164,7 @@ export const OverviewMap: React.FC = () => {
         rawsCanvasPositionsRef.current = renderRawsStations(
           ctx,
           rawsPinsRef.current,
-          grid,
+          worldGrid,
           t,
           rawsSelectedIdRef.current,
           cW,
@@ -1088,7 +1179,7 @@ export const OverviewMap: React.FC = () => {
         weatherStationCanvasPositionsRef.current = renderWeatherStations(
           ctx,
           weatherStationPinsRef.current,
-          grid,
+          worldGrid,
           t,
           weatherStationSelectedIdRef.current,
           cW,
@@ -1104,7 +1195,7 @@ export const OverviewMap: React.FC = () => {
         intertidalCanvasPositionsRef.current = renderIntertidalHotspotPins(
           ctx,
           intertidalPinsRef.current,
-          grid,
+          worldGrid,
           t,
           intertidalSelectedUnitIdRef.current,
         );
@@ -1186,11 +1277,15 @@ export const OverviewMap: React.FC = () => {
     };
 
     const updateTooltip = (mx: number, my: number) => {
-      const grid = overviewGrid;
+      const grid = overviewGrid; // primary grid — depth array lives here
       const t = transformRef.current;
       if (!grid || !t) return;
 
-      const { lon, lat } = canvasToLonLat(mx, my, grid, t);
+      // Use the world coordinate frame so the canvas → lon/lat conversion
+      // works correctly when multiple datasets shift the transform origin.
+      const activeGrid = worldGridRef.current ?? grid;
+      const { lon, lat } = canvasToLonLat(mx, my, activeGrid, t);
+      // Depth lookup is always from the primary grid (its bbox / depths array).
       const lonRange = lonRangeOf(grid);
       const latRange = grid.maxLat - grid.minLat || 1;
       const col = Math.round(((normaliseLon(lon, grid) - grid.minLon) / lonRange) * (grid.width - 1));
@@ -1239,7 +1334,7 @@ export const OverviewMap: React.FC = () => {
           offsetX: dragStartRef.current.ox + dx,
           offsetY: dragStartRef.current.oy + dy,
         },
-        overviewGrid,
+        worldGridRef.current ?? overviewGrid,
         canvas.width,
         canvas.height,
       );
@@ -1253,8 +1348,9 @@ export const OverviewMap: React.FC = () => {
         const t = transformRef.current;
         dragRectRef.current = null;
         if (t && overviewGrid && Math.abs(r.x1 - r.x0) > 4 && Math.abs(r.y1 - r.y0) > 4) {
-          const a = canvasToLonLat(r.x0, r.y0, overviewGrid, t);
-          const b = canvasToLonLat(r.x1, r.y1, overviewGrid, t);
+          const coordGrid = worldGridRef.current ?? overviewGrid;
+          const a = canvasToLonLat(r.x0, r.y0, coordGrid, t);
+          const b = canvasToLonLat(r.x1, r.y1, coordGrid, t);
           const north = Math.max(a.lat, b.lat);
           const south = Math.min(a.lat, b.lat);
           const east = Math.max(a.lon, b.lon);
@@ -1297,7 +1393,7 @@ export const OverviewMap: React.FC = () => {
           offsetX: mx + (t.offsetX - mx) * ratio,
           offsetY: my + (t.offsetY - my) * ratio,
         },
-        overviewGrid,
+        worldGridRef.current ?? overviewGrid,
         canvas.width,
         canvas.height,
       );
@@ -1427,7 +1523,8 @@ export const OverviewMap: React.FC = () => {
         }
       }
 
-      const { lon, lat } = canvasToLonLat(mx, my, overviewGrid, t);
+      const coordGrid = worldGridRef.current ?? overviewGrid;
+      const { lon, lat } = canvasToLonLat(mx, my, coordGrid, t);
 
       // Non-primary footprint click → promote that dataset to primary instead
       // of dropping in. Hit-test newest-first so the most recently-added
@@ -1464,7 +1561,7 @@ export const OverviewMap: React.FC = () => {
       if (showEfhRef.current && efhFeaturesRef.current.length > 0) {
         const visibleEfh = getVisibleEfhFeatures(
           efhFeaturesRef.current,
-          { minLon: overviewGrid.minLon, maxLon: overviewGrid.maxLon, minLat: overviewGrid.minLat, maxLat: overviewGrid.maxLat },
+          { minLon: coordGrid.minLon, maxLon: coordGrid.maxLon, minLat: coordGrid.minLat, maxLat: coordGrid.maxLat },
           hiddenEfhSpeciesRef.current,
         );
         const hit = hitTestEfh(lon, lat, visibleEfh);
@@ -1524,7 +1621,9 @@ export const OverviewMap: React.FC = () => {
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
 
-      const { lon, lat } = canvasToLonLat(mx, my, overviewGrid, t);
+      const ctxCoordGrid = worldGridRef.current ?? overviewGrid;
+      const { lon, lat } = canvasToLonLat(mx, my, ctxCoordGrid, t);
+      // lonLatToWorldXZ uses the primary dataset's 3D coordinate frame — keep overviewGrid.
       const { x: worldX, z: worldZ } = lonLatToWorldXZ(lon, lat, overviewGrid);
 
       // Approximate depth at this lon/lat from the overview grid.
