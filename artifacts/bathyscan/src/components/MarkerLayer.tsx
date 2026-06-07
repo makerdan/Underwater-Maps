@@ -9,7 +9,6 @@
  * Must be rendered inside the R3F Canvas (inside SceneContents in TourScene).
  */
 import React, { useEffect } from "react";
-import * as THREE from "three";
 import { useGetMarkers, getGetMarkersQueryKey } from "@workspace/api-client-react";
 import type { Marker } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
