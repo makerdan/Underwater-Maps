@@ -216,9 +216,9 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       !lastSyncedAt ||
       (serverUpdatedAt !== undefined && serverUpdatedAt > lastSyncedAt);
 
-    hydrateFromServer(serverSettings as Parameters<typeof hydrateFromServer>[0]);
-
     if (serverIsNewer) {
+      hydrateFromServer(serverSettings as Parameters<typeof hydrateFromServer>[0]);
+
       usePaletteStore.getState().hydrateFromServer({
         paletteShallow: serverRec.paletteShallow,
         paletteDeep: serverRec.paletteDeep,

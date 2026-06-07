@@ -5,6 +5,8 @@
  * Returns the list of tool calls the LLM selected plus any text response.
  */
 
+import { z } from "zod";
+
 export interface QueryContext {
   datasetName: string;
   waterType?: "saltwater" | "freshwater";
@@ -26,6 +28,16 @@ export interface QueryLLMResult {
   textResponse: string | null;
 }
 
+const ToolCallSchema = z.object({
+  name: z.string(),
+  args: z.record(z.unknown()),
+});
+
+const QueryLLMResultSchema = z.object({
+  toolCalls: z.array(ToolCallSchema).default([]),
+  textResponse: z.string().nullable().default(null),
+});
+
 export async function queryLLM(
   query: string,
   context: QueryContext,
@@ -45,9 +57,13 @@ export async function queryLLM(
     throw new Error(`Query failed: ${resp.status} ${text}`);
   }
 
-  const data = (await resp.json()) as {
-    toolCalls: ToolCall[];
-    textResponse: string | null;
-  };
-  return data;
+  const raw = await resp.json();
+  const parsed = QueryLLMResultSchema.safeParse(raw);
+  if (!parsed.success) {
+    console.error("[queryLLM] Unexpected response shape:", parsed.error.message, raw);
+    throw new Error(
+      "The AI assistant returned an unexpected response. Please try again.",
+    );
+  }
+  return parsed.data;
 }

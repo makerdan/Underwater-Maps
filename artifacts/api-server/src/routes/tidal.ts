@@ -83,7 +83,7 @@ function bearingDeg(fromLat: number, fromLon: number, toLat: number, toLon: numb
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
   if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
   return res.json() as Promise<T>;
 }
@@ -436,6 +436,25 @@ router.post(
   }),
 );
 
+/**
+ * Short-term in-process cache for GET /tidal results.
+ *
+ * Key: rounded lat/lon bucket (0.5° × 0.5°) + 30-minute datetime bucket.
+ * TTL: ~10 minutes for real NOAA-backed results, ~2 minutes for estimated.
+ * Keeps repeat panel updates for nearby points snappy without re-hitting NOAA.
+ */
+const tidalResultCache = new Map<string, { body: TidalResponse; ts: number }>();
+const TIDAL_RESULT_TTL_MS = 10 * 60 * 1000;
+const TIDAL_RESULT_ESTIMATED_TTL_MS = 2 * 60 * 1000;
+registerCache(() => tidalResultCache.clear());
+
+function tidalResultCacheKey(lat: number, lon: number, refMs: number): string {
+  const latBucket = Math.round(lat * 2) / 2;
+  const lonBucket = Math.round(lon * 2) / 2;
+  const timeBucket = Math.floor(refMs / (30 * 60 * 1000));
+  return `${latBucket}|${lonBucket}|${timeBucket}`;
+}
+
 // GET /tidal?lat=&lon=&datetime=
 router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
   const lat = parseFloat(String(req.query["lat"] ?? ""));
@@ -458,6 +477,19 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
 
   const refTime = datetime ?? new Date();
   const refMs = refTime.getTime();
+
+  // Short-term result cache: serve identical responses for nearby points
+  // within the same ~30-min window without redundant NOAA upstream calls.
+  const cacheKey = tidalResultCacheKey(lat, lon, refMs);
+  const now = Date.now();
+  const cachedResult = tidalResultCache.get(cacheKey);
+  if (cachedResult) {
+    const ttl = cachedResult.body.source === "noaa" ? TIDAL_RESULT_TTL_MS : TIDAL_RESULT_ESTIMATED_TTL_MS;
+    if (now - cachedResult.ts < ttl) {
+      res.json(cachedResult.body);
+      return;
+    }
+  }
 
   // Look up both station networks in parallel — they're independent.
   const [heightsStation, currentsStation] = await Promise.all([
@@ -536,6 +568,7 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
     ...(currentsStationRef ? { currentsStation: currentsStationRef } : {}),
     slack: sample.slack,
   };
+  tidalResultCache.set(cacheKey, { body, ts: Date.now() });
   res.json(body);
 }));
 

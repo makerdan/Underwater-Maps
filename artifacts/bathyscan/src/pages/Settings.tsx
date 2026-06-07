@@ -309,11 +309,12 @@ const S = {
 };
 
 // ─── Atomic controls ──────────────────────────────────────────────────────────
-function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+function Toggle({ value, onChange, "aria-label": ariaLabel }: { value: boolean; onChange: (v: boolean) => void; "aria-label"?: string }) {
   return (
     <div
       role="switch"
       aria-checked={value}
+      aria-label={ariaLabel}
       onClick={() => onChange(!value)}
       style={S.toggle(value)}
       tabIndex={0}
@@ -347,14 +348,16 @@ function SliderRow({
   format?: (v: number) => string; onChange: (v: number) => void; sublabel?: string;
 }) {
   const fmt = format ?? ((v) => String(v));
+  const inputId = `slider-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return (
     <div style={S.row}>
       <div>
-        <div style={S.label}>{label}</div>
+        <label htmlFor={inputId} style={S.label}>{label}</label>
         {sublabel && <div style={S.sublabel}>{sublabel}</div>}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <input
+          id={inputId}
           type="range" min={min} max={max} step={step} value={value}
           onChange={(e) => onChange(Number(e.target.value))}
           style={S.slider}
@@ -378,7 +381,7 @@ function ToggleRow({
         <div style={S.label}>{label}</div>
         {sublabel && <div style={S.sublabel}>{sublabel}</div>}
       </div>
-      <Toggle value={value} onChange={onChange} />
+      <Toggle value={value} onChange={onChange} aria-label={label} />
     </div>
   );
 }
