@@ -296,7 +296,7 @@ test.describe("Bathymetric currents — interaction coverage", () => {
   }) => {
     // Goes straight to /settings — no home-route warmup needed (task #249).
     await page.goto("/settings");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     const tab = page.locator('button:has-text("CURRENTS")').first();
     const tabVisible = await tab.isVisible({ timeout: 5_000 }).catch(() => false);

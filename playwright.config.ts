@@ -89,7 +89,7 @@ export default defineConfig({
       command:
         "pnpm --filter @workspace/api-server run build:e2e && PORT=3161 E2E_AUTH_BYPASS=1 pnpm --filter @workspace/api-server run start:e2e",
       url: "http://127.0.0.1:3161/api/healthz",
-      reuseExistingServer: !process.env["CI"],
+      reuseExistingServer: false,
       timeout: 60_000,
       stdout: "pipe",
       stderr: "pipe",
@@ -104,7 +104,7 @@ export default defineConfig({
       command:
         "PORT=3150 BASE_PATH=/ VITE_DEV_AUTH_BYPASS=1 VITE_E2E_PRESERVE_BUFFER=1 E2E_API_SERVER_URL=http://127.0.0.1:3161 pnpm --filter @workspace/bathyscan run dev",
       url: "http://localhost:3150",
-      reuseExistingServer: !process.env["CI"],
+      reuseExistingServer: false,
       timeout: 60_000,
       stdout: "ignore",
       stderr: "pipe",

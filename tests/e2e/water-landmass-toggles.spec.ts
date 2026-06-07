@@ -36,7 +36,7 @@ async function waitForTestApi(page: Page): Promise<void> {
 
 async function openAdvancedTerrainSection(page: Page) {
   await page.goto("/settings");
-  await page.waitForLoadState("networkidle");
+  await page.waitForLoadState("domcontentloaded");
   const advanced = page.locator('[data-testid="visuals-advanced"]');
   await expect(advanced).toBeVisible({ timeout: 5_000 });
   const expander = advanced.locator('button[aria-expanded]').first();
@@ -63,7 +63,7 @@ async function flipAndReload(page: Page, label: string) {
 
   await page.waitForTimeout(500);
   await page.reload();
-  await page.waitForLoadState("networkidle");
+  await page.waitForLoadState("domcontentloaded");
 
   const advanced2 = await openAdvancedTerrainSection(page);
   const toggle2 = toggleByLabel(advanced2, label);

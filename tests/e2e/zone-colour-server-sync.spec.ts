@@ -160,7 +160,7 @@ test.describe("Zone colour server-sync round-trip", () => {
       // and hydrateFromServer will apply the server row (lastSyncedAt is null
       // after localStorage was cleared, so the server is always considered newer).
       await page.goto("/");
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("domcontentloaded");
 
       // Wait for the test bridge to be ready again on the reloaded page.
       const bridgeReadyAfterReload = await page
@@ -311,7 +311,7 @@ test.describe("Zone colour server-sync round-trip", () => {
       });
 
       await page.goto("/");
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("domcontentloaded");
 
       const bridgeReadyAfterReload = await page
         .waitForFunction(

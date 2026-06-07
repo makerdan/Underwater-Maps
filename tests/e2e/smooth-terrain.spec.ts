@@ -17,7 +17,7 @@ import { test, expect } from "./fixtures";
 test.describe("Smooth terrain spikes toggle", () => {
   test("toggle state persists across reload", async ({ page }) => {
     await page.goto("/settings");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // VISUALS tab is active by default. The toggle lives inside the
     // Advanced disclosure → expand it first.
@@ -45,7 +45,7 @@ test.describe("Smooth terrain spikes toggle", () => {
     // Hard reload — must wipe any in-memory React state so we're reading
     // from the persisted source on remount.
     await page.reload();
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // Re-expand advanced section after reload.
     const advanced2 = page.locator('[data-testid="visuals-advanced"]');
