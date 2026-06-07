@@ -7,44 +7,79 @@ import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { VitePWA } from "vite-plugin-pwa";
 
 /**
- * Send a native WebSocket ping frame (opcode 0x9) from the Vite dev server
- * to every connected HMR client every 15 seconds.
+ * Keep the Replit mTLS proxy from dropping the Vite HMR WebSocket.
  *
- * Why this is necessary in Replit:
- *   The Replit mTLS proxy drops idle WebSocket connections after ~30 seconds.
- *   Vite's built-in keepalive is a JSON application message
- *   `{ type: "ping" }` sent by the BROWSER every `server.hmr.timeout` ms.
- *   The proxy does not count application-layer data frames toward its idle
- *   timeout — it only resets the timer when it sees a native WebSocket ping
- *   frame (opcode 0x9) originating from the server side.
+ * Root cause (Vite 7 source confirmed):
+ *   When the HMR WebSocket closes unexpectedly, Vite 7's client always calls
+ *   location.reload() after waitForSuccessfulPing() succeeds — wiping all
+ *   in-memory state including loaded datasets.
  *
- *   This plugin hooks the `vite:client:connect` / `vite:client:disconnect`
- *   internal events emitted by Vite's WebSocket server to track each raw
- *   `ws` WebSocket instance (exposed as `.socket` on the HotChannelClient
- *   wrapper) and calls `ws.ping()` — which emits an opcode-0x9 frame —
- *   every 15 seconds. This keeps the proxy alive without any browser-side
- *   changes and prevents the spurious full page reloads that wiped loaded
- *   datasets.
+ *   The Replit mTLS proxy drops WebSocket connections after ~30 s of idle
+ *   time, measured per-connection on the browser→proxy leg. Neither:
+ *   • Server-side native WS ping frames (opcode 0x9) — the proxy handles
+ *     these at its own layer and doesn't forward them to the browser
+ *   • Browser-side JSON data frames (Vite's built-in ping) — the proxy
+ *     doesn't count application-layer messages toward idle tracking
+ *   …actually reset the proxy's idle timer.
+ *
+ * Fix — two-pronged:
+ *   1. Browser heartbeat (primary): inject a tiny inline script into
+ *      index.html that sends a HEAD fetch to /__vite_keepalive every 10 s.
+ *      Because both the HMR WebSocket and this HTTP request go through the
+ *      same *.replit.dev proxy HOST, the proxy's session idle timer resets
+ *      on each fetch — keeping the WebSocket alive.
+ *   2. Server-side native WS ping (belt-and-suspenders): sends opcode-0x9
+ *      frames every 15 s; harmless if the proxy handles them internally.
  */
-function hmrNativePingPlugin(): Plugin {
+function hmrKeepalivePlugin(): Plugin {
   return {
-    name: "bathyscan:hmr-native-ping",
+    name: "bathyscan:hmr-keepalive",
     apply: "serve",
-    configureServer(server) {
-      const PING_INTERVAL_MS = 15_000;
 
-      // "connection" is a wsServerEvents member in Vite 7, so server.ws.on
-      // routes it directly to the underlying ws.WebSocketServer and the
-      // callback receives the raw ws.WebSocket instance — which has .ping().
-      // We attach a per-socket interval here and clean up on socket close.
+    configureServer(server) {
+      // ── 1a. HTTP keepalive endpoint ──────────────────────────────────────
+      // Responds 204 with no body. The browser fetches this every 10 s so
+      // that the proxy session (shared with the HMR WS) never goes idle.
+      server.middlewares.use("/__vite_keepalive", (_req, res) => {
+        res.writeHead(204, { "Cache-Control": "no-store" });
+        res.end();
+      });
+
+      // ── 1b. Server-side native WS ping (belt-and-suspenders) ─────────────
+      // "connection" is in Vite 7's wsServerEvents so this routes directly
+      // to the underlying ws.WebSocketServer; the callback gets the raw
+      // ws.WebSocket instance which has .ping() for native opcode-0x9 frames.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (server.ws.on as any)("connection", (socket: any) => {
         if (!socket || typeof socket.ping !== "function") return;
         const id = setInterval(() => {
           if (socket.readyState === 1 /* WebSocket.OPEN */) socket.ping();
-        }, PING_INTERVAL_MS);
+        }, 15_000);
         socket.on("close", () => clearInterval(id));
       });
+    },
+
+    // ── 2. Browser heartbeat script ─────────────────────────────────────────
+    // Injected before anything else in <head>. Uses an absolute-path URL
+    // (/__vite_keepalive) so it works regardless of the app's base path.
+    // The fetch goes to the same Replit proxy host as the HMR WebSocket,
+    // resetting the proxy's session idle timer.
+    transformIndexHtml() {
+      return [
+        {
+          tag: "script",
+          attrs: { type: "text/javascript" },
+          injectTo: "head-prepend" as const,
+          children: [
+            "(function(){",
+            "  if(typeof fetch!=='function')return;",
+            "  setInterval(function(){",
+            "    fetch('/__vite_keepalive',{method:'HEAD',cache:'no-store'}).catch(function(){});",
+            "  },10000);",
+            "})();",
+          ].join(""),
+        },
+      ];
     },
   };
 }
@@ -124,7 +159,7 @@ export default defineConfig({
     __BUILD_HASH__: JSON.stringify(buildHash),
   },
   plugins: [
-    hmrNativePingPlugin(),
+    hmrKeepalivePlugin(),
     failOnTestBackdoor(),
     react(),
     tailwindcss({ optimize: false }),
@@ -186,7 +221,7 @@ export default defineConfig({
     // "Error creating WebGL context" warning in headless Chromium) fires, even
     // after the app has rendered successfully. Disable it under the e2e
     // auth-bypass build so Playwright clicks reach the HUD directly.
-    // The actual proxy-keepalive mechanism is hmrNativePingPlugin() above.
+    // The actual proxy-keepalive mechanism is hmrKeepalivePlugin() above.
     hmr:
       process.env.VITE_DEV_AUTH_BYPASS === "1"
         ? { overlay: false }
