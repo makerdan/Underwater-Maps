@@ -319,7 +319,6 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   // ---------------------------------------------------------------------------
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      keys.current[e.code] = true;
       const bindings = keyBindingsRef.current;
 
       // Suppress all single-key action shortcuts when focus is inside a text
@@ -334,6 +333,10 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
           activeEl?.isContentEditable === true);
 
       if (isEditableFocused) return;
+
+      // Only register key state after confirming focus is not in an editable
+      // element — prevents movement keys from accumulating while typing.
+      keys.current[e.code] = true;
 
       // Speed tier up / down (not in realistic mode). The NumpadAdd /
       // NumpadSubtract synonyms are always honoured in addition to the

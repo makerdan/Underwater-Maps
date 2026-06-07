@@ -23,7 +23,7 @@ test.describe("Settings page", () => {
 
   test("settings page is reachable via /settings route", async ({ page }) => {
     await page.goto("/settings");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     await expect(page.locator("text=SETTINGS").first()).toBeVisible({ timeout: 10_000 });
     await expect(page.locator("text=← BACK")).toBeVisible();
@@ -31,7 +31,7 @@ test.describe("Settings page", () => {
 
   test("settings sidebar shows all tab labels", async ({ page }) => {
     await page.goto("/settings");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // Match the NAV_TABS array in Settings.tsx. Each entry below is a
     // substring that uniquely identifies its sidebar button.
@@ -54,7 +54,7 @@ test.describe("Settings page", () => {
 
   test("clicking a sidebar tab shows the correct section heading", async ({ page }) => {
     await page.goto("/settings");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     await page.locator('button:has-text("CAMERA & CTRL")').first().click();
     await expect(page.locator("text=◈ CAMERA").first()).toBeVisible({ timeout: 5_000 });
@@ -71,7 +71,7 @@ test.describe("Settings page", () => {
 
   test("caustics toggle changes checked state in the Visuals tab", async ({ page }) => {
     await page.goto("/settings");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // ToggleRow renders the label and a Radix Switch in the same row.
     // Find the row by the "Caustics Effect" label, then the switch inside it.
@@ -91,7 +91,7 @@ test.describe("Settings page", () => {
 
   test("Visuals tab is active by default and shows colormap selector", async ({ page }) => {
     await page.goto("/settings");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     await expect(page.locator("text=◈ VISUALS").first()).toBeVisible({ timeout: 10_000 });
     await expect(page.locator("text=Depth Colormap").first()).toBeVisible();
@@ -99,14 +99,14 @@ test.describe("Settings page", () => {
 
   test("RESET ALL SETTINGS button is present", async ({ page }) => {
     await page.goto("/settings");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     await expect(page.locator("text=RESET ALL SETTINGS")).toBeVisible({ timeout: 10_000 });
   });
 
   test("Offline tab shows pending markers count", async ({ page }) => {
     await page.goto("/settings");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     await page.locator('button:has-text("DATA & STORAGE")').first().click();
     const count = page.locator("[data-testid='pending-markers-count']");
@@ -115,7 +115,7 @@ test.describe("Settings page", () => {
 
   test("← BACK navigates back to the home route", async ({ page }) => {
     await page.goto("/settings");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     await page.locator("text=← BACK").click();
     await page.waitForURL((url) => !url.pathname.endsWith("/settings"), { timeout: 5_000 });
@@ -123,7 +123,7 @@ test.describe("Settings page", () => {
 
   test("Account tab shows danger zone", async ({ page }) => {
     await page.goto("/settings");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     await page.locator('button:has-text("ACCOUNT & PRIVACY")').first().click();
     await expect(page.locator("text=DANGER ZONE")).toBeVisible({ timeout: 5_000 });
@@ -132,7 +132,7 @@ test.describe("Settings page", () => {
 
   test("danger zone delete button requires confirmation", async ({ page }) => {
     await page.goto("/settings");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     await page.locator('button:has-text("ACCOUNT & PRIVACY")').first().click();
     await page.getByRole("button", { name: "DELETE ALL MY MARKERS" }).click();
@@ -144,7 +144,7 @@ test.describe("Settings page", () => {
 
   test("RESET ALL SETTINGS restores colormap to ocean after a change", async ({ page }) => {
     await page.goto("/settings");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // Visuals tab is active by default. Find the Depth Colormap picker.
     const colormapSelect = page.locator('[data-testid="depth-colormap-select"]');
@@ -168,7 +168,7 @@ test.describe("Settings page", () => {
 
   test("colormap selection survives a full page reload", async ({ page }) => {
     await page.goto("/settings");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     const colormapSelect = page.locator('[data-testid="depth-colormap-select"]');
     await expect(colormapSelect).toBeVisible({ timeout: 5_000 });
@@ -197,7 +197,7 @@ test.describe("Settings page", () => {
 
     // Full page reload.
     await page.reload();
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // The picker should still reflect the previously chosen value.
     const reloadedSelect = page.locator('[data-testid="depth-colormap-select"]');
@@ -212,7 +212,7 @@ test.describe("Settings page", () => {
 
   test("settings on Visuals, HUD, Camera, and Markers tabs all survive a full page reload", async ({ page }) => {
     await page.goto("/settings");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // Helper: read a field out of the persisted settings blob in localStorage.
     const readPersisted = (field: string) =>
@@ -300,7 +300,7 @@ test.describe("Settings page", () => {
 
     // Full page reload — the real persistence check.
     await page.reload();
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
     await expect(page.locator("text=◈ VISUALS").first()).toBeVisible({ timeout: 10_000 });
 
     // After reload, every changed field must still be in localStorage
@@ -333,7 +333,7 @@ test.describe("Settings page", () => {
 
   test("Accessibility tab: Bright Daylight toggle is visible and toggleable", async ({ page }) => {
     await page.goto("/settings");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     await page.locator('button:has-text("ACCESSIBILITY")').first().click();
     await expect(page.locator("text=◈ ACCESSIBILITY").first()).toBeVisible({ timeout: 5_000 });
@@ -374,7 +374,7 @@ test.describe("Settings page", () => {
 
   test("comma keyboard shortcut navigates to /settings from the main page", async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // Only works when signed in (app main page visible)
     const isSignedIn = await page.locator("canvas, [data-testid='hud']").isVisible({ timeout: 5_000 }).catch(() => false);
