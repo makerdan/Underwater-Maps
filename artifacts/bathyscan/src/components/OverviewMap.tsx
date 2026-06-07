@@ -269,6 +269,8 @@ export const OverviewMap: React.FC = () => {
   // 3D LandTerrainMesh via useSatelliteTile). Load into an HTMLImageElement so
   // the rAF loop can drawImage it as a top layer (above the heatmap).
   const satelliteTileUrl = useSatelliteTileStore((s) => s.tileUrl);
+  const satelliteTileLoading = useSatelliteTileStore((s) => s.isLoading);
+  const satelliteTileError = useSatelliteTileStore((s) => s.error);
   const satelliteImgRef = useRef<HTMLImageElement | null>(null);
   useEffect(() => {
     if (!satelliteTileUrl) {
@@ -284,6 +286,8 @@ export const OverviewMap: React.FC = () => {
 
   // USGS terrain tile — hillshaded relief drawn below the heatmap.
   const terrainTileUrl = useTerrainTileStore((s) => s.tileUrl);
+  const terrainTileLoading = useTerrainTileStore((s) => s.isLoading);
+  const terrainTileError = useTerrainTileStore((s) => s.error);
   const terrainImgRef = useRef<HTMLImageElement | null>(null);
   useEffect(() => {
     if (!terrainTileUrl) {
@@ -1858,10 +1862,16 @@ export const OverviewMap: React.FC = () => {
               aria-pressed={terrainImagery}
               onClick={() => setTerrainImagery(!terrainImagery)}
               style={{
-                background: terrainImagery ? "rgba(34,197,94,0.15)" : "rgba(0,10,20,0.75)",
-                border: `1px solid ${terrainImagery ? "rgba(34,197,94,0.55)" : "rgba(0,229,255,0.2)"}`,
+                background: terrainTileError
+                  ? "rgba(239,68,68,0.1)"
+                  : terrainImagery ? "rgba(34,197,94,0.15)" : "rgba(0,10,20,0.75)",
+                border: `1px solid ${
+                  terrainTileError
+                    ? "rgba(239,68,68,0.4)"
+                    : terrainImagery ? "rgba(34,197,94,0.55)" : "rgba(0,229,255,0.2)"
+                }`,
                 borderRadius: 3,
-                color: terrainImagery ? "#22c55e" : "#94a3b8",
+                color: terrainTileError ? "#f87171" : terrainImagery ? "#22c55e" : "#94a3b8",
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: 9,
                 padding: "2px 10px",
@@ -1871,7 +1881,7 @@ export const OverviewMap: React.FC = () => {
                 whiteSpace: "nowrap",
               }}
             >
-              ▲ TERRAIN
+              {terrainTileLoading ? "… TERRAIN" : terrainTileError ? "⚠ TERRAIN" : "▲ TERRAIN"}
             </button>
           </ViewscreenTooltip>
 
@@ -1882,10 +1892,16 @@ export const OverviewMap: React.FC = () => {
               aria-pressed={satelliteImagery}
               onClick={() => setSatelliteImagery(!satelliteImagery)}
               style={{
-                background: satelliteImagery ? "rgba(251,191,36,0.15)" : "rgba(0,10,20,0.75)",
-                border: `1px solid ${satelliteImagery ? "rgba(251,191,36,0.55)" : "rgba(0,229,255,0.2)"}`,
+                background: satelliteTileError
+                  ? "rgba(239,68,68,0.1)"
+                  : satelliteImagery ? "rgba(251,191,36,0.15)" : "rgba(0,10,20,0.75)",
+                border: `1px solid ${
+                  satelliteTileError
+                    ? "rgba(239,68,68,0.4)"
+                    : satelliteImagery ? "rgba(251,191,36,0.55)" : "rgba(0,229,255,0.2)"
+                }`,
                 borderRadius: 3,
-                color: satelliteImagery ? "#fbbf24" : "#94a3b8",
+                color: satelliteTileError ? "#f87171" : satelliteImagery ? "#fbbf24" : "#94a3b8",
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: 9,
                 padding: "2px 10px",
@@ -1895,7 +1911,7 @@ export const OverviewMap: React.FC = () => {
                 whiteSpace: "nowrap",
               }}
             >
-              ◉ SATELLITE
+              {satelliteTileLoading ? "… SATELLITE" : satelliteTileError ? "⚠ SATELLITE" : "◉ SATELLITE"}
             </button>
           </ViewscreenTooltip>
 
