@@ -223,6 +223,24 @@ const fragmentShader = /* glsl */ `
 `;
 
 // ---------------------------------------------------------------------------
+// Module-level singletons (allocated once, shared across all material instances)
+// ---------------------------------------------------------------------------
+
+/**
+ * Placeholder 1×1 habitat texture used before real scores arrive.
+ * Allocated once at module load so switching datasets does not leak a new
+ * DataTexture into GPU memory on every call to createTerrainShaderMaterial.
+ * UnsignedByteType is universally filterable without OES_texture_float_linear.
+ */
+const PLACEHOLDER_HABITAT_TEXTURE = new THREE.DataTexture(
+  new Uint8Array([0]),
+  1,
+  1,
+  THREE.RedFormat,
+  THREE.UnsignedByteType,
+);
+
+// ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 
@@ -269,9 +287,8 @@ export function createTerrainShaderMaterial(
       uHighlightMax:   { value: 0 },
       uGridMinDepth:   { value: 0 },
       uGridMaxDepth:   { value: 1000 },
-      // Habitat suitability overlay — placeholder 1×1 texture until scores arrive.
-      // UnsignedByteType is universally filterable without OES_texture_float_linear.
-      uHabitatTex:       { value: new THREE.DataTexture(new Uint8Array([0]), 1, 1, THREE.RedFormat, THREE.UnsignedByteType) },
+      // Habitat suitability overlay — shared singleton placeholder until scores arrive.
+      uHabitatTex:       { value: PLACEHOLDER_HABITAT_TEXTURE },
       uShowHabitat:      { value: 0 },
       uHabitatIntensity: { value: 0.4 },
       uHabitatColor:     { value: new THREE.Color(1.0, 0.6, 0.1) }, // default amber

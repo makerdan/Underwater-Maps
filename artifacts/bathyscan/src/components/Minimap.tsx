@@ -118,6 +118,9 @@ export const Minimap: React.FC = () => {
   // Stored as an offscreen canvas so we can drawImage with globalAlpha for
   // satellite compositing (putImageData ignores globalAlpha).
   const heatmapCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Static layer: bg + satellite + heatmap + marker dots. Rebuilt only when
+  // data changes so the camera-tick path only composites this + the arrow.
+  const staticLayerRef = useRef<HTMLCanvasElement | null>(null);
   const satelliteImgRef = useRef<HTMLImageElement | null>(null);
   const markersRef = useRef<Marker[]>([]);
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
@@ -167,11 +170,12 @@ export const Minimap: React.FC = () => {
       satelliteImgRef.current = img;
       // Redraw immediately so satellite background appears on load.
       const canvas = canvasRef.current;
-      if (!canvas) return;
+      if (!canvas || !terrain) return;
       const ctx = canvas.getContext("2d");
       if (!ctx || !heatmapCanvasRef.current) return;
+      rebuildStaticLayer(terrain);
       const camState = useCameraStore.getState();
-      compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading);
+      compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading, terrain);
     };
     img.onerror = () => {
       satelliteImgRef.current = null;
@@ -191,48 +195,76 @@ export const Minimap: React.FC = () => {
     markersRef.current = markers ?? [];
   }, [markers]);
 
-  // Composite the minimap: dark background → satellite → heatmap (semi-transparent)
-  // → marker dots → camera arrow. Using drawImage for the heatmap layer so
-  // globalAlpha compositing works (putImageData ignores globalAlpha).
+  // Rebuild the static layer (bg + satellite + heatmap + marker dots) onto an
+  // offscreen canvas. Called whenever data changes. The camera-tick path just
+  // drawImage's this + the arrow, avoiding a full repaint every camera frame.
+  const rebuildStaticLayer = (currentTerrain: typeof terrain) => {
+    if (!currentTerrain) return;
+
+    // Allocate or reuse the offscreen static canvas.
+    if (!staticLayerRef.current) {
+      const c = document.createElement("canvas");
+      c.width = W;
+      c.height = H;
+      staticLayerRef.current = c;
+    }
+    const sc = staticLayerRef.current;
+    const sCtx = sc.getContext("2d");
+    if (!sCtx) return;
+
+    // 1. Dark background
+    sCtx.fillStyle = "#020818";
+    sCtx.fillRect(0, 0, W, H);
+
+    // 2. Satellite imagery background
+    if (satelliteImgRef.current) {
+      sCtx.drawImage(satelliteImgRef.current, 0, 0, W, H);
+    }
+
+    // 3. Depth heatmap — semi-transparent so satellite shows through
+    if (heatmapCanvasRef.current) {
+      sCtx.globalAlpha = satelliteImgRef.current ? 0.65 : 1.0;
+      sCtx.drawImage(heatmapCanvasRef.current, 0, 0);
+      sCtx.globalAlpha = 1.0;
+    }
+
+    // 4. Marker dots
+    drawMarkerDots(
+      sCtx,
+      markersRef.current,
+      currentTerrain.minLon,
+      currentTerrain.maxLon,
+      currentTerrain.minLat,
+      currentTerrain.maxLat,
+    );
+  };
+
+  // Composite the minimap onto the visible canvas: static layer + camera arrow.
+  // The heavy drawing (heatmap, satellite, markers) lives in rebuildStaticLayer
+  // so this function only touches the arrow on each camera tick.
   const compositeFrame = (
     ctx: CanvasRenderingContext2D,
     camLon: number | null,
     camLat: number | null,
     heading: number,
+    currentTerrain: typeof terrain,
   ) => {
-    if (!terrain) return;
+    if (!currentTerrain) return;
 
-    // 1. Dark background (fallback when satellite not yet loaded)
-    ctx.fillStyle = "#020818";
-    ctx.fillRect(0, 0, W, H);
-
-    // 2. Satellite imagery background
-    if (satelliteImgRef.current) {
-      ctx.drawImage(satelliteImgRef.current, 0, 0, W, H);
+    // 1. Paint the pre-built static layer (bg + satellite + heatmap + markers)
+    if (staticLayerRef.current) {
+      ctx.drawImage(staticLayerRef.current, 0, 0);
+    } else {
+      // Fallback: bare background until the static layer is built
+      ctx.fillStyle = "#020818";
+      ctx.fillRect(0, 0, W, H);
     }
 
-    // 3. Depth heatmap — semi-transparent overlay so satellite shows through
-    if (heatmapCanvasRef.current) {
-      ctx.globalAlpha = satelliteImgRef.current ? 0.65 : 1.0;
-      ctx.drawImage(heatmapCanvasRef.current, 0, 0);
-      ctx.globalAlpha = 1.0;
-    }
-
-    // 4. Marker dots
-    drawMarkerDots(
-      ctx,
-      markersRef.current,
-      terrain.minLon,
-      terrain.maxLon,
-      terrain.minLat,
-      terrain.maxLat,
-    );
-
-    // 5. Camera arrow
+    // 2. Camera arrow — the only element that changes on every camera tick
     if (camLon !== null && camLat !== null) {
-      const px = ((camLon - terrain.minLon) / (terrain.maxLon - terrain.minLon)) * W;
+      const px = ((camLon - currentTerrain.minLon) / (currentTerrain.maxLon - currentTerrain.minLon)) * W;
       // North-up: invert y so high-lat (North) is at top.
-      const py = H - ((camLat - terrain.minLat) / (terrain.maxLat - terrain.minLat)) * H;
+      const py = H - ((camLat - currentTerrain.minLat) / (currentTerrain.maxLat - currentTerrain.minLat)) * H;
       if (px >= 0 && px <= W && py >= 0 && py <= H) {
         drawArrow(ctx, px, py, heading);
       }
@@ -263,8 +295,9 @@ export const Minimap: React.FC = () => {
     );
     heatmapCanvasRef.current = offscreen;
 
+    rebuildStaticLayer(terrain);
     const camState = useCameraStore.getState();
-    compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading);
+    compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading, terrain);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terrain, colormapTheme, shallow, deep, bandColors, customStops, bandBoundaries]);
 
@@ -274,33 +307,35 @@ export const Minimap: React.FC = () => {
     if (!canvas || !terrain || !heatmapCanvasRef.current) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    rebuildStaticLayer(terrain);
     const camState = useCameraStore.getState();
-    compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading);
+    compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading, terrain);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tileUrl]);
 
-  // Subscribe to cameraStore and update arrow + marker dots imperatively
+  // Subscribe to cameraStore and update arrow only — static layer is pre-built.
   useEffect(() => {
     const unsub = useCameraStore.subscribe((state) => {
       const canvas = canvasRef.current;
       if (!canvas || !terrain) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      compositeFrame(ctx, state.cameraLon, state.cameraLat, state.heading);
+      compositeFrame(ctx, state.cameraLon, state.cameraLat, state.heading, terrain);
     });
 
     return () => { unsub(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terrain]);
 
-  // Force a canvas redraw whenever markers change (camera may not have moved)
+  // Rebuild static layer whenever markers change (new dots without camera move)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !terrain) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    rebuildStaticLayer(terrain);
     const camState = useCameraStore.getState();
-    compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading);
+    compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading, terrain);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [markers, terrain]);
 

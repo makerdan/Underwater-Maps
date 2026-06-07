@@ -247,13 +247,18 @@ export const OverviewMap: React.FC = () => {
   useEffect(() => {
     if (!satelliteTileUrl) {
       satelliteImgRef.current = null;
+      dirtyRef.current = true;
       return;
     }
     const img = new Image();
-    img.onload = () => { satelliteImgRef.current = img; };
-    img.onerror = () => { satelliteImgRef.current = null; };
+    img.onload = () => { satelliteImgRef.current = img; dirtyRef.current = true; };
+    img.onerror = () => { satelliteImgRef.current = null; dirtyRef.current = true; };
     img.src = satelliteTileUrl;
   }, [satelliteTileUrl]);
+
+  // Dirty flag — rAF loop skips draws when nothing has changed (no camera
+  // movement, no data updates, no mouse interaction, no GPS/trail pulse).
+  const dirtyRef = useRef(true);
 
   // Drag tracking
   const isDraggingRef = useRef(false);
@@ -419,6 +424,7 @@ export const OverviewMap: React.FC = () => {
   // Keep markers ref in sync without causing rAF re-registration
   useEffect(() => {
     markersRef.current = markerData ?? [];
+    dirtyRef.current = true;
   }, [markerData]);
 
   // EFH data — either embedded in the overview grid (for user-saved noaa-efh-*
@@ -467,11 +473,13 @@ export const OverviewMap: React.FC = () => {
   }, [embeddedEfhPolygons, efhData, overviewGrid]);
   useEffect(() => {
     efhFeaturesRef.current = activeEfhFeatures;
+    dirtyRef.current = true;
   }, [activeEfhFeatures]);
 
   // Keep showEfhRef in sync so the rAF loop can read it without a dep-array entry
   useEffect(() => {
     showEfhRef.current = showEfh;
+    dirtyRef.current = true;
   }, [showEfh]);
 
   // Substrate overlay — gated on the shared `substrateColorMode` toggle from
@@ -484,17 +492,21 @@ export const OverviewMap: React.FC = () => {
   );
   useEffect(() => {
     substrateColorModeRef.current = substrateColorMode;
+    dirtyRef.current = true;
   }, [substrateColorMode]);
   useEffect(() => {
     selectedSubstrateUnitIdRef.current = selectedSubstrateUnitId;
+    dirtyRef.current = true;
   }, [selectedSubstrateUnitId]);
   const hiddenSubstrateClasses = useUiStore((s) => s.hiddenSubstrateClasses);
   useEffect(() => {
     hiddenSubstrateClassesRef.current = hiddenSubstrateClasses;
+    dirtyRef.current = true;
   }, [hiddenSubstrateClasses]);
   const hiddenEfhSpecies = useUiStore((s) => s.hiddenEfhSpecies);
   useEffect(() => {
     hiddenEfhSpeciesRef.current = hiddenEfhSpecies;
+    dirtyRef.current = true;
   }, [hiddenEfhSpecies]);
 
   // Weather stations overlay — query always runs when terrain loaded so FAA button works
@@ -514,6 +526,7 @@ export const OverviewMap: React.FC = () => {
       setSelectedWeatherStation(null);
       setSelectedWeatherStationPos(null);
     }
+    dirtyRef.current = true;
   }, [weatherStationsActive]);
   useEffect(() => {
     if (!weatherStationsActive) return;
@@ -523,6 +536,7 @@ export const OverviewMap: React.FC = () => {
     const m = new Map<string, WeatherStation>();
     for (const s of weatherStations) m.set(s.id, s);
     weatherStationDataRef.current = m;
+    dirtyRef.current = true;
   }, [weatherStations, weatherStationsActive]);
 
   // RAWS overlay — fetch all nearby stations when overlay is enabled
@@ -548,6 +562,7 @@ export const OverviewMap: React.FC = () => {
       setSelectedRawsDatasetId(null);
       setSelectedRawsPos(null);
     }
+    dirtyRef.current = true;
   }, [rawsOverlayActive]);
   useEffect(() => {
     if (!rawsOverlayActive) return;
@@ -557,6 +572,7 @@ export const OverviewMap: React.FC = () => {
     const m = new Map<string, RawsStationItem>();
     for (const s of rawsStations) m.set(s.datasetId, s);
     rawsDataRef.current = m;
+    dirtyRef.current = true;
   }, [rawsStations, rawsOverlayActive]);
 
   const { data: substrateCollection, isError: substrateIsError } = useGetSubstrate(datasetId, {
@@ -593,6 +609,7 @@ export const OverviewMap: React.FC = () => {
     substrateMeta?.creditUrl ?? "https://alaskafisheries.noaa.gov/shorezone/";
   useEffect(() => {
     substrateFeaturesRef.current = substrateCollection?.features ?? [];
+    dirtyRef.current = true;
   }, [substrateCollection]);
 
   // Intertidal hotspots overlay — mirrors intertidalHotspotsEnabled / intertidalScoreMode
@@ -607,13 +624,16 @@ export const OverviewMap: React.FC = () => {
       intertidalHotspotDataRef.current = new Map();
       intertidalSelectedUnitIdRef.current = null;
     }
+    dirtyRef.current = true;
   }, [intertidalHotspotsEnabled]);
   useEffect(() => {
     intertidalScoreModeRef.current = intertidalScoreMode;
+    dirtyRef.current = true;
   }, [intertidalScoreMode]);
   // Keep selected-pin ref in sync with the shared selectedHotspot
   useEffect(() => {
     intertidalSelectedUnitIdRef.current = selectedHotspot?.unitId ?? null;
+    dirtyRef.current = true;
   }, [selectedHotspot]);
   // Always fetch with type="both" so the query key stays stable when
   // intertidalScoreMode changes. The frontend builds pins using whichever
@@ -652,12 +672,14 @@ export const OverviewMap: React.FC = () => {
 
     intertidalPinsRef.current = pins;
     intertidalHotspotDataRef.current = dataMap;
+    dirtyRef.current = true;
   }, [intertidalSpotsData, intertidalHotspotsEnabled, intertidalScoreMode]);
 
   // Fetch trail points when trails list changes; update savedTrailsRef for rAF
   useEffect(() => {
     if (!trailsData || trailsData.length === 0) {
       savedTrailsRef.current = [];
+      dirtyRef.current = true;
       return;
     }
 
@@ -703,6 +725,7 @@ export const OverviewMap: React.FC = () => {
       );
       if (!cancelled && !controller.signal.aborted) {
         savedTrailsRef.current = results;
+        dirtyRef.current = true;
       }
     };
 
@@ -717,6 +740,7 @@ export const OverviewMap: React.FC = () => {
   useEffect(() => {
     if (!overviewGrid || !contoursEnabled) {
       contourSegmentsRef.current = [];
+      dirtyRef.current = true;
       return;
     }
     // Convert contour interval from user units to metres (grid depths are in metres).
@@ -728,6 +752,7 @@ export const OverviewMap: React.FC = () => {
       unitsForUi === "nautical" ? contourInterval * 1.8288 :
                                   contourInterval / 3.28084;
     contourSegmentsRef.current = buildContourLines(overviewGrid, intervalMetres);
+    dirtyRef.current = true;
   }, [overviewGrid, contourInterval, contoursEnabled, unitsForUi]);
 
   // Build offscreen bitmap whenever overviewGrid, palette, or colormap theme changes.
@@ -742,6 +767,7 @@ export const OverviewMap: React.FC = () => {
     if (!overviewGrid) return;
     bitmapRef.current = buildHeatmapBitmap(overviewGrid, colormapTheme);
     invalidateUpscaleRef.current();
+    dirtyRef.current = true;
   }, [overviewGrid, colormapTheme, paletteShallow, paletteDeep, paletteBandColors, paletteCustomStops, paletteBandBoundaries]);
 
   // Compute initial transform whenever the grid or canvas is ready
@@ -762,6 +788,12 @@ export const OverviewMap: React.FC = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    // Subscribe to stores that change outside of React renders so we can mark
+    // the canvas dirty and trigger a redraw without re-running this effect.
+    const unsubCamera = useCameraStore.subscribe(() => { dirtyRef.current = true; });
+    const unsubGps    = useGpsStore.subscribe(()    => { dirtyRef.current = true; });
+    const unsubTrail  = useTrailStore.subscribe(()  => { dirtyRef.current = true; });
+
     // Track the last view key to detect pan/zoom changes and invalidate the
     // cached upscaled bitmap so a stale enhanced image is never shown after
     // the user moves the map.
@@ -777,6 +809,21 @@ export const OverviewMap: React.FC = () => {
         rafRef.current = requestAnimationFrame(loop);
         return;
       }
+
+      // Skip the draw when nothing has changed. GPS pulsing and trail recording
+      // require continuous animation; everything else can wait for a dirty mark.
+      if (!dirtyRef.current) {
+        const gps = useGpsStore.getState();
+        const trail = useTrailStore.getState();
+        const alwaysAnimate =
+          (gps.active && gps.position !== null) ||
+          (trail.recording && trail.currentPoints.length > 0);
+        if (!alwaysAnimate) {
+          rafRef.current = requestAnimationFrame(loop);
+          return;
+        }
+      }
+      dirtyRef.current = false;
 
       const cW = canvas.width;
       const cH = canvas.height;
@@ -1101,7 +1148,12 @@ export const OverviewMap: React.FC = () => {
     };
 
     rafRef.current = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(rafRef.current);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      unsubCamera();
+      unsubGps();
+      unsubTrail();
+    };
   }, [overviewGrid]);
 
   // ---------------------------------------------------------------------------
@@ -1120,6 +1172,7 @@ export const OverviewMap: React.FC = () => {
         const my = e.clientY - rect.top;
         dragRectRef.current = { x0: mx, y0: my, x1: mx, y1: my };
         hasDraggedRef.current = true; // prevents the trailing `click` from firing drop-in
+        dirtyRef.current = true;
         return;
       }
       isDraggingRef.current = true;
@@ -1159,6 +1212,7 @@ export const OverviewMap: React.FC = () => {
         if (dragRectRef.current) {
           dragRectRef.current.x1 = Math.max(0, Math.min(canvas.width, mx));
           dragRectRef.current.y1 = Math.max(0, Math.min(canvas.height, my));
+          dirtyRef.current = true;
         }
         setTooltip((prev) => (prev.visible ? { ...prev, visible: false } : prev));
         return;
@@ -1189,6 +1243,7 @@ export const OverviewMap: React.FC = () => {
         canvas.width,
         canvas.height,
       );
+      dirtyRef.current = true;
     };
 
     const handleMouseUp = () => {
@@ -1246,6 +1301,7 @@ export const OverviewMap: React.FC = () => {
         canvas.width,
         canvas.height,
       );
+      dirtyRef.current = true;
     };
 
     const handleClick = (e: MouseEvent) => {

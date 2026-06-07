@@ -2,6 +2,7 @@
 import { precacheAndRoute } from "workbox-precaching";
 import { registerRoute } from "workbox-routing";
 import { StaleWhileRevalidate, CacheFirst } from "workbox-strategies";
+import { ExpirationPlugin } from "workbox-expiration";
 import { get as idbGet, del as idbDel, keys as idbKeys } from "idb-keyval";
 
 declare const self: ServiceWorkerGlobalScope;
@@ -30,6 +31,8 @@ self.addEventListener("activate", (event: ExtendableEvent) => {
         names
           .filter(
             (name) =>
+              // Only purge our own versioned caches from older builds —
+              // do NOT touch Workbox precache or any other origin cache.
               name.startsWith(CACHE_PREFIX) &&
               name !== CACHE_VERSION &&
               !PERSISTENT_CACHES.has(name),
@@ -44,7 +47,12 @@ self.addEventListener("activate", (event: ExtendableEvent) => {
 
 registerRoute(
   ({ url }: { url: URL }) => /\/api\/datasets$/.test(url.pathname),
-  new StaleWhileRevalidate({ cacheName: `${CACHE_VERSION}-api-datasets` }),
+  new StaleWhileRevalidate({
+    cacheName: `${CACHE_VERSION}-api-datasets`,
+    plugins: [
+      new ExpirationPlugin({ maxEntries: 1, maxAgeSeconds: 60 * 60 * 24 }),
+    ],
+  }),
 );
 
 // Terrain and overview: serve from persistent pack cache first (CacheFirst)
@@ -62,6 +70,9 @@ registerRoute(
   ({ url }: { url: URL }) => /\/api\/datasets\/[^/]+\/terrain/.test(url.pathname),
   new StaleWhileRevalidate({
     cacheName: `${CACHE_VERSION}-api-terrain`,
+    plugins: [
+      new ExpirationPlugin({ maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 7 }),
+    ],
   }),
 );
 
@@ -76,12 +87,20 @@ registerRoute(
   ({ url }: { url: URL }) => /\/api\/datasets\/[^/]+\/overview/.test(url.pathname),
   new StaleWhileRevalidate({
     cacheName: `${CACHE_VERSION}-api-overview`,
+    plugins: [
+      new ExpirationPlugin({ maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 7 }),
+    ],
   }),
 );
 
 registerRoute(
   ({ url }: { url: URL }) => /\/api\/markers/.test(url.pathname),
-  new StaleWhileRevalidate({ cacheName: `${CACHE_VERSION}-api-markers` }),
+  new StaleWhileRevalidate({
+    cacheName: `${CACHE_VERSION}-api-markers`,
+    plugins: [
+      new ExpirationPlugin({ maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 }),
+    ],
+  }),
 );
 
 // Help media: serve from pack cache when available, fall back to network.
