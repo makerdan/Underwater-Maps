@@ -438,6 +438,7 @@ Authentication is handled by **Clerk** across all surfaces:
 | GET | `/efh/:id` | Essential Fish Habitat zones for a specific dataset |
 | GET | `/terrain/land` | Fetch a land-elevation (DEM) grid for a bounding box |
 | GET | `/terrain/satellite-tile` | Proxy a satellite/aerial imagery PNG for a bounding box |
+| GET | `/terrain/terrain-tile` | Proxy a USGS hillshaded terrain PNG for a bounding box |
 | GET | `/terrain/download/info` | Preflight for bbox terrain CSV download |
 | GET | `/terrain/download` | Stream a terrain CSV for a bounding box |
 | DELETE | `/datasets/presets/:id` | Disable a built-in preset dataset |
