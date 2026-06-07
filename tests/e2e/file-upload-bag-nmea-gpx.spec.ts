@@ -32,16 +32,16 @@ const API_BASE = API_URL;
 const authHeaders = { "x-e2e-user-id": E2E_USER_ID };
 
 const BAG_FIXTURE_PATH = path.resolve(
-  path.dirname(new URL(import.meta.url).pathname),
-  "../../artifacts/api-server/src/__tests__/fixtures/survey.bag",
+  process.cwd(),
+  "artifacts/api-server/src/__tests__/fixtures/survey.bag",
 );
 const NMEA_FIXTURE_PATH = path.resolve(
-  path.dirname(new URL(import.meta.url).pathname),
-  "../../artifacts/api-server/src/__tests__/fixtures/survey.nmea",
+  process.cwd(),
+  "artifacts/api-server/src/__tests__/fixtures/survey.nmea",
 );
 const GPX_FIXTURE_PATH = path.resolve(
-  path.dirname(new URL(import.meta.url).pathname),
-  "../../artifacts/api-server/src/__tests__/fixtures/survey.gpx",
+  process.cwd(),
+  "artifacts/api-server/src/__tests__/fixtures/survey.gpx",
 );
 
 interface UserDatasetMeta {

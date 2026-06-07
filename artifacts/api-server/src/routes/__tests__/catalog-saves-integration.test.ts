@@ -527,6 +527,18 @@ vi.mock("../../lib/catalogSeeder.js", () => ({
   scoreEntry: () => 1,
 }));
 
+// Stub the EFH live fetcher so buildEfhHabitatCollection does not make a real
+// HTTP call to NOAA in the test environment. Returning null from
+// fetchNoaaAlaskaEfh triggers the immediate fallback to bundled efhData.ts
+// polygons, keeping the async background job well within the poll timeout.
+vi.mock("../../lib/efhFetcher.js", () => ({
+  fetchNoaaAlaskaEfh: async () => null,
+  buildCollectionFromLiveFeatures: (
+    _features: unknown[],
+    _matcher: unknown,
+  ) => ({ type: "FeatureCollection", features: [] }),
+}));
+
 // Clerk / proxy plumbing — same stubs as the sibling datasets.test.ts so the
 // app boots without contacting Clerk.
 vi.mock("@clerk/express", () => ({

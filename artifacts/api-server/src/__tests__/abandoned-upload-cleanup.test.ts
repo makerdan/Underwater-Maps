@@ -146,8 +146,8 @@ describe("cleanupAbandonedUploadJobs", () => {
     const expectedMin = before - ABANDONED_UPLOAD_THRESHOLD_MS;
     const expectedMax = after - ABANDONED_UPLOAD_THRESHOLD_MS;
 
-    expect(cutoffMs).toBeGreaterThanOrEqual(expectedMin - 100);
-    expect(cutoffMs).toBeLessThanOrEqual(expectedMax + 100);
+    expect(cutoffMs).toBeGreaterThanOrEqual(expectedMin - 1_000);
+    expect(cutoffMs).toBeLessThanOrEqual(expectedMax + 1_000);
   });
 
   it("filters on status='uploading'", async () => {

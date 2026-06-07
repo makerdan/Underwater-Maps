@@ -26,8 +26,8 @@ const API_BASE = API_URL;
 const authHeaders = { "x-e2e-user-id": E2E_USER_ID };
 
 const LAZ_FIXTURE_PATH = path.resolve(
-  path.dirname(new URL(import.meta.url).pathname),
-  "../../artifacts/api-server/src/__tests__/fixtures/survey.laz",
+  process.cwd(),
+  "artifacts/api-server/src/__tests__/fixtures/survey.laz",
 );
 
 interface UserDatasetMeta {

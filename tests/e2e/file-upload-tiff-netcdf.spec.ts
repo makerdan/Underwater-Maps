@@ -33,12 +33,12 @@ const API_BASE = API_URL;
 const authHeaders = { "x-e2e-user-id": E2E_USER_ID };
 
 const TIFF_FIXTURE_PATH = path.resolve(
-  path.dirname(new URL(import.meta.url).pathname),
-  "../../artifacts/api-server/src/__tests__/fixtures/survey.tif",
+  process.cwd(),
+  "artifacts/api-server/src/__tests__/fixtures/survey.tif",
 );
 const NETCDF_FIXTURE_PATH = path.resolve(
-  path.dirname(new URL(import.meta.url).pathname),
-  "../../artifacts/api-server/src/__tests__/fixtures/survey.nc",
+  process.cwd(),
+  "artifacts/api-server/src/__tests__/fixtures/survey.nc",
 );
 
 interface UserDatasetMeta {
