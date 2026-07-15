@@ -434,6 +434,11 @@ const WaterTempSceneContents: React.FC<{ terrain: TerrainData }> = ({ terrain })
     terrain.datasetId,
   );
 
+  const isRealData =
+    !!profile?.available &&
+    Array.isArray(profile.samples) &&
+    (profile.samples as unknown[]).length >= 2;
+
   const samples: TempSample[] | null = useMemo(() => {
     if (!showWaterTempLayer) return null;
     if (profile?.available && Array.isArray(profile.samples) && profile.samples.length >= 2) {
@@ -469,6 +474,7 @@ const WaterTempSceneContents: React.FC<{ terrain: TerrainData }> = ({ terrain })
       surfY={surfY}
       seafloorY={seafloorY}
       dataTexture={dataTexture}
+      opacity={isRealData ? 0.15 : 0.07}
     />
   );
 };

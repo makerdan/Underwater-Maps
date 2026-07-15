@@ -56,12 +56,19 @@ interface WaterTempVolumeLayerProps {
   seafloorY: number;
   /** Baked 1×N temperature DataTexture from useWaterTempTexture. */
   dataTexture: THREE.DataTexture;
+  /**
+   * Alpha multiplier for the volume (0–1). Defaults to 0.15.
+   * Pass a lower value (e.g. 0.07) when showing a synthetic fallback
+   * so users can visually distinguish estimated from measured data.
+   */
+  opacity?: number;
 }
 
 export const WaterTempVolumeLayer: React.FC<WaterTempVolumeLayerProps> = ({
   surfY,
   seafloorY,
   dataTexture,
+  opacity = 0.15,
 }) => {
   const meshRef = useRef<THREE.Mesh>(null);
 
@@ -78,7 +85,7 @@ export const WaterTempVolumeLayer: React.FC<WaterTempVolumeLayerProps> = ({
       fragmentShader,
       uniforms: {
         uTempTex:   { value: dataTexture },
-        uOpacity:   { value: 0.15 },
+        uOpacity:   { value: opacity },
         uSurfY:     { value: surfY },
         uSeafloorY: { value: seafloorY },
       },
@@ -86,7 +93,7 @@ export const WaterTempVolumeLayer: React.FC<WaterTempVolumeLayerProps> = ({
       depthWrite: false,
       side: THREE.BackSide,
     });
-  }, [dataTexture, surfY, seafloorY]);
+  }, [dataTexture, opacity, surfY, seafloorY]);
 
   useEffect(() => {
     if (material.uniforms["uTempTex"]) {

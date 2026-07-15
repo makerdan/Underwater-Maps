@@ -31,6 +31,7 @@ import { HelpIcon } from "@/components/help/HelpButton";
 import { Spinner } from "@/components/ui/spinner";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
 import { useWeatherStations } from "@/hooks/useWeatherStations";
+import { useTemperatureProfile } from "@/hooks/useTemperatureProfile";
 import { useToast } from "@/hooks/use-toast";
 
 const PANEL: React.CSSProperties = {
@@ -156,6 +157,23 @@ export const OverlaysToolsPanel: React.FC = () => {
   const showWaterTempLayer = useSettingsStore((s) => s.showWaterTempLayer);
   const setShowWaterTempLayer = useSettingsStore((s) => s.setShowWaterTempLayer);
   const waterType = useSettingsStore((s) => s.waterType);
+
+  // Detect whether the active temp layer is driven by a real measured profile
+  // or the synthetic fallback thermocline model. React Query deduplicates
+  // this call with the identical one inside WaterTempSceneContents.
+  const tempCenterLat = terrain ? (terrain.minLat + terrain.maxLat) / 2 : null;
+  const tempCenterLon = terrain ? (terrain.minLon + terrain.maxLon) / 2 : null;
+  const { profile: tempProfile, loading: tempLoading } = useTemperatureProfile(
+    showWaterTempLayer ? tempCenterLat : null,
+    showWaterTempLayer ? tempCenterLon : null,
+    showWaterTempLayer && !!terrain,
+    terrain?.datasetId ?? null,
+  );
+  const isTempRealData =
+    !!tempProfile?.available &&
+    Array.isArray(tempProfile.samples) &&
+    (tempProfile.samples as unknown[]).length >= 2;
+  const isTempEstimated = showWaterTempLayer && !tempLoading && !isTempRealData;
   const { data: datasets } = useGetDatasets(
     { waterType },
     { query: { queryKey: getGetDatasetsQueryKey({ waterType }) } },
@@ -742,7 +760,25 @@ export const OverlaysToolsPanel: React.FC = () => {
             activeBorder="rgba(251,146,60,0.55)"
             activeColor="#fb923c"
             activeGlow="0 0 6px rgba(251,146,60,0.5)"
+            isLoading={showWaterTempLayer && tempLoading}
           />
+          {isTempEstimated && (
+            <div
+              data-testid="temp-layer-estimated-notice"
+              style={{
+                fontSize: 9,
+                letterSpacing: "0.06em",
+                color: "#fb923c",
+                background: "rgba(251,146,60,0.08)",
+                border: "1px solid rgba(251,146,60,0.25)",
+                borderRadius: 4,
+                padding: "5px 8px",
+                lineHeight: 1.5,
+              }}
+            >
+              ⚠ ESTIMATED — no measured profile for this location. Showing synthetic thermocline model.
+            </div>
+          )}
 
           {hasHyd93Features && (
             <>
