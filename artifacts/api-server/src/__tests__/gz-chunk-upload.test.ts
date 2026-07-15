@@ -101,6 +101,7 @@ vi.mock("drizzle-orm", () => ({
   eq: vi.fn(() => "eq-condition"),
   and: vi.fn((...args: unknown[]) => args),
   or: vi.fn((...args: unknown[]) => args),
+  lt: vi.fn(() => "lt-condition"),
   inArray: vi.fn(() => "in-condition"),
 }));
 

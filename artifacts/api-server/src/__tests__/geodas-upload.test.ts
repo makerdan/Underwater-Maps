@@ -64,6 +64,7 @@ vi.mock("@workspace/db", async () => {
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn(() => "eq-condition"),
   and: vi.fn((...args: unknown[]) => args),
+  lt: vi.fn(() => "lt-condition"),
 }));
 
 vi.mock("@clerk/express", () => ({
