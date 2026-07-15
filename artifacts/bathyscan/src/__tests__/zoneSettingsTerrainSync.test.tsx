@@ -208,6 +208,7 @@ vi.mock("@react-three/fiber", () => ({
 
 vi.mock("@/lib/terrainShader", () => ({
   createTerrainShaderMaterial: () => mockMatHolder.make(),
+  getPlaceholderHabitatTexture: () => ({ isTexture: true, dispose: () => {} }),
 }));
 
 vi.mock("@/lib/terrain", () => ({
