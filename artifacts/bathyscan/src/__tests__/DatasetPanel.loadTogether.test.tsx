@@ -79,7 +79,10 @@ const simulatedStore = vi.hoisted(() => ({
 // Mutable state for terrainStore so each test can assert toggleVisible calls.
 const terrainState = vi.hoisted(() => ({
   visibleDatasets: [] as Array<{ datasetId: string }>,
+  selectedIds: [] as string[],
   toggleVisible: vi.fn(),
+  addSelected: vi.fn(),
+  removeSelected: vi.fn(),
   setGrids: vi.fn(),
   primaryDatasetId: null as string | null,
   hideAllOthers: vi.fn(),
@@ -357,33 +360,30 @@ describe("DatasetPanel — handleLoadTogether preflight", () => {
   beforeEach(() => {
     fetchQueryMock.mockReset();
     terrainState.toggleVisible.mockReset();
+    terrainState.addSelected.mockReset();
+    terrainState.removeSelected.mockReset();
     terrainState.visibleDatasets = [];
+    terrainState.selectedIds = [];
     simulatedStore.setPending.mockReset();
     simulatedStore.suppressed = false;
   });
 
-  it("(a) all presets return real data → toggleVisible called immediately, dialog never opened", async () => {
+  it("(a) all presets return real data → addSelected called immediately, dialog never opened", async () => {
     // Both preview fetches resolve with a real (non-synthetic) dataSource.
     fetchQueryMock.mockResolvedValue({ dataSource: "ncei", name: "Alpha Bay" });
 
     render(<DatasetPanel />);
     await selectPresetsAndLoadTogether(PRESET_A.id, PRESET_B.id);
 
-    // toggleVisible must have been called for each selected preset.
-    expect(terrainState.toggleVisible).toHaveBeenCalledWith({
-      datasetId: PRESET_A.id,
-      source: "preset",
-    });
-    expect(terrainState.toggleVisible).toHaveBeenCalledWith({
-      datasetId: PRESET_B.id,
-      source: "preset",
-    });
+    // addSelected must have been called for each selected preset.
+    expect(terrainState.addSelected).toHaveBeenCalledWith(PRESET_A.id, "preset");
+    expect(terrainState.addSelected).toHaveBeenCalledWith(PRESET_B.id, "preset");
 
     // The simulated-data dialog must NOT have been triggered.
     expect(simulatedStore.setPending).not.toHaveBeenCalled();
   });
 
-  it("(b-confirm) one preset is synthetic → dialog opens; confirm → toggleVisible called for all presets", async () => {
+  it("(b-confirm) one preset is synthetic → dialog opens; confirm → addSelected called for all presets", async () => {
     // First preset is real, second is synthetic.
     fetchQueryMock
       .mockResolvedValueOnce({ dataSource: "gebco", name: "Alpha Bay" })
@@ -398,26 +398,20 @@ describe("DatasetPanel — handleLoadTogether preflight", () => {
     expect(pendingArg.datasetId).toBe(PRESET_B.id);
     expect(pendingArg.datasetName).toBe("Beta Fjord");
 
-    // toggleVisible must NOT have been called yet (waiting for user confirmation).
-    expect(terrainState.toggleVisible).not.toHaveBeenCalled();
+    // addSelected must NOT have been called yet (waiting for user confirmation).
+    expect(terrainState.addSelected).not.toHaveBeenCalled();
 
     // Simulate the user confirming the dialog.
     await act(async () => {
       pendingArg.onConfirm();
     });
 
-    // After confirmation, toggleVisible fires for all presets.
-    expect(terrainState.toggleVisible).toHaveBeenCalledWith({
-      datasetId: PRESET_A.id,
-      source: "preset",
-    });
-    expect(terrainState.toggleVisible).toHaveBeenCalledWith({
-      datasetId: PRESET_B.id,
-      source: "preset",
-    });
+    // After confirmation, addSelected fires for all presets.
+    expect(terrainState.addSelected).toHaveBeenCalledWith(PRESET_A.id, "preset");
+    expect(terrainState.addSelected).toHaveBeenCalledWith(PRESET_B.id, "preset");
   });
 
-  it("(b-cancel) one preset is synthetic → dialog opens; cancel → no toggles at all", async () => {
+  it("(b-cancel) one preset is synthetic → dialog opens; cancel → no addSelected at all", async () => {
     fetchQueryMock
       .mockResolvedValueOnce({ dataSource: "ncei", name: "Alpha Bay" })
       .mockResolvedValueOnce({ dataSource: "unknown", name: "Beta Fjord" });
@@ -433,11 +427,11 @@ describe("DatasetPanel — handleLoadTogether preflight", () => {
       pendingArg.onCancel();
     });
 
-    // toggleVisible must never have been called.
-    expect(terrainState.toggleVisible).not.toHaveBeenCalled();
+    // addSelected must never have been called.
+    expect(terrainState.addSelected).not.toHaveBeenCalled();
   });
 
-  it("(c) suppression active → toggleVisible called immediately, preflight fetch never runs", async () => {
+  it("(c) suppression active → addSelected called immediately, preflight fetch never runs", async () => {
     simulatedStore.suppressed = true;
 
     render(<DatasetPanel />);
@@ -446,13 +440,10 @@ describe("DatasetPanel — handleLoadTogether preflight", () => {
     // Suppression bypasses the preflight entirely.
     expect(fetchQueryMock).not.toHaveBeenCalled();
     expect(simulatedStore.setPending).not.toHaveBeenCalled();
-    expect(terrainState.toggleVisible).toHaveBeenCalledWith({
-      datasetId: PRESET_A.id,
-      source: "preset",
-    });
+    expect(terrainState.addSelected).toHaveBeenCalledWith(PRESET_A.id, "preset");
   });
 
-  it("(d) only library IDs selected → toggleVisible called immediately with no preflight", async () => {
+  it("(d) only library IDs selected → addSelected called immediately with no preflight", async () => {
     render(<DatasetPanel />);
 
     // Trigger library selection via the mock DatasetFolderTree button, then Load Together.
@@ -466,14 +457,11 @@ describe("DatasetPanel — handleLoadTogether preflight", () => {
     expect(fetchQueryMock).not.toHaveBeenCalled();
     expect(simulatedStore.setPending).not.toHaveBeenCalled();
 
-    // Library dataset toggled immediately.
-    expect(terrainState.toggleVisible).toHaveBeenCalledWith({
-      datasetId: "lib-ds-1",
-      source: "user",
-    });
+    // Library dataset added to selected pool immediately.
+    expect(terrainState.addSelected).toHaveBeenCalledWith("lib-ds-1", "user");
   });
 
-  it("(e) preflight fetch throws → treated as 'proceed' (toggles immediately, no dialog)", async () => {
+  it("(e) preflight fetch throws → treated as 'proceed' (addSelected immediately, no dialog)", async () => {
     fetchQueryMock.mockRejectedValue(new Error("Network error"));
 
     render(<DatasetPanel />);
@@ -482,9 +470,6 @@ describe("DatasetPanel — handleLoadTogether preflight", () => {
     // An error during preflight is treated as a null preview (dataSource not synthetic),
     // so the load proceeds without opening the dialog.
     expect(simulatedStore.setPending).not.toHaveBeenCalled();
-    expect(terrainState.toggleVisible).toHaveBeenCalledWith({
-      datasetId: PRESET_A.id,
-      source: "preset",
-    });
+    expect(terrainState.addSelected).toHaveBeenCalledWith(PRESET_A.id, "preset");
   });
 });

@@ -10,6 +10,10 @@
  *   Receive: \n<csv lines>__OK__\n   on success
  *            \n__ERR__\t<msg>\n      on failure (embedded \n escaped as \\n)
  *
+ *   Warmup ping:
+ *   Send:    __WARMUP__\n
+ *   Receive: __WARMUP_OK__\n         h5py already loaded at module scope in worker
+ *
  * Concurrent calls are serialised through an internal queue; the worker
  * processes one BAG file at a time.
  *
@@ -120,6 +124,33 @@ class BagWorkerProcess {
   }
 
   /**
+   * Eagerly spawn the worker process and trigger h5py import via the
+   * __WARMUP__ protocol command.  Returns a Promise that resolves once the
+   * Python side acknowledges with __WARMUP_OK__, meaning h5py is fully loaded
+   * and the first parseBag() call will not pay the cold-start cost.
+   *
+   * Safe to call multiple times — subsequent calls after the first warmup has
+   * resolved are no-ops (the process is already warm).
+   */
+  warmup(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const handleResolve = () => resolve();
+      const handleReject = (err: Error) => reject(err);
+
+      if (this.active === null) {
+        this.active = { resolve: handleResolve, reject: handleReject };
+        this._ensureProc().stdin!.write("__WARMUP__\n");
+      } else {
+        this.queue.push({
+          path: "__WARMUP__",
+          resolve: handleResolve,
+          reject: handleReject,
+        });
+      }
+    });
+  }
+
+  /**
    * Gracefully shut down the worker process.
    * Closing stdin signals EOF to the Python worker, which exits cleanly.
    * In tests, prefer letting the OS process exit handle cleanup (via unref)
@@ -217,8 +248,19 @@ class BagWorkerProcess {
   private _drain(): void {
     const OK_MARKER = "\n__OK__\n";
     const ERR_MARKER = "\n__ERR__\t";
+    const WARMUP_OK_MARKER = "__WARMUP_OK__\n";
 
     while (this.active) {
+      // Warmup ACK: no leading \n separator — check before the regular markers.
+      if (this.stdoutBuf.startsWith(WARMUP_OK_MARKER)) {
+        this.stdoutBuf = this.stdoutBuf.slice(WARMUP_OK_MARKER.length);
+        const cur = this.active;
+        this.active = null;
+        this._next();
+        cur.resolve("");
+        continue;
+      }
+
       const okIdx = this.stdoutBuf.indexOf(OK_MARKER);
       const errIdx = this.stdoutBuf.indexOf(ERR_MARKER);
 

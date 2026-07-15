@@ -166,13 +166,28 @@ describe("BAG worker crash recovery", () => {
     // each spawn.  The retry logic allows exactly one retry; a second crash
     // must reject so callers aren't stuck in an infinite retry loop.
 
-    let killCount = 0;
-
-    // Monkey-patch _ensureProc to kill every proc it returns (up to 2 times).
     const worker = bagWorker as unknown as {
       _ensureProc: () => import("child_process").ChildProcess;
       proc: import("child_process").ChildProcess | null;
     };
+
+    // Kill the existing warm proc (left by warmup or prior tests) and clear
+    // the reference so _ensureProc will be called fresh by parseFile.
+    if (worker.proc) {
+      const oldProc = worker.proc;
+      worker.proc = null;
+      try { oldProc.kill("SIGKILL"); } catch { /* ignore */ }
+      await new Promise<void>((resolve) => {
+        oldProc.once("exit", () => resolve());
+        setTimeout(resolve, 300);
+      });
+    }
+
+    let killCount = 0;
+
+    // Monkey-patch _ensureProc to kill every proc it spawns (up to 2 times).
+    // parseFile calls _ensureProc once (initial spawn), retry calls it again.
+    // Both spawns are killed → second rejection is not retried → hard failure.
     const original = worker._ensureProc.bind(worker);
     worker._ensureProc = function () {
       const p = original();

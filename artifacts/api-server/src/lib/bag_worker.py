@@ -7,11 +7,13 @@ eliminating per-request cold-start overhead (~500–700 ms each).
 
 Protocol (one request/response cycle per file):
   Stdin  (one line):  <absolute path to .bag file>\\n
+                      __WARMUP__\\n  (no-op ping — imports h5py, sends __WARMUP_OK__)
   Stdout (response):
     \\n                          separator (always present, aids marker search)
     <lon,lat,depth lines>       CSV (may be empty on error path)
     __OK__\\n                    on success  OR
     __ERR__\\t<msg>\\n            on failure  (\\n in msg replaced by \\\\n)
+    __WARMUP_OK__\\n             on __WARMUP__ request
 
 The worker reads until EOF then exits cleanly.
 """
@@ -34,6 +36,20 @@ except ImportError as _import_err:
         raise ImportError(_import_err)
     MAX_POINTS = 2_000_000
 
+# Import h5py at module scope so the cost is paid once on startup, not per
+# request.  The warmup() call on the TypeScript side sends __WARMUP__ which
+# triggers this import path and receives __WARMUP_OK__ as an ACK.
+try:
+    import h5py  # type: ignore  # noqa: F401 — import triggers JIT compilation
+    _H5PY_AVAILABLE = True
+    _H5PY_ERR: str | None = None
+except ImportError as _h5py_err:
+    _H5PY_AVAILABLE = False
+    _H5PY_ERR = (
+        f"Missing Python dependency: {_h5py_err}. "
+        "Run: PYTHONUSERBASE=.pythonlibs pip install h5py numpy pyproj --user"
+    )
+
 
 def _send_err(msg: str) -> None:
     one_line = msg.replace("\n", "\\n").replace("\r", "")
@@ -41,14 +57,15 @@ def _send_err(msg: str) -> None:
     sys.stdout.flush()
 
 
+def handle_warmup() -> None:
+    """Respond to a __WARMUP__ ping — h5py is already imported at module level."""
+    sys.stdout.write("__WARMUP_OK__\n")
+    sys.stdout.flush()
+
+
 def handle_one(path: str) -> None:
-    try:
-        import h5py  # type: ignore
-    except ImportError as exc:
-        _send_err(
-            f"Missing Python dependency: {exc}. "
-            "Run: PYTHONUSERBASE=.pythonlibs pip install h5py numpy pyproj --user"
-        )
+    if not _H5PY_AVAILABLE:
+        _send_err(_H5PY_ERR or "h5py not available")
         return
 
     try:
@@ -100,7 +117,10 @@ def main() -> None:
         path = line.rstrip("\n\r")
         if not path:
             continue
-        handle_one(path)
+        if path == "__WARMUP__":
+            handle_warmup()
+        else:
+            handle_one(path)
 
 
 if __name__ == "__main__":
