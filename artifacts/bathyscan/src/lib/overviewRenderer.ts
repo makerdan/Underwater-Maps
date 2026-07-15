@@ -134,6 +134,40 @@ export function computeInitialTransform(
 }
 
 /**
+ * Compute a transform that centres and fills the canvas around an arbitrary
+ * bounding box at 88% fill. Used by the "Fit to Data" button to frame the
+ * union bbox of all visible datasets.
+ *
+ * Unlike `computeInitialTransform`, this accepts a plain bbox object rather
+ * than a full TerrainData grid, and handles the antimeridian-crossing case
+ * (minLon > maxLon) the same way `lonRangeOf` does.
+ */
+export function computeFitTransform(
+  bbox: { minLon: number; maxLon: number; minLat: number; maxLat: number },
+  canvasW: number,
+  canvasH: number,
+): OverviewTransform {
+  const lonRange =
+    bbox.minLon > bbox.maxLon
+      ? bbox.maxLon + 360 - bbox.minLon || 1
+      : bbox.maxLon - bbox.minLon || 1;
+  const latRange = bbox.maxLat - bbox.minLat || 1;
+  const margin = 0.88;
+  const pxPerDeg = Math.min(
+    (canvasW * margin) / lonRange,
+    (canvasH * margin) / latRange,
+  );
+  const terrainW = pxPerDeg * lonRange;
+  const terrainH = pxPerDeg * latRange;
+  return {
+    scale: 1,
+    offsetX: (canvasW - terrainW) / 2,
+    offsetY: (canvasH - terrainH) / 2,
+    pxPerDeg,
+  };
+}
+
+/**
  * Clamp the transform so at least 10% of the terrain remains visible.
  * Does NOT modify `pxPerDeg` or `scale`.
  */

@@ -28,6 +28,7 @@ import {
   buildHeatmapBitmap,
   buildContourLines,
   computeInitialTransform,
+  computeFitTransform,
   clampTransform,
   canvasToLonLat,
   lonLatToCanvas,
@@ -235,6 +236,15 @@ export const OverviewMap: React.FC = () => {
   // movement, no data updates, no mouse interaction, no GPS/trail pulse).
   const dirtyRef = useRef(true);
 
+  // Fit-to-data animation state. Set by handleFitToData; consumed and cleared
+  // by the rAF loop once the tween completes.
+  const fitAnimRef = useRef<{
+    from: OverviewTransform;
+    to: OverviewTransform;
+    startTime: number;
+    duration: number;
+  } | null>(null);
+
   // Drag tracking
   const isDraggingRef = useRef(false);
   const hasDraggedRef = useRef(false);
@@ -355,6 +365,39 @@ export const OverviewMap: React.FC = () => {
     setBboxError(null);
   }, []);
 
+  // Compute the union bbox of all visible datasets that have a loaded overview
+  // grid and animate the minimap transform to frame it.
+  const handleFitToData = useCallback(() => {
+    const withGrid = visibleDatasets.filter((v) => !!v.overviewGrid);
+    if (withGrid.length === 0) return;
+    const canvas = canvasRef.current;
+    const currentTransform = transformRef.current;
+    if (!canvas || !currentTransform) return;
+
+    let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+    for (const v of withGrid) {
+      const og = v.overviewGrid!;
+      minLon = Math.min(minLon, og.minLon);
+      maxLon = Math.max(maxLon, og.maxLon);
+      minLat = Math.min(minLat, og.minLat);
+      maxLat = Math.max(maxLat, og.maxLat);
+    }
+
+    const targetTransform = computeFitTransform(
+      { minLon, maxLon, minLat, maxLat },
+      canvas.width,
+      canvas.height,
+    );
+
+    fitAnimRef.current = {
+      from: { ...currentTransform },
+      to: targetTransform,
+      startTime: performance.now(),
+      duration: 400,
+    };
+    dirtyRef.current = true;
+  }, [visibleDatasets]);
+
   // Escape behavior (capture-phase so we win against the global App handler):
   //   1. Mid-drag (drawing a rectangle): cancel the in-progress drag only.
   //   2. Completed download box: clear it.
@@ -433,6 +476,12 @@ export const OverviewMap: React.FC = () => {
     datasetNameMapRef.current = m;
   }, [allDatasets, userDatasetsForNames]);
   const hasEfh = !!allDatasets?.find((d) => d.id === datasetId)?.hasEfh;
+  // Derived once per render so the Fit button doesn't repeat the filter three
+  // times in inline JSX style expressions.
+  const datasetsWithGrid = useMemo(
+    () => visibleDatasets.filter((v) => !!v.overviewGrid),
+    [visibleDatasets],
+  );
   // Only hit /efh for preset datasets — user-saved EFH datasets have polygons
   // already embedded in overviewGrid.habitatPolygons.
   const { data: efhData } = useGetEfh(
@@ -900,6 +949,32 @@ export const OverviewMap: React.FC = () => {
         return;
       }
 
+      // Tick the fit-to-data tween BEFORE the dirty check so the animation
+      // keeps running even when nothing else has changed.
+      if (fitAnimRef.current) {
+        const anim = fitAnimRef.current;
+        const elapsed = performance.now() - anim.startTime;
+        const progress = Math.min(1, elapsed / anim.duration);
+        // Ease-in-out cubic
+        const ease =
+          progress < 0.5
+            ? 4 * progress * progress * progress
+            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+        const from = anim.from;
+        const to = anim.to;
+        transformRef.current = {
+          pxPerDeg: from.pxPerDeg + (to.pxPerDeg - from.pxPerDeg) * ease,
+          scale: from.scale + (to.scale - from.scale) * ease,
+          offsetX: from.offsetX + (to.offsetX - from.offsetX) * ease,
+          offsetY: from.offsetY + (to.offsetY - from.offsetY) * ease,
+        };
+        dirtyRef.current = true;
+        if (progress >= 1) {
+          transformRef.current = to;
+          fitAnimRef.current = null;
+        }
+      }
+
       // When multiple datasets are visible, `worldGrid` is a synthetic TerrainData
       // whose bbox spans the combined extent of all loaded overview grids.
       // All lon/lat → canvas projections use this so every dataset sits in a shared
@@ -1291,6 +1366,8 @@ export const OverviewMap: React.FC = () => {
         ox: transformRef.current?.offsetX ?? 0,
         oy: transformRef.current?.offsetY ?? 0,
       };
+      // Cancel any in-progress fit animation so manual pan takes over immediately.
+      fitAnimRef.current = null;
     };
 
     const updateTooltip = (mx: number, my: number) => {
@@ -1403,6 +1480,8 @@ export const OverviewMap: React.FC = () => {
       const newScale = Math.max(0.5, Math.min(20, t.scale * factor));
       const ratio = newScale / t.scale;
 
+      // Cancel any in-progress fit animation so manual zoom takes over immediately.
+      fitAnimRef.current = null;
       transformRef.current = clampTransform(
         {
           ...t,
@@ -1825,6 +1904,33 @@ export const OverviewMap: React.FC = () => {
               </ViewscreenTooltip>
             );
           })()}
+
+
+          {/* Fit to Data — zoom and pan to frame all loaded datasets */}
+          <ViewscreenTooltip label="Zoom and pan to fit all loaded datasets in view" side="bottom">
+            <button
+              data-testid="overview-fit-to-data"
+              onClick={handleFitToData}
+              disabled={datasetsWithGrid.length === 0}
+              style={{
+                background: "rgba(0,10,20,0.75)",
+                border: "1px solid rgba(0,229,255,0.2)",
+                borderRadius: 3,
+                color: datasetsWithGrid.length === 0 ? "#475569" : "#94a3b8",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9,
+                padding: "2px 10px",
+                cursor: datasetsWithGrid.length === 0 ? "not-allowed" : "pointer",
+                letterSpacing: "0.1em",
+                lineHeight: "20px",
+                whiteSpace: "nowrap",
+                opacity: datasetsWithGrid.length === 0 ? 0.45 : 1,
+              }}
+            >
+              ⊡ FIT
+            </button>
+          </ViewscreenTooltip>
+
 
           {/* Tools popover — collapses box-select and download into one button */}
           <div ref={toolsWrapperRef} style={{ position: "relative" }}>
