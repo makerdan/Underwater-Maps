@@ -2670,6 +2670,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                   const active = ds.id === datasetId && !pendingId && !activeUserDatasetId;
                   const loading = ds.id === loadingId;
                   const isChecked = presetSelectedIds.has(ds.id);
+                  const isRowDisabled = (!isOnline && !cachedIds.has(ds.id)) || loading;
                   return (
                     <ViewscreenTooltip key={ds.id} label={`Load ${ds.name}`} side="right">
                     <div
@@ -2703,14 +2704,22 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           {isChecked ? "✓" : ""}
                         </span>
                       </span>
-                    <button
+                    <div
+                      role="button"
+                      tabIndex={isRowDisabled ? -1 : 0}
+                      aria-disabled={isRowDisabled}
                       data-testid={`btn-dataset-${ds.id}`}
-                      onClick={() => (isOnline || cachedIds.has(ds.id)) && handleSelectPreset(ds)}
-                      disabled={(!isOnline && !cachedIds.has(ds.id)) || loadingId === ds.id}
+                      onClick={() => { if (!isRowDisabled) handleSelectPreset(ds); }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          if (!isRowDisabled) handleSelectPreset(ds);
+                        }
+                      }}
                       className="flex-1 text-left px-2 py-2"
                       style={{
                         background: "transparent",
-                        cursor: (!isOnline && !cachedIds.has(ds.id)) || loadingId === ds.id ? "not-allowed" : "pointer",
+                        cursor: isRowDisabled ? "not-allowed" : "pointer",
                       }}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -2778,7 +2787,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           </div>
                         </div>
                       )}
-                    </button>
+                    </div>
                     </div>
                     </ViewscreenTooltip>
                   );
