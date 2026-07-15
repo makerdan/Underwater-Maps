@@ -204,6 +204,17 @@ class BagWorkerProcess {
       for (const q of pending) q.reject(err);
     });
 
+    // If the worker dies while a request is being written (or right before),
+    // the stdin socket emits EPIPE.  Without a handler this becomes an
+    // uncaught exception that can crash the Node process.  The 'exit' handler
+    // below already rejects all in-flight/queued requests, so the write
+    // error itself carries no additional information — swallow it.
+    proc.stdin!.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code !== "EPIPE") {
+        logger.warn({ err }, "bag_worker stdin write error");
+      }
+    });
+
     proc.stdout!.on("data", (chunk: Buffer) => {
       this.stdoutBuf += chunk.toString("utf8");
       this._drain();

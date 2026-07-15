@@ -193,7 +193,11 @@ describe("BAG worker crash recovery", () => {
       const p = original();
       if (killCount < 2) {
         killCount++;
-        setImmediate(() => p.kill("SIGKILL"));
+        // Kill synchronously, BEFORE parseFile writes the request to stdin.
+        // A deferred kill (setImmediate) races against a warm worker, which
+        // can parse the small fixture and respond before the signal lands —
+        // making the parse succeed and the test flaky.
+        p.kill("SIGKILL");
       }
       return p;
     };
@@ -204,8 +208,8 @@ describe("BAG worker crash recovery", () => {
       // Restore the original method so later tests are unaffected.
       worker._ensureProc = original;
       // Clear any leftover proc reference so the next test starts fresh.
-      // (Read through a fresh local: TS narrows worker.proc to null after the
-      // assignment above and would otherwise type this access as `never`.)
+      // (Explicit cast: TypeScript's control-flow analysis narrows the
+      // mutable `worker.proc` property to `never` here otherwise.)
       const leftover = worker.proc as import("child_process").ChildProcess | null;
       if (leftover) {
         leftover.kill("SIGKILL");

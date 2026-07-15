@@ -94,15 +94,22 @@ function noneExist(): void {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("recoverGcsJobStatus", () => {
+  // Monotonically increasing fake-clock base.  vi.useFakeTimers() resets the
+  // fake clock to the *real* current time on every call, so advancing timers
+  // inside a test does NOT accumulate across tests once real timers are
+  // restored in afterEach.  To guarantee prior tests' 30-second-TTL cache
+  // entries are expired, each test starts its fake clock 120 s later than the
+  // previous test's base (well past TTL + any intra-test advance of 31 s).
+  let clockBase = Date.now();
+
   beforeEach(() => {
     process.env["DEFAULT_OBJECT_STORAGE_BUCKET_ID"] = BUCKET_ID;
     gcsMocks.mockGetMetadata.mockReset();
     // Flush module-level caches captured via the cacheRegistry mock.
     for (const clear of cacheMocks.clearFns) clear();
     vi.useFakeTimers();
-    // Advance past the 30-second cache TTL so prior test entries are always
-    // expired at the start of each test — prevents cross-test cache pollution.
-    vi.advanceTimersByTime(31_000);
+    clockBase += 120_000;
+    vi.setSystemTime(clockBase);
   });
 
   afterEach(() => {
