@@ -5,6 +5,15 @@ import "./index.css";
 import { installTestHelpers } from "./lib/testHelpers";
 import { assertDevAuthBypassSafe, installDevAuthFetchPatch } from "./lib/devAuth";
 import { patchPerformanceMeasure } from "./lib/patchPerformanceMeasure";
+import { startDevHealthWatch } from "./lib/queryClient";
+
+// Dev-only proactive API health watch: pings /api/healthz every few seconds
+// so the "API server down" banner appears even before any screen has fetched
+// anything. In production builds `import.meta.env.DEV` is statically false,
+// the body is dead code, and the watch never runs.
+if (import.meta.env.DEV) {
+  startDevHealthWatch();
+}
 
 // Keep the Replit mTLS proxy from dropping the HMR WebSocket.
 // The server (hmrKeepalivePlugin in vite.config.ts) broadcasts a

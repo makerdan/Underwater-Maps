@@ -2,7 +2,8 @@ import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
-import { execSync } from "child_process";
+import { execSync, exec, spawn } from "child_process";
+import fs from "fs";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { VitePWA } from "vite-plugin-pwa";
 
@@ -120,6 +121,100 @@ function failOnTestBackdoor(): Plugin {
   };
 }
 
+/**
+ * Dev-only "Restart API Server" endpoint, served by the Vite dev server —
+ * deliberately NOT by the API server, which is down exactly when the button
+ * is needed. Backs the DevApiDownBanner component.
+ *
+ * POST /__restart_api_server:
+ *   1. Kills whatever currently listens on the API server port (if anything —
+ *      typically nothing, since the button appears when the server is dead).
+ *   2. Spawns a fresh detached `pnpm --filter @workspace/api-server run dev`
+ *      from the workspace root, logging to /tmp/api-server-dev-restart.log.
+ *   3. Responds 202 immediately; the client's health poll detects recovery.
+ *
+ * `apply: "serve"` means this plugin only exists on the dev server — no
+ * restart route is ever served by a production build (which is static assets
+ * with no Vite server at all).
+ */
+function devApiRestartPlugin(): Plugin {
+  const API_SERVER_PORT = 8080; // matches artifacts/api-server localPort
+  const RESTART_LOG = "/tmp/api-server-dev-restart.log";
+  const workspaceRoot = path.resolve(import.meta.dirname, "..", "..");
+
+  function killApiServerOnPort(): Promise<void> {
+    return new Promise((resolve) => {
+      // Kill by port so we catch both workflow-started and previously
+      // restart-spawned instances. Errors (nothing listening) are ignored.
+      exec(
+        `pids=$(lsof -ti tcp:${API_SERVER_PORT} 2>/dev/null); [ -n "$pids" ] && kill $pids 2>/dev/null; exit 0`,
+        () => setTimeout(resolve, 300),
+      );
+    });
+  }
+
+  function spawnApiServer(): void {
+    const logFd = fs.openSync(RESTART_LOG, "a");
+    const child = spawn(
+      "pnpm",
+      ["--filter", "@workspace/api-server", "run", "dev"],
+      {
+        cwd: workspaceRoot,
+        env: {
+          ...process.env,
+          PORT: String(API_SERVER_PORT),
+          NODE_ENV: "development",
+        },
+        detached: true,
+        stdio: ["ignore", logFd, logFd],
+      },
+    );
+    child.unref();
+    fs.closeSync(logFd);
+  }
+
+  return {
+    name: "bathyscan:dev-api-restart",
+    apply: "serve",
+    configureServer(server) {
+      let inFlight = false;
+      server.middlewares.use("/__restart_api_server", (req, res) => {
+        const json = (status: number, body: object) => {
+          res.writeHead(status, {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store",
+          });
+          res.end(JSON.stringify(body));
+        };
+        if (req.method !== "POST") {
+          json(405, { error: "method not allowed" });
+          return;
+        }
+        if (inFlight) {
+          json(409, { status: "already-restarting" });
+          return;
+        }
+        inFlight = true;
+        void (async () => {
+          try {
+            await killApiServerOnPort();
+            spawnApiServer();
+            json(202, { status: "restarting" });
+          } catch (err) {
+            json(500, { error: String(err) });
+          } finally {
+            // Debounce: block repeat restarts for a few seconds while the
+            // freshly spawned server builds and boots.
+            setTimeout(() => {
+              inFlight = false;
+            }, 5_000);
+          }
+        })();
+      });
+    },
+  };
+}
+
 const rawPort = process.env.PORT;
 
 if (!rawPort) {
@@ -159,6 +254,7 @@ export default defineConfig({
   },
   plugins: [
     hmrKeepalivePlugin(),
+    devApiRestartPlugin(),
     failOnTestBackdoor(),
     react(),
     tailwindcss({ optimize: false }),
@@ -176,6 +272,12 @@ export default defineConfig({
       injectRegister: "auto",
       base: basePath + "/",
       manifest: false,
+      injectManifest: {
+        // The main index chunk is ~2.7 MB (three.js + app code), above
+        // workbox's 2 MB default. Raise the cap so the chunk is precached
+        // and the production build doesn't fail.
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+      },
       devOptions: {
         enabled: false,
       },

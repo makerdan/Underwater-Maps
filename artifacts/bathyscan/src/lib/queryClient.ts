@@ -133,9 +133,17 @@ export function useHealthResponseTime(): number | null {
 }
 
 // ─── Health poll ──────────────────────────────────────────────────────────────
-// Polls GET /health (no auth required) with exponential back-off (1 s → 15 s
-// max) whenever the server appears unreachable. Clears the connecting flag and
-// cancels the poll as soon as the endpoint returns 200.
+// Polls GET /api/healthz (no auth required) with exponential back-off (1 s →
+// 15 s max) whenever the server appears unreachable. Clears the connecting
+// flag and cancels the poll as soon as the endpoint returns 200.
+//
+// The probe deliberately targets /api/healthz (not /health): only /api/* paths
+// are routed to the API server by the Replit proxy in dev and by the
+// deployment router in production. A root-relative /health would be answered
+// by the frontend's SPA fallback with a misleading 200.
+
+const HEALTH_PROBE_URL = "/api/healthz";
+const HEALTH_PROBE_TIMEOUT_MS = 5_000;
 
 let _healthPollTimer: ReturnType<typeof setTimeout> | null = null;
 let _healthPollAttempt = 0;
@@ -158,8 +166,8 @@ function scheduleHealthPoll(): void {
 async function runHealthProbe(): Promise<void> {
   const t0 = performance.now();
   try {
-    const resp = await fetch("/health", {
-      signal: AbortSignal.timeout(5_000),
+    const resp = await fetch(HEALTH_PROBE_URL, {
+      signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS),
       cache: "no-store",
     });
     setLastHealthResponseMs(Math.round(performance.now() - t0));
@@ -179,6 +187,57 @@ async function runHealthProbe(): Promise<void> {
     _healthPollAttempt++;
     scheduleHealthPoll();
   }
+}
+
+// ─── Dev-only proactive health watch ─────────────────────────────────────────
+// In development we want the "API server down" banner to appear within a few
+// seconds even when no screen has fetched anything yet. This lightweight watch
+// pings /api/healthz on a fixed interval while the server is believed healthy;
+// on the first failure it flips the connecting flag, which hands over to the
+// exponential back-off poll above (no double-polling: the watch skips its
+// probe while _isConnecting is true).
+//
+// Called from main.tsx behind an `import.meta.env.DEV` gate so the interval —
+// and this entire code path — never runs in production builds.
+
+const DEV_HEALTH_WATCH_INTERVAL_MS = 5_000;
+
+/**
+ * Start the proactive dev health watch. Returns a stop function.
+ * Safe to call once at app startup; the interval is suppressed while the
+ * back-off poll is already running.
+ */
+export function startDevHealthWatch(
+  intervalMs: number = DEV_HEALTH_WATCH_INTERVAL_MS,
+): () => void {
+  let probeInFlight = false;
+
+  const probe = () => {
+    if (_isConnecting || probeInFlight) return;
+    probeInFlight = true;
+    void (async () => {
+      const t0 = performance.now();
+      try {
+        const resp = await fetch(HEALTH_PROBE_URL, {
+          signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS),
+          cache: "no-store",
+        });
+        setLastHealthResponseMs(Math.round(performance.now() - t0));
+        if (!resp.ok) setIsConnecting(true);
+      } catch {
+        setLastHealthResponseMs(Math.round(performance.now() - t0));
+        setIsConnecting(true);
+      } finally {
+        probeInFlight = false;
+      }
+    })();
+  };
+
+  // Fire one probe immediately so a dead server is detected right at page
+  // load, not only after the first interval elapses.
+  probe();
+  const id = setInterval(probe, intervalMs);
+  return () => clearInterval(id);
 }
 
 // ─── Session-expired signal ────────────────────────────────────────────────────

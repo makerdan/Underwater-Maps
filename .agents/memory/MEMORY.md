@@ -15,3 +15,4 @@
 - [Long-running commands](long-running-commands.md) — nohup/setsid background jobs die when the shell call ends; use a temp validation command or a workflow for >2 min runs.
 - [Replit proxy needs native WS ping to stay alive](replit-proxy-ws-ping.md) — Replit mTLS proxy drops WS after ~30 s idle; only opcode-0x9 frames reset the timer, not JSON data frames. Fix: hmrNativePingPlugin() in vite.config.ts.
 - [terrainStore promote wipes grids](terrainstore-promote-wipes-grids.md) — re-promoting a visible dataset must preserve its loaded grids; null-grid rebuilds silently break Overview Map bbox flows.
+- [Health probe must use /api/healthz](health-probe-routing.md) — root-relative probes hit the SPA fallback 200; only /api/* reaches the API server. Dev restart button lives on the Vite server.

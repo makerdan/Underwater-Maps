@@ -37,6 +37,7 @@ import { useMarkerEditStore } from "@/lib/markerEditStore";
 import { ContextMenu } from "@/components/ContextMenu";
 import { MeasurementBanner } from "@/components/MeasurementBanner";
 import { LandTerrainStatusBanner } from "@/components/LandTerrainStatusBanner";
+import { DevApiDownBanner } from "@/components/DevApiDownBanner";
 import { DepthProfilePanel } from "@/components/DepthProfilePanel";
 import { MarkerDetailCard } from "@/components/MarkerDetailCard";
 import { OverviewMap } from "@/components/OverviewMap";
@@ -1881,6 +1882,11 @@ function ClerkProviderWithRoutes() {
       {/* Session-expired banner — fixed overlay, non-dismissable. Fires when
           persistent post-load 401s or getToken() null retries exhaust. */}
       <SessionExpiredBanner />
+      {/* Dev-only "API server down" warning banner. Mounted at the router
+          root (not inside Main) so it is visible on every screen. The
+          import.meta.env.DEV gate is statically false in production builds,
+          so the component and its restart client are tree-shaken away. */}
+      {import.meta.env.DEV && <DevApiDownBanner />}
       <ClerkAuthTokenWirer />
       <QueryClientProvider client={queryClient}>
         <ClerkQueryClientCacheInvalidator />
