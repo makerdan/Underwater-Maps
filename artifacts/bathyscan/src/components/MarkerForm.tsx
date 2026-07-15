@@ -302,17 +302,11 @@ export const MarkerForm: React.FC = () => {
     const queueOffline = async () => {
       const pendingKey = `pending-marker-${crypto.randomUUID()}`;
       await idbSet(pendingKey, markerBody);
-      // Best-effort Background Sync registration
-      if ("serviceWorker" in navigator) {
-        try {
-          const reg = await navigator.serviceWorker.ready;
-          if ("sync" in reg) {
-            await (reg as ServiceWorkerRegistration & { sync: { register: (tag: string) => Promise<void> } }).sync.register("sync-markers");
-          }
-        } catch {
-          // Background Sync not supported; online handler will retry
-        }
-      }
+      // Marker is queued in IndexedDB. The page-side offlineFlush path
+      // (App.tsx "online" listener → flushPendingMarkers via authorizedFetch)
+      // will POST it with the Clerk Bearer token on the next reconnect.
+      // No SW background-sync registration — the SW cannot access the Clerk
+      // token and would 401 for every signed-in user.
       setSavedOffline(true);
       offlineTimerRef.current = setTimeout(() => {
         setSavedOffline(false);

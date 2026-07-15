@@ -3,7 +3,6 @@ import { precacheAndRoute } from "workbox-precaching";
 import { registerRoute } from "workbox-routing";
 import { StaleWhileRevalidate, CacheFirst } from "workbox-strategies";
 import { ExpirationPlugin } from "workbox-expiration";
-import { get as idbGet, del as idbDel, keys as idbKeys } from "idb-keyval";
 
 declare const self: ServiceWorkerGlobalScope;
 declare const __BUILD_HASH__: string;
@@ -144,55 +143,19 @@ self.addEventListener("message", (event: ExtendableMessageEvent) => {
   );
 });
 
-// ── Background Sync: push queued markers to the API ─────────────────────────
-
-interface SyncEvent extends ExtendableEvent {
-  readonly tag: string;
-}
-
-self.addEventListener("sync", (rawEvent: Event) => {
-  const event = rawEvent as SyncEvent;
-  if (event.tag === "sync-markers") {
-    event.waitUntil(syncQueuedMarkers());
-  }
-});
-
-async function syncQueuedMarkers(): Promise<void> {
-  const allKeys = await idbKeys();
-  const pendingKeys = allKeys.filter(
-    (k): k is string => typeof k === "string" && k.startsWith("pending-marker-"),
-  );
-
-  const results = await Promise.allSettled(
-    pendingKeys.map(async (key) => {
-      const data = await idbGet<Record<string, unknown>>(key);
-      if (!data) {
-        await idbDel(key);
-        return;
-      }
-      // KNOWN GAP: /api/markers is requireAuth-protected and cookie auth is
-      // disabled in BathyScan (Bearer token is the only auth path), but the
-      // service worker cannot reach the Clerk token getter — it lives in the
-      // page's JS context. This background-sync POST will therefore 401 for
-      // signed-in users; the key is kept on failure and the page-side
-      // offlineFlush path (which does attach the Bearer token via
-      // authorizedFetch) reliably retries it on the next reconnect.
-      const resp = await fetch("/api/markers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (resp.ok) {
-        await idbDel(key);
-      } else {
-        throw new Error(`HTTP ${resp.status}`);
-      }
-    }),
-  );
-
-  const failed = results.filter((r) => r.status === "rejected");
-  if (failed.length > 0) {
-    // Throw so the browser retries the sync on next opportunity
-    throw new Error(`Failed to sync ${failed.length} marker(s)`);
-  }
-}
+// ── Background Sync (markers) — intentionally not implemented in the SW ──────
+//
+// /api/markers is protected by requireAuth (Bearer token only — cookie auth is
+// disabled in BathyScan). The service worker has no access to the Clerk token
+// getter, which lives in the page's JS context, so any unauthenticated POST
+// from here would 401 for every signed-in user and silently loop forever.
+//
+// Queued markers are flushed by the page-side offlineFlush.ts path instead:
+//   • `flushPendingMarkers` reads idb-keyval and POSTs via `authorizedFetch`,
+//     which attaches the current Clerk Bearer token automatically.
+//   • App.tsx wires a `window "online"` listener that calls flushAll() (which
+//     runs flushPendingTrails + flushPendingMarkers) on every reconnect.
+//
+// This means sync happens when the app is open and comes back online — not
+// truly in the background — but it is reliable for signed-in users and never
+// produces silent 401 loops.
