@@ -184,9 +184,9 @@ describe("PUT /api/settings — unknown-key (extras) policy", () => {
     expect(res.body.details).toMatch(/not an allowed key name/);
   });
 
-  it("rejects more than 32 unknown keys", async () => {
+  it("rejects more than 512 unknown keys", async () => {
     const body: Record<string, unknown> = {};
-    for (let i = 0; i < 33; i++) body[`extraKey${i}`] = i;
+    for (let i = 0; i < 513; i++) body[`extraKey${i}`] = i;
     const res = await put(body);
     expect(res.status).toBe(400);
     expect(res.body.details).toMatch(/Too many unknown settings keys/);

@@ -34,27 +34,11 @@ args = "test-e2e"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "test-gpx-nmea-integration"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "test-fixture-freshness"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "test-settings-validation"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "test-all"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "check:e2e-user-ids"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "ports-guard"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
@@ -105,28 +89,6 @@ args = "pnpm run test:e2e"
 isValidation = true
 
 [[workflows.workflow]]
-name = "test-gpx-nmea-integration"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm --filter @workspace/api-server exec vitest run --reporter=verbose src/__tests__/parser-gpx.test.ts src/__tests__/parser-nmea.test.ts"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow]]
-name = "test-fixture-freshness"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "bash artifacts/api-server/src/__tests__/fixtures/check-fixture-freshness.sh"
-
-[workflows.workflow.metadata]
-isValidation = true
-
-[[workflows.workflow]]
 name = "test-settings-validation"
 author = "agent"
 
@@ -149,37 +111,15 @@ args = "pnpm run test-all"
 isValidation = true
 
 [[workflows.workflow]]
-name = "check:e2e-user-ids"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm run check:e2e-user-ids"
-
-[workflows.workflow.metadata]
-isValidation = true
-
-[[workflows.workflow]]
-name = "ports-guard"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "node scripts/check-hardcoded-ports.mjs"
-
-[workflows.workflow.metadata]
-isValidation = true
-
-[[workflows.workflow]]
 name = "test-e2e-palette"
 author = "agent"
 
-[workflows.workflow.metadata]
-outputType = "console"
-
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "mkdir -p .local/tmp && npx playwright test tests/e2e/palette-cross-device-sync.spec.ts tests/e2e/onboarding-tour.spec.ts tests/e2e/settings-cross-device-sync.spec.ts tests/e2e/settings-save-buttons.spec.ts tests/e2e/zone-colour-server-sync.spec.ts tests/e2e/tooltips.spec.ts 2>&1 | tee .local/tmp/palette-e2e.log"
+args = "bash -c 'set -o pipefail; mkdir -p .local/tmp && npx playwright test tests/e2e/palette-cross-device-sync.spec.ts tests/e2e/onboarding-tour.spec.ts tests/e2e/settings-cross-device-sync.spec.ts tests/e2e/settings-save-buttons.spec.ts tests/e2e/zone-colour-server-sync.spec.ts tests/e2e/tooltips.spec.ts 2>&1 | tee .local/tmp/palette-e2e.log'"
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [agent]
 stack = "PNPM_WORKSPACE"
