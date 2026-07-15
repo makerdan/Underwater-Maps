@@ -2269,6 +2269,56 @@ router.post(
       // Reuse the UUID generated on chunk 0 so the "uploading" DB row
       // transitions to "queued" in-place rather than creating a second row.
       jobId = session.sessionJobId ?? crypto.randomUUID();
+
+      // DB-backed idempotency guard — authoritative even across server
+      // restarts (the in-memory flags above are just a fast path).  A
+      // conditional status-transition UPDATE means only one caller can move
+      // the row out of a non-active status into "queued"; losers observe an
+      // already-queued/processing row and get a 409 with the existing jobId
+      // instead of re-triggering the processing pipeline.
+      try {
+        const winners = await db
+          .update(uploadJobsTable)
+          .set({ status: "queued", updatedAt: new Date() })
+          .where(
+            and(
+              eq(uploadJobsTable.id, jobId),
+              or(
+                eq(uploadJobsTable.status, "uploading"),
+                eq(uploadJobsTable.status, "error"),
+                eq(uploadJobsTable.status, "done"),
+              ),
+            ),
+          )
+          .returning({ id: uploadJobsTable.id });
+
+        if (winners.length === 0) {
+          // Either no row exists yet (chunk-0 insert failed — the upsert in
+          // persistJobToDB below creates it, and the in-memory lock covers
+          // same-process races), or the row is already queued/processing
+          // (another finalize won the transition).
+          const rows = await db
+            .select({ status: uploadJobsTable.status })
+            .from(uploadJobsTable)
+            .where(eq(uploadJobsTable.id, jobId));
+          const current = rows[0];
+          if (current && (current.status === "queued" || current.status === "processing")) {
+            session.activeJobId = jobId;
+            session.finalizing = false;
+            res.status(409).json({
+              error: "already_processing",
+              jobId,
+              details: "A finalize job for this upload is already running. Poll the existing jobId.",
+            });
+            return;
+          }
+        }
+      } catch (guardErr) {
+        // DB unavailable — fall back to the in-memory guard rather than
+        // blocking uploads (matches persistJobToDB's non-fatal policy).
+        const errMsg = guardErr instanceof Error ? guardErr.message : String(guardErr);
+        logger.warn({ jobId, uploadId, errMsg }, `[finalize] DB idempotency guard failed, falling back to in-memory guard: ${errMsg}`);
+      }
     } catch (err) {
       // Release lock so the client can retry.
       session.finalizing = false;
