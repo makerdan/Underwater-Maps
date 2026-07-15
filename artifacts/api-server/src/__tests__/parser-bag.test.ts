@@ -7,6 +7,7 @@ import {
   parseUploadedFile,
   type RawPoint,
 } from "../lib/uploadParsers.js";
+import { bagWorker } from "../lib/bagWorker.js";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_DIR = join(__dir, "fixtures");
@@ -108,4 +109,90 @@ describe("standard BAG — projected-CRS plausibility guard", () => {
       /projected CRS/i
     );
   }, 60_000);
+});
+
+// ---------------------------------------------------------------------------
+// Worker crash-recovery
+// ---------------------------------------------------------------------------
+
+describe("BAG worker crash recovery", () => {
+  // Access internal proc field via type-cast; kept test-local so it doesn't
+  // pollute the BagWorkerProcess public API.
+  function getWorkerProc(): import("child_process").ChildProcess | null {
+    return (bagWorker as unknown as { proc: import("child_process").ChildProcess | null }).proc;
+  }
+
+  it("automatically retries once and succeeds when the worker is killed mid-parse", async () => {
+    // Start a parse (the worker process will already be warm from earlier
+    // tests, so proc is non-null immediately after parseFile writes to stdin).
+    const parsePromise = parseBag(bagBuf);
+
+    // Kill the worker process as soon as it is in-flight.  parseBag writes the
+    // tmp-file path to stdin synchronously inside parseFile, so by the time we
+    // read proc here the Python side has received the path but hasn't had time
+    // to respond.  bagWorkerProcess.parseFile retries once automatically.
+    const proc = getWorkerProc();
+    if (proc) {
+      proc.kill("SIGKILL");
+    }
+
+    // The promise must still resolve (via retry) and produce valid points.
+    const pts = await parsePromise;
+    assertValidBathyPoints(pts, 90);
+  }, 120_000);
+
+  it("does not permanently break the singleton — subsequent parse succeeds after a crash", async () => {
+    // Ensure the worker is running by completing a successful parse first.
+    await parseBag(bagBuf);
+
+    // Forcefully kill the worker between calls.
+    const proc = getWorkerProc();
+    if (proc) {
+      proc.kill("SIGKILL");
+      // Wait briefly for the exit event to propagate so proc is cleared.
+      await new Promise<void>((resolve) => {
+        proc.once("exit", () => resolve());
+        setTimeout(resolve, 500); // safety fallback
+      });
+    }
+
+    // The next parse should spawn a fresh worker and succeed normally.
+    const pts = await parseBag(bagBuf);
+    assertValidBathyPoints(pts, 90);
+  }, 120_000);
+
+  it("does NOT retry a second time — hard failure is surfaced on repeated crash", async () => {
+    // Simulate two consecutive unexpected exits by killing the worker after
+    // each spawn.  The retry logic allows exactly one retry; a second crash
+    // must reject so callers aren't stuck in an infinite retry loop.
+
+    let killCount = 0;
+
+    // Monkey-patch _ensureProc to kill every proc it returns (up to 2 times).
+    const worker = bagWorker as unknown as {
+      _ensureProc: () => import("child_process").ChildProcess;
+      proc: import("child_process").ChildProcess | null;
+    };
+    const original = worker._ensureProc.bind(worker);
+    worker._ensureProc = function () {
+      const p = original();
+      if (killCount < 2) {
+        killCount++;
+        setImmediate(() => p.kill("SIGKILL"));
+      }
+      return p;
+    };
+
+    try {
+      await expect(parseBag(bagBuf)).rejects.toThrow(/exited unexpectedly/i);
+    } finally {
+      // Restore the original method so later tests are unaffected.
+      worker._ensureProc = original;
+      // Clear any leftover proc reference so the next test starts fresh.
+      if (worker.proc) {
+        worker.proc.kill("SIGKILL");
+        worker.proc = null;
+      }
+    }
+  }, 120_000);
 });

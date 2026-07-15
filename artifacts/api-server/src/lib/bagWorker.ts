@@ -88,14 +88,33 @@ class BagWorkerProcess {
   /**
    * Parse a BAG file at `bagPath` (absolute path to a temp file).
    * Returns the raw CSV string (lon,lat,depth rows).
+   *
+   * If the worker exits unexpectedly while this request is active or queued,
+   * the call is automatically retried once with a freshly-spawned worker
+   * process.  The retry is transparent to the caller — the promise resolves
+   * (or rejects with the retry's error) as normal.  A second unexpected exit
+   * on the retry is treated as a hard failure.
    */
-  parseFile(bagPath: string): Promise<string> {
+  parseFile(bagPath: string, _isRetry = false): Promise<string> {
     return new Promise<string>((resolve, reject) => {
+      // Wrap reject so that an unexpected-exit error triggers a single retry.
+      const handleReject = (err: Error): void => {
+        if (!_isRetry && /exited unexpectedly/i.test(err.message)) {
+          // Worker died mid-parse.  Retry once with a fresh process; pipe the
+          // retry's outcome directly into this promise's resolve/reject so that
+          // the caller (e.g. parseBag) stays awaiting and its temp-file cleanup
+          // only runs after the retry completes.
+          this.parseFile(bagPath, true).then(resolve, reject);
+        } else {
+          reject(err);
+        }
+      };
+
       if (this.active === null) {
-        this.active = { resolve, reject };
+        this.active = { resolve, reject: handleReject };
         this._ensureProc().stdin!.write(bagPath + "\n");
       } else {
-        this.queue.push({ path: bagPath, resolve, reject });
+        this.queue.push({ path: bagPath, resolve, reject: handleReject });
       }
     });
   }
