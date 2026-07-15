@@ -26,6 +26,7 @@ import {
   getGetUserDatasetsIdHyd93FeaturesQueryKey,
 } from "@workspace/api-client-react";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
+import { AdvancedSection } from "@/components/AdvancedSection";
 import {
   useGetDatasets,
   getGetDatasetsQueryKey,
@@ -552,314 +553,7 @@ export const OverlaysToolsPanel: React.FC = () => {
             isLoading={currentOverlayActive && surfaceLoading}
           />
 
-          {/* Aviation Weather section — saltwater only, disabled when no terrain */}
-          {waterType !== "freshwater" && (
-            <>
-              <div
-                style={{
-                  borderTop: "1px solid rgba(0,229,255,0.08)",
-                  marginTop: 4,
-                  paddingTop: 6,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 9,
-                    letterSpacing: "0.12em",
-                    color: "#64748b",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Aviation Weather
-                </span>
-              </div>
-
-              <ViewscreenTooltip
-                label={
-                  !terrain
-                    ? "Load a terrain dataset to enable weather stations"
-                    : weatherStationsActive
-                    ? "Hide NOAA ASOS/AWOS weather station pins"
-                    : "Show NOAA aviation weather station pins on the Overview Map"
-                }
-                side="right"
-              >
-                <button
-                  data-testid="overlay-toggle-weather-stations"
-                  aria-pressed={weatherStationsActive}
-                  disabled={!terrain}
-                  onClick={() => {
-                    const next = !weatherStationsActive;
-                    setWeatherStationsActive(next);
-                    // Auto-open Overview Map when enabling (matching tidal behavior)
-                    if (next) setOverviewOpen(true);
-                  }}
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    background: weatherStationsActive
-                      ? "rgba(251,191,36,0.12)"
-                      : "rgba(0,10,20,0.55)",
-                    border: `1px solid ${
-                      weatherStationsActive
-                        ? "rgba(251,191,36,0.5)"
-                        : "rgba(0,229,255,0.15)"
-                    }`,
-                    borderRadius: 4,
-                    color: !terrain
-                      ? "#475569"
-                      : weatherStationsActive
-                      ? "#fbbf24"
-                      : "#e2e8f0",
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 10,
-                    padding: "5px 10px",
-                    cursor: !terrain ? "not-allowed" : "pointer",
-                    letterSpacing: "0.12em",
-                    textShadow:
-                      weatherStationsActive
-                        ? "0 0 6px rgba(251,191,36,0.5)"
-                        : "none",
-                    transition: "all 0.15s ease",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 4,
-                    opacity: !terrain ? 0.5 : 1,
-                    ...(IS_TOUCH ? { minHeight: 44 } : {}),
-                  }}
-                >
-                  <span>🛩 NOAA WEATHER STATIONS</span>
-                  {weatherStationsActive && wxLoading && (
-                    <Spinner
-                      className="size-3 shrink-0"
-                      style={{ color: "#fbbf24", opacity: 0.85 }}
-                    />
-                  )}
-                </button>
-              </ViewscreenTooltip>
-
-              {wxNoaaUnavailable && (
-                <div
-                  data-testid="wx-noaa-unavailable-notice"
-                  style={{
-                    fontSize: 9,
-                    letterSpacing: "0.06em",
-                    color: "#fbbf24",
-                    background: "rgba(251,191,36,0.08)",
-                    border: "1px solid rgba(251,191,36,0.25)",
-                    borderRadius: 4,
-                    padding: "5px 8px",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  ⚠ Weather data temporarily unavailable — try again in a few minutes.
-                </div>
-              )}
-
-              <ViewscreenTooltip
-                label={
-                  !terrain
-                    ? "Load a terrain dataset to enable FAA WeatherCams"
-                    : faaWeatherCamsUrl
-                    ? "Open FAA WeatherCams for this region in a new tab"
-                    : "FAA WeatherCams (available inside the US)"
-                }
-                side="right"
-              >
-                <a
-                  href={faaWeatherCamsUrl ?? undefined}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-disabled={!terrain || !faaWeatherCamsUrl}
-                  onClick={
-                    !terrain || !faaWeatherCamsUrl
-                      ? (e) => e.preventDefault()
-                      : undefined
-                  }
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    width: "100%",
-                    textAlign: "left",
-                    background: "rgba(0,10,20,0.55)",
-                    border: "1px solid rgba(0,229,255,0.15)",
-                    borderRadius: 4,
-                    color:
-                      !terrain || !faaWeatherCamsUrl ? "#475569" : "#7dd3fc",
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 10,
-                    padding: "5px 10px",
-                    cursor:
-                      !terrain || !faaWeatherCamsUrl
-                        ? "not-allowed"
-                        : "pointer",
-                    letterSpacing: "0.12em",
-                    textDecoration: "none",
-                    transition: "all 0.15s ease",
-                    opacity: !terrain || !faaWeatherCamsUrl ? 0.5 : 1,
-                    ...(IS_TOUCH ? { minHeight: 44 } : {}),
-                  }}
-                >
-                  <span>📷 FAA WEATHERCAMS ↗</span>
-                </a>
-              </ViewscreenTooltip>
-            </>
-          )}
-
-          {/* RAWS Land Weather section — saltwater only, disabled when no terrain */}
-          {waterType !== "freshwater" && (
-            <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)", marginTop: 4, paddingTop: 6 }}>
-              <span
-                style={{
-                  fontSize: 9,
-                  letterSpacing: "0.12em",
-                  color: "#64748b",
-                  textTransform: "uppercase",
-                  display: "block",
-                  marginBottom: 4,
-                }}
-              >
-                Land Weather (RAWS)
-              </span>
-              <ViewscreenTooltip
-                label={
-                  !terrain
-                    ? "Load a terrain dataset to enable RAWS stations"
-                    : rawsOverlayActive
-                    ? "Hide AOOS RAWS land weather station pins"
-                    : "Show AOOS RAWS land weather station pins on the Overview Map"
-                }
-                side="right"
-              >
-                <button
-                  data-testid="overlay-toggle-raws"
-                  aria-pressed={rawsOverlayActive}
-                  disabled={!terrain}
-                  onClick={() => {
-                    const next = !rawsOverlayActive;
-                    setRawsOverlayActive(next);
-                    if (next) setOverviewOpen(true);
-                  }}
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    background: rawsOverlayActive ? "rgba(52,211,153,0.12)" : "rgba(0,10,20,0.55)",
-                    border: `1px solid ${rawsOverlayActive ? "rgba(52,211,153,0.5)" : "rgba(0,229,255,0.15)"}`,
-                    borderRadius: 4,
-                    color: !terrain ? "#475569" : rawsOverlayActive ? "#34d399" : "#e2e8f0",
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 10,
-                    padding: "5px 10px",
-                    cursor: !terrain ? "not-allowed" : "pointer",
-                    letterSpacing: "0.12em",
-                    textShadow: rawsOverlayActive ? "0 0 6px rgba(52,211,153,0.5)" : "none",
-                    transition: "all 0.15s ease",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 4,
-                    opacity: !terrain ? 0.5 : 1,
-                    ...(IS_TOUCH ? { minHeight: 44 } : {}),
-                  }}
-                >
-                  <span>🌿 RAWS WEATHER STATIONS</span>
-                </button>
-              </ViewscreenTooltip>
-            </div>
-          )}
-
-          <ToggleButton
-            active={intertidalHotspotsEnabled}
-            onClick={() => setIntertidalHotspotsEnabled(!intertidalHotspotsEnabled)}
-            label="🌊 INTERTIDAL HOTSPOTS"
-            tooltip="Score & display tidepool and beachcombing hotspots (SE Alaska ShoreZone)"
-            activeBg="rgba(13,148,136,0.15)"
-            activeBorder="rgba(13,148,136,0.55)"
-            activeColor="#2dd4bf"
-            activeGlow="rgba(13,148,136,0.4)"
-          />
-          {intertidalHotspotsEnabled && (
-            <div
-              style={{
-                marginTop: 2,
-                paddingLeft: 8,
-                display: "flex",
-                flexDirection: "column",
-                gap: 4,
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 9,
-                  letterSpacing: "0.12em",
-                  color: "#94a3b8",
-                  textTransform: "uppercase",
-                }}
-              >
-                Highlight mode
-              </span>
-              <div style={{ display: "flex", gap: 3 }}>
-                <ViewscreenTooltip label="Show tidepool hotspot polygons (teal)" side="right">
-                  <button
-                    aria-pressed={intertidalScoreMode === "tidepool"}
-                    onClick={() => setIntertidalScoreMode("tidepool")}
-                    style={{
-                      flex: 1,
-                      padding: "4px 6px",
-                      borderRadius: 3,
-                      border: `1px solid ${intertidalScoreMode === "tidepool" ? "rgba(13,148,136,0.7)" : "rgba(255,255,255,0.1)"}`,
-                      background: intertidalScoreMode === "tidepool" ? "rgba(13,148,136,0.2)" : "rgba(0,10,20,0.45)",
-                      color: intertidalScoreMode === "tidepool" ? "#2dd4bf" : "#64748b",
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 9,
-                      letterSpacing: "0.1em",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 4,
-                      transition: "all 0.15s ease",
-                      textShadow: intertidalScoreMode === "tidepool" ? "0 0 6px rgba(13,148,136,0.5)" : "none",
-                    }}
-                  >
-                    <span style={{ width: 7, height: 7, borderRadius: 1, background: "#0d9488", flexShrink: 0 }} />
-                    TIDEPOOL
-                  </button>
-                </ViewscreenTooltip>
-                <ViewscreenTooltip label="Show beachcombing hotspot polygons (amber)" side="right">
-                  <button
-                    aria-pressed={intertidalScoreMode === "beachcombing"}
-                    onClick={() => setIntertidalScoreMode("beachcombing")}
-                    style={{
-                      flex: 1,
-                      padding: "4px 6px",
-                      borderRadius: 3,
-                      border: `1px solid ${intertidalScoreMode === "beachcombing" ? "rgba(217,119,6,0.7)" : "rgba(255,255,255,0.1)"}`,
-                      background: intertidalScoreMode === "beachcombing" ? "rgba(217,119,6,0.18)" : "rgba(0,10,20,0.45)",
-                      color: intertidalScoreMode === "beachcombing" ? "#fbbf24" : "#64748b",
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 9,
-                      letterSpacing: "0.1em",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 4,
-                      transition: "all 0.15s ease",
-                      textShadow: intertidalScoreMode === "beachcombing" ? "0 0 6px rgba(217,119,6,0.4)" : "none",
-                    }}
-                  >
-                    <span style={{ width: 7, height: 7, borderRadius: 1, background: "#d97706", flexShrink: 0 }} />
-                    BEACH
-                  </button>
-                </ViewscreenTooltip>
-              </div>
-              <span style={{ fontSize: 9, color: "#64748b", lineHeight: 1.4 }}>
-                Opacity ∝ score intensity. Click polygon for score card.
-              </span>
-            </div>
-          )}
-
+          {/* Temp Layer — primary (moved before Advanced fold) */}
           <ToggleButton
             testId="overlay-toggle-water-temp"
             active={showWaterTempLayer}
@@ -889,7 +583,6 @@ export const OverlaysToolsPanel: React.FC = () => {
               ⚠ ESTIMATED — no measured profile for this location. Showing synthetic thermocline model.
             </div>
           )}
-
           {showWaterTempLayer && <ThermalLegend />}
 
           {showWaterTempLayer && (
@@ -941,6 +634,7 @@ export const OverlaysToolsPanel: React.FC = () => {
             </div>
           )}
 
+          {/* HYD93 Features — primary (user-dataset-specific, moved before Advanced fold) */}
           {hasHyd93Features && (
             <>
               <ToggleButton
@@ -1031,40 +725,244 @@ export const OverlaysToolsPanel: React.FC = () => {
             </>
           )}
 
-          {hasEfh && (
-            <>
-              <ToggleButton
-                active={efhOverlayEnabled}
-                onClick={() => setEfhOverlayEnabled(!efhOverlayEnabled)}
-                label="🐟 ESSENTIAL FISH HABITAT"
-                tooltip="Show Essential Fish Habitat zones overlay"
-                activeBg="rgba(34,197,94,0.15)"
-                activeBorder="rgba(34,197,94,0.5)"
-                activeColor="#4ade80"
-                isLoading={efhOverlayEnabled && efhLoading}
-              />
-              {efhOverlayEnabled && isUserDataset && !efhByIdLoading && activeEfhFeatures.length === 0 && (
+          {/* Advanced section — less-frequently-used overlays */}
+          <AdvancedSection panelId="overlaysToolsAdvanced">
+            {/* Aviation Weather — saltwater only, disabled when no terrain */}
+            {waterType !== "freshwater" && (
+              <>
                 <div
                   style={{
-                    marginTop: 4,
-                    paddingLeft: 8,
-                    fontSize: 9,
-                    color: "#94a3b8",
-                    fontStyle: "italic",
-                    letterSpacing: "0.05em",
+                    paddingTop: 2,
+                    paddingBottom: 4,
                   }}
                 >
-                  No EFH coverage for this upload area.
+                  <span
+                    style={{
+                      fontSize: 9,
+                      letterSpacing: "0.12em",
+                      color: "#64748b",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Aviation Weather
+                  </span>
                 </div>
-              )}
-              {efhOverlayEnabled && efhSpeciesEntries.length > 0 && (
+
+                <ViewscreenTooltip
+                  label={
+                    !terrain
+                      ? "Load a terrain dataset to enable weather stations"
+                      : weatherStationsActive
+                      ? "Hide NOAA ASOS/AWOS weather station pins"
+                      : "Show NOAA aviation weather station pins on the Overview Map"
+                  }
+                  side="right"
+                >
+                  <button
+                    data-testid="overlay-toggle-weather-stations"
+                    aria-pressed={weatherStationsActive}
+                    disabled={!terrain}
+                    onClick={() => {
+                      const next = !weatherStationsActive;
+                      setWeatherStationsActive(next);
+                      if (next) setOverviewOpen(true);
+                    }}
+                    style={{
+                      width: "100%",
+                      textAlign: "left",
+                      background: weatherStationsActive
+                        ? "rgba(251,191,36,0.12)"
+                        : "rgba(0,10,20,0.55)",
+                      border: `1px solid ${
+                        weatherStationsActive
+                          ? "rgba(251,191,36,0.5)"
+                          : "rgba(0,229,255,0.15)"
+                      }`,
+                      borderRadius: 4,
+                      color: !terrain
+                        ? "#475569"
+                        : weatherStationsActive
+                        ? "#fbbf24"
+                        : "#e2e8f0",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 10,
+                      padding: "5px 10px",
+                      cursor: !terrain ? "not-allowed" : "pointer",
+                      letterSpacing: "0.12em",
+                      textShadow:
+                        weatherStationsActive
+                          ? "0 0 6px rgba(251,191,36,0.5)"
+                          : "none",
+                      transition: "all 0.15s ease",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 4,
+                      opacity: !terrain ? 0.5 : 1,
+                      ...(IS_TOUCH ? { minHeight: 44 } : {}),
+                    }}
+                  >
+                    <span>🛩 NOAA WEATHER STATIONS</span>
+                    {weatherStationsActive && wxLoading && (
+                      <Spinner
+                        className="size-3 shrink-0"
+                        style={{ color: "#fbbf24", opacity: 0.85 }}
+                      />
+                    )}
+                  </button>
+                </ViewscreenTooltip>
+
+                {wxNoaaUnavailable && (
+                  <div
+                    data-testid="wx-noaa-unavailable-notice"
+                    style={{
+                      fontSize: 9,
+                      letterSpacing: "0.06em",
+                      color: "#fbbf24",
+                      background: "rgba(251,191,36,0.08)",
+                      border: "1px solid rgba(251,191,36,0.25)",
+                      borderRadius: 4,
+                      padding: "5px 8px",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    ⚠ Weather data temporarily unavailable — try again in a few minutes.
+                  </div>
+                )}
+
+                <ViewscreenTooltip
+                  label={
+                    !terrain
+                      ? "Load a terrain dataset to enable FAA WeatherCams"
+                      : faaWeatherCamsUrl
+                      ? "Open FAA WeatherCams for this region in a new tab"
+                      : "FAA WeatherCams (available inside the US)"
+                  }
+                  side="right"
+                >
+                  <a
+                    href={faaWeatherCamsUrl ?? undefined}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-disabled={!terrain || !faaWeatherCamsUrl}
+                    onClick={
+                      !terrain || !faaWeatherCamsUrl
+                        ? (e) => e.preventDefault()
+                        : undefined
+                    }
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      width: "100%",
+                      textAlign: "left",
+                      background: "rgba(0,10,20,0.55)",
+                      border: "1px solid rgba(0,229,255,0.15)",
+                      borderRadius: 4,
+                      color:
+                        !terrain || !faaWeatherCamsUrl ? "#475569" : "#7dd3fc",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 10,
+                      padding: "5px 10px",
+                      cursor:
+                        !terrain || !faaWeatherCamsUrl
+                          ? "not-allowed"
+                          : "pointer",
+                      letterSpacing: "0.12em",
+                      textDecoration: "none",
+                      transition: "all 0.15s ease",
+                      opacity: !terrain || !faaWeatherCamsUrl ? 0.5 : 1,
+                      ...(IS_TOUCH ? { minHeight: 44 } : {}),
+                    }}
+                  >
+                    <span>📷 FAA WEATHERCAMS ↗</span>
+                  </a>
+                </ViewscreenTooltip>
+              </>
+            )}
+
+            {/* RAWS Land Weather — saltwater only, disabled when no terrain */}
+            {waterType !== "freshwater" && (
+              <div style={{ marginTop: 4 }}>
+                <span
+                  style={{
+                    fontSize: 9,
+                    letterSpacing: "0.12em",
+                    color: "#64748b",
+                    textTransform: "uppercase",
+                    display: "block",
+                    marginBottom: 4,
+                  }}
+                >
+                  Land Weather (RAWS)
+                </span>
+                <ViewscreenTooltip
+                  label={
+                    !terrain
+                      ? "Load a terrain dataset to enable RAWS stations"
+                      : rawsOverlayActive
+                      ? "Hide AOOS RAWS land weather station pins"
+                      : "Show AOOS RAWS land weather station pins on the Overview Map"
+                  }
+                  side="right"
+                >
+                  <button
+                    data-testid="overlay-toggle-raws"
+                    aria-pressed={rawsOverlayActive}
+                    disabled={!terrain}
+                    onClick={() => {
+                      const next = !rawsOverlayActive;
+                      setRawsOverlayActive(next);
+                      if (next) setOverviewOpen(true);
+                    }}
+                    style={{
+                      width: "100%",
+                      textAlign: "left",
+                      background: rawsOverlayActive ? "rgba(52,211,153,0.12)" : "rgba(0,10,20,0.55)",
+                      border: `1px solid ${rawsOverlayActive ? "rgba(52,211,153,0.5)" : "rgba(0,229,255,0.15)"}`,
+                      borderRadius: 4,
+                      color: !terrain ? "#475569" : rawsOverlayActive ? "#34d399" : "#e2e8f0",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 10,
+                      padding: "5px 10px",
+                      cursor: !terrain ? "not-allowed" : "pointer",
+                      letterSpacing: "0.12em",
+                      textShadow: rawsOverlayActive ? "0 0 6px rgba(52,211,153,0.5)" : "none",
+                      transition: "all 0.15s ease",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 4,
+                      opacity: !terrain ? 0.5 : 1,
+                      ...(IS_TOUCH ? { minHeight: 44 } : {}),
+                    }}
+                  >
+                    <span>🌿 RAWS WEATHER STATIONS</span>
+                  </button>
+                </ViewscreenTooltip>
+              </div>
+            )}
+
+            {/* Intertidal Hotspots */}
+            <div style={{ marginTop: 4 }}>
+              <ToggleButton
+                active={intertidalHotspotsEnabled}
+                onClick={() => setIntertidalHotspotsEnabled(!intertidalHotspotsEnabled)}
+                label="🌊 INTERTIDAL HOTSPOTS"
+                tooltip="Score & display tidepool and beachcombing hotspots (SE Alaska ShoreZone)"
+                activeBg="rgba(13,148,136,0.15)"
+                activeBorder="rgba(13,148,136,0.55)"
+                activeColor="#2dd4bf"
+                activeGlow="rgba(13,148,136,0.4)"
+              />
+              {intertidalHotspotsEnabled && (
                 <div
                   style={{
                     marginTop: 2,
                     paddingLeft: 8,
                     display: "flex",
                     flexDirection: "column",
-                    gap: 2,
+                    gap: 4,
                   }}
                 >
                   <span
@@ -1073,71 +971,180 @@ export const OverlaysToolsPanel: React.FC = () => {
                       letterSpacing: "0.12em",
                       color: "#94a3b8",
                       textTransform: "uppercase",
-                      paddingBottom: 2,
                     }}
                   >
-                    Filter by species
+                    Highlight mode
                   </span>
-                  {efhSpeciesEntries.map(([name, color]) => {
-                    const hidden = hiddenEfhSpecies.has(name);
-                    return (
-                      <ViewscreenTooltip
-                        key={name}
-                        label={hidden ? `Show ${name}` : `Hide ${name}`}
-                        side="right"
+                  <div style={{ display: "flex", gap: 3 }}>
+                    <ViewscreenTooltip label="Show tidepool hotspot polygons (teal)" side="right">
+                      <button
+                        aria-pressed={intertidalScoreMode === "tidepool"}
+                        onClick={() => setIntertidalScoreMode("tidepool")}
+                        style={{
+                          flex: 1,
+                          padding: "4px 6px",
+                          borderRadius: 3,
+                          border: `1px solid ${intertidalScoreMode === "tidepool" ? "rgba(13,148,136,0.7)" : "rgba(255,255,255,0.1)"}`,
+                          background: intertidalScoreMode === "tidepool" ? "rgba(13,148,136,0.2)" : "rgba(0,10,20,0.45)",
+                          color: intertidalScoreMode === "tidepool" ? "#2dd4bf" : "#64748b",
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 9,
+                          letterSpacing: "0.1em",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                          transition: "all 0.15s ease",
+                          textShadow: intertidalScoreMode === "tidepool" ? "0 0 6px rgba(13,148,136,0.5)" : "none",
+                        }}
                       >
-                        <button
-                          aria-pressed={!hidden}
-                          title={hidden ? `Show ${name}` : `Hide ${name}`}
-                          onClick={() => toggleEfhSpecies(name)}
-                          style={{
-                            width: "100%",
-                            textAlign: "left",
-                            background: hidden ? "transparent" : "rgba(0,10,20,0.45)",
-                            border: `1px solid ${hidden ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.12)"}`,
-                            borderRadius: 3,
-                            color: hidden ? "#64748b" : "#cbd5e1",
-                            fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 10,
-                            padding: "3px 8px",
-                            cursor: "pointer",
-                            letterSpacing: "0.08em",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6,
-                            transition: "all 0.12s ease",
-                            opacity: hidden ? 0.5 : 1,
-                          }}
-                        >
-                          <span
-                            style={{
-                              width: 8,
-                              height: 8,
-                              borderRadius: 2,
-                              background: hidden ? "transparent" : color,
-                              border: `1px solid ${color}`,
-                              flexShrink: 0,
-                              transition: "background 0.12s ease",
-                            }}
-                          />
-                          <span
-                            style={{
-                              textDecoration: hidden ? "line-through" : "none",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {name}
-                          </span>
-                        </button>
-                      </ViewscreenTooltip>
-                    );
-                  })}
+                        <span style={{ width: 7, height: 7, borderRadius: 1, background: "#0d9488", flexShrink: 0 }} />
+                        TIDEPOOL
+                      </button>
+                    </ViewscreenTooltip>
+                    <ViewscreenTooltip label="Show beachcombing hotspot polygons (amber)" side="right">
+                      <button
+                        aria-pressed={intertidalScoreMode === "beachcombing"}
+                        onClick={() => setIntertidalScoreMode("beachcombing")}
+                        style={{
+                          flex: 1,
+                          padding: "4px 6px",
+                          borderRadius: 3,
+                          border: `1px solid ${intertidalScoreMode === "beachcombing" ? "rgba(217,119,6,0.7)" : "rgba(255,255,255,0.1)"}`,
+                          background: intertidalScoreMode === "beachcombing" ? "rgba(217,119,6,0.18)" : "rgba(0,10,20,0.45)",
+                          color: intertidalScoreMode === "beachcombing" ? "#fbbf24" : "#64748b",
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 9,
+                          letterSpacing: "0.1em",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                          transition: "all 0.15s ease",
+                          textShadow: intertidalScoreMode === "beachcombing" ? "0 0 6px rgba(217,119,6,0.4)" : "none",
+                        }}
+                      >
+                        <span style={{ width: 7, height: 7, borderRadius: 1, background: "#d97706", flexShrink: 0 }} />
+                        BEACH
+                      </button>
+                    </ViewscreenTooltip>
+                  </div>
+                  <span style={{ fontSize: 9, color: "#64748b", lineHeight: 1.4 }}>
+                    Opacity ∝ score intensity. Click polygon for score card.
+                  </span>
                 </div>
               )}
-            </>
-          )}
+            </div>
+
+            {/* EFH Zones */}
+            {hasEfh && (
+              <div style={{ marginTop: 4 }}>
+                <ToggleButton
+                  active={efhOverlayEnabled}
+                  onClick={() => setEfhOverlayEnabled(!efhOverlayEnabled)}
+                  label="🐟 ESSENTIAL FISH HABITAT"
+                  tooltip="Show Essential Fish Habitat zones overlay"
+                  activeBg="rgba(34,197,94,0.15)"
+                  activeBorder="rgba(34,197,94,0.5)"
+                  activeColor="#4ade80"
+                  isLoading={efhOverlayEnabled && efhLoading}
+                />
+                {efhOverlayEnabled && isUserDataset && !efhByIdLoading && activeEfhFeatures.length === 0 && (
+                  <div
+                    style={{
+                      marginTop: 4,
+                      paddingLeft: 8,
+                      fontSize: 9,
+                      color: "#94a3b8",
+                      fontStyle: "italic",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    No EFH coverage for this upload area.
+                  </div>
+                )}
+                {efhOverlayEnabled && efhSpeciesEntries.length > 0 && (
+                  <div
+                    style={{
+                      marginTop: 2,
+                      paddingLeft: 8,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 9,
+                        letterSpacing: "0.12em",
+                        color: "#94a3b8",
+                        textTransform: "uppercase",
+                        paddingBottom: 2,
+                      }}
+                    >
+                      Filter by species
+                    </span>
+                    {efhSpeciesEntries.map(([name, color]) => {
+                      const hidden = hiddenEfhSpecies.has(name);
+                      return (
+                        <ViewscreenTooltip
+                          key={name}
+                          label={hidden ? `Show ${name}` : `Hide ${name}`}
+                          side="right"
+                        >
+                          <button
+                            aria-pressed={!hidden}
+                            title={hidden ? `Show ${name}` : `Hide ${name}`}
+                            onClick={() => toggleEfhSpecies(name)}
+                            style={{
+                              width: "100%",
+                              textAlign: "left",
+                              background: hidden ? "transparent" : "rgba(0,10,20,0.45)",
+                              border: `1px solid ${hidden ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.12)"}`,
+                              borderRadius: 3,
+                              color: hidden ? "#64748b" : "#cbd5e1",
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 10,
+                              padding: "3px 8px",
+                              cursor: "pointer",
+                              letterSpacing: "0.08em",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                              transition: "all 0.12s ease",
+                              opacity: hidden ? 0.5 : 1,
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: 2,
+                                background: hidden ? "transparent" : color,
+                                border: `1px solid ${color}`,
+                                flexShrink: 0,
+                                transition: "background 0.12s ease",
+                              }}
+                            />
+                            <span
+                              style={{
+                                textDecoration: hidden ? "line-through" : "none",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {name}
+                            </span>
+                          </button>
+                        </ViewscreenTooltip>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </AdvancedSection>
         </div>
       )}
     </div>

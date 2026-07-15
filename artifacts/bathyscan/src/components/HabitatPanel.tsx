@@ -10,6 +10,7 @@
  */
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
+import { AdvancedSection } from "@/components/AdvancedSection";
 import { useQueryClient } from "@tanstack/react-query";
 import { useHabitatStore } from "@/lib/habitatStore";
 import { useClassificationStore } from "@/lib/classificationStore";
@@ -499,105 +500,106 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
             )}
           </div>
 
-          {/* Overlay intensity slider */}
+          {/* Advanced section — overlay appearance controls */}
           {showOverlay && (
-            <div style={{ marginBottom: 8 }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  fontSize: 10,
-                  color: "#cbd5e1",
-                  letterSpacing: "0.08em",
-                  marginBottom: 4,
-                }}
-              >
-                <span>OVERLAY INTENSITY</span>
-                <span style={{ ...AMBER, fontWeight: 600 }}>
-                  {Math.round(habitatOverlayIntensity * 100)}%
-                </span>
+            <AdvancedSection panelId="habitatAdvanced">
+              {/* Overlay intensity slider */}
+              <div style={{ marginBottom: 8 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    fontSize: 10,
+                    color: "#cbd5e1",
+                    letterSpacing: "0.08em",
+                    marginBottom: 4,
+                  }}
+                >
+                  <span>OVERLAY INTENSITY</span>
+                  <span style={{ ...AMBER, fontWeight: 600 }}>
+                    {Math.round(habitatOverlayIntensity * 100)}%
+                  </span>
+                </div>
+                <input
+                  className="habitat-overlay-intensity"
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={habitatOverlayIntensity}
+                  onChange={(e) => setHabitatOverlayIntensity(parseFloat(e.target.value))}
+                  aria-label="Habitat overlay intensity"
+                  style={{
+                    width: "100%",
+                    accentColor: "#fb923c",
+                    cursor: "pointer",
+                  }}
+                />
               </div>
-              <input
-                className="habitat-overlay-intensity"
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={habitatOverlayIntensity}
-                onChange={(e) => setHabitatOverlayIntensity(parseFloat(e.target.value))}
-                aria-label="Habitat overlay intensity"
-                style={{
-                  width: "100%",
-                  accentColor: "#fb923c",
-                  cursor: "pointer",
-                }}
-              />
-            </div>
-          )}
 
-          {/* Overlay colour — preset swatches + custom picker */}
-          {showOverlay && (
-            <div style={{ marginBottom: 8 }}>
-              <div
-                style={{
-                  fontSize: 10,
-                  color: "#cbd5e1",
-                  letterSpacing: "0.08em",
-                  marginBottom: 4,
-                }}
-              >
-                OVERLAY COLOR
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-                {[
-                  { hex: "#ff9919", label: "Amber" },
-                  { hex: "#22d3ee", label: "Cyan" },
-                  { hex: "#4ade80", label: "Green" },
-                  { hex: "#f472b6", label: "Pink" },
-                  { hex: "#a78bfa", label: "Violet" },
-                  { hex: "#ef4444", label: "Red" },
-                  { hex: "#ffffff", label: "White" },
-                ].map(({ hex, label }) => (
-                  <button
-                    key={hex}
-                    title={label}
-                    aria-label={`Set overlay color to ${label}`}
-                    onClick={() => setHabitatOverlayColor(hex)}
+              {/* Overlay colour — preset swatches + custom picker */}
+              <div style={{ marginBottom: 8 }}>
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: "#cbd5e1",
+                    letterSpacing: "0.08em",
+                    marginBottom: 4,
+                  }}
+                >
+                  OVERLAY COLOR
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+                  {[
+                    { hex: "#ff9919", label: "Amber" },
+                    { hex: "#22d3ee", label: "Cyan" },
+                    { hex: "#4ade80", label: "Green" },
+                    { hex: "#f472b6", label: "Pink" },
+                    { hex: "#a78bfa", label: "Violet" },
+                    { hex: "#ef4444", label: "Red" },
+                    { hex: "#ffffff", label: "White" },
+                  ].map(({ hex, label }) => (
+                    <button
+                      key={hex}
+                      title={label}
+                      aria-label={`Set overlay color to ${label}`}
+                      onClick={() => setHabitatOverlayColor(hex)}
+                      style={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: 3,
+                        background: hex,
+                        border: habitatOverlayColor === hex
+                          ? "2px solid #fff"
+                          : "1px solid rgba(255,255,255,0.18)",
+                        cursor: "pointer",
+                        padding: 0,
+                        flexShrink: 0,
+                        boxShadow: habitatOverlayColor === hex ? `0 0 0 1px ${hex}` : "none",
+                      }}
+                    />
+                  ))}
+                  <input
+                    type="color"
+                    value={habitatOverlayColor}
+                    onChange={(e) => setHabitatOverlayColor(e.target.value)}
+                    aria-label="Custom overlay color"
+                    title="Custom color"
                     style={{
                       width: 18,
                       height: 18,
                       borderRadius: 3,
-                      background: hex,
-                      border: habitatOverlayColor === hex
-                        ? "2px solid #fff"
-                        : "1px solid rgba(255,255,255,0.18)",
+                      border: "1px solid rgba(255,255,255,0.18)",
                       cursor: "pointer",
                       padding: 0,
+                      background: "none",
                       flexShrink: 0,
-                      boxShadow: habitatOverlayColor === hex ? `0 0 0 1px ${hex}` : "none",
                     }}
                   />
-                ))}
-                <input
-                  type="color"
-                  value={habitatOverlayColor}
-                  onChange={(e) => setHabitatOverlayColor(e.target.value)}
-                  aria-label="Custom overlay color"
-                  title="Custom color"
-                  style={{
-                    width: 18,
-                    height: 18,
-                    borderRadius: 3,
-                    border: "1px solid rgba(255,255,255,0.18)",
-                    cursor: "pointer",
-                    padding: 0,
-                    background: "none",
-                    flexShrink: 0,
-                  }}
-                />
+                </div>
               </div>
-            </div>
+            </AdvancedSection>
           )}
 
           {/* Status */}

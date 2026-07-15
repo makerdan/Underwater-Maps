@@ -3,6 +3,7 @@ import type { TidalDataResult } from "@/hooks/useTidalData";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
+import { AdvancedSection } from "@/components/AdvancedSection";
 import { formatDistance, formatDepth, formatSpeedFromKnots, cardinal } from "@/lib/units";
 import { useTidalSchedule, type TidalScheduleEvent } from "@/hooks/useTidalSchedule";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
@@ -502,35 +503,37 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                 </div>
               )}
 
-              {/* Depth layer selector */}
-              <div>
-                <div style={LABEL}>Current layer</div>
-                <div className="flex gap-1 mt-0.5">
-                  {DEPTH_LAYERS.map((l) => (
-                    <ViewscreenTooltip
-                      key={l}
-                      label={`Show ${LAYER_LABELS[l].toLowerCase()} current layer`}
-                      side="bottom"
-                    >
-                    <button
-                      onClick={() => onDepthLayerChange(l)}
-                      style={{
-                        fontSize: 10,
-                        padding: "3px 7px",
-                        borderRadius: 2,
-                        border: `1px solid ${l === depthLayer ? "rgba(0,229,255,0.6)" : "rgba(0,229,255,0.3)"}`,
-                        background: l === depthLayer ? "rgba(0,229,255,0.15)" : "transparent",
-                        color: l === depthLayer ? "#00e5ff" : "#cbd5e1",
-                        cursor: "pointer",
-                        letterSpacing: "0.1em",
-                      }}
-                    >
-                      {LAYER_LABELS[l]}
-                    </button>
-                    </ViewscreenTooltip>
-                  ))}
+              <AdvancedSection panelId="tidePanelAdvanced">
+                {/* Depth layer selector */}
+                <div>
+                  <div style={LABEL}>Current layer</div>
+                  <div className="flex gap-1 mt-0.5">
+                    {DEPTH_LAYERS.map((l) => (
+                      <ViewscreenTooltip
+                        key={l}
+                        label={`Show ${LAYER_LABELS[l].toLowerCase()} current layer`}
+                        side="bottom"
+                      >
+                      <button
+                        onClick={() => onDepthLayerChange(l)}
+                        style={{
+                          fontSize: 10,
+                          padding: "3px 7px",
+                          borderRadius: 2,
+                          border: `1px solid ${l === depthLayer ? "rgba(0,229,255,0.6)" : "rgba(0,229,255,0.3)"}`,
+                          background: l === depthLayer ? "rgba(0,229,255,0.15)" : "transparent",
+                          color: l === depthLayer ? "#00e5ff" : "#cbd5e1",
+                          cursor: "pointer",
+                          letterSpacing: "0.1em",
+                        }}
+                      >
+                        {LAYER_LABELS[l]}
+                      </button>
+                      </ViewscreenTooltip>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              </AdvancedSection>
             </>
           )}
 

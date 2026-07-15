@@ -16,7 +16,13 @@ export type PanelId =
   | "markersAccordion"
   | "uploadTerrainAccordion"
   | "routes"
-  | "myLibrary";
+  | "myLibrary"
+  // ── Per-panel Advanced section collapse keys (default: collapsed) ──────────
+  | "overlaysToolsAdvanced"
+  | "tidePanelAdvanced"
+  | "currentsPanelAdvanced"
+  | "habitatAdvanced"
+  | "seafloorAdvanced";
 
 interface PanelCollapseStore {
   collapsed: Record<PanelId, boolean>;
@@ -40,6 +46,12 @@ export const DEFAULTS: Record<PanelId, boolean> = {
   uploadTerrainAccordion: true,
   routes: false,
   myLibrary: false,
+  // Advanced sub-sections — collapsed by default on first use
+  overlaysToolsAdvanced: true,
+  tidePanelAdvanced: true,
+  currentsPanelAdvanced: true,
+  habitatAdvanced: true,
+  seafloorAdvanced: true,
 };
 
 export const PANEL_IDS = Object.keys(DEFAULTS) as PanelId[];

@@ -16,6 +16,7 @@
 
 import React, { useEffect, useRef } from "react";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { AdvancedSection } from "@/components/AdvancedSection";
 import { useCurrentsStore, type TidalStatus } from "@/lib/currentsStore";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { CURRENT_RAMP_STOPS, speedToColor } from "@/lib/currentColor";
@@ -273,60 +274,62 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
         />
       )}
 
-      <div style={{ marginBottom: 8 }}>
-        <div style={{ ...label, display: "flex", justifyContent: "space-between" }}>
-          <span>Tide Phase</span>
-          <span style={{ color: "#e2e8f0" }}>{Math.round(currentsTidePhase * 100)}%</span>
+      <AdvancedSection panelId="currentsPanelAdvanced">
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ ...label, display: "flex", justifyContent: "space-between" }}>
+            <span>Tide Phase</span>
+            <span style={{ color: "#e2e8f0" }}>{Math.round(currentsTidePhase * 100)}%</span>
+          </div>
+          <TidePhaseSlider
+            value={currentsTidePhase}
+            onChange={setCurrentsTidePhase}
+          />
+          <button
+            style={{
+              ...toggleBtn(currentsAutoAdvance),
+              marginTop: 4,
+              width: "100%",
+              flex: 0,
+            }}
+            onClick={() => setCurrentsAutoAdvance(!currentsAutoAdvance)}
+            data-testid="currents-auto-advance"
+          >
+            {currentsAutoAdvance ? "◉ AUTO-ADVANCE" : "○ AUTO-ADVANCE"}
+          </button>
         </div>
-        <TidePhaseSlider
-          value={currentsTidePhase}
-          onChange={setCurrentsTidePhase}
-        />
-        <button
-          style={{
-            ...toggleBtn(currentsAutoAdvance),
-            marginTop: 4,
-            width: "100%",
-            flex: 0,
-          }}
-          onClick={() => setCurrentsAutoAdvance(!currentsAutoAdvance)}
-          data-testid="currents-auto-advance"
-        >
-          {currentsAutoAdvance ? "◉ AUTO-ADVANCE" : "○ AUTO-ADVANCE"}
-        </button>
-      </div>
 
-      <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-        <button
-          style={toggleBtn(currentsShowParticles)}
-          onClick={() => setCurrentsShowParticles(!currentsShowParticles)}
-          data-testid="currents-toggle-particles"
-        >
-          ✦ PART
-        </button>
-        <button
-          style={toggleBtn(currentsShowArrows)}
-          onClick={() => setCurrentsShowArrows(!currentsShowArrows)}
-          data-testid="currents-toggle-arrows"
-        >
-          ➤ ARR
-        </button>
-        <button
-          style={toggleBtn(currentsShowStreamlines)}
-          onClick={() => setCurrentsShowStreamlines(!currentsShowStreamlines)}
-          data-testid="currents-toggle-streams"
-        >
-          ∿ FLOW
-        </button>
-      </div>
-
-      <Legend units={units} />
-
-      {field && (
-        <div style={{ marginTop: 6, fontSize: 9, color: "#94a3b8" }} data-testid="currents-field-stats">
-          Field: {field.resolution}² · max {formatSpeedFromKnots(maxKt, { units, decimals: 2 })}
+        <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+          <button
+            style={toggleBtn(currentsShowParticles)}
+            onClick={() => setCurrentsShowParticles(!currentsShowParticles)}
+            data-testid="currents-toggle-particles"
+          >
+            ✦ PART
+          </button>
+          <button
+            style={toggleBtn(currentsShowArrows)}
+            onClick={() => setCurrentsShowArrows(!currentsShowArrows)}
+            data-testid="currents-toggle-arrows"
+          >
+            ➤ ARR
+          </button>
+          <button
+            style={toggleBtn(currentsShowStreamlines)}
+            onClick={() => setCurrentsShowStreamlines(!currentsShowStreamlines)}
+            data-testid="currents-toggle-streams"
+          >
+            ∿ FLOW
+          </button>
         </div>
-      )}
+
+        <Legend units={units} />
+
+        {field && (
+          <div style={{ marginTop: 6, fontSize: 9, color: "#94a3b8" }} data-testid="currents-field-stats">
+            Field: {field.resolution}² · max {formatSpeedFromKnots(maxKt, { units, decimals: 2 })}
+          </div>
+        )}
+      </AdvancedSection>
     </div>
   );
 };

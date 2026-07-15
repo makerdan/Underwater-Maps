@@ -15,6 +15,7 @@
 import React from "react";
 import { useUiStore } from "@/lib/uiStore";
 import { ZoneOverlay } from "@/components/ZoneOverlay";
+import { AdvancedSection } from "@/components/AdvancedSection";
 
 const MONO = "'JetBrains Mono', 'Fira Code', monospace";
 
@@ -144,10 +145,12 @@ export const SeafloorClassificationPanel: React.FC = () => {
         </div>
       )}
 
-      {/* ── Zone Analysis (classification, overlay toggle, colour pickers, paint mode) ── */}
-      <div style={{ padding: "4px 0 4px 0" }}>
-        <ZoneOverlay embedded />
-      </div>
+      {/* ── Zone Analysis — behind Advanced toggle (paint brush, zone colours, classification) ── */}
+      <AdvancedSection panelId="seafloorAdvanced">
+        <div style={{ padding: "4px 0 4px 0" }}>
+          <ZoneOverlay embedded />
+        </div>
+      </AdvancedSection>
     </div>
   );
 };
