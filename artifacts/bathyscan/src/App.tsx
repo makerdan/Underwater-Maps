@@ -95,6 +95,8 @@ import { useCameraStore } from "@/lib/cameraStore";
 import { DEV_AUTH_BYPASS } from "@/lib/devAuth";
 import { useTimelineStore } from "@/lib/timelineStore";
 import { TimelineScrubBar } from "@/components/TimelineScrubBar";
+import { WhatsHereCard } from "@/components/WhatsHereCard";
+import { useWhatsHere } from "@/hooks/useWhatsHere";
 
 
 function TestBridge(): null {
@@ -285,6 +287,8 @@ function Main() {
   const markerFormOpen = useUiStore((s) => s.markerFormOpen);
   const markerEditOpen = useMarkerEditStore((s) => s.marker !== null);
   const overviewOpen = useUiStore((s) => s.overviewOpen);
+  const whatsHereOpen = useUiStore((s) => s.whatsHereOpen);
+
   const findDataPanelOpen = useUiStore((s) => s.findDataPanelOpen);
   const setFindDataPanelOpen = useUiStore((s) => s.setFindDataPanelOpen);
   const openFindDataCount = useUiStore((s) => s.openFindDataCount);
@@ -423,6 +427,9 @@ function Main() {
   // E2E test bridge: when non-null, overrides live tidal fetch data so tests
   // can inject tidal state without going through the useTidalData HTTP path.
   const effectiveTidalData = (tidalDataOverride as typeof tidalData) ?? tidalData;
+
+  // Aggregate crosshair data for the "What's Here?" card.
+  const whatsHereData = useWhatsHere(effectiveTidalData, tidalOverlay, terrain);
 
   // Build tidal data map for multi-primary rendering in TourScene.
   // The primary (slot 0) uses effectiveTidalData (which may be the test override).
@@ -906,11 +913,20 @@ function Main() {
           setLocation(basePath + "/settings");
         }
       }
+      if (e.code === "KeyH" && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const el = e.target as HTMLElement | null;
+        const tag = el?.tagName ?? "";
+        if (tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT" && !el?.isContentEditable) {
+          const store = useUiStore.getState();
+          store.setWhatsHereOpen(!store.whatsHereOpen);
+        }
+      }
       if (e.key === "Escape" && !e.repeat) {
         setQueryOpen(false);
         useHighlightStore.getState().clearHighlight();
         const store = useUiStore.getState();
         if (store.overviewOpen) store.setOverviewOpen(false);
+        if (store.whatsHereOpen) store.setWhatsHereOpen(false);
       }
     };
     window.addEventListener("keydown", handler);
@@ -1468,6 +1484,11 @@ function Main() {
           </ViewscreenTooltip>
         )}
       </div>
+
+      {/* What's Here card — floating summary of crosshair data */}
+      {whatsHereOpen && (
+        <WhatsHereCard data={whatsHereData} />
+      )}
 
       {/* Onboarding overlay — shown to new users after the scene is ready.
           Suppressed while the WebGL context is lost/recovering so a recovery

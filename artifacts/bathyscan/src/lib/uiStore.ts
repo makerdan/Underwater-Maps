@@ -120,6 +120,12 @@ interface UiStore {
   clearPendingDropIn: () => void;
   overviewOpen: boolean;
   setOverviewOpen: (open: boolean) => void;
+  /** Whether the "What's Here?" summary card is visible. */
+  whatsHereOpen: boolean;
+  setWhatsHereOpen: (open: boolean) => void;
+  /** When true the card stays open past the 8-second auto-close and updates live. */
+  whatsHerePinned: boolean;
+  setWhatsHerePinned: (pinned: boolean) => void;
   markerFormOpen: boolean;
   setMarkerFormOpen: (open: boolean) => void;
   /**
@@ -347,6 +353,10 @@ export const useUiStore = create<UiStore>((set, get) => {
     clearPendingDropIn: () => set({ pendingDropIn: null }),
     overviewOpen: false,
     setOverviewOpen: (open) => set({ overviewOpen: open }),
+    whatsHereOpen: false,
+    setWhatsHereOpen: (open) => set(open ? { whatsHereOpen: true } : { whatsHereOpen: false, whatsHerePinned: false }),
+    whatsHerePinned: false,
+    setWhatsHerePinned: (pinned) => set({ whatsHerePinned: pinned }),
     markerFormOpen: false,
     setMarkerFormOpen: (open) =>
       set(open ? { markerFormOpen: true } : { markerFormOpen: false, markerFormPrefill: null }),

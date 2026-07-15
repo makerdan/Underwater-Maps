@@ -88,6 +88,9 @@ export const HUD: React.FC = () => {
   const overviewGrid = useTerrainStore((s) => s.overviewGrid);
   const isOnline = useOfflineStore((s) => s.isOnline);
 
+  const whatsHereOpen = useUiStore((s) => s.whatsHereOpen);
+  const setWhatsHereOpen = useUiStore((s) => s.setWhatsHereOpen);
+
   const showCrosshairGps = useSettingsStore((s) => s.showCrosshairGps);
   const showHeading = useSettingsStore((s) => s.showHeading);
   const coordinateFormat = useSettingsStore((s) => s.coordinateFormat);
@@ -499,6 +502,7 @@ export const HUD: React.FC = () => {
             gap: 8,
           }}
         >
+
           {/* Reticle */}
           <div style={{ position: "relative", width: 40, height: 40 }}>
             <div
@@ -690,6 +694,44 @@ export const HUD: React.FC = () => {
       {/* Bottom-right overlay/command toggle stack has moved into the
           left sidebar's "Overlays & Tools" panel (see OverlaysToolsPanel).
           The Substrate Legend also lives inline within that panel now. */}
+
+      {/* ── Centre-bottom: What's Here? button ──
+          Floats just below the crosshair circle. Keyboard shortcut H. */}
+      {terrain && (
+        <ViewscreenTooltip
+          label={whatsHereOpen ? "Close What's Here summary" : "What's Here? — terrain & conditions at your crosshair  [H]"}
+          side="top"
+        >
+          <button
+            data-testid="whats-here-btn"
+            aria-label={whatsHereOpen ? "Close What's Here summary" : "Open What's Here summary"}
+            aria-pressed={whatsHereOpen}
+            onClick={() => setWhatsHereOpen(!whatsHereOpen)}
+            style={{
+              position: "absolute",
+              bottom: "calc(50% - 108px)",
+              left: "50%",
+              transform: "translateX(-50%)",
+              pointerEvents: "auto",
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              fontSize: 10,
+              letterSpacing: "0.18em",
+              padding: "4px 10px",
+              borderRadius: 3,
+              border: `1px solid ${whatsHereOpen ? "rgba(0,229,255,0.55)" : "rgba(0,229,255,0.22)"}`,
+              background: whatsHereOpen ? "rgba(0,229,255,0.12)" : "rgba(2,8,18,0.72)",
+              color: whatsHereOpen ? "#00e5ff" : "#94a3b8",
+              textShadow: whatsHereOpen ? "0 0 6px rgba(0,229,255,0.45)" : "none",
+              cursor: "pointer",
+              backdropFilter: "blur(4px)",
+              transition: "border-color 0.12s, background 0.12s, color 0.12s",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {isNarrow ? "◎" : "◎ WHAT'S HERE?"}
+          </button>
+        </ViewscreenTooltip>
+      )}
 
       {/* ── Bottom-left: pin readout only ──
           The "CAMERA POSITION" LON/LAT panel was renamed to
