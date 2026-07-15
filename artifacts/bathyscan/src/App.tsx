@@ -93,6 +93,8 @@ import { OnboardingOverlay } from "@/components/OnboardingOverlay";
 import { useWebglContextStore } from "@/lib/webglContextStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { DEV_AUTH_BYPASS } from "@/lib/devAuth";
+import { useTimelineStore } from "@/lib/timelineStore";
+import { TimelineScrubBar } from "@/components/TimelineScrubBar";
 
 
 function TestBridge(): null {
@@ -481,6 +483,50 @@ function Main() {
       setNoaaAmbient(null);
     }
   }, [effectiveTidalData, setNoaaAmbient]);
+
+  // ── Timeline range auto-population ─────────────────────────────────────────
+  // Primary: fire whenever the tidal/currents data-load event resolves —
+  // i.e. when effectiveTidalData transitions to an `available: true` result.
+  // TidalDataResult does not expose explicit forecast start/end timestamps, so
+  // we derive the window as "now ± 12 h" (a single NOAA tidal forecast period).
+  // When the data is unavailable we also refresh the range so the bar shows a
+  // sensible current window regardless of overlay state.
+  // Secondary fallback: fire when terrain loads and no tidal data is available
+  // yet (e.g. tidal overlay is disabled), so the bar is ready as soon as an
+  // overlay is enabled.
+  const setTimelineRange = useTimelineStore((s) => s.setRange);
+
+  const prevTidalAvailableRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    const available =
+      effectiveTidalData && "available" in effectiveTidalData
+        ? effectiveTidalData.available
+        : null;
+    // Only fire on real availability changes, not every poll cycle.
+    if (available === prevTidalAvailableRef.current) return;
+    prevTidalAvailableRef.current = available;
+    if (available === null) return;
+    const now = new Date();
+    setTimelineRange({
+      start: new Date(now.getTime() - 12 * 3_600_000),
+      end: new Date(now.getTime() + 12 * 3_600_000),
+    });
+  }, [effectiveTidalData, setTimelineRange]);
+
+  // Fallback: set range when a new terrain dataset loads and the above effect
+  // hasn't fired yet (tidal overlay off, no data fetched).
+  const prevTerrainForRangeRef = useRef<typeof terrain>(null);
+  useEffect(() => {
+    if (!terrain || terrain === prevTerrainForRangeRef.current) return;
+    prevTerrainForRangeRef.current = terrain;
+    // Don't override a range that was already set from tidal data.
+    if (prevTidalAvailableRef.current !== null) return;
+    const now = new Date();
+    setTimelineRange({
+      start: new Date(now.getTime() - 12 * 3_600_000),
+      end: new Date(now.getTime() + 12 * 3_600_000),
+    });
+  }, [terrain, setTimelineRange]);
 
   // ── Auto-retry NOAA fetch when the user flies to a new area ────────────────
   // Minimum centre-point shift (degrees, either axis) that triggers an
@@ -1232,6 +1278,11 @@ function Main() {
 
         {/* Depth-profile chart — bottom-centre, z-36 */}
         <DepthProfilePanel />
+
+        {/* Timeline scrubber bar — fixed at bottom, z-34, visible when a
+            time-sensitive overlay is active. Depth-profile (z-36) renders
+            on top when both are open so the bar never obscures the chart. */}
+        <TimelineScrubBar />
 
         {/* Full-screen overview map — z-40, rendered above all HUD elements */}
         {overviewOpen && <OverviewMap />}

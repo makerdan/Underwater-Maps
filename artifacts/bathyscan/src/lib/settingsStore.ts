@@ -54,7 +54,7 @@ import {
 } from "./keyBindings";
 import { usePanelCollapseStore, type PanelId } from "./panelCollapseStore";
 
-export const SETTINGS_SCHEMA_VERSION = 20;
+export const SETTINGS_SCHEMA_VERSION = 21;
 
 /**
  * Standard-mapping gamepad button index used to trigger the crosshair
@@ -464,6 +464,12 @@ export interface SettingsState {
    * users can confirm cross-device sync is working.
    */
   lastSyncedAt: string | null;
+
+  // ── Timeline scrubber (best-effort session restore) ───────────────────
+  /** Last timeline scrubber position (ISO string). Restored on next load. */
+  timelineCurrentTime: string | null;
+  /** Last timeline range (ISO strings). Restored on next load. */
+  timelineRange: { start: string; end: string } | null;
 }
 
 interface SettingsActions {
@@ -901,6 +907,9 @@ export const DEFAULT_SETTINGS: SettingsState = {
   crosshairMenuGamepadButton: DEFAULT_CROSSHAIR_MENU_GAMEPAD_BUTTON,
 
   lastSyncedAt: null,
+
+  timelineCurrentTime: null,
+  timelineRange: null,
 };
 
 export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
@@ -1477,6 +1486,15 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).showWaterTempLayer === undefined) {
             migratedWaterTemp.showWaterTempLayer = DEFAULT_SETTINGS.showWaterTempLayer;
           }
+          // v20 → v21: inject timeline scrubber restore fields.
+          // Both fields default to null so existing users start fresh.
+          const migratedTimeline: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).timelineCurrentTime === undefined) {
+            migratedTimeline.timelineCurrentTime = DEFAULT_SETTINGS.timelineCurrentTime;
+          }
+          if ((rest as Record<string, unknown>).timelineRange === undefined) {
+            migratedTimeline.timelineRange = DEFAULT_SETTINGS.timelineRange;
+          }
           return {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -1486,6 +1504,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedFontSize,
             ...migratedHyd93,
             ...migratedWaterTemp,
+            ...migratedTimeline,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,
