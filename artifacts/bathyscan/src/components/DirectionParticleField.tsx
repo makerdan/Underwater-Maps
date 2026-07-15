@@ -184,28 +184,49 @@ export const DirectionParticleField: React.FC<DirectionParticleFieldProps> = ({
     return geo;
   }, [count]);
 
-  // Material: round, additive-soft point sprite drawn from a generated canvas
-  // so the swarm reads as glowing droplets rather than square pixels.
-  const material = useMemo(() => {
-    const tex = makeParticleTexture(color);
-    return new THREE.PointsMaterial({
-      color,
-      size: baseSize,
-      sizeAttenuation: true,
-      transparent: true,
-      opacity,
-      depthWrite: false,
-      map: tex,
-      alphaTest: 0.01,
-      blending: THREE.AdditiveBlending,
-    });
-  }, [color, baseSize, opacity]);
+  // Texture: canvas-based sprite tinted to `color`. Rebuilt only when the
+  // colour changes — a baseSize or opacity change must not re-upload the GPU
+  // texture unnecessarily.
+  const texture = useMemo(() => makeParticleTexture(color), [color]);
+
+  useEffect(() => {
+    return () => {
+      texture.dispose();
+    };
+  }, [texture]);
+
+  // Material: deliberately does NOT depend on `color` or `texture`, so a
+  // colour change only swaps the sprite texture (via the effect below)
+  // instead of reconstructing the whole material and re-uploading GPU state.
+  const material = useMemo(
+    () =>
+      new THREE.PointsMaterial({
+        size: baseSize,
+        sizeAttenuation: true,
+        transparent: true,
+        opacity,
+        depthWrite: false,
+        alphaTest: 0.01,
+        blending: THREE.AdditiveBlending,
+      }),
+    [baseSize, opacity],
+  );
+
+  // Wire colour + texture onto the (stable) material by mutation. Runs when
+  // either the colour, texture, or material instance changes; keeps the
+  // material's colour uniform and sprite map in sync without rebuilding it.
+  useEffect(() => {
+    material.color.set(color);
+    material.map = texture;
+    material.needsUpdate = true;
+  }, [material, texture, color]);
 
   useEffect(() => {
     return () => {
       geometry.dispose();
       material.dispose();
-      if (material.map) material.map.dispose();
+      // Do NOT dispose material.map here — the texture has its own effect
+      // above that tracks its own lifetime correctly.
     };
   }, [geometry, material]);
 
