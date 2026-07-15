@@ -69,10 +69,17 @@ function overviewCanvas(page: Page) {
  * Right-clicks the OverviewMap canvas at the given fractional position
  * (0..1 of width/height).
  *
- * Uses dispatchEvent("contextmenu") with screen coordinates instead of
- * Playwright's pointer-based .click({button:"right"}) so the event reaches
- * the canvas's contextmenu handler even when another element (Three.js
- * scene canvas or the SimulatedDataConfirmDialog overlay) sits on top.
+ * Dispatches a real MouseEvent("contextmenu") in-page with screen
+ * coordinates instead of Playwright's pointer-based .click({button:"right"})
+ * so the event reaches the canvas's contextmenu handler even when another
+ * element (Three.js scene canvas or the SimulatedDataConfirmDialog overlay)
+ * sits on top.
+ *
+ * NOTE: locator.dispatchEvent("contextmenu", {...}) must NOT be used here —
+ * Playwright constructs a plain Event for the "contextmenu" type (it is not
+ * in its MouseEvent type map), silently dropping clientX/clientY. The
+ * handler then computes NaN coordinates and bails out, so the menu never
+ * opens. Constructing the MouseEvent ourselves preserves the coordinates.
  */
 async function rightClickOverviewCanvas(
   page: Page,
@@ -82,12 +89,23 @@ async function rightClickOverviewCanvas(
   const canvas = overviewCanvas(page);
   const box = await canvas.boundingBox();
   if (!box) throw new Error("OverviewMap canvas not found");
-  await canvas.dispatchEvent("contextmenu", {
-    bubbles: true,
-    cancelable: true,
-    clientX: box.x + box.width * fracX,
-    clientY: box.y + box.height * fracY,
-  });
+  await canvas.evaluate(
+    (el, { clientX, clientY }) => {
+      el.dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          cancelable: true,
+          clientX,
+          clientY,
+          button: 2,
+        }),
+      );
+    },
+    {
+      clientX: box.x + box.width * fracX,
+      clientY: box.y + box.height * fracY,
+    },
+  );
 }
 
 test.describe("BathyScan — Overview Map", () => {

@@ -1695,6 +1695,10 @@ export const OverviewMap: React.FC = () => {
 
       const ctxCoordGrid = worldGridRef.current ?? overviewGrid;
       const { lon, lat } = canvasToLonLat(mx, my, ctxCoordGrid, t);
+      // Synthetic events (or exotic input devices) can carry non-finite
+      // coordinates — opening the menu with garbage lon/lat would wire
+      // NaN into pendingDropIn / lastClickedGps, so bail out instead.
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
       // lonLatToWorldXZ uses the primary dataset's 3D coordinate frame — keep overviewGrid.
       const { x: worldX, z: worldZ } = lonLatToWorldXZ(lon, lat, overviewGrid);
 
