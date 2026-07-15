@@ -38,9 +38,6 @@ import {
   renderHeatmapAtBbox,
   renderContourLines,
   renderGridLines,
-  renderMarkers,
-  renderDepthPoles,
-  renderViewCone,
   renderScaleBar,
   renderColormapLegend,
   renderHabitatOverlay,
@@ -52,18 +49,14 @@ import {
   renderSubstrateLegend,
   hitTestSubstrate,
   hitTestSubstrateLegend,
-  renderGpsPosition,
-  renderLiveTrail,
   renderSavedTrails,
   drawSelectionRect,
-  renderWeatherStations,
-  renderRawsStations,
-  renderIntertidalHotspotPins,
   buildIntertidalHotspotDescriptors,
   renderIntertidalModeLegend,
   POLYGON_LOD_MIN_ZOOM,
 } from "@/lib/overviewRenderer";
 import type { OverviewTransform, CanvasSavedTrail, EfhLegendLayout, ContourSegment, WeatherStationPin, RawsStationPin, IntertidalHotspotPin } from "@/lib/overviewRenderer";
+import { MARKER_COLOR } from "@/lib/markerConstants";
 import { useWeatherStations } from "@/hooks/useWeatherStations";
 import type { WeatherStation } from "@workspace/api-client-react";
 import { WeatherStationPopover } from "@/components/WeatherStationLayer";
@@ -195,9 +188,7 @@ export const OverviewMap: React.FC = () => {
   const weatherStationPinsRef = useRef<WeatherStationPin[]>([]);
   const weatherStationActiveRef = useRef(false);
   const weatherStationSelectedIdRef = useRef<string | null>(null);
-  // Canvas-space positions of rendered pins (updated each rAF frame for hit-test)
-  const weatherStationCanvasPositionsRef = useRef<Array<{ id: string; cx: number; cy: number }>>([]);
-  // Full station objects keyed by id for the popover
+  // Full station objects keyed by id for the SVG onClick handler and popover
   const weatherStationDataRef = useRef<Map<string, WeatherStation>>(new Map());
 
   // RAWS station refs (read in rAF loop without React re-render)
@@ -209,7 +200,6 @@ export const OverviewMap: React.FC = () => {
 
   // Intertidal hotspot pin refs (read in rAF loop without React re-render)
   const intertidalPinsRef = useRef<IntertidalHotspotPin[]>([]);
-  const intertidalCanvasPositionsRef = useRef<Array<{ unitId: string; cx: number; cy: number }>>([]);
   const intertidalHotspotDataRef = useRef<Map<string, SelectedHotspot>>(new Map());
   const intertidalSelectedUnitIdRef = useRef<string | null>(null);
   const intertidalHotspotsEnabledRef = useRef(false);
@@ -273,9 +263,19 @@ export const OverviewMap: React.FC = () => {
   const selectModeRef = useRef(false);
   useEffect(() => { selectModeRef.current = selectMode; }, [selectMode]);
 
+  // SVG overlay transform — updated each rAF frame so SVG elements reposition in sync with the canvas.
+  const [svgTransform, setSvgTransform] = useState<OverviewTransform | null>(null);
+
+  // Camera position selectors (reactive — update camera arrow in SVG without waiting for rAF).
+  const cameraLon = useCameraStore((s) => s.cameraLon);
+  const cameraLat = useCameraStore((s) => s.cameraLat);
+  const cameraHeading = useCameraStore((s) => s.heading);
+
+  // Marker visibility setting (reactive for SVG render).
+  const overviewShowMarkers = useSettingsStore((s) => s.overviewShowMarkers);
+
   // Weather station selected-pin React state (drives popover)
   const [selectedWeatherStation, setSelectedWeatherStation] = useState<WeatherStation | null>(null);
-  const [selectedWeatherStationPos, setSelectedWeatherStationPos] = useState<{ cx: number; cy: number } | null>(null);
 
   // --- Tools popover state --------------------------------------------------
   // Controls the compact "Tools" popover that houses box-select and download.
@@ -443,7 +443,6 @@ export const OverviewMap: React.FC = () => {
   }, [toolsPopoverOpen]);
 
   // GPS & trail state (read directly from stores in rAF — no React re-render)
-  const pulseRef = useRef(0);
 
   // Keep markers ref in sync without causing rAF re-registration
   useEffect(() => {
@@ -554,7 +553,6 @@ export const OverviewMap: React.FC = () => {
       // Clear popover when the overlay is toggled off
       weatherStationSelectedIdRef.current = null;
       setSelectedWeatherStation(null);
-      setSelectedWeatherStationPos(null);
     }
     dirtyRef.current = true;
   }, [weatherStationsActive]);
@@ -574,12 +572,11 @@ export const OverviewMap: React.FC = () => {
   const { stations: rawsStations } = useRawsStations();
   // Selected RAWS pin React state (drives popover)
   const [selectedRawsDatasetId, setSelectedRawsDatasetId] = useState<string | null>(null);
-  const [selectedRawsPos, setSelectedRawsPos] = useState<{ cx: number; cy: number } | null>(null);
-  // Register popup state setters and canvas-position getter so e2e tests can
-  // both open the popover via the backdoor AND dispatch real canvas clicks at
-  // the actual rendered pin coordinates.
+  // Register popup state setter and canvas-position getter so e2e tests can
+  // open the popover via the backdoor AND dispatch real canvas clicks at the
+  // actual rendered pin coordinates.
   useEffect(() => {
-    registerRawsPopupHandlers(setSelectedRawsDatasetId, setSelectedRawsPos);
+    registerRawsPopupHandlers(setSelectedRawsDatasetId, () => {});
     registerRawsCanvasPositionGetter(() => rawsCanvasPositionsRef.current);
     registerSubstrateFeatureGetter(() => substrateFeaturesRef.current.length);
   }, []);
@@ -590,7 +587,6 @@ export const OverviewMap: React.FC = () => {
       rawsDataRef.current = new Map();
       rawsSelectedIdRef.current = null;
       setSelectedRawsDatasetId(null);
-      setSelectedRawsPos(null);
     }
     dirtyRef.current = true;
   }, [rawsOverlayActive]);
@@ -1095,7 +1091,7 @@ export const OverviewMap: React.FC = () => {
       }
 
       // Contour lines — drawn over the heatmap, under the geographic grid and markers.
-      const { overviewShowGrid, overviewShowMarkers, units, colormapTheme: activeTheme } = useSettingsStore.getState();
+      const { overviewShowGrid, units, colormapTheme: activeTheme } = useSettingsStore.getState();
       if (contoursEnabledRef.current && contourSegmentsRef.current.length > 0) {
         // renderContourLines uses grid.width/height/minDepth/maxDepth and its own
         // internal lonLatToCanvas — must stay on the primary dataset's overviewGrid.
@@ -1110,21 +1106,6 @@ export const OverviewMap: React.FC = () => {
       // Saved trails (completed)
       if (savedTrailsRef.current.length > 0) {
         renderSavedTrails(ctx, savedTrailsRef.current, worldGrid, t);
-      }
-
-      // Markers (gated by user setting)
-      if (overviewShowMarkers) {
-        renderMarkers(ctx, markersRef.current, worldGrid, t, cW, cH);
-
-        // Depth poles (drawn above markers so labels are visible)
-        renderDepthPoles(ctx, markersRef.current, worldGrid, t, units);
-      }
-
-      // View cone — read from Zustand store directly (no React re-render)
-      const cam = useCameraStore.getState();
-      if (cam.cameraLon !== null && cam.cameraLat !== null) {
-        const fov = useSettingsStore.getState().fieldOfView;
-        renderViewCone(ctx, cam.cameraLon, cam.cameraLat, cam.heading, cam.cameraAltitude, fov, worldGrid, t);
       }
 
       // Habitat overlay (drawn above depth heatmap, below markers)
@@ -1172,31 +1153,6 @@ export const OverviewMap: React.FC = () => {
         );
       } else {
         substrateLegendLayoutRef.current = null;
-      }
-
-      // GPS position + live trail
-      const gps = useGpsStore.getState();
-      const trail = useTrailStore.getState();
-      pulseRef.current = (pulseRef.current + 0.02) % 1;
-      const pulse = Math.abs(Math.sin(pulseRef.current * Math.PI));
-
-      if (trail.recording && trail.currentPoints.length > 0) {
-        renderLiveTrail(ctx, trail.currentPoints, worldGrid, t, pulse);
-      }
-
-      if (gps.active && gps.position) {
-        renderGpsPosition(
-          ctx,
-          gps.position.longitude,
-          gps.position.latitude,
-          gps.position.accuracy,
-          worldGrid,
-          t,
-          cW,
-          cH,
-          pulse,
-          units,
-        );
       }
 
       // Scale bar
@@ -1251,58 +1207,23 @@ export const OverviewMap: React.FC = () => {
       ctx.lineWidth = 1;
       ctx.strokeRect(0.5, 0.5, cW - 1, cH - 1);
 
-      // RAWS station pins — AOOS RAWS land-weather stations (drawn above most layers)
+      // Compute RAWS canvas positions without drawing — kept for the e2e test helper
+      // (registerRawsCanvasPositionGetter) so Playwright can locate pins by pixel coords.
       if (rawsActiveRef.current && rawsPinsRef.current.length > 0) {
-        rawsCanvasPositionsRef.current = renderRawsStations(
-          ctx,
-          rawsPinsRef.current,
-          worldGrid,
-          t,
-          rawsSelectedIdRef.current,
-          cW,
-          cH,
-        );
+        const MARGIN = 11;
+        rawsCanvasPositionsRef.current = rawsPinsRef.current
+          .map((s) => {
+            const [cx, cy] = lonLatToCanvas(s.lon, s.lat, worldGrid, t);
+            return { datasetId: s.datasetId, cx, cy };
+          })
+          .filter(({ cx, cy }) => cx >= -MARGIN && cx <= cW + MARGIN && cy >= -MARGIN && cy <= cH + MARGIN);
       } else {
         rawsCanvasPositionsRef.current = [];
       }
 
-      // Weather station pins — NOAA ASOS/AWOS stations (drawn above all other layers)
-      if (weatherStationActiveRef.current && weatherStationPinsRef.current.length > 0) {
-        weatherStationCanvasPositionsRef.current = renderWeatherStations(
-          ctx,
-          weatherStationPinsRef.current,
-          worldGrid,
-          t,
-          weatherStationSelectedIdRef.current,
-          cW,
-          cH,
-        );
-      } else {
-        weatherStationCanvasPositionsRef.current = [];
-      }
-
-      // Intertidal hotspot pins — teal (tidepool) or amber (beachcombing) scored pins.
-      // Drawn above weather/RAWS pins so they are always reachable.
-      if (intertidalHotspotsEnabledRef.current && intertidalPinsRef.current.length > 0) {
-        intertidalCanvasPositionsRef.current = renderIntertidalHotspotPins(
-          ctx,
-          intertidalPinsRef.current,
-          worldGrid,
-          t,
-          intertidalSelectedUnitIdRef.current,
-        );
-        // Mode legend — always visible alongside pins so users know which
-        // colour corresponds to which mode without opening the side panel.
-        renderIntertidalModeLegend(
-          ctx,
-          intertidalScoreModeRef.current,
-          cW,
-          cH,
-          30,
-        );
-      } else {
-        intertidalCanvasPositionsRef.current = [];
-      }
+      // Push current transform to the SVG overlay state so React re-renders
+      // SVG elements (markers, camera arrow, GPS dot, pins) in the correct position.
+      setSvgTransform({ ...t });
 
       // "Enhancing…" indicator — shown while a Topaz upscale request is in
       // flight. Drawn last so it sits on top of all other layers.
@@ -1512,86 +1433,8 @@ export const OverviewMap: React.FC = () => {
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
 
-      // RAWS station pin hit-test — before weather stations and other overlays
-      if (rawsActiveRef.current && rawsCanvasPositionsRef.current.length > 0) {
-        const HIT_R = 10;
-        const hit = rawsCanvasPositionsRef.current.find(
-          (p) => Math.hypot(p.cx - mx, p.cy - my) <= HIT_R,
-        );
-        if (hit) {
-          const stationData = rawsDataRef.current.get(hit.datasetId) ?? null;
-          if (stationData) {
-            const alreadySelected = rawsSelectedIdRef.current === hit.datasetId;
-            if (alreadySelected) {
-              rawsSelectedIdRef.current = null;
-              setSelectedRawsDatasetId(null);
-              setSelectedRawsPos(null);
-            } else {
-              rawsSelectedIdRef.current = hit.datasetId;
-              setSelectedRawsDatasetId(hit.datasetId);
-              setSelectedRawsPos({ cx: hit.cx, cy: hit.cy });
-              // Close weather station popover if open
-              weatherStationSelectedIdRef.current = null;
-              setSelectedWeatherStation(null);
-              setSelectedWeatherStationPos(null);
-            }
-            return;
-          }
-        }
-      }
-
-      // Weather station pin hit-test — before other overlays so the pin is
-      // always clickable even when EFH/substrate polygons are also active.
-      if (weatherStationActiveRef.current && weatherStationCanvasPositionsRef.current.length > 0) {
-        const HIT_R = 10;
-        const hit = weatherStationCanvasPositionsRef.current.find(
-          (p) => Math.hypot(p.cx - mx, p.cy - my) <= HIT_R,
-        );
-        if (hit) {
-          const stationData = weatherStationDataRef.current.get(hit.id) ?? null;
-          if (stationData) {
-            const alreadySelected = weatherStationSelectedIdRef.current === hit.id;
-            if (alreadySelected) {
-              // Toggle off on second click
-              weatherStationSelectedIdRef.current = null;
-              setSelectedWeatherStation(null);
-              setSelectedWeatherStationPos(null);
-            } else {
-              weatherStationSelectedIdRef.current = hit.id;
-              setSelectedWeatherStation(stationData);
-              setSelectedWeatherStationPos({ cx: hit.cx, cy: hit.cy });
-              // Close RAWS popover if open
-              rawsSelectedIdRef.current = null;
-              setSelectedRawsDatasetId(null);
-              setSelectedRawsPos(null);
-            }
-            return;
-          }
-        }
-      }
-
-      // Intertidal hotspot pin hit-test — before polygon overlays so pins are
-      // always reachable even when EFH / substrate are also visible.
-      if (intertidalHotspotsEnabledRef.current && intertidalCanvasPositionsRef.current.length > 0) {
-        const HIT_R = 12;
-        const hit = intertidalCanvasPositionsRef.current.find(
-          (p) => Math.hypot(p.cx - mx, p.cy - my) <= HIT_R,
-        );
-        if (hit) {
-          const hotspot = intertidalHotspotDataRef.current.get(hit.unitId) ?? null;
-          if (hotspot) {
-            const alreadySelected = intertidalSelectedUnitIdRef.current === hit.unitId;
-            if (alreadySelected) {
-              intertidalSelectedUnitIdRef.current = null;
-              useUiStore.getState().setSelectedHotspot(null);
-            } else {
-              intertidalSelectedUnitIdRef.current = hit.unitId;
-              useUiStore.getState().setSelectedHotspot(hotspot);
-            }
-            return;
-          }
-        }
-      }
+      // Note: RAWS, weather station, and intertidal pin clicks are handled by
+      // onClick on SVG elements (see SVG overlay below) — no canvas hit-test needed.
 
       // EFH legend row click → toggle that species. Checked before polygon
       // hit-tests so the legend rows behave like buttons even when they
@@ -1815,6 +1658,342 @@ export const OverviewMap: React.FC = () => {
         height={window.innerHeight}
         style={{ width: "100%", height: "100%", cursor: "crosshair", display: "block" }}
       />
+
+      {/* SVG marker/pin overlay — positioned exactly over the canvas so SVG
+          coordinates match canvas pixel coordinates 1:1.  All interactive pin
+          elements carry pointerEvents:"all" so clicks don't fall through; the
+          svg root uses pointerEvents:"none" so pan/zoom still reaches the canvas. */}
+      {svgTransform && overviewGrid && (() => {
+        const wg = worldGridRef.current ?? overviewGrid;
+        const cW = canvasRef.current?.width ?? window.innerWidth;
+        const cH = canvasRef.current?.height ?? window.innerHeight;
+        const MARGIN = 14;
+        const inCanvas = (cx: number, cy: number, m = MARGIN) =>
+          cx >= -m && cx <= cW + m && cy >= -m && cy <= cH + m;
+
+        return (
+          <svg
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              pointerEvents: "none",
+              overflow: "visible",
+              zIndex: 41,
+            }}
+          >
+            <defs>
+              <filter id="ov-marker-glow" x="-80%" y="-80%" width="260%" height="260%">
+                <feGaussianBlur stdDeviation="2" result="b" />
+                <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+              </filter>
+              <filter id="ov-cam-glow" x="-100%" y="-100%" width="300%" height="300%">
+                <feGaussianBlur stdDeviation="3.5" result="b" />
+                <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+              </filter>
+            </defs>
+
+            {/* ── Depth poles ───────────────────────────────────────────────── */}
+            {overviewShowMarkers && markersRef.current.map((m) => {
+              if (m.type !== "depth_pole") return null;
+              if (m.depth === undefined || m.depth === null) return null;
+              const [cx, cy] = lonLatToCanvas(m.lon, m.lat, wg, svgTransform);
+              if (!inCanvas(cx, cy, 30)) return null;
+              let colour = "#00ffee";
+              try {
+                const parsed = JSON.parse(m.notes ?? "{}") as Record<string, unknown>;
+                if (typeof parsed["colour"] === "string") colour = parsed["colour"];
+              } catch { /* ignored */ }
+              const units = useSettingsStore.getState().units;
+              const depthText = units === "imperial"
+                ? `-${(m.depth * 3.28084).toFixed(0)} ft`
+                : `-${m.depth.toFixed(0)} m`;
+              return (
+                <g key={`pole-${m.id}`} pointerEvents="none">
+                  <line x1={cx} y1={cy} x2={cx} y2={cy - 14} stroke={colour} strokeWidth={1.5} opacity={0.85} />
+                  <circle cx={cx} cy={cy - 14} r={3.5} fill={colour} opacity={0.5} />
+                  <text
+                    x={cx + 5} y={cy - 14}
+                    fill={colour} fontSize={8} dominantBaseline="middle"
+                    fontFamily="'JetBrains Mono', monospace" opacity={0.9}
+                  >{depthText}</text>
+                </g>
+              );
+            })}
+
+            {/* ── Markers ───────────────────────────────────────────────────── */}
+            {overviewShowMarkers && markersRef.current.map((m) => {
+              const [cx, cy] = lonLatToCanvas(m.lon, m.lat, wg, svgTransform);
+              if (!inCanvas(cx, cy)) return null;
+              const colour = (MARKER_COLOR as Record<string, string>)[m.type] ?? "#e2e8f0";
+              const r = Math.max(3.5, Math.min(9, svgTransform.scale * 1.8));
+              return (
+                <g key={`mk-${m.id}`} pointerEvents="none" filter="url(#ov-marker-glow)">
+                  <circle cx={cx} cy={cy} r={r} fill={colour} opacity={0.92} />
+                  {svgTransform.scale >= 3 && (
+                    <text
+                      x={cx + r + 4} y={cy}
+                      fill={colour} fontSize={11} dominantBaseline="middle"
+                      fontFamily="'JetBrains Mono', monospace" opacity={0.9}
+                    >{m.label}</text>
+                  )}
+                </g>
+              );
+            })}
+
+            {/* ── Camera arrow ──────────────────────────────────────────────── */}
+            {cameraLon !== null && cameraLat !== null && (() => {
+              const [cx, cy] = lonLatToCanvas(cameraLon, cameraLat, wg, svgTransform);
+              if (!inCanvas(cx, cy, 20)) return null;
+              const size = 11;
+              const rot = 180 - cameraHeading;
+              return (
+                <polygon
+                  points={`0,${-size} ${size * 0.6},${size * 0.65} 0,0 ${-size * 0.6},${size * 0.65}`}
+                  fill="#d4ac0d"
+                  opacity={0.95}
+                  filter="url(#ov-cam-glow)"
+                  transform={`translate(${cx},${cy}) rotate(${rot})`}
+                  pointerEvents="none"
+                />
+              );
+            })()}
+
+            {/* ── GPS live trail ────────────────────────────────────────────── */}
+            {(() => {
+              const trail = useTrailStore.getState();
+              if (!trail.recording || trail.currentPoints.length < 2) return null;
+              const pts = trail.currentPoints
+                .map(p => { const [x, y] = lonLatToCanvas(p.lon, p.lat, wg, svgTransform); return `${x},${y}`; })
+                .join(' ');
+              const last = trail.currentPoints[trail.currentPoints.length - 1]!;
+              const [lx, ly] = lonLatToCanvas(last.lon, last.lat, wg, svgTransform);
+              return (
+                <g pointerEvents="none">
+                  <polyline points={pts} fill="none" stroke="#f97316" strokeWidth={2}
+                    strokeLinejoin="round" strokeLinecap="round" opacity={0.85}
+                    filter="url(#ov-marker-glow)" />
+                  <circle cx={lx} cy={ly} r={4} fill="#f97316">
+                    <animate attributeName="r" values="4;7;4" dur="1.2s" repeatCount="indefinite" />
+                    <animate attributeName="opacity" values="0.85;0.2;0.85" dur="1.2s" repeatCount="indefinite" />
+                  </circle>
+                  <circle cx={lx} cy={ly} r={4} fill="#f97316" opacity={0.95} />
+                </g>
+              );
+            })()}
+
+            {/* ── GPS dot ───────────────────────────────────────────────────── */}
+            {gpsActive && gpsPosition && (() => {
+              const lon = gpsPosition.longitude;
+              const lat = gpsPosition.latitude;
+              const [cx, cy] = lonLatToCanvas(lon, lat, wg, svgTransform);
+              const inBounds = inCanvas(cx, cy, 0);
+
+              if (inBounds) {
+                const lonRange = lonRangeOf(wg);
+                const terrainW = svgTransform.pxPerDeg * lonRange * svgTransform.scale;
+                const mPerPx = lonRange > 0 ? (lonRange * 111_320) / terrainW : 1;
+                const accuracyR = Math.max(8, gpsPosition.accuracy / mPerPx);
+                return (
+                  <g pointerEvents="none">
+                    <circle cx={cx} cy={cy} r={accuracyR}
+                      fill="none" stroke="rgba(59,130,246,0.35)"
+                      strokeWidth={1} strokeDasharray="4 3" />
+                    <circle cx={cx} cy={cy} r={10}
+                      fill="none" stroke="rgba(59,130,246,0.25)" strokeWidth={1.5}>
+                      <animate attributeName="r" values="8;15;8" dur="2s" repeatCount="indefinite" />
+                      <animate attributeName="opacity" values="0.5;0;0.5" dur="2s" repeatCount="indefinite" />
+                    </circle>
+                    <circle cx={cx} cy={cy} r={5} fill="#3b82f6" />
+                  </g>
+                );
+              } else {
+                // Out-of-bounds — render an edge arrow pointing to GPS
+                const centerX = cW / 2;
+                const centerY = cH / 2;
+                const angle = Math.atan2(cy - centerY, cx - centerX);
+                const EM = 20;
+                const ex = Math.max(EM, Math.min(cW - EM, centerX + Math.cos(angle) * (cW / 2 - EM)));
+                const ey = Math.max(EM, Math.min(cH - EM, centerY + Math.sin(angle) * (cH / 2 - EM)));
+                const ar = 7;
+                const ax0 = ex + Math.cos(angle) * ar;
+                const ay0 = ey + Math.sin(angle) * ar;
+                const ax1 = ex + Math.cos(angle - 2.4) * ar * 0.7;
+                const ay1 = ey + Math.sin(angle - 2.4) * ar * 0.7;
+                const ax2 = ex + Math.cos(angle + 2.4) * ar * 0.7;
+                const ay2 = ey + Math.sin(angle + 2.4) * ar * 0.7;
+                return (
+                  <g pointerEvents="none" opacity={0.85}>
+                    <polygon
+                      points={`${ax0},${ay0} ${ax1},${ay1} ${ax2},${ay2}`}
+                      fill="#3b82f6" />
+                  </g>
+                );
+              }
+            })()}
+
+            {/* ── Weather station pins ──────────────────────────────────────── */}
+            {weatherStationActiveRef.current && weatherStationPinsRef.current.map((pin) => {
+              const [cx, cy] = lonLatToCanvas(pin.lon, pin.lat, wg, svgTransform);
+              if (!inCanvas(cx, cy)) return null;
+              const isSelected = weatherStationSelectedIdRef.current === pin.id;
+              return (
+                <g
+                  key={`wx-${pin.id}`}
+                  style={{ cursor: "pointer", pointerEvents: "all" }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const stationData = weatherStationDataRef.current.get(pin.id) ?? null;
+                    if (!stationData) return;
+                    if (isSelected) {
+                      weatherStationSelectedIdRef.current = null;
+                      setSelectedWeatherStation(null);
+                    } else {
+                      weatherStationSelectedIdRef.current = pin.id;
+                      setSelectedWeatherStation(stationData);
+                      rawsSelectedIdRef.current = null;
+                      setSelectedRawsDatasetId(null);
+                    }
+                    dirtyRef.current = true;
+                  }}
+                >
+                  {isSelected && (
+                    <circle cx={cx} cy={cy} r={11} fill="rgba(251,191,36,0.18)" />
+                  )}
+                  <circle cx={cx} cy={cy} r={isSelected ? 7 : 5}
+                    fill={isSelected ? "#fde68a" : "#fbbf24"}
+                    stroke={isSelected ? "#f59e0b" : "rgba(0,0,0,0.5)"}
+                    strokeWidth={isSelected ? 1.5 : 1} />
+                  <text x={cx} y={cy}
+                    textAnchor="middle" dominantBaseline="central"
+                    fill={isSelected ? "#78350f" : "#451a03"}
+                    fontSize={isSelected ? 7 : 6}
+                    fontFamily="sans-serif" fontWeight="bold"
+                    pointerEvents="none"
+                  >W</text>
+                </g>
+              );
+            })}
+
+            {/* ── RAWS station pins ─────────────────────────────────────────── */}
+            {rawsActiveRef.current && rawsPinsRef.current.map((pin) => {
+              const [cx, cy] = lonLatToCanvas(pin.lon, pin.lat, wg, svgTransform);
+              if (!inCanvas(cx, cy)) return null;
+              const isSelected = rawsSelectedIdRef.current === pin.datasetId;
+              return (
+                <g
+                  key={`raws-${pin.datasetId}`}
+                  style={{ cursor: "pointer", pointerEvents: "all" }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isSelected) {
+                      rawsSelectedIdRef.current = null;
+                      setSelectedRawsDatasetId(null);
+                    } else {
+                      rawsSelectedIdRef.current = pin.datasetId;
+                      setSelectedRawsDatasetId(pin.datasetId);
+                      weatherStationSelectedIdRef.current = null;
+                      setSelectedWeatherStation(null);
+                    }
+                    dirtyRef.current = true;
+                  }}
+                >
+                  {isSelected && (
+                    <circle cx={cx} cy={cy} r={11} fill="rgba(52,211,153,0.18)" />
+                  )}
+                  <circle cx={cx} cy={cy} r={isSelected ? 7 : 5}
+                    fill={isSelected ? "#6ee7b7" : "#34d399"}
+                    stroke={isSelected ? "#059669" : "rgba(0,0,0,0.5)"}
+                    strokeWidth={isSelected ? 1.5 : 1} />
+                  <text x={cx} y={cy}
+                    textAnchor="middle" dominantBaseline="central"
+                    fill={isSelected ? "#065f46" : "#064e3b"}
+                    fontSize={isSelected ? 7 : 6}
+                    fontFamily="sans-serif" fontWeight="bold"
+                    pointerEvents="none"
+                  >R</text>
+                </g>
+              );
+            })}
+
+            {/* ── Intertidal hotspot pins ───────────────────────────────────── */}
+            {intertidalHotspotsEnabledRef.current && intertidalPinsRef.current.map((pin) => {
+              const [cx, cy] = lonLatToCanvas(pin.lon, pin.lat, wg, svgTransform);
+              if (!inCanvas(cx, cy)) return null;
+              const isSelected = intertidalSelectedUnitIdRef.current === pin.unitId;
+              const baseColor = pin.color;
+              const scoreFrac = Math.max(0, Math.min(100, pin.score)) / 100;
+              const R = (isSelected ? 7 : 4) + scoreFrac * 4;
+              const fillOpacity = 0.55 + scoreFrac * 0.35;
+              const borderOpacity = 0.8 + scoreFrac * 0.2;
+              return (
+                <g
+                  key={`it-${pin.unitId}`}
+                  style={{ cursor: "pointer", pointerEvents: "all" }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const hotspot = intertidalHotspotDataRef.current.get(pin.unitId) ?? null;
+                    if (!hotspot) return;
+                    if (isSelected) {
+                      intertidalSelectedUnitIdRef.current = null;
+                      useUiStore.getState().setSelectedHotspot(null);
+                    } else {
+                      intertidalSelectedUnitIdRef.current = pin.unitId;
+                      useUiStore.getState().setSelectedHotspot(hotspot);
+                    }
+                    dirtyRef.current = true;
+                  }}
+                >
+                  {isSelected && (
+                    <circle cx={cx} cy={cy} r={R + 5} fill={baseColor} fillOpacity={0.18} />
+                  )}
+                  <circle cx={cx} cy={cy} r={R}
+                    fill={baseColor} fillOpacity={fillOpacity}
+                    stroke={baseColor} strokeOpacity={borderOpacity}
+                    strokeWidth={isSelected ? 2 : 1.5} />
+                  <text x={cx} y={cy}
+                    textAnchor="middle" dominantBaseline="central"
+                    fill="white" opacity={0.9}
+                    fontSize={R > 6 ? 7 : 6}
+                    fontFamily="sans-serif" fontWeight="bold"
+                    pointerEvents="none"
+                  >{pin.color === "#0d9488" ? "T" : "B"}</text>
+                </g>
+              );
+            })}
+          </svg>
+        );
+      })()}
+
+      {/* Intertidal mode legend — positioned bottom-right above the scale bar */}
+      {intertidalHotspotsEnabled && intertidalPinsRef.current.length > 0 && (
+        <div
+          style={{
+            position: "absolute",
+            right: 8,
+            bottom: 30,
+            background: "rgba(2,8,24,0.85)",
+            border: `1px solid ${intertidalScoreMode === "tidepool" ? "rgba(13,148,136,0.35)" : "rgba(217,119,6,0.35)"}`,
+            borderRadius: 3,
+            padding: "6px 8px",
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 9,
+            zIndex: 41,
+            pointerEvents: "none",
+          }}
+        >
+          <div style={{ color: "#94a3b8", marginBottom: 3, letterSpacing: "0.1em" }}>INTERTIDAL</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <svg width={8} height={8} style={{ flexShrink: 0 }}>
+              <circle cx={4} cy={4} r={4} fill={intertidalScoreMode === "tidepool" ? "#0d9488" : "#d97706"} />
+            </svg>
+            <span style={{ color: intertidalScoreMode === "tidepool" ? "#0d9488" : "#d97706" }}>
+              {intertidalScoreMode === "tidepool" ? "TIDEPOOL" : "BEACHCOMBING"}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Header bar */}
       <div
@@ -2243,38 +2422,52 @@ export const OverviewMap: React.FC = () => {
         />
       )}
 
-      {/* NOAA Weather Station popover — shown when a station pin is clicked */}
-      {selectedWeatherStation && selectedWeatherStationPos && canvasRef.current && (
-        <WeatherStationPopover
-          station={selectedWeatherStation}
-          pinX={selectedWeatherStationPos.cx}
-          pinY={selectedWeatherStationPos.cy}
-          containerWidth={canvasRef.current.width}
-          faaWeatherCamsUrl={faaWeatherCamsUrl}
-          stale={weatherStationsStale}
-          onClose={() => {
-            weatherStationSelectedIdRef.current = null;
-            setSelectedWeatherStation(null);
-            setSelectedWeatherStationPos(null);
-          }}
-        />
-      )}
+      {/* NOAA Weather Station popover — anchored to the station's current SVG position
+          so it follows the pin automatically when the user pans or zooms. */}
+      {selectedWeatherStation && svgTransform && overviewGrid && canvasRef.current && (() => {
+        const wg = worldGridRef.current ?? overviewGrid;
+        const [pinX, pinY] = lonLatToCanvas(
+          selectedWeatherStation.lon,
+          selectedWeatherStation.lat,
+          wg,
+          svgTransform,
+        );
+        return (
+          <WeatherStationPopover
+            station={selectedWeatherStation}
+            pinX={pinX}
+            pinY={pinY}
+            containerWidth={canvasRef.current!.width}
+            faaWeatherCamsUrl={faaWeatherCamsUrl}
+            stale={weatherStationsStale}
+            onClose={() => {
+              weatherStationSelectedIdRef.current = null;
+              setSelectedWeatherStation(null);
+            }}
+          />
+        );
+      })()}
 
-      {/* RAWS Station popover — shown when a RAWS pin is clicked */}
-      {selectedRawsDatasetId && selectedRawsPos && canvasRef.current && (
-        <RawsStationPopover
-          datasetId={selectedRawsDatasetId}
-          stationName={rawsDataRef.current.get(selectedRawsDatasetId)?.name ?? selectedRawsDatasetId}
-          pinX={selectedRawsPos.cx}
-          pinY={selectedRawsPos.cy}
-          containerWidth={canvasRef.current.width}
-          onClose={() => {
-            rawsSelectedIdRef.current = null;
-            setSelectedRawsDatasetId(null);
-            setSelectedRawsPos(null);
-          }}
-        />
-      )}
+      {/* RAWS Station popover — anchored to the station's current SVG position. */}
+      {selectedRawsDatasetId && svgTransform && overviewGrid && canvasRef.current && (() => {
+        const station = rawsDataRef.current.get(selectedRawsDatasetId);
+        if (!station) return null;
+        const wg = worldGridRef.current ?? overviewGrid;
+        const [pinX, pinY] = lonLatToCanvas(station.lon, station.lat, wg, svgTransform);
+        return (
+          <RawsStationPopover
+            datasetId={selectedRawsDatasetId}
+            stationName={station.name ?? selectedRawsDatasetId}
+            pinX={pinX}
+            pinY={pinY}
+            containerWidth={canvasRef.current!.width}
+            onClose={() => {
+              rawsSelectedIdRef.current = null;
+              setSelectedRawsDatasetId(null);
+            }}
+          />
+        );
+      })()}
 
       {/* The shared EFH species detail panel is rendered once at the App
           root so it sits above both this overview map and the 3D scene. */}

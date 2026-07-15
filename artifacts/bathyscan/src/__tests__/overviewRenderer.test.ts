@@ -5,15 +5,14 @@ import type { OverviewTransform } from "../lib/overviewRenderer";
 // wired via __mocks__/three.ts so no factory is needed here.
 vi.mock("three");
 
-import type { TerrainData, Marker, EfhFeature } from "@workspace/api-client-react";
-import { MarkerType, EfhFeatureType } from "@workspace/api-client-react";
+import type { TerrainData, EfhFeature } from "@workspace/api-client-react";
+import { EfhFeatureType } from "@workspace/api-client-react";
 import {
   buildHeatmapBitmap,
   buildContourLines,
   lonLatToCanvas,
   canvasToLonLat,
   renderViewCone,
-  renderMarkers,
   renderEfhOverlay,
 } from "../lib/overviewRenderer";
 import { usePaletteStore } from "../lib/paletteStore";
@@ -534,98 +533,59 @@ describe("renderViewCone — North-up coordinate placement", () => {
 });
 
 // ---------------------------------------------------------------------------
-// renderMarkers — coordinate placement
+// lonLatToCanvas — coordinate placement for SVG marker layer
 // ---------------------------------------------------------------------------
 
-describe("renderMarkers — coordinate placement", () => {
+describe("lonLatToCanvas — coordinate placement for SVG marker layer", () => {
   const grid = makeGrid({ minLon: -120, maxLon: -119, minLat: 47, maxLat: 48 });
   const t = makeTransform({ pxPerDeg: 200, offsetX: 0, offsetY: 0 });
-  const CANVAS_W = 400;
-  const CANVAS_H = 400;
   const latRange = grid.maxLat - grid.minLat;
   const lonRange = grid.maxLon - grid.minLon;
   const terrainH = t.pxPerDeg * latRange * t.scale;
   const terrainW = t.pxPerDeg * lonRange * t.scale;
 
-  function makeMarker(lon: number, lat: number, id = "m1"): Marker {
-    return {
-      id,
-      datasetId: "test",
-      lon,
-      lat,
-      depth: 10,
-      type: MarkerType.fish,
-      label: "Test",
-      createdAt: "2024-01-01T00:00:00Z",
-    };
-  }
-
-  it("a northern marker draws its arc at a smaller Y than a southern marker (North-up)", () => {
-    const ctxN = makeCtx() as unknown as CanvasRenderingContext2D;
-    renderMarkers(ctxN, [makeMarker(-119.5, grid.maxLat)], grid, t, CANVAS_W, CANVAS_H);
-    const [, cyN] = (ctxN.arc as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number, number, number, number];
-
-    const ctxS = makeCtx() as unknown as CanvasRenderingContext2D;
-    renderMarkers(ctxS, [makeMarker(-119.5, grid.minLat)], grid, t, CANVAS_W, CANVAS_H);
-    const [, cyS] = (ctxS.arc as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number, number, number, number];
-
+  it("a northern marker maps to a smaller Y than a southern marker (North-up)", () => {
+    const [, cyN] = lonLatToCanvas(-119.5, grid.maxLat, grid, t);
+    const [, cyS] = lonLatToCanvas(-119.5, grid.minLat, grid, t);
     expect(cyN).toBeLessThan(cyS);
   });
 
-  it("a marker at maxLat draws its arc at Y ≈ offsetY (top edge)", () => {
-    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
-    renderMarkers(ctx, [makeMarker(-119.5, grid.maxLat)], grid, t, CANVAS_W, CANVAS_H);
-    const [, cy] = (ctx.arc as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number, number, number, number];
+  it("a marker at maxLat maps to Y ≈ offsetY (top edge)", () => {
+    const [, cy] = lonLatToCanvas(-119.5, grid.maxLat, grid, t);
     expect(cy).toBeCloseTo(t.offsetY, 3);
   });
 
-  it("a marker at minLat draws its arc at Y ≈ offsetY + terrainH (bottom edge)", () => {
-    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
-    renderMarkers(ctx, [makeMarker(-119.5, grid.minLat)], grid, t, CANVAS_W, CANVAS_H);
-    const [, cy] = (ctx.arc as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number, number, number, number];
+  it("a marker at minLat maps to Y ≈ offsetY + terrainH (bottom edge)", () => {
+    const [, cy] = lonLatToCanvas(-119.5, grid.minLat, grid, t);
     expect(cy).toBeCloseTo(t.offsetY + terrainH, 3);
   });
 
   it("an eastern marker has greater X than a western marker (West-to-East left-to-right)", () => {
-    const ctxW = makeCtx() as unknown as CanvasRenderingContext2D;
-    renderMarkers(ctxW, [makeMarker(grid.minLon, 47.5)], grid, t, CANVAS_W, CANVAS_H);
-    const [cxW] = (ctxW.arc as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number, number, number, number];
-
-    const ctxE = makeCtx() as unknown as CanvasRenderingContext2D;
-    renderMarkers(ctxE, [makeMarker(grid.maxLon, 47.5)], grid, t, CANVAS_W, CANVAS_H);
-    const [cxE] = (ctxE.arc as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number, number, number, number];
-
+    const [cxW] = lonLatToCanvas(grid.minLon, 47.5, grid, t);
+    const [cxE] = lonLatToCanvas(grid.maxLon, 47.5, grid, t);
     expect(cxE).toBeGreaterThan(cxW);
   });
 
-  it("a marker at minLon draws at X ≈ offsetX (left edge)", () => {
-    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
-    renderMarkers(ctx, [makeMarker(grid.minLon, 47.5)], grid, t, CANVAS_W, CANVAS_H);
-    const [cx] = (ctx.arc as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number, number, number, number];
+  it("a marker at minLon maps to X ≈ offsetX (left edge)", () => {
+    const [cx] = lonLatToCanvas(grid.minLon, 47.5, grid, t);
     expect(cx).toBeCloseTo(t.offsetX, 3);
   });
 
-  it("a marker at maxLon draws at X ≈ offsetX + terrainW (right edge)", () => {
-    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
-    renderMarkers(ctx, [makeMarker(grid.maxLon, 47.5)], grid, t, CANVAS_W, CANVAS_H);
-    const [cx] = (ctx.arc as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number, number, number, number];
+  it("a marker at maxLon maps to X ≈ offsetX + terrainW (right edge)", () => {
+    const [cx] = lonLatToCanvas(grid.maxLon, 47.5, grid, t);
     expect(cx).toBeCloseTo(t.offsetX + terrainW, 3);
   });
 
-  it("a marker far outside the canvas bounds is clipped — arc is not called", () => {
-    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
-    renderMarkers(ctx, [makeMarker(0, 47.5)], grid, t, CANVAS_W, CANVAS_H);
-    expect((ctx.arc as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
+  it("a marker far outside the terrain bbox maps to an X far from the canvas (SVG inCanvas() gates rendering)", () => {
+    const [cx] = lonLatToCanvas(0, 47.5, grid, t);
+    // lon=0 is far east of maxLon=-119, so cx should be far to the right
+    expect(cx).toBeGreaterThan(t.offsetX + terrainW + 1000);
   });
 
-  it("two in-bounds markers both produce an arc call each", () => {
-    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
-    renderMarkers(
-      ctx,
-      [makeMarker(-119.8, 47.5, "m1"), makeMarker(-119.2, 47.5, "m2")],
-      grid, t, CANVAS_W, CANVAS_H,
-    );
-    expect((ctx.arc as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2);
+  it("two in-bounds markers at different longitudes produce distinct X coordinates", () => {
+    const [cx1] = lonLatToCanvas(-119.8, 47.5, grid, t);
+    const [cx2] = lonLatToCanvas(-119.2, 47.5, grid, t);
+    expect(cx2).toBeGreaterThan(cx1);
   });
 });
 
