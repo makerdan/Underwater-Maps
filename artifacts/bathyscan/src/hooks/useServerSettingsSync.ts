@@ -354,6 +354,7 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
         intertidalScoreMode: ss.intertidalScoreMode ?? 'tidepool',
         efhOverlayEnabled: ss.efhOverlayEnabled,
         hiddenEfhSpecies: new Set<string>(ss.hiddenEfhSpecies ?? []),
+        sidebarMode: ss.sidebarMode ?? 'explore',
       });
       }
       } finally {

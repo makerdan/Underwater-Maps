@@ -35,7 +35,7 @@
 import { create } from "zustand";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import type { EfhSpeciesProperties } from "@workspace/api-client-react";
-import { useSettingsStore, DEFAULT_SETTINGS } from "./settingsStore";
+import { useSettingsStore, DEFAULT_SETTINGS, type SidebarMode } from "./settingsStore";
 
 export const CURRENT_DEPTH_LAYERS: DepthLayer[] = ["surface", "mid", "near-bottom"];
 
@@ -258,6 +258,12 @@ interface UiStore {
    */
   thermalCursorDepthM: number | null;
   setThermalCursorDepthM: (depthM: number | null) => void;
+  /**
+   * Which contextual mode the left sidebar is currently showing.
+   * Mirrors settingsStore.sidebarMode for persistence across sessions.
+   */
+  sidebarMode: SidebarMode;
+  setSidebarMode: (mode: SidebarMode) => void;
 }
 
 // ── Device-local helpers (hasSeenOrbitTouchHint only) ────────────────────────
@@ -335,6 +341,7 @@ function applySettingsToUiStore(s: typeof DEFAULT_SETTINGS) {
     currentOverlayActive: s.currentOverlayActive,
     currentDepthLayers: validDepthLayers(s.currentDepthLayers),
     sidePaneCollapsed: s.sidePaneCollapsed,
+    sidebarMode: s.sidebarMode ?? 'explore',
   });
 }
 
@@ -565,6 +572,13 @@ export const useUiStore = create<UiStore>((set, get) => {
     // ── Ephemeral per-frame 3D cursor state ────────────────────────────────
     thermalCursorDepthM: null,
     setThermalCursorDepthM: (depthM) => set({ thermalCursorDepthM: depthM }),
+
+    // ── Sidebar mode (persisted via settingsStore) ──────────────────────────
+    sidebarMode: s.sidebarMode ?? 'explore',
+    setSidebarMode: (mode) => {
+      set({ sidebarMode: mode });
+      useSettingsStore.setState({ sidebarMode: mode });
+    },
   };
 });
 

@@ -25,6 +25,7 @@ import { DepthScaleBar } from "@/components/DepthScaleBar";
 import { OverlaysToolsPanel } from "@/components/OverlaysToolsPanel";
 import { DatasetPanel } from "@/components/DatasetPanel";
 import { SidebarSection, SidebarSectionGroup } from "@/components/SidebarSection";
+import { SidebarModeTabs } from "@/components/SidebarModeTabs";
 import { Minimap } from "@/components/Minimap";
 import { ControlsLegend } from "@/components/ControlsLegend";
 import { AppHeader } from "@/components/AppHeader";
@@ -329,6 +330,7 @@ function Main() {
   const [queryOpen, setQueryOpen] = useState(false);
   const sidePaneCollapsed = useUiStore((s) => s.sidePaneCollapsed);
   const setSidePaneCollapsed = useUiStore((s) => s.setSidePaneCollapsed);
+  const sidebarMode = useUiStore((s) => s.sidebarMode);
   const hasSeenOrbitTouchHint = useUiStore((s) => s.hasSeenOrbitTouchHint);
   const setHasSeenOrbitTouchHint = useUiStore((s) => s.setHasSeenOrbitTouchHint);
   const prevOverviewOpenRef = useRef(false);
@@ -928,6 +930,18 @@ function Main() {
         if (store.overviewOpen) store.setOverviewOpen(false);
         if (store.whatsHereOpen) store.setWhatsHereOpen(false);
       }
+      // M — cycle sidebar modes: Explore → Plan → Analyze → Explore
+      if (e.code === "KeyM" && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const el = e.target as HTMLElement | null;
+        const tag = el?.tagName ?? "";
+        if (tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT" && !el?.isContentEditable) {
+          const store = useUiStore.getState();
+          const MODES = ['explore', 'plan', 'analyze'] as const;
+          const idx = MODES.indexOf(store.sidebarMode);
+          const next = MODES[(idx + 1) % MODES.length] as typeof MODES[number];
+          store.setSidebarMode(next);
+        }
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -1114,24 +1128,31 @@ function Main() {
                 </button>
               </ViewscreenTooltip>
             </div>
-            <OverlaysToolsPanel />
+            {/* ── Mode tabs (always visible, above all panels) ── */}
+            <SidebarModeTabs />
 
-            <RoutesPanel />
+            {/* ══════════════════════════════════════════════════
+                EXPLORE MODE — DatasetPanel + OverlaysToolsPanel
+                display:none keeps all panel state alive when
+                the user switches away.
+            ══════════════════════════════════════════════════ */}
+            <div style={{ display: sidebarMode === 'explore' ? 'flex' : 'none', flexDirection: 'column', gap: 8 }}>
+              <OverlaysToolsPanel />
 
-            <div className="flex flex-col gap-2">
-              {/* ── Grouped sections: Map & Data + Conditions ──
-                  Rendered inside one shared bordered shell so the two
-                  top-level sections read as siblings of a single panel
-                  instead of two separate cards. Each section still has
-                  its own collapsible header and independent toggle. */}
               <SidebarSectionGroup>
-                {/* ── Section 1: Map & Data ── */}
                 <SidebarSection id="mapData" title="Map & Data">
                   {showDatasetPanel ? <DatasetPanel embedded /> : null}
-                  {showHabitatPanel ? <HabitatPanel embedded /> : null}
                 </SidebarSection>
+              </SidebarSectionGroup>
+            </div>
 
-                {/* ── Section 2: Conditions ── */}
+            {/* ══════════════════════════════════════════════════
+                PLAN MODE — Tides, Currents, Routes, Forecast
+            ══════════════════════════════════════════════════ */}
+            <div style={{ display: sidebarMode === 'plan' ? 'flex' : 'none', flexDirection: 'column', gap: 8 }}>
+              <RoutesPanel />
+
+              <SidebarSectionGroup>
                 <SidebarSection id="conditions" title="Conditions">
                   {showTidePanel && tidalOverlay && effectiveTidalData !== null ? (
                     <ErrorBoundary label="tide panel">
@@ -1154,14 +1175,6 @@ function Main() {
                 </SidebarSection>
               </SidebarSectionGroup>
 
-              {/* ── Seafloor Classification section ── */}
-              <SidebarSectionGroup>
-                <SidebarSection id="seafloorClassification" title="Seafloor Classification">
-                  <SeafloorClassificationPanel />
-                </SidebarSection>
-              </SidebarSectionGroup>
-
-              {/* ── Forecast section ── */}
               <SidebarSectionGroup>
                 <SidebarSection id="forecast" title="Forecast">
                   <ForecastStrip />
@@ -1169,11 +1182,58 @@ function Main() {
               </SidebarSectionGroup>
             </div>
 
-            {/* ── Footer: Conditions Legend (pinned bottom) ──
+            {/* ══════════════════════════════════════════════════
+                ANALYZE MODE — Habitat, Seafloor Classification,
+                QueryPanel trigger
+            ══════════════════════════════════════════════════ */}
+            <div style={{ display: sidebarMode === 'analyze' ? 'flex' : 'none', flexDirection: 'column', gap: 8 }}>
+              <SidebarSectionGroup>
+                <SidebarSection id="habitat" title="Habitat">
+                  {showHabitatPanel ? <HabitatPanel embedded /> : null}
+                </SidebarSection>
+              </SidebarSectionGroup>
+
+              <SidebarSectionGroup>
+                <SidebarSection id="seafloorClassification" title="Seafloor Classification">
+                  <SeafloorClassificationPanel />
+                </SidebarSection>
+              </SidebarSectionGroup>
+
+              {showQueryPanel && (
+                <ViewscreenTooltip label='Open natural-language query panel (press "/")' side="right">
+                  <button
+                    onClick={() => setQueryOpen(true)}
+                    style={{
+                      width: "100%",
+                      minWidth: 230,
+                      maxWidth: 260,
+                      padding: "9px 14px",
+                      background: "rgba(2,8,18,0.94)",
+                      border: "1px solid rgba(0,229,255,0.22)",
+                      borderRadius: 6,
+                      color: "#64748b",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 10,
+                      letterSpacing: "0.2em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                      backdropFilter: "blur(6px)",
+                      textAlign: "left",
+                    }}
+                  >
+                    <span style={{ color: "#00e5ff", marginRight: 8 }}>⌕</span>
+                    Query Panel
+                    <span style={{ float: "right", fontSize: 9, letterSpacing: "0.1em", color: "#475569" }}>
+                      press /
+                    </span>
+                  </button>
+                </ViewscreenTooltip>
+              )}
+            </div>
+
+            {/* ── Footer: Conditions Legend (pinned bottom, all modes) ──
                 Only renders when at least one of Wind / Tide / Current
-                overlays is active (returns null otherwise). The small
-                top margin keeps a visible gap between the scrolling
-                section list and the pinned footer on short viewports. */}
+                overlays is active (returns null otherwise). */}
             <div className="sidebar-footer-wrap" style={{ flexShrink: 0 }}>
               <ConditionsLegend />
             </div>

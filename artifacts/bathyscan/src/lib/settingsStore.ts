@@ -54,7 +54,9 @@ import {
 } from "./keyBindings";
 import { usePanelCollapseStore, type PanelId } from "./panelCollapseStore";
 
-export const SETTINGS_SCHEMA_VERSION = 21;
+export const SETTINGS_SCHEMA_VERSION = 22;
+
+export type SidebarMode = 'explore' | 'plan' | 'analyze';
 
 /**
  * Standard-mapping gamepad button index used to trigger the crosshair
@@ -470,6 +472,16 @@ export interface SettingsState {
   timelineCurrentTime: string | null;
   /** Last timeline range (ISO strings). Restored on next load. */
   timelineRange: { start: string; end: string } | null;
+
+  // ── Sidebar mode ──────────────────────────────────────────────────────
+  /**
+   * Which contextual mode the left sidebar is showing.
+   * 'explore' = DatasetPanel + OverlaysToolsPanel
+   * 'plan'    = TidePanel + CurrentsPanel + WeatherPanel / DriftPlanner
+   * 'analyze' = HabitatPanel + SeafloorClassificationPanel + QueryPanel
+   * Persisted so the user's last mode survives page reloads.
+   */
+  sidebarMode: SidebarMode;
 }
 
 interface SettingsActions {
@@ -643,6 +655,8 @@ interface SettingsActions {
   resetKeyBinding: (action: ShortcutActionId) => void;
   resetAllKeyBindings: () => void;
   setCrosshairMenuGamepadButton: (v: number | null) => void;
+
+  setSidebarMode: (v: SidebarMode) => void;
 
   /** Hydrate the entire settings state from the server response. */
   hydrateFromServer: (partial: Partial<SettingsState>) => void;
@@ -910,6 +924,8 @@ export const DEFAULT_SETTINGS: SettingsState = {
 
   timelineCurrentTime: null,
   timelineRange: null,
+
+  sidebarMode: 'explore',
 };
 
 export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
@@ -931,7 +947,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "showHeading", "showDepthLegend", "showDepthScaleBar", "showCompassMinimap",
     "showControlsLegend", "showTidePanel", "showHabitatPanel", "showDatasetPanel",
     "showQueryPanel", "showUiTooltips", "timeFormat", "coordinateFormat", "depthUnit", "units",
-    "temperatureUnit", "sidePaneCollapsed",
+    "temperatureUnit", "sidePaneCollapsed", "sidebarMode",
   ],
   overview: [
     "overviewDefaultZoom", "overviewShowGrid", "overviewShowMarkers", "overviewOpenOnLoad",
@@ -1242,6 +1258,8 @@ export const useSettingsStore = create<SettingsStore>()(
         setHyd93ActiveFeatureCodes: setter("hyd93ActiveFeatureCodes"),
         setHyd93FeaturesEnabled: setter("hyd93FeaturesEnabled"),
 
+        setSidebarMode: setter("sidebarMode"),
+
         // Shortcuts
         setKeyBinding: (action, code) =>
           set((state) => ({
@@ -1495,6 +1513,11 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).timelineRange === undefined) {
             migratedTimeline.timelineRange = DEFAULT_SETTINGS.timelineRange;
           }
+          // v21 → v22: inject sidebarMode default ('explore') for existing users.
+          const migratedSidebarMode: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).sidebarMode === undefined) {
+            migratedSidebarMode.sidebarMode = DEFAULT_SETTINGS.sidebarMode;
+          }
           return {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -1505,6 +1528,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedHyd93,
             ...migratedWaterTemp,
             ...migratedTimeline,
+            ...migratedSidebarMode,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,
