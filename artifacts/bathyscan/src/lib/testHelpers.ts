@@ -850,7 +850,14 @@ export function installTestHelpers(): void {
         const deadline = Date.now() + 5_000;
         const poll = () => {
           const current = useSettingsStore.getState().lastSyncedAt;
-          if (current !== before) {
+          // lastSyncedAt also changes when the initial GET hydration applies
+          // the server row (hydrateFromServer stamps it with __updatedAt).
+          // That change alone does NOT mean the pending PUT completed — so
+          // only resolve once the timestamp moved AND nothing is still
+          // debounced or in flight. Otherwise a hydration landing during the
+          // debounce window resolves this promise early, the caller reloads
+          // the page, and the pending PUT is aborted by navigation.
+          if (current !== before && !hasPendingOrInFlightSettingsSync()) {
             resolve();
             return;
           }

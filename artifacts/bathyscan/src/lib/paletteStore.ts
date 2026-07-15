@@ -205,6 +205,15 @@ export function sanitizeCustomStops(raw: unknown): CustomStop[] | null {
 }
 
 interface PaletteStore {
+  /**
+   * Monotonic edit counter bumped on every *user-initiated* mutation (never
+   * by `hydrateFromServer`). The server-settings sync hook watches this
+   * instead of comparing value snapshots, so an edit whose normalized value
+   * happens to equal the previous state (e.g. "#FF00AA" → "#ff00aa") still
+   * triggers the debounced PUT /api/settings, and server hydration never
+   * echoes a spurious PUT.
+   */
+  rev: number;
   shallow: string;
   deep: string;
   /** Ordered custom-theme stops (min 2). Always sanitised on read. */
@@ -287,7 +296,12 @@ function normalizeStops(stops: CustomStop[]): CustomStop[] {
 
 export const usePaletteStore = create<PaletteStore>()(
   persist(
-    (set, get) => ({
+    (set, get) => {
+      /** Merge a patch and bump the user-edit revision counter atomically. */
+      const setEdit = (patch: Partial<PaletteStore>) =>
+        set({ ...patch, rev: get().rev + 1 });
+      return {
+      rev: 0,
       shallow: DEFAULT_SHALLOW,
       deep: DEFAULT_DEEP,
       customStops: DEFAULT_CUSTOM_STOPS.map((s) => ({ ...s })),
@@ -297,10 +311,10 @@ export const usePaletteStore = create<PaletteStore>()(
       setShallow: (hex) => {
         const bc = [...get().bandColors];
         bc[0] = hex;
-        set({ shallow: hex, bandColors: bc });
+        setEdit({ shallow: hex, bandColors: bc });
       },
-      setDeep: (hex) => set({ deep: hex }),
-      setCustomStops: (stops) => set({ customStops: normalizeStops(stops) }),
+      setDeep: (hex) => setEdit({ deep: hex }),
+      setCustomStops: (stops) => setEdit({ customStops: normalizeStops(stops) }),
       addCustomStop: () => {
         const stops = get().customStops;
         let bestIdx = 0;
@@ -317,22 +331,22 @@ export const usePaletteStore = create<PaletteStore>()(
         const pos = (lo.position + hi.position) / 2;
         const hex = mixHex(lo.hex, hi.hex, 0.5);
         const next = [...stops, { position: pos, hex }];
-        set({ customStops: normalizeStops(next) });
+        setEdit({ customStops: normalizeStops(next) });
       },
       removeCustomStop: (index) => {
         const stops = get().customStops;
         if (stops.length <= 2) return;
         const next = stops.filter((_, i) => i !== index);
-        set({ customStops: normalizeStops(next) });
+        setEdit({ customStops: normalizeStops(next) });
       },
       updateCustomStop: (index, patch) => {
         const stops = get().customStops;
         if (index < 0 || index >= stops.length) return;
         const next = stops.map((s, i) => (i === index ? { ...s, ...patch } : s));
-        set({ customStops: normalizeStops(next) });
+        setEdit({ customStops: normalizeStops(next) });
       },
       resetCustomStops: () =>
-        set({ customStops: DEFAULT_CUSTOM_STOPS.map((s) => ({ ...s })) }),
+        setEdit({ customStops: DEFAULT_CUSTOM_STOPS.map((s) => ({ ...s })) }),
 
       setBandColor: (index, hex) => {
         if (index < 0 || index >= 10) return;
@@ -341,14 +355,14 @@ export const usePaletteStore = create<PaletteStore>()(
         bc[index] = hex.toLowerCase();
         const patch: Partial<PaletteStore> = { bandColors: bc };
         if (index === 0) patch.shallow = hex.toLowerCase();
-        set(patch);
+        setEdit(patch);
       },
       setBandColors: (colors) => {
         const sanitized = sanitizeBandColors(colors) ?? [...DEFAULT_BAND_COLORS];
-        set({ bandColors: sanitized, shallow: sanitized[0]! });
+        setEdit({ bandColors: sanitized, shallow: sanitized[0]! });
       },
       resetBandColors: () =>
-        set({ bandColors: [...DEFAULT_BAND_COLORS], shallow: DEFAULT_BAND_COLORS[0]! }),
+        setEdit({ bandColors: [...DEFAULT_BAND_COLORS], shallow: DEFAULT_BAND_COLORS[0]! }),
 
       setBandBoundary: (index, ft) => {
         if (index < 1 || index > 9) return;
@@ -360,17 +374,17 @@ export const usePaletteStore = create<PaletteStore>()(
           Math.min(next - MIN_BOUNDARY_GAP_FT, Math.round(ft)),
         );
         bb[index] = clamped;
-        set({ bandBoundaries: bb });
+        setEdit({ bandBoundaries: bb });
       },
       setBandBoundaries: (boundaries) => {
         const sanitized = sanitizeBandBoundaries(boundaries) ?? [...DEFAULT_BAND_BOUNDARIES];
-        set({ bandBoundaries: sanitized });
+        setEdit({ bandBoundaries: sanitized });
       },
       resetBandBoundaries: () =>
-        set({ bandBoundaries: [...DEFAULT_BAND_BOUNDARIES] }),
+        setEdit({ bandBoundaries: [...DEFAULT_BAND_BOUNDARIES] }),
 
       reset: () =>
-        set({
+        setEdit({
           shallow: DEFAULT_SHALLOW,
           deep: DEFAULT_DEEP,
           customStops: DEFAULT_CUSTOM_STOPS.map((s) => ({ ...s })),
@@ -413,9 +427,17 @@ export const usePaletteStore = create<PaletteStore>()(
         }
         if (Object.keys(patch).length > 0) set(patch);
       },
-    }),
+      };
+    },
     {
       name: "bathyscan:palette",
+      // `rev` is a session-local edit counter — persisting it would make a
+      // freshly loaded page look "dirty" to the server-sync hook and block
+      // hydration. Strip it from the persisted snapshot.
+      partialize: (state) => {
+        const { rev: _rev, ...rest } = state;
+        return rest as PaletteStore;
+      },
       merge: (persistedState, currentState) => {
         const ps = persistedState as Record<string, unknown> | undefined;
         const merged = { ...currentState, ...(ps as object) };

@@ -81,6 +81,38 @@ export function requestSettingsSync(): void {
 let _pendingDebounce = false;
 let _flushInFlight = false;
 
+// ─── Hydration / ordering guards ─────────────────────────────────────────────
+//  _hydrating        — true while the GET effect is applying server values to
+//                      the local stores. The store subscriptions below check
+//                      it so hydration never echoes a spurious PUT (which
+//                      could carry pre-edit values and clobber the server or
+//                      be captured by tests as "the" save).
+//  _serverSettled    — true once the initial server state is known (first GET
+//                      applied, GET errored, or user signed out). flush()
+//                      waits for this so a full-state PUT can never send
+//                      un-hydrated local defaults over newer server values.
+//  _ackedPaletteRev  — the paletteStore.rev last acknowledged by the server
+//                      (via a successful PUT) or observed at hydration time.
+//                      When the live rev is ahead of this, the palette has
+//                      unflushed local edits and GET responses must NOT
+//                      hydrate (clobber) the palette.
+let _hydrating = false;
+let _serverSettled = false;
+let _ackedPaletteRev = 0;
+
+// Per-store local-edit revision counters (same idea as paletteStore.rev but
+// tracked here because those stores have no built-in counter). The store
+// subscriptions below bump the edit rev on every genuine local change
+// (hydration is excluded via _hydrating). flush() acknowledges the revs it
+// captured once the server accepts the PUT. While an edit rev is ahead of
+// its acked rev, GET responses must NOT hydrate (clobber) that store.
+let _settingsEditRev = 0;
+let _ackedSettingsRev = 0;
+let _panelEditRev = 0;
+let _ackedPanelRev = 0;
+let _zoneEditRev = 0;
+let _ackedZoneRev = 0;
+
 /** True when a debounce timer is armed OR a PUT is currently in flight. */
 export function hasPendingOrInFlightSettingsSync(): boolean {
   return _pendingDebounce || _flushInFlight;
@@ -142,7 +174,10 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
 
   // When auth state resolves to "not signed in", mark ready immediately.
   useEffect(() => {
-    if (isSignedIn === false) setSettingsReady(true);
+    if (isSignedIn === false) {
+      setSettingsReady(true);
+      _serverSettled = true;
+    }
   }, [isSignedIn]);
 
   // ── Sign-out cleanup ───────────────────────────────────────────────────────
@@ -159,8 +194,19 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
     // Clear settingsStore and its localStorage entry.
     useSettingsStore.getState().clearForSignOut();
 
-    // Reset the colour palette and remove its localStorage entry.
+    // Reset the colour palette and remove its localStorage entry. The reset
+    // bumps `rev`; realign the acked rev so the next sign-in's hydration
+    // isn't blocked by a phantom "dirty palette".
     usePaletteStore.getState().reset();
+    _ackedPaletteRev = usePaletteStore.getState().rev;
+    // The clears above fire the store subscriptions and bump the edit revs;
+    // realign the acked revs so the next sign-in's hydration isn't blocked
+    // by phantom "dirty" state.
+    queueMicrotask(() => {
+      _ackedSettingsRev = _settingsEditRev;
+      _ackedPanelRev = _panelEditRev;
+      _ackedZoneRev = _zoneEditRev;
+    });
     try { localStorage.removeItem("bathyscan:palette"); } catch { /* ignore */ }
 
     // Reset panel collapse state and remove its localStorage entry.
@@ -188,7 +234,10 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
   // If the settings fetch fails (e.g. network error), mark ready so the app
   // doesn't wait forever — it will fall back to local defaults.
   useEffect(() => {
-    if (settingsFetchError) setSettingsReady(true);
+    if (settingsFetchError) {
+      setSettingsReady(true);
+      _serverSettled = true;
+    }
   }, [settingsFetchError]);
 
   useEffect(() => {
@@ -199,12 +248,7 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
     // would leave the startup auto-select effect stuck when the first GET
     // arrives while the user already has a change queued to flush.
     setSettingsReady(true);
-
-    // Guard: if a local change is pending flush to the server, skip field
-    // hydration to avoid overwriting in-flight local state with a stale server
-    // response.  The next GET (triggered after the PUT settles) will carry the
-    // up-to-date server values and will hydrate without interference.
-    if (_pendingDebounce || _flushInFlight) return;
+    _serverSettled = true;
 
     const serverRec = serverSettings as Record<string, unknown>;
     const serverUpdatedAt =
@@ -217,18 +261,40 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       (serverUpdatedAt !== undefined && serverUpdatedAt > lastSyncedAt);
 
     if (serverIsNewer) {
-      hydrateFromServer(serverSettings as Parameters<typeof hydrateFromServer>[0]);
+      // Suppress the store subscriptions below for the duration of hydration
+      // (zustand notifies synchronously) so applying server values can never
+      // echo a spurious PUT back at the server.
+      _hydrating = true;
+      try {
+      // Only hydrate settingsStore when it has no unflushed local edits —
+      // a GET must never clobber a newer local change (e.g. the onboarding
+      // Skip flag or a slider nudge made before the first GET settled).
+      const settingsClean = _settingsEditRev === _ackedSettingsRev;
+      if (settingsClean) {
+        hydrateFromServer(serverSettings as Parameters<typeof hydrateFromServer>[0]);
+      }
 
-      usePaletteStore.getState().hydrateFromServer({
-        paletteShallow: serverRec.paletteShallow,
-        paletteDeep: serverRec.paletteDeep,
-        customStops: serverRec.customStops,
-        bandColors: serverRec.bandColors,
-        bandBoundaries: serverRec.bandBoundaries,
-      });
+      // Only hydrate the palette when it has no unflushed local edits —
+      // a GET response must never clobber a newer local palette change
+      // (e.g. one made just before/while a PUT was in flight).
+      const paletteRev = usePaletteStore.getState().rev;
+      if (paletteRev === _ackedPaletteRev) {
+        usePaletteStore.getState().hydrateFromServer({
+          paletteShallow: serverRec.paletteShallow,
+          paletteDeep: serverRec.paletteDeep,
+          customStops: serverRec.customStops,
+          bandColors: serverRec.bandColors,
+          bandBoundaries: serverRec.bandBoundaries,
+        });
+      }
 
-      // Restore panel collapse layout from the server.
-      if (serverRec.panelCollapse && typeof serverRec.panelCollapse === "object") {
+      // Restore panel collapse layout from the server (skip when local
+      // panel edits are unflushed).
+      if (
+        _panelEditRev === _ackedPanelRev &&
+        serverRec.panelCollapse &&
+        typeof serverRec.panelCollapse === "object"
+      ) {
         const { setCollapsed } = usePanelCollapseStore.getState();
         for (const [id, val] of Object.entries(
           serverRec.panelCollapse as Record<string, unknown>,
@@ -242,7 +308,7 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       // Restore zone overlay colours and visibility from the server.
       // Accepts both the new { saltwater, freshwater } object and the
       // legacy flat array (treated as saltwater) for backward compatibility.
-      if (serverRec.zoneOverlaySlots != null) {
+      if (_zoneEditRev === _ackedZoneRev && serverRec.zoneOverlaySlots != null) {
         useZoneOverlayStore.getState().hydrateFromServer(serverRec.zoneOverlaySlots);
       }
 
@@ -251,7 +317,10 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       // (settingsStore v15) and must be pushed into uiStore so the 3D scene and
       // overlay controls reflect the server's state immediately.
       // Reading from settingsStore.getState() (after hydrateFromServer has run)
-      // gives us the fully merged server values.
+      // gives us the fully merged server values. Skipped when settingsStore
+      // hydration was skipped — patching uiStore from un-hydrated local
+      // defaults would wipe the user's live overlay state.
+      if (settingsClean) {
       const ss = useSettingsStore.getState();
 
       // Helper: validate depth layers array from the server payload.
@@ -286,6 +355,10 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
         efhOverlayEnabled: ss.efhOverlayEnabled,
         hiddenEfhSpecies: new Set<string>(ss.hiddenEfhSpecies ?? []),
       });
+      }
+      } finally {
+        _hydrating = false;
+      }
     }
   }, [serverSettings, hydrateFromServer]);
 
@@ -303,6 +376,22 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
     }
     _flushInFlight = true;
     try {
+      // Never send a full-state PUT before the initial server state is known
+      // (first GET applied or errored). Doing so would overwrite newer server
+      // values with un-hydrated local defaults. Wait briefly for settle; on
+      // timeout proceed anyway rather than dropping the user's edit.
+      if (!_serverSettled) {
+        const deadline = Date.now() + 10_000;
+        while (!_serverSettled && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
+      }
+      // Capture the edit revisions *before* reading store state so any
+      // edit included in this payload is acknowledged below.
+      const paletteRevAtFlush = usePaletteStore.getState().rev;
+      const settingsRevAtFlush = _settingsEditRev;
+      const panelRevAtFlush = _panelEditRev;
+      const zoneRevAtFlush = _zoneEditRev;
       const data = buildPayload();
       const resp = await saveSettingsAsync({
         data: data as Parameters<typeof saveSettingsAsync>[0]["data"],
@@ -310,6 +399,10 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       const serverStamp = (resp as Record<string, unknown> | undefined)
         ?.__updatedAt;
       markAllSaved(typeof serverStamp === "string" ? serverStamp : undefined);
+      if (paletteRevAtFlush > _ackedPaletteRev) _ackedPaletteRev = paletteRevAtFlush;
+      if (settingsRevAtFlush > _ackedSettingsRev) _ackedSettingsRev = settingsRevAtFlush;
+      if (panelRevAtFlush > _ackedPanelRev) _ackedPanelRev = panelRevAtFlush;
+      if (zoneRevAtFlush > _ackedZoneRev) _ackedZoneRev = zoneRevAtFlush;
     } finally {
       _flushInFlight = false;
     }
@@ -334,10 +427,12 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
   }, [isSignedIn, flush]);
 
   useEffect(() => {
-    const palSnap = () => {
-      const p = usePaletteStore.getState();
-      return JSON.stringify({ s: p.shallow, d: p.deep, c: p.customStops, b: p.bandColors, bb: p.bandBoundaries });
-    };
+    // Palette change detection uses the store's monotonic `rev` counter
+    // rather than a JSON value snapshot: `rev` bumps on every user edit even
+    // when normalization (e.g. hex lowercasing) leaves the values identical,
+    // and it does NOT bump on hydrateFromServer, so server hydration can't
+    // echo a spurious PUT.
+    const palRev = () => usePaletteStore.getState().rev;
     const panelSnap = () =>
       JSON.stringify(usePanelCollapseStore.getState().collapsed);
     const zoneSnap = () => {
@@ -346,7 +441,7 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
     };
 
     let lastSettings = JSON.stringify(getDataSnapshot());
-    let lastPalette = palSnap();
+    let lastPaletteRev = palRev();
     let lastPanel = panelSnap();
     let lastZone = zoneSnap();
 
@@ -354,13 +449,18 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       const cur = JSON.stringify(getDataSnapshot());
       if (cur !== lastSettings) {
         lastSettings = cur;
-        scheduleSync();
+        // Server hydration mutates the store too (zustand notifies
+        // synchronously); refresh the snapshot but never echo a PUT.
+        if (!_hydrating) {
+          _settingsEditRev++;
+          scheduleSync();
+        }
       }
     });
     const unsubPalette = usePaletteStore.subscribe(() => {
-      const cur = palSnap();
-      if (cur !== lastPalette) {
-        lastPalette = cur;
+      const cur = palRev();
+      if (cur !== lastPaletteRev) {
+        lastPaletteRev = cur;
         scheduleSync();
       }
     });
@@ -368,14 +468,20 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       const cur = panelSnap();
       if (cur !== lastPanel) {
         lastPanel = cur;
-        scheduleSync();
+        if (!_hydrating) {
+          _panelEditRev++;
+          scheduleSync();
+        }
       }
     });
     const unsubZone = useZoneOverlayStore.subscribe(() => {
       const cur = zoneSnap();
       if (cur !== lastZone) {
         lastZone = cur;
-        scheduleSync();
+        if (!_hydrating) {
+          _zoneEditRev++;
+          scheduleSync();
+        }
       }
     });
 
