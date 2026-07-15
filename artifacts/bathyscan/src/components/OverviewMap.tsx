@@ -96,10 +96,6 @@ import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useUndoableTrailDelete } from "@/hooks/useUndoableTrailDelete";
 import { TerrainDownloadPopover } from "@/components/TerrainDownloadPopover";
 import { useUpscaledHeatmap } from "@/hooks/useUpscaledHeatmap";
-import { useSatelliteTileStore } from "@/lib/satelliteTileStore";
-import { useSatelliteTile } from "@/hooks/useSatelliteTile";
-import { useTerrainTileStore } from "@/lib/terrainTileStore";
-import { useTerrainTile } from "@/hooks/useTerrainTile";
 import {
   registerRawsPopupHandlers,
   registerRawsCanvasPositionGetter,
@@ -116,8 +112,6 @@ interface TooltipState {
   lat: number;
   depth: number;
 }
-
-const tileImageCache = new Map<string, HTMLImageElement>();
 
 export const OverviewMap: React.FC = () => {
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
@@ -144,37 +138,6 @@ export const OverviewMap: React.FC = () => {
   const colormapTheme = useSettingsStore((s) => s.colormapTheme);
   const contoursEnabled = useSettingsStore((s) => s.contoursEnabled);
   const contourInterval = useSettingsStore((s) => s.contourInterval);
-  const satelliteImagery = useSettingsStore((s) => s.satelliteImagery);
-  const terrainImagery = useSettingsStore((s) => s.terrainImagery);
-  const setTerrainImagery = useSettingsStore((s) => s.setTerrainImagery);
-  const setSatelliteImagery = useSettingsStore((s) => s.setSatelliteImagery);
-
-  // Derive the satellite-fetch bbox from overviewGrid so the tile is fetched
-  // whenever a valid terrain bbox is available — even when the 3D scene isn't
-  // mounted. Pass null when the setting is off to skip the network request.
-  const satelliteBbox = useMemo(() => {
-    if (!satelliteImagery || !overviewGrid) return null;
-    return {
-      minLon: overviewGrid.minLon,
-      maxLon: overviewGrid.maxLon,
-      minLat: overviewGrid.minLat,
-      maxLat: overviewGrid.maxLat,
-    };
-  }, [satelliteImagery, overviewGrid]);
-  useSatelliteTile(satelliteBbox);
-
-  // USGS terrain tile — same bbox logic as satellite; only fires when enabled.
-  const terrainBbox = useMemo(() => {
-    if (!terrainImagery || !overviewGrid) return null;
-    return {
-      minLon: overviewGrid.minLon,
-      maxLon: overviewGrid.maxLon,
-      minLat: overviewGrid.minLat,
-      maxLat: overviewGrid.maxLat,
-    };
-  }, [terrainImagery, overviewGrid]);
-  useTerrainTile(terrainBbox);
-
   const datasetId = overviewGrid?.datasetId ?? appTerrain?.datasetId ?? "";
   const { data: markerData } = useGetMarkers(
     { datasetId },
@@ -267,62 +230,6 @@ export const OverviewMap: React.FC = () => {
   useEffect(() => { isUpscalingRef.current = isUpscaling; }, [isUpscaling]);
   useEffect(() => { requestUpscaleIfNeededRef.current = requestUpscaleIfNeeded; }, [requestUpscaleIfNeeded]);
   useEffect(() => { invalidateUpscaleRef.current = invalidateUpscale; }, [invalidateUpscale]);
-
-  // Satellite imagery — read from the shared store (already populated by the
-  // 3D LandTerrainMesh via useSatelliteTile). Load into an HTMLImageElement so
-  // the rAF loop can drawImage it as a top layer (above the heatmap).
-  const satelliteTileUrl = useSatelliteTileStore((s) => s.tileUrl);
-  const satelliteTileLoading = useSatelliteTileStore((s) => s.isLoading);
-  const satelliteTileError = useSatelliteTileStore((s) => s.error);
-  const satelliteImgRef = useRef<HTMLImageElement | null>(null);
-  useEffect(() => {
-    if (!satelliteTileUrl) {
-      satelliteImgRef.current = null;
-      dirtyRef.current = true;
-      return;
-    }
-    const cached = tileImageCache.get(satelliteTileUrl);
-    if (cached) {
-      satelliteImgRef.current = cached;
-      dirtyRef.current = true;
-      return;
-    }
-    const img = new Image();
-    img.onload = () => {
-      tileImageCache.set(satelliteTileUrl, img);
-      satelliteImgRef.current = img;
-      dirtyRef.current = true;
-    };
-    img.onerror = () => { satelliteImgRef.current = null; dirtyRef.current = true; };
-    img.src = satelliteTileUrl;
-  }, [satelliteTileUrl]);
-
-  // USGS terrain tile — hillshaded relief drawn below the heatmap.
-  const terrainTileUrl = useTerrainTileStore((s) => s.tileUrl);
-  const terrainTileLoading = useTerrainTileStore((s) => s.isLoading);
-  const terrainTileError = useTerrainTileStore((s) => s.error);
-  const terrainImgRef = useRef<HTMLImageElement | null>(null);
-  useEffect(() => {
-    if (!terrainTileUrl) {
-      terrainImgRef.current = null;
-      dirtyRef.current = true;
-      return;
-    }
-    const cached = tileImageCache.get(terrainTileUrl);
-    if (cached) {
-      terrainImgRef.current = cached;
-      dirtyRef.current = true;
-      return;
-    }
-    const img = new Image();
-    img.onload = () => {
-      tileImageCache.set(terrainTileUrl, img);
-      terrainImgRef.current = img;
-      dirtyRef.current = true;
-    };
-    img.onerror = () => { terrainImgRef.current = null; dirtyRef.current = true; };
-    img.src = terrainTileUrl;
-  }, [terrainTileUrl]);
 
   // Dirty flag — rAF loop skips draws when nothing has changed (no camera
   // movement, no data updates, no mouse interaction, no GPS/trail pulse).
@@ -1030,28 +937,13 @@ export const OverviewMap: React.FC = () => {
       ctx.fillStyle = "#020818";
       ctx.fillRect(0, 0, cW, cH);
 
-      // ── Draw order: terrain (bottom) → heatmap → satellite (top) ────────────
-      // Terrain — USGS hillshaded relief drawn first so heatmap composites over it.
-      const terrainImg = terrainImgRef.current;
-      if (terrainImg) {
-        const [tx0, ty0] = lonLatToCanvas(grid.minLon, grid.maxLat, worldGrid, t);
-        const [tx1, ty1] = lonLatToCanvas(grid.maxLon, grid.minLat, worldGrid, t);
-        ctx.globalAlpha = 1.0;
-        ctx.imageSmoothingEnabled = true;
-        ctx.drawImage(terrainImg, tx0, ty0, tx1 - tx0, ty1 - ty0);
-      }
-
       // Multi-dataset heatmap rendering:
       //   1. Secondary datasets (behind, in dataset order)
       //   2. Primary dataset (on top so it is never obscured)
       //
       // When only one dataset is loaded this collapses to the same single
       // renderHeatmap call that existed before.
-      //
-      // Reduce heatmap opacity when terrain is visible so hillshading shows through.
-      const satImg = satelliteImgRef.current;
-      const heatmapAlpha = terrainImg ? 0.65 : 1.0;
-      ctx.globalAlpha = heatmapAlpha;
+      ctx.globalAlpha = 1.0;
 
       // Secondary heatmaps — rendered first so the primary sits on top.
       const visibleNow = visibleDatasetsRef.current;
@@ -1086,18 +978,6 @@ export const OverviewMap: React.FC = () => {
         }
       }
       ctx.globalAlpha = 1.0;
-
-      // Satellite imagery — drawn ABOVE the heatmap so coastline detail is
-      // visible over land. At 0.75 opacity the bathymetric colour data still
-      // shows through for the water areas beneath the satellite layer.
-      if (satImg) {
-        const [sx0, sy0] = lonLatToCanvas(grid.minLon, grid.maxLat, worldGrid, t);
-        const [sx1, sy1] = lonLatToCanvas(grid.maxLon, grid.minLat, worldGrid, t);
-        ctx.globalAlpha = 0.75;
-        ctx.imageSmoothingEnabled = true;
-        ctx.drawImage(satImg, sx0, sy0, sx1 - sx0, sy1 - sy0);
-        ctx.globalAlpha = 1.0;
-      }
 
       // Dataset boundary outlines — thin dashed borders drawn over the heatmap
       // patches so the edges of each dataset are clearly visible.
@@ -1945,66 +1825,6 @@ export const OverviewMap: React.FC = () => {
               </ViewscreenTooltip>
             );
           })()}
-
-          {/* Terrain layer toggle — USGS hillshaded relief base layer */}
-          <ViewscreenTooltip label="Toggle USGS hillshaded terrain base layer" side="bottom">
-            <button
-              data-testid="terrain-layer-toggle"
-              aria-pressed={terrainImagery}
-              onClick={() => setTerrainImagery(!terrainImagery)}
-              style={{
-                background: terrainTileError
-                  ? "rgba(239,68,68,0.1)"
-                  : terrainImagery ? "rgba(34,197,94,0.15)" : "rgba(0,10,20,0.75)",
-                border: `1px solid ${
-                  terrainTileError
-                    ? "rgba(239,68,68,0.4)"
-                    : terrainImagery ? "rgba(34,197,94,0.55)" : "rgba(0,229,255,0.2)"
-                }`,
-                borderRadius: 3,
-                color: terrainTileError ? "#f87171" : terrainImagery ? "#22c55e" : "#94a3b8",
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 9,
-                padding: "2px 10px",
-                cursor: "pointer",
-                letterSpacing: "0.1em",
-                lineHeight: "20px",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {terrainTileLoading ? "… TERRAIN" : terrainTileError ? "⚠ TERRAIN" : "▲ TERRAIN"}
-            </button>
-          </ViewscreenTooltip>
-
-          {/* Satellite layer toggle — ESRI World Imagery top layer */}
-          <ViewscreenTooltip label="Toggle ESRI satellite imagery overlay" side="bottom">
-            <button
-              data-testid="satellite-layer-toggle"
-              aria-pressed={satelliteImagery}
-              onClick={() => setSatelliteImagery(!satelliteImagery)}
-              style={{
-                background: satelliteTileError
-                  ? "rgba(239,68,68,0.1)"
-                  : satelliteImagery ? "rgba(251,191,36,0.15)" : "rgba(0,10,20,0.75)",
-                border: `1px solid ${
-                  satelliteTileError
-                    ? "rgba(239,68,68,0.4)"
-                    : satelliteImagery ? "rgba(251,191,36,0.55)" : "rgba(0,229,255,0.2)"
-                }`,
-                borderRadius: 3,
-                color: satelliteTileError ? "#f87171" : satelliteImagery ? "#fbbf24" : "#94a3b8",
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 9,
-                padding: "2px 10px",
-                cursor: "pointer",
-                letterSpacing: "0.1em",
-                lineHeight: "20px",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {satelliteTileLoading ? "… SATELLITE" : satelliteTileError ? "⚠ SATELLITE" : "◉ SATELLITE"}
-            </button>
-          </ViewscreenTooltip>
 
           {/* Tools popover — collapses box-select and download into one button */}
           <div ref={toolsWrapperRef} style={{ position: "relative" }}>

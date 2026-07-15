@@ -224,12 +224,6 @@ export interface SettingsState {
   landmassStyle: LandmassStyle;
   /** When true, drape the ESRI World Imagery satellite photo over the land mesh (default on). When false, use the procedural green→brown→grey colour ramp instead. */
   satelliteImagery: boolean;
-  /**
-   * When true, draw a USGS National Map hillshaded relief layer as the bottom
-   * layer of the Overview Map (terrain → heatmap → satellite). Default off.
-   * Independent of `satelliteImagery`.
-   */
-  terrainImagery: boolean;
 
   // ── HUD & Layout ──────────────────────────────────────────────────────
   hudOpacity: number;
@@ -509,7 +503,6 @@ interface SettingsActions {
   setShowLandmass: (v: boolean) => void;
   setLandmassStyle: (v: LandmassStyle) => void;
   setSatelliteImagery: (v: boolean) => void;
-  setTerrainImagery: (v: boolean) => void;
 
   // HUD
   setHudOpacity: (v: number) => void;
@@ -786,7 +779,6 @@ export const DEFAULT_SETTINGS: SettingsState = {
   showLandmass: false,
   landmassStyle: "realistic",
   satelliteImagery: true,
-  terrainImagery: false,
 
   // HUD
   hudOpacity: 0.75,
@@ -922,7 +914,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "enableCaustics", "fogDensity", "fogColor", "ambientLightIntensity",
     "directionalLightIntensity", "lampIntensity", "lampRange", "antialiasing",
     "textureQuality", "colormapTheme", "smoothTerrainSpikes",
-    "showWaterSurface", "showWaterTempLayer", "showLandmass", "landmassStyle", "satelliteImagery", "terrainImagery", "colormapUserSet",
+    "showWaterSurface", "showWaterTempLayer", "showLandmass", "landmassStyle", "satelliteImagery", "colormapUserSet",
     "contoursEnabled", "contourInterval",
   ],
   hud: [
@@ -1064,7 +1056,6 @@ export const useSettingsStore = create<SettingsStore>()(
         setShowLandmass: setter("showLandmass"),
         setLandmassStyle: setter("landmassStyle"),
         setSatelliteImagery: setter("satelliteImagery"),
-        setTerrainImagery: setter("terrainImagery"),
 
         // HUD
         setHudOpacity: setter("hudOpacity"),
@@ -1481,12 +1472,6 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).hyd93FeaturesEnabled === undefined) {
             migratedHyd93.hyd93FeaturesEnabled = DEFAULT_SETTINGS.hyd93FeaturesEnabled;
           }
-          // v18 → v19: inject terrainImagery default for existing stored settings.
-          // New field; existing users who never set it get the default (off).
-          const migratedTerrain: Partial<SettingsState> = {};
-          if ((rest as Record<string, unknown>).terrainImagery === undefined) {
-            migratedTerrain.terrainImagery = DEFAULT_SETTINGS.terrainImagery;
-          }
           // v19 → v20: inject showWaterTempLayer default (false — opt-in layer).
           const migratedWaterTemp: Partial<SettingsState> = {};
           if ((rest as Record<string, unknown>).showWaterTempLayer === undefined) {
@@ -1500,7 +1485,6 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedOverlays,
             ...migratedFontSize,
             ...migratedHyd93,
-            ...migratedTerrain,
             ...migratedWaterTemp,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,

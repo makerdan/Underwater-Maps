@@ -46,7 +46,7 @@ function lruPut(key: string, url: string): void {
  *   L2  — browser Cache API (persists across page reloads, 24 h TTL)
  *   L3  — network fetch from /api/terrain/terrain-tile
  *
- * - Pass `bbox = null` (when `terrainImagery` is off) to clear the store
+ * - Pass `bbox = null` to clear the store
  *   without making any network request.
  */
 export function useTerrainTile(bbox: Bbox | null, tileSize = 512): void {

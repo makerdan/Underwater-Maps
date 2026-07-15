@@ -1056,13 +1056,7 @@ function VisualsSection() {
             label="Satellite imagery"
             value={s.satelliteImagery}
             onChange={s.setSatelliteImagery}
-            sublabel="Drape ESRI World Imagery photo over the land mesh. Turn off to use the stylised green→brown→grey colour ramp — clearer in dark scenes. Also controls the satellite overlay in the Overview Map."
-          />
-          <ToggleRow
-            label="Terrain hillshade (Overview Map)"
-            value={s.terrainImagery}
-            onChange={s.setTerrainImagery}
-            sublabel="Overlay Mapbox Terrain-RGB hillshading on the Overview Map for topographic context. Has no effect on the 3D scene."
+            sublabel="Drape ESRI World Imagery photo over the land mesh. Turn off to use the stylised green→brown→grey colour ramp — clearer in dark scenes."
           />
           <SelectRow
             label="Landmass style"
