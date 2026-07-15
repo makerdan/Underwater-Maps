@@ -54,7 +54,7 @@ import {
 } from "./keyBindings";
 import { usePanelCollapseStore, type PanelId } from "./panelCollapseStore";
 
-export const SETTINGS_SCHEMA_VERSION = 19;
+export const SETTINGS_SCHEMA_VERSION = 20;
 
 /**
  * Standard-mapping gamepad button index used to trigger the crosshair
@@ -216,6 +216,8 @@ export interface SettingsState {
   smoothTerrainSpikes: boolean;
   /** Render the sea-level water surface plane over the bathymetry (default on). */
   showWaterSurface: boolean;
+  /** Render the semi-transparent thermal water volume layer (default off — opt-in). */
+  showWaterTempLayer: boolean;
   /** Render above-water landmass meshing from the terrain topography array (default off). */
   showLandmass: boolean;
   /** How the landmass is coloured: realistic elevation ramp or a single flat neutral colour. */
@@ -503,6 +505,7 @@ interface SettingsActions {
   setColormapThemeByUser: (v: ColormapTheme) => void;
   setSmoothTerrainSpikes: (v: boolean) => void;
   setShowWaterSurface: (v: boolean) => void;
+  setShowWaterTempLayer: (v: boolean) => void;
   setShowLandmass: (v: boolean) => void;
   setLandmassStyle: (v: LandmassStyle) => void;
   setSatelliteImagery: (v: boolean) => void;
@@ -779,6 +782,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   colormapTheme: "ocean",
   smoothTerrainSpikes: true,
   showWaterSurface: true,
+  showWaterTempLayer: false,
   showLandmass: false,
   landmassStyle: "realistic",
   satelliteImagery: true,
@@ -918,7 +922,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "enableCaustics", "fogDensity", "fogColor", "ambientLightIntensity",
     "directionalLightIntensity", "lampIntensity", "lampRange", "antialiasing",
     "textureQuality", "colormapTheme", "smoothTerrainSpikes",
-    "showWaterSurface", "showLandmass", "landmassStyle", "satelliteImagery", "terrainImagery", "colormapUserSet",
+    "showWaterSurface", "showWaterTempLayer", "showLandmass", "landmassStyle", "satelliteImagery", "terrainImagery", "colormapUserSet",
     "contoursEnabled", "contourInterval",
   ],
   hud: [
@@ -1056,6 +1060,7 @@ export const useSettingsStore = create<SettingsStore>()(
         setColormapThemeByUser: (v) => set({ colormapTheme: v, colormapUserSet: true }),
         setSmoothTerrainSpikes: setter("smoothTerrainSpikes"),
         setShowWaterSurface: setter("showWaterSurface"),
+        setShowWaterTempLayer: setter("showWaterTempLayer"),
         setShowLandmass: setter("showLandmass"),
         setLandmassStyle: setter("landmassStyle"),
         setSatelliteImagery: setter("satelliteImagery"),
@@ -1482,6 +1487,11 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).terrainImagery === undefined) {
             migratedTerrain.terrainImagery = DEFAULT_SETTINGS.terrainImagery;
           }
+          // v19 → v20: inject showWaterTempLayer default (false — opt-in layer).
+          const migratedWaterTemp: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).showWaterTempLayer === undefined) {
+            migratedWaterTemp.showWaterTempLayer = DEFAULT_SETTINGS.showWaterTempLayer;
+          }
           return {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -1491,6 +1501,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedFontSize,
             ...migratedHyd93,
             ...migratedTerrain,
+            ...migratedWaterTemp,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,

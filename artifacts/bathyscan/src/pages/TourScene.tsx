@@ -27,6 +27,7 @@ import type { TidalDataResult } from "@/hooks/useTidalData";
 import { MAX_DEPTH_WORLD, WORLD_SIZE } from "@/lib/terrain";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { WaterSurfacePlane } from "@/components/WaterSurfacePlane";
+import { WaterTempVolumeLayer } from "@/components/WaterTempVolumeLayer";
 import { LandmassMesh } from "@/components/LandmassMesh";
 import type { TerrainData } from "@workspace/api-client-react";
 import { useSettingsStore } from "@/lib/settingsStore";
@@ -45,6 +46,9 @@ import { useLandTerrain } from "@/hooks/useLandTerrain";
 import { useSatelliteTileStore } from "@/lib/satelliteTileStore";
 import { useSatelliteTile } from "@/hooks/useSatelliteTile";
 import { TerrainContourLines } from "@/components/TerrainContourLines";
+import { useTemperatureProfile } from "@/hooks/useTemperatureProfile";
+import { useWaterTempTexture, type TempSample } from "@/hooks/useWaterTempTexture";
+import { sampleTemperatureProfile } from "@/lib/waterTemp";
 
 // One-shot WebGL availability probe. Cached at module scope so we don't
 // recreate a throwaway <canvas> on every TourScene re-render. Used by the
@@ -411,6 +415,65 @@ const TidalSceneContents: React.FC<TidalSceneContentsProps> = ({
 };
 
 // ---------------------------------------------------------------------------
+// Water Temperature Volume — fetches the real temperature profile (or falls
+// back to the exponential thermocline model) and renders a semi-transparent
+// thermal gradient box spanning the full water column.
+// Lives inside <Canvas> so useWaterTempTexture can dispose GPU resources.
+// ---------------------------------------------------------------------------
+const WaterTempSceneContents: React.FC<{ terrain: TerrainData }> = ({ terrain }) => {
+  const showWaterTempLayer = useSettingsStore((s) => s.showWaterTempLayer);
+  const showWaterSurface = useSettingsStore((s) => s.showWaterSurface);
+
+  const centerLat = (terrain.minLat + terrain.maxLat) / 2;
+  const centerLon = (terrain.minLon + terrain.maxLon) / 2;
+
+  const { profile } = useTemperatureProfile(
+    showWaterTempLayer ? centerLat : null,
+    showWaterTempLayer ? centerLon : null,
+    showWaterTempLayer,
+    terrain.datasetId,
+  );
+
+  const samples: TempSample[] | null = useMemo(() => {
+    if (!showWaterTempLayer) return null;
+    if (profile?.available && Array.isArray(profile.samples) && profile.samples.length >= 2) {
+      return (profile.samples as { depthM: number; temperatureC: number }[])
+        .filter(
+          (s): s is { depthM: number; temperatureC: number } =>
+            typeof s?.depthM === "number" &&
+            Number.isFinite(s.depthM) &&
+            typeof s?.temperatureC === "number" &&
+            Number.isFinite(s.temperatureC),
+        )
+        .sort((a, b) => a.depthM - b.depthM)
+        .map((s) => ({ depthM: s.depthM, celsius: s.temperatureC }));
+    }
+    // Fallback: exponential thermocline model at the scene depth range.
+    const maxDepthM = Math.max(20, terrain.maxDepth - terrain.minDepth);
+    const thermo = sampleTemperatureProfile(maxDepthM, null, 24);
+    return thermo.samples.map((s) => ({ depthM: s.depthM, celsius: s.celsius }));
+  }, [showWaterTempLayer, profile, terrain]);
+
+  const dataTexture = useWaterTempTexture(samples);
+
+  if (!showWaterTempLayer || !dataTexture) return null;
+  // Same depth-gating as the water surface: don't show the volume when the
+  // water surface is hidden (user has explicitly turned off water visuals).
+  if (!showWaterSurface) return null;
+
+  const surfY = seaSurfaceY(terrain);
+  const seafloorY = -MAX_DEPTH_WORLD;
+
+  return (
+    <WaterTempVolumeLayer
+      surfY={surfY}
+      seafloorY={seafloorY}
+      dataTexture={dataTexture}
+    />
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Currents (Task #136) — reads runtime NOAA ambient via a hook so subscription
 // triggers re-renders when the value updates.
 // ---------------------------------------------------------------------------
@@ -556,6 +619,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
         terrain && showWaterSurface && <WaterSurfacePlane terrain={terrain} />
       )}
 
+      {terrain && <WaterTempSceneContents terrain={terrain} />}
       {terrain && <CurrentsSceneContents terrain={terrain} />}
       <MarkerLayer />
       <DepthPoleLayer />

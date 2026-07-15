@@ -153,6 +153,8 @@ export const OverlaysToolsPanel: React.FC = () => {
   const rawsOverlayActive = useUiStore((s) => s.rawsOverlayActive);
   const setRawsOverlayActive = useUiStore((s) => s.setRawsOverlayActive);
 
+  const showWaterTempLayer = useSettingsStore((s) => s.showWaterTempLayer);
+  const setShowWaterTempLayer = useSettingsStore((s) => s.setShowWaterTempLayer);
   const waterType = useSettingsStore((s) => s.waterType);
   const { data: datasets } = useGetDatasets(
     { waterType },
@@ -729,6 +731,18 @@ export const OverlaysToolsPanel: React.FC = () => {
               </span>
             </div>
           )}
+
+          <ToggleButton
+            testId="overlay-toggle-water-temp"
+            active={showWaterTempLayer}
+            onClick={() => setShowWaterTempLayer(!showWaterTempLayer)}
+            label="🌡 TEMP LAYER"
+            tooltip={showWaterTempLayer ? "Hide water temperature volume" : "Show semi-transparent water temperature volume (thermal gradient by depth)"}
+            activeBg="rgba(251,146,60,0.12)"
+            activeBorder="rgba(251,146,60,0.55)"
+            activeColor="#fb923c"
+            activeGlow="0 0 6px rgba(251,146,60,0.5)"
+          />
 
           {hasHyd93Features && (
             <>
