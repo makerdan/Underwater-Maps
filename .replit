@@ -52,6 +52,10 @@ args = "test-all"
 task = "workflow.run"
 args = "check:e2e-user-ids"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "ports-guard"
+
 [[workflows.workflow]]
 name = "typecheck"
 author = "agent"
@@ -147,6 +151,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm run check:e2e-user-ids"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "ports-guard"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node scripts/check-hardcoded-ports.mjs"
 
 [workflows.workflow.metadata]
 isValidation = true

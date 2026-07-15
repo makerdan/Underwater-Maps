@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "export NODE_ENV=development && export PORT=${PORT:-8080} && pnpm run build && pnpm run start",
+    "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
     "dev:e2e": "export NODE_ENV=development && DIST_DIR=dist-e2e node ./build.mjs && node --enable-source-maps ./dist-e2e/index.mjs",
     "build": "node ./build.mjs",
     "build:e2e": "DIST_DIR=dist-e2e node ./build.mjs",

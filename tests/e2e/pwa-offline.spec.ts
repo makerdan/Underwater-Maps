@@ -1,5 +1,6 @@
 import { test, expect } from "./fixtures";
 import { terrainCanvas } from "./_helpers/canvases";
+import { E2E_WEB_URL } from "./ports";
 
 /**
  * PWA / Offline Mode E2E tests.
@@ -14,7 +15,7 @@ import { terrainCanvas } from "./_helpers/canvases";
  *    panel is disabled, and the dataset picker shows unavailable indicators.
  */
 
-const BASE = process.env.BASE_URL ?? "http://localhost:3150";
+const BASE = process.env.BASE_URL ?? E2E_WEB_URL;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 

@@ -1,4 +1,5 @@
 import { test as base, expect } from "@playwright/test";
+import { E2E_API_URL } from "./ports";
 import type { Page, Locator, APIRequestContext, APIResponse } from "@playwright/test";
 
 /**
@@ -34,7 +35,7 @@ import type { Page, Locator, APIRequestContext, APIResponse } from "@playwright/
  * ───────────────────────────────────────────────────────────────────────────
  */
 
-export const API_URL = process.env["E2E_API_BASE_URL"] ?? "http://127.0.0.1:3161";
+export const API_URL = process.env["E2E_API_BASE_URL"] ?? E2E_API_URL;
 
 export function apiUrl(path: string): string {
   return `${API_URL}${path}`;

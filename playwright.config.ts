@@ -1,5 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
 import budgets from "./tests/timeout-guard/budgets.json";
+import {
+  E2E_WEB_PORT,
+  E2E_API_PORT,
+  E2E_WEB_URL,
+  E2E_API_URL,
+} from "./tests/e2e/ports";
 
 export default defineConfig({
   globalSetup: "./tests/e2e/global-setup.ts",
@@ -22,7 +28,7 @@ export default defineConfig({
   workers: 1,
   reporter: "list",
   use: {
-    baseURL: process.env["E2E_BASE_URL"] ?? "http://localhost:3150",
+    baseURL: process.env["E2E_BASE_URL"] ?? E2E_WEB_URL,
     trace: "on-first-retry",
     headless: true,
   },
@@ -95,9 +101,8 @@ export default defineConfig({
       // always returns 200 immediately) rather than /api/datasets (which would
       // require an x-e2e-user-id header to avoid a 401 and performs a DB query
       // on every poll, masking startup failures under slow queries).
-      command:
-        "pnpm --filter @workspace/api-server run build:e2e && PORT=3161 E2E_AUTH_BYPASS=1 pnpm --filter @workspace/api-server run start:e2e",
-      url: "http://127.0.0.1:3161/api/healthz",
+      command: `pnpm --filter @workspace/api-server run build:e2e && PORT=${E2E_API_PORT} E2E_AUTH_BYPASS=1 pnpm --filter @workspace/api-server run start:e2e`,
+      url: `${E2E_API_URL}/api/healthz`,
       reuseExistingServer: false,
       timeout: 60_000,
       stdout: "pipe",
@@ -110,9 +115,8 @@ export default defineConfig({
       // With this set, canvas-gated specs (drift-planner, slack-tide,
       // gps-trail, smoke, currents) render the authenticated UI and assert
       // instead of skipping on "canvas not visible".
-      command:
-        "PORT=3150 BASE_PATH=/ VITE_DEV_AUTH_BYPASS=1 VITE_E2E_PRESERVE_BUFFER=1 E2E_API_SERVER_URL=http://127.0.0.1:3161 pnpm --filter @workspace/bathyscan run dev",
-      url: "http://localhost:3150",
+      command: `PORT=${E2E_WEB_PORT} BASE_PATH=/ VITE_DEV_AUTH_BYPASS=1 VITE_E2E_PRESERVE_BUFFER=1 E2E_API_SERVER_URL=${E2E_API_URL} pnpm --filter @workspace/bathyscan run dev`,
+      url: E2E_WEB_URL,
       reuseExistingServer: false,
       timeout: 60_000,
       stdout: "ignore",

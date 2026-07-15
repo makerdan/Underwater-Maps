@@ -48,8 +48,6 @@ if (Number.isNaN(basePort) || basePort <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-// Maximum number of additional ports to try after the base port is in use.
-const MAX_PORT_RETRIES = 3;
 // Drain window for SIGTERM: wait up to this many ms for in-flight requests to
 // finish before force-closing all connections.
 const SIGTERM_DRAIN_MS = 10_000;
@@ -60,8 +58,8 @@ let stopUploadCleanupJob: (() => void) | null = null;
 // ---------------------------------------------------------------------------
 // Graceful shutdown on SIGTERM
 // ---------------------------------------------------------------------------
-// Registered once at module load — uses `activeServer` which is updated each
-// time tryBind succeeds (or retries on a different port).
+// Registered once at module load — uses `activeServer` which is set once the
+// server successfully binds its assigned port.
 
 process.on("SIGTERM", () => {
   const server = activeServer;
@@ -108,32 +106,28 @@ process.on("SIGTERM", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Port-binding with EADDRINUSE fallback
+// Port-binding — fail fast on EADDRINUSE
 // ---------------------------------------------------------------------------
+// The platform assigns each artifact a unique PORT. Silently rebinding to a
+// neighboring port on EADDRINUSE could collide with another artifact's
+// assigned port, so a bind failure is fatal: log clearly and exit.
 
-function tryBind(port: number, retriesLeft: number): void {
+function startServer(port: number): void {
   const server = app.listen(port, "127.0.0.1");
 
   server.on("error", (err: NodeJS.ErrnoException) => {
     if (err.code === "EADDRINUSE") {
-      if (retriesLeft > 0) {
-        logger.warn(
-          { port, nextPort: port + 1, retriesLeft },
-          `Port ${port} in use — retrying on ${port + 1}`,
-        );
-        server.close();
-        tryBind(port + 1, retriesLeft - 1);
-      } else {
-        logger.error(
-          { basePort, attemptsExhausted: MAX_PORT_RETRIES + 1 },
-          `All ${MAX_PORT_RETRIES + 1} port candidates in use — exiting`,
-        );
-        process.exit(1);
-      }
+      logger.error(
+        { port },
+        `Port ${port} is already in use — refusing to rebind to another port. ` +
+          `Free the port or fix the PORT assignment, then restart. Exiting.`,
+      );
     } else {
       logger.error({ err }, "Server listen error — exiting");
-      process.exit(1);
     }
+    logger.flush(() => {
+      process.exit(1);
+    });
   });
 
   server.on("listening", () => {
@@ -207,4 +201,4 @@ function tryBind(port: number, retriesLeft: number): void {
   });
 }
 
-tryBind(basePort, MAX_PORT_RETRIES);
+startServer(basePort);

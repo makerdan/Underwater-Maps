@@ -17,6 +17,7 @@
 import { describe, it, expect } from "vitest";
 import { build, type RollupOutput } from "vite";
 import path from "path";
+import { E2E_BUNDLE_TEST_PORT } from "../../../../tests/e2e/ports";
 
 describe("production bundle", () => {
   it("does not contain the dev-only __bathyTest back door", async () => {
@@ -24,7 +25,7 @@ describe("production bundle", () => {
     // (they only matter for the dev server, not for `build`), so seed
     // safe defaults if the test runner didn't already provide them.
     // This keeps the guard self-contained for unit-test runs.
-    process.env.PORT ??= "4173";
+    process.env.PORT ??= String(E2E_BUNDLE_TEST_PORT);
     process.env.BASE_PATH ??= "/";
     const root = path.resolve(__dirname, "..", "..");
     const result = (await build({
