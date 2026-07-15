@@ -115,15 +115,40 @@ export interface SavedDriftPlan {
 
 const SAVED_PLANS_KEY = "bathyscan:savedDriftPlans";
 
-function readSavedPlans(): SavedDriftPlan[] {
+function isValidSavedPlan(p: unknown): p is SavedDriftPlan {
+  if (!p || typeof p !== "object") return false;
+  const obj = p as Record<string, unknown>;
+  return (
+    typeof obj["id"] === "string" &&
+    typeof obj["name"] === "string" &&
+    typeof obj["savedAt"] === "string" &&
+    typeof obj["lineLengthM"] === "number" &&
+    typeof obj["lineWeightG"] === "number" &&
+    (obj["driftMode"] === "drift" || obj["driftMode"] === "trolling") &&
+    typeof obj["boatHeadingDeg"] === "number" &&
+    typeof obj["boatSpeedKnots"] === "number" &&
+    Array.isArray(obj["waypoints"])
+  );
+}
+
+function readSavedPlans(): { plans: SavedDriftPlan[]; skipped: number } {
   try {
     const raw = localStorage.getItem(SAVED_PLANS_KEY);
-    if (!raw) return [];
+    if (!raw) return { plans: [], skipped: 0 };
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed as SavedDriftPlan[];
-    return [];
+    if (!Array.isArray(parsed)) return { plans: [], skipped: 0 };
+    const valid: SavedDriftPlan[] = [];
+    let skipped = 0;
+    for (const entry of parsed) {
+      if (isValidSavedPlan(entry)) {
+        valid.push(entry as SavedDriftPlan);
+      } else {
+        skipped++;
+      }
+    }
+    return { plans: valid, skipped };
   } catch {
-    return [];
+    return { plans: [], skipped: 0 };
   }
 }
 
@@ -208,6 +233,9 @@ interface DriftStore {
   saveDriftPlan: (name: string) => void;
   deleteSavedDriftPlan: (id: string) => void;
   loadDriftPlan: (plan: SavedDriftPlan) => void;
+  /** Number of corrupt/stale plans dropped at startup (cleared once acknowledged). */
+  skippedPlanCount: number;
+  clearSkippedPlanCount: () => void;
 
   // ── Reverse drift ───────────────────────────────────────────────────────
   /** Backwards-computed path from a catch location. */
@@ -281,16 +309,16 @@ export const useDriftStore = create<DriftStore>((set, get) => ({
   clearDriftStart: () => set({ driftStartLat: null, driftStartLon: null, driftPath: null }),
 
   lineLengthM: 200,
-  setLineLengthM: (m) => set({ lineLengthM: m }),
+  setLineLengthM: (m) => set({ lineLengthM: Math.max(0.5, Math.min(500, m)) }),
 
   lineWeightG: 500,
-  setLineWeightG: (g) => set({ lineWeightG: g }),
+  setLineWeightG: (g) => set({ lineWeightG: Math.max(1, Math.min(5000, g)) }),
 
   estimatedConditions: false,
   setEstimatedConditions: (b) => set({ estimatedConditions: b }),
 
   manualWindSpeedKnots: 8,
-  setManualWindSpeedKnots: (v) => set({ manualWindSpeedKnots: v }),
+  setManualWindSpeedKnots: (v) => set({ manualWindSpeedKnots: Math.max(0, Math.min(80, v)) }),
   manualWindDegrees: 225,
   setManualWindDegrees: (v) => set({ manualWindDegrees: v }),
   manualTidalSpeedKnots: 0.8,
@@ -338,7 +366,12 @@ export const useDriftStore = create<DriftStore>((set, get) => ({
   setDriftWaypoints: (wps) => set({ driftWaypoints: wps }),
 
   // ── Saved plans ─────────────────────────────────────────────────────────
-  savedDriftPlans: readSavedPlans(),
+  ...((): Pick<DriftStore, "savedDriftPlans" | "skippedPlanCount"> => {
+    const { plans, skipped } = readSavedPlans();
+    return { savedDriftPlans: plans, skippedPlanCount: skipped };
+  })(),
+
+  clearSkippedPlanCount: () => set({ skippedPlanCount: 0 }),
 
   saveDriftPlan: (name) => {
     const s = get();

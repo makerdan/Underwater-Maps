@@ -498,6 +498,12 @@ export interface ReverseComputeDriftOptions {
   lineLengthM?: number;
   /** How many hours to step back (default 24). */
   hours?: number;
+  /**
+   * Boat profile id used for leeway calculation — matches the forward drift
+   * so the backwards path uses the same physics as the forward path.
+   * Defaults to DEFAULT_BOAT_PROFILE_ID.
+   */
+  boatProfileId?: string;
 }
 
 /**
@@ -513,7 +519,9 @@ export interface ReverseComputeDriftOptions {
  * with hour === `hours`.
  */
 export function reverseComputeDrift(opts: ReverseComputeDriftOptions): DriftWaypoint[] {
-  const { conditions, endLat, endLon, terrain, lineLengthM = 200, hours = 24 } = opts;
+  const { conditions, endLat, endLon, terrain, lineLengthM = 200, hours = 24, boatProfileId } = opts;
+  const profile = getBoatProfile(boatProfileId ?? DEFAULT_BOAT_PROFILE_ID);
+  const leewayFactor = profile.leewayFactor * profile.windageFactor;
 
   // Build positions array backwards: start at catch, subtract drift each step.
   const positions: Array<{ lat: number; lon: number }> = [];
@@ -525,13 +533,13 @@ export function reverseComputeDrift(opts: ReverseComputeDriftOptions): DriftWayp
     const cond = conditions[h % conditions.length]!;
 
     // Drift vector that would have applied during hour h (forward direction).
-    // Uses the canonical boatPhysics blend with the default open-skiff leeway.
+    // Uses the same boat profile leeway as the forward drift for physics consistency.
     const { dLat: driftDLat, dLon: driftDLon } = computeBlendedDrift({
       tidalSpeedKnots: cond.tidalSpeedKnots,
       tidalDegrees: cond.tidalDegrees,
       windSpeedKnots: cond.windSpeedKnots,
       windDegrees: cond.windDegrees,
-      leewayFactor: 0.03,
+      leewayFactor,
       refLat: curLat,
     });
 

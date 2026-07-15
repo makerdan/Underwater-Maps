@@ -11,7 +11,7 @@
  *   - Mode banner shows "⛵ BTROLL" when backtroll is enabled in trolling mode
  */
 
-import React from "react";
+import React, { useEffect } from "react";
 import { useDriftStore } from "@/lib/driftStore";
 import { useSettingsStore, type UnitsSystem } from "@/lib/settingsStore";
 import { formatSpeedFromKnots } from "@/lib/units";
@@ -42,19 +42,36 @@ const CHIP_BASE: React.CSSProperties = {
   padding: "3px 5px",
   borderRadius: 4,
   cursor: "pointer",
-  fontSize: 9,
+  fontSize: 11,
   letterSpacing: "0.08em",
   border: "1px solid rgba(0,229,255,0.1)",
   minWidth: 28,
   userSelect: "none",
   transition: "all 0.1s ease",
+  outline: "none",
 };
 
 function formatHour(h: number): string {
   return `${h.toString().padStart(2, "0")}:00`;
 }
 
+const FOCUS_RING_STYLE = `
+.drift-chip:focus-visible {
+  outline: 2px solid #00e5ff;
+  outline-offset: 2px;
+}
+`;
+
 export const DriftTimeline: React.FC = () => {
+  useEffect(() => {
+    const id = "drift-chip-focus-style";
+    if (!document.getElementById(id)) {
+      const style = document.createElement("style");
+      style.id = id;
+      style.textContent = FOCUS_RING_STYLE;
+      document.head.appendChild(style);
+    }
+  }, []);
   const driftPath = useDriftStore((s) => s.driftPath);
   const driftHour = useDriftStore((s) => s.driftHour);
   const setDriftHour = useDriftStore((s) => s.setDriftHour);
@@ -138,7 +155,10 @@ export const DriftTimeline: React.FC = () => {
           return (
             <button
               key={h}
+              className="drift-chip"
               onClick={() => setDriftHour(h)}
+              aria-label={`Hour ${h}${contact ? " — sinker drag warning" : stalled ? " — hold station" : bottom ? " — bottom in reach" : " — bottom too deep"}${w.isSlack ? ", slack tide" : ""}`}
+              aria-pressed={isActive}
               title={contact ? "⚠ Sinker drag — sinker contacts seafloor" : undefined}
               style={{
                 ...CHIP_BASE,
@@ -331,18 +351,21 @@ export const DriftTimeline: React.FC = () => {
           <LegendRow
             color="#fbbf24"
             label={isBacktrolling ? "Reverse" : "Boat"}
+            ariaLabel={`Amber arrow: ${isBacktrolling ? "reverse engine thrust" : "boat propulsion"} direction`}
             valueKt={wp.boatContributionKnots}
             units={units}
           />
           <LegendRow
             color="#22d3ee"
             label="Drift"
+            ariaLabel="Cyan arrow: wind and tidal drift direction"
             valueKt={wp.driftContributionKnots}
             units={units}
           />
           <LegendRow
             color="#e2e8f0"
             label="Resultant"
+            ariaLabel="White arrow: net direction and speed combining all forces"
             valueKt={wp.driftSpeedKnots}
             units={units}
             faint
@@ -350,8 +373,39 @@ export const DriftTimeline: React.FC = () => {
         </div>
       )}
 
-      <div style={{ textAlign: "center", fontSize: 8, color: "#1e3a5f", marginTop: 6, letterSpacing: "0.1em" }}>
-        CLICK A CHIP TO SCRUB · ● = BOTTOM IN REACH · ○ = TOO DEEP · ⚠ DRAG = SINKER CONTACTS SEAFLOOR{isBacktrolling ? " · ⚓ HOLD = STATION KEPT" : ""}
+      {/* Probability cone legend */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          gap: 12,
+          marginTop: 6,
+          fontSize: 8,
+          color: "#64748b",
+          letterSpacing: "0.1em",
+        }}
+        aria-label="Drift path legend"
+      >
+        <span>
+          <span
+            aria-hidden
+            style={{
+              display: "inline-block",
+              width: 12,
+              height: 12,
+              background: "rgba(34,211,238,0.22)",
+              borderRadius: 2,
+              verticalAlign: "middle",
+              marginRight: 4,
+              border: "1px solid rgba(34,211,238,0.4)",
+            }}
+          />
+          Cone = growing uncertainty
+        </span>
+        <span>● = bottom in reach</span>
+        <span>○ = too deep</span>
+        <span>⚠ = sinker drag</span>
+        {isBacktrolling && <span>⚓ = station kept</span>}
       </div>
     </div>
   );
@@ -360,11 +414,15 @@ export const DriftTimeline: React.FC = () => {
 const LegendRow: React.FC<{
   color: string;
   label: string;
+  ariaLabel?: string;
   valueKt?: number;
   units: UnitsSystem;
   faint?: boolean;
-}> = ({ color, label, valueKt, units, faint }) => (
-  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+}> = ({ color, label, ariaLabel, valueKt, units, faint }) => (
+  <span
+    style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+    aria-label={ariaLabel}
+  >
     <span
       aria-hidden
       style={{

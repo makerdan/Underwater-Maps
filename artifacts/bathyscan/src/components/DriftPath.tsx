@@ -42,6 +42,19 @@ const ARROW_SCALE_PER_KT = 0.55;
 const ARROW_MIN_LEN = 0.25;
 
 /**
+ * Centralised surface Y-offsets so all drift overlays lift together if
+ * terrain scale changes. All values are world-units above the water plane.
+ */
+const SURFACE_OFFSETS = {
+  cone: 0.08,         // probability cone rings and centre tube
+  circuitLine: 0.15,  // trolling course preview line
+  buoy: 0.22,         // hourly waypoint buoys (slack tori + sphere buoys)
+  reverseBuoy: 0.25,  // reverse drift hour markers
+  snapContour: 0.2,   // snap-to-depth contour feedback line
+  forceArrow: 0.32,   // force arrow origin plane
+} as const;
+
+/**
  * Build a tapered tube geometry along the drift path. The radius grows linearly
  * from minRadius at hour 0 to maxRadius at the final hour, representing the
  * widening probability envelope as forecast uncertainty accumulates over time.
@@ -93,7 +106,7 @@ function buildProbabilityCone(
       // Ring vertex = centre + radius * (cosA * normal_xz + sinA * up)
       positions.push(
         wp.worldX + radius * cosA * nx,
-        surfaceY + 0.08 + radius * sinA,
+        surfaceY + SURFACE_OFFSETS.cone + radius * sinA,
         wp.worldZ + radius * cosA * nz,
       );
     }
@@ -117,7 +130,7 @@ function buildProbabilityCone(
 }
 
 function pathCurve(waypoints: { worldX: number; worldZ: number }[], surfaceY: number): THREE.CatmullRomCurve3 {
-  const pts = waypoints.map((wp) => new THREE.Vector3(wp.worldX, surfaceY + 0.08, wp.worldZ));
+  const pts = waypoints.map((wp) => new THREE.Vector3(wp.worldX, surfaceY + SURFACE_OFFSETS.cone, wp.worldZ));
   return new THREE.CatmullRomCurve3(pts, false, "catmullrom", 0.5);
 }
 
@@ -264,7 +277,7 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
             // surfaceY: waterPlane eq is y = surfaceY, i.e. plane.constant = -surfaceY
             const sy = -waterPlane.constant;
             const vec3pts = contourPts.map(
-              (p) => new THREE.Vector3(p.x, sy + 0.2, p.z),
+              (p) => new THREE.Vector3(p.x, sy + SURFACE_OFFSETS.snapContour, p.z),
             );
             setSnapContourPoints(vec3pts.length >= 2 ? vec3pts : null);
           } else {
@@ -351,10 +364,10 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
     if (!terrain || driftMode !== "trolling" || driftWaypoints.length === 0) return null;
     if (driftStartLat === null || driftStartLon === null) return null;
     const { x: sx, z: sz } = lonLatToWorldXZ(driftStartLon, driftStartLat, terrain);
-    const pts: THREE.Vector3[] = [new THREE.Vector3(sx, surfaceY + 0.15, sz)];
+    const pts: THREE.Vector3[] = [new THREE.Vector3(sx, surfaceY + SURFACE_OFFSETS.circuitLine, sz)];
     for (const wp of driftWaypoints) {
       const { x, z } = lonLatToWorldXZ(wp.lon, wp.lat, terrain);
-      pts.push(new THREE.Vector3(x, surfaceY + 0.15, z));
+      pts.push(new THREE.Vector3(x, surfaceY + SURFACE_OFFSETS.circuitLine, z));
     }
     return pts;
   }, [terrain, driftMode, driftWaypoints, driftStartLat, driftStartLon, surfaceY]);
@@ -371,7 +384,7 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
     const driftHeading = wp.driftHeadingDeg;
     const resultantHeading = wp.headingDeg;
     const resultantKt = wp.driftSpeedKnots;
-    const y = surfaceY + 0.32;
+    const y = surfaceY + SURFACE_OFFSETS.forceArrow;
     return {
       origin: [wp.worldX, y, wp.worldZ] as [number, number, number],
       boat:
@@ -478,7 +491,7 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
           return (
             <mesh
               key={i}
-              position={[wp.worldX, surfaceY + 0.22, wp.worldZ]}
+              position={[wp.worldX, surfaceY + SURFACE_OFFSETS.buoy, wp.worldZ]}
               rotation={[-Math.PI / 2, 0, 0]}
             >
               <torusGeometry args={[radius, radius * 0.22, 6, 16]} />
@@ -493,7 +506,7 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
         return (
           <mesh
             key={i}
-            position={[wp.worldX, surfaceY + 0.22, wp.worldZ]}
+            position={[wp.worldX, surfaceY + SURFACE_OFFSETS.buoy, wp.worldZ]}
           >
             <sphereGeometry args={[radius, 8, 8]} />
             <meshStandardMaterial
@@ -538,7 +551,7 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
               headingDeg={forceArrows.resultant.heading}
               length={forceArrows.resultant.length}
               color={RESULTANT_ARROW_COLOR}
-              opacity={0.35}
+              opacity={0.70}
             />
           )}
           {forceArrows.drift && (
@@ -642,7 +655,7 @@ export const DriftPath: React.FC<DriftPathProps> = ({ surfaceY }) => {
             return (
               <mesh
                 key={`rev-${i}`}
-                position={[wp.worldX, surfaceY + 0.25, wp.worldZ]}
+                position={[wp.worldX, surfaceY + SURFACE_OFFSETS.reverseBuoy, wp.worldZ]}
               >
                 {isCatch ? (
                   <octahedronGeometry args={[0.36, 0]} />

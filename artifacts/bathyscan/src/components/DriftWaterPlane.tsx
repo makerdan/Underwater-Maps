@@ -91,6 +91,7 @@ export const DriftWaterPlane: React.FC<DriftWaterPlaneProps> = ({ surfaceY, terr
   const reverseModeActive = useDriftStore((s) => s.reverseModeActive);
   const setCatchPoint = useDriftStore((s) => s.setCatchPoint);
   const setReverseDriftPath = useDriftStore((s) => s.setReverseDriftPath);
+  const boatProfileId = useDriftStore((s) => s.boatProfileId);
 
   const material = useMemo(() => {
     return new THREE.ShaderMaterial({
@@ -158,6 +159,7 @@ export const DriftWaterPlane: React.FC<DriftWaterPlaneProps> = ({ surfaceY, terr
           terrain,
           lineLengthM,
           hours: 24,
+          boatProfileId,
         });
         setReverseDriftPath(reversePath);
         return;

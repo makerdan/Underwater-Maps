@@ -40,6 +40,16 @@ import { ToastAction } from "@/components/ui/toast";
 // window elapses, so a misclick can still be reverted by clicking "Undo".
 const UNDO_DELETE_WINDOW_MS = 5000;
 
+/** Escape all five XML special characters for safe embedding in GPX text nodes. */
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 interface CompassProps {
   degrees: number;
   size?: number;
@@ -205,6 +215,8 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
   const saveDriftPlan = useDriftStore((s) => s.saveDriftPlan);
   const deleteSavedDriftPlan = useDriftStore((s) => s.deleteSavedDriftPlan);
   const loadDriftPlan = useDriftStore((s) => s.loadDriftPlan);
+  const skippedPlanCount = useDriftStore((s) => s.skippedPlanCount);
+  const clearSkippedPlanCount = useDriftStore((s) => s.clearSkippedPlanCount);
   // Reverse drift
   const driftPath = useDriftStore((s) => s.driftPath);
   const reverseModeActive = useDriftStore((s) => s.reverseModeActive);
@@ -254,15 +266,15 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     const now = new Date().toISOString();
     let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
     xml += `<gpx version="1.1" creator="BathyScan Drift Planner" xmlns="http://www.topografix.com/GPX/1/1">\n`;
-    xml += `  <metadata><name>${planName}</name><time>${now}</time></metadata>\n`;
-    xml += `  <trk>\n    <name>${planName}</name>\n    <trkseg>\n`;
+    xml += `  <metadata><name>${escapeXml(planName)}</name><time>${now}</time></metadata>\n`;
+    xml += `  <trk>\n    <name>${escapeXml(planName)}</name>\n    <trkseg>\n`;
     for (const wp of driftPath) {
       const time = new Date(Date.now() + wp.hour * 3600000).toISOString();
       const desc = `Hour ${wp.hour}: ${wp.driftSpeedKnots.toFixed(1)} kt drift, line ${Math.round(wp.lineAngleDeg)}°, hook ${Math.round(wp.hookDepthM)} m${wp.isSlack ? ", slack" : ""}${wp.bottomReached ? ", BOTTOM" : ""}`;
       xml += `      <trkpt lat="${wp.lat.toFixed(7)}" lon="${wp.lon.toFixed(7)}">\n`;
       xml += `        <ele>${(-wp.hookDepthM).toFixed(1)}</ele>\n`;
       xml += `        <time>${time}</time>\n`;
-      xml += `        <desc>${desc.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</desc>\n`;
+      xml += `        <desc>${escapeXml(desc)}</desc>\n`;
       xml += `      </trkpt>\n`;
     }
     xml += `    </trkseg>\n  </trk>\n</gpx>`;
@@ -812,6 +824,23 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
         </div>
       )}
 
+      {/* ── Skipped-plans warning ────────────────────────────────────────── */}
+      {skippedPlanCount > 0 && (
+        <div
+          role="alert"
+          style={{ marginBottom: 6, padding: "4px 8px", background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.4)", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}
+        >
+          <span style={{ fontSize: 8, color: "#fbbf24" }}>
+            ⚠ {skippedPlanCount} saved plan{skippedPlanCount > 1 ? "s were" : " was"} skipped — format was outdated or corrupt.
+          </span>
+          <button
+            onClick={clearSkippedPlanCount}
+            title="Dismiss"
+            style={{ background: "none", border: "none", color: "#fbbf24", cursor: "pointer", fontSize: 10, lineHeight: 1, padding: "0 2px" }}
+          >✕</button>
+        </div>
+      )}
+
       {/* ── Saved Plans section ──────────────────────────────────────────── */}
       <div style={{ marginBottom: 8 }}>
         <div
@@ -974,11 +1003,15 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
         <div style={{ display: "flex", gap: 4 }}>
           {(["drift", "trolling"] as const).map((m) => {
             const active = driftMode === m;
+            const modeTitle = m === "drift"
+              ? "Drift: boat drifts freely with wind and current — no engine power."
+              : "Trolling: boat moves under engine power through wind and current.";
             return (
               <button
                 key={m}
                 data-testid={`drift-mode-btn-${m}`}
                 onClick={() => setDriftMode(m)}
+                title={modeTitle}
                 style={{
                   flex: 1,
                   background: active ? "rgba(0,229,255,0.15)" : "rgba(0,10,20,0.8)",
@@ -1030,8 +1063,8 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
             data-testid="backtroll-toggle"
             onClick={toggleBacktroll}
             title={backtroll
-              ? "Backtroll ON: boat moves stern-first against the current. Click to return to forward trolling."
-              : "Enable backtroll: run the boat stern-first against the current for slow, controlled presentations."}
+              ? "Backtroll ON: boat moves stern-first against the current for a slow, controlled presentation. Click to switch back to forward trolling."
+              : "Backtroll: run the boat stern-first against the current — ideal for holding a tight lane over structure."}
             style={{
               display: "block",
               width: "100%",
@@ -1497,6 +1530,9 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
           <span style={{ ...LABEL, color: reverseModeActive ? "#fb923c" : "#94a3b8", fontSize: 8 }}>⟵ REVERSE DRIFT</span>
           <button
             onClick={() => setReverseModeActive(!reverseModeActive)}
+            title={reverseModeActive
+              ? "Reverse Drift ON: click the water to mark a catch location and see where the fish may have come from."
+              : "Reverse Drift: click a catch location on the map to trace where the fish likely originated."}
             style={{ background: reverseModeActive ? "rgba(249,115,22,0.18)" : "rgba(0,10,20,0.6)", border: `1px solid ${reverseModeActive ? "rgba(249,115,22,0.5)" : "rgba(0,229,255,0.2)"}`, color: reverseModeActive ? "#fb923c" : "#94a3b8", fontFamily: "inherit", fontSize: 8, padding: "2px 8px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.1em" }}
           >{reverseModeActive ? "ON" : "OFF"}</button>
         </div>
@@ -1545,14 +1581,19 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
         <span style={LABEL}>LINE LENGTH </span>
         <input
           type="number"
-          min={10}
-          max={1000}
-          step={10}
+          min={0.5}
+          max={500}
+          step={5}
           value={lineLengthM}
           onChange={(e) => setLineLengthM(Number(e.target.value))}
-          style={{ width: 60, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 10, padding: "2px 4px", borderRadius: 3, marginLeft: 4 }}
+          style={{ width: 60, background: "rgba(0,10,20,0.8)", border: `1px solid ${lineLengthM < 0.5 || lineLengthM > 500 ? "rgba(248,113,113,0.6)" : "rgba(0,229,255,0.2)"}`, color: "#00e5ff", fontFamily: "inherit", fontSize: 10, padding: "2px 4px", borderRadius: 3, marginLeft: 4 }}
         />
         <span style={{ ...LABEL, marginLeft: 3 }}>m</span>
+        {(lineLengthM < 0.5 || lineLengthM > 500) ? (
+          <div style={{ fontSize: 8, color: "#f87171", marginTop: 1 }}>Must be 0.5 – 500 m</div>
+        ) : (
+          <div style={{ fontSize: 8, color: "#64748b", marginTop: 1 }}>0.5 – 500 m</div>
+        )}
       </div>
 
       {(isError || estimatedConditions) && (
