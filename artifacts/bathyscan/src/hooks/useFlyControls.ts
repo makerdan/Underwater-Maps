@@ -1072,7 +1072,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       const camDepth = worldYToMetres(camera.position.y, grid);
       const heading =
         (Math.atan2(lookDir.current.x, -lookDir.current.z) * 180 / Math.PI + 360) % 360;
-      useCameraStore.getState().setCameraGeo({ lon: camLon, lat: camLat, depth: camDepth, heading });
+      useCameraStore.getState().setCameraGeo({ lon: camLon, lat: camLat, depth: camDepth, heading, altitude: camera.position.y });
     }
 
     // 4. Submersible lamp follows camera

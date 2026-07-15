@@ -39,7 +39,7 @@ import {
   renderGridLines,
   renderMarkers,
   renderDepthPoles,
-  renderCameraArrow,
+  renderViewCone,
   renderScaleBar,
   renderColormapLegend,
   renderHabitatOverlay,
@@ -1164,10 +1164,11 @@ export const OverviewMap: React.FC = () => {
         renderDepthPoles(ctx, markersRef.current, worldGrid, t, units);
       }
 
-      // Camera arrow — read from Zustand store directly (no React re-render)
+      // View cone — read from Zustand store directly (no React re-render)
       const cam = useCameraStore.getState();
       if (cam.cameraLon !== null && cam.cameraLat !== null) {
-        renderCameraArrow(ctx, cam.cameraLon, cam.cameraLat, cam.heading, worldGrid, t);
+        const fov = useSettingsStore.getState().fieldOfView;
+        renderViewCone(ctx, cam.cameraLon, cam.cameraLat, cam.heading, cam.cameraAltitude, fov, worldGrid, t);
       }
 
       // Habitat overlay (drawn above depth heatmap, below markers)

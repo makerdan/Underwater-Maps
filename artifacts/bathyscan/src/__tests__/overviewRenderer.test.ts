@@ -12,7 +12,7 @@ import {
   buildContourLines,
   lonLatToCanvas,
   canvasToLonLat,
-  renderCameraArrow,
+  renderViewCone,
   renderMarkers,
   renderEfhOverlay,
 } from "../lib/overviewRenderer";
@@ -427,38 +427,40 @@ function makeCtx() {
 }
 
 // ---------------------------------------------------------------------------
-// renderCameraArrow — North-up coordinate placement
+// renderViewCone — North-up coordinate placement + cone geometry
 // ---------------------------------------------------------------------------
 
-describe("renderCameraArrow — North-up coordinate placement", () => {
+describe("renderViewCone — North-up coordinate placement", () => {
   const grid = makeGrid({ minLon: -120, maxLon: -119, minLat: 47, maxLat: 48 });
   const t = makeTransform({ pxPerDeg: 200, offsetX: 0, offsetY: 0 });
   const latRange = grid.maxLat - grid.minLat;
   const lonRange = grid.maxLon - grid.minLon;
   const terrainH = t.pxPerDeg * latRange * t.scale;
   const terrainW = t.pxPerDeg * lonRange * t.scale;
+  const ALT = 20;
+  const FOV = 60;
 
   it("camera at the northern edge (maxLat) translates to Y ≈ offsetY — not the bottom", () => {
     const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
-    renderCameraArrow(ctx, -119.5, grid.maxLat, 180, grid, t);
+    renderViewCone(ctx, -119.5, grid.maxLat, 180, ALT, FOV, grid, t);
     const [, cy] = (ctx.translate as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number];
     expect(cy).toBeCloseTo(t.offsetY, 3);
   });
 
   it("camera at the southern edge (minLat) translates to Y ≈ offsetY + terrainH — not the top", () => {
     const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
-    renderCameraArrow(ctx, -119.5, grid.minLat, 180, grid, t);
+    renderViewCone(ctx, -119.5, grid.minLat, 180, ALT, FOV, grid, t);
     const [, cy] = (ctx.translate as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number];
     expect(cy).toBeCloseTo(t.offsetY + terrainH, 3);
   });
 
   it("northern camera Y is strictly less than southern camera Y (North-up)", () => {
     const ctxN = makeCtx() as unknown as CanvasRenderingContext2D;
-    renderCameraArrow(ctxN, -119.5, grid.maxLat, 180, grid, t);
+    renderViewCone(ctxN, -119.5, grid.maxLat, 180, ALT, FOV, grid, t);
     const [, cyN] = (ctxN.translate as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number];
 
     const ctxS = makeCtx() as unknown as CanvasRenderingContext2D;
-    renderCameraArrow(ctxS, -119.5, grid.minLat, 180, grid, t);
+    renderViewCone(ctxS, -119.5, grid.minLat, 180, ALT, FOV, grid, t);
     const [, cyS] = (ctxS.translate as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number];
 
     expect(cyN).toBeLessThan(cyS);
@@ -466,37 +468,68 @@ describe("renderCameraArrow — North-up coordinate placement", () => {
 
   it("camera at the western edge (minLon) translates to X ≈ offsetX (left edge)", () => {
     const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
-    renderCameraArrow(ctx, grid.minLon, 47.5, 180, grid, t);
+    renderViewCone(ctx, grid.minLon, 47.5, 180, ALT, FOV, grid, t);
     const [cx] = (ctx.translate as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number];
     expect(cx).toBeCloseTo(t.offsetX, 3);
   });
 
   it("camera at the eastern edge (maxLon) translates to X ≈ offsetX + terrainW (right edge)", () => {
     const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
-    renderCameraArrow(ctx, grid.maxLon, 47.5, 180, grid, t);
+    renderViewCone(ctx, grid.maxLon, 47.5, 180, ALT, FOV, grid, t);
     const [cx] = (ctx.translate as ReturnType<typeof vi.fn>).mock.calls[0] as [number, number];
     expect(cx).toBeCloseTo(t.offsetX + terrainW, 3);
   });
 
   it("heading 180° (North-facing) produces rotate angle ≈ 0 rad", () => {
     const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
-    renderCameraArrow(ctx, -119.5, 47.5, 180, grid, t);
+    renderViewCone(ctx, -119.5, 47.5, 180, ALT, FOV, grid, t);
     const [rad] = (ctx.rotate as ReturnType<typeof vi.fn>).mock.calls[0] as [number];
     expect(rad).toBeCloseTo(0, 5);
   });
 
   it("heading 0° (South-facing) produces rotate angle ≈ π rad", () => {
     const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
-    renderCameraArrow(ctx, -119.5, 47.5, 0, grid, t);
+    renderViewCone(ctx, -119.5, 47.5, 0, ALT, FOV, grid, t);
     const [rad] = (ctx.rotate as ReturnType<typeof vi.fn>).mock.calls[0] as [number];
     expect(rad).toBeCloseTo(Math.PI, 5);
   });
 
   it("heading 90° (East-facing) produces rotate angle ≈ π/2 rad", () => {
     const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
-    renderCameraArrow(ctx, -119.5, 47.5, 90, grid, t);
+    renderViewCone(ctx, -119.5, 47.5, 90, ALT, FOV, grid, t);
     const [rad] = (ctx.rotate as ReturnType<typeof vi.fn>).mock.calls[0] as [number];
     expect(rad).toBeCloseTo(Math.PI / 2, 5);
+  });
+
+  it("higher altitude produces a longer cone than low altitude", () => {
+    const ctxLow = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderViewCone(ctxLow, -119.5, 47.5, 180, 1, FOV, grid, t);
+    const lowLineTo = (ctxLow.lineTo as ReturnType<typeof vi.fn>).mock.calls;
+
+    const ctxHigh = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderViewCone(ctxHigh, -119.5, 47.5, 180, 70, FOV, grid, t);
+    const highLineTo = (ctxHigh.lineTo as ReturnType<typeof vi.fn>).mock.calls;
+
+    // The first lineTo call gives the left edge of the cone; Y is negative
+    // (forward / up on canvas before heading rotation). Greater |Y| → longer cone.
+    const [, lowY] = lowLineTo[0] as [number, number];
+    const [, highY] = highLineTo[0] as [number, number];
+    expect(Math.abs(highY)).toBeGreaterThan(Math.abs(lowY));
+  });
+
+  it("wider FOV produces a wider cone spread", () => {
+    const ctxNarrow = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderViewCone(ctxNarrow, -119.5, 47.5, 180, ALT, 30, grid, t);
+    const narrowLineTo = (ctxNarrow.lineTo as ReturnType<typeof vi.fn>).mock.calls;
+
+    const ctxWide = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderViewCone(ctxWide, -119.5, 47.5, 180, ALT, 90, grid, t);
+    const wideLineTo = (ctxWide.lineTo as ReturnType<typeof vi.fn>).mock.calls;
+
+    // Left edge X is negative; wider FOV → more negative X → larger |X|.
+    const [narrowX] = narrowLineTo[0] as [number, number];
+    const [wideX] = wideLineTo[0] as [number, number];
+    expect(Math.abs(wideX)).toBeGreaterThan(Math.abs(narrowX));
   });
 });
 
