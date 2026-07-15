@@ -11,7 +11,7 @@ import { useAppState, SPEEDS } from "@/lib/context";
 import { useDriftStore } from "@/lib/driftStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
-import { worldXZToLonLat, worldYToMetres, lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
+import { worldXZToLonLat, worldYToMetres, lonLatToWorldXZ } from "@/lib/terrain";
 import { applyCameraSpawn } from "@/lib/cameraSpawn";
 import { registerResetCameraFn } from "@/lib/resetCameraRegistry";
 import { useJoystickStore } from "@/components/VirtualJoystick";
