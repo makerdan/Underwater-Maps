@@ -5,12 +5,9 @@
  * tests exercise the logic (null-guard, prop consumption, mesh construction)
  * without mounting a real R3F Canvas / WebGL context.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import * as THREE from "three";
 import { bakeWaterTempTexture } from "@/hooks/useWaterTempTexture";
-import { WaterTempVolumeLayer } from "@/components/WaterTempVolumeLayer";
-import React from "react";
-import { render } from "@testing-library/react";
 
 vi.mock("@react-three/fiber", () => ({
   useFrame: vi.fn(),
