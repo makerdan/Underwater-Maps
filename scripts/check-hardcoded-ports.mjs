@@ -25,7 +25,12 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 // ── Configuration ───────────────────────────────────────────────────────────
 
 // The single allowlisted registry of fixed E2E ports (repo-relative).
-const ALLOWLIST = new Set(["tests/e2e/ports.ts"]);
+const ALLOWLIST = new Set([
+  "tests/e2e/ports.ts",
+  // Sibling guard script: its comments and regex definitions contain the very
+  // patterns this scanner flags, so it must be excluded from scanning.
+  "scripts/check-port-drift.mjs",
+]);
 
 // Default scan roots (repo-relative). Everything a process could bind a
 // port from: artifact sources + configs, shared libs, test code, scripts.
