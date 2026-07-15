@@ -3001,9 +3001,18 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                     const color = MARKER_COLOR[m.type] ?? "#e2e8f0";
                     const icon = MARKER_ICON[m.type] ?? "●";
                     return (
-                      <button
+                      <div
                         key={m.id}
+                        role="button"
+                        tabIndex={0}
                         onClick={() => handleTeleportToMarker(m.lon, m.lat)}
+                        onKeyDown={(e) => {
+                          if (e.target !== e.currentTarget) return;
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            handleTeleportToMarker(m.lon, m.lat);
+                          }
+                        }}
                         className="w-full text-left px-3 py-1.5 hover:bg-white/5 transition-colors group"
                         style={{
                           cursor: "pointer",
@@ -3076,7 +3085,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                             </span>
                           </ViewscreenTooltip>
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
