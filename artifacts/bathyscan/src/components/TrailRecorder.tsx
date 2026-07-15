@@ -13,6 +13,7 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { useAppState } from "@/lib/context";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { toast } from "@/hooks/use-toast";
+import { authorizedFetch } from "@/lib/authorizedFetch";
 
 const FONT: React.CSSProperties = {
   fontFamily: "'JetBrains Mono', monospace",
@@ -63,7 +64,7 @@ async function saveTrailToServer(
     })),
   };
 
-  const res = await fetch(`${API_BASE}/api/trails`, {
+  const res = await authorizedFetch(`${API_BASE}/api/trails`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

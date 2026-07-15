@@ -7,6 +7,8 @@
 
 import { z } from "zod";
 
+import { authorizedFetch } from "./authorizedFetch";
+
 export interface QueryContext {
   datasetName: string;
   waterType?: "saltwater" | "freshwater";
@@ -44,10 +46,9 @@ export async function queryLLM(
   signal?: AbortSignal,
 ): Promise<QueryLLMResult> {
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-  const resp = await fetch(`${base}/api/query`, {
+  const resp = await authorizedFetch(`${base}/api/query`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    credentials: "include",
     body: JSON.stringify({ query, context }),
     signal,
   });

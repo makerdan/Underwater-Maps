@@ -28,6 +28,7 @@ import {
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
+import { authorizedFetch } from "@/lib/authorizedFetch";
 
 const UNDO_DELETE_WINDOW_MS = 5000;
 
@@ -188,9 +189,10 @@ export function useUndoableMarkerDelete() {
       const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
       for (const entry of map.values()) {
         // fetch with keepalive survives page unload; sendBeacon only supports POST.
-        void fetch(`${apiBase}/api/markers/${encodeURIComponent(entry.markerId)}`, {
+        // Best-effort: the token lookup is async, so during unload the request
+        // may go out cookie-only if the token doesn't resolve in time.
+        void authorizedFetch(`${apiBase}/api/markers/${encodeURIComponent(entry.markerId)}`, {
           method: "DELETE",
-          credentials: "include",
           keepalive: true,
         }).catch(() => undefined);
       }

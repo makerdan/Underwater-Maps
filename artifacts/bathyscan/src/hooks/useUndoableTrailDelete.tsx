@@ -26,6 +26,7 @@ import {
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
+import { authorizedFetch } from "@/lib/authorizedFetch";
 
 const UNDO_TRAIL_DELETE_MS = 5000;
 
@@ -187,9 +188,11 @@ export function useUndoableTrailDelete(
       if (map.size === 0) return;
       const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
       for (const entry of map.values()) {
-        void fetch(`${apiBase}/api/trails/${encodeURIComponent(entry.trailId)}`, {
+        // Best-effort: the token lookup is async, so during unload the
+        // request may go out cookie-only — the Authorization header is
+        // attached whenever the token resolves in time.
+        void authorizedFetch(`${apiBase}/api/trails/${encodeURIComponent(entry.trailId)}`, {
           method: "DELETE",
-          credentials: "include",
           keepalive: true,
         }).catch(() => undefined);
       }

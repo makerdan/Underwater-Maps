@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import type { OverviewTransform } from "@/lib/overviewRenderer";
 import type { TerrainData } from "@workspace/api-client-react";
+import { authorizedFetch } from "@/lib/authorizedFetch";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -402,11 +403,10 @@ export function useUpscaledHeatmap() {
 
       try {
         const imageBase64 = canvas.toDataURL("image/png");
-        const response = await fetch(`${API_BASE}/api/poe/upscale`, {
+        const response = await authorizedFetch(`${API_BASE}/api/poe/upscale`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ imageBase64, upscaleFactor: factor }),
-          credentials: "include",
         });
 
         if (!response.ok) {

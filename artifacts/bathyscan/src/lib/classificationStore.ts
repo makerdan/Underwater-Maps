@@ -29,6 +29,7 @@ import type { TerrainData, PoeClassifyRequest } from "@workspace/api-client-reac
 import { gridToBase64Png } from "./gridToImage";
 import type { ClassifyResultSource } from "@workspace/api-client-react";
 import { parseAndUpsampleZones, zoneMapToStorage, zoneMapFromStorage } from "./zoneMap";
+import { authorizedFetch } from "./authorizedFetch";
 
 // ---------------------------------------------------------------------------
 // Error categorisation
@@ -483,8 +484,12 @@ export const useClassificationStore = create<ClassificationState>((set, get) => 
           // Namespace the lookup by waterType — the server keys its zone
           // cache by (gridHash, waterType) so a saltwater entry can never
           // satisfy a freshwater request (and vice versa).
+          // GET /api/datasets/:id/zones is conditionally auth-required: preset
+          // dataset IDs are public, but UUID/upload dataset IDs require auth on
+          // the server. Use authorizedFetch so private/upload datasets get the
+          // Bearer token (cookie auth is disabled in BathyScan).
           const url = `/api/datasets/${encodeURIComponent(datasetId)}/zones?h=${gridHash}&w=${encodeURIComponent(wt)}`;
-          const resp = await fetch(url, { credentials: "include" });
+          const resp = await authorizedFetch(url);
           if (resp.ok) {
             const data = (await resp.json()) as {
               zones: string[];

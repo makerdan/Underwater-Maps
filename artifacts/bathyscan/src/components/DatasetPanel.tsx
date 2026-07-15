@@ -28,6 +28,7 @@ import {
   getGetDatasetsIdPreviewQueryKey,
 } from "@workspace/api-client-react";
 import type { DatasetMeta, UserDatasetMeta } from "@workspace/api-client-react";
+import { authorizedFetch } from "@/lib/authorizedFetch";
 import { useAppState } from "@/lib/context";
 import { requestDatasetSwitch, useSimulatedDataStore } from "@/lib/simulatedDataStore";
 import { useTerrainStore, MAX_ACTIVE_DATASETS } from "@/lib/terrainStore";
@@ -1316,9 +1317,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     const poll = async () => {
       if (!active) return;
       try {
-        const resp = await fetch(`/api/datasets/upload/jobs/${chunkedJobId}`, {
-          credentials: "include",
-        });
+        const resp = await authorizedFetch(`/api/datasets/upload/jobs/${chunkedJobId}`);
         backoffMs = 2_000; // reset back-off on any successful network response
         if (!resp.ok) {
           scheduleNext();
@@ -1553,10 +1552,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
       let resp: Response;
       try {
-        resp = await fetch("/api/datasets/upload/chunk", {
+        resp = await authorizedFetch("/api/datasets/upload/chunk", {
           method: "POST",
           body: fd,
-          credentials: "include",
         });
       } catch (networkErr) {
         // Network-level failure (server unreachable). Store the chunk index so
@@ -1587,10 +1585,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   // Returns true on success; sets error state and returns false otherwise.
   const doFinalizeChunks = useCallback(async (file: File, uploadId: string): Promise<boolean> => {
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    const finalResp = await fetch("/api/datasets/upload/chunk/finalize", {
+    const finalResp = await authorizedFetch("/api/datasets/upload/chunk/finalize", {
       method: "POST",
       body: JSON.stringify({ uploadId, fileName: file.name, totalChunks, resolution: 256 }),
-      credentials: "include",
       headers: { "Content-Type": "application/json" },
     });
 
@@ -1829,9 +1826,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       if (stopped) return;
 
       try {
-        const resp = await fetch(
+        const resp = await authorizedFetch(
           `/api/datasets/upload/jobs/${encodeURIComponent(chunkedJobId)}`,
-          { credentials: "include" },
         );
         backoffMs = 1_500; // reset back-off on any successful network response
 
@@ -1963,9 +1959,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     // Ask the server which chunks it already has so we skip them.
     let resumeFrom = 0;
     try {
-      const statusResp = await fetch(
+      const statusResp = await authorizedFetch(
         `/api/datasets/upload/chunk/status/${encodeURIComponent(saved.uploadId)}`,
-        { credentials: "include" },
       );
       if (statusResp.ok) {
         const { receivedChunks } = await statusResp.json() as { receivedChunks: number[] };
@@ -2148,9 +2143,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       // Ask the server which chunk slices it already has on disk.
       let resumeFrom = chunkedFailedAtRef.current ?? 0;
       try {
-        const statusResp = await fetch(
+        const statusResp = await authorizedFetch(
           `/api/datasets/upload/chunk/status/${encodeURIComponent(uploadId)}`,
-          { credentials: "include" },
         );
         if (statusResp.ok) {
           const { receivedChunks } = await statusResp.json() as { receivedChunks: number[] };
@@ -2395,9 +2389,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     const ids = [...presetSelectedIds];
     for (const id of ids) {
       try {
-        await fetch(`/api/datasets/presets/${encodeURIComponent(id)}`, {
+        await authorizedFetch(`/api/datasets/presets/${encodeURIComponent(id)}`, {
           method: "DELETE",
-          credentials: "include",
         });
       } catch {
         // best-effort; server already guards against duplicates

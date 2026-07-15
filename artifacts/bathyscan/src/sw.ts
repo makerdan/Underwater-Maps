@@ -126,6 +126,8 @@ self.addEventListener("message", (event: ExtendableMessageEvent) => {
       const port = event.ports[0];
       try {
         const cache = await caches.open(PACK_TERRAIN_CACHE);
+        // Public-only: these URLs point at /api/datasets/:id/terrain|overview,
+        // which are unauthenticated catalog routes — no Authorization needed.
         await Promise.all([
           fetch(data.terrainUrl).then((r) => {
             if (r.ok) return cache.put(data.terrainUrl, r);
@@ -168,6 +170,13 @@ async function syncQueuedMarkers(): Promise<void> {
         await idbDel(key);
         return;
       }
+      // KNOWN GAP: /api/markers is requireAuth-protected and cookie auth is
+      // disabled in BathyScan (Bearer token is the only auth path), but the
+      // service worker cannot reach the Clerk token getter — it lives in the
+      // page's JS context. This background-sync POST will therefore 401 for
+      // signed-in users; the key is kept on failure and the page-side
+      // offlineFlush path (which does attach the Bearer token via
+      // authorizedFetch) reliably retries it on the next reconnect.
       const resp = await fetch("/api/markers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

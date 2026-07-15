@@ -47,6 +47,7 @@ import {
   type ShortcutActionId,
 } from "@/lib/keyBindings";
 import { formatKeyCode, formatGamepadButton } from "@/lib/keyLabel";
+import { authorizedFetch } from "@/lib/authorizedFetch";
 import { triggerBlobDownload } from "@/lib/blobDownload";
 import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import { useQueryClient } from "@tanstack/react-query";
@@ -2069,7 +2070,7 @@ function AccountSection() {
     setExporting(true);
     try {
       const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
-      const resp = await fetch(`${apiBase}/api/me/export`, { credentials: "include" });
+      const resp = await authorizedFetch(`${apiBase}/api/me/export`);
       if (!resp.ok) throw new Error(`Export failed: ${resp.status}`);
       const blob = await resp.blob();
       triggerBlobDownload(blob, `bathyscan-export-${Date.now()}.json`);
@@ -2085,9 +2086,8 @@ function AccountSection() {
 
   const handleDeleteAccount = async () => {
     const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
-    const resp = await fetch(`${apiBase}/api/me`, {
+    const resp = await authorizedFetch(`${apiBase}/api/me`, {
       method: "DELETE",
-      credentials: "include",
     });
     if (resp.ok) {
       // Clear all client-side persisted state and sign out.

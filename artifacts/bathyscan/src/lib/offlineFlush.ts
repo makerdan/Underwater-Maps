@@ -9,6 +9,8 @@
  * deduplicated — only one flush runs at a time.
  */
 
+import { authorizedFetch } from "./authorizedFetch";
+
 export async function flushPendingTrails(apiBase: string): Promise<void> {
   const keys: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
@@ -35,7 +37,7 @@ export async function flushPendingTrails(apiBase: string): Promise<void> {
           seq: number;
         }[];
       };
-      const res = await fetch(`${apiBase}/api/trails`, {
+      const res = await authorizedFetch(`${apiBase}/api/trails`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -67,7 +69,7 @@ export async function flushPendingMarkers(apiBase: string): Promise<void> {
     try {
       const payload = await get(key);
       if (!payload) continue;
-      const res = await fetch(`${apiBase}/api/markers`, {
+      const res = await authorizedFetch(`${apiBase}/api/markers`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

@@ -16,6 +16,7 @@ import { formatDistance } from "@/lib/units";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useFlyRouteStore } from "@/lib/flyRouteStore";
 import { useToast } from "@/hooks/use-toast";
+import { authorizedFetch } from "@/lib/authorizedFetch";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -95,25 +96,21 @@ function apiUrl(path: string): string {
 }
 
 async function fetchRoutes(datasetId: string): Promise<SavedRoute[]> {
-  const res = await fetch(apiUrl(`/routes?datasetId=${encodeURIComponent(datasetId)}`), {
-    credentials: "include",
-  });
+  const res = await authorizedFetch(apiUrl(`/routes?datasetId=${encodeURIComponent(datasetId)}`));
   if (!res.ok) throw new Error(`Failed to fetch routes: ${res.status}`);
   return res.json() as Promise<SavedRoute[]>;
 }
 
 async function deleteRoute(id: string): Promise<void> {
-  const res = await fetch(apiUrl(`/routes/${id}`), {
+  const res = await authorizedFetch(apiUrl(`/routes/${id}`), {
     method: "DELETE",
-    credentials: "include",
   });
   if (!res.ok && res.status !== 404) throw new Error(`Failed to delete route: ${res.status}`);
 }
 
 async function renameRoute(id: string, name: string): Promise<SavedRoute> {
-  const res = await fetch(apiUrl(`/routes/${id}`), {
+  const res = await authorizedFetch(apiUrl(`/routes/${id}`), {
     method: "PATCH",
-    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name }),
   });

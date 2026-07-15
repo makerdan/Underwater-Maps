@@ -11,6 +11,7 @@
  * Independent of the marker system; dismiss via the × button.
  */
 import React from "react";
+import { authorizedFetch } from "@/lib/authorizedFetch";
 import { triggerBlobDownload } from "@/lib/blobDownload";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -214,9 +215,8 @@ export const DepthProfilePanel: React.FC = () => {
     setSaveError(null);
     try {
       const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
-      const res = await fetch(`${base}/api/routes`, {
+      const res = await authorizedFetch(`${base}/api/routes`, {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           datasetId,

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useOfflineStore } from "@/lib/offlineStore";
+import { authorizedFetch } from "@/lib/authorizedFetch";
 
 const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -45,10 +46,9 @@ export const HelpQA: React.FC = () => {
     setInput("");
     setLoading(true);
     try {
-      const resp = await fetch(`${apiBase}/api/poe/help`, {
+      const resp = await authorizedFetch(`${apiBase}/api/poe/help`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
           question: q,
           history: messages.slice(-8).map((m) => ({ role: m.role, content: m.content })),
