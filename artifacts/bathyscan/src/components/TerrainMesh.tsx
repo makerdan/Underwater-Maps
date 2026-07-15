@@ -4,7 +4,7 @@ import * as THREE from "three";
 import type { TerrainData } from "@workspace/api-client-react";
 import { buildTerrainGeometry, buildTerrainSkirtGeometry, computeZoneWeights, computeSlopeAttribute, applyColormapToVertexColors, WORLD_SIZE } from "@/lib/terrain";
 import { getTerrainTextures } from "@/lib/textures";
-import { createTerrainShaderMaterial } from "@/lib/terrainShader";
+import { createTerrainShaderMaterial, getPlaceholderHabitatTexture } from "@/lib/terrainShader";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
@@ -302,11 +302,7 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     // the OES_texture_float_linear extension (R32F is not filterable by default).
     useEffect(() => {
       const N = grid.resolution;
-
-      if (habitatTexRef.current) {
-        habitatTexRef.current.dispose();
-        habitatTexRef.current = null;
-      }
+      const prevTex = habitatTexRef.current;
 
       if (habitatScores && habitatScores.length === N * N) {
         const bytes = new Uint8Array(N * N);
@@ -329,18 +325,33 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
         tex.needsUpdate = true;
         material.uniforms["uHabitatTex"]!.value = tex;
         habitatTexRef.current = tex;
+      } else {
+        // No usable scores (species deselected, or grid changed before new
+        // scores computed). Rebind the shared placeholder BEFORE disposing so
+        // the shader can never sample a disposed texture — three.js would
+        // silently re-upload it, leaking a GPU allocation nothing disposes.
+        material.uniforms["uHabitatTex"]!.value = getPlaceholderHabitatTexture();
+        habitatTexRef.current = null;
+      }
+
+      // Dispose the superseded texture exactly once, after the uniform has
+      // been rebound to its replacement (new texture or placeholder).
+      if (prevTex && prevTex !== habitatTexRef.current) {
+        prevTex.dispose();
       }
     }, [habitatScores, grid, material]);
 
-    // Dispose the habitat texture on unmount to free GPU memory.
+    // Dispose the habitat texture on unmount to free GPU memory, rebinding
+    // the placeholder so the disposed texture can never be resurrected.
     useEffect(() => {
       return () => {
         if (habitatTexRef.current) {
+          material.uniforms["uHabitatTex"]!.value = getPlaceholderHabitatTexture();
           habitatTexRef.current.dispose();
           habitatTexRef.current = null;
         }
       };
-    }, []);
+    }, [material]);
 
     // Animate opacity 0→1 (~400 ms at 60 fps), keep lamp position in sync,
     // and reflect zone overlay + highlight + habitat state from stores.

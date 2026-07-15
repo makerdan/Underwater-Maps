@@ -240,6 +240,19 @@ const PLACEHOLDER_HABITAT_TEXTURE = new THREE.DataTexture(
   THREE.UnsignedByteType,
 );
 
+/**
+ * Shared 1×1 zero-score placeholder for the `uHabitatTex` uniform.
+ *
+ * Callers that dispose a per-grid habitat DataTexture MUST reset the uniform
+ * back to this placeholder. Leaving a disposed texture bound to the uniform
+ * makes three.js silently re-upload it the next time the shader samples it
+ * (e.g. while new scores are still computing), and that resurrected GPU
+ * allocation is never disposed again.
+ */
+export function getPlaceholderHabitatTexture(): THREE.DataTexture {
+  return PLACEHOLDER_HABITAT_TEXTURE;
+}
+
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
