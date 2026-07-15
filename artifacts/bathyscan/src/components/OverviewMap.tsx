@@ -359,6 +359,11 @@ export const OverviewMap: React.FC = () => {
   const [selectedWeatherStation, setSelectedWeatherStation] = useState<WeatherStation | null>(null);
   const [selectedWeatherStationPos, setSelectedWeatherStationPos] = useState<{ cx: number; cy: number } | null>(null);
 
+  // --- Tools popover state --------------------------------------------------
+  // Controls the compact "Tools" popover that houses box-select and download.
+  const [toolsPopoverOpen, setToolsPopoverOpen] = useState(false);
+  const toolsWrapperRef = useRef<HTMLDivElement>(null);
+
   // --- Download tool state --------------------------------------------------
   // `downloadMode` is mutually exclusive with `selectMode`. When active, the
   // rubber-band rectangle commits to a download bbox that triggers the
@@ -473,6 +478,18 @@ export const OverviewMap: React.FC = () => {
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [selectedBbox, bboxResults, downloadBbox, clearBbox]);
+
+  // Close the Tools popover when clicking outside its wrapper.
+  useEffect(() => {
+    if (!toolsPopoverOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (toolsWrapperRef.current && !toolsWrapperRef.current.contains(e.target as Node)) {
+        setToolsPopoverOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown, true);
+    return () => document.removeEventListener("mousedown", onDown, true);
+  }, [toolsPopoverOpen]);
 
   // GPS & trail state (read directly from stores in rAF — no React re-render)
   const pulseRef = useRef(0);
@@ -1984,63 +2001,145 @@ export const OverviewMap: React.FC = () => {
             </button>
           </ViewscreenTooltip>
 
-          {/* Box-select tool toggle — draw a rectangle to query catalog */}
-          <ViewscreenTooltip label="Draw a rectangle to find datasets that cover that area" side="bottom">
-            <button
-              data-testid="overview-select-area-toggle"
-              aria-pressed={selectMode}
-              onClick={() => {
-                const next = !selectMode;
-                setSelectMode(next);
-                if (next) { setDownloadMode(false); setDownloadBbox(null); }
-                if (!next) clearBbox();
-              }}
-              style={{
-                background: selectMode ? "rgba(0,229,255,0.15)" : "rgba(0,10,20,0.75)",
-                border: `1px solid ${selectMode ? "rgba(0,229,255,0.6)" : "rgba(0,229,255,0.2)"}`,
-                borderRadius: 3,
-                color: selectMode ? "#00e5ff" : "#94a3b8",
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 9,
-                padding: "2px 10px",
-                cursor: "pointer",
-                letterSpacing: "0.1em",
-                lineHeight: "20px",
-                whiteSpace: "nowrap",
-              }}
-            >
-              ▭ SELECT AREA
-            </button>
-          </ViewscreenTooltip>
+          {/* Tools popover — collapses box-select and download into one button */}
+          <div ref={toolsWrapperRef} style={{ position: "relative" }}>
+            <ViewscreenTooltip label="Area tools: box-select or download" side="bottom">
+              <button
+                data-testid="overview-tools-toggle"
+                aria-expanded={toolsPopoverOpen}
+                aria-haspopup="true"
+                onClick={() => setToolsPopoverOpen((v) => !v)}
+                style={{
+                  background: (selectMode || downloadMode)
+                    ? "rgba(0,229,255,0.12)"
+                    : toolsPopoverOpen
+                    ? "rgba(0,229,255,0.08)"
+                    : "rgba(0,10,20,0.75)",
+                  border: `1px solid ${
+                    (selectMode || downloadMode)
+                      ? "rgba(0,229,255,0.6)"
+                      : toolsPopoverOpen
+                      ? "rgba(0,229,255,0.4)"
+                      : "rgba(0,229,255,0.2)"
+                  }`,
+                  borderRadius: 3,
+                  color: (selectMode || downloadMode) ? "#00e5ff" : toolsPopoverOpen ? "#7dd3fc" : "#94a3b8",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9,
+                  padding: "2px 10px",
+                  cursor: "pointer",
+                  letterSpacing: "0.1em",
+                  lineHeight: "20px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {selectMode ? "▭ SELECT" : downloadMode ? "↓ DOWNLOAD" : "⚙ TOOLS"}
+              </button>
+            </ViewscreenTooltip>
 
-          {/* Download tool toggle — draw a rectangle to download CSV */}
-          <ViewscreenTooltip label="Draw a rectangle to download bathymetric data as CSV" side="bottom">
-            <button
-              data-testid="overview-download-toggle"
-              aria-pressed={downloadMode}
-              onClick={() => {
-                const next = !downloadMode;
-                setDownloadMode(next);
-                if (next) { setSelectMode(false); clearBbox(); }
-                if (!next) { setDownloadBbox(null); dragRectRef.current = null; }
-              }}
+            <div
+              data-testid="overview-tools-popover"
+              role="menu"
               style={{
-                background: downloadMode ? "rgba(251,191,36,0.15)" : "rgba(0,10,20,0.75)",
-                border: `1px solid ${downloadMode ? "rgba(251,191,36,0.55)" : "rgba(0,229,255,0.2)"}`,
-                borderRadius: 3,
-                color: downloadMode ? "#fbbf24" : "#94a3b8",
+                display: toolsPopoverOpen ? "block" : "none",
+                position: "absolute",
+                top: "calc(100% + 4px)",
+                right: 0,
+                background: "rgba(2,8,24,0.97)",
+                border: "1px solid rgba(0,229,255,0.25)",
+                borderRadius: 4,
+                backdropFilter: "blur(8px)",
+                boxShadow: "0 4px 16px rgba(0,0,0,0.55)",
+                zIndex: 50,
+                minWidth: 168,
+                overflow: "hidden",
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 9,
-                padding: "2px 10px",
-                cursor: "pointer",
-                letterSpacing: "0.1em",
-                lineHeight: "20px",
-                whiteSpace: "nowrap",
               }}
             >
-              ↓ DOWNLOAD
-            </button>
-          </ViewscreenTooltip>
+                <div
+                  style={{
+                    padding: "5px 10px 4px",
+                    borderBottom: "1px solid rgba(0,229,255,0.1)",
+                    fontSize: 8,
+                    color: "#64748b",
+                    letterSpacing: "0.18em",
+                  }}
+                >
+                  TOOLS
+                </div>
+
+                {/* Box-Select row */}
+                <button
+                  data-testid="overview-select-area-toggle"
+                  role="menuitem"
+                  aria-pressed={selectMode}
+                  onClick={() => {
+                    const next = !selectMode;
+                    setSelectMode(next);
+                    if (next) { setDownloadMode(false); setDownloadBbox(null); }
+                    if (!next) clearBbox();
+                    setToolsPopoverOpen(false);
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    width: "100%",
+                    padding: "7px 10px",
+                    background: selectMode ? "rgba(0,229,255,0.1)" : "transparent",
+                    border: "none",
+                    borderBottom: "1px solid rgba(0,229,255,0.07)",
+                    color: selectMode ? "#00e5ff" : "#cbd5e1",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 9,
+                    letterSpacing: "0.1em",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  <span style={{ width: 14, textAlign: "center", flexShrink: 0 }}>▭</span>
+                  <span style={{ flex: 1 }}>BOX SELECT</span>
+                  {selectMode && (
+                    <span style={{ fontSize: 8, color: "#00e5ff", opacity: 0.85 }}>● ON</span>
+                  )}
+                </button>
+
+                {/* Download row */}
+                <button
+                  data-testid="overview-download-toggle"
+                  role="menuitem"
+                  aria-pressed={downloadMode}
+                  onClick={() => {
+                    const next = !downloadMode;
+                    setDownloadMode(next);
+                    if (next) { setSelectMode(false); clearBbox(); }
+                    if (!next) { setDownloadBbox(null); dragRectRef.current = null; }
+                    setToolsPopoverOpen(false);
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    width: "100%",
+                    padding: "7px 10px",
+                    background: downloadMode ? "rgba(251,191,36,0.1)" : "transparent",
+                    border: "none",
+                    color: downloadMode ? "#fbbf24" : "#cbd5e1",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 9,
+                    letterSpacing: "0.1em",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  <span style={{ width: 14, textAlign: "center", flexShrink: 0 }}>↓</span>
+                  <span style={{ flex: 1 }}>DOWNLOAD</span>
+                  {downloadMode && (
+                    <span style={{ fontSize: 8, color: "#fbbf24", opacity: 0.85 }}>● ON</span>
+                  )}
+                </button>
+              </div>
+          </div>
 
           {/* EFH overlay toggle — shown for preset datasets (hasEfh) and user-saved EFH datasets (embeddedEfhPolygons) */}
           {(hasEfh || !!embeddedEfhPolygons) && (

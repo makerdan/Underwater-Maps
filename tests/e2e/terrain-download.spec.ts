@@ -87,14 +87,26 @@ async function openOverview(
 }
 
 /**
- * Activates the ↓ DOWNLOAD mode toggle (the yellow button in the overview
- * toolbar) and verifies aria-pressed flips to "true".
+ * Opens the Tools popover in the overview toolbar.
+ */
+async function openToolsPopover(
+  page: import("@playwright/test").Page,
+): Promise<void> {
+  const toolsBtn = page.getByTestId("overview-tools-toggle");
+  await expect(toolsBtn).toBeVisible({ timeout: 5_000 });
+  await toolsBtn.dispatchEvent("click");
+  await expect(page.getByTestId("overview-tools-popover")).toBeVisible({ timeout: 2_000 });
+}
+
+/**
+ * Activates the ↓ DOWNLOAD mode via the Tools popover and verifies
+ * aria-pressed flips to "true".
  */
 async function activateDownloadMode(
   page: import("@playwright/test").Page,
 ): Promise<void> {
+  await openToolsPopover(page);
   const toggle = page.getByTestId("overview-download-toggle");
-  await expect(toggle).toBeVisible({ timeout: 5_000 });
   await toggle.dispatchEvent("click");
   await expect(toggle).toHaveAttribute("aria-pressed", "true");
 }
@@ -236,17 +248,20 @@ test.describe("BathyScan — Download toolbar mode (UI)", () => {
 
     await openOverview(page);
 
+    // Open Tools popover to access the download toggle.
+    await openToolsPopover(page);
     const toggle = page.getByTestId("overview-download-toggle");
-    await expect(toggle).toBeVisible({ timeout: 5_000 });
 
     // Initially not pressed.
     const initialPressed = await toggle.getAttribute("aria-pressed");
     expect(initialPressed).not.toBe("true");
 
+    // Activate — popover closes after selection but button stays in DOM.
     await toggle.dispatchEvent("click");
     await expect(toggle).toHaveAttribute("aria-pressed", "true");
 
-    // Clicking again deactivates it.
+    // Deactivate: re-open the popover and click again.
+    await openToolsPopover(page);
     await toggle.dispatchEvent("click");
     await expect(toggle).toHaveAttribute("aria-pressed", "false");
   });
@@ -258,19 +273,19 @@ test.describe("BathyScan — Download toolbar mode (UI)", () => {
 
     await openOverview(page);
 
+    // Open Tools popover to access both toggles.
+    await openToolsPopover(page);
     const downloadToggle = page.getByTestId("overview-download-toggle");
     const selectToggle = page.getByTestId("overview-select-area-toggle");
 
-    await expect(downloadToggle).toBeVisible({ timeout: 5_000 });
-    await expect(selectToggle).toBeVisible({ timeout: 5_000 });
-
-    // Activate select-area first, then activate download.
+    // Activate select-area first — popover closes after click.
     await selectToggle.dispatchEvent("click");
     await expect(selectToggle).toHaveAttribute("aria-pressed", "true");
 
+    // Re-open popover and activate download — select-area must deactivate.
+    await openToolsPopover(page);
     await downloadToggle.dispatchEvent("click");
     await expect(downloadToggle).toHaveAttribute("aria-pressed", "true");
-    // Select-area must have been deactivated.
     await expect(selectToggle).toHaveAttribute("aria-pressed", "false");
   });
 

@@ -514,9 +514,11 @@ test.describe("BathyScan — Overview Map", () => {
         return;
       }
 
-      // Activate the box-select tool.
+      // Open the Tools popover and activate the box-select tool.
+      const toolsBtn = page.getByTestId("overview-tools-toggle");
+      await expect(toolsBtn).toBeVisible({ timeout: 5_000 });
+      await toolsBtn.dispatchEvent("click");
       const selectBtn = page.getByTestId("overview-select-area-toggle");
-      await expect(selectBtn).toBeVisible();
       await selectBtn.dispatchEvent("click");
       await expect(selectBtn).toHaveAttribute("aria-pressed", "true");
 
