@@ -92,6 +92,7 @@ import { lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
 import { OnboardingOverlay } from "@/components/OnboardingOverlay";
 import { useWebglContextStore } from "@/lib/webglContextStore";
 import { useCameraStore } from "@/lib/cameraStore";
+import { DEV_AUTH_BYPASS } from "@/lib/devAuth";
 
 
 function TestBridge(): null {
@@ -1837,7 +1838,14 @@ export function ClerkAuthTokenWirer() {
     if (session) {
       setClerkLoaded(true);
       setAuthTokenGetter(() =>
-        getTokenWithRetry(() => session.getToken(), signalSessionExpired),
+        getTokenWithRetry(
+          () => session.getToken(),
+          // In dev-auth-bypass mode getToken() always returns null (the stub
+          // has no real Clerk session), but API calls succeed via the
+          // x-e2e-user-id header patch.  Don't fire the session-expired banner
+          // for an expected null; use a no-op so the banner is never shown.
+          DEV_AUTH_BYPASS ? () => {} : signalSessionExpired,
+        ),
       );
     } else {
       setClerkLoaded(false);
