@@ -94,6 +94,10 @@ describe("recoverGcsJobStatus", () => {
     vi.advanceTimersByTime(31_000);
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("returns status=failed with error when object is in failed-datasets/ with x-goog-meta-error", async () => {
     onlyExists(`failed-datasets/${SUFFIX}`, {
       metadata: { "x-goog-meta-error": "File must contain at least 10 valid rows" },

@@ -23,8 +23,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import {
   useDatasetProximityStreaming,
-  LOAD_THRESHOLD_M,
-  UNLOAD_THRESHOLD_M,
   type DatasetBbox,
 } from "@/hooks/useDatasetProximityStreaming";
 import { useCameraStore } from "@/lib/cameraStore";

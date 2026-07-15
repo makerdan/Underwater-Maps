@@ -93,6 +93,7 @@ function resetMocks(): void {
   dbControl.deleteReturning.mockReset().mockResolvedValue([]);
   dbControl.deleteWhere.mockReset().mockReturnValue({ returning: dbControl.deleteReturning });
   dbControl.deleteFn.mockReset().mockReturnValue({ where: dbControl.deleteWhere });
+  vi.mocked(lt).mockClear();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
