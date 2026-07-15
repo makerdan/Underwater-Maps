@@ -85,11 +85,21 @@ describe("GET /tidal/schedule", () => {
     }
   });
 
-  it("clamps days to the supported [1, 14] window", async () => {
+  it("rejects days outside the supported [1, 14] window with 400", async () => {
     fetchSpy.mockResolvedValue(jsonResponse({ stations: [] }));
 
     const res = await request(makeApp()).get(
       "/tidal/schedule?lat=10&lon=20&days=999&start=2026-05-25T00:00:00Z",
+    );
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBeDefined();
+  });
+
+  it("accepts the maximum supported days=14", async () => {
+    fetchSpy.mockResolvedValue(jsonResponse({ stations: [] }));
+
+    const res = await request(makeApp()).get(
+      "/tidal/schedule?lat=10&lon=20&days=14&start=2026-05-25T00:00:00Z",
     );
     expect(res.status).toBe(200);
     const start = new Date(res.body.rangeStart).getTime();

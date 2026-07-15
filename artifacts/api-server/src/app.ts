@@ -10,6 +10,11 @@ import {
 import { correlationIdMiddleware, globalTimeoutMiddleware } from "./middlewares/correlationId";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { validateStartupEnv } from "./lib/env";
+
+// Validate format-sensitive env vars once at startup. Malformed values are
+// logged loudly here (and safe fallbacks apply at each point of use).
+validateStartupEnv();
 
 const app: Express = express();
 

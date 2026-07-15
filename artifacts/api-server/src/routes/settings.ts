@@ -209,12 +209,55 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
   // globalFontSize, efhOverlayEnabled, weatherStationsActive, etc.) ARE already
   // present in PutSettingsBody and will therefore appear in parsed.data; they
   // do NOT go through this extras path. Only genuinely unrecognised keys reach
-  // this block. Both categories should be stored verbatim so they round-trip
-  // correctly.
+  // this block.
+  //
+  // POLICY (documented decision): unknown keys are accepted for backward and
+  // forward compatibility, but they are constrained rather than merged blindly:
+  //   * key names must match EXTRA_KEY_RE (letter-first identifier, ≤ 64 chars)
+  //     — this rejects prototype-pollution vectors (__proto__, constructor,
+  //     prototype), dunder keys, and arbitrary injected key strings;
+  //   * at most MAX_EXTRA_KEYS unknown keys per request;
+  //   * the serialized extras payload is capped at MAX_EXTRAS_BYTES.
+  // A request violating any of these returns a structured 400 instead of
+  // silently storing attacker-controlled keys.
   const schemaKeys = new Set(Object.keys(parsed.data as Record<string, unknown>));
-  const extras: Record<string, unknown> = {};
+  // Null-prototype object: a plain `{}` would treat an assignment to
+  // "__proto__" as a prototype mutation (silently vanishing from
+  // Object.keys) instead of an own property, letting the key evade the
+  // policy checks below.
+  const extras: Record<string, unknown> = Object.create(null);
   for (const [k, v] of Object.entries(body)) {
-    if (!schemaKeys.has(k)) extras[k] = v;
+    if (!schemaKeys.has(k) && k !== "__updatedAt") extras[k] = v;
+  }
+
+  const EXTRA_KEY_RE = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+  const FORBIDDEN_EXTRA_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+  const MAX_EXTRA_KEYS = 32;
+  const MAX_EXTRAS_BYTES = 16 * 1024;
+
+  const badKey = Object.keys(extras).find(
+    (k) => FORBIDDEN_EXTRA_KEYS.has(k) || !EXTRA_KEY_RE.test(k),
+  );
+  if (badKey !== undefined) {
+    res.status(400).json({
+      error: "invalid_request",
+      details: `Unknown settings key '${badKey}' is not an allowed key name`,
+    });
+    return;
+  }
+  if (Object.keys(extras).length > MAX_EXTRA_KEYS) {
+    res.status(400).json({
+      error: "invalid_request",
+      details: `Too many unknown settings keys (max ${MAX_EXTRA_KEYS})`,
+    });
+    return;
+  }
+  if (Buffer.byteLength(JSON.stringify(extras), "utf8") > MAX_EXTRAS_BYTES) {
+    res.status(400).json({
+      error: "invalid_request",
+      details: `Unknown settings keys exceed the ${MAX_EXTRAS_BYTES}-byte size cap`,
+    });
+    return;
   }
   // Server is the source of truth for the sync timestamp — never trust the
   // client's value here. This is what cross-device hydration uses to decide

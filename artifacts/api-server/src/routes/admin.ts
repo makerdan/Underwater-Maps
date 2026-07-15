@@ -8,6 +8,7 @@ import {
   getLargeDatasetsDiff,
 } from "../lib/bucketMonitor.js";
 import { queryRateLimitUsage } from "../middlewares/rateLimit.js";
+import { AdminRateLimitUsageQuerySchema } from "./schemas.js";
 
 const router = Router();
 
@@ -124,10 +125,17 @@ router.get(
       return;
     }
 
-    const rawWindowMs = Number(req.query["windowMs"]);
-    const rawLimit = Number(req.query["limit"]);
-    const windowMs = Number.isFinite(rawWindowMs) && rawWindowMs > 0 ? rawWindowMs : 60_000;
-    const topN = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 200) : 25;
+    const parsed = AdminRateLimitUsageQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      const first = parsed.error.issues[0];
+      res.status(400).json({
+        error: "invalid_param",
+        details: first ? `${String(first.path[0] ?? "query")}: ${first.message}` : "Invalid query parameters",
+      });
+      return;
+    }
+    const windowMs = parsed.data.windowMs ?? 60_000;
+    const topN = parsed.data.limit ?? 25;
 
     const rows = await queryRateLimitUsage(windowMs, topN);
 

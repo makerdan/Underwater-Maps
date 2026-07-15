@@ -187,6 +187,102 @@ const TERRAIN_TOOLS: TerrainTool[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Tool-argument validation
+//
+// The LLM's tool_calls[].function.arguments field is model-generated JSON —
+// it is untrusted input just like a request body. Every tool has a strict Zod
+// schema; arguments that fail validation are never forwarded to the client.
+// Invalid calls are reported in a separate `toolErrors` array so the client
+// can surface a friendly failure instead of executing garbage.
+// ---------------------------------------------------------------------------
+
+const TOOL_ARG_SCHEMAS: Record<string, z.ZodType<Record<string, unknown>>> = {
+  navigateTo: z
+    .object({
+      lon: z.number().finite().gte(-180).lte(180),
+      lat: z.number().finite().gte(-90).lte(90),
+    })
+    .strict(),
+  navigateToDeepestPoint: z.object({}).strict(),
+  navigateToShallowPoint: z.object({}).strict(),
+  highlightDepthRange: z
+    .object({
+      minMetres: z.number().finite(),
+      maxMetres: z.number().finite(),
+    })
+    .strict(),
+  highlightSlope: z
+    .object({
+      minDegrees: z.number().finite(),
+      maxDegrees: z.number().finite(),
+    })
+    .strict(),
+  highlightZone: z.object({ zone: z.string().min(1).max(100) }).strict(),
+  showStatistic: z
+    .object({
+      metric: z.enum([
+        "mean_depth",
+        "max_depth",
+        "min_depth",
+        "depth_std_dev",
+        "area_km2",
+        "slope_mean",
+        "deepest_coordinates",
+        "shallowest_coordinates",
+      ]),
+    })
+    .strict(),
+  describeCurrentLocation: z.object({}).strict(),
+  clearHighlights: z.object({}).strict(),
+  openOverview: z.object({}).strict(),
+  switchDataset: z.object({ datasetId: z.string().min(1).max(200) }).strict(),
+};
+
+type ValidatedToolCall = { name: string; args: Record<string, unknown> };
+type ToolCallError = { name: string; error: string };
+
+/**
+ * Validate raw LLM tool calls against their per-tool schemas.
+ * Returns the valid calls plus a structured error entry for each rejected one.
+ */
+export function validateToolCalls(
+  rawCalls: Array<{ function: { name: string; arguments: string } }>,
+): { toolCalls: ValidatedToolCall[]; toolErrors: ToolCallError[] } {
+  const toolCalls: ValidatedToolCall[] = [];
+  const toolErrors: ToolCallError[] = [];
+
+  for (const tc of rawCalls) {
+    const name = tc.function?.name ?? "";
+    const schema = TOOL_ARG_SCHEMAS[name];
+    if (!schema) {
+      toolErrors.push({ name, error: "unknown_tool" });
+      continue;
+    }
+
+    let parsedArgs: unknown;
+    try {
+      parsedArgs = tc.function.arguments ? JSON.parse(tc.function.arguments) : {};
+    } catch {
+      toolErrors.push({ name, error: "malformed_arguments_json" });
+      continue;
+    }
+
+    const result = schema.safeParse(parsedArgs);
+    if (!result.success) {
+      toolErrors.push({
+        name,
+        error: `invalid_arguments: ${result.error.issues[0]?.message ?? "validation failed"}`,
+      });
+      continue;
+    }
+
+    toolCalls.push({ name, args: result.data });
+  }
+
+  return { toolCalls, toolErrors };
+}
+
+// ---------------------------------------------------------------------------
 // Route + request schema
 // ---------------------------------------------------------------------------
 
@@ -280,17 +376,16 @@ router.post(
 
     const message = choice.message;
     type RawToolCall = { function: { name: string; arguments: string } };
-    const toolCalls = ((message.tool_calls ?? []) as RawToolCall[]).map((tc) => ({
-      name: tc.function.name,
-      args: (() => {
-        try { return JSON.parse(tc.function.arguments) as Record<string, unknown>; }
-        catch { return {}; }
-      })(),
-    }));
+    const { toolCalls, toolErrors } = validateToolCalls(
+      (message.tool_calls ?? []) as RawToolCall[],
+    );
+    if (toolErrors.length > 0) {
+      logger.warn({ toolErrors }, "[query] rejected malformed LLM tool calls");
+    }
 
     const textResponse = message.content ?? null;
 
-    res.json({ toolCalls, textResponse });
+    res.json({ toolCalls, toolErrors, textResponse });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     logger.error({ err, msg }, "[query] OpenAI error");

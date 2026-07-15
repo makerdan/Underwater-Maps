@@ -117,10 +117,10 @@ beforeEach(() => {
 
 describe("DELETE /api/datasets/my-saves/:id", () => {
   it("returns 404 when the save belongs to a different user", async () => {
-    state.saves = [{ id: "save-1", userId: "user-b", catalogId: "preset-x", datasetId: "ds-1" }];
+    state.saves = [{ id: "11111111-1111-4111-8111-111111111111", userId: "user-b", catalogId: "preset-x", datasetId: "ds-1" }];
     state.datasets = [{ id: "ds-1", userId: "user-b" }];
 
-    const res = await request(app).delete("/api/datasets/my-saves/save-1");
+    const res = await request(app).delete("/api/datasets/my-saves/11111111-1111-4111-8111-111111111111");
 
     expect(res.status).toBe(404);
     expect(state.saves).toHaveLength(1);
@@ -130,36 +130,49 @@ describe("DELETE /api/datasets/my-saves/:id", () => {
   });
 
   it("returns 404 when the save id doesn't exist", async () => {
-    const res = await request(app).delete("/api/datasets/my-saves/missing");
+    const res = await request(app).delete("/api/datasets/my-saves/33333333-3333-4333-8333-333333333333");
     expect(res.status).toBe(404);
   });
 
   it("deletes the save and the linked custom_datasets row on success", async () => {
-    state.saves = [{ id: "save-1", userId: "user-a", catalogId: "preset-x", datasetId: "ds-1" }];
+    state.saves = [{ id: "11111111-1111-4111-8111-111111111111", userId: "user-a", catalogId: "preset-x", datasetId: "ds-1" }];
     state.datasets = [{ id: "ds-1", userId: "user-a" }];
 
-    const res = await request(app).delete("/api/datasets/my-saves/save-1");
+    const res = await request(app).delete("/api/datasets/my-saves/11111111-1111-4111-8111-111111111111");
 
     expect(res.status).toBe(204);
-    expect(state.deletedSaveIds).toContain("save-1");
+    expect(state.deletedSaveIds).toContain("11111111-1111-4111-8111-111111111111");
     expect(state.deletedDatasetIds).toContain("ds-1");
     expect(state.saves).toHaveLength(0);
     expect(state.datasets).toHaveLength(0);
   });
 
   it("deletes the save even when no dataset has been materialized yet", async () => {
-    state.saves = [{ id: "save-2", userId: "user-a", catalogId: "preset-y", datasetId: null }];
+    state.saves = [{ id: "22222222-2222-4222-8222-222222222222", userId: "user-a", catalogId: "preset-y", datasetId: null }];
 
-    const res = await request(app).delete("/api/datasets/my-saves/save-2");
+    const res = await request(app).delete("/api/datasets/my-saves/22222222-2222-4222-8222-222222222222");
 
     expect(res.status).toBe(204);
-    expect(state.deletedSaveIds).toContain("save-2");
+    expect(state.deletedSaveIds).toContain("22222222-2222-4222-8222-222222222222");
     expect(state.deletedDatasetIds).toHaveLength(0);
+  });
+
+  it("returns 400 for a non-UUID save id (param validation)", async () => {
+    const res = await request(app).delete("/api/datasets/my-saves/not-a-uuid");
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_param");
+  });
+
+  it("returns 400 for a path-traversal-style save id", async () => {
+    const res = await request(app).delete(
+      "/api/datasets/my-saves/..%2F..%2Fetc%2Fpasswd",
+    );
+    expect(res.status).toBe(400);
   });
 
   it("rejects unauthenticated callers", async () => {
     currentUserId = null;
-    const res = await request(app).delete("/api/datasets/my-saves/save-1");
+    const res = await request(app).delete("/api/datasets/my-saves/11111111-1111-4111-8111-111111111111");
     expect(res.status).toBe(401);
   });
 });

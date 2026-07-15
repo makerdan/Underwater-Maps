@@ -30,6 +30,14 @@ vi.mock("../../lib/bucketMonitor.js", () => ({
   getLargeDatasetsDiff: mockGetLargeDatasetsDiff,
 }));
 
+const { mockQueryRateLimitUsage } = vi.hoisted(() => ({
+  mockQueryRateLimitUsage: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock("../../middlewares/rateLimit.js", () => ({
+  queryRateLimitUsage: mockQueryRateLimitUsage,
+}));
+
 vi.mock("@clerk/express", () => ({
   clerkMiddleware: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
   getAuth: vi.fn(() => ({ userId: null })),
@@ -177,5 +185,57 @@ describe("GET /admin/large-datasets-diff — authentication", () => {
       filename: "new_survey.xyz",
       status: "unimported",
     });
+  });
+});
+
+describe("GET /admin/rate-limit/usage — query param validation", () => {
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+    vi.stubEnv("E2E_AUTH_BYPASS", "1");
+    vi.stubEnv("ADMIN_USER_IDS", E2E_USER);
+    mockQueryRateLimitUsage.mockClear();
+    mockQueryRateLimitUsage.mockResolvedValue([]);
+  });
+
+  function get(url: string) {
+    return request(makeApp()).get(url).set("x-e2e-user-id", E2E_USER);
+  }
+
+  it("applies defaults when no params are given", async () => {
+    const res = await get("/admin/rate-limit/usage");
+    expect(res.status).toBe(200);
+    expect(res.body.windowMs).toBe(60000);
+    expect(mockQueryRateLimitUsage).toHaveBeenCalledWith(60000, 25);
+  });
+
+  it("accepts in-range windowMs and limit", async () => {
+    const res = await get("/admin/rate-limit/usage?windowMs=120000&limit=50");
+    expect(res.status).toBe(200);
+    expect(mockQueryRateLimitUsage).toHaveBeenCalledWith(120000, 50);
+  });
+
+  it("rejects non-numeric windowMs with 400", async () => {
+    const res = await get("/admin/rate-limit/usage?windowMs=soon");
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_param");
+    expect(mockQueryRateLimitUsage).not.toHaveBeenCalled();
+  });
+
+  it("rejects out-of-range windowMs with 400", async () => {
+    const res = await get("/admin/rate-limit/usage?windowMs=999999999999");
+    expect(res.status).toBe(400);
+    expect(mockQueryRateLimitUsage).not.toHaveBeenCalled();
+  });
+
+  it("rejects out-of-range limit with 400", async () => {
+    const res = await get("/admin/rate-limit/usage?limit=9999");
+    expect(res.status).toBe(400);
+    expect(mockQueryRateLimitUsage).not.toHaveBeenCalled();
+  });
+
+  it("rejects array-injected params with 400", async () => {
+    const res = await get("/admin/rate-limit/usage?limit=10&limit=20");
+    expect(res.status).toBe(400);
+    expect(mockQueryRateLimitUsage).not.toHaveBeenCalled();
   });
 });

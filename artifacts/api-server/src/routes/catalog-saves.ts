@@ -29,7 +29,7 @@ import { Router } from "express";
 import { eq, and, lt } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
-import { CatalogSearchQuerySchema } from "./schemas.js";
+import { CatalogSearchQuerySchema, CatalogIdParamSchema, SaveIdParamSchema } from "./schemas.js";
 import { db, userCatalogSavesTable, customDatasetsTable, type StoredTerrainJson } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
@@ -256,7 +256,15 @@ router.post("/datasets/bbox-query", asyncHandler(async (req, res): Promise<void>
 
 router.post("/datasets/catalog/:id/save", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
-  const catalogId = String(req.params["id"] ?? "");
+  const idParsed = CatalogIdParamSchema.safeParse(req.params["id"]);
+  if (!idParsed.success) {
+    res.status(400).json({
+      error: "invalid_param",
+      details: idParsed.error.issues[0]?.message ?? "Invalid catalog id",
+    });
+    return;
+  }
+  const catalogId = idParsed.data;
 
   // Validate the catalog entry exists
   const entries = await getCatalogEntries();
@@ -719,7 +727,15 @@ function nceiCoverageForEntry(
 
 router.post("/datasets/my-saves/:id/retry", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
-  const saveId = String(req.params["id"] ?? "");
+  const saveIdParsed = SaveIdParamSchema.safeParse(req.params["id"]);
+  if (!saveIdParsed.success) {
+    res.status(400).json({
+      error: "invalid_param",
+      details: saveIdParsed.error.issues[0]?.message ?? "Invalid save id",
+    });
+    return;
+  }
+  const saveId = saveIdParsed.data;
 
   const rows = await db
     .select()
@@ -794,7 +810,15 @@ router.get("/datasets/my-saves", requireAuth, asyncHandler(async (req, res): Pro
 
 router.get("/datasets/my-saves/:id/status", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
-  const saveId = String(req.params["id"] ?? "");
+  const saveIdParsed = SaveIdParamSchema.safeParse(req.params["id"]);
+  if (!saveIdParsed.success) {
+    res.status(400).json({
+      error: "invalid_param",
+      details: saveIdParsed.error.issues[0]?.message ?? "Invalid save id",
+    });
+    return;
+  }
+  const saveId = saveIdParsed.data;
 
   const rows = await db
     .select()
@@ -822,7 +846,15 @@ router.get("/datasets/my-saves/:id/status", requireAuth, asyncHandler(async (req
 
 router.delete("/datasets/my-saves/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
-  const saveId = String(req.params["id"] ?? "");
+  const saveIdParsed = SaveIdParamSchema.safeParse(req.params["id"]);
+  if (!saveIdParsed.success) {
+    res.status(400).json({
+      error: "invalid_param",
+      details: saveIdParsed.error.issues[0]?.message ?? "Invalid save id",
+    });
+    return;
+  }
+  const saveId = saveIdParsed.data;
 
   const [save] = await db
     .select({ id: userCatalogSavesTable.id, datasetId: userCatalogSavesTable.datasetId })

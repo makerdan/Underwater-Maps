@@ -144,3 +144,62 @@ describe("PUT /api/settings — HTTP validation", () => {
     expect(res.body).toMatchObject({ error: "invalid_request" });
   });
 });
+
+describe("PUT /api/settings — unknown-key (extras) policy", () => {
+  function put(body: Record<string, unknown>) {
+    return request(app)
+      .put("/api/settings")
+      .set("x-e2e-user-id", "user-settings-extras")
+      .send(body);
+  }
+
+  it("accepts a benign unknown key that matches the identifier policy", async () => {
+    const res = await put({ showCompassMinimap: true });
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects a prototype-pollution key name with 400", async () => {
+    // Use raw JSON so the __proto__ key survives object-literal handling.
+    const res = await request(app)
+      .put("/api/settings")
+      .set("x-e2e-user-id", "user-settings-extras")
+      .set("content-type", "application/json")
+      .send('{"__proto__": {"polluted": true}}');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+  });
+
+  it("rejects a constructor key with 400", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set("x-e2e-user-id", "user-settings-extras")
+      .set("content-type", "application/json")
+      .send('{"constructor": 1}');
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects key names with illegal characters", async () => {
+    const res = await put({ "bad key!": 1 });
+    expect(res.status).toBe(400);
+    expect(res.body.details).toMatch(/not an allowed key name/);
+  });
+
+  it("rejects more than 32 unknown keys", async () => {
+    const body: Record<string, unknown> = {};
+    for (let i = 0; i < 33; i++) body[`extraKey${i}`] = i;
+    const res = await put(body);
+    expect(res.status).toBe(400);
+    expect(res.body.details).toMatch(/Too many unknown settings keys/);
+  });
+
+  it("rejects oversized extras payloads", async () => {
+    const res = await put({ bigExtra: "x".repeat(17 * 1024) });
+    expect(res.status).toBe(400);
+    expect(res.body.details).toMatch(/size cap/);
+  });
+
+  it("still allows the server-managed __updatedAt key to pass through", async () => {
+    const res = await put({ __updatedAt: 12345 });
+    expect(res.status).toBe(200);
+  });
+});

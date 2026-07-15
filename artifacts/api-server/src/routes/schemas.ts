@@ -322,3 +322,129 @@ export const ChunkFinalizeBodySchema = z.object({
 });
 
 export type ChunkFinalizeBody = z.infer<typeof ChunkFinalizeBodySchema>;
+
+/**
+ * Optional ISO-ish datetime string. An empty string (e.g. `?datetime=`) is
+ * treated as absent. Array injection (?datetime[]=a&datetime[]=b) is rejected
+ * because z.string() rejects arrays.
+ */
+const optionalDateStringSchema = z.preprocess(
+  (v) => (v === "" ? undefined : v),
+  z
+    .string({ invalid_type_error: "datetime must be a string" })
+    .refine((s) => !isNaN(new Date(s).getTime()), "must be a parseable datetime")
+    .optional(),
+);
+
+/**
+ * Optional days count coerced from a query string. `min`/`max` bound the
+ * accepted range; out-of-range or non-integer input fails validation (400)
+ * instead of being silently clamped. Empty string is treated as absent.
+ */
+function daysSchema(min: number, max: number) {
+  return z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z
+      .string({ invalid_type_error: "days must be a string, not an array" })
+      .regex(/^\d+$/, "days must be a non-negative integer")
+      .transform(Number)
+      .pipe(
+        z
+          .number()
+          .int()
+          .min(min, `days must be between ${min} and ${max}`)
+          .max(max, `days must be between ${min} and ${max}`),
+      )
+      .optional(),
+  );
+}
+
+/**
+ * Validates query parameters for GET /tidal.
+ * lat/lon use string-first schemas so array injection (?lat[]=1&lat[]=2) is
+ * rejected with a type error rather than producing NaN behaviour.
+ */
+export const TidalQuerySchema = z.object({
+  lat: latCoordSchema,
+  lon: lonCoordSchema,
+  datetime: optionalDateStringSchema,
+});
+
+export type TidalQuery = z.infer<typeof TidalQuerySchema>;
+
+/** Validates query parameters for GET /tidal/schedule (days ∈ [1, 14]). */
+export const TidalScheduleQuerySchema = z.object({
+  lat: latCoordSchema,
+  lon: lonCoordSchema,
+  days: daysSchema(1, 14),
+  start: optionalDateStringSchema,
+});
+
+export type TidalScheduleQuery = z.infer<typeof TidalScheduleQuerySchema>;
+
+/** Validates query parameters for GET /tidal/pack (days ∈ [3, 14]). */
+export const TidalPackQuerySchema = z.object({
+  lat: latCoordSchema,
+  lon: lonCoordSchema,
+  days: daysSchema(3, 14),
+});
+
+export type TidalPackQuery = z.infer<typeof TidalPackQuerySchema>;
+
+/**
+ * Validates query parameters for GET /admin/rate-limit/usage.
+ * Both params are optional; when provided they must be positive integers
+ * within sane bounds. Array injection and non-numeric values return 400
+ * instead of silently falling back to defaults.
+ */
+export const AdminRateLimitUsageQuerySchema = z.object({
+  windowMs: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z
+      .string({ invalid_type_error: "windowMs must be a string, not an array" })
+      .regex(/^\d+$/, "windowMs must be a positive integer")
+      .transform(Number)
+      .pipe(
+        z
+          .number()
+          .int()
+          .min(1000, "windowMs must be between 1000 and 604800000")
+          .max(604_800_000, "windowMs must be between 1000 and 604800000"),
+      )
+      .optional(),
+  ),
+  limit: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z
+      .string({ invalid_type_error: "limit must be a string, not an array" })
+      .regex(/^\d+$/, "limit must be a positive integer")
+      .transform(Number)
+      .pipe(
+        z
+          .number()
+          .int()
+          .min(1, "limit must be between 1 and 200")
+          .max(200, "limit must be between 1 and 200"),
+      )
+      .optional(),
+  ),
+});
+
+export type AdminRateLimitUsageQuery = z.infer<typeof AdminRateLimitUsageQuerySchema>;
+
+/**
+ * Validates the :id path param for POST /datasets/catalog/:id/save.
+ * Catalog IDs are slug-like (e.g. "ncei-portal-…"); constrain the charset and
+ * length so arbitrary junk never reaches catalog lookup or the database.
+ */
+export const CatalogIdParamSchema = z
+  .string({ invalid_type_error: "catalog id must be a string" })
+  .regex(
+    /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/,
+    "catalog id must be 1–200 characters of letters, digits, dots, colons, underscores, or hyphens",
+  );
+
+/** Validates the :id path param for save rows (DB UUID primary keys). */
+export const SaveIdParamSchema = z
+  .string({ invalid_type_error: "save id must be a string" })
+  .uuid("save id must be a valid UUID");

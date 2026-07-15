@@ -24,12 +24,13 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 
 // ── Configuration ───────────────────────────────────────────────────────────
 
-// Allowlisted files (repo-relative): the single registry of fixed E2E
-// ports, plus guard scripts whose own comments/patterns self-match.
+// Allowlisted files (repo-relative): the fixed E2E port registry, plus the
+// port-guard scripts themselves — their comments and regex sources contain
+// example patterns (`port: 1234`, `process.env.PORT ?? 3000`) that would
+// otherwise self-flag.
 const ALLOWLIST = new Set([
   "tests/e2e/ports.ts",
-  // Sibling guard script: its comments and regex definitions contain the very
-  // patterns this scanner flags, so it must be excluded from scanning.
+  "scripts/check-hardcoded-ports.mjs",
   "scripts/check-port-drift.mjs",
 ]);
 

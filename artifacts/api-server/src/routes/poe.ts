@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
+import { parsePositiveIntEnv } from "../lib/env.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { promises as fsPromises } from "fs";
 import path from "path";
@@ -266,22 +267,21 @@ const ZONE_CACHE_DIR = "/tmp/zone-cache";
  * `classifiedAt` timestamp is older than this are removed from disk during
  * hydration. Configurable via ZONE_CACHE_MAX_AGE_MS (default: 7 days).
  */
-const ZONE_CACHE_MAX_AGE_MS: number = (() => {
-  const raw = process.env.ZONE_CACHE_MAX_AGE_MS;
-  const parsed = raw ? parseInt(raw, 10) : NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 7 * 24 * 60 * 60 * 1000;
-})();
+const ZONE_CACHE_MAX_AGE_MS: number = parsePositiveIntEnv(
+  "ZONE_CACHE_MAX_AGE_MS",
+  7 * 24 * 60 * 60 * 1000,
+  { min: 1000, max: 365 * 24 * 60 * 60 * 1000 },
+);
 
 /**
  * Maximum number of .json files to keep in the zone-cache directory. When
  * more files survive the age check than this cap, the oldest (by classifiedAt)
  * are evicted. Configurable via ZONE_CACHE_MAX_FILES (default: 500).
  */
-const ZONE_CACHE_MAX_FILES: number = (() => {
-  const raw = process.env.ZONE_CACHE_MAX_FILES;
-  const parsed = raw ? parseInt(raw, 10) : NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 500;
-})();
+const ZONE_CACHE_MAX_FILES: number = parsePositiveIntEnv("ZONE_CACHE_MAX_FILES", 500, {
+  min: 1,
+  max: 100_000,
+});
 
 /**
  * Sentinel file that marks the cache directory as having been written with the
@@ -304,20 +304,52 @@ function isValidZoneCacheKey(key: string): boolean {
   return ZONE_CACHE_KEY_RE.test(key);
 }
 
+/**
+ * Schema for on-disk zone-cache entries. Files under /tmp are outside the
+ * process's trust boundary (they survive restarts and could be corrupted or
+ * tampered with), so every read is validated before use. Any file that fails
+ * validation is treated as a cache miss.
+ */
+export const CachedZonesSchema = z.object({
+  zones: z.array(z.string().max(100)).max(1_048_576),
+  waterType: z.enum(["saltwater", "freshwater"]),
+  classifiedAt: z.number().finite(),
+  source: z.enum(["ai", "heuristic", "partial"]).optional(),
+  contentHash: z.string().max(128).optional(),
+  coarseWidth: z.number().int().positive().max(4096).optional(),
+  coarseHeight: z.number().int().positive().max(4096).optional(),
+});
+
 /** Read a single zone cache entry by namespaced cache key from disk. */
 export async function readZoneDiskByKey(cacheKey: string): Promise<CachedZones | null> {
   if (!isValidZoneCacheKey(cacheKey)) return null; // reject path traversal attempts
+  let raw: string;
+  const file = path.join(ZONE_CACHE_DIR, `${cacheKey}.json`);
+  // Resolve and verify the path stays inside ZONE_CACHE_DIR
+  const resolved = path.resolve(file);
+  if (!resolved.startsWith(path.resolve(ZONE_CACHE_DIR) + path.sep)) return null;
   try {
-    const file = path.join(ZONE_CACHE_DIR, `${cacheKey}.json`);
-    // Resolve and verify the path stays inside ZONE_CACHE_DIR
-    const resolved = path.resolve(file);
-    if (!resolved.startsWith(path.resolve(ZONE_CACHE_DIR) + path.sep)) return null;
-    const raw = await fsPromises.readFile(resolved, "utf8");
-    return JSON.parse(raw) as CachedZones;
+    raw = await fsPromises.readFile(resolved, "utf8");
   } catch (err) {
     logger.warn({ err, cacheKey }, "[zones] readZoneDiskByKey failed");
     return null;
   }
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(raw);
+  } catch (err) {
+    logger.warn({ err, cacheKey }, "[zones] disk cache entry is corrupt JSON — treating as miss");
+    return null;
+  }
+  const validated = CachedZonesSchema.safeParse(parsedJson);
+  if (!validated.success) {
+    logger.warn(
+      { cacheKey, issue: validated.error.issues[0]?.message },
+      "[zones] disk cache entry failed schema validation — treating as miss",
+    );
+    return null;
+  }
+  return validated.data;
 }
 
 /**

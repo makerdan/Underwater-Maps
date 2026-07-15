@@ -10,6 +10,28 @@ import {
   type SlackBlock,
   type TideEvent,
 } from "../lib/slack.js";
+import {
+  TidalQuerySchema,
+  TidalScheduleQuerySchema,
+  TidalPackQuerySchema,
+} from "./schemas.js";
+import type { ZodError } from "zod";
+
+/**
+ * Map a Zod query-validation error onto the tidal routes' legacy
+ * `invalid_param` error shape, preserving the historical detail strings for
+ * lat/lon and datetime/start so existing clients (and tests) keep working.
+ */
+function tidalValidationDetails(error: ZodError): string {
+  const paths = new Set(error.issues.map((i) => String(i.path[0] ?? "")));
+  if (paths.has("lat") || paths.has("lon")) {
+    return "lat and lon are required numeric parameters";
+  }
+  if (paths.has("datetime")) return "Invalid datetime parameter";
+  if (paths.has("start")) return "Invalid start parameter";
+  const first = error.issues[0];
+  return first ? `${String(first.path[0] ?? "query")}: ${first.message}` : "Invalid query parameters";
+}
 
 const router = Router();
 
@@ -459,23 +481,13 @@ function tidalResultCacheKey(lat: number, lon: number, refMs: number): string {
 
 // GET /tidal?lat=&lon=&datetime=
 router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
-  const lat = parseFloat(String(req.query["lat"] ?? ""));
-  const lon = parseFloat(String(req.query["lon"] ?? ""));
-  const datetimeStr = String(req.query["datetime"] ?? "");
-
-  if (isNaN(lat) || isNaN(lon)) {
-    res.status(400).json({ error: "invalid_param", details: "lat and lon are required numeric parameters" });
+  const parsed = TidalQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_param", details: tidalValidationDetails(parsed.error) });
     return;
   }
-
-  let datetime: Date | undefined;
-  if (datetimeStr) {
-    datetime = new Date(datetimeStr);
-    if (isNaN(datetime.getTime())) {
-      res.status(400).json({ error: "invalid_param", details: "Invalid datetime parameter" });
-      return;
-    }
-  }
+  const { lat, lon } = parsed.data;
+  const datetime: Date | undefined = parsed.data.datetime ? new Date(parsed.data.datetime) : undefined;
 
   const refTime = datetime ?? new Date();
   const refMs = refTime.getTime();
@@ -578,26 +590,14 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
 // Returns the next N days of predicted high/low events plus derived
 // slack windows (when current speed crosses below the slack threshold).
 router.get("/tidal/schedule", asyncHandler(async (req, res): Promise<void> => {
-  const lat = parseFloat(String(req.query["lat"] ?? ""));
-  const lon = parseFloat(String(req.query["lon"] ?? ""));
-  const days = Math.min(14, Math.max(1, parseInt(String(req.query["days"] ?? "7"), 10) || 7));
-  const startStr = String(req.query["start"] ?? "");
-
-  if (isNaN(lat) || isNaN(lon)) {
-    res.status(400).json({ error: "invalid_param", details: "lat and lon are required numeric parameters" });
+  const parsed = TidalScheduleQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_param", details: tidalValidationDetails(parsed.error) });
     return;
   }
-
-  let startTime: Date;
-  if (startStr) {
-    startTime = new Date(startStr);
-    if (isNaN(startTime.getTime())) {
-      res.status(400).json({ error: "invalid_param", details: "Invalid start parameter" });
-      return;
-    }
-  } else {
-    startTime = new Date();
-  }
+  const { lat, lon } = parsed.data;
+  const days = parsed.data.days ?? 7;
+  const startTime: Date = parsed.data.start ? new Date(parsed.data.start) : new Date();
   const endMs = startTime.getTime() + days * 24 * 3600 * 1000;
 
   const station = await getNearestHeightsStation(lat, lon);
@@ -701,14 +701,13 @@ router.get("/tidal/schedule", asyncHandler(async (req, res): Promise<void> => {
 // Fetches height predictions and current predictions for the full N-day window
 // and returns them in a single response object (target < 200 KB for 7 days).
 router.get("/tidal/pack", asyncHandler(async (req, res): Promise<void> => {
-  const lat = parseFloat(String(req.query["lat"] ?? ""));
-  const lon = parseFloat(String(req.query["lon"] ?? ""));
-  const days = Math.min(14, Math.max(3, parseInt(String(req.query["days"] ?? "7"), 10) || 7));
-
-  if (isNaN(lat) || isNaN(lon)) {
-    res.status(400).json({ error: "invalid_param", details: "lat and lon are required numeric parameters" });
+  const parsed = TidalPackQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_param", details: tidalValidationDetails(parsed.error) });
     return;
   }
+  const { lat, lon } = parsed.data;
+  const days = parsed.data.days ?? 7;
 
   const now = new Date();
   const endMs = now.getTime() + days * 24 * 3600 * 1000;
