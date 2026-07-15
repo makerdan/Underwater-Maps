@@ -74,6 +74,13 @@ interface UploadSession {
    * second row per upload.
    */
   sessionJobId?: string;
+  /**
+   * Epoch ms of the last request that touched this session (chunk received,
+   * status polled, or finalize attempted).  Used by
+   * sweepStaleUploadSessions() to evict abandoned sessions after
+   * ABANDONED_UPLOAD_THRESHOLD_MS of inactivity.
+   */
+  lastActivityAt: number;
 }
 const uploadSessions = new Map<string, UploadSession>();
 registerCache(() => uploadSessions.clear());
@@ -84,6 +91,13 @@ interface JobState {
   error?: string;
   datasetId?: string;
   userId: string; // enforced on poll — only the owner can read job status
+  /**
+   * Epoch ms used by sweepStaleUploadSessions() to evict terminal
+   * (done/error) job entries from memory after
+   * ABANDONED_UPLOAD_THRESHOLD_MS. Refreshed on each sweep while the job is
+   * still queued/processing so active jobs are never evicted mid-flight.
+   */
+  lastActivityAt?: number;
   /** Count of archive entries intentionally skipped (unsupported formats). */
   skippedCount?: number;
   /** Unique file extensions of skipped entries, e.g. [".sid.gz", ".pdf"]. */
@@ -459,7 +473,7 @@ export async function recoverStaleUploadJobs(): Promise<void> {
           // Restore the in-memory upload session so chunk-status queries work.
           // Include sessionJobId so that if the client retries finalize the
           // same DB row is reused instead of spawning a second one.
-          uploadSessions.set(uploadId, { userId: job.userId, sessionJobId: job.id });
+          uploadSessions.set(uploadId, { userId: job.userId, sessionJobId: job.id, lastActivityAt: Date.now() });
 
           // Re-queue the job with its original parameters.
           const requeued: JobState = { status: "queued", progress: 0, userId: job.userId };
@@ -625,6 +639,107 @@ export async function cleanupAbandonedUploadJobs(): Promise<void> {
     // Non-fatal — stale rows accumulate but the server remains healthy.
     logger.error({ err }, "[upload-jobs] failed to purge abandoned upload jobs on startup");
   }
+}
+
+/**
+ * Evict abandoned in-memory upload state and its temp chunk files.
+ *
+ * `uploadSessions` and `uploadJobs` are module-level Maps with no other
+ * eviction path — uploads that are started but never finalized (browser
+ * closed, network dropped) would otherwise stay in memory until the server
+ * restarts. This sweep runs periodically (from the upload cleanup job in
+ * lib/uploadCleanupJob.ts, alongside the DB-side abandoned-upload cleanup)
+ * and:
+ *
+ *   - Evicts sessions idle longer than ABANDONED_UPLOAD_THRESHOLD_MS and
+ *     deletes their on-disk chunk files (<uploadId>-chunk-N).
+ *   - Never evicts active sessions: a session that is mid-finalize or whose
+ *     job is queued/processing gets its activity timestamp refreshed instead.
+ *   - Evicts terminal (done/error) uploadJobs entries that have been idle
+ *     past the same threshold — polling for those falls back to the DB row,
+ *     so no client-visible behavior changes.  Queued/processing jobs are
+ *     always kept and their timestamps refreshed.
+ */
+export async function sweepStaleUploadSessions(): Promise<void> {
+  const now = Date.now();
+  const evictedSessions: string[] = [];
+  let evictedJobs = 0;
+
+  for (const [uploadId, session] of uploadSessions) {
+    const activeJob = session.activeJobId ? uploadJobs.get(session.activeJobId) : undefined;
+    const isActive =
+      session.finalizing === true ||
+      activeJob?.status === "queued" ||
+      activeJob?.status === "processing";
+
+    if (isActive) {
+      session.lastActivityAt = now;
+      continue;
+    }
+    if (now - session.lastActivityAt < ABANDONED_UPLOAD_THRESHOLD_MS) continue;
+
+    uploadSessions.delete(uploadId);
+    evictedSessions.push(uploadId);
+
+    // Delete any temp chunk files left behind by the abandoned upload.
+    const entries = await fs.promises.readdir(CHUNK_BASE_DIR).catch(() => [] as string[]);
+    const prefix = `${uploadId}-chunk-`;
+    for (const entry of entries) {
+      if (entry.startsWith(prefix)) {
+        await fs.promises.unlink(path.join(CHUNK_BASE_DIR, entry)).catch(() => undefined);
+      }
+    }
+  }
+
+  for (const [jobId, job] of uploadJobs) {
+    if (job.status === "queued" || job.status === "processing") {
+      job.lastActivityAt = now;
+      continue;
+    }
+    if (job.lastActivityAt === undefined) {
+      // First time this terminal job is observed by the sweep — start its
+      // idle clock now rather than evicting immediately.
+      job.lastActivityAt = now;
+      continue;
+    }
+    if (now - job.lastActivityAt >= ABANDONED_UPLOAD_THRESHOLD_MS) {
+      uploadJobs.delete(jobId);
+      evictedJobs++;
+    }
+  }
+
+  if (evictedSessions.length > 0 || evictedJobs > 0) {
+    logger.info(
+      { sessions: evictedSessions.length, jobs: evictedJobs, thresholdMs: ABANDONED_UPLOAD_THRESHOLD_MS },
+      `[upload-sessions] evicted ${evictedSessions.length} abandoned session(s) and ${evictedJobs} terminal job entrie(s) from memory`,
+    );
+  }
+}
+
+/** Test-only: seed an in-memory upload session. */
+export function setUploadSessionForTest(
+  uploadId: string,
+  session: { userId: string; lastActivityAt: number; finalizing?: boolean; activeJobId?: string; sessionJobId?: string },
+): void {
+  uploadSessions.set(uploadId, session);
+}
+
+/** Test-only: read an in-memory upload session. */
+export function getUploadSessionForTest(uploadId: string): UploadSession | undefined {
+  return uploadSessions.get(uploadId);
+}
+
+/** Test-only: seed an in-memory upload job entry. */
+export function setUploadJobForTest(
+  jobId: string,
+  job: { status: "queued" | "processing" | "done" | "error"; progress: number; userId: string; lastActivityAt?: number },
+): void {
+  uploadJobs.set(jobId, job);
+}
+
+/** Test-only: read an in-memory upload job entry. */
+export function getUploadJobForTest(jobId: string): JobState | undefined {
+  return uploadJobs.get(jobId);
 }
 
 async function cleanupChunks(uploadId: string, totalChunks: number): Promise<void> {
@@ -2026,7 +2141,7 @@ router.post(
       // jobId — this lets the same DB row transition uploading→queued rather
       // than spawning a second row per upload.
       const sessionJobId = crypto.randomUUID();
-      uploadSessions.set(uploadId, { userId, sessionJobId });
+      uploadSessions.set(uploadId, { userId, sessionJobId, lastActivityAt: Date.now() });
       // Persist to DB so chunk-status can reconstruct progress after a
       // server restart that wiped /tmp.  Fire-and-forget — non-fatal.
       void createUploadSessionRow(sessionJobId, userId, uploadId, totalChunks);
@@ -2049,7 +2164,7 @@ router.post(
           .where(eq(uploadJobsTable.uploadId, uploadId));
 
         if (dbJob) {
-          session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId };
+          session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId, lastActivityAt: Date.now() };
           uploadSessions.set(uploadId, session);
         }
       }
@@ -2064,6 +2179,8 @@ router.post(
         res.status(403).json({ error: "forbidden", details: "Upload session belongs to a different user." });
         return;
       }
+      // Refresh activity so an in-progress upload is never swept mid-flight.
+      session.lastActivityAt = Date.now();
     }
 
     // Rename the temp file to its canonical <uploadId>-chunk-<index> path
@@ -2129,7 +2246,7 @@ router.get(
       if (dbJob) {
         // Restore the in-memory session so future requests in this process
         // take the fast path.
-        session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId };
+        session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId, lastActivityAt: Date.now() };
         uploadSessions.set(uploadId, session);
         dbChunksReceived = dbJob.chunksReceived ?? null;
       }
@@ -2220,7 +2337,7 @@ router.post(
         .where(eq(uploadJobsTable.uploadId, uploadId));
 
       if (dbJob) {
-        session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId };
+        session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId, lastActivityAt: Date.now() };
         uploadSessions.set(uploadId, session);
       }
     }
@@ -2233,6 +2350,8 @@ router.post(
       res.status(403).json({ error: "forbidden", details: "Upload session belongs to a different user." });
       return;
     }
+    // Refresh activity so the session is never swept while finalize is underway.
+    session.lastActivityAt = Date.now();
 
     // Idempotency guard — atomic: check AND lock synchronously before any await
     // so two concurrent finalize requests cannot both slip past the check.
@@ -2325,7 +2444,7 @@ router.post(
       throw err;
     }
 
-    const initialState: JobState = { status: "queued", progress: 0, userId };
+    const initialState: JobState = { status: "queued", progress: 0, userId, lastActivityAt: Date.now() };
     uploadJobs.set(jobId, initialState);
 
     // Promote from in-flight lock to a stable jobId reference, then clear the

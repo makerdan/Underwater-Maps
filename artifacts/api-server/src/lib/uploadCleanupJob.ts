@@ -11,7 +11,7 @@
  * restarts. This job fills that gap by running cleanup periodically.
  */
 
-import { cleanupAbandonedUploadJobs } from "../routes/datasets.js";
+import { cleanupAbandonedUploadJobs, sweepStaleUploadSessions } from "../routes/datasets.js";
 import { logger } from "./logger.js";
 
 const CLEANUP_INTERVAL_MS =
@@ -53,6 +53,9 @@ export function startUploadCleanupJob(): () => void {
     cycleRunning = true;
     try {
       await cleanupAbandonedUploadJobs();
+      // Also evict abandoned in-memory upload sessions/jobs and their temp
+      // chunk files — same TTL as the DB-side cleanup above.
+      await sweepStaleUploadSessions();
     } catch (err: unknown) {
       logger.warn({ err }, "[upload-cleanup] Unexpected cleanup cycle error");
     } finally {
