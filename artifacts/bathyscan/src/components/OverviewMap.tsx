@@ -106,6 +106,13 @@ interface TooltipState {
   depth: number;
 }
 
+interface Waypoint {
+  id: string;
+  lon: number;
+  lat: number;
+  label: string;
+}
+
 export const OverviewMap: React.FC = () => {
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
   const setPendingDropIn = useUiStore((s) => s.setPendingDropIn);
@@ -296,6 +303,45 @@ export const OverviewMap: React.FC = () => {
   >(null);
   const downloadBboxRef = useRef<typeof downloadBbox>(null);
   useEffect(() => { downloadBboxRef.current = downloadBbox; }, [downloadBbox]);
+
+  // --- Waypoint tool state --------------------------------------------------
+  // When active, map clicks drop numbered pins instead of teleporting.
+  const [waypointMode, setWaypointMode] = useState(false);
+  const waypointModeRef = useRef(false);
+  useEffect(() => { waypointModeRef.current = waypointMode; }, [waypointMode]);
+  const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
+  const waypointsRef = useRef<Waypoint[]>([]);
+  useEffect(() => {
+    waypointsRef.current = waypoints;
+    dirtyRef.current = true;
+  }, [waypoints]);
+  const [showWaypointPanel, setShowWaypointPanel] = useState(false);
+
+  // Tracks active fly-through timeout IDs so they can be cancelled.
+  const flyThroughTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const cancelFlyThrough = useCallback(() => {
+    flyThroughTimeoutsRef.current.forEach(clearTimeout);
+    flyThroughTimeoutsRef.current = [];
+  }, []);
+
+  // Clear pending timers when the component unmounts.
+  useEffect(() => () => { cancelFlyThrough(); }, [cancelFlyThrough]);
+
+  // Fly-through: sequentially drop-in to each waypoint with a dwell interval.
+  const flyThroughWaypoints = useCallback(() => {
+    const wps = waypointsRef.current;
+    if (wps.length < 2 || !overviewGrid) return;
+    const DWELL_MS = 4000;
+    cancelFlyThrough();
+    useUiStore.getState().setOverviewOpen(false);
+    flyThroughTimeoutsRef.current = wps.map((wp, i) =>
+      setTimeout(() => {
+        const { x: worldX, z: worldZ } = lonLatToWorldXZ(wp.lon, wp.lat, overviewGrid);
+        useUiStore.getState().setPendingDropIn({ worldX, worldZ });
+      }, i * DWELL_MS)
+    );
+  }, [overviewGrid, cancelFlyThrough]);
 
   // In-progress drag rectangle (canvas pixels). `null` when no drag.
   const dragRectRef = useRef<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
@@ -1420,6 +1466,26 @@ export const OverviewMap: React.FC = () => {
       // Select / Download tool owns the canvas; never drop-in or open EFH while active.
       if (selectModeRef.current || downloadModeRef.current) return;
       if (hasDraggedRef.current) return;
+
+      // Waypoint tool: drop a numbered pin at the click location.
+      if (waypointModeRef.current) {
+        const t = transformRef.current;
+        if (!t || !overviewGrid) return;
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const coordGrid = worldGridRef.current ?? overviewGrid;
+        const { lon, lat } = canvasToLonLat(mx, my, coordGrid, t);
+        const newWp: Waypoint = {
+          id: Math.random().toString(36).slice(2),
+          lon,
+          lat,
+          label: String(waypointsRef.current.length + 1),
+        };
+        setWaypoints((prev) => [...prev, newWp]);
+        setShowWaypointPanel(true);
+        return;
+      }
       const t = transformRef.current;
       if (!t || !overviewGrid) {
         // No terrain grid loaded yet — close the overlay to respect the dismiss
@@ -1916,6 +1982,44 @@ export const OverviewMap: React.FC = () => {
               );
             })}
 
+            {/* ── Waypoint connecting line ──────────────────────────────────── */}
+            {waypoints.length >= 2 && (() => {
+              const pts = waypoints.map(wp => {
+                const [cx, cy] = lonLatToCanvas(wp.lon, wp.lat, wg, svgTransform);
+                return `${cx},${cy}`;
+              }).join(' ');
+              return (
+                <polyline
+                  points={pts}
+                  fill="none"
+                  stroke="#a855f7"
+                  strokeWidth={1.5}
+                  strokeDasharray="5 3"
+                  opacity={0.55}
+                  pointerEvents="none"
+                />
+              );
+            })()}
+
+            {/* ── Waypoint pins ─────────────────────────────────────────────── */}
+            {waypoints.map((wp, i) => {
+              const [cx, cy] = lonLatToCanvas(wp.lon, wp.lat, wg, svgTransform);
+              if (!inCanvas(cx, cy, 20)) return null;
+              return (
+                <g key={`wp-${wp.id}`} pointerEvents="none">
+                  <circle cx={cx} cy={cy} r={10} fill="#a855f7" opacity={0.85} />
+                  <circle cx={cx} cy={cy} r={10} fill="none" stroke="#e879f9" strokeWidth={1.5} opacity={0.6} />
+                  <text
+                    x={cx} y={cy}
+                    textAnchor="middle" dominantBaseline="central"
+                    fill="white" fontSize={9} fontWeight="bold"
+                    fontFamily="sans-serif"
+                    pointerEvents="none"
+                  >{i + 1}</text>
+                </g>
+              );
+            })}
+
             {/* ── Intertidal hotspot pins ───────────────────────────────────── */}
             {intertidalHotspotsEnabledRef.current && intertidalPinsRef.current.map((pin) => {
               const [cx, cy] = lonLatToCanvas(pin.lon, pin.lat, wg, svgTransform);
@@ -2119,20 +2223,20 @@ export const OverviewMap: React.FC = () => {
                 aria-haspopup="true"
                 onClick={() => setToolsPopoverOpen((v) => !v)}
                 style={{
-                  background: (selectMode || downloadMode)
+                  background: (selectMode || downloadMode || waypointMode)
                     ? "rgba(0,229,255,0.12)"
                     : toolsPopoverOpen
                     ? "rgba(0,229,255,0.08)"
                     : "rgba(0,10,20,0.75)",
                   border: `1px solid ${
-                    (selectMode || downloadMode)
+                    (selectMode || downloadMode || waypointMode)
                       ? "rgba(0,229,255,0.6)"
                       : toolsPopoverOpen
                       ? "rgba(0,229,255,0.4)"
                       : "rgba(0,229,255,0.2)"
                   }`,
                   borderRadius: 3,
-                  color: (selectMode || downloadMode) ? "#00e5ff" : toolsPopoverOpen ? "#7dd3fc" : "#94a3b8",
+                  color: (selectMode || downloadMode || waypointMode) ? "#00e5ff" : toolsPopoverOpen ? "#7dd3fc" : "#94a3b8",
                   fontFamily: "'JetBrains Mono', monospace",
                   fontSize: 9,
                   padding: "2px 10px",
@@ -2142,7 +2246,7 @@ export const OverviewMap: React.FC = () => {
                   whiteSpace: "nowrap",
                 }}
               >
-                {selectMode ? "▭ SELECT" : downloadMode ? "↓ DOWNLOAD" : "⚙ TOOLS"}
+                {selectMode ? "▭ SELECT" : downloadMode ? "↓ DOWNLOAD" : waypointMode ? "📍 WAYPOINTS" : "⚙ TOOLS"}
               </button>
             </ViewscreenTooltip>
 
@@ -2185,7 +2289,7 @@ export const OverviewMap: React.FC = () => {
                   onClick={() => {
                     const next = !selectMode;
                     setSelectMode(next);
-                    if (next) { setDownloadMode(false); setDownloadBbox(null); }
+                    if (next) { setDownloadMode(false); setWaypointMode(false); setDownloadBbox(null); }
                     if (!next) clearBbox();
                     setToolsPopoverOpen(false);
                   }}
@@ -2221,7 +2325,7 @@ export const OverviewMap: React.FC = () => {
                   onClick={() => {
                     const next = !downloadMode;
                     setDownloadMode(next);
-                    if (next) { setSelectMode(false); clearBbox(); }
+                    if (next) { setSelectMode(false); setWaypointMode(false); clearBbox(); }
                     if (!next) { setDownloadBbox(null); dragRectRef.current = null; }
                     setToolsPopoverOpen(false);
                   }}
@@ -2233,6 +2337,7 @@ export const OverviewMap: React.FC = () => {
                     padding: "7px 10px",
                     background: downloadMode ? "rgba(251,191,36,0.1)" : "transparent",
                     border: "none",
+                    borderBottom: "1px solid rgba(0,229,255,0.07)",
                     color: downloadMode ? "#fbbf24" : "#cbd5e1",
                     fontFamily: "'JetBrains Mono', monospace",
                     fontSize: 9,
@@ -2245,6 +2350,41 @@ export const OverviewMap: React.FC = () => {
                   <span style={{ flex: 1 }}>DOWNLOAD</span>
                   {downloadMode && (
                     <span style={{ fontSize: 8, color: "#fbbf24", opacity: 0.85 }}>● ON</span>
+                  )}
+                </button>
+
+                {/* Waypoints row */}
+                <button
+                  data-testid="overview-waypoint-mode-toggle"
+                  role="menuitem"
+                  aria-pressed={waypointMode}
+                  onClick={() => {
+                    const next = !waypointMode;
+                    setWaypointMode(next);
+                    if (next) { setSelectMode(false); setDownloadMode(false); clearBbox(); setDownloadBbox(null); dragRectRef.current = null; }
+                    setToolsPopoverOpen(false);
+                    if (next) setShowWaypointPanel(true);
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    width: "100%",
+                    padding: "7px 10px",
+                    background: waypointMode ? "rgba(168,85,247,0.12)" : "transparent",
+                    border: "none",
+                    color: waypointMode ? "#c084fc" : "#cbd5e1",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 9,
+                    letterSpacing: "0.1em",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  <span style={{ width: 14, textAlign: "center", flexShrink: 0 }}>📍</span>
+                  <span style={{ flex: 1 }}>WAYPOINTS</span>
+                  {waypointMode && (
+                    <span style={{ fontSize: 8, color: "#c084fc", opacity: 0.85 }}>● ON</span>
                   )}
                 </button>
               </div>
@@ -2272,6 +2412,31 @@ export const OverviewMap: React.FC = () => {
               }}
             >
               🐟 Essential Fish Habitat
+            </button>
+            </ViewscreenTooltip>
+          )}
+
+          {/* Waypoints panel toggle — visible when waypoints exist or mode is on */}
+          {(waypoints.length > 0 || waypointMode) && (
+            <ViewscreenTooltip label="Show waypoint list" side="bottom">
+            <button
+              data-testid="overview-waypoint-panel-toggle"
+              onClick={() => setShowWaypointPanel((v) => !v)}
+              style={{
+                background: showWaypointPanel ? "rgba(168,85,247,0.18)" : "rgba(0,10,20,0.75)",
+                border: `1px solid ${showWaypointPanel ? "rgba(168,85,247,0.55)" : "rgba(0,229,255,0.2)"}`,
+                borderRadius: 3,
+                color: showWaypointPanel ? "#c084fc" : "#94a3b8",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9,
+                padding: "2px 10px",
+                cursor: "pointer",
+                letterSpacing: "0.1em",
+                lineHeight: "20px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              📍 WAYPOINTS ({waypoints.length})
             </button>
             </ViewscreenTooltip>
           )}
@@ -2345,6 +2510,23 @@ export const OverviewMap: React.FC = () => {
           </ViewscreenTooltip>
         </div>
       </div>
+
+      {/* Waypoint list panel */}
+      {showWaypointPanel && (
+        <WaypointListPanel
+          waypoints={waypoints}
+          waypointMode={waypointMode}
+          onReorder={setWaypoints}
+          onDelete={(id) =>
+            setWaypoints((prev) => {
+              const next = prev.filter((w) => w.id !== id);
+              return next.map((w, i) => ({ ...w, label: String(i + 1) }));
+            })
+          }
+          onFlyThrough={flyThroughWaypoints}
+          onClose={() => setShowWaypointPanel(false)}
+        />
+      )}
 
       {/* Trail list panel */}
       {showTrailList && trailsData && trailsData.length > 0 && (
@@ -2470,6 +2652,211 @@ export const OverviewMap: React.FC = () => {
 
       {/* The shared EFH species detail panel is rendered once at the App
           root so it sits above both this overview map and the 3D scene. */}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// WaypointListPanel — compact list with drag-to-reorder and fly-through
+// ---------------------------------------------------------------------------
+interface WaypointListPanelProps {
+  waypoints: Waypoint[];
+  waypointMode: boolean;
+  onReorder: (waypoints: Waypoint[]) => void;
+  onDelete: (id: string) => void;
+  onFlyThrough: () => void;
+  onClose: () => void;
+}
+
+const WaypointListPanel: React.FC<WaypointListPanelProps> = ({
+  waypoints,
+  waypointMode,
+  onReorder,
+  onDelete,
+  onFlyThrough,
+  onClose,
+}) => {
+  const dragIdxRef = React.useRef<number | null>(null);
+
+  const MONO: React.CSSProperties = {
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: 10,
+  };
+
+  const handleDragStart = (i: number) => { dragIdxRef.current = i; };
+
+  const handleDrop = (i: number) => {
+    const from = dragIdxRef.current;
+    dragIdxRef.current = null;
+    if (from === null || from === i) return;
+    const next = [...waypoints];
+    const [item] = next.splice(from, 1);
+    if (!item) return;
+    next.splice(i, 0, item);
+    onReorder(next.map((w, idx) => ({ ...w, label: String(idx + 1) })));
+  };
+
+  return (
+    <div
+      data-testid="overview-waypoint-panel"
+      style={{
+        position: "absolute",
+        top: 44,
+        right: 16,
+        width: 280,
+        maxHeight: "65vh",
+        overflowY: "auto",
+        background: "rgba(2,8,24,0.92)",
+        border: "1px solid rgba(168,85,247,0.25)",
+        borderRadius: 6,
+        zIndex: 43,
+        backdropFilter: "blur(8px)",
+        pointerEvents: "auto",
+      }}
+    >
+      {/* Panel header */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "8px 12px",
+          borderBottom: "1px solid rgba(168,85,247,0.15)",
+        }}
+      >
+        <span style={{ ...MONO, letterSpacing: "0.15em", color: "#c084fc" }}>
+          WAYPOINTS{waypoints.length > 0 ? ` (${waypoints.length})` : ""}
+        </span>
+        <button
+          onClick={onClose}
+          style={{
+            background: "none",
+            border: "none",
+            color: "#94a3b8",
+            cursor: "pointer",
+            fontSize: 13,
+            lineHeight: 1,
+            padding: "0 2px",
+          }}
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Empty state hint */}
+      {waypoints.length === 0 && (
+        <div
+          style={{
+            padding: "14px 12px",
+            ...MONO,
+            fontSize: 9,
+            color: "#64748b",
+            textAlign: "center",
+            lineHeight: 1.6,
+          }}
+        >
+          {waypointMode
+            ? "Click the map to drop waypoints"
+            : "Enable Waypoints in ⚙ Tools to start"}
+        </div>
+      )}
+
+      {/* Waypoint rows (drag-to-reorder) */}
+      {waypoints.map((wp, i) => (
+        <div
+          key={wp.id}
+          draggable
+          onDragStart={() => handleDragStart(i)}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={() => handleDrop(i)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "6px 10px 6px 12px",
+            borderBottom: "1px solid rgba(255,255,255,0.04)",
+            cursor: "grab",
+            userSelect: "none",
+          }}
+        >
+          {/* Numbered circle */}
+          <div
+            style={{
+              width: 20,
+              height: 20,
+              borderRadius: "50%",
+              background: "#a855f7",
+              border: "1.5px solid #e879f9",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              fontSize: 9,
+              fontWeight: "bold",
+              color: "white",
+              fontFamily: "sans-serif",
+            }}
+          >
+            {i + 1}
+          </div>
+
+          {/* Coordinates */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ ...MONO, color: "#e2e8f0", fontSize: 9, lineHeight: 1.4 }}>
+              {wp.lat.toFixed(4)}°, {wp.lon.toFixed(4)}°
+            </div>
+          </div>
+
+          {/* Drag handle */}
+          <span style={{ color: "#475569", fontSize: 13, cursor: "grab" }}>⠿</span>
+
+          {/* Delete button */}
+          <button
+            onClick={() => onDelete(wp.id)}
+            title="Remove waypoint"
+            style={{
+              background: "none",
+              border: "none",
+              color: "#64748b",
+              cursor: "pointer",
+              fontSize: 12,
+              lineHeight: 1,
+              padding: "3px 4px",
+              flexShrink: 0,
+              borderRadius: 3,
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+
+      {/* Fly Through button */}
+      <div style={{ padding: "10px 12px" }}>
+        <button
+          data-testid="overview-waypoint-fly-through"
+          onClick={onFlyThrough}
+          disabled={waypoints.length < 2}
+          style={{
+            width: "100%",
+            background:
+              waypoints.length >= 2 ? "rgba(168,85,247,0.2)" : "rgba(168,85,247,0.05)",
+            border: `1px solid ${waypoints.length >= 2 ? "rgba(168,85,247,0.6)" : "rgba(168,85,247,0.2)"}`,
+            borderRadius: 3,
+            color: waypoints.length >= 2 ? "#c084fc" : "#475569",
+            padding: "5px 10px",
+            cursor: waypoints.length < 2 ? "not-allowed" : "pointer",
+            fontSize: 9,
+            fontFamily: "'JetBrains Mono', monospace",
+            letterSpacing: "0.12em",
+            opacity: waypoints.length < 2 ? 0.5 : 1,
+          }}
+        >
+          {waypoints.length >= 2
+            ? `▶ FLY THROUGH (${waypoints.length} stops)`
+            : "▶ FLY THROUGH — need 2+ waypoints"}
+        </button>
+      </div>
     </div>
   );
 };
