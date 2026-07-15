@@ -24,3 +24,4 @@
 - [Validation harness concurrency race](validation-concurrency-race.md) — parallel validation steps race on generated api.ts (codegen patch=0) and e2e port 3161; reproduce the failing step alone before iterating.
 - [uiStore/settingsStore ordering](uistore-settings-ordering.md) — mirrored setters must commit uiStore via set() first, then useSettingsStore.setState; never setState another store inside a set((state)=>…) transition.
 - [Concurrent codegen race](codegen-concurrent-race.md) — typecheck + test-all both regenerate api.ts; concurrent runs fail patch-zod-integer-settings with "missing .int()"; re-run solo, not a schema bug.
+- [PUT /api/settings extra-keys 400](put-settings-extra-keys-400.md) — palette e2e 400s come from MAX_EXTRA_KEYS=32 guard, not Zod; browser sends 76 extras not in PutSettingsBody schema.

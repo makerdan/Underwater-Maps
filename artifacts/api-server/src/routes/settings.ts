@@ -4,6 +4,7 @@ import { db, userSettingsTable } from "@workspace/db";
 import { GetSettingsResponse, PutSettingsBody } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -183,6 +184,8 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
   const body = (req.body ?? {}) as Record<string, unknown>;
   const parsed = PutSettingsBody.safeParse(body);
   if (!parsed.success) {
+    process.stderr.write(`[settings] PUT /api/settings 400 — userId=${userId} issues=${JSON.stringify(parsed.error.issues)}\n`);
+    logger.warn({ userId, issues: parsed.error.issues }, "PUT /api/settings — Zod validation failed");
     res.status(400).json({ error: "invalid_request", details: parsed.error.message, issues: parsed.error.issues });
     return;
   }
@@ -239,6 +242,8 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
     (k) => FORBIDDEN_EXTRA_KEYS.has(k) || !EXTRA_KEY_RE.test(k),
   );
   if (badKey !== undefined) {
+    process.stderr.write(`[settings] PUT /api/settings 400 — badKey userId=${userId} key=${JSON.stringify(badKey)} allExtras=${JSON.stringify(Object.keys(extras))}\n`);
+    logger.warn({ userId, badKey, extraKeys: Object.keys(extras) }, "PUT /api/settings — bad extra key name");
     res.status(400).json({
       error: "invalid_request",
       details: `Unknown settings key '${badKey}' is not an allowed key name`,
@@ -246,6 +251,8 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
     return;
   }
   if (Object.keys(extras).length > MAX_EXTRA_KEYS) {
+    process.stderr.write(`[settings] PUT /api/settings 400 — tooManyExtras userId=${userId} count=${Object.keys(extras).length} keys=${JSON.stringify(Object.keys(extras))}\n`);
+    logger.warn({ userId, extraKeyCount: Object.keys(extras).length, extraKeys: Object.keys(extras) }, "PUT /api/settings — too many extra keys");
     res.status(400).json({
       error: "invalid_request",
       details: `Too many unknown settings keys (max ${MAX_EXTRA_KEYS})`,
@@ -253,6 +260,8 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
     return;
   }
   if (Buffer.byteLength(JSON.stringify(extras), "utf8") > MAX_EXTRAS_BYTES) {
+    process.stderr.write(`[settings] PUT /api/settings 400 — extrasTooLarge userId=${userId} bytes=${Buffer.byteLength(JSON.stringify(extras), "utf8")} keys=${JSON.stringify(Object.keys(extras))}\n`);
+    logger.warn({ userId, extraBytes: Buffer.byteLength(JSON.stringify(extras), "utf8"), extraKeys: Object.keys(extras) }, "PUT /api/settings — extra keys payload too large");
     res.status(400).json({
       error: "invalid_request",
       details: `Unknown settings keys exceed the ${MAX_EXTRAS_BYTES}-byte size cap`,
