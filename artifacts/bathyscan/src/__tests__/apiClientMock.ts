@@ -138,12 +138,17 @@ export function makeApiClientMock(
 
       if (key in target) return target[key];
 
-      if (key.startsWith("useGet")) return defaultQueryHook;
-      if (/^use(Post|Put|Patch|Delete|Health|Poe)/.test(key))
+      // Classification must stay in sync with the real generated client —
+      // apiClientMockSentinel.test.ts derives the authoritative query/mutation
+      // split from @workspace/api-client-react (a hook `useX` is a query iff
+      // `getXQueryKey` is exported) and fails if these patterns misclassify.
+      if (/^use(Get|Admin|List|Export|HealthCheck)/.test(key))
+        return defaultQueryHook;
+      if (/^use(Post|Put|Patch|Delete|Poe|Create|Upload|Finalize|Request|Query)/.test(key))
         return defaultMutationHook;
 
-      if (key.startsWith("getGet") && key.endsWith("QueryKey")) {
-        const label = key.replace(/^getGet/, "").replace(/QueryKey$/, "");
+      if (/^get[A-Z].*QueryKey$/.test(key)) {
+        const label = key.replace(/^get(Get)?/, "").replace(/QueryKey$/, "");
         return (...args: unknown[]) => [label, ...args];
       }
 

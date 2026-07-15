@@ -457,7 +457,7 @@ describe("DatasetPanel — handleLoadTogether preflight", () => {
     expect(fetchQueryMock).not.toHaveBeenCalled();
     expect(simulatedStore.setPending).not.toHaveBeenCalled();
 
-    // Library dataset added to selected pool immediately.
+    // Library dataset added to the selected pool immediately.
     expect(terrainState.addSelected).toHaveBeenCalledWith("lib-ds-1", "user");
   });
 

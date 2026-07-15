@@ -16,3 +16,4 @@
 - [Replit proxy needs native WS ping to stay alive](replit-proxy-ws-ping.md) — Replit mTLS proxy drops WS after ~30 s idle; only opcode-0x9 frames reset the timer, not JSON data frames. Fix: hmrNativePingPlugin() in vite.config.ts.
 - [terrainStore promote wipes grids](terrainstore-promote-wipes-grids.md) — re-promoting a visible dataset must preserve its loaded grids; null-grid rebuilds silently break Overview Map bbox flows.
 - [Health probe must use /api/healthz](health-probe-routing.md) — root-relative probes hit the SPA fallback 200; only /api/* reaches the API server. Dev restart button lives on the Vite server.
+- [Drizzle schema-drift check quirks](drizzle-schema-drift-check.md) — drizzle-kit generate needs relative `out`; hand-written migrations must be journaled or drift check always fires.

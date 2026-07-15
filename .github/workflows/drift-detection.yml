@@ -1,0 +1,68 @@
+name: Drift Detection
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  drift:
+    name: Six-class drift detection
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Set up Python 3.11 (fixture generator requires laspy[lazrs] wheels)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared libs (emit .d.ts for workspace packages)
+        run: pnpm run typecheck:libs
+
+      # ── Drift class 1: API codegen ─────────────────────────────────────────
+      - name: 'Drift class 1: API codegen (OpenAPI spec vs generated client)'
+        run: pnpm run check:codegen-stale
+
+      # ── Drift class 2: Database schema ─────────────────────────────────────
+      - name: 'Drift class 2: DB schema (Drizzle schema vs migration snapshots)'
+        run: pnpm run check:schema-stale
+
+      # ── Drift class 3: Test fixtures ───────────────────────────────────────
+      - name: 'Drift class 3: Test fixtures (committed binaries vs generate.mjs)'
+        run: |
+          pip install -r artifacts/api-server/src/__tests__/fixtures/gen_laz_deps.txt
+          pnpm run check:fixture-freshness
+
+      # ── Drift class 4: Docs ────────────────────────────────────────────────
+      - name: 'Drift class 4a: API docs (generated docs vs routes)'
+        run: pnpm run check:docs-stale
+
+      - name: 'Drift class 4b: Route documentation coverage'
+        run: pnpm run check:routes-documented
+
+      # ── Drift class 5: Mock/contract ───────────────────────────────────────
+      - name: 'Drift class 5: Mock contracts (Clerk bypass + API client mocks vs real surfaces)'
+        run: pnpm run check:mock-drift
+
+      # ── Drift class 6: Config/ports ────────────────────────────────────────
+      - name: 'Drift class 6: Config/ports (hardcoded or colliding ports)'
+        run: pnpm run check:port-drift

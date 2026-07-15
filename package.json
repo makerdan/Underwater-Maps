@@ -25,6 +25,10 @@
     "check:e2e-user-ids": "bash scripts/check-e2e-user-ids.sh",
     "check:e2e-cjs-globals": "bash scripts/check-e2e-cjs-globals.sh",
     "check:fixture-freshness": "bash artifacts/api-server/src/__tests__/fixtures/check-fixture-freshness.sh",
+    "check:schema-stale": "node scripts/check-schema-drift.mjs",
+    "check:port-drift": "node scripts/check-port-drift.mjs",
+    "check:mock-drift": "pnpm --filter @workspace/bathyscan exec vitest run src/__tests__/apiClientMockSentinel.test.ts src/__tests__/clerkBypassMockSentinel.test.ts && pnpm --filter @workspace/api-server exec vitest run src/__tests__/settings-schema-sync.test.ts src/__tests__/settings-coverage-sentinel.test.ts",
+    "check:drift": "node scripts/check-drift.mjs",
     "test-all": "node scripts/run-with-timeout.mjs aggregate --label \"test-all\" -- node scripts/test-all-steps.mjs"
   },
   "private": true,

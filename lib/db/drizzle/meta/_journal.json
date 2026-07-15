@@ -43,6 +43,13 @@
       "when": 1748822400000,
       "tag": "0005_add_disabled_presets",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784080624574,
+      "tag": "0012_schema_baseline_sync",
+      "breakpoints": true
     }
   ]
 }
