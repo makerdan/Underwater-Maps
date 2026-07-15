@@ -179,7 +179,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npx playwright test tests/e2e/palette-cross-device-sync.spec.ts tests/e2e/onboarding-tour.spec.ts tests/e2e/settings-cross-device-sync.spec.ts tests/e2e/settings-save-buttons.spec.ts tests/e2e/zone-colour-server-sync.spec.ts tests/e2e/tooltips.spec.ts 2>&1 | tee .local/tmp/palette-e2e.log"
+args = "mkdir -p .local/tmp && npx playwright test tests/e2e/palette-cross-device-sync.spec.ts tests/e2e/onboarding-tour.spec.ts tests/e2e/settings-cross-device-sync.spec.ts tests/e2e/settings-save-buttons.spec.ts tests/e2e/zone-colour-server-sync.spec.ts tests/e2e/tooltips.spec.ts 2>&1 | tee .local/tmp/palette-e2e.log"
 
 [agent]
 stack = "PNPM_WORKSPACE"
