@@ -103,7 +103,16 @@ describe("hardcoded-port guard", () => {
     // Proves the scan pattern AND the scan path coverage work together: if
     // a future change to the scanned roots silently excludes real source,
     // this test fails.
-    const syntheticFile = path.join(__dirname, "__tmp-synthetic-port-violation.ts");
+    //
+    // The file is written under scripts/ (a default scan root) rather than
+    // this test's own directory: no tsconfig compiles scripts/, so a
+    // concurrently running typecheck can never pick up the temp file and
+    // fail with TS6053 when it is deleted mid-compile.
+    const syntheticFile = path.join(
+      repoRoot,
+      "scripts",
+      "__tmp-synthetic-port-violation.ts",
+    );
     try {
       fs.writeFileSync(syntheticFile, LISTEN_VIOLATION);
       const { status, output } = runGuard();

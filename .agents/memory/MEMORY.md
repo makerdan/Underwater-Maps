@@ -23,3 +23,4 @@
 - [Playwright contextmenu dispatchEvent drops coords](playwright-contextmenu-dispatchevent.md) — dispatchEvent("contextmenu",{clientX}) builds a plain Event, coords become NaN; construct MouseEvent in-page via evaluate.
 - [Validation harness concurrency race](validation-concurrency-race.md) — parallel validation steps race on generated api.ts (codegen patch=0) and e2e port 3161; reproduce the failing step alone before iterating.
 - [uiStore/settingsStore ordering](uistore-settings-ordering.md) — mirrored setters must commit uiStore via set() first, then useSettingsStore.setState; never setState another store inside a set((state)=>…) transition.
+- [Concurrent codegen race](codegen-concurrent-race.md) — typecheck + test-all both regenerate api.ts; concurrent runs fail patch-zod-integer-settings with "missing .int()"; re-run solo, not a schema bug.
