@@ -408,6 +408,21 @@ export function renderCameraArrow(
 }
 
 // ---------------------------------------------------------------------------
+// LOD constants
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimum canvas scale at which EFH and substrate polygon layers are drawn.
+ * Below this threshold the polygons are too small to be legible and are
+ * suppressed to reduce draw noise and CPU cost.
+ *
+ * At scale=1 the terrain fills ~88% of the canvas.  Scale=1.5 corresponds to
+ * roughly 1.5× zoom-in, which is the point where polygon shapes measuring
+ * ~0.1° across become individually distinguishable (≥5–6 px wide).
+ */
+export const POLYGON_LOD_MIN_ZOOM = 1.5;
+
+// ---------------------------------------------------------------------------
 // Habitat overlay
 // ---------------------------------------------------------------------------
 

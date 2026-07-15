@@ -60,6 +60,7 @@ import {
   renderIntertidalHotspotPins,
   buildIntertidalHotspotDescriptors,
   renderIntertidalModeLegend,
+  POLYGON_LOD_MIN_ZOOM,
 } from "@/lib/overviewRenderer";
 import type { OverviewTransform, CanvasSavedTrail, EfhLegendLayout, ContourSegment, WeatherStationPin, RawsStationPin, IntertidalHotspotPin } from "@/lib/overviewRenderer";
 import { useWeatherStations } from "@/hooks/useWeatherStations";
@@ -1181,7 +1182,9 @@ export const OverviewMap: React.FC = () => {
       }
 
       // EFH overlay (dashed species polygon outlines + legend)
-      if (showEfhRef.current && efhFeaturesRef.current.length > 0) {
+      // Hidden below POLYGON_LOD_MIN_ZOOM: polygons are too small to read and
+      // add render noise without value when zoomed far out.
+      if (showEfhRef.current && efhFeaturesRef.current.length > 0 && t.scale >= POLYGON_LOD_MIN_ZOOM) {
         const visibleEfhFeatures = getVisibleEfhFeatures(
           efhFeaturesRef.current,
           { minLon: worldGrid.minLon, maxLon: worldGrid.maxLon, minLat: worldGrid.minLat, maxLat: worldGrid.maxLat },
@@ -1196,7 +1199,8 @@ export const OverviewMap: React.FC = () => {
       // Substrate overlay (CMECS-coloured polygons + legend) — mirrors the
       // 3D SubstrateLayer so anglers can see the gravel / sand / mud zones
       // when planning from the top-down view.
-      if (substrateColorModeRef.current && substrateFeaturesRef.current.length > 0) {
+      // Hidden below POLYGON_LOD_MIN_ZOOM: same rationale as EFH overlay.
+      if (substrateColorModeRef.current && substrateFeaturesRef.current.length > 0 && t.scale >= POLYGON_LOD_MIN_ZOOM) {
         renderSubstrateOverlay(
           ctx,
           substrateFeaturesRef.current,
