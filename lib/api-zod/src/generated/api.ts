@@ -969,6 +969,127 @@ export const getSettingsResponseHiddenEfhSpeciesDefault = [];
 export const getSettingsResponseHyd93ActiveFeatureCodesDefault = [89, 103, 146, 530, 988];
 export const getSettingsResponseHyd93FeaturesEnabledDefault = false;
 export const getSettingsResponseGlobalFontSizeDefault = `medium`;
+export const getSettingsResponseSchemaVersionDefault = 19;
+export const getSettingsResponseShowAdvancedEverywhereDefault = false;
+export const getSettingsResponseMouseZoomSensitivityDefault = 1;
+export const getSettingsResponseMouseZoomSensitivityMin = 0.1;
+export const getSettingsResponseMouseZoomSensitivityMax = 3;
+
+export const getSettingsResponseTouchpadZoomSensitivityDefault = 1;
+export const getSettingsResponseTouchpadZoomSensitivityMin = 0.1;
+export const getSettingsResponseTouchpadZoomSensitivityMax = 3;
+
+export const getSettingsResponsePinchZoomSensitivityDefault = 1;
+export const getSettingsResponsePinchZoomSensitivityMin = 0.1;
+export const getSettingsResponsePinchZoomSensitivityMax = 3;
+
+export const getSettingsResponseJoystickModeDefault = `auto`;
+export const getSettingsResponseShowJoystickInOrbitDefault = false;
+export const getSettingsResponseFieldOfViewDefault = 45;
+export const getSettingsResponseFieldOfViewMin = 15;
+export const getSettingsResponseFieldOfViewMax = 150;
+
+export const getSettingsResponseRenderDistanceDefault = 400;
+export const getSettingsResponseRenderDistanceMin = 50;
+export const getSettingsResponseRenderDistanceMax = 2000;
+
+export const getSettingsResponseQualityPresetDefault = `medium`;
+export const getSettingsResponseTerrainExaggerationDefault = 0.8;
+export const getSettingsResponseTerrainExaggerationMin = 0;
+export const getSettingsResponseTerrainExaggerationMax = 10;
+
+export const getSettingsResponseEnableMarineSnowDefault = true;
+export const getSettingsResponseFogColorDefault = `#020818`;
+export const getSettingsResponseFogColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const getSettingsResponseAmbientLightIntensityDefault = 0.05;
+export const getSettingsResponseAmbientLightIntensityMin = 0;
+export const getSettingsResponseAmbientLightIntensityMax = 2;
+
+export const getSettingsResponseDirectionalLightIntensityDefault = 0.35;
+export const getSettingsResponseDirectionalLightIntensityMin = 0;
+export const getSettingsResponseDirectionalLightIntensityMax = 2;
+
+export const getSettingsResponseLampRangeDefault = 40;
+export const getSettingsResponseLampRangeMax = 200;
+
+export const getSettingsResponseAntialiasingDefault = true;
+export const getSettingsResponseShowWaterSurfaceDefault = true;
+export const getSettingsResponseShowLandmassDefault = false;
+export const getSettingsResponseLandmassStyleDefault = `realistic`;
+export const getSettingsResponseSatelliteImageryDefault = true;
+export const getSettingsResponseTerrainImageryDefault = false;
+export const getSettingsResponseShowDepthLegendDefault = true;
+export const getSettingsResponseShowDepthScaleBarDefault = true;
+export const getSettingsResponseShowCompassMinimapDefault = true;
+export const getSettingsResponseShowControlsLegendDefault = true;
+export const getSettingsResponseShowTidePanelDefault = true;
+export const getSettingsResponseShowHabitatPanelDefault = true;
+export const getSettingsResponseShowDatasetPanelDefault = true;
+export const getSettingsResponseShowQueryPanelDefault = true;
+export const getSettingsResponseTimeFormatDefault = `local`;
+export const getSettingsResponseTemperatureUnitDefault = `auto`;
+export const getSettingsResponseContoursEnabledDefault = true;
+export const getSettingsResponseContourIntervalDefault = 10;
+export const getSettingsResponseContourIntervalMax = 1000;
+
+export const getSettingsResponseDefaultDepthPoleColorDefault = `#22d3ee`;
+export const getSettingsResponseDefaultDepthPoleColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const getSettingsResponseMarkerClusterThresholdDefault = 25;
+export const getSettingsResponseMarkerClusterThresholdMin = 0;
+export const getSettingsResponseMarkerClusterThresholdMax = 500;
+
+export const getSettingsResponseAutoLoadTidalDefault = false;
+export const getSettingsResponseDefaultTidalDepthLayerDefault = `surface`;
+export const getSettingsResponseCurrentArrowDensityDefault = `normal`;
+export const getSettingsResponseWindOverlayStyleDefault = `arrows`;
+export const getSettingsResponseTideOverlayStyleDefault = `arrows`;
+export const getSettingsResponseCurrentOverlayStyleDefault = `arrows`;
+export const getSettingsResponseCurrentsEnabledDefault = false;
+export const getSettingsResponseCurrentsSourceDefault = `noaa`;
+export const getSettingsResponseCurrentsManualDirectionDegDefault = 90;
+export const getSettingsResponseCurrentsManualDirectionDegMin = 0;
+export const getSettingsResponseCurrentsManualDirectionDegMax = 360;
+
+export const getSettingsResponseCurrentsManualSpeedKtDefault = 0.8;
+export const getSettingsResponseCurrentsManualSpeedKtMin = 0;
+export const getSettingsResponseCurrentsManualSpeedKtMax = 50;
+
+export const getSettingsResponseCurrentsTidePhaseDefault = 0;
+export const getSettingsResponseCurrentsTidePhaseMin = 0;
+export const getSettingsResponseCurrentsTidePhaseMax = 1;
+
+export const getSettingsResponseCurrentsAutoAdvanceDefault = false;
+export const getSettingsResponseCurrentsShowParticlesDefault = true;
+export const getSettingsResponseCurrentsShowArrowsDefault = true;
+export const getSettingsResponseCurrentsShowStreamlinesDefault = false;
+export const getSettingsResponseAutoShowZoneOverlayDefault = false;
+export const getSettingsResponseDefaultHabitatSpeciesDefault = ``;
+export const getSettingsResponseHabitatOverlayIntensityDefault = 0.4;
+export const getSettingsResponseHabitatOverlayIntensityMin = 0;
+export const getSettingsResponseHabitatOverlayIntensityMax = 1;
+
+export const getSettingsResponseHabitatOverlayColorDefault = `#ff9919`;
+export const getSettingsResponseHabitatOverlayColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const getSettingsResponseAutoStartTrailRecordingDefault = false;
+export const getSettingsResponseDefaultTrailColorDefault = `#ff6600`;
+export const getSettingsResponseDefaultTrailColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const getSettingsResponseTrailRetentionDefault = `30`;
+export const getSettingsResponseAutoLoadLastDatasetDefault = true;
+export const getSettingsResponseReducedMotionDefault = false;
+export const getSettingsResponseColorBlindSafePaletteDefault = false;
+export const getSettingsResponseLargeHudTextDefault = false;
+export const getSettingsResponseHighContrastHudDefault = false;
+export const getSettingsResponseBrightDaylightDefault = false;
+export const getSettingsResponseColormapUserSetDefault = false;
+export const getSettingsResponseTelemetryOptInDefault = false;
+export const getSettingsResponseLlmDisclosureAcknowledgedDefault = false;
+export const getSettingsResponseHasSeenOnboardingDefault = false;
+export const getSettingsResponseDatasetFolderExpandedDefault = {  };
+export const getSettingsResponseCrosshairMenuGamepadButtonDefault = 3;
+export const getSettingsResponseCrosshairMenuGamepadButtonMin = 0;
+export const getSettingsResponseCrosshairMenuGamepadButtonMax = 31;
+
+
 
 export const GetSettingsResponse = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(getSettingsResponseTextureQualityDefault),
@@ -1052,7 +1173,103 @@ export const GetSettingsResponse = zod.object({
   "hiddenEfhSpecies": zod.array(zod.string()).default(getSettingsResponseHiddenEfhSpeciesDefault).describe('Species names whose EFH polygons are hidden from the overlay.'),
   "hyd93ActiveFeatureCodes": zod.array(zod.number().int()).default(getSettingsResponseHyd93ActiveFeatureCodesDefault).describe('HYD93 feature type codes currently visible (89=Rocks, 103=Kelp, 146=Ledge, 530=Rocky reef, 988=Obstruction).'),
   "hyd93FeaturesEnabled": zod.boolean().default(getSettingsResponseHyd93FeaturesEnabledDefault).describe('Whether the master HYD93 cartographic annotation overlay is visible (kelp, rocks, rocky reefs, ledges, obstructions).'),
-  "globalFontSize": zod.enum(['smallest', 'small', 'medium', 'large', 'x-large', 'largest']).default(getSettingsResponseGlobalFontSizeDefault).describe('Global UI font size level applied throughout the application.')
+  "globalFontSize": zod.enum(['smallest', 'small', 'medium', 'large', 'x-large', 'largest']).default(getSettingsResponseGlobalFontSizeDefault).describe('Global UI font size level applied throughout the application.'),
+  "schemaVersion": zod.number().default(getSettingsResponseSchemaVersionDefault).describe('Client settings schema version used for client-side migrations.'),
+  "showAdvancedEverywhere": zod.boolean().default(getSettingsResponseShowAdvancedEverywhereDefault).describe('Show advanced settings in all sections without hiding them behind a toggle.'),
+  "mouseZoomSensitivity": zod.number().min(getSettingsResponseMouseZoomSensitivityMin).max(getSettingsResponseMouseZoomSensitivityMax).default(getSettingsResponseMouseZoomSensitivityDefault).describe('Mouse scroll-wheel zoom speed multiplier.'),
+  "touchpadZoomSensitivity": zod.number().min(getSettingsResponseTouchpadZoomSensitivityMin).max(getSettingsResponseTouchpadZoomSensitivityMax).default(getSettingsResponseTouchpadZoomSensitivityDefault).describe('Touchpad pinch\/scroll zoom speed multiplier.'),
+  "pinchZoomSensitivity": zod.number().min(getSettingsResponsePinchZoomSensitivityMin).max(getSettingsResponsePinchZoomSensitivityMax).default(getSettingsResponsePinchZoomSensitivityDefault).describe('Touch-screen pinch-to-zoom sensitivity multiplier.'),
+  "joystickMode": zod.enum(['auto', 'always', 'off']).default(getSettingsResponseJoystickModeDefault).describe('On-screen joystick display mode. \"auto\" shows it on touch devices only.'),
+  "showJoystickInOrbit": zod.boolean().default(getSettingsResponseShowJoystickInOrbitDefault).describe('Show the on-screen joystick when in orbit\/inspect mode.'),
+  "fieldOfView": zod.number().min(getSettingsResponseFieldOfViewMin).max(getSettingsResponseFieldOfViewMax).default(getSettingsResponseFieldOfViewDefault).describe('Camera vertical field-of-view in degrees.'),
+  "renderDistance": zod.number().min(getSettingsResponseRenderDistanceMin).max(getSettingsResponseRenderDistanceMax).default(getSettingsResponseRenderDistanceDefault).describe('Maximum distance in metres at which terrain geometry is rendered.'),
+  "lastSession": zod.object({
+  "lon": zod.number(),
+  "lat": zod.number(),
+  "depth": zod.number(),
+  "heading": zod.number(),
+  "datasetId": zod.string()
+}).nullish().describe('Last camera position and active dataset. Restored on load when cameraSpawnBehaviour is \"last\". Null when no session has been saved yet.'),
+  "qualityPreset": zod.enum(['low', 'medium', 'high', 'ultra', 'custom']).default(getSettingsResponseQualityPresetDefault).describe('Overall graphics quality preset. \"custom\" means the user has individually adjusted one or more visual knobs.'),
+  "terrainExaggeration": zod.number().min(getSettingsResponseTerrainExaggerationMin).max(getSettingsResponseTerrainExaggerationMax).default(getSettingsResponseTerrainExaggerationDefault).describe('Vertical exaggeration factor applied to terrain depth for visual clarity.'),
+  "enableMarineSnow": zod.boolean().default(getSettingsResponseEnableMarineSnowDefault).describe('Render animated marine snow particle effect in the 3D scene.'),
+  "fogColor": zod.string().regex(getSettingsResponseFogColorRegExp).default(getSettingsResponseFogColorDefault).describe('RGB hex colour of the underwater fog.'),
+  "ambientLightIntensity": zod.number().min(getSettingsResponseAmbientLightIntensityMin).max(getSettingsResponseAmbientLightIntensityMax).default(getSettingsResponseAmbientLightIntensityDefault).describe('Intensity of the ambient (omnidirectional) scene light.'),
+  "directionalLightIntensity": zod.number().min(getSettingsResponseDirectionalLightIntensityMin).max(getSettingsResponseDirectionalLightIntensityMax).default(getSettingsResponseDirectionalLightIntensityDefault).describe('Intensity of the primary directional sunlight.'),
+  "lampRange": zod.number().min(1).max(getSettingsResponseLampRangeMax).default(getSettingsResponseLampRangeDefault).describe('Range in metres of the camera headlamp point light.'),
+  "antialiasing": zod.boolean().default(getSettingsResponseAntialiasingDefault).describe('Enable anti-aliasing on the 3D canvas.'),
+  "showWaterSurface": zod.boolean().default(getSettingsResponseShowWaterSurfaceDefault).describe('Render the sea-level water surface plane over the bathymetry.'),
+  "showLandmass": zod.boolean().default(getSettingsResponseShowLandmassDefault).describe('Render above-water landmass meshing from the terrain topography array.'),
+  "landmassStyle": zod.enum(['realistic', 'flat']).default(getSettingsResponseLandmassStyleDefault).describe('How the landmass is coloured — realistic elevation ramp or a single flat neutral colour.'),
+  "satelliteImagery": zod.boolean().default(getSettingsResponseSatelliteImageryDefault).describe('Drape ESRI World Imagery satellite photo over the land mesh. When false, use the procedural colour ramp.'),
+  "terrainImagery": zod.boolean().default(getSettingsResponseTerrainImageryDefault).describe('Draw a USGS National Map hillshaded relief layer as the bottom layer of the Overview Map. Independent of satelliteImagery.'),
+  "showDepthLegend": zod.boolean().default(getSettingsResponseShowDepthLegendDefault).describe('Show the depth-colourmap legend overlay in the 3D viewscreen HUD.'),
+  "showDepthScaleBar": zod.boolean().default(getSettingsResponseShowDepthScaleBarDefault).describe('Show the depth scale bar in the 3D viewscreen HUD.'),
+  "showCompassMinimap": zod.boolean().default(getSettingsResponseShowCompassMinimapDefault).describe('Show the compass\/minimap widget in the HUD.'),
+  "showControlsLegend": zod.boolean().default(getSettingsResponseShowControlsLegendDefault).describe('Show the keyboard\/controls legend overlay in the HUD.'),
+  "showTidePanel": zod.boolean().default(getSettingsResponseShowTidePanelDefault).describe('Show the tidal data side panel.'),
+  "showHabitatPanel": zod.boolean().default(getSettingsResponseShowHabitatPanelDefault).describe('Show the habitat\/species side panel.'),
+  "showDatasetPanel": zod.boolean().default(getSettingsResponseShowDatasetPanelDefault).describe('Show the dataset library side panel.'),
+  "showQueryPanel": zod.boolean().default(getSettingsResponseShowQueryPanelDefault).describe('Show the AI query side panel.'),
+  "timeFormat": zod.enum(['utc', 'local', '12h', '24h']).default(getSettingsResponseTimeFormatDefault).describe('How timestamps are displayed in the HUD and panels.'),
+  "temperatureUnit": zod.enum(['auto', 'celsius', 'fahrenheit']).default(getSettingsResponseTemperatureUnitDefault).describe('Temperature display unit. \"auto\" follows the global units selector (metric=°C, imperial=°F).'),
+  "contoursEnabled": zod.boolean().default(getSettingsResponseContoursEnabledDefault).describe('Draw iso-depth contour lines on the 2D overview map.'),
+  "contourInterval": zod.number().min(1).max(getSettingsResponseContourIntervalMax).default(getSettingsResponseContourIntervalDefault).describe('Spacing between contour lines in the user\'s active unit system (metres for metric, feet for imperial\/nautical).'),
+  "defaultDepthPoleColor": zod.string().regex(getSettingsResponseDefaultDepthPoleColorRegExp).default(getSettingsResponseDefaultDepthPoleColorDefault).describe('Default hex colour applied to new depth-pole markers.'),
+  "markerClusterThreshold": zod.number().min(getSettingsResponseMarkerClusterThresholdMin).max(getSettingsResponseMarkerClusterThresholdMax).default(getSettingsResponseMarkerClusterThresholdDefault).describe('Maximum number of visible markers before clustering is activated. Set to 0 to disable clustering.'),
+  "autoLoadTidal": zod.boolean().default(getSettingsResponseAutoLoadTidalDefault).describe('Automatically load tidal current data when a dataset is opened.'),
+  "defaultTidalDepthLayer": zod.enum(['surface', 'mid', 'near-bottom']).default(getSettingsResponseDefaultTidalDepthLayerDefault).describe('Depth layer pre-selected in the tidal overlay controls.'),
+  "currentArrowDensity": zod.enum(['sparse', 'normal', 'dense']).default(getSettingsResponseCurrentArrowDensityDefault).describe('Global density of current direction arrows shown across all depth layers.'),
+  "layerArrowDensity": zod.object({
+  "surface": zod.enum(['sparse', 'normal', 'dense']).optional(),
+  "mid": zod.enum(['sparse', 'normal', 'dense']).optional(),
+  "near-bottom": zod.enum(['sparse', 'normal', 'dense']).optional()
+}).optional().describe('Per-depth-layer arrow density override. When set, overrides currentArrowDensity for that specific layer.'),
+  "windOverlayStyle": zod.enum(['arrows', 'particles']).default(getSettingsResponseWindOverlayStyleDefault).describe('Visual style for the wind overlay — directional arrows or streaming particles.'),
+  "tideOverlayStyle": zod.enum(['arrows', 'particles']).default(getSettingsResponseTideOverlayStyleDefault).describe('Visual style for the tidal height overlay.'),
+  "currentOverlayStyle": zod.enum(['arrows', 'particles']).default(getSettingsResponseCurrentOverlayStyleDefault).describe('Visual style for the ocean current overlay.'),
+  "currentsEnabled": zod.boolean().default(getSettingsResponseCurrentsEnabledDefault).describe('Master enable for the bathymetry-shaped current simulation.'),
+  "currentsSource": zod.enum(['manual', 'noaa']).default(getSettingsResponseCurrentsSourceDefault).describe('Source for the ambient (depth-averaged) current vector used in the simulation.'),
+  "currentsManualDirectionDeg": zod.number().min(getSettingsResponseCurrentsManualDirectionDegMin).max(getSettingsResponseCurrentsManualDirectionDegMax).default(getSettingsResponseCurrentsManualDirectionDegDefault).describe('Manual ambient current direction in degrees (compass going-to bearing).'),
+  "currentsManualSpeedKt": zod.number().min(getSettingsResponseCurrentsManualSpeedKtMin).max(getSettingsResponseCurrentsManualSpeedKtMax).default(getSettingsResponseCurrentsManualSpeedKtDefault).describe('Manual ambient current speed in knots.'),
+  "currentsTidePhase": zod.number().min(getSettingsResponseCurrentsTidePhaseMin).max(getSettingsResponseCurrentsTidePhaseMax).default(getSettingsResponseCurrentsTidePhaseDefault).describe('Tide-phase scrubber position in [0, 1) — 0 = flood peak, 0.5 = ebb peak.'),
+  "currentsAutoAdvance": zod.boolean().default(getSettingsResponseCurrentsAutoAdvanceDefault).describe('Automatically animate the tide-phase scrubber.'),
+  "currentsShowParticles": zod.boolean().default(getSettingsResponseCurrentsShowParticlesDefault).describe('Show the animated particle layer in the current simulation.'),
+  "currentsShowArrows": zod.boolean().default(getSettingsResponseCurrentsShowArrowsDefault).describe('Show the instanced speed-coloured arrow layer in the current simulation.'),
+  "currentsShowStreamlines": zod.boolean().default(getSettingsResponseCurrentsShowStreamlinesDefault).describe('Show integrated streamline ribbons in the current simulation.'),
+  "autoShowZoneOverlay": zod.boolean().default(getSettingsResponseAutoShowZoneOverlayDefault).describe('Automatically show the substrate zone overlay when a dataset is loaded.'),
+  "defaultHabitatSpecies": zod.string().default(getSettingsResponseDefaultHabitatSpeciesDefault).describe('Species pre-selected in the habitat suitability panel on load.'),
+  "habitatOverlayIntensity": zod.number().min(getSettingsResponseHabitatOverlayIntensityMin).max(getSettingsResponseHabitatOverlayIntensityMax).default(getSettingsResponseHabitatOverlayIntensityDefault).describe('Habitat suitability overlay blend strength (0 = invisible, 1 = fully opaque).'),
+  "habitatOverlayColor": zod.string().regex(getSettingsResponseHabitatOverlayColorRegExp).default(getSettingsResponseHabitatOverlayColorDefault).describe('Tint hex colour for the habitat suitability overlay.'),
+  "autoStartTrailRecording": zod.boolean().default(getSettingsResponseAutoStartTrailRecordingDefault).describe('Automatically start GPS trail recording when the app loads.'),
+  "defaultTrailColor": zod.string().regex(getSettingsResponseDefaultTrailColorRegExp).default(getSettingsResponseDefaultTrailColorDefault).describe('Default hex colour applied to new GPS trail recordings.'),
+  "trailRetention": zod.enum(['7', '30', '90', 'all']).default(getSettingsResponseTrailRetentionDefault).describe('Number of days of GPS trail history to retain locally. \"all\" disables automatic pruning.'),
+  "autoLoadLastDataset": zod.boolean().default(getSettingsResponseAutoLoadLastDatasetDefault).describe('Automatically reload the most recently used dataset when the app starts.'),
+  "defaultMapLoad": zod.object({
+  "kind": zod.enum(['preset', 'upload']).describe('Whether this is a built-in preset or a user-uploaded dataset.'),
+  "id": zod.string().describe('Dataset slug (preset) or upload id (upload).')
+}).nullish().describe('Dataset to load automatically on every app start. Null means use the built-in default.'),
+  "reducedMotion": zod.boolean().default(getSettingsResponseReducedMotionDefault).describe('Reduce or eliminate non-essential UI animations for accessibility.'),
+  "colorBlindSafePalette": zod.boolean().default(getSettingsResponseColorBlindSafePaletteDefault).describe('Apply a colour-blind-friendly palette to the depth colourmap and overlays.'),
+  "largeHudText": zod.boolean().default(getSettingsResponseLargeHudTextDefault).describe('(Deprecated — use globalFontSize instead.) Enlarge HUD text for readability.'),
+  "highContrastHud": zod.boolean().default(getSettingsResponseHighContrastHudDefault).describe('Apply high-contrast styling to HUD elements.'),
+  "brightDaylight": zod.boolean().default(getSettingsResponseBrightDaylightDefault).describe('Outdoor display mode — opaque panels, bold text, cobalt accent for direct-sunlight use.'),
+  "colormapUserSet": zod.boolean().default(getSettingsResponseColormapUserSetDefault).describe('True when the user has explicitly chosen a depth colourmap via the Settings UI. Used to avoid auto-switching palettes.'),
+  "telemetryOptIn": zod.boolean().default(getSettingsResponseTelemetryOptInDefault).describe('Whether the user has opted in to anonymous usage telemetry.'),
+  "llmDisclosureAcknowledged": zod.boolean().default(getSettingsResponseLlmDisclosureAcknowledgedDefault).describe('Whether the user has read and dismissed the one-time AI\/LLM data-sharing disclosure.'),
+  "hasSeenOnboarding": zod.boolean().default(getSettingsResponseHasSeenOnboardingDefault).describe('Set to true once the user completes or skips the first-time guided tour. Synced cross-device.'),
+  "datasetFolderExpanded": zod.record(zod.string(), zod.boolean()).default(getSettingsResponseDatasetFolderExpandedDefault).describe('Expand\/collapse state for dataset library folders, keyed by folder id.'),
+  "bookmarks": zod.record(zod.string(), zod.array(zod.object({
+  "id": zod.string().describe('Unique bookmark id (UUID).'),
+  "name": zod.string().describe('User-assigned bookmark label.'),
+  "lon": zod.number().describe('Camera longitude at the bookmark.'),
+  "lat": zod.number().describe('Camera latitude at the bookmark.'),
+  "depth": zod.number().describe('Camera depth (metres, positive = below sea level) at the bookmark.'),
+  "heading": zod.number().describe('Camera heading in degrees at the bookmark.')
+}))).optional().describe('Per-dataset camera bookmarks keyed by dataset id. Each value is an ordered array of named camera positions.'),
+  "keyBindings": zod.record(zod.string(), zod.string()).optional().describe('Remapped keyboard shortcuts keyed by action id (e.g. \"moveForward\"). Values are KeyboardEvent.code strings (e.g. \"KeyW\"). Missing keys fall back to their default binding.'),
+  "crosshairMenuGamepadButton": zod.number().min(getSettingsResponseCrosshairMenuGamepadButtonMin).max(getSettingsResponseCrosshairMenuGamepadButtonMax).nullish().default(getSettingsResponseCrosshairMenuGamepadButtonDefault).describe('Standard-mapping gamepad button index that opens the crosshair action menu. Null disables the gamepad binding.'),
+  "lastSyncedAt": zod.string().nullish().describe('ISO 8601 timestamp of the most recent successful server sync (GET hydration or PUT save). Null when the user has never synced.')
 }).describe('Per-user application settings with sensible defaults')
 
 
@@ -1167,6 +1384,127 @@ export const putSettingsBodyHiddenEfhSpeciesDefault = [];
 export const putSettingsBodyHyd93ActiveFeatureCodesDefault = [89, 103, 146, 530, 988];
 export const putSettingsBodyHyd93FeaturesEnabledDefault = false;
 export const putSettingsBodyGlobalFontSizeDefault = `medium`;
+export const putSettingsBodySchemaVersionDefault = 19;
+export const putSettingsBodyShowAdvancedEverywhereDefault = false;
+export const putSettingsBodyMouseZoomSensitivityDefault = 1;
+export const putSettingsBodyMouseZoomSensitivityMin = 0.1;
+export const putSettingsBodyMouseZoomSensitivityMax = 3;
+
+export const putSettingsBodyTouchpadZoomSensitivityDefault = 1;
+export const putSettingsBodyTouchpadZoomSensitivityMin = 0.1;
+export const putSettingsBodyTouchpadZoomSensitivityMax = 3;
+
+export const putSettingsBodyPinchZoomSensitivityDefault = 1;
+export const putSettingsBodyPinchZoomSensitivityMin = 0.1;
+export const putSettingsBodyPinchZoomSensitivityMax = 3;
+
+export const putSettingsBodyJoystickModeDefault = `auto`;
+export const putSettingsBodyShowJoystickInOrbitDefault = false;
+export const putSettingsBodyFieldOfViewDefault = 45;
+export const putSettingsBodyFieldOfViewMin = 15;
+export const putSettingsBodyFieldOfViewMax = 150;
+
+export const putSettingsBodyRenderDistanceDefault = 400;
+export const putSettingsBodyRenderDistanceMin = 50;
+export const putSettingsBodyRenderDistanceMax = 2000;
+
+export const putSettingsBodyQualityPresetDefault = `medium`;
+export const putSettingsBodyTerrainExaggerationDefault = 0.8;
+export const putSettingsBodyTerrainExaggerationMin = 0;
+export const putSettingsBodyTerrainExaggerationMax = 10;
+
+export const putSettingsBodyEnableMarineSnowDefault = true;
+export const putSettingsBodyFogColorDefault = `#020818`;
+export const putSettingsBodyFogColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsBodyAmbientLightIntensityDefault = 0.05;
+export const putSettingsBodyAmbientLightIntensityMin = 0;
+export const putSettingsBodyAmbientLightIntensityMax = 2;
+
+export const putSettingsBodyDirectionalLightIntensityDefault = 0.35;
+export const putSettingsBodyDirectionalLightIntensityMin = 0;
+export const putSettingsBodyDirectionalLightIntensityMax = 2;
+
+export const putSettingsBodyLampRangeDefault = 40;
+export const putSettingsBodyLampRangeMax = 200;
+
+export const putSettingsBodyAntialiasingDefault = true;
+export const putSettingsBodyShowWaterSurfaceDefault = true;
+export const putSettingsBodyShowLandmassDefault = false;
+export const putSettingsBodyLandmassStyleDefault = `realistic`;
+export const putSettingsBodySatelliteImageryDefault = true;
+export const putSettingsBodyTerrainImageryDefault = false;
+export const putSettingsBodyShowDepthLegendDefault = true;
+export const putSettingsBodyShowDepthScaleBarDefault = true;
+export const putSettingsBodyShowCompassMinimapDefault = true;
+export const putSettingsBodyShowControlsLegendDefault = true;
+export const putSettingsBodyShowTidePanelDefault = true;
+export const putSettingsBodyShowHabitatPanelDefault = true;
+export const putSettingsBodyShowDatasetPanelDefault = true;
+export const putSettingsBodyShowQueryPanelDefault = true;
+export const putSettingsBodyTimeFormatDefault = `local`;
+export const putSettingsBodyTemperatureUnitDefault = `auto`;
+export const putSettingsBodyContoursEnabledDefault = true;
+export const putSettingsBodyContourIntervalDefault = 10;
+export const putSettingsBodyContourIntervalMax = 1000;
+
+export const putSettingsBodyDefaultDepthPoleColorDefault = `#22d3ee`;
+export const putSettingsBodyDefaultDepthPoleColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsBodyMarkerClusterThresholdDefault = 25;
+export const putSettingsBodyMarkerClusterThresholdMin = 0;
+export const putSettingsBodyMarkerClusterThresholdMax = 500;
+
+export const putSettingsBodyAutoLoadTidalDefault = false;
+export const putSettingsBodyDefaultTidalDepthLayerDefault = `surface`;
+export const putSettingsBodyCurrentArrowDensityDefault = `normal`;
+export const putSettingsBodyWindOverlayStyleDefault = `arrows`;
+export const putSettingsBodyTideOverlayStyleDefault = `arrows`;
+export const putSettingsBodyCurrentOverlayStyleDefault = `arrows`;
+export const putSettingsBodyCurrentsEnabledDefault = false;
+export const putSettingsBodyCurrentsSourceDefault = `noaa`;
+export const putSettingsBodyCurrentsManualDirectionDegDefault = 90;
+export const putSettingsBodyCurrentsManualDirectionDegMin = 0;
+export const putSettingsBodyCurrentsManualDirectionDegMax = 360;
+
+export const putSettingsBodyCurrentsManualSpeedKtDefault = 0.8;
+export const putSettingsBodyCurrentsManualSpeedKtMin = 0;
+export const putSettingsBodyCurrentsManualSpeedKtMax = 50;
+
+export const putSettingsBodyCurrentsTidePhaseDefault = 0;
+export const putSettingsBodyCurrentsTidePhaseMin = 0;
+export const putSettingsBodyCurrentsTidePhaseMax = 1;
+
+export const putSettingsBodyCurrentsAutoAdvanceDefault = false;
+export const putSettingsBodyCurrentsShowParticlesDefault = true;
+export const putSettingsBodyCurrentsShowArrowsDefault = true;
+export const putSettingsBodyCurrentsShowStreamlinesDefault = false;
+export const putSettingsBodyAutoShowZoneOverlayDefault = false;
+export const putSettingsBodyDefaultHabitatSpeciesDefault = ``;
+export const putSettingsBodyHabitatOverlayIntensityDefault = 0.4;
+export const putSettingsBodyHabitatOverlayIntensityMin = 0;
+export const putSettingsBodyHabitatOverlayIntensityMax = 1;
+
+export const putSettingsBodyHabitatOverlayColorDefault = `#ff9919`;
+export const putSettingsBodyHabitatOverlayColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsBodyAutoStartTrailRecordingDefault = false;
+export const putSettingsBodyDefaultTrailColorDefault = `#ff6600`;
+export const putSettingsBodyDefaultTrailColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsBodyTrailRetentionDefault = `30`;
+export const putSettingsBodyAutoLoadLastDatasetDefault = true;
+export const putSettingsBodyReducedMotionDefault = false;
+export const putSettingsBodyColorBlindSafePaletteDefault = false;
+export const putSettingsBodyLargeHudTextDefault = false;
+export const putSettingsBodyHighContrastHudDefault = false;
+export const putSettingsBodyBrightDaylightDefault = false;
+export const putSettingsBodyColormapUserSetDefault = false;
+export const putSettingsBodyTelemetryOptInDefault = false;
+export const putSettingsBodyLlmDisclosureAcknowledgedDefault = false;
+export const putSettingsBodyHasSeenOnboardingDefault = false;
+export const putSettingsBodyDatasetFolderExpandedDefault = {  };
+export const putSettingsBodyCrosshairMenuGamepadButtonDefault = 3;
+export const putSettingsBodyCrosshairMenuGamepadButtonMin = 0;
+export const putSettingsBodyCrosshairMenuGamepadButtonMax = 31;
+
+
 
 export const PutSettingsBody = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsBodyTextureQualityDefault),
@@ -1250,7 +1588,103 @@ export const PutSettingsBody = zod.object({
   "hiddenEfhSpecies": zod.array(zod.string()).default(putSettingsBodyHiddenEfhSpeciesDefault).describe('Species names whose EFH polygons are hidden from the overlay.'),
   "hyd93ActiveFeatureCodes": zod.array(zod.number().int()).default(putSettingsBodyHyd93ActiveFeatureCodesDefault).describe('HYD93 feature type codes currently visible (89=Rocks, 103=Kelp, 146=Ledge, 530=Rocky reef, 988=Obstruction).'),
   "hyd93FeaturesEnabled": zod.boolean().default(putSettingsBodyHyd93FeaturesEnabledDefault).describe('Whether the master HYD93 cartographic annotation overlay is visible (kelp, rocks, rocky reefs, ledges, obstructions).'),
-  "globalFontSize": zod.enum(['smallest', 'small', 'medium', 'large', 'x-large', 'largest']).default(putSettingsBodyGlobalFontSizeDefault).describe('Global UI font size level applied throughout the application.')
+  "globalFontSize": zod.enum(['smallest', 'small', 'medium', 'large', 'x-large', 'largest']).default(putSettingsBodyGlobalFontSizeDefault).describe('Global UI font size level applied throughout the application.'),
+  "schemaVersion": zod.number().default(putSettingsBodySchemaVersionDefault).describe('Client settings schema version used for client-side migrations.'),
+  "showAdvancedEverywhere": zod.boolean().default(putSettingsBodyShowAdvancedEverywhereDefault).describe('Show advanced settings in all sections without hiding them behind a toggle.'),
+  "mouseZoomSensitivity": zod.number().min(putSettingsBodyMouseZoomSensitivityMin).max(putSettingsBodyMouseZoomSensitivityMax).default(putSettingsBodyMouseZoomSensitivityDefault).describe('Mouse scroll-wheel zoom speed multiplier.'),
+  "touchpadZoomSensitivity": zod.number().min(putSettingsBodyTouchpadZoomSensitivityMin).max(putSettingsBodyTouchpadZoomSensitivityMax).default(putSettingsBodyTouchpadZoomSensitivityDefault).describe('Touchpad pinch\/scroll zoom speed multiplier.'),
+  "pinchZoomSensitivity": zod.number().min(putSettingsBodyPinchZoomSensitivityMin).max(putSettingsBodyPinchZoomSensitivityMax).default(putSettingsBodyPinchZoomSensitivityDefault).describe('Touch-screen pinch-to-zoom sensitivity multiplier.'),
+  "joystickMode": zod.enum(['auto', 'always', 'off']).default(putSettingsBodyJoystickModeDefault).describe('On-screen joystick display mode. \"auto\" shows it on touch devices only.'),
+  "showJoystickInOrbit": zod.boolean().default(putSettingsBodyShowJoystickInOrbitDefault).describe('Show the on-screen joystick when in orbit\/inspect mode.'),
+  "fieldOfView": zod.number().min(putSettingsBodyFieldOfViewMin).max(putSettingsBodyFieldOfViewMax).default(putSettingsBodyFieldOfViewDefault).describe('Camera vertical field-of-view in degrees.'),
+  "renderDistance": zod.number().min(putSettingsBodyRenderDistanceMin).max(putSettingsBodyRenderDistanceMax).default(putSettingsBodyRenderDistanceDefault).describe('Maximum distance in metres at which terrain geometry is rendered.'),
+  "lastSession": zod.object({
+  "lon": zod.number(),
+  "lat": zod.number(),
+  "depth": zod.number(),
+  "heading": zod.number(),
+  "datasetId": zod.string()
+}).nullish().describe('Last camera position and active dataset. Restored on load when cameraSpawnBehaviour is \"last\". Null when no session has been saved yet.'),
+  "qualityPreset": zod.enum(['low', 'medium', 'high', 'ultra', 'custom']).default(putSettingsBodyQualityPresetDefault).describe('Overall graphics quality preset. \"custom\" means the user has individually adjusted one or more visual knobs.'),
+  "terrainExaggeration": zod.number().min(putSettingsBodyTerrainExaggerationMin).max(putSettingsBodyTerrainExaggerationMax).default(putSettingsBodyTerrainExaggerationDefault).describe('Vertical exaggeration factor applied to terrain depth for visual clarity.'),
+  "enableMarineSnow": zod.boolean().default(putSettingsBodyEnableMarineSnowDefault).describe('Render animated marine snow particle effect in the 3D scene.'),
+  "fogColor": zod.string().regex(putSettingsBodyFogColorRegExp).default(putSettingsBodyFogColorDefault).describe('RGB hex colour of the underwater fog.'),
+  "ambientLightIntensity": zod.number().min(putSettingsBodyAmbientLightIntensityMin).max(putSettingsBodyAmbientLightIntensityMax).default(putSettingsBodyAmbientLightIntensityDefault).describe('Intensity of the ambient (omnidirectional) scene light.'),
+  "directionalLightIntensity": zod.number().min(putSettingsBodyDirectionalLightIntensityMin).max(putSettingsBodyDirectionalLightIntensityMax).default(putSettingsBodyDirectionalLightIntensityDefault).describe('Intensity of the primary directional sunlight.'),
+  "lampRange": zod.number().min(1).max(putSettingsBodyLampRangeMax).default(putSettingsBodyLampRangeDefault).describe('Range in metres of the camera headlamp point light.'),
+  "antialiasing": zod.boolean().default(putSettingsBodyAntialiasingDefault).describe('Enable anti-aliasing on the 3D canvas.'),
+  "showWaterSurface": zod.boolean().default(putSettingsBodyShowWaterSurfaceDefault).describe('Render the sea-level water surface plane over the bathymetry.'),
+  "showLandmass": zod.boolean().default(putSettingsBodyShowLandmassDefault).describe('Render above-water landmass meshing from the terrain topography array.'),
+  "landmassStyle": zod.enum(['realistic', 'flat']).default(putSettingsBodyLandmassStyleDefault).describe('How the landmass is coloured — realistic elevation ramp or a single flat neutral colour.'),
+  "satelliteImagery": zod.boolean().default(putSettingsBodySatelliteImageryDefault).describe('Drape ESRI World Imagery satellite photo over the land mesh. When false, use the procedural colour ramp.'),
+  "terrainImagery": zod.boolean().default(putSettingsBodyTerrainImageryDefault).describe('Draw a USGS National Map hillshaded relief layer as the bottom layer of the Overview Map. Independent of satelliteImagery.'),
+  "showDepthLegend": zod.boolean().default(putSettingsBodyShowDepthLegendDefault).describe('Show the depth-colourmap legend overlay in the 3D viewscreen HUD.'),
+  "showDepthScaleBar": zod.boolean().default(putSettingsBodyShowDepthScaleBarDefault).describe('Show the depth scale bar in the 3D viewscreen HUD.'),
+  "showCompassMinimap": zod.boolean().default(putSettingsBodyShowCompassMinimapDefault).describe('Show the compass\/minimap widget in the HUD.'),
+  "showControlsLegend": zod.boolean().default(putSettingsBodyShowControlsLegendDefault).describe('Show the keyboard\/controls legend overlay in the HUD.'),
+  "showTidePanel": zod.boolean().default(putSettingsBodyShowTidePanelDefault).describe('Show the tidal data side panel.'),
+  "showHabitatPanel": zod.boolean().default(putSettingsBodyShowHabitatPanelDefault).describe('Show the habitat\/species side panel.'),
+  "showDatasetPanel": zod.boolean().default(putSettingsBodyShowDatasetPanelDefault).describe('Show the dataset library side panel.'),
+  "showQueryPanel": zod.boolean().default(putSettingsBodyShowQueryPanelDefault).describe('Show the AI query side panel.'),
+  "timeFormat": zod.enum(['utc', 'local', '12h', '24h']).default(putSettingsBodyTimeFormatDefault).describe('How timestamps are displayed in the HUD and panels.'),
+  "temperatureUnit": zod.enum(['auto', 'celsius', 'fahrenheit']).default(putSettingsBodyTemperatureUnitDefault).describe('Temperature display unit. \"auto\" follows the global units selector (metric=°C, imperial=°F).'),
+  "contoursEnabled": zod.boolean().default(putSettingsBodyContoursEnabledDefault).describe('Draw iso-depth contour lines on the 2D overview map.'),
+  "contourInterval": zod.number().min(1).max(putSettingsBodyContourIntervalMax).default(putSettingsBodyContourIntervalDefault).describe('Spacing between contour lines in the user\'s active unit system (metres for metric, feet for imperial\/nautical).'),
+  "defaultDepthPoleColor": zod.string().regex(putSettingsBodyDefaultDepthPoleColorRegExp).default(putSettingsBodyDefaultDepthPoleColorDefault).describe('Default hex colour applied to new depth-pole markers.'),
+  "markerClusterThreshold": zod.number().min(putSettingsBodyMarkerClusterThresholdMin).max(putSettingsBodyMarkerClusterThresholdMax).default(putSettingsBodyMarkerClusterThresholdDefault).describe('Maximum number of visible markers before clustering is activated. Set to 0 to disable clustering.'),
+  "autoLoadTidal": zod.boolean().default(putSettingsBodyAutoLoadTidalDefault).describe('Automatically load tidal current data when a dataset is opened.'),
+  "defaultTidalDepthLayer": zod.enum(['surface', 'mid', 'near-bottom']).default(putSettingsBodyDefaultTidalDepthLayerDefault).describe('Depth layer pre-selected in the tidal overlay controls.'),
+  "currentArrowDensity": zod.enum(['sparse', 'normal', 'dense']).default(putSettingsBodyCurrentArrowDensityDefault).describe('Global density of current direction arrows shown across all depth layers.'),
+  "layerArrowDensity": zod.object({
+  "surface": zod.enum(['sparse', 'normal', 'dense']).optional(),
+  "mid": zod.enum(['sparse', 'normal', 'dense']).optional(),
+  "near-bottom": zod.enum(['sparse', 'normal', 'dense']).optional()
+}).optional().describe('Per-depth-layer arrow density override. When set, overrides currentArrowDensity for that specific layer.'),
+  "windOverlayStyle": zod.enum(['arrows', 'particles']).default(putSettingsBodyWindOverlayStyleDefault).describe('Visual style for the wind overlay — directional arrows or streaming particles.'),
+  "tideOverlayStyle": zod.enum(['arrows', 'particles']).default(putSettingsBodyTideOverlayStyleDefault).describe('Visual style for the tidal height overlay.'),
+  "currentOverlayStyle": zod.enum(['arrows', 'particles']).default(putSettingsBodyCurrentOverlayStyleDefault).describe('Visual style for the ocean current overlay.'),
+  "currentsEnabled": zod.boolean().default(putSettingsBodyCurrentsEnabledDefault).describe('Master enable for the bathymetry-shaped current simulation.'),
+  "currentsSource": zod.enum(['manual', 'noaa']).default(putSettingsBodyCurrentsSourceDefault).describe('Source for the ambient (depth-averaged) current vector used in the simulation.'),
+  "currentsManualDirectionDeg": zod.number().min(putSettingsBodyCurrentsManualDirectionDegMin).max(putSettingsBodyCurrentsManualDirectionDegMax).default(putSettingsBodyCurrentsManualDirectionDegDefault).describe('Manual ambient current direction in degrees (compass going-to bearing).'),
+  "currentsManualSpeedKt": zod.number().min(putSettingsBodyCurrentsManualSpeedKtMin).max(putSettingsBodyCurrentsManualSpeedKtMax).default(putSettingsBodyCurrentsManualSpeedKtDefault).describe('Manual ambient current speed in knots.'),
+  "currentsTidePhase": zod.number().min(putSettingsBodyCurrentsTidePhaseMin).max(putSettingsBodyCurrentsTidePhaseMax).default(putSettingsBodyCurrentsTidePhaseDefault).describe('Tide-phase scrubber position in [0, 1) — 0 = flood peak, 0.5 = ebb peak.'),
+  "currentsAutoAdvance": zod.boolean().default(putSettingsBodyCurrentsAutoAdvanceDefault).describe('Automatically animate the tide-phase scrubber.'),
+  "currentsShowParticles": zod.boolean().default(putSettingsBodyCurrentsShowParticlesDefault).describe('Show the animated particle layer in the current simulation.'),
+  "currentsShowArrows": zod.boolean().default(putSettingsBodyCurrentsShowArrowsDefault).describe('Show the instanced speed-coloured arrow layer in the current simulation.'),
+  "currentsShowStreamlines": zod.boolean().default(putSettingsBodyCurrentsShowStreamlinesDefault).describe('Show integrated streamline ribbons in the current simulation.'),
+  "autoShowZoneOverlay": zod.boolean().default(putSettingsBodyAutoShowZoneOverlayDefault).describe('Automatically show the substrate zone overlay when a dataset is loaded.'),
+  "defaultHabitatSpecies": zod.string().default(putSettingsBodyDefaultHabitatSpeciesDefault).describe('Species pre-selected in the habitat suitability panel on load.'),
+  "habitatOverlayIntensity": zod.number().min(putSettingsBodyHabitatOverlayIntensityMin).max(putSettingsBodyHabitatOverlayIntensityMax).default(putSettingsBodyHabitatOverlayIntensityDefault).describe('Habitat suitability overlay blend strength (0 = invisible, 1 = fully opaque).'),
+  "habitatOverlayColor": zod.string().regex(putSettingsBodyHabitatOverlayColorRegExp).default(putSettingsBodyHabitatOverlayColorDefault).describe('Tint hex colour for the habitat suitability overlay.'),
+  "autoStartTrailRecording": zod.boolean().default(putSettingsBodyAutoStartTrailRecordingDefault).describe('Automatically start GPS trail recording when the app loads.'),
+  "defaultTrailColor": zod.string().regex(putSettingsBodyDefaultTrailColorRegExp).default(putSettingsBodyDefaultTrailColorDefault).describe('Default hex colour applied to new GPS trail recordings.'),
+  "trailRetention": zod.enum(['7', '30', '90', 'all']).default(putSettingsBodyTrailRetentionDefault).describe('Number of days of GPS trail history to retain locally. \"all\" disables automatic pruning.'),
+  "autoLoadLastDataset": zod.boolean().default(putSettingsBodyAutoLoadLastDatasetDefault).describe('Automatically reload the most recently used dataset when the app starts.'),
+  "defaultMapLoad": zod.object({
+  "kind": zod.enum(['preset', 'upload']).describe('Whether this is a built-in preset or a user-uploaded dataset.'),
+  "id": zod.string().describe('Dataset slug (preset) or upload id (upload).')
+}).nullish().describe('Dataset to load automatically on every app start. Null means use the built-in default.'),
+  "reducedMotion": zod.boolean().default(putSettingsBodyReducedMotionDefault).describe('Reduce or eliminate non-essential UI animations for accessibility.'),
+  "colorBlindSafePalette": zod.boolean().default(putSettingsBodyColorBlindSafePaletteDefault).describe('Apply a colour-blind-friendly palette to the depth colourmap and overlays.'),
+  "largeHudText": zod.boolean().default(putSettingsBodyLargeHudTextDefault).describe('(Deprecated — use globalFontSize instead.) Enlarge HUD text for readability.'),
+  "highContrastHud": zod.boolean().default(putSettingsBodyHighContrastHudDefault).describe('Apply high-contrast styling to HUD elements.'),
+  "brightDaylight": zod.boolean().default(putSettingsBodyBrightDaylightDefault).describe('Outdoor display mode — opaque panels, bold text, cobalt accent for direct-sunlight use.'),
+  "colormapUserSet": zod.boolean().default(putSettingsBodyColormapUserSetDefault).describe('True when the user has explicitly chosen a depth colourmap via the Settings UI. Used to avoid auto-switching palettes.'),
+  "telemetryOptIn": zod.boolean().default(putSettingsBodyTelemetryOptInDefault).describe('Whether the user has opted in to anonymous usage telemetry.'),
+  "llmDisclosureAcknowledged": zod.boolean().default(putSettingsBodyLlmDisclosureAcknowledgedDefault).describe('Whether the user has read and dismissed the one-time AI\/LLM data-sharing disclosure.'),
+  "hasSeenOnboarding": zod.boolean().default(putSettingsBodyHasSeenOnboardingDefault).describe('Set to true once the user completes or skips the first-time guided tour. Synced cross-device.'),
+  "datasetFolderExpanded": zod.record(zod.string(), zod.boolean()).default(putSettingsBodyDatasetFolderExpandedDefault).describe('Expand\/collapse state for dataset library folders, keyed by folder id.'),
+  "bookmarks": zod.record(zod.string(), zod.array(zod.object({
+  "id": zod.string().describe('Unique bookmark id (UUID).'),
+  "name": zod.string().describe('User-assigned bookmark label.'),
+  "lon": zod.number().describe('Camera longitude at the bookmark.'),
+  "lat": zod.number().describe('Camera latitude at the bookmark.'),
+  "depth": zod.number().describe('Camera depth (metres, positive = below sea level) at the bookmark.'),
+  "heading": zod.number().describe('Camera heading in degrees at the bookmark.')
+}))).optional().describe('Per-dataset camera bookmarks keyed by dataset id. Each value is an ordered array of named camera positions.'),
+  "keyBindings": zod.record(zod.string(), zod.string()).optional().describe('Remapped keyboard shortcuts keyed by action id (e.g. \"moveForward\"). Values are KeyboardEvent.code strings (e.g. \"KeyW\"). Missing keys fall back to their default binding.'),
+  "crosshairMenuGamepadButton": zod.number().min(putSettingsBodyCrosshairMenuGamepadButtonMin).max(putSettingsBodyCrosshairMenuGamepadButtonMax).nullish().default(putSettingsBodyCrosshairMenuGamepadButtonDefault).describe('Standard-mapping gamepad button index that opens the crosshair action menu. Null disables the gamepad binding.'),
+  "lastSyncedAt": zod.string().nullish().describe('ISO 8601 timestamp of the most recent successful server sync (GET hydration or PUT save). Null when the user has never synced.')
 }).describe('Per-user application settings with sensible defaults')
 
 export const putSettingsResponseTextureQualityDefault = `high`;
@@ -1360,6 +1794,127 @@ export const putSettingsResponseHiddenEfhSpeciesDefault = [];
 export const putSettingsResponseHyd93ActiveFeatureCodesDefault = [89, 103, 146, 530, 988];
 export const putSettingsResponseHyd93FeaturesEnabledDefault = false;
 export const putSettingsResponseGlobalFontSizeDefault = `medium`;
+export const putSettingsResponseSchemaVersionDefault = 19;
+export const putSettingsResponseShowAdvancedEverywhereDefault = false;
+export const putSettingsResponseMouseZoomSensitivityDefault = 1;
+export const putSettingsResponseMouseZoomSensitivityMin = 0.1;
+export const putSettingsResponseMouseZoomSensitivityMax = 3;
+
+export const putSettingsResponseTouchpadZoomSensitivityDefault = 1;
+export const putSettingsResponseTouchpadZoomSensitivityMin = 0.1;
+export const putSettingsResponseTouchpadZoomSensitivityMax = 3;
+
+export const putSettingsResponsePinchZoomSensitivityDefault = 1;
+export const putSettingsResponsePinchZoomSensitivityMin = 0.1;
+export const putSettingsResponsePinchZoomSensitivityMax = 3;
+
+export const putSettingsResponseJoystickModeDefault = `auto`;
+export const putSettingsResponseShowJoystickInOrbitDefault = false;
+export const putSettingsResponseFieldOfViewDefault = 45;
+export const putSettingsResponseFieldOfViewMin = 15;
+export const putSettingsResponseFieldOfViewMax = 150;
+
+export const putSettingsResponseRenderDistanceDefault = 400;
+export const putSettingsResponseRenderDistanceMin = 50;
+export const putSettingsResponseRenderDistanceMax = 2000;
+
+export const putSettingsResponseQualityPresetDefault = `medium`;
+export const putSettingsResponseTerrainExaggerationDefault = 0.8;
+export const putSettingsResponseTerrainExaggerationMin = 0;
+export const putSettingsResponseTerrainExaggerationMax = 10;
+
+export const putSettingsResponseEnableMarineSnowDefault = true;
+export const putSettingsResponseFogColorDefault = `#020818`;
+export const putSettingsResponseFogColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsResponseAmbientLightIntensityDefault = 0.05;
+export const putSettingsResponseAmbientLightIntensityMin = 0;
+export const putSettingsResponseAmbientLightIntensityMax = 2;
+
+export const putSettingsResponseDirectionalLightIntensityDefault = 0.35;
+export const putSettingsResponseDirectionalLightIntensityMin = 0;
+export const putSettingsResponseDirectionalLightIntensityMax = 2;
+
+export const putSettingsResponseLampRangeDefault = 40;
+export const putSettingsResponseLampRangeMax = 200;
+
+export const putSettingsResponseAntialiasingDefault = true;
+export const putSettingsResponseShowWaterSurfaceDefault = true;
+export const putSettingsResponseShowLandmassDefault = false;
+export const putSettingsResponseLandmassStyleDefault = `realistic`;
+export const putSettingsResponseSatelliteImageryDefault = true;
+export const putSettingsResponseTerrainImageryDefault = false;
+export const putSettingsResponseShowDepthLegendDefault = true;
+export const putSettingsResponseShowDepthScaleBarDefault = true;
+export const putSettingsResponseShowCompassMinimapDefault = true;
+export const putSettingsResponseShowControlsLegendDefault = true;
+export const putSettingsResponseShowTidePanelDefault = true;
+export const putSettingsResponseShowHabitatPanelDefault = true;
+export const putSettingsResponseShowDatasetPanelDefault = true;
+export const putSettingsResponseShowQueryPanelDefault = true;
+export const putSettingsResponseTimeFormatDefault = `local`;
+export const putSettingsResponseTemperatureUnitDefault = `auto`;
+export const putSettingsResponseContoursEnabledDefault = true;
+export const putSettingsResponseContourIntervalDefault = 10;
+export const putSettingsResponseContourIntervalMax = 1000;
+
+export const putSettingsResponseDefaultDepthPoleColorDefault = `#22d3ee`;
+export const putSettingsResponseDefaultDepthPoleColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsResponseMarkerClusterThresholdDefault = 25;
+export const putSettingsResponseMarkerClusterThresholdMin = 0;
+export const putSettingsResponseMarkerClusterThresholdMax = 500;
+
+export const putSettingsResponseAutoLoadTidalDefault = false;
+export const putSettingsResponseDefaultTidalDepthLayerDefault = `surface`;
+export const putSettingsResponseCurrentArrowDensityDefault = `normal`;
+export const putSettingsResponseWindOverlayStyleDefault = `arrows`;
+export const putSettingsResponseTideOverlayStyleDefault = `arrows`;
+export const putSettingsResponseCurrentOverlayStyleDefault = `arrows`;
+export const putSettingsResponseCurrentsEnabledDefault = false;
+export const putSettingsResponseCurrentsSourceDefault = `noaa`;
+export const putSettingsResponseCurrentsManualDirectionDegDefault = 90;
+export const putSettingsResponseCurrentsManualDirectionDegMin = 0;
+export const putSettingsResponseCurrentsManualDirectionDegMax = 360;
+
+export const putSettingsResponseCurrentsManualSpeedKtDefault = 0.8;
+export const putSettingsResponseCurrentsManualSpeedKtMin = 0;
+export const putSettingsResponseCurrentsManualSpeedKtMax = 50;
+
+export const putSettingsResponseCurrentsTidePhaseDefault = 0;
+export const putSettingsResponseCurrentsTidePhaseMin = 0;
+export const putSettingsResponseCurrentsTidePhaseMax = 1;
+
+export const putSettingsResponseCurrentsAutoAdvanceDefault = false;
+export const putSettingsResponseCurrentsShowParticlesDefault = true;
+export const putSettingsResponseCurrentsShowArrowsDefault = true;
+export const putSettingsResponseCurrentsShowStreamlinesDefault = false;
+export const putSettingsResponseAutoShowZoneOverlayDefault = false;
+export const putSettingsResponseDefaultHabitatSpeciesDefault = ``;
+export const putSettingsResponseHabitatOverlayIntensityDefault = 0.4;
+export const putSettingsResponseHabitatOverlayIntensityMin = 0;
+export const putSettingsResponseHabitatOverlayIntensityMax = 1;
+
+export const putSettingsResponseHabitatOverlayColorDefault = `#ff9919`;
+export const putSettingsResponseHabitatOverlayColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsResponseAutoStartTrailRecordingDefault = false;
+export const putSettingsResponseDefaultTrailColorDefault = `#ff6600`;
+export const putSettingsResponseDefaultTrailColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsResponseTrailRetentionDefault = `30`;
+export const putSettingsResponseAutoLoadLastDatasetDefault = true;
+export const putSettingsResponseReducedMotionDefault = false;
+export const putSettingsResponseColorBlindSafePaletteDefault = false;
+export const putSettingsResponseLargeHudTextDefault = false;
+export const putSettingsResponseHighContrastHudDefault = false;
+export const putSettingsResponseBrightDaylightDefault = false;
+export const putSettingsResponseColormapUserSetDefault = false;
+export const putSettingsResponseTelemetryOptInDefault = false;
+export const putSettingsResponseLlmDisclosureAcknowledgedDefault = false;
+export const putSettingsResponseHasSeenOnboardingDefault = false;
+export const putSettingsResponseDatasetFolderExpandedDefault = {  };
+export const putSettingsResponseCrosshairMenuGamepadButtonDefault = 3;
+export const putSettingsResponseCrosshairMenuGamepadButtonMin = 0;
+export const putSettingsResponseCrosshairMenuGamepadButtonMax = 31;
+
+
 
 export const PutSettingsResponse = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsResponseTextureQualityDefault),
@@ -1443,7 +1998,103 @@ export const PutSettingsResponse = zod.object({
   "hiddenEfhSpecies": zod.array(zod.string()).default(putSettingsResponseHiddenEfhSpeciesDefault).describe('Species names whose EFH polygons are hidden from the overlay.'),
   "hyd93ActiveFeatureCodes": zod.array(zod.number().int()).default(putSettingsResponseHyd93ActiveFeatureCodesDefault).describe('HYD93 feature type codes currently visible (89=Rocks, 103=Kelp, 146=Ledge, 530=Rocky reef, 988=Obstruction).'),
   "hyd93FeaturesEnabled": zod.boolean().default(putSettingsResponseHyd93FeaturesEnabledDefault).describe('Whether the master HYD93 cartographic annotation overlay is visible (kelp, rocks, rocky reefs, ledges, obstructions).'),
-  "globalFontSize": zod.enum(['smallest', 'small', 'medium', 'large', 'x-large', 'largest']).default(putSettingsResponseGlobalFontSizeDefault).describe('Global UI font size level applied throughout the application.')
+  "globalFontSize": zod.enum(['smallest', 'small', 'medium', 'large', 'x-large', 'largest']).default(putSettingsResponseGlobalFontSizeDefault).describe('Global UI font size level applied throughout the application.'),
+  "schemaVersion": zod.number().default(putSettingsResponseSchemaVersionDefault).describe('Client settings schema version used for client-side migrations.'),
+  "showAdvancedEverywhere": zod.boolean().default(putSettingsResponseShowAdvancedEverywhereDefault).describe('Show advanced settings in all sections without hiding them behind a toggle.'),
+  "mouseZoomSensitivity": zod.number().min(putSettingsResponseMouseZoomSensitivityMin).max(putSettingsResponseMouseZoomSensitivityMax).default(putSettingsResponseMouseZoomSensitivityDefault).describe('Mouse scroll-wheel zoom speed multiplier.'),
+  "touchpadZoomSensitivity": zod.number().min(putSettingsResponseTouchpadZoomSensitivityMin).max(putSettingsResponseTouchpadZoomSensitivityMax).default(putSettingsResponseTouchpadZoomSensitivityDefault).describe('Touchpad pinch\/scroll zoom speed multiplier.'),
+  "pinchZoomSensitivity": zod.number().min(putSettingsResponsePinchZoomSensitivityMin).max(putSettingsResponsePinchZoomSensitivityMax).default(putSettingsResponsePinchZoomSensitivityDefault).describe('Touch-screen pinch-to-zoom sensitivity multiplier.'),
+  "joystickMode": zod.enum(['auto', 'always', 'off']).default(putSettingsResponseJoystickModeDefault).describe('On-screen joystick display mode. \"auto\" shows it on touch devices only.'),
+  "showJoystickInOrbit": zod.boolean().default(putSettingsResponseShowJoystickInOrbitDefault).describe('Show the on-screen joystick when in orbit\/inspect mode.'),
+  "fieldOfView": zod.number().min(putSettingsResponseFieldOfViewMin).max(putSettingsResponseFieldOfViewMax).default(putSettingsResponseFieldOfViewDefault).describe('Camera vertical field-of-view in degrees.'),
+  "renderDistance": zod.number().min(putSettingsResponseRenderDistanceMin).max(putSettingsResponseRenderDistanceMax).default(putSettingsResponseRenderDistanceDefault).describe('Maximum distance in metres at which terrain geometry is rendered.'),
+  "lastSession": zod.object({
+  "lon": zod.number(),
+  "lat": zod.number(),
+  "depth": zod.number(),
+  "heading": zod.number(),
+  "datasetId": zod.string()
+}).nullish().describe('Last camera position and active dataset. Restored on load when cameraSpawnBehaviour is \"last\". Null when no session has been saved yet.'),
+  "qualityPreset": zod.enum(['low', 'medium', 'high', 'ultra', 'custom']).default(putSettingsResponseQualityPresetDefault).describe('Overall graphics quality preset. \"custom\" means the user has individually adjusted one or more visual knobs.'),
+  "terrainExaggeration": zod.number().min(putSettingsResponseTerrainExaggerationMin).max(putSettingsResponseTerrainExaggerationMax).default(putSettingsResponseTerrainExaggerationDefault).describe('Vertical exaggeration factor applied to terrain depth for visual clarity.'),
+  "enableMarineSnow": zod.boolean().default(putSettingsResponseEnableMarineSnowDefault).describe('Render animated marine snow particle effect in the 3D scene.'),
+  "fogColor": zod.string().regex(putSettingsResponseFogColorRegExp).default(putSettingsResponseFogColorDefault).describe('RGB hex colour of the underwater fog.'),
+  "ambientLightIntensity": zod.number().min(putSettingsResponseAmbientLightIntensityMin).max(putSettingsResponseAmbientLightIntensityMax).default(putSettingsResponseAmbientLightIntensityDefault).describe('Intensity of the ambient (omnidirectional) scene light.'),
+  "directionalLightIntensity": zod.number().min(putSettingsResponseDirectionalLightIntensityMin).max(putSettingsResponseDirectionalLightIntensityMax).default(putSettingsResponseDirectionalLightIntensityDefault).describe('Intensity of the primary directional sunlight.'),
+  "lampRange": zod.number().min(1).max(putSettingsResponseLampRangeMax).default(putSettingsResponseLampRangeDefault).describe('Range in metres of the camera headlamp point light.'),
+  "antialiasing": zod.boolean().default(putSettingsResponseAntialiasingDefault).describe('Enable anti-aliasing on the 3D canvas.'),
+  "showWaterSurface": zod.boolean().default(putSettingsResponseShowWaterSurfaceDefault).describe('Render the sea-level water surface plane over the bathymetry.'),
+  "showLandmass": zod.boolean().default(putSettingsResponseShowLandmassDefault).describe('Render above-water landmass meshing from the terrain topography array.'),
+  "landmassStyle": zod.enum(['realistic', 'flat']).default(putSettingsResponseLandmassStyleDefault).describe('How the landmass is coloured — realistic elevation ramp or a single flat neutral colour.'),
+  "satelliteImagery": zod.boolean().default(putSettingsResponseSatelliteImageryDefault).describe('Drape ESRI World Imagery satellite photo over the land mesh. When false, use the procedural colour ramp.'),
+  "terrainImagery": zod.boolean().default(putSettingsResponseTerrainImageryDefault).describe('Draw a USGS National Map hillshaded relief layer as the bottom layer of the Overview Map. Independent of satelliteImagery.'),
+  "showDepthLegend": zod.boolean().default(putSettingsResponseShowDepthLegendDefault).describe('Show the depth-colourmap legend overlay in the 3D viewscreen HUD.'),
+  "showDepthScaleBar": zod.boolean().default(putSettingsResponseShowDepthScaleBarDefault).describe('Show the depth scale bar in the 3D viewscreen HUD.'),
+  "showCompassMinimap": zod.boolean().default(putSettingsResponseShowCompassMinimapDefault).describe('Show the compass\/minimap widget in the HUD.'),
+  "showControlsLegend": zod.boolean().default(putSettingsResponseShowControlsLegendDefault).describe('Show the keyboard\/controls legend overlay in the HUD.'),
+  "showTidePanel": zod.boolean().default(putSettingsResponseShowTidePanelDefault).describe('Show the tidal data side panel.'),
+  "showHabitatPanel": zod.boolean().default(putSettingsResponseShowHabitatPanelDefault).describe('Show the habitat\/species side panel.'),
+  "showDatasetPanel": zod.boolean().default(putSettingsResponseShowDatasetPanelDefault).describe('Show the dataset library side panel.'),
+  "showQueryPanel": zod.boolean().default(putSettingsResponseShowQueryPanelDefault).describe('Show the AI query side panel.'),
+  "timeFormat": zod.enum(['utc', 'local', '12h', '24h']).default(putSettingsResponseTimeFormatDefault).describe('How timestamps are displayed in the HUD and panels.'),
+  "temperatureUnit": zod.enum(['auto', 'celsius', 'fahrenheit']).default(putSettingsResponseTemperatureUnitDefault).describe('Temperature display unit. \"auto\" follows the global units selector (metric=°C, imperial=°F).'),
+  "contoursEnabled": zod.boolean().default(putSettingsResponseContoursEnabledDefault).describe('Draw iso-depth contour lines on the 2D overview map.'),
+  "contourInterval": zod.number().min(1).max(putSettingsResponseContourIntervalMax).default(putSettingsResponseContourIntervalDefault).describe('Spacing between contour lines in the user\'s active unit system (metres for metric, feet for imperial\/nautical).'),
+  "defaultDepthPoleColor": zod.string().regex(putSettingsResponseDefaultDepthPoleColorRegExp).default(putSettingsResponseDefaultDepthPoleColorDefault).describe('Default hex colour applied to new depth-pole markers.'),
+  "markerClusterThreshold": zod.number().min(putSettingsResponseMarkerClusterThresholdMin).max(putSettingsResponseMarkerClusterThresholdMax).default(putSettingsResponseMarkerClusterThresholdDefault).describe('Maximum number of visible markers before clustering is activated. Set to 0 to disable clustering.'),
+  "autoLoadTidal": zod.boolean().default(putSettingsResponseAutoLoadTidalDefault).describe('Automatically load tidal current data when a dataset is opened.'),
+  "defaultTidalDepthLayer": zod.enum(['surface', 'mid', 'near-bottom']).default(putSettingsResponseDefaultTidalDepthLayerDefault).describe('Depth layer pre-selected in the tidal overlay controls.'),
+  "currentArrowDensity": zod.enum(['sparse', 'normal', 'dense']).default(putSettingsResponseCurrentArrowDensityDefault).describe('Global density of current direction arrows shown across all depth layers.'),
+  "layerArrowDensity": zod.object({
+  "surface": zod.enum(['sparse', 'normal', 'dense']).optional(),
+  "mid": zod.enum(['sparse', 'normal', 'dense']).optional(),
+  "near-bottom": zod.enum(['sparse', 'normal', 'dense']).optional()
+}).optional().describe('Per-depth-layer arrow density override. When set, overrides currentArrowDensity for that specific layer.'),
+  "windOverlayStyle": zod.enum(['arrows', 'particles']).default(putSettingsResponseWindOverlayStyleDefault).describe('Visual style for the wind overlay — directional arrows or streaming particles.'),
+  "tideOverlayStyle": zod.enum(['arrows', 'particles']).default(putSettingsResponseTideOverlayStyleDefault).describe('Visual style for the tidal height overlay.'),
+  "currentOverlayStyle": zod.enum(['arrows', 'particles']).default(putSettingsResponseCurrentOverlayStyleDefault).describe('Visual style for the ocean current overlay.'),
+  "currentsEnabled": zod.boolean().default(putSettingsResponseCurrentsEnabledDefault).describe('Master enable for the bathymetry-shaped current simulation.'),
+  "currentsSource": zod.enum(['manual', 'noaa']).default(putSettingsResponseCurrentsSourceDefault).describe('Source for the ambient (depth-averaged) current vector used in the simulation.'),
+  "currentsManualDirectionDeg": zod.number().min(putSettingsResponseCurrentsManualDirectionDegMin).max(putSettingsResponseCurrentsManualDirectionDegMax).default(putSettingsResponseCurrentsManualDirectionDegDefault).describe('Manual ambient current direction in degrees (compass going-to bearing).'),
+  "currentsManualSpeedKt": zod.number().min(putSettingsResponseCurrentsManualSpeedKtMin).max(putSettingsResponseCurrentsManualSpeedKtMax).default(putSettingsResponseCurrentsManualSpeedKtDefault).describe('Manual ambient current speed in knots.'),
+  "currentsTidePhase": zod.number().min(putSettingsResponseCurrentsTidePhaseMin).max(putSettingsResponseCurrentsTidePhaseMax).default(putSettingsResponseCurrentsTidePhaseDefault).describe('Tide-phase scrubber position in [0, 1) — 0 = flood peak, 0.5 = ebb peak.'),
+  "currentsAutoAdvance": zod.boolean().default(putSettingsResponseCurrentsAutoAdvanceDefault).describe('Automatically animate the tide-phase scrubber.'),
+  "currentsShowParticles": zod.boolean().default(putSettingsResponseCurrentsShowParticlesDefault).describe('Show the animated particle layer in the current simulation.'),
+  "currentsShowArrows": zod.boolean().default(putSettingsResponseCurrentsShowArrowsDefault).describe('Show the instanced speed-coloured arrow layer in the current simulation.'),
+  "currentsShowStreamlines": zod.boolean().default(putSettingsResponseCurrentsShowStreamlinesDefault).describe('Show integrated streamline ribbons in the current simulation.'),
+  "autoShowZoneOverlay": zod.boolean().default(putSettingsResponseAutoShowZoneOverlayDefault).describe('Automatically show the substrate zone overlay when a dataset is loaded.'),
+  "defaultHabitatSpecies": zod.string().default(putSettingsResponseDefaultHabitatSpeciesDefault).describe('Species pre-selected in the habitat suitability panel on load.'),
+  "habitatOverlayIntensity": zod.number().min(putSettingsResponseHabitatOverlayIntensityMin).max(putSettingsResponseHabitatOverlayIntensityMax).default(putSettingsResponseHabitatOverlayIntensityDefault).describe('Habitat suitability overlay blend strength (0 = invisible, 1 = fully opaque).'),
+  "habitatOverlayColor": zod.string().regex(putSettingsResponseHabitatOverlayColorRegExp).default(putSettingsResponseHabitatOverlayColorDefault).describe('Tint hex colour for the habitat suitability overlay.'),
+  "autoStartTrailRecording": zod.boolean().default(putSettingsResponseAutoStartTrailRecordingDefault).describe('Automatically start GPS trail recording when the app loads.'),
+  "defaultTrailColor": zod.string().regex(putSettingsResponseDefaultTrailColorRegExp).default(putSettingsResponseDefaultTrailColorDefault).describe('Default hex colour applied to new GPS trail recordings.'),
+  "trailRetention": zod.enum(['7', '30', '90', 'all']).default(putSettingsResponseTrailRetentionDefault).describe('Number of days of GPS trail history to retain locally. \"all\" disables automatic pruning.'),
+  "autoLoadLastDataset": zod.boolean().default(putSettingsResponseAutoLoadLastDatasetDefault).describe('Automatically reload the most recently used dataset when the app starts.'),
+  "defaultMapLoad": zod.object({
+  "kind": zod.enum(['preset', 'upload']).describe('Whether this is a built-in preset or a user-uploaded dataset.'),
+  "id": zod.string().describe('Dataset slug (preset) or upload id (upload).')
+}).nullish().describe('Dataset to load automatically on every app start. Null means use the built-in default.'),
+  "reducedMotion": zod.boolean().default(putSettingsResponseReducedMotionDefault).describe('Reduce or eliminate non-essential UI animations for accessibility.'),
+  "colorBlindSafePalette": zod.boolean().default(putSettingsResponseColorBlindSafePaletteDefault).describe('Apply a colour-blind-friendly palette to the depth colourmap and overlays.'),
+  "largeHudText": zod.boolean().default(putSettingsResponseLargeHudTextDefault).describe('(Deprecated — use globalFontSize instead.) Enlarge HUD text for readability.'),
+  "highContrastHud": zod.boolean().default(putSettingsResponseHighContrastHudDefault).describe('Apply high-contrast styling to HUD elements.'),
+  "brightDaylight": zod.boolean().default(putSettingsResponseBrightDaylightDefault).describe('Outdoor display mode — opaque panels, bold text, cobalt accent for direct-sunlight use.'),
+  "colormapUserSet": zod.boolean().default(putSettingsResponseColormapUserSetDefault).describe('True when the user has explicitly chosen a depth colourmap via the Settings UI. Used to avoid auto-switching palettes.'),
+  "telemetryOptIn": zod.boolean().default(putSettingsResponseTelemetryOptInDefault).describe('Whether the user has opted in to anonymous usage telemetry.'),
+  "llmDisclosureAcknowledged": zod.boolean().default(putSettingsResponseLlmDisclosureAcknowledgedDefault).describe('Whether the user has read and dismissed the one-time AI\/LLM data-sharing disclosure.'),
+  "hasSeenOnboarding": zod.boolean().default(putSettingsResponseHasSeenOnboardingDefault).describe('Set to true once the user completes or skips the first-time guided tour. Synced cross-device.'),
+  "datasetFolderExpanded": zod.record(zod.string(), zod.boolean()).default(putSettingsResponseDatasetFolderExpandedDefault).describe('Expand\/collapse state for dataset library folders, keyed by folder id.'),
+  "bookmarks": zod.record(zod.string(), zod.array(zod.object({
+  "id": zod.string().describe('Unique bookmark id (UUID).'),
+  "name": zod.string().describe('User-assigned bookmark label.'),
+  "lon": zod.number().describe('Camera longitude at the bookmark.'),
+  "lat": zod.number().describe('Camera latitude at the bookmark.'),
+  "depth": zod.number().describe('Camera depth (metres, positive = below sea level) at the bookmark.'),
+  "heading": zod.number().describe('Camera heading in degrees at the bookmark.')
+}))).optional().describe('Per-dataset camera bookmarks keyed by dataset id. Each value is an ordered array of named camera positions.'),
+  "keyBindings": zod.record(zod.string(), zod.string()).optional().describe('Remapped keyboard shortcuts keyed by action id (e.g. \"moveForward\"). Values are KeyboardEvent.code strings (e.g. \"KeyW\"). Missing keys fall back to their default binding.'),
+  "crosshairMenuGamepadButton": zod.number().min(putSettingsResponseCrosshairMenuGamepadButtonMin).max(putSettingsResponseCrosshairMenuGamepadButtonMax).nullish().default(putSettingsResponseCrosshairMenuGamepadButtonDefault).describe('Standard-mapping gamepad button index that opens the crosshair action menu. Null disables the gamepad binding.'),
+  "lastSyncedAt": zod.string().nullish().describe('ISO 8601 timestamp of the most recent successful server sync (GET hydration or PUT save). Null when the user has never synced.')
 }).describe('Per-user application settings with sensible defaults')
 
 

@@ -476,6 +476,247 @@ export const UserSettingsGlobalFontSize = {
 } as const;
 
 /**
+ * On-screen joystick display mode. "auto" shows it on touch devices only.
+ */
+export type UserSettingsJoystickMode = typeof UserSettingsJoystickMode[keyof typeof UserSettingsJoystickMode];
+
+
+export const UserSettingsJoystickMode = {
+  auto: 'auto',
+  always: 'always',
+  off: 'off',
+} as const;
+
+/**
+ * Last camera position and active dataset. Restored on load when cameraSpawnBehaviour is "last". Null when no session has been saved yet.
+ */
+export type UserSettingsLastSession = {
+  lon: number;
+  lat: number;
+  depth: number;
+  heading: number;
+  datasetId: string;
+} | null;
+
+/**
+ * Overall graphics quality preset. "custom" means the user has individually adjusted one or more visual knobs.
+ */
+export type UserSettingsQualityPreset = typeof UserSettingsQualityPreset[keyof typeof UserSettingsQualityPreset];
+
+
+export const UserSettingsQualityPreset = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  ultra: 'ultra',
+  custom: 'custom',
+} as const;
+
+/**
+ * How the landmass is coloured — realistic elevation ramp or a single flat neutral colour.
+ */
+export type UserSettingsLandmassStyle = typeof UserSettingsLandmassStyle[keyof typeof UserSettingsLandmassStyle];
+
+
+export const UserSettingsLandmassStyle = {
+  realistic: 'realistic',
+  flat: 'flat',
+} as const;
+
+/**
+ * How timestamps are displayed in the HUD and panels.
+ */
+export type UserSettingsTimeFormat = typeof UserSettingsTimeFormat[keyof typeof UserSettingsTimeFormat];
+
+
+export const UserSettingsTimeFormat = {
+  utc: 'utc',
+  local: 'local',
+  '12h': '12h',
+  '24h': '24h',
+} as const;
+
+/**
+ * Temperature display unit. "auto" follows the global units selector (metric=°C, imperial=°F).
+ */
+export type UserSettingsTemperatureUnit = typeof UserSettingsTemperatureUnit[keyof typeof UserSettingsTemperatureUnit];
+
+
+export const UserSettingsTemperatureUnit = {
+  auto: 'auto',
+  celsius: 'celsius',
+  fahrenheit: 'fahrenheit',
+} as const;
+
+/**
+ * Depth layer pre-selected in the tidal overlay controls.
+ */
+export type UserSettingsDefaultTidalDepthLayer = typeof UserSettingsDefaultTidalDepthLayer[keyof typeof UserSettingsDefaultTidalDepthLayer];
+
+
+export const UserSettingsDefaultTidalDepthLayer = {
+  surface: 'surface',
+  mid: 'mid',
+  'near-bottom': 'near-bottom',
+} as const;
+
+/**
+ * Global density of current direction arrows shown across all depth layers.
+ */
+export type UserSettingsCurrentArrowDensity = typeof UserSettingsCurrentArrowDensity[keyof typeof UserSettingsCurrentArrowDensity];
+
+
+export const UserSettingsCurrentArrowDensity = {
+  sparse: 'sparse',
+  normal: 'normal',
+  dense: 'dense',
+} as const;
+
+export type UserSettingsLayerArrowDensitySurface = typeof UserSettingsLayerArrowDensitySurface[keyof typeof UserSettingsLayerArrowDensitySurface];
+
+
+export const UserSettingsLayerArrowDensitySurface = {
+  sparse: 'sparse',
+  normal: 'normal',
+  dense: 'dense',
+} as const;
+
+export type UserSettingsLayerArrowDensityMid = typeof UserSettingsLayerArrowDensityMid[keyof typeof UserSettingsLayerArrowDensityMid];
+
+
+export const UserSettingsLayerArrowDensityMid = {
+  sparse: 'sparse',
+  normal: 'normal',
+  dense: 'dense',
+} as const;
+
+export type UserSettingsLayerArrowDensityNearBottom = typeof UserSettingsLayerArrowDensityNearBottom[keyof typeof UserSettingsLayerArrowDensityNearBottom];
+
+
+export const UserSettingsLayerArrowDensityNearBottom = {
+  sparse: 'sparse',
+  normal: 'normal',
+  dense: 'dense',
+} as const;
+
+/**
+ * Per-depth-layer arrow density override. When set, overrides currentArrowDensity for that specific layer.
+ */
+export type UserSettingsLayerArrowDensity = {
+  surface?: UserSettingsLayerArrowDensitySurface;
+  mid?: UserSettingsLayerArrowDensityMid;
+  'near-bottom'?: UserSettingsLayerArrowDensityNearBottom;
+};
+
+/**
+ * Visual style for the wind overlay — directional arrows or streaming particles.
+ */
+export type UserSettingsWindOverlayStyle = typeof UserSettingsWindOverlayStyle[keyof typeof UserSettingsWindOverlayStyle];
+
+
+export const UserSettingsWindOverlayStyle = {
+  arrows: 'arrows',
+  particles: 'particles',
+} as const;
+
+/**
+ * Visual style for the tidal height overlay.
+ */
+export type UserSettingsTideOverlayStyle = typeof UserSettingsTideOverlayStyle[keyof typeof UserSettingsTideOverlayStyle];
+
+
+export const UserSettingsTideOverlayStyle = {
+  arrows: 'arrows',
+  particles: 'particles',
+} as const;
+
+/**
+ * Visual style for the ocean current overlay.
+ */
+export type UserSettingsCurrentOverlayStyle = typeof UserSettingsCurrentOverlayStyle[keyof typeof UserSettingsCurrentOverlayStyle];
+
+
+export const UserSettingsCurrentOverlayStyle = {
+  arrows: 'arrows',
+  particles: 'particles',
+} as const;
+
+/**
+ * Source for the ambient (depth-averaged) current vector used in the simulation.
+ */
+export type UserSettingsCurrentsSource = typeof UserSettingsCurrentsSource[keyof typeof UserSettingsCurrentsSource];
+
+
+export const UserSettingsCurrentsSource = {
+  manual: 'manual',
+  noaa: 'noaa',
+} as const;
+
+/**
+ * Number of days of GPS trail history to retain locally. "all" disables automatic pruning.
+ */
+export type UserSettingsTrailRetention = typeof UserSettingsTrailRetention[keyof typeof UserSettingsTrailRetention];
+
+
+export const UserSettingsTrailRetention = {
+  NUMBER_7: '7',
+  NUMBER_30: '30',
+  NUMBER_90: '90',
+  all: 'all',
+} as const;
+
+/**
+ * Whether this is a built-in preset or a user-uploaded dataset.
+ */
+export type UserSettingsDefaultMapLoadKind = typeof UserSettingsDefaultMapLoadKind[keyof typeof UserSettingsDefaultMapLoadKind];
+
+
+export const UserSettingsDefaultMapLoadKind = {
+  preset: 'preset',
+  upload: 'upload',
+} as const;
+
+/**
+ * Dataset to load automatically on every app start. Null means use the built-in default.
+ */
+export type UserSettingsDefaultMapLoad = {
+  /** Whether this is a built-in preset or a user-uploaded dataset. */
+  kind: UserSettingsDefaultMapLoadKind;
+  /** Dataset slug (preset) or upload id (upload). */
+  id: string;
+} | null;
+
+/**
+ * Expand/collapse state for dataset library folders, keyed by folder id.
+ */
+export type UserSettingsDatasetFolderExpanded = {[key: string]: boolean};
+
+export type UserSettingsBookmarksItem = {
+  /** Unique bookmark id (UUID). */
+  id: string;
+  /** User-assigned bookmark label. */
+  name: string;
+  /** Camera longitude at the bookmark. */
+  lon: number;
+  /** Camera latitude at the bookmark. */
+  lat: number;
+  /** Camera depth (metres, positive = below sea level) at the bookmark. */
+  depth: number;
+  /** Camera heading in degrees at the bookmark. */
+  heading: number;
+};
+
+/**
+ * Per-dataset camera bookmarks keyed by dataset id. Each value is an ordered array of named camera positions.
+ */
+export type UserSettingsBookmarks = {[key: string]: UserSettingsBookmarksItem[]};
+
+/**
+ * Remapped keyboard shortcuts keyed by action id (e.g. "moveForward"). Values are KeyboardEvent.code strings (e.g. "KeyW"). Missing keys fall back to their default binding.
+ */
+export type UserSettingsKeyBindings = {[key: string]: string};
+
+/**
  * Per-user application settings with sensible defaults
  */
 export interface UserSettings {
@@ -621,6 +862,234 @@ export interface UserSettings {
   hyd93FeaturesEnabled?: boolean;
   /** Global UI font size level applied throughout the application. */
   globalFontSize?: UserSettingsGlobalFontSize;
+  /** Client settings schema version used for client-side migrations. */
+  schemaVersion?: number;
+  /** Show advanced settings in all sections without hiding them behind a toggle. */
+  showAdvancedEverywhere?: boolean;
+  /**
+     * Mouse scroll-wheel zoom speed multiplier.
+     * @minimum 0.1
+     * @maximum 3
+     */
+  mouseZoomSensitivity?: number;
+  /**
+     * Touchpad pinch/scroll zoom speed multiplier.
+     * @minimum 0.1
+     * @maximum 3
+     */
+  touchpadZoomSensitivity?: number;
+  /**
+     * Touch-screen pinch-to-zoom sensitivity multiplier.
+     * @minimum 0.1
+     * @maximum 3
+     */
+  pinchZoomSensitivity?: number;
+  /** On-screen joystick display mode. "auto" shows it on touch devices only. */
+  joystickMode?: UserSettingsJoystickMode;
+  /** Show the on-screen joystick when in orbit/inspect mode. */
+  showJoystickInOrbit?: boolean;
+  /**
+     * Camera vertical field-of-view in degrees.
+     * @minimum 15
+     * @maximum 150
+     */
+  fieldOfView?: number;
+  /**
+     * Maximum distance in metres at which terrain geometry is rendered.
+     * @minimum 50
+     * @maximum 2000
+     */
+  renderDistance?: number;
+  /** Last camera position and active dataset. Restored on load when cameraSpawnBehaviour is "last". Null when no session has been saved yet. */
+  lastSession?: UserSettingsLastSession;
+  /** Overall graphics quality preset. "custom" means the user has individually adjusted one or more visual knobs. */
+  qualityPreset?: UserSettingsQualityPreset;
+  /**
+     * Vertical exaggeration factor applied to terrain depth for visual clarity.
+     * @minimum 0
+     * @maximum 10
+     */
+  terrainExaggeration?: number;
+  /** Render animated marine snow particle effect in the 3D scene. */
+  enableMarineSnow?: boolean;
+  /**
+     * RGB hex colour of the underwater fog.
+     * @pattern ^#[0-9a-fA-F]{6}$
+     */
+  fogColor?: string;
+  /**
+     * Intensity of the ambient (omnidirectional) scene light.
+     * @minimum 0
+     * @maximum 2
+     */
+  ambientLightIntensity?: number;
+  /**
+     * Intensity of the primary directional sunlight.
+     * @minimum 0
+     * @maximum 2
+     */
+  directionalLightIntensity?: number;
+  /**
+     * Range in metres of the camera headlamp point light.
+     * @minimum 1
+     * @maximum 200
+     */
+  lampRange?: number;
+  /** Enable anti-aliasing on the 3D canvas. */
+  antialiasing?: boolean;
+  /** Render the sea-level water surface plane over the bathymetry. */
+  showWaterSurface?: boolean;
+  /** Render above-water landmass meshing from the terrain topography array. */
+  showLandmass?: boolean;
+  /** How the landmass is coloured — realistic elevation ramp or a single flat neutral colour. */
+  landmassStyle?: UserSettingsLandmassStyle;
+  /** Drape ESRI World Imagery satellite photo over the land mesh. When false, use the procedural colour ramp. */
+  satelliteImagery?: boolean;
+  /** Draw a USGS National Map hillshaded relief layer as the bottom layer of the Overview Map. Independent of satelliteImagery. */
+  terrainImagery?: boolean;
+  /** Show the depth-colourmap legend overlay in the 3D viewscreen HUD. */
+  showDepthLegend?: boolean;
+  /** Show the depth scale bar in the 3D viewscreen HUD. */
+  showDepthScaleBar?: boolean;
+  /** Show the compass/minimap widget in the HUD. */
+  showCompassMinimap?: boolean;
+  /** Show the keyboard/controls legend overlay in the HUD. */
+  showControlsLegend?: boolean;
+  /** Show the tidal data side panel. */
+  showTidePanel?: boolean;
+  /** Show the habitat/species side panel. */
+  showHabitatPanel?: boolean;
+  /** Show the dataset library side panel. */
+  showDatasetPanel?: boolean;
+  /** Show the AI query side panel. */
+  showQueryPanel?: boolean;
+  /** How timestamps are displayed in the HUD and panels. */
+  timeFormat?: UserSettingsTimeFormat;
+  /** Temperature display unit. "auto" follows the global units selector (metric=°C, imperial=°F). */
+  temperatureUnit?: UserSettingsTemperatureUnit;
+  /** Draw iso-depth contour lines on the 2D overview map. */
+  contoursEnabled?: boolean;
+  /**
+     * Spacing between contour lines in the user's active unit system (metres for metric, feet for imperial/nautical).
+     * @minimum 1
+     * @maximum 1000
+     */
+  contourInterval?: number;
+  /**
+     * Default hex colour applied to new depth-pole markers.
+     * @pattern ^#[0-9a-fA-F]{6}$
+     */
+  defaultDepthPoleColor?: string;
+  /**
+     * Maximum number of visible markers before clustering is activated. Set to 0 to disable clustering.
+     * @minimum 0
+     * @maximum 500
+     */
+  markerClusterThreshold?: number;
+  /** Automatically load tidal current data when a dataset is opened. */
+  autoLoadTidal?: boolean;
+  /** Depth layer pre-selected in the tidal overlay controls. */
+  defaultTidalDepthLayer?: UserSettingsDefaultTidalDepthLayer;
+  /** Global density of current direction arrows shown across all depth layers. */
+  currentArrowDensity?: UserSettingsCurrentArrowDensity;
+  /** Per-depth-layer arrow density override. When set, overrides currentArrowDensity for that specific layer. */
+  layerArrowDensity?: UserSettingsLayerArrowDensity;
+  /** Visual style for the wind overlay — directional arrows or streaming particles. */
+  windOverlayStyle?: UserSettingsWindOverlayStyle;
+  /** Visual style for the tidal height overlay. */
+  tideOverlayStyle?: UserSettingsTideOverlayStyle;
+  /** Visual style for the ocean current overlay. */
+  currentOverlayStyle?: UserSettingsCurrentOverlayStyle;
+  /** Master enable for the bathymetry-shaped current simulation. */
+  currentsEnabled?: boolean;
+  /** Source for the ambient (depth-averaged) current vector used in the simulation. */
+  currentsSource?: UserSettingsCurrentsSource;
+  /**
+     * Manual ambient current direction in degrees (compass going-to bearing).
+     * @minimum 0
+     * @maximum 360
+     */
+  currentsManualDirectionDeg?: number;
+  /**
+     * Manual ambient current speed in knots.
+     * @minimum 0
+     * @maximum 50
+     */
+  currentsManualSpeedKt?: number;
+  /**
+     * Tide-phase scrubber position in [0, 1) — 0 = flood peak, 0.5 = ebb peak.
+     * @minimum 0
+     * @maximum 1
+     */
+  currentsTidePhase?: number;
+  /** Automatically animate the tide-phase scrubber. */
+  currentsAutoAdvance?: boolean;
+  /** Show the animated particle layer in the current simulation. */
+  currentsShowParticles?: boolean;
+  /** Show the instanced speed-coloured arrow layer in the current simulation. */
+  currentsShowArrows?: boolean;
+  /** Show integrated streamline ribbons in the current simulation. */
+  currentsShowStreamlines?: boolean;
+  /** Automatically show the substrate zone overlay when a dataset is loaded. */
+  autoShowZoneOverlay?: boolean;
+  /** Species pre-selected in the habitat suitability panel on load. */
+  defaultHabitatSpecies?: string;
+  /**
+     * Habitat suitability overlay blend strength (0 = invisible, 1 = fully opaque).
+     * @minimum 0
+     * @maximum 1
+     */
+  habitatOverlayIntensity?: number;
+  /**
+     * Tint hex colour for the habitat suitability overlay.
+     * @pattern ^#[0-9a-fA-F]{6}$
+     */
+  habitatOverlayColor?: string;
+  /** Automatically start GPS trail recording when the app loads. */
+  autoStartTrailRecording?: boolean;
+  /**
+     * Default hex colour applied to new GPS trail recordings.
+     * @pattern ^#[0-9a-fA-F]{6}$
+     */
+  defaultTrailColor?: string;
+  /** Number of days of GPS trail history to retain locally. "all" disables automatic pruning. */
+  trailRetention?: UserSettingsTrailRetention;
+  /** Automatically reload the most recently used dataset when the app starts. */
+  autoLoadLastDataset?: boolean;
+  /** Dataset to load automatically on every app start. Null means use the built-in default. */
+  defaultMapLoad?: UserSettingsDefaultMapLoad;
+  /** Reduce or eliminate non-essential UI animations for accessibility. */
+  reducedMotion?: boolean;
+  /** Apply a colour-blind-friendly palette to the depth colourmap and overlays. */
+  colorBlindSafePalette?: boolean;
+  /** (Deprecated — use globalFontSize instead.) Enlarge HUD text for readability. */
+  largeHudText?: boolean;
+  /** Apply high-contrast styling to HUD elements. */
+  highContrastHud?: boolean;
+  /** Outdoor display mode — opaque panels, bold text, cobalt accent for direct-sunlight use. */
+  brightDaylight?: boolean;
+  /** True when the user has explicitly chosen a depth colourmap via the Settings UI. Used to avoid auto-switching palettes. */
+  colormapUserSet?: boolean;
+  /** Whether the user has opted in to anonymous usage telemetry. */
+  telemetryOptIn?: boolean;
+  /** Whether the user has read and dismissed the one-time AI/LLM data-sharing disclosure. */
+  llmDisclosureAcknowledged?: boolean;
+  /** Set to true once the user completes or skips the first-time guided tour. Synced cross-device. */
+  hasSeenOnboarding?: boolean;
+  /** Expand/collapse state for dataset library folders, keyed by folder id. */
+  datasetFolderExpanded?: UserSettingsDatasetFolderExpanded;
+  /** Per-dataset camera bookmarks keyed by dataset id. Each value is an ordered array of named camera positions. */
+  bookmarks?: UserSettingsBookmarks;
+  /** Remapped keyboard shortcuts keyed by action id (e.g. "moveForward"). Values are KeyboardEvent.code strings (e.g. "KeyW"). Missing keys fall back to their default binding. */
+  keyBindings?: UserSettingsKeyBindings;
+  /**
+     * Standard-mapping gamepad button index that opens the crosshair action menu. Null disables the gamepad binding.
+     * @minimum 0
+     * @maximum 31
+     */
+  crosshairMenuGamepadButton?: number | null;
+  /** ISO 8601 timestamp of the most recent successful server sync (GET hydration or PUT save). Null when the user has never synced. */
+  lastSyncedAt?: string | null;
 }
 
 export interface ApiError {

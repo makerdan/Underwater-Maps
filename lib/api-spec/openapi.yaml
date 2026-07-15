@@ -4571,6 +4571,415 @@ components:
           enum: [smallest, small, medium, large, x-large, largest]
           default: medium
           description: Global UI font size level applied throughout the application.
+        schemaVersion:
+          type: integer
+          default: 19
+          description: Client settings schema version used for client-side migrations.
+        showAdvancedEverywhere:
+          type: boolean
+          default: false
+          description: Show advanced settings in all sections without hiding them behind a toggle.
+        mouseZoomSensitivity:
+          type: number
+          minimum: 0.1
+          maximum: 3.0
+          default: 1.0
+          description: Mouse scroll-wheel zoom speed multiplier.
+        touchpadZoomSensitivity:
+          type: number
+          minimum: 0.1
+          maximum: 3.0
+          default: 1.0
+          description: Touchpad pinch/scroll zoom speed multiplier.
+        pinchZoomSensitivity:
+          type: number
+          minimum: 0.1
+          maximum: 3.0
+          default: 1.0
+          description: Touch-screen pinch-to-zoom sensitivity multiplier.
+        joystickMode:
+          type: string
+          enum: [auto, always, off]
+          default: auto
+          description: On-screen joystick display mode. "auto" shows it on touch devices only.
+        showJoystickInOrbit:
+          type: boolean
+          default: false
+          description: Show the on-screen joystick when in orbit/inspect mode.
+        fieldOfView:
+          type: integer
+          minimum: 15
+          maximum: 150
+          default: 45
+          description: Camera vertical field-of-view in degrees.
+        renderDistance:
+          type: number
+          minimum: 50
+          maximum: 2000
+          default: 400
+          description: Maximum distance in metres at which terrain geometry is rendered.
+        lastSession:
+          nullable: true
+          type: object
+          description: Last camera position and active dataset. Restored on load when cameraSpawnBehaviour is "last". Null when no session has been saved yet.
+          properties:
+            lon:
+              type: number
+            lat:
+              type: number
+            depth:
+              type: number
+            heading:
+              type: number
+            datasetId:
+              type: string
+          required: [lon, lat, depth, heading, datasetId]
+        qualityPreset:
+          type: string
+          enum: [low, medium, high, ultra, custom]
+          default: medium
+          description: Overall graphics quality preset. "custom" means the user has individually adjusted one or more visual knobs.
+        terrainExaggeration:
+          type: number
+          minimum: 0.0
+          maximum: 10.0
+          default: 0.8
+          description: Vertical exaggeration factor applied to terrain depth for visual clarity.
+        enableMarineSnow:
+          type: boolean
+          default: true
+          description: Render animated marine snow particle effect in the 3D scene.
+        fogColor:
+          type: string
+          pattern: '^#[0-9a-fA-F]{6}$'
+          default: '#020818'
+          description: RGB hex colour of the underwater fog.
+        ambientLightIntensity:
+          type: number
+          minimum: 0
+          maximum: 2
+          default: 0.05
+          description: Intensity of the ambient (omnidirectional) scene light.
+        directionalLightIntensity:
+          type: number
+          minimum: 0
+          maximum: 2
+          default: 0.35
+          description: Intensity of the primary directional sunlight.
+        lampRange:
+          type: number
+          minimum: 1
+          maximum: 200
+          default: 40
+          description: Range in metres of the camera headlamp point light.
+        antialiasing:
+          type: boolean
+          default: true
+          description: Enable anti-aliasing on the 3D canvas.
+        showWaterSurface:
+          type: boolean
+          default: true
+          description: Render the sea-level water surface plane over the bathymetry.
+        showLandmass:
+          type: boolean
+          default: false
+          description: Render above-water landmass meshing from the terrain topography array.
+        landmassStyle:
+          type: string
+          enum: [realistic, flat]
+          default: realistic
+          description: How the landmass is coloured — realistic elevation ramp or a single flat neutral colour.
+        satelliteImagery:
+          type: boolean
+          default: true
+          description: Drape ESRI World Imagery satellite photo over the land mesh. When false, use the procedural colour ramp.
+        terrainImagery:
+          type: boolean
+          default: false
+          description: Draw a USGS National Map hillshaded relief layer as the bottom layer of the Overview Map. Independent of satelliteImagery.
+        showDepthLegend:
+          type: boolean
+          default: true
+          description: Show the depth-colourmap legend overlay in the 3D viewscreen HUD.
+        showDepthScaleBar:
+          type: boolean
+          default: true
+          description: Show the depth scale bar in the 3D viewscreen HUD.
+        showCompassMinimap:
+          type: boolean
+          default: true
+          description: Show the compass/minimap widget in the HUD.
+        showControlsLegend:
+          type: boolean
+          default: true
+          description: Show the keyboard/controls legend overlay in the HUD.
+        showTidePanel:
+          type: boolean
+          default: true
+          description: Show the tidal data side panel.
+        showHabitatPanel:
+          type: boolean
+          default: true
+          description: Show the habitat/species side panel.
+        showDatasetPanel:
+          type: boolean
+          default: true
+          description: Show the dataset library side panel.
+        showQueryPanel:
+          type: boolean
+          default: true
+          description: Show the AI query side panel.
+        timeFormat:
+          type: string
+          enum: [utc, local, '12h', '24h']
+          default: local
+          description: How timestamps are displayed in the HUD and panels.
+        temperatureUnit:
+          type: string
+          enum: [auto, celsius, fahrenheit]
+          default: auto
+          description: Temperature display unit. "auto" follows the global units selector (metric=°C, imperial=°F).
+        contoursEnabled:
+          type: boolean
+          default: true
+          description: Draw iso-depth contour lines on the 2D overview map.
+        contourInterval:
+          type: number
+          minimum: 1
+          maximum: 1000
+          default: 10
+          description: Spacing between contour lines in the user's active unit system (metres for metric, feet for imperial/nautical).
+        defaultDepthPoleColor:
+          type: string
+          pattern: '^#[0-9a-fA-F]{6}$'
+          default: '#22d3ee'
+          description: Default hex colour applied to new depth-pole markers.
+        markerClusterThreshold:
+          type: integer
+          minimum: 0
+          maximum: 500
+          default: 25
+          description: Maximum number of visible markers before clustering is activated. Set to 0 to disable clustering.
+        autoLoadTidal:
+          type: boolean
+          default: false
+          description: Automatically load tidal current data when a dataset is opened.
+        defaultTidalDepthLayer:
+          type: string
+          enum: [surface, mid, near-bottom]
+          default: surface
+          description: Depth layer pre-selected in the tidal overlay controls.
+        currentArrowDensity:
+          type: string
+          enum: [sparse, normal, dense]
+          default: normal
+          description: Global density of current direction arrows shown across all depth layers.
+        layerArrowDensity:
+          type: object
+          description: Per-depth-layer arrow density override. When set, overrides currentArrowDensity for that specific layer.
+          properties:
+            surface:
+              type: string
+              enum: [sparse, normal, dense]
+            mid:
+              type: string
+              enum: [sparse, normal, dense]
+            near-bottom:
+              type: string
+              enum: [sparse, normal, dense]
+        windOverlayStyle:
+          type: string
+          enum: [arrows, particles]
+          default: arrows
+          description: Visual style for the wind overlay — directional arrows or streaming particles.
+        tideOverlayStyle:
+          type: string
+          enum: [arrows, particles]
+          default: arrows
+          description: Visual style for the tidal height overlay.
+        currentOverlayStyle:
+          type: string
+          enum: [arrows, particles]
+          default: arrows
+          description: Visual style for the ocean current overlay.
+        currentsEnabled:
+          type: boolean
+          default: false
+          description: Master enable for the bathymetry-shaped current simulation.
+        currentsSource:
+          type: string
+          enum: [manual, noaa]
+          default: noaa
+          description: Source for the ambient (depth-averaged) current vector used in the simulation.
+        currentsManualDirectionDeg:
+          type: number
+          minimum: 0
+          maximum: 360
+          default: 90
+          description: Manual ambient current direction in degrees (compass going-to bearing).
+        currentsManualSpeedKt:
+          type: number
+          minimum: 0
+          maximum: 50
+          default: 0.8
+          description: Manual ambient current speed in knots.
+        currentsTidePhase:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0
+          description: Tide-phase scrubber position in [0, 1) — 0 = flood peak, 0.5 = ebb peak.
+        currentsAutoAdvance:
+          type: boolean
+          default: false
+          description: Automatically animate the tide-phase scrubber.
+        currentsShowParticles:
+          type: boolean
+          default: true
+          description: Show the animated particle layer in the current simulation.
+        currentsShowArrows:
+          type: boolean
+          default: true
+          description: Show the instanced speed-coloured arrow layer in the current simulation.
+        currentsShowStreamlines:
+          type: boolean
+          default: false
+          description: Show integrated streamline ribbons in the current simulation.
+        autoShowZoneOverlay:
+          type: boolean
+          default: false
+          description: Automatically show the substrate zone overlay when a dataset is loaded.
+        defaultHabitatSpecies:
+          type: string
+          default: ''
+          description: Species pre-selected in the habitat suitability panel on load.
+        habitatOverlayIntensity:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.4
+          description: Habitat suitability overlay blend strength (0 = invisible, 1 = fully opaque).
+        habitatOverlayColor:
+          type: string
+          pattern: '^#[0-9a-fA-F]{6}$'
+          default: '#ff9919'
+          description: Tint hex colour for the habitat suitability overlay.
+        autoStartTrailRecording:
+          type: boolean
+          default: false
+          description: Automatically start GPS trail recording when the app loads.
+        defaultTrailColor:
+          type: string
+          pattern: '^#[0-9a-fA-F]{6}$'
+          default: '#ff6600'
+          description: Default hex colour applied to new GPS trail recordings.
+        trailRetention:
+          type: string
+          enum: ['7', '30', '90', all]
+          default: '30'
+          description: Number of days of GPS trail history to retain locally. "all" disables automatic pruning.
+        autoLoadLastDataset:
+          type: boolean
+          default: true
+          description: Automatically reload the most recently used dataset when the app starts.
+        defaultMapLoad:
+          nullable: true
+          type: object
+          description: Dataset to load automatically on every app start. Null means use the built-in default.
+          properties:
+            kind:
+              type: string
+              enum: [preset, upload]
+              description: Whether this is a built-in preset or a user-uploaded dataset.
+            id:
+              type: string
+              description: Dataset slug (preset) or upload id (upload).
+          required: [kind, id]
+        reducedMotion:
+          type: boolean
+          default: false
+          description: Reduce or eliminate non-essential UI animations for accessibility.
+        colorBlindSafePalette:
+          type: boolean
+          default: false
+          description: Apply a colour-blind-friendly palette to the depth colourmap and overlays.
+        largeHudText:
+          type: boolean
+          default: false
+          description: "(Deprecated — use globalFontSize instead.) Enlarge HUD text for readability."
+        highContrastHud:
+          type: boolean
+          default: false
+          description: Apply high-contrast styling to HUD elements.
+        brightDaylight:
+          type: boolean
+          default: false
+          description: Outdoor display mode — opaque panels, bold text, cobalt accent for direct-sunlight use.
+        colormapUserSet:
+          type: boolean
+          default: false
+          description: True when the user has explicitly chosen a depth colourmap via the Settings UI. Used to avoid auto-switching palettes.
+        telemetryOptIn:
+          type: boolean
+          default: false
+          description: Whether the user has opted in to anonymous usage telemetry.
+        llmDisclosureAcknowledged:
+          type: boolean
+          default: false
+          description: Whether the user has read and dismissed the one-time AI/LLM data-sharing disclosure.
+        hasSeenOnboarding:
+          type: boolean
+          default: false
+          description: Set to true once the user completes or skips the first-time guided tour. Synced cross-device.
+        datasetFolderExpanded:
+          type: object
+          additionalProperties:
+            type: boolean
+          default: {}
+          description: Expand/collapse state for dataset library folders, keyed by folder id.
+        bookmarks:
+          type: object
+          description: Per-dataset camera bookmarks keyed by dataset id. Each value is an ordered array of named camera positions.
+          additionalProperties:
+            type: array
+            items:
+              type: object
+              required: [id, name, lon, lat, depth, heading]
+              properties:
+                id:
+                  type: string
+                  description: Unique bookmark id (UUID).
+                name:
+                  type: string
+                  description: User-assigned bookmark label.
+                lon:
+                  type: number
+                  description: Camera longitude at the bookmark.
+                lat:
+                  type: number
+                  description: Camera latitude at the bookmark.
+                depth:
+                  type: number
+                  description: Camera depth (metres, positive = below sea level) at the bookmark.
+                heading:
+                  type: number
+                  description: Camera heading in degrees at the bookmark.
+        keyBindings:
+          type: object
+          description: Remapped keyboard shortcuts keyed by action id (e.g. "moveForward"). Values are KeyboardEvent.code strings (e.g. "KeyW"). Missing keys fall back to their default binding.
+          additionalProperties:
+            type: string
+        crosshairMenuGamepadButton:
+          nullable: true
+          type: integer
+          minimum: 0
+          maximum: 31
+          default: 3
+          description: Standard-mapping gamepad button index that opens the crosshair action menu. Null disables the gamepad binding.
+        lastSyncedAt:
+          nullable: true
+          type: string
+          description: ISO 8601 timestamp of the most recent successful server sync (GET hydration or PUT save). Null when the user has never synced.
 
     ApiError:
       type: object
