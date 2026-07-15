@@ -245,6 +245,13 @@ interface UiStore {
   /** Whether the user has already seen the one-time two-finger orbit hint toast. */
   hasSeenOrbitTouchHint: boolean;
   setHasSeenOrbitTouchHint: (seen: boolean) => void;
+  /**
+   * Depth in metres currently under the pointer in the 3D scene when the
+   * TEMP LAYER is active. null = pointer is off-canvas or temp layer is off.
+   * Updated by ThermalCursorTracker (lives inside the R3F Canvas).
+   */
+  thermalCursorDepthM: number | null;
+  setThermalCursorDepthM: (depthM: number | null) => void;
 }
 
 // ── Device-local helpers (hasSeenOrbitTouchHint only) ────────────────────────
@@ -544,6 +551,10 @@ export const useUiStore = create<UiStore>((set, get) => {
       writeLocalBool("bathyscan:hasSeenOrbitTouchHint", seen);
       set({ hasSeenOrbitTouchHint: seen });
     },
+
+    // ── Ephemeral per-frame 3D cursor state ────────────────────────────────
+    thermalCursorDepthM: null,
+    setThermalCursorDepthM: (depthM) => set({ thermalCursorDepthM: depthM }),
   };
 });
 

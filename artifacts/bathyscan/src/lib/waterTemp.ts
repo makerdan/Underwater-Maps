@@ -182,6 +182,33 @@ export interface ResolvedTemperatureProfile {
 }
 
 /**
+ * Linearly interpolate temperature (°C) at `depthM` from a sorted array of
+ * (depthM, celsius) profile samples. Returns null when the samples array is
+ * empty. Out-of-range depths clamp to the nearest endpoint so callers
+ * never receive undefined for reasonable inputs.
+ */
+export function interpolateTempAtDepth(
+  samples: { depthM: number; celsius: number }[],
+  depthM: number,
+): number | null {
+  if (!samples || samples.length === 0) return null;
+  const first = samples[0]!;
+  const last = samples[samples.length - 1]!;
+  if (depthM <= first.depthM) return first.celsius;
+  if (depthM >= last.depthM) return last.celsius;
+  for (let i = 0; i < samples.length - 1; i++) {
+    const lo = samples[i]!;
+    const hi = samples[i + 1]!;
+    if (depthM <= hi.depthM) {
+      const span = hi.depthM - lo.depthM;
+      const alpha = span === 0 ? 0 : (depthM - lo.depthM) / span;
+      return lo.celsius + (hi.celsius - lo.celsius) * alpha;
+    }
+  }
+  return last.celsius;
+}
+
+/**
  * Pick the best available depth profile for a location: prefer a real
  * measured cast (bundled CTD / Argo / reanalysis) when the server returns
  * one, otherwise fall back to the surface-anchored thermocline model.

@@ -49,6 +49,7 @@ import { TerrainContourLines } from "@/components/TerrainContourLines";
 import { useTemperatureProfile } from "@/hooks/useTemperatureProfile";
 import { useWaterTempTexture, type TempSample } from "@/hooks/useWaterTempTexture";
 import { sampleTemperatureProfile } from "@/lib/waterTemp";
+import { ThermalCursorTracker } from "@/components/ThermalCursorTracker";
 
 // One-shot WebGL availability probe. Cached at module scope so we don't
 // recreate a throwaway <canvas> on every TourScene re-render. Used by the
@@ -626,6 +627,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
       )}
 
       {terrain && <WaterTempSceneContents terrain={terrain} />}
+      {terrain && <ThermalCursorTracker terrain={terrain} terrainMeshRef={terrainMeshRef} />}
       {terrain && <CurrentsSceneContents terrain={terrain} />}
       <MarkerLayer />
       <DepthPoleLayer />

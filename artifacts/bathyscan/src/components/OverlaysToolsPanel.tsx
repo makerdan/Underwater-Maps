@@ -13,6 +13,10 @@ import {
   THERMAL_MIN_C,
   THERMAL_MAX_C,
 } from "@/lib/thermalColormap";
+import {
+  sampleTemperatureProfile,
+  interpolateTempAtDepth,
+} from "@/lib/waterTemp";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
 import { useSettingsStore } from "@/lib/settingsStore";
@@ -231,6 +235,7 @@ export const OverlaysToolsPanel: React.FC = () => {
   const showWaterTempLayer = useSettingsStore((s) => s.showWaterTempLayer);
   const setShowWaterTempLayer = useSettingsStore((s) => s.setShowWaterTempLayer);
   const waterType = useSettingsStore((s) => s.waterType);
+  const thermalCursorDepthM = useUiStore((s) => s.thermalCursorDepthM);
 
   // Detect whether the active temp layer is driven by a real measured profile
   // or the synthetic fallback thermocline model. React Query deduplicates
@@ -248,6 +253,37 @@ export const OverlaysToolsPanel: React.FC = () => {
     Array.isArray(tempProfile.samples) &&
     (tempProfile.samples as unknown[]).length >= 2;
   const isTempEstimated = showWaterTempLayer && !tempLoading && !isTempRealData;
+
+  // Build the same ordered sample list that WaterTempSceneContents uses for
+  // the shader texture so temperature readouts are consistent with the volume colour.
+  const thermalSamples = useMemo(() => {
+    if (!showWaterTempLayer || !terrain) return null;
+    if (
+      tempProfile?.available &&
+      Array.isArray(tempProfile.samples) &&
+      (tempProfile.samples as unknown[]).length >= 2
+    ) {
+      return (tempProfile.samples as { depthM: number; temperatureC: number }[])
+        .filter(
+          (s): s is { depthM: number; temperatureC: number } =>
+            typeof s?.depthM === "number" &&
+            Number.isFinite(s.depthM) &&
+            typeof s?.temperatureC === "number" &&
+            Number.isFinite(s.temperatureC),
+        )
+        .sort((a, b) => a.depthM - b.depthM)
+        .map((s) => ({ depthM: s.depthM, celsius: s.temperatureC }));
+    }
+    const maxDepthM = Math.max(20, terrain.maxDepth - terrain.minDepth);
+    return sampleTemperatureProfile(maxDepthM, null, 24).samples;
+  }, [showWaterTempLayer, terrain, tempProfile]);
+
+  // Temperature at the depth currently under the pointer (null = no readout).
+  const cursorTempC =
+    thermalCursorDepthM !== null && thermalSamples !== null
+      ? interpolateTempAtDepth(thermalSamples, thermalCursorDepthM)
+      : null;
+
   const { data: datasets } = useGetDatasets(
     { waterType },
     { query: { queryKey: getGetDatasetsQueryKey({ waterType }) } },
@@ -855,6 +891,55 @@ export const OverlaysToolsPanel: React.FC = () => {
           )}
 
           {showWaterTempLayer && <ThermalLegend />}
+
+          {showWaterTempLayer && (
+            <div
+              data-testid="thermal-cursor-callout"
+              style={{
+                marginTop: 2,
+                paddingLeft: 8,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                minHeight: 20,
+              }}
+            >
+              {cursorTempC !== null && thermalCursorDepthM !== null ? (
+                <>
+                  <span
+                    style={{
+                      display: "inline-block",
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: "#fb923c",
+                      boxShadow: "0 0 4px rgba(251,146,60,0.7)",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      color: "#fb923c",
+                      textShadow: "0 0 6px rgba(251,146,60,0.4)",
+                      letterSpacing: "0.05em",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {cursorTempC.toFixed(1)} °C
+                  </span>
+                  <span style={{ fontSize: 10, color: "#94a3b8", letterSpacing: "0.04em" }}>
+                    at −{Math.round(thermalCursorDepthM)} m
+                  </span>
+                </>
+              ) : (
+                <span style={{ fontSize: 9, color: "#475569", letterSpacing: "0.06em" }}>
+                  Move cursor over scene
+                </span>
+              )}
+            </div>
+          )}
 
           {hasHyd93Features && (
             <>
