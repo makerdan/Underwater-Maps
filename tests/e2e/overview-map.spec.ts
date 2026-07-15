@@ -228,6 +228,67 @@ test.describe("BathyScan — Overview Map", () => {
   });
 
   // ---------------------------------------------------------------------------
+  // Canvas context-loss recovery
+  //
+  // Browsers can reclaim the 2D canvas context under GPU pressure (common on
+  // mobile). The OverviewMap listens for `contextlost`/`contextrestored`,
+  // rebuilds its cached offscreen heatmap bitmaps, and marks the rAF loop
+  // dirty. Simulate the loss by blanking the canvas to black (what a real
+  // context reset does) and dispatching the two events — the map must repaint
+  // rather than stay black.
+  // ---------------------------------------------------------------------------
+  test("recovers from simulated canvas context loss", async ({ page }) => {
+    if (!(await ensureSignedInOrSkip(page))) return;
+
+    await openOverview(page);
+
+    const overlayCanvas = overviewMapCanvas(page);
+    await expect(overlayCanvas).toBeVisible({ timeout: 5_000 });
+
+    // Helper: fraction of sampled pixels that are non-black.
+    const nonBlackFraction = () =>
+      overlayCanvas.evaluate((el) => {
+        const canvas = el as HTMLCanvasElement;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return -1;
+        const { width, height } = canvas;
+        const data = ctx.getImageData(0, 0, width, height).data;
+        let nonBlack = 0;
+        let total = 0;
+        for (let i = 0; i < data.length; i += 4 * 97) {
+          total++;
+          if (data[i]! > 12 || data[i + 1]! > 12 || data[i + 2]! > 12) nonBlack++;
+        }
+        return total > 0 ? nonBlack / total : -1;
+      });
+
+    // Wait for the initial heatmap paint (non-trivial non-black content).
+    await expect
+      .poll(nonBlackFraction, { timeout: 10_000 })
+      .toBeGreaterThan(0.02);
+
+    // Simulate a context reset: the browser clears the canvas to transparent
+    // black and fires contextlost, then contextrestored once usable again.
+    await overlayCanvas.evaluate((el) => {
+      const canvas = el as HTMLCanvasElement;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      canvas.dispatchEvent(new Event("contextlost"));
+      canvas.dispatchEvent(new Event("contextrestored"));
+    });
+
+    // The restore handler must rebuild the bitmaps and repaint — the canvas
+    // must not stay black.
+    await expect
+      .poll(nonBlackFraction, { timeout: 10_000 })
+      .toBeGreaterThan(0.02);
+  });
+
+  // ---------------------------------------------------------------------------
   // Right-click context menu
   //
   // The Overview Map's contextmenu handler builds a 3-item menu (plus a

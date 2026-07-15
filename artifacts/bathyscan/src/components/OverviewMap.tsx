@@ -902,6 +902,60 @@ export const OverviewMap: React.FC = () => {
   }, [initTransform]);
 
   // ---------------------------------------------------------------------------
+  // Canvas context-loss recovery
+  //
+  // Browsers (especially mobile / under GPU pressure) can reclaim the 2D
+  // canvas context, which clears the on-screen canvas AND may wipe the
+  // offscreen bitmap canvases cached in bitmapRef / secondaryBitmapsRef.
+  // Without handling, the overview map goes permanently black until reload.
+  //
+  // On `contextrestored` we imperatively rebuild all heatmap bitmaps from the
+  // latest store state (read via getState()/refs so this effect never needs to
+  // re-register) and mark the rAF loop dirty. The user's pan/zoom transform is
+  // deliberately left untouched.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rebuildBitmaps = () => {
+      const og = useTerrainStore.getState().overviewGrid;
+      const theme = useSettingsStore.getState().colormapTheme;
+      if (og) {
+        bitmapRef.current = buildHeatmapBitmap(og, theme);
+      }
+      const visibleNow = visibleDatasetsRef.current;
+      const primaryId = visibleNow[0]?.datasetId ?? null;
+      secondaryBitmapsRef.current.clear();
+      for (const v of visibleNow) {
+        if (v.datasetId === primaryId || !v.overviewGrid) continue;
+        secondaryBitmapsRef.current.set(
+          v.datasetId,
+          buildHeatmapBitmap(v.overviewGrid, theme),
+        );
+      }
+      invalidateUpscaleRef.current();
+      dirtyRef.current = true;
+    };
+
+    const onContextLost = () => {
+      // Draw calls are no-ops while the context is lost; mark dirty so the
+      // first frame after restore repaints even if nothing else changed.
+      dirtyRef.current = true;
+    };
+    const onContextRestored = () => {
+      rebuildBitmaps();
+    };
+
+    canvas.addEventListener("contextlost", onContextLost);
+    canvas.addEventListener("contextrestored", onContextRestored);
+    return () => {
+      canvas.removeEventListener("contextlost", onContextLost);
+      canvas.removeEventListener("contextrestored", onContextRestored);
+    };
+  }, []);
+
+  // ---------------------------------------------------------------------------
   // rAF render loop
   // ---------------------------------------------------------------------------
   useEffect(() => {
