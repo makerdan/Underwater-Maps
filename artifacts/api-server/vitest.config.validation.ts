@@ -19,13 +19,16 @@
  *  - DEFAULT_SETTINGS ↔ PutSettingsBody key parity — fails when a field is added to one but not the other
  */
 import { defineConfig } from "vitest/config";
+import budgets from "../../tests/timeout-guard/budgets.json";
 
 export default defineConfig({
   test: {
     name: "validation-regression",
     environment: "node",
     globals: true,
-    testTimeout: 30000,
+    // Layers 1+2: per-test / per-hook timeouts from the shared budget config.
+    testTimeout: budgets.apiServerValidation.testTimeoutMs,
+    hookTimeout: budgets.apiServerValidation.hookTimeoutMs,
     pool: "forks",
     poolOptions: { forks: { singleFork: true } },
     setupFiles: ["./src/__tests__/setup.ts"],

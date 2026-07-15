@@ -1,8 +1,17 @@
 import { defineConfig, devices } from "@playwright/test";
+import budgets from "./tests/timeout-guard/budgets.json";
 
 export default defineConfig({
   globalSetup: "./tests/e2e/global-setup.ts",
   testDir: "./tests/e2e",
+  // Layers 1+2: explicit per-test and per-expect timeouts from the shared
+  // budget config (tests/timeout-guard/budgets.json) — no silent framework
+  // defaults. Layer 3 (per-file budget) lives in tests/e2e/fixtures.ts;
+  // Layer 4 (whole-run budget) is enforced both here (globalTimeout) and by
+  // the run-with-timeout wrapper around `pnpm run test:e2e`.
+  timeout: budgets.e2e.testTimeoutMs,
+  expect: { timeout: budgets.e2e.expectTimeoutMs },
+  globalTimeout: budgets.e2e.runBudgetMs,
   fullyParallel: false,
   forbidOnly: !!process.env["CI"],
   // Per-test retries. Stabilizes the suite against rare timing flakes

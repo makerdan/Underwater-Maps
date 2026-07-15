@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test:unit": "vitest run"
+    "test:unit": "node ../../scripts/run-with-timeout.mjs apiZod --label \"api-zod test:unit\" -- vitest run"
   },
   "dependencies": {
     "zod": "catalog:"

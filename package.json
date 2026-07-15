@@ -14,7 +14,7 @@
     "lint": "eslint artifacts/bathyscan/src artifacts/api-server/src tests/e2e",
     "test:unit": "pnpm -r --if-present run test:unit",
     "test:validation": "pnpm --filter @workspace/api-server run test:validation && pnpm --filter @workspace/bathyscan run test:validation",
-    "test:e2e": "playwright test",
+    "test:e2e": "node scripts/run-with-timeout.mjs e2e --label \"playwright e2e\" -- playwright test",
     "capture:help-screenshots": "node scripts/capture-help-screenshots.mjs",
     "docs": "node scripts/generate-api-docs.mjs",
     "check:docs-stale": "node scripts/generate-api-docs.mjs --check",
@@ -24,7 +24,7 @@
     "check:e2e-user-ids": "bash scripts/check-e2e-user-ids.sh",
     "check:e2e-cjs-globals": "bash scripts/check-e2e-cjs-globals.sh",
     "check:fixture-freshness": "bash artifacts/api-server/src/__tests__/fixtures/check-fixture-freshness.sh",
-    "test-all": "pnpm run typecheck && pnpm run lint && pnpm run test:unit && pnpm run check:docs-stale && pnpm run check:catalog-coverage && pnpm run check:e2e-user-ids && pnpm run check:e2e-cjs-globals && pnpm run check:fixture-freshness"
+    "test-all": "node scripts/run-with-timeout.mjs aggregate --label \"test-all\" -- node scripts/test-all-steps.mjs"
   },
   "private": true,
   "devDependencies": {

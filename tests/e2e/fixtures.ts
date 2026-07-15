@@ -51,7 +51,69 @@ export const DEFAULT_SETTINGS = {
   panelCollapse: {},
 } as const;
 
-export const test = base.extend<{ resetSettings: void }>({
+// ─── Layer 3: per-spec-file wall-clock budget guard ─────────────────────────
+// Budgets live in tests/timeout-guard/budgets.json (e2e.fileBudgetMs). With
+// workers: 1 the suite runs files sequentially, so we track cumulative
+// elapsed time per spec file and fail the file's remaining tests fast with a
+// diagnostic instead of letting a slow file consume the whole run budget.
+import budgets from "../timeout-guard/budgets.json";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { resolve as resolvePath } from "node:path";
+
+const fileStarts = new Map<string, number>();
+const fileSlowest = new Map<string, Array<{ name: string; durationMs: number }>>();
+
+export const test = base.extend<{ resetSettings: void; fileBudgetGuard: void }>({
+  fileBudgetGuard: [
+    async ({}, use, testInfo) => {
+      const file = testInfo.file;
+      if (!fileStarts.has(file)) fileStarts.set(file, Date.now());
+      const start = fileStarts.get(file)!;
+      const budgetMs = budgets.e2e.fileBudgetMs;
+      const elapsedMs = Date.now() - start;
+      if (elapsedMs > budgetMs) {
+        const slowest = (fileSlowest.get(file) ?? []).slice(0, 5);
+        const lines = [
+          "",
+          "════════════════════════════════════════════════════════════════",
+          "⏱  TEST TIME-BUDGET BREACH — layer: FILE (e2e)",
+          `Offender : ${file}`,
+          `Elapsed  : ${(elapsedMs / 1000).toFixed(1)}s  (budget: ${(budgetMs / 1000).toFixed(1)}s)`,
+          "Slowest tests in this file so far:",
+          ...slowest.map((s) => `  - ${(s.durationMs / 1000).toFixed(1)}s  ${s.name}`),
+          "Suggestions:",
+          "  • Raise e2e.fileBudgetMs in tests/timeout-guard/budgets.json only if this spec legitimately needs more time.",
+          "  • Check for slow selectors, long waitForTimeout calls, or network waits against live NOAA endpoints.",
+          "════════════════════════════════════════════════════════════════",
+          "",
+        ];
+        console.error(lines.join("\n"));
+        try {
+          const dir = resolvePath(process.cwd(), ".local/test-timeout-reports");
+          mkdirSync(dir, { recursive: true });
+          const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+          writeFileSync(
+            resolvePath(dir, `${stamp}-file.json`),
+            JSON.stringify({ layer: "file", name: file, elapsedMs, budgetMs, slowest, at: new Date().toISOString() }, null, 2),
+          );
+        } catch {
+          // reporting must never mask the primary failure
+        }
+        throw new Error(
+          `[timeout-guard] Spec file exceeded its ${(budgetMs / 1000).toFixed(0)}s wall-clock budget ` +
+            `(elapsed ${(elapsedMs / 1000).toFixed(1)}s). See diagnostic above.`,
+        );
+      }
+      const testStart = Date.now();
+      await use();
+      const list = fileSlowest.get(file) ?? [];
+      list.push({ name: testInfo.title, durationMs: Date.now() - testStart });
+      list.sort((a, b) => b.durationMs - a.durationMs);
+      if (list.length > 5) list.length = 5;
+      fileSlowest.set(file, list);
+    },
+    { auto: true },
+  ],
   resetSettings: [
     async ({ request }, use) => {
       try {

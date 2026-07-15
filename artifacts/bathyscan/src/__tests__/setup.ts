@@ -3,6 +3,13 @@ import React from "react";
 import { afterEach, vi } from "vitest";
 import { cleanup, render, type RenderOptions, type RenderResult } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { installFileBudgetGuard } from "../../../../tests/timeout-guard/vitest-guard.mjs";
+
+// Layer 3: per-file wall-clock budget guard. Uses the validation budget when
+// running under the validation config, else the unit one.
+installFileBudgetGuard(
+  process.env["VITEST_VALIDATION"] === "1" ? "bathyscanValidation" : "bathyscanUnit",
+);
 
 if (typeof window !== "undefined") {
   Object.defineProperty(window, "innerWidth",  { writable: true, configurable: true, value: 1024 });
