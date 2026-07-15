@@ -235,7 +235,7 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
 
   const EXTRA_KEY_RE = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
   const FORBIDDEN_EXTRA_KEYS = new Set(["__proto__", "constructor", "prototype"]);
-  const MAX_EXTRA_KEYS = 128;
+  const MAX_EXTRA_KEYS = 512;
   const MAX_EXTRAS_BYTES = 16 * 1024;
 
   const badKey = Object.keys(extras).find(
