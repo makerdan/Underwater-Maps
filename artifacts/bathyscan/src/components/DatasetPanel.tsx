@@ -118,13 +118,9 @@ function makeProgressTerrainFetcher(
   reportProgress: boolean,
 ) {
   return async ({ signal }: { signal?: AbortSignal }): Promise<TerrainData> => {
-    const token = await getAuthToken();
-    const headers: Record<string, string> = token
-      ? { Authorization: `Bearer ${token}` }
-      : {};
+    // Auth header is attached automatically by fetchJsonWithProgress.
     return fetchJsonWithProgress<TerrainData>(url, {
       signal,
-      init: { headers },
       onProgress: reportProgress
         ? ({ loaded, total }) => {
             useActiveLoadStore.getState().update(datasetId, loaded, total);

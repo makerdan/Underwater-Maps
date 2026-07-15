@@ -7,6 +7,8 @@
  * can cancel in-flight requests (e.g. when the user picks a different
  * dataset mid-load).
  */
+import { getAuthToken } from "@workspace/api-client-react";
+
 export interface ProgressEvent {
   loaded: number;
   total: number | null;
@@ -41,9 +43,18 @@ export async function fetchJsonWithProgress<T = unknown>(
   options: FetchWithProgressOptions = {},
 ): Promise<T> {
   const { signal, onProgress, init } = options;
+  // Attach the Clerk Bearer token the same way customFetch does, so callers
+  // on authenticated routes don't silently 401. Caller-supplied headers take
+  // precedence over the injected Authorization header.
+  const token = await getAuthToken();
+  const headers = new Headers(token ? { Authorization: `Bearer ${token}` } : {});
+  if (init?.headers) {
+    new Headers(init.headers).forEach((value, key) => headers.set(key, value));
+  }
   const response = await fetch(url, {
     credentials: "same-origin",
     ...init,
+    headers,
     signal,
   });
   if (!response.ok) {

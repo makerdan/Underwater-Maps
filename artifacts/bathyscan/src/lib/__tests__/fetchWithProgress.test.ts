@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { fetchJsonWithProgress } from "@/lib/fetchWithProgress";
+import { setAuthTokenGetter } from "@workspace/api-client-react";
 
 function makeStreamResponse(
   chunks: Uint8Array[],
@@ -20,6 +21,7 @@ const enc = new TextEncoder();
 
 afterEach(() => {
   vi.restoreAllMocks();
+  setAuthTokenGetter(null);
 });
 
 describe("fetchJsonWithProgress", () => {
@@ -98,7 +100,11 @@ describe("fetchJsonWithProgress", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((_url, init: RequestInit | undefined) => {
-        init?.signal?.addEventListener("abort", () => ac.abort());
+        if (init?.signal?.aborted) {
+          ac.abort();
+        } else {
+          init?.signal?.addEventListener("abort", () => ac.abort());
+        }
         return Promise.resolve(
           new Response(stream, {
             status: 200,
@@ -110,6 +116,42 @@ describe("fetchJsonWithProgress", () => {
     const p = fetchJsonWithProgress("/x", { signal: controller.signal });
     controller.abort();
     await expect(p).rejects.toBeDefined();
+  });
+
+  it("attaches the Authorization header when an auth token is available", async () => {
+    setAuthTokenGetter(async () => "tok-123");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(makeStreamResponse([enc.encode("{}")]));
+    vi.stubGlobal("fetch", fetchMock);
+    await fetchJsonWithProgress("/x");
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
+    expect(new Headers(init.headers).get("authorization")).toBe("Bearer tok-123");
+  });
+
+  it("sends no Authorization header when no token is available", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(makeStreamResponse([enc.encode("{}")]));
+    vi.stubGlobal("fetch", fetchMock);
+    await fetchJsonWithProgress("/x");
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
+    expect(new Headers(init.headers).get("authorization")).toBeNull();
+  });
+
+  it("lets caller-supplied headers override the injected Authorization header", async () => {
+    setAuthTokenGetter(async () => "tok-123");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(makeStreamResponse([enc.encode("{}")]));
+    vi.stubGlobal("fetch", fetchMock);
+    await fetchJsonWithProgress("/x", {
+      init: { headers: { Authorization: "Bearer caller-token", "X-Extra": "1" } },
+    });
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
+    const headers = new Headers(init.headers);
+    expect(headers.get("authorization")).toBe("Bearer caller-token");
+    expect(headers.get("x-extra")).toBe("1");
   });
 
   it("throws on non-2xx responses", async () => {

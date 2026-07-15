@@ -204,8 +204,11 @@ describe("BAG worker crash recovery", () => {
       // Restore the original method so later tests are unaffected.
       worker._ensureProc = original;
       // Clear any leftover proc reference so the next test starts fresh.
-      if (worker.proc) {
-        worker.proc.kill("SIGKILL");
+      // (Read through a fresh local: TS narrows worker.proc to null after the
+      // assignment above and would otherwise type this access as `never`.)
+      const leftover = worker.proc as import("child_process").ChildProcess | null;
+      if (leftover) {
+        leftover.kill("SIGKILL");
         worker.proc = null;
       }
     }

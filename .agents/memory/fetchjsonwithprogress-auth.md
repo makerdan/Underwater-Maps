@@ -1,22 +1,12 @@
 ---
-name: fetchJsonWithProgress missing Bearer token
-description: fetchJsonWithProgress does not attach Authorization headers — callers on authed routes must inject the token manually via init.headers.
+name: fetchJsonWithProgress auth wiring
+description: fetchJsonWithProgress now attaches the Clerk Bearer token automatically via getAuthToken(); caller headers override it. Do not re-inject tokens manually.
 ---
 
 ## The rule
 
-`fetchJsonWithProgress` uses `credentials: "same-origin"` (cookies) and accepts an optional `init: RequestInit` spread, but never calls `getAuthToken()` itself. In BathyScan, cookie-based auth is intentionally disabled (Clerk's handshake 307 redirects break in Replit's proxied-iframe). All auth flows through `customFetch`, which reads `_authTokenGetter`.
+`fetchJsonWithProgress` (artifacts/bathyscan/src/lib/fetchWithProgress.ts) calls `getAuthToken()` from `@workspace/api-client-react` itself and injects `Authorization: Bearer <token>` on every request when a token getter is registered. Caller-supplied `init.headers` take precedence over the injected header. Callers must NOT manually wire the token — that would be double-wiring.
 
-Any function that calls `fetchJsonWithProgress` for an authenticated route **must** resolve the token explicitly and pass it in `init.headers`:
+**Why:** It previously used raw `fetch` with no token; `makeProgressTerrainFetcher` in DatasetPanel patched around it manually, and other callers silently got 401s on `requireAuth` routes (terrain/overview loads failed while signed in). Cookie auth is intentionally disabled in BathyScan (Clerk's handshake 307 breaks in Replit's proxied iframe), so the Bearer header is the only auth path.
 
-```ts
-const token = await getAuthToken();
-const headers: Record<string, string> = token
-  ? { Authorization: `Bearer ${token}` }
-  : {};
-fetchJsonWithProgress(url, { signal, init: { headers }, ... });
-```
-
-**Why:** `makeProgressTerrainFetcher` in DatasetPanel.tsx overrides the TanStack-generated queryFn with a streaming fetcher to drive the loading-progress dial. Because it bypassed `customFetch`, `/api/user/datasets/:id/terrain` and `/api/user/datasets/:id/overview` received requests with no Authorization header → `getAuth(req)?.userId` was null → 401. The list endpoint `/api/user/datasets` was fine because it used the generated hook without a custom queryFn.
-
-**How to apply:** Whenever adding a new call to `fetchJsonWithProgress` for a route protected by `requireAuth`, wrap it as above. If the route is public, no token is needed (getAuthToken returns null → no header added, which is also safe).
+**How to apply:** New `fetchJsonWithProgress` callers on authed routes need nothing extra. Signed-out is safe: `getAuthToken()` returns null → no header. Test gotcha: because `getAuthToken()` adds an async tick before `fetch`, fetch mocks in abort tests must handle an already-aborted signal (`init?.signal?.aborted`), not just listen for the abort event.

@@ -15,7 +15,7 @@
  * All GCS I/O is replaced by vi.mock stubs.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { loggerMockFactory } from "./helpers/mockLogger.js";
 
 // ── GCS mock ──────────────────────────────────────────────────────────────────
@@ -58,7 +58,16 @@ vi.mock("../lib/terrain.js", () => ({
 vi.mock("../lib/uploadParsers.js", () => ({ parseUploadedFile: vi.fn() }));
 
 // ── cacheRegistry mock ────────────────────────────────────────────────────────
-vi.mock("../lib/cacheRegistry.js", () => ({ registerCache: vi.fn() }));
+// Capture registered clear callbacks so each test can flush module-level
+// caches (e.g. the 30 s gcsRecoveryCache) — fake-timer clock resets between
+// tests would otherwise make stale entries look fresh.
+const cacheMocks = vi.hoisted(() => {
+  const clearFns: Array<() => void> = [];
+  return { clearFns, registerCache: (fn: () => void) => clearFns.push(fn) };
+});
+vi.mock("../lib/cacheRegistry.js", () => ({
+  registerCache: vi.fn(cacheMocks.registerCache),
+}));
 
 // ── Import after all mocks ────────────────────────────────────────────────────
 import { recoverGcsJobStatus } from "../lib/bucketMonitor.js";
@@ -88,6 +97,8 @@ describe("recoverGcsJobStatus", () => {
   beforeEach(() => {
     process.env["DEFAULT_OBJECT_STORAGE_BUCKET_ID"] = BUCKET_ID;
     gcsMocks.mockGetMetadata.mockReset();
+    // Flush module-level caches captured via the cacheRegistry mock.
+    for (const clear of cacheMocks.clearFns) clear();
     vi.useFakeTimers();
     // Advance past the 30-second cache TTL so prior test entries are always
     // expired at the start of each test — prevents cross-test cache pollution.
