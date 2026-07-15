@@ -100,4 +100,13 @@ describe("POST /api/query — body size limit", () => {
     // 200 means the limit did not fire; the mocked OpenAI returned a result.
     expect(res.status).toBe(200);
   });
+
+  it("returns 400 for a malformed JSON body", async () => {
+    const res = await request(app)
+      .post("/api/query")
+      .set("Content-Type", "application/json")
+      .send('{"query": "unterminated');
+
+    expect(res.status).toBe(400);
+  });
 });

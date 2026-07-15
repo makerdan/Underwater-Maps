@@ -164,4 +164,35 @@ app.use(
 
 app.use("/api", router);
 
+// ─── Global error handler ─────────────────────────────────────────────────────
+// Maps body-parser errors to structured JSON responses.  Without this,
+// express.json() errors (e.g. entity.too.large) propagate to Express's default
+// finalhandler, which in some setups never responds, hanging the request.
+app.use(
+  (
+    err: Error & { type?: string; status?: number },
+    _req: express.Request,
+    res: express.Response,
+    next: express.NextFunction,
+  ) => {
+    if (res.headersSent) {
+      next(err);
+      return;
+    }
+    if (err.type === "entity.too.large") {
+      res.status(413).json({ error: "Request body too large" });
+      return;
+    }
+    if (err.type === "entity.parse.failed") {
+      res.status(400).json({ error: "Malformed JSON body" });
+      return;
+    }
+    const status =
+      typeof err.status === "number" && err.status >= 400 && err.status < 600
+        ? err.status
+        : 500;
+    res.status(status).json({ error: "Internal server error" });
+  },
+);
+
 export default app;
