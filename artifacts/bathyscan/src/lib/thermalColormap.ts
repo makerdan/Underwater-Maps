@@ -18,7 +18,7 @@ export const THERMAL_MIN_C = 2;
 /** Maximum temperature clamped to the warm end of the gradient (°C). */
 export const THERMAL_MAX_C = 22;
 
-const THERMAL_STOPS: ThermalStop[] = [
+export const THERMAL_STOPS: ThermalStop[] = [
   { t: 0.00, color: new THREE.Color("#3d0c6e") }, // deep purple  — very cold (≤2°C)
   { t: 0.20, color: new THREE.Color("#0c3d8a") }, // deep blue    — ~6°C
   { t: 0.40, color: new THREE.Color("#0872b5") }, // steel blue   — ~10°C

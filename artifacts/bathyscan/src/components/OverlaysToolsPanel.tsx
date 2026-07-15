@@ -8,6 +8,11 @@
  * floating placement.
  */
 import React, { useEffect, useMemo, useRef } from "react";
+import {
+  THERMAL_STOPS,
+  THERMAL_MIN_C,
+  THERMAL_MAX_C,
+} from "@/lib/thermalColormap";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
 import { useSettingsStore } from "@/lib/settingsStore";
@@ -115,6 +120,75 @@ const ToggleButton: React.FC<ToggleButtonProps> = ({
     </button>
   </ViewscreenTooltip>
 );
+
+/**
+ * Compact thermal gradient legend shown below the TEMP LAYER toggle.
+ * Displays a horizontal colour bar derived from THERMAL_STOPS with
+ * temperature labels at the cold end, thermocline, and warm end.
+ */
+const ThermalLegend: React.FC = () => {
+  const gradientStops = THERMAL_STOPS.map(
+    (s) => `#${s.color.getHexString()} ${Math.round(s.t * 100)}%`,
+  ).join(", ");
+  const gradient = `linear-gradient(to right, ${gradientStops})`;
+
+  const range = THERMAL_MAX_C - THERMAL_MIN_C;
+  const keyLabels = [
+    { t: 0.00, label: `${THERMAL_MIN_C}°C` },
+    { t: 0.40, label: `${Math.round(THERMAL_MIN_C + 0.40 * range)}°C` },
+    { t: 1.00, label: `${THERMAL_MAX_C}°C` },
+  ];
+
+  return (
+    <div
+      data-testid="thermal-legend"
+      style={{
+        marginTop: 2,
+        paddingLeft: 8,
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 9,
+          letterSpacing: "0.12em",
+          color: "#94a3b8",
+          textTransform: "uppercase",
+        }}
+      >
+        Thermal gradient
+      </span>
+      <div
+        style={{
+          height: 8,
+          borderRadius: 3,
+          background: gradient,
+          border: "1px solid rgba(255,255,255,0.1)",
+        }}
+      />
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
+        {keyLabels.map(({ t, label }) => (
+          <span
+            key={t}
+            style={{
+              fontSize: 9,
+              color: "#94a3b8",
+              fontFamily: "'JetBrains Mono', monospace",
+              letterSpacing: "0.06em",
+            }}
+          >
+            {label}
+          </span>
+        ))}
+      </div>
+      <span style={{ fontSize: 9, color: "#475569", lineHeight: 1.4 }}>
+        Colour maps depth → temperature via Argo/CTD profile data.
+      </span>
+    </div>
+  );
+};
 
 export const OverlaysToolsPanel: React.FC = () => {
   const { terrain } = useAppState();
@@ -779,6 +853,8 @@ export const OverlaysToolsPanel: React.FC = () => {
               ⚠ ESTIMATED — no measured profile for this location. Showing synthetic thermocline model.
             </div>
           )}
+
+          {showWaterTempLayer && <ThermalLegend />}
 
           {hasHyd93Features && (
             <>

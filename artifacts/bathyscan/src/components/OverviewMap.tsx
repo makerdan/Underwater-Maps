@@ -52,7 +52,6 @@ import {
   renderSavedTrails,
   drawSelectionRect,
   buildIntertidalHotspotDescriptors,
-  renderIntertidalModeLegend,
   POLYGON_LOD_MIN_ZOOM,
 } from "@/lib/overviewRenderer";
 import type { OverviewTransform, CanvasSavedTrail, EfhLegendLayout, ContourSegment, WeatherStationPin, RawsStationPin, IntertidalHotspotPin } from "@/lib/overviewRenderer";
