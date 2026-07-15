@@ -12,3 +12,4 @@
 - [Error boundary retry must use componentDidCatch](error-boundary-retry.md) — componentDidUpdate's prevState.hasError stays true→true on re-catch; use componentDidCatch for retry scheduling instead.
 - [fetchJsonWithProgress missing Bearer token](fetchjsonwithprogress-auth.md) — fetchJsonWithProgress bypasses customFetch auth wiring; any caller on an authed route must pass getAuthToken() result via init.headers.
 - [Replit proxy needs native WS ping to stay alive](replit-proxy-ws-ping.md) — Replit mTLS proxy drops WS after ~30 s idle; only opcode-0x9 frames reset the timer, not JSON data frames. Fix: hmrNativePingPlugin() in vite.config.ts.
+- [terrainStore promote wipes grids](terrainstore-promote-wipes-grids.md) — re-promoting a visible dataset must preserve its loaded grids; null-grid rebuilds silently break Overview Map bbox flows.

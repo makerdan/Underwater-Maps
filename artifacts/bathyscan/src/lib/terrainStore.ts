@@ -508,11 +508,17 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
 
   setSinglePrimary: (datasetId, source) =>
     set((prev) => {
+      // Preserve already-loaded grids when re-promoting a dataset that is
+      // currently visible — otherwise promoting the active dataset (e.g. the
+      // useActiveDatasetSync promote effect firing after grids were seeded
+      // directly) wipes its grids and the Overview Map goes blank until a
+      // refetch completes (or never, if the dataset has no server-side grid).
+      const existing = prev.visibleDatasets.find((v) => v.datasetId === datasetId);
       const entry: VisibleDataset = {
         datasetId,
-        source: source ?? "preset",
-        activeGrid: null,
-        overviewGrid: null,
+        source: source ?? existing?.source ?? "preset",
+        activeGrid: existing?.activeGrid ?? null,
+        overviewGrid: existing?.overviewGrid ?? null,
       };
       const nextVisible = [entry];
       return {

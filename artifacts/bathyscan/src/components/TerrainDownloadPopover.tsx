@@ -72,6 +72,14 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
   const { toast } = useToast();
 
   const [resolution, setResolution] = useState<Resolution>(256);
+  // Backdrop dismissal guard: only close when a full press (mousedown AND
+  // click) lands on the backdrop itself. The rubber-band drag that opens this
+  // popover ends with a mouseup/click at the release point — by then the
+  // backdrop has already mounted under the cursor, so the browser-synthesized
+  // click targets the backdrop and would immediately dismiss it. Since that
+  // click's mousedown happened on the map canvas (before mount), requiring
+  // the mousedown to originate on the backdrop filters it out.
+  const backdropMouseDownRef = React.useRef(false);
   const [info, setInfo] = useState<InfoResult | null>(null);
   const [infoLoading, setInfoLoading] = useState(false);
   const [infoError, setInfoError] = useState<string | null>(null);
@@ -172,11 +180,18 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
         justifyContent: "center",
         ...MONO,
       }}
+      onMouseDown={(e) => {
+        backdropMouseDownRef.current = e.target === e.currentTarget;
+      }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        const startedOnBackdrop = backdropMouseDownRef.current;
+        backdropMouseDownRef.current = false;
+        if (e.target === e.currentTarget && startedOnBackdrop) onClose();
       }}
     >
       <div
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
         style={{
           width: 400,
           maxWidth: "92vw",
