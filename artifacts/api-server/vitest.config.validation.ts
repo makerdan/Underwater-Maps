@@ -43,6 +43,7 @@ export default defineConfig({
       "src/routes/__tests__/rateLimit-pg.test.ts",
       "src/routes/__tests__/ncei-validation.test.ts",
       "src/routes/__tests__/settings-response-parse.test.ts",
+      "src/routes/__tests__/settings-validation.test.ts",
       "src/routes/__tests__/me-validation.test.ts",
       "src/routes/__tests__/datasets-response-parse.test.ts",
     ],
