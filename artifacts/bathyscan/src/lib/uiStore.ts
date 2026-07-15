@@ -325,7 +325,7 @@ function applySettingsToUiStore(s: typeof DEFAULT_SETTINGS) {
   });
 }
 
-export const useUiStore = create<UiStore>((set) => {
+export const useUiStore = create<UiStore>((set, get) => {
   // Use DEFAULT_SETTINGS as the initial values for fields that mirror
   // settingsStore. The correct persisted values are applied via
   // onFinishHydration (below) once settingsStore rehydrates from localStorage.
@@ -369,75 +369,78 @@ export const useUiStore = create<UiStore>((set) => {
 
     zoneOverlayEnabled: s.zoneOverlayEnabled,
     setZoneOverlayEnabled: (enabled) => {
+      set(enabled ? { zoneOverlayEnabled: true } : { zoneOverlayEnabled: false, zonePaintMode: false });
       useSettingsStore.setState(
         enabled ? { zoneOverlayEnabled: true } : { zoneOverlayEnabled: false, zonePaintMode: false },
       );
-      set(enabled ? { zoneOverlayEnabled: true } : { zoneOverlayEnabled: false, zonePaintMode: false });
     },
 
     zonePaintMode: s.zonePaintMode,
     setZonePaintMode: (enabled) => {
-      useSettingsStore.setState({ zonePaintMode: enabled });
       set({ zonePaintMode: enabled });
+      useSettingsStore.setState({ zonePaintMode: enabled });
     },
 
     zonePaintSlot: (s.zonePaintSlot as 0 | 1 | 2 | 3) ?? 0,
     setZonePaintSlot: (slot) => {
-      useSettingsStore.setState({ zonePaintSlot: slot });
       set({ zonePaintSlot: slot });
+      useSettingsStore.setState({ zonePaintSlot: slot });
     },
 
     zonePaintBrushRadius: s.zonePaintBrushRadius,
     setZonePaintBrushRadius: (radius) => {
       const clamped = Math.max(1, Math.min(20, Math.round(radius)));
-      useSettingsStore.setState({ zonePaintBrushRadius: clamped });
       set({ zonePaintBrushRadius: clamped });
+      useSettingsStore.setState({ zonePaintBrushRadius: clamped });
     },
 
     substrateColorMode: s.substrateColorMode,
     setSubstrateColorMode: (enabled) => {
-      useSettingsStore.setState({ substrateColorMode: enabled });
       set(enabled ? { substrateColorMode: true } : { substrateColorMode: false, selectedSubstrate: null });
+      useSettingsStore.setState({ substrateColorMode: enabled });
     },
 
     hiddenSubstrateClasses: new Set<string>(s.hiddenSubstrateClasses ?? []),
-    toggleSubstrateClass: (substrate) => set((state) => {
+    toggleSubstrateClass: (substrate) => {
+      const state = get();
       const key = substrate.toLowerCase();
       const next = new Set(state.hiddenSubstrateClasses);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       const sel = state.selectedSubstrate;
       const clearSel = sel && next.has(sel.substrate.toLowerCase());
-      useSettingsStore.setState({ hiddenSubstrateClasses: [...next] });
-      return clearSel
+      set(clearSel
         ? { hiddenSubstrateClasses: next, selectedSubstrate: null }
-        : { hiddenSubstrateClasses: next };
-    }),
+        : { hiddenSubstrateClasses: next });
+      // Cross-store sync happens AFTER the local commit so the settings-store
+      // update can never interleave with (or observe) a mid-transition uiStore.
+      useSettingsStore.setState({ hiddenSubstrateClasses: [...next] });
+    },
     clearHiddenSubstrateClasses: () => {
-      useSettingsStore.setState({ hiddenSubstrateClasses: [] });
       set({ hiddenSubstrateClasses: new Set<string>() });
+      useSettingsStore.setState({ hiddenSubstrateClasses: [] });
     },
 
     intertidalHotspotsEnabled: s.intertidalHotspotsEnabled,
     setIntertidalHotspotsEnabled: (enabled) => {
-      useSettingsStore.setState({ intertidalHotspotsEnabled: enabled });
       set(enabled
         ? { intertidalHotspotsEnabled: true }
         : { intertidalHotspotsEnabled: false, selectedHotspot: null });
+      useSettingsStore.setState({ intertidalHotspotsEnabled: enabled });
     },
 
     intertidalScoreMode: s.intertidalScoreMode ?? 'tidepool',
     setIntertidalScoreMode: (mode) => {
-      useSettingsStore.setState({ intertidalScoreMode: mode });
       set({ intertidalScoreMode: mode, selectedHotspot: null });
+      useSettingsStore.setState({ intertidalScoreMode: mode });
     },
 
     efhOverlayEnabled: s.efhOverlayEnabled,
     setEfhOverlayEnabled: (enabled) => {
-      useSettingsStore.setState({ efhOverlayEnabled: enabled });
       set(enabled
         ? { efhOverlayEnabled: true }
         : { efhOverlayEnabled: false, selectedEfh: null, hiddenEfhSpecies: new Set<string>() });
+      useSettingsStore.setState({ efhOverlayEnabled: enabled });
       if (!enabled) useSettingsStore.setState({ hiddenEfhSpecies: [] });
     },
 
@@ -445,92 +448,94 @@ export const useUiStore = create<UiStore>((set) => {
     // between sessions for power users who always work with HYD93 datasets.
     hyd93FeaturesEnabled: s.hyd93FeaturesEnabled,
     setHyd93FeaturesEnabled: (enabled) => {
-      useSettingsStore.setState({ hyd93FeaturesEnabled: enabled });
       set({ hyd93FeaturesEnabled: enabled });
+      useSettingsStore.setState({ hyd93FeaturesEnabled: enabled });
     },
 
     // hyd93ActiveFeatureCodes is persisted via settingsStore so power users'
     // filter choices survive page reloads and sync cross-device.
     hyd93ActiveFeatureCodes: new Set<number>(s.hyd93ActiveFeatureCodes ?? [89, 103, 146, 530, 988]),
-    toggleHyd93FeatureCode: (code) => set((state) => {
-      const next = new Set(state.hyd93ActiveFeatureCodes);
+    toggleHyd93FeatureCode: (code) => {
+      const next = new Set(get().hyd93ActiveFeatureCodes);
       if (next.has(code)) {
         if (next.size > 1) next.delete(code);
       } else {
         next.add(code);
       }
+      set({ hyd93ActiveFeatureCodes: next });
       useSettingsStore.setState({ hyd93ActiveFeatureCodes: [...next] });
-      return { hyd93ActiveFeatureCodes: next };
-    }),
+    },
 
     hiddenEfhSpecies: new Set<string>(s.hiddenEfhSpecies ?? []),
-    toggleEfhSpecies: (commonName) => set((state) => {
+    toggleEfhSpecies: (commonName) => {
+      const state = get();
       const next = new Set(state.hiddenEfhSpecies);
       if (next.has(commonName)) next.delete(commonName);
       else next.add(commonName);
       const sel = state.selectedEfh;
       const clearSel = sel && next.has(sel.commonName ?? "");
-      useSettingsStore.setState({ hiddenEfhSpecies: [...next] });
-      return clearSel
+      set(clearSel
         ? { hiddenEfhSpecies: next, selectedEfh: null }
-        : { hiddenEfhSpecies: next };
-    }),
+        : { hiddenEfhSpecies: next });
+      useSettingsStore.setState({ hiddenEfhSpecies: [...next] });
+    },
     clearHiddenEfhSpecies: () => {
-      useSettingsStore.setState({ hiddenEfhSpecies: [] });
       set({ hiddenEfhSpecies: new Set<string>() });
+      useSettingsStore.setState({ hiddenEfhSpecies: [] });
     },
 
     weatherStationsActive: s.weatherStationsActive,
     setWeatherStationsActive: (b) => {
-      useSettingsStore.setState({ weatherStationsActive: b });
       set({ weatherStationsActive: b });
+      useSettingsStore.setState({ weatherStationsActive: b });
     },
 
     rawsOverlayActive: s.rawsOverlayActive,
     setRawsOverlayActive: (b) => {
-      useSettingsStore.setState({ rawsOverlayActive: b });
       set({ rawsOverlayActive: b });
+      useSettingsStore.setState({ rawsOverlayActive: b });
     },
 
     windOverlayActive: s.windOverlayActive,
     setWindOverlayActive: (b) => {
-      useSettingsStore.setState({ windOverlayActive: b });
       set({ windOverlayActive: b });
+      useSettingsStore.setState({ windOverlayActive: b });
     },
 
     tideOverlayActive: s.tideOverlayActive,
     setTideOverlayActive: (b) => {
-      useSettingsStore.setState({ tideOverlayActive: b });
       set({ tideOverlayActive: b });
+      useSettingsStore.setState({ tideOverlayActive: b });
     },
 
     currentOverlayActive: s.currentOverlayActive,
     setCurrentOverlayActive: (b) => {
-      useSettingsStore.setState({ currentOverlayActive: b });
       set({ currentOverlayActive: b });
+      useSettingsStore.setState({ currentOverlayActive: b });
     },
 
     currentDepthLayers: validDepthLayers(s.currentDepthLayers),
     setCurrentDepthLayers: (layers) => {
       const ordered = CURRENT_DEPTH_LAYERS.filter((l) => layers.includes(l));
-      useSettingsStore.setState({ currentDepthLayers: ordered });
       set({ currentDepthLayers: ordered });
+      useSettingsStore.setState({ currentDepthLayers: ordered });
     },
-    toggleCurrentDepthLayer: (layer) => set((state) => {
+    toggleCurrentDepthLayer: (layer) => {
+      const state = get();
       const has = state.currentDepthLayers.includes(layer);
       let next = has
         ? state.currentDepthLayers.filter((l) => l !== layer)
         : [...state.currentDepthLayers, layer];
       if (next.length === 0) next = [layer];
       const ordered = CURRENT_DEPTH_LAYERS.filter((l) => next.includes(l));
+      set({ currentDepthLayers: ordered });
       useSettingsStore.setState({ currentDepthLayers: ordered });
-      return { currentDepthLayers: ordered };
-    }),
+    },
 
     sidePaneCollapsed: s.sidePaneCollapsed,
     setSidePaneCollapsed: (collapsed) => {
-      useSettingsStore.setState({ sidePaneCollapsed: collapsed });
       set({ sidePaneCollapsed: collapsed });
+      useSettingsStore.setState({ sidePaneCollapsed: collapsed });
     },
 
     // ── Device-local state (stays in raw localStorage, never synced) ────────

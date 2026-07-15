@@ -21,3 +21,4 @@
 - [Drizzle schema-drift check quirks](drizzle-schema-drift-check.md) — drizzle-kit generate needs relative `out`; hand-written migrations must be journaled or drift check always fires.
 - [Headless test-bridge fallback](headless-test-bridge-fallback.md) — Canvas-hook-registered __bathyTest callbacks never register headless; fall back to pure lib functions run on the rig camera.
 - [Playwright contextmenu dispatchEvent drops coords](playwright-contextmenu-dispatchevent.md) — dispatchEvent("contextmenu",{clientX}) builds a plain Event, coords become NaN; construct MouseEvent in-page via evaluate.
+- [uiStore/settingsStore ordering](uistore-settings-ordering.md) — mirrored setters must commit uiStore via set() first, then useSettingsStore.setState; never setState another store inside a set((state)=>…) transition.
