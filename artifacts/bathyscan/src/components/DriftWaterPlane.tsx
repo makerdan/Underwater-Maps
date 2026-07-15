@@ -212,7 +212,7 @@ export const DriftWaterPlane: React.FC<DriftWaterPlaneProps> = ({ surfaceY, terr
       terrain, driftConditions, lineLengthM, lineWeightG, setDriftStart, setDriftPath,
       driftMode, boatHeadingDeg, boatSpeedKnots,
       driftStartLat, driftStartLon, driftWaypoints, addDriftWaypoint,
-      reverseModeActive, setCatchPoint, setReverseDriftPath,
+      reverseModeActive, setCatchPoint, setReverseDriftPath, boatProfileId,
     ],
   );
 
