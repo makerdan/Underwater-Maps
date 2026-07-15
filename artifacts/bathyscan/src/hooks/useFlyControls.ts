@@ -12,6 +12,7 @@ import { useDriftStore } from "@/lib/driftStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
 import { worldXZToLonLat, worldYToMetres, lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
+import { applyCameraSpawn } from "@/lib/cameraSpawn";
 import { registerResetCameraFn } from "@/lib/resetCameraRegistry";
 import { useJoystickStore } from "@/components/VirtualJoystick";
 import { computeMetersPerWorldUnit, boatMphToWorldUnitsPerSecond, BOAT_MIN_MPH, BOAT_MAX_MPH } from "@/lib/boatSpeed";
@@ -178,83 +179,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   const resetCamera = useCallback(() => {
     const grid = terrainRef.current;
     if (!grid) return;
-    const { resolution: N, depths, minDepth, maxDepth } = grid;
-    const depthRange = maxDepth - minDepth || 1;
-
-    const settings = useSettingsStore.getState();
-    const spawnBehaviour = settings.cameraSpawnBehaviour;
-
-    // "last" — resume the previously saved camera position for this dataset.
-    if (spawnBehaviour === "last") {
-      const sess = settings.lastSession;
-      if (sess && sess.datasetId === grid.datasetId) {
-        const { x, z } = lonLatToWorldXZ(sess.lon, sess.lat, grid);
-        const t = Math.max(0, Math.min(1, (sess.depth - minDepth) / depthRange));
-        const worldY = -t * MAX_DEPTH_WORLD;
-        camera.position.set(x, worldY + 10, z);
-        // Restore heading: euler.y encodes the compass heading (yaw).
-        // Convention from useFlyControls: yaw = heading * PI / 180 applied
-        // as negative euler.y (camera looks along -Z in Three.js).
-        euler.current.set(-0.25, -(sess.heading * Math.PI) / 180, 0);
-        camera.quaternion.setFromEuler(euler.current);
-        return;
-      }
-      // No saved session yet — place camera at the geographic center so the
-      // user gets a meaningful overview of the whole survey area on first load.
-      const centerLon = (grid.minLon + grid.maxLon) / 2;
-      const centerLat = (grid.minLat + grid.maxLat) / 2;
-      const { x, z } = lonLatToWorldXZ(centerLon, centerLat, grid);
-      const centerY = -(MAX_DEPTH_WORLD / 2);
-      camera.position.set(x, centerY + 10, z);
-      euler.current.set(-0.25, 0, 0);
-      camera.quaternion.setFromEuler(euler.current);
-      return;
-    }
-
-    // "center" — place camera above the geographic (lon/lat) centroid of the dataset.
-    if (spawnBehaviour === "center") {
-      const centerLon = (grid.minLon + grid.maxLon) / 2;
-      const centerLat = (grid.minLat + grid.maxLat) / 2;
-      const { x, z } = lonLatToWorldXZ(centerLon, centerLat, grid);
-      const centerY = -(MAX_DEPTH_WORLD / 2);
-      camera.position.set(x, centerY + 10, z);
-      euler.current.set(-0.25, 0, 0);
-      camera.quaternion.setFromEuler(euler.current);
-      return;
-    }
-
-    // "home" — spawn at the per-dataset saved home position if one is set.
-    if (spawnBehaviour === "home") {
-      const home = settings.datasetHomePositions[grid.datasetId];
-      if (home) {
-        const { x, z } = lonLatToWorldXZ(home.lon, home.lat, grid);
-        const t = (home.depth - minDepth) / depthRange;
-        const surfaceY = -Math.max(0, Math.min(1, t)) * MAX_DEPTH_WORLD;
-        camera.position.set(x, surfaceY + 10, z);
-        euler.current.set(-0.25, 0, 0);
-        camera.quaternion.setFromEuler(euler.current);
-        return;
-      }
-      // No home set — fall through to deepest-point spawn.
-    }
-
-    // "deepest" (default fallback) — place 10 units above the deepest point.
-    let maxIdx = 0;
-    for (let i = 1; i < depths.length; i++) {
-      if ((depths[i] ?? 0) > (depths[maxIdx] ?? 0)) maxIdx = i;
-    }
-
-    const col = maxIdx % N;
-    const row = Math.floor(maxIdx / N);
-    const lon = grid.minLon + (col / Math.max(1, N - 1)) * (grid.maxLon - grid.minLon);
-    const lat = grid.minLat + (row / Math.max(1, N - 1)) * (grid.maxLat - grid.minLat);
-    const { x, z } = lonLatToWorldXZ(lon, lat, grid);
-    const t = ((depths[maxIdx] ?? 0) - minDepth) / depthRange;
-    const surfaceY = -Math.max(0, Math.min(1, t)) * MAX_DEPTH_WORLD;
-
-    camera.position.set(x, surfaceY + 10, z);
-    euler.current.set(-0.25, 0, 0);
-    camera.quaternion.setFromEuler(euler.current);
+    applyCameraSpawn(camera, euler.current, grid, useSettingsStore.getState());
   }, [camera]);
 
   // Register the latest resetCamera callback with the test-helper bridge so

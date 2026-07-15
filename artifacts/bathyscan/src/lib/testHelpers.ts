@@ -51,6 +51,7 @@ import type { LastSession } from "./settingsStore";
 import { usePaletteStore } from "./paletteStore";
 import { worldXZToLonLat } from "./terrain";
 import { callRegisteredResetCamera } from "./resetCameraRegistry";
+import { applyCameraSpawn } from "./cameraSpawn";
 import { hasPendingOrInFlightSettingsSync } from "../hooks/useServerSettingsSync";
 import { processFlyWheel } from "./flyWheel";
 import { useZoneOverlayStore, ZONE_DEFAULT_COLORS } from "./zoneOverlayStore";
@@ -1028,7 +1029,19 @@ export function installTestHelpers(): void {
       for (let i = 0; i < zm.length; i += step) sample.push(zm[i] ?? 0);
       return { length: zm.length, hasEdits: s.hasEdits, hash, sample };
     },
-    resetCameraForSpawn: () => callRegisteredResetCamera(),
+    resetCameraForSpawn: () => {
+      // Prefer the production callback registered by useFlyControls (live
+      // Canvas). In headless e2e runs the WebGL Canvas never mounts, so fall
+      // back to running the same production spawn logic (applyCameraSpawn)
+      // against the fly-wheel rig camera and the React-bound terrain.
+      if (callRegisteredResetCamera()) return true;
+      const cam = threeCameraRef as THREE.PerspectiveCamera | null;
+      const terrain = appGetTerrainRef.current;
+      if (!cam || !terrain) return false;
+      const euler = new THREE.Euler(0, 0, 0, "YXZ");
+      applyCameraSpawn(cam, euler, terrain, useSettingsStore.getState());
+      return true;
+    },
     getCameraGeo: () => {
       const cam = threeCameraRef;
       const terrain = appGetTerrainRef.current;

@@ -18,3 +18,4 @@
 - [terrainStore promote wipes grids](terrainstore-promote-wipes-grids.md) — re-promoting a visible dataset must preserve its loaded grids; null-grid rebuilds silently break Overview Map bbox flows.
 - [Health probe must use /api/healthz](health-probe-routing.md) — root-relative probes hit the SPA fallback 200; only /api/* reaches the API server. Dev restart button lives on the Vite server.
 - [Drizzle schema-drift check quirks](drizzle-schema-drift-check.md) — drizzle-kit generate needs relative `out`; hand-written migrations must be journaled or drift check always fires.
+- [Headless test-bridge fallback](headless-test-bridge-fallback.md) — Canvas-hook-registered __bathyTest callbacks never register headless; fall back to pure lib functions run on the rig camera.
