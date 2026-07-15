@@ -14,9 +14,9 @@ The PUT /api/settings 400 is **not** from Zod validation failure. It is from the
 3. `Object.keys(extras).length > MAX_EXTRA_KEYS` → too many extras (this is the current failure)
 4. `Buffer.byteLength(...) > MAX_EXTRAS_BYTES` → extras payload too large
 
-Fix options (in priority order):
-- **Short-term:** Raise `MAX_EXTRA_KEYS` from 32 to ≥128 in `artifacts/api-server/src/routes/settings.ts`
-- **Long-term:** Add the 76 missing keys to the OpenAPI spec and regenerate `PutSettingsBody` so they are no longer "extras"
+Fix applied: `MAX_EXTRA_KEYS` raised from 32 to 128 in `artifacts/api-server/src/routes/settings.ts`. All 18 palette e2e tests pass with this change.
+
+Remaining long-term fix: Add the 76 missing keys to the OpenAPI spec and regenerate `PutSettingsBody` so they are first-class schema keys rather than extras.
 
 The 76 extra keys observed (as of this diagnosis):
 schemaVersion, showAdvancedEverywhere, mouseZoomSensitivity, touchpadZoomSensitivity, pinchZoomSensitivity, joystickMode, showJoystickInOrbit, fieldOfView, renderDistance, lastSession, qualityPreset, terrainExaggeration, enableMarineSnow, fogColor, ambientLightIntensity, directionalLightIntensity, lampRange, antialiasing, showWaterSurface, showLandmass, landmassStyle, satelliteImagery, terrainImagery, showDepthLegend, showDepthScaleBar, showCompassMinimap, showControlsLegend, showTidePanel, showHabitatPanel, showDatasetPanel, showQueryPanel, timeFormat, temperatureUnit, contoursEnabled, contourInterval, defaultDepthPoleColor, markerClusterThreshold, autoLoadTidal, defaultTidalDepthLayer, currentArrowDensity, layerArrowDensity, windOverlayStyle, tideOverlayStyle, currentOverlayStyle, currentsEnabled, currentsSource, currentsManualDirectionDeg, currentsManualSpeedKt, currentsTidePhase, currentsAutoAdvance, currentsShowParticles, currentsShowArrows, currentsShowStreamlines, autoShowZoneOverlay, defaultHabitatSpecies, habitatOverlayIntensity, habitatOverlayColor, autoStartTrailRecording, defaultTrailColor, trailRetention, autoLoadLastDataset, defaultMapLoad, reducedMotion, colorBlindSafePalette, largeHudText, highContrastHud, brightDaylight, colormapUserSet, telemetryOptIn, llmDisclosureAcknowledged, hasSeenOnboarding, datasetFolderExpanded, bookmarks, keyBindings, crosshairMenuGamepadButton, lastSyncedAt
