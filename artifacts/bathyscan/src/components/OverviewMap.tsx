@@ -404,17 +404,6 @@ export const OverviewMap: React.FC = () => {
   );
   const [bboxSavingIds, setBboxSavingIds] = useState<Set<string>>(new Set());
 
-  const handleBboxLoad = useCallback(
-    (_entry: DatasetCatalogSearchResult) => {
-      // Preset datasets are retired (Task #403). Non-preset (user-saved or
-      // external) entries don't have a runtime grid here, so this is a
-      // no-op — the Find Data flow handles them.
-      void _entry;
-      void setDatasetId;
-    },
-    [setDatasetId],
-  );
-
   const handleBboxSave = useCallback(
     async (id: string) => {
       setBboxSavingIds((s) => new Set(s).add(id));
@@ -2210,7 +2199,6 @@ export const OverviewMap: React.FC = () => {
           onRedraw={() => { setBboxResults(null); setBboxError(null); setSelectedBbox(null); }}
           onClear={clearBbox}
           onClose={() => { clearBbox(); setSelectMode(false); }}
-          onLoad={handleBboxLoad}
           onSave={(id) => void handleBboxSave(id)}
           savedIds={savedCatalogIds}
           savingIds={bboxSavingIds}
@@ -2536,7 +2524,6 @@ interface BboxQueryPanelProps {
   onRedraw: () => void;
   onClear: () => void;
   onClose: () => void;
-  onLoad: (entry: DatasetCatalogSearchResult) => void;
   onSave: (id: string) => void;
   savedIds: Set<string>;
   savingIds: Set<string>;
@@ -2551,7 +2538,6 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
   onRedraw,
   onClear,
   onClose,
-  onLoad: _onLoad,
   onSave,
   savedIds,
   savingIds,
@@ -2744,8 +2730,6 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
                 {entry.dataType} · {entry.sourceAgency}
               </div>
               <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                {/* Save is always available — presets are retired (Task #403),
-                    but user-saved/external entries can still be saved here. */}
                 <button
                   data-testid="overview-bbox-save"
                   onClick={() => !saved && !saving && onSave(entry.id)}
