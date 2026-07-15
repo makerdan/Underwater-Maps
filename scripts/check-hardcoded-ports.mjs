@@ -24,7 +24,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 
 // ── Configuration ───────────────────────────────────────────────────────────
 
-// The single allowlisted registry of fixed E2E ports (repo-relative).
+// Allowlisted files (repo-relative): the single registry of fixed E2E
+// ports, plus guard scripts whose own comments/patterns self-match.
 const ALLOWLIST = new Set([
   "tests/e2e/ports.ts",
   // Sibling guard script: its comments and regex definitions contain the very
