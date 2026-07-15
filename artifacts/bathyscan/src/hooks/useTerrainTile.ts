@@ -24,7 +24,9 @@ function lruGet(key: string): string | undefined {
 }
 
 function lruPut(key: string, url: string): void {
-  if (terrainTileCache.has(key)) {
+  const existing = terrainTileCache.get(key);
+  if (existing !== undefined) {
+    if (existing !== url) URL.revokeObjectURL(existing);
     terrainTileCache.delete(key);
   } else if (terrainTileCache.size >= CACHE_MAX) {
     const oldest = terrainTileCache.keys().next().value as string;
@@ -83,15 +85,28 @@ export function useTerrainTile(bbox: Bbox | null, tileSize = 512): void {
 
     let cancelled = false;
 
+    /**
+     * Create an object URL for `blob` and publish it, unless the effect has
+     * been cancelled — in which case the URL is revoked immediately so a
+     * late-arriving fetch never leaks a blob URL for the session.
+     */
+    const publishTile = (blob: Blob): void => {
+      const objectUrl = URL.createObjectURL(blob);
+      if (cancelled) {
+        URL.revokeObjectURL(objectUrl);
+        return;
+      }
+      lruPut(bboxKey, objectUrl);
+      setTileUrl(objectUrl, bboxKey);
+    };
+
     (async () => {
       // L2: check the persistent Cache API before hitting the network.
       const persistedBlob = await getPersistentTile(CACHE_NAME, bboxKey);
       if (cancelled) return;
 
       if (persistedBlob) {
-        const objectUrl = URL.createObjectURL(persistedBlob);
-        lruPut(bboxKey, objectUrl);
-        setTileUrl(objectUrl, bboxKey);
+        publishTile(persistedBlob);
         return;
       }
 
@@ -110,9 +125,7 @@ export function useTerrainTile(bbox: Bbox | null, tileSize = 512): void {
         // Persist to L2 (fire-and-forget; errors are swallowed inside putPersistentTile).
         putPersistentTile(CACHE_NAME, bboxKey, blob).catch(() => undefined);
 
-        const objectUrl = URL.createObjectURL(blob);
-        lruPut(bboxKey, objectUrl);
-        setTileUrl(objectUrl, bboxKey);
+        publishTile(blob);
       } catch (err: unknown) {
         if (cancelled) return;
         if ((err as Error).name === "AbortError") return;
