@@ -28,11 +28,68 @@ export const SeafloorClassificationPanel: React.FC = () => {
   const substrateEnabled = useUiStore((s) => s.substrateColorMode);
   const setSubstrateEnabled = useUiStore((s) => s.setSubstrateColorMode);
   const zoneOverlayEnabled = useUiStore((s) => s.zoneOverlayEnabled);
+  const zonePaintMode = useUiStore((s) => s.zonePaintMode);
 
   const bothActive = substrateEnabled && zoneOverlayEnabled;
+  const activePaintMode = zonePaintMode && zoneOverlayEnabled;
 
   return (
     <div style={{ fontFamily: MONO, fontSize: 12 }}>
+      {/* ── Sub-mode indicator row ── */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "6px 12px 4px",
+          borderBottom: "1px dashed rgba(0,229,255,0.08)",
+        }}
+      >
+        <span
+          style={{
+            fontSize: 9,
+            letterSpacing: "0.15em",
+            textTransform: "uppercase",
+            color: !activePaintMode ? "#00e5ff" : "#475569",
+            fontWeight: !activePaintMode ? 700 : 400,
+            textShadow: !activePaintMode ? "0 0 6px rgba(0,229,255,0.4)" : "none",
+            transition: "color 0.15s",
+          }}
+        >
+          VIEW
+        </span>
+        <span style={{ fontSize: 9, color: "#334155", letterSpacing: "0.1em" }}>|</span>
+        <span
+          style={{
+            fontSize: 9,
+            letterSpacing: "0.15em",
+            textTransform: "uppercase",
+            color: activePaintMode ? "#fb923c" : "#475569",
+            fontWeight: activePaintMode ? 700 : 400,
+            textShadow: activePaintMode ? "0 0 6px rgba(251,146,60,0.5)" : "none",
+            transition: "color 0.15s",
+          }}
+        >
+          PAINT
+        </span>
+        {activePaintMode && (
+          <span
+            style={{
+              marginLeft: "auto",
+              fontSize: 8,
+              letterSpacing: "0.12em",
+              color: "#fb923c",
+              background: "rgba(251,146,60,0.1)",
+              border: "1px solid rgba(251,146,60,0.3)",
+              borderRadius: 3,
+              padding: "1px 5px",
+            }}
+          >
+            ACTIVE
+          </span>
+        )}
+      </div>
+
       {/* ── Substrate toggle ── */}
       <div style={{ padding: "8px 12px", borderBottom: "1px dashed rgba(0,229,255,0.10)" }}>
         <div

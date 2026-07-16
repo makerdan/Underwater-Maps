@@ -331,6 +331,9 @@ function Main() {
   const sidePaneCollapsed = useUiStore((s) => s.sidePaneCollapsed);
   const setSidePaneCollapsed = useUiStore((s) => s.setSidePaneCollapsed);
   const sidebarMode = useUiStore((s) => s.sidebarMode);
+  const tideOverlayActive = useUiStore((s) => s.tideOverlayActive);
+  const currentOverlayActive = useUiStore((s) => s.currentOverlayActive);
+  const setSidebarMode = useUiStore((s) => s.setSidebarMode);
   const hasSeenOrbitTouchHint = useUiStore((s) => s.hasSeenOrbitTouchHint);
   const setHasSeenOrbitTouchHint = useUiStore((s) => s.setHasSeenOrbitTouchHint);
   const prevOverviewOpenRef = useRef(false);
@@ -1140,10 +1143,80 @@ function Main() {
               <OverlaysToolsPanel />
 
               <SidebarSectionGroup>
-                <SidebarSection id="mapData" title="Map & Data">
-                  {showDatasetPanel ? <DatasetPanel embedded /> : null}
+                <SidebarSection id="mapData" title="Your Data">
+                  {!terrain ? (
+                    <div
+                      data-testid="explore-empty-state"
+                      style={{
+                        padding: "14px 12px",
+                        textAlign: "center",
+                        color: "#475569",
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 10,
+                        letterSpacing: "0.1em",
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      <div style={{ fontSize: 20, marginBottom: 6, opacity: 0.5 }}>🌊</div>
+                      <div style={{ color: "#64748b", marginBottom: 8 }}>
+                        Load a dataset to begin.
+                      </div>
+                      <button
+                        onClick={() => useUiStore.getState().setFindDataPanelOpen(true)}
+                        style={{
+                          fontSize: 9,
+                          letterSpacing: "0.12em",
+                          padding: "4px 10px",
+                          background: "rgba(0,229,255,0.06)",
+                          border: "1px solid rgba(0,229,255,0.28)",
+                          borderRadius: 3,
+                          color: "#00e5ff",
+                          cursor: "pointer",
+                          fontFamily: "'JetBrains Mono', monospace",
+                        }}
+                      >
+                        BROWSE DATASETS →
+                      </button>
+                    </div>
+                  ) : showDatasetPanel ? <DatasetPanel embedded /> : null}
                 </SidebarSection>
               </SidebarSectionGroup>
+
+              {/* "Switch to Plan" nudge — appears when a conditions or drift overlay is active */}
+              {(tideOverlayActive || currentOverlayActive || driftPlannerActive) && (
+                <button
+                  data-testid="switch-to-plan-nudge"
+                  onClick={() => setSidebarMode('plan')}
+                  style={{
+                    width: "100%",
+                    minWidth: 230,
+                    maxWidth: 260,
+                    padding: "7px 12px",
+                    background: "rgba(2,8,18,0.88)",
+                    border: "1px solid rgba(52,211,153,0.25)",
+                    borderRadius: 6,
+                    color: "#34d399",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 9,
+                    letterSpacing: "0.15em",
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                    backdropFilter: "blur(6px)",
+                    textAlign: "left",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    opacity: 0.85,
+                    transition: "opacity 0.15s",
+                    pointerEvents: "auto",
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+                  onMouseLeave={e => (e.currentTarget.style.opacity = "0.85")}
+                >
+                  <span style={{ fontSize: 12 }}>⇄</span>
+                  Switch to Plan to configure conditions
+                </button>
+              )}
             </div>
 
             {/* ══════════════════════════════════════════════════
@@ -1187,21 +1260,64 @@ function Main() {
                 QueryPanel trigger
             ══════════════════════════════════════════════════ */}
             <div style={{ display: sidebarMode === 'analyze' ? 'flex' : 'none', flexDirection: 'column', gap: 8 }}>
-              <SidebarSectionGroup>
-                <SidebarSection id="habitat" title="Habitat">
-                  {showHabitatPanel ? <HabitatPanel embedded /> : null}
-                </SidebarSection>
-              </SidebarSectionGroup>
+              {!terrain ? (
+                <div
+                  data-testid="analyze-empty-state"
+                  style={{
+                    padding: "14px 12px",
+                    textAlign: "center",
+                    color: "#475569",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10,
+                    letterSpacing: "0.1em",
+                    lineHeight: 1.6,
+                    background: "rgba(2,8,18,0.94)",
+                    border: "1px solid rgba(0,229,255,0.22)",
+                    borderRadius: 6,
+                    backdropFilter: "blur(6px)",
+                  }}
+                >
+                  <div style={{ fontSize: 20, marginBottom: 6, opacity: 0.5 }}>◈</div>
+                  <div style={{ color: "#64748b", marginBottom: 8 }}>
+                    Load a dataset to begin analysis.
+                  </div>
+                  <button
+                    onClick={() => { setSidebarMode('explore'); useUiStore.getState().setFindDataPanelOpen(true); }}
+                    style={{
+                      fontSize: 9,
+                      letterSpacing: "0.12em",
+                      padding: "4px 10px",
+                      background: "rgba(0,229,255,0.06)",
+                      border: "1px solid rgba(0,229,255,0.28)",
+                      borderRadius: 3,
+                      color: "#00e5ff",
+                      cursor: "pointer",
+                      fontFamily: "'JetBrains Mono', monospace",
+                    }}
+                  >
+                    GO TO EXPLORE →
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <SidebarSectionGroup>
+                    <SidebarSection id="habitat" title="Species Habitat">
+                      {showHabitatPanel ? <HabitatPanel embedded /> : null}
+                    </SidebarSection>
+                  </SidebarSectionGroup>
 
-              <SidebarSectionGroup>
-                <SidebarSection id="seafloorClassification" title="Seafloor Classification">
-                  <SeafloorClassificationPanel />
-                </SidebarSection>
-              </SidebarSectionGroup>
+                  <SidebarSectionGroup>
+                    <SidebarSection id="seafloorClassification" title="Seafloor">
+                      <SeafloorClassificationPanel />
+                    </SidebarSection>
+                  </SidebarSectionGroup>
+                </>
+              )}
 
               {showQueryPanel && (
-                <ViewscreenTooltip label='Open natural-language query panel (press "/")' side="right">
+                <ViewscreenTooltip label='Open AI query panel (press "/")' side="right">
                   <button
+                    data-testid="ask-ai-trigger"
                     onClick={() => setQueryOpen(true)}
                     style={{
                       width: "100%",
@@ -1222,7 +1338,7 @@ function Main() {
                     }}
                   >
                     <span style={{ color: "#00e5ff", marginRight: 8 }}>⌕</span>
-                    Query Panel
+                    Ask AI
                     <span style={{ float: "right", fontSize: 9, letterSpacing: "0.1em", color: "#475569" }}>
                       press /
                     </span>

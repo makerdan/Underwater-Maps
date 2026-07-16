@@ -771,8 +771,8 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
           })()}
 
           {!activeSpecies && (
-            <div style={{ fontSize: 11, color: "#e2e8f0", letterSpacing: "0.05em" }}>
-              Select a species to score habitat
+            <div style={{ fontSize: 11, color: "#64748b", letterSpacing: "0.05em" }}>
+              Select a species to see habitat scores.
             </div>
           )}
 
