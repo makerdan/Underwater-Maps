@@ -375,6 +375,81 @@ test.describe("CurrentsPanel — Advanced toggle", () => {
       expect(newAriaPressed).not.toBe(initialAriaPressed);
     }
   });
+
+  test("Advanced section is absent when currentsEnabled=false", async ({ page }) => {
+    test.setTimeout(90_000);
+
+    // Explicitly disable currents so the Advanced section must not render.
+    await seedSettings(page, { currentsEnabled: false });
+    await seedPanelCollapse(page, { seafloorClassification: false });
+
+    await page.goto("/");
+
+    // The currents panel itself still renders (with the enable button)
+    // but without currentsEnabled the AdvancedSection is never mounted.
+    const currentsPanel = page.locator('[data-testid="currents-panel"]');
+    const panelVisible = await currentsPanel.isVisible({ timeout: 25_000 }).catch(() => false);
+    if (!panelVisible) {
+      test.skip(true, "CurrentsPanel not visible — UI may not be active");
+      return;
+    }
+
+    // The enable button must be visible (currents are off).
+    const enableBtn = currentsPanel.locator('[data-testid="currents-enable"]');
+    await expect(enableBtn).toBeVisible({ timeout: 10_000 });
+
+    // The Advanced toggle must NOT be in the DOM.
+    const advBtn = currentsPanel.locator('[data-testid="advanced-toggle-currentsPanelAdvanced"]');
+    await expect(advBtn).toHaveCount(0);
+  });
+
+  test("Advanced section is still expanded after toggling currents off then back on", async ({ page }) => {
+    test.setTimeout(90_000);
+
+    // Start with currents enabled and the Advanced section expanded.
+    await seedSettings(page, { currentsEnabled: true });
+    await seedPanelCollapse(page, {
+      seafloorClassification: false,
+      currentsPanelAdvanced: false, // false = expanded
+    });
+
+    await page.goto("/");
+
+    const currentsPanel = page.locator('[data-testid="currents-panel"]');
+    const panelVisible = await currentsPanel.isVisible({ timeout: 25_000 }).catch(() => false);
+    if (!panelVisible) {
+      test.skip(true, "CurrentsPanel not visible — UI may not be active");
+      return;
+    }
+
+    const advBtn = currentsPanel.locator('[data-testid="advanced-toggle-currentsPanelAdvanced"]');
+    const advBtnVisible = await advBtn.isVisible({ timeout: 10_000 }).catch(() => false);
+    if (!advBtnVisible) {
+      test.skip(true, "CurrentsPanel Advanced toggle not visible — currents may not be enabled");
+      return;
+    }
+
+    // Confirm the section is expanded before toggling off.
+    await expect(advBtn).toHaveAttribute("aria-expanded", "true");
+
+    // Toggle currents OFF via the panel's OFF button.
+    const disableBtn = currentsPanel.locator('[data-testid="currents-disable"]');
+    await disableBtn.click();
+
+    // The Advanced toggle must disappear (currents off hides the whole section).
+    await expect(advBtn).toHaveCount(0, { timeout: 5_000 });
+
+    // Toggle currents ON again via the enable button.
+    const enableBtn = currentsPanel.locator('[data-testid="currents-enable"]');
+    await enableBtn.click();
+
+    // Advanced toggle must reappear and still be expanded — the store state
+    // (currentsPanelAdvanced=false) was not modified by the toggle, so the
+    // AdvancedSection remounts in the same expanded position.
+    const advBtnAfter = currentsPanel.locator('[data-testid="advanced-toggle-currentsPanelAdvanced"]');
+    await expect(advBtnAfter).toBeVisible({ timeout: 10_000 });
+    await expect(advBtnAfter).toHaveAttribute("aria-expanded", "true");
+  });
 });
 
 // ── TidePanel ─────────────────────────────────────────────────────────────────
