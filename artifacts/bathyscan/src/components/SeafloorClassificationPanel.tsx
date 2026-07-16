@@ -14,6 +14,7 @@
  */
 import React from "react";
 import { useUiStore } from "@/lib/uiStore";
+import { useClassificationStore } from "@/lib/classificationStore";
 import { ZoneOverlay } from "@/components/ZoneOverlay";
 import { AdvancedSection } from "@/components/AdvancedSection";
 
@@ -29,6 +30,7 @@ export const SeafloorClassificationPanel: React.FC = () => {
   const setSubstrateEnabled = useUiStore((s) => s.setSubstrateColorMode);
   const zoneOverlayEnabled = useUiStore((s) => s.zoneOverlayEnabled);
   const zonePaintMode = useUiStore((s) => s.zonePaintMode);
+  const zoneMapReady = useClassificationStore((s) => s.zoneMap !== null);
 
   const bothActive = substrateEnabled && zoneOverlayEnabled;
   const activePaintMode = zonePaintMode && zoneOverlayEnabled;
@@ -203,7 +205,7 @@ export const SeafloorClassificationPanel: React.FC = () => {
       )}
 
       {/* ── Zone Analysis — behind Advanced toggle (paint brush, zone colours, classification) ── */}
-      <AdvancedSection panelId="seafloorAdvanced">
+      <AdvancedSection panelId="seafloorAdvanced" indicator={zoneMapReady}>
         <div style={{ padding: "4px 0 4px 0" }}>
           <ZoneOverlay embedded />
         </div>

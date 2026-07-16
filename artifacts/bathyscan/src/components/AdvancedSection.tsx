@@ -22,11 +22,14 @@ const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 interface AdvancedSectionProps {
   panelId: PanelId;
   children: React.ReactNode;
+  /** When true and the section is collapsed, renders a cyan dot to hint that notable content is ready inside. */
+  indicator?: boolean;
 }
 
 export const AdvancedSection: React.FC<AdvancedSectionProps> = ({
   panelId,
   children,
+  indicator = false,
 }) => {
   const collapsed = usePanelCollapseStore((s) => s.collapsed[panelId]);
   const toggle = usePanelCollapseStore((s) => s.toggle);
@@ -71,6 +74,22 @@ export const AdvancedSection: React.FC<AdvancedSectionProps> = ({
           ▸
         </span>
         <span>Advanced</span>
+        {indicator && collapsed && (
+          <span
+            aria-label="zones ready"
+            title="Zone classification results are ready inside"
+            style={{
+              display: "inline-block",
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: "#00e5ff",
+              boxShadow: "0 0 5px rgba(0,229,255,0.8)",
+              flexShrink: 0,
+              marginLeft: 2,
+            }}
+          />
+        )}
       </button>
 
       {/* Always-mounted children clipped via max-height for smooth animation */}
