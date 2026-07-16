@@ -535,6 +535,150 @@ describe("OverviewMap — waypoint mode click dispatches correct lat/lon", () =>
   });
 
   /**
+   * WORLD-GRID PAN CLAMPING scenario — verifies that panning uses the union-bbox
+   * (worldGridRef) as the clamp boundary when two datasets are loaded, rather
+   * than the smaller single-dataset overviewGrid.
+   *
+   * Strategy:
+   *   1. Seed two datasets with non-overlapping bboxes:
+   *        A: -122..-119 lon, 47..49 lat  (primary)
+   *        B: -116..-113 lon, 44..46 lat
+   *      Union bbox: -122..-113 lon (9°), 44..49 lat (5°)
+   *   2. Mount the component; the visibleDatasets effect sets worldGridRef to
+   *      the union bbox and computes the initial transform from it.
+   *   3. Fire a very large drag to the left so the raw offset is far beyond
+   *      even the union clamp limit, ensuring it hits the clamp boundary.
+   *   4. Mirror the expected union-clamp math locally to predict the clamped
+   *      offsetX, then click at a fixed pixel and compute the expected lon/lat.
+   *   5. Assert appendWaypoint receives that lon — which would be ~5 degrees off
+   *      if A's smaller grid had been used for clamping instead of the union.
+   */
+  it("world-grid pan clamping uses union bbox so panning is not over-restricted to the primary dataset", async () => {
+    const gridA = makeOverviewGrid(); // -122..-119 lon, 47..49 lat
+
+    const NB = 4;
+    const depthsB = new Array(NB * NB).fill(0).map((_, i) => 20 + i * 3);
+    const gridB = {
+      datasetId: "ds-b",
+      name: "Dataset B",
+      resolution: NB,
+      width: NB,
+      height: NB,
+      depths: depthsB,
+      minDepth: 20,
+      maxDepth: 20 + (NB * NB - 1) * 3,
+      minLon: -116,
+      maxLon: -113,
+      minLat: 44,
+      maxLat: 46,
+      centerLon: -114.5,
+      centerLat: 45.0,
+      waterType: "saltwater" as const,
+    };
+
+    useTerrainStore.setState({
+      visibleDatasets: [
+        { datasetId: gridA.datasetId, source: "preset", overviewGrid: gridA, activeGrid: null },
+        { datasetId: gridB.datasetId, source: "preset", overviewGrid: gridB, activeGrid: null },
+      ],
+      primaryDatasetId: gridA.datasetId,
+      overviewGrid: gridA,
+      activeGrid: null,
+    });
+
+    const spy = vi.spyOn(waypointHelpers, "appendWaypoint");
+
+    renderWithProviders(withQuery(React.createElement(OverviewMap)));
+
+    const toolsToggle = screen.getByTestId("overview-tools-toggle");
+    await act(async () => { fireEvent.click(toolsToggle); });
+
+    const waypointToggle = screen.getByTestId("overview-waypoint-mode-toggle");
+    await act(async () => { fireEvent.click(waypointToggle); });
+
+    const canvas = document.querySelector<HTMLCanvasElement>(
+      'canvas[data-testid="overview-map-canvas"]',
+    )!;
+    expect(canvas).not.toBeNull();
+
+    canvas.getBoundingClientRect = () =>
+      ({
+        left: 0, top: 0,
+        right: CANVAS_W, bottom: CANVAS_H,
+        width: CANVAS_W, height: CANVAS_H,
+        x: 0, y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    // Mirror the union-bbox initial transform that the component computes
+    // (two datasets → worldGridRef set → computeInitialTransform uses union grid).
+    const UNION_MIN_LON = -122;
+    const UNION_MAX_LON = -113;
+    const UNION_MIN_LAT = 44;
+    const UNION_MAX_LAT = 49;
+    const unionLonRange = UNION_MAX_LON - UNION_MIN_LON; // 9
+    const unionLatRange = UNION_MAX_LAT - UNION_MIN_LAT; // 5
+    const unionPxPerDeg = Math.min(
+      (CANVAS_W * 0.88) / unionLonRange,
+      (CANVAS_H * 0.88) / unionLatRange,
+    );
+    const unionTerrainW = unionPxPerDeg * unionLonRange;
+    const unionTerrainH = unionPxPerDeg * unionLatRange;
+    const initOffsetX = (CANVAS_W - unionTerrainW) / 2;
+    const initOffsetY = (CANVAS_H - unionTerrainH) / 2;
+
+    // Drag 5000 px to the left — far beyond the union clamp minimum.
+    // After clamping, offsetX must equal -(unionTerrainW * 0.9), NOT the
+    // narrower -(primaryTerrainW * 0.9) that gridA alone would produce.
+    const DRAG_DX = -5000;
+    await act(async () => {
+      fireEvent.mouseDown(canvas, { clientX: 400, clientY: 300 });
+      fireEvent.mouseMove(window, { clientX: 400 + DRAG_DX, clientY: 300 });
+      fireEvent.mouseUp(window,   { clientX: 400 + DRAG_DX, clientY: 300 });
+    });
+
+    // Reset hasDraggedRef so the next click is not swallowed by the drag guard.
+    await act(async () => {
+      fireEvent.mouseDown(canvas, { clientX: 0, clientY: 0 });
+    });
+
+    // Predict the clamped offset using union-grid bounds.
+    // Union clamp: offsetX ∈ [-(unionTerrainW * 0.9), CANVAS_W - unionTerrainW * 0.1]
+    // With DRAG_DX=-5000, raw offsetX ≪ clamp minimum → lands at the minimum.
+    const unionClampMinX = -(unionTerrainW * 0.9);
+    const clampedOffsetX = Math.max(
+      unionClampMinX,
+      Math.min(CANVAS_W - unionTerrainW * 0.1, initOffsetX + DRAG_DX),
+    );
+    // No vertical drag → offsetY unchanged.
+    const clampedOffsetY = initOffsetY;
+
+    // Click at a fixed canvas pixel and compute expected lon/lat from union transform.
+    // If gridA's smaller bbox had been used for clamping, clampedOffsetX would be
+    // ~540 px less negative, yielding a lon ~5° different — detectable at ±0.5°.
+    const CLICK_X = 200;
+    const CLICK_Y = 300;
+    const expectedLon =
+      UNION_MIN_LON +
+      ((CLICK_X - clampedOffsetX) / (unionPxPerDeg * unionLonRange)) * unionLonRange;
+    const expectedLat =
+      UNION_MIN_LAT +
+      (1 - (CLICK_Y - clampedOffsetY) / (unionPxPerDeg * unionLatRange)) * unionLatRange;
+
+    await act(async () => {
+      fireEvent.click(canvas, { clientX: CLICK_X, clientY: CLICK_Y });
+    });
+
+    expect(spy).toHaveBeenCalledOnce();
+    const [, lon, lat] = spy.mock.calls[0] as [unknown, number, number];
+    // 0 decimal places → ±0.5° tolerance; the wrong-grid error is ~5°.
+    expect(lon).toBeCloseTo(expectedLon, 0);
+    expect(lat).toBeCloseTo(expectedLat, 0);
+
+    spy.mockRestore();
+  });
+
+  /**
    * PAN scenario — verifies coordinate accuracy after the user drags (pans)
    * the overview map before dropping a waypoint.
    *
