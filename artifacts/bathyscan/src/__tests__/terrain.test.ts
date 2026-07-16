@@ -18,6 +18,8 @@ import {
   lonLatToWorldXZ,
   worldYToMetres,
   applyColormapToVertexColors,
+  getTerrainSurfaceY,
+  WORLD_SIZE,
   MAX_DEPTH_WORLD,
 } from "../lib/terrain";
 import type { TerrainData } from "@workspace/api-client-react";
@@ -228,8 +230,6 @@ describe("blendZoneWeights", () => {
 // ---------------------------------------------------------------------------
 // getTerrainSurfaceY
 // ---------------------------------------------------------------------------
-
-import { getTerrainSurfaceY, WORLD_SIZE, MAX_DEPTH_WORLD } from "../lib/terrain";
 
 function makeDepthGrid(
   depths: number[],
