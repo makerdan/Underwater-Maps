@@ -114,12 +114,12 @@ isValidation = true
 name = "test-e2e-palette"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "bash -c 'set -o pipefail; mkdir -p .local/tmp && npx playwright test tests/e2e/palette-cross-device-sync.spec.ts tests/e2e/onboarding-tour.spec.ts tests/e2e/settings-cross-device-sync.spec.ts tests/e2e/settings-save-buttons.spec.ts tests/e2e/zone-colour-server-sync.spec.ts tests/e2e/tooltips.spec.ts 2>&1 | tee .local/tmp/palette-e2e.log'"
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bash -c 'set -o pipefail; mkdir -p .local/tmp && npx playwright test tests/e2e/palette-cross-device-sync.spec.ts tests/e2e/onboarding-tour.spec.ts tests/e2e/settings-cross-device-sync.spec.ts tests/e2e/settings-save-buttons.spec.ts tests/e2e/zone-colour-server-sync.spec.ts tests/e2e/tooltips.spec.ts tests/e2e/adaptive-palette.spec.ts 2>&1 | tee .local/tmp/palette-e2e.log'"
 
 [agent]
 stack = "PNPM_WORKSPACE"

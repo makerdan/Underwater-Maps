@@ -49,6 +49,7 @@ import { useDepthProfileStore, buildProfile } from "./depthProfileStore";
 import { useSettingsStore } from "./settingsStore";
 import type { LastSession } from "./settingsStore";
 import { usePaletteStore } from "./paletteStore";
+import { usePaletteSuggestionStore } from "../hooks/usePaletteSuggestion";
 import { worldXZToLonLat } from "./terrain";
 import { callRegisteredResetCamera } from "./resetCameraRegistry";
 import { applyCameraSpawn } from "./cameraSpawn";
@@ -659,6 +660,32 @@ export interface BathyTestApi {
     heading: number;
     altitude: number;
   }) => void;
+
+  /**
+   * Adaptive palette suggestion helpers — let e2e specs drive the
+   * usePaletteSuggestionStore without needing real terrain to load.
+   *
+   * `setPaletteSuggestion` injects a suggestion (theme + bandBoundaries) for a
+   * given datasetId so PaletteSuggestionBanner renders it immediately.
+   * `clearPaletteSuggestion` removes the active suggestion (same as the hook
+   * calling clear() after auto-apply).
+   * `isPaletteSuggestionDismissed` queries whether a datasetId has been
+   * dismissed this session — used to assert the dismiss-stays-hidden invariant.
+   * `setColormapUserSet` / `getColormapUserSet` expose the colormapUserSet flag
+   * so tests can toggle the auto-apply gate without going through the Settings UI.
+   * `setColormapThemeByUser` calls the same action used by the Settings UI
+   * (sets both colormapTheme and colormapUserSet=true) so the no-overwrite
+   * scenario can be set up without navigating to the settings page.
+   */
+  setPaletteSuggestion: (
+    suggestion: { theme: string; bandBoundaries: number[] },
+    datasetId: string,
+  ) => void;
+  clearPaletteSuggestion: () => void;
+  isPaletteSuggestionDismissed: (datasetId: string) => boolean;
+  setColormapUserSet: (v: boolean) => void;
+  getColormapUserSet: () => boolean;
+  setColormapThemeByUser: (theme: string) => void;
 }
 
 declare global {
@@ -861,6 +888,20 @@ export function installTestHelpers(): void {
         ?.isInvalidated ?? false),
     getColormapTheme: () => useSettingsStore.getState().colormapTheme,
     setBandColor: (index, hex) => usePaletteStore.getState().setBandColor(index, hex),
+    setPaletteSuggestion: (suggestion, datasetId) =>
+      usePaletteSuggestionStore.getState().setSuggestion(
+        { theme: suggestion.theme as import("./settingsStore").ColormapTheme, bandBoundaries: suggestion.bandBoundaries },
+        datasetId,
+      ),
+    clearPaletteSuggestion: () => usePaletteSuggestionStore.getState().clear(),
+    isPaletteSuggestionDismissed: (datasetId) =>
+      usePaletteSuggestionStore.getState().isDismissed(datasetId),
+    setColormapUserSet: (v) => useSettingsStore.getState().setColormapUserSet(v),
+    getColormapUserSet: () => useSettingsStore.getState().colormapUserSet,
+    setColormapThemeByUser: (theme) =>
+      useSettingsStore.getState().setColormapThemeByUser(
+        theme as import("./settingsStore").ColormapTheme,
+      ),
     waitForServerSettingsSync: () => {
       return new Promise<void>((resolve, reject) => {
         // Fast path: if nothing is pending/in-flight at call time the server
