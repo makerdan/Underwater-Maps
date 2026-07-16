@@ -30,6 +30,7 @@ import { Minimap } from "@/components/Minimap";
 import { ControlsLegend } from "@/components/ControlsLegend";
 import { AppHeader } from "@/components/AppHeader";
 import { TidePanel } from "@/components/TidePanel";
+import { useTidalSchedule } from "@/hooks/useTidalSchedule";
 import { CurrentsPanel } from "@/components/CurrentsPanel";
 import { useCurrentsStore } from "@/lib/currentsStore";
 import { ThrottlePanel } from "@/components/ThrottlePanel";
@@ -503,31 +504,58 @@ function Main() {
   // ── Timeline range auto-population ─────────────────────────────────────────
   // Primary: fire whenever the tidal/currents data-load event resolves —
   // i.e. when effectiveTidalData transitions to an `available: true` result.
-  // TidalDataResult does not expose explicit forecast start/end timestamps, so
-  // we derive the window as "now ± 12 h" (a single NOAA tidal forecast period).
-  // When the data is unavailable we also refresh the range so the bar shows a
-  // sensible current window regardless of overlay state.
+  // We prefer the real forecast extent from useTidalSchedule (first/last event
+  // timestamps) when events are available; falls back to now ± 12 h otherwise.
   // Secondary fallback: fire when terrain loads and no tidal data is available
   // yet (e.g. tidal overlay is disabled), so the bar is ready as soon as an
   // overlay is enabled.
   const setTimelineRange = useTimelineStore((s) => s.setRange);
 
+  // Fetch the 7-day tidal schedule at the App level so the timeline range can
+  // use real event timestamps rather than a hardcoded ±12 h window.
+  const { schedule: tidalScheduleForRange } = useTidalSchedule(
+    centerLat,
+    centerLon,
+    7,
+  );
+
   const prevTidalAvailableRef = useRef<boolean | null>(null);
+  // Track whether we've already applied real schedule events so that when the
+  // schedule loads after `available` is already true we still update the range.
+  const prevScheduleHadEventsRef = useRef<boolean>(false);
   useEffect(() => {
     const available =
       effectiveTidalData && "available" in effectiveTidalData
         ? effectiveTidalData.available
         : null;
-    // Only fire on real availability changes, not every poll cycle.
-    if (available === prevTidalAvailableRef.current) return;
+    const events = tidalScheduleForRange?.events;
+    const hasEvents = Boolean(events && events.length > 0);
+
+    // Skip if neither availability nor schedule-event presence has changed.
+    const availabilityUnchanged = available === prevTidalAvailableRef.current;
+    const scheduleUnchanged = hasEvents === prevScheduleHadEventsRef.current;
+    if (availabilityUnchanged && scheduleUnchanged) return;
+
     prevTidalAvailableRef.current = available;
+    prevScheduleHadEventsRef.current = hasEvents;
     if (available === null) return;
-    const now = new Date();
-    setTimelineRange({
-      start: new Date(now.getTime() - 12 * 3_600_000),
-      end: new Date(now.getTime() + 12 * 3_600_000),
-    });
-  }, [effectiveTidalData, setTimelineRange]);
+
+    // Use real forecast window when schedule events are present.
+    const firstEvent = events?.[0];
+    const lastEvent = events?.[events.length - 1];
+    if (firstEvent && lastEvent) {
+      setTimelineRange({
+        start: new Date(firstEvent.time),
+        end: new Date(lastEvent.time),
+      });
+    } else {
+      const now = new Date();
+      setTimelineRange({
+        start: new Date(now.getTime() - 12 * 3_600_000),
+        end: new Date(now.getTime() + 12 * 3_600_000),
+      });
+    }
+  }, [effectiveTidalData, tidalScheduleForRange, setTimelineRange]);
 
   // Fallback: set range when a new terrain dataset loads and the above effect
   // hasn't fired yet (tidal overlay off, no data fetched).
