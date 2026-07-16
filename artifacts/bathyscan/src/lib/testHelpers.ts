@@ -629,6 +629,36 @@ export interface BathyTestApi {
   setVisibleDatasets: (
     items: Array<{ datasetId: string; name: string; source: "preset" | "user" }>,
   ) => void;
+
+  // ── What's Here card ────────────────────────────────────────────────────
+  /** Open or close the "What's Here?" summary card. */
+  setWhatsHereOpen: (v: boolean) => void;
+  /** Returns true when the "What's Here?" card is currently visible. */
+  isWhatsHereOpen: () => boolean;
+  /** Pin or unpin the "What's Here?" card (prevents auto-close and camera-move close). */
+  setWhatsHerePinned: (v: boolean) => void;
+  /** Returns true when the "What's Here?" card is currently pinned. */
+  isWhatsHerePinned: () => boolean;
+  /**
+   * Enable or disable the substrate colour overlay (same store action the
+   * Substrate toggle in OverlaysToolsPanel calls). Used by e2e tests to
+   * verify that the substrate row disappears from the What's Here card
+   * when the overlay is toggled OFF mid-session.
+   */
+  setSubstrateColorMode: (v: boolean) => void;
+  /**
+   * Advance the camera geo position in the cameraStore.  Mirrors
+   * setCameraGeo() — the same action the real fly-controls write each frame.
+   * Used by e2e tests to simulate camera movement (e.g. to confirm a pinned
+   * What's Here card stays open after the camera moves).
+   */
+  moveCameraGeo: (geo: {
+    lon: number;
+    lat: number;
+    depth: number;
+    heading: number;
+    altitude: number;
+  }) => void;
 }
 
 declare global {
@@ -1276,5 +1306,20 @@ export function installTestHelpers(): void {
         })),
       });
     },
+
+    // ── What's Here card ──────────────────────────────────────────────────
+    setWhatsHereOpen: (v) => useUiStore.getState().setWhatsHereOpen(v),
+    isWhatsHereOpen: () => useUiStore.getState().whatsHereOpen,
+    setWhatsHerePinned: (v) => useUiStore.getState().setWhatsHerePinned(v),
+    isWhatsHerePinned: () => useUiStore.getState().whatsHerePinned,
+    setSubstrateColorMode: (v) => useUiStore.getState().setSubstrateColorMode(v),
+    moveCameraGeo: (geo) =>
+      useCameraStore.getState().setCameraGeo({
+        lon: geo.lon,
+        lat: geo.lat,
+        depth: geo.depth,
+        heading: geo.heading,
+        altitude: geo.altitude,
+      }),
   };
 }
