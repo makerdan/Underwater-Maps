@@ -26,6 +26,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppState } from "@/lib/context";
 import { useDriftStore, TROLL_MAX_KNOTS } from "@/lib/driftStore";
+import { useTimelineStore } from "@/lib/timelineStore";
 import { computeDrift } from "@/lib/computeDrift";
 import { BOAT_PROFILES } from "@/lib/boatProfiles";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
@@ -177,6 +178,8 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
   const setEstimatedConditions = useDriftStore((s) => s.setEstimatedConditions);
   const estimatedConditions = useDriftStore((s) => s.estimatedConditions);
   const driftHour = useDriftStore((s) => s.driftHour);
+  const driftPlannerActive = useDriftStore((s) => s.driftPlannerActive);
+  const timelineCurrentTime = useTimelineStore((s) => s.currentTime);
   const driftStartLat = useDriftStore((s) => s.driftStartLat);
   const driftStartLon = useDriftStore((s) => s.driftStartLon);
   const setDriftStart = useDriftStore((s) => s.setDriftStart);
@@ -695,8 +698,13 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
 
   // Shared surface-conditions hook — same query key as the always-on overlays,
   // so React Query dedupes and Drift Planner stays in sync with WIND/TIDE/CURRENT.
+  // When the drift planner is active its own driftHour drives the display;
+  // otherwise the timeline scrubber's current hour is used.
+  const surfaceConditionsHourOverride = driftPlannerActive
+    ? undefined
+    : timelineCurrentTime.getUTCHours();
   const { data, hours: sharedHours, loading: isLoading, isFetching, error: isError, estimated, refetch, centerLat: cLat, centerLon: cLon } =
-    useSurfaceConditions(!!terrain);
+    useSurfaceConditions(!!terrain, surfaceConditionsHourOverride);
 
   // Single source of truth for the auto-drift recompute. Every input that
   // feeds computeDrift is captured in the dependency list so moving the

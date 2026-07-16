@@ -9,6 +9,8 @@ import React, { useMemo } from "react";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
+import { useTimelineStore } from "@/lib/timelineStore";
+import { useDriftStore } from "@/lib/driftStore";
 import { MAX_DEPTH_WORLD, WORLD_SIZE } from "@/lib/terrain";
 import type { TerrainData } from "@workspace/api-client-react";
 import { DirectionArrowField } from "@/components/DirectionArrowField";
@@ -75,7 +77,10 @@ export const WindOverlay: React.FC = () => {
   const { terrain } = useAppState();
   const active = useUiStore((s) => s.windOverlayActive);
   const style = useSettingsStore((s) => s.windOverlayStyle);
-  const { snapshot, estimated, fallback } = useSurfaceConditions(active);
+  const timelineCurrentTime = useTimelineStore((s) => s.currentTime);
+  const driftPlannerActive = useDriftStore((s) => s.driftPlannerActive);
+  const hourOverride = driftPlannerActive ? undefined : timelineCurrentTime.getUTCHours();
+  const { snapshot, estimated, fallback } = useSurfaceConditions(active, hourOverride);
 
   if (!active || !terrain) return null;
 
@@ -129,7 +134,10 @@ export const TideOverlay: React.FC = () => {
   const { terrain } = useAppState();
   const active = useUiStore((s) => s.tideOverlayActive);
   const style = useSettingsStore((s) => s.tideOverlayStyle);
-  const { snapshot, estimated, fallback } = useSurfaceConditions(active);
+  const timelineCurrentTime = useTimelineStore((s) => s.currentTime);
+  const driftPlannerActive = useDriftStore((s) => s.driftPlannerActive);
+  const hourOverride = driftPlannerActive ? undefined : timelineCurrentTime.getUTCHours();
+  const { snapshot, estimated, fallback } = useSurfaceConditions(active, hourOverride);
 
   // Constrain tide arrows to the shallow/shoreline band — tides drive flow
   // strongest where the bottom comes up, so this is where users want them.
@@ -190,7 +198,10 @@ export const CurrentOverlay: React.FC = () => {
   const active = useUiStore((s) => s.currentOverlayActive);
   const layers = useUiStore((s) => s.currentDepthLayers);
   const style = useSettingsStore((s) => s.currentOverlayStyle);
-  const { snapshot, estimated, fallback } = useSurfaceConditions(active);
+  const timelineCurrentTime = useTimelineStore((s) => s.currentTime);
+  const driftPlannerActive = useDriftStore((s) => s.driftPlannerActive);
+  const hourOverride = driftPlannerActive ? undefined : timelineCurrentTime.getUTCHours();
+  const { snapshot, estimated, fallback } = useSurfaceConditions(active, hourOverride);
 
   if (!active || !terrain || layers.length === 0) return null;
 
