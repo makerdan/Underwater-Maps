@@ -403,3 +403,131 @@ describe("OverviewMap — LOD gate suppresses renderEfhOverlay below POLYGON_LOD
     spy.mockRestore();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 3. EFH legend — renderEfhLegend called/suppressed alongside renderEfhOverlay
+//
+// OverviewMap.tsx rAF loop (~line 1175):
+//   if (showEfhRef.current && efhFeaturesRef.current.length > 0
+//       && shouldDrawOverlayAtScale(t.scale)) {
+//     renderEfhOverlay(...);
+//     efhLegendLayoutRef.current = renderEfhLegend(ctx, efhFeaturesRef.current, cW, cH, ...);
+//   } else {
+//     efhLegendLayoutRef.current = null;   ← legend skipped
+//   }
+//
+// renderEfhLegend lives in the same guard branch as renderEfhOverlay:
+//   • NOT called at scale < POLYGON_LOD_MIN_ZOOM (default zoom = 1.0)
+//   • NOT called when efhOverlayEnabled is false
+//   • Called with the full efhFeaturesRef array once scale ≥ POLYGON_LOD_MIN_ZOOM
+// ---------------------------------------------------------------------------
+
+describe("OverviewMap — renderEfhLegend called/suppressed by LOD gate and overlay toggle", () => {
+  beforeEach(() => {
+    mockConfig.efhData = undefined;
+    setupStores();
+  });
+
+  it(`renderEfhLegend NOT called at default zoom (scale=1.0 < ${POLYGON_LOD_MIN_ZOOM})`, async () => {
+    mockConfig.efhData = { features: [makeEfhFeature()] };
+    useUiStore.setState({ ...useUiStore.getState(), efhOverlayEnabled: true });
+
+    const spy = vi.spyOn(overviewRenderer, "renderEfhLegend");
+
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    // Camera-arrow appearing signals at least one complete rAF draw at scale=1.0.
+    await waitForCameraArrow();
+
+    // shouldDrawOverlayAtScale(1.0) → false → legend branch skipped entirely.
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it(`renderEfhLegend called with expected features once scale exceeds ${POLYGON_LOD_MIN_ZOOM}`, async () => {
+    const efhFeature = makeEfhFeature();
+    mockConfig.efhData = { features: [efhFeature] };
+    useUiStore.setState({ ...useUiStore.getState(), efhOverlayEnabled: true });
+
+    const spy = vi.spyOn(overviewRenderer, "renderEfhLegend");
+
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    const canvas = document.querySelector<HTMLCanvasElement>(
+      'canvas[data-testid="overview-map-canvas"]',
+    )!;
+    expect(canvas).not.toBeNull();
+
+    canvas.getBoundingClientRect = () =>
+      ({
+        left: 0, top: 0,
+        right: CANVAS_W, bottom: CANVAS_H,
+        width: CANVAS_W, height: CANVAS_H,
+        x: 0, y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    // 4 zoom-in ticks: scale = 1.0 × 1.15⁴ ≈ 1.75 > POLYGON_LOD_MIN_ZOOM (1.5)
+    await act(async () => {
+      for (let i = 0; i < 4; i++) {
+        fireEvent.wheel(canvas, { deltaY: -100, clientX: CANVAS_W / 2, clientY: CANVAS_H / 2 });
+      }
+    });
+
+    // Wait until the legend spy fires (same rAF frame as renderEfhOverlay).
+    await waitFor(
+      () => { expect(spy).toHaveBeenCalled(); },
+      { timeout: 4000 },
+    );
+
+    // Verify the second argument — the full feature array — contains our species.
+    const [, featuresArg] = spy.mock.calls[0]!;
+    expect(Array.isArray(featuresArg)).toBe(true);
+    const typedFeatures = featuresArg as Array<{ properties: { species: string } }>;
+    expect(typedFeatures.some((f) => f.properties.species === efhFeature.properties.species)).toBe(true);
+
+    spy.mockRestore();
+  });
+
+  it("renderEfhLegend NOT called when efhOverlayEnabled is false, even at high zoom", async () => {
+    mockConfig.efhData = { features: [makeEfhFeature()] };
+    // efhOverlayEnabled stays false (default from setupStores)
+
+    const spy = vi.spyOn(overviewRenderer, "renderEfhLegend");
+
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    const canvas = document.querySelector<HTMLCanvasElement>(
+      'canvas[data-testid="overview-map-canvas"]',
+    )!;
+    canvas.getBoundingClientRect = () =>
+      ({
+        left: 0, top: 0,
+        right: CANVAS_W, bottom: CANVAS_H,
+        width: CANVAS_W, height: CANVAS_H,
+        x: 0, y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    // Zoom well past the LOD threshold
+    await act(async () => {
+      for (let i = 0; i < 4; i++) {
+        fireEvent.wheel(canvas, { deltaY: -100, clientX: CANVAS_W / 2, clientY: CANVAS_H / 2 });
+      }
+    });
+
+    // Let at least one more rAF draw settle at elevated scale.
+    await waitForCameraArrow();
+    await act(async () => { await new Promise((r) => setTimeout(r, 200)); });
+
+    // showEfhRef.current is false → the guard fails → legend never invoked.
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+});
