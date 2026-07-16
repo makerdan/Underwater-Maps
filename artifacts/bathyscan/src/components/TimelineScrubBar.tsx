@@ -84,6 +84,15 @@ export const TimelineScrubBar: React.FC = () => {
   const timeRangeRef = useRef(timeRange);
   timeRangeRef.current = timeRange;
 
+  // Stop playback when the scrubber becomes hidden (overlay deactivated mid-play).
+  // This prevents the interval from silently advancing time while no overlay is visible.
+  useEffect(() => {
+    if (!visible && isPlaying) {
+      setPlaying(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
   useEffect(() => {
     if (!isPlaying) return;
     const id = setInterval(() => {

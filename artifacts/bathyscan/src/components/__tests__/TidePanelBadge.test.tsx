@@ -54,10 +54,20 @@ vi.mock("@/lib/panelCollapseStore", () => ({
     selector({ collapsed: { tide: false }, toggle: vi.fn() }),
 }));
 
-vi.mock("@/lib/settingsStore", () => ({
-  useSettingsStore: (selector: (s: { units: string; defaultTidalDepthLayer: string }) => unknown) =>
-    selector({ units: "metric", defaultTidalDepthLayer: "surface" }),
-}));
+vi.mock("@/lib/settingsStore", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/settingsStore")>();
+  const storeState = { ...actual.DEFAULT_SETTINGS, units: "metric" as const, defaultTidalDepthLayer: "surface" as const };
+  const useSettingsStore = Object.assign(
+    (sel: (s: typeof storeState) => unknown) => sel(storeState),
+    {
+      getState: () => storeState,
+      setState: (patch: Partial<typeof storeState>) => Object.assign(storeState, patch),
+      subscribe: () => () => {},
+      persist: { hasHydrated: () => false, onFinishHydration: () => () => {} },
+    },
+  );
+  return { ...actual, useSettingsStore };
+});
 
 vi.mock("@/hooks/useTidalSchedule", () => ({
   useTidalSchedule: () => ({ schedule: null }),

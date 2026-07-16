@@ -77,8 +77,18 @@ export const useTimelineStore = create<TimelineStore>((set) => {
     isPlaying: false,
 
     setTime: (t) => {
-      set({ currentTime: t });
-      useSettingsStore.setState({ timelineCurrentTime: t.toISOString() });
+      let clamped: Date | undefined;
+      set((state) => {
+        clamped = new Date(
+          Math.min(
+            Math.max(t.getTime(), state.timeRange.start.getTime()),
+            state.timeRange.end.getTime(),
+          ),
+        );
+        return { currentTime: clamped };
+      });
+      // Persist the clamped value so stored time is always within the range
+      useSettingsStore.setState({ timelineCurrentTime: (clamped ?? t).toISOString() });
     },
 
     setRange: (range) => {
