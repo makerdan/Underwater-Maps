@@ -52,8 +52,10 @@ import {
   renderSavedTrails,
   drawSelectionRect,
   buildIntertidalHotspotDescriptors,
-  POLYGON_LOD_MIN_ZOOM,
+  shouldDrawOverlayAtScale,
 } from "@/lib/overviewRenderer";
+import { appendWaypoint, planFlyThroughStops } from "@/lib/waypointHelpers";
+import type { Waypoint } from "@/lib/waypointHelpers";
 import type { OverviewTransform, CanvasSavedTrail, EfhLegendLayout, ContourSegment, WeatherStationPin, RawsStationPin, IntertidalHotspotPin } from "@/lib/overviewRenderer";
 import { MARKER_COLOR } from "@/lib/markerConstants";
 import { useWeatherStations } from "@/hooks/useWeatherStations";
@@ -106,12 +108,6 @@ interface TooltipState {
   depth: number;
 }
 
-interface Waypoint {
-  id: string;
-  lon: number;
-  lat: number;
-  label: string;
-}
 
 export const OverviewMap: React.FC = () => {
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
@@ -331,14 +327,15 @@ export const OverviewMap: React.FC = () => {
   // Fly-through: sequentially drop-in to each waypoint with a dwell interval.
   const flyThroughWaypoints = useCallback(() => {
     const wps = waypointsRef.current;
-    if (wps.length < 2 || !overviewGrid) return;
+    if (!overviewGrid) return;
+    const stops = planFlyThroughStops(wps, overviewGrid);
+    if (stops.length === 0) return;
     const DWELL_MS = 4000;
     cancelFlyThrough();
     useUiStore.getState().setOverviewOpen(false);
-    flyThroughTimeoutsRef.current = wps.map((wp, i) =>
+    flyThroughTimeoutsRef.current = stops.map((stop, i) =>
       setTimeout(() => {
-        const { x: worldX, z: worldZ } = lonLatToWorldXZ(wp.lon, wp.lat, overviewGrid);
-        useUiStore.getState().setPendingDropIn({ worldX, worldZ });
+        useUiStore.getState().setPendingDropIn(stop);
       }, i * DWELL_MS)
     );
   }, [overviewGrid, cancelFlyThrough]);
@@ -1165,7 +1162,7 @@ export const OverviewMap: React.FC = () => {
       // EFH overlay (dashed species polygon outlines + legend)
       // Hidden below POLYGON_LOD_MIN_ZOOM: polygons are too small to read and
       // add render noise without value when zoomed far out.
-      if (showEfhRef.current && efhFeaturesRef.current.length > 0 && t.scale >= POLYGON_LOD_MIN_ZOOM) {
+      if (showEfhRef.current && efhFeaturesRef.current.length > 0 && shouldDrawOverlayAtScale(t.scale)) {
         const visibleEfhFeatures = getVisibleEfhFeatures(
           efhFeaturesRef.current,
           { minLon: worldGrid.minLon, maxLon: worldGrid.maxLon, minLat: worldGrid.minLat, maxLat: worldGrid.maxLat },
@@ -1181,7 +1178,7 @@ export const OverviewMap: React.FC = () => {
       // 3D SubstrateLayer so anglers can see the gravel / sand / mud zones
       // when planning from the top-down view.
       // Hidden below POLYGON_LOD_MIN_ZOOM: same rationale as EFH overlay.
-      if (substrateColorModeRef.current && substrateFeaturesRef.current.length > 0 && t.scale >= POLYGON_LOD_MIN_ZOOM) {
+      if (substrateColorModeRef.current && substrateFeaturesRef.current.length > 0 && shouldDrawOverlayAtScale(t.scale)) {
         renderSubstrateOverlay(
           ctx,
           substrateFeaturesRef.current,
@@ -1476,13 +1473,7 @@ export const OverviewMap: React.FC = () => {
         const my = e.clientY - rect.top;
         const coordGrid = worldGridRef.current ?? overviewGrid;
         const { lon, lat } = canvasToLonLat(mx, my, coordGrid, t);
-        const newWp: Waypoint = {
-          id: Math.random().toString(36).slice(2),
-          lon,
-          lat,
-          label: String(waypointsRef.current.length + 1),
-        };
-        setWaypoints((prev) => [...prev, newWp]);
+        setWaypoints((prev) => appendWaypoint(prev, lon, lat));
         setShowWaypointPanel(true);
         return;
       }

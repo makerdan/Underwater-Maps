@@ -422,6 +422,18 @@ export function renderCameraArrow(
  */
 export const POLYGON_LOD_MIN_ZOOM = 1.5;
 
+/**
+ * Returns true when the current map scale is high enough to render polygon
+ * overlays (EFH, Substrate). At lower zoom levels the polygons are too small
+ * to read, so callers should skip the draw call entirely.
+ *
+ * Used by OverviewMap.tsx before every `renderEfhOverlay` /
+ * `renderSubstrateOverlay` call so the gate is in one place and testable.
+ */
+export function shouldDrawOverlayAtScale(scale: number): boolean {
+  return scale >= POLYGON_LOD_MIN_ZOOM;
+}
+
 // ---------------------------------------------------------------------------
 // Habitat overlay
 // ---------------------------------------------------------------------------
