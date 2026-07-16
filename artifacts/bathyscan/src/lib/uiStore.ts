@@ -582,6 +582,21 @@ export const useUiStore = create<UiStore>((set, get) => {
   };
 });
 
+/**
+ * Returns true when the global timeline scrubber bar is currently visible —
+ * i.e. at least one time-sensitive overlay (tide, currents, wind, or weather
+ * stations) is active. Each time-sensitive panel uses this to decide whether
+ * to defer to the global time source or show its own local time control.
+ */
+export function useTimelineVisible(): boolean {
+  const tide = useUiStore((s) => s.tideOverlayActive);
+  const currents = useUiStore((s) => s.currentOverlayActive);
+  const wind = useUiStore((s) => s.windOverlayActive);
+  const weather = useUiStore((s) => s.weatherStationsActive);
+  const raws = useUiStore((s) => s.rawsOverlayActive);
+  return tide || currents || wind || weather || raws;
+}
+
 // ── Post-rehydration sync from settingsStore ──────────────────────────────────
 // settingsStore uses Zustand's `persist` middleware with localStorage (sync).
 // In practice, hydration completes before this module finishes evaluating, but

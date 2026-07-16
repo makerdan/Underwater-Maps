@@ -81,6 +81,7 @@ import type {
   GetWaterTemperatureParams,
   GetWeatherPack200,
   GetWeatherPackParams,
+  GetWeatherStationObsParams,
   GetWeatherStationsParams,
   GithubWorkflowRun,
   GpsTrail,
@@ -140,6 +141,7 @@ import type {
   UserDatasetMeta,
   UserSettings,
   WaterTemperature,
+  WeatherStationObsResponse,
   WeatherStationsResponse
 } from './api.schemas';
 
@@ -4725,6 +4727,96 @@ export function useGetWeatherStations<TData = Awaited<ReturnType<typeof getWeath
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetWeatherStationsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetWeatherStationObsUrl = (params: GetWeatherStationObsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/weather-station-obs?${stringifiedParams}` : `/api/weather-station-obs`
+}
+
+/**
+ * Returns the archived NOAA ASOS/AWOS observation nearest to the requested
+`time` for a single station.  Queries the NOAA observation time-series
+endpoint and picks the feature with the smallest |obsTime − targetTime|
+within the available window.  Returns available=false when the station
+has no archived observations or the upstream API is unreachable.
+
+ * @summary Fetch NOAA weather station observation nearest to a target time
+ */
+export const getWeatherStationObs = async (params: GetWeatherStationObsParams, options?: RequestInit): Promise<WeatherStationObsResponse> => {
+
+  return customFetch<WeatherStationObsResponse>(getGetWeatherStationObsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetWeatherStationObsQueryKey = (params?: GetWeatherStationObsParams,) => {
+    return [
+    `/api/weather-station-obs`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetWeatherStationObsQueryOptions = <TData = Awaited<ReturnType<typeof getWeatherStationObs>>, TError = ErrorType<ApiError>>(params: GetWeatherStationObsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWeatherStationObs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetWeatherStationObsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWeatherStationObs>>> = ({ signal }) => getWeatherStationObs(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWeatherStationObs>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetWeatherStationObsQueryResult = NonNullable<Awaited<ReturnType<typeof getWeatherStationObs>>>
+export type GetWeatherStationObsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Fetch NOAA weather station observation nearest to a target time
+ */
+
+export function useGetWeatherStationObs<TData = Awaited<ReturnType<typeof getWeatherStationObs>>, TError = ErrorType<ApiError>>(
+ params: GetWeatherStationObsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWeatherStationObs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetWeatherStationObsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

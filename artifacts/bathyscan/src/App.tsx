@@ -54,7 +54,7 @@ import { TrailRecorder } from "@/components/TrailRecorder";
 import { VirtualJoystick } from "@/components/VirtualJoystick";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useTidalData } from "@/hooks/useTidalData";
-import { useUiStore } from "@/lib/uiStore";
+import { useUiStore, useTimelineVisible } from "@/lib/uiStore";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useHighlightStore } from "@/lib/highlightStore";
 import { useGpsStore } from "@/lib/gpsStore";
@@ -326,6 +326,10 @@ function Main() {
 
   const scrubDatetime = useUiStore((s) => s.scrubDatetime);
   const setScrubDatetime = useUiStore((s) => s.setScrubDatetime);
+  const timelineVisible = useTimelineVisible();
+  const timelineCurrentTime = useTimelineStore((s) => s.currentTime);
+  /** When a time-sensitive overlay is active the timeline scrubber is the source of truth. */
+  const effectiveScrubDatetime = timelineVisible ? timelineCurrentTime : scrubDatetime;
   const [showResumeHint, setShowResumeHint] = useState(false);
   const [showIosInstallHint, setShowIosInstallHint] = useState(false);
   const [queryOpen, setQueryOpen] = useState(false);
@@ -409,24 +413,24 @@ function Main() {
   const { data: tidalData, loading: tidalLoading, retry: retryTidal } = useTidalData(
     tidalOverlay ? centerLat : null,
     tidalOverlay ? centerLon : null,
-    tidalOverlay ? scrubDatetime : null,
+    tidalOverlay ? effectiveScrubDatetime : null,
   );
 
   // Multi-primary: tidal data for secondary visible datasets.
   const { data: tidalData1 } = useTidalData(
     tidalOverlay ? center1Lat : null,
     tidalOverlay ? center1Lon : null,
-    tidalOverlay ? scrubDatetime : null,
+    tidalOverlay ? effectiveScrubDatetime : null,
   );
   const { data: tidalData2 } = useTidalData(
     tidalOverlay ? center2Lat : null,
     tidalOverlay ? center2Lon : null,
-    tidalOverlay ? scrubDatetime : null,
+    tidalOverlay ? effectiveScrubDatetime : null,
   );
   const { data: tidalData3 } = useTidalData(
     tidalOverlay ? center3Lat : null,
     tidalOverlay ? center3Lon : null,
-    tidalOverlay ? scrubDatetime : null,
+    tidalOverlay ? effectiveScrubDatetime : null,
   );
 
   // E2E test bridge: when non-null, overrides live tidal fetch data so tests
@@ -1233,7 +1237,7 @@ function Main() {
                         loading={tidalLoading}
                         depthLayer={depthLayer}
                         onDepthLayerChange={setDepthLayer}
-                        scrubDatetime={scrubDatetime}
+                        scrubDatetime={effectiveScrubDatetime}
                         onScrubChange={setScrubDatetime}
                         lat={centerLat}
                         lon={centerLon}

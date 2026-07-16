@@ -275,6 +275,80 @@ async function fetchStationObs(stationId: string): Promise<Omit<WeatherStation, 
 }
 
 // ---------------------------------------------------------------------------
+// Historical observation: nearest-to-time fetch
+// ---------------------------------------------------------------------------
+
+interface RawObsCollection {
+  features?: Array<{
+    properties?: RawObs["properties"] & { timestamp?: string | null };
+  }>;
+}
+
+/**
+ * Fetch the NOAA observation nearest to `targetTime` for a single station.
+ *
+ * Uses the `/observations?start=&end=` time-series endpoint to retrieve all
+ * observations in a ±2-hour window, then selects the one whose timestamp is
+ * closest to `targetTime`.  Returns null when NOAA returns no observations for
+ * the window (e.g. the station didn't exist at that time, or NOAA has no
+ * archived data for the requested period).
+ */
+export async function fetchStationObsAt(
+  stationId: string,
+  targetTime: Date,
+): Promise<Omit<WeatherStation, "id" | "name" | "lat" | "lon"> | null> {
+  const windowStart = new Date(targetTime.getTime() - 2 * 60 * 60_000).toISOString();
+  const windowEnd   = new Date(Math.min(targetTime.getTime() + 2 * 60 * 60_000, Date.now())).toISOString();
+
+  try {
+    const url =
+      `${NOAA_API_BASE}/stations/${encodeURIComponent(stationId)}/observations` +
+      `?start=${encodeURIComponent(windowStart)}&end=${encodeURIComponent(windowEnd)}`;
+    const res = await fetchWithTimeout(url, OBS_TIMEOUT_MS);
+    if (!res.ok) return null;
+
+    const json = (await res.json()) as RawObsCollection;
+    const features = json.features ?? [];
+    if (features.length === 0) return null;
+
+    const targetMs = targetTime.getTime();
+
+    // Pick the feature whose timestamp is closest to targetTime
+    let bestFeature = features[0]!;
+    let bestDiff = Infinity;
+    for (const f of features) {
+      const ts = f.properties?.timestamp;
+      if (!ts) continue;
+      const diff = Math.abs(new Date(ts).getTime() - targetMs);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestFeature = f;
+      }
+    }
+
+    const p = bestFeature.properties;
+    if (!p) return null;
+
+    return {
+      windSpeedKnots: convert(p.windSpeed?.value, p.windSpeed?.unitCode, "knots"),
+      windDirDeg:
+        p.windDirection?.value != null && isFinite(p.windDirection.value)
+          ? Math.round(((p.windDirection.value % 360) + 360) % 360)
+          : null,
+      visibilityMiles: convert(p.visibility?.value, p.visibility?.unitCode, "miles"),
+      ceilingFt: pickCeiling(p.cloudLayers),
+      tempC:
+        p.temperature?.value != null && isFinite(p.temperature.value)
+          ? Math.round(p.temperature.value * 10) / 10
+          : null,
+      observedAt: p.timestamp ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // DB helpers
 // ---------------------------------------------------------------------------
 

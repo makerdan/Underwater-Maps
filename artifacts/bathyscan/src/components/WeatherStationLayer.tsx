@@ -10,6 +10,7 @@
 import React from "react";
 import type { WeatherStation } from "@workspace/api-client-react";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { useWeatherStationObs } from "@/hooks/useWeatherStationObs";
 
 /** Cardinal direction label from degrees (16-point compass). */
 function cardinalDir(deg: number): string {
@@ -72,12 +73,26 @@ interface Props {
   faaWeatherCamsUrl: string | null;
   /** True when the data is served from the DB fallback cache due to a NOAA outage. */
   stale?: boolean;
+  /** When the global timeline is active, the selected timeline moment. */
+  timelineTime?: Date;
+  /** True when the global timeline overlay is driving the selected time. */
+  timelineActive?: boolean;
   onClose: () => void;
 }
 
 const MONO: React.CSSProperties = {
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
 };
+
+/** Format a Date to "Mon DD  HH:MM UTC" for the timeline row. */
+function fmtTimelineTime(d: Date): string {
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const mon = months[d.getUTCMonth()];
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${mon} ${day}  ${hh}:${mm} UTC`;
+}
 
 export const WeatherStationPopover: React.FC<Props> = ({
   station,
@@ -86,13 +101,27 @@ export const WeatherStationPopover: React.FC<Props> = ({
   containerWidth,
   faaWeatherCamsUrl,
   stale = false,
+  timelineTime,
+  timelineActive = false,
   onClose,
 }) => {
   const units = useSettingsStore((s) => s.units);
   const metric = units === "metric";
 
+  // When the global timeline is active, fetch the NOAA observation nearest
+  // to the scrubbed time. Falls back to `station` (live snapshot) while
+  // loading or when no archived data exists for the requested window.
+  const { observation: timelineObs, isLoading: timelineLoading } = useWeatherStationObs(
+    station.id,
+    timelineActive ? (timelineTime ?? null) : null,
+    timelineActive && timelineTime != null,
+  );
+
+  // Observation values to display: prefer the timeline-targeted obs when ready.
+  const displayObs = timelineActive && timelineObs ? timelineObs : station;
+
   const CARD_W = 220;
-  const CARD_H = 220;
+  const CARD_H = timelineActive ? 252 : 220;
 
   // Prefer opening above+right of pin; flip if too close to edge
   let left = pinX + 12;
@@ -100,12 +129,12 @@ export const WeatherStationPopover: React.FC<Props> = ({
   if (left + CARD_W > containerWidth - 8) left = pinX - CARD_W - 12;
   if (top < 8) top = pinY + 18;
 
-  const rows: Array<{ label: string; value: string }> = [
-    { label: "WIND", value: fmtWind(station.windSpeedKnots, station.windDirDeg) },
-    { label: "VIS", value: fmtVis(station.visibilityMiles, metric) },
-    { label: "CEILING", value: fmtCeiling(station.ceilingFt, metric) },
-    { label: "TEMP", value: fmtTemp(station.tempC, metric) },
-    { label: "OBS", value: fmtObsTime(station.observedAt) },
+  const rows: Array<{ label: string; value: string; highlight?: boolean }> = [
+    { label: "WIND", value: fmtWind(displayObs.windSpeedKnots, displayObs.windDirDeg) },
+    { label: "VIS", value: fmtVis(displayObs.visibilityMiles, metric) },
+    { label: "CEILING", value: fmtCeiling(displayObs.ceilingFt, metric) },
+    { label: "TEMP", value: fmtTemp(displayObs.tempC, metric) },
+    { label: "OBS", value: fmtObsTime(displayObs.observedAt) },
   ];
 
   return (
@@ -193,6 +222,32 @@ export const WeatherStationPopover: React.FC<Props> = ({
           ✕
         </button>
       </div>
+
+      {/* Timeline scrubber indicator — shown when the global timeline is active */}
+      {timelineActive && timelineTime && (
+        <div
+          style={{
+            margin: "0 10px",
+            padding: "4px 6px",
+            borderRadius: 3,
+            background: "rgba(0,229,255,0.07)",
+            border: "1px solid rgba(0,229,255,0.25)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 8,
+            fontSize: 9,
+            letterSpacing: "0.08em",
+          }}
+        >
+          <span style={{ color: "#64748b", flexShrink: 0 }}>
+            {timelineLoading ? "FETCHING…" : timelineObs ? "TIMELINE" : "LATEST"}
+          </span>
+          <span style={{ color: "#00e5ff", textShadow: "0 0 6px rgba(0,229,255,0.4)" }}>
+            {fmtTimelineTime(timelineTime)}
+          </span>
+        </div>
+      )}
 
       {/* Observation rows */}
       <div style={{ padding: "8px 10px", display: "flex", flexDirection: "column", gap: 5 }}>

@@ -22,6 +22,11 @@ import { HelpIcon } from "@/components/help/HelpButton";
 import { CURRENT_RAMP_STOPS, speedToColor } from "@/lib/currentColor";
 import { formatSpeedFromKnots, speedSuffix, MPH_TO_KNOTS, MPH_TO_KPH, cardinal } from "@/lib/units";
 import type { UnitsSystem } from "@/lib/settingsStore";
+import { useTimelineStore } from "@/lib/timelineStore";
+import { useTimelineVisible } from "@/lib/uiStore";
+
+/** Semi-diurnal tide cycle duration in ms (≈ 12.42 h). Used to derive phase from wall-clock time. */
+const TIDE_CYCLE_MS = 12.42 * 3_600_000;
 
 function knotsToDisplay(kt: number, units: UnitsSystem): number {
   if (units === "nautical") return kt;
@@ -150,6 +155,22 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
   const tidalStatus = useCurrentsStore((st) => st.tidalStatus);
   const retryTidal = useCurrentsStore((st) => st.retryTidal);
 
+  const timelineVisible = useTimelineVisible();
+  const timelineCurrentTime = useTimelineStore((s) => s.currentTime);
+
+  // When the global timeline is active and the user is using NOAA currents
+  // mode, keep the tide-phase slider in sync with the scrubber position.
+  // The NOAA ambient current already re-fetches automatically (via
+  // effectiveScrubDatetime in App.tsx → useTidalData); this sync keeps the
+  // phase slider and particle animation consistent with that time.
+  //
+  useEffect(() => {
+    if (!timelineVisible || currentsSource === "manual") return;
+    const phase = (timelineCurrentTime.getTime() % TIDE_CYCLE_MS) / TIDE_CYCLE_MS;
+    setCurrentsTidePhase(phase);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timelineVisible, timelineCurrentTime, currentsSource]);
+
   const wrapStyle: React.CSSProperties = embedded
     ? { width: "100%", minWidth: 0, color: "#e2e8f0", fontFamily: FONT, fontSize: 11 }
     : card;
@@ -275,6 +296,43 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
       )}
 
       <AdvancedSection panelId="currentsPanelAdvanced">
+        {timelineVisible && currentsSource !== "manual" && (
+          <div
+            data-testid="currents-timeline-active-notice"
+            style={{
+              marginBottom: 6,
+              padding: "3px 6px",
+              borderRadius: 3,
+              background: "rgba(0,229,255,0.07)",
+              border: "1px solid rgba(0,229,255,0.22)",
+              fontSize: 9,
+              letterSpacing: "0.1em",
+              color: "#00e5ff",
+              display: "flex",
+              flexDirection: "column",
+              gap: 2,
+              textTransform: "uppercase",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <span>◉</span>
+              <span>Tide phase synced to global timeline</span>
+            </div>
+            {(() => {
+              const tMs = timelineCurrentTime.getTime();
+              const nearestHourMs = Math.round(tMs / 3_600_000) * 3_600_000;
+              const deltaMin = Math.round((tMs - nearestHourMs) / 60_000);
+              const nearestHour = new Date(nearestHourMs);
+              const hh = String(nearestHour.getUTCHours()).padStart(2, "0");
+              return (
+                <div style={{ fontSize: 8, color: "#7dd3fc", letterSpacing: "0.08em" }}>
+                  NOAA data: {hh}:00 UTC
+                  {deltaMin !== 0 && ` (${deltaMin > 0 ? "+" : ""}${deltaMin} min from timeline)`}
+                </div>
+              );
+            })()}
+          </div>
+        )}
         <div style={{ marginBottom: 8 }}>
           <div style={{ ...label, display: "flex", justifyContent: "space-between" }}>
             <span>Tide Phase</span>

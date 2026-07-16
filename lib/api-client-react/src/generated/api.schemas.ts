@@ -2141,6 +2141,31 @@ export interface RawsWeatherResponse {
   station?: RawsWeatherResponseStation;
 }
 
+/**
+ * The observation nearest to the requested time (omitted when available=false)
+ */
+export type WeatherStationObsResponseObservation = {
+  /** Wind speed in knots */
+  windSpeedKnots?: number | null;
+  /** Wind direction in degrees true */
+  windDirDeg?: number | null;
+  /** Visibility in statute miles */
+  visibilityMiles?: number | null;
+  /** Cloud ceiling in feet AGL */
+  ceilingFt?: number | null;
+  /** Air temperature in degrees Celsius */
+  tempC?: number | null;
+  /** ISO 8601 UTC timestamp of the observation */
+  observedAt?: string | null;
+};
+
+export interface WeatherStationObsResponse {
+  /** False when the NOAA API was unreachable or returned no observations */
+  available: boolean;
+  /** The observation nearest to the requested time (omitted when available=false) */
+  observation?: WeatherStationObsResponseObservation;
+}
+
 export interface WaterTemperature {
   /** True when a live sea-surface temperature was retrieved */
   available: boolean;
@@ -2811,6 +2836,17 @@ lon: number;
  * Search radius in statute miles (default 75, max 500)
  */
 radiusMiles?: number;
+};
+
+export type GetWeatherStationObsParams = {
+/**
+ * NOAA weather station ID (e.g. PAWD)
+ */
+stationId: string;
+/**
+ * ISO 8601 target datetime; the observation nearest to this time is returned
+ */
+time: string;
 };
 
 export type GetRawsStationsParams = {

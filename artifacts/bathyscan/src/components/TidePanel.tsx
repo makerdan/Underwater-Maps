@@ -11,6 +11,7 @@ import { HelpIcon } from "@/components/help/HelpButton";
 import { Spinner } from "@/components/ui/spinner";
 import { LocationBadge } from "@/components/LocationBadge";
 import { useAppState } from "@/lib/context";
+import { useTimelineVisible } from "@/lib/uiStore";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(2,8,18,0.94)",
@@ -149,6 +150,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
   lon,
   embedded = false,
 }) => {
+  const timelineVisible = useTimelineVisible();
   const storeCollapsed = usePanelCollapseStore((s) => s.collapsed.tide);
   const collapsed = embedded ? false : storeCollapsed;
   const togglePanel = usePanelCollapseStore((s) => s.toggle);
@@ -537,8 +539,49 @@ export const TidePanel: React.FC<TidePanelProps> = ({
             </>
           )}
 
-          {/* Time scrubber — always shown */}
-          <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)", paddingTop: 6 }}>
+          {/* Global timeline active notice — shown when the scrubber bar overrides the local time */}
+          {timelineVisible && (
+            <div
+              data-testid="tide-timeline-active-notice"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "3px 6px",
+                borderRadius: 3,
+                background: "rgba(0,229,255,0.07)",
+                border: "1px solid rgba(0,229,255,0.22)",
+                fontSize: 9,
+                letterSpacing: "0.1em",
+                color: "#00e5ff",
+                textTransform: "uppercase",
+              }}
+            >
+              <span>◉</span>
+              <span>Global timeline active</span>
+            </div>
+          )}
+
+          <AdvancedSection panelId="tidePanelTimeScrub">
+          <div>
+            {timelineVisible && (
+              <div
+                data-testid="tide-local-scrub-override-notice"
+                style={{
+                  marginBottom: 6,
+                  padding: "3px 6px",
+                  borderRadius: 3,
+                  background: "rgba(0,229,255,0.06)",
+                  border: "1px solid rgba(0,229,255,0.2)",
+                  fontSize: 9,
+                  letterSpacing: "0.1em",
+                  color: "#7dd3fc",
+                  textTransform: "uppercase",
+                }}
+              >
+                Global timeline overrides — controls below adjust local fallback only
+              </div>
+            )}
             <div style={LABEL}>Time scrub</div>
             {/* Day selector */}
             <div className="flex gap-1 mt-1 flex-wrap">
@@ -809,6 +852,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
               )}
             </div>
           </div>
+          </AdvancedSection>
         </div>
       )}
     </div>

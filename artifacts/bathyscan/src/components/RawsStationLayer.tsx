@@ -106,12 +106,26 @@ function buildRows(obs: RawsObservation, metric: boolean): Array<{ label: string
   return rows;
 }
 
+/** Format a Date to "Mon DD  HH:MM UTC" for the timeline row. */
+function fmtTimelineTime(d: Date): string {
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const mon = months[d.getUTCMonth()];
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${mon} ${day}  ${hh}:${mm} UTC`;
+}
+
 interface Props {
   datasetId: string;
   stationName: string;
   pinX: number;
   pinY: number;
   containerWidth: number;
+  /** When the global timeline is active, the selected timeline moment. */
+  timelineTime?: Date;
+  /** True when the global timeline overlay is driving the selected time. */
+  timelineActive?: boolean;
   onClose: () => void;
 }
 
@@ -121,15 +135,22 @@ export const RawsStationPopover: React.FC<Props> = ({
   pinX,
   pinY,
   containerWidth,
+  timelineTime,
+  timelineActive = false,
   onClose,
 }) => {
   const units = useSettingsStore((s) => s.units);
   const metric = units === "metric";
 
-  const { observation, isLoading, isError } = useRawsWeather(datasetId, true);
+  // When the global timeline is active, fetch the observation nearest that time.
+  const { observation, isLoading, isError } = useRawsWeather(
+    datasetId,
+    true,
+    timelineActive ? (timelineTime ?? null) : null,
+  );
 
   const CARD_W = 240;
-  const CARD_H = 200;
+  const CARD_H = timelineActive ? 228 : 200;
 
   let left = pinX + 12;
   let top = pinY - CARD_H - 12;
@@ -212,6 +233,27 @@ export const RawsStationPopover: React.FC<Props> = ({
 
       {/* Body */}
       <div style={{ padding: "8px 10px" }}>
+        {timelineActive && timelineTime && (
+          <div
+            data-testid="raws-timeline-active-row"
+            style={{
+              marginBottom: 6,
+              padding: "2px 5px",
+              borderRadius: 3,
+              background: "rgba(0,229,255,0.07)",
+              border: "1px solid rgba(0,229,255,0.22)",
+              display: "grid",
+              gridTemplateColumns: "72px 1fr",
+              alignItems: "baseline",
+              gap: 4,
+            }}
+          >
+            <span style={{ fontSize: 9, letterSpacing: "0.16em", color: "#00e5ff", textTransform: "uppercase" }}>
+              TIMELINE
+            </span>
+            <span style={{ color: "#00e5ff", fontSize: 9 }}>{fmtTimelineTime(timelineTime)}</span>
+          </div>
+        )}
         {isLoading && (
           <div style={{ color: "#64748b", fontSize: 9, letterSpacing: "0.1em" }}>
             Fetching observation…

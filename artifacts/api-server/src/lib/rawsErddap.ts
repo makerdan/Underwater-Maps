@@ -130,18 +130,10 @@ function getStr(row: unknown[], cols: string[], name: string): string | null {
   return typeof v === "string" ? v : null;
 }
 
-function parseObservation(json: ErddapTableResponse): RawsObservation | null {
-  const cols = json.table?.columnNames ?? [];
-  const rows = json.table?.rows ?? [];
-  if (rows.length === 0) return null;
-
-  const row = rows[0]!;
-
-  // Support alternate temperature variable name
+function parseRow(row: unknown[], cols: string[]): RawsObservation {
   const tempC =
     getNum(row, cols, "air_temperature") ??
     getNum(row, cols, "air_temperature_cm_time__mean_over_pt24h");
-
   return {
     time: getStr(row, cols, "time"),
     airTemperatureC: tempC,
@@ -154,6 +146,24 @@ function parseObservation(json: ErddapTableResponse): RawsObservation | null {
     fuelTemperatureC: getNum(row, cols, "fuel_temperature"),
     batteryVoltageV: getNum(row, cols, "battery_voltage"),
   };
+}
+
+/** Parse the first row of an ERDDAP table response (used for latest-obs queries). */
+function parseObservation(json: ErddapTableResponse): RawsObservation | null {
+  const cols = json.table?.columnNames ?? [];
+  const rows = json.table?.rows ?? [];
+  if (rows.length === 0) return null;
+  return parseRow(rows[0]!, cols);
+}
+
+/**
+ * Parse all rows of an ERDDAP table response.
+ * Used by fetchRawsObservationAt to select the nearest observation client-side.
+ */
+function parseAllObservations(json: ErddapTableResponse): RawsObservation[] {
+  const cols = json.table?.columnNames ?? [];
+  const rows = json.table?.rows ?? [];
+  return rows.map((row) => parseRow(row, cols));
 }
 
 // ---------------------------------------------------------------------------
@@ -312,6 +322,69 @@ async function loadFromDb(
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
+
+/**
+ * Fetch the observation nearest to `targetTime` for a RAWS station.
+ *
+ * Queries ERDDAP for observations in a ±2-hour window around the target time
+ * and returns the latest one within that window (closest from below).
+ *
+ * Falls back to `fetchRawsObservation` (live/latest) when ERDDAP returns no
+ * rows for the requested window — this preserves graceful degradation when
+ * historical data is unavailable for older timestamps.
+ *
+ * Not cached server-side (historical queries are inherently varied); the
+ * client-side hook performs its own hour-bucketed caching.
+ */
+export async function fetchRawsObservationAt(
+  datasetId: string,
+  targetTime: Date,
+): Promise<RawsObservationResult | null> {
+  const available = await getDatasetVariables(datasetId);
+  const requestedVars =
+    available !== null
+      ? DESIRED_VARS.filter((v) => available.has(v))
+      : [...DESIRED_VARS];
+  const varList = ["time", ...requestedVars].join(",");
+
+  // ±2-hour window; cap end at now so we don't query the future.
+  // No orderByMax — fetch all rows in window, then pick nearest client-side
+  // (mirrors the NOAA nearest-feature strategy).
+  const windowStart = new Date(targetTime.getTime() - 2 * 60 * 60_000).toISOString();
+  const windowEnd   = new Date(Math.min(targetTime.getTime() + 2 * 60 * 60_000, Date.now())).toISOString();
+
+  const url =
+    `${ERDDAP_BASE}/tabledap/${encodeURIComponent(datasetId)}.json` +
+    `?${varList}&time>=${windowStart}&time<=${windowEnd}`;
+
+  try {
+    const res = await fetchWithTimeout(url, FETCH_TIMEOUT_MS);
+    if (res.ok) {
+      const json = (await res.json()) as ErddapTableResponse;
+      const observations = parseAllObservations(json);
+      if (observations.length > 0) {
+        const targetMs = targetTime.getTime();
+        // Select the observation whose timestamp is closest to targetTime
+        let nearest = observations[0]!;
+        let nearestDiff = Infinity;
+        for (const obs of observations) {
+          if (!obs.time) continue;
+          const diff = Math.abs(new Date(obs.time).getTime() - targetMs);
+          if (diff < nearestDiff) {
+            nearestDiff = diff;
+            nearest = obs;
+          }
+        }
+        return { observation: nearest, stale: false };
+      }
+    }
+  } catch {
+    // fall through to live latest below
+  }
+
+  // No historical row found for the requested window — degrade to latest
+  return fetchRawsObservation(datasetId);
+}
 
 /**
  * Fetch the latest observation for a RAWS station identified by `datasetId`.

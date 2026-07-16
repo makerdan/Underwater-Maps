@@ -15,7 +15,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
-import { fetchRawsObservation } from "../lib/rawsErddap.js";
+import { fetchRawsObservation, fetchRawsObservationAt } from "../lib/rawsErddap.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 
 const router = Router();
@@ -25,6 +25,8 @@ const RawsWeatherQuerySchema = z.object({
     .string({ required_error: "datasetId is required" })
     .min(1, "datasetId is required")
     .regex(/^raws_[a-zA-Z0-9_-]+$/, "datasetId is required and must match the raws_* pattern"),
+  /** Optional ISO 8601 target time; when supplied, returns the observation nearest that moment. */
+  time: z.string().datetime({ offset: true }).optional(),
 });
 
 router.get("/raws-weather", asyncHandler(async (req, res): Promise<void> => {
@@ -36,10 +38,12 @@ router.get("/raws-weather", asyncHandler(async (req, res): Promise<void> => {
     });
     return;
   }
-  const { datasetId } = parsed.data;
+  const { datasetId, time } = parsed.data;
 
   try {
-    const result = await fetchRawsObservation(datasetId);
+    const result = time
+      ? await fetchRawsObservationAt(datasetId, new Date(time))
+      : await fetchRawsObservation(datasetId);
     if (!result) {
       res.json({ available: false });
       return;

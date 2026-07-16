@@ -20,8 +20,9 @@ import type {
 import { useAppState } from "@/lib/context";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useCameraStore } from "@/lib/cameraStore";
-import { useUiStore } from "@/lib/uiStore";
+import { useUiStore, useTimelineVisible } from "@/lib/uiStore";
 import type { SelectedHotspot } from "@/lib/uiStore";
+import { useTimelineStore } from "@/lib/timelineStore";
 import { useContextMenuStore, type ContextMenuItem } from "@/lib/contextMenuStore";
 import { lonLatToWorldXZ } from "@/lib/terrain";
 import {
@@ -582,6 +583,8 @@ export const OverviewMap: React.FC = () => {
 
   // Weather stations overlay — query always runs when terrain loaded so FAA button works
   const weatherStationsActive = useUiStore((s) => s.weatherStationsActive);
+  const timelineVisible = useTimelineVisible();
+  const timelineCurrentTime = useTimelineStore((s) => s.currentTime);
   const {
     stations: weatherStations,
     faaWeatherCamsUrl,
@@ -2612,6 +2615,8 @@ export const OverviewMap: React.FC = () => {
             containerWidth={canvasRef.current!.width}
             faaWeatherCamsUrl={faaWeatherCamsUrl}
             stale={weatherStationsStale}
+            timelineTime={timelineCurrentTime}
+            timelineActive={timelineVisible}
             onClose={() => {
               weatherStationSelectedIdRef.current = null;
               setSelectedWeatherStation(null);
@@ -2633,6 +2638,8 @@ export const OverviewMap: React.FC = () => {
             pinX={pinX}
             pinY={pinY}
             containerWidth={canvasRef.current!.width}
+            timelineTime={timelineCurrentTime}
+            timelineActive={timelineVisible}
             onClose={() => {
               rawsSelectedIdRef.current = null;
               setSelectedRawsDatasetId(null);

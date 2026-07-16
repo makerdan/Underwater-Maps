@@ -2987,6 +2987,33 @@ export const GetWeatherStationsResponse = zod.object({
 
 
 /**
+ * Returns the archived NOAA ASOS/AWOS observation nearest to the requested
+`time` for a single station.  Queries the NOAA observation time-series
+endpoint and picks the feature with the smallest |obsTime − targetTime|
+within the available window.  Returns available=false when the station
+has no archived observations or the upstream API is unreachable.
+
+ * @summary Fetch NOAA weather station observation nearest to a target time
+ */
+export const GetWeatherStationObsQueryParams = zod.object({
+  "stationId": zod.coerce.string().describe('NOAA weather station ID (e.g. PAWD)'),
+  "time": zod.date().describe('ISO 8601 target datetime; the observation nearest to this time is returned')
+})
+
+export const GetWeatherStationObsResponse = zod.object({
+  "available": zod.boolean().describe('False when the NOAA API was unreachable or returned no observations'),
+  "observation": zod.object({
+  "windSpeedKnots": zod.number().nullish().describe('Wind speed in knots'),
+  "windDirDeg": zod.number().nullish().describe('Wind direction in degrees true'),
+  "visibilityMiles": zod.number().nullish().describe('Visibility in statute miles'),
+  "ceilingFt": zod.number().nullish().describe('Cloud ceiling in feet AGL'),
+  "tempC": zod.number().nullish().describe('Air temperature in degrees Celsius'),
+  "observedAt": zod.string().nullish().describe('ISO 8601 UTC timestamp of the observation')
+}).optional().describe('The observation nearest to the requested time (omitted when available=false)')
+})
+
+
+/**
  * Returns all RAWS (Remote Automatic Weather Station) stations within
 `radiusKm` kilometres of the given lat/lon, drawn from the AOOS ERDDAP
 catalog (cached 24 h). Returns available=false on ERDDAP failure so

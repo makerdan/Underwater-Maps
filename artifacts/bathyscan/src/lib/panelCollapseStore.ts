@@ -21,6 +21,7 @@ export type PanelId =
   // ── Per-panel Advanced section collapse keys (default: collapsed) ──────────
   | "overlaysToolsAdvanced"
   | "tidePanelAdvanced"
+  | "tidePanelTimeScrub"
   | "currentsPanelAdvanced"
   | "habitatAdvanced"
   | "seafloorAdvanced";
@@ -51,6 +52,7 @@ export const DEFAULTS: Record<PanelId, boolean> = {
   // Advanced sub-sections — collapsed by default on first use
   overlaysToolsAdvanced: true,
   tidePanelAdvanced: true,
+  tidePanelTimeScrub: true,
   currentsPanelAdvanced: true,
   habitatAdvanced: true,
   seafloorAdvanced: true,

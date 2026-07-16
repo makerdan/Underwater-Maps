@@ -2047,6 +2047,51 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /weather-station-obs:
+    get:
+      operationId: getWeatherStationObs
+      tags: [drift-planner]
+      summary: Fetch NOAA weather station observation nearest to a target time
+      description: |
+        Returns the archived NOAA ASOS/AWOS observation nearest to the requested
+        `time` for a single station.  Queries the NOAA observation time-series
+        endpoint and picks the feature with the smallest |obsTime − targetTime|
+        within the available window.  Returns available=false when the station
+        has no archived observations or the upstream API is unreachable.
+      parameters:
+        - name: stationId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: NOAA weather station ID (e.g. PAWD)
+        - name: time
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: ISO 8601 target datetime; the observation nearest to this time is returned
+      responses:
+        "200":
+          description: Nearest NOAA observation or available=false on upstream failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeatherStationObsResponse"
+        "400":
+          description: Missing or invalid stationId or time
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Upstream NOAA API error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /raws-stations:
     get:
       operationId: getRawsStations
@@ -6231,6 +6276,43 @@ components:
               type: string
           required:
             - datasetId
+      required:
+        - available
+
+    WeatherStationObsResponse:
+      type: object
+      properties:
+        available:
+          type: boolean
+          description: False when the NOAA API was unreachable or returned no observations
+        observation:
+          type: object
+          description: The observation nearest to the requested time (omitted when available=false)
+          properties:
+            windSpeedKnots:
+              type: number
+              nullable: true
+              description: Wind speed in knots
+            windDirDeg:
+              type: number
+              nullable: true
+              description: Wind direction in degrees true
+            visibilityMiles:
+              type: number
+              nullable: true
+              description: Visibility in statute miles
+            ceilingFt:
+              type: number
+              nullable: true
+              description: Cloud ceiling in feet AGL
+            tempC:
+              type: number
+              nullable: true
+              description: Air temperature in degrees Celsius
+            observedAt:
+              type: string
+              nullable: true
+              description: ISO 8601 UTC timestamp of the observation
       required:
         - available
 

@@ -55,9 +55,12 @@ export const TimelineScrubBar: React.FC = () => {
   const currentOverlayActive = useUiStore((s) => s.currentOverlayActive);
   const windOverlayActive = useUiStore((s) => s.windOverlayActive);
   const weatherStationsActive = useUiStore((s) => s.weatherStationsActive);
+  const rawsOverlayActive = useUiStore((s) => s.rawsOverlayActive);
 
+  // Must exactly mirror useTimelineVisible() in uiStore.ts so the scrubber bar
+  // is always visible whenever any overlay drives timeline-dependent behavior.
   const visible =
-    tideOverlayActive || currentOverlayActive || windOverlayActive || weatherStationsActive;
+    tideOverlayActive || currentOverlayActive || windOverlayActive || weatherStationsActive || rawsOverlayActive;
 
   // Depth-profile panel clearance: when a profile is active and at its default
   // bottom position, push the scrubber bar upward so it sits above the chart.

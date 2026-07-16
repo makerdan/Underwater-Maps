@@ -366,6 +366,7 @@ Authentication is handled by **Clerk** across all surfaces:
 |---|---|---|
 | GET | `/surface-conditions` | Fetch hourly surface weather and tidal conditions for drift planning |
 | GET | `/weather-stations` | Fetch nearby NOAA aviation weather station observations |
+| GET | `/weather-station-obs` | Fetch NOAA weather station observation nearest to a target time |
 | GET | `/raws-stations` | Fetch nearby AOOS RAWS weather station list |
 | GET | `/raws-weather` | Fetch latest observation for a single AOOS RAWS station |
 | GET | `/water-temperature` | Fetch current sea-surface temperature for a lat/lon point |
