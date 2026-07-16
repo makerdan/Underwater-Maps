@@ -1,0 +1,61 @@
+[plugin:vite:react-babel] /home/runner/workspace/artifacts/bathyscan/src/App.tsx: Identifier 'currentsEnabled' has already been declared. (362:8)
+  365 |   // Tracks which terrain object we last auto-enabled the tidal overlay for.
+/home/runner/workspace/artifacts/bathyscan/src/App.tsx:362:8
+360 |  
+361 |    const currentsSource = useSettingsStore((st) => st.currentsSource);
+362 |    const currentsEnabled = useSettingsStore((st) => st.currentsEnabled);
+    |          ^
+363 |    const autoLoadTidal = useSettingsStore((st) => st.autoLoadTidal);
+364 |
+    at constructor (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:365:19)
+    at TypeScriptParserMixin.raise (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:6616:19)
+    at TypeScriptScopeHandler.checkRedeclarationInScope (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:1619:19)
+    at TypeScriptScopeHandler.declareName (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:1585:12)
+    at TypeScriptScopeHandler.declareName (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:4892:11)
+    at TypeScriptParserMixin.declareNameFromIdentifier (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:7584:16)
+    at TypeScriptParserMixin.checkIdentifier (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:7580:12)
+    at TypeScriptParserMixin.checkLVal (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:7517:12)
+    at TypeScriptParserMixin.parseVarId (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:13429:10)
+    at TypeScriptParserMixin.parseVarId (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:9769:11)
+    at TypeScriptParserMixin.parseVar (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:13400:12)
+    at TypeScriptParserMixin.parseVarStatement (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:13247:10)
+    at TypeScriptParserMixin.parseVarStatement (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:9425:31)
+    at TypeScriptParserMixin.parseStatementContent (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:12868:23)
+    at TypeScriptParserMixin.parseStatementContent (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:9525:18)
+    at TypeScriptParserMixin.parseStatementLike (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:12784:17)
+    at TypeScriptParserMixin.parseStatementListItem (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:12764:17)
+    at TypeScriptParserMixin.parseBlockOrModuleBlockBody (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:13333:61)
+    at TypeScriptParserMixin.parseBlockBody (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:13326:10)
+    at TypeScriptParserMixin.parseBlock (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:13314:10)
+    at TypeScriptParserMixin.parseFunctionBody (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:12117:24)
+    at TypeScriptParserMixin.parseFunctionBodyAndFinish (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:12103:10)
+    at TypeScriptParserMixin.parseFunctionBodyAndFinish (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:9189:18)
+    at /home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:13462:12
+    at TypeScriptParserMixin.withSmartMixTopicForbiddingContext (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:12420:14)
+    at TypeScriptParserMixin.parseFunction (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:13461:10)
+    at TypeScriptParserMixin.parseFunctionStatement (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:13142:17)
+    at TypeScriptParserMixin.parseStatementContent (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:12808:21)
+    at TypeScriptParserMixin.parseStatementContent (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:9525:18)
+    at TypeScriptParserMixin.parseStatementLike (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:12784:17)
+    at TypeScriptParserMixin.parseModuleItem (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:12761:17)
+    at TypeScriptParserMixin.parseBlockOrModuleBlockBody (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:13333:36)
+    at TypeScriptParserMixin.parseBlockBody (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:13326:10)
+    at TypeScriptParserMixin.parseProgram (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:12639:10)
+    at TypeScriptParserMixin.parseTopLevel (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:12629:25)
+    at TypeScriptParserMixin.parse (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:14505:25)
+    at TypeScriptParserMixin.parse (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:10143:18)
+    at parse (/home/runner/workspace/node_modules/.pnpm/@babel+parser@7.29.3/node_modules/@babel/parser/lib/index.js:14539:38)
+    at parser (/home/runner/workspace/node_modules/.pnpm/@babel+core@7.29.0/node_modules/@babel/core/lib/parser/index.js:41:34)
+    at parser.next (<anonymous>)
+    at normalizeFile (/home/runner/workspace/node_modules/.pnpm/@babel+core@7.29.0/node_modules/@babel/core/lib/transformation/normalize-file.js:64:37)
+    at normalizeFile.next (<anonymous>)
+    at run (/home/runner/workspace/node_modules/.pnpm/@babel+core@7.29.0/node_modules/@babel/core/lib/transformation/index.js:22:50)
+    at run.next (<anonymous>)
+    at transform (/home/runner/workspace/node_modules/.pnpm/@babel+core@7.29.0/node_modules/@babel/core/lib/transform.js:22:33)
+    at transform.next (<anonymous>)
+    at step (/home/runner/workspace/node_modules/.pnpm/gensync@1.0.0-beta.2/node_modules/gensync/index.js:261:32)
+    at /home/runner/workspace/node_modules/.pnpm/gensync@1.0.0-beta.2/node_modules/gensync/index.js:273:13
+    at async.call.result.err.err (/home/runner/workspace/node_modules/.pnpm/gensync@1.0.0-beta.2/node_modules/gensync/index.js:223:11)
+    at /home/runner/workspace/node_modules/.pnpm/gensync@1.0.0-beta.2/node_modules/gensync/index.js:189:28
+Click outside, press Esc key, or fix the code to dismiss.
+You can also disable this overlay by setting server.hmr.overlay to false in vite.config.ts.
