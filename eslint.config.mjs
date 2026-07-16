@@ -56,23 +56,61 @@ const noUndeclaredStoreSelectorInJsx = {
       return /^use[A-Z]\w*Store$/.test(name);
     }
 
-    function extractSimpleField(selectorArg) {
-      if (!selectorArg) return null;
+    function extractFieldsFromNode(node) {
+      if (!node) return [];
+
+      // Simple member: s.FIELD
+      if (
+        node.type === "MemberExpression" &&
+        !node.computed &&
+        node.object.type === "Identifier" &&
+        node.property.type === "Identifier"
+      ) {
+        return [node.property.name];
+      }
+
+      // Object expression: ({ key: s.FIELD, key2: s.FIELD2 })
+      if (node.type === "ObjectExpression") {
+        const fields = [];
+        for (const prop of node.properties ?? []) {
+          if (prop.type === "Property") {
+            fields.push(...extractFieldsFromNode(prop.value));
+          }
+        }
+        return fields;
+      }
+
+      // Logical expression: s.FIELD ?? default, s.FIELD || default, s.FIELD && default
+      if (node.type === "LogicalExpression") {
+        return extractFieldsFromNode(node.left);
+      }
+
+      // Unary expression: !s.FIELD
+      if (node.type === "UnaryExpression") {
+        return extractFieldsFromNode(node.argument);
+      }
+
+      // Boolean(s.FIELD) call
+      if (
+        node.type === "CallExpression" &&
+        node.callee.type === "Identifier" &&
+        node.callee.name === "Boolean" &&
+        node.arguments.length >= 1
+      ) {
+        return extractFieldsFromNode(node.arguments[0]);
+      }
+
+      return [];
+    }
+
+    function extractFields(selectorArg) {
+      if (!selectorArg) return [];
       if (
         selectorArg.type !== "ArrowFunctionExpression" &&
         selectorArg.type !== "FunctionExpression"
       )
-        return null;
-      const body = selectorArg.body;
-      if (
-        body.type === "MemberExpression" &&
-        !body.computed &&
-        body.object.type === "Identifier" &&
-        body.property.type === "Identifier"
-      ) {
-        return body.property.name;
-      }
-      return null;
+        return [];
+      return extractFieldsFromNode(selectorArg.body);
     }
 
     function collectDeclaredIds(pattern) {
@@ -106,8 +144,9 @@ const noUndeclaredStoreSelectorInJsx = {
           node.init.callee.type === "Identifier" &&
           isStoreHook(node.init.callee.name)
         ) {
-          const field = extractSimpleField(node.init.arguments[0]);
-          if (field) selectorFields.add(field);
+          for (const field of extractFields(node.init.arguments[0])) {
+            selectorFields.add(field);
+          }
         }
       },
 
@@ -116,8 +155,9 @@ const noUndeclaredStoreSelectorInJsx = {
           node.callee.type === "Identifier" &&
           isStoreHook(node.callee.name)
         ) {
-          const field = extractSimpleField(node.arguments[0]);
-          if (field) selectorFields.add(field);
+          for (const field of extractFields(node.arguments[0])) {
+            selectorFields.add(field);
+          }
         }
       },
 
@@ -259,6 +299,8 @@ const localPlugin = {
     "no-undeclared-store-selector-in-jsx": noUndeclaredStoreSelectorInJsx,
   },
 };
+
+export { noUndeclaredStoreSelectorInJsx };
 
 export default [
   {
