@@ -359,7 +359,6 @@ function Main() {
   const center3Lon = ds3?.activeGrid ? (ds3.activeGrid.minLon + ds3.activeGrid.maxLon) / 2 : null;
 
   const currentsSource = useSettingsStore((st) => st.currentsSource);
-  const currentsEnabled = useSettingsStore((st) => st.currentsEnabled);
   const autoLoadTidal = useSettingsStore((st) => st.autoLoadTidal);
 
   // Tracks which terrain object we last auto-enabled the tidal overlay for.
