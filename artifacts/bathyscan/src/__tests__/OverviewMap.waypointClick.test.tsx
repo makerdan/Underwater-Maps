@@ -99,6 +99,67 @@ function withQuery(node: React.ReactElement): React.ReactElement {
   return React.createElement(QueryClientProvider, { client }, node);
 }
 
+// ---------------------------------------------------------------------------
+// Transform helpers mirroring overviewRenderer.ts
+// ---------------------------------------------------------------------------
+
+const LON_RANGE = 3;   // -122 to -119
+const LAT_RANGE = 2;   // 47 to 49
+const MIN_LON   = -122;
+const MIN_LAT   = 47;
+
+/**
+ * Mirror of computeInitialTransform for the 3°×2° test grid.
+ * Returns the same transform the component computes on mount.
+ */
+function computeTestInitialTransform() {
+  const pxPerDeg = Math.min(
+    (CANVAS_W * 0.88) / LON_RANGE,
+    (CANVAS_H * 0.88) / LAT_RANGE,
+  );
+  const terrainW = pxPerDeg * LON_RANGE;
+  const terrainH = pxPerDeg * LAT_RANGE;
+  return {
+    scale:   1,
+    pxPerDeg,
+    offsetX: (CANVAS_W - terrainW) / 2,
+    offsetY: (CANVAS_H - terrainH) / 2,
+  };
+}
+
+/**
+ * Mirror of clampTransform — clamps offsetX/Y so ≥10 % of terrain is visible.
+ */
+function clampTestTransform(t: {
+  scale: number; pxPerDeg: number; offsetX: number; offsetY: number;
+}) {
+  const terrainW = t.pxPerDeg * LON_RANGE * t.scale;
+  const terrainH = t.pxPerDeg * LAT_RANGE * t.scale;
+  const minVis = 0.10;
+  return {
+    ...t,
+    offsetX: Math.max(-terrainW * (1 - minVis), Math.min(CANVAS_W - terrainW * minVis, t.offsetX)),
+    offsetY: Math.max(-terrainH * (1 - minVis), Math.min(CANVAS_H - terrainH * minVis, t.offsetY)),
+  };
+}
+
+/**
+ * Mirror of lonLatToCanvas: returns the canvas pixel for a lon/lat given an
+ * explicit transform (so tests can predict where to click after pan/zoom).
+ */
+function lonLatToPxWithTransform(
+  lon: number,
+  lat: number,
+  t: { scale: number; pxPerDeg: number; offsetX: number; offsetY: number },
+): [number, number] {
+  const terrainW = t.pxPerDeg * LON_RANGE * t.scale;
+  const terrainH = t.pxPerDeg * LAT_RANGE * t.scale;
+  return [
+    t.offsetX + ((lon - MIN_LON) / LON_RANGE) * terrainW,
+    t.offsetY + (1 - (lat - MIN_LAT) / LAT_RANGE) * terrainH,
+  ];
+}
+
 /**
  * Mirrors computeInitialTransform / lonLatToCanvas for a 3°×2° test grid.
  * Returns the canvas pixel for a given lon/lat.
@@ -113,19 +174,7 @@ function withQuery(node: React.ReactElement): React.ReactElement {
  *   y = offsetY + (1 - (lat - minLat) / latRange) * terrainH
  */
 function lonLatToPx(lon: number, lat: number): [number, number] {
-  const minLon = -122, maxLon = -119;
-  const minLat = 47, maxLat = 49;
-  const lonRange = maxLon - minLon;
-  const latRange = maxLat - minLat;
-  const pxPerDeg = Math.min((CANVAS_W * 0.88) / lonRange, (CANVAS_H * 0.88) / latRange);
-  const terrainW = pxPerDeg * lonRange;
-  const terrainH = pxPerDeg * latRange;
-  const offsetX = (CANVAS_W - terrainW) / 2;
-  const offsetY = (CANVAS_H - terrainH) / 2;
-  return [
-    offsetX + ((lon - minLon) / lonRange) * terrainW,
-    offsetY + (1 - (lat - minLat) / latRange) * terrainH,
-  ];
+  return lonLatToPxWithTransform(lon, lat, computeTestInitialTransform());
 }
 
 function clickAt(canvas: HTMLCanvasElement, x: number, y: number) {
@@ -293,6 +342,160 @@ describe("OverviewMap — waypoint mode click dispatches correct lat/lon", () =>
     await act(async () => { clickAt(canvas, px, py); });
 
     expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  /**
+   * ZOOM scenario — verifies coordinate accuracy after the user wheel-zooms
+   * before dropping a waypoint.
+   *
+   * Strategy:
+   *   1. Mount the component and enable waypoint mode.
+   *   2. Fire a wheel zoom-in event at the canvas centre so the component
+   *      mutates its internal transformRef.
+   *   3. Mirror the exact handleWheel + clampTransform math locally to predict
+   *      the new transform.
+   *   4. Compute the canvas pixel that corresponds to the target lon/lat using
+   *      the predicted transform, then click there.
+   *   5. Assert that appendWaypoint receives coordinates that round-trip back
+   *      to the target position (to 1 decimal-degree precision).
+   */
+  it("coordinate accuracy is maintained after a wheel zoom before dropping a waypoint", async () => {
+    const spy = vi.spyOn(waypointHelpers, "appendWaypoint");
+
+    renderWithProviders(withQuery(React.createElement(OverviewMap)));
+
+    const toolsToggle = screen.getByTestId("overview-tools-toggle");
+    await act(async () => { fireEvent.click(toolsToggle); });
+
+    const waypointToggle = screen.getByTestId("overview-waypoint-mode-toggle");
+    await act(async () => { fireEvent.click(waypointToggle); });
+
+    const canvas = document.querySelector<HTMLCanvasElement>(
+      'canvas[data-testid="overview-map-canvas"]',
+    )!;
+    expect(canvas).not.toBeNull();
+
+    canvas.getBoundingClientRect = () =>
+      ({
+        left: 0, top: 0,
+        right: CANVAS_W, bottom: CANVAS_H,
+        width: CANVAS_W, height: CANVAS_H,
+        x: 0, y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    // --- Zoom in at the canvas centre ---
+    const zoomCx = CANVAS_W / 2;
+    const zoomCy = CANVAS_H / 2;
+    await act(async () => {
+      fireEvent.wheel(canvas, { clientX: zoomCx, clientY: zoomCy, deltaY: -100 });
+    });
+
+    // Mirror handleWheel math to predict transformRef after the event.
+    const init = computeTestInitialTransform();
+    const factor = 1.15; // deltaY < 0 → zoom in
+    const newScale = init.scale * factor;
+    const ratio = newScale / init.scale;
+    const rawOffsetX = zoomCx + (init.offsetX - zoomCx) * ratio;
+    const rawOffsetY = zoomCy + (init.offsetY - zoomCy) * ratio;
+    const zoomedTransform = clampTestTransform({
+      scale: newScale,
+      pxPerDeg: init.pxPerDeg,
+      offsetX: rawOffsetX,
+      offsetY: rawOffsetY,
+    });
+
+    // Compute the canvas pixel for the target lon/lat using the zoomed transform.
+    const targetLon = -120.5;
+    const targetLat = 48.0;
+    const [px, py] = lonLatToPxWithTransform(targetLon, targetLat, zoomedTransform);
+
+    await act(async () => { clickAt(canvas, px, py); });
+
+    expect(spy).toHaveBeenCalledOnce();
+    const [, lon, lat] = spy.mock.calls[0] as [unknown, number, number];
+    expect(lon).toBeCloseTo(targetLon, 1);
+    expect(lat).toBeCloseTo(targetLat, 1);
+
+    spy.mockRestore();
+  });
+
+  /**
+   * PAN scenario — verifies coordinate accuracy after the user drags (pans)
+   * the overview map before dropping a waypoint.
+   *
+   * Strategy:
+   *   1. Mount the component and enable waypoint mode.
+   *   2. Simulate a mouse drag of (panDx, panDy) pixels so the component
+   *      mutates its internal transformRef via handleMouseMove.
+   *   3. Fire a second mousedown (no movement) to reset hasDraggedRef so
+   *      the subsequent click is not swallowed by the drag guard.
+   *   4. Mirror handleMouseMove + clampTransform math to predict the new
+   *      transform, compute the target pixel, click there, and assert
+   *      appendWaypoint receives the correct coordinates.
+   */
+  it("coordinate accuracy is maintained after a mouse pan before dropping a waypoint", async () => {
+    const spy = vi.spyOn(waypointHelpers, "appendWaypoint");
+
+    renderWithProviders(withQuery(React.createElement(OverviewMap)));
+
+    const toolsToggle = screen.getByTestId("overview-tools-toggle");
+    await act(async () => { fireEvent.click(toolsToggle); });
+
+    const waypointToggle = screen.getByTestId("overview-waypoint-mode-toggle");
+    await act(async () => { fireEvent.click(waypointToggle); });
+
+    const canvas = document.querySelector<HTMLCanvasElement>(
+      'canvas[data-testid="overview-map-canvas"]',
+    )!;
+    expect(canvas).not.toBeNull();
+
+    canvas.getBoundingClientRect = () =>
+      ({
+        left: 0, top: 0,
+        right: CANVAS_W, bottom: CANVAS_H,
+        width: CANVAS_W, height: CANVAS_H,
+        x: 0, y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    // --- Pan: drag 60 px right, 40 px down ---
+    const panDx = 60;
+    const panDy = 40;
+    await act(async () => {
+      fireEvent.mouseDown(canvas, { clientX: 300, clientY: 300 });
+      fireEvent.mouseMove(window, { clientX: 300 + panDx, clientY: 300 + panDy });
+      fireEvent.mouseUp(window,   { clientX: 300 + panDx, clientY: 300 + panDy });
+    });
+
+    // After the drag, hasDraggedRef=true which would swallow the next click.
+    // A fresh mousedown resets hasDraggedRef to false (mirrors component logic).
+    await act(async () => {
+      fireEvent.mouseDown(canvas, { clientX: 0, clientY: 0 });
+    });
+
+    // Mirror handleMouseMove pan + clampTransform to predict transformRef.
+    const init = computeTestInitialTransform();
+    const pannedTransform = clampTestTransform({
+      scale:    init.scale,
+      pxPerDeg: init.pxPerDeg,
+      offsetX:  init.offsetX + panDx,
+      offsetY:  init.offsetY + panDy,
+    });
+
+    // Compute the canvas pixel for the target lon/lat using the panned transform.
+    const targetLon = -121.0;
+    const targetLat = 47.5;
+    const [px, py] = lonLatToPxWithTransform(targetLon, targetLat, pannedTransform);
+
+    await act(async () => { clickAt(canvas, px, py); });
+
+    expect(spy).toHaveBeenCalledOnce();
+    const [, lon, lat] = spy.mock.calls[0] as [unknown, number, number];
+    expect(lon).toBeCloseTo(targetLon, 1);
+    expect(lat).toBeCloseTo(targetLat, 1);
+
     spy.mockRestore();
   });
 });
