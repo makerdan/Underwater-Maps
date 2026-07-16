@@ -11,6 +11,7 @@ export type PanelId =
   | "overlaysTools"
   | "mapData"
   | "conditions"
+  | "driftRoute"
   | "forecast"
   | "seafloorClassification"
   | "markersAccordion"
@@ -40,6 +41,7 @@ export const DEFAULTS: Record<PanelId, boolean> = {
   overlaysTools: false,
   mapData: false,
   conditions: false,
+  driftRoute: false,
   forecast: false,
   seafloorClassification: false,
   markersAccordion: true,

@@ -330,10 +330,9 @@ function Main() {
   const [queryOpen, setQueryOpen] = useState(false);
   const sidePaneCollapsed = useUiStore((s) => s.sidePaneCollapsed);
   const setSidePaneCollapsed = useUiStore((s) => s.setSidePaneCollapsed);
-  const sidebarMode = useUiStore((s) => s.sidebarMode);
   const tideOverlayActive = useUiStore((s) => s.tideOverlayActive);
   const currentOverlayActive = useUiStore((s) => s.currentOverlayActive);
-  const setSidebarMode = useUiStore((s) => s.setSidebarMode);
+  const currentsEnabled = useSettingsStore((s) => s.currentsEnabled);
   const hasSeenOrbitTouchHint = useUiStore((s) => s.hasSeenOrbitTouchHint);
   const setHasSeenOrbitTouchHint = useUiStore((s) => s.setHasSeenOrbitTouchHint);
   const prevOverviewOpenRef = useRef(false);
@@ -359,6 +358,7 @@ function Main() {
   const center3Lon = ds3?.activeGrid ? (ds3.activeGrid.minLon + ds3.activeGrid.maxLon) / 2 : null;
 
   const currentsSource = useSettingsStore((st) => st.currentsSource);
+  const currentsEnabled = useSettingsStore((st) => st.currentsEnabled);
   const autoLoadTidal = useSettingsStore((st) => st.autoLoadTidal);
 
   // Tracks which terrain object we last auto-enabled the tidal overlay for.
@@ -1223,8 +1223,7 @@ function Main() {
                 PLAN MODE — Tides, Currents, Routes, Forecast
             ══════════════════════════════════════════════════ */}
             <div style={{ display: sidebarMode === 'plan' ? 'flex' : 'none', flexDirection: 'column', gap: 8 }}>
-              <RoutesPanel />
-
+              {/* (1) Conditions — Tides + Currents stacked under one collapse */}
               <SidebarSectionGroup>
                 <SidebarSection id="conditions" title="Conditions">
                   {showTidePanel && tidalOverlay && effectiveTidalData !== null ? (
@@ -1248,11 +1247,105 @@ function Main() {
                 </SidebarSection>
               </SidebarSectionGroup>
 
+              {/* Timeline hint — shown when tidal overlay or currents simulation is active */}
+              {(tidalOverlay || currentsEnabled) && (
+                <div
+                  data-testid="plan-timeline-hint"
+                  style={{
+                    minWidth: 230,
+                    maxWidth: 260,
+                    padding: "7px 10px",
+                    background: "rgba(0,229,255,0.04)",
+                    border: "1px dashed rgba(0,229,255,0.18)",
+                    borderRadius: 4,
+                    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                    fontSize: 9,
+                    letterSpacing: "0.13em",
+                    color: "#64748b",
+                    pointerEvents: "none",
+                  }}
+                >
+                  <span style={{ color: "#00e5ff", marginRight: 5 }}>▸</span>
+                  Use the timeline bar below to preview conditions over time.
+                </div>
+              )}
+
+              {/* (2) Drift & Route — drift planner */}
+              <SidebarSectionGroup>
+                <SidebarSection id="driftRoute" title="Drift & Route">
+                  {!driftPlannerActive ? (
+                    <div
+                      data-testid="drift-empty-state"
+                      style={{
+                        padding: "14px 10px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 8,
+                        alignItems: "flex-start",
+                      }}
+                    >
+                      <div style={{
+                        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                        fontSize: 9,
+                        letterSpacing: "0.13em",
+                        color: "#64748b",
+                        lineHeight: 1.55,
+                      }}>
+                        Predict where your boat and fishing line will drift based on tidal currents and wind over a 24-hour window.
+                      </div>
+                      <button
+                        onClick={() => setDriftPlannerActive(true)}
+                        style={{
+                          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                          fontSize: 9,
+                          letterSpacing: "0.18em",
+                          padding: "5px 12px",
+                          borderRadius: 3,
+                          border: "1px solid rgba(251,191,36,0.45)",
+                          background: "rgba(251,191,36,0.08)",
+                          color: "#fbbf24",
+                          cursor: "pointer",
+                        }}
+                      >
+                        ⛵ START PLANNING
+                      </button>
+                    </div>
+                  ) : (
+                    <ErrorBoundary label="weather panel">
+                      <WeatherPanel onClose={() => setDriftPlannerActive(false)} embedded />
+                    </ErrorBoundary>
+                  )}
+                </SidebarSection>
+              </SidebarSectionGroup>
+
+              {/* Routes list — standalone card, appears between Drift and Forecast */}
+              <RoutesPanel />
+
               <SidebarSectionGroup>
                 <SidebarSection id="forecast" title="Forecast">
                   <ForecastStrip />
                 </SidebarSection>
               </SidebarSectionGroup>
+
+              {/* Back to Explore shortcut */}
+              <button
+                data-testid="plan-back-to-explore"
+                onClick={() => setSidebarMode('explore')}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#475569",
+                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                  fontSize: 9,
+                  letterSpacing: "0.15em",
+                  cursor: "pointer",
+                  padding: "4px 0",
+                  textAlign: "left",
+                  alignSelf: "flex-start",
+                }}
+              >
+                ◂ Back to Explore
+              </button>
             </div>
 
             {/* ══════════════════════════════════════════════════
@@ -1491,10 +1584,7 @@ function Main() {
           <FindDataPanel key={openFindDataCount} onClose={() => setFindDataPanelOpen(false)} />
         )}
 
-        {/* Drift Planner overlays — weather panel (top-right) + timeline (bottom-centre) */}
-        {driftPlannerActive && (
-          <WeatherPanel onClose={() => setDriftPlannerActive(false)} />
-        )}
+        {/* Drift Planner timeline — bottom-centre, always shown when planner is active */}
         {driftPlannerActive && <DriftTimeline />}
 
         {/* ConditionsLegend has moved into the left sidebar (rendered above

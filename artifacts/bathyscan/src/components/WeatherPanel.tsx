@@ -165,9 +165,11 @@ const OfflineWeatherBadge: React.FC = () => {
 
 interface WeatherPanelProps {
   onClose: () => void;
+  /** When true, renders inline (no absolute positioning, no floating header). */
+  embedded?: boolean;
 }
 
-export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
+export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = false }) => {
   const { terrain } = useAppState();
   const driftConditions = useDriftStore((s) => s.driftConditions);
   const setDriftConditions = useDriftStore((s) => s.setDriftConditions);
@@ -801,8 +803,20 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
     cursor: "pointer",
   };
 
+  const panelStyle: React.CSSProperties = embedded
+    ? {
+        width: "100%",
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 10,
+        color: "#e2e8f0",
+        letterSpacing: "0.06em",
+        pointerEvents: "auto",
+      }
+    : PANEL_STYLE;
+
   return (
-    <div data-testid="weather-panel" style={PANEL_STYLE}>
+    <div data-testid="weather-panel" style={panelStyle}>
+      {!embedded && (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <span style={{ ...VALUE, fontSize: 11, letterSpacing: "0.15em" }}>⛵ DRIFT PLANNER</span>
         <button
@@ -810,6 +824,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose }) => {
           style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 14, padding: "0 2px" }}
         >×</button>
       </div>
+      )}
 
       {/* Location context badge */}
       {terrain && (
