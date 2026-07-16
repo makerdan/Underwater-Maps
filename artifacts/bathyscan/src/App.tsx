@@ -336,6 +336,8 @@ function Main() {
   const [queryOpen, setQueryOpen] = useState(false);
   const sidePaneCollapsed = useUiStore((s) => s.sidePaneCollapsed);
   const setSidePaneCollapsed = useUiStore((s) => s.setSidePaneCollapsed);
+  const sidebarMode = useUiStore((s) => s.sidebarMode);
+  const setSidebarMode = useUiStore((s) => s.setSidebarMode);
   const tideOverlayActive = useUiStore((s) => s.tideOverlayActive);
   const currentOverlayActive = useUiStore((s) => s.currentOverlayActive);
   const currentsEnabled = useSettingsStore((s) => s.currentsEnabled);

@@ -25,3 +25,4 @@
 - [uiStore/settingsStore ordering](uistore-settings-ordering.md) — mirrored setters must commit uiStore via set() first, then useSettingsStore.setState; never setState another store inside a set((state)=>…) transition.
 - [Concurrent codegen race](codegen-concurrent-race.md) — typecheck + test-all both regenerate api.ts; concurrent runs fail patch-zod-integer-settings with "missing .int()"; re-run solo, not a schema bug.
 - [PUT /api/settings extra-keys 400](put-settings-extra-keys-400.md) — palette e2e 400s come from MAX_EXTRA_KEYS=32 guard, not Zod; browser sends 76 extras not in PutSettingsBody schema.
+- [useUiStore selector declarations must precede JSX usage](uistore-selector-declarations.md) — adding JSX usages of useUiStore fields without the corresponding const hook declaration causes TS2304; check App.tsx hook block when TS reports unknown names that clearly live in the store.
