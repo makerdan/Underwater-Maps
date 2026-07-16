@@ -422,6 +422,119 @@ describe("OverviewMap — waypoint mode click dispatches correct lat/lon", () =>
   });
 
   /**
+   * MULTI-DATASET scenario — verifies that waypoint coordinates are computed
+   * from the union-bbox transform (worldGridRef) rather than the single-dataset
+   * overviewGrid when two datasets are loaded simultaneously.
+   *
+   * Strategy:
+   *   1. Seed two datasets with non-overlapping bboxes into visibleDatasets:
+   *        A: -122..-119 lon, 47..49 lat
+   *        B: -116..-113 lon, 44..46 lat
+   *      Union bbox: -122..-113 lon, 44..49 lat (lon=9°, lat=5°)
+   *   2. Mount the component; the visibleDatasets effect sets worldGridRef to
+   *      the union bbox and recomputes the transform via computeInitialTransform.
+   *   3. Mirror that math locally to predict the canvas transform.
+   *   4. Derive the canvas pixel for a target point using the union grid's
+   *      lonLatToCanvas semantics, then click there.
+   *   5. Assert appendWaypoint receives the correct lon/lat (would be wrong if
+   *      the single-dataset overviewGrid were used instead of the union).
+   */
+  it("multi-dataset: waypoint click uses union-bbox transform so coordinates are not silently wrong", async () => {
+    const gridA = makeOverviewGrid(); // -122..-119 lon, 47..49 lat, id="test-ds"
+
+    const N = 4;
+    const depthsB = new Array(N * N).fill(0).map((_, i) => 20 + i * 3);
+    const gridB = {
+      datasetId: "ds-b",
+      name: "Dataset B",
+      resolution: N,
+      width: N,
+      height: N,
+      depths: depthsB,
+      minDepth: 20,
+      maxDepth: 20 + (N * N - 1) * 3,
+      minLon: -116,
+      maxLon: -113,
+      minLat: 44,
+      maxLat: 46,
+      centerLon: -114.5,
+      centerLat: 45.0,
+      waterType: "saltwater" as const,
+    };
+
+    // Override store with two-dataset state (runs after beforeEach, before mount).
+    useTerrainStore.setState({
+      visibleDatasets: [
+        { datasetId: gridA.datasetId, source: "preset", overviewGrid: gridA, activeGrid: null },
+        { datasetId: gridB.datasetId, source: "preset", overviewGrid: gridB, activeGrid: null },
+      ],
+      primaryDatasetId: gridA.datasetId,
+      overviewGrid: gridA,
+      activeGrid: null,
+    });
+
+    const spy = vi.spyOn(waypointHelpers, "appendWaypoint");
+
+    renderWithProviders(withQuery(React.createElement(OverviewMap)));
+
+    const toolsToggle = screen.getByTestId("overview-tools-toggle");
+    await act(async () => { fireEvent.click(toolsToggle); });
+
+    const waypointToggle = screen.getByTestId("overview-waypoint-mode-toggle");
+    await act(async () => { fireEvent.click(waypointToggle); });
+
+    const canvas = document.querySelector<HTMLCanvasElement>(
+      'canvas[data-testid="overview-map-canvas"]',
+    )!;
+    expect(canvas).not.toBeNull();
+
+    // Mirror the union-bbox transform that worldGridRef produces:
+    //   union minLon=-122, maxLon=-113 (lonRange=9)
+    //   union minLat=44,   maxLat=49  (latRange=5)
+    const UNION_MIN_LON = -122, UNION_MAX_LON = -113;
+    const UNION_MIN_LAT = 44,   UNION_MAX_LAT = 49;
+    const unionLonRange = UNION_MAX_LON - UNION_MIN_LON; // 9
+    const unionLatRange = UNION_MAX_LAT - UNION_MIN_LAT; // 5
+    const unionPxPerDeg = Math.min(
+      (CANVAS_W * 0.88) / unionLonRange,
+      (CANVAS_H * 0.88) / unionLatRange,
+    );
+    const unionTerrainW = unionPxPerDeg * unionLonRange;
+    const unionTerrainH = unionPxPerDeg * unionLatRange;
+    const unionOffsetX  = (CANVAS_W - unionTerrainW) / 2;
+    const unionOffsetY  = (CANVAS_H - unionTerrainH) / 2;
+
+    // Target: a point inside dataset A's bbox.
+    // If the click handler mistakenly used overviewGrid (A's 3°×2° bbox) instead
+    // of the union (9°×5°) the round-trip lat would be off by several degrees.
+    const targetLon = -120.5;
+    const targetLat = 48.0;
+
+    // Mirror lonLatToCanvas with the union grid (scale=1).
+    const px = unionOffsetX + ((targetLon - UNION_MIN_LON) / unionLonRange) * unionTerrainW;
+    const py = unionOffsetY + (1 - (targetLat - UNION_MIN_LAT) / unionLatRange) * unionTerrainH;
+
+    await act(async () => {
+      canvas.getBoundingClientRect = () =>
+        ({
+          left: 0, top: 0,
+          right: CANVAS_W, bottom: CANVAS_H,
+          width: CANVAS_W, height: CANVAS_H,
+          x: 0, y: 0,
+          toJSON: () => ({}),
+        }) as DOMRect;
+      fireEvent.click(canvas, { clientX: px, clientY: py });
+    });
+
+    expect(spy).toHaveBeenCalledOnce();
+    const [, lon, lat] = spy.mock.calls[0] as [unknown, number, number];
+    expect(lon).toBeCloseTo(targetLon, 1);
+    expect(lat).toBeCloseTo(targetLat, 1);
+
+    spy.mockRestore();
+  });
+
+  /**
    * PAN scenario — verifies coordinate accuracy after the user drags (pans)
    * the overview map before dropping a waypoint.
    *
