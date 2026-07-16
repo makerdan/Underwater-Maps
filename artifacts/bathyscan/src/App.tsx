@@ -89,6 +89,7 @@ import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { initialViewParams } from "@/lib/viewUrl";
 import { resolveDefaultDataset } from "@/lib/defaultMapLoadLogic";
 import { useUrlSync } from "@/hooks/useUrlSync";
+import { usePaletteSuggestion } from "@/hooks/usePaletteSuggestion";
 import { lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
 import { OnboardingOverlay } from "@/components/OnboardingOverlay";
 import { useWebglContextStore } from "@/lib/webglContextStore";
@@ -1887,6 +1888,14 @@ function ServerSettingsSyncMount() {
   return null;
 }
 
+function PaletteSuggestionMount() {
+  // Runs the adaptive-palette suggestion pipeline whenever a new dataset
+  // grid loads. Auto-applies silently for first-time users; surfaces a
+  // banner in Settings for users with a customised palette.
+  usePaletteSuggestion();
+  return null;
+}
+
 function HomeRoute() {
   // QueryClientProvider wraps everything (including the global UI surfaces
   // below) so components like MarkerDetailCard — which intentionally mount
@@ -1904,6 +1913,7 @@ function HomeRoute() {
           </AppProvider>
           <Toaster />
         </TooltipProvider>
+        <PaletteSuggestionMount />
       </Show>
       <Show when="signed-out">
         <LandingPage />
@@ -1929,6 +1939,7 @@ function SettingsRoute() {
     <QueryClientProvider client={queryClient}>
       <Show when="signed-in">
         <ServerSettingsSyncMount />
+        <PaletteSuggestionMount />
         <Settings />
       </Show>
       <Show when="signed-out">

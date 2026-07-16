@@ -57,6 +57,7 @@ import { usePaletteStore, DEFAULT_SHALLOW, DEFAULT_DEEP, PALETTE_PRESETS, MID1_H
 import { colormapCanvas, colormapCssGradient, OCEAN_MAX_DEPTH_FT } from "@/lib/colormap";
 import { formatDepth } from "@/lib/units";
 import type { ColormapTheme } from "@/lib/settingsStore";
+import { PaletteSuggestionBanner } from "@/components/PaletteSuggestionBanner";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { DefaultMapLoadPicker } from "@/components/DefaultMapLoadPicker";
 import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
@@ -961,6 +962,7 @@ function VisualsSection() {
         </div>
       </div>
 
+      <PaletteSuggestionBanner />
       <PalettePickerCard />
       <ZoneColourSwatches />
       <AdvancedDisclosure testId="visuals-advanced">
