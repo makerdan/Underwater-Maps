@@ -301,6 +301,42 @@ export function useIsSessionExpired(): boolean {
   );
 }
 
+// ─── Poe classify error detection ─────────────────────────────────────────────
+// Errors returned by the /poe/* routes carry a structured `error` code in
+// their JSON body.  classificationStore already shows a targeted
+// "Seafloor classification unavailable" toast for every one of these codes,
+// so the global handler must suppress its generic "Request failed" fallback
+// to avoid a duplicate (and less-specific) toast appearing alongside it.
+//
+// This guard applies whether the call goes through the React Query mutation
+// cache (e.g. via usePoeClassify) or reaches the cache indirectly.  For calls
+// made outside of React Query entirely (classificationStore calls poeClassify
+// directly) this guard is a no-op, but it is kept here defensively so that
+// any future refactor toward hook-based calling does not reintroduce the
+// duplicate toast.
+
+const POE_ERROR_CODES = new Set([
+  "poe_error",
+  "auth_error",
+  "rate_limit",
+  "credits_exhausted",
+  "poe_point_balance_zero",
+  "poe_circuit_open",
+  "invalid_request",
+]);
+
+function isPoeClassifyError(error: unknown): boolean {
+  const e = error as { data?: { error?: unknown }; url?: unknown } | null;
+  if (!e) return false;
+  if (typeof e?.data?.error === "string" && POE_ERROR_CODES.has(e.data.error)) {
+    return true;
+  }
+  if (typeof e?.url === "string" && e.url.includes("/poe/")) {
+    return true;
+  }
+  return false;
+}
+
 // ─── Error handlers ───────────────────────────────────────────────────────────
 
 function handleQueryError(error: unknown) {
@@ -326,6 +362,13 @@ function handleQueryError(error: unknown) {
   // health poll confirms the server is back.
   if (is502(error) || isNetworkError(error)) {
     setIsConnecting(true);
+    return;
+  }
+
+  // Poe/classify errors are already handled by classificationStore with a
+  // specific "Seafloor classification unavailable" toast.  Showing a second
+  // generic "Request failed" toast here would be confusing and redundant.
+  if (isPoeClassifyError(error)) {
     return;
   }
 

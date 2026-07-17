@@ -825,9 +825,12 @@ async function classifyOneTileAi(
   if (poeBreaker.isOpen()) {
     throw new Error("poe_circuit_open");
   }
+  // Resolve the Poe client before entering the retry loop so a missing
+  // POE_API_KEY throws immediately (caught by runTiledClassify's per-tile
+  // catch → null → heuristic fill) rather than being retried three times.
+  const client = getPoeClient();
   try {
     const result = await withRetry(async () => {
-      const client = getPoeClient();
       const input = buildVisionInput(
         `Classify the seafloor/lake-bed zones in this depth map. Return exactly 1024 zone labels for the 32×32 grid.`,
         gridBase64,
@@ -1221,8 +1224,16 @@ router.post("/classify", asyncHandler(async (req, res) => {
       throw Object.assign(new Error("poe_circuit_open"), { circuitOpen: true });
     }
 
+    // Resolve the Poe client once, *before* entering the withRetry loop.
+    // getPoeClient() throws synchronously when POE_API_KEY is absent; doing
+    // this outside the retry closure means the missing-key error is caught
+    // immediately by the outer try/catch below (→ heuristic fallback or
+    // handlePoeError) rather than being retried three times with back-off
+    // delays (7 s total), which could race against upstream timeouts and
+    // reach the global Express error handler instead.
+    const client = getPoeClient();
+
     const result = await withRetry(async () => {
-      const client = getPoeClient();
       const promptText = substratePrompt
         ? `Classify the seafloor/lake-bed zones in this depth map. Return exactly 1024 zone labels for the 32×32 grid.\n\n${substratePrompt}\n\nFor every cell where a substrate label is provided above, you MUST output that exact label. Only reason from the depth map for cells marked "?".`
         : `Classify the seafloor/lake-bed zones in this depth map. Return exactly 1024 zone labels for the 32×32 grid.`;
@@ -1258,6 +1269,9 @@ router.post("/classify", asyncHandler(async (req, res) => {
 
       return response;
     }, 3);
+    // Note: `client` is shared across retries — this is intentional.
+    // The Poe client is a stateless HTTP wrapper (OpenAI-compatible) so
+    // re-using the same instance across retry attempts is safe.
 
     let parsedRaw: { zones: string[] };
     try {
