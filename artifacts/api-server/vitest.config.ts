@@ -19,9 +19,11 @@ export default defineConfig({
     poolOptions: {
       forks: {
         singleFork: true,
-        // Cap the heap of the forked test process so V8 GC pressure kicks in
-        // before the process exhausts system RAM and triggers an OOM crash.
-        execArgv: ["--max-old-space-size=4096"],
+        // Give the single long-lived worker enough heap to run the full suite
+        // without hitting "Ineffective mark-compacts near heap limit" (OOM).
+        // The default V8 heap is ~1.5 GB; BAG-parsing tests accumulate well
+        // beyond that over a single-fork run.
+        execArgv: ["--max-old-space-size=8192"],
       },
     },
   },
