@@ -1078,10 +1078,35 @@ function VisualsSection() {
 
 function NavigationSection() {
   const s = useSettingsStore(useShallow((s) => s));
+  const keyBindings = useSettingsStore((s) => s.keyBindings);
+  const resetAllKeyBindings = useSettingsStore((s) => s.resetAllKeyBindings);
+
+  const conflictByAction = React.useMemo(() => {
+    const byCode = findBindingConflicts(keyBindings);
+    const out = new Map<ShortcutActionId, string[]>();
+    for (const action of SHORTCUT_ACTIONS) {
+      const code = keyBindings[action.id] ?? action.defaultCode;
+      const sharing = (byCode.get(code) ?? []).filter((id) => id !== action.id);
+      out.set(
+        action.id,
+        sharing.map((id) => SHORTCUT_ACTIONS.find((a) => a.id === id)?.label ?? id),
+      );
+    }
+    return out;
+  }, [keyBindings]);
+
+  const allDefault = React.useMemo(
+    () =>
+      SHORTCUT_ACTIONS.every(
+        (a) => (keyBindings[a.id] ?? a.defaultCode) === DEFAULT_KEY_BINDINGS[a.id],
+      ),
+    [keyBindings],
+  );
+
   return (
     <>
-      <SectionTitle helpId="keyboard-shortcuts" helpLabel="Camera & Controls">◈ CAMERA &amp; CONTROLS</SectionTitle>
-      <SectionActionsRow section="camera" />
+      <SectionTitle helpId="keyboard-shortcuts" helpLabel="Navigation">◈ NAVIGATION</SectionTitle>
+      <SectionActionsRow sections={["camera", "shortcuts"]} />
       <div style={S.card}>
         <div style={S.cardHeader}>BASICS</div>
         <div style={S.row}>
@@ -1204,16 +1229,105 @@ function NavigationSection() {
           />
         </div>
       </AdvancedDisclosure>
+
+      {/* ── Keyboard Shortcuts ─────────────────────────────────────── */}
+      <div style={{ ...S.card, marginTop: 16 }}>
+        <div style={S.cardHeader}>KEYBOARD SHORTCUTS</div>
+      </div>
+
+      {SHORTCUT_GROUPS.map((group) => {
+        const actions = SHORTCUT_ACTIONS.filter((a) => a.group === group.id);
+        if (actions.length === 0) return null;
+        return (
+          <div key={group.id} style={S.card}>
+            <div style={S.cardHeader}>{group.title}</div>
+            {actions.map((a) => (
+              <KeyBindingCapture
+                key={a.id}
+                action={a.id}
+                conflictWith={conflictByAction.get(a.id) ?? []}
+              />
+            ))}
+          </div>
+        );
+      })}
+
+      <div style={S.card}>
+        <div style={S.cardHeader}>GAMEPAD</div>
+        <CrosshairMenuGamepadCapture />
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "flex-end", margin: "8px 0 16px" }}>
+        <button
+          type="button"
+          data-testid="reset-all-bindings-btn"
+          onClick={() => resetAllKeyBindings()}
+          disabled={allDefault}
+          style={{
+            background: "none",
+            border: "1px solid rgba(0,229,255,0.2)",
+            borderRadius: 3,
+            color: allDefault ? "#64748b" : "#67e8f9",
+            fontSize: 9,
+            letterSpacing: "0.15em",
+            padding: "4px 12px",
+            cursor: allDefault ? "default" : "pointer",
+            fontFamily: FONT,
+            opacity: allDefault ? 0.5 : 1,
+          }}
+        >
+          RESET ALL KEY BINDINGS
+        </button>
+      </div>
+
+      <div style={S.card}>
+        <div style={S.cardHeader}>FIXED CONTROLS</div>
+        <div style={{ padding: "8px 16px" }}>
+          {FIXED_SHORTCUTS.map((sh) => (
+            <div
+              key={sh.keys}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "6px 0",
+                borderBottom: "1px solid rgba(0,229,255,0.05)",
+                fontSize: 11,
+              }}
+            >
+              <span style={{ color: "#e2e8f0" }}>{sh.desc}</span>
+              <kbd
+                style={{
+                  background: "rgba(0,229,255,0.08)",
+                  border: "1px solid rgba(0,229,255,0.25)",
+                  borderRadius: 3,
+                  padding: "2px 8px",
+                  fontFamily: FONT,
+                  fontSize: 10,
+                  color: "#67e8f9",
+                }}
+              >
+                {sh.keys}
+              </kbd>
+            </div>
+          ))}
+        </div>
+      </div>
     </>
   );
 }
 
-function HUDSection() {
+function DisplayOverlaysSection() {
   const s = useSettingsStore(useShallow((s) => s));
   return (
     <>
-      <SectionTitle helpId="interface-tour" helpLabel="HUD & Layout">◈ HUD &amp; LAYOUT</SectionTitle>
-      <SectionActionsRow section="hud" />
+      <SectionTitle helpId="interface-tour" helpLabel="Display & Overlays">◈ DISPLAY &amp; OVERLAYS</SectionTitle>
+      <SectionActionsRow sections={["hud", "overview", "habitat"]} withReset={false} />
+
+      {/* ── HUD & Layout ──────────────────────────────────────────── */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>HUD &amp; LAYOUT</div>
+      </div>
       <div style={S.card}>
         <div style={S.cardHeader}>VISIBILITY</div>
         <ToggleRow label="Crosshair GPS" value={s.showCrosshairGps} onChange={s.setShowCrosshairGps} sublabel="Centre-screen target coordinates" />
@@ -1268,6 +1382,64 @@ function HUDSection() {
             ]}
             sublabel="Clock format used for tide predictions, overlay timestamps, and the tidal panel."
           />
+        </div>
+      </AdvancedDisclosure>
+
+      {/* ── Map & Overlays ────────────────────────────────────────── */}
+      <div style={{ ...S.card, marginTop: 16 }}>
+        <div style={S.cardHeader}>MAP &amp; OVERLAYS</div>
+      </div>
+      <div style={S.card}>
+        <div style={S.cardHeader}>OVERVIEW MAP</div>
+        <ToggleRow label="Show Grid Lines" value={s.overviewShowGrid} onChange={s.setOverviewShowGrid} />
+        <ToggleRow label="Show Markers" value={s.overviewShowMarkers} onChange={s.setOverviewShowMarkers} />
+        <ToggleRow label="Open on Load" value={s.overviewOpenOnLoad} onChange={s.setOverviewOpenOnLoad} sublabel="Auto-expand when a dataset loads" />
+        <SliderRow
+          label="Default Zoom"
+          value={s.overviewDefaultZoom}
+          min={0.5} max={5.0} step={0.1}
+          format={(v) => `${v.toFixed(1)}×`}
+          onChange={s.setOverviewDefaultZoom}
+        />
+      </div>
+      <div style={S.card}>
+        <div style={S.cardHeader}>HABITAT</div>
+        <ToggleRow
+          label="Auto-Show Zone Overlay"
+          value={s.autoShowZoneOverlay}
+          onChange={s.setAutoShowZoneOverlay}
+          sublabel="Display habitat zones automatically on load"
+        />
+        <SliderRow
+          label="Overlay Intensity"
+          value={s.habitatOverlayIntensity}
+          min={0}
+          max={1}
+          step={0.05}
+          format={(v) => `${Math.round(v * 100)}%`}
+          onChange={s.setHabitatOverlayIntensity}
+          sublabel="Default strength of the amber habitat tint on terrain"
+        />
+      </div>
+      <ZoneColourSwatches />
+      <AdvancedDisclosure testId="habitat-advanced">
+        <div style={S.card}>
+          <div style={S.cardHeader}>HABITAT DEFAULTS</div>
+          <div style={S.row}>
+            <div>
+              <div style={S.label}>Default Species</div>
+              <div style={S.sublabel}>Pre-fills the habitat species filter</div>
+            </div>
+            <input
+              type="text"
+              value={s.defaultHabitatSpecies}
+              onChange={(e) => s.setDefaultHabitatSpecies(e.target.value)}
+              placeholder="(none)"
+              style={{
+                ...S.select, width: 160, fontFamily: FONT, fontSize: 10,
+              }}
+            />
+          </div>
         </div>
       </AdvancedDisclosure>
     </>
@@ -1748,121 +1920,6 @@ function CrosshairMenuGamepadCapture() {
   );
 }
 
-function ShortcutsSection() {
-  const keyBindings = useSettingsStore((s) => s.keyBindings);
-  const resetAllKeyBindings = useSettingsStore((s) => s.resetAllKeyBindings);
-
-  // Map each action id to the other actions that share its code, so each row
-  // can render an inline conflict warning. Built once per render from the
-  // current bindings snapshot.
-  const conflictByAction = React.useMemo(() => {
-    const byCode = findBindingConflicts(keyBindings);
-    const out = new Map<ShortcutActionId, string[]>();
-    for (const action of SHORTCUT_ACTIONS) {
-      const code = keyBindings[action.id] ?? action.defaultCode;
-      const sharing = (byCode.get(code) ?? []).filter((id) => id !== action.id);
-      out.set(
-        action.id,
-        sharing.map((id) => SHORTCUT_ACTIONS.find((a) => a.id === id)?.label ?? id),
-      );
-    }
-    return out;
-  }, [keyBindings]);
-
-  const allDefault = React.useMemo(
-    () =>
-      SHORTCUT_ACTIONS.every(
-        (a) => (keyBindings[a.id] ?? a.defaultCode) === DEFAULT_KEY_BINDINGS[a.id],
-      ),
-    [keyBindings],
-  );
-
-  return (
-    <>
-      <SectionTitle helpId="keyboard-shortcuts" helpLabel="Keyboard Shortcuts">◈ KEYBOARD SHORTCUTS</SectionTitle>
-      <SectionActionsRow section="shortcuts" />
-
-      {SHORTCUT_GROUPS.map((group) => {
-        const actions = SHORTCUT_ACTIONS.filter((a) => a.group === group.id);
-        if (actions.length === 0) return null;
-        return (
-          <div key={group.id} style={S.card}>
-            <div style={S.cardHeader}>{group.title}</div>
-            {actions.map((a) => (
-              <KeyBindingCapture
-                key={a.id}
-                action={a.id}
-                conflictWith={conflictByAction.get(a.id) ?? []}
-              />
-            ))}
-          </div>
-        );
-      })}
-
-      <div style={S.card}>
-        <div style={S.cardHeader}>GAMEPAD</div>
-        <CrosshairMenuGamepadCapture />
-      </div>
-
-      <div style={{ display: "flex", justifyContent: "flex-end", margin: "8px 0 16px" }}>
-        <button
-          type="button"
-          data-testid="reset-all-bindings-btn"
-          onClick={() => resetAllKeyBindings()}
-          disabled={allDefault}
-          style={{
-            background: "none",
-            border: "1px solid rgba(0,229,255,0.2)",
-            borderRadius: 3,
-            color: allDefault ? "#64748b" : "#67e8f9",
-            fontSize: 9,
-            letterSpacing: "0.15em",
-            padding: "4px 12px",
-            cursor: allDefault ? "default" : "pointer",
-            fontFamily: FONT,
-            opacity: allDefault ? 0.5 : 1,
-          }}
-        >
-          RESET ALL KEY BINDINGS
-        </button>
-      </div>
-
-      <div style={S.card}>
-        <div style={S.cardHeader}>FIXED CONTROLS</div>
-        <div style={{ padding: "8px 16px" }}>
-          {FIXED_SHORTCUTS.map((sh) => (
-            <div
-              key={sh.keys}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "6px 0",
-                borderBottom: "1px solid rgba(0,229,255,0.05)",
-                fontSize: 11,
-              }}
-            >
-              <span style={{ color: "#e2e8f0" }}>{sh.desc}</span>
-              <kbd
-                style={{
-                  background: "rgba(0,229,255,0.08)",
-                  border: "1px solid rgba(0,229,255,0.25)",
-                  borderRadius: 3,
-                  padding: "2px 8px",
-                  fontFamily: FONT,
-                  fontSize: 10,
-                  color: "#67e8f9",
-                }}
-              >
-                {sh.keys}
-              </kbd>
-            </div>
-          ))}
-        </div>
-      </div>
-    </>
-  );
-}
 function formatCacheSize(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
@@ -1874,6 +1931,8 @@ function AccountSection() {
   const activeGrid = useTerrainStore((s) => s.activeGrid);
   const s = useSettingsStore(useShallow((s) => s));
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const setHasSeenOnboarding = useSettingsStore((st) => st.setHasSeenOnboarding);
   const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
   const deleteAllMarkers = useDeleteMarkersMine({
     mutation: {
@@ -2101,6 +2160,34 @@ function AccountSection() {
     <>
       <SectionTitle helpId="settings" helpLabel="Account & Privacy">◈ ACCOUNT &amp; PRIVACY</SectionTitle>
       <SectionResetRow section="account" />
+      {/* Guided Tour card */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>GUIDED TOUR</div>
+        <div style={S.row}>
+          <div>
+            <div style={S.label}>Replay App Tour</div>
+            <div style={S.sublabel}>Reset the onboarding tour and restart it from the beginning</div>
+          </div>
+          <button
+            data-testid="replay-tour-btn"
+            onClick={() => { setHasSeenOnboarding(false); setLocation("/"); }}
+            style={{
+              fontSize: 9,
+              letterSpacing: "0.15em",
+              padding: "4px 12px",
+              borderRadius: 4,
+              border: "1px solid rgba(0,229,255,0.3)",
+              background: "transparent",
+              color: "#00e5ff",
+              cursor: "pointer",
+              fontFamily: FONT,
+              whiteSpace: "nowrap",
+            }}
+          >
+            ▶ REPLAY TOUR
+          </button>
+        </div>
+      </div>
       {user && (
         <div style={S.card}>
           <div style={S.cardHeader}>SIGNED IN AS</div>
@@ -2453,12 +2540,10 @@ function AccountSection() {
  */
 function GeneralSection() {
   const s = useSettingsStore(useShallow((s) => s));
-  const [, setLocation] = useLocation();
-  const setHasSeenOnboarding = useSettingsStore((st) => st.setHasSeenOnboarding);
   return (
     <>
       <SectionTitle>◈ GENERAL</SectionTitle>
-      <SectionActionsRow sections={["environment", "hud"]} withReset={false} />
+      <SectionActionsRow sections={["environment", "hud", "data"]} withReset={false} />
       {/* Environment card */}
       <div style={S.card}>
         <div style={S.cardHeader}>ENVIRONMENT</div>
@@ -2545,110 +2630,35 @@ function GeneralSection() {
           sublabel="Override temperature display unit independently of the global units system"
         />
       </div>
-      {/* Tour card */}
+      {/* Startup Defaults card */}
       <div style={S.card}>
-        <div style={S.cardHeader}>GUIDED TOUR</div>
+        <div style={S.cardHeader}>STARTUP DEFAULTS</div>
         <div style={S.row}>
           <div>
-            <div style={S.label}>Replay App Tour</div>
-            <div style={S.sublabel}>Reset the onboarding tour and restart it from the beginning</div>
+            <div style={S.label}>Default Map Load</div>
+            <div style={S.sublabel}>Dataset that opens automatically on every launch</div>
           </div>
-          <button
-            data-testid="replay-tour-btn"
-            onClick={() => { setHasSeenOnboarding(false); setLocation("/"); }}
-            style={{
-              fontSize: 9,
-              letterSpacing: "0.15em",
-              padding: "4px 12px",
-              borderRadius: 4,
-              border: "1px solid rgba(0,229,255,0.3)",
-              background: "transparent",
-              color: "#00e5ff",
-              cursor: "pointer",
-              fontFamily: FONT,
-              whiteSpace: "nowrap",
-            }}
-          >
-            ▶ REPLAY TOUR
-          </button>
+          <DefaultMapLoadPicker
+            value={s.defaultMapLoad}
+            onChange={s.setDefaultMapLoad}
+          />
         </div>
+        <SelectRow
+          label="Default Region"
+          value={s.defaultRegion}
+          onChange={s.setDefaultRegion}
+          options={[
+            { value: "", label: "None — start with no dataset loaded" },
+          ]}
+          sublabel="No bundled preset regions are available. Upload your own data or save a dataset from Find Data to use as a default."
+        />
       </div>
     </>
   );
 }
 
-/**
- * Map & Overlays — Overview Map + Habitat Defaults in one section.
- */
-function MapOverlaysSection() {
-  const s = useSettingsStore(useShallow((s) => s));
-  return (
-    <>
-      <SectionTitle helpId="ai-assistant" helpLabel="Map & Overlays">◈ MAP &amp; OVERLAYS</SectionTitle>
-      <SectionActionsRow sections={["overview", "habitat"]} withReset={false} />
-      {/* Overview Map card */}
-      <div style={S.card}>
-        <div style={S.cardHeader}>OVERVIEW MAP</div>
-        <ToggleRow label="Show Grid Lines" value={s.overviewShowGrid} onChange={s.setOverviewShowGrid} />
-        <ToggleRow label="Show Markers" value={s.overviewShowMarkers} onChange={s.setOverviewShowMarkers} />
-        <ToggleRow label="Open on Load" value={s.overviewOpenOnLoad} onChange={s.setOverviewOpenOnLoad} sublabel="Auto-expand when a dataset loads" />
-        <SliderRow
-          label="Default Zoom"
-          value={s.overviewDefaultZoom}
-          min={0.5} max={5.0} step={0.1}
-          format={(v) => `${v.toFixed(1)}×`}
-          onChange={s.setOverviewDefaultZoom}
-        />
-      </div>
-      {/* Habitat card */}
-      <div style={S.card}>
-        <div style={S.cardHeader}>HABITAT</div>
-        <ToggleRow
-          label="Auto-Show Zone Overlay"
-          value={s.autoShowZoneOverlay}
-          onChange={s.setAutoShowZoneOverlay}
-          sublabel="Display habitat zones automatically on load"
-        />
-        <SliderRow
-          label="Overlay Intensity"
-          value={s.habitatOverlayIntensity}
-          min={0}
-          max={1}
-          step={0.05}
-          format={(v) => `${Math.round(v * 100)}%`}
-          onChange={s.setHabitatOverlayIntensity}
-          sublabel="Default strength of the amber habitat tint on terrain"
-        />
-      </div>
-      <ZoneColourSwatches />
-      <AdvancedDisclosure testId="habitat-advanced">
-        <div style={S.card}>
-          <div style={S.cardHeader}>HABITAT DEFAULTS</div>
-          <div style={S.row}>
-            <div>
-              <div style={S.label}>Default Species</div>
-              <div style={S.sublabel}>Pre-fills the habitat species filter</div>
-            </div>
-            <input
-              type="text"
-              value={s.defaultHabitatSpecies}
-              onChange={(e) => s.setDefaultHabitatSpecies(e.target.value)}
-              placeholder="(none)"
-              style={{
-                ...S.select, width: 160, fontFamily: FONT, fontSize: 10,
-              }}
-            />
-          </div>
-        </div>
-      </AdvancedDisclosure>
-    </>
-  );
-}
 
-/**
- * Markers & Trails — Markers + GPS & Trail in one section.
- */
-function MarkersTrailsSection() {
+function MapLayersSection() {
   const s = useSettingsStore(useShallow((s) => s));
   const MARKER_TYPE_OPTIONS =
     s.waterType === "freshwater"
@@ -2666,9 +2676,13 @@ function MarkersTrailsSection() {
 
   return (
     <>
-      <SectionTitle helpId="markers" helpLabel="Markers & Trails">◈ MARKERS &amp; TRAILS</SectionTitle>
-      <SectionActionsRow sections={["markers", "gps"]} />
-      {/* Markers card */}
+      <SectionTitle helpId="markers" helpLabel="Map Layers">◈ MAP LAYERS</SectionTitle>
+      <SectionActionsRow sections={["markers", "gps", "tidal", "currents"]} />
+
+      {/* ── Markers & Trails ──────────────────────────────────────── */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>MARKERS &amp; TRAILS</div>
+      </div>
       <div style={S.card}>
         <div style={S.cardHeader}>MARKERS</div>
         <ToggleRow label="Show Marker Labels" value={s.showMarkerLabels} onChange={s.setShowMarkerLabels} sublabel="Name text below marker sprites" />
@@ -2681,7 +2695,6 @@ function MarkersTrailsSection() {
           sublabel="Pre-selected when opening the marker form"
         />
       </div>
-      {/* Visible Types card */}
       <div style={S.card}>
         <div style={S.cardHeader}>VISIBLE TYPES</div>
         {MARKER_TYPE_OPTIONS.map((o) => (
@@ -2693,7 +2706,6 @@ function MarkersTrailsSection() {
           />
         ))}
       </div>
-      {/* Trails card */}
       <div style={S.card}>
         <div style={S.cardHeader}>TRAILS</div>
         <ToggleRow
@@ -2753,20 +2765,11 @@ function MarkersTrailsSection() {
           />
         </div>
       </AdvancedDisclosure>
-    </>
-  );
-}
 
-/**
- * Tides & Currents — Tidal Defaults + Bathymetric Currents in one section.
- */
-function TidesCurrentsSection() {
-  const s = useSettingsStore(useShallow((s) => s));
-  return (
-    <>
-      <SectionTitle helpId="settings" helpLabel="Tides & Currents">◈ TIDES &amp; CURRENTS</SectionTitle>
-      <SectionActionsRow sections={["tidal", "currents"]} />
-      {/* Behaviour card */}
+      {/* ── Tides & Currents ──────────────────────────────────────── */}
+      <div style={{ ...S.card, marginTop: 16 }}>
+        <div style={S.cardHeader}>TIDES &amp; CURRENTS</div>
+      </div>
       <div style={S.card}>
         <div style={S.cardHeader}>BEHAVIOUR</div>
         <ToggleRow
@@ -2787,7 +2790,6 @@ function TidesCurrentsSection() {
           sublabel="Which current layer is shown by default"
         />
       </div>
-      {/* Simulation card */}
       <div style={S.card}>
         <div style={S.cardHeader}>SIMULATION</div>
         <ToggleRow
@@ -3024,25 +3026,6 @@ function DataStorageSection() {
       {/* Defaults card */}
       <div style={S.card}>
         <div style={S.cardHeader}>DEFAULTS</div>
-        <div style={S.row}>
-          <div>
-            <div style={S.label}>Default Map Load</div>
-            <div style={S.sublabel}>Dataset that opens automatically on every launch</div>
-          </div>
-          <DefaultMapLoadPicker
-            value={s.defaultMapLoad}
-            onChange={s.setDefaultMapLoad}
-          />
-        </div>
-        <SelectRow
-          label="Default Region"
-          value={s.defaultRegion}
-          onChange={s.setDefaultRegion}
-          options={[
-            { value: "", label: "None — start with no dataset loaded" },
-          ]}
-          sublabel="No bundled preset regions are available. Upload your own data or save a dataset from Find Data to use as a default."
-        />
         <ToggleRow
           label="Auto-Load Last Dataset"
           value={s.autoLoadLastDataset}
@@ -3253,21 +3236,17 @@ function DataStorageSection() {
 
 // ─── Nav tabs ─────────────────────────────────────────────────────────────────
 type Tab =
-  | "general" | "visuals" | "navigation" | "hud"
-  | "map-overlays" | "markers-trails" | "tides-currents"
-  | "data-storage" | "accessibility" | "shortcuts" | "account";
+  | "general" | "visuals" | "navigation" | "display-overlays"
+  | "map-layers" | "data-storage" | "accessibility" | "account";
 
 const NAV_TABS: { id: Tab; label: string }[] = [
   { id: "general", label: "GENERAL" },
   { id: "visuals", label: "VISUALS & PERF" },
-  { id: "navigation", label: "CAMERA & CTRL" },
-  { id: "hud", label: "HUD & LAYOUT" },
-  { id: "map-overlays", label: "MAP & OVERLAYS" },
-  { id: "markers-trails", label: "MARKERS & TRAILS" },
-  { id: "tides-currents", label: "TIDES & CURRENTS" },
+  { id: "navigation", label: "NAVIGATION" },
+  { id: "display-overlays", label: "DISPLAY & OVERLAYS" },
+  { id: "map-layers", label: "MAP LAYERS" },
   { id: "data-storage", label: "DATA & STORAGE" },
   { id: "accessibility", label: "ACCESSIBILITY" },
-  { id: "shortcuts", label: "SHORTCUTS" },
   { id: "account", label: "ACCOUNT & PRIVACY" },
 ];
 
@@ -3421,13 +3400,10 @@ export function Settings() {
           {tab === "general" && <GeneralSection />}
           {tab === "visuals" && <VisualsSection />}
           {tab === "navigation" && <NavigationSection />}
-          {tab === "hud" && <HUDSection />}
-          {tab === "map-overlays" && <MapOverlaysSection />}
-          {tab === "markers-trails" && <MarkersTrailsSection />}
-          {tab === "tides-currents" && <TidesCurrentsSection />}
+          {tab === "display-overlays" && <DisplayOverlaysSection />}
+          {tab === "map-layers" && <MapLayersSection />}
           {tab === "data-storage" && <DataStorageSection />}
           {tab === "accessibility" && <AccessibilitySection />}
-          {tab === "shortcuts" && <ShortcutsSection />}
           {tab === "account" && <AccountSection />}
 
           {/* Footer: global reset */}

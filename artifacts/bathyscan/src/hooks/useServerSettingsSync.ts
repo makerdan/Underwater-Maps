@@ -127,7 +127,6 @@ function _enterBackOff(): void {
   _inBackOff = true;
   _consecutiveFlushFailures = 0;
 
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const delay = BACK_OFF_DELAYS[Math.min(_backOffStep, BACK_OFF_DELAYS.length - 1)]!;
   _backOffStep = Math.min(_backOffStep + 1, BACK_OFF_DELAYS.length - 1);
 
