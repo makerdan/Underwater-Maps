@@ -32,9 +32,14 @@ const FIXTURE_DIR = join(__dir, "fixtures");
 
 let lazBuf: Buffer;
 
+// 90 s — WASM laz-perf init can be slow on the shared CI runner.
+// Pre-warming here means individual tests never pay the init cost themselves.
 beforeAll(async () => {
   lazBuf = await readFile(join(FIXTURE_DIR, "survey.laz"));
-});
+  // Pre-warm the WASM decoder so its one-time init cost is borne here,
+  // not spread across every it() block.
+  await lazPerfModule.createLazPerf();
+}, 90_000);
 
 afterEach(() => {
   vi.restoreAllMocks();

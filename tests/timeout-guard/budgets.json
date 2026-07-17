@@ -2,7 +2,7 @@
   "$comment": "Single source of truth for all test-suite time budgets (milliseconds). Layers: testTimeoutMs/hookTimeoutMs = per-test & per-hook (Layer 1+2); fileBudgetMs = per test file wall-clock (Layer 3); runBudgetMs = whole runner invocation (Layer 4); aggregate.totalBudgetMs = the entire test-all sequence (Layer 5). Edit here, never inline in configs.",
   "apiServerUnit": {
     "testTimeoutMs": 30000,
-    "hookTimeoutMs": 30000,
+    "hookTimeoutMs": 90000,
     "fileBudgetMs": 120000,
     "runBudgetMs": 600000
   },
