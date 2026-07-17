@@ -60,7 +60,7 @@ import {
   toValidDefaultSpeedTier,
 } from "./settingsGuards";
 
-export const SETTINGS_SCHEMA_VERSION = 22;
+export const SETTINGS_SCHEMA_VERSION = 23;
 
 export type SidebarMode = 'explore' | 'plan' | 'analyze';
 
@@ -247,6 +247,8 @@ export interface SettingsState {
   showDatasetPanel: boolean;
   showQueryPanel: boolean;
   showUiTooltips: boolean;
+  /** Show the /health latency badge in the bottom-right corner (dev builds only). */
+  showHealthBadge: boolean;
   timeFormat: TimeFormat;
   coordinateFormat: CoordinateFormat;
   depthUnit: DepthUnit;
@@ -542,6 +544,7 @@ interface SettingsActions {
   setShowDatasetPanel: (v: boolean) => void;
   setShowQueryPanel: (v: boolean) => void;
   setShowUiTooltips: (v: boolean) => void;
+  setShowHealthBadge: (v: boolean) => void;
   setTimeFormat: (v: TimeFormat) => void;
   setCoordinateFormat: (v: CoordinateFormat) => void;
   setDepthUnit: (v: DepthUnit) => void;
@@ -820,6 +823,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   showDatasetPanel: true,
   showQueryPanel: true,
   showUiTooltips: true,
+  showHealthBadge: true,
   timeFormat: "local",
   coordinateFormat: "decimal",
   depthUnit: "metres",
@@ -952,7 +956,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "hudOpacity", "showCrosshairGps", "showCameraPosition",
     "showHeading", "showDepthLegend", "showDepthScaleBar", "showCompassMinimap",
     "showControlsLegend", "showTidePanel", "showHabitatPanel", "showDatasetPanel",
-    "showQueryPanel", "showUiTooltips", "timeFormat", "coordinateFormat", "depthUnit", "units",
+    "showQueryPanel", "showUiTooltips", "showHealthBadge", "timeFormat", "coordinateFormat", "depthUnit", "units",
     "temperatureUnit", "sidePaneCollapsed", "sidebarMode",
   ],
   overview: [
@@ -1102,6 +1106,7 @@ export const useSettingsStore = create<SettingsStore>()(
         setShowDatasetPanel: setter("showDatasetPanel"),
         setShowQueryPanel: setter("showQueryPanel"),
         setShowUiTooltips: setter("showUiTooltips"),
+        setShowHealthBadge: setter("showHealthBadge"),
         setTimeFormat: setter("timeFormat"),
         setCoordinateFormat: setter("coordinateFormat"),
         setDepthUnit: setter("depthUnit"),
@@ -1531,6 +1536,11 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).sidebarMode === undefined) {
             migratedSidebarMode.sidebarMode = DEFAULT_SETTINGS.sidebarMode;
           }
+          // v22 → v23: inject showHealthBadge default (true) for existing users.
+          const migratedHealthBadge: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).showHealthBadge === undefined) {
+            migratedHealthBadge.showHealthBadge = DEFAULT_SETTINGS.showHealthBadge;
+          }
           const mergedState: SettingsState = {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -1542,6 +1552,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedWaterTemp,
             ...migratedTimeline,
             ...migratedSidebarMode,
+            ...migratedHealthBadge,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,

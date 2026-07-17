@@ -59,6 +59,12 @@ export function DisplayOverlaysSection() {
             onChange={s.setShowUiTooltips}
             sublabel="Hover hints on viewscreen buttons and HUD elements"
           />
+          <ToggleRow
+            label="Health Badge"
+            value={s.showHealthBadge}
+            onChange={s.setShowHealthBadge}
+            sublabel="Latency readout in the bottom-right corner (dev builds only)"
+          />
         </div>
         <div style={S.card}>
           <div style={S.cardHeader}>TIME FORMAT</div>

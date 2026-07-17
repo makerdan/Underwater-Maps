@@ -321,6 +321,7 @@ function Main() {
   const showHabitatPanel = useSettingsStore((st) => st.showHabitatPanel);
   const showDatasetPanel = useSettingsStore((st) => st.showDatasetPanel);
   const showQueryPanel = useSettingsStore((st) => st.showQueryPanel);
+  const showHealthBadge = useSettingsStore((st) => st.showHealthBadge);
   const joystickMode = useSettingsStore((st) => st.joystickMode);
   const showJoystickInOrbit = useSettingsStore((st) => st.showJoystickInOrbit);
 
@@ -1036,7 +1037,7 @@ function Main() {
           Shows the round-trip latency of the most recent GET /health probe
           so developers can verify connectivity without opening DevTools.
           Stripped from production builds via import.meta.env.DEV. */}
-      {import.meta.env.DEV && healthResponseMs !== null && (
+      {import.meta.env.DEV && healthResponseMs !== null && showHealthBadge && (
         <div
           aria-hidden="true"
           style={{

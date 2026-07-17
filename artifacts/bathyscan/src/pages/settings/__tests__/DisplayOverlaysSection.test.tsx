@@ -49,6 +49,8 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     setShowQueryPanel: vi.fn(),
     showUiTooltips: true,
     setShowUiTooltips: vi.fn(),
+    showHealthBadge: true,
+    setShowHealthBadge: vi.fn(),
     timeFormat: "local" as const,
     setTimeFormat: vi.fn(),
     overviewShowGrid: true,
