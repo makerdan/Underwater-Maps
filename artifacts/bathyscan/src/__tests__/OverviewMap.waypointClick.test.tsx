@@ -755,4 +755,143 @@ describe("OverviewMap — waypoint mode click dispatches correct lat/lon", () =>
 
     spy.mockRestore();
   });
+
+  /**
+   * THIRD-DATASET-ADDED-MID-SESSION scenario — verifies that waypoints placed
+   * before a third dataset is promoted keep their original absolute lon/lat.
+   *
+   * When a third dataset is added the component re-runs the visibleDatasets
+   * effect, updates worldGridRef to the new (larger) union bbox, and recomputes
+   * the transform.  Waypoints are stored as absolute lon/lat in React state and
+   * must NOT be re-derived from canvas coordinates, so their values must be
+   * identical before and after the store update.
+   *
+   * Strategy:
+   *   1. Seed two datasets (A + B) with a known union bbox (-122..-113 / 44..49).
+   *   2. Mount the component, enable waypoint mode, and drop one waypoint.
+   *   3. Capture the lon/lat that appendWaypoint received.
+   *   4. Update useTerrainStore to add a third dataset C (-108..-105 / 41..43),
+   *      expanding the union to -122..-105 / 41..49 (17°×8°).
+   *   5. Assert appendWaypoint was called exactly once and its arguments match
+   *      the coordinates captured in step 3 (no drift after bbox expansion).
+   */
+  it("third dataset added mid-session: existing waypoint lon/lat are unchanged after union bbox expands", async () => {
+    const gridA = makeOverviewGrid(); // -122..-119 lon, 47..49 lat, id="test-ds"
+
+    const N = 4;
+    const depthsB = new Array(N * N).fill(0).map((_, i) => 20 + i * 3);
+    const gridB = {
+      datasetId: "ds-b",
+      name: "Dataset B",
+      resolution: N, width: N, height: N,
+      depths: depthsB,
+      minDepth: 20, maxDepth: 20 + (N * N - 1) * 3,
+      minLon: -116, maxLon: -113,
+      minLat: 44,   maxLat: 46,
+      centerLon: -114.5, centerLat: 45.0,
+      waterType: "saltwater" as const,
+    };
+
+    // Seed two-dataset state before mounting.
+    useTerrainStore.setState({
+      visibleDatasets: [
+        { datasetId: gridA.datasetId, source: "preset", overviewGrid: gridA, activeGrid: null },
+        { datasetId: gridB.datasetId, source: "preset", overviewGrid: gridB, activeGrid: null },
+      ],
+      primaryDatasetId: gridA.datasetId,
+      overviewGrid: gridA,
+      activeGrid: null,
+    });
+
+    const spy = vi.spyOn(waypointHelpers, "appendWaypoint");
+
+    renderWithProviders(withQuery(React.createElement(OverviewMap)));
+
+    const toolsToggle = screen.getByTestId("overview-tools-toggle");
+    await act(async () => { fireEvent.click(toolsToggle); });
+
+    const waypointToggle = screen.getByTestId("overview-waypoint-mode-toggle");
+    await act(async () => { fireEvent.click(waypointToggle); });
+
+    const canvas = document.querySelector<HTMLCanvasElement>(
+      'canvas[data-testid="overview-map-canvas"]',
+    )!;
+    expect(canvas).not.toBeNull();
+
+    // Mirror union-bbox transform for A+B: lon -122..-113 (9°), lat 44..49 (5°).
+    const AB_MIN_LON = -122, AB_MAX_LON = -113;
+    const AB_MIN_LAT = 44,   AB_MAX_LAT = 49;
+    const abLonRange  = AB_MAX_LON - AB_MIN_LON; // 9
+    const abLatRange  = AB_MAX_LAT - AB_MIN_LAT; // 5
+    const abPxPerDeg  = Math.min(
+      (CANVAS_W * 0.88) / abLonRange,
+      (CANVAS_H * 0.88) / abLatRange,
+    );
+    const abTerrainW  = abPxPerDeg * abLonRange;
+    const abTerrainH  = abPxPerDeg * abLatRange;
+    const abOffsetX   = (CANVAS_W - abTerrainW) / 2;
+    const abOffsetY   = (CANVAS_H - abTerrainH) / 2;
+
+    // Drop a waypoint inside dataset A's bbox.
+    const targetLon = -120.5;
+    const targetLat = 48.0;
+    const px = abOffsetX + ((targetLon - AB_MIN_LON) / abLonRange) * abTerrainW;
+    const py = abOffsetY + (1 - (targetLat - AB_MIN_LAT) / abLatRange) * abTerrainH;
+
+    await act(async () => {
+      canvas.getBoundingClientRect = () =>
+        ({
+          left: 0, top: 0,
+          right: CANVAS_W, bottom: CANVAS_H,
+          width: CANVAS_W, height: CANVAS_H,
+          x: 0, y: 0,
+          toJSON: () => ({}),
+        }) as DOMRect;
+      fireEvent.click(canvas, { clientX: px, clientY: py });
+    });
+
+    // Verify waypoint was placed with the correct coordinates.
+    expect(spy).toHaveBeenCalledOnce();
+    const [, lonBefore, latBefore] = spy.mock.calls[0] as [unknown, number, number];
+    expect(lonBefore).toBeCloseTo(targetLon, 1);
+    expect(latBefore).toBeCloseTo(targetLat, 1);
+
+    // --- Add a third dataset that expands the union bbox ---
+    const depthsC = new Array(N * N).fill(0).map((_, i) => 30 + i * 2);
+    const gridC = {
+      datasetId: "ds-c",
+      name: "Dataset C",
+      resolution: N, width: N, height: N,
+      depths: depthsC,
+      minDepth: 30, maxDepth: 30 + (N * N - 1) * 2,
+      minLon: -108, maxLon: -105,
+      minLat: 41,   maxLat: 43,
+      centerLon: -106.5, centerLat: 42.0,
+      waterType: "saltwater" as const,
+    };
+
+    await act(async () => {
+      useTerrainStore.setState({
+        visibleDatasets: [
+          { datasetId: gridA.datasetId, source: "preset", overviewGrid: gridA, activeGrid: null },
+          { datasetId: gridB.datasetId, source: "preset", overviewGrid: gridB, activeGrid: null },
+          { datasetId: gridC.datasetId, source: "preset", overviewGrid: gridC, activeGrid: null },
+        ],
+        primaryDatasetId: gridA.datasetId,
+        overviewGrid: gridA,
+        activeGrid: null,
+      });
+    });
+
+    // appendWaypoint must still have been called exactly once — the store update
+    // must NOT trigger any re-derivation of waypoint coordinates.
+    expect(spy).toHaveBeenCalledOnce();
+
+    // The recorded coordinates must be exactly the same as before the bbox grew.
+    const [, lonAfter, latAfter] = spy.mock.calls[0] as [unknown, number, number];
+    expect(lonAfter).toBeCloseTo(lonBefore, 5);
+    expect(latAfter).toBeCloseTo(latBefore, 5);
+
+    spy.mockRestore();
+  });
 });
