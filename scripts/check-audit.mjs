@@ -16,12 +16,6 @@ import { execSync } from "child_process";
 // Documented exceptions — must be kept in sync with security-audit-exceptions.md
 // ---------------------------------------------------------------------------
 const EXCEPTIONS = {
-  "GHSA-hmw2-7cc7-3qxx": {
-    reason:
-      "form-data CRLF injection — only reachable via @types/supertest (dev-only type declarations) " +
-      "and @google-cloud/storage transitive type dep. Not exploitable at runtime.",
-    fixDate: "2026-10-17",
-  },
   "GHSA-22p9-wv53-3rq4": {
     reason:
       "linkify-it quadratic scan — only reachable via orval>typedoc at build time, " +

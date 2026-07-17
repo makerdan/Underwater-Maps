@@ -7,23 +7,6 @@ Last reviewed: 2026-07-17
 
 ---
 
-## High — `form-data` CRLF injection (GHSA-hmw2-7cc7-3qxx)
-
-**Paths affected**
-- `artifacts/api-server > @types/supertest > @types/superagent > form-data` (versions `>=4.0.0 <4.0.6`)
-- `artifacts/api-server > @google-cloud/storage > retry-request > @types/request > form-data` (versions `<2.5.6`)
-
-**Risk assessment**: Both paths run through `@types/*` packages (TypeScript type declarations) or
-the `retry-request` helper inside `@google-cloud/storage`. The `form-data` instances here are
-either dev-only (type packages never execute in production) or indirect transitive dependencies of
-a GCS client that does not expose multipart form upload to untrusted input. Neither path constructs
-multipart payloads from user-controlled field names or filenames.
-
-**Planned fix date**: 2026-10-17 — reassess when `@google-cloud/storage` releases a version that
-pulls in `form-data >=4.0.6` / `>=2.5.6`. Track via `pnpm update --recursive @google-cloud/storage`.
-
----
-
 ## High — `linkify-it` quadratic scan loop (GHSA-22p9-wv53-3rq4)
 
 **Path affected**
