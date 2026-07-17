@@ -53,8 +53,6 @@ overrides:
   #     never runs in production.
   # All moderate/high/critical findings are resolved via the overrides below.
   # Security: pin vulnerable transitive deps to patched versions (2025-07-17)
-  # undici <7.28.0: TLS bypass + DoS via jsdom (vitest/bathyscan); dev-only exposure
-  undici: '>=7.28.0'
   # form-data <4.0.6 / <2.5.6: CRLF injection via @types/supertest and @google-cloud/storage chains
   form-data: '>=4.0.6'
   # linkify-it <=5.0.0: quadratic scan loop via orval->typedoc->markdown-it; build-only exposure
@@ -65,6 +63,9 @@ overrides:
   # Use ">=4.2.0 <5" to stay in the 4.x series (4.3.0 is the patched release)
   # and avoid v5.x which has a different ESM export shape that breaks orval.
   js-yaml: '>=4.2.0 <5'
+  # undici: cannot override to >=7.28.0 — jsdom 29.1.1 hard-requires internal
+  # paths removed in 7.28.0 (lib/handler/wrap-handler.js), breaking all Vitest tests.
+  # Documented as exception in check-audit.mjs + security-audit-exceptions.md.
   # vite <=7.3.4: server.fs.deny bypass + NTLMv2 hash disclosure on Windows;
   # bumped to ^7.3.5 in catalog above for bathyscan; override also covers api-server->vitest->vite path
   vite: '>=7.3.5'

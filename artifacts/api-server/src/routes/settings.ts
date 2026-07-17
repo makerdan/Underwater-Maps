@@ -414,12 +414,13 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
     };
   }
 
-  // Cap the total merged payload so the 16 KB extras-only guard cannot be
-  // bypassed by combining many small extras with large schema-validated values.
-  const mergedBytes = Buffer.byteLength(JSON.stringify(merged), "utf8");
-  if (mergedBytes > MAX_TOTAL_SETTINGS_BYTES) {
-    process.stderr.write(`[settings] PUT /api/settings 400 — totalTooLarge userId=${userId} bytes=${mergedBytes}\n`);
-    logger.warn({ userId, mergedBytes }, "PUT /api/settings — merged settings payload too large");
+  // Guard: cap the total size of the merged settings object to prevent
+  // unbounded database growth. This catches cases where a large stored row
+  // combined with a small valid request would still produce an oversized row.
+  const totalMergedBytes = Buffer.byteLength(JSON.stringify(merged), "utf8");
+  if (totalMergedBytes > MAX_TOTAL_SETTINGS_BYTES) {
+    process.stderr.write(`[settings] PUT /api/settings 400 — totalTooLarge userId=${userId} bytes=${totalMergedBytes}\n`);
+    logger.warn({ userId, totalMergedBytes }, "PUT /api/settings — merged settings payload too large");
     res.status(400).json({
       error: "invalid_request",
       details: `Settings payload exceeds the ${MAX_TOTAL_SETTINGS_BYTES}-byte total size cap`,

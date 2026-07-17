@@ -1,11 +1,10 @@
 #!/bin/bash
 set -e
-pnpm install --frozen-lockfile
-# Clear any stale codegen lock left by a previous interrupted run (e.g. rapid
-# parallel merges that each triggered pnpm install simultaneously).  The lock
-# file is safe to remove here because post-merge.sh runs serially — only one
-# instance can be executing at this point.
+# Clear any stale codegen lock before pnpm install so the postinstall hook
+# (which runs codegen) does not time out waiting on a lock left by a prior
+# interrupted run. Safe here because post-merge.sh runs serially.
 rm -f lib/api-zod/src/generated/.codegen.lock
+pnpm install --no-frozen-lockfile
 # Regenerate the API client from openapi.yaml. `pnpm install` already triggers
 # the workspace `postinstall` hook which runs this, but we invoke it explicitly
 # here so a merge that only changes openapi.yaml (no dependency changes) still

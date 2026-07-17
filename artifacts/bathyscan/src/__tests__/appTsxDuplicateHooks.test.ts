@@ -233,6 +233,25 @@ function countBraces(line: string): number {
 
 // ---------------------------------------------------------------------------
 
+describe("App.tsx lint suppressors", () => {
+  it("App.tsx has no eslint-disable-next-line react-hooks/exhaustive-deps suppressors", () => {
+    const filePath = path.join(SRC_DIR, "App.tsx");
+    const src = fs.readFileSync(filePath, "utf-8");
+    const lines = src.split("\n");
+    const offenders: string[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes("eslint-disable-next-line react-hooks/exhaustive-deps")) {
+        offenders.push(`  line ${i + 1}: ${lines[i].trim()}`);
+      }
+    }
+    expect(
+      offenders,
+      `App.tsx contains eslint-disable-next-line react-hooks/exhaustive-deps suppressor(s) ` +
+        `— fix the dependency array instead of silencing the rule:\n${offenders.join("\n")}`,
+    ).toHaveLength(0);
+  });
+});
+
 describe("duplicate hook-variable declarations", () => {
   it("has no duplicate hook-variable names within any component scope in any scanned file", () => {
     const violations: string[] = [];

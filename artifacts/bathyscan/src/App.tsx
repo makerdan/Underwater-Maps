@@ -354,6 +354,7 @@ function Main() {
 
   // Multi-primary: compute center coords for secondary visible datasets.
   const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
+  const ds0 = visibleDatasets[0];
   const ds1 = visibleDatasets[1];
   const ds2 = visibleDatasets[2];
   const ds3 = visibleDatasets[3];
@@ -446,14 +447,12 @@ function Main() {
   // The primary (slot 0) uses effectiveTidalData (which may be the test override).
   const tidalDataMap = useMemo(() => {
     const map = new Map<string, NonNullable<typeof tidalData>>();
-    const ds0 = visibleDatasets[0];
     if (ds0 && effectiveTidalData) map.set(ds0.datasetId, effectiveTidalData);
     if (ds1 && tidalData1) map.set(ds1.datasetId, tidalData1);
     if (ds2 && tidalData2) map.set(ds2.datasetId, tidalData2);
     if (ds3 && tidalData3) map.set(ds3.datasetId, tidalData3);
     return map;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleDatasets[0]?.datasetId, effectiveTidalData, ds1?.datasetId, tidalData1, ds2?.datasetId, tidalData2, ds3?.datasetId, tidalData3]);
+  }, [ds0, effectiveTidalData, ds1, tidalData1, ds2, tidalData2, ds3, tidalData3]);
 
   // Publish NOAA-derived ambient current to the currents runtime store so
   // the bathymetric currents simulation (Task #136) can use it as the

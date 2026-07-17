@@ -79,6 +79,7 @@ const steps = [
   ["check:e2e-cjs-globals", "pnpm run check:e2e-cjs-globals"],
   ["check:fixture-freshness", "pnpm run check:fixture-freshness"],
   ["check:ports", "pnpm run check:ports"],
+  ["check:audit", "pnpm run check:audit"],
 ];
 
 const overallStart = Date.now();
