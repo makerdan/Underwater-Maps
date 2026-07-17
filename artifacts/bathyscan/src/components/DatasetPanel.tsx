@@ -1709,7 +1709,13 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       void fetch(`/api/datasets/upload/gcs-job-status?objectKey=${encodeURIComponent(objectKey)}`, {
         headers: authHeader,
       })
-        .then((r) => r.json() as Promise<{ status: string; datasetId?: string; error?: string; skippedCount?: number; skippedFormats?: string[]; soundingCount?: number; substrateCount?: number; parseWarnings?: string[] }>)
+        .then((r) => {
+          // Check r.ok before calling r.json() — a non-2xx response with a
+          // non-JSON body (e.g. HTML error page) would throw an unhandled
+          // parse error rather than flowing to the .catch transient-error path.
+          if (!r.ok) throw new Error(`Poll failed: HTTP ${r.status}`);
+          return r.json() as Promise<{ status: string; datasetId?: string; error?: string; skippedCount?: number; skippedFormats?: string[]; soundingCount?: number; substrateCount?: number; parseWarnings?: string[] }>;
+        })
         .then((job) => {
           if (job.status === "done" && job.datasetId) {
             clearInterval(pollIntervalId);

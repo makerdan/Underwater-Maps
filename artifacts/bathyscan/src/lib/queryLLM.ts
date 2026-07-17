@@ -61,7 +61,9 @@ export async function queryLLM(
   const raw = await resp.json();
   const parsed = QueryLLMResultSchema.safeParse(raw);
   if (!parsed.success) {
-    console.error("[queryLLM] Unexpected response shape:", parsed.error.message, raw);
+    // Do NOT log `raw` here — it may contain user query content or full AI
+    // response text. Log only the schema-mismatch description.
+    console.error("[queryLLM] Unexpected response shape:", parsed.error.message);
     throw new Error(
       "The AI assistant returned an unexpected response. Please try again.",
     );

@@ -19,6 +19,7 @@
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useUser } from "@/lib/clerkCompat";
+import { toast } from "@/hooks/use-toast";
 import {
   useGetSettings,
   usePutSettings,
@@ -118,6 +119,20 @@ export function hasPendingOrInFlightSettingsSync(): boolean {
   return _pendingDebounce || _flushInFlight;
 }
 
+// ─── Singleton guard ──────────────────────────────────────────────────────────
+// These module-level mutable variables are shared across all invocations of the
+// hook. Mounting the hook more than once (e.g. during hot-reload, Strict Mode
+// double-invoke, or a test that forgets to unmount) produces incorrect
+// concurrency behaviour: two flush paths can race, and edit-rev tracking
+// de-syncs. Detect this early in DEV mode.
+let _hookMounted = false;
+
+// ─── Consecutive flush failure tracking ───────────────────────────────────────
+// After this many consecutive PUT failures the user gets a non-blocking toast
+// so they know their settings may not be saving (e.g. server unreachable).
+let _consecutiveFlushFailures = 0;
+const MAX_SILENT_FLUSH_FAILURES = 3;
+
 // ─── Payload builder (pure function of store state) ───────────────────────────
 function buildPayload(): Record<string, unknown> {
   const {
@@ -163,6 +178,23 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
   const markAllSaved = useSettingsStore((s) => s.markAllSaved);
   const { mutateAsync: saveSettingsAsync } = usePutSettings();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Singleton invariant — mount/unmount tracking so double-mount is caught
+  // early in DEV mode. The module-level vars are not safe for concurrent use.
+  useEffect(() => {
+    if (_hookMounted && import.meta.env.DEV) {
+      console.error(
+        "[useServerSettingsSync] Hook mounted more than once. " +
+        "Module-level sync state is shared; concurrent instances will race " +
+        "and produce incorrect concurrency behaviour.",
+      );
+    }
+    _hookMounted = true;
+    return () => {
+      _hookMounted = false;
+      _consecutiveFlushFailures = 0;
+    };
+  }, []);
 
   // Tracks whether the server-side settings have been received at least once.
   // Signed-out users don't fetch settings, so they are immediately ready.
@@ -404,6 +436,8 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       if (settingsRevAtFlush > _ackedSettingsRev) _ackedSettingsRev = settingsRevAtFlush;
       if (panelRevAtFlush > _ackedPanelRev) _ackedPanelRev = panelRevAtFlush;
       if (zoneRevAtFlush > _ackedZoneRev) _ackedZoneRev = zoneRevAtFlush;
+      // Successful flush — reset the consecutive failure counter.
+      _consecutiveFlushFailures = 0;
     } finally {
       _flushInFlight = false;
     }
@@ -422,6 +456,18 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
         /* keep dirty so the section Save button stays active */
         if (import.meta.env.DEV) {
           console.error("[useServerSettingsSync] PUT /api/settings failed:", err);
+        }
+        _consecutiveFlushFailures++;
+        // After several consecutive failures, surface a non-blocking toast so
+        // the user knows their settings may not be saving (e.g. server down).
+        if (_consecutiveFlushFailures >= MAX_SILENT_FLUSH_FAILURES) {
+          toast({
+            title: "Settings not saving",
+            description: "Your settings could not be saved to the server. Changes are stored locally — try again when reconnected.",
+            duration: 8000,
+          });
+          // Reset counter so we don't spam the toast on every subsequent failure.
+          _consecutiveFlushFailures = 0;
         }
       });
     }, 300);

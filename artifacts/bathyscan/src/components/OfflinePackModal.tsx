@@ -82,17 +82,29 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
   const [helpError, setHelpError] = useState<string | null>(null);
 
   const [storageQuota, setStorageQuota] = useState<{ used: number; total: number } | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const overlayRef = useRef<HTMLDivElement>(null);
 
   // Load existing pack state and help status on mount
   useEffect(() => {
     void (async () => {
-      const packs = await listOfflinePacks().catch(() => [] as OfflinePack[]);
+      const [packs, packsErr] = await listOfflinePacks()
+        .then((r): [OfflinePack[], null] => [r, null])
+        .catch((e): [OfflinePack[], string] => [
+          [],
+          e instanceof Error ? e.message : "Could not load saved packs",
+        ]);
+      if (packsErr) setLoadError(packsErr);
       const match = packs.find((p) => p.datasetId === dataset.id) ?? null;
       setExistingPack(match);
 
-      const hs = await getHelpPackStatus().catch(() => ({ saved: false } as HelpPackStatus));
+      const hs = await getHelpPackStatus().catch((e) => {
+        setLoadError((prev) =>
+          prev ?? (e instanceof Error ? e.message : "Could not load help pack status"),
+        );
+        return { saved: false } as HelpPackStatus;
+      });
       setHelpStatus(hs);
 
       if (typeof navigator !== "undefined" && "storage" in navigator) {
@@ -244,6 +256,19 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
             ×
           </button>
         </div>
+
+        {/* IDB load error banner */}
+        {loadError && (
+          <div style={{
+            padding: "8px 16px",
+            background: "rgba(239,68,68,0.08)",
+            borderBottom: "1px solid rgba(239,68,68,0.2)",
+            fontSize: 10,
+            color: "#fca5a5",
+          }}>
+            ⚠ Could not load offline pack data — {loadError}
+          </div>
+        )}
 
         <div style={{ padding: "12px 16px" }}>
           {/* ── Survey Area section ── */}

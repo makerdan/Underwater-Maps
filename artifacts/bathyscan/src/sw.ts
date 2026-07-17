@@ -117,8 +117,14 @@ interface CachePackMessage {
 }
 
 self.addEventListener("message", (event: ExtendableMessageEvent) => {
+  // Validate the shape before casting — any postMessage payload can arrive
+  // here, not just our CACHE_PACK messages. Narrow first, then cast.
+  if (
+    typeof event.data !== "object" ||
+    event.data === null ||
+    (event.data as Record<string, unknown>).type !== "CACHE_PACK"
+  ) return;
   const data = event.data as CachePackMessage;
-  if (!data || data.type !== "CACHE_PACK") return;
 
   event.waitUntil(
     (async () => {
@@ -127,12 +133,16 @@ self.addEventListener("message", (event: ExtendableMessageEvent) => {
         const cache = await caches.open(PACK_TERRAIN_CACHE);
         // Public-only: these URLs point at /api/datasets/:id/terrain|overview,
         // which are unauthenticated catalog routes — no Authorization needed.
+        // Throw on non-2xx so the outer catch sends a proper failure message
+        // to the caller instead of silently storing a partial/empty pack.
         await Promise.all([
           fetch(data.terrainUrl).then((r) => {
-            if (r.ok) return cache.put(data.terrainUrl, r);
+            if (!r.ok) throw new Error(`Terrain fetch failed: HTTP ${r.status}`);
+            return cache.put(data.terrainUrl, r);
           }),
           fetch(data.overviewUrl).then((r) => {
-            if (r.ok) return cache.put(data.overviewUrl, r);
+            if (!r.ok) throw new Error(`Overview fetch failed: HTTP ${r.status}`);
+            return cache.put(data.overviewUrl, r);
           }),
         ]);
         port?.postMessage({ ok: true });

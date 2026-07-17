@@ -246,15 +246,18 @@ router.get("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
     };
   }
 
-  let validated: Record<string, unknown>;
+  let validated: ReturnType<typeof GetSettingsResponse.parse>;
   try {
-    validated = GetSettingsResponse.parse(merged) as Record<string, unknown>;
+    validated = GetSettingsResponse.parse(merged);
   } catch (err) {
-    const details = err instanceof Error ? err.message : "Response schema validation failed";
-    res.status(500).json({ error: "internal", details });
+    // Do NOT return err.message — Zod error messages include .received values
+    // which may echo stored user data in the error response. Return only a
+    // generic message; field paths are logged server-side for debugging.
+    logger.warn({ userId, err }, "[settings] GET /api/settings — response schema validation failed");
+    res.status(500).json({ error: "internal", details: "Server settings failed internal schema validation" });
     return;
   }
-  res.json(mergeForResponse(stored, validated));
+  res.json(mergeForResponse(stored, validated as Record<string, unknown>));
 }));
 
 router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void> => {
@@ -262,9 +265,13 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
   const body = (req.body ?? {}) as Record<string, unknown>;
   const parsed = PutSettingsBody.safeParse(body);
   if (!parsed.success) {
-    process.stderr.write(`[settings] PUT /api/settings 400 — userId=${userId} issues=${JSON.stringify(parsed.error.issues)}\n`);
-    logger.warn({ userId, issues: parsed.error.issues }, "PUT /api/settings — Zod validation failed");
-    res.status(400).json({ error: "invalid_request", details: parsed.error.message, issues: parsed.error.issues });
+    // Strip .received from each issue before logging/returning to avoid echoing
+    // user-controlled input values (a malicious string sent as a setting value
+    // would appear verbatim in logs and in the 400 response body).
+    const sanitizedIssues = parsed.error.issues.map(({ path, code, message }) => ({ path, code, message }));
+    process.stderr.write(`[settings] PUT /api/settings 400 — userId=${userId} issues=${JSON.stringify(sanitizedIssues)}\n`);
+    logger.warn({ userId, issues: sanitizedIssues }, "PUT /api/settings — Zod validation failed");
+    res.status(400).json({ error: "invalid_request", details: parsed.error.message, issues: sanitizedIssues });
     return;
   }
 
@@ -349,7 +356,8 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
   // Server is the source of truth for the sync timestamp — never trust the
   // client's value here. This is what cross-device hydration uses to decide
   // whether the stored server state is newer than the local snapshot.
-  delete extras.__updatedAt;
+  // NOTE: `delete extras.__updatedAt` was previously here but is dead code —
+  // the extraction loop above already excludes __updatedAt via `k !== "__updatedAt"`.
   const updatedAt = new Date().toISOString();
 
   // Merge over the previously stored row so unspecified fields keep their
@@ -360,13 +368,25 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
     .where(eq(userSettingsTable.userId, userId));
   const stored = (existing?.settings ?? {}) as Record<string, unknown>;
 
-  const merged: Record<string, unknown> = {
-    ...DEFAULT_SETTINGS,
-    ...stored,
-    ...sentValidated,
-    ...extras,
-    __updatedAt: updatedAt,
-  };
+  // Use Object.create(null) so that if `stored` (a DB row written before
+  // prototype-pollution hardening) contains a "__proto__" own key, spreading
+  // it into a null-prototype target keeps it as an own property rather than
+  // silently mutating Object.prototype.
+  const merged = Object.create(null) as Record<string, unknown>;
+  Object.assign(merged, DEFAULT_SETTINGS, stored, sentValidated, extras, { __updatedAt: updatedAt });
+
+  // Cap the total merged payload so the 16 KB extras-only guard cannot be
+  // bypassed by combining many small extras with large schema-validated values.
+  const MAX_MERGED_BYTES = 256 * 1024; // 256 KB total merged payload cap
+  const mergedBytes = Buffer.byteLength(JSON.stringify(merged), "utf8");
+  if (mergedBytes > MAX_MERGED_BYTES) {
+    logger.warn({ userId, mergedBytes }, "PUT /api/settings — merged payload too large");
+    res.status(400).json({
+      error: "invalid_request",
+      details: `Settings payload too large (${mergedBytes} bytes, max ${MAX_MERGED_BYTES})`,
+    });
+    return;
+  }
 
   // Migration for legacy rows: normalize a flat zoneOverlaySlots array to the
   // new per-water-type object shape so it is stored correctly going forward.

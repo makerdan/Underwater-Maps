@@ -323,7 +323,15 @@ function Main() {
   const joystickMode = useSettingsStore((st) => st.joystickMode);
   const showJoystickInOrbit = useSettingsStore((st) => st.showJoystickInOrbit);
 
-  const [depthLayer, setDepthLayer] = useState<DepthLayer>(defaultTidalDepthLayer as DepthLayer);
+  // Validate the stored value before using it as a DepthLayer — an
+  // unrecognised string (e.g. from a future schema version) would cast
+  // successfully but cause the tidal arrow layer to render incorrectly.
+  const VALID_DEPTH_LAYERS: readonly string[] = ["surface", "mid", "near-bottom"];
+  const [depthLayer, setDepthLayer] = useState<DepthLayer>(
+    VALID_DEPTH_LAYERS.includes(defaultTidalDepthLayer as string)
+      ? (defaultTidalDepthLayer as DepthLayer)
+      : "surface",
+  );
 
   const timelineCurrentTime = useTimelineStore((s) => s.currentTime);
   const setTimelineTime = useTimelineStore((s) => s.setTime);
@@ -800,7 +808,7 @@ function Main() {
   // iOS Safari "Add to Home Screen" hint (once per session)
   useEffect(() => {
     const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    const isStandalone = ("standalone" in navigator) && (navigator as unknown as { standalone: boolean }).standalone;
+    const isStandalone = "standalone" in navigator && (navigator as Record<string, unknown>).standalone === true;
     const hintShown = sessionStorage.getItem("bs-ios-hint");
     if (!isIos || isStandalone || hintShown) return;
     sessionStorage.setItem("bs-ios-hint", "1");
@@ -815,7 +823,13 @@ function Main() {
     import("@/lib/offlinePackStore").then(async ({ getExpiringPacks }) => {
       const expiring = await getExpiringPacks(48);
       for (const p of expiring) {
-        const expiresAt = new Date(p.tidePack?.tidalExpiresAt ?? p.savedAt);
+        // Guard against a malformed pack record where both tidalExpiresAt and
+        // savedAt are absent/undefined, which would produce new Date(undefined)
+        // → NaN and cause Math.round(NaN) to silently pass through to the toast.
+        const rawDate = p.tidePack?.tidalExpiresAt ?? p.savedAt;
+        if (!rawDate) continue;
+        const expiresAt = new Date(rawDate);
+        if (isNaN(expiresAt.getTime())) continue;
         const hoursLeft = Math.max(0, Math.round((expiresAt.getTime() - Date.now()) / 3_600_000));
         toast({
           title: "Offline pack expiring soon",
@@ -823,9 +837,12 @@ function Main() {
           duration: 8000,
         });
       }
-    }).catch(() => undefined);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    }).catch((err) => {
+      if (import.meta.env.DEV) {
+        console.warn("[App] Failed to check offline pack expiry:", err);
+      }
+    });
+  }, [toast]);
 
   // Flush offline-buffered trails/markers when connection is restored.
   // The guard and flush implementations live in offlineFlush.ts so they can

@@ -99,6 +99,7 @@ import {
 } from "@/lib/testHelpers";
 import { useSubstrateErrorToast } from "@/hooks/useSubstrateErrorToast";
 import { useSubstrateCoverageToast } from "@/hooks/useSubstrateCoverageToast";
+import { toast } from "@/hooks/use-toast";
 
 interface TooltipState {
   visible: boolean;
@@ -1667,7 +1668,14 @@ export const OverviewMap: React.FC = () => {
           onClick: () => {
             const text = `lat: ${lat.toFixed(5)}, lon: ${lon.toFixed(5)}, depth: ${formatDepth(depth, { units: useSettingsStore.getState().units })}`;
             if (typeof navigator !== "undefined" && navigator.clipboard) {
-              navigator.clipboard.writeText(text).catch(() => {});
+              navigator.clipboard.writeText(text).catch(() => {
+                toast({
+                  title: "Copy failed",
+                  description: "Clipboard permission denied. Try copying manually.",
+                  variant: "destructive",
+                  duration: 4000,
+                });
+              });
             }
           },
         },
