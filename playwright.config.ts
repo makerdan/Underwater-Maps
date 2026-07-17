@@ -33,8 +33,20 @@ export default defineConfig({
     headless: true,
   },
   projects: [
+    // ── Setup project ─────────────────────────────────────────────────────
+    // Runs immediately after webServer starts (before any spec file). Polls
+    // /api/healthz to confirm the API server is still alive and stable.
+    // Playwright skips all projects that declare `dependencies: ["setup"]`
+    // when this project fails, replacing 400+ cascade failures with a single
+    // clear diagnostic that names the API server as the root cause.
+    {
+      name: "setup",
+      testMatch: /api-liveness\.setup\.ts$/,
+    },
+    // ── Main browser project ───────────────────────────────────────────────
     {
       name: "chromium",
+      dependencies: ["setup"],
       use: {
         ...devices["Desktop Chrome"],
         launchOptions: {

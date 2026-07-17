@@ -161,6 +161,30 @@ export function __resetRateLimitMemory(): void {
   memoryBuckets.clear();
 }
 
+/**
+ * Test-only hook: pre-fill an in-memory rate-limit bucket with `count`
+ * synthetic timestamps spread evenly within the given window.
+ *
+ * This lets tests assert "Nth request is blocked" or "last allowed request
+ * passes" without sending N-1 actual HTTP requests to exhaust the quota.
+ * Dramatically reduces run time for high-limit routes (e.g. terrain-fetch
+ * at 90 req/min would otherwise require 90 supertest round-trips).
+ *
+ * @param key      - Raw bucket key: `i:<route>:<ip>` or `u:<route>:<userId>`.
+ * @param count    - Number of timestamps to inject (typically max or max-1).
+ * @param windowMs - Window length in ms; all timestamps are placed inside it.
+ */
+export function __prefillRateLimitMemory(key: string, count: number, windowMs: number): void {
+  const now = Date.now();
+  const timestamps: number[] = [];
+  for (let i = 0; i < count; i++) {
+    // Spread timestamps evenly across the window, all guaranteed to be live
+    // (newer than the cutoff = now - windowMs) when the next consume() runs.
+    timestamps.push(now - windowMs + Math.floor((windowMs * (i + 1)) / (count + 1)));
+  }
+  memoryBuckets.set(key, timestamps);
+}
+
 // ---------------------------------------------------------------------------
 // Postgres backend — single-query INSERT + windowed count using the shared
 // Drizzle pg pool. Atomic enough for our needs: any concurrent inserter sees

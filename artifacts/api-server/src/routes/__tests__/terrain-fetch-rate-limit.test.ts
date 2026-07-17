@@ -9,6 +9,11 @@
  * rate limiter (skipIfNoUser: true) never fires for unauthenticated callers —
  * only the IP limit (90/min) applies there. GET /user/datasets/:id/terrain
  * enforces both: IP first, then requireAuth, then user limit (30/min).
+ *
+ * Performance note: instead of exhausting the quota by sending max-1 real HTTP
+ * requests, __prefillRateLimitMemory() pre-loads the in-memory bucket with the
+ * desired count of synthetic timestamps.  This cuts test time from ~43 s to
+ * under 2 s while exercising identical production code paths.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
@@ -56,7 +61,17 @@ vi.mock("../../lib/terrain.js", () => ({
 }));
 
 import app from "../../app.js";
-import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
+import {
+  __resetRateLimitMemory,
+  __prefillRateLimitMemory,
+} from "../../middlewares/rateLimit.js";
+
+// Route + window constants that match the production createRateLimit() calls
+// in routes/datasets.ts and routes/user-datasets.ts.
+const TERRAIN_ROUTE = "terrain-fetch";
+const WINDOW_MS = 60_000;
+const IP_MAX = 90;
+const USER_MAX = 30;
 
 beforeEach(() => {
   vi.stubEnv("RATE_LIMIT_BACKEND", "memory");
@@ -73,17 +88,20 @@ afterEach(() => {
 // skips. Only the IP limiter (90/min) applies.
 describe("GET /api/datasets/:id/terrain — IP rate limit (90 req/min)", () => {
   it("allows 90 requests then blocks the 91st with 429", async () => {
-    for (let i = 0; i < 90; i++) {
-      const res = await request(app)
-        .get("/api/datasets/glba_main/terrain")
-        .set("x-forwarded-for", "198.51.100.70");
+    const ip = "198.51.100.70";
+    // Pre-fill the bucket to 89 (max - 1) so the next request is the 90th
+    // (last allowed) and the one after is the 91st (first blocked).
+    __prefillRateLimitMemory(`i:${TERRAIN_ROUTE}:${ip}`, IP_MAX - 1, WINDOW_MS);
 
-      expect(res.status, `request #${i + 1} should not be rate-limited`).not.toBe(429);
-    }
+    const allowed = await request(app)
+      .get("/api/datasets/glba_main/terrain")
+      .set("x-forwarded-for", ip);
+
+    expect(allowed.status, "90th request should not be rate-limited").not.toBe(429);
 
     const blocked = await request(app)
       .get("/api/datasets/glba_main/terrain")
-      .set("x-forwarded-for", "198.51.100.70");
+      .set("x-forwarded-for", ip);
 
     expect(blocked.status).toBe(429);
     expect(blocked.body).toMatchObject({ error: "rate_limit" });
@@ -92,17 +110,20 @@ describe("GET /api/datasets/:id/terrain — IP rate limit (90 req/min)", () => {
   });
 
   it("tracks limits per IP — a different IP is unaffected by another IP's quota", async () => {
-    for (let i = 0; i < 90; i++) {
-      await request(app)
-        .get("/api/datasets/glba_main/terrain")
-        .set("x-forwarded-for", "198.51.100.71");
-    }
+    const exhaustedIp = "198.51.100.71";
+    const freshIp = "198.51.100.72";
+    // Exhaust the quota for exhaustedIp entirely (pre-fill to max).
+    __prefillRateLimitMemory(`i:${TERRAIN_ROUTE}:${exhaustedIp}`, IP_MAX, WINDOW_MS);
 
-    const differentIp = await request(app)
+    const exhaustedRes = await request(app)
       .get("/api/datasets/glba_main/terrain")
-      .set("x-forwarded-for", "198.51.100.72");
+      .set("x-forwarded-for", exhaustedIp);
+    expect(exhaustedRes.status).toBe(429);
 
-    expect(differentIp.status).not.toBe(429);
+    const freshRes = await request(app)
+      .get("/api/datasets/glba_main/terrain")
+      .set("x-forwarded-for", freshIp);
+    expect(freshRes.status).not.toBe(429);
   });
 
   it("sets X-RateLimit-* headers on allowed requests", async () => {
@@ -123,19 +144,22 @@ describe("GET /api/user/datasets/:id/terrain — user rate limit (30 req/min)", 
   const E2E_USER = "user_terrain_rate_limit_test";
 
   it("allows 30 requests from one user then blocks the 31st with 429", async () => {
-    for (let i = 0; i < 30; i++) {
-      const res = await request(app)
-        .get("/api/user/datasets/some-dataset-id/terrain")
-        .set("x-e2e-user-id", E2E_USER)
-        .set("x-forwarded-for", "198.51.100.80");
+    const ip = "198.51.100.80";
+    // Pre-fill the user bucket to 29 (max - 1); next request is the 30th
+    // (last allowed), and the one after is the 31st (first blocked).
+    __prefillRateLimitMemory(`u:${TERRAIN_ROUTE}:${E2E_USER}`, USER_MAX - 1, WINDOW_MS);
 
-      expect(res.status, `request #${i + 1} should not be rate-limited`).not.toBe(429);
-    }
+    const allowed = await request(app)
+      .get("/api/user/datasets/some-dataset-id/terrain")
+      .set("x-e2e-user-id", E2E_USER)
+      .set("x-forwarded-for", ip);
+
+    expect(allowed.status, "30th request should not be rate-limited").not.toBe(429);
 
     const blocked = await request(app)
       .get("/api/user/datasets/some-dataset-id/terrain")
       .set("x-e2e-user-id", E2E_USER)
-      .set("x-forwarded-for", "198.51.100.80");
+      .set("x-forwarded-for", ip);
 
     expect(blocked.status).toBe(429);
     expect(blocked.body).toMatchObject({ error: "rate_limit" });
@@ -144,19 +168,23 @@ describe("GET /api/user/datasets/:id/terrain — user rate limit (30 req/min)", 
   });
 
   it("tracks limits per user — a different user is unaffected by another user's quota", async () => {
-    for (let i = 0; i < 30; i++) {
-      await request(app)
-        .get("/api/user/datasets/some-dataset-id/terrain")
-        .set("x-e2e-user-id", "user_terrain_quota_a")
-        .set("x-forwarded-for", "198.51.100.81");
-    }
+    const exhaustedUser = "user_terrain_quota_a";
+    const freshUser = "user_terrain_quota_b";
+    const ip = "198.51.100.81";
+    // Exhaust the quota for exhaustedUser entirely.
+    __prefillRateLimitMemory(`u:${TERRAIN_ROUTE}:${exhaustedUser}`, USER_MAX, WINDOW_MS);
 
-    const differentUser = await request(app)
+    const exhaustedRes = await request(app)
       .get("/api/user/datasets/some-dataset-id/terrain")
-      .set("x-e2e-user-id", "user_terrain_quota_b")
-      .set("x-forwarded-for", "198.51.100.82");
+      .set("x-e2e-user-id", exhaustedUser)
+      .set("x-forwarded-for", ip);
+    expect(exhaustedRes.status).toBe(429);
 
-    expect(differentUser.status).not.toBe(429);
+    const freshRes = await request(app)
+      .get("/api/user/datasets/some-dataset-id/terrain")
+      .set("x-e2e-user-id", freshUser)
+      .set("x-forwarded-for", "198.51.100.82");
+    expect(freshRes.status).not.toBe(429);
   });
 
   it("sets X-RateLimit-* headers on allowed requests", async () => {

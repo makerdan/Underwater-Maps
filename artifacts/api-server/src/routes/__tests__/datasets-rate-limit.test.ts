@@ -4,6 +4,10 @@
  * Verifies that POST /api/datasets/upload enforces the IP-based rate limit of
  * 10 requests per minute. Uses the in-memory rate-limit backend so the test
  * is hermetic (no Postgres required).
+ *
+ * Performance note: instead of exhausting the quota by sending max-1 real HTTP
+ * requests, __prefillRateLimitMemory() pre-loads the in-memory bucket with the
+ * desired count of synthetic timestamps.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
@@ -39,7 +43,16 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../../app.js";
-import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
+import {
+  __resetRateLimitMemory,
+  __prefillRateLimitMemory,
+} from "../../middlewares/rateLimit.js";
+
+// Route + window constants matching the production createRateLimit() call
+// in routes/datasets.ts.
+const UPLOAD_ROUTE = "dataset-upload";
+const WINDOW_MS = 60_000;
+const IP_MAX = 10;
 
 const MINIMAL_CSV = "lon,lat,depth\n-136.0,58.5,50\n-136.1,58.6,55\n";
 
@@ -57,21 +70,24 @@ const E2E_USER = "user_datasets_rate_limit_test";
 
 describe("POST /api/datasets/upload — IP rate limit (10 req / min)", () => {
   it("allows the first 10 requests and blocks the 11th with 429", async () => {
-    for (let i = 0; i < 10; i++) {
-      const res = await request(app)
-        .post("/api/datasets/upload")
-        .set("x-e2e-user-id", E2E_USER)
-        .set("x-forwarded-for", "198.51.100.7")
-        .field("resolution", "not-a-number")
-        .attach("file", Buffer.from(MINIMAL_CSV), "test.csv");
+    const ip = "198.51.100.7";
+    // Pre-fill to 9 (max - 1): the next request is the 10th (last allowed),
+    // and the one after is the 11th (first blocked).
+    __prefillRateLimitMemory(`i:${UPLOAD_ROUTE}:${ip}`, IP_MAX - 1, WINDOW_MS);
 
-      expect(res.status, `request #${i + 1} should not be rate-limited`).not.toBe(429);
-    }
+    const allowed = await request(app)
+      .post("/api/datasets/upload")
+      .set("x-e2e-user-id", E2E_USER)
+      .set("x-forwarded-for", ip)
+      .field("resolution", "not-a-number")
+      .attach("file", Buffer.from(MINIMAL_CSV), "test.csv");
+
+    expect(allowed.status, "10th request should not be rate-limited").not.toBe(429);
 
     const blocked = await request(app)
       .post("/api/datasets/upload")
       .set("x-e2e-user-id", E2E_USER)
-      .set("x-forwarded-for", "198.51.100.7")
+      .set("x-forwarded-for", ip)
       .field("resolution", "not-a-number")
       .attach("file", Buffer.from(MINIMAL_CSV), "test.csv");
 
@@ -82,23 +98,26 @@ describe("POST /api/datasets/upload — IP rate limit (10 req / min)", () => {
   });
 
   it("tracks limits per IP — a different IP is unaffected by another IP's quota", async () => {
-    for (let i = 0; i < 10; i++) {
-      await request(app)
-        .post("/api/datasets/upload")
-        .set("x-e2e-user-id", E2E_USER)
-        .set("x-forwarded-for", "198.51.100.10")
-        .field("resolution", "not-a-number")
-        .attach("file", Buffer.from(MINIMAL_CSV), "test.csv");
-    }
+    const exhaustedIp = "198.51.100.10";
+    const freshIp = "198.51.100.11";
+    // Exhaust quota for exhaustedIp entirely.
+    __prefillRateLimitMemory(`i:${UPLOAD_ROUTE}:${exhaustedIp}`, IP_MAX, WINDOW_MS);
 
-    const differentIp = await request(app)
+    const exhaustedRes = await request(app)
       .post("/api/datasets/upload")
       .set("x-e2e-user-id", E2E_USER)
-      .set("x-forwarded-for", "198.51.100.11")
+      .set("x-forwarded-for", exhaustedIp)
       .field("resolution", "not-a-number")
       .attach("file", Buffer.from(MINIMAL_CSV), "test.csv");
+    expect(exhaustedRes.status).toBe(429);
 
-    expect(differentIp.status).not.toBe(429);
+    const freshRes = await request(app)
+      .post("/api/datasets/upload")
+      .set("x-e2e-user-id", E2E_USER)
+      .set("x-forwarded-for", freshIp)
+      .field("resolution", "not-a-number")
+      .attach("file", Buffer.from(MINIMAL_CSV), "test.csv");
+    expect(freshRes.status).not.toBe(429);
   });
 
   it("sets X-RateLimit-* headers on allowed requests", async () => {

@@ -11,6 +11,11 @@
  * Each test spawns the real built server (dist-porttest/, built once in
  * beforeAll so it never races the dev workflow's dist/ or the E2E suite's
  * dist-e2e/).
+ *
+ * Build is skipped when dist-porttest/index.mjs is already newer than all
+ * source inputs — this avoids paying an unconditional ~30–60 s esbuild cost
+ * on every unit-suite run when nothing has changed, keeping the suite within
+ * its 600 s run budget.
  */
 import { describe, it, expect, beforeAll } from "vitest";
 import { execFileSync, spawn } from "node:child_process";
@@ -21,6 +26,69 @@ import fs from "node:fs";
 const artifactDir = path.resolve(__dirname, "..", "..");
 const distDir = path.join(artifactDir, "dist-porttest");
 const serverEntry = path.join(distDir, "index.mjs");
+
+// ---------------------------------------------------------------------------
+// Staleness helpers
+// ---------------------------------------------------------------------------
+
+/** Recursively find the newest mtime (ms) in a directory. */
+function newestMtimeInDir(dir: string): number {
+  let newest = 0;
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const sub = newestMtimeInDir(full);
+      if (sub > newest) newest = sub;
+    } else if (entry.isFile()) {
+      try {
+        const mt = fs.statSync(full).mtimeMs;
+        if (mt > newest) newest = mt;
+      } catch { /* skip unreadable */ }
+    }
+  }
+  return newest;
+}
+
+/**
+ * Returns true if dist-porttest/index.mjs is missing or older than any of
+ * the source inputs that feed into the build. When false, we can skip the
+ * build and save 30–60 s per unit-suite run.
+ */
+function isDistStale(): boolean {
+  let distMtime: number;
+  try {
+    distMtime = fs.statSync(serverEntry).mtimeMs;
+  } catch {
+    return true; // doesn't exist
+  }
+
+  const sourceRoots = [
+    path.join(artifactDir, "src"),
+    path.join(artifactDir, "build.mjs"),
+    path.join(artifactDir, "package.json"),
+    path.join(artifactDir, "tsconfig.json"),
+  ];
+
+  for (const src of sourceRoots) {
+    try {
+      const stat = fs.statSync(src);
+      const mtime = stat.isDirectory() ? newestMtimeInDir(src) : stat.mtimeMs;
+      if (mtime > distMtime) return true;
+    } catch { /* skip unreadable paths */ }
+  }
+
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function makeEnv(overrides: Record<string, string | undefined>): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
@@ -94,6 +162,12 @@ function isPortListening(port: number): Promise<boolean> {
 
 describe("api-server port fail-fast behavior", () => {
   beforeAll(() => {
+    if (!isDistStale()) {
+      // dist-porttest/index.mjs is current — skip the build and save ~30–60 s.
+      expect(fs.existsSync(serverEntry)).toBe(true);
+      return;
+    }
+
     execFileSync(process.execPath, [path.join(artifactDir, "build.mjs")], {
       cwd: artifactDir,
       env: { ...process.env, DIST_DIR: "dist-porttest" },

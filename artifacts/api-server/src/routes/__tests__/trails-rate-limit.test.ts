@@ -4,6 +4,10 @@
  * Verifies that POST /api/trails enforces the IP-based rate limit of 10
  * requests per minute. Uses the in-memory rate-limit backend so the test is
  * hermetic (no Postgres required).
+ *
+ * Performance note: instead of exhausting the quota by sending max-1 real HTTP
+ * requests, __prefillRateLimitMemory() pre-loads the in-memory bucket with the
+ * desired count of synthetic timestamps.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
@@ -52,7 +56,16 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../../app.js";
-import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
+import {
+  __resetRateLimitMemory,
+  __prefillRateLimitMemory,
+} from "../../middlewares/rateLimit.js";
+
+// Route + window constants matching the production createRateLimit() call
+// in routes/trails.ts.
+const TRAIL_ROUTE = "trail-upload";
+const WINDOW_MS = 60_000;
+const IP_MAX = 10;
 
 beforeEach(() => {
   vi.stubEnv("RATE_LIMIT_BACKEND", "memory");
@@ -77,20 +90,23 @@ const VALID_TRAIL_BODY = {
 
 describe("POST /api/trails — IP rate limit (10 req / min)", () => {
   it("allows the first 10 requests and blocks the 11th with 429", async () => {
-    for (let i = 0; i < 10; i++) {
-      const res = await request(app)
-        .post("/api/trails")
-        .set("x-e2e-user-id", E2E_USER)
-        .set("x-forwarded-for", "203.0.113.42")
-        .send(VALID_TRAIL_BODY);
+    const ip = "203.0.113.42";
+    // Pre-fill to 9 (max - 1): the next request is the 10th (last allowed),
+    // and the one after is the 11th (first blocked).
+    __prefillRateLimitMemory(`i:${TRAIL_ROUTE}:${ip}`, IP_MAX - 1, WINDOW_MS);
 
-      expect(res.status, `request #${i + 1} should not be rate-limited`).not.toBe(429);
-    }
+    const allowed = await request(app)
+      .post("/api/trails")
+      .set("x-e2e-user-id", E2E_USER)
+      .set("x-forwarded-for", ip)
+      .send(VALID_TRAIL_BODY);
+
+    expect(allowed.status, "10th request should not be rate-limited").not.toBe(429);
 
     const blocked = await request(app)
       .post("/api/trails")
       .set("x-e2e-user-id", E2E_USER)
-      .set("x-forwarded-for", "203.0.113.42")
+      .set("x-forwarded-for", ip)
       .send(VALID_TRAIL_BODY);
 
     expect(blocked.status).toBe(429);
@@ -100,21 +116,24 @@ describe("POST /api/trails — IP rate limit (10 req / min)", () => {
   });
 
   it("tracks limits per IP — a different IP is not affected by another IP's quota", async () => {
-    for (let i = 0; i < 10; i++) {
-      await request(app)
-        .post("/api/trails")
-        .set("x-e2e-user-id", E2E_USER)
-        .set("x-forwarded-for", "203.0.113.1")
-        .send(VALID_TRAIL_BODY);
-    }
+    const exhaustedIp = "203.0.113.1";
+    const freshIp = "203.0.113.2";
+    // Exhaust quota for exhaustedIp entirely.
+    __prefillRateLimitMemory(`i:${TRAIL_ROUTE}:${exhaustedIp}`, IP_MAX, WINDOW_MS);
 
-    const differentIp = await request(app)
+    const exhaustedRes = await request(app)
       .post("/api/trails")
       .set("x-e2e-user-id", E2E_USER)
-      .set("x-forwarded-for", "203.0.113.2")
+      .set("x-forwarded-for", exhaustedIp)
       .send(VALID_TRAIL_BODY);
+    expect(exhaustedRes.status).toBe(429);
 
-    expect(differentIp.status).not.toBe(429);
+    const freshRes = await request(app)
+      .post("/api/trails")
+      .set("x-e2e-user-id", E2E_USER)
+      .set("x-forwarded-for", freshIp)
+      .send(VALID_TRAIL_BODY);
+    expect(freshRes.status).not.toBe(429);
   });
 
   it("sets X-RateLimit-* headers on allowed requests", async () => {

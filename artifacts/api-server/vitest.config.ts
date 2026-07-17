@@ -1,5 +1,27 @@
 import { defineConfig } from "vitest/config";
+import { BaseSequencer } from "vitest/node";
+import type { TestFile } from "vitest/node";
 import budgets from "../../tests/timeout-guard/budgets.json";
+
+/**
+ * Run portFailFast.spawn.test.ts first in the sequential singleFork queue.
+ *
+ * Without this, vitest schedules files in inode-creation order — newer files
+ * sort last. portFailFast was created recently, so it lands at position ~140
+ * and starts with ≈0 s left in the 600 s budget.  Hoisting it to position 1
+ * gives it the full budget for its esbuild build (if stale) + 3 spawn tests,
+ * and leaves the remaining 140 files to fill the rest of the window.
+ */
+class PortTestFirstSequencer extends BaseSequencer {
+  override async sort(files: TestFile[]) {
+    const sorted = await super.sort(files);
+    const portFirst = sorted.filter((f) =>
+      f.moduleId.includes("portFailFast"),
+    );
+    const rest = sorted.filter((f) => !f.moduleId.includes("portFailFast"));
+    return [...portFirst, ...rest];
+  }
+}
 
 export default defineConfig({
   test: {
@@ -32,6 +54,11 @@ export default defineConfig({
         // than a silent OS-level kill.
         execArgv: ["--max-old-space-size=6144", "--expose-gc"],
       },
+    },
+    // portFailFast runs first so the esbuild build (if triggered) and the
+    // 3 spawn tests always have the full suite budget ahead of them.
+    sequence: {
+      sequencer: PortTestFirstSequencer,
     },
   },
 });
