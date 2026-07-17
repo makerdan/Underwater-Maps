@@ -1181,8 +1181,6 @@ function Main() {
                 the user switches away.
             ══════════════════════════════════════════════════ */}
             <div style={{ display: sidebarMode === 'explore' ? 'flex' : 'none', flexDirection: 'column', gap: 8 }}>
-              <OverlaysToolsPanel />
-
               <SidebarSectionGroup>
                 <SidebarSection id="mapData" title="Your Data">
                   {!terrain ? (
@@ -1222,6 +1220,8 @@ function Main() {
                   ) : showDatasetPanel ? <DatasetPanel embedded /> : null}
                 </SidebarSection>
               </SidebarSectionGroup>
+
+              <OverlaysToolsPanel />
 
               {/* "Switch to Plan" nudge — appears when a conditions or drift overlay is active */}
               {(tideOverlayActive || currentOverlayActive || driftPlannerActive) && (
