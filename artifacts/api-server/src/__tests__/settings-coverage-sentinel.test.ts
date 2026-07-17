@@ -203,6 +203,14 @@ const SETTINGS_TESTED_FIELDS = new Set<string>([
   "keyBindings",
   "crosshairMenuGamepadButton",
   "lastSyncedAt",
+
+  // ── v22 sidebar / timeline / water-temp (settings-schema-sync.test.ts) ───
+  // Promoted from the client-only extras path; now first-class validated fields.
+  // The schema/default parity is verified by settings-schema-sync.test.ts.
+  "showWaterTempLayer",
+  "timelineCurrentTime",
+  "timelineRange",
+  "sidebarMode",
 ]);
 
 describe("PutSettingsBody field-coverage sentinel", () => {

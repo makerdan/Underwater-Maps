@@ -175,6 +175,10 @@ export const DEFAULT_SETTINGS = {
   keyBindings: {} as Record<string, string>,
   crosshairMenuGamepadButton: 3 as number | null,
   lastSyncedAt: null as string | null,
+  showWaterTempLayer: false,
+  timelineCurrentTime: null as string | null,
+  timelineRange: null as { start: string; end: string } | null,
+  sidebarMode: "explore" as "explore" | "plan" | "analyze",
 };
 
 /**
@@ -385,10 +389,20 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
 
   // Merge over the previously stored row so unspecified fields keep their
   // existing values (rather than being reset to DEFAULT_SETTINGS).
-  const [existing] = await db
-    .select()
-    .from(userSettingsTable)
-    .where(eq(userSettingsTable.userId, userId));
+  let existing: typeof userSettingsTable.$inferSelect | undefined;
+  try {
+    [existing] = await db
+      .select()
+      .from(userSettingsTable)
+      .where(eq(userSettingsTable.userId, userId));
+  } catch (selectErr) {
+    const e = selectErr as Error & { code?: string };
+    logger.error(
+      { userId, errMessage: e.message, errCode: e.code, step: "db.select" },
+      "PUT /api/settings — DB SELECT threw",
+    );
+    throw selectErr;
+  }
   const stored = (existing?.settings ?? {}) as Record<string, unknown>;
 
   // Object.create(null) gives a null-prototype object so a "__proto__" key
@@ -417,7 +431,18 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
   // Guard: cap the total size of the merged settings object to prevent
   // unbounded database growth. This catches cases where a large stored row
   // combined with a small valid request would still produce an oversized row.
-  const totalMergedBytes = Buffer.byteLength(JSON.stringify(merged), "utf8");
+  let mergedJson: string;
+  try {
+    mergedJson = JSON.stringify(merged);
+  } catch (jsonErr) {
+    const e = jsonErr as Error;
+    logger.error(
+      { userId, errMessage: e.message, step: "JSON.stringify(merged)" },
+      "PUT /api/settings — JSON serialization of merged settings threw",
+    );
+    throw jsonErr;
+  }
+  const totalMergedBytes = Buffer.byteLength(mergedJson, "utf8");
   if (totalMergedBytes > MAX_TOTAL_SETTINGS_BYTES) {
     process.stderr.write(`[settings] PUT /api/settings 400 — totalTooLarge userId=${userId} bytes=${totalMergedBytes}\n`);
     logger.warn({ userId, totalMergedBytes }, "PUT /api/settings — merged settings payload too large");
@@ -434,15 +459,24 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
   // round-trip is the cheapest way to guarantee a plain, regular-prototype
   // object reaches the wire — and it is safe because JSON.stringify already
   // reads only own enumerable properties, which is exactly what we want.
-  const safeSettings = JSON.parse(JSON.stringify(merged)) as Record<string, unknown>;
+  const safeSettings = JSON.parse(mergedJson) as Record<string, unknown>;
 
-  await db
-    .insert(userSettingsTable)
-    .values({ userId, settings: safeSettings })
-    .onConflictDoUpdate({
-      target: userSettingsTable.userId,
-      set: { settings: safeSettings },
-    });
+  try {
+    await db
+      .insert(userSettingsTable)
+      .values({ userId, settings: safeSettings })
+      .onConflictDoUpdate({
+        target: userSettingsTable.userId,
+        set: { settings: safeSettings },
+      });
+  } catch (upsertErr) {
+    const e = upsertErr as Error & { code?: string };
+    logger.error(
+      { userId, errMessage: e.message, errCode: e.code, step: "db.insert.onConflictDoUpdate" },
+      "PUT /api/settings — DB upsert threw",
+    );
+    throw upsertErr;
+  }
 
   res.json(safeSettings);
 }));

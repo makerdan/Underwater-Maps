@@ -1089,7 +1089,8 @@ export const getSettingsResponseCrosshairMenuGamepadButtonDefault = 3;
 export const getSettingsResponseCrosshairMenuGamepadButtonMin = 0;
 export const getSettingsResponseCrosshairMenuGamepadButtonMax = 31;
 
-
+export const getSettingsResponseShowWaterTempLayerDefault = false;
+export const getSettingsResponseSidebarModeDefault = `explore`;
 
 export const GetSettingsResponse = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(getSettingsResponseTextureQualityDefault),
@@ -1269,7 +1270,14 @@ export const GetSettingsResponse = zod.object({
 }))).optional().describe('Per-dataset camera bookmarks keyed by dataset id. Each value is an ordered array of named camera positions.'),
   "keyBindings": zod.record(zod.string(), zod.string()).optional().describe('Remapped keyboard shortcuts keyed by action id (e.g. \"moveForward\"). Values are KeyboardEvent.code strings (e.g. \"KeyW\"). Missing keys fall back to their default binding.'),
   "crosshairMenuGamepadButton": zod.number().min(getSettingsResponseCrosshairMenuGamepadButtonMin).max(getSettingsResponseCrosshairMenuGamepadButtonMax).nullish().default(getSettingsResponseCrosshairMenuGamepadButtonDefault).describe('Standard-mapping gamepad button index that opens the crosshair action menu. Null disables the gamepad binding.'),
-  "lastSyncedAt": zod.string().nullish().describe('ISO 8601 timestamp of the most recent successful server sync (GET hydration or PUT save). Null when the user has never synced.')
+  "lastSyncedAt": zod.string().nullish().describe('ISO 8601 timestamp of the most recent successful server sync (GET hydration or PUT save). Null when the user has never synced.'),
+  "showWaterTempLayer": zod.boolean().default(getSettingsResponseShowWaterTempLayerDefault).describe('Whether the water-temperature layer overlay is visible in the 3D viewscreen.'),
+  "timelineCurrentTime": zod.string().nullish().describe('Last timeline scrubber position as an ISO 8601 string. Restored on next load. Null when the scrubber has never been used.'),
+  "timelineRange": zod.object({
+  "start": zod.string().describe('Range start as ISO 8601 string.'),
+  "end": zod.string().describe('Range end as ISO 8601 string.')
+}).nullish().describe('Last timeline range (start\/end ISO 8601 strings). Restored on next load. Null when no range has been set.'),
+  "sidebarMode": zod.enum(['explore', 'plan', 'analyze']).default(getSettingsResponseSidebarModeDefault).describe('Which contextual mode the left sidebar shows. Persisted so the user\'s last mode survives page reloads.')
 }).describe('Per-user application settings with sensible defaults')
 
 
@@ -1504,7 +1512,8 @@ export const putSettingsBodyCrosshairMenuGamepadButtonDefault = 3;
 export const putSettingsBodyCrosshairMenuGamepadButtonMin = 0;
 export const putSettingsBodyCrosshairMenuGamepadButtonMax = 31;
 
-
+export const putSettingsBodyShowWaterTempLayerDefault = false;
+export const putSettingsBodySidebarModeDefault = `explore`;
 
 export const PutSettingsBody = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsBodyTextureQualityDefault),
@@ -1684,7 +1693,14 @@ export const PutSettingsBody = zod.object({
 }))).optional().describe('Per-dataset camera bookmarks keyed by dataset id. Each value is an ordered array of named camera positions.'),
   "keyBindings": zod.record(zod.string(), zod.string()).optional().describe('Remapped keyboard shortcuts keyed by action id (e.g. \"moveForward\"). Values are KeyboardEvent.code strings (e.g. \"KeyW\"). Missing keys fall back to their default binding.'),
   "crosshairMenuGamepadButton": zod.number().min(putSettingsBodyCrosshairMenuGamepadButtonMin).max(putSettingsBodyCrosshairMenuGamepadButtonMax).nullish().default(putSettingsBodyCrosshairMenuGamepadButtonDefault).describe('Standard-mapping gamepad button index that opens the crosshair action menu. Null disables the gamepad binding.'),
-  "lastSyncedAt": zod.string().nullish().describe('ISO 8601 timestamp of the most recent successful server sync (GET hydration or PUT save). Null when the user has never synced.')
+  "lastSyncedAt": zod.string().nullish().describe('ISO 8601 timestamp of the most recent successful server sync (GET hydration or PUT save). Null when the user has never synced.'),
+  "showWaterTempLayer": zod.boolean().default(putSettingsBodyShowWaterTempLayerDefault).describe('Whether the water-temperature layer overlay is visible in the 3D viewscreen.'),
+  "timelineCurrentTime": zod.string().nullish().describe('Last timeline scrubber position as an ISO 8601 string. Restored on next load. Null when the scrubber has never been used.'),
+  "timelineRange": zod.object({
+  "start": zod.string().describe('Range start as ISO 8601 string.'),
+  "end": zod.string().describe('Range end as ISO 8601 string.')
+}).nullish().describe('Last timeline range (start\/end ISO 8601 strings). Restored on next load. Null when no range has been set.'),
+  "sidebarMode": zod.enum(['explore', 'plan', 'analyze']).default(putSettingsBodySidebarModeDefault).describe('Which contextual mode the left sidebar shows. Persisted so the user\'s last mode survives page reloads.')
 }).describe('Per-user application settings with sensible defaults')
 
 export const putSettingsResponseTextureQualityDefault = `high`;
@@ -1914,7 +1930,8 @@ export const putSettingsResponseCrosshairMenuGamepadButtonDefault = 3;
 export const putSettingsResponseCrosshairMenuGamepadButtonMin = 0;
 export const putSettingsResponseCrosshairMenuGamepadButtonMax = 31;
 
-
+export const putSettingsResponseShowWaterTempLayerDefault = false;
+export const putSettingsResponseSidebarModeDefault = `explore`;
 
 export const PutSettingsResponse = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsResponseTextureQualityDefault),
@@ -2094,7 +2111,14 @@ export const PutSettingsResponse = zod.object({
 }))).optional().describe('Per-dataset camera bookmarks keyed by dataset id. Each value is an ordered array of named camera positions.'),
   "keyBindings": zod.record(zod.string(), zod.string()).optional().describe('Remapped keyboard shortcuts keyed by action id (e.g. \"moveForward\"). Values are KeyboardEvent.code strings (e.g. \"KeyW\"). Missing keys fall back to their default binding.'),
   "crosshairMenuGamepadButton": zod.number().min(putSettingsResponseCrosshairMenuGamepadButtonMin).max(putSettingsResponseCrosshairMenuGamepadButtonMax).nullish().default(putSettingsResponseCrosshairMenuGamepadButtonDefault).describe('Standard-mapping gamepad button index that opens the crosshair action menu. Null disables the gamepad binding.'),
-  "lastSyncedAt": zod.string().nullish().describe('ISO 8601 timestamp of the most recent successful server sync (GET hydration or PUT save). Null when the user has never synced.')
+  "lastSyncedAt": zod.string().nullish().describe('ISO 8601 timestamp of the most recent successful server sync (GET hydration or PUT save). Null when the user has never synced.'),
+  "showWaterTempLayer": zod.boolean().default(putSettingsResponseShowWaterTempLayerDefault).describe('Whether the water-temperature layer overlay is visible in the 3D viewscreen.'),
+  "timelineCurrentTime": zod.string().nullish().describe('Last timeline scrubber position as an ISO 8601 string. Restored on next load. Null when the scrubber has never been used.'),
+  "timelineRange": zod.object({
+  "start": zod.string().describe('Range start as ISO 8601 string.'),
+  "end": zod.string().describe('Range end as ISO 8601 string.')
+}).nullish().describe('Last timeline range (start\/end ISO 8601 strings). Restored on next load. Null when no range has been set.'),
+  "sidebarMode": zod.enum(['explore', 'plan', 'analyze']).default(putSettingsResponseSidebarModeDefault).describe('Which contextual mode the left sidebar shows. Persisted so the user\'s last mode survives page reloads.')
 }).describe('Per-user application settings with sensible defaults')
 
 

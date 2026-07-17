@@ -196,6 +196,12 @@ app.use(
       typeof err.status === "number" && err.status >= 400 && err.status < 600
         ? err.status
         : 500;
+    if (status >= 500) {
+      logger.error(
+        { err, reqId: (_req as express.Request & { id?: string }).id },
+        "Unhandled error forwarded to global error handler",
+      );
+    }
     res.status(status).json({ error: "Internal server error" });
   },
 );

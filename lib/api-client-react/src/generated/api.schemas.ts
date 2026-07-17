@@ -717,6 +717,28 @@ export type UserSettingsBookmarks = {[key: string]: UserSettingsBookmarksItem[]}
 export type UserSettingsKeyBindings = {[key: string]: string};
 
 /**
+ * Last timeline range (start/end ISO 8601 strings). Restored on next load. Null when no range has been set.
+ */
+export type UserSettingsTimelineRange = {
+  /** Range start as ISO 8601 string. */
+  start: string;
+  /** Range end as ISO 8601 string. */
+  end: string;
+} | null;
+
+/**
+ * Which contextual mode the left sidebar shows. Persisted so the user's last mode survives page reloads.
+ */
+export type UserSettingsSidebarMode = typeof UserSettingsSidebarMode[keyof typeof UserSettingsSidebarMode];
+
+
+export const UserSettingsSidebarMode = {
+  explore: 'explore',
+  plan: 'plan',
+  analyze: 'analyze',
+} as const;
+
+/**
  * Per-user application settings with sensible defaults
  */
 export interface UserSettings {
@@ -1090,6 +1112,14 @@ export interface UserSettings {
   crosshairMenuGamepadButton?: number | null;
   /** ISO 8601 timestamp of the most recent successful server sync (GET hydration or PUT save). Null when the user has never synced. */
   lastSyncedAt?: string | null;
+  /** Whether the water-temperature layer overlay is visible in the 3D viewscreen. */
+  showWaterTempLayer?: boolean;
+  /** Last timeline scrubber position as an ISO 8601 string. Restored on next load. Null when the scrubber has never been used. */
+  timelineCurrentTime?: string | null;
+  /** Last timeline range (start/end ISO 8601 strings). Restored on next load. Null when no range has been set. */
+  timelineRange?: UserSettingsTimelineRange;
+  /** Which contextual mode the left sidebar shows. Persisted so the user's last mode survives page reloads. */
+  sidebarMode?: UserSettingsSidebarMode;
 }
 
 export interface ApiError {
