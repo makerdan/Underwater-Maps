@@ -5,7 +5,7 @@
  * idb-keyval is mocked via vitest so no real IndexedDB is required.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ── idb-keyval mock ────────────────────────────────────────────────────────
 const store = new Map<string, unknown>();
@@ -24,7 +24,9 @@ import {
   listOfflinePacks,
   deleteOfflinePack,
   getExpiringPacks,
+  saveOfflinePack,
   type OfflinePack,
+  type PackProgress,
   type TideHeightPrediction,
 } from "@/lib/offlinePackStore";
 
@@ -195,5 +197,155 @@ describe("getExpiringPacks", () => {
   it("returns empty array when no packs are stored", async () => {
     const expiring = await getExpiringPacks(48);
     expect(expiring).toHaveLength(0);
+  });
+});
+
+// ── SW { ok: false } integration tests ───────────────────────────────────
+//
+// These tests stub navigator.serviceWorker and MessageChannel so that the
+// page-side cacheTerrain() receives { ok: false, error: "HTTP 503" } from
+// the simulated MessagePort.  They assert that saveOfflinePack() propagates
+// the failure through onProgress (with an error field) and throws, rather
+// than silently recording a "Terrain cached" success.
+
+describe("saveOfflinePack — SW { ok: false } surface to caller", () => {
+  // Capture the real navigator descriptor so we can restore it after each test.
+  const origNavigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    // Restore navigator to whatever it was before the test.
+    if (origNavigatorDescriptor) {
+      Object.defineProperty(globalThis, "navigator", origNavigatorDescriptor);
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (globalThis as any).navigator;
+    }
+  });
+
+  function stubSwWithResponse(response: { ok: boolean; error?: string }): void {
+    // Intercept MessageChannel so we can capture port1 and fire a reply.
+    let capturedPort1: { onmessage: ((e: MessageEvent) => void) | null } | null = null;
+
+    vi.stubGlobal("MessageChannel", function (this: unknown) {
+      capturedPort1 = { onmessage: null };
+      const port2 = {};
+      return { port1: capturedPort1, port2 };
+    });
+
+    const postMessageSpy = vi.fn().mockImplementation(() => {
+      // Fire the SW reply on the next microtask tick — before the 10 s fallback timer.
+      Promise.resolve().then(() => {
+        capturedPort1?.onmessage?.({ data: response } as MessageEvent);
+      });
+    });
+
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        serviceWorker: {
+          ready: Promise.resolve({ active: { postMessage: postMessageSpy } }),
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+  }
+
+  it("throws when the SW MessagePort replies { ok: false, error: 'HTTP 503' }", async () => {
+    stubSwWithResponse({ ok: false, error: "HTTP 503" });
+
+    const events: PackProgress[] = [];
+    await expect(
+      saveOfflinePack({ id: "ds-sw-fail", name: "SW Fail Dataset" }, 3, (p) => events.push(p)),
+    ).rejects.toThrow("HTTP 503");
+  });
+
+  it("reports step:'terrain' with error field when SW replies { ok: false }", async () => {
+    stubSwWithResponse({ ok: false, error: "HTTP 503" });
+
+    const events: PackProgress[] = [];
+    await saveOfflinePack(
+      { id: "ds-sw-fail2", name: "SW Fail Dataset 2" },
+      3,
+      (p) => events.push(p),
+    ).catch(() => { /* expected */ });
+
+    const terrainErrorEvent = events.find((p) => p.step === "terrain" && p.error !== undefined);
+    expect(terrainErrorEvent).toBeDefined();
+    expect(terrainErrorEvent?.error).toMatch(/HTTP 503/);
+  });
+
+  it("does not emit a success terrain progress event when SW replies { ok: false }", async () => {
+    stubSwWithResponse({ ok: false, error: "HTTP 503" });
+
+    const events: PackProgress[] = [];
+    await saveOfflinePack(
+      { id: "ds-sw-fail3", name: "SW Fail Dataset 3" },
+      3,
+      (p) => events.push(p),
+    ).catch(() => { /* expected */ });
+
+    const successTerrainEvent = events.find(
+      (p) => p.step === "terrain" && p.done && p.error === undefined,
+    );
+    expect(successTerrainEvent).toBeUndefined();
+  });
+
+  it("does not write a pack to IndexedDB when SW terrain caching fails", async () => {
+    stubSwWithResponse({ ok: false, error: "HTTP 503" });
+
+    await saveOfflinePack(
+      { id: "ds-sw-fail4", name: "SW Fail Dataset 4" },
+      3,
+      () => { /* noop */ },
+    ).catch(() => { /* expected */ });
+
+    const packs = await listOfflinePacks();
+    expect(packs).toHaveLength(0);
+  });
+
+  it("resolves successfully when SW replies { ok: true }", async () => {
+    stubSwWithResponse({ ok: true });
+
+    // Also stub fetch for tide and weather so the full flow completes.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (String(url).includes("/tidal/")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              station: "TEST",
+              heightPredictions: [],
+              currentPredictions: [],
+              tidalExpiresAt: new Date(Date.now() + 7 * 86400_000).toISOString(),
+              generatedAt: new Date().toISOString(),
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            station: "TEST",
+            observation: null,
+            snapshotAt: new Date().toISOString(),
+          }),
+        });
+      }),
+    );
+
+    const events: PackProgress[] = [];
+    const pack = await saveOfflinePack(
+      { id: "ds-sw-ok", name: "SW OK Dataset" },
+      3,
+      (p) => events.push(p),
+    );
+
+    expect(pack.datasetId).toBe("ds-sw-ok");
+    const successTerrainEvent = events.find(
+      (p) => p.step === "terrain" && p.done && p.error === undefined,
+    );
+    expect(successTerrainEvent).toBeDefined();
+    expect(successTerrainEvent?.label).toBe("Terrain cached");
   });
 });

@@ -138,8 +138,10 @@ export async function saveOfflinePack(
   onProgress({ step: "terrain", label: "Fetching terrain…", done: false });
   try {
     await cacheTerrain(terrainUrl, overviewUrl);
-  } catch {
-    // Non-fatal — terrain may already be cached via StaleWhileRevalidate
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "SW CACHE_PACK failed";
+    onProgress({ step: "terrain", label: msg, done: true, error: msg });
+    throw err;
   }
   onProgress({ step: "terrain", label: "Terrain cached", done: true });
 
