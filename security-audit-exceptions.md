@@ -65,4 +65,4 @@ Documented for visibility but not blocking per task scope:
 |---|---|---|---|---|
 | moderate | `undici` | GHSA-g8m3-5g58-fq7m, GHSA-35p6-xmwp-9g52 | `jsdom` | Test devDep only; see High section above for full reasoning |
 | low | `undici` | Multiple | `jsdom` | Test devDep only; same reasoning |
-| low | `@babel/core` | GHSA-4x5r-pxfx-6jf8 | `eslint-plugin-react-hooks` | Dev-only lint tool; no user input reaches it |
+| low | `@babel/core` | GHSA-4x5r-pxfx-6jf8 | `eslint-plugin-react-hooks` | **Overridden** via `pnpm-workspace.yaml` (`'@babel/core': '>=7.29.6'`); remove override once eslint-plugin-react-hooks bumps its own peer |

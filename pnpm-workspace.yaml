@@ -48,10 +48,12 @@ overrides:
   #   • esbuild >=0.27.3 <0.28.1 (GHSA-g7r4-m6w7-qqqr): arbitrary file read on
   #     Windows dev server only; pinned at 0.27.3 to avoid platform-binary churn;
   #     Linux-only deployment is not affected.
-  #   • @babel/core <=7.29.0 (GHSA-4x5r-pxfx-6jf8): sourceMappingURL arbitrary
-  #     file read via eslint-plugin-react-hooks; dev/lint toolchain only,
-  #     never runs in production.
   # All moderate/high/critical findings are resolved via the overrides below.
+  # @babel/core <=7.29.0 (GHSA-4x5r-pxfx-6jf8): sourceMappingURL arbitrary file
+  # read via eslint-plugin-react-hooks; dev/lint toolchain only. Overridden to
+  # close the finding proactively; remove once eslint-plugin-react-hooks bumps its
+  # own @babel/core peer to >=7.29.6.
+  '@babel/core': '^7.29.6'
   # Security: pin vulnerable transitive deps to patched versions (2025-07-17)
   # form-data <4.0.6 / <2.5.6: CRLF injection via @types/supertest and @google-cloud/storage chains
   form-data: '>=4.0.6'
