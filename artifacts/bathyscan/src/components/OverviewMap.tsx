@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { toast } from "@/hooks/use-toast";
 import {
   useGetMarkers,
   getGetMarkersQueryKey,
@@ -99,7 +100,6 @@ import {
 } from "@/lib/testHelpers";
 import { useSubstrateErrorToast } from "@/hooks/useSubstrateErrorToast";
 import { useSubstrateCoverageToast } from "@/hooks/useSubstrateCoverageToast";
-import { toast } from "@/hooks/use-toast";
 
 interface TooltipState {
   visible: boolean;

@@ -827,7 +827,7 @@ function Main() {
         // savedAt are absent/undefined, which would produce new Date(undefined)
         // → NaN and cause Math.round(NaN) to silently pass through to the toast.
         const rawDate = p.tidePack?.tidalExpiresAt ?? p.savedAt;
-        if (!rawDate) continue;
+        if (rawDate == null) continue;
         const expiresAt = new Date(rawDate);
         if (isNaN(expiresAt.getTime())) continue;
         const hoursLeft = Math.max(0, Math.round((expiresAt.getTime() - Date.now()) / 3_600_000));

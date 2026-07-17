@@ -1570,7 +1570,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       }
 
       if (!resp.ok) {
-        const errBody = await resp.json().catch(() => ({})) as { details?: string; error?: string };
+        // Cast via unknown — resp.json() returns any; the intermediate unknown
+        // step makes the advisory shape explicit without bypassing type safety.
+        const errBody = await resp.json().catch(() => ({})) as unknown as { details?: string; error?: string };
         chunkedFailedAtRef.current = i;
         setChunkedPhase("error");
         setChunkedError(errBody.details ?? errBody.error ?? `Upload failed at chunk ${i + 1} of ${totalChunks}`);
@@ -1592,7 +1594,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     });
 
     if (!finalResp.ok) {
-      const errBody = await finalResp.json().catch(() => ({})) as { details?: string; error?: string };
+      // Cast via unknown — advisory shape for json() which returns any.
+      const errBody = await finalResp.json().catch(() => ({})) as unknown as { details?: string; error?: string };
       // Use totalChunks as sentinel: all chunks are present, only finalize failed
       chunkedFailedAtRef.current = totalChunks;
       setChunkedPhase("error");
@@ -1658,7 +1661,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         break;
       }
       if (!lastResp!.ok) {
-        const err = await lastResp!.json().catch(() => ({})) as { details?: string; error?: string };
+        // Cast via unknown — advisory shape for json() which returns any.
+        const err = await lastResp!.json().catch(() => ({})) as unknown as { details?: string; error?: string };
         throw new Error(err.details ?? err.error ?? "Failed to get upload URL");
       }
       const data = await lastResp!.json() as { uploadUrl: string; objectKey: string };
