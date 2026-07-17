@@ -17,9 +17,10 @@
  * Save button, without requiring prop-drilling or a separate React context.
  */
 
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useState, createElement, type ElementType } from "react";
 import { useUser } from "@/lib/clerkCompat";
 import { toast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import {
   useGetSettings,
   usePutSettings,
@@ -92,10 +93,74 @@ let _flushInFlight = false;
 
 // ─── Consecutive flush failure tracking ──────────────────────────────────────
 // Counts how many debounce-triggered flush() calls have failed back-to-back.
-// Reset to 0 on any successful PUT. When it reaches the threshold, a toast
-// warning is shown so the user knows their settings are not being persisted.
+// Reset to 0 on any successful PUT. When it reaches the threshold the sync
+// loop backs off and a toast is shown so the user knows their settings are not
+// being persisted. The counter is also reset whenever back-off is entered so
+// the threshold check stays accurate across the retry cycle.
 let _consecutiveFlushFailures = 0;
 const FLUSH_FAILURE_TOAST_THRESHOLD = 3;
+
+// ─── Back-off state ───────────────────────────────────────────────────────────
+// After FLUSH_FAILURE_TOAST_THRESHOLD consecutive failures the sync loop enters
+// back-off: scheduleSync() becomes a no-op and a retry is scheduled after an
+// exponential delay (30 s → 60 s → 120 s, then capped). The user can bypass
+// the timer at any time with the "Retry now" toast action.
+let _inBackOff = false;
+let _backOffStep = 0;
+let _backOffTimerId: ReturnType<typeof setTimeout> | null = null;
+const BACK_OFF_DELAYS = [30_000, 60_000, 120_000] as const;
+
+// Forward declaration — implemented below after _flush is declared.
+function _retryNow(): void {
+  _inBackOff = false;
+  if (_backOffTimerId) {
+    clearTimeout(_backOffTimerId);
+    _backOffTimerId = null;
+  }
+  if (!_flush) return;
+  void _flush().catch(() => {
+    _enterBackOff();
+  });
+}
+
+function _enterBackOff(): void {
+  _inBackOff = true;
+  _consecutiveFlushFailures = 0;
+
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  const delay = BACK_OFF_DELAYS[Math.min(_backOffStep, BACK_OFF_DELAYS.length - 1)]!;
+  _backOffStep = Math.min(_backOffStep + 1, BACK_OFF_DELAYS.length - 1);
+
+  // Build the action element imperatively so this .ts file stays JSX-free.
+  // The dismiss ref trick lets the click handler close the toast it belongs to.
+  // Cast ToastAction to React.ElementType to avoid the TS forwardRef prop-shape
+  // mismatch that arises when createElement's overloads are resolved against a
+  // ForwardRefExoticComponent — the runtime behaviour is identical.
+  let toastDismiss: (() => void) | null = null;
+  const handleRetry = () => {
+    toastDismiss?.();
+    _retryNow();
+  };
+  const { dismiss } = toast({
+    title: "Settings not saving",
+    description:
+      "Your settings could not be saved to the server. " +
+      "Retrying automatically — or tap 'Retry now' to try immediately.",
+    duration: delay + 5_000,
+    action: createElement(
+      ToastAction as ElementType,
+      { altText: "Retry now", onClick: handleRetry },
+      "Retry now",
+    ),
+  });
+  toastDismiss = dismiss;
+
+  if (_backOffTimerId) clearTimeout(_backOffTimerId);
+  _backOffTimerId = setTimeout(() => {
+    _backOffTimerId = null;
+    _retryNow();
+  }, delay);
+}
 
 // ─── Hydration / ordering guards ─────────────────────────────────────────────
 //  _hydrating        — true while the GET effect is applying server values to
@@ -204,6 +269,12 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
     return () => {
       _hookMountCount--;
       _consecutiveFlushFailures = 0;
+      _inBackOff = false;
+      _backOffStep = 0;
+      if (_backOffTimerId) {
+        clearTimeout(_backOffTimerId);
+        _backOffTimerId = null;
+      }
     };
   }, []);
 
@@ -447,8 +518,11 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       if (settingsRevAtFlush > _ackedSettingsRev) _ackedSettingsRev = settingsRevAtFlush;
       if (panelRevAtFlush > _ackedPanelRev) _ackedPanelRev = panelRevAtFlush;
       if (zoneRevAtFlush > _ackedZoneRev) _ackedZoneRev = zoneRevAtFlush;
-      // Successful flush — reset the consecutive failure counter.
+      // Successful flush — reset failure counter and back-off step so the next
+      // failure streak starts fresh at the shortest delay (30 s), not the last
+      // escalated one.
       _consecutiveFlushFailures = 0;
+      _backOffStep = 0;
     } finally {
       _flushInFlight = false;
     }
@@ -457,6 +531,10 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
   // ── Debounced PUT subscription ─────────────────────────────────────────────
   const scheduleSync = useCallback(() => {
     if (!isSignedIn) return;
+    // While in back-off mode, the debounce timer is suspended. A retry is
+    // already scheduled by _enterBackOff(); arming another debounce here
+    // would cause the two timers to race and could prematurely exit back-off.
+    if (_inBackOff) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     // Signal that a write is outstanding so waitForServerSettingsSync knows
     // to poll rather than resolve immediately.
@@ -469,16 +547,12 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
           console.error("[useServerSettingsSync] PUT /api/settings failed:", err);
         }
         _consecutiveFlushFailures++;
-        // After several consecutive failures, surface a non-blocking toast so
-        // the user knows their settings may not be saving (e.g. server down).
+        // After several consecutive failures, enter exponential back-off and
+        // surface a non-blocking toast with a "Retry now" action so the user
+        // can recover without reloading. Back-off pauses the sync loop; the
+        // back-off timer attempts one retry per interval on its own.
         if (_consecutiveFlushFailures >= FLUSH_FAILURE_TOAST_THRESHOLD) {
-          toast({
-            title: "Settings not saving",
-            description: "Your settings could not be saved to the server. Changes are stored locally — try again when reconnected.",
-            duration: 8000,
-          });
-          // Reset counter so we don't spam the toast on every subsequent failure.
-          _consecutiveFlushFailures = 0;
+          _enterBackOff();
         }
       });
     }, 300);
