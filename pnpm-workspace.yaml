@@ -26,7 +26,7 @@ catalog:
   tailwind-merge: ^3.3.1
   tailwindcss: ^4.1.14
   tsx: 4.21.0
-  vite: ^7.3.2
+  vite: ^7.3.6
   wouter: ^3.10.0
   zod: 3.25.76
 
@@ -43,6 +43,29 @@ onlyBuiltDependencies:
   - unrs-resolver
 
 overrides:
+  # ── Security overrides (2025-07-17) ─────────────────────────────────────────
+  # Intentionally accepted low-severity findings (not overridden):
+  #   • esbuild >=0.27.3 <0.28.1 (GHSA-g7r4-m6w7-qqqr): arbitrary file read on
+  #     Windows dev server only; pinned at 0.27.3 to avoid platform-binary churn;
+  #     Linux-only deployment is not affected.
+  #   • @babel/core <=7.29.0 (GHSA-4x5r-pxfx-6jf8): sourceMappingURL arbitrary
+  #     file read via eslint-plugin-react-hooks; dev/lint toolchain only,
+  #     never runs in production.
+  # All moderate/high/critical findings are resolved via the overrides below.
+  # Security: pin vulnerable transitive deps to patched versions (2025-07-17)
+  # undici <7.28.0: TLS bypass + DoS via jsdom (vitest/bathyscan); dev-only exposure
+  undici: '>=7.28.0'
+  # form-data <4.0.6 / <2.5.6: CRLF injection via @types/supertest and @google-cloud/storage chains
+  form-data: '>=4.0.6'
+  # linkify-it <=5.0.0: quadratic scan loop via orval->typedoc->markdown-it; build-only exposure
+  linkify-it: '>=5.0.1'
+  # markdown-it <=14.1.1: quadratic DoS in smartquotes via orval->typedoc; build-only exposure
+  markdown-it: '>=14.2.0'
+  # js-yaml <=4.1.1: quadratic DoS in merge-key via orval; build-only exposure
+  js-yaml: '>=4.2.0'
+  # vite <=7.3.4: server.fs.deny bypass + NTLMv2 hash disclosure on Windows;
+  # bumped to ^7.3.5 in catalog above for bathyscan; override also covers api-server->vitest->vite path
+  vite: '>=7.3.5'
   '@esbuild-kit/esm-loader': npm:tsx@^4.21.0
   '@expo/ngrok-bin>@expo/ngrok-bin-darwin-arm64': '-'
   '@expo/ngrok-bin>@expo/ngrok-bin-darwin-x64': '-'
