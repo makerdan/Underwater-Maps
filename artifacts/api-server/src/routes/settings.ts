@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
+import { z } from "zod";
 import { db, userSettingsTable } from "@workspace/db";
 import { GetSettingsResponse, PutSettingsBody } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
@@ -183,7 +184,7 @@ export const DEFAULT_SETTINGS = {
  */
 function mergeForResponse(
   stored: Record<string, unknown> | null | undefined,
-  validated: Record<string, unknown>,
+  validated: object,
 ): Record<string, unknown> {
   // Include any stored field that is not already present in the validated
   // schema response. This covers both fields that are completely outside the
@@ -198,7 +199,7 @@ function mergeForResponse(
       if (!(k in validated)) extras[k] = v;
     }
   }
-  return { ...validated, ...extras };
+  return { ...(validated as Record<string, unknown>), ...extras };
 }
 
 router.get("/settings", requireAuth, asyncHandler(async (req, res): Promise<void> => {
@@ -246,7 +247,7 @@ router.get("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
     };
   }
 
-  let validated: ReturnType<typeof GetSettingsResponse.parse>;
+  let validated: z.infer<typeof GetSettingsResponse>;
   try {
     validated = GetSettingsResponse.parse(merged);
   } catch (err) {
@@ -257,7 +258,7 @@ router.get("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
     res.status(500).json({ error: "internal", details: "Server settings failed internal schema validation" });
     return;
   }
-  res.json(mergeForResponse(stored, validated as Record<string, unknown>));
+  res.json(mergeForResponse(stored, validated));
 }));
 
 router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void> => {

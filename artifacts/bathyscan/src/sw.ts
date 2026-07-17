@@ -3,6 +3,7 @@ import { precacheAndRoute } from "workbox-precaching";
 import { registerRoute } from "workbox-routing";
 import { StaleWhileRevalidate, CacheFirst } from "workbox-strategies";
 import { ExpirationPlugin } from "workbox-expiration";
+import { handleCachePackMessage, PACK_TERRAIN_CACHE_NAME } from "./lib/swMessageHandler";
 
 declare const self: ServiceWorkerGlobalScope;
 declare const __BUILD_HASH__: string;
@@ -14,7 +15,7 @@ const CACHE_PREFIX = "bathyscan-v";
 
 // Version-independent persistent caches for offline packs — intentionally
 // survive SW version upgrades so saved packs aren't wiped on app update.
-const PACK_TERRAIN_CACHE = "bathyscan-pack-terrain";
+const PACK_TERRAIN_CACHE = PACK_TERRAIN_CACHE_NAME;
 const PACK_HELP_CACHE = "bathyscan-pack-help";
 const PERSISTENT_CACHES = new Set([PACK_TERRAIN_CACHE, PACK_HELP_CACHE]);
 
@@ -110,48 +111,7 @@ registerRoute(
 
 // ── CACHE_PACK message handler ────────────────────────────────────────────────
 
-interface CachePackMessage {
-  type: "CACHE_PACK";
-  terrainUrl: string;
-  overviewUrl: string;
-}
-
-self.addEventListener("message", (event: ExtendableMessageEvent) => {
-  // Validate the shape before casting — any postMessage payload can arrive
-  // here, not just our CACHE_PACK messages. Narrow first, then cast.
-  if (
-    typeof event.data !== "object" ||
-    event.data === null ||
-    (event.data as Record<string, unknown>).type !== "CACHE_PACK"
-  ) return;
-  const data = event.data as CachePackMessage;
-
-  event.waitUntil(
-    (async () => {
-      const port = event.ports[0];
-      try {
-        const cache = await caches.open(PACK_TERRAIN_CACHE);
-        // Public-only: these URLs point at /api/datasets/:id/terrain|overview,
-        // which are unauthenticated catalog routes — no Authorization needed.
-        // Throw on non-2xx so the outer catch sends a proper failure message
-        // to the caller instead of silently storing a partial/empty pack.
-        await Promise.all([
-          fetch(data.terrainUrl).then((r) => {
-            if (!r.ok) throw new Error(`Terrain fetch failed: HTTP ${r.status}`);
-            return cache.put(data.terrainUrl, r);
-          }),
-          fetch(data.overviewUrl).then((r) => {
-            if (!r.ok) throw new Error(`Overview fetch failed: HTTP ${r.status}`);
-            return cache.put(data.overviewUrl, r);
-          }),
-        ]);
-        port?.postMessage({ ok: true });
-      } catch (err) {
-        port?.postMessage({ ok: false, error: String(err) });
-      }
-    })(),
-  );
-});
+self.addEventListener("message", handleCachePackMessage as EventListener);
 
 // ── Background Sync (markers) — intentionally not implemented in the SW ──────
 //

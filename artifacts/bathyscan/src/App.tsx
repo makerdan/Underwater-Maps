@@ -61,6 +61,7 @@ import { useHighlightStore } from "@/lib/highlightStore";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
+import { toValidDepthLayer } from "@/lib/depthLayerGuard";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useToast } from "@/hooks/use-toast";
 import { getBoundKey } from "@/lib/keyBindings";
@@ -323,14 +324,8 @@ function Main() {
   const joystickMode = useSettingsStore((st) => st.joystickMode);
   const showJoystickInOrbit = useSettingsStore((st) => st.showJoystickInOrbit);
 
-  // Validate the stored value before using it as a DepthLayer — an
-  // unrecognised string (e.g. from a future schema version) would cast
-  // successfully but cause the tidal arrow layer to render incorrectly.
-  const VALID_DEPTH_LAYERS: readonly string[] = ["surface", "mid", "near-bottom"];
   const [depthLayer, setDepthLayer] = useState<DepthLayer>(
-    VALID_DEPTH_LAYERS.includes(defaultTidalDepthLayer as string)
-      ? (defaultTidalDepthLayer as DepthLayer)
-      : "surface",
+    toValidDepthLayer(defaultTidalDepthLayer)
   );
 
   const timelineCurrentTime = useTimelineStore((s) => s.currentTime);
@@ -808,7 +803,7 @@ function Main() {
   // iOS Safari "Add to Home Screen" hint (once per session)
   useEffect(() => {
     const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    const isStandalone = "standalone" in navigator && (navigator as Record<string, unknown>).standalone === true;
+    const isStandalone = "standalone" in navigator && (navigator as Record<string, unknown>)["standalone"] === true;
     const hintShown = sessionStorage.getItem("bs-ios-hint");
     if (!isIos || isStandalone || hintShown) return;
     sessionStorage.setItem("bs-ios-hint", "1");
