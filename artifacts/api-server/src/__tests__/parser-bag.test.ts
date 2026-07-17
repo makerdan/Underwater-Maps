@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { readFile } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -34,6 +34,13 @@ beforeAll(async () => {
   bagProjectedBuf = await readFile(
     join(FIXTURE_DIR, "survey_standard_projected.bag")
   );
+});
+
+// Release fixture buffers after all tests in this file complete so that
+// the GC triggered by setup.ts afterAll can reclaim the memory.
+afterAll(() => {
+  bagBuf = null!;
+  bagProjectedBuf = null!;
 });
 
 describe("BAG (HDF5) — realistic NOAA hydrographic survey fixture", () => {

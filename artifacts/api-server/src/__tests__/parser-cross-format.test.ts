@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { readFile } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -34,6 +34,16 @@ beforeAll(async () => {
     readFile(join(FIXTURE_DIR, "survey.gpx")),
     readFile(join(FIXTURE_DIR, "survey.nmea")),
   ]);
+});
+
+afterAll(() => {
+  tifBuf = null!;
+  ncBuf = null!;
+  las12Buf = null!;
+  las14Buf = null!;
+  bagBuf = null!;
+  gpxBuf = null!;
+  nmeaBuf = null!;
 });
 
 describe("Cross-format consistency", () => {

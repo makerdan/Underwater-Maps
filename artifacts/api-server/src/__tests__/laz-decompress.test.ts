@@ -19,7 +19,7 @@
  *   (or: node artifacts/api-server/src/__tests__/fixtures/generate.mjs)
  */
 
-import { vi, describe, it, expect, beforeAll, afterEach } from "vitest";
+import { vi, describe, it, expect, afterAll, afterEach, beforeAll } from "vitest";
 import { readFile } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -40,6 +40,10 @@ beforeAll(async () => {
   // not spread across every it() block.
   await lazPerfModule.createLazPerf();
 }, 90_000);
+
+afterAll(() => {
+  lazBuf = null!;
+});
 
 afterEach(() => {
   vi.restoreAllMocks();

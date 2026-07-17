@@ -90,6 +90,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await fs.promises.rm(tmpExtractBase, { recursive: true, force: true });
+  tarBuf = null!;
+  tarGzBuf = null!;
 });
 
 // ---------------------------------------------------------------------------

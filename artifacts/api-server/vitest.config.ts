@@ -19,11 +19,17 @@ export default defineConfig({
     poolOptions: {
       forks: {
         singleFork: true,
-        // Give the single long-lived worker enough heap to run the full suite
-        // without hitting "Ineffective mark-compacts near heap limit" (OOM).
-        // The default V8 heap is ~1.5 GB; BAG-parsing tests accumulate well
-        // beyond that over a single-fork run.
-        execArgv: ["--max-old-space-size=8192"],
+        // --expose-gc lets setup.ts call global.gc() after each test file so
+        // that old module registries (and their WASM heaps) are swept promptly
+        // instead of accumulating across the 70+ file singleFork run.
+        //
+        // --max-old-space-size is kept at 4096 MB (halved from 8192) as a
+        // safety ceiling.  With the laz-perf WASM singleton and the per-file
+        // gc() call the peak heap should now stay well under the default
+        // ~1.5 GB limit, but the explicit ceiling remains so that regressions
+        // are caught as OOM crashes rather than silent slowness if the test
+        // suite ever introduces a new large retained object.
+        execArgv: ["--max-old-space-size=4096", "--expose-gc"],
       },
     },
   },

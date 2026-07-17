@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { readFile } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -29,6 +29,10 @@ let tifBuf: Buffer;
 
 beforeAll(async () => {
   tifBuf = await readFile(join(FIXTURE_DIR, "survey.tif"));
+});
+
+afterAll(() => {
+  tifBuf = null!;
 });
 
 describe("GeoTIFF — realistic survey fixture", () => {

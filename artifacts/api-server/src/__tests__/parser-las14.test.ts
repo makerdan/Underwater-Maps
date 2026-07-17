@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { readFile } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -29,6 +29,10 @@ let las14Buf: Buffer;
 
 beforeAll(async () => {
   las14Buf = await readFile(join(FIXTURE_DIR, "survey_1_4.las"));
+});
+
+afterAll(() => {
+  las14Buf = null!;
 });
 
 describe("LAS 1.4 (format 6) — 64-bit point count fixture", () => {

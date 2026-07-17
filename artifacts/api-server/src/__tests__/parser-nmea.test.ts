@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { readFile } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -29,6 +29,10 @@ let nmeaBuf: Buffer;
 
 beforeAll(async () => {
   nmeaBuf = await readFile(join(FIXTURE_DIR, "survey.nmea"));
+});
+
+afterAll(() => {
+  nmeaBuf = null!;
 });
 
 describe("NMEA — realistic depth-sounder log fixture", () => {

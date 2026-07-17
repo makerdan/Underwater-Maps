@@ -25,6 +25,47 @@ import { NetCDFReader } from "netcdfjs";
 import { createLazPerf } from "laz-perf";
 import { parseXyzCsv } from "./terrain.js";
 import { bagWorker } from "./bagWorker.js";
+import { registerCache } from "./cacheRegistry.js";
+
+// ---------------------------------------------------------------------------
+// laz-perf WASM singleton
+//
+// createLazPerf() initialises an Emscripten WASM runtime (≥16 MB heap) on
+// every call.  Re-initialising it per parseLasLaz() invocation wastes memory
+// because the module is stateless between calls — only the LASZip object,
+// malloc'd buffers, and the decompressed-point loop are call-scoped.
+//
+// Caching a single Promise here means the WASM heap is allocated once per
+// module-registry lifetime (once in production, once per vitest test-file in
+// singleFork mode), and every subsequent call to parseLasLaz awaits the same
+// already-resolved Promise without allocating a second heap.
+//
+// The cache is registered with cacheRegistry so that test setup's
+// clearAllCaches() (called in beforeEach) resets it between tests.  This lets
+// spy/mock tests intercept createLazPerf normally: the beforeEach clears
+// _lazPerfPromise, so the next parseLasLaz() call invokes createLazPerf()
+// fresh and the spy fires.  In production there is no clearAllCaches(), so
+// the singleton persists for the entire process lifetime as intended.
+// ---------------------------------------------------------------------------
+let _lazPerfPromise: ReturnType<typeof createLazPerf> | null = null;
+registerCache(() => {
+  _lazPerfPromise = null;
+});
+
+function getLazPerfInstance(): ReturnType<typeof createLazPerf> {
+  if (!_lazPerfPromise) {
+    // Attach a rejection handler that clears the cached Promise so the next
+    // call can retry initialisation rather than re-throwing a permanently
+    // stale rejection.  The .catch() returns a new Promise that we do NOT
+    // store — the caller's await on _lazPerfPromise will still see the
+    // original rejection propagate correctly.
+    _lazPerfPromise = createLazPerf();
+    _lazPerfPromise.catch(() => {
+      _lazPerfPromise = null;
+    });
+  }
+  return _lazPerfPromise;
+}
 
 // ---------------------------------------------------------------------------
 // Shared type (mirrors terrain.ts RawPoint — re-exported to avoid circular dep)
@@ -635,7 +676,7 @@ export async function parseLasLaz(buffer: Buffer, fileName: string): Promise<Raw
     // decompression errors, giving users a concrete fallback path.
     let lp: Awaited<ReturnType<typeof createLazPerf>>;
     try {
-      lp = await createLazPerf();
+      lp = await getLazPerfInstance();
     } catch (err) {
       throw new Error(
         `LAZ decompression failed: ${err instanceof Error ? err.message : String(err)}. ` +
