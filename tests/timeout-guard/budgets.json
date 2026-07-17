@@ -1,10 +1,11 @@
 {
-  "$comment": "Single source of truth for all test-suite time budgets (milliseconds). Layers: testTimeoutMs/hookTimeoutMs = per-test & per-hook (Layer 1+2); fileBudgetMs = per test file wall-clock (Layer 3); runBudgetMs = whole runner invocation (Layer 4); aggregate.totalBudgetMs = the entire test-all sequence (Layer 5). Edit here, never inline in configs.",
+  "$comment": "Single source of truth for all test-suite time budgets (milliseconds). Layers: testTimeoutMs/hookTimeoutMs = per-test & per-hook (Layer 1+2); fileBudgetMs = per test file wall-clock (Layer 3); runBudgetMs = whole runner invocation (Layer 4); aggregate.totalBudgetMs = the entire test-all sequence (Layer 5). Optional rssWarnMb: per-file RSS high-water-mark soft-warn threshold (MB) — vitest-guard prints a warning when peak RSS for any single file exceeds this; raise only alongside --max-old-space-size in vitest.config.ts. Edit here, never inline in configs.",
   "apiServerUnit": {
     "testTimeoutMs": 30000,
     "hookTimeoutMs": 90000,
     "fileBudgetMs": 120000,
-    "runBudgetMs": 600000
+    "runBudgetMs": 600000,
+    "rssWarnMb": 4096
   },
   "apiServerValidation": {
     "testTimeoutMs": 30000,
