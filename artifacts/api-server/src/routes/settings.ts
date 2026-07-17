@@ -428,15 +428,23 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
     return;
   }
 
+  // Sanitize the null-prototype merged object into a plain object before
+  // passing to Drizzle. The pg driver may call instanceof Object or toJSON on
+  // the value; a null-prototype object would fail those checks. A JSON
+  // round-trip is the cheapest way to guarantee a plain, regular-prototype
+  // object reaches the wire — and it is safe because JSON.stringify already
+  // reads only own enumerable properties, which is exactly what we want.
+  const safeSettings = JSON.parse(JSON.stringify(merged)) as Record<string, unknown>;
+
   await db
     .insert(userSettingsTable)
-    .values({ userId, settings: merged })
+    .values({ userId, settings: safeSettings })
     .onConflictDoUpdate({
       target: userSettingsTable.userId,
-      set: { settings: merged },
+      set: { settings: safeSettings },
     });
 
-  res.json(merged);
+  res.json(safeSettings);
 }));
 
 export default router;

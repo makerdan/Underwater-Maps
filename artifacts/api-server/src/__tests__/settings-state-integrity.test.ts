@@ -127,7 +127,63 @@ describe("PUT /api/settings — prototype pollution guard", () => {
   });
 });
 
-// ─── 2. Dead-delete absence (static) ─────────────────────────────────────────
+// ─── 2. JSON round-trip integrity of the value written to db.insert ──────────
+
+describe("PUT /api/settings — db.insert receives a plain JSON-round-trippable object", () => {
+  it("the settings value passed to db.insert deep-equals its own JSON.parse(JSON.stringify(...)) result", async () => {
+    // Seed a stored row so the merge path is exercised.
+    integrityMocks.selectWhereMock.mockResolvedValue([
+      { userId: "user_integrity_test", settings: { textureQuality: "medium", somePrevKey: true } },
+    ]);
+
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ textureQuality: "high", customKey: "customValue" });
+
+    expect(res.status).toBe(200);
+
+    // Retrieve the argument passed to .values({ userId, settings: ... }).
+    const [valuesArg] = integrityMocks.valuesMock.mock.calls[0] as [
+      { userId: string; settings: unknown },
+    ];
+    const captured = valuesArg.settings;
+
+    // The value must JSON-round-trip cleanly: parsing the stringified form
+    // must produce a deep-equal result. This ensures it is a plain object
+    // (not a null-prototype object) and carries no non-serializable content.
+    const roundTripped = JSON.parse(JSON.stringify(captured));
+    expect(captured).toEqual(roundTripped);
+
+    // Extra: the prototype of the captured object must be Object.prototype,
+    // not null — confirming the route applied the JSON-sanitisation step.
+    expect(Object.getPrototypeOf(captured as object)).toBe(Object.prototype);
+  });
+
+  it("a client-supplied __updatedAt is never stored in db.insert even when syntactically valid", async () => {
+    const clientTimestamp = "2099-06-15T12:00:00.000Z";
+
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ textureQuality: "low", __updatedAt: clientTimestamp });
+
+    expect(res.status).toBe(200);
+
+    const [valuesArg] = integrityMocks.valuesMock.mock.calls[0] as [
+      { userId: string; settings: Record<string, unknown> },
+    ];
+    const storedSettings = valuesArg.settings;
+
+    // The stored __updatedAt must NOT match what the client sent.
+    expect(storedSettings.__updatedAt).not.toBe(clientTimestamp);
+    // It must still be a valid ISO date string (server-generated).
+    expect(typeof storedSettings.__updatedAt).toBe("string");
+    expect(Number.isNaN(Date.parse(storedSettings.__updatedAt as string))).toBe(false);
+  });
+});
+
+// ─── 3. Dead-delete absence (static) ─────────────────────────────────────────
 
 describe("settings.ts source — dead delete statement absence", () => {
   it("does not contain 'delete extras.__updatedAt' after the extraction-loop fix", () => {
