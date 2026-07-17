@@ -50,7 +50,7 @@ const PANEL_STYLE: React.CSSProperties = {
   borderRadius: 6,
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   color: "#cbd5e1",
-  fontSize: 12,
+  fontSize: 18,
   minWidth: 230,
   maxWidth: 260,
   backdropFilter: "blur(6px)",
@@ -75,7 +75,7 @@ const ACTION_BTN_STYLE: React.CSSProperties = {
   border: "1px solid rgba(0,229,255,0.35)",
   color: "#cbd5e1",
   cursor: "pointer",
-  fontSize: 9,
+  fontSize: 13.5,
   letterSpacing: "0.1em",
   padding: "2px 7px",
   borderRadius: 3,
@@ -260,10 +260,10 @@ export const RoutesPanel: React.FC = () => {
             aria-expanded={!collapsed}
             style={{ ...HEADER_BTN_STYLE, width: "auto", flex: 1 }}
           >
-            <span style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: "#00e5ff", textShadow: "0 0 6px rgba(0,229,255,0.5)", fontWeight: 700 }}>
+            <span style={{ fontSize: 16.5, letterSpacing: "0.2em", textTransform: "uppercase", color: "#00e5ff", textShadow: "0 0 6px rgba(0,229,255,0.5)", fontWeight: 700 }}>
               🛤 Routes {routeList.length > 0 ? `(${routeList.length})` : ""}
             </span>
-            <span style={{ color: "#cbd5e1", fontSize: 22, lineHeight: 1 }}>
+            <span style={{ color: "#cbd5e1", fontSize: 33, lineHeight: 1 }}>
               {collapsed ? "▸" : "▾"}
             </span>
           </button>
@@ -273,21 +273,21 @@ export const RoutesPanel: React.FC = () => {
         {!collapsed && (
           <div style={{ padding: "6px 10px 10px" }}>
             {!isSignedIn ? (
-              <div style={{ fontSize: 10, color: "#94a3b8", textAlign: "center", padding: "8px 0" }}>
+              <div style={{ fontSize: 15, color: "#94a3b8", textAlign: "center", padding: "8px 0" }}>
                 Sign in to save and view routes.
               </div>
             ) : !datasetId ? (
-              <div style={{ fontSize: 10, color: "#94a3b8" }}>
+              <div style={{ fontSize: 15, color: "#94a3b8" }}>
                 Load a dataset to view routes.
               </div>
             ) : (terrain?.dataSource === "synthetic" || terrain?.synthetic === true) ? (
-              <div data-testid="routes-panel-synthetic-msg" style={{ fontSize: 10, color: "#94a3b8" }}>
+              <div data-testid="routes-panel-synthetic-msg" style={{ fontSize: 15, color: "#94a3b8" }}>
                 Routes are not available for simulated data. Load a real dataset to save and view routes.
               </div>
             ) : isLoading ? (
-              <div style={{ fontSize: 10, color: "#94a3b8" }}>Loading…</div>
+              <div style={{ fontSize: 15, color: "#94a3b8" }}>Loading…</div>
             ) : routeList.length === 0 ? (
-              <div style={{ fontSize: 10, color: "#94a3b8" }}>
+              <div style={{ fontSize: 15, color: "#94a3b8" }}>
                 No saved routes. Use the depth profile panel to save a path profile as a route.
               </div>
             ) : (
@@ -323,7 +323,7 @@ export const RoutesPanel: React.FC = () => {
                               border: "1px solid rgba(0,229,255,0.5)",
                               color: "#e2e8f0",
                               fontFamily: "inherit",
-                              fontSize: 11,
+                              fontSize: 16.5,
                               padding: "2px 6px",
                               borderRadius: 3,
                               width: "100%",
@@ -332,7 +332,7 @@ export const RoutesPanel: React.FC = () => {
                         </div>
                       ) : (
                         <div
-                          style={{ fontSize: 11, color: "#e2e8f0", marginBottom: 3, cursor: "pointer", wordBreak: "break-word" }}
+                          style={{ fontSize: 16.5, color: "#e2e8f0", marginBottom: 3, cursor: "pointer", wordBreak: "break-word" }}
                           title="Click to rename"
                           onClick={() => startEditName(route)}
                           role="button"
@@ -343,7 +343,7 @@ export const RoutesPanel: React.FC = () => {
                         </div>
                       )}
 
-                      <div style={{ fontSize: 9, color: "#94a3b8", marginBottom: 5 }}>
+                      <div style={{ fontSize: 13.5, color: "#94a3b8", marginBottom: 5 }}>
                         {route.waypointCount} wpt · {distStr}
                       </div>
 

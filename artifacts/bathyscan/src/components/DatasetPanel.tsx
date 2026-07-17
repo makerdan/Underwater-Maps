@@ -162,14 +162,14 @@ const PANEL: React.CSSProperties = {
   borderRadius: 6,
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   color: "#e2e8f0",
-  fontSize: 11,
+  fontSize: 16.5,
   minWidth: 268,
   maxWidth: 308,
   backdropFilter: "blur(6px)",
 };
 
 const ACTION_BTN_STYLE: React.CSSProperties = {
-  fontSize: 9,
+  fontSize: 13.5,
   letterSpacing: "0.06em",
   padding: "3px 7px",
   background: "rgba(0,229,255,0.06)",
@@ -210,7 +210,7 @@ const VisibleDatasetsHeader: React.FC<{
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        fontSize: 9,
+        fontSize: 13.5,
         letterSpacing: "0.1em",
         color: "#7dd3fc",
         background: "rgba(0,229,255,0.04)",
@@ -226,7 +226,7 @@ const VisibleDatasetsHeader: React.FC<{
         data-testid="btn-hide-all-others"
         onClick={onHideAllOthers}
         style={{
-          fontSize: 9,
+          fontSize: 13.5,
           color: "#00e5ff",
           background: "transparent",
           border: "1px solid rgba(0,229,255,0.35)",
@@ -297,7 +297,7 @@ const RemoveDatasetConfirmDialog: React.FC<{
         <div
           id="remove-dataset-dialog-title"
           style={{
-            fontSize: 11,
+            fontSize: 16.5,
             letterSpacing: "0.12em",
             color: "#00e5ff",
             textShadow: "0 0 6px rgba(0,229,255,0.5)",
@@ -308,7 +308,7 @@ const RemoveDatasetConfirmDialog: React.FC<{
         </div>
         <div
           style={{
-            fontSize: 11,
+            fontSize: 16.5,
             color: "#e2e8f0",
             marginBottom: 18,
             lineHeight: 1.5,
@@ -325,7 +325,7 @@ const RemoveDatasetConfirmDialog: React.FC<{
             data-testid="remove-dataset-cancel"
             onClick={onCancel}
             style={{
-              fontSize: 10,
+              fontSize: 15,
               letterSpacing: "0.08em",
               color: "#94a3b8",
               background: "transparent",
@@ -342,7 +342,7 @@ const RemoveDatasetConfirmDialog: React.FC<{
             data-testid="remove-dataset-confirm"
             onClick={onConfirm}
             style={{
-              fontSize: 10,
+              fontSize: 15,
               letterSpacing: "0.08em",
               color: "#001a1f",
               background: "#00e5ff",
@@ -437,7 +437,7 @@ const VisibleDatasetRows: React.FC<{
               alignItems: "center",
               padding: "2px 8px 2px 8px",
               gap: 4,
-              fontSize: 10,
+              fontSize: 15,
               color: "#e2e8f0",
               borderBottom: "1px solid rgba(0,229,255,0.05)",
               background: "rgba(0,229,255,0.08)",
@@ -454,7 +454,7 @@ const VisibleDatasetRows: React.FC<{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: 12,
+                fontSize: 18,
                 color: "#00e5ff",
                 textShadow: "0 0 6px rgba(0,229,255,0.6)",
                 lineHeight: 1,
@@ -482,7 +482,7 @@ const VisibleDatasetRows: React.FC<{
                 data-testid={`loading-badge-${vd.datasetId}`}
                 style={{
                   flexShrink: 0,
-                  fontSize: 8,
+                  fontSize: 12,
                   letterSpacing: "0.06em",
                   color: "#64748b",
                   padding: "1px 4px",
@@ -501,7 +501,7 @@ const VisibleDatasetRows: React.FC<{
                 title="This dataset's depth range exceeds the primary's — Y-axis is compressed to fit"
                 style={{
                   flexShrink: 0,
-                  fontSize: 8,
+                  fontSize: 12,
                   letterSpacing: "0.04em",
                   color: "#f59e0b",
                   padding: "1px 4px",
@@ -533,7 +533,7 @@ const VisibleDatasetRows: React.FC<{
                   border: "none",
                   color: "#64748b",
                   cursor: "pointer",
-                  fontSize: 11,
+                  fontSize: 16.5,
                   lineHeight: 1,
                   padding: 0,
                   borderRadius: 2,
@@ -559,7 +559,7 @@ const VisibleDatasetRows: React.FC<{
           {count > 0 && (
             <div style={{
               padding: "2px 8px",
-              fontSize: 8,
+              fontSize: 12,
               letterSpacing: "0.1em",
               color: "#475569",
               background: "rgba(0,229,255,0.02)",
@@ -580,7 +580,7 @@ const VisibleDatasetRows: React.FC<{
                   alignItems: "center",
                   padding: "2px 8px 2px 8px",
                   gap: 4,
-                  fontSize: 10,
+                  fontSize: 15,
                   color: "#64748b",
                   borderBottom: "1px solid rgba(0,229,255,0.04)",
                   background: "rgba(0,229,255,0.03)",
@@ -597,7 +597,7 @@ const VisibleDatasetRows: React.FC<{
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: 11,
+                    fontSize: 16.5,
                     color: "rgba(0,229,255,0.35)",
                     lineHeight: 1,
                   }}
@@ -623,7 +623,7 @@ const VisibleDatasetRows: React.FC<{
                   title="Will load automatically when camera enters proximity"
                   style={{
                     flexShrink: 0,
-                    fontSize: 7,
+                    fontSize: 10.5,
                     letterSpacing: "0.06em",
                     color: "rgba(0,229,255,0.3)",
                     padding: "1px 4px",
@@ -654,7 +654,7 @@ const VisibleDatasetRows: React.FC<{
                       border: "none",
                       color: "#334155",
                       cursor: "pointer",
-                      fontSize: 11,
+                      fontSize: 16.5,
                       lineHeight: 1,
                       padding: 0,
                       borderRadius: 2,
@@ -2485,14 +2485,14 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             className="flex-1 flex items-center justify-between"
             style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", fontFamily: "inherit", padding: 0, textAlign: "left" }}
           >
-            <span className="uppercase tracking-widest" style={{ fontSize: 10, ...CYAN, fontWeight: 700 }}>
+            <span className="uppercase tracking-widest" style={{ fontSize: 15, ...CYAN, fontWeight: 700 }}>
               Datasets
             </span>
             <div className="flex items-center gap-2">
               {anyLoading && (
-                <span className="animate-spin" style={{ fontSize: 10 }}>◌</span>
+                <span className="animate-spin" style={{ fontSize: 15 }}>◌</span>
               )}
-              <span style={{ color: "#cbd5e1", fontSize: 24, lineHeight: 1 }}>{collapsed ? "▸" : "▾"}</span>
+              <span style={{ color: "#cbd5e1", fontSize: 36, lineHeight: 1 }}>{collapsed ? "▸" : "▾"}</span>
             </div>
           </button>
         </ViewscreenTooltip>
@@ -2511,7 +2511,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             justifyContent: "space-between",
             gap: 8,
           }}>
-            <span style={{ fontSize: 10, letterSpacing: "0.12em", color: "#cbd5e1" }}>ENVIRONMENT</span>
+            <span style={{ fontSize: 15, letterSpacing: "0.12em", color: "#cbd5e1" }}>ENVIRONMENT</span>
             <WaterTypeToggle />
           </div>
           {/* ── MY LIBRARY section (preset datasets + user library) ── */}
@@ -2522,7 +2522,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
               aria-expanded={!myLibraryCollapsed}
               className="px-3 py-1 flex items-center gap-2 w-full hover:bg-white/5 transition-colors"
               style={{
-                fontSize: 10,
+                fontSize: 15,
                 letterSpacing: "0.12em",
                 color: "#cbd5e1",
                 background: "none",
@@ -2533,7 +2533,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             >
               <span>{myLibraryCollapsed ? "▾ MY LIBRARY" : "▲ MY LIBRARY"}</span>
               {anyLoading && (
-                <span className="animate-spin" style={{ fontSize: 9, color: "#cbd5e1" }}>◌</span>
+                <span className="animate-spin" style={{ fontSize: 13.5, color: "#cbd5e1" }}>◌</span>
               )}
             </button>
 
@@ -2548,7 +2548,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       background: "rgba(239,68,68,0.08)",
                       border: "1px solid rgba(239,68,68,0.35)",
                       borderRadius: 4,
-                      fontSize: 10,
+                      fontSize: 15,
                       color: "#fca5a5",
                       display: "flex",
                       alignItems: "center",
@@ -2565,7 +2565,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                         onClick={handleRetryPreset}
                         disabled={!!pendingId}
                         style={{
-                          fontSize: 10,
+                          fontSize: 15,
                           color: "#00e5ff",
                           background: "transparent",
                           border: "1px solid rgba(0,229,255,0.35)",
@@ -2580,7 +2580,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       <button
                         onClick={(e) => { e.stopPropagation(); setPresetLoadError(null); }}
                         style={{
-                          fontSize: 10, color: "#cbd5e1", background: "transparent",
+                          fontSize: 15, color: "#cbd5e1", background: "transparent",
                           border: "none", cursor: "pointer", padding: "1px 4px",
                         }}
                         aria-label="Dismiss error"
@@ -2608,7 +2608,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           padding: "6px 8px",
                           background: "rgba(239,68,68,0.08)",
                           border: "1px solid rgba(239,68,68,0.35)",
-                          borderRadius: 4, fontSize: 10, color: "#fca5a5",
+                          borderRadius: 4, fontSize: 15, color: "#fca5a5",
                           display: "flex", alignItems: "center",
                           justifyContent: "space-between", gap: 8,
                         }}
@@ -2622,7 +2622,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                             onClick={handleRetryUserDataset}
                             disabled={!!pendingUserDatasetId}
                             style={{
-                              fontSize: 10, color: "#00e5ff", background: "transparent",
+                              fontSize: 15, color: "#00e5ff", background: "transparent",
                               border: "1px solid rgba(0,229,255,0.35)", borderRadius: 3,
                               padding: "1px 6px",
                               cursor: !!pendingUserDatasetId ? "not-allowed" : "pointer",
@@ -2634,7 +2634,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           <button
                             onClick={(e) => { e.stopPropagation(); setUserLoadError(null); }}
                             style={{
-                              fontSize: 10, color: "#cbd5e1", background: "transparent",
+                              fontSize: 15, color: "#cbd5e1", background: "transparent",
                               border: "none", cursor: "pointer", padding: "1px 4px",
                             }}
                             aria-label="Dismiss error"
@@ -2676,17 +2676,17 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       borderTop: "1px solid rgba(0,229,255,0.08)",
                       cursor: "pointer",
                       color: "#7dd3fc",
-                      fontSize: 10,
+                      fontSize: 15,
                       letterSpacing: "0.08em",
                       textAlign: "left",
                       fontFamily: "inherit",
                     }}
                   >
-                    <span style={{ fontSize: 9 }}>{exampleDatasetsFolderExpanded ? "▾" : "▸"}</span>
-                    <span style={{ fontSize: 11 }}>📁</span>
+                    <span style={{ fontSize: 13.5 }}>{exampleDatasetsFolderExpanded ? "▾" : "▸"}</span>
+                    <span style={{ fontSize: 16.5 }}>📁</span>
                     <span style={{ flex: 1 }}>Example Datasets</span>
                     {(datasets ?? []).length > 0 && (
-                      <span style={{ fontSize: 9, color: "#64748b" }}>{(datasets ?? []).length}</span>
+                      <span style={{ fontSize: 13.5, color: "#64748b" }}>{(datasets ?? []).length}</span>
                     )}
                   </button>
 
@@ -2723,7 +2723,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           borderRadius: 2,
                           background: isChecked ? "rgba(0,229,255,0.18)" : "transparent",
                           display: "inline-flex", alignItems: "center", justifyContent: "center",
-                          fontSize: 10, color: "#00e5ff",
+                          fontSize: 15, color: "#00e5ff",
                         }}>
                           {isChecked ? "✓" : ""}
                         </span>
@@ -2749,7 +2749,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       <div className="flex items-start justify-between gap-2">
                         <span
                           style={{
-                            flex: 1, minWidth: 0, fontSize: 11,
+                            flex: 1, minWidth: 0, fontSize: 16.5,
                             fontWeight: active ? 700 : 400,
                             color: active ? "#00e5ff" : !isOnline && !cachedIds.has(ds.id) ? "#cbd5e1" : "#e2e8f0",
                             textShadow: active ? "0 0 6px rgba(0,229,255,0.4)" : "none",
@@ -2759,7 +2759,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                         >
                           {ds.name}
                         </span>
-                        <span style={{ fontSize: 9, color: "#cbd5e1", flexShrink: 0 }}>
+                        <span style={{ fontSize: 13.5, color: "#cbd5e1", flexShrink: 0 }}>
                           {loading ? (
                             <LoadingDial datasetId={ds.id} label={ds.name} />
                           ) : !isOnline ? (
@@ -2775,7 +2775,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           ) : null}
                         </span>
                       </div>
-                      <div style={{ fontSize: 10, color: "#cbd5e1", marginTop: 2, letterSpacing: "0.05em" }}>
+                      <div style={{ fontSize: 15, color: "#cbd5e1", marginTop: 2, letterSpacing: "0.05em" }}>
                         {formatDepthRange(ds.minDepth, ds.maxDepth, { units })}
                       </div>
                       {active && terrain && terrain.datasetId === ds.id && (
@@ -2795,7 +2795,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                                 });
                               }}
                               style={{
-                                fontSize: 9,
+                                fontSize: 13.5,
                                 padding: "3px 8px",
                                 background: "rgba(251,191,36,0.08)",
                                 border: "1px solid rgba(251,191,36,0.35)",
@@ -2834,7 +2834,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                     }}
                   >
                     <span style={{
-                      fontSize: 9, color: "#7dd3fc", width: "100%",
+                      fontSize: 13.5, color: "#7dd3fc", width: "100%",
                       letterSpacing: "0.08em", marginBottom: 2,
                     }}>
                       {presetSelectedIds.size + librarySelectedIds.size} selected
@@ -2874,10 +2874,10 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                 className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
                 style={{ cursor: "pointer" }}
               >
-                <span style={{ fontSize: 10, letterSpacing: "0.12em", color: "#cbd5e1" }}>
+                <span style={{ fontSize: 15, letterSpacing: "0.12em", color: "#cbd5e1" }}>
                   ▼ MARKERS {markers?.length ? `(${markers.length})` : ""}
                 </span>
-                <span style={{ color: "#cbd5e1", fontSize: 11 }}>{markersOpen ? "−" : "+"}</span>
+                <span style={{ color: "#cbd5e1", fontSize: 16.5 }}>{markersOpen ? "−" : "+"}</span>
               </button>
 
               {markersOpen && (() => {
@@ -2906,7 +2906,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           border: "1px solid rgba(0,229,255,0.2)",
                           borderRadius: 3,
                           color: "#00e5ff",
-                          fontSize: 10,
+                          fontSize: 15,
                           letterSpacing: "0.12em",
                           cursor: "pointer",
                           fontFamily: "inherit",
@@ -2926,7 +2926,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           border: "1px solid rgba(0,229,255,0.2)",
                           borderRadius: 3,
                           color: "#00e5ff",
-                          fontSize: 10,
+                          fontSize: 15,
                           letterSpacing: "0.12em",
                           cursor: "pointer",
                           fontFamily: "inherit",
@@ -2953,7 +2953,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           border: "1px solid rgba(0,229,255,0.15)",
                           borderRadius: 3,
                           color: "#e2e8f0",
-                          fontSize: 10,
+                          fontSize: 15,
                           padding: "4px 7px",
                           fontFamily: "inherit",
                           outline: "none",
@@ -2970,7 +2970,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                                 data-testid={`marker-type-filter-${t.value}`}
                                 onClick={() => setMarkerTypeFilter(active ? null : t.value)}
                                 style={{
-                                  fontSize: 11,
+                                  fontSize: 16.5,
                                   padding: "2px 5px",
                                   borderRadius: 3,
                                   border: `1px solid ${active ? t.color : "rgba(0,229,255,0.12)"}`,
@@ -2993,7 +2993,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                             type="button"
                             onClick={() => setMarkerTypeFilter(null)}
                             style={{
-                              fontSize: 9,
+                              fontSize: 13.5,
                               padding: "2px 5px",
                               borderRadius: 3,
                               border: "1px solid rgba(0,229,255,0.15)",
@@ -3012,12 +3012,12 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                   )}
 
                   {!markers?.length && (
-                    <div style={{ fontSize: 10, color: "#cbd5e1", padding: "4px 12px 6px" }}>
+                    <div style={{ fontSize: 15, color: "#cbd5e1", padding: "4px 12px 6px" }}>
                       No markers yet — press G or right-click to drop one
                     </div>
                   )}
                   {markers?.length && !visibleMarkers.length ? (
-                    <div style={{ fontSize: 10, color: "#94a3b8", padding: "4px 12px 6px" }}>
+                    <div style={{ fontSize: 15, color: "#94a3b8", padding: "4px 12px 6px" }}>
                       No markers match the current filter
                     </div>
                   ) : null}
@@ -3043,11 +3043,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                         }}
                       >
                         <div className="flex items-center justify-between gap-1">
-                          <span style={{ color, fontSize: 10, flexShrink: 0 }}>{icon}</span>
+                          <span style={{ color, fontSize: 15, flexShrink: 0 }}>{icon}</span>
                           <span
                             style={{
                               flex: 1,
-                              fontSize: 10,
+                              fontSize: 15,
                               color: "#cbd5e1",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
@@ -3056,7 +3056,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           >
                             {m.label}
                           </span>
-                          <span style={{ fontSize: 9, color: "#64748b", flexShrink: 0 }}>
+                          <span style={{ fontSize: 13.5, color: "#64748b", flexShrink: 0 }}>
                             {Math.round(m.depth)}m
                           </span>
                           <ViewscreenTooltip label="Edit this marker" side="left">
@@ -3075,7 +3075,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                               }}
                               className="opacity-0 group-hover:opacity-100 transition-opacity"
                               style={{
-                                fontSize: 10,
+                                fontSize: 15,
                                 color: "#7dd3fc",
                                 cursor: "pointer",
                                 lineHeight: 1,
@@ -3097,7 +3097,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                               }
                               className="opacity-0 group-hover:opacity-100 transition-opacity"
                               style={{
-                                fontSize: 11,
+                                fontSize: 16.5,
                                 color: "#cbd5e1",
                                 cursor: "pointer",
                                 lineHeight: 1,
@@ -3126,16 +3126,16 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                 className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
                 style={{ cursor: "pointer" }}
               >
-                <span style={{ fontSize: 10, letterSpacing: "0.12em", color: "#cbd5e1" }}>
+                <span style={{ fontSize: 15, letterSpacing: "0.12em", color: "#cbd5e1" }}>
                   📷 SAVED VIEWS {bookmarks.length ? `(${bookmarks.length})` : ""}
                 </span>
-                <span style={{ color: "#cbd5e1", fontSize: 11 }}>{bookmarksOpen ? "−" : "+"}</span>
+                <span style={{ color: "#cbd5e1", fontSize: 16.5 }}>{bookmarksOpen ? "−" : "+"}</span>
               </button>
 
               {bookmarksOpen && (
                 <div style={{ paddingBottom: 4 }}>
                   {!bookmarks.length && (
-                    <div style={{ fontSize: 10, color: "#cbd5e1", padding: "4px 12px 6px" }}>
+                    <div style={{ fontSize: 15, color: "#cbd5e1", padding: "4px 12px 6px" }}>
                       No saved views yet — right-click terrain and choose &ldquo;Save as saved view…&rdquo;
                     </div>
                   )}
@@ -3169,7 +3169,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           aria-hidden="true"
                           className="opacity-0 group-hover:opacity-100 transition-opacity"
                           style={{
-                            fontSize: 11,
+                            fontSize: 16.5,
                             color: "#64748b",
                             flexShrink: 0,
                             lineHeight: 1,
@@ -3183,7 +3183,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       <span
                         style={{
                           flex: 1,
-                          fontSize: 10,
+                          fontSize: 15,
                           color: "#cbd5e1",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
@@ -3197,7 +3197,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           onClick={() => handleFlyToBookmark(bk)}
                           aria-label="Fly to this saved view"
                           style={{
-                            fontSize: 9,
+                            fontSize: 13.5,
                             padding: "1px 5px",
                             background: "rgba(0,229,255,0.08)",
                             border: "1px solid rgba(0,229,255,0.25)",
@@ -3216,7 +3216,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           onClick={() => handleRenameBookmark(bk)}
                           className="opacity-0 group-hover:opacity-100 transition-opacity"
                           style={{
-                            fontSize: 10,
+                            fontSize: 15,
                             color: "#e2e8f0",
                             background: "transparent",
                             border: "none",
@@ -3235,7 +3235,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           onClick={(e) => handleDeleteBookmark(e, bk)}
                           className="opacity-0 group-hover:opacity-100 transition-opacity"
                           style={{
-                            fontSize: 11,
+                            fontSize: 16.5,
                             color: "#cbd5e1",
                             background: "transparent",
                             border: "none",
@@ -3272,10 +3272,10 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
               className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
               style={{ cursor: "pointer" }}
             >
-              <span style={{ fontSize: 10, letterSpacing: "0.15em", color: "#cbd5e1" }}>
+              <span style={{ fontSize: 15, letterSpacing: "0.15em", color: "#cbd5e1" }}>
                 ▲ UPLOAD DATASET(S)
               </span>
-              <span style={{ color: "#cbd5e1", fontSize: 11 }}>{uploadOpen ? "−" : "+"}</span>
+              <span style={{ color: "#cbd5e1", fontSize: 16.5 }}>{uploadOpen ? "−" : "+"}</span>
             </button>
             </ViewscreenTooltip>
 
@@ -3290,7 +3290,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       borderRadius: 4,
                       padding: "12px 8px",
                       textAlign: "center",
-                      fontSize: 9,
+                      fontSize: 13.5,
                       color: "#f87171",
                       letterSpacing: "0.1em",
                     }}
@@ -3332,60 +3332,60 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       <input {...getInputProps()} />
                       {postDatasetsUpload.isPending ? (
                         <div>
-                          <div className="animate-pulse" style={{ ...CYAN, fontSize: 10, marginBottom: 2 }}>
+                          <div className="animate-pulse" style={{ ...CYAN, fontSize: 15, marginBottom: 2 }}>
                             ◌ Uploading &amp; parsing...
                           </div>
-                          <div style={{ fontSize: 10, color: "#cbd5e1" }}>{Math.round(uploadProgress)}%</div>
+                          <div style={{ fontSize: 15, color: "#cbd5e1" }}>{Math.round(uploadProgress)}%</div>
                           {formatEta(smallFileEta) && (
-                            <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 2 }}>
+                            <div style={{ fontSize: 13.5, color: "#94a3b8", marginTop: 2 }}>
                               {formatEta(smallFileEta)}
                             </div>
                           )}
                         </div>
                       ) : chunkedPhase === "uploading" ? (
                         <div>
-                          <div className="animate-pulse" style={{ ...CYAN, fontSize: 10, marginBottom: 2 }}>
+                          <div className="animate-pulse" style={{ ...CYAN, fontSize: 15, marginBottom: 2 }}>
                             ◌ Uploading in chunks...
                           </div>
-                          <div style={{ fontSize: 10, color: "#cbd5e1" }}>{chunkedUploadProgress}%</div>
+                          <div style={{ fontSize: 15, color: "#cbd5e1" }}>{chunkedUploadProgress}%</div>
                         </div>
                       ) : chunkedPhase === "processing" ? (
                         <div>
-                          <div className="animate-pulse" style={{ ...CYAN, fontSize: 10, marginBottom: 2 }}>
+                          <div className="animate-pulse" style={{ ...CYAN, fontSize: 15, marginBottom: 2 }}>
                             ◌ Processing on server...
                           </div>
-                          <div style={{ fontSize: 10, color: "#cbd5e1" }}>{Math.round(chunkedJobProgress)}%</div>
+                          <div style={{ fontSize: 15, color: "#cbd5e1" }}>{Math.round(chunkedJobProgress)}%</div>
                           {formatEta(chunkedJobEta) && (
-                            <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 2 }}>
+                            <div style={{ fontSize: 13.5, color: "#94a3b8", marginTop: 2 }}>
                               {formatEta(chunkedJobEta)}
                             </div>
                           )}
                         </div>
                       ) : gcsPhase === "uploading" ? (
                         <div>
-                          <div className="animate-pulse" style={{ ...CYAN, fontSize: 10, marginBottom: 2 }}>
+                          <div className="animate-pulse" style={{ ...CYAN, fontSize: 15, marginBottom: 2 }}>
                             ◌ Uploading to cloud storage...
                           </div>
-                          <div style={{ fontSize: 10, color: "#cbd5e1" }}>{gcsUploadProgress}%</div>
+                          <div style={{ fontSize: 15, color: "#cbd5e1" }}>{gcsUploadProgress}%</div>
                         </div>
                       ) : gcsPhase === "processing" ? (
                         <div>
-                          <div className="animate-pulse" style={{ ...CYAN, fontSize: 10, marginBottom: 2 }}>
+                          <div className="animate-pulse" style={{ ...CYAN, fontSize: 15, marginBottom: 2 }}>
                             ◌ Processing in background...
                           </div>
-                          <div style={{ fontSize: 10, color: "#94a3b8" }}>
+                          <div style={{ fontSize: 15, color: "#94a3b8" }}>
                             We&apos;ll notify you when it&apos;s ready
                           </div>
                         </div>
                       ) : gcsPhase === "processing_timeout" ? (
                         <div>
-                          <div style={{ fontSize: 10, color: "#f59e0b", marginBottom: 4 }}>
+                          <div style={{ fontSize: 15, color: "#f59e0b", marginBottom: 4 }}>
                             ⏳ Still processing — taking longer than usual
                           </div>
-                          <div style={{ fontSize: 9, color: "#94a3b8", marginBottom: 4 }}>
+                          <div style={{ fontSize: 13.5, color: "#94a3b8", marginBottom: 4 }}>
                             Your file was uploaded safely. It will appear in your datasets once conversion finishes. You can drop a new file while you wait.
                           </div>
-                          <div style={{ fontSize: 10, color: "#cbd5e1" }}>
+                          <div style={{ fontSize: 15, color: "#cbd5e1" }}>
                             Drop file here, or click to browse
                           </div>
                         </div>
@@ -3400,7 +3400,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                                 border: "1px solid rgba(251,191,36,0.4)",
                                 background: "rgba(251,191,36,0.07)",
                                 borderRadius: 4,
-                                fontSize: 10,
+                                fontSize: 15,
                                 color: "#fde68a",
                                 textAlign: "left",
                               }}
@@ -3408,7 +3408,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                               <div style={{ marginBottom: 4 }}>
                                 ⚠ Upload interrupted — <strong>{interruptedSession.fileName}</strong>
                               </div>
-                              <div style={{ fontSize: 9, color: "#94a3b8", marginBottom: 5 }}>
+                              <div style={{ fontSize: 13.5, color: "#94a3b8", marginBottom: 5 }}>
                                 Drop or select the same file to resume from where it left off.
                               </div>
                               <button
@@ -3418,7 +3418,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                                   setInterruptedSession(null);
                                 }}
                                 style={{
-                                  fontSize: 9,
+                                  fontSize: 13.5,
                                   color: "#94a3b8",
                                   background: "transparent",
                                   border: "1px solid rgba(148,163,184,0.3)",
@@ -3431,17 +3431,17 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                               </button>
                             </div>
                           )}
-                          <div style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 3 }}>
+                          <div style={{ fontSize: 15, color: "#cbd5e1", marginBottom: 3 }}>
                             Drop file here, or click to browse
                           </div>
-                          <div style={{ fontSize: 10, color: "#cbd5e1" }}>
+                          <div style={{ fontSize: 15, color: "#cbd5e1" }}>
                             any size · large files upload in chunks{isSignedIn ? " · auto-saved" : ""}
                           </div>
-                          <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 4 }}>
+                          <div style={{ fontSize: 13.5, color: "#94a3b8", marginTop: 4 }}>
                             {SUPPORTED_EXTENSIONS}
                           </div>
                           {activeUploadError && (
-                            <div style={{ fontSize: 9, color: "#f87171", marginTop: 4 }}>⚠ upload error — click for details</div>
+                            <div style={{ fontSize: 13.5, color: "#f87171", marginTop: 4 }}>⚠ upload error — click for details</div>
                           )}
                         </>
                       )}
@@ -3453,7 +3453,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           data-testid="btn-retry-chunked-upload"
                           onClick={() => { void handleRetryChunked(); }}
                           style={{
-                            fontSize: 10,
+                            fontSize: 15,
                             color: "#00e5ff",
                             background: "transparent",
                             border: "1px solid rgba(0,229,255,0.35)",
@@ -3475,7 +3475,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           border: "1px solid rgba(0,229,255,0.25)",
                           background: "rgba(0,229,255,0.05)",
                           borderRadius: 4,
-                          fontSize: 10,
+                          fontSize: 15,
                           color: "#7dd3fc",
                           display: "flex",
                           alignItems: "center",
@@ -3500,7 +3500,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           gap: 8,
                         }}
                       >
-                        <div style={{ fontSize: 10, color: "#fca5a5", flex: 1, lineHeight: 1.4 }}>
+                        <div style={{ fontSize: 15, color: "#fca5a5", flex: 1, lineHeight: 1.4 }}>
                           ⚠ Uploaded, but couldn&apos;t save to your account — {saveError}
                         </div>
                         <button
@@ -3509,7 +3509,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           onClick={handleRetrySave}
                           disabled={postDatasetsUpload.isPending}
                           style={{
-                            fontSize: 10,
+                            fontSize: 15,
                             padding: "3px 8px",
                             border: "1px solid rgba(0,229,255,0.4)",
                             background: "rgba(0,229,255,0.08)",
@@ -3567,7 +3567,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             <div
               id="preset-delete-dialog-title"
               style={{
-                fontSize: 11,
+                fontSize: 16.5,
                 letterSpacing: "0.12em",
                 color: "#fca5a5",
                 textShadow: "0 0 6px rgba(239,68,68,0.4)",
@@ -3577,7 +3577,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             >
               Remove Example Dataset{presetSelectedIds.size !== 1 ? "s" : ""}
             </div>
-            <p style={{ fontSize: 11, color: "#e2e8f0", lineHeight: 1.5, marginBottom: 16 }}>
+            <p style={{ fontSize: 16.5, color: "#e2e8f0", lineHeight: 1.5, marginBottom: 16 }}>
               Remove {presetSelectedIds.size === 1 ? "this preset" : `${presetSelectedIds.size} presets`} from the app for all users? This cannot be undone from the UI.
             </p>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -3585,7 +3585,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                 data-testid="preset-delete-cancel"
                 onClick={() => setPresetDeleteConfirm(false)}
                 style={{
-                  fontSize: 10,
+                  fontSize: 15,
                   padding: "5px 14px",
                   background: "transparent",
                   border: "1px solid rgba(148,163,184,0.4)",
@@ -3600,7 +3600,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                 data-testid="preset-delete-confirm"
                 onClick={() => { void handleConfirmPresetDelete(); }}
                 style={{
-                  fontSize: 10,
+                  fontSize: 15,
                   padding: "5px 14px",
                   background: "rgba(239,68,68,0.12)",
                   border: "1px solid rgba(239,68,68,0.5)",
@@ -3649,7 +3649,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "#f87171", letterSpacing: "0.1em" }}>
+              <span style={{ fontSize: 18, fontWeight: 700, color: "#f87171", letterSpacing: "0.1em" }}>
                 ⚠ UPLOAD ERROR
               </span>
               <button
@@ -3660,7 +3660,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                   border: "none",
                   color: "#94a3b8",
                   cursor: "pointer",
-                  fontSize: 16,
+                  fontSize: 24,
                   padding: "0 2px",
                   lineHeight: 1,
                 }}
@@ -3668,7 +3668,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             </div>
             <p
               style={{
-                fontSize: 11,
+                fontSize: 16.5,
                 color: "#e2e8f0",
                 lineHeight: 1.6,
                 margin: "0 0 16px 0",
@@ -3687,7 +3687,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                   });
                 }}
                 style={{
-                  fontSize: 10,
+                  fontSize: 15,
                   color: accent,
                   background: "transparent",
                   border: `1px solid ${accent}55`,
@@ -3703,7 +3703,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
               <button
                 onClick={dismissUploadError}
                 style={{
-                  fontSize: 10,
+                  fontSize: 15,
                   color: "#94a3b8",
                   background: "transparent",
                   border: "1px solid rgba(148,163,184,0.3)",

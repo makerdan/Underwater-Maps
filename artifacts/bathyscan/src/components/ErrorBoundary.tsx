@@ -67,7 +67,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
             background: "rgba(239,68,68,0.08)",
             border: "1px solid rgba(239,68,68,0.35)",
             borderRadius: 4,
-            fontSize: 10,
+            fontSize: 15,
             color: "#fca5a5",
             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
             userSelect: "text",
@@ -80,7 +80,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
             <button
               onClick={this.reset}
               style={{
-                fontSize: 10,
+                fontSize: 15,
                 color: "#00e5ff",
                 background: "transparent",
                 border: "1px solid rgba(0,229,255,0.35)",
@@ -96,7 +96,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
                 void navigator.clipboard.writeText(debugText).catch(() => undefined);
               }}
               style={{
-                fontSize: 10,
+                fontSize: 15,
                 color: "#94a3b8",
                 background: "transparent",
                 border: "1px solid rgba(148,163,184,0.3)",
@@ -113,7 +113,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
               style={{
                 cursor: "pointer",
                 color: "#94a3b8",
-                fontSize: 9,
+                fontSize: 13.5,
                 letterSpacing: "0.06em",
                 userSelect: "none",
               }}
@@ -126,7 +126,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
                 padding: "6px 8px",
                 background: "rgba(0,0,0,0.3)",
                 borderRadius: 3,
-                fontSize: 9,
+                fontSize: 13.5,
                 color: "#cbd5e1",
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-all",
@@ -143,7 +143,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
                 </div>
               )}
               {this.state.componentStack && (
-                <div style={{ color: "#94a3b8", fontSize: 8 }}>
+                <div style={{ color: "#94a3b8", fontSize: 12 }}>
                   {this.state.componentStack}
                 </div>
               )}

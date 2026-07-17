@@ -175,9 +175,9 @@ const clerkAppearance = {
     card: "!shadow-none !border-0 !bg-transparent !rounded-none",
     footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
     headerTitle: "text-[#e2e8f0] font-mono tracking-wide",
-    headerSubtitle: "text-[#e2e8f0] font-mono text-sm",
+    headerSubtitle: "text-[#e2e8f0] font-mono text-[21px]",
     socialButtonsBlockButtonText: "text-[#e2e8f0]",
-    formFieldLabel: "text-[#e2e8f0] font-mono text-xs uppercase tracking-widest",
+    formFieldLabel: "text-[#e2e8f0] font-mono text-[18px] uppercase tracking-widest",
     footerActionLink: "text-[#38bdf8] hover:text-[#7dd3fc]",
     footerActionText: "text-[#cbd5e1]",
     dividerText: "text-[#94a3b8]",
@@ -204,8 +204,8 @@ function SignInPage() {
       <div className="absolute inset-0 bg-gradient-to-b from-[#040810] via-[#061220] to-[#040810] pointer-events-none" />
       <div className="relative z-10 text-center">
         <div className="mb-8">
-          <p className="text-[#94a3b8] font-mono text-xs tracking-[0.3em] uppercase mb-2">Deep Sea Explorer</p>
-          <h1 className="text-4xl font-mono font-bold text-[#e2e8f0] tracking-wider mb-1">BATHYSCAN</h1>
+          <p className="text-[#94a3b8] font-mono text-[18px] tracking-[0.3em] uppercase mb-2">Deep Sea Explorer</p>
+          <h1 className="text-[54px] font-mono font-bold text-[#e2e8f0] tracking-wider mb-1">BATHYSCAN</h1>
           <div className="h-px bg-gradient-to-r from-transparent via-[#38bdf8]/40 to-transparent mt-3" />
         </div>
         <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
@@ -1013,7 +1013,7 @@ function Main() {
           role="status"
           aria-live="polite"
           aria-label="Connecting to server"
-          className="absolute inset-x-0 top-0 z-[200] flex items-center justify-center gap-2 h-7 bg-sky-950/90 backdrop-blur-sm border-b border-sky-800/40 text-sky-400 text-[11px] font-mono tracking-wide select-none pointer-events-none"
+          className="absolute inset-x-0 top-0 z-[200] flex items-center justify-center gap-2 h-7 bg-sky-950/90 backdrop-blur-sm border-b border-sky-800/40 text-sky-400 text-[16.5px] font-mono tracking-wide select-none pointer-events-none"
         >
           <svg
             aria-hidden="true"
@@ -1049,7 +1049,7 @@ function Main() {
             borderRadius: 4,
             padding: "2px 7px",
             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-            fontSize: 9,
+            fontSize: 13.5,
             letterSpacing: "0.08em",
             color: healthResponseMs < 200 ? "#34d399" : healthResponseMs < 600 ? "#fbbf24" : "#f87171",
             pointerEvents: "none",
@@ -1123,7 +1123,7 @@ function Main() {
               className="absolute top-24 left-4 z-20"
               style={{
                 fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                fontSize: 24,
+                fontSize: 36,
                 lineHeight: 1,
                 padding: "6px 10px",
                 borderRadius: 4,
@@ -1157,7 +1157,7 @@ function Main() {
                   aria-label="Hide side pane"
                   style={{
                     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                    fontSize: 11,
+                    fontSize: 16.5,
                     padding: "2px 8px",
                     borderRadius: 4,
                     border: "1px solid rgba(0,229,255,0.35)",
@@ -1168,7 +1168,7 @@ function Main() {
                     letterSpacing: "0.1em",
                   }}
                 >
-                  <span style={{ fontSize: 22, lineHeight: 1, verticalAlign: "middle" }}>◂</span> HIDE
+                  <span style={{ fontSize: 33, lineHeight: 1, verticalAlign: "middle" }}>◂</span> HIDE
                 </button>
               </ViewscreenTooltip>
             </div>
@@ -1191,19 +1191,19 @@ function Main() {
                         textAlign: "center",
                         color: "#475569",
                         fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 10,
+                        fontSize: 15,
                         letterSpacing: "0.1em",
                         lineHeight: 1.6,
                       }}
                     >
-                      <div style={{ fontSize: 20, marginBottom: 6, opacity: 0.5 }}>🌊</div>
+                      <div style={{ fontSize: 30, marginBottom: 6, opacity: 0.5 }}>🌊</div>
                       <div style={{ color: "#64748b", marginBottom: 8 }}>
                         Load a dataset to begin.
                       </div>
                       <button
                         onClick={() => useUiStore.getState().setFindDataPanelOpen(true)}
                         style={{
-                          fontSize: 9,
+                          fontSize: 13.5,
                           letterSpacing: "0.12em",
                           padding: "4px 10px",
                           background: "rgba(0,229,255,0.06)",
@@ -1238,7 +1238,7 @@ function Main() {
                     borderRadius: 6,
                     color: "#34d399",
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 9,
+                    fontSize: 13.5,
                     letterSpacing: "0.15em",
                     textTransform: "uppercase",
                     cursor: "pointer",
@@ -1254,7 +1254,7 @@ function Main() {
                   onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
                   onMouseLeave={e => (e.currentTarget.style.opacity = "0.85")}
                 >
-                  <span style={{ fontSize: 12 }}>⇄</span>
+                  <span style={{ fontSize: 18 }}>⇄</span>
                   Switch to Plan to configure conditions
                 </button>
               )}
@@ -1300,7 +1300,7 @@ function Main() {
                     border: "1px dashed rgba(0,229,255,0.18)",
                     borderRadius: 4,
                     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                    fontSize: 9,
+                    fontSize: 13.5,
                     letterSpacing: "0.13em",
                     color: "#64748b",
                     pointerEvents: "none",
@@ -1327,7 +1327,7 @@ function Main() {
                     >
                       <div style={{
                         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                        fontSize: 9,
+                        fontSize: 13.5,
                         letterSpacing: "0.13em",
                         color: "#64748b",
                         lineHeight: 1.55,
@@ -1338,7 +1338,7 @@ function Main() {
                         onClick={() => setDriftPlannerActive(true)}
                         style={{
                           fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                          fontSize: 9,
+                          fontSize: 13.5,
                           letterSpacing: "0.18em",
                           padding: "5px 12px",
                           borderRadius: 3,
@@ -1377,7 +1377,7 @@ function Main() {
                   border: "none",
                   color: "#475569",
                   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                  fontSize: 9,
+                  fontSize: 13.5,
                   letterSpacing: "0.15em",
                   cursor: "pointer",
                   padding: "4px 0",
@@ -1402,7 +1402,7 @@ function Main() {
                     textAlign: "center",
                     color: "#475569",
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 10,
+                    fontSize: 15,
                     letterSpacing: "0.1em",
                     lineHeight: 1.6,
                     background: "rgba(2,8,18,0.94)",
@@ -1411,14 +1411,14 @@ function Main() {
                     backdropFilter: "blur(6px)",
                   }}
                 >
-                  <div style={{ fontSize: 20, marginBottom: 6, opacity: 0.5 }}>◈</div>
+                  <div style={{ fontSize: 30, marginBottom: 6, opacity: 0.5 }}>◈</div>
                   <div style={{ color: "#64748b", marginBottom: 8 }}>
                     Load a dataset to begin analysis.
                   </div>
                   <button
                     onClick={() => { setSidebarMode('explore'); useUiStore.getState().setFindDataPanelOpen(true); }}
                     style={{
-                      fontSize: 9,
+                      fontSize: 13.5,
                       letterSpacing: "0.12em",
                       padding: "4px 10px",
                       background: "rgba(0,229,255,0.06)",
@@ -1463,7 +1463,7 @@ function Main() {
                       borderRadius: 6,
                       color: "#64748b",
                       fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 10,
+                      fontSize: 15,
                       letterSpacing: "0.2em",
                       textTransform: "uppercase",
                       cursor: "pointer",
@@ -1473,7 +1473,7 @@ function Main() {
                   >
                     <span style={{ color: "#00e5ff", marginRight: 8 }}>⌕</span>
                     Ask AI
-                    <span style={{ float: "right", fontSize: 9, letterSpacing: "0.1em", color: "#475569" }}>
+                    <span style={{ float: "right", fontSize: 13.5, letterSpacing: "0.1em", color: "#475569" }}>
                       press /
                     </span>
                   </button>
@@ -1501,7 +1501,7 @@ function Main() {
             onClick={() => setRealisticMode(!realisticMode)}
             style={{
               fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-              fontSize: 10,
+              fontSize: 15,
               letterSpacing: "0.18em",
               padding: "4px 10px",
               borderRadius: 3,
@@ -1529,7 +1529,7 @@ function Main() {
             onClick={() => setTidalOverlay(!tidalOverlay)}
             style={{
               fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-              fontSize: 10,
+              fontSize: 15,
               letterSpacing: "0.18em",
               padding: "4px 10px",
               borderRadius: 3,
@@ -1567,7 +1567,7 @@ function Main() {
             onClick={() => setDriftPlannerActive(!driftPlannerActive)}
             style={{
               fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-              fontSize: 10,
+              fontSize: 15,
               letterSpacing: "0.18em",
               padding: "4px 10px",
               borderRadius: 3,
@@ -1655,7 +1655,7 @@ function Main() {
               borderRadius: 8,
               padding: "12px 18px",
               fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 10,
+              fontSize: 15,
               color: "#e2e8f0",
               letterSpacing: "0.08em",
               backdropFilter: "blur(12px)",
@@ -1664,7 +1664,7 @@ function Main() {
               pointerEvents: "auto",
             }}
           >
-            <div style={{ color: "#00e5ff", fontWeight: 700, marginBottom: 4, fontSize: 9, letterSpacing: "0.2em" }}>
+            <div style={{ color: "#00e5ff", fontWeight: 700, marginBottom: 4, fontSize: 13.5, letterSpacing: "0.2em" }}>
               INSTALL BATHYSCAN
             </div>
             <div>Tap <span style={{ color: "#38bdf8" }}>Share ↑</span> → <span style={{ color: "#38bdf8" }}>Add to Home Screen</span></div>
@@ -1677,7 +1677,7 @@ function Main() {
                 background: "none",
                 border: "none",
                 color: "#94a3b8",
-                fontSize: 14,
+                fontSize: 21,
                 cursor: "pointer",
               }}
             >
@@ -1702,7 +1702,7 @@ function Main() {
             <div
               style={{
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 11,
+                fontSize: 16.5,
                 letterSpacing: "0.25em",
                 color: "#00e5ff",
                 textShadow: "0 0 12px rgba(0,229,255,0.6)",
@@ -1779,7 +1779,7 @@ function Main() {
               borderRadius: 4,
               color: "#64748b",
               fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 9,
+              fontSize: 13.5,
               letterSpacing: "0.2em",
               padding: "4px 14px",
               cursor: "pointer",
@@ -1855,7 +1855,7 @@ function MarkerSubsampleBadge() {
         border: "1px solid rgba(251,146,60,0.4)",
         borderRadius: 4,
         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-        fontSize: 10,
+        fontSize: 15,
         color: "#fb923c",
         padding: "5px 10px",
         backdropFilter: "blur(6px)",
@@ -1877,7 +1877,7 @@ function MarkerSubsampleBadge() {
           border: "none",
           color: "#cbd5e1",
           cursor: "pointer",
-          fontSize: 11,
+          fontSize: 16.5,
           lineHeight: 1,
           padding: 0,
         }}
@@ -1894,22 +1894,22 @@ function LandingPage() {
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-[#040810] px-4 text-center">
       <div className="absolute inset-0 bg-gradient-to-b from-[#040810] via-[#061220] to-[#040810] pointer-events-none" />
       <div className="relative z-10">
-        <p className="text-[#94a3b8] font-mono text-xs tracking-[0.3em] uppercase mb-4">Deep Sea Explorer</p>
-        <h1 className="text-5xl font-mono font-bold text-[#e2e8f0] tracking-wider mb-2">BATHYSCAN</h1>
+        <p className="text-[#94a3b8] font-mono text-[18px] tracking-[0.3em] uppercase mb-4">Deep Sea Explorer</p>
+        <h1 className="text-[72px] font-mono font-bold text-[#e2e8f0] tracking-wider mb-2">BATHYSCAN</h1>
         <div className="h-px bg-gradient-to-r from-transparent via-[#38bdf8]/40 to-transparent mb-8" />
-        <p className="text-[#cbd5e1] font-mono text-sm mb-10 max-w-sm mx-auto leading-relaxed">
+        <p className="text-[#cbd5e1] font-mono text-[21px] mb-10 max-w-sm mx-auto leading-relaxed">
           Explore 3D bathymetric seafloor maps. Upload sonar data, drop markers, and dive in.
         </p>
         <button
           onClick={() => setLocation("/sign-in")}
-          className="px-8 py-3 bg-[#0369a1] hover:bg-[#0284c7] text-white font-mono text-sm tracking-widest uppercase rounded transition-colors"
+          className="px-8 py-3 bg-[#0369a1] hover:bg-[#0284c7] text-white font-mono text-[21px] tracking-widest uppercase rounded transition-colors"
         >
           Sign In to Explore
         </button>
         <div className="mt-4">
           <button
             onClick={() => setLocation("/sign-up")}
-            className="text-[#38bdf8] font-mono text-xs hover:text-[#7dd3fc] transition-colors"
+            className="text-[#38bdf8] font-mono text-[18px] hover:text-[#7dd3fc] transition-colors"
           >
             Create account
           </button>
@@ -2040,15 +2040,15 @@ export function ClerkLoadFailedFallback() {
       role="alert"
       className="flex flex-col items-center justify-center h-screen bg-[#040810] text-sky-100 gap-4 p-8 text-center"
     >
-      <p className="text-base font-medium">
+      <p className="text-[24px] font-medium">
         Authentication service failed to load.
       </p>
-      <p className="text-sm text-sky-400">
+      <p className="text-[21px] text-sky-400">
         This may be a temporary network issue. Try reloading the page.
       </p>
       <button
         onClick={() => window.location.reload()}
-        className="mt-2 px-4 py-2 bg-sky-700 hover:bg-sky-600 rounded text-sm font-medium text-white transition-colors"
+        className="mt-2 px-4 py-2 bg-sky-700 hover:bg-sky-600 rounded text-[21px] font-medium text-white transition-colors"
       >
         Reload page
       </button>
@@ -2129,7 +2129,7 @@ export class ClerkLoadErrorBoundary extends React.Component<
         <div
           role="status"
           aria-live="polite"
-          className="flex items-center justify-center h-screen bg-[#040810] text-sky-400 text-sm gap-2"
+          className="flex items-center justify-center h-screen bg-[#040810] text-sky-400 text-[21px] gap-2"
         >
           <svg
             aria-hidden="true"
@@ -2167,12 +2167,12 @@ function SessionExpiredBanner() {
     <div
       role="alert"
       aria-live="assertive"
-      className="fixed inset-x-0 top-0 z-[9999] flex items-center justify-center gap-3 h-9 bg-amber-950/95 backdrop-blur-sm border-b border-amber-800/50 text-amber-300 text-[12px] font-medium select-none"
+      className="fixed inset-x-0 top-0 z-[9999] flex items-center justify-center gap-3 h-9 bg-amber-950/95 backdrop-blur-sm border-b border-amber-800/50 text-amber-300 text-[18px] font-medium select-none"
     >
       Session expired — please reload to continue
       <button
         onClick={() => window.location.reload()}
-        className="ml-2 px-2 py-0.5 bg-amber-700 hover:bg-amber-600 rounded text-[11px] text-white transition-colors"
+        className="ml-2 px-2 py-0.5 bg-amber-700 hover:bg-amber-600 rounded text-[16.5px] text-white transition-colors"
       >
         Reload
       </button>

@@ -102,7 +102,7 @@ export const DepthScaleBar: React.FC = () => {
             border: "none",
             color: "inherit",
             fontFamily: "inherit",
-            fontSize: 10,
+            fontSize: 15,
             letterSpacing: "0.15em",
             cursor: "pointer",
             width: "100%",
@@ -123,7 +123,7 @@ export const DepthScaleBar: React.FC = () => {
             }}
           />
           <span style={{ fontWeight: 700 }}>DEPTH</span>
-          <span style={{ marginLeft: "auto", fontSize: 12, lineHeight: 1 }}>
+          <span style={{ marginLeft: "auto", fontSize: 18, lineHeight: 1 }}>
             {expanded ? "▴" : "▾"}
           </span>
         </button>
@@ -158,7 +158,7 @@ export const DepthScaleBar: React.FC = () => {
                   right: 0,
                   top: pos * rampHeight,
                   transform: "translateY(-50%)",
-                  fontSize: 9,
+                  fontSize: 13.5,
                   lineHeight: 1,
                   fontFamily: "'JetBrains Mono', monospace",
                   color: "#00e5ff",

@@ -74,7 +74,7 @@ const BTN_BASE: React.CSSProperties = {
   color: "#94a3b8",
   cursor: "pointer",
   fontFamily: "inherit",
-  fontSize: 8,
+  fontSize: 12,
   letterSpacing: "0.12em",
   padding: "2px 6px",
   lineHeight: 1.5,
@@ -230,12 +230,12 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
             alignItems: "center",
             gap: 10,
             cursor: "pointer",
-            fontSize: 11,
+            fontSize: 16.5,
             letterSpacing: "0.12em",
           }}
           onClick={() => setMinimized(false)}
         >
-          <span style={{ color: "#22d3ee", fontSize: 13 }}>{driveBoatReverse ? "⛵↩" : "⛵"}</span>
+          <span style={{ color: "#22d3ee", fontSize: 19.5 }}>{driveBoatReverse ? "⛵↩" : "⛵"}</span>
           {driveBoatReverse ? (
             <span style={{ color: "#fbbf24", fontWeight: 700 }}>BT {knots.toFixed(1)} KT</span>
           ) : (
@@ -247,8 +247,8 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
               <span style={{ color: "#7dd3fc" }}>{knots.toFixed(1)} KT</span>
             </>
           )}
-          {headingLocked && <span style={{ color: "#fbbf24", fontSize: 9 }}>🔒</span>}
-          <span style={{ color: "#1e3a5f", fontSize: 10 }}>▲</span>
+          {headingLocked && <span style={{ color: "#fbbf24", fontSize: 13.5 }}>🔒</span>}
+          <span style={{ color: "#1e3a5f", fontSize: 15 }}>▲</span>
         </div>
       </ViewscreenTooltip>
     );
@@ -266,7 +266,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
           borderBottom: "1px solid rgba(0,229,255,0.1)",
         }}
       >
-        <span style={{ fontSize: 9, letterSpacing: "0.25em", color: "#94a3b8", display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <span style={{ fontSize: 13.5, letterSpacing: "0.25em", color: "#94a3b8", display: "inline-flex", alignItems: "center", gap: 6 }}>
           THROTTLE
           <HelpIcon articleId="throttle" label="Throttle panel" />
         </span>
@@ -279,7 +279,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
                 border: "none",
                 color: "#64748b",
                 cursor: "pointer",
-                fontSize: 10,
+                fontSize: 15,
                 padding: "0 2px",
                 lineHeight: 1,
               }}
@@ -296,7 +296,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
                   border: "none",
                   color: "#64748b",
                   cursor: "pointer",
-                  fontSize: 11,
+                  fontSize: 16.5,
                   padding: "0 2px",
                   lineHeight: 1,
                 }}
@@ -313,25 +313,25 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
         <div style={{ textAlign: "center" }}>
           {driveBoatReverse ? (
             <>
-              <div style={{ color: "#fbbf24", fontSize: 15, fontWeight: 700, letterSpacing: "0.05em", textShadow: "0 0 8px rgba(251,191,36,0.5)" }}>
+              <div style={{ color: "#fbbf24", fontSize: 22.5, fontWeight: 700, letterSpacing: "0.05em", textShadow: "0 0 8px rgba(251,191,36,0.5)" }}>
                 BT {knots.toFixed(1)} KT
               </div>
-              <div style={{ fontSize: 9, color: "#fbbf24", letterSpacing: "0.15em", marginTop: 1, opacity: 0.7 }}>
+              <div style={{ fontSize: 13.5, color: "#fbbf24", letterSpacing: "0.15em", marginTop: 1, opacity: 0.7 }}>
                 REVERSE
               </div>
             </>
           ) : (
             <>
-              <div style={{ ...CYAN, fontSize: 15, fontWeight: 700, letterSpacing: "0.05em" }}>
+              <div style={{ ...CYAN, fontSize: 22.5, fontWeight: 700, letterSpacing: "0.05em" }}>
                 {formatSpeed(boatSpeedMph, { units }).toUpperCase()}
               </div>
               {showInertia && (
-                <div style={{ fontSize: 8, color: "#fbbf24", letterSpacing: "0.1em", marginTop: 1 }}>
+                <div style={{ fontSize: 12, color: "#fbbf24", letterSpacing: "0.1em", marginTop: 1 }}>
                   ▶ {Math.round(actualDisplay * 10) / 10} {unitSuffix}
                 </div>
               )}
               {showSecondaryKnots && (
-                <div style={{ fontSize: 9, color: "#94a3b8", letterSpacing: "0.15em", marginTop: 1 }}>
+                <div style={{ fontSize: 13.5, color: "#94a3b8", letterSpacing: "0.15em", marginTop: 1 }}>
                   {knots.toFixed(1)} KT
                 </div>
               )}
@@ -422,7 +422,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
             justifyContent: "space-between",
             paddingTop: LEVER_THUMB_H / 2,
             paddingBottom: LEVER_THUMB_H / 2,
-            fontSize: 8,
+            fontSize: 12,
             letterSpacing: "0.1em",
             color: "#64748b",
           }}
@@ -468,7 +468,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
             borderRadius: 3,
             color: driveBoatReverse ? "#fbbf24" : "#64748b",
             fontFamily: "inherit",
-            fontSize: 9,
+            fontSize: 13.5,
             letterSpacing: "0.18em",
             cursor: "pointer",
             textTransform: "uppercase",
@@ -497,18 +497,18 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
             borderRadius: 3,
             color: "#e2e8f0",
             fontFamily: "inherit",
-            fontSize: 11,
+            fontSize: 16.5,
             textAlign: "center",
             padding: "3px 6px",
             outline: "none",
           }}
         />
-        <span style={{ fontSize: 9, color: "#94a3b8", whiteSpace: "nowrap" }}>{unitSuffix}</span>
+        <span style={{ fontSize: 13.5, color: "#94a3b8", whiteSpace: "nowrap" }}>{unitSuffix}</span>
       </div>
 
       {/* ── Drive Boat controls ─────────────────────────────────────────── */}
       <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)", padding: "6px 10px 4px" }}>
-        <div style={{ fontSize: 7, color: "#475569", letterSpacing: "0.2em", marginBottom: 5 }}>
+        <div style={{ fontSize: 10.5, color: "#475569", letterSpacing: "0.2em", marginBottom: 5 }}>
           AUTOPILOT
         </div>
 
@@ -552,7 +552,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
         )}
 
         {followingRoute && distanceToNextNm > 0 && (
-          <div style={{ fontSize: 7, color: "#64748b", marginTop: 3, letterSpacing: "0.1em" }}>
+          <div style={{ fontSize: 10.5, color: "#64748b", marginTop: 3, letterSpacing: "0.1em" }}>
             {distanceToNextNm.toFixed(2)} nm to turn
           </div>
         )}
@@ -562,9 +562,9 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
       <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)", padding: "5px 10px 7px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <div style={{ fontSize: 7, color: "#475569", letterSpacing: "0.2em" }}>TRAVELED</div>
-            <div style={{ ...CYAN, fontSize: 12, fontWeight: 700, letterSpacing: "0.05em", marginTop: 1 }}>
-              {distanceTraveledNm.toFixed(2)} <span style={{ fontSize: 8, color: "#94a3b8" }}>nm</span>
+            <div style={{ fontSize: 10.5, color: "#475569", letterSpacing: "0.2em" }}>TRAVELED</div>
+            <div style={{ ...CYAN, fontSize: 18, fontWeight: 700, letterSpacing: "0.05em", marginTop: 1 }}>
+              {distanceTraveledNm.toFixed(2)} <span style={{ fontSize: 12, color: "#94a3b8" }}>nm</span>
             </div>
           </div>
           <ViewscreenTooltip label="Reset distance counter" side="left">
@@ -572,7 +572,7 @@ export const ThrottlePanel: React.FC<ThrottlePanelProps> = ({ onClose }) => {
               onClick={resetDistanceTraveled}
               style={{
                 ...BTN_BASE,
-                fontSize: 7,
+                fontSize: 10.5,
                 padding: "2px 5px",
                 letterSpacing: "0.1em",
               }}

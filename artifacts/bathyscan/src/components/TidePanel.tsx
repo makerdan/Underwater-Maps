@@ -19,7 +19,7 @@ const PANEL: React.CSSProperties = {
   borderRadius: 4,
   backdropFilter: "blur(6px)",
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-  fontSize: 12,
+  fontSize: 18,
   color: "#cbd5e1",
   letterSpacing: "0.07em",
   userSelect: "none",
@@ -30,7 +30,7 @@ const PANEL: React.CSSProperties = {
 
 const CYAN: React.CSSProperties = { color: "#00e5ff", textShadow: "0 0 6px rgba(0,229,255,0.5)" };
 const DIM: React.CSSProperties = { color: "#cbd5e1" };
-const LABEL: React.CSSProperties = { color: "#cbd5e1", fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", fontWeight: 600 };
+const LABEL: React.CSSProperties = { color: "#cbd5e1", fontSize: 15, letterSpacing: "0.2em", textTransform: "uppercase", fontWeight: 600 };
 
 function timeToNext(isoStr: string, referenceTime: Date): string {
   const target = new Date(isoStr.replace(" ", "T") + (isoStr.includes("Z") ? "" : "Z"));
@@ -85,7 +85,7 @@ const StationSourceBadge: React.FC<StationSourceBadgeProps> = ({
         display: "inline-flex",
         alignItems: "center",
         gap: 4,
-        fontSize: 9,
+        fontSize: 13.5,
         letterSpacing: "0.15em",
         textTransform: "uppercase",
         padding: "1px 5px",
@@ -99,7 +99,7 @@ const StationSourceBadge: React.FC<StationSourceBadgeProps> = ({
         display: "inline-flex",
         alignItems: "center",
         gap: 4,
-        fontSize: 9,
+        fontSize: 13.5,
         letterSpacing: "0.15em",
         textTransform: "uppercase",
         padding: "1px 5px",
@@ -299,7 +299,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
           style={{ borderBottom: collapsed ? "none" : "1px solid rgba(0,229,255,0.1)" }}
           onClick={() => togglePanel("tide")}
         >
-          <span style={{ ...CYAN, fontSize: 10, letterSpacing: "0.2em", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span style={{ ...CYAN, fontSize: 15, letterSpacing: "0.2em", display: "inline-flex", alignItems: "center", gap: 6 }}>
             ◉ TIDAL OVERLAY
             {loading && (
               <Spinner className="size-3 text-cyan-400" aria-label="Fetching tidal data" />
@@ -308,7 +308,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
               <HelpIcon articleId="tidal-overlay" label="Tidal overlay" />
             </span>
           </span>
-          <span style={{ ...DIM, fontSize: 20, lineHeight: 1 }}>{collapsed ? "▲" : "▼"}</span>
+          <span style={{ ...DIM, fontSize: 30, lineHeight: 1 }}>{collapsed ? "▲" : "▼"}</span>
         </div>
       </ViewscreenTooltip>
       )}
@@ -338,14 +338,14 @@ export const TidePanel: React.FC<TidePanelProps> = ({
       {!collapsed && (
         <div className="px-2 py-2 space-y-2">
           {loading && !data.available && (
-            <div style={{ ...DIM, fontSize: 11, display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <div style={{ ...DIM, fontSize: 16.5, display: "inline-flex", alignItems: "center", gap: 6 }}>
               <Spinner className="size-3 text-cyan-400" aria-label="Fetching tidal data" />
               Fetching tidal data…
             </div>
           )}
 
           {!data.available && !loading && (
-            <div style={{ color: "#cbd5e1", fontSize: 11 }}>
+            <div style={{ color: "#cbd5e1", fontSize: 16.5 }}>
               No tidal station within {formatDistance(100_000, { units })} of this area.
             </div>
           )}
@@ -360,7 +360,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                     <span
                       data-testid="tide-refreshing"
                       style={{
-                        fontSize: 8,
+                        fontSize: 12,
                         letterSpacing: "0.15em",
                         color: "#94a3b8",
                         border: "1px solid rgba(148,163,184,0.3)",
@@ -372,7 +372,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                     </span>
                   )}
                 </div>
-                <div style={{ color: "#7dd3fc", fontSize: 11 }}>{data.stationName}</div>
+                <div style={{ color: "#7dd3fc", fontSize: 16.5 }}>{data.stationName}</div>
                 <StationSourceBadge
                   source={data.source}
                   stationId={data.stationId}
@@ -386,7 +386,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                       display: "inline-flex",
                       alignItems: "center",
                       gap: 4,
-                      fontSize: 9,
+                      fontSize: 13.5,
                       letterSpacing: "0.12em",
                       textTransform: "uppercase",
                       padding: "1px 5px",
@@ -398,7 +398,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                   >
                     ⬇ OFFLINE PACK
                     {data.packSnapshotAt && (
-                      <span style={{ fontSize: 8, color: "#d97706" }}>
+                      <span style={{ fontSize: 12, color: "#d97706" }}>
                         · saved {new Date(data.packSnapshotAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                       </span>
                     )}
@@ -410,16 +410,16 @@ export const TidePanel: React.FC<TidePanelProps> = ({
               <div className="flex gap-4 items-end" style={{ minWidth: 0 }}>
                 <div style={{ minWidth: 0, flex: "0 1 auto" }}>
                   <div style={LABEL}>Tide height</div>
-                  <span style={{ ...CYAN, fontSize: 15, fontWeight: 700 }}>
+                  <span style={{ ...CYAN, fontSize: 22.5, fontWeight: 700 }}>
                     {data.tideHeight >= 0 ? "+" : ""}
                     {formatDepth(data.tideHeight, { units, decimals: 2 })}
                   </span>
-                  <span style={{ ...DIM, fontSize: 10, marginLeft: 4 }}>MLLW</span>
+                  <span style={{ ...DIM, fontSize: 15, marginLeft: 4 }}>MLLW</span>
                   {data.isPredicted && (
                     <span
                       style={{
                         marginLeft: 5,
-                        fontSize: 9,
+                        fontSize: 13.5,
                         background: "rgba(251,191,36,0.18)",
                         border: "1px solid rgba(251,191,36,0.5)",
                         color: "#fcd34d",
@@ -434,7 +434,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                 </div>
                 <div style={{ minWidth: 0, flex: "0 1 auto" }}>
                   <div style={LABEL}>Status</div>
-                  <div style={{ color: "#34d399", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ color: "#34d399", fontSize: 16.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {floodEbbLabel(data.currentDirection, data.nextEvent?.type)}{" "}
                     {cardinal(data.currentDirection)}
                   </div>
@@ -475,14 +475,14 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                   }}
                 >
                   {data.slack.isSlack ? (
-                    <div style={{ color: "#c084fc", fontSize: 10 }}>
+                    <div style={{ color: "#c084fc", fontSize: 15 }}>
                       ◐ Slack tide — current reversing
-                      <div style={{ ...DIM, fontSize: 9, marginTop: 1 }}>
+                      <div style={{ ...DIM, fontSize: 13.5, marginTop: 1 }}>
                         Next flow in {data.slack.minutesToSlack} min
                       </div>
                     </div>
                   ) : (
-                    <div style={{ color: "#7dd3fc", fontSize: 10 }}>
+                    <div style={{ color: "#7dd3fc", fontSize: 15 }}>
                       {data.slack.phase === "flooding" ? "Flooding" : "Ebbing"}{" "}
                       {cardinal(data.currentDirection)} · slack in{" "}
                       {data.slack.minutesToSlack} min
@@ -498,7 +498,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                     Next {data.nextEvent.type === "high" ? "High" : "Low"}
                     {data.isPredicted ? " (predicted)" : ""}
                   </div>
-                  <div style={{ color: "#f0abfc", fontSize: 11 }}>
+                  <div style={{ color: "#f0abfc", fontSize: 16.5 }}>
                     {formatDepth(data.nextEvent.height, { units, decimals: 2 })} — in{" "}
                     {timeToNext(data.nextEvent.time, referenceTime)}
                   </div>
@@ -519,7 +519,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                       <button
                         onClick={() => onDepthLayerChange(l)}
                         style={{
-                          fontSize: 10,
+                          fontSize: 15,
                           padding: "3px 7px",
                           borderRadius: 2,
                           border: `1px solid ${l === depthLayer ? "rgba(0,229,255,0.6)" : "rgba(0,229,255,0.3)"}`,
@@ -551,7 +551,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                 borderRadius: 3,
                 background: "rgba(0,229,255,0.07)",
                 border: "1px solid rgba(0,229,255,0.22)",
-                fontSize: 9,
+                fontSize: 13.5,
                 letterSpacing: "0.1em",
                 color: "#00e5ff",
                 textTransform: "uppercase",
@@ -573,7 +573,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                   borderRadius: 3,
                   background: "rgba(0,229,255,0.06)",
                   border: "1px solid rgba(0,229,255,0.2)",
-                  fontSize: 9,
+                  fontSize: 13.5,
                   letterSpacing: "0.1em",
                   color: "#7dd3fc",
                   textTransform: "uppercase",
@@ -605,7 +605,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                   <button
                     onClick={() => setDay(offset)}
                     style={{
-                      fontSize: 10,
+                      fontSize: 15,
                       padding: "2px 6px",
                       borderRadius: 2,
                       border: `1px solid ${offset === selectedDayOffset ? "rgba(56,189,248,0.6)" : "rgba(0,229,255,0.25)"}`,
@@ -626,7 +626,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                       <span
                         style={{
                           color: "#c084fc",
-                          fontSize: 9,
+                          fontSize: 13.5,
                           letterSpacing: 0,
                           opacity: 0.9,
                         }}
@@ -660,7 +660,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                   disabled={prevSlackMs === null}
                   data-testid="slack-prev"
                   style={{
-                    fontSize: 10,
+                    fontSize: 15,
                     padding: "2px 7px",
                     borderRadius: 2,
                     border: `1px solid ${prevSlackMs === null ? "rgba(168,85,247,0.15)" : "rgba(168,85,247,0.5)"}`,
@@ -692,7 +692,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                   disabled={nextSlackMs === null}
                   data-testid="slack-next"
                   style={{
-                    fontSize: 10,
+                    fontSize: 15,
                     padding: "2px 7px",
                     borderRadius: 2,
                     border: `1px solid ${nextSlackMs === null ? "rgba(168,85,247,0.15)" : "rgba(168,85,247,0.5)"}`,
@@ -711,7 +711,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
             {/* Hour slider */}
             <div className="mt-1.5">
               <div className="flex items-center gap-2">
-                <span style={{ ...DIM, fontSize: 10, minWidth: 20 }}>00</span>
+                <span style={{ ...DIM, fontSize: 15, minWidth: 20 }}>00</span>
                 <div style={{ flex: 1, position: "relative", height: 18 }}>
                   {/* Slack window band overlay (purple shading) */}
                   <div
@@ -806,9 +806,9 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                     );
                   })}
                 </div>
-                <span style={{ ...DIM, fontSize: 10, minWidth: 20 }}>23</span>
+                <span style={{ ...DIM, fontSize: 15, minWidth: 20 }}>23</span>
               </div>
-              <div style={{ textAlign: "center", ...CYAN, fontSize: 10, marginTop: 2 }}>
+              <div style={{ textAlign: "center", ...CYAN, fontSize: 15, marginTop: 2 }}>
                 {String(scrubHour).padStart(2, "0")}:00 UTC
                 {scrubDatetime ? "" : " (Live)"}
               </div>
@@ -821,7 +821,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                     background: "rgba(168,85,247,0.12)",
                     border: "1px solid rgba(168,85,247,0.4)",
                     color: "#e9d5ff",
-                    fontSize: 10,
+                    fontSize: 15,
                     lineHeight: 1.4,
                   }}
                 >
@@ -839,7 +839,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                       UTC
                     </span>
                   </div>
-                  <div style={{ ...DIM, fontSize: 9 }}>
+                  <div style={{ ...DIM, fontSize: 13.5 }}>
                     Reverses to{" "}
                     <span style={{ color: "#7dd3fc" }}>
                       {hoveredEvent.type === "high" ? "ebb" : "flood"}

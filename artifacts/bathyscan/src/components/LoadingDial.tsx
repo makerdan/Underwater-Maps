@@ -130,7 +130,7 @@ export const LoadingDial: React.FC<LoadingDialProps> = ({
       {etaSeconds != null && (
         <span
           data-testid="loading-dial-eta"
-          style={{ fontSize: 9, color: "#7dd3fc", letterSpacing: "0.04em" }}
+          style={{ fontSize: 13.5, color: "#7dd3fc", letterSpacing: "0.04em" }}
         >
           ~{etaSeconds}s
         </span>

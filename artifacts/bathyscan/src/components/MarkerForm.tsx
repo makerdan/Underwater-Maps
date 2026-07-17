@@ -56,7 +56,7 @@ const PANEL: React.CSSProperties = {
   borderRadius: 8,
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   color: "#e2e8f0",
-  fontSize: 11,
+  fontSize: 16.5,
   width: 300,
   backdropFilter: "blur(8px)",
   boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
@@ -393,7 +393,7 @@ export const MarkerForm: React.FC = () => {
       >
         <span
           style={{
-            fontSize: 10,
+            fontSize: 15,
             letterSpacing: "0.2em",
             color: "#00e5ff",
             textShadow: "0 0 6px rgba(0,229,255,0.5)",
@@ -410,7 +410,7 @@ export const MarkerForm: React.FC = () => {
               background: "none",
               border: "none",
               color: "#94a3b8",
-              fontSize: 14,
+              fontSize: 21,
               cursor: "pointer",
               lineHeight: 1,
               padding: "0 2px",
@@ -429,7 +429,7 @@ export const MarkerForm: React.FC = () => {
             padding: "8px 14px",
             background: "rgba(234,179,8,0.08)",
             borderBottom: "1px solid rgba(234,179,8,0.2)",
-            fontSize: 9,
+            fontSize: 13.5,
             color: "#fbbf24",
             letterSpacing: "0.12em",
           }}
@@ -445,7 +445,7 @@ export const MarkerForm: React.FC = () => {
             padding: "5px 14px",
             background: "rgba(239,68,68,0.06)",
             borderBottom: "1px solid rgba(239,68,68,0.15)",
-            fontSize: 9,
+            fontSize: 13.5,
             color: "#f87171",
             letterSpacing: "0.1em",
           }}
@@ -470,10 +470,10 @@ export const MarkerForm: React.FC = () => {
           { key: "depth", val: displayGps ? formatDepth(displayGps.depth, { units }) : "—" },
         ].map(({ key, val }) => (
           <div key={key}>
-            <div style={{ fontSize: 8, letterSpacing: "0.12em", color: "#64748b", marginBottom: 1 }}>
+            <div style={{ fontSize: 12, letterSpacing: "0.12em", color: "#64748b", marginBottom: 1 }}>
               {key.toUpperCase()}
             </div>
-            <div style={{ fontSize: 10, color: "#cbd5e1" }}>{val}</div>
+            <div style={{ fontSize: 15, color: "#cbd5e1" }}>{val}</div>
           </div>
         ))}
       </div>
@@ -481,7 +481,7 @@ export const MarkerForm: React.FC = () => {
       <form onSubmit={handleSubmit}>
         {/* Type selector — categorised scrollable picker */}
         <div style={{ padding: "9px 14px 4px" }}>
-          <div style={{ fontSize: 8, letterSpacing: "0.12em", color: "#64748b", marginBottom: 5 }}>
+          <div style={{ fontSize: 12, letterSpacing: "0.12em", color: "#64748b", marginBottom: 5 }}>
             TYPE
           </div>
           <div
@@ -500,7 +500,7 @@ export const MarkerForm: React.FC = () => {
                 <div key={cat} data-category={cat}>
                   <div
                     style={{
-                      fontSize: 7,
+                      fontSize: 10.5,
                       letterSpacing: "0.18em",
                       color: "#475569",
                       fontWeight: 700,
@@ -520,7 +520,7 @@ export const MarkerForm: React.FC = () => {
                             type="button"
                             onClick={() => setMarkerType(t.value as MarkerTypeValue)}
                             style={{
-                              fontSize: 9,
+                              fontSize: 13.5,
                               padding: "3px 7px",
                               borderRadius: 3,
                               border: `1px solid ${active ? t.color : "rgba(0,229,255,0.12)"}`,
@@ -547,7 +547,7 @@ export const MarkerForm: React.FC = () => {
         {/* Label */}
         <div style={{ padding: "8px 14px 4px" }}>
           <label
-            style={{ display: "block", fontSize: 8, letterSpacing: "0.12em", color: "#64748b", marginBottom: 4 }}
+            style={{ display: "block", fontSize: 12, letterSpacing: "0.12em", color: "#64748b", marginBottom: 4 }}
           >
             LABEL *
           </label>
@@ -566,7 +566,7 @@ export const MarkerForm: React.FC = () => {
               border: `1px solid ${labelError ? "#ef4444" : "rgba(0,229,255,0.15)"}`,
               borderRadius: 3,
               color: "#e2e8f0",
-              fontSize: 11,
+              fontSize: 16.5,
               padding: "5px 8px",
               fontFamily: "inherit",
               boxSizing: "border-box",
@@ -574,9 +574,9 @@ export const MarkerForm: React.FC = () => {
             }}
           />
           {labelError && (
-            <div style={{ fontSize: 9, color: "#ef4444", marginTop: 3 }}>⚠ {labelError}</div>
+            <div style={{ fontSize: 13.5, color: "#ef4444", marginTop: 3 }}>⚠ {labelError}</div>
           )}
-          <div style={{ fontSize: 8, color: "#1e293b", marginTop: 2, textAlign: "right" }}>
+          <div style={{ fontSize: 12, color: "#1e293b", marginTop: 2, textAlign: "right" }}>
             {label.length}/60
           </div>
         </div>
@@ -585,7 +585,7 @@ export const MarkerForm: React.FC = () => {
         {markerType === "depth_pole" && (
           <div style={{ padding: "4px 14px 8px" }}>
             <label
-              style={{ display: "block", fontSize: 8, letterSpacing: "0.12em", color: "#64748b", marginBottom: 6 }}
+              style={{ display: "block", fontSize: 12, letterSpacing: "0.12em", color: "#64748b", marginBottom: 6 }}
             >
               POLE COLOUR
             </label>
@@ -604,7 +604,7 @@ export const MarkerForm: React.FC = () => {
                   background: "none",
                 }}
               />
-              <span style={{ fontSize: 10, color: "#cbd5e1", fontFamily: "monospace" }}>{poleColour}</span>
+              <span style={{ fontSize: 15, color: "#cbd5e1", fontFamily: "monospace" }}>{poleColour}</span>
             </div>
           </div>
         )}
@@ -613,7 +613,7 @@ export const MarkerForm: React.FC = () => {
         {markerType !== "depth_pole" && (
           <div style={{ padding: "4px 14px 8px" }}>
             <label
-              style={{ display: "block", fontSize: 8, letterSpacing: "0.12em", color: "#64748b", marginBottom: 4 }}
+              style={{ display: "block", fontSize: 12, letterSpacing: "0.12em", color: "#64748b", marginBottom: 4 }}
             >
               NOTES (optional)
             </label>
@@ -632,7 +632,7 @@ export const MarkerForm: React.FC = () => {
                 border: `1px solid ${notesError ? "#ef4444" : "rgba(0,229,255,0.12)"}`,
                 borderRadius: 3,
                 color: "#e2e8f0",
-                fontSize: 11,
+                fontSize: 16.5,
                 padding: "5px 8px",
                 fontFamily: "inherit",
                 resize: "none",
@@ -641,9 +641,9 @@ export const MarkerForm: React.FC = () => {
               }}
             />
             {notesError && (
-              <div style={{ fontSize: 9, color: "#ef4444", marginTop: 3 }}>⚠ {notesError}</div>
+              <div style={{ fontSize: 13.5, color: "#ef4444", marginTop: 3 }}>⚠ {notesError}</div>
             )}
-            <div style={{ fontSize: 8, color: notes.length >= 250 ? "#f59e0b" : "#475569", textAlign: "right" }}>
+            <div style={{ fontSize: 12, color: notes.length >= 250 ? "#f59e0b" : "#475569", textAlign: "right" }}>
               {notes.length}/280
             </div>
           </div>
@@ -663,7 +663,7 @@ export const MarkerForm: React.FC = () => {
             type="button"
             onClick={handleCancel}
             style={{
-              fontSize: 9,
+              fontSize: 13.5,
               letterSpacing: "0.12em",
               padding: "5px 14px",
               borderRadius: 3,
@@ -680,7 +680,7 @@ export const MarkerForm: React.FC = () => {
             type="submit"
             disabled={postMarkers.isPending || patchMarker.isPending}
             style={{
-              fontSize: 9,
+              fontSize: 13.5,
               letterSpacing: "0.12em",
               padding: "5px 14px",
               borderRadius: 3,

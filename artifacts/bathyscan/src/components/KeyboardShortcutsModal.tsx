@@ -73,7 +73,7 @@ export const KeyboardShortcutsModal: React.FC<{ open: boolean; onClose: () => vo
         >
           <span
             style={{
-              fontSize: 11,
+              fontSize: 16.5,
               letterSpacing: "0.2em",
               color: "#00e5ff",
               fontWeight: 700,
@@ -91,7 +91,7 @@ export const KeyboardShortcutsModal: React.FC<{ open: boolean; onClose: () => vo
               border: "1px solid rgba(0,229,255,0.25)",
               borderRadius: 3,
               color: "#cbd5e1",
-              fontSize: 12,
+              fontSize: 18,
               padding: "2px 8px",
               cursor: "pointer",
               fontFamily: FONT,
@@ -112,7 +112,7 @@ export const KeyboardShortcutsModal: React.FC<{ open: boolean; onClose: () => vo
                   borderRadius: 3,
                   padding: "3px 8px",
                   color: "#00e5ff",
-                  fontSize: 11,
+                  fontSize: 16.5,
                   textAlign: "center",
                   letterSpacing: "0.08em",
                   fontWeight: 600,
@@ -120,7 +120,7 @@ export const KeyboardShortcutsModal: React.FC<{ open: boolean; onClose: () => vo
               >
                 {key}
               </span>
-              <span style={{ fontSize: 12, color: "#cbd5e1" }}>{action}</span>
+              <span style={{ fontSize: 18, color: "#cbd5e1" }}>{action}</span>
             </div>
           ))}
         </div>

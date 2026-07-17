@@ -42,7 +42,7 @@ export const DepthLegend = () => {
         {ticks.map(({ label, pos }) => (
           <span
             key={label}
-            className="absolute right-0 text-xs font-mono text-muted-foreground whitespace-nowrap"
+            className="absolute right-0 text-[18px] font-mono text-muted-foreground whitespace-nowrap"
             style={{
               top: pos * rampHeightPx,
               transform: "translateY(-50%)",

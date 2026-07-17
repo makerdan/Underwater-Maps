@@ -201,14 +201,14 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
     >
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <span style={{ fontSize: 10, letterSpacing: "0.22em", color: "#00e5ff", opacity: 0.85, display: "flex", alignItems: "center" }}>
+        <span style={{ fontSize: 15, letterSpacing: "0.22em", color: "#00e5ff", opacity: 0.85, display: "flex", alignItems: "center" }}>
           ◈ NATURAL LANGUAGE QUERY
           <HelpIcon articleId="ai-assistant" label="AI assistant" />
         </span>
         <ViewscreenTooltip label="Close query panel (Esc)" side="left">
           <button
             onClick={onClose}
-            style={{ fontSize: 11, color: "#94a3b8", cursor: "pointer", background: "none", border: "none", letterSpacing: "0.1em" }}
+            style={{ fontSize: 16.5, color: "#94a3b8", cursor: "pointer", background: "none", border: "none", letterSpacing: "0.1em" }}
             aria-label="Close query panel"
           >
             ✕ ESC
@@ -226,7 +226,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
             borderRadius: 4,
             padding: "9px 11px",
             marginBottom: 10,
-            fontSize: 10,
+            fontSize: 15,
             color: "#e2e8f0",
             lineHeight: 1.6,
             letterSpacing: "0.04em",
@@ -246,7 +246,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
                 borderRadius: 3,
                 color: "#fb923c",
                 fontFamily: "inherit",
-                fontSize: 10,
+                fontSize: 15,
                 letterSpacing: "0.14em",
                 padding: "4px 12px",
                 cursor: "pointer",
@@ -268,7 +268,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
             borderRadius: 4,
             padding: "7px 10px",
             color: "#f87171",
-            fontSize: 10,
+            fontSize: 15,
             letterSpacing: "0.12em",
             marginBottom: 10,
           }}
@@ -293,7 +293,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
             border: `1px solid ${isOnline ? "rgba(0,229,255,0.2)" : "rgba(239,68,68,0.2)"}`,
             borderRadius: 4,
             color: isOnline ? "#e2e8f0" : "#94a3b8",
-            fontSize: 12,
+            fontSize: 18,
             padding: "7px 10px",
             outline: "none",
             fontFamily: "inherit",
@@ -310,7 +310,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
             border: "1px solid rgba(0,229,255,0.3)",
             borderRadius: 4,
             color: (loading || !isOnline || !llmDisclosureAcknowledged) ? "#94a3b8" : "#00e5ff",
-            fontSize: 10,
+            fontSize: 15,
             letterSpacing: "0.18em",
             padding: "7px 14px",
             cursor: (loading || !isOnline || !llmDisclosureAcknowledged) ? "not-allowed" : "pointer",
@@ -335,7 +335,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
                 border: "1px solid rgba(0,229,255,0.15)",
                 borderRadius: 3,
                 color: "#cbd5e1",
-                fontSize: 9,
+                fontSize: 13.5,
                 padding: "4px 9px",
                 cursor: "pointer",
                 fontFamily: "inherit",
@@ -362,7 +362,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
             background: "rgba(0,229,255,0.08)",
             border: "1px solid rgba(0,229,255,0.2)",
             borderRadius: 4,
-            fontSize: 11,
+            fontSize: 16.5,
             color: "#00e5ff",
             letterSpacing: "0.12em",
           }}
@@ -381,7 +381,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
             background: "rgba(255,255,255,0.04)",
             border: "1px solid rgba(100,116,139,0.3)",
             borderRadius: 4,
-            fontSize: 11,
+            fontSize: 16.5,
             color: "#e2e8f0",
             lineHeight: 1.5,
           }}
@@ -393,7 +393,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
       {/* Query history */}
       {history.length > 0 && (
         <div>
-          <div style={{ fontSize: 9, color: "#64748b", letterSpacing: "0.2em", marginBottom: 5 }}>
+          <div style={{ fontSize: 13.5, color: "#64748b", letterSpacing: "0.2em", marginBottom: 5 }}>
             RECENT
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -406,7 +406,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
                   background: "none",
                   border: "none",
                   color: "#94a3b8",
-                  fontSize: 10,
+                  fontSize: 15,
                   padding: "2px 0",
                   cursor: "pointer",
                   fontFamily: "inherit",

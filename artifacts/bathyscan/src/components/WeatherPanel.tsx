@@ -105,7 +105,7 @@ const PANEL_STYLE: React.CSSProperties = {
   borderRadius: 8,
   padding: "12px 14px",
   fontFamily: "'JetBrains Mono', monospace",
-  fontSize: 10,
+  fontSize: 15,
   color: "#e2e8f0",
   letterSpacing: "0.06em",
   backdropFilter: "blur(8px)",
@@ -114,7 +114,7 @@ const PANEL_STYLE: React.CSSProperties = {
   pointerEvents: "auto",
 };
 
-const LABEL: React.CSSProperties = { color: "#94a3b8", fontSize: 9, letterSpacing: "0.18em" };
+const LABEL: React.CSSProperties = { color: "#94a3b8", fontSize: 13.5, letterSpacing: "0.18em" };
 const VALUE: React.CSSProperties = { color: "#00e5ff", fontWeight: 700 };
 const DIVIDER: React.CSSProperties = { borderTop: "1px solid rgba(0,229,255,0.1)", margin: "8px 0" };
 
@@ -149,7 +149,7 @@ const OfflineWeatherBadge: React.FC = () => {
     <div
       data-testid="weather-offline-badge"
       style={{
-        fontSize: 8,
+        fontSize: 12,
         letterSpacing: "0.12em",
         color: "#fbbf24",
         background: "rgba(251,191,36,0.06)",
@@ -815,7 +815,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
     ? {
         width: "100%",
         fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 10,
+        fontSize: 15,
         color: "#e2e8f0",
         letterSpacing: "0.06em",
         pointerEvents: "auto",
@@ -826,10 +826,10 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
     <div data-testid="weather-panel" style={panelStyle}>
       {!embedded && (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <span style={{ ...VALUE, fontSize: 11, letterSpacing: "0.15em" }}>⛵ DRIFT PLANNER</span>
+        <span style={{ ...VALUE, fontSize: 16.5, letterSpacing: "0.15em" }}>⛵ DRIFT PLANNER</span>
         <button
           onClick={onClose}
-          style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 14, padding: "0 2px" }}
+          style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 21, padding: "0 2px" }}
         >×</button>
       </div>
       )}
@@ -853,13 +853,13 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
           role="alert"
           style={{ marginBottom: 6, padding: "4px 8px", background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.4)", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}
         >
-          <span style={{ fontSize: 8, color: "#fbbf24" }}>
+          <span style={{ fontSize: 12, color: "#fbbf24" }}>
             ⚠ {skippedPlanCount} saved plan{skippedPlanCount > 1 ? "s were" : " was"} skipped — format was outdated or corrupt.
           </span>
           <button
             onClick={clearSkippedPlanCount}
             title="Dismiss"
-            style={{ background: "none", border: "none", color: "#fbbf24", cursor: "pointer", fontSize: 10, lineHeight: 1, padding: "0 2px" }}
+            style={{ background: "none", border: "none", color: "#fbbf24", cursor: "pointer", fontSize: 15, lineHeight: 1, padding: "0 2px" }}
           >✕</button>
         </div>
       )}
@@ -870,8 +870,8 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
           style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", marginBottom: showSavedPlans ? 6 : 0 }}
           onClick={() => setShowSavedPlans((v) => !v)}
         >
-          <span style={{ ...LABEL, fontSize: 8 }}>📁 SAVED PLANS ({savedDriftPlans.length})</span>
-          <span style={{ color: "#94a3b8", fontSize: 10 }}>{showSavedPlans ? "▲" : "▼"}</span>
+          <span style={{ ...LABEL, fontSize: 12 }}>📁 SAVED PLANS ({savedDriftPlans.length})</span>
+          <span style={{ color: "#94a3b8", fontSize: 15 }}>{showSavedPlans ? "▲" : "▼"}</span>
         </div>
 
         {showSavedPlans && (
@@ -884,35 +884,35 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                 onChange={(e) => { setPlanNameInput(e.target.value); setPlanError(null); }}
                 onKeyDown={(e) => { if (e.key === "Enter") handleSavePlan(); }}
                 placeholder="Plan name…"
-                style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#e2e8f0", fontFamily: "inherit", fontSize: 9, padding: "2px 6px", borderRadius: 3 }}
+                style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#e2e8f0", fontFamily: "inherit", fontSize: 13.5, padding: "2px 6px", borderRadius: 3 }}
               />
               <button
                 onClick={handleSavePlan}
-                style={{ background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", color: "#00e5ff", fontFamily: "inherit", fontSize: 8, padding: "2px 8px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.1em", whiteSpace: "nowrap" }}
+                style={{ background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", color: "#00e5ff", fontFamily: "inherit", fontSize: 12, padding: "2px 8px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.1em", whiteSpace: "nowrap" }}
               >SAVE</button>
             </div>
-            {planError && <div style={{ color: "#f87171", fontSize: 8 }}>{planError}</div>}
+            {planError && <div style={{ color: "#f87171", fontSize: 12 }}>{planError}</div>}
 
             {/* Plans list */}
             {savedDriftPlans.length === 0 ? (
-              <div style={{ color: "#64748b", fontSize: 8, fontStyle: "italic" }}>No saved plans yet</div>
+              <div style={{ color: "#64748b", fontSize: 12, fontStyle: "italic" }}>No saved plans yet</div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 3, maxHeight: 120, overflowY: "auto" }}>
                 {[...savedDriftPlans].reverse().map((plan) => (
                   <div key={plan.id} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(0,10,20,0.5)", borderRadius: 3, padding: "2px 4px" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ color: "#e2e8f0", fontSize: 8, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{plan.name}</div>
-                      <div style={{ color: "#64748b", fontSize: 7 }}>{plan.driftMode} · {plan.lineLengthM}m · {new Date(plan.savedAt).toLocaleDateString()}</div>
+                      <div style={{ color: "#e2e8f0", fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{plan.name}</div>
+                      <div style={{ color: "#64748b", fontSize: 10.5 }}>{plan.driftMode} · {plan.lineLengthM}m · {new Date(plan.savedAt).toLocaleDateString()}</div>
                     </div>
                     <button
                       onClick={() => loadDriftPlan(plan)}
                       title="Load this plan"
-                      style={{ background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.25)", color: "#22d3ee", fontFamily: "inherit", fontSize: 7, padding: "1px 5px", borderRadius: 2, cursor: "pointer" }}
+                      style={{ background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.25)", color: "#22d3ee", fontFamily: "inherit", fontSize: 10.5, padding: "1px 5px", borderRadius: 2, cursor: "pointer" }}
                     >LOAD</button>
                     <button
                       onClick={() => deleteSavedDriftPlan(plan.id)}
                       title="Delete plan"
-                      style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", color: "#f87171", fontFamily: "inherit", fontSize: 7, padding: "1px 5px", borderRadius: 2, cursor: "pointer" }}
+                      style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", color: "#f87171", fontFamily: "inherit", fontSize: 10.5, padding: "1px 5px", borderRadius: 2, cursor: "pointer" }}
                     >×</button>
                   </div>
                 ))}
@@ -923,13 +923,13 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
       </div>
 
       {isLoading && (
-        <div style={{ color: "#22d3ee", fontSize: 9, letterSpacing: "0.12em", marginBottom: 8 }}>
+        <div style={{ color: "#22d3ee", fontSize: 13.5, letterSpacing: "0.12em", marginBottom: 8 }}>
           ↻ Fetching conditions…
         </div>
       )}
 
       {(isError || estimatedConditions) && (
-        <div style={{ color: "#fbbf24", fontSize: 9, letterSpacing: "0.1em", marginBottom: 8, padding: "4px 6px", background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)", borderRadius: 4 }}>
+        <div style={{ color: "#fbbf24", fontSize: 13.5, letterSpacing: "0.1em", marginBottom: 8, padding: "4px 6px", background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)", borderRadius: 4 }}>
           ⚠ Using estimated conditions
         </div>
       )}
@@ -946,7 +946,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                   <span
                     data-testid="wind-refreshing"
                     style={{
-                      fontSize: 8,
+                      fontSize: 12,
                       letterSpacing: "0.15em",
                       color: "#94a3b8",
                       border: "1px solid rgba(148,163,184,0.3)",
@@ -959,7 +959,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                 )}
               </div>
               <div style={{ ...VALUE, color: "#7dd3fc" }}>{formatSpeedFromKnots(cond.windSpeedKnots, { units })}</div>
-              <div style={{ fontSize: 9, color: "#94a3b8" }}>{cardinal(cond.windDegrees)} {Math.round(cond.windDegrees)}°</div>
+              <div style={{ fontSize: 13.5, color: "#94a3b8" }}>{cardinal(cond.windDegrees)} {Math.round(cond.windDegrees)}°</div>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -971,7 +971,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                   <span
                     data-testid="tide-current-refreshing"
                     style={{
-                      fontSize: 8,
+                      fontSize: 12,
                       letterSpacing: "0.15em",
                       color: "#94a3b8",
                       border: "1px solid rgba(148,163,184,0.3)",
@@ -984,11 +984,11 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                 )}
               </div>
               <div style={{ ...VALUE, color: "#34d399" }}>{formatSpeedFromKnots(cond.tidalSpeedKnots, { units })}</div>
-              <div style={{ fontSize: 9, color: "#94a3b8" }}>{cardinal(cond.tidalDegrees)} {Math.round(cond.tidalDegrees)}°</div>
+              <div style={{ fontSize: 13.5, color: "#94a3b8" }}>{cardinal(cond.tidalDegrees)} {Math.round(cond.tidalDegrees)}°</div>
               {data?.tidalDataSource === "noaa-coops" && data.tidalStationName ? (
                 <div
                   data-testid="tidal-source"
-                  style={{ fontSize: 8, color: "#cbd5e1", marginTop: 2, letterSpacing: "0.05em" }}
+                  style={{ fontSize: 12, color: "#cbd5e1", marginTop: 2, letterSpacing: "0.05em" }}
                   title={`NOAA CO-OPS station ${data.tidalStationId ?? ""}`}
                 >
                   NOAA: {data.tidalStationName}
@@ -999,7 +999,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
               ) : (
                 <div
                   data-testid="tidal-source"
-                  style={{ fontSize: 8, color: "#cbd5e1", marginTop: 2, letterSpacing: "0.05em", fontStyle: "italic" }}
+                  style={{ fontSize: 12, color: "#cbd5e1", marginTop: 2, letterSpacing: "0.05em", fontStyle: "italic" }}
                 >
                   Estimated (no NOAA station nearby)
                 </div>
@@ -1010,7 +1010,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
             <span style={LABEL}>WAVE HEIGHT </span>
             <span style={{ ...VALUE, color: "#60a5fa" }}>{cond.waveHeightM.toFixed(2)} m</span>
             {cond.waveDirectionDeg !== undefined && (
-              <span style={{ fontSize: 9, color: "#94a3b8", marginLeft: 6 }}>
+              <span style={{ fontSize: 13.5, color: "#94a3b8", marginLeft: 6 }}>
                 {cardinal(cond.waveDirectionDeg)} {Math.round(cond.waveDirectionDeg)}°
               </span>
             )}
@@ -1041,7 +1041,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                   border: `1px solid ${active ? "rgba(0,229,255,0.5)" : "rgba(0,229,255,0.15)"}`,
                   color: active ? "#00e5ff" : "#94a3b8",
                   fontFamily: "inherit",
-                  fontSize: 9,
+                  fontSize: 13.5,
                   padding: "4px",
                   borderRadius: 3,
                   cursor: "pointer",
@@ -1076,7 +1076,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
               </div>
             </div>
           ) : (
-            <div style={{ fontSize: 9, color: "#fbbf24", marginBottom: 6, letterSpacing: "0.1em" }}>
+            <div style={{ fontSize: 13.5, color: "#fbbf24", marginBottom: 6, letterSpacing: "0.1em" }}>
               ⇢ Heading auto-steered to waypoints
             </div>
           )}
@@ -1098,7 +1098,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
               borderRadius: 3,
               color: backtroll ? "#fbbf24" : "#64748b",
               fontFamily: "inherit",
-              fontSize: 9,
+              fontSize: 13.5,
               letterSpacing: "0.18em",
               cursor: "pointer",
               textTransform: "uppercase",
@@ -1126,7 +1126,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
               borderRadius: snapToDepthEnabled ? "3px 3px 0 0" : 3,
               color: snapToDepthEnabled ? "#f0abfc" : "#64748b",
               fontFamily: "inherit",
-              fontSize: 9,
+              fontSize: 13.5,
               letterSpacing: "0.18em",
               cursor: "pointer",
               textTransform: "uppercase",
@@ -1152,7 +1152,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                 borderRadius: "0 0 3px 3px",
               }}
             >
-              <span style={{ fontSize: 8, color: "#c084fc", letterSpacing: "0.12em", flex: 1 }}>
+              <span style={{ fontSize: 12, color: "#c084fc", letterSpacing: "0.12em", flex: 1 }}>
                 TARGET DEPTH
               </span>
               <input
@@ -1173,13 +1173,13 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                   borderRadius: 3,
                   color: "#f0abfc",
                   fontFamily: "inherit",
-                  fontSize: 10,
+                  fontSize: 15,
                   textAlign: "center",
                   padding: "2px 4px",
                   outline: "none",
                 }}
               />
-              <span style={{ fontSize: 8, color: "#94a3b8" }}>m</span>
+              <span style={{ fontSize: 12, color: "#94a3b8" }}>m</span>
             </div>
           )}
 
@@ -1200,7 +1200,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                     border: "1px solid rgba(248,113,113,0.35)",
                     color: "#f87171",
                     fontFamily: "inherit",
-                    fontSize: 8,
+                    fontSize: 12,
                     padding: "2px 6px",
                     borderRadius: 3,
                     cursor: "pointer",
@@ -1213,7 +1213,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
               )}
             </div>
             {driftWaypoints.length === 0 ? (
-              <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.1em", fontStyle: "italic" }}>
+              <div style={{ fontSize: 13.5, color: "#475569", letterSpacing: "0.1em", fontStyle: "italic" }}>
                 Click the map to place waypoints
               </div>
             ) : (
@@ -1232,10 +1232,10 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                       padding: "3px 5px",
                     }}
                   >
-                    <span style={{ color: "#fbbf24", fontSize: 8, minWidth: 12, textAlign: "right", flexShrink: 0 }}>
+                    <span style={{ color: "#fbbf24", fontSize: 12, minWidth: 12, textAlign: "right", flexShrink: 0 }}>
                       {i + 1}
                     </span>
-                    <span style={{ flex: 1, color: "#94a3b8", fontSize: 8, letterSpacing: "0.06em", fontVariantNumeric: "tabular-nums" }}>
+                    <span style={{ flex: 1, color: "#94a3b8", fontSize: 12, letterSpacing: "0.06em", fontVariantNumeric: "tabular-nums" }}>
                       {wp.lat.toFixed(4)}°&nbsp;{wp.lon.toFixed(4)}°
                     </span>
                     <button
@@ -1248,7 +1248,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                         border: "1px solid rgba(248,113,113,0.25)",
                         color: "#f87171",
                         fontFamily: "inherit",
-                        fontSize: 9,
+                        fontSize: 13.5,
                         padding: "0 4px",
                         borderRadius: 2,
                         cursor: "pointer",
@@ -1282,14 +1282,14 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                         aria-label={`Move preset ${p.name} up`}
                         disabled={isFirst}
                         onClick={() => void handleMovePresetInFolder(folderId, p.id, -1)}
-                        style={{ background: "none", border: "1px solid rgba(0,229,255,0.2)", color: isFirst ? "#64748b" : "#00e5ff", cursor: isFirst ? "default" : "pointer", fontSize: 8, padding: "0 3px", borderRadius: 2, lineHeight: 1.2 }}
+                        style={{ background: "none", border: "1px solid rgba(0,229,255,0.2)", color: isFirst ? "#64748b" : "#00e5ff", cursor: isFirst ? "default" : "pointer", fontSize: 12, padding: "0 3px", borderRadius: 2, lineHeight: 1.2 }}
                       >▲</button>
                       <button
                         title="Move down"
                         aria-label={`Move preset ${p.name} down`}
                         disabled={isLast}
                         onClick={() => void handleMovePresetInFolder(folderId, p.id, 1)}
-                        style={{ background: "none", border: "1px solid rgba(0,229,255,0.2)", color: isLast ? "#64748b" : "#00e5ff", cursor: isLast ? "default" : "pointer", fontSize: 8, padding: "0 3px", borderRadius: 2, lineHeight: 1.2 }}
+                        style={{ background: "none", border: "1px solid rgba(0,229,255,0.2)", color: isLast ? "#64748b" : "#00e5ff", cursor: isLast ? "default" : "pointer", fontSize: 12, padding: "0 3px", borderRadius: 2, lineHeight: 1.2 }}
                       >▼</button>
                     </div>
                     {isEditing ? (
@@ -1304,13 +1304,13 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                           if (e.key === "Enter") { e.preventDefault(); void handleCommitRename(); }
                           else if (e.key === "Escape") { e.preventDefault(); handleCancelRename(); }
                         }}
-                        style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.4)", color: "#00e5ff", fontFamily: "inherit", fontSize: 9, padding: "3px 6px", borderRadius: 3 }}
+                        style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.4)", color: "#00e5ff", fontFamily: "inherit", fontSize: 13.5, padding: "3px 6px", borderRadius: 3 }}
                       />
                     ) : (
                       <button
                         onClick={() => handleLoadPreset(p.id)}
                         title={`Load ${p.name}: ${Math.round(p.headingDeg)}° @ ${p.speedKnots}kt`}
-                        style={{ flex: 1, textAlign: "left", background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 9, padding: "3px 6px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.1em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                        style={{ flex: 1, textAlign: "left", background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 13.5, padding: "3px 6px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.1em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                       >
                         {p.name} · {Math.round(p.headingDeg)}° @ {p.speedKnots}kt
                       </button>
@@ -1321,7 +1321,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                         title="Move to folder"
                         value={p.folderId ?? ""}
                         onChange={(e) => void handleAssignPresetToFolder(p.id, e.target.value === "" ? null : e.target.value)}
-                        style={{ background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 9, padding: "2px", borderRadius: 3, cursor: "pointer", maxWidth: 60 }}
+                        style={{ background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 13.5, padding: "2px", borderRadius: 3, cursor: "pointer", maxWidth: 60 }}
                       >
                         <option value="">— root —</option>
                         {sortedFolders.map((f) => (
@@ -1334,14 +1334,14 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                         onClick={() => handleStartRename(p.id, p.name)}
                         aria-label={`Rename preset ${p.name}`}
                         title="Rename preset"
-                        style={{ background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 9, padding: "3px 6px", borderRadius: 3, cursor: "pointer" }}
+                        style={{ background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 13.5, padding: "3px 6px", borderRadius: 3, cursor: "pointer" }}
                       >✎</button>
                     )}
                     <button
                       onClick={() => void handleDeletePreset(p.id)}
                       aria-label={`Delete preset ${p.name}`}
                       title="Delete preset"
-                      style={{ background: "rgba(0,10,20,0.8)", border: "1px solid rgba(248,113,113,0.3)", color: "#f87171", fontFamily: "inherit", fontSize: 9, padding: "3px 6px", borderRadius: 3, cursor: "pointer" }}
+                      style={{ background: "rgba(0,10,20,0.8)", border: "1px solid rgba(248,113,113,0.3)", color: "#f87171", fontFamily: "inherit", fontSize: 13.5, padding: "3px 6px", borderRadius: 3, cursor: "pointer" }}
                     >×</button>
                   </div>
                 );
@@ -1351,7 +1351,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
               const totalPresets = trollingPresets?.length ?? 0;
               if (totalPresets === 0 && sortedFolders.length === 0) {
                 return (
-                  <div style={{ fontSize: 8, color: "#94a3b8", marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
                     No saved presets yet
                   </div>
                 );
@@ -1369,7 +1369,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                             onClick={() => toggleFolderCollapsed(folder.id)}
                             aria-label={collapsed ? `Expand folder ${folder.name}` : `Collapse folder ${folder.name}`}
                             title={collapsed ? "Expand" : "Collapse"}
-                            style={{ background: "none", border: "none", color: "#00e5ff", cursor: "pointer", fontSize: 10, padding: "0 4px" }}
+                            style={{ background: "none", border: "none", color: "#00e5ff", cursor: "pointer", fontSize: 15, padding: "0 4px" }}
                           >{collapsed ? "▸" : "▾"}</button>
                           {isEditingFolder ? (
                             <input
@@ -1383,10 +1383,10 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                                 if (e.key === "Enter") { e.preventDefault(); void handleCommitFolderRename(); }
                                 else if (e.key === "Escape") { e.preventDefault(); handleCancelFolderRename(); }
                               }}
-                              style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.4)", color: "#fbbf24", fontFamily: "inherit", fontSize: 9, padding: "2px 6px", borderRadius: 3 }}
+                              style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.4)", color: "#fbbf24", fontFamily: "inherit", fontSize: 13.5, padding: "2px 6px", borderRadius: 3 }}
                             />
                           ) : (
-                            <span style={{ flex: 1, color: "#fbbf24", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            <span style={{ flex: 1, color: "#fbbf24", fontSize: 13.5, fontWeight: 700, letterSpacing: "0.12em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               📁 {folder.name} ({inFolder.length})
                             </span>
                           )}
@@ -1396,13 +1396,13 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                                 onClick={() => handleStartFolderRename(folder.id, folder.name)}
                                 aria-label={`Rename folder ${folder.name}`}
                                 title="Rename folder"
-                                style={{ background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 9, padding: "2px 5px", borderRadius: 3, cursor: "pointer" }}
+                                style={{ background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 13.5, padding: "2px 5px", borderRadius: 3, cursor: "pointer" }}
                               >✎</button>
                               <button
                                 onClick={() => handleDeleteFolder(folder.id, folder.name)}
                                 aria-label={`Delete folder ${folder.name}`}
                                 title="Delete folder"
-                                style={{ background: "rgba(0,10,20,0.8)", border: "1px solid rgba(248,113,113,0.3)", color: "#f87171", fontFamily: "inherit", fontSize: 9, padding: "2px 5px", borderRadius: 3, cursor: "pointer" }}
+                                style={{ background: "rgba(0,10,20,0.8)", border: "1px solid rgba(248,113,113,0.3)", color: "#f87171", fontFamily: "inherit", fontSize: 13.5, padding: "2px 5px", borderRadius: 3, cursor: "pointer" }}
                               >×</button>
                             </>
                           )}
@@ -1413,7 +1413,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                           </div>
                         )}
                         {!collapsed && inFolder.length === 0 && (
-                          <div style={{ fontSize: 8, color: "#94a3b8", marginTop: 2, paddingLeft: 14, fontStyle: "italic" }}>
+                          <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2, paddingLeft: 14, fontStyle: "italic" }}>
                             Empty
                           </div>
                         )}
@@ -1428,9 +1428,9 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                           onClick={() => setFolderRootCollapsed((v) => !v)}
                           aria-label={folderRootCollapsed ? "Expand root presets" : "Collapse root presets"}
                           title={folderRootCollapsed ? "Expand" : "Collapse"}
-                          style={{ background: "none", border: "none", color: "#00e5ff", cursor: "pointer", fontSize: 10, padding: "0 4px" }}
+                          style={{ background: "none", border: "none", color: "#00e5ff", cursor: "pointer", fontSize: 15, padding: "0 4px" }}
                         >{folderRootCollapsed ? "▸" : "▾"}</button>
-                        <span style={{ flex: 1, color: "#cbd5e1", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em" }}>
+                        <span style={{ flex: 1, color: "#cbd5e1", fontSize: 13.5, fontWeight: 700, letterSpacing: "0.12em" }}>
                           UNFILED ({inRoot.length})
                         </span>
                       </div>
@@ -1463,17 +1463,17 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                 onKeyDown={(e) => {
                   if (e.key === "Enter") { e.preventDefault(); void handleCreateFolder(); }
                 }}
-                style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#fbbf24", fontFamily: "inherit", fontSize: 10, padding: "2px 6px", borderRadius: 3 }}
+                style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#fbbf24", fontFamily: "inherit", fontSize: 15, padding: "2px 6px", borderRadius: 3 }}
               />
               <button
                 onClick={() => void handleCreateFolder()}
                 disabled={postFolderMutation.isPending}
                 title="Create folder"
-                style={{ background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.3)", color: "#fbbf24", fontFamily: "inherit", fontSize: 9, padding: "2px 8px", borderRadius: 3, cursor: postFolderMutation.isPending ? "wait" : "pointer", letterSpacing: "0.15em" }}
+                style={{ background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.3)", color: "#fbbf24", fontFamily: "inherit", fontSize: 13.5, padding: "2px 8px", borderRadius: 3, cursor: postFolderMutation.isPending ? "wait" : "pointer", letterSpacing: "0.15em" }}
               >+ FOLDER</button>
             </div>
             {folderError && (
-              <div style={{ fontSize: 8, color: "#f87171", marginTop: 2 }}>{folderError}</div>
+              <div style={{ fontSize: 12, color: "#f87171", marginTop: 2 }}>{folderError}</div>
             )}
 
             {/* Save-preset controls */}
@@ -1484,7 +1484,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                 value={presetName}
                 maxLength={80}
                 onChange={(e) => setPresetName(e.target.value)}
-                style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 10, padding: "2px 6px", borderRadius: 3 }}
+                style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 15, padding: "2px 6px", borderRadius: 3 }}
               />
               {(presetFolders?.length ?? 0) > 0 && (
                 <select
@@ -1492,7 +1492,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                   title="Save to folder"
                   value={saveFolderId ?? ""}
                   onChange={(e) => setSaveFolderId(e.target.value === "" ? null : e.target.value)}
-                  style={{ background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 9, padding: "2px 4px", borderRadius: 3, cursor: "pointer", maxWidth: 70 }}
+                  style={{ background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 13.5, padding: "2px 4px", borderRadius: 3, cursor: "pointer", maxWidth: 70 }}
                 >
                   <option value="">root</option>
                   {[...(presetFolders ?? [])]
@@ -1505,11 +1505,11 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
               <button
                 onClick={() => void handleSavePreset()}
                 disabled={postPresetMutation.isPending}
-                style={{ background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", color: "#00e5ff", fontFamily: "inherit", fontSize: 9, padding: "2px 8px", borderRadius: 3, cursor: postPresetMutation.isPending ? "wait" : "pointer", letterSpacing: "0.15em" }}
+                style={{ background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", color: "#00e5ff", fontFamily: "inherit", fontSize: 13.5, padding: "2px 8px", borderRadius: 3, cursor: postPresetMutation.isPending ? "wait" : "pointer", letterSpacing: "0.15em" }}
               >SAVE</button>
             </div>
             {presetError && (
-              <div style={{ fontSize: 8, color: "#f87171", marginTop: 2, userSelect: "text" }}>{presetError}</div>
+              <div style={{ fontSize: 12, color: "#f87171", marginTop: 2, userSelect: "text" }}>{presetError}</div>
             )}
           </div>
 
@@ -1524,7 +1524,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                 step={0.1}
                 value={boatSpeedKnots}
                 onChange={(e) => setBoatSpeedKnots(Number(e.target.value))}
-                style={{ width: 56, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 10, padding: "2px 4px", borderRadius: 3 }}
+                style={{ width: 56, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 15, padding: "2px 4px", borderRadius: 3 }}
               />
               <span style={{ ...LABEL }}>kt</span>
               <input
@@ -1537,7 +1537,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                 style={{ ...sliderStyle, flex: 1 }}
               />
             </div>
-            <div style={{ fontSize: 8, color: "#94a3b8", marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
               Max {TROLL_MAX_KNOTS} kt · 0 kt falls back to pure drift
             </div>
           </div>
@@ -1550,17 +1550,17 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
       {/* ── Reverse Drift section ─────────────────────────────────────────── */}
       <div style={{ marginBottom: 8, padding: "6px 8px", background: reverseModeActive ? "rgba(249,115,22,0.08)" : "rgba(0,10,20,0.4)", border: `1px solid ${reverseModeActive ? "rgba(249,115,22,0.4)" : "rgba(0,229,255,0.1)"}`, borderRadius: 4 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: reverseModeActive ? 6 : 0 }}>
-          <span style={{ ...LABEL, color: reverseModeActive ? "#fb923c" : "#94a3b8", fontSize: 8 }}>⟵ REVERSE DRIFT</span>
+          <span style={{ ...LABEL, color: reverseModeActive ? "#fb923c" : "#94a3b8", fontSize: 12 }}>⟵ REVERSE DRIFT</span>
           <button
             onClick={() => setReverseModeActive(!reverseModeActive)}
             title={reverseModeActive
               ? "Reverse Drift ON: click the water to mark a catch location and see where the fish may have come from."
               : "Reverse Drift: click a catch location on the map to trace where the fish likely originated."}
-            style={{ background: reverseModeActive ? "rgba(249,115,22,0.18)" : "rgba(0,10,20,0.6)", border: `1px solid ${reverseModeActive ? "rgba(249,115,22,0.5)" : "rgba(0,229,255,0.2)"}`, color: reverseModeActive ? "#fb923c" : "#94a3b8", fontFamily: "inherit", fontSize: 8, padding: "2px 8px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.1em" }}
+            style={{ background: reverseModeActive ? "rgba(249,115,22,0.18)" : "rgba(0,10,20,0.6)", border: `1px solid ${reverseModeActive ? "rgba(249,115,22,0.5)" : "rgba(0,229,255,0.2)"}`, color: reverseModeActive ? "#fb923c" : "#94a3b8", fontFamily: "inherit", fontSize: 12, padding: "2px 8px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.1em" }}
           >{reverseModeActive ? "ON" : "OFF"}</button>
         </div>
         {reverseModeActive && (
-          <div style={{ fontSize: 8, color: "#94a3b8" }}>
+          <div style={{ fontSize: 12, color: "#94a3b8" }}>
             {catchLat === null
               ? "Click the water to mark your catch location — the backwards path will appear in orange."
               : <>
@@ -1585,7 +1585,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
             border: "1px solid rgba(0,229,255,0.2)",
             color: "#00e5ff",
             fontFamily: "inherit",
-            fontSize: 10,
+            fontSize: 15,
             padding: "3px 5px",
             borderRadius: 3,
             cursor: "pointer",
@@ -1595,7 +1595,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
             <option key={p.id} value={p.id}>{p.label}</option>
           ))}
         </select>
-        <div style={{ fontSize: 8, color: "#94a3b8", marginTop: 2, letterSpacing: "0.06em" }}>
+        <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2, letterSpacing: "0.06em" }}>
           Affects wind leeway coefficient used in drift model
         </div>
       </div>
@@ -1609,13 +1609,13 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
           step={5}
           value={lineLengthM}
           onChange={(e) => setLineLengthM(Number(e.target.value))}
-          style={{ width: 60, background: "rgba(0,10,20,0.8)", border: `1px solid ${lineLengthM < 0.5 || lineLengthM > 500 ? "rgba(248,113,113,0.6)" : "rgba(0,229,255,0.2)"}`, color: "#00e5ff", fontFamily: "inherit", fontSize: 10, padding: "2px 4px", borderRadius: 3, marginLeft: 4 }}
+          style={{ width: 60, background: "rgba(0,10,20,0.8)", border: `1px solid ${lineLengthM < 0.5 || lineLengthM > 500 ? "rgba(248,113,113,0.6)" : "rgba(0,229,255,0.2)"}`, color: "#00e5ff", fontFamily: "inherit", fontSize: 15, padding: "2px 4px", borderRadius: 3, marginLeft: 4 }}
         />
         <span style={{ ...LABEL, marginLeft: 3 }}>m</span>
         {(lineLengthM < 0.5 || lineLengthM > 500) ? (
-          <div style={{ fontSize: 8, color: "#f87171", marginTop: 1 }}>Must be 0.5 – 500 m</div>
+          <div style={{ fontSize: 12, color: "#f87171", marginTop: 1 }}>Must be 0.5 – 500 m</div>
         ) : (
-          <div style={{ fontSize: 8, color: "#64748b", marginTop: 1 }}>0.5 – 500 m</div>
+          <div style={{ fontSize: 12, color: "#64748b", marginTop: 1 }}>0.5 – 500 m</div>
         )}
       </div>
 
@@ -1632,7 +1632,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
               <div style={LABEL}>TIDAL {manualSlackNow ? "0.0 (slack)" : manualTidalSpeedKnots} kt @ {cardinal(manualTidalDegrees)} ({manualTidalDegrees}°)</div>
               <input type="range" min={0} max={6} step={0.1} value={manualTidalSpeedKnots} disabled={manualSlackNow} onChange={(e) => setManualTidalSpeedKnots(Number(e.target.value))} style={{ ...sliderStyle, opacity: manualSlackNow ? 0.4 : 1 }} />
               <input type="range" min={0} max={359} value={manualTidalDegrees} onChange={(e) => setManualTidalDegrees(Number(e.target.value))} style={sliderStyle} />
-              <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, color: manualSlackNow ? "#c084fc" : "#cbd5e1", cursor: "pointer", fontSize: 9, letterSpacing: "0.1em" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, color: manualSlackNow ? "#c084fc" : "#cbd5e1", cursor: "pointer", fontSize: 13.5, letterSpacing: "0.1em" }}>
                 <input
                   type="checkbox"
                   checked={manualSlackNow}
@@ -1644,7 +1644,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
             </div>
             <button
               onClick={recomputeWithManual}
-              style={{ background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", color: "#00e5ff", fontFamily: "inherit", fontSize: 9, padding: "4px 10px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.15em" }}
+              style={{ background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", color: "#00e5ff", fontFamily: "inherit", fontSize: 13.5, padding: "4px 10px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.15em" }}
             >COMPUTE DRIFT</button>
           </div>
         </div>
@@ -1661,19 +1661,19 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
               value={planNameInput}
               onChange={(e) => setPlanNameInput(e.target.value)}
               placeholder="Plan name (optional for GPX)…"
-              style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.15)", color: "#e2e8f0", fontFamily: "inherit", fontSize: 8, padding: "2px 6px", borderRadius: 3 }}
+              style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.15)", color: "#e2e8f0", fontFamily: "inherit", fontSize: 12, padding: "2px 6px", borderRadius: 3 }}
             />
           </div>
           <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
             <button
               onClick={handleSavePlan}
               title="Save plan to local storage"
-              style={{ flex: 1, background: "rgba(0,229,255,0.06)", border: "1px solid rgba(0,229,255,0.2)", color: "#22d3ee", fontFamily: "inherit", fontSize: 8, padding: "3px 4px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.1em" }}
+              style={{ flex: 1, background: "rgba(0,229,255,0.06)", border: "1px solid rgba(0,229,255,0.2)", color: "#22d3ee", fontFamily: "inherit", fontSize: 12, padding: "3px 4px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.1em" }}
             >💾 SAVE PLAN</button>
             <button
               onClick={handleExportGpx}
               title="Export drift path as GPX 1.1"
-              style={{ flex: 1, background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.25)", color: "#4ade80", fontFamily: "inherit", fontSize: 8, padding: "3px 4px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.1em" }}
+              style={{ flex: 1, background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.25)", color: "#4ade80", fontFamily: "inherit", fontSize: 12, padding: "3px 4px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.1em" }}
             >↓ EXPORT GPX</button>
           </div>
         </div>
@@ -1682,9 +1682,9 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
       <div style={{ display: "flex", gap: 6 }}>
         <button
           onClick={() => void refetch()}
-          style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 9, padding: "4px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.15em" }}
+          style={{ flex: 1, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: 13.5, padding: "4px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.15em" }}
         >⟳ REFRESH</button>
-        <div style={{ fontSize: 9, color: "#1e3a5f", alignSelf: "center" }}>Open-Meteo</div>
+        <div style={{ fontSize: 13.5, color: "#1e3a5f", alignSelf: "center" }}>Open-Meteo</div>
       </div>
     </div>
   );

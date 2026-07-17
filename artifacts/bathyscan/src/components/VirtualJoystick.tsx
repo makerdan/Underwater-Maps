@@ -209,7 +209,7 @@ export const VirtualJoystick: React.FC<{ forceVisible?: boolean; showInOrbit?: b
           <div style={baseStyle} />
           <div style={nubStyle} />
         </div>
-        <div style={{ textAlign: "center", color: "rgba(148,163,184,0.5)", fontSize: 9, marginTop: 4, fontFamily: "monospace" }}>
+        <div style={{ textAlign: "center", color: "rgba(148,163,184,0.5)", fontSize: 13.5, marginTop: 4, fontFamily: "monospace" }}>
           MOVE
         </div>
       </div>
@@ -227,7 +227,7 @@ export const VirtualJoystick: React.FC<{ forceVisible?: boolean; showInOrbit?: b
           <div style={baseStyle} />
           <div style={nubStyle} />
         </div>
-        <div style={{ textAlign: "center", color: "rgba(148,163,184,0.5)", fontSize: 9, marginTop: 4, fontFamily: "monospace" }}>
+        <div style={{ textAlign: "center", color: "rgba(148,163,184,0.5)", fontSize: 13.5, marginTop: 4, fontFamily: "monospace" }}>
           LOOK
         </div>
       </div>

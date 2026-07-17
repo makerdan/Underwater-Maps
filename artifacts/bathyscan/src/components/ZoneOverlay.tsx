@@ -37,7 +37,7 @@ const PANEL: React.CSSProperties = {
   borderRadius: 6,
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   color: "#e2e8f0",
-  fontSize: 12,
+  fontSize: 18,
   backdropFilter: "blur(6px)",
   pointerEvents: "auto",
   minWidth: 200,
@@ -156,13 +156,13 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
       >
         <span
           className="uppercase tracking-widest"
-          style={{ fontSize: 11, ...CYAN, fontWeight: 700 }}
+          style={{ fontSize: 16.5, ...CYAN, fontWeight: 700 }}
         >
           ◈ Zone Analysis
         </span>
         <div className="flex items-center gap-2">
           {loading && (
-            <span className="animate-spin" style={{ fontSize: 10, color: "#00e5ff" }}>
+            <span className="animate-spin" style={{ fontSize: 15, color: "#00e5ff" }}>
               ◌
             </span>
           )}
@@ -175,7 +175,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                   : "Zones estimated from depth (AI unavailable)"
               }
               style={{
-                fontSize: 9,
+                fontSize: 13.5,
                 fontWeight: 700,
                 letterSpacing: "0.08em",
                 padding: "1px 5px",
@@ -194,7 +194,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
             </span>
           )}
           <HelpIcon articleId="zones-paint-mode" label="Zones and paint mode" />
-          <span style={{ fontSize: 24, lineHeight: 1, color: "#cbd5e1" }}>{collapsed ? "▸" : "▾"}</span>
+          <span style={{ fontSize: 36, lineHeight: 1, color: "#cbd5e1" }}>{collapsed ? "▸" : "▾"}</span>
         </div>
       </button>
       )}
@@ -204,7 +204,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
       <div className="px-3 py-2">
         {/* Loading state */}
         {loading && (
-          <div style={{ fontSize: 11, color: "#cbd5e1", marginBottom: 6 }}>
+          <div style={{ fontSize: 16.5, color: "#cbd5e1", marginBottom: 6 }}>
             <span className="animate-pulse">Analysing terrain</span>
             <span style={{ color: "#e2e8f0" }}> (3–8 s)</span>
           </div>
@@ -215,7 +215,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
           <div
             data-testid="zone-error"
             data-error-category={error.category}
-            style={{ fontSize: 11, color: "#fca5a5", marginBottom: 6, lineHeight: 1.4, userSelect: "text" }}
+            style={{ fontSize: 16.5, color: "#fca5a5", marginBottom: 6, lineHeight: 1.4, userSelect: "text" }}
           >
             {error.reason}
           </div>
@@ -248,7 +248,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                     display: "block",
                     textAlign: "center",
                     lineHeight: "10px",
-                    fontSize: 8,
+                    fontSize: 12,
                     color: "#00e5ff",
                   }}
                 >
@@ -258,7 +258,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
             </span>
             <span
               style={{
-                fontSize: 11,
+                fontSize: 16.5,
                 color: overlayEnabled ? "#00e5ff" : "#cbd5e1",
                 transition: "color 0.15s",
               }}
@@ -282,7 +282,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
           >
             <div
               style={{
-                fontSize: 10,
+                fontSize: 15,
                 color: "#fbbf24",
                 letterSpacing: "0.04em",
                 lineHeight: 1.4,
@@ -298,7 +298,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
               }}
               style={{
                 marginTop: 5,
-                fontSize: 10,
+                fontSize: 15,
                 color: "#fbbf24",
                 background: "transparent",
                 border: "1px solid rgba(251,191,36,0.5)",
@@ -336,7 +336,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                   />
                   <span
                     style={{
-                      fontSize: 11,
+                      fontSize: 16.5,
                       color: "#e2e8f0",
                       letterSpacing: "0.04em",
                     }}
@@ -372,7 +372,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
             >
               <span
                 style={{
-                  fontSize: 9,
+                  fontSize: 13.5,
                   letterSpacing: "0.12em",
                   color: "#94a3b8",
                   textTransform: "uppercase",
@@ -384,7 +384,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                 data-testid="zone-colors-reset"
                 onClick={resetZoneColors}
                 style={{
-                  fontSize: 9,
+                  fontSize: 13.5,
                   color: "#64748b",
                   background: "transparent",
                   border: "1px solid rgba(100,116,139,0.3)",
@@ -441,7 +441,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                       }}
                     >
                       {visible && (
-                        <span style={{ fontSize: 8, color: "#00e5ff", lineHeight: 1 }}>✓</span>
+                        <span style={{ fontSize: 12, color: "#00e5ff", lineHeight: 1 }}>✓</span>
                       )}
                     </button>
 
@@ -486,7 +486,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                     {/* Slot name */}
                     <span
                       style={{
-                        fontSize: 10,
+                        fontSize: 15,
                         color: visible ? "#cbd5e1" : "#475569",
                         letterSpacing: "0.04em",
                         overflow: "hidden",
@@ -534,7 +534,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                   flexShrink: 0,
                   textAlign: "center",
                   lineHeight: "10px",
-                  fontSize: 8,
+                  fontSize: 12,
                   color: "#00e5ff",
                 }}
               >
@@ -542,7 +542,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
               </span>
               <span
                 style={{
-                  fontSize: 11,
+                  fontSize: 16.5,
                   color: paintMode ? "#00e5ff" : "#cbd5e1",
                   transition: "color 0.15s",
                 }}
@@ -553,7 +553,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
 
             {paintMode && (
               <>
-                <div style={{ fontSize: 10, color: "#cbd5e1", letterSpacing: "0.05em" }}>
+                <div style={{ fontSize: 15, color: "#cbd5e1", letterSpacing: "0.05em" }}>
                   Click &amp; drag on the terrain to repaint
                 </div>
                 <div
@@ -591,12 +591,12 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                 {/* Brush size slider */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: 10, color: "#94a3b8", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                    <span style={{ fontSize: 15, color: "#94a3b8", letterSpacing: "0.08em", textTransform: "uppercase" }}>
                       Brush size
                     </span>
                     <span
                       data-testid="zone-brush-radius-value"
-                      style={{ fontSize: 10, color: "#00e5ff", fontVariantNumeric: "tabular-nums", minWidth: 18, textAlign: "right" }}
+                      style={{ fontSize: 15, color: "#00e5ff", fontVariantNumeric: "tabular-nums", minWidth: 18, textAlign: "right" }}
                     >
                       {brushRadius}
                     </span>
@@ -617,8 +617,8 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                     aria-label="Brush size"
                   />
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: 9, color: "#475569" }}>Fine</span>
-                    <span style={{ fontSize: 9, color: "#475569" }}>Broad</span>
+                    <span style={{ fontSize: 13.5, color: "#475569" }}>Fine</span>
+                    <span style={{ fontSize: 13.5, color: "#475569" }}>Broad</span>
                   </div>
                 </div>
               </>
@@ -633,7 +633,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                     disabled={!canUndo}
                     title="Ctrl+Z / Cmd+Z"
                     style={{
-                      fontSize: 11,
+                      fontSize: 16.5,
                       color: canUndo ? "#cbd5e1" : "#475569",
                       background: "transparent",
                       border: `1px solid ${canUndo ? "rgba(0,229,255,0.28)" : "rgba(100,116,139,0.2)"}`,
@@ -654,7 +654,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                     disabled={!canRedo}
                     title="Ctrl+Shift+Z / Cmd+Shift+Z"
                     style={{
-                      fontSize: 11,
+                      fontSize: 16.5,
                       color: canRedo ? "#cbd5e1" : "#475569",
                       background: "transparent",
                       border: `1px solid ${canRedo ? "rgba(0,229,255,0.28)" : "rgba(100,116,139,0.2)"}`,
@@ -675,7 +675,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                     data-testid="zone-reset-ai"
                     onClick={() => resetToAi()}
                     style={{
-                      fontSize: 11,
+                      fontSize: 16.5,
                       color: "#cbd5e1",
                       background: "transparent",
                       border: "1px solid rgba(0,229,255,0.28)",
@@ -696,7 +696,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
                 data-testid="zone-reset-ai"
                 onClick={() => resetToAi()}
                 style={{
-                  fontSize: 11,
+                  fontSize: 16.5,
                   color: "#cbd5e1",
                   background: "transparent",
                   border: "1px solid rgba(0,229,255,0.28)",
@@ -715,7 +715,7 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
 
         {/* Waiting state */}
         {!hasZoneMap && !loading && !error && (
-          <div style={{ fontSize: 11, color: "#e2e8f0", letterSpacing: "0.05em" }}>
+          <div style={{ fontSize: 16.5, color: "#e2e8f0", letterSpacing: "0.05em" }}>
             Load a dataset to classify
           </div>
         )}

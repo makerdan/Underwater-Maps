@@ -35,21 +35,21 @@ export const ControlsLegend: React.FC = () => {
     <div className="controls-legend relative pointer-events-auto select-none">
       {open && (
         <div
-          className="absolute bottom-10 left-0 w-64 rounded border text-xs font-mono z-30 p-3 space-y-1.5"
+          className="absolute bottom-10 left-0 w-64 rounded border text-[18px] font-mono z-30 p-3 space-y-1.5"
           style={{
             background: "rgba(0,10,20,0.90)",
             borderColor: "rgba(0,229,255,0.2)",
             color: "#e2e8f0",
           }}
         >
-          <div className="text-[10px] uppercase tracking-widest mb-2"
+          <div className="text-[15px] uppercase tracking-widest mb-2"
             style={{ color: "#00e5ff" }}>
             Controls
           </div>
           {BINDINGS.map(({ key, action }) => (
             <div key={key} className="flex gap-2 items-start">
               <span
-                className="shrink-0 rounded px-1 py-0.5 text-[9px] uppercase tracking-wider"
+                className="shrink-0 rounded px-1 py-0.5 text-[13.5px] uppercase tracking-wider"
                 style={{
                   background: "rgba(0,229,255,0.08)",
                   border: "1px solid rgba(0,229,255,0.2)",
@@ -59,7 +59,7 @@ export const ControlsLegend: React.FC = () => {
               >
                 {key}
               </span>
-              <span className="text-[10px] leading-tight">{action}</span>
+              <span className="text-[15px] leading-tight">{action}</span>
             </div>
           ))}
         </div>
@@ -69,7 +69,7 @@ export const ControlsLegend: React.FC = () => {
         <button
           onClick={() => setOpen((o) => !o)}
           aria-label="Toggle controls help"
-          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-mono font-bold transition-colors"
+          className="w-8 h-8 rounded-full flex items-center justify-center text-[18px] font-mono font-bold transition-colors"
           style={{
             background: open ? "rgba(0,229,255,0.15)" : "rgba(0,10,20,0.80)",
             border: "1px solid rgba(0,229,255,0.3)",

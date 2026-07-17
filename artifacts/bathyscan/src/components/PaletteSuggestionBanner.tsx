@@ -86,11 +86,11 @@ export function PaletteSuggestionBanner() {
             }}
           />
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 9, letterSpacing: "0.12em", color: "#00e5ff", fontWeight: 700 }}>
+            <div style={{ fontSize: 13.5, letterSpacing: "0.12em", color: "#00e5ff", fontWeight: 700 }}>
               SUGGESTED PALETTE
             </div>
             <div style={{
-              fontSize: 10,
+              fontSize: 15,
               color: "#e2e8f0",
               marginTop: 2,
               whiteSpace: "nowrap",
@@ -99,7 +99,7 @@ export function PaletteSuggestionBanner() {
             }}>
               {THEME_LABELS[suggestion.theme]}
             </div>
-            <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 2, letterSpacing: "0.05em" }}>
+            <div style={{ fontSize: 13.5, color: "#94a3b8", marginTop: 2, letterSpacing: "0.05em" }}>
               Best match for loaded dataset depth range
             </div>
           </div>
@@ -111,7 +111,7 @@ export function PaletteSuggestionBanner() {
             onClick={handleApply}
             style={{
               fontFamily: FONT,
-              fontSize: 9,
+              fontSize: 13.5,
               letterSpacing: "0.15em",
               padding: "6px 14px",
               background: "rgba(0,229,255,0.12)",
@@ -129,7 +129,7 @@ export function PaletteSuggestionBanner() {
             onClick={dismiss}
             style={{
               fontFamily: FONT,
-              fontSize: 9,
+              fontSize: 13.5,
               letterSpacing: "0.15em",
               padding: "6px 10px",
               background: "transparent",

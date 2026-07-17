@@ -64,7 +64,7 @@ export const HabitatLegend: React.FC<HabitatLegendProps> = ({ embedded = false }
     >
       <div
         style={{
-          fontSize: 9,
+          fontSize: 13.5,
           color: "#fb923c",
           letterSpacing: "0.12em",
           marginBottom: 3,
@@ -90,7 +90,7 @@ export const HabitatLegend: React.FC<HabitatLegendProps> = ({ embedded = false }
         style={{
           display: "flex",
           justifyContent: "space-between",
-          fontSize: 9,
+          fontSize: 13.5,
           color: "#e2e8f0",
           marginTop: 2,
           letterSpacing: "0.06em",

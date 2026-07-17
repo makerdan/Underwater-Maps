@@ -66,7 +66,7 @@ export function DevApiDownBanner() {
       role="alert"
       aria-live="assertive"
       data-testid="dev-api-down-banner"
-      className="fixed inset-x-0 top-7 z-[9998] flex flex-wrap items-center justify-center gap-3 min-h-9 py-1 px-3 bg-red-950/95 backdrop-blur-sm border-b border-red-800/60 text-red-200 text-[12px] font-mono select-none"
+      className="fixed inset-x-0 top-7 z-[9998] flex flex-wrap items-center justify-center gap-3 min-h-9 py-1 px-3 bg-red-950/95 backdrop-blur-sm border-b border-red-800/60 text-red-200 text-[18px] font-mono select-none"
     >
       <span className="font-semibold text-red-300">DEV</span>
       <span>
@@ -81,7 +81,7 @@ export function DevApiDownBanner() {
         onClick={handleRestart}
         disabled={restarting}
         data-testid="button-restart-api-server"
-        className="px-2 py-0.5 bg-red-700 hover:bg-red-600 disabled:opacity-60 disabled:cursor-not-allowed rounded text-[11px] text-white transition-colors"
+        className="px-2 py-0.5 bg-red-700 hover:bg-red-600 disabled:opacity-60 disabled:cursor-not-allowed rounded text-[16.5px] text-white transition-colors"
       >
         {restarting ? "Restarting…" : "Restart API Server"}
       </button>

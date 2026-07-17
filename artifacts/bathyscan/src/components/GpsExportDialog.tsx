@@ -120,7 +120,7 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
         justifyContent: "center",
         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
         color: "#cbd5e1",
-        fontSize: 11,
+        fontSize: 16.5,
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -153,7 +153,7 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
               color: "#00e5ff",
               letterSpacing: "0.18em",
               fontWeight: 700,
-              fontSize: 11,
+              fontSize: 16.5,
             }}
           >
             ▲ EXPORT GPS
@@ -165,7 +165,7 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
               background: "none",
               border: "none",
               color: "#94a3b8",
-              fontSize: 16,
+              fontSize: 24,
               cursor: "pointer",
             }}
           >
@@ -192,13 +192,13 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
               display: "grid",
               gridTemplateColumns: "1fr 1fr",
               gap: 6,
-              fontSize: 10,
+              fontSize: 15,
             }}
           >
             <div>
               <div style={{ color: "#cbd5e1" }}>Markers</div>
               <div
-                style={{ color: "#cbd5e1", fontSize: 13 }}
+                style={{ color: "#cbd5e1", fontSize: 19.5 }}
                 data-testid="gps-export-marker-count"
               >
                 {markerCount}
@@ -207,7 +207,7 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
             <div>
               <div style={{ color: "#cbd5e1" }}>Trolling routes</div>
               <div
-                style={{ color: "#cbd5e1", fontSize: 13 }}
+                style={{ color: "#cbd5e1", fontSize: 19.5 }}
                 data-testid="gps-export-route-count"
               >
                 {exportData.routes.length}
@@ -218,7 +218,7 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
           <div style={{ marginBottom: 12 }}>
             <div
               style={{
-                fontSize: 9,
+                fontSize: 13.5,
                 color: "#cbd5e1",
                 marginBottom: 4,
                 letterSpacing: "0.12em",
@@ -238,7 +238,7 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
                 borderRadius: 3,
                 color: "#cbd5e1",
                 fontFamily: "inherit",
-                fontSize: 11,
+                fontSize: 16.5,
               }}
             >
               <option value="gpx">GPX (chartplotters, Garmin)</option>
@@ -255,7 +255,7 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
                 borderRadius: 4,
                 color: "#fbbf24",
                 marginBottom: 12,
-                fontSize: 10,
+                fontSize: 15,
               }}
             >
               No markers or trolling routes to export yet.
@@ -304,7 +304,7 @@ function btnStyle(variant: "primary" | "ghost"): React.CSSProperties {
       color: "#00e5ff",
       cursor: "pointer",
       fontFamily: "inherit",
-      fontSize: 11,
+      fontSize: 16.5,
       letterSpacing: "0.1em",
     };
   }
@@ -316,7 +316,7 @@ function btnStyle(variant: "primary" | "ghost"): React.CSSProperties {
     color: "#e2e8f0",
     cursor: "pointer",
     fontFamily: "inherit",
-    fontSize: 11,
+    fontSize: 16.5,
     letterSpacing: "0.1em",
   };
 }

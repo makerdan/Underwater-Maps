@@ -41,7 +41,7 @@ export const MeasurementBanner: React.FC = () => {
         border: "1px solid rgba(0,229,255,0.35)",
         borderRadius: 4,
         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-        fontSize: 11,
+        fontSize: 16.5,
         color: "#cbd5e1",
         letterSpacing: "0.1em",
         pointerEvents: "none",

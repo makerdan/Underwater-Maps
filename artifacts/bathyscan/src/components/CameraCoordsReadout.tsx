@@ -18,7 +18,7 @@ const PANEL: React.CSSProperties = {
   borderRadius: 6,
   backdropFilter: "blur(6px)",
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-  fontSize: 12,
+  fontSize: 18,
   color: "#e2e8f0",
   letterSpacing: "0.08em",
   minWidth: 220,
@@ -71,14 +71,14 @@ export const CameraCoordsReadout: React.FC = () => {
             textAlign: "left",
             color: "#cbd5e1",
             fontFamily: "inherit",
-            fontSize: 10,
+            fontSize: 15,
             letterSpacing: "0.2em",
             marginBottom: 4,
             fontWeight: 600,
           }}
         >
           <span>YOUR CURRENT COORDINATES</span>
-          <span style={{ color: "#cbd5e1", fontSize: 24, lineHeight: 1 }}>{collapsed ? "▸" : "▾"}</span>
+          <span style={{ color: "#cbd5e1", fontSize: 36, lineHeight: 1 }}>{collapsed ? "▸" : "▾"}</span>
         </button>
       </ViewscreenTooltip>
       {!collapsed && (

@@ -161,7 +161,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
 
   const MONO: React.CSSProperties = {
     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-    fontSize: 11,
+    fontSize: 16.5,
     color: "#cbd5e1",
   };
 
@@ -218,7 +218,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
               color: "#00e5ff",
               letterSpacing: "0.18em",
               fontWeight: 700,
-              fontSize: 11,
+              fontSize: 16.5,
             }}
           >
             ↓ DOWNLOAD BATHYMETRY
@@ -230,7 +230,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
               background: "none",
               border: "none",
               color: "#94a3b8",
-              fontSize: 16,
+              fontSize: 24,
               cursor: "pointer",
               padding: 0,
             }}
@@ -250,7 +250,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
                 border: "1px solid rgba(251,191,36,0.3)",
                 borderRadius: 4,
                 color: "#fbbf24",
-                fontSize: 10,
+                fontSize: 15,
                 marginBottom: 12,
                 lineHeight: 1.5,
               }}
@@ -271,12 +271,12 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
               background: "rgba(0,229,255,0.04)",
               border: "1px solid rgba(0,229,255,0.12)",
               borderRadius: 4,
-              fontSize: 10,
+              fontSize: 15,
             }}
           >
             <div>
               <div style={{ color: "#cbd5e1", marginBottom: 2 }}>AREA</div>
-              <div style={{ color: "#e2e8f0", fontSize: 13 }}>
+              <div style={{ color: "#e2e8f0", fontSize: 19.5 }}>
                 {areaKm2 < 1
                   ? `${(areaKm2 * 1000).toFixed(0)} km²`
                   : `${areaKm2.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",")} km²`}
@@ -296,7 +296,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
               {infoLoading ? (
                 <div style={{ color: "#94a3b8" }}>probing…</div>
               ) : infoError ? (
-                <div style={{ color: "#f87171", fontSize: 10 }}>{infoError}</div>
+                <div style={{ color: "#f87171", fontSize: 15 }}>{infoError}</div>
               ) : info ? (
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <span
@@ -304,7 +304,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
                       display: "inline-block",
                       padding: "1px 6px",
                       borderRadius: 3,
-                      fontSize: 9,
+                      fontSize: 13.5,
                       letterSpacing: "0.1em",
                       background:
                         info.dataSource === "ncei"
@@ -350,7 +350,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
           <div style={{ marginBottom: 14 }}>
             <div
               style={{
-                fontSize: 9,
+                fontSize: 13.5,
                 color: "#cbd5e1",
                 letterSpacing: "0.12em",
                 marginBottom: 6,
@@ -378,7 +378,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
                     borderRadius: 3,
                     color: resolution === r ? "#00e5ff" : "#94a3b8",
                     fontFamily: "inherit",
-                    fontSize: 9,
+                    fontSize: 13.5,
                     letterSpacing: "0.05em",
                     cursor: "pointer",
                     whiteSpace: "nowrap",
@@ -398,7 +398,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
                 background: "rgba(0,0,0,0.3)",
                 border: "1px solid rgba(255,255,255,0.06)",
                 borderRadius: 3,
-                fontSize: 9,
+                fontSize: 13.5,
                 color: "#94a3b8",
                 marginBottom: 12,
                 letterSpacing: "0.04em",
@@ -457,7 +457,7 @@ function btnStyle(variant: "primary" | "ghost"): React.CSSProperties {
       color: "#00e5ff",
       cursor: "pointer",
       fontFamily: "'JetBrains Mono', monospace",
-      fontSize: 11,
+      fontSize: 16.5,
       letterSpacing: "0.1em",
     };
   }
@@ -469,7 +469,7 @@ function btnStyle(variant: "primary" | "ghost"): React.CSSProperties {
     color: "#e2e8f0",
     cursor: "pointer",
     fontFamily: "'JetBrains Mono', monospace",
-    fontSize: 11,
+    fontSize: 16.5,
     letterSpacing: "0.1em",
   };
 }

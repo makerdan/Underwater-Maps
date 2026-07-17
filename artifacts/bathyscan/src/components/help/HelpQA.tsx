@@ -86,15 +86,15 @@ export const HelpQA: React.FC = () => {
           background: "rgba(251,191,36,0.07)",
           border: "1px solid rgba(251,191,36,0.3)",
           borderRadius: 4,
-          fontSize: 11,
+          fontSize: 16.5,
           color: "#fbbf24",
           lineHeight: 1.5,
         }}>
-          <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 10, letterSpacing: "0.12em" }}>
+          <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 15, letterSpacing: "0.12em" }}>
             ⚡ OFFLINE MODE
           </div>
           The AI assistant requires a network connection. Reconnect to the internet to ask questions.
-          <div style={{ marginTop: 6, fontSize: 10, color: "#94a3b8" }}>
+          <div style={{ marginTop: 6, fontSize: 15, color: "#94a3b8" }}>
             Offline help articles and walkthroughs in the Articles tab are still available.
           </div>
         </div>

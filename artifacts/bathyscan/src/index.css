@@ -146,13 +146,13 @@ body.bs-daylight {
 
   /* ── Typography — step up one weight level for outdoor legibility ── */
   font-weight: 500;
-  font-size: 17px;
+  font-size: 25.5px;
 }
 
 /* Bump an extra pixel on touch / tablet devices */
 @media (pointer: coarse) {
   body.bs-daylight {
-    font-size: 18px;
+    font-size: 27px;
   }
 
   /* Expand touch hit targets to 52px minimum */
@@ -314,11 +314,11 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
     padding: 6px 10px;
   }
   .sidebar-section-title {
-    font-size: 10px !important;
+    font-size: 15px !important;
     letter-spacing: 0.18em !important;
   }
   .sidebar-section-chevron {
-    font-size: 18px !important;
+    font-size: 27px !important;
   }
   .sidebar-section-body {
     padding: 2px 0;
@@ -367,7 +367,7 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
   /* HUD elements: stack vertically, larger font */
   .hud-top-left,
   .hud-top-right {
-    font-size: 13px !important;
+    font-size: 19.5px !important;
   }
 
   /* Overview map: fill screen, allow scrolling header */

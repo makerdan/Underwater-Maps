@@ -51,7 +51,7 @@ const PANEL: React.CSSProperties = {
   borderRadius: 6,
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   color: "#e2e8f0",
-  fontSize: 12,
+  fontSize: 18,
   backdropFilter: "blur(6px)",
   pointerEvents: "auto",
   minWidth: 200,
@@ -95,7 +95,7 @@ const StarRating: React.FC<{ stars: 1 | 2 | 3 }> = ({ stars }) => (
     {[1, 2, 3].map((n) => (
       <span
         key={n}
-        style={{ color: n <= stars ? "#fb923c" : "rgba(251,146,60,0.22)", fontSize: 11 }}
+        style={{ color: n <= stars ? "#fb923c" : "rgba(251,146,60,0.22)", fontSize: 16.5 }}
       >
         ★
       </span>
@@ -134,14 +134,14 @@ const FishingWindowCard: React.FC<FishingWindowCardProps> = ({ window: w, onSnap
       }}
     >
       <div className="flex items-center justify-between" style={{ marginBottom: 2 }}>
-        <span style={{ color: "#fb923c", fontSize: 10, fontWeight: 600 }}>
+        <span style={{ color: "#fb923c", fontSize: 15, fontWeight: 600 }}>
           {formatWindowRange(w.start, w.end)}
         </span>
         <span className="flex items-center gap-1">
           {isActive && (
             <span
               style={{
-                fontSize: 9,
+                fontSize: 13.5,
                 fontWeight: 700,
                 color: "#fb923c",
                 letterSpacing: "0.06em",
@@ -154,7 +154,7 @@ const FishingWindowCard: React.FC<FishingWindowCardProps> = ({ window: w, onSnap
           <StarRating stars={w.stars} />
         </span>
       </div>
-      <div style={{ color: "#cbd5e1", fontSize: 9, letterSpacing: "0.06em" }}>
+      <div style={{ color: "#cbd5e1", fontSize: 13.5, letterSpacing: "0.06em" }}>
         {w.phaseLabel}
       </div>
     </button>
@@ -190,13 +190,13 @@ const HotspotCard: React.FC<HotspotCardProps> = ({
   >
     <div className="flex items-start justify-between gap-1">
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ color: "#f1f5f9", fontSize: 11, marginBottom: 1 }}>
-          <span style={{ color: "#cbd5e1", fontSize: 10 }}>#{index + 1} </span>
+        <div style={{ color: "#f1f5f9", fontSize: 16.5, marginBottom: 1 }}>
+          <span style={{ color: "#cbd5e1", fontSize: 15 }}>#{index + 1} </span>
           <span style={{ color: "#fb923c", fontWeight: 600 }}>{Math.round(hotspot.score * 100)}%</span>
-          <span style={{ color: "#e2e8f0", fontSize: 10 }}> match</span>
+          <span style={{ color: "#e2e8f0", fontSize: 15 }}> match</span>
         </div>
         <ScoreBar score={hotspot.score} />
-        <div style={{ fontSize: 10, color: "#cbd5e1", marginTop: 3 }}>
+        <div style={{ fontSize: 15, color: "#cbd5e1", marginTop: 3 }}>
           <span>{formatDepth(hotspot.depth, { units })}</span>
           <span style={{ color: "#e2e8f0", margin: "0 4px" }}>·</span>
           <span style={{ color: "#cbd5e1" }}>
@@ -211,7 +211,7 @@ const HotspotCard: React.FC<HotspotCardProps> = ({
           onClick={() => onFly(hotspot)}
           style={{
             flex: 1,
-            fontSize: 10,
+            fontSize: 15,
             letterSpacing: "0.1em",
             padding: "4px 0",
             border: "1px solid rgba(0,229,255,0.35)",
@@ -231,7 +231,7 @@ const HotspotCard: React.FC<HotspotCardProps> = ({
           disabled={dropping}
           style={{
             flex: 1,
-            fontSize: 10,
+            fontSize: 15,
             letterSpacing: "0.1em",
             padding: "4px 0",
             border: "1px solid rgba(251,146,60,0.4)",
@@ -431,13 +431,13 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
       >
         <span
           className="uppercase tracking-widest"
-          style={{ fontSize: 11, ...AMBER, fontWeight: 700 }}
+          style={{ fontSize: 16.5, ...AMBER, fontWeight: 700 }}
         >
           ◈ Habitat Layer
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <HelpIcon articleId="ai-assistant" label="Habitat layer" />
-          <span style={{ fontSize: 22, lineHeight: 1, color: "#cbd5e1" }}>
+          <span style={{ fontSize: 33, lineHeight: 1, color: "#cbd5e1" }}>
             {collapsed ? "▶" : "▼"}
           </span>
         </span>
@@ -449,7 +449,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
         <div className="px-3 py-2">
           {/* Species selector */}
           <div style={{ marginBottom: 8 }}>
-            <div style={{ fontSize: 10, color: "#cbd5e1", letterSpacing: "0.08em", marginBottom: 4 }}>
+            <div style={{ fontSize: 15, color: "#cbd5e1", letterSpacing: "0.08em", marginBottom: 4 }}>
               SPECIES ({waterType === "freshwater" ? "freshwater" : "marine"})
             </div>
             <select
@@ -463,7 +463,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
                 borderRadius: 3,
                 color: showOverlay ? "#fb923c" : "#cbd5e1",
                 fontFamily: "inherit",
-                fontSize: 11,
+                fontSize: 16.5,
                 padding: "5px 6px",
                 cursor: "pointer",
                 outline: "none",
@@ -510,7 +510,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    fontSize: 10,
+                    fontSize: 15,
                     color: "#cbd5e1",
                     letterSpacing: "0.08em",
                     marginBottom: 4,
@@ -542,7 +542,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
               <div style={{ marginBottom: 8 }}>
                 <div
                   style={{
-                    fontSize: 10,
+                    fontSize: 15,
                     color: "#cbd5e1",
                     letterSpacing: "0.08em",
                     marginBottom: 4,
@@ -604,7 +604,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
 
           {/* Status */}
           {showOverlay && (
-            <div style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 6, letterSpacing: "0.04em" }}>
+            <div style={{ fontSize: 15, color: "#cbd5e1", marginBottom: 6, letterSpacing: "0.04em" }}>
               Overlay active on terrain
             </div>
           )}
@@ -619,7 +619,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
             >
               <div
                 style={{
-                  fontSize: 10,
+                  fontSize: 15,
                   color: "#cbd5e1",
                   letterSpacing: "0.08em",
                   marginBottom: 3,
@@ -640,7 +640,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
-                  fontSize: 9,
+                  fontSize: 13.5,
                   color: "#e2e8f0",
                   marginTop: 2,
                   letterSpacing: "0.06em",
@@ -656,12 +656,12 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
           {showOverlay && (
             <div className="hotspot-list">
               {hotspots.length === 0 ? (
-                <div style={{ fontSize: 11, color: "#e2e8f0" }}>
+                <div style={{ fontSize: 16.5, color: "#e2e8f0" }}>
                   No hotspots above 75% threshold
                 </div>
               ) : (
                 <>
-                  <div style={{ fontSize: 10, color: "#cbd5e1", letterSpacing: "0.08em", marginBottom: 4 }}>
+                  <div style={{ fontSize: 15, color: "#cbd5e1", letterSpacing: "0.08em", marginBottom: 4 }}>
                     SUGGESTED HOTSPOTS ({hotspots.length})
                   </div>
                   {hotspots.map((h, i) => (
@@ -699,7 +699,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
               `}</style>
               <div
                 style={{
-                  fontSize: 10,
+                  fontSize: 15,
                   color: "#fb923c",
                   letterSpacing: "0.08em",
                   fontWeight: 700,
@@ -733,7 +733,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
                         cursor: "pointer",
                         fontFamily: "inherit",
                         color: "#fb923c",
-                        fontSize: 10,
+                        fontSize: 15,
                         fontWeight: 700,
                         letterSpacing: "0.08em",
                       }}
@@ -741,7 +741,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
                       <span style={{ textTransform: "uppercase" }}>
                         {day.dayLabel}
                       </span>
-                      <span style={{ fontSize: 9, opacity: 0.7 }}>
+                      <span style={{ fontSize: 13.5, opacity: 0.7 }}>
                         {isCollapsed ? "▶" : "▼"} {day.windows.length}
                       </span>
                     </button>
@@ -758,7 +758,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
               })}
               <div
                 style={{
-                  fontSize: 9,
+                  fontSize: 13.5,
                   color: "#94a3b8",
                   letterSpacing: "0.05em",
                   marginTop: 2,
@@ -771,7 +771,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
           })()}
 
           {!activeSpecies && (
-            <div style={{ fontSize: 11, color: "#64748b", letterSpacing: "0.05em" }}>
+            <div style={{ fontSize: 16.5, color: "#64748b", letterSpacing: "0.05em" }}>
               Select a species to see habitat scores.
             </div>
           )}

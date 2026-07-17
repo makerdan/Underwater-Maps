@@ -14,7 +14,7 @@ export const ShoreZoneCredit: React.FC<Props> = ({ style, className }) => {
       data-testid="shorezone-credit"
       className={className}
       style={{
-        fontSize: 9,
+        fontSize: 13.5,
         letterSpacing: "0.04em",
         color: "#e2e8f0",
         pointerEvents: "auto",

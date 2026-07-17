@@ -30,7 +30,7 @@ const cardStyle: React.CSSProperties = {
   borderRadius: 6,
   backdropFilter: "blur(8px)",
   fontFamily: FONT,
-  fontSize: 11,
+  fontSize: 16.5,
   color: "#e2e8f0",
   letterSpacing: "0.07em",
   minWidth: 210,
@@ -48,7 +48,7 @@ const rowStyle: React.CSSProperties = {
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 9,
+  fontSize: 13.5,
   letterSpacing: "0.18em",
   color: "#64748b",
   textTransform: "uppercase",
@@ -176,7 +176,7 @@ export const WhatsHereCard: React.FC<WhatsHereCardProps> = ({ data }) => {
       >
         <span
           style={{
-            fontSize: 10,
+            fontSize: 15,
             letterSpacing: "0.2em",
             color: "#00e5ff",
             textShadow: "0 0 6px rgba(0,229,255,0.45)",
@@ -201,7 +201,7 @@ export const WhatsHereCard: React.FC<WhatsHereCardProps> = ({ data }) => {
               borderRadius: 3,
               color: whatsHerePinned ? "#00e5ff" : "#64748b",
               fontFamily: FONT,
-              fontSize: 11,
+              fontSize: 16.5,
               padding: "1px 5px",
               cursor: "pointer",
               lineHeight: 1,
@@ -219,7 +219,7 @@ export const WhatsHereCard: React.FC<WhatsHereCardProps> = ({ data }) => {
               borderRadius: 3,
               color: "#64748b",
               fontFamily: FONT,
-              fontSize: 11,
+              fontSize: 16.5,
               padding: "1px 6px",
               cursor: "pointer",
               lineHeight: 1,
@@ -285,7 +285,7 @@ export const WhatsHereCard: React.FC<WhatsHereCardProps> = ({ data }) => {
               <span
                 style={{
                   marginLeft: 4,
-                  fontSize: 8,
+                  fontSize: 12,
                   color: tempLive ? "#22d3ee" : "#f59e0b",
                   background: tempLive ? "rgba(0,229,255,0.08)" : "rgba(245,158,11,0.10)",
                   border: `1px solid ${tempLive ? "rgba(0,229,255,0.25)" : "rgba(245,158,11,0.4)"}`,
@@ -305,7 +305,7 @@ export const WhatsHereCard: React.FC<WhatsHereCardProps> = ({ data }) => {
           <div
             style={{
               marginTop: 4,
-              fontSize: 10,
+              fontSize: 15,
               color: "#64748b",
               lineHeight: 1.5,
               letterSpacing: "0.04em",
@@ -320,7 +320,7 @@ export const WhatsHereCard: React.FC<WhatsHereCardProps> = ({ data }) => {
           <div
             style={{
               marginTop: 6,
-              fontSize: 9,
+              fontSize: 13.5,
               color: "#334155",
               letterSpacing: "0.06em",
             }}
@@ -332,7 +332,7 @@ export const WhatsHereCard: React.FC<WhatsHereCardProps> = ({ data }) => {
           <div
             style={{
               marginTop: 6,
-              fontSize: 9,
+              fontSize: 13.5,
               color: "#0ea5e9",
               letterSpacing: "0.06em",
             }}

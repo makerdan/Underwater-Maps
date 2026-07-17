@@ -136,45 +136,45 @@ export const FileUpload = () => {
           {postDatasetsUpload.isPending ? (
             <div className="flex flex-col items-center gap-2">
               <Spinner className="w-5 h-5 text-primary" />
-              <p className="text-xs text-muted-foreground">Parsing grid...</p>
+              <p className="text-[18px] text-muted-foreground">Parsing grid...</p>
               {nearLimitWarning && (
-                <p className="text-[10px] text-amber-500 select-text">
+                <p className="text-[15px] text-amber-500 select-text">
                   ⚠ {nearLimitWarning}
                 </p>
               )}
               {gzWarning && (
-                <p className="text-[10px] text-amber-400 select-text">
+                <p className="text-[15px] text-amber-400 select-text">
                   ⚠ {gzWarning}
                 </p>
               )}
             </div>
           ) : !isSignedIn ? (
             <>
-              <p className="text-xs font-semibold mb-1">UPLOAD DATASET(S)</p>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-[18px] font-semibold mb-1">UPLOAD DATASET(S)</p>
+              <p className="text-[15px] text-muted-foreground">
                 Sign in to upload bathymetric files to your account
               </p>
             </>
           ) : (
             <>
-              <p className="text-xs font-semibold mb-1">UPLOAD DATASET(S)</p>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-[18px] font-semibold mb-1">UPLOAD DATASET(S)</p>
+              <p className="text-[15px] text-muted-foreground">
                 Drop file here — auto-saved to your account
               </p>
-              <p style={{ fontSize: 9, color: "#94a3b8", marginTop: 4 }}>
+              <p style={{ fontSize: 13.5, color: "#94a3b8", marginTop: 4 }}>
                 {SUPPORTED_EXTENSIONS}
               </p>
               {nearLimitWarning && (
-                <p className="text-[10px] text-amber-500 mt-2 select-text">
+                <p className="text-[15px] text-amber-500 mt-2 select-text">
                   ⚠ {nearLimitWarning}
                 </p>
               )}
               {gzWarning && (
-                <p className="text-[10px] text-amber-400 mt-2 select-text">
+                <p className="text-[15px] text-amber-400 mt-2 select-text">
                   ⚠ {gzWarning}
                 </p>
               )}
-              {error && <p className="text-[10px] text-destructive mt-2 select-text">{error}</p>}
+              {error && <p className="text-[15px] text-destructive mt-2 select-text">{error}</p>}
             </>
           )}
         </div>

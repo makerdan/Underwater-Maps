@@ -66,7 +66,7 @@ export const ViewscreenTooltip: React.FC<ViewscreenTooltipProps> = ({
   return (
     <Tooltip delayDuration={delayDuration}>
       <TooltipTrigger asChild={asChild}>{children}</TooltipTrigger>
-      <TooltipContent side={side} align={align} className="font-mono text-[11px]">
+      <TooltipContent side={side} align={align} className="font-mono text-[16.5px]">
         {label}
       </TooltipContent>
     </Tooltip>

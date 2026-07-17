@@ -14,7 +14,7 @@ export const DatasetPicker = ({ datasets, isLoading }: { datasets: DatasetMeta[]
   return (
     <Card className="bg-background/80 backdrop-blur-md border-border text-foreground pointer-events-auto">
       <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-bold uppercase tracking-wider flex justify-between items-center">
+        <CardTitle className="text-[21px] font-bold uppercase tracking-wider flex justify-between items-center">
           <span>Datasets</span>
           {isLoading && <Spinner className="w-4 h-4 text-primary" />}
         </CardTitle>
@@ -40,12 +40,12 @@ export const DatasetPicker = ({ datasets, isLoading }: { datasets: DatasetMeta[]
                 }`}
               >
                 <div className="flex justify-between items-start mb-1">
-                  <span className="font-semibold text-sm truncate pr-2">{ds.name}</span>
-                  <Badge variant={ds.waterType === "saltwater" ? "default" : "secondary"} className="text-[10px] uppercase">
+                  <span className="font-semibold text-[21px] truncate pr-2">{ds.name}</span>
+                  <Badge variant={ds.waterType === "saltwater" ? "default" : "secondary"} className="text-[15px] uppercase">
                     {ds.waterType}
                   </Badge>
                 </div>
-                <div className="text-xs text-muted-foreground flex justify-between">
+                <div className="text-[18px] text-muted-foreground flex justify-between">
                   <span>{ds.minDepth}m - {ds.maxDepth}m</span>
                 </div>
               </button>

@@ -72,7 +72,7 @@ const STEPS: Step[] = [
 function ArrowIndicator({ region }: { region: Step["region"] }) {
   const arrowStyle: React.CSSProperties = {
     position: "absolute",
-    fontSize: 22,
+    fontSize: 33,
     color: "#00e5ff",
     textShadow: "0 0 10px rgba(0,229,255,0.8)",
     animation: "bs-onboard-pulse 1.4s ease-in-out infinite",
@@ -242,7 +242,7 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
         >
           <span
             style={{
-              fontSize: 9,
+              fontSize: 13.5,
               letterSpacing: "0.28em",
               color: "#00e5ff",
               fontWeight: 700,
@@ -259,7 +259,7 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
               background: "none",
               border: "none",
               color: "#64748b",
-              fontSize: 10,
+              fontSize: 15,
               letterSpacing: "0.15em",
               cursor: "pointer",
               fontFamily: FONT,
@@ -296,7 +296,7 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
           <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 14 }}>
             <span
               style={{
-                fontSize: 28,
+                fontSize: 42,
                 lineHeight: 1,
                 color: "#00e5ff",
                 textShadow: "0 0 12px rgba(0,229,255,0.5)",
@@ -309,7 +309,7 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
             <div>
               <div
                 style={{
-                  fontSize: 13,
+                  fontSize: 19.5,
                   fontWeight: 700,
                   letterSpacing: "0.1em",
                   color: "#ffffff",
@@ -321,7 +321,7 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
               </div>
               <div
                 style={{
-                  fontSize: 11,
+                  fontSize: 16.5,
                   lineHeight: 1.65,
                   color: "#cbd5e1",
                   letterSpacing: "0.02em",
@@ -375,7 +375,7 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
                 border: "1px solid rgba(0,229,255,0.15)",
                 borderRadius: 4,
                 color: step === 0 ? "#334155" : "#94a3b8",
-                fontSize: 9,
+                fontSize: 13.5,
                 letterSpacing: "0.2em",
                 padding: "9px 0",
                 cursor: step === 0 ? "default" : "pointer",
@@ -395,7 +395,7 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
                 border: "1px solid rgba(0,229,255,0.35)",
                 borderRadius: 4,
                 color: "#00e5ff",
-                fontSize: 9,
+                fontSize: 13.5,
                 letterSpacing: "0.2em",
                 padding: "9px 0",
                 cursor: "pointer",

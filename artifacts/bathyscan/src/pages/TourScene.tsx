@@ -645,10 +645,10 @@ const SceneContents: React.FC<SceneContentsProps> = ({
 // ---------------------------------------------------------------------------
 const LoadingOverlay: React.FC = () => (
   <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#020818]">
-    <div className="font-mono text-cyan-400 text-lg tracking-[0.3em] uppercase animate-pulse">
+    <div className="font-mono text-cyan-400 text-[27px] tracking-[0.3em] uppercase animate-pulse">
       ▼ Descending...
     </div>
-    <div className="font-mono text-cyan-900 text-xs mt-3 tracking-widest uppercase">
+    <div className="font-mono text-cyan-900 text-[18px] mt-3 tracking-widest uppercase">
       Retrieving bathymetric data
     </div>
   </div>
@@ -664,15 +664,15 @@ interface ErrorOverlayProps {
 
 const ErrorOverlay: React.FC<ErrorOverlayProps> = ({ message, onRetry }) => (
   <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#020818]">
-    <div className="font-mono text-red-400 text-lg tracking-[0.3em] uppercase mb-2">
+    <div className="font-mono text-red-400 text-[27px] tracking-[0.3em] uppercase mb-2">
       ⚠ Signal Lost
     </div>
-    <div className="font-mono text-red-700 text-xs tracking-wider mb-6 max-w-xs text-center select-text">
+    <div className="font-mono text-red-700 text-[18px] tracking-wider mb-6 max-w-xs text-center select-text">
       {message}
     </div>
     <button
       onClick={onRetry}
-      className="border border-red-800 text-red-400 font-mono text-xs px-5 py-2 tracking-widest uppercase hover:bg-red-900/20 transition-colors"
+      className="border border-red-800 text-red-400 font-mono text-[18px] px-5 py-2 tracking-widest uppercase hover:bg-red-900/20 transition-colors"
     >
       Retry Connection
     </button>

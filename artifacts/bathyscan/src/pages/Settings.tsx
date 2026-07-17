@@ -171,7 +171,7 @@ const S = {
       ? "2px solid var(--bs-s-accent, #00e5ff)"
       : "2px solid transparent",
     padding: "8px 16px",
-    fontSize: 9,
+    fontSize: 13.5,
     letterSpacing: "0.2em",
     color: active
       ? "var(--bs-s-accent, #00e5ff)"
@@ -182,7 +182,7 @@ const S = {
   }),
 
   sectionTitle: {
-    fontSize: 9,
+    fontSize: 13.5,
     letterSpacing: "0.25em",
     color: "var(--bs-s-accent, #00e5ff)",
     fontWeight: 700,
@@ -202,7 +202,7 @@ const S = {
   cardHeader: {
     padding: "10px 16px",
     borderBottom: "1px solid var(--bs-s-card-border, rgba(0,229,255,0.08))",
-    fontSize: 8,
+    fontSize: 12,
     letterSpacing: "0.2em",
     color: "var(--bs-s-card-header-fg, #cbd5e1)",
     fontWeight: 700,
@@ -214,7 +214,7 @@ const S = {
     justifyContent: "space-between",
     padding: "10px 16px",
     borderBottom: "1px solid var(--bs-s-row-border, rgba(0,229,255,0.05))",
-    fontSize: 11,
+    fontSize: 16.5,
     gap: 12,
   } as React.CSSProperties,
 
@@ -224,7 +224,7 @@ const S = {
   } as React.CSSProperties,
 
   sublabel: {
-    fontSize: 9,
+    fontSize: 13.5,
     color: "var(--bs-s-sublabel-fg, #94a3b8)",
     marginTop: 2,
     letterSpacing: "0.05em",
@@ -235,7 +235,7 @@ const S = {
     border: "1px solid var(--bs-s-card-border, rgba(0,229,255,0.2))",
     borderRadius: 4,
     color: "var(--bs-s-page-fg, #e2e8f0)",
-    fontSize: 10,
+    fontSize: 15,
     padding: "4px 8px",
     fontFamily: FONT,
     cursor: "pointer",
@@ -290,7 +290,7 @@ const S = {
   dangerHeader: {
     padding: "10px 16px",
     borderBottom: "1px solid rgba(239,68,68,0.12)",
-    fontSize: 8,
+    fontSize: 12,
     letterSpacing: "0.2em",
     color: "var(--bs-s-danger-fg, #f87171)",
     fontWeight: 700,
@@ -301,7 +301,7 @@ const S = {
     border: "1px solid rgba(239,68,68,0.3)",
     borderRadius: 4,
     color: "var(--bs-s-danger-fg, #f87171)",
-    fontSize: 9,
+    fontSize: 13.5,
     letterSpacing: "0.15em",
     padding: "6px 14px",
     cursor: "pointer",
@@ -364,7 +364,7 @@ function SliderRow({
           onChange={(e) => onChange(Number(e.target.value))}
           style={S.slider}
         />
-        <span style={{ color: "#00e5ff", fontSize: 10, minWidth: 48, textAlign: "right" }}>
+        <span style={{ color: "#00e5ff", fontSize: 15, minWidth: 48, textAlign: "right" }}>
           {fmt(value)}
         </span>
       </div>
@@ -483,7 +483,7 @@ function ColormapSelectRow({
           }}
         >
           <span style={{ color: "#e2e8f0" }}>{current.label}</span>
-          <span style={{ color: "#cbd5e1", fontSize: 16, lineHeight: 1 }}>{open ? "▲" : "▼"}</span>
+          <span style={{ color: "#cbd5e1", fontSize: 24, lineHeight: 1 }}>{open ? "▲" : "▼"}</span>
         </button>
         {open && (
           <ul
@@ -523,7 +523,7 @@ function ColormapSelectRow({
                     borderRadius: 3,
                     background: selected ? "rgba(0,229,255,0.10)" : "transparent",
                     color: selected ? "#00e5ff" : "#e2e8f0",
-                    fontSize: 11,
+                    fontSize: 16.5,
                     fontFamily: FONT,
                   }}
                   onMouseEnter={(e) => {
@@ -535,7 +535,7 @@ function ColormapSelectRow({
                 >
                   <ColormapSwatch theme={o.value} width={40} height={12} title={`${o.label} preview`} />
                   <span style={{ flex: 1 }}>{o.label}</span>
-                  {selected && <span style={{ fontSize: 9, color: "#00e5ff" }}>●</span>}
+                  {selected && <span style={{ fontSize: 13.5, color: "#00e5ff" }}>●</span>}
                 </li>
               );
             })}
@@ -583,7 +583,7 @@ function ColorRow({
           }}
           aria-label={label}
         />
-        <span style={{ color: "#cbd5e1", fontSize: 10, minWidth: 64, textAlign: "right" }}>
+        <span style={{ color: "#cbd5e1", fontSize: 15, minWidth: 64, textAlign: "right" }}>
           {value.toUpperCase()}
         </span>
       </div>
@@ -678,7 +678,7 @@ function SectionSaveButton({
       {status === "error" && errMsg && (
         <span
           data-testid={`save-section-${sectionKey}-error`}
-          style={{ fontSize: 9, color: "#f87171", letterSpacing: "0.1em", userSelect: "text" }}
+          style={{ fontSize: 13.5, color: "#f87171", letterSpacing: "0.1em", userSelect: "text" }}
         >
           {errMsg}
         </span>
@@ -704,7 +704,7 @@ function SectionSaveButton({
           }`,
           borderRadius: 3,
           color: isErrorStyle ? "#f87171" : isSavedStyle ? "#4ade80" : "#67e8f9",
-          fontSize: 9,
+          fontSize: 13.5,
           letterSpacing: "0.15em",
           padding: "3px 10px",
           cursor: disabled ? "default" : "pointer",
@@ -743,7 +743,7 @@ function SectionActionsRow({
             border: "1px solid rgba(0,229,255,0.15)",
             borderRadius: 3,
             color: "#cbd5e1",
-            fontSize: 9,
+            fontSize: 13.5,
             letterSpacing: "0.15em",
             padding: "3px 10px",
             cursor: "pointer",
@@ -871,10 +871,10 @@ function VisualsSection() {
         }}
       >
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 9, letterSpacing: "0.2em", color: "var(--bs-s-card-header-fg, #cbd5e1)", fontWeight: 700, marginBottom: 2 }}>
+          <div style={{ fontSize: 13.5, letterSpacing: "0.2em", color: "var(--bs-s-card-header-fg, #cbd5e1)", fontWeight: 700, marginBottom: 2 }}>
             QUALITY PRESET
           </div>
-          <div style={{ fontSize: 9, color: "#64748b", letterSpacing: "0.05em" }}>
+          <div style={{ fontSize: 13.5, color: "#64748b", letterSpacing: "0.05em" }}>
             Master override — adjusts all visual controls below at once
           </div>
         </div>
@@ -1120,7 +1120,7 @@ function NavigationSection() {
               onChange={(e) => s.setDefaultSpeedTier(Number(e.target.value))}
               style={S.slider}
             />
-            <span style={{ color: "#00e5ff", fontSize: 10, minWidth: 24, textAlign: "center" }}>
+            <span style={{ color: "#00e5ff", fontSize: 15, minWidth: 24, textAlign: "center" }}>
               {s.defaultSpeedTier}
             </span>
           </div>
@@ -1206,7 +1206,7 @@ function NavigationSection() {
             }}
           >
             <span>TOUCH CONTROLS</span>
-            <span style={{ fontSize: 8, color: "#64748b", letterSpacing: "0.1em" }}>
+            <span style={{ fontSize: 12, color: "#64748b", letterSpacing: "0.1em" }}>
               MOBILE / TOUCH ONLY
             </span>
           </div>
@@ -1498,7 +1498,7 @@ function ZoneColourSwatches() {
           data-testid="settings-zone-colours-reset"
           onClick={resetToDefaults}
           style={{
-            fontSize: 9,
+            fontSize: 13.5,
             color: "#64748b",
             background: "transparent",
             border: "1px solid rgba(100,116,139,0.3)",
@@ -1641,10 +1641,10 @@ function GlobalResetFooter() {
 
   return (
     <div style={{ marginTop: 32, paddingTop: 20, borderTop: "1px solid rgba(239,68,68,0.15)" }}>
-      <div style={{ fontSize: 9, color: "#cbd5e1", letterSpacing: "0.15em", marginBottom: 8 }}>
+      <div style={{ fontSize: 13.5, color: "#cbd5e1", letterSpacing: "0.15em", marginBottom: 8 }}>
         GLOBAL RESET
       </div>
-      <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 12 }}>
+      <div style={{ fontSize: 15, color: "#94a3b8", marginBottom: 12 }}>
         Restore every setting on this page to its default value. Your saved
         dataset home positions and marker data are not affected.
       </div>
@@ -1657,7 +1657,7 @@ function GlobalResetFooter() {
             border: "1px solid rgba(239,68,68,0.3)",
             borderRadius: 4,
             color: "#f87171",
-            fontSize: 9,
+            fontSize: 13.5,
             letterSpacing: "0.15em",
             padding: "6px 14px",
             cursor: "pointer",
@@ -1668,7 +1668,7 @@ function GlobalResetFooter() {
         </button>
       ) : (
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 10, color: "#f87171" }}>Reset every setting?</span>
+          <span style={{ fontSize: 15, color: "#f87171" }}>Reset every setting?</span>
           <button
             onClick={() => { resetAll(); setConfirm(false); }}
             data-testid="confirm-reset-all-btn"
@@ -1677,7 +1677,7 @@ function GlobalResetFooter() {
               border: "1px solid rgba(239,68,68,0.4)",
               borderRadius: 4,
               color: "#f87171",
-              fontSize: 9,
+              fontSize: 13.5,
               letterSpacing: "0.15em",
               padding: "6px 14px",
               cursor: "pointer",
@@ -1693,7 +1693,7 @@ function GlobalResetFooter() {
               border: "1px solid rgba(100,116,139,0.3)",
               borderRadius: 4,
               color: "#cbd5e1",
-              fontSize: 9,
+              fontSize: 13.5,
               letterSpacing: "0.15em",
               padding: "6px 14px",
               cursor: "pointer",
@@ -1754,7 +1754,7 @@ function KeyBindingCapture({
         {conflict && (
           <div
             data-testid={`shortcut-conflict-${action.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}`}
-            style={{ fontSize: 10, color: "#fb923c", marginTop: 4, letterSpacing: "0.04em" }}
+            style={{ fontSize: 15, color: "#fb923c", marginTop: 4, letterSpacing: "0.04em" }}
           >
             ⚠ Also bound to: {conflictWith.join(", ")}
           </div>
@@ -1781,7 +1781,7 @@ function KeyBindingCapture({
             borderRadius: 3,
             color: capturing ? "#fb923c" : conflict ? "#fb923c" : "#67e8f9",
             fontFamily: FONT,
-            fontSize: 10,
+            fontSize: 15,
             padding: "4px 12px",
             minWidth: 110,
             cursor: "pointer",
@@ -1800,7 +1800,7 @@ function KeyBindingCapture({
             border: "1px solid rgba(0,229,255,0.15)",
             borderRadius: 3,
             color: isDefault ? "#64748b" : "#cbd5e1",
-            fontSize: 9,
+            fontSize: 13.5,
             letterSpacing: "0.15em",
             padding: "3px 8px",
             cursor: isDefault ? "default" : "pointer",
@@ -1872,7 +1872,7 @@ function CrosshairMenuGamepadCapture() {
             borderRadius: 3,
             color: capturing ? "#fb923c" : "#67e8f9",
             fontFamily: FONT,
-            fontSize: 10,
+            fontSize: 15,
             padding: "4px 12px",
             minWidth: 140,
             cursor: "pointer",
@@ -1889,7 +1889,7 @@ function CrosshairMenuGamepadCapture() {
             border: "1px solid rgba(0,229,255,0.15)",
             borderRadius: 3,
             color: "#cbd5e1",
-            fontSize: 9,
+            fontSize: 13.5,
             letterSpacing: "0.15em",
             padding: "3px 8px",
             cursor: "pointer",
@@ -1906,7 +1906,7 @@ function CrosshairMenuGamepadCapture() {
             border: "1px solid rgba(0,229,255,0.15)",
             borderRadius: 3,
             color: "#cbd5e1",
-            fontSize: 9,
+            fontSize: 13.5,
             letterSpacing: "0.15em",
             padding: "3px 8px",
             cursor: "pointer",
@@ -2197,7 +2197,7 @@ function AccountSection() {
               onClick={() => void signOut()}
               style={{
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 9,
+                fontSize: 13.5,
                 letterSpacing: "0.15em",
                 color: "#e2e8f0",
                 background: "rgba(100,116,139,0.08)",
@@ -2213,7 +2213,7 @@ function AccountSection() {
           <div
             style={{
               padding: "6px 16px 12px",
-              fontSize: 9,
+              fontSize: 13.5,
               letterSpacing: "0.12em",
               color: "#cbd5e1",
               fontFamily: "'JetBrains Mono', monospace",
@@ -2243,7 +2243,7 @@ function AccountSection() {
             <div
               data-testid="llm-disclosure-summary"
               style={{
-                fontSize: 10,
+                fontSize: 15,
                 color: "#e2e8f0",
                 lineHeight: 1.7,
                 letterSpacing: "0.04em",
@@ -2262,7 +2262,7 @@ function AccountSection() {
               <div
                 data-testid="llm-disclosure-status"
                 style={{
-                  fontSize: 9,
+                  fontSize: 13.5,
                   letterSpacing: "0.14em",
                   color: s.llmDisclosureAcknowledged ? "#4ade80" : "#fb923c",
                 }}
@@ -2280,7 +2280,7 @@ function AccountSection() {
                     border: "1px solid rgba(251,146,60,0.3)",
                     borderRadius: 3,
                     color: "#fb923c",
-                    fontSize: 9,
+                    fontSize: 13.5,
                     letterSpacing: "0.14em",
                     padding: "4px 12px",
                     cursor: "pointer",
@@ -2298,7 +2298,7 @@ function AccountSection() {
       <div style={S.card}>
         <div style={S.cardHeader}>SETTINGS BACKUP</div>
         <div style={{ padding: "14px 16px" }}>
-          <div style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 12 }}>
+          <div style={{ fontSize: 15, color: "#cbd5e1", marginBottom: 12 }}>
             Save all your BathyScan settings (colormaps, sensitivity, fog, lamp,
             marker visibility, and more) to a file, or restore them from a previous export.
           </div>
@@ -2306,7 +2306,7 @@ function AccountSection() {
             <div
               data-testid="settings-backup-msg"
               style={{
-                fontSize: 9,
+                fontSize: 13.5,
                 color: settingsMsg.startsWith("✓") ? "#4ade80" : "#f87171",
                 letterSpacing: "0.12em",
                 marginBottom: 8,
@@ -2324,7 +2324,7 @@ function AccountSection() {
                 border: "1px solid rgba(0,229,255,0.25)",
                 borderRadius: 3,
                 color: "#67e8f9",
-                fontSize: 9,
+                fontSize: 13.5,
                 letterSpacing: "0.15em",
                 padding: "6px 14px",
                 cursor: "pointer",
@@ -2341,7 +2341,7 @@ function AccountSection() {
                 border: "1px solid rgba(100,116,139,0.3)",
                 borderRadius: 3,
                 color: "#cbd5e1",
-                fontSize: 9,
+                fontSize: 13.5,
                 letterSpacing: "0.15em",
                 padding: "6px 14px",
                 cursor: "pointer",
@@ -2368,11 +2368,11 @@ function AccountSection() {
       <div style={S.card}>
         <div style={S.cardHeader}>YOUR DATA</div>
         <div style={{ padding: "14px 16px" }}>
-          <div style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 12 }}>
+          <div style={{ fontSize: 15, color: "#cbd5e1", marginBottom: 12 }}>
             Export a copy of all your settings, markers, custom datasets, and GPS trails as JSON.
           </div>
           {accountMsg && (
-            <div style={{ fontSize: 9, color: accountMsg.startsWith("✓") ? "#4ade80" : "#f87171", letterSpacing: "0.12em", marginBottom: 8, userSelect: "text" }}>
+            <div style={{ fontSize: 13.5, color: accountMsg.startsWith("✓") ? "#4ade80" : "#f87171", letterSpacing: "0.12em", marginBottom: 8, userSelect: "text" }}>
               {accountMsg}
             </div>
           )}
@@ -2385,7 +2385,7 @@ function AccountSection() {
               border: "1px solid rgba(0,229,255,0.25)",
               borderRadius: 3,
               color: "#67e8f9",
-              fontSize: 9,
+              fontSize: 13.5,
               letterSpacing: "0.15em",
               padding: "6px 14px",
               cursor: "pointer",
@@ -2414,7 +2414,7 @@ function AccountSection() {
         >
           <span
             style={{
-              fontSize: 9,
+              fontSize: 13.5,
               letterSpacing: "0.25em",
               color: "#f87171",
               fontWeight: 700,
@@ -2425,7 +2425,7 @@ function AccountSection() {
           </span>
           <span
             style={{
-              fontSize: 9,
+              fontSize: 13.5,
               color: "#64748b",
               letterSpacing: "0.05em",
             }}
@@ -2436,12 +2436,12 @@ function AccountSection() {
         <div style={S.dangerCard}>
           <div style={S.dangerHeader}>DELETE ALL MY MARKERS</div>
           <div style={{ padding: "14px 16px" }}>
-            <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 12 }}>
+            <div style={{ fontSize: 15, color: "#94a3b8", marginBottom: 12 }}>
               Permanently removes every marker you have created across all datasets.
               This cannot be undone.
             </div>
             {deleteMsg && (
-              <div style={{ fontSize: 9, color: "#4ade80", letterSpacing: "0.12em", marginBottom: 8 }}>
+              <div style={{ fontSize: 13.5, color: "#4ade80", letterSpacing: "0.12em", marginBottom: 8 }}>
                 {deleteMsg}
               </div>
             )}
@@ -2454,7 +2454,7 @@ function AccountSection() {
               </button>
             ) : (
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 10, color: "#f87171" }}>
+                <span style={{ fontSize: 15, color: "#f87171" }}>
                   ⚠ This will permanently delete all your markers. Are you sure?
                 </span>
                 <div style={{ display: "flex", gap: 8 }}>
@@ -2487,7 +2487,7 @@ function AccountSection() {
         <div style={{ ...S.dangerCard, marginTop: 12 }}>
           <div style={S.dangerHeader}>DELETE MY ACCOUNT DATA</div>
           <div style={{ padding: "14px 16px" }}>
-            <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 12 }}>
+            <div style={{ fontSize: 15, color: "#94a3b8", marginBottom: 12 }}>
               Permanently deletes <strong style={{ color: "#f87171" }}>all</strong> of your data
               — settings, markers, custom datasets, and GPS trails. This cannot be undone.
             </div>
@@ -2501,7 +2501,7 @@ function AccountSection() {
               </button>
             ) : (
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 10, color: "#f87171" }}>
+                <span style={{ fontSize: 15, color: "#f87171" }}>
                   ⚠ This will permanently delete everything. Are you sure?
                 </span>
                 <div style={{ display: "flex", gap: 8 }}>
@@ -2564,7 +2564,7 @@ function GeneralSection() {
                   data-testid={`settings-water-type-${wt}`}
                   onClick={() => s.setWaterType(wt)}
                   style={{
-                    fontSize: 9,
+                    fontSize: 13.5,
                     letterSpacing: "0.15em",
                     padding: "4px 12px",
                     borderRadius: 4,
@@ -2582,13 +2582,13 @@ function GeneralSection() {
             })}
           </div>
         </div>
-        <div style={{ padding: "10px 16px 12px", fontSize: 10, color: "#94a3b8", lineHeight: 1.6 }}>
+        <div style={{ padding: "10px 16px 12px", fontSize: 15, color: "#94a3b8", lineHeight: 1.6 }}>
           {s.waterType === "freshwater" ? (
-            <span style={{ color: "#4ade80", fontSize: 9, letterSpacing: "0.08em" }}>
+            <span style={{ color: "#4ade80", fontSize: 13.5, letterSpacing: "0.08em" }}>
               ~ Freshwater mode: lakes, reservoirs, freshwater species, limnology AI context.
             </span>
           ) : (
-            <span style={{ color: "#00e5ff", fontSize: 9, letterSpacing: "0.08em" }}>
+            <span style={{ color: "#00e5ff", fontSize: 13.5, letterSpacing: "0.08em" }}>
               ≈ Saltwater mode: ocean datasets, marine species, marine geology AI context.
             </span>
           )}
@@ -3038,16 +3038,16 @@ function DataStorageSection() {
         <div style={S.cardHeader}>CACHED TERRAIN DATA</div>
         <div style={{ padding: "12px 16px" }}>
           {loading ? (
-            <div style={{ fontSize: 10, color: "#64748b" }}>◌ Loading…</div>
+            <div style={{ fontSize: 15, color: "#64748b" }}>◌ Loading…</div>
           ) : cached.length === 0 ? (
-            <div data-testid="no-cache-msg" style={{ fontSize: 10, color: "#64748b" }}>
+            <div data-testid="no-cache-msg" style={{ fontSize: 15, color: "#64748b" }}>
               No terrain data cached. Load a dataset to cache it.
             </div>
           ) : (
             cached.map((entry) => (
               <div key={entry.url} data-testid="cache-entry" style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "6px 0", borderBottom: "1px solid rgba(0,229,255,0.06)", fontSize: 10,
+                padding: "6px 0", borderBottom: "1px solid rgba(0,229,255,0.06)", fontSize: 15,
               }}>
                 <div>
                   <span style={{ color: "#cbd5e1" }}>{entry.label}</span>
@@ -3070,8 +3070,8 @@ function DataStorageSection() {
           )}
         </div>
         <div style={{ ...S.row, flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
-          <div style={{ fontSize: 9, letterSpacing: "0.15em", color: "#94a3b8" }}>PENDING SYNC</div>
-          <div style={{ fontSize: 10 }}>
+          <div style={{ fontSize: 13.5, letterSpacing: "0.15em", color: "#94a3b8" }}>PENDING SYNC</div>
+          <div style={{ fontSize: 15 }}>
             <span style={{ color: "#cbd5e1" }}>Markers: </span>
             <span data-testid="pending-markers-count" style={{ color: pending.markers > 0 ? "#fbbf24" : "#64748b" }}>
               {pending.markers}
@@ -3084,7 +3084,7 @@ function DataStorageSection() {
         </div>
         <div style={{ padding: "12px 16px" }}>
           {allClearedMsg && (
-            <div style={{ fontSize: 9, color: "#4ade80", letterSpacing: "0.12em", marginBottom: 8 }}>
+            <div style={{ fontSize: 13.5, color: "#4ade80", letterSpacing: "0.12em", marginBottom: 8 }}>
               ✓ All cached data cleared
             </div>
           )}
@@ -3102,14 +3102,14 @@ function DataStorageSection() {
       <div style={S.card}>
         <div style={S.cardHeader}>ENHANCED IMAGE CACHE</div>
         <div style={{ padding: "12px 16px" }}>
-          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 10 }}>
+          <div style={{ fontSize: 15, color: "#94a3b8", marginBottom: 10 }}>
             AI-upscaled heatmap images are stored locally (IndexedDB) for up to 7 days to avoid
             repeat processing. Clear this if you suspect a stale image is being shown or want to
             free up browser storage.
           </div>
           <div
             data-testid="upscale-cache-size"
-            style={{ fontSize: 10, color: "#cbd5e1", marginBottom: 10 }}
+            style={{ fontSize: 15, color: "#cbd5e1", marginBottom: 10 }}
           >
             {upscaleInfo === null
               ? "◌ Calculating…"
@@ -3118,7 +3118,7 @@ function DataStorageSection() {
                 : `${upscaleInfo.count} ${upscaleInfo.count === 1 ? "entry" : "entries"} · ${formatCacheSize(upscaleInfo.bytes)}`}
           </div>
           {upscaleClearMsg && (
-            <div style={{ fontSize: 9, color: "#4ade80", letterSpacing: "0.12em", marginBottom: 8 }}>
+            <div style={{ fontSize: 13.5, color: "#4ade80", letterSpacing: "0.12em", marginBottom: 8 }}>
               ✓ Enhanced image cache cleared
             </div>
           )}
@@ -3136,12 +3136,12 @@ function DataStorageSection() {
       <div style={S.card}>
         <div style={S.cardHeader}>SAVED OFFLINE PACKS</div>
         <div style={{ padding: "12px 16px" }}>
-          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 10 }}>
+          <div style={{ fontSize: 15, color: "#94a3b8", marginBottom: 10 }}>
             Terrain, tide predictions, and weather snapshots saved for offline use.
             Each pack covers 7 days of tide data and can be updated from the dataset panel.
           </div>
           {offlinePacks.length === 0 ? (
-            <div style={{ fontSize: 10, color: "#64748b" }}>
+            <div style={{ fontSize: 15, color: "#64748b" }}>
               No offline packs saved. Load a dataset and tap "⬇ Save Offline" to create one.
             </div>
           ) : (
@@ -3166,13 +3166,13 @@ function DataStorageSection() {
                   }}
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 10, color: "#cbd5e1", fontWeight: 600, marginBottom: 2 }}>
+                    <div style={{ fontSize: 15, color: "#cbd5e1", fontWeight: 600, marginBottom: 2 }}>
                       {pack.datasetName}
                     </div>
-                    <div style={{ fontSize: 9, color: "#64748b" }}>
+                    <div style={{ fontSize: 13.5, color: "#64748b" }}>
                       Saved {savedDate} · {sizeStr}
                     </div>
-                    <div style={{ fontSize: 9, color: isExpired ? "#f87171" : "#94a3b8", marginTop: 1 }}>
+                    <div style={{ fontSize: 13.5, color: isExpired ? "#f87171" : "#94a3b8", marginTop: 1 }}>
                       Tide data {isExpired ? "expired" : `expires ${expiresDate}`}
                     </div>
                   </div>
@@ -3183,7 +3183,7 @@ function DataStorageSection() {
                     style={{
                       ...S.dangerBtn,
                       padding: "3px 8px",
-                      fontSize: 8,
+                      fontSize: 12,
                       flexShrink: 0,
                     }}
                   >
@@ -3199,15 +3199,15 @@ function DataStorageSection() {
       <div style={S.card}>
         <div style={S.cardHeader}>HELP CONTENT</div>
         <div style={{ padding: "12px 16px" }}>
-          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 10 }}>
+          <div style={{ fontSize: 15, color: "#94a3b8", marginBottom: 10 }}>
             Tutorial GIFs and images are cached for offline viewing. Download once to access
             help articles without a network connection.
           </div>
           {helpStatus === null ? (
-            <div style={{ fontSize: 10, color: "#64748b" }}>◌ Loading…</div>
+            <div style={{ fontSize: 15, color: "#64748b" }}>◌ Loading…</div>
           ) : helpStatus.saved ? (
             <div>
-              <div style={{ fontSize: 10, color: "#4ade80", marginBottom: 8 }}>
+              <div style={{ fontSize: 15, color: "#4ade80", marginBottom: 8 }}>
                 ✓ Help content saved ·{" "}
                 {helpStatus.savedAt && new Date(helpStatus.savedAt).toLocaleDateString(undefined, {
                   month: "short", day: "numeric", year: "numeric",
@@ -3218,13 +3218,13 @@ function DataStorageSection() {
                 data-testid="delete-help-pack-btn"
                 onClick={() => void handleDeleteHelp()}
                 disabled={helpClearing}
-                style={{ ...S.dangerBtn, fontSize: 8, padding: "3px 8px" }}
+                style={{ ...S.dangerBtn, fontSize: 12, padding: "3px 8px" }}
               >
                 {helpClearing ? "…" : "DELETE HELP PACK"}
               </button>
             </div>
           ) : (
-            <div style={{ fontSize: 10, color: "#64748b" }}>
+            <div style={{ fontSize: 15, color: "#64748b" }}>
               No help content saved. Use the Help panel (? button) when online to cache it.
             </div>
           )}
@@ -3340,22 +3340,22 @@ export function Settings() {
           title={shouldGuard ? "Saving unsaved changes before leaving…" : undefined}
           data-testid="settings-back-btn"
           data-unsaved={shouldGuard ? "true" : "false"}
-          style={{ background: "none", border: "none", color: shouldGuard ? "#fbbf24" : "#94a3b8", cursor: "pointer", fontSize: 11, letterSpacing: "0.15em", padding: 0, fontFamily: FONT, display: "flex", alignItems: "center", gap: 8 }}
+          style={{ background: "none", border: "none", color: shouldGuard ? "#fbbf24" : "#94a3b8", cursor: "pointer", fontSize: 16.5, letterSpacing: "0.15em", padding: 0, fontFamily: FONT, display: "flex", alignItems: "center", gap: 8 }}
         >
           <span>← BACK</span>
           {shouldGuard && (
             <span
               data-testid="settings-back-unsaved-hint"
-              style={{ fontSize: 9, letterSpacing: "0.15em", color: "#fbbf24", opacity: 0.8 }}
+              style={{ fontSize: 13.5, letterSpacing: "0.15em", color: "#fbbf24", opacity: 0.8 }}
             >
               • UNSAVED
             </span>
           )}
         </button>
-        <span style={{ fontSize: 10, letterSpacing: "0.3em", color: "#00e5ff", fontWeight: 700, textShadow: "0 0 8px rgba(0,229,255,0.5)", flex: 1 }}>
+        <span style={{ fontSize: 15, letterSpacing: "0.3em", color: "#00e5ff", fontWeight: 700, textShadow: "0 0 8px rgba(0,229,255,0.5)", flex: 1 }}>
           SETTINGS
         </span>
-        <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 9 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 13.5 }}>
           <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#cbd5e1", letterSpacing: "0.1em", cursor: "pointer" }}>
             <span>SHOW ADVANCED</span>
             <span data-testid="show-advanced-toggle">
@@ -3513,7 +3513,7 @@ function DepthBandColorEditor({
     <div data-testid="depth-band-color-editor" style={{ padding: "8px 16px 4px" }}>
       {/* ── Colour rows ───────────────────────────────────────────── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <div style={{ ...labelStyle, fontSize: 9, letterSpacing: "0.15em" }}>
+        <div style={{ ...labelStyle, fontSize: 13.5, letterSpacing: "0.15em" }}>
           DEPTH BAND COLOURS
         </div>
         <button
@@ -3526,7 +3526,7 @@ function DepthBandColorEditor({
             border: "1px solid rgba(0,229,255,0.2)",
             borderRadius: 3,
             color: allColorsDefault ? "#64748b" : "#67e8f9",
-            fontSize: 8,
+            fontSize: 12,
             letterSpacing: "0.12em",
             padding: "2px 8px",
             cursor: allColorsDefault ? "not-allowed" : "pointer",
@@ -3558,7 +3558,7 @@ function DepthBandColorEditor({
                 borderBottom: "1px solid rgba(0,229,255,0.05)",
               }}
             >
-              <span style={{ ...labelStyle, fontSize: 9, letterSpacing: "0.05em", color: "#cbd5e1", whiteSpace: "nowrap" }}>
+              <span style={{ ...labelStyle, fontSize: 13.5, letterSpacing: "0.05em", color: "#cbd5e1", whiteSpace: "nowrap" }}>
                 {bandLabel}
               </span>
 
@@ -3623,7 +3623,7 @@ function DepthBandColorEditor({
       {/* ── Band Boundaries ───────────────────────────────────────── */}
       <div style={{ marginTop: 14, borderTop: "1px solid rgba(0,229,255,0.08)", paddingTop: 10 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <div style={{ ...labelStyle, fontSize: 9, letterSpacing: "0.15em" }}>
+          <div style={{ ...labelStyle, fontSize: 13.5, letterSpacing: "0.15em" }}>
             BAND BOUNDARIES
           </div>
           <button
@@ -3636,7 +3636,7 @@ function DepthBandColorEditor({
               border: "1px solid rgba(0,229,255,0.2)",
               borderRadius: 3,
               color: allBoundariesDefault ? "#64748b" : "#67e8f9",
-              fontSize: 8,
+              fontSize: 12,
               letterSpacing: "0.12em",
               padding: "2px 8px",
               cursor: allBoundariesDefault ? "not-allowed" : "pointer",
@@ -3658,13 +3658,13 @@ function DepthBandColorEditor({
               padding: "3px 0",
             }}
           >
-            <span style={{ ...labelStyle, fontSize: 9, color: "#64748b", whiteSpace: "nowrap" }}>
+            <span style={{ ...labelStyle, fontSize: 13.5, color: "#64748b", whiteSpace: "nowrap" }}>
               START (FIXED)
             </span>
-            <span style={{ fontSize: 9, color: "#64748b", fontFamily: "inherit" }}>
+            <span style={{ fontSize: 13.5, color: "#64748b", fontFamily: "inherit" }}>
               {formatDepth(0, { units })}
             </span>
-            <span style={{ fontSize: 9, color: "#475569", minWidth: 20 }} />
+            <span style={{ fontSize: 13.5, color: "#475569", minWidth: 20 }} />
           </div>
 
           {/* Editable interior boundaries (indices 1–9) */}
@@ -3692,7 +3692,7 @@ function DepthBandColorEditor({
                   borderBottom: "1px solid rgba(0,229,255,0.04)",
                 }}
               >
-                <span style={{ ...labelStyle, fontSize: 9, color: "#94a3b8", whiteSpace: "nowrap" }}>
+                <span style={{ ...labelStyle, fontSize: 13.5, color: "#94a3b8", whiteSpace: "nowrap" }}>
                   BOUNDARY {bIdx}
                 </span>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -3726,7 +3726,7 @@ function DepthBandColorEditor({
                     }}
                     aria-label={`Band boundary ${bIdx} value in ${inputUnit}`}
                   />
-                  <span style={{ ...labelStyle, fontSize: 9, color: "#475569", minWidth: 14 }}>
+                  <span style={{ ...labelStyle, fontSize: 13.5, color: "#475569", minWidth: 14 }}>
                     {inputUnit}
                   </span>
                 </div>
@@ -3756,13 +3756,13 @@ function DepthBandColorEditor({
               padding: "3px 0",
             }}
           >
-            <span style={{ ...labelStyle, fontSize: 9, color: "#64748b", whiteSpace: "nowrap" }}>
+            <span style={{ ...labelStyle, fontSize: 13.5, color: "#64748b", whiteSpace: "nowrap" }}>
               END (FIXED)
             </span>
-            <span style={{ fontSize: 9, color: "#64748b", fontFamily: "inherit" }}>
+            <span style={{ fontSize: 13.5, color: "#64748b", fontFamily: "inherit" }}>
               {formatDepth(OCEAN_MAX_DEPTH_FT * FT_TO_M_SETTINGS, { units })}
             </span>
-            <span style={{ fontSize: 9, color: "#475569", minWidth: 20 }} />
+            <span style={{ fontSize: 13.5, color: "#475569", minWidth: 20 }} />
           </div>
         </div>
       </div>
@@ -3824,11 +3824,11 @@ function PalettePickerCard() {
     alignItems: "center",
     justifyContent: "space-between",
     padding: "10px 16px",
-    fontSize: 11,
+    fontSize: 16.5,
     borderBottom: "1px solid rgba(0,229,255,0.06)",
   };
   const labelStyle: React.CSSProperties = {
-    fontSize: 9,
+    fontSize: 13.5,
     letterSpacing: "0.15em",
     color: "#94a3b8",
   };
@@ -3843,7 +3843,7 @@ function PalettePickerCard() {
   };
   const hexStyle: React.CSSProperties = {
     fontFamily: "inherit",
-    fontSize: 10,
+    fontSize: 15,
     color: "#cbd5e1",
     background: "rgba(0,0,0,0.3)",
     border: "1px solid rgba(0,229,255,0.12)",
@@ -3897,7 +3897,7 @@ function PalettePickerCard() {
                   cursor: "pointer",
                   fontFamily: "inherit",
                   color: isActive ? "#67e8f9" : "#e2e8f0",
-                  fontSize: 9,
+                  fontSize: 13.5,
                   letterSpacing: "0.12em",
                   textTransform: "uppercase",
                 }}
@@ -4024,7 +4024,7 @@ function PalettePickerCard() {
             border: "1px solid rgba(0,229,255,0.25)",
             borderRadius: 3,
             color: (!isCustom && isDefault) ? "#64748b" : "#67e8f9",
-            fontSize: 9,
+            fontSize: 13.5,
             letterSpacing: "0.15em",
             padding: "4px 12px",
             cursor: (!isCustom && isDefault) ? "not-allowed" : "pointer",
@@ -4085,7 +4085,7 @@ function CustomBandColorEditor({
               <span
                 style={{
                   ...labelStyle,
-                  fontSize: 9,
+                  fontSize: 13.5,
                   letterSpacing: "0.05em",
                   color: "#cbd5e1",
                   whiteSpace: "nowrap",

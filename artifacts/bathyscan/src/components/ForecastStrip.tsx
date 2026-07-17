@@ -176,7 +176,7 @@ export const ForecastStrip: React.FC = () => {
     return (
       <div>
         {locationBadge}
-        <div style={{ padding: "10px 12px", color: "#94a3b8", fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }}>
+        <div style={{ padding: "10px 12px", color: "#94a3b8", fontSize: 15, fontFamily: "'JetBrains Mono', monospace" }}>
           Loading forecast…
         </div>
       </div>
@@ -187,7 +187,7 @@ export const ForecastStrip: React.FC = () => {
     return (
       <div>
         {locationBadge}
-        <div style={{ padding: "10px 12px", color: "#94a3b8", fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }}>
+        <div style={{ padding: "10px 12px", color: "#94a3b8", fontSize: 15, fontFamily: "'JetBrains Mono', monospace" }}>
           No forecast data available
         </div>
       </div>
@@ -208,7 +208,7 @@ export const ForecastStrip: React.FC = () => {
     <div
       style={{
         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-        fontSize: 10,
+        fontSize: 15,
         color: "#e2e8f0",
         paddingBottom: 6,
       }}
@@ -241,16 +241,16 @@ export const ForecastStrip: React.FC = () => {
                 border: "1px solid rgba(0,229,255,0.10)",
               }}
             >
-              <div style={{ fontSize: 8, color: "#64748b", letterSpacing: "0.15em", marginBottom: 2 }}>
+              <div style={{ fontSize: 12, color: "#64748b", letterSpacing: "0.15em", marginBottom: 2 }}>
                 {label}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2 }}>
                 <ConditionIcon avgWind={summary.avgWind} maxWave={summary.maxWave} />
-                <span style={{ color: conditionColor(cLabel), fontWeight: 700, fontSize: 10 }}>
+                <span style={{ color: conditionColor(cLabel), fontWeight: 700, fontSize: 15 }}>
                   {cLabel}
                 </span>
               </div>
-              <div style={{ color: "#94a3b8", fontSize: 9 }}>
+              <div style={{ color: "#94a3b8", fontSize: 13.5 }}>
                 {summary.avgWind.toFixed(0)} kn · {summary.maxWave.toFixed(1)} m
               </div>
             </div>
@@ -265,7 +265,7 @@ export const ForecastStrip: React.FC = () => {
           display: "flex",
           alignItems: "center",
           gap: 5,
-          fontSize: 9,
+          fontSize: 13.5,
           color: "#64748b",
         }}
       >
@@ -340,7 +340,7 @@ export const ForecastStrip: React.FC = () => {
                 {/* Time label */}
                 <div
                   style={{
-                    fontSize: 9,
+                    fontSize: 13.5,
                     color: isNow ? "#00e5ff" : "#64748b",
                     fontWeight: isNow ? 700 : 400,
                     letterSpacing: "0.05em",
@@ -354,12 +354,12 @@ export const ForecastStrip: React.FC = () => {
                 <WindArrow degrees={slot.windDegrees} speed={slot.windSpeedKnots} />
 
                 {/* Wind speed */}
-                <div style={{ fontSize: 9, color: "#e2e8f0", marginTop: 1 }}>
+                <div style={{ fontSize: 13.5, color: "#e2e8f0", marginTop: 1 }}>
                   {slot.windSpeedKnots.toFixed(0)} kn
                 </div>
 
                 {/* Wave height */}
-                <div style={{ fontSize: 9, color: "#7dd3fc" }}>
+                <div style={{ fontSize: 13.5, color: "#7dd3fc" }}>
                   {slot.waveHeightM.toFixed(1)} m
                 </div>
               </div>
@@ -369,7 +369,7 @@ export const ForecastStrip: React.FC = () => {
       </div>
 
       {/* UTC note */}
-      <div style={{ padding: "2px 10px 0", fontSize: 8, color: "#475569", textAlign: "right" }}>
+      <div style={{ padding: "2px 10px 0", fontSize: 12, color: "#475569", textAlign: "right" }}>
         Times in UTC
       </div>
     </div>

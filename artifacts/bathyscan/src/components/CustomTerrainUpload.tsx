@@ -224,7 +224,7 @@ export const CustomTerrainUpload: React.FC = () => {
             borderRadius: 4,
             padding: "12px 8px",
             textAlign: "center",
-            fontSize: 10,
+            fontSize: 15,
             color: "#f87171",
             letterSpacing: "0.1em",
           }}
@@ -270,26 +270,26 @@ export const CustomTerrainUpload: React.FC = () => {
             <input {...getInputProps()} />
             {postDatasetsUpload.isPending ? (
               <div>
-                <div className="animate-pulse" style={{ ...CYAN, fontSize: 11, marginBottom: 4 }}>
+                <div className="animate-pulse" style={{ ...CYAN, fontSize: 16.5, marginBottom: 4 }}>
                   ◌ Uploading &amp; parsing...
                 </div>
-                <div style={{ fontSize: 11, color: "#cbd5e1" }}>{Math.round(uploadProgress)}%</div>
+                <div style={{ fontSize: 16.5, color: "#cbd5e1" }}>{Math.round(uploadProgress)}%</div>
                 {formatEta(smallFileEta) && (
-                  <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 2 }}>
+                  <div style={{ fontSize: 13.5, color: "#94a3b8", marginTop: 2 }}>
                     {formatEta(smallFileEta)}
                   </div>
                 )}
               </div>
             ) : (
               <>
-                <div style={{ fontSize: 11, color: "#cbd5e1", marginBottom: 3, fontWeight: 600 }}>
+                <div style={{ fontSize: 16.5, color: "#cbd5e1", marginBottom: 3, fontWeight: 600 }}>
                   Drop file here, or click to browse
                 </div>
-                <div style={{ fontSize: 10, color: "#cbd5e1" }}>
+                <div style={{ fontSize: 15, color: "#cbd5e1" }}>
                   up to 50 MB{isSignedIn ? " · auto-saved to your account" : ""}
                 </div>
                 {uploadError && (
-                  <div style={{ fontSize: 10, color: "#f87171", marginTop: 6 }}>⚠ {uploadError}</div>
+                  <div style={{ fontSize: 15, color: "#f87171", marginTop: 6 }}>⚠ {uploadError}</div>
                 )}
               </>
             )}
@@ -303,7 +303,7 @@ export const CustomTerrainUpload: React.FC = () => {
                 border: "1px solid rgba(0,229,255,0.25)",
                 background: "rgba(0,229,255,0.05)",
                 borderRadius: 4,
-                fontSize: 10,
+                fontSize: 15,
                 color: "#7dd3fc",
                 display: "flex",
                 alignItems: "center",
@@ -328,7 +328,7 @@ export const CustomTerrainUpload: React.FC = () => {
                 gap: 8,
               }}
             >
-              <div style={{ fontSize: 10, color: "#fca5a5", flex: 1, lineHeight: 1.4 }}>
+              <div style={{ fontSize: 15, color: "#fca5a5", flex: 1, lineHeight: 1.4 }}>
                 ⚠ Uploaded, but couldn&apos;t save to your account — {saveError}
               </div>
               <button
@@ -337,7 +337,7 @@ export const CustomTerrainUpload: React.FC = () => {
                 onClick={handleRetrySave}
                 disabled={postDatasetsUpload.isPending}
                 style={{
-                  fontSize: 10,
+                  fontSize: 15,
                   padding: "3px 8px",
                   border: "1px solid rgba(0,229,255,0.4)",
                   background: "rgba(0,229,255,0.08)",

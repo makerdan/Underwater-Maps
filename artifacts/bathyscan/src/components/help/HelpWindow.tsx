@@ -72,7 +72,7 @@ function TakeTourLink({ onClose }: { onClose: () => void }) {
           textAlign: "left",
         }}
       >
-        <span style={{ fontSize: 12 }}>▶</span>
+        <span style={{ fontSize: 18 }}>▶</span>
         Take the tour
       </button>
     </div>

@@ -50,7 +50,7 @@ const PANEL: React.CSSProperties = {
   borderRadius: 6,
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   color: "#cbd5e1",
-  fontSize: 12,
+  fontSize: 18,
   minWidth: 220,
   maxWidth: 260,
   backdropFilter: "blur(6px)",
@@ -102,7 +102,7 @@ const ToggleButton: React.FC<ToggleButtonProps> = ({
         borderRadius: 4,
         color: active ? activeColor : "#e2e8f0",
         fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 10,
+        fontSize: 15,
         padding: "5px 10px",
         cursor: "pointer",
         letterSpacing: "0.12em",
@@ -157,7 +157,7 @@ const ThermalLegend: React.FC = () => {
     >
       <span
         style={{
-          fontSize: 9,
+          fontSize: 13.5,
           letterSpacing: "0.12em",
           color: "#94a3b8",
           textTransform: "uppercase",
@@ -178,7 +178,7 @@ const ThermalLegend: React.FC = () => {
           <span
             key={t}
             style={{
-              fontSize: 9,
+              fontSize: 13.5,
               color: "#94a3b8",
               fontFamily: "'JetBrains Mono', monospace",
               letterSpacing: "0.06em",
@@ -188,7 +188,7 @@ const ThermalLegend: React.FC = () => {
           </span>
         ))}
       </div>
-      <span style={{ fontSize: 9, color: "#475569", lineHeight: 1.4 }}>
+      <span style={{ fontSize: 13.5, color: "#475569", lineHeight: 1.4 }}>
         Colour maps depth → temperature via Argo/CTD profile data.
       </span>
     </div>
@@ -457,14 +457,14 @@ export const OverlaysToolsPanel: React.FC = () => {
         >
           <span
             className="uppercase tracking-widest"
-            style={{ fontSize: 11, ...CYAN, fontWeight: 700 }}
+            style={{ fontSize: 16.5, ...CYAN, fontWeight: 700 }}
           >
             ▼ Overlays &amp; Tools
           </span>
         </ViewscreenTooltip>
         <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <HelpIcon articleId="hud-overlays" label="HUD overlay toggles" />
-          <span style={{ color: "#cbd5e1", fontSize: 24, lineHeight: 1 }}>
+          <span style={{ color: "#cbd5e1", fontSize: 36, lineHeight: 1 }}>
             {collapsed ? "▸" : "▾"}
           </span>
         </span>
@@ -570,7 +570,7 @@ export const OverlaysToolsPanel: React.FC = () => {
             <div
               data-testid="temp-layer-estimated-notice"
               style={{
-                fontSize: 9,
+                fontSize: 13.5,
                 letterSpacing: "0.06em",
                 color: "#fb923c",
                 background: "rgba(251,146,60,0.08)",
@@ -612,7 +612,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                   />
                   <span
                     style={{
-                      fontSize: 11,
+                      fontSize: 16.5,
                       fontFamily: "'JetBrains Mono', monospace",
                       color: "#fb923c",
                       textShadow: "0 0 6px rgba(251,146,60,0.4)",
@@ -622,12 +622,12 @@ export const OverlaysToolsPanel: React.FC = () => {
                   >
                     {cursorTempC.toFixed(1)} °C
                   </span>
-                  <span style={{ fontSize: 10, color: "#94a3b8", letterSpacing: "0.04em" }}>
+                  <span style={{ fontSize: 15, color: "#94a3b8", letterSpacing: "0.04em" }}>
                     at −{Math.round(thermalCursorDepthM)} m
                   </span>
                 </>
               ) : (
-                <span style={{ fontSize: 9, color: "#475569", letterSpacing: "0.06em" }}>
+                <span style={{ fontSize: 13.5, color: "#475569", letterSpacing: "0.06em" }}>
                   Move cursor over scene
                 </span>
               )}
@@ -659,7 +659,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                 >
                   <span
                     style={{
-                      fontSize: 9,
+                      fontSize: 13.5,
                       letterSpacing: "0.12em",
                       color: "#94a3b8",
                       textTransform: "uppercase",
@@ -693,7 +693,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                             borderRadius: 3,
                             color: active ? "#cbd5e1" : "#64748b",
                             fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 10,
+                            fontSize: 15,
                             padding: "3px 8px",
                             cursor: "pointer",
                             letterSpacing: "0.08em",
@@ -738,7 +738,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                 >
                   <span
                     style={{
-                      fontSize: 9,
+                      fontSize: 13.5,
                       letterSpacing: "0.12em",
                       color: "#64748b",
                       textTransform: "uppercase",
@@ -785,7 +785,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                         ? "#fbbf24"
                         : "#e2e8f0",
                       fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 10,
+                      fontSize: 15,
                       padding: "5px 10px",
                       cursor: !terrain ? "not-allowed" : "pointer",
                       letterSpacing: "0.12em",
@@ -816,7 +816,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                   <div
                     data-testid="wx-noaa-unavailable-notice"
                     style={{
-                      fontSize: 9,
+                      fontSize: 13.5,
                       letterSpacing: "0.06em",
                       color: "#fbbf24",
                       background: "rgba(251,191,36,0.08)",
@@ -862,7 +862,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                       color:
                         !terrain || !faaWeatherCamsUrl ? "#475569" : "#7dd3fc",
                       fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 10,
+                      fontSize: 15,
                       padding: "5px 10px",
                       cursor:
                         !terrain || !faaWeatherCamsUrl
@@ -886,7 +886,7 @@ export const OverlaysToolsPanel: React.FC = () => {
               <div style={{ marginTop: 4 }}>
                 <span
                   style={{
-                    fontSize: 9,
+                    fontSize: 13.5,
                     letterSpacing: "0.12em",
                     color: "#64748b",
                     textTransform: "uppercase",
@@ -923,7 +923,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                       borderRadius: 4,
                       color: !terrain ? "#475569" : rawsOverlayActive ? "#34d399" : "#e2e8f0",
                       fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 10,
+                      fontSize: 15,
                       padding: "5px 10px",
                       cursor: !terrain ? "not-allowed" : "pointer",
                       letterSpacing: "0.12em",
@@ -967,7 +967,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                 >
                   <span
                     style={{
-                      fontSize: 9,
+                      fontSize: 13.5,
                       letterSpacing: "0.12em",
                       color: "#94a3b8",
                       textTransform: "uppercase",
@@ -988,7 +988,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                           background: intertidalScoreMode === "tidepool" ? "rgba(13,148,136,0.2)" : "rgba(0,10,20,0.45)",
                           color: intertidalScoreMode === "tidepool" ? "#2dd4bf" : "#64748b",
                           fontFamily: "'JetBrains Mono', monospace",
-                          fontSize: 9,
+                          fontSize: 13.5,
                           letterSpacing: "0.1em",
                           cursor: "pointer",
                           display: "flex",
@@ -1014,7 +1014,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                           background: intertidalScoreMode === "beachcombing" ? "rgba(217,119,6,0.18)" : "rgba(0,10,20,0.45)",
                           color: intertidalScoreMode === "beachcombing" ? "#fbbf24" : "#64748b",
                           fontFamily: "'JetBrains Mono', monospace",
-                          fontSize: 9,
+                          fontSize: 13.5,
                           letterSpacing: "0.1em",
                           cursor: "pointer",
                           display: "flex",
@@ -1029,7 +1029,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                       </button>
                     </ViewscreenTooltip>
                   </div>
-                  <span style={{ fontSize: 9, color: "#64748b", lineHeight: 1.4 }}>
+                  <span style={{ fontSize: 13.5, color: "#64748b", lineHeight: 1.4 }}>
                     Opacity ∝ score intensity. Click polygon for score card.
                   </span>
                 </div>
@@ -1054,7 +1054,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                     style={{
                       marginTop: 4,
                       paddingLeft: 8,
-                      fontSize: 9,
+                      fontSize: 13.5,
                       color: "#94a3b8",
                       fontStyle: "italic",
                       letterSpacing: "0.05em",
@@ -1075,7 +1075,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                   >
                     <span
                       style={{
-                        fontSize: 9,
+                        fontSize: 13.5,
                         letterSpacing: "0.12em",
                         color: "#94a3b8",
                         textTransform: "uppercase",
@@ -1104,7 +1104,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                               borderRadius: 3,
                               color: hidden ? "#64748b" : "#cbd5e1",
                               fontFamily: "'JetBrains Mono', monospace",
-                              fontSize: 10,
+                              fontSize: 15,
                               padding: "3px 8px",
                               cursor: "pointer",
                               letterSpacing: "0.08em",

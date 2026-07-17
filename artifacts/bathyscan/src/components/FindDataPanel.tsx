@@ -128,7 +128,7 @@ const HEADER: React.CSSProperties = {
 };
 
 const TITLE: React.CSSProperties = {
-  fontSize: 10,
+  fontSize: 15,
   letterSpacing: "0.2em",
   color: "#00e5ff",
   textTransform: "uppercase",
@@ -144,7 +144,7 @@ function tabStyle(active: boolean): React.CSSProperties {
   return {
     flex: 1,
     padding: "8px 0",
-    fontSize: 9,
+    fontSize: 13.5,
     letterSpacing: "0.15em",
     textTransform: "uppercase",
     background: "none",
@@ -162,7 +162,7 @@ const INPUT_STYLE: React.CSSProperties = {
   border: "1px solid rgba(0,229,255,0.2)",
   borderRadius: 4,
   padding: "8px 10px",
-  fontSize: 11,
+  fontSize: 16.5,
   color: "#e2e8f0",
   fontFamily: "'JetBrains Mono', monospace",
   outline: "none",
@@ -250,11 +250,11 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
 }) => (
   <div style={CARD}>
     <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
-      <span style={{ fontSize: 14 }}>🌊</span>
+      <span style={{ fontSize: 21 }}>🌊</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
-            fontSize: 10,
+            fontSize: 15,
             fontWeight: 700,
             color: "#e2e8f0",
             marginBottom: 2,
@@ -265,7 +265,7 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
         </div>
         <div
           style={{
-            fontSize: 8,
+            fontSize: 12,
             color: "#00e5ff",
             letterSpacing: "0.1em",
             textTransform: "uppercase",
@@ -279,7 +279,7 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
           label="No NCEI WCS coverage — cannot be materialized in BathyScan yet"
           side="left"
         >
-          <span style={{ fontSize: 8, color: "#f59e0b", letterSpacing: "0.06em" }}>
+          <span style={{ fontSize: 12, color: "#f59e0b", letterSpacing: "0.06em" }}>
             N/A
           </span>
         </ViewscreenTooltip>
@@ -288,7 +288,7 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
 
     {result.description && (
       <div
-        style={{ fontSize: 9, color: "#94a3b8", lineHeight: 1.5, marginBottom: 6 }}
+        style={{ fontSize: 13.5, color: "#94a3b8", lineHeight: 1.5, marginBottom: 6 }}
       >
         {result.description.length > 120
           ? result.description.slice(0, 120) + "…"
@@ -299,13 +299,13 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
     <BboxPreviewMap bbox={result.coverageBbox} />
 
     <div
-      style={{ fontSize: 8, color: "#64748b", marginBottom: 4, fontVariantNumeric: "tabular-nums" }}
+      style={{ fontSize: 12, color: "#64748b", marginBottom: 4, fontVariantNumeric: "tabular-nums" }}
     >
       {result.coverageBbox.minLon.toFixed(1)}°,{result.coverageBbox.minLat.toFixed(1)}° →{" "}
       {result.coverageBbox.maxLon.toFixed(1)}°,{result.coverageBbox.maxLat.toFixed(1)}°
     </div>
 
-    <div style={{ fontSize: 8, color: "#64748b", marginBottom: 6 }}>
+    <div style={{ fontSize: 12, color: "#64748b", marginBottom: 6 }}>
       {result.resolutionMMin != null
         ? result.resolutionMMax != null && result.resolutionMMax !== result.resolutionMMin
           ? `${result.resolutionMMin}–${result.resolutionMMax} m res`
@@ -320,7 +320,7 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
           target="_blank"
           rel="noopener noreferrer"
           style={{
-            fontSize: 8,
+            fontSize: 12,
             padding: "3px 10px",
             background: "transparent",
             border: "1px solid rgba(255,255,255,0.1)",
@@ -352,7 +352,7 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
           }
           disabled={!result.wcsAvailable || !canSave || saved || saving}
           style={{
-            fontSize: 8,
+            fontSize: 12,
             padding: "3px 10px",
             background: saved
               ? "rgba(74,222,128,0.1)"
@@ -404,19 +404,19 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
   return (
     <div style={CARD}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: 14 }}>{isIntertidal ? "🏖️" : icon}</span>
+        <span style={{ fontSize: 21 }}>{isIntertidal ? "🏖️" : icon}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: "#e2e8f0", marginBottom: 2, lineHeight: 1.3 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#e2e8f0", marginBottom: 2, lineHeight: 1.3 }}>
             {entry.name}
           </div>
-          <div style={{ fontSize: 8, color, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+          <div style={{ fontSize: 12, color, letterSpacing: "0.1em", textTransform: "uppercase" }}>
             {entry.dataType} · {entry.sourceAgency}
           </div>
           {isIntertidal && (
             <div style={{ marginTop: 4, display: "inline-flex", alignItems: "center", gap: 4 }}>
               <span
                 style={{
-                  fontSize: 8,
+                  fontSize: 12,
                   letterSpacing: "0.1em",
                   textTransform: "uppercase",
                   color: "#fbbf24",
@@ -433,7 +433,7 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
         </div>
         <span
           style={{
-            fontSize: 8,
+            fontSize: 12,
             letterSpacing: "0.08em",
             color: color,
             border: `1px solid ${color}40`,
@@ -449,7 +449,7 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
       {isIntertidal && (
         <div
           style={{
-            fontSize: 8,
+            fontSize: 12,
             color: "#94a3b8",
             fontStyle: "italic",
             marginBottom: 6,
@@ -464,13 +464,13 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
       )}
 
       {entry.description && (
-        <div style={{ fontSize: 9, color: "#cbd5e1", lineHeight: 1.5, marginBottom: 6 }}>
+        <div style={{ fontSize: 13.5, color: "#cbd5e1", lineHeight: 1.5, marginBottom: 6 }}>
           {entry.description.slice(0, 120)}
           {entry.description.length > 120 && "…"}
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 4, fontSize: 8, color: "#94a3b8", marginBottom: 6 }}>
+      <div style={{ display: "flex", gap: 4, fontSize: 12, color: "#94a3b8", marginBottom: 6 }}>
         {entry.resolutionMMin != null && (
           <span>{entry.resolutionMMin}–{entry.resolutionMMax ?? "?"}m res</span>
         )}
@@ -485,7 +485,7 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
             <button
               onClick={() => onLoad(presetId)}
               style={{
-                fontSize: 8,
+                fontSize: 12,
                 padding: "3px 10px",
                 background: "rgba(0,229,255,0.1)",
                 border: "1px solid rgba(0,229,255,0.3)",
@@ -514,7 +514,7 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
             onClick={() => canSave && !saved && !saving && onSave(entry.id)}
             disabled={!canSave || saved || saving}
             style={{
-              fontSize: 8,
+              fontSize: 12,
               padding: "3px 10px",
               background: saved ? "rgba(74,222,128,0.1)" : "rgba(255,255,255,0.04)",
               border: `1px solid ${saved ? "rgba(74,222,128,0.3)" : "rgba(255,255,255,0.1)"}`,
@@ -534,7 +534,7 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
             <button
               onClick={() => setOfflineModalOpen(true)}
               style={{
-                fontSize: 8,
+                fontSize: 12,
                 padding: "3px 8px",
                 background: "rgba(251,191,36,0.08)",
                 border: "1px solid rgba(251,191,36,0.3)",
@@ -591,18 +591,18 @@ const SaveCard: React.FC<{
       aria-busy={deleting || undefined}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 12 }}>{icon}</span>
+        <span style={{ fontSize: 18 }}>{icon}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 10, color: "#e2e8f0", fontWeight: 600, marginBottom: 1 }}>
+          <div style={{ fontSize: 15, color: "#e2e8f0", fontWeight: 600, marginBottom: 1 }}>
             {save.catalog?.name ?? save.catalogId}
           </div>
-          <div style={{ fontSize: 8, color: "#94a3b8" }}>
+          <div style={{ fontSize: 12, color: "#94a3b8" }}>
             {save.catalog?.sourceAgency ?? "—"}
           </div>
         </div>
         <span
           style={{
-            fontSize: 8,
+            fontSize: 12,
             letterSpacing: "0.1em",
             textTransform: "uppercase",
             color: statusColor,
@@ -622,7 +622,7 @@ const SaveCard: React.FC<{
               border: "none",
               color: "#cbd5e1",
               cursor: deleting ? "wait" : "pointer",
-              fontSize: 12,
+              fontSize: 18,
               lineHeight: 1,
               padding: "0 2px",
               flexShrink: 0,
@@ -638,7 +638,7 @@ const SaveCard: React.FC<{
             onClick={() => onLoadUserDataset(save.datasetId!)}
             style={{
               marginTop: 8,
-              fontSize: 8,
+              fontSize: 12,
               padding: "3px 12px",
               background: "rgba(0,229,255,0.1)",
               border: "1px solid rgba(0,229,255,0.3)",
@@ -656,7 +656,7 @@ const SaveCard: React.FC<{
       {save.status === "failed" && (
         <>
           {save.errorMessage && (
-            <div style={{ marginTop: 6, fontSize: 8, color: "#f87171", lineHeight: 1.4 }}>
+            <div style={{ marginTop: 6, fontSize: 12, color: "#f87171", lineHeight: 1.4 }}>
               {save.errorMessage}
             </div>
           )}
@@ -667,7 +667,7 @@ const SaveCard: React.FC<{
               data-testid={`save-retry-${save.id}`}
               style={{
                 marginTop: 8,
-                fontSize: 8,
+                fontSize: 12,
                 padding: "3px 12px",
                 background: "rgba(248,113,113,0.1)",
                 border: "1px solid rgba(248,113,113,0.3)",
@@ -1130,7 +1130,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               border: "none",
               color: "#94a3b8",
               cursor: "pointer",
-              fontSize: 14,
+              fontSize: 21,
               lineHeight: 1,
             }}
           >
@@ -1185,7 +1185,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 <button
                   onClick={() => setDataTypeFilter(dt)}
                   style={{
-                    fontSize: 8,
+                    fontSize: 12,
                     padding: "2px 8px",
                     borderRadius: 3,
                     border: `1px solid ${dataTypeFilter === dt ? "rgba(0,229,255,0.4)" : "rgba(255,255,255,0.08)"}`,
@@ -1204,7 +1204,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               ))}
             </div>
             {isSearching && (
-              <div style={{ fontSize: 8, color: "#94a3b8", marginTop: 4 }}>Searching…</div>
+              <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>Searching…</div>
             )}
           </div>
 
@@ -1214,7 +1214,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             data-testid="find-data-results"
           >
             {searchResults.length === 0 && !isSearching && (
-              <div style={{ fontSize: 9, color: "#94a3b8", textAlign: "center", paddingTop: 32 }}>
+              <div style={{ fontSize: 13.5, color: "#94a3b8", textAlign: "center", paddingTop: 32 }}>
                 {debouncedQuery
                   ? "No results found — try different keywords"
                   : "Type a query to discover datasets"}
@@ -1223,7 +1223,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             {!isSignedIn && (
               <div
                 style={{
-                  fontSize: 9,
+                  fontSize: 13.5,
                   color: "#f59e0b",
                   textAlign: "center",
                   padding: "8px 0 12px",
@@ -1256,15 +1256,15 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
       {tab === "saves" && (
         <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px" }}>
           {isSaveFetching && (
-            <div style={{ fontSize: 9, color: "#94a3b8", marginBottom: 8 }}>Loading…</div>
+            <div style={{ fontSize: 13.5, color: "#94a3b8", marginBottom: 8 }}>Loading…</div>
           )}
           {!isSaveFetching && visibleSaves.length === 0 && (
-            <div style={{ fontSize: 9, color: "#94a3b8", textAlign: "center", paddingTop: 32 }}>
+            <div style={{ fontSize: 13.5, color: "#94a3b8", textAlign: "center", paddingTop: 32 }}>
               No saved datasets yet — search and save some above
             </div>
           )}
           {!isSignedIn && (
-            <div style={{ fontSize: 9, color: "#f59e0b", textAlign: "center", paddingTop: 32 }}>
+            <div style={{ fontSize: 13.5, color: "#f59e0b", textAlign: "center", paddingTop: 32 }}>
               Sign in to see saved datasets.
             </div>
           )}
@@ -1277,7 +1277,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 border: "1px solid rgba(248,113,113,0.4)",
                 background: "rgba(248,113,113,0.08)",
                 borderRadius: 4,
-                fontSize: 9,
+                fontSize: 13.5,
                 color: "#fca5a5",
                 display: "flex",
                 justifyContent: "space-between",
@@ -1294,7 +1294,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                   border: "none",
                   color: "#cbd5e1",
                   cursor: "pointer",
-                  fontSize: 10,
+                  fontSize: 15,
                 }}
               >
                 ×
@@ -1330,7 +1330,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             />
             <div
               style={{
-                fontSize: 8,
+                fontSize: 12,
                 color: "#64748b",
                 marginTop: 6,
                 lineHeight: 1.5,
@@ -1348,10 +1348,10 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               . Datasets with WCS coverage can be saved to your library.
             </div>
             {isNceiSearching && (
-              <div style={{ fontSize: 8, color: "#94a3b8", marginTop: 4 }}>Searching…</div>
+              <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>Searching…</div>
             )}
             {nceiError && (
-              <div style={{ fontSize: 8, color: "#f87171", marginTop: 4 }}>
+              <div style={{ fontSize: 12, color: "#f87171", marginTop: 4 }}>
                 ⚠ Could not reach the NCEI Geoportal — try again in a moment.
               </div>
             )}
@@ -1365,7 +1365,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             {!isSignedIn && (
               <div
                 style={{
-                  fontSize: 9,
+                  fontSize: 13.5,
                   color: "#f59e0b",
                   textAlign: "center",
                   padding: "8px 0 12px",
@@ -1377,7 +1377,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             )}
             {nceiAccumulated.length === 0 && !isNceiSearching && !nceiError && (
               <div
-                style={{ fontSize: 9, color: "#94a3b8", textAlign: "center", paddingTop: 32 }}
+                style={{ fontSize: 13.5, color: "#94a3b8", textAlign: "center", paddingTop: 32 }}
               >
                 {debouncedNceiQuery
                   ? "No NCEI datasets matched — try different keywords"
@@ -1395,7 +1395,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               />
             ))}
             {isNceiSearching && nceiFrom > 1 && (
-              <div style={{ fontSize: 9, color: "#94a3b8", textAlign: "center", padding: "8px 0" }}>
+              <div style={{ fontSize: 13.5, color: "#94a3b8", textAlign: "center", padding: "8px 0" }}>
                 Loading more…
               </div>
             )}
@@ -1412,7 +1412,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                   border: "1px solid rgba(0,229,255,0.2)",
                   borderRadius: 4,
                   color: "#00e5ff",
-                  fontSize: 9,
+                  fontSize: 13.5,
                   letterSpacing: "0.15em",
                   textTransform: "uppercase",
                   cursor: isNceiSearching ? "not-allowed" : "pointer",
@@ -1458,7 +1458,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
           >
             <div
               style={{
-                fontSize: 11,
+                fontSize: 16.5,
                 color: "#e2e8f0",
                 fontWeight: 700,
                 marginBottom: 8,
@@ -1467,7 +1467,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             >
               Delete &ldquo;{confirmDelete.catalog?.name ?? confirmDelete.catalogId}&rdquo;?
             </div>
-            <div style={{ fontSize: 10, color: "#e2e8f0", lineHeight: 1.5, marginBottom: 14 }}>
+            <div style={{ fontSize: 15, color: "#e2e8f0", lineHeight: 1.5, marginBottom: 14 }}>
               This will remove the saved dataset and its terrain grids from your library.
               You can re-save it from the catalog later.
             </div>
@@ -1476,7 +1476,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 onClick={() => setConfirmDelete(null)}
                 data-testid="confirm-delete-cancel"
                 style={{
-                  fontSize: 9,
+                  fontSize: 13.5,
                   padding: "5px 12px",
                   background: "transparent",
                   border: "1px solid rgba(255,255,255,0.15)",
@@ -1493,7 +1493,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 onClick={() => void handleConfirmDelete()}
                 data-testid="confirm-delete-confirm"
                 style={{
-                  fontSize: 9,
+                  fontSize: 13.5,
                   padding: "5px 12px",
                   background: "rgba(248,113,113,0.12)",
                   border: "1px solid rgba(248,113,113,0.5)",
@@ -1516,7 +1516,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
         style={{
           padding: "8px 14px",
           borderTop: "1px solid rgba(0,229,255,0.08)",
-          fontSize: 7,
+          fontSize: 10.5,
           color: "#64748b",
           letterSpacing: "0.05em",
         }}
