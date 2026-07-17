@@ -335,3 +335,63 @@ describe("DatasetPanel — GCS job-status r.ok guard", () => {
     expect(pollCount).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe("DatasetPanel — GCS job-status poll timeout", () => {
+  let restoreXhr: () => void;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    authMock.getAuthToken.mockResolvedValue("token");
+    authMock.hasAuthTokenGetter.mockReturnValue(true);
+    restoreXhr = mockXhrSuccess();
+  });
+
+  afterEach(() => {
+    restoreXhr();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("transitions to processing_timeout UI after 15 minutes of continuous polling", async () => {
+    // Every job-status poll returns "processing" — the job never finishes.
+    vi.spyOn(global, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : String(input);
+      if (url.includes("request-gcs-url")) {
+        return {
+          ok: true, status: 200,
+          json: async () => ({
+            uploadUrl: "https://storage.googleapis.com/bucket/obj?sig=ok",
+            objectKey: "pending/survey.bag",
+          }),
+        } as Response;
+      }
+      if (url.includes("gcs-job-status")) {
+        return {
+          ok: true, status: 200,
+          json: async () => ({ status: "processing" }),
+        } as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({}) } as Response;
+    });
+
+    render(<DatasetPanel />);
+
+    const file = makeFakeFile("survey.bag", "application/octet-stream", 60 * 1024 * 1024);
+
+    // Trigger the GCS upload path and let the XHR settle.
+    await act(async () => {
+      dropzoneMock.trigger([file]);
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    // Advance past the 15-minute watchdog (plus a tick for the setTimeout callback).
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000 + 500);
+    });
+
+    // The processing_timeout UI must now be visible.
+    expect(
+      screen.getByText(/still processing/i),
+    ).toBeInTheDocument();
+  });
+});

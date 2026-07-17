@@ -757,6 +757,14 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     if (autoRetryTimer.current) clearTimeout(autoRetryTimer.current);
   }, []);
 
+  // GCS upload poll/watchdog refs — cleared on unmount to avoid state updates after destroy
+  const gcsPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const gcsWatchdogTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (gcsPollIntervalRef.current) { clearInterval(gcsPollIntervalRef.current); gcsPollIntervalRef.current = null; }
+    if (gcsWatchdogTimeoutRef.current) { clearTimeout(gcsWatchdogTimeoutRef.current); gcsWatchdogTimeoutRef.current = null; }
+  }, []);
+
   // Chunked upload session refs — stable across renders, used by retry logic
   const chunkedUploadIdRef = useRef<string | null>(null);
   // Index of the chunk that failed (null = not failed yet, >= totalChunks = finalize failed)
@@ -1723,6 +1731,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         .then((job) => {
           if (job.status === "done" && job.datasetId) {
             clearInterval(pollIntervalId);
+            gcsPollIntervalRef.current = null;
             void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
             void qc.invalidateQueries({ queryKey: getGetSubstrateQueryKey(job.datasetId) });
             setGcsPhase("idle");
@@ -1764,6 +1773,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             }
           } else if (job.status === "failed") {
             clearInterval(pollIntervalId);
+            gcsPollIntervalRef.current = null;
             const failMsg = job.error ?? "Processing failed. Please try uploading again.";
             setGcsPhase("error");
             setGcsError(failMsg);
@@ -1778,13 +1788,16 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           // Transient network error — keep polling
         });
     }, 10_000);
+    gcsPollIntervalRef.current = pollIntervalId;
 
     // After 15 minutes, stop polling and enter a distinct "processing_timeout"
     // phase rather than "idle" or "error". The upload itself succeeded; only
     // background conversion is still running.  "processing_timeout" signals
     // this clearly in the UI while still allowing a new file to be dropped.
-    setTimeout(() => {
+    const watchdogId = setTimeout(() => {
       clearInterval(pollIntervalId);
+      gcsPollIntervalRef.current = null;
+      gcsWatchdogTimeoutRef.current = null;
       setGcsPhase((prev) => {
         if (prev === "processing") {
           toast({
@@ -1797,6 +1810,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         return prev;
       });
     }, 15 * 60 * 1000);
+    gcsWatchdogTimeoutRef.current = watchdogId;
   }, [qc, setUploadOpen, toast]);
 
   // ─── Chunked upload entry-point (new upload, starts from chunk 0) ─────────
