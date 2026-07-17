@@ -19,9 +19,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetDatasetsCatalogSearch,
   useGetDatasetsMySaves,
+  useGetUserDatasets,
   usePostDatasetsCatalogIdSave,
   usePostDatasetsMySavesIdRetry,
   useDeleteDatasetsMySavesId,
+  useDeleteUserDatasetsId,
   useGetNceiSearch,
   usePostNceiSave,
   getGetNceiSearchQueryKey,
@@ -31,6 +33,7 @@ import {
   type GetDatasetsCatalogSearchDataType,
   type DatasetCatalogSearchResult,
   type UserCatalogSave,
+  type UserDatasetMeta,
   type NceiPortalResult,
 } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
@@ -688,6 +691,100 @@ const SaveCard: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
+// Upload card (My Uploads section)
+// ---------------------------------------------------------------------------
+
+const UploadCard: React.FC<{
+  dataset: UserDatasetMeta;
+  onLoad: (id: string) => void;
+  onDelete: (dataset: UserDatasetMeta) => void;
+  deleting: boolean;
+}> = ({ dataset, onLoad, onDelete, deleting }) => {
+  const createdDate = useMemo(() => {
+    const d = new Date(dataset.createdAt);
+    if (Number.isNaN(d.getTime())) return dataset.createdAt.slice(0, 10);
+    return d.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  }, [dataset.createdAt]);
+
+  return (
+    <div
+      style={{
+        ...CARD,
+        borderLeft: "2px solid rgba(167,139,250,0.4)",
+        opacity: deleting ? 0.5 : 1,
+      }}
+      data-testid={`upload-card-${dataset.id}`}
+      aria-busy={deleting || undefined}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ fontSize: 18 }}>📤</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 15,
+              color: "#e2e8f0",
+              fontWeight: 600,
+              marginBottom: 1,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {dataset.name}
+          </div>
+          <div style={{ fontSize: 12, color: "#94a3b8" }}>{createdDate}</div>
+        </div>
+        <ViewscreenTooltip label="Delete this uploaded dataset" side="left">
+          <button
+            type="button"
+            data-testid={`btn-delete-upload-${dataset.id}`}
+            aria-label={`Delete uploaded dataset ${dataset.name}`}
+            disabled={deleting}
+            onClick={() => onDelete(dataset)}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "#cbd5e1",
+              cursor: deleting ? "wait" : "pointer",
+              fontSize: 18,
+              lineHeight: 1,
+              padding: "0 2px",
+              flexShrink: 0,
+            }}
+          >
+            ×
+          </button>
+        </ViewscreenTooltip>
+      </div>
+      <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
+        <button
+          onClick={() => onLoad(dataset.id)}
+          data-testid={`btn-load-upload-${dataset.id}`}
+          style={{
+            marginTop: 8,
+            fontSize: 12,
+            padding: "3px 12px",
+            background: "rgba(0,229,255,0.1)",
+            border: "1px solid rgba(0,229,255,0.3)",
+            borderRadius: 3,
+            color: "#00e5ff",
+            cursor: "pointer",
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+          }}
+        >
+          Load
+        </button>
+      </ViewscreenTooltip>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Main panel
 // ---------------------------------------------------------------------------
 
@@ -705,6 +802,9 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState<UserCatalogSave | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deletingUploadIds, setDeletingUploadIds] = useState<Set<string>>(new Set());
+  const [confirmDeleteUpload, setConfirmDeleteUpload] = useState<UserDatasetMeta | null>(null);
+  const [deleteUploadError, setDeleteUploadError] = useState<string | null>(null);
   // Saves whose row should be hidden from the list while their "Undo"
   // window is still open. Once the timer fires we commit the DELETE and
   // drop the id; if the user clicks Undo we just drop the id.
@@ -925,6 +1025,53 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     },
     [isSignedIn, nceiSaveMutation, refetchSaves],
   );
+
+  // My Uploads — raw list of user-uploaded datasets
+  const { data: userDatasets = [], isFetching: isUploadFetching } = useGetUserDatasets({
+    query: {
+      queryKey: getGetUserDatasetsQueryKey(),
+      enabled: !!isSignedIn,
+    },
+  });
+
+  // Dataset IDs already represented as catalog saves (any status).
+  // We exclude these from the uploads section to avoid double-listing.
+  const catalogSaveDatasetIds = useMemo(
+    () => new Set(mySaves.map((s) => s.datasetId).filter(Boolean) as string[]),
+    [mySaves],
+  );
+
+  // Uploads that are NOT already shown as a catalog save entry.
+  const uploadOnlyDatasets = useMemo(
+    () => userDatasets.filter((d) => !catalogSaveDatasetIds.has(d.id)),
+    [userDatasets, catalogSaveDatasetIds],
+  );
+
+  const deleteUploadMutation = useDeleteUserDatasetsId();
+
+  const handleRequestDeleteUpload = useCallback((dataset: UserDatasetMeta) => {
+    setDeleteUploadError(null);
+    setConfirmDeleteUpload(dataset);
+  }, []);
+
+  const handleConfirmDeleteUpload = useCallback(async () => {
+    if (!confirmDeleteUpload) return;
+    const target = confirmDeleteUpload;
+    setConfirmDeleteUpload(null);
+    setDeletingUploadIds((s) => new Set(s).add(target.id));
+    try {
+      await deleteUploadMutation.mutateAsync({ id: target.id });
+      await qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+    } catch (err) {
+      setDeleteUploadError(err instanceof Error ? err.message : "Could not delete uploaded dataset");
+    } finally {
+      setDeletingUploadIds((s) => {
+        const next = new Set(s);
+        next.delete(target.id);
+        return next;
+      });
+    }
+  }, [confirmDeleteUpload, deleteUploadMutation, qc]);
 
   const saveMutation = usePostDatasetsCatalogIdSave();
   const retryMutation = usePostDatasetsMySavesIdRetry();
@@ -1255,63 +1402,165 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
       {/* My Saves tab */}
       {tab === "saves" && (
         <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px" }}>
-          {isSaveFetching && (
-            <div style={{ fontSize: 13.5, color: "#94a3b8", marginBottom: 8 }}>Loading…</div>
-          )}
-          {!isSaveFetching && visibleSaves.length === 0 && (
-            <div style={{ fontSize: 13.5, color: "#94a3b8", textAlign: "center", paddingTop: 32 }}>
-              No saved datasets yet — search and save some above
-            </div>
-          )}
           {!isSignedIn && (
             <div style={{ fontSize: 13.5, color: "#f59e0b", textAlign: "center", paddingTop: 32 }}>
               Sign in to see saved datasets.
             </div>
           )}
-          {deleteError && (
-            <div
-              data-testid="save-delete-error"
-              style={{
-                marginBottom: 8,
-                padding: "6px 8px",
-                border: "1px solid rgba(248,113,113,0.4)",
-                background: "rgba(248,113,113,0.08)",
-                borderRadius: 4,
-                fontSize: 13.5,
-                color: "#fca5a5",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <span>⚠ {deleteError}</span>
-              <button
-                onClick={() => setDeleteError(null)}
-                aria-label="Dismiss error"
+          {isSignedIn && isSaveFetching && (
+            <div style={{ fontSize: 13.5, color: "#94a3b8", marginBottom: 8 }}>Loading…</div>
+          )}
+
+          {/* ── Catalog Saves section ── */}
+          {isSignedIn && (
+            <>
+              <div
                 style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "#cbd5e1",
-                  cursor: "pointer",
-                  fontSize: 15,
+                  fontSize: 11,
+                  letterSpacing: "0.15em",
+                  textTransform: "uppercase",
+                  color: "#64748b",
+                  marginBottom: 8,
+                  marginTop: 2,
                 }}
               >
-                ×
-              </button>
-            </div>
+                Catalog Saves
+              </div>
+              {deleteError && (
+                <div
+                  data-testid="save-delete-error"
+                  style={{
+                    marginBottom: 8,
+                    padding: "6px 8px",
+                    border: "1px solid rgba(248,113,113,0.4)",
+                    background: "rgba(248,113,113,0.08)",
+                    borderRadius: 4,
+                    fontSize: 13.5,
+                    color: "#fca5a5",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <span>⚠ {deleteError}</span>
+                  <button
+                    onClick={() => setDeleteError(null)}
+                    aria-label="Dismiss error"
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "#cbd5e1",
+                      cursor: "pointer",
+                      fontSize: 15,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              {!isSaveFetching && visibleSaves.length === 0 && (
+                <div
+                  style={{
+                    fontSize: 13.5,
+                    color: "#94a3b8",
+                    textAlign: "center",
+                    padding: "12px 0 16px",
+                  }}
+                >
+                  No catalog saves yet — search and save some above
+                </div>
+              )}
+              {visibleSaves.map((save) => (
+                <SaveCard
+                  key={save.id}
+                  save={save}
+                  onLoadUserDataset={handleLoadUserDataset}
+                  onRetry={handleRetry}
+                  retrying={retryingIds.has(save.id)}
+                  onDelete={handleRequestDelete}
+                  deleting={deletingIds.has(save.id)}
+                />
+              ))}
+            </>
           )}
-          {visibleSaves.map((save) => (
-            <SaveCard
-              key={save.id}
-              save={save}
-              onLoadUserDataset={handleLoadUserDataset}
-              onRetry={handleRetry}
-              retrying={retryingIds.has(save.id)}
-              onDelete={handleRequestDelete}
-              deleting={deletingIds.has(save.id)}
-            />
-          ))}
+
+          {/* ── My Uploads section ── */}
+          {isSignedIn && (
+            <>
+              <div
+                style={{
+                  fontSize: 11,
+                  letterSpacing: "0.15em",
+                  textTransform: "uppercase",
+                  color: "#64748b",
+                  marginBottom: 8,
+                  marginTop: 16,
+                  paddingTop: 12,
+                  borderTop: "1px solid rgba(0,229,255,0.08)",
+                }}
+              >
+                My Uploads
+              </div>
+              {deleteUploadError && (
+                <div
+                  data-testid="upload-delete-error"
+                  style={{
+                    marginBottom: 8,
+                    padding: "6px 8px",
+                    border: "1px solid rgba(248,113,113,0.4)",
+                    background: "rgba(248,113,113,0.08)",
+                    borderRadius: 4,
+                    fontSize: 13.5,
+                    color: "#fca5a5",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <span>⚠ {deleteUploadError}</span>
+                  <button
+                    onClick={() => setDeleteUploadError(null)}
+                    aria-label="Dismiss error"
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "#cbd5e1",
+                      cursor: "pointer",
+                      fontSize: 15,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              {isUploadFetching && (
+                <div style={{ fontSize: 13.5, color: "#94a3b8", marginBottom: 8 }}>Loading…</div>
+              )}
+              {!isUploadFetching && uploadOnlyDatasets.length === 0 && (
+                <div
+                  style={{
+                    fontSize: 13.5,
+                    color: "#94a3b8",
+                    textAlign: "center",
+                    padding: "12px 0 16px",
+                  }}
+                >
+                  No uploaded datasets yet
+                </div>
+              )}
+              {uploadOnlyDatasets.map((dataset) => (
+                <UploadCard
+                  key={dataset.id}
+                  dataset={dataset}
+                  onLoad={handleLoadUserDataset}
+                  onDelete={handleRequestDeleteUpload}
+                  deleting={deletingUploadIds.has(dataset.id)}
+                />
+              ))}
+            </>
+          )}
         </div>
       )}
 
@@ -1492,6 +1741,89 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               <button
                 onClick={() => void handleConfirmDelete()}
                 data-testid="confirm-delete-confirm"
+                style={{
+                  fontSize: 13.5,
+                  padding: "5px 12px",
+                  background: "rgba(248,113,113,0.12)",
+                  border: "1px solid rgba(248,113,113,0.5)",
+                  borderRadius: 3,
+                  color: "#fca5a5",
+                  cursor: "pointer",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload delete confirmation dialog */}
+      {confirmDeleteUpload && (
+        <div
+          role="dialog"
+          aria-label="Confirm delete uploaded dataset"
+          data-testid="confirm-delete-upload"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,4,10,0.75)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 200,
+          }}
+          onClick={() => setConfirmDeleteUpload(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "rgba(0,12,24,0.98)",
+              border: "1px solid rgba(0,229,255,0.25)",
+              borderRadius: 6,
+              padding: "16px 18px",
+              maxWidth: 320,
+              fontFamily: "'JetBrains Mono', monospace",
+              color: "#cbd5e1",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 16.5,
+                color: "#e2e8f0",
+                fontWeight: 700,
+                marginBottom: 8,
+                letterSpacing: "0.05em",
+              }}
+            >
+              Delete &ldquo;{confirmDeleteUpload.name}&rdquo;?
+            </div>
+            <div style={{ fontSize: 15, color: "#e2e8f0", lineHeight: 1.5, marginBottom: 14 }}>
+              This will permanently remove the uploaded dataset and its terrain data. This cannot be undone.
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                onClick={() => setConfirmDeleteUpload(null)}
+                data-testid="confirm-delete-upload-cancel"
+                style={{
+                  fontSize: 13.5,
+                  padding: "5px 12px",
+                  background: "transparent",
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  borderRadius: 3,
+                  color: "#e2e8f0",
+                  cursor: "pointer",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleConfirmDeleteUpload()}
+                data-testid="confirm-delete-upload-confirm"
                 style={{
                   fontSize: 13.5,
                   padding: "5px 12px",
