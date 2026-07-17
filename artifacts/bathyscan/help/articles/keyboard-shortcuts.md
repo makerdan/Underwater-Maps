@@ -24,9 +24,15 @@ Every key BathyScan responds to, in one place.
 | Shift | Descend (fly mode) |
 | = | Speed tier up |
 | - | Speed tier down |
-| Scroll wheel | Change speed tier (fly mode) / Zoom (orbit mode) |
+| Scroll wheel | Change speed tier (fly mode) / Zoom in and out (orbit mode) |
 | Right-drag | Orbit around the terrain point under the cursor |
 | Ctrl + drag | Orbit around the terrain point under the cursor |
+
+### Scroll and zoom sensitivity
+
+In **orbit mode**, scrolling zooms the camera toward or away from the terrain. How much each scroll tick moves can be adjusted with **Settings → Camera & Controls → Zoom Sensitivity** — increase it for faster zooming, decrease it for finer control when close to the seafloor.
+
+In **fly mode**, scrolling changes your speed tier rather than zooming. You can swap this default with **Settings → Camera & Controls → Scroll Behaviour**.
 
 ## Markers and tools
 
@@ -74,4 +80,5 @@ Movement via gamepad sticks and triggers is not currently supported; use a keybo
 - **Esc** is context-sensitive: it closes the topmost open panel first, then releases the mouse if fly mode is active.
 - The `=` and `-` keys adjust speed tier from anywhere in fly mode, even without scroll-wheel access.
 - **Right-drag** (or **Ctrl + drag**) lets you orbit around a specific terrain point without entering orbit mode.
-- On laptops, use a two-finger trackpad swipe to zoom in orbit mode.
+- On laptops, use a two-finger trackpad swipe to zoom in orbit mode. Adjust **Zoom Sensitivity** in Settings if the default feels too fast or too slow on your trackpad.
+- On touch devices, **tap-and-hold** replaces right-click everywhere in the app.

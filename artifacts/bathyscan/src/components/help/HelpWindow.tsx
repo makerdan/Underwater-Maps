@@ -80,7 +80,7 @@ function TakeTourLink({ onClose }: { onClose: () => void }) {
 }
 
 function ContactFooter() {
-  const appVersion = "1.0.0";
+  const appVersion = "1.6.0";
   const ua = typeof navigator !== "undefined" ? navigator.userAgent : "unknown";
   const subject = encodeURIComponent("BathyScan feedback");
   const body = encodeURIComponent(

@@ -53,8 +53,8 @@ const articles: ArticleEntry[] = mdFiles.map((file) => {
 const allIds = new Set(articles.map((a) => a.fm.id));
 
 describe("Help articles — frontmatter integrity", () => {
-  it("has exactly 29 article files", () => {
-    expect(mdFiles.length).toBe(29);
+  it("has exactly 34 article files", () => {
+    expect(mdFiles.length).toBe(34);
   });
 
   for (const { file, slug, fm } of articles) {

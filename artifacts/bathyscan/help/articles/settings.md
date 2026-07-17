@@ -11,9 +11,11 @@ Open Settings with the **Settings** link in the top bar, or by pressing **`,`** 
 
 Settings are saved locally and synced to the server when you are signed in, so they survive reloads and device switches.
 
-## Per-section RESET buttons
+## Per-section SAVE and RESET buttons
 
-Every section has a **RESET SECTION** button in its top-right corner that restores only that section's defaults without touching the rest. There is also a global **Reset All** button at the very bottom of the Settings page.
+Every section has a **SAVE** button and a **RESET SECTION** button in its top-right corner. The **SAVE** button commits changes in that section without affecting others. The **RESET SECTION** button restores only that section's defaults without touching the rest. There is also a global **Reset All** button at the very bottom of the Settings page.
+
+If you navigate away with unsaved changes, a **"You have unsaved changes"** warning dialog appears so you can save or discard before leaving.
 
 ---
 
@@ -32,6 +34,7 @@ Controls the look of the 3D scene.
 | Caustics | Shimmering light patterns on the seafloor in shallow water |
 | Marine Snow | Slow particle fall in the water column |
 | Water Opacity | How transparent the water surface appears |
+| Show Water Surface | Toggles the animated water plane visible on the scene |
 | Smooth Terrain Spikes | Median filter that removes single-point outlier spikes from the mesh |
 | Contour Interval | Depth spacing between iso-depth contour lines (auto-scales by default) |
 
@@ -59,6 +62,7 @@ The **Colour-blind (CVD)** colormap uses a palette designed for the most common 
 | Bright Daylight Mode | Boosts contrast and saturation for use in direct sunlight |
 | Reduced Motion | Disables animated water surface, particles, and camera easing |
 | High Contrast UI | Increases border and text contrast in all panels |
+| Tooltip Visibility | Controls whether hover tooltips appear on HUD elements and overlay buttons. Toggle off to reduce visual clutter |
 
 ---
 
@@ -85,7 +89,8 @@ Controls which on-screen elements are visible.
 | Setting | What it does |
 | --- | --- |
 | Mouse Sensitivity | How fast the camera rotates in fly mode |
-| Scroll Behaviour | Whether scroll changes speed tier or zooms (orbit mode) |
+| Scroll Behaviour | Whether scroll changes speed tier (fly mode) or zooms the camera (orbit mode). Both behaviours are always available — this setting only sets which mode scroll applies to by default |
+| Zoom Sensitivity | Controls how much each scroll tick zooms in orbit mode. Higher values give faster zoom steps; lower values give finer control |
 | Fly-mode Speed Tiers | Adjust the speed of each dot-tier |
 | Realistic Speed Mode | Shows knots in the speed indicator instead of unitless tiers |
 | Joystick Mode | Touch-based virtual joystick for mobile / tablet use |
@@ -147,6 +152,13 @@ Toggle the visibility of each left-column panel individually:
 | Clear Cached Tiles (per dataset) | Removes the tile cache for one dataset; the dataset itself is not deleted |
 | Clear Enhanced Image Cache | Wipes the AI-upscaled heatmap cache; the size readout resets to 0 |
 | Clear All Cached Data | Wipes the entire tile cache for all datasets |
+
+### Settings export and import
+
+You can back up your entire settings configuration or move it to another device:
+
+- **Export Settings** — downloads a `.json` file containing all your current settings values.
+- **Import Settings** — opens a file picker; select a previously exported `.json` to restore all settings at once. A confirmation dialog previews what will change before applying.
 
 ---
 

@@ -16,13 +16,14 @@ interface QAMessage {
 }
 
 const STARTERS = [
-  "How do I drop a marker?",
-  "What is the AI assistant for?",
-  "How do I upload my own depth data?",
+  "How do I switch between Explore, Plan, and Analyze modes?",
+  "How do I use the Drift Planner?",
+  "How do I enable Drive Boat / heading lock?",
+  "What does the TIDAL 3D toggle do?",
   "How do I correct a zone the AI got wrong?",
-  "How do I record my GPS track?",
-  "What does METAR mean?",
-  "How do I use the overview map?",
+  "How do I organise datasets into folders?",
+  "How do I export or import my settings?",
+  "How do I use the context menu on a phone?",
 ];
 
 export const HelpQA: React.FC = () => {

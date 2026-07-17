@@ -37,48 +37,48 @@ function rateLimitResponse() {
 
 describe("HelpQA", () => {
   it("clicking a starter question appends user + assistant messages", async () => {
-    fetchMock.mockResolvedValueOnce(okResponse("Use the marker tool."));
+    fetchMock.mockResolvedValueOnce(okResponse("Use the Drift Planner in the Plan tab."));
 
     render(<HelpQA />);
 
-    const starter = screen.getByRole("button", { name: /How do I drop a marker\?/i });
+    const starter = screen.getByRole("button", { name: /How do I use the Drift Planner\?/i });
     await act(async () => {
       fireEvent.click(starter);
     });
 
     await waitFor(() => {
-      expect(screen.getByText(/Use the marker tool\./)).toBeInTheDocument();
+      expect(screen.getByText(/Use the Drift Planner in the Plan tab\./)).toBeInTheDocument();
     });
-    expect(screen.getByText(/How do I drop a marker\?/)).toBeInTheDocument();
+    expect(screen.getByText(/How do I use the Drift Planner\?/)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toMatchObject({
-      question: "How do I drop a marker?",
+      question: "How do I use the Drift Planner?",
     });
   });
 
   it("clear button wipes the thread and brings back the starter prompts", async () => {
-    fetchMock.mockResolvedValueOnce(okResponse("Drop a pin from the toolbar."));
+    fetchMock.mockResolvedValueOnce(okResponse("Click Explore, Plan, or Analyze at the top of the sidebar."));
 
     render(<HelpQA />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /How do I drop a marker\?/i }));
+      fireEvent.click(screen.getByRole("button", { name: /How do I switch between Explore, Plan, and Analyze modes\?/i }));
     });
     await waitFor(() => {
-      expect(screen.getByText(/Drop a pin from the toolbar\./)).toBeInTheDocument();
+      expect(screen.getByText(/Click Explore, Plan, or Analyze at the top of the sidebar\./)).toBeInTheDocument();
     });
 
     const clearBtn = screen.getByRole("button", { name: /^Clear$/ });
     fireEvent.click(clearBtn);
 
     await waitFor(() => {
-      expect(screen.queryByText(/Drop a pin from the toolbar\./)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Click Explore, Plan, or Analyze at the top of the sidebar\./)).not.toBeInTheDocument();
     });
     expect(screen.getByText(/Try a starter question:/)).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /How do I drop a marker\?/i }),
+      screen.getByRole("button", { name: /How do I switch between Explore, Plan, and Analyze modes\?/i }),
     ).toBeInTheDocument();
   });
 
@@ -88,7 +88,7 @@ describe("HelpQA", () => {
     render(<HelpQA />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /How do I drop a marker\?/i }));
+      fireEvent.click(screen.getByRole("button", { name: /How do I use the Drift Planner\?/i }));
     });
 
     await waitFor(() => {

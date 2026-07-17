@@ -34,36 +34,35 @@ Most HUD elements can be turned off or made transparent under **Settings → HUD
 
 ## Left sidebar
 
-The left side of the screen holds a vertically scrollable column with several stacked panels:
+The left side of the screen holds a vertically scrollable column organised into **three mode tabs** at the top:
 
-- **Datasets** — pick a region, upload your own data, manage the dataset folder tree, manage markers.
-- **Overlays** — all environmental overlay toggle buttons (see below).
-- **Zone overlay** — toggle the AI-classified terrain zones and enter Paint mode.
-- **Habitat layer** — pick a species and see scored hotspots.
-- **Drift Planner** — drift prediction, trolling mode, and waypoints.
-- **Camera position** — current world coordinates.
-- **Keyboard** — collapsible cheat-sheet of shortcuts.
-- **Tidal panel** — currents, tide height, time scrub, and per-layer arrow density.
+- **Explore** — browse and switch datasets, control environmental overlays, search the data catalogue, and access the Find Data panel.
+- **Plan** — access the Tidal panel (tide height, time scrub, slack windows), the Drift Planner (routes, waypoints, GPX export), and the Throttle / Drive Boat panel (speed control and heading lock).
+- **Analyze** — access Zone Overlay (AI classifications, Paint mode), Habitat Layer (species scoring), Depth Profile, and the AI Query panel.
 
-You can hide the whole column with the **◂ HIDE** button at the top to get an unobstructed view.
+Each tab shows only the panels relevant to that mode. Click the tab labels at the top of the sidebar to switch. The **Camera Position** and **Keyboard Cheat-Sheet** panels appear in all modes.
 
-## Overlays panel
+You can hide the whole column with the **◂ HIDE** button at the top to get an unobstructed view. Each section's collapsed or expanded state is remembered across reloads, so your preferred layout is restored automatically the next time you open the app.
 
-The **Overlays** panel in the left sidebar contains buttons that toggle environmental layers directly on the 3D scene:
+## Overlays panel (Explore tab)
+
+The **Overlays** panel in the Explore tab contains buttons that toggle environmental layers directly on the 3D scene:
 
 | Button | What it does |
 | --- | --- |
 | 🗺 OVERVIEW | Opens/closes the top-down Overview Map (same as **O**) |
 | 🔍 FIND DATA | Opens the dataset search and browse drawer |
 | ◼ SUBSTRATE | Tints the seafloor by classified substrate type |
-| 💨 WIND | Overlays surface wind-direction arrows |
-| 🌊 TIDE | Overlays tidal-flow arrows |
-| ↬ CURRENT | Overlays sub-surface current arrows |
+| 💨 WIND | Overlays surface wind-direction arrows — available any time the toggle is on |
+| 🌊 TIDE | Overlays tidal-flow arrows — available any time the toggle is on |
+| ↬ CURRENT | Overlays sub-surface current arrows — available any time the toggle is on |
 | 🛩 NOAA WEATHER STATIONS | Toggles NOAA ASOS/AWOS station pins (saltwater only) |
 | 🌿 RAWS WEATHER STATIONS | Toggles AOOS RAWS land station pins (saltwater only) |
 | 📷 FAA WEATHERCAMS ↗ | Opens the FAA WeatherCams website in a new tab (saltwater only) |
 | 🌊 INTERTIDAL HOTSPOTS | Toggles tidepool and beachcombing hotspot pins |
 | 🐟 EFH | Overlays Essential Fish Habitat polygons (dataset-dependent) |
+
+Wind, Tide, and Current overlays are available whenever their toggle is on — they are not conditional on specific tidal data being loaded.
 
 ## Floating panels
 
@@ -75,6 +74,8 @@ The **Overlays** panel in the left sidebar contains buttons that toggle environm
 ## Crosshair action menu (Q or right-click)
 
 Pressing **Q** or right-clicking the terrain opens a context menu with actions at the current terrain point: Drop GPS pin, Measure, Depth Profile, Set home, Save bookmark, Copy coordinates, and Copy share link.
+
+On touch devices, **tap-and-hold** the terrain (or any dataset/folder entry in the sidebar) to open the same context menu instead of right-clicking.
 
 ## Status badges
 

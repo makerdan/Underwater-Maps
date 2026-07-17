@@ -11,7 +11,16 @@ The Drift Planner helps you model how your boat will move relative to the seaflo
 
 ## Opening the planner
 
-Look for the **Drift Planner** entry in the side pane (below Habitat Layer). Toggle it on to activate the planner controls and display the predicted track on the overview map.
+Switch to the **Plan tab** in the left sidebar. The **Drift Planner** section is listed below the Tidal panel. Toggle it on to activate the planner controls and display the predicted track on the overview map.
+
+## Setting a start point
+
+By default the planner uses your current GPS fix as the start point. If you do not have a GPS lock, or want to plan from a different location:
+
+1. Click **Set start point** in the Drift Planner panel.
+2. Click any point on the 3D scene or the overview map.
+
+A **Drift Start** marker appears at the chosen origin so you can compare your real position to the plan later.
 
 ## Drift mode
 
@@ -21,7 +30,7 @@ In **Drift mode** the planner estimates where your boat will end up after a give
 - **Drift duration** — how many minutes you want to drift for.
 - **Fishing line length** (optional) — estimates where your bait will settle relative to the boat after drifting.
 
-The planner draws a predicted ending position and a faint trail. A **Drift Start** marker at the origin lets you compare your real drift to the prediction later.
+The planner draws a predicted ending position and a faint trail.
 
 > **Heads-up:** this is a simple linear model. Eddies, depth-driven currents, and shoreline effects are not modelled. Use it as a sanity check, not a navigation source.
 
@@ -43,6 +52,16 @@ You can run **both modes in sequence** to plan a drifting approach followed by a
 
 The combined track is shown as two connected segments with a colour change at the transition point.
 
+## Adjusting wind and tidal inputs
+
+The planner reads wind direction and speed from the active **Weather Panel** conditions, and tidal current from the **Tidal Overlay** panel's selected layer and time. To change the inputs:
+
+- Adjust the hour slider in the Tidal panel to model a future or past state of the tide.
+- Switch the current layer (Surface / Mid-col / Near-btm) to match your gear depth.
+- If no live weather is available, you can manually enter a wind speed and bearing in the Drift Planner panel's **Override wind** fields.
+
+The drift path updates immediately whenever these inputs change.
+
 ## Waypoints
 
 Waypoints let you string together a series of targets that the planner visits in order:
@@ -52,7 +71,32 @@ Waypoints let you string together a series of targets that the planner visits in
 3. Add more waypoints. The planner draws legs between them and shows the **leg distance** (in nautical miles) and **estimated time** for each leg based on your current trolling speed and heading.
 4. The total route distance and total estimated time appear at the bottom of the waypoint list.
 
-You can drag waypoints to reorder them, or click **×** to remove one. Waypoints are saved per dataset session and cleared when you start a new planner session.
+You can drag waypoints to reorder them, or click **×** to remove one. Click any waypoint row to move the camera to that point.
+
+## Editing waypoints
+
+After placing waypoints you can:
+
+- **Drag** a waypoint pin on the overview map to reposition it.
+- **Click a waypoint row** in the list and type new coordinates directly.
+- **Reorder** by dragging the ≡ handle on any row.
+- **Delete** a single waypoint with the **×** button on its row.
+
+The leg distances and estimated times update instantly as you edit.
+
+## Saving and loading plans
+
+Click **Save plan** at the bottom of the Drift Planner panel to give the current waypoint route a name and store it. Saved plans appear in the **Saved Plans** dropdown at the top of the panel. Select one to reload it.
+
+Plans are stored per-account and available across devices. They are not tied to a specific dataset — the same plan can be loaded while viewing any dataset.
+
+## GPX export
+
+Click **Export GPX** (below the waypoint list) to download the full route — start point, drift/trolling segments, and all waypoints — as a standard GPX file. You can open this in any chart plotter, navigation app, or GIS tool that reads GPX.
+
+## WeatherPanel conditions summary
+
+At the top of the Drift Planner section a compact **WeatherPanel** summary shows the current wind speed, direction, and gust speed being fed into the drift calculation. If conditions have been overridden manually, the summary shows the override values instead of live data.
 
 ## Tips
 
@@ -60,3 +104,4 @@ You can drag waypoints to reorder them, or click **×** to remove one. Waypoints
 - For long drifts, re-check the wind and current data mid-session as conditions change throughout the day.
 - Use the leg-distance readout in waypoint mode to confirm you can reach the next mark within your planned fishing window.
 - The **SIMULATED badge** on tidal arrows means modelled data is being used for the current calculation — drift predictions are still directionally useful but treat absolute distances as estimates.
+- Save a named plan for each of your regular fishing spots. Loading a saved plan takes seconds and saves you having to re-enter waypoints every trip.

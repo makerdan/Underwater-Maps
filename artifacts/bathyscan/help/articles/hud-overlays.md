@@ -7,11 +7,11 @@ order: 11
 
 # HUD Overlay Toggles
 
-The **Overlays** panel sits in the **left sidebar**, below the main dataset controls. It collects all the environmental overlay toggles in one place so you can switch layers without hunting through settings.
+The **Overlays** panel sits in the **left sidebar**, in the **Explore tab**. It collects all the environmental overlay toggles in one place so you can switch layers without hunting through settings.
 
 ## How to open the Overlays panel
 
-The panel is always visible in the left column. If the left sidebar is hidden, click **▸ SHOW** to reveal it.
+The panel is always visible in the Explore tab of the left column. If the left sidebar is hidden, click **▸ SHOW** to reveal it.
 
 ## Toggles
 
@@ -20,9 +20,9 @@ The panel is always visible in the left column. If the left sidebar is hidden, c
 | 🗺 OVERVIEW | Opens/closes the top-down Overview Map (same as pressing **O**) |
 | 🔍 FIND DATA | Opens the dataset search and browse drawer — see [Find Data](#article:find-data) |
 | ◼ SUBSTRATE | Tints the seafloor by classified substrate type (sand, silt, sediment, basalt) — see [Substrate Layer](#article:substrate-layer) |
-| 💨 WIND | Overlays surface wind-direction arrows; colour intensity scales with speed |
-| 🌊 TIDE | Overlays tidal-flow arrows (pair with the [Tidal Overlay](#article:tidal-overlay) panel) |
-| ↬ CURRENT | Overlays sub-surface current arrows at the selected depth layer |
+| 💨 WIND | Overlays surface wind-direction arrows; colour intensity scales with speed. Available whenever the toggle is on |
+| 🌊 TIDE | Overlays tidal-flow arrows. Available whenever the toggle is on — not conditional on additional data loading |
+| ↬ CURRENT | Overlays sub-surface current arrows at the selected depth layer. Available whenever the toggle is on |
 | 🛩 NOAA WEATHER STATIONS | Toggles NOAA ASOS/AWOS aviation weather station pins (saltwater only) |
 | 🌿 RAWS WEATHER STATIONS | Toggles AOOS RAWS land weather station pins (saltwater only) |
 | 📷 FAA WEATHERCAMS ↗ | Opens the FAA WeatherCams page for your region in a new browser tab (saltwater only) |
@@ -59,4 +59,4 @@ The **📷 FAA WEATHERCAMS ↗** button is an **external link** — clicking it 
 - Weather station buttons are only shown when the **Saltwater** environment is active.
 - Toggles are independent — you can leave SUBSTRATE on while flipping TIDE and CURRENT.
 - The state of every toggle is remembered between sessions.
-- **🌊 TIDE** and **↬ CURRENT** work together with the [Tidal Overlay](#article:tidal-overlay) panel's time scrub and per-layer density controls.
+- **🌊 TIDE** and **↬ CURRENT** work together with the [Tidal Overlay](#article:tidal-overlay) panel's time scrub and per-layer density controls, but they show arrows even without a tidal panel time selection.

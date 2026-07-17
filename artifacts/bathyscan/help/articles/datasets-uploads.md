@@ -21,7 +21,7 @@ Click **Upload** at the bottom of the Datasets panel and drop in a `.xyz` or `.c
 
 **Format:** three columns — longitude, latitude, depth (in metres, positive down). Comma or whitespace separated. First-row header optional.
 
-After upload the app builds a terrain mesh, runs zone classification, and saves it under **Your saved datasets** so you can come back to it later.
+After upload the app builds a terrain mesh, runs zone classification, and saves it. Your new dataset appears automatically under **My Uploads** — no manual save step is required. Click it to load it immediately.
 
 ![Upload drop-zone](/help/upload-dropzone.png)
 
@@ -45,6 +45,17 @@ You do not need to keep the upload panel open while the server processes.
 ## Dataset folders
 
 Your saved datasets can be organised into **folders**. Click **+ New Folder** inside the Datasets panel, type a name, and press Enter. Drag a dataset onto a folder to move it in. Folders help when you have many uploads covering different areas or projects.
+
+### Context menu actions on folders and datasets
+
+Right-click (or **tap-and-hold** on touch) any folder or dataset entry to open its context menu:
+
+| Action | What it does |
+| --- | --- |
+| **Rename** | Edit the name of the folder or dataset inline |
+| **Duplicate** | Creates a copy of the dataset under a new name (same grid data, independent markers) |
+| **Move to folder** | Opens a folder picker so you can relocate the item without drag-and-drop |
+| **Delete** | Permanently removes the dataset or folder. Deleting a folder also deletes all datasets inside it and their markers — a confirmation dialog warns you before proceeding |
 
 ## Very large files
 

@@ -41,21 +41,27 @@ When a dataset includes coastline data, BathyScan renders a **Landmass layer** �
 
 Toggle the landmass on or off under **Settings → Visuals → Show Landmass**.
 
+### Shoreline texture
+
+The landmass surface uses a **realistic shoreline texture** — vegetation colours and a distinct shoreline band rendered where land meets water. The band's width and colour shift automatically based on the terrain slope and tidal range of the dataset, giving rocky, sandy, and marshy coastlines a visually distinct appearance. This texture is applied whenever the landmass layer is on; it does not require a separate toggle.
+
 ## Satellite imagery
 
 When the landmass layer is on, you can also enable **Satellite Imagery** under **Settings → Visuals → Satellite Imagery**. This drapes real aerial/satellite imagery over the landmass surface for a photo-realistic look. The toggle is hidden if the landmass layer is off, since satellite imagery applies only to the above-water terrain.
 
 You can also toggle satellite imagery on and off for the overview map independently — see [Overview Map](#article:overview-map).
 
-## Water surface animations
+## Water surface
 
-The animated water plane sits above the seafloor and adds realism:
+The animated water plane sits above the seafloor. You can toggle the water plane itself on or off under **Settings → Visuals → Show Water Surface** — useful when you want an unobstructed top-down view of the terrain or cleaner screenshots.
+
+With the water surface on, additional effects are available:
 
 - **Caustics** — shimmering light-refraction patterns on the seafloor, visible in shallow water. Toggle under **Settings → Visuals → Caustics**.
 - **Marine snow** — a slow particle fall of organic particles visible in the water column. Toggle under **Settings → Visuals → Marine Snow**.
 - **Water opacity** — adjust how transparent the water surface appears so you can see through to the terrain more clearly.
 
-All three are disabled automatically when the **Quality preset** is set to Low.
+All three effects are disabled automatically when the **Quality preset** is set to Low.
 
 ## Smooth terrain spikes filter
 
