@@ -301,6 +301,24 @@ export function useIsSessionExpired(): boolean {
   );
 }
 
+// ─── Settings PUT error suppression ───────────────────────────────────────────
+// PUT /api/settings failures are handled by useServerSettingsSync's own back-off
+// logic: after 3 consecutive failures it shows a "Settings not saving" toast with
+// a "Retry now" action button. Showing a generic "Request failed" toast here for
+// every single failure produces redundant noise before the dedicated toast appears.
+// Suppress the generic path entirely for this mutation; the hook owns the UX.
+
+function isSettingsPutError(error: unknown): boolean {
+  const e = error as { method?: unknown; url?: unknown } | null;
+  if (!e) return false;
+  return (
+    typeof e.method === "string" &&
+    e.method.toUpperCase() === "PUT" &&
+    typeof e.url === "string" &&
+    e.url.includes("/api/settings")
+  );
+}
+
 // ─── Poe classify error detection ─────────────────────────────────────────────
 // Errors returned by the /poe/* routes carry a structured `error` code in
 // their JSON body.  classificationStore already shows a targeted
@@ -362,6 +380,14 @@ function handleQueryError(error: unknown) {
   // health poll confirms the server is back.
   if (is502(error) || isNetworkError(error)) {
     setIsConnecting(true);
+    return;
+  }
+
+  // PUT /api/settings failures are owned by useServerSettingsSync's back-off
+  // logic ("Settings not saving" toast after 3 consecutive failures). Suppress
+  // the generic toast here so the user never sees redundant "Request failed"
+  // messages stacking up before the dedicated back-off toast appears.
+  if (isSettingsPutError(error)) {
     return;
   }
 
