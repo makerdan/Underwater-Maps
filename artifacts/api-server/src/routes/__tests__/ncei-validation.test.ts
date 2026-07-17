@@ -25,7 +25,7 @@ vi.mock("@workspace/db", () => ({
         onConflictDoUpdate: () => Promise.resolve([]),
       }),
     }),
-    update: () => ({ set: () => ({ where: () => Promise.resolve([]) }) }),
+    update: () => ({ set: () => ({ where: () => ({ returning: () => Promise.resolve([]) }) }) }),
     transaction: async <T>(cb: (tx: unknown) => Promise<T>) => cb({}),
   },
   datasetCatalogTable: {},

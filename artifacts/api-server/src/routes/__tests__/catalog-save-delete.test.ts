@@ -79,7 +79,7 @@ vi.mock("@workspace/db", () => {
       select,
       delete: del,
       insert: () => ({ values: () => ({ returning: () => Promise.resolve([]) }) }),
-      update: () => ({ set: () => ({ where: () => Promise.resolve([]) }) }),
+      update: () => ({ set: () => ({ where: () => ({ returning: () => Promise.resolve([]) }) }) }),
       transaction: async <T>(cb: (tx: unknown) => Promise<T>) => cb({}),
     },
     userCatalogSavesTable,
