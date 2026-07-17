@@ -379,8 +379,8 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
   // Server is the source of truth for the sync timestamp — never trust the
   // client's value here. This is what cross-device hydration uses to decide
   // whether the stored server state is newer than the local snapshot.
-  // NOTE: `delete extras.__updatedAt` was previously here but is dead code —
-  // the extraction loop above already excludes __updatedAt via `k !== "__updatedAt"`.
+  // The extraction loop above already excludes __updatedAt (k !== "__updatedAt"),
+  // so no explicit removal is needed here — the server timestamp is set below.
   const updatedAt = new Date().toISOString();
 
   // Merge over the previously stored row so unspecified fields keep their

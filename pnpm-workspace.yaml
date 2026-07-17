@@ -61,9 +61,10 @@ overrides:
   linkify-it: '>=5.0.1'
   # markdown-it <=14.1.1: quadratic DoS in smartquotes via orval->typedoc; build-only exposure
   markdown-it: '>=14.2.0'
-  # js-yaml: no patched 4.x exists (latest is 4.1.1); accepted as low-severity
-  # build-only exposure via orval toolchain; override removed to avoid resolving
-  # to the incompatible v5.x major which breaks orval's ESM import.
+  # js-yaml <=4.1.1: quadratic DoS in merge-key via orval; build-only exposure.
+  # Use ">=4.2.0 <5" to stay in the 4.x series (4.3.0 is the patched release)
+  # and avoid v5.x which has a different ESM export shape that breaks orval.
+  js-yaml: '>=4.2.0 <5'
   # vite <=7.3.4: server.fs.deny bypass + NTLMv2 hash disclosure on Windows;
   # bumped to ^7.3.5 in catalog above for bathyscan; override also covers api-server->vitest->vite path
   vite: '>=7.3.5'
