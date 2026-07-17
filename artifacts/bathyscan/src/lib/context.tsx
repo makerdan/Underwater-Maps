@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, { createContext, useCallback, useContext, useState, ReactNode } from "react";
 import type { TerrainData } from "@workspace/api-client-react";
 import { BOAT_DEFAULT_MPH, BOAT_MIN_MPH, BOAT_MAX_MPH } from "./boatSpeed";
 
@@ -76,19 +76,19 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [pendingExternalUserDatasetId, setPendingExternalUserDatasetId] =
     useState<string | null>(null);
 
-  function setTidalOverlay(b: boolean) {
+  const setTidalOverlay = useCallback((b: boolean) => {
     setTidalOverlayRaw(b);
-  }
+  }, []);
 
-  function setRealisticMode(b: boolean) {
+  const setRealisticMode = useCallback((b: boolean) => {
     setRealisticModeRaw(b);
     try { localStorage.setItem("bathyscan:realisticMode", String(b)); } catch {}
-  }
+  }, []);
 
-  function setBoatSpeedMph(mph: number) {
+  const setBoatSpeedMph = useCallback((mph: number) => {
     setBoatSpeedMphRaw(mph);
     try { localStorage.setItem("bathyscan:boatSpeedMph", String(mph)); } catch {}
-  }
+  }, []);
 
   return (
     <AppContext.Provider

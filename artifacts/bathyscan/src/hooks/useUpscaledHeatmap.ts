@@ -1,7 +1,15 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import type { OverviewTransform } from "@/lib/overviewRenderer";
 import type { TerrainData } from "@workspace/api-client-react";
 import { authorizedFetch } from "@/lib/authorizedFetch";
+import {
+  idbGet,
+  idbSet,
+  idbDelete,
+  initIdbCache,
+  clearIdbStore,
+  getIdbCacheInfo,
+} from "@/lib/upscaleIdb";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -26,80 +34,6 @@ function evictIfNeeded(): void {
   }
 }
 
-// ---------------------------------------------------------------------------
-// IndexedDB persistence — survives full page refreshes.
-// Keyed by the same bitmapHash + factor string used by the in-memory cache.
-// ---------------------------------------------------------------------------
-
-const IDB_NAME = "bathyscan-upscale-v1";
-const IDB_STORE = "upscaled";
-const TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-interface IdbEntry {
-  src: string;   // data URL
-  ts: number;    // Date.now() at write time
-}
-
-function openIdb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(IDB_NAME, 1);
-    req.onupgradeneeded = () => {
-      req.result.createObjectStore(IDB_STORE);
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function idbGet(key: string): Promise<string | null> {
-  try {
-    const db = await openIdb();
-    return new Promise((resolve) => {
-      const tx = db.transaction(IDB_STORE, "readonly");
-      const req = tx.objectStore(IDB_STORE).get(key) as IDBRequest<IdbEntry | undefined>;
-      req.onsuccess = () => {
-        db.close();
-        const entry = req.result;
-        if (!entry) { resolve(null); return; }
-        if (Date.now() - entry.ts > TTL_MS) { resolve(null); return; }
-        resolve(entry.src);
-      };
-      req.onerror = () => { db.close(); resolve(null); };
-    });
-  } catch {
-    return null;
-  }
-}
-
-async function idbSet(key: string, src: string): Promise<void> {
-  try {
-    const db = await openIdb();
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE, "readwrite");
-      const entry: IdbEntry = { src, ts: Date.now() };
-      const req = tx.objectStore(IDB_STORE).put(entry, key);
-      req.onsuccess = () => { db.close(); resolve(); };
-      req.onerror = () => { db.close(); reject(req.error); };
-    });
-  } catch (err) {
-    console.warn("[upscale] IDB write failed (non-fatal):", err);
-  }
-}
-
-async function idbDelete(key: string): Promise<void> {
-  try {
-    const db = await openIdb();
-    await new Promise<void>((resolve) => {
-      const tx = db.transaction(IDB_STORE, "readwrite");
-      const req = tx.objectStore(IDB_STORE).delete(key);
-      req.onsuccess = () => { db.close(); resolve(); };
-      req.onerror = () => { db.close(); resolve(); };
-    });
-  } catch {
-    // non-fatal
-  }
-}
-
 /**
  * Return the number of entries and the approximate total byte size of the
  * IndexedDB upscale cache.  Size is estimated by summing the character length
@@ -108,30 +42,7 @@ async function idbDelete(key: string): Promise<void> {
  * Returns `{ count: 0, bytes: 0 }` on any error so the UI degrades gracefully.
  */
 export async function getUpscaleCacheInfo(): Promise<{ count: number; bytes: number }> {
-  try {
-    const db = await openIdb();
-    return new Promise((resolve) => {
-      const tx = db.transaction(IDB_STORE, "readonly");
-      const store = tx.objectStore(IDB_STORE);
-      const cursorReq = store.openCursor() as IDBRequest<IDBCursorWithValue | null>;
-      let count = 0;
-      let bytes = 0;
-
-      cursorReq.onsuccess = () => {
-        const cursor = cursorReq.result;
-        if (!cursor) return; // tx.oncomplete fires next
-        const entry = cursor.value as IdbEntry;
-        count += 1;
-        bytes += entry.src.length;
-        cursor.continue();
-      };
-
-      tx.oncomplete = () => { db.close(); resolve({ count, bytes }); };
-      tx.onerror = () => { db.close(); resolve({ count: 0, bytes: 0 }); };
-    });
-  } catch {
-    return { count: 0, bytes: 0 };
-  }
+  return getIdbCacheInfo();
 }
 
 /**
@@ -145,60 +56,20 @@ export async function getUpscaleCacheInfo(): Promise<{ count: number; bytes: num
  */
 export async function clearUpscaleCache(): Promise<void> {
   upscaleCache.clear();
-  try {
-    const db = await openIdb();
-    await new Promise<void>((resolve) => {
-      const tx = db.transaction(IDB_STORE, "readwrite");
-      const req = tx.objectStore(IDB_STORE).clear();
-      req.onsuccess = () => { db.close(); resolve(); };
-      req.onerror = () => { db.close(); resolve(); };
-    });
-  } catch (err) {
-    console.warn("[upscale] clearUpscaleCache IDB clear failed (non-fatal):", err);
-  }
+  await clearIdbStore();
 }
 
 /**
  * On module load: open IDB, prune entries older than TTL, and pre-populate the
  * in-memory cache from surviving entries so the first render hits the fast path.
  */
-const idbReady: Promise<void> = (async () => {
-  try {
-    const db = await openIdb();
-    const now = Date.now();
-
-    await new Promise<void>((resolve) => {
-      const tx = db.transaction(IDB_STORE, "readwrite");
-      const store = tx.objectStore(IDB_STORE);
-      const cursorReq = store.openCursor() as IDBRequest<IDBCursorWithValue | null>;
-
-      cursorReq.onsuccess = () => {
-        const cursor = cursorReq.result;
-        if (!cursor) { resolve(); return; }
-
-        const entry = cursor.value as IdbEntry;
-        const key = cursor.key as string;
-
-        if (now - entry.ts > TTL_MS) {
-          cursor.delete();
-        } else if (upscaleCache.size < MAX_CACHE_ENTRIES) {
-          // Pre-populate in-memory cache without fully loading the Image yet;
-          // we load it lazily when it is actually requested.
-          const img = new Image();
-          img.src = entry.src;
-          upscaleCache.set(key, img);
-        }
-
-        cursor.continue();
-      };
-
-      cursorReq.onerror = () => resolve();
-      tx.oncomplete = () => { db.close(); resolve(); };
-    });
-  } catch (err) {
-    console.warn("[upscale] IDB init failed (non-fatal):", err);
+const idbReady: Promise<void> = initIdbCache((key, src) => {
+  if (upscaleCache.size < MAX_CACHE_ENTRIES) {
+    const img = new Image();
+    img.src = src;
+    upscaleCache.set(key, img);
   }
-})();
+}, MAX_CACHE_ENTRIES);
 
 // ---------------------------------------------------------------------------
 // Bitmap hashing
@@ -297,12 +168,24 @@ function makeCacheKey(bitmapHash: string, factor: 2 | 4): string {
  * Concurrent requests are suppressed via `inFlightRef`. Requests for the same
  * cache key are skipped. Errors fall back silently — the original bitmap
  * remains visible.
+ *
+ * `isMountedRef` guards every state setter and IDB write that runs after an
+ * async boundary so that an unmounted component never triggers orphaned IDB
+ * writes or React state updates.
  */
 export function useUpscaledHeatmap() {
   const [isUpscaling, setIsUpscaling] = useState(false);
   const [upscaledBitmap, setUpscaledBitmap] = useState<HTMLImageElement | null>(null);
   const inFlightRef = useRef(false);
   const lastKeyRef = useRef<string | null>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   /**
    * Clear the currently displayed upscaled bitmap, reset the in-component
@@ -368,7 +251,7 @@ export function useUpscaledHeatmap() {
       // Check in-memory again — the init pass may have populated it.
       if (upscaleCache.has(cacheKey)) {
         const cached = upscaleCache.get(cacheKey)!;
-        if (lastKeyRef.current !== cacheKey) {
+        if (lastKeyRef.current !== cacheKey && isMountedRef.current) {
           lastKeyRef.current = cacheKey;
           setUpscaledBitmap(cached);
         }
@@ -386,7 +269,7 @@ export function useUpscaledHeatmap() {
         if (img.complete && img.naturalWidth > 0) {
           upscaleCache.set(cacheKey, img);
           evictIfNeeded();
-          if (lastKeyRef.current !== cacheKey) {
+          if (lastKeyRef.current !== cacheKey && isMountedRef.current) {
             lastKeyRef.current = cacheKey;
             setUpscaledBitmap(img);
           }
@@ -429,20 +312,28 @@ export function useUpscaledHeatmap() {
           img.src = src;
         });
 
-        // Store in module-level cache and IndexedDB before updating state
+        // Store in module-level cache (survives unmount).
         upscaleCache.set(cacheKey, img);
         evictIfNeeded();
-        void idbSet(cacheKey, src);
 
-        setUpscaledBitmap(img);
+        // Guard IDB write and state update: the component may have unmounted
+        // while the Poe call was in flight.
+        if (isMountedRef.current) {
+          void idbSet(cacheKey, src);
+          setUpscaledBitmap(img);
+        }
       } catch (err) {
         console.warn("[upscale] Upscale error (silent fallback):", err);
         lastKeyRef.current = null;
       } finally {
         inFlightRef.current = false;
-        setIsUpscaling(false);
+        if (isMountedRef.current) {
+          setIsUpscaling(false);
+        }
       }
     },
+    // isMountedRef is a ref object — the closure always reads .current, so it
+    // does not need to be listed as a dep.
     [],
   );
 
