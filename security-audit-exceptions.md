@@ -22,23 +22,6 @@ upgrades `markdown-it` to pull `linkify-it >=5.0.1`. Track via `pnpm update --re
 
 ---
 
-## High — `vite` server.fs.deny bypass on Windows (GHSA-fx2h-pf6j-xcff)
-
-**Path affected**
-- `artifacts/api-server > vitest > vite` (versions `>=7.0.0 <=7.3.4`)
-
-**Risk assessment**: This is a Windows-specific path-traversal issue (`\\??\\` alternate path forms).
-The project runs exclusively on Linux; the attack vector does not exist on the deployment target.
-
-**Fix status**: Fix already committed — `pnpm-workspace.yaml` overrides section forces `vite: '>=7.3.5'`
-for all transitive consumers. This finding will disappear automatically after the next `pnpm install`
-updates the lockfile. Remove this exception from `scripts/check-audit.mjs` and this file once the
-override has been applied by a successful install.
-
-**Planned fix date**: 2026-08-01 (remove exception after lockfile regeneration confirms clear audit).
-
----
-
 ## High — `undici` SOCKS5/WebSocket advisories via jsdom (GHSA-vmh5-mc38-953g, GHSA-vxpw-j846-p89q, GHSA-hm92-r4w5-c3mj)
 
 **Path affected**

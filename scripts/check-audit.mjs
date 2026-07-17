@@ -22,14 +22,6 @@ const EXCEPTIONS = {
       "never in a deployed service. No user input reaches this code path at runtime.",
     fixDate: "2026-10-17",
   },
-  "GHSA-fx2h-pf6j-xcff": {
-    reason:
-      "vite server.fs.deny bypass — Windows-only attack vector; this project runs on Linux. " +
-      "Fix already committed: pnpm-workspace.yaml overrides forces vite>=7.3.5. " +
-      "This finding disappears once pnpm install is re-run and the lockfile is updated. " +
-      "Remove this exception after the next successful pnpm install.",
-    fixDate: "2026-08-01",
-  },
   // undici via jsdom — test-only devDep, not deployed to production.
   // Cannot override undici to >=7.28.0: jsdom 29.1.1 hard-requires internal
   // paths (e.g. undici/lib/handler/wrap-handler.js) that were removed in
