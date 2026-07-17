@@ -261,18 +261,36 @@ router.get("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
   res.json(mergeForResponse(stored, validated));
 }));
 
+/**
+ * Strip user-controlled `.received` values from a Zod issue object before
+ * logging or returning it in a response. Keeps `.path`, `.code`, and
+ * `.message` which are sufficient for debugging without echoing user input.
+ */
+function sanitizeZodIssue(issue: Record<string, unknown>): Record<string, unknown> {
+  const { received: _r, ...safe } = issue;
+  return safe;
+}
+
+const MAX_TOTAL_SETTINGS_BYTES = 256 * 1024;
+
 router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const body = (req.body ?? {}) as Record<string, unknown>;
   const parsed = PutSettingsBody.safeParse(body);
   if (!parsed.success) {
-    // Strip .received from each issue before logging/returning to avoid echoing
-    // user-controlled input values (a malicious string sent as a setting value
-    // would appear verbatim in logs and in the 400 response body).
-    const sanitizedIssues = parsed.error.issues.map(({ path, code, message }) => ({ path, code, message }));
-    process.stderr.write(`[settings] PUT /api/settings 400 — userId=${userId} issues=${JSON.stringify(sanitizedIssues)}\n`);
-    logger.warn({ userId, issues: sanitizedIssues }, "PUT /api/settings — Zod validation failed");
-    res.status(400).json({ error: "invalid_request", details: parsed.error.message, issues: sanitizedIssues });
+    const safeIssues = parsed.error.issues.map((i) =>
+      sanitizeZodIssue(i as unknown as Record<string, unknown>),
+    );
+    const sanitizedDetails = parsed.error.issues
+      .map((i) => `${(i.path ?? []).join(".") || "(root)"}: ${i.code}`)
+      .join("; ");
+    // For server logs, keep only path and code — Zod's message field can
+    // embed the user-supplied value (e.g. "received 'attoparsecs'"), so
+    // it is intentionally excluded from the log to avoid leaking input.
+    const logIssues = parsed.error.issues.map((i) => ({ path: i.path, code: i.code }));
+    process.stderr.write(`[settings] PUT /api/settings 400 — userId=${userId} issues=${JSON.stringify(logIssues)}\n`);
+    logger.warn({ userId, issues: logIssues }, "PUT /api/settings — Zod validation failed");
+    res.status(400).json({ error: "invalid_request", details: sanitizedDetails, issues: safeIssues });
     return;
   }
 
@@ -407,6 +425,20 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
       saltwater: merged.zoneOverlaySlots,
       freshwater: DEFAULT_SETTINGS.zoneOverlaySlots.freshwater,
     };
+  }
+
+  // Guard: cap the total size of the merged settings object to prevent
+  // unbounded database growth. This catches cases where a large stored row
+  // combined with a small valid request would still produce an oversized row.
+  const mergedBytes = Buffer.byteLength(JSON.stringify(merged), "utf8");
+  if (mergedBytes > MAX_TOTAL_SETTINGS_BYTES) {
+    process.stderr.write(`[settings] PUT /api/settings 400 — totalTooLarge userId=${userId} bytes=${mergedBytes}\n`);
+    logger.warn({ userId, mergedBytes }, "PUT /api/settings — merged settings payload too large");
+    res.status(400).json({
+      error: "invalid_request",
+      details: `Settings payload exceeds the ${MAX_TOTAL_SETTINGS_BYTES}-byte total size cap`,
+    });
+    return;
   }
 
   await db

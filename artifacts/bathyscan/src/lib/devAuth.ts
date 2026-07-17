@@ -44,7 +44,10 @@ export function assertDevAuthBypassSafe(): void {
         "This flag is dev-only and must never ship to production.",
     );
   }
-  if (DEV_AUTH_BYPASS && typeof console !== "undefined") {
+  // The explicit import.meta.env.DEV guard lets Vite tree-shake this entire
+  // branch (including the console.warn call) from production bundles, even
+  // though DEV_AUTH_BYPASS already incorporates the same flag.
+  if (import.meta.env.DEV && DEV_AUTH_BYPASS && typeof console !== "undefined") {
     console.warn(
       "%c[bathyscan] DEV AUTH BYPASS ACTIVE — Clerk is stubbed, requests are signed as " +
         FAKE_DEV_USER_ID +

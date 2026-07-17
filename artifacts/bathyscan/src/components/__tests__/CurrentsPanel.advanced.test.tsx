@@ -17,24 +17,45 @@ import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
-// ── Mutable state shared across tests ─────────────────────────────────────────
+// ── vi.hoisted: variables available before mock factories AND before module init ──
+//
+// vi.mock() factories are hoisted before `let` declarations, so plain `let` vars
+// are in the Temporal Dead Zone (TDZ) when getState() is called during module
+// initialization (uiStore.ts:608 → settingsState()). vi.hoisted() runs first.
 
-let mockCurrentsEnabled = true;
-const mockSetCurrentsEnabled = vi.fn((v: boolean) => {
-  mockCurrentsEnabled = v;
+const h = vi.hoisted(() => {
+  let currentsEnabled = true;
+  let advancedCollapsed = true;
+  const setCurrentsEnabled = vi.fn((v: boolean) => {
+    currentsEnabled = v;
+  });
+  const panelToggle = vi.fn();
+
+  return {
+    get currentsEnabled() {
+      return currentsEnabled;
+    },
+    set currentsEnabled(v: boolean) {
+      currentsEnabled = v;
+    },
+    get advancedCollapsed() {
+      return advancedCollapsed;
+    },
+    set advancedCollapsed(v: boolean) {
+      advancedCollapsed = v;
+    },
+    setCurrentsEnabled,
+    panelToggle,
+  };
 });
-
-/** panelCollapseStore mock state — false = expanded, true = collapsed */
-let mockCurrentsPanelAdvancedCollapsed = true;
-const mockPanelToggle = vi.fn();
 
 // ── Module-level mocks (hoisted) ──────────────────────────────────────────────
 
 vi.mock("@/lib/settingsStore", () => {
   const settingsState = () => ({
     units: "nautical" as const,
-    currentsEnabled: mockCurrentsEnabled,
-    setCurrentsEnabled: mockSetCurrentsEnabled,
+    currentsEnabled: h.currentsEnabled,
+    setCurrentsEnabled: h.setCurrentsEnabled,
     currentsSource: "manual" as const,
     setCurrentsSource: vi.fn(),
     currentsManualDirectionDeg: 90,
@@ -67,7 +88,10 @@ vi.mock("@/lib/settingsStore", () => {
     },
   );
 
-  return { useSettingsStore };
+  return {
+    useSettingsStore,
+    DEFAULT_SETTINGS: {} as Record<string, unknown>,
+  };
 });
 
 vi.mock("@/lib/panelCollapseStore", () => ({
@@ -80,12 +104,11 @@ vi.mock("@/lib/panelCollapseStore", () => ({
     sel({
       collapsed: new Proxy({} as Record<string, boolean>, {
         get(_target, prop) {
-          if (prop === "currentsPanelAdvanced")
-            return mockCurrentsPanelAdvancedCollapsed;
+          if (prop === "currentsPanelAdvanced") return h.advancedCollapsed;
           return false;
         },
       }),
-      toggle: mockPanelToggle,
+      toggle: h.panelToggle,
     }),
 }));
 
@@ -140,10 +163,10 @@ function resetMocks({
   currentsEnabled?: boolean;
   advancedCollapsed?: boolean;
 } = {}) {
-  mockCurrentsEnabled = currentsEnabled;
-  mockCurrentsPanelAdvancedCollapsed = advancedCollapsed;
-  mockSetCurrentsEnabled.mockClear();
-  mockPanelToggle.mockClear();
+  h.currentsEnabled = currentsEnabled;
+  h.advancedCollapsed = advancedCollapsed;
+  h.setCurrentsEnabled.mockClear();
+  h.panelToggle.mockClear();
 }
 
 const ADV_TESTID = "advanced-toggle-currentsPanelAdvanced";
@@ -214,12 +237,12 @@ describe("CurrentsPanel — Advanced section visibility guard", () => {
     );
 
     // Toggle currents off — Advanced toggle disappears.
-    mockCurrentsEnabled = false;
+    h.currentsEnabled = false;
     rerender(<CurrentsPanel />);
     expect(screen.queryByTestId(ADV_TESTID)).toBeNull();
 
     // Toggle currents on — store state is UNCHANGED (advancedCollapsed=false).
-    mockCurrentsEnabled = true;
+    h.currentsEnabled = true;
     rerender(<CurrentsPanel />);
 
     const advBtn = screen.getByTestId(ADV_TESTID);
@@ -238,11 +261,11 @@ describe("CurrentsPanel — Advanced section visibility guard", () => {
       "false",
     );
 
-    mockCurrentsEnabled = false;
+    h.currentsEnabled = false;
     rerender(<CurrentsPanel />);
     expect(screen.queryByTestId(ADV_TESTID)).toBeNull();
 
-    mockCurrentsEnabled = true;
+    h.currentsEnabled = true;
     rerender(<CurrentsPanel />);
     expect(screen.getByTestId(ADV_TESTID)).toHaveAttribute(
       "aria-expanded",
@@ -256,7 +279,7 @@ describe("CurrentsPanel — Advanced section visibility guard", () => {
     resetMocks({ currentsEnabled: true, advancedCollapsed: true });
     render(<CurrentsPanel />);
     fireEvent.click(screen.getByTestId(ADV_TESTID));
-    expect(mockPanelToggle).toHaveBeenCalledOnce();
-    expect(mockPanelToggle).toHaveBeenCalledWith("currentsPanelAdvanced");
+    expect(h.panelToggle).toHaveBeenCalledOnce();
+    expect(h.panelToggle).toHaveBeenCalledWith("currentsPanelAdvanced");
   });
 });
