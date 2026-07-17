@@ -51,7 +51,9 @@ const h = vi.hoisted(() => {
 
 // ── Module-level mocks (hoisted) ──────────────────────────────────────────────
 
-vi.mock("@/lib/settingsStore", () => {
+vi.mock("@/lib/settingsStore", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/settingsStore")>();
+
   const settingsState = () => ({
     units: "nautical" as const,
     currentsEnabled: h.currentsEnabled,
@@ -89,8 +91,8 @@ vi.mock("@/lib/settingsStore", () => {
   );
 
   return {
+    ...actual,
     useSettingsStore,
-    DEFAULT_SETTINGS: {} as Record<string, unknown>,
   };
 });
 
