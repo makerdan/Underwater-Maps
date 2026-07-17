@@ -53,6 +53,12 @@ import {
   type ShortcutActionId,
 } from "./keyBindings";
 import { usePanelCollapseStore, type PanelId } from "./panelCollapseStore";
+import {
+  toValidJoystickMode,
+  toValidColormapTheme,
+  toValidWaterType,
+  toValidDefaultSpeedTier,
+} from "./settingsGuards";
 
 export const SETTINGS_SCHEMA_VERSION = 22;
 
@@ -1312,8 +1318,15 @@ export const useSettingsStore = create<SettingsStore>()(
             for (const [k, serverVal] of Object.entries(partialRec)) {
               if (k === "__updatedAt") continue;
               if (!dataKeySet.has(k)) continue;
-              applied[k] = serverVal;
-              nextSnap[k] = serverVal;
+              // Guard the high-risk union/range fields so a corrupted server
+              // value cannot silently overwrite a valid local value.
+              let safeVal: unknown = serverVal;
+              if (k === "joystickMode") safeVal = toValidJoystickMode(serverVal);
+              else if (k === "colormapTheme") safeVal = toValidColormapTheme(serverVal);
+              else if (k === "waterType") safeVal = toValidWaterType(serverVal);
+              else if (k === "defaultSpeedTier") safeVal = toValidDefaultSpeedTier(serverVal);
+              applied[k] = safeVal;
+              nextSnap[k] = safeVal;
             }
 
             // Apply the server's panel collapse map to panelCollapseStore.
@@ -1518,7 +1531,7 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).sidebarMode === undefined) {
             migratedSidebarMode.sidebarMode = DEFAULT_SETTINGS.sidebarMode;
           }
-          return {
+          const mergedState: SettingsState = {
             ...DEFAULT_SETTINGS,
             ...rest,
             ...split,
@@ -1533,13 +1546,27 @@ export const useSettingsStore = create<SettingsStore>()(
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,
           };
+          // Guard high-risk union fields against corrupted or future-schema values
+          // that slipped in before migration ran (e.g. from a cross-device sync
+          // or a manually edited localStorage entry).
+          mergedState.joystickMode = toValidJoystickMode(mergedState.joystickMode);
+          mergedState.colormapTheme = toValidColormapTheme(mergedState.colormapTheme);
+          mergedState.waterType = toValidWaterType(mergedState.waterType);
+          mergedState.defaultSpeedTier = toValidDefaultSpeedTier(mergedState.defaultSpeedTier);
+          return mergedState;
         }
         // Even at the current version, ensure newly added actions get
         // their defaults filled in if the persisted map is missing them.
+        // Also guard union fields so a corrupted or manually edited stored
+        // entry doesn't silently produce an unrecognised value.
         const cur = persisted as SettingsState;
         return {
           ...cur,
           keyBindings: resolveKeyBindings(cur.keyBindings),
+          joystickMode: toValidJoystickMode(cur.joystickMode),
+          colormapTheme: toValidColormapTheme(cur.colormapTheme),
+          waterType: toValidWaterType(cur.waterType),
+          defaultSpeedTier: toValidDefaultSpeedTier(cur.defaultSpeedTier),
         };
       },
       // After localStorage rehydrates, treat the persisted values as the
