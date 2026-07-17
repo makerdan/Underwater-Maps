@@ -15,9 +15,13 @@ export default defineConfig({
     // Run all test files in a single forked process so the bagWorker singleton
     // (stored under a global symbol) is shared across all BAG test files.
     // This eliminates repeated Python + h5py cold-starts between test files.
+    pool: "forks",
     poolOptions: {
       forks: {
         singleFork: true,
+        // Cap the heap of the forked test process so V8 GC pressure kicks in
+        // before the process exhausts system RAM and triggers an OOM crash.
+        execArgv: ["--max-old-space-size=4096"],
       },
     },
   },
