@@ -83,6 +83,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
 
   const [storageQuota, setStorageQuota] = useState<{ used: number; total: number } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [idbError, setIdbError] = useState(false);
 
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -91,15 +92,16 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
     void (async () => {
       const [packs, packsErr] = await listOfflinePacks()
         .then((r): [OfflinePack[], null] => [r, null])
-        .catch((e): [OfflinePack[], string] => [
-          [],
-          e instanceof Error ? e.message : "Could not load saved packs",
-        ]);
+        .catch((e): [OfflinePack[], string] => {
+          setIdbError(true);
+          return [[], e instanceof Error ? e.message : "Could not load saved packs"];
+        });
       if (packsErr) setLoadError(packsErr);
       const match = packs.find((p) => p.datasetId === dataset.id) ?? null;
       setExistingPack(match);
 
       const hs = await getHelpPackStatus().catch((e) => {
+        setIdbError(true);
         setLoadError((prev) =>
           prev ?? (e instanceof Error ? e.message : "Could not load help pack status"),
         );
@@ -271,6 +273,23 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
         )}
 
         <div style={{ padding: "12px 16px" }}>
+          {/* ── IDB unavailable banner ── */}
+          {idbError && (
+            <div
+              role="alert"
+              style={{
+                background: "rgba(239,68,68,0.12)",
+                border: "1px solid rgba(239,68,68,0.4)",
+                borderRadius: 6,
+                padding: "8px 12px",
+                marginBottom: 12,
+                fontSize: 11,
+                color: "#fca5a5",
+              }}
+            >
+              Could not load packs — storage may be unavailable in this browser.
+            </div>
+          )}
           {/* ── Survey Area section ── */}
           <div style={{
             border: "1px solid rgba(0,229,255,0.12)",

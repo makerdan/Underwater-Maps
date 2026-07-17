@@ -90,6 +90,13 @@ export function requestSettingsSync(): void {
 let _pendingDebounce = false;
 let _flushInFlight = false;
 
+// ─── Consecutive flush failure tracking ──────────────────────────────────────
+// Counts how many debounce-triggered flush() calls have failed back-to-back.
+// Reset to 0 on any successful PUT. When it reaches the threshold, a toast
+// warning is shown so the user knows their settings are not being persisted.
+let _consecutiveFlushFailures = 0;
+const FLUSH_FAILURE_TOAST_THRESHOLD = 3;
+
 // ─── Hydration / ordering guards ─────────────────────────────────────────────
 //  _hydrating        — true while the GET effect is applying server values to
 //                      the local stores. The store subscriptions below check
@@ -134,12 +141,6 @@ export function hasPendingOrInFlightSettingsSync(): boolean {
 // concurrency behaviour: two flush paths can race, and edit-rev tracking
 // de-syncs. Detect this early in DEV mode.
 let _hookMounted = false;
-
-// ─── Consecutive flush failure tracking ───────────────────────────────────────
-// After this many consecutive PUT failures the user gets a non-blocking toast
-// so they know their settings may not be saving (e.g. server unreachable).
-let _consecutiveFlushFailures = 0;
-const MAX_SILENT_FLUSH_FAILURES = 3;
 
 // ─── Payload builder (pure function of store state) ───────────────────────────
 function buildPayload(): Record<string, unknown> {
@@ -470,7 +471,7 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
         _consecutiveFlushFailures++;
         // After several consecutive failures, surface a non-blocking toast so
         // the user knows their settings may not be saving (e.g. server down).
-        if (_consecutiveFlushFailures >= MAX_SILENT_FLUSH_FAILURES) {
+        if (_consecutiveFlushFailures >= FLUSH_FAILURE_TOAST_THRESHOLD) {
           toast({
             title: "Settings not saving",
             description: "Your settings could not be saved to the server. Changes are stored locally — try again when reconnected.",
