@@ -8,7 +8,7 @@
  *  - The custom_datasets delete is gated on userId too, so a forged
  *    datasetId can't take down someone else's dataset.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import request from "supertest";
 
 type Row = Record<string, unknown>;
@@ -113,6 +113,15 @@ beforeEach(() => {
   state.deletedSaveIds = [];
   state.deletedDatasetIds = [];
   currentUserId = "user-a";
+});
+
+// Release all in-memory row arrays so the per-file gc() in setup.ts can
+// reclaim them (and any closures still holding references) after this file.
+afterAll(() => {
+  state.saves = [];
+  state.datasets = [];
+  state.deletedSaveIds = [];
+  state.deletedDatasetIds = [];
 });
 
 describe("DELETE /api/datasets/my-saves/:id", () => {

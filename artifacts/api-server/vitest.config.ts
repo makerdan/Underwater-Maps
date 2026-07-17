@@ -21,15 +21,16 @@ export default defineConfig({
         singleFork: true,
         // --expose-gc lets setup.ts call global.gc() after each test file so
         // that old module registries (and their WASM heaps) are swept promptly
-        // instead of accumulating across the 70+ file singleFork run.
+        // instead of accumulating across the 140+ file singleFork run.
         //
-        // --max-old-space-size is kept at 4096 MB (halved from 8192) as a
-        // safety ceiling.  With the laz-perf WASM singleton and the per-file
-        // gc() call the peak heap should now stay well under the default
-        // ~1.5 GB limit, but the explicit ceiling remains so that regressions
-        // are caught as OOM crashes rather than silent slowness if the test
-        // suite ever introduces a new large retained object.
-        execArgv: ["--max-old-space-size=4096", "--expose-gc"],
+        // --max-old-space-size is set to 6144 MB to give the 140-file
+        // singleFork suite enough headroom so that the heaviest files
+        // (efhData, catalog-save-delete, parseHyd93A93) don't push RSS
+        // over the OS limit before the per-file gc() calls can reclaim
+        // their large GeoJSON/app fixtures.  Keeping an explicit ceiling
+        // means a future regression causes a clear V8 OOM error rather
+        // than a silent OS-level kill.
+        execArgv: ["--max-old-space-size=6144", "--expose-gc"],
       },
     },
   },

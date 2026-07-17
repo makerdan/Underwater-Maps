@@ -16,7 +16,7 @@
  *     EXTRA_CATALOG_ENTRIES (enforces automatic sync between the two files)
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import {
   SALTWATER_EFH_BY_DATASET,
   EFH_SPECIES_TO_CATALOG_ID,
@@ -238,6 +238,18 @@ describe("EFH catalog sync — EFH_SPECIES_TO_CATALOG_ID ↔ EXTRA_CATALOG_ENTRI
         missing.map(({ species, catalogId }) => `  "${species}" → "${catalogId}"`).join("\n"),
     ).toHaveLength(0);
   });
+});
+
+// ---------------------------------------------------------------------------
+// Cleanup — drop local references to large GeoJSON collections so the
+// per-file gc() call in setup.ts can sweep them after this file completes.
+// ---------------------------------------------------------------------------
+
+afterAll(() => {
+  // ALL_REGIONS holds the only local references to the six large GeoJSON
+  // FeatureCollection objects.  Emptying it lets V8 reclaim that heap
+  // during the gc() triggered by setup.ts afterAll().
+  ALL_REGIONS.length = 0;
 });
 
 // ---------------------------------------------------------------------------

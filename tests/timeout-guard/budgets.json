@@ -5,7 +5,7 @@
     "hookTimeoutMs": 90000,
     "fileBudgetMs": 120000,
     "runBudgetMs": 600000,
-    "rssWarnMb": 4096
+    "rssWarnMb": 6144
   },
   "apiServerValidation": {
     "testTimeoutMs": 30000,
