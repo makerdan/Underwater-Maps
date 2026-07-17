@@ -39,12 +39,12 @@ export function handleCachePackMessage(event: MessageEventLike): void {
       try {
         const cache = await caches.open(PACK_TERRAIN_CACHE_NAME);
         await Promise.all([
-          fetch(raw.terrainUrl).then((r) => {
-            if (r.ok) return cache.put(raw.terrainUrl, r);
-          }),
-          fetch(raw.overviewUrl).then((r) => {
-            if (r.ok) return cache.put(raw.overviewUrl, r);
-          }),
+          fetch(raw.terrainUrl).then((r) =>
+            r.ok ? cache.put(raw.terrainUrl, r) : undefined,
+          ),
+          fetch(raw.overviewUrl).then((r) =>
+            r.ok ? cache.put(raw.overviewUrl, r) : undefined,
+          ),
         ]);
         port?.postMessage({ ok: true });
       } catch (err) {
