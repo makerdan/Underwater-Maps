@@ -116,6 +116,17 @@ vi.mock("@/lib/units", () => ({
   cardinal: (deg: number) => (deg < 180 ? "N" : "S"),
 }));
 
+vi.mock("@/lib/uiStore", () => ({
+  useTimelineVisible: (sel?: (v: boolean) => unknown) =>
+    sel ? sel(false) : false,
+}));
+
+vi.mock("@/lib/timelineStore", () => ({
+  useTimelineStore: (
+    sel: (s: { currentTime: null; isPlaying: boolean }) => unknown,
+  ) => sel({ currentTime: null, isPlaying: false }),
+}));
+
 // ── Import under test (after all mocks are declared) ─────────────────────────
 
 import { CurrentsPanel } from "@/components/CurrentsPanel";
