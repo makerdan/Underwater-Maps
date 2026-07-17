@@ -315,6 +315,10 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
   // policy checks below.
   const extras: Record<string, unknown> = Object.create(null);
   for (const [k, v] of Object.entries(body)) {
+    // __updatedAt is excluded here — the server is the sole authority for the
+    // sync timestamp and we overwrite it unconditionally below, so accepting a
+    // client-supplied value would let a client inject a future timestamp and
+    // break cross-device hydration ordering.
     if (!schemaKeys.has(k) && k !== "__updatedAt") extras[k] = v;
   }
 
@@ -368,12 +372,19 @@ router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
     .where(eq(userSettingsTable.userId, userId));
   const stored = (existing?.settings ?? {}) as Record<string, unknown>;
 
-  // Use Object.create(null) so that if `stored` (a DB row written before
-  // prototype-pollution hardening) contains a "__proto__" own key, spreading
-  // it into a null-prototype target keeps it as an own property rather than
-  // silently mutating Object.prototype.
-  const merged = Object.create(null) as Record<string, unknown>;
-  Object.assign(merged, DEFAULT_SETTINGS, stored, sentValidated, extras, { __updatedAt: updatedAt });
+  // Object.create(null) gives a null-prototype object so a "__proto__" key
+  // in any of the spread sources (e.g. a legacy stored row) is copied as an
+  // own property rather than silently mutating Object.prototype. Equivalent
+  // behaviour to the spread but prototype-safe. JSON.stringify reads only own
+  // enumerable properties, so serialisation is unaffected.
+  const merged: Record<string, unknown> = Object.assign(
+    Object.create(null) as Record<string, unknown>,
+    DEFAULT_SETTINGS,
+    stored,
+    sentValidated,
+    extras,
+    { __updatedAt: updatedAt },
+  );
 
   // Cap the total merged payload so the 16 KB extras-only guard cannot be
   // bypassed by combining many small extras with large schema-validated values.

@@ -32,6 +32,14 @@ import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
 import { useUiStore, CURRENT_DEPTH_LAYERS } from "@/lib/uiStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 
+// ─── Singleton mount guard ────────────────────────────────────────────────────
+// useServerSettingsSync must be mounted exactly once in the app tree. Multiple
+// active instances would each maintain independent debounce timers, revision
+// counters, and flush callbacks — the module-level vars (_flush, _scheduleSync,
+// revision counters) are shared and last-writer-wins, so the second instance
+// silently clobbers the first's flush ref, creating a TOCTOU race on every PUT.
+let _hookMountCount = 0;
+
 // ─── Module-level flush ref ───────────────────────────────────────────────────
 // Populated by the hook on every render so Settings can always call the most
 // recent flush function, even after re-renders.
@@ -179,19 +187,21 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
   const { mutateAsync: saveSettingsAsync } = usePutSettings();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Singleton invariant — mount/unmount tracking so double-mount is caught
-  // early in DEV mode. The module-level vars are not safe for concurrent use.
+  // ── Singleton invariant ──────────────────────────────────────────────────
+  // Detect accidental double-mount (Strict Mode, duplicate tree placement, etc.)
+  // early so the root cause is obvious rather than manifesting as silent data
+  // loss from the TOCTOU race described at _hookMountCount above.
   useEffect(() => {
-    if (_hookMounted && import.meta.env.DEV) {
+    _hookMountCount++;
+    if (import.meta.env.DEV && _hookMountCount > 1) {
       console.error(
-        "[useServerSettingsSync] Hook mounted more than once. " +
-        "Module-level sync state is shared; concurrent instances will race " +
-        "and produce incorrect concurrency behaviour.",
+        `[useServerSettingsSync] mounted twice — ${_hookMountCount} active instances detected. ` +
+        "This hook must be placed exactly once in the app tree (inside the signed-in guard). " +
+        "Multiple instances share module-level revision counters and will race on every PUT.",
       );
     }
-    _hookMounted = true;
     return () => {
-      _hookMounted = false;
+      _hookMountCount--;
       _consecutiveFlushFailures = 0;
     };
   }, []);
