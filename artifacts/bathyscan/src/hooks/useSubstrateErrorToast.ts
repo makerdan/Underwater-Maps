@@ -62,6 +62,7 @@ export function useSubstrateErrorToast({
           "this dataset's area. The overlay will show no polygons. Coverage is " +
           "available for built-in survey regions in SE Alaska and select CONUS coasts.",
         variant: "destructive",
+        duration: 10_000,
       });
     } else {
       toast({
@@ -70,6 +71,7 @@ export function useSubstrateErrorToast({
           "Substrate coverage is only bundled for built-in survey regions. " +
           "Uploaded datasets do not have substrate data — the overlay will show no polygons.",
         variant: "destructive",
+        duration: 10_000,
       });
     }
   }, [isError, isEmpty, datasetId, enabled]);

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useIsConnecting } from "@/lib/queryClient";
+import { CopyButton } from "@/components/ui/CopyButton";
+import { X } from "lucide-react";
 
 /**
  * Dev-only endpoint served by the Vite dev server (see devApiRestartPlugin in
@@ -18,6 +20,9 @@ export const RESTART_API_ENDPOINT = `${import.meta.env.BASE_URL}__restart_api_se
  * - Auto-dismisses when the health poll confirms the server is back.
  * - "Restart API Server" posts to the Vite dev-server restart endpoint and
  *   shows a restarting state until connectivity recovers.
+ * - × button lets the user manually dismiss the banner (it re-appears if the
+ *   health poll detects a new outage).
+ * - Copy button copies the banner message to the clipboard.
  *
  * Production exclusion (defense in depth):
  * 1. The mount site in App.tsx is gated on `import.meta.env.DEV`, which is
@@ -29,18 +34,29 @@ export function DevApiDownBanner() {
   const apiDown = useIsConnecting();
   const [restarting, setRestarting] = useState(false);
   const [restartError, setRestartError] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState(false);
 
-  // When connectivity recovers, clear the restarting/error state so the next
-  // outage starts from a clean slate.
+  // When connectivity recovers, clear the restarting/error/dismissed state so
+  // the next outage starts from a clean slate.
   useEffect(() => {
     if (!apiDown) {
       setRestarting(false);
       setRestartError(null);
+      setDismissed(false);
     }
   }, [apiDown]);
 
   if (!import.meta.env.DEV) return null;
   if (!apiDown) return null;
+  if (dismissed) return null;
+
+  const bannerMessage = restarting
+    ? "API server restarting — waiting for it to come back…"
+    : "API server is unreachable — requests will fail until it is restarted.";
+
+  const copyText = restartError
+    ? `${bannerMessage} (${restartError})`
+    : bannerMessage;
 
   const handleRestart = async () => {
     setRestarting(true);
@@ -69,11 +85,7 @@ export function DevApiDownBanner() {
       className="fixed inset-x-0 top-7 z-[9998] flex flex-wrap items-center justify-center gap-3 min-h-9 py-1 px-3 bg-red-950/95 backdrop-blur-sm border-b border-red-800/60 text-red-200 text-[18px] font-mono select-none"
     >
       <span className="font-semibold text-red-300">DEV</span>
-      <span>
-        {restarting
-          ? "API server restarting — waiting for it to come back…"
-          : "API server is unreachable — requests will fail until it is restarted."}
-      </span>
+      <span>{bannerMessage}</span>
       {restartError && (
         <span className="text-amber-300">({restartError})</span>
       )}
@@ -84,6 +96,18 @@ export function DevApiDownBanner() {
         className="px-2 py-0.5 bg-red-700 hover:bg-red-600 disabled:opacity-60 disabled:cursor-not-allowed rounded text-[16.5px] text-white transition-colors"
       >
         {restarting ? "Restarting…" : "Restart API Server"}
+      </button>
+      <CopyButton
+        text={copyText}
+        className="text-red-300/70 hover:text-red-200"
+      />
+      <button
+        onClick={() => setDismissed(true)}
+        aria-label="Dismiss API down banner"
+        data-testid="dev-api-down-dismiss-btn"
+        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 opacity-60 hover:opacity-100 transition-opacity text-red-300 focus:outline-none focus:ring-1 focus:ring-red-400 rounded"
+      >
+        <X className="h-3.5 w-3.5" />
       </button>
     </div>
   );

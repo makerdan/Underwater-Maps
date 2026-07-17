@@ -6,23 +6,48 @@
  *     is in flight (isLoading === true).
  *   • A muted "Land terrain unavailable" warning when the fetch failed
  *     (error !== null). A small "Retry" button lets the user re-trigger the
- *     fetch without reloading the page.
+ *     fetch without reloading the page. The error banner also shows an × to
+ *     dismiss immediately and a Copy button, and auto-dismisses after 10 s
+ *     (timer pauses on hover).
  *
  * Nothing is rendered when the land grid has loaded successfully.
  */
-import React from "react";
+import React, { useState } from "react";
 import { useLandTerrainStore } from "@/lib/landTerrainStore";
+import { useAutoDismiss } from "@/hooks/useAutoDismiss";
+import { CopyButton } from "@/components/ui/CopyButton";
+
+const ERROR_TEXT = "Land terrain unavailable";
+const AUTO_DISMISS_MS = 10_000;
 
 export const LandTerrainStatusBanner: React.FC = () => {
   const isLoading = useLandTerrainStore((s) => s.isLoading);
   const error = useLandTerrainStore((s) => s.error);
   const retry = useLandTerrainStore((s) => s.retry);
 
+  const [dismissed, setDismissed] = useState(false);
+
+  // Reset dismissed state when a new error arrives so the banner re-appears.
+  const [prevError, setPrevError] = useState(error);
+  if (error !== prevError) {
+    setPrevError(error);
+    if (error) setDismissed(false);
+  }
+
+  const dismiss = React.useCallback(() => setDismissed(true), []);
+  const { onMouseEnter, onMouseLeave } = useAutoDismiss(
+    error && !dismissed ? AUTO_DISMISS_MS : undefined,
+    error && !dismissed ? dismiss : undefined,
+  );
+
   if (!isLoading && !error) return null;
+  if (error && dismissed) return null;
 
   return (
     <div
       data-testid="land-terrain-status-banner"
+      onMouseEnter={error ? onMouseEnter : undefined}
+      onMouseLeave={error ? onMouseLeave : undefined}
       style={{
         position: "absolute",
         bottom: 72,
@@ -68,7 +93,7 @@ export const LandTerrainStatusBanner: React.FC = () => {
       ) : (
         <>
           <span style={{ fontSize: 13.5 }}>⚠</span>
-          LAND TERRAIN UNAVAILABLE
+          {ERROR_TEXT}
           <button
             data-testid="land-terrain-retry-btn"
             onClick={retry}
@@ -88,6 +113,30 @@ export const LandTerrainStatusBanner: React.FC = () => {
             }}
           >
             RETRY
+          </button>
+          <CopyButton
+            text={ERROR_TEXT}
+            className="text-amber-400/70 hover:text-amber-300"
+          />
+          <button
+            data-testid="land-terrain-dismiss-btn"
+            onClick={dismiss}
+            aria-label="Dismiss land terrain error"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginLeft: 2,
+              padding: 2,
+              background: "transparent",
+              border: "none",
+              color: "#fbbf24",
+              cursor: "pointer",
+              opacity: 0.7,
+              lineHeight: 1,
+            }}
+          >
+            ×
           </button>
         </>
       )}

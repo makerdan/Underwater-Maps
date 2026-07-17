@@ -140,6 +140,8 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">
 
+const DESTRUCTIVE_TOAST_DURATION = 10_000
+
 function toast({ ...props }: Toast) {
   const id = genId()
 
@@ -150,10 +152,19 @@ function toast({ ...props }: Toast) {
     })
   const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
 
+  // Default destructive/error toasts to 10 s so stale errors don't linger.
+  const duration =
+    props.duration !== undefined
+      ? props.duration
+      : props.variant === "destructive"
+        ? DESTRUCTIVE_TOAST_DURATION
+        : undefined
+
   dispatch({
     type: "ADD_TOAST",
     toast: {
       ...props,
+      ...(duration !== undefined ? { duration } : {}),
       id,
       open: true,
       onOpenChange: (open) => {

@@ -145,7 +145,8 @@ function _enterBackOff(): void {
     description:
       "Your settings could not be saved to the server. " +
       "Retrying automatically — or tap 'Retry now' to try immediately.",
-    duration: delay + 5_000,
+    variant: "destructive",
+    duration: 10_000,
     action: createElement(
       ToastAction as ElementType,
       { altText: "Retry now", onClick: handleRetry },
