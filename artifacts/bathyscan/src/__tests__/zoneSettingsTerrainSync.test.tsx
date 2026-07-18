@@ -222,6 +222,7 @@ vi.mock("@/lib/terrain", () => ({
   computeZoneWeights: () => new Float32Array(0),
   computeSlopeAttribute: () => new Float32Array(0),
   applyColormapToVertexColors: () => {},
+  isSyntheticGrid: () => false,
   WORLD_SIZE: 100,
 }));
 
@@ -658,6 +659,7 @@ const MOCK_GRID = {
 
 const MOCK_FRAME_STATE = {
   camera: { position: { x: 0, y: 0, z: 0 } },
+  clock: { elapsedTime: 0 },
 } as unknown as Parameters<NonNullable<typeof frameRef.cb>>[0];
 
 // ---------------------------------------------------------------------------

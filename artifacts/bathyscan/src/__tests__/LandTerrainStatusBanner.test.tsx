@@ -23,7 +23,7 @@ describe("LandTerrainStatusBanner", () => {
     render(<LandTerrainStatusBanner />);
     const banner = screen.getByTestId("land-terrain-status-banner");
     expect(banner).toBeInTheDocument();
-    expect(banner).toHaveTextContent("LAND TERRAIN UNAVAILABLE");
+    expect(banner).toHaveTextContent("Land terrain unavailable");
   });
 
   it("renders nothing when the land grid has loaded successfully (no loading, no error)", () => {

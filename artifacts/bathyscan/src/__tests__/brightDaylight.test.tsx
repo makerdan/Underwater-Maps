@@ -233,8 +233,8 @@ describe("CSS source integrity — body.bs-daylight variable definitions", () =>
     expect(daylightBlock).toContain("font-weight: 500");
   });
 
-  it("sets font-size: 17px for outdoor legibility", () => {
-    expect(daylightBlock).toContain("font-size: 17px");
+  it("sets font-size: 25.5px for outdoor legibility", () => {
+    expect(daylightBlock).toContain("font-size: 25.5px");
   });
 
   it("daylight --primary (cobalt) differs from :root --primary (cyan)", () => {

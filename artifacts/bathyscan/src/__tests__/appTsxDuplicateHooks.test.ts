@@ -64,8 +64,8 @@ function collectTsxFiles(dir: string): string[] {
  */
 const SCANNED_FILES: string[] = [
   "App.tsx",
-  "pages/Settings.tsx",
   "pages/TourScene.tsx",
+  "pages/settings/components/PalettePickerCard.tsx",
   "components/CurrentsPanel.tsx",
   "components/DatasetPanel.tsx",
   "components/DatasetFolderTree.tsx",
