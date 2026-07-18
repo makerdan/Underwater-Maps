@@ -45,6 +45,10 @@ export const TemperatureProfileChart: React.FC<TemperatureProfileChartProps> = (
 }) => {
   const { samples, surfaceC, deepC, maxDepthM, source, sourceUrl, timestamp, live } = profile;
 
+  if (samples.length === 0) {
+    return null;
+  }
+
   // X axis: temperature. Pad the range so the line never kisses the edge.
   const tMin = Math.min(surfaceC, deepC);
   const tMax = Math.max(surfaceC, deepC);
