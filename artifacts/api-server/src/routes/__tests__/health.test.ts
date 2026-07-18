@@ -14,6 +14,9 @@ const poolQueryMock = vi.fn();
 vi.mock("@workspace/db", () => ({
   pool: {
     query: (...args: unknown[]) => poolQueryMock(...args),
+    totalCount: 2,
+    idleCount: 1,
+    waitingCount: 0,
   },
 }));
 
@@ -62,6 +65,11 @@ describe("GET /healthz/deep — deep health check", () => {
       db: { status: "ok" },
       poe: expect.any(Object),
       aoos: expect.any(Object),
+    });
+    expect(res.body.subsystems.db.pool).toMatchObject({
+      total: expect.any(Number),
+      idle: expect.any(Number),
+      waiting: expect.any(Number),
     });
   });
 

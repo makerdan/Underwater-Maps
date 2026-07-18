@@ -47,7 +47,21 @@ router.get("/healthz/deep", asyncHandler(async (_req, res) => {
   res.status(overallStatus === "ok" ? 200 : 503).json(body);
 }));
 
-async function checkDb(): Promise<{ status: "ok" | "degraded"; latencyMs?: number; error?: string }> {
+interface PoolStats {
+  total: number;
+  idle: number;
+  waiting: number;
+}
+
+function getPoolStats(): PoolStats {
+  return {
+    total: pool.totalCount,
+    idle: pool.idleCount,
+    waiting: pool.waitingCount,
+  };
+}
+
+async function checkDb(): Promise<{ status: "ok" | "degraded"; latencyMs?: number; error?: string; pool?: PoolStats }> {
   const start = Date.now();
   try {
     await Promise.race([
@@ -56,9 +70,9 @@ async function checkDb(): Promise<{ status: "ok" | "degraded"; latencyMs?: numbe
         setTimeout(() => reject(new Error("DB health check timed out")), DB_QUERY_TIMEOUT_MS),
       ),
     ]);
-    return { status: "ok", latencyMs: Date.now() - start };
+    return { status: "ok", latencyMs: Date.now() - start, pool: getPoolStats() };
   } catch (err) {
-    return { status: "degraded", latencyMs: Date.now() - start, error: (err as Error)?.message ?? "unknown" };
+    return { status: "degraded", latencyMs: Date.now() - start, error: (err as Error)?.message ?? "unknown", pool: getPoolStats() };
   }
 }
 

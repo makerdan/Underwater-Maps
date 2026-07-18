@@ -6,10 +6,20 @@ const SubsystemStatus = zod.object({
   error: zod.string().optional(),
 });
 
+const DbPoolStats = zod.object({
+  total: zod.number().int(),
+  idle: zod.number().int(),
+  waiting: zod.number().int(),
+});
+
+const DbSubsystemStatus = SubsystemStatus.extend({
+  pool: DbPoolStats.optional(),
+});
+
 export const DeepHealthCheckResponse = zod.object({
   status: zod.enum(["ok", "degraded"]),
   subsystems: zod.object({
-    db: SubsystemStatus,
+    db: DbSubsystemStatus,
     poe: SubsystemStatus,
     aoos: SubsystemStatus,
   }),
