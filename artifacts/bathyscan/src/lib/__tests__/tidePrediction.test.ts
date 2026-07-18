@@ -3,6 +3,8 @@ import {
   prepareTideSamples,
   interpolateTideHeightFt,
   interpolateTideHeightMeters,
+  findTideExtremes,
+  extremesInRange,
   FEET_TO_METERS,
   type TideSample,
 } from "@/lib/tidePrediction";
@@ -75,6 +77,69 @@ describe("interpolateTideHeightFt boundaries", () => {
     const mid = T0 + i * SIX_MIN + SIX_MIN / 2;
     const expected = (vals[i]! + vals[i + 1]!) / 2;
     expect(interpolateTideHeightFt(s, mid)).toBeCloseTo(expected, 10);
+  });
+});
+
+describe("findTideExtremes", () => {
+  it("returns empty for fewer than 3 samples", () => {
+    expect(findTideExtremes([])).toEqual([]);
+    expect(findTideExtremes(samples([1, 2]))).toEqual([]);
+  });
+
+  it("finds alternating highs and lows", () => {
+    const s = samples([1, 2, 3, 2, 1, 0, 1, 2]);
+    expect(findTideExtremes(s)).toEqual([
+      { tMs: T0 + 2 * SIX_MIN, v: 3, kind: "high" },
+      { tMs: T0 + 5 * SIX_MIN, v: 0, kind: "low" },
+    ]);
+  });
+
+  it("never reports window endpoints as extremes", () => {
+    // Monotonic series: endpoints are the max/min but not true extremes.
+    expect(findTideExtremes(samples([1, 2, 3, 4, 5]))).toEqual([]);
+  });
+
+  it("collapses a flat plateau to a single midpoint extreme", () => {
+    const s = samples([1, 3, 3, 3, 1]);
+    const out = findTideExtremes(s);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toEqual({ tMs: T0 + 2 * SIX_MIN, v: 3, kind: "high" });
+  });
+
+  it("plateau at the end of the window is not an extreme", () => {
+    expect(findTideExtremes(samples([1, 2, 3, 3, 3]))).toEqual([]);
+  });
+
+  it("finds extremes in a sinusoidal series (~2 highs and 2 lows/day)", () => {
+    // Semidiurnal-ish: period ~12.4h over 48h of 6-min samples.
+    const periodMs = 12.4 * 3_600_000;
+    const n = 480; // 48 h
+    const s: TideSample[] = Array.from({ length: n }, (_, i) => ({
+      tMs: T0 + i * SIX_MIN,
+      v: 2 + 2 * Math.sin(((i * SIX_MIN) / periodMs) * 2 * Math.PI),
+    }));
+    const out = findTideExtremes(s);
+    const highs = out.filter((e) => e.kind === "high");
+    const lows = out.filter((e) => e.kind === "low");
+    expect(highs.length).toBeGreaterThanOrEqual(3);
+    expect(lows.length).toBeGreaterThanOrEqual(3);
+    for (const h of highs) expect(h.v).toBeCloseTo(4, 1);
+    for (const l of lows) expect(l.v).toBeCloseTo(0, 1);
+    // Alternation: sorted extremes alternate high/low.
+    for (let i = 1; i < out.length; i++) {
+      expect(out[i]!.kind).not.toBe(out[i - 1]!.kind);
+    }
+  });
+});
+
+describe("extremesInRange", () => {
+  it("filters half-open [start, end)", () => {
+    const ex = findTideExtremes(samples([1, 2, 1, 0, 1, 2, 1]));
+    expect(ex).toHaveLength(3);
+    const start = T0 + SIX_MIN;
+    const end = T0 + 5 * SIX_MIN;
+    const within = extremesInRange(ex, start, end);
+    expect(within.map((e) => e.tMs)).toEqual([T0 + SIX_MIN, T0 + 3 * SIX_MIN]);
   });
 });
 

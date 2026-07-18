@@ -2,6 +2,8 @@ import React, { useMemo } from "react";
 import { useTidalStore } from "@/lib/tidalStore";
 import {
   interpolateTideHeightFt,
+  findTideExtremes,
+  extremesInRange,
   type TideSample,
 } from "@/lib/tidePrediction";
 
@@ -91,6 +93,16 @@ export const TideStationPanel: React.FC<TideStationPanelProps> = ({
     const end = dayStartMs + DAY_MS;
     return samples.filter((s) => s.tMs >= dayStartMs && s.tMs <= end);
   }, [samples, dayStartMs]);
+
+  const allExtremes = useMemo(
+    () => (samples ? findTideExtremes(samples) : []),
+    [samples],
+  );
+
+  const dayExtremes = useMemo(
+    () => extremesInRange(allExtremes, dayStartMs, dayStartMs + DAY_MS),
+    [allExtremes, dayStartMs],
+  );
 
   const [minV, maxV] = useMemo(() => {
     if (daySamples.length === 0) return [0, 1] as const;
@@ -295,11 +307,78 @@ export const TideStationPanel: React.FC<TideStationPanelProps> = ({
                   strokeWidth={1}
                   strokeDasharray="3 2"
                 />
+                {dayExtremes.map((e) => {
+                  const span = maxV - minV || 1;
+                  const x = ((e.tMs - dayStartMs) / DAY_MS) * CURVE_W;
+                  const y =
+                    CURVE_H - ((e.v - minV) / span) * (CURVE_H - 8) - 4;
+                  return (
+                    <circle
+                      key={e.tMs}
+                      data-testid={`tide-extreme-marker-${e.kind}`}
+                      cx={x}
+                      cy={y}
+                      r={3}
+                      fill={e.kind === "high" ? "#4ade80" : "#fbbf24"}
+                      stroke="#0f172a"
+                      strokeWidth={1}
+                    />
+                  );
+                })}
               </svg>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "#64748b" }}>
                 <span>{maxV.toFixed(1)} ft max</span>
                 <span>{minV.toFixed(1)} ft min</span>
               </div>
+
+              {/* High/low times for the selected day */}
+              {dayExtremes.length > 0 && (
+                <div data-testid="tide-extremes-list" style={{ marginTop: 5 }}>
+                  <div style={{ ...LABEL, fontSize: 12.5 }}>High / Low</div>
+                  {dayExtremes.map((e) => (
+                    <button
+                      key={e.tMs}
+                      data-testid={`tide-extreme-${e.kind}`}
+                      onClick={() => onScrubChange(new Date(e.tMs))}
+                      title="Jump planning time to this tide"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        width: "100%",
+                        padding: "1px 2px",
+                        border: "none",
+                        background: "transparent",
+                        cursor: "pointer",
+                        fontSize: 13.5,
+                        color: "#cbd5e1",
+                        textAlign: "left",
+                      }}
+                    >
+                      <span
+                        style={{
+                          color: e.kind === "high" ? "#4ade80" : "#fbbf24",
+                          fontWeight: 700,
+                          width: 34,
+                        }}
+                      >
+                        {e.kind === "high" ? "HIGH" : "LOW"}
+                      </span>
+                      <span style={{ color: "#7dd3fc" }}>
+                        {new Date(e.tMs).toLocaleTimeString("en-US", {
+                          hour: "numeric",
+                          minute: "2-digit",
+                          timeZone: "UTC",
+                        })}
+                      </span>
+                      <span style={{ marginLeft: "auto" }}>
+                        {e.v >= 0 ? "+" : ""}
+                        {e.v.toFixed(2)} ft
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Time scrubber */}
               <input

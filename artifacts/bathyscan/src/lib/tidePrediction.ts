@@ -70,6 +70,55 @@ export function interpolateTideHeightFt(
   return a.v + (b.v - a.v) * frac;
 }
 
+/** A local high or low tide extreme derived from the prediction series. */
+export interface TideExtreme {
+  tMs: number;
+  v: number;
+  kind: "high" | "low";
+}
+
+/**
+ * Derive local high/low tide extremes from a prepared (sorted) sample series.
+ *
+ * A sample is a high when it is >= both neighbours and strictly greater than
+ * at least one of them (mirrored for lows), which tolerates the flat
+ * plateaus a 6-minute series produces near slack. Consecutive plateau
+ * samples emit only one extreme (the plateau midpoint). Window endpoints are
+ * never reported as extremes since they are artifacts of the cached window.
+ */
+export function findTideExtremes(samples: TideSample[]): TideExtreme[] {
+  const n = samples.length;
+  if (n < 3) return [];
+  const out: TideExtreme[] = [];
+  let i = 1;
+  while (i < n - 1) {
+    const prev = samples[i - 1]!.v;
+    const cur = samples[i]!.v;
+    // Extend across a flat plateau.
+    let j = i;
+    while (j < n - 1 && samples[j + 1]!.v === cur) j++;
+    if (j >= n - 1) break;
+    const next = samples[j + 1]!.v;
+    const mid = samples[(i + j) >> 1]!;
+    if (cur > prev && cur > next) {
+      out.push({ tMs: mid.tMs, v: cur, kind: "high" });
+    } else if (cur < prev && cur < next) {
+      out.push({ tMs: mid.tMs, v: cur, kind: "low" });
+    }
+    i = j + 1;
+  }
+  return out;
+}
+
+/** Extremes falling within [startMs, endMs). */
+export function extremesInRange(
+  extremes: TideExtreme[],
+  startMs: number,
+  endMs: number,
+): TideExtreme[] {
+  return extremes.filter((e) => e.tMs >= startMs && e.tMs < endMs);
+}
+
 /** Convenience: interpolated height converted to metres above MLLW. */
 export function interpolateTideHeightMeters(
   samples: TideSample[],
