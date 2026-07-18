@@ -2,7 +2,8 @@
 
 # compiled output
 dist
-dist-e2e
+dist-e2e*
+.codegen.stamp
 tmp
 out-tsc
 *.tsbuildinfo
