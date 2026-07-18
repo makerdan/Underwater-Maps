@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "./fixtures";
+import { test, expect, type Page, API_URL, E2E_USER_ID } from "./fixtures";
 
 /**
  * Drift Planner end-to-end tests
@@ -24,6 +24,13 @@ async function appIsSignedIn(page: Page): Promise<boolean> {
 }
 
 async function openDriftPlanner(page: Page): Promise<void> {
+  // The Drift Planner panel now lives inside the sidebar's Plan-mode section,
+  // which is hidden while the default Explore mode is active — switch to Plan
+  // first (see tide-station-panel.spec.ts for the same pattern).
+  const planTab = page.locator("[data-testid='sidebar-mode-tab-plan']");
+  await expect(planTab).toBeVisible({ timeout: 10_000 });
+  await planTab.click();
+  await expect(planTab).toHaveAttribute("aria-pressed", "true");
   // Activate the Drift Planner via the TestBridge. The production UI opens it
   // by clicking a forecast slot in ForecastStrip (a <div role="button">, not
   // a <button>), but that requires surface-conditions data and the sidebar
@@ -74,7 +81,20 @@ test.describe("Drift Planner", () => {
     await page.addInitScript(() => {
       try {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+        // Suppress the onboarding tour overlay, which otherwise intercepts
+        // all pointer events (including the Plan-mode tab click).
+        const key = "bathyscan:settings";
+        const raw = localStorage.getItem(key);
+        const parsed = raw ? JSON.parse(raw) : { state: {}, version: 0 };
+        parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: true };
+        localStorage.setItem(key, JSON.stringify(parsed));
       } catch {}
+    });
+    // Server-side settings sync can override the localStorage flag above, so
+    // persist hasSeenOnboarding on the server too (same as tide-station spec).
+    await page.request.put(`${API_URL}/api/settings`, {
+      headers: { "x-e2e-user-id": E2E_USER_ID },
+      data: { hasSeenOnboarding: true },
     });
     await mockOkSurfaceConditions(page);
     await page.goto("/");
@@ -124,13 +144,20 @@ test.describe("Drift Planner", () => {
     }
   });
 
-  test("DRIFT toolbar button opens the Weather Panel overlay", async ({ page }) => {
+  test("START PLANNING button in Plan mode opens the Weather Panel", async ({ page }) => {
     if (!(await appIsSignedIn(page))) {
       test.skip(true, "Canvas not visible — landing page shown (e2e auth bypass inactive)");
       return;
     }
-    await openDriftPlanner(page);
-    await expect(page.locator("text=DRIFT PLANNER")).toBeVisible({ timeout: 5_000 });
+    // Exercise the real UI path: switch to Plan mode and click the
+    // START PLANNING button in the Drift & Route sidebar section.
+    const planTab = page.locator("[data-testid='sidebar-mode-tab-plan']");
+    await expect(planTab).toBeVisible({ timeout: 10_000 });
+    await planTab.click();
+    const startBtn = page.locator("[data-testid='drift-empty-state'] button");
+    await expect(startBtn).toBeVisible({ timeout: 5_000 });
+    await startBtn.click();
+    await expect(page.locator("[data-testid='weather-panel']")).toBeVisible({ timeout: 5_000 });
   });
 
   test("Weather Panel shows tidal/wind data or the estimated-conditions banner", async ({ page }) => {
@@ -139,7 +166,7 @@ test.describe("Drift Planner", () => {
       return;
     }
     await openDriftPlanner(page);
-    await expect(page.locator("text=DRIFT PLANNER")).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator("[data-testid='weather-panel']")).toBeVisible({ timeout: 5_000 });
 
     // Either we get the live readouts (WIND + TIDAL CURRENT labels) or the
     // amber estimated-conditions banner — both are valid outcomes depending
@@ -188,24 +215,25 @@ test.describe("Drift Planner", () => {
     );
   });
 
-  test("× close button hides the Drift Planner overlays", async ({ page }) => {
+  test("DRIFT toolbar toggle hides the Drift Planner panel", async ({ page }) => {
     if (!(await appIsSignedIn(page))) {
       test.skip(true, "Canvas not visible — landing page shown");
       return;
     }
     await openDriftPlanner(page);
-    const panel = page.locator("text=DRIFT PLANNER");
+    const panel = page.locator("[data-testid='weather-panel']");
     await expect(panel).toBeVisible({ timeout: 5_000 });
 
-    // The close button is the × glyph inside the panel header.
-    const closeBtn = page
-      .locator("div", { has: panel })
-      .locator("button:has-text('×')")
-      .first();
-    await closeBtn.dispatchEvent("click");
+    // The embedded Plan-mode panel has no × header button; the top toolbar
+    // "◉ DRIFT" button toggles the planner off.
+    const toolbarToggle = page.locator("button:has-text('◉ DRIFT')").first();
+    await toolbarToggle.dispatchEvent("click");
 
     await expect(panel).toBeHidden({ timeout: 3_000 });
-    // Hour chips also disappear.
+    // Hour chips also disappear, and the empty state returns.
     await expect(page.locator("button:has-text('00:00')").first()).toBeHidden();
+    await expect(page.locator("[data-testid='drift-empty-state']")).toBeVisible({
+      timeout: 3_000,
+    });
   });
 });

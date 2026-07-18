@@ -108,17 +108,13 @@ function isBuildStale(): boolean {
 // ---------------------------------------------------------------------------
 
 export default function globalSetup() {
-  // --- Port cleanup ---
-  // A previous e2e run that was SIGKILLed (e.g. by the timeout guard) can
-  // orphan its Playwright webServer children, which then hold the fixed E2E
-  // ports and make this run's webServer boot fail (reuseExistingServer is
-  // deliberately false). Sweep those ports before Playwright starts anything.
-  // kill-port-holders.mjs is a strict no-op when the ports are already free.
-  console.log("[global-setup] Ensuring E2E ports are free…");
-  execSync("node scripts/kill-port-holders.mjs --e2e", {
-    cwd: root,
-    stdio: "inherit",
-  });
+  // NOTE on port cleanup: the stale-port sweep (kill-port-holders.mjs --e2e)
+  // must NOT run here. In Playwright 1.60 plugin setup — which starts the
+  // webServer processes — runs BEFORE globalSetup (createGlobalSetupTasks
+  // orders createPluginSetupTasks first), so a sweep here kills this run's
+  // own freshly-started servers, and every spec then fails with
+  // ECONNREFUSED on the API port. The sweep lives in the `test:e2e` script
+  // (package.json), which runs it before Playwright launches anything.
 
   // --- Codegen ---
   if (codegenMissing) {

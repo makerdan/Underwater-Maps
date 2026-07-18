@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Locator } from "./fixtures";
+import { test, expect, type Page, type Locator, API_URL, E2E_USER_ID } from "./fixtures";
 
 /**
  * Drift Planner — Drift vs Trolling mode coverage.
@@ -27,6 +27,13 @@ async function appIsSignedIn(page: Page): Promise<boolean> {
 }
 
 async function openDriftPlanner(page: Page): Promise<void> {
+  // The Drift Planner panel now lives inside the sidebar's Plan-mode section,
+  // which is hidden while the default Explore mode is active — switch to Plan
+  // first (see tide-station-panel.spec.ts for the same pattern).
+  const planTab = page.locator("[data-testid='sidebar-mode-tab-plan']");
+  await expect(planTab).toBeVisible({ timeout: 10_000 });
+  await planTab.click();
+  await expect(planTab).toHaveAttribute("aria-pressed", "true");
   // Activate via TestBridge: the production UI opens the planner by clicking
   // a forecast slot (<div role="button">, no text "DRIFT"), which requires
   // surface-conditions data and sidebar scroll. Driving the store directly
@@ -38,7 +45,7 @@ async function openDriftPlanner(page: Page): Promise<void> {
       }
     ).__bathyTest?.setDriftPlannerActive?.(true),
   );
-  await expect(page.locator("text=DRIFT PLANNER")).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator("[data-testid='weather-panel']")).toBeVisible({ timeout: 5_000 });
   // Timeline only renders after computeDrift resolves (needs surface conditions).
   await expect(page.locator("[data-testid='timeline-drift-mode-badge']")).toBeVisible({
     timeout: 15_000,
@@ -98,7 +105,20 @@ test.describe("Drift Planner — Drift vs Trolling modes", () => {
     await page.addInitScript(() => {
       try {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+        // Suppress the onboarding tour overlay, which otherwise intercepts
+        // all pointer events (including the Plan-mode tab click).
+        const key = "bathyscan:settings";
+        const raw = localStorage.getItem(key);
+        const parsed = raw ? JSON.parse(raw) : { state: {}, version: 0 };
+        parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: true };
+        localStorage.setItem(key, JSON.stringify(parsed));
       } catch {}
+    });
+    // Server-side settings sync can override the localStorage flag above, so
+    // persist hasSeenOnboarding on the server too (same as tide-station spec).
+    await page.request.put(`${API_URL}/api/settings`, {
+      headers: { "x-e2e-user-id": E2E_USER_ID },
+      data: { hasSeenOnboarding: true },
     });
     await mockOkSurfaceConditions(page);
     await page.goto("/");
