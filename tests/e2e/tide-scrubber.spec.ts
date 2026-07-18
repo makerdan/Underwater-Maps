@@ -196,8 +196,8 @@ test.describe("Tide HUD scrubber slack visuals", () => {
     // Wait for the TidePanel to mount. TidePanel is always rendered embedded
     // inside the sidebar so its standalone "TIDAL OVERLAY" header is never
     // shown — check the root element (data-testid="tide-panel") instead.
-    // TidePanel lives in the Plan sidebar tab (display:none on Explore).
-    await ensurePlanTab(page);
+    // TidePanel lives in the Plan sidebar tab (display:none in Explore).
+    await page.getByRole("button", { name: "Plan", exact: true }).dispatchEvent("click");
     await expect(page.locator("[data-testid='tide-panel']")).toBeVisible({ timeout: 5_000 });
 
     // The "Time scrub" section is always rendered, even if the station data
@@ -243,7 +243,11 @@ test.describe("Tide HUD scrubber slack visuals", () => {
     const tickCount = await ticks.count();
     expect(tickCount).toBeGreaterThan(0);
     const firstTick = ticks.first();
-    await firstTick.hover();
+    // A real hover is intercepted by overlapping panel chrome (e.g. the
+    // Advanced-section toggle) under headless layout. React's onMouseEnter
+    // is delegated from bubbling "mouseover", so dispatching it directly on
+    // the tick fires setHoveredEvent deterministically.
+    await firstTick.dispatchEvent("mouseover", { bubbles: true });
 
     // Tooltip copy: "Slack ↑ High" or "Slack ↓ Low" + a "Reverses to ebb/flood
     // → <COMPASS> (<deg>°)" line.

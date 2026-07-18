@@ -233,9 +233,11 @@ test.describe("BathyScan — substrate overlay toggle while card is pinned", () 
     // Substrate row should be present (substrateActive = true).
     // Even if substrateName is null (no GeoJSON loaded in test env), the
     // Substrate label row is rendered whenever substrateActive is true.
-    // Assert on the row's testid — the card's empty-state hint text also
-    // contains the word "Substrate", so a raw text match would false-positive.
-    await expect(page.locator('[data-testid="whats-here-substrate-row"]')).toBeVisible();
+    // Assert on the dedicated row testid — the card's empty-state hint copy
+    // ("Enable Substrate or Habitat overlays…") also contains the word
+    // "substrate", so text matching cannot distinguish row presence.
+    const substrateRow = page.locator('[data-testid="whats-here-substrate-row"]');
+    await expect(substrateRow).toBeVisible({ timeout: 10_000 });
 
     // Toggle substrate overlay OFF.
     await page.evaluate(() => {
@@ -244,6 +246,6 @@ test.describe("BathyScan — substrate overlay toggle while card is pinned", () 
 
     // The substrate row must have disappeared — no crash, no stale row.
     await expect(page.locator('[data-testid="whats-here-card"]')).toBeVisible();
-    await expect(page.locator('[data-testid="whats-here-substrate-row"]')).toBeHidden();
+    await expect(substrateRow).toHaveCount(0, { timeout: 10_000 });
   });
 });

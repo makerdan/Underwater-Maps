@@ -123,7 +123,7 @@ test.describe("BathyScan — Crosshair action menu (desktop / Q key)", () => {
     const menu = page.locator('[data-testid="context-menu"]');
 
     // Nine action items: Drop pin / Log a catch / Measure / Set home /
-    // Save bookmark / Start straight-line profile / Start path profile /
+    // Save saved view / Start straight-line profile / Start path profile /
     // Copy coords / Copy share link. The separator above "Copy coordinates"
     // renders as a non-menuitem <li role="separator">.
     const items = menu.locator('[role="menuitem"]');

@@ -249,14 +249,11 @@ test.describe("Help-icon deep links", () => {
       await tidalBtn.dispatchEvent("click");
     }
 
-    // TidePanel (host of the tidal-overlay help icon) now lives in the Plan
-    // sidebar tab, which renders display:none unless selected.
-    const planTab = page.locator("[data-testid='sidebar-mode-tab-plan']");
-    await expect(planTab).toBeVisible({ timeout: 10_000 });
-    if ((await planTab.getAttribute("aria-pressed").catch(() => null)) !== "true") {
-      await planTab.dispatchEvent("click");
-      await expect(planTab).toHaveAttribute("aria-pressed", "true");
-    }
+    // TidePanel lives in the Plan sidebar tab; the shared fixture resets
+    // sidebarMode to "explore", so the Plan tab must be opened first.
+    const planBtn = page.getByRole("button", { name: "Plan", exact: true });
+    await expect(planBtn).toBeVisible({ timeout: 10_000 });
+    await planBtn.dispatchEvent("click");
 
     const icon = page.locator('[data-testid="help-icon-tidal-overlay"]');
     await expect(icon).toBeVisible({ timeout: 10_000 });

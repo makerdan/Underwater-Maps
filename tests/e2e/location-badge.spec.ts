@@ -85,17 +85,15 @@ async function mockStallingSurfaceConditions(page: Page): Promise<void> {
  * This exploits the fact that useTidalData preserves the previous `data` value
  * during a re-fetch, so TidePanel stays mounted with tidalLoading=true.
  */
-async function mockTidalFirstFastThenStall(page: Page): Promise<void> {
+async function mockTidalFirstFastThenStall(page: Page): Promise<() => void> {
+  // NOTE: with the tide overlay active, App.tsx passes timelineStore.currentTime
+  // (always a Date, never null) as scrubDatetime, so EVERY tidal fetch carries a
+  // datetime= param — a "datetime means re-fetch" heuristic stalls the initial
+  // fetch too and TidePanel never mounts. Instead, fulfill every call until the
+  // test flips the stall flag (right before clicking "Tomorrow").
+  const state = { stall: false };
   await page.route(/\/api\/tidal(\?|$)/, async (route) => {
-    // The initial fetch carries either no datetime or one near "now"; the
-    // "Tomorrow" scrub re-fetch is clamped by timelineStore.setTime to the
-    // range end (now + 12 h). Fulfill near-now requests fast and stall far-out
-    // ones (threshold 6 h splits the two cleanly). (Call-count ordering is
-    // unreliable: other components also hit /api/tidal.)
-    const url = new URL(route.request().url());
-    const dt = url.searchParams.get("datetime");
-    const farOut = dt !== null && Math.abs(new Date(dt).getTime() - Date.now()) > 6 * 3_600_000;
-    if (!farOut) {
+    if (!state.stall) {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -123,8 +121,11 @@ async function mockTidalFirstFastThenStall(page: Page): Promise<void> {
         }),
       });
     }
-    // far-out datetime requests: do nothing — route stalls, keeping loading=true
+    // stall=true: do nothing — route stalls, keeping loading=true
   });
+  return () => {
+    state.stall = true;
+  };
 }
 
 /** Mock the tidal data endpoint to respond immediately (for non-loading tests). */
@@ -269,6 +270,17 @@ async function ensureOverlayOn(
 // Shared beforeEach
 // ---------------------------------------------------------------------------
 
+/**
+ * ForecastStrip, TidePanel (embedded) and WeatherPanel all render inside the
+ * Plan sidebar tab; the shared resetSettings fixture starts every test in
+ * Explore mode, so the Plan tab must be opened before asserting them.
+ */
+async function openPlanTab(page: Page): Promise<void> {
+  const planBtn = page.getByRole("button", { name: "Plan", exact: true });
+  await expect(planBtn).toBeVisible({ timeout: 10_000 });
+  await planBtn.dispatchEvent("click");
+}
+
 test.describe("LocationBadge on data panels", () => {
   test.beforeEach(async ({ page, request }) => {
     // Suppress the SimulatedDataConfirmDialog so it doesn't block interactions.
@@ -328,7 +340,7 @@ test.describe("LocationBadge on data panels", () => {
       }
 
       await ensureTerrainLoaded(page);
-      await ensurePlanTab(page);
+      await openPlanTab(page);
 
       const forecastSection = page.locator("[data-testid='sidebar-section-forecast']");
       await expect(forecastSection).toBeVisible({ timeout: 15_000 });
@@ -380,7 +392,7 @@ test.describe("LocationBadge on data panels", () => {
       }
 
       await ensureTerrainLoaded(page);
-      await ensurePlanTab(page);
+      await openPlanTab(page);
 
       const forecastSection = page.locator("[data-testid='sidebar-section-forecast']");
       await expect(forecastSection).toBeVisible({ timeout: 15_000 });
@@ -506,6 +518,7 @@ test.describe("LocationBadge on data panels", () => {
       }
 
       await ensureTerrainLoaded(page);
+      await openPlanTab(page);
       await ensureTidalOverlayOn(page);
       await ensurePlanTab(page);
 
@@ -524,7 +537,7 @@ test.describe("LocationBadge on data panels", () => {
     test("shows badge in loading state while a scrubDatetime re-fetch is in-flight", async ({ page }) => {
       test.setTimeout(90_000);
       await mockReadySurfaceConditions(page);
-      await mockTidalFirstFastThenStall(page);
+      const enableTidalStall = await mockTidalFirstFastThenStall(page);
       await page.goto("/");
       await page.waitForLoadState("domcontentloaded");
 
@@ -534,6 +547,7 @@ test.describe("LocationBadge on data panels", () => {
       }
 
       await ensureTerrainLoaded(page);
+      await openPlanTab(page);
       await ensureTidalOverlayOn(page);
       await ensurePlanTab(page);
 
@@ -560,6 +574,7 @@ test.describe("LocationBadge on data panels", () => {
       }
       const tomorrowBtn = tidePanel.locator("[data-testid='tide-day-btn-1']");
       await expect(tomorrowBtn).toBeVisible({ timeout: 10_000 });
+      enableTidalStall();
       await tomorrowBtn.dispatchEvent("click");
 
       await expect(badge).toHaveAttribute("data-state", "loading", { timeout: 10_000 });
@@ -585,13 +600,14 @@ test.describe("LocationBadge on data panels", () => {
       }
 
       await ensureTerrainLoaded(page);
+      await openPlanTab(page);
 
-      // Multiple buttons contain "DRIFT" (hidden DriftTimeline/HUD variants) —
-      // scope to the visible top-right HUD toggle.
-      const driftBtn = page.locator("button:has-text('DRIFT'):visible").first();
-      await expect(driftBtn).toBeVisible({ timeout: 10_000 });
-      await driftBtn.dispatchEvent("click");
-      await ensurePlanTab(page);
+      // Enable the Drift Planner via the test bridge — the DRIFT HUD toggle
+      // is unreliable under headless z-order; this matches drift-planner.spec.ts.
+      await page.waitForFunction(() => Boolean((window as unknown as { __bathyTest?: { setDriftPlannerActive?: unknown } }).__bathyTest?.setDriftPlannerActive), null, { timeout: 10_000 });
+      await page.evaluate(() =>
+        (window as unknown as { __bathyTest?: { setDriftPlannerActive?: (v: boolean) => void } }).__bathyTest?.setDriftPlannerActive?.(true),
+      );
 
       const weatherPanel = page.locator("[data-testid='weather-panel']");
       await expect(weatherPanel).toBeVisible({ timeout: 8_000 });
@@ -617,13 +633,14 @@ test.describe("LocationBadge on data panels", () => {
       }
 
       await ensureTerrainLoaded(page);
+      await openPlanTab(page);
 
-      // Multiple buttons contain "DRIFT" (hidden DriftTimeline/HUD variants) —
-      // scope to the visible top-right HUD toggle.
-      const driftBtn = page.locator("button:has-text('DRIFT'):visible").first();
-      await expect(driftBtn).toBeVisible({ timeout: 10_000 });
-      await driftBtn.dispatchEvent("click");
-      await ensurePlanTab(page);
+      // Enable the Drift Planner via the test bridge — the DRIFT HUD toggle
+      // is unreliable under headless z-order; this matches drift-planner.spec.ts.
+      await page.waitForFunction(() => Boolean((window as unknown as { __bathyTest?: { setDriftPlannerActive?: unknown } }).__bathyTest?.setDriftPlannerActive), null, { timeout: 10_000 });
+      await page.evaluate(() =>
+        (window as unknown as { __bathyTest?: { setDriftPlannerActive?: (v: boolean) => void } }).__bathyTest?.setDriftPlannerActive?.(true),
+      );
 
       const weatherPanel = page.locator("[data-testid='weather-panel']");
       await expect(weatherPanel).toBeVisible({ timeout: 8_000 });

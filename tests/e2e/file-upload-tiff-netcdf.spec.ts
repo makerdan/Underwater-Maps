@@ -71,6 +71,21 @@ async function cleanupAllUploads(req: APIRequestContext): Promise<void> {
   }
 }
 
+/**
+ * The "Your Data" sidebar section renders an empty state until terrain is
+ * loaded — DatasetPanel (which hosts the MY UPLOADS rows and the upload
+ * accordion) never mounts without it. Seed synthetic terrain via the test
+ * bridge after every navigation.
+ */
+async function seedTerrain(page: Page): Promise<void> {
+  await page.waitForFunction(() => Boolean(window.__bathyTest), null, {
+    timeout: 15_000,
+  });
+  await page.evaluate(() => {
+    window.__bathyTest!.seedTerrain();
+  });
+}
+
 async function openUploadAccordion(page: Page): Promise<boolean> {
   const toggle = page.getByRole("button", { name: /UPLOAD DATASET\(S\)/i });
   const visible = await toggle
@@ -106,29 +121,6 @@ async function uploadFileViaDropzone(
 // ---------------------------------------------------------------------------
 
 
-/**
- * Seed synthetic terrain via the test bridge. The sidebar's "Your Data"
- * section (host of the MY UPLOADS dataset tree) renders an empty state
- * until a terrain is loaded, so API-path tests must seed one before
- * asserting on btn-user-dataset-* rows.
- */
-async function seedTerrainForSidebar(page: Page): Promise<void> {
-  await page
-    .waitForFunction(
-      () => Boolean(window.__bathyTest?.isTestBridgeReady?.()),
-      null,
-      { timeout: 10_000 },
-    )
-    .catch(() => {});
-  await page.evaluate(() => window.__bathyTest?.seedTerrain?.()).catch(() => {});
-  await page
-    .waitForFunction(
-      () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
-      null,
-      { timeout: 5_000 },
-    )
-    .catch(() => {});
-}
 
 test.describe("TIFF file-upload flow", () => {
   test.beforeAll(async ({ request }) => {
@@ -187,13 +179,13 @@ test.describe("TIFF file-upload flow", () => {
     expect(body.savedDatasetMeta?.name).toBe(expectedName);
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     const row = page.getByTestId(`btn-user-dataset-${savedId}`);
     await expect(row).toBeVisible({ timeout: 30_000 });
     await expect(row).toContainText(expectedName);
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     const persistedRow = page.getByTestId(`btn-user-dataset-${savedId}`);
     await expect(persistedRow).toBeVisible({ timeout: 30_000 });
     await expect(persistedRow).toContainText(expectedName);
@@ -209,6 +201,7 @@ test.describe("TIFF file-upload flow", () => {
     expect(await listMyUploads(request)).toHaveLength(0);
 
     await page.goto("/?noCanvas=1", { waitUntil: "domcontentloaded" });
+    await seedTerrain(page);
     await expect(page.getByTestId("tour-scene-canvas-disabled")).toBeVisible();
 
     if (!(await openUploadAccordion(page))) {
@@ -238,7 +231,7 @@ test.describe("TIFF file-upload flow", () => {
     await expect(page.getByTestId("upload-save-error")).toHaveCount(0);
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     const persistedRow = page
       .getByTestId(/^btn-user-dataset-/)
       .filter({ hasText: expectedName });
@@ -252,6 +245,7 @@ test.describe("TIFF file-upload flow", () => {
     page,
   }) => {
     await page.goto("/?noCanvas=1", { waitUntil: "domcontentloaded" });
+    await seedTerrain(page);
     await expect(page.getByTestId("tour-scene-canvas-disabled")).toBeVisible();
 
     if (!(await openUploadAccordion(page))) {
@@ -270,7 +264,7 @@ test.describe("TIFF file-upload flow", () => {
     const filename = `survey-e2e-bad-${Date.now()}.tif`;
     await uploadFileViaDropzone(page, TIFF_FIXTURE_PATH, filename, "image/tiff");
 
-    const errorText = page.getByText(/No valid soundings found in file/i);
+    const errorText = page.getByText(/No valid soundings found in file/i).first();
     await expect(errorText).toBeVisible({ timeout: 15_000 });
 
     await expect(page.getByTestId("upload-save-error")).toHaveCount(0);
@@ -338,13 +332,13 @@ test.describe("NetCDF file-upload flow", () => {
     expect(body.savedDatasetMeta?.name).toBe(expectedName);
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     const row = page.getByTestId(`btn-user-dataset-${savedId}`);
     await expect(row).toBeVisible({ timeout: 30_000 });
     await expect(row).toContainText(expectedName);
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     const persistedRow = page.getByTestId(`btn-user-dataset-${savedId}`);
     await expect(persistedRow).toBeVisible({ timeout: 30_000 });
     await expect(persistedRow).toContainText(expectedName);
@@ -360,6 +354,7 @@ test.describe("NetCDF file-upload flow", () => {
     expect(await listMyUploads(request)).toHaveLength(0);
 
     await page.goto("/?noCanvas=1", { waitUntil: "domcontentloaded" });
+    await seedTerrain(page);
     await expect(page.getByTestId("tour-scene-canvas-disabled")).toBeVisible();
 
     if (!(await openUploadAccordion(page))) {
@@ -389,7 +384,7 @@ test.describe("NetCDF file-upload flow", () => {
     await expect(page.getByTestId("upload-save-error")).toHaveCount(0);
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     const persistedRow = page
       .getByTestId(/^btn-user-dataset-/)
       .filter({ hasText: expectedName });
@@ -403,6 +398,7 @@ test.describe("NetCDF file-upload flow", () => {
     page,
   }) => {
     await page.goto("/?noCanvas=1", { waitUntil: "domcontentloaded" });
+    await seedTerrain(page);
     await expect(page.getByTestId("tour-scene-canvas-disabled")).toBeVisible();
 
     if (!(await openUploadAccordion(page))) {
@@ -421,7 +417,7 @@ test.describe("NetCDF file-upload flow", () => {
     const filename = `survey-e2e-bad-${Date.now()}.nc`;
     await uploadFileViaDropzone(page, NETCDF_FIXTURE_PATH, filename, "application/x-netcdf");
 
-    const errorText = page.getByText(/No valid soundings found in file/i);
+    const errorText = page.getByText(/No valid soundings found in file/i).first();
     await expect(errorText).toBeVisible({ timeout: 15_000 });
 
     await expect(page.getByTestId("upload-save-error")).toHaveCount(0);

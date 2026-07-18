@@ -87,6 +87,21 @@ async function cleanupAllUploads(req: APIRequestContext): Promise<void> {
   }
 }
 
+/**
+ * The "Your Data" sidebar section renders an empty state until terrain is
+ * loaded — DatasetPanel (which hosts the MY UPLOADS rows and the upload
+ * accordion) never mounts without it. Seed synthetic terrain via the test
+ * bridge after every navigation.
+ */
+async function seedTerrain(page: Page): Promise<void> {
+  await page.waitForFunction(() => Boolean(window.__bathyTest), null, {
+    timeout: 15_000,
+  });
+  await page.evaluate(() => {
+    window.__bathyTest!.seedTerrain();
+  });
+}
+
 async function openUploadAccordion(page: Page): Promise<boolean> {
   const toggle = page.getByRole("button", { name: /UPLOAD DATASET\(S\)/i });
   const visible = await toggle
@@ -146,29 +161,6 @@ async function assertViewerRendersDataset(page: Page, rowTestId: string, expecte
 // ---------------------------------------------------------------------------
 
 
-/**
- * Seed synthetic terrain via the test bridge. The sidebar's "Your Data"
- * section (host of the MY UPLOADS dataset tree) renders an empty state
- * until a terrain is loaded, so API-path tests must seed one before
- * asserting on btn-user-dataset-* rows.
- */
-async function seedTerrainForSidebar(page: Page): Promise<void> {
-  await page
-    .waitForFunction(
-      () => Boolean(window.__bathyTest?.isTestBridgeReady?.()),
-      null,
-      { timeout: 10_000 },
-    )
-    .catch(() => {});
-  await page.evaluate(() => window.__bathyTest?.seedTerrain?.()).catch(() => {});
-  await page
-    .waitForFunction(
-      () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
-      null,
-      { timeout: 5_000 },
-    )
-    .catch(() => {});
-}
 
 test.describe("BAG file-upload flow", () => {
   test.beforeAll(async ({ request }) => {
@@ -227,13 +219,13 @@ test.describe("BAG file-upload flow", () => {
     expect(body.savedDatasetMeta?.name).toBe(expectedName);
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     const row = page.getByTestId(`btn-user-dataset-${savedId}`);
     await expect(row).toBeVisible({ timeout: 30_000 });
     await expect(row).toContainText(expectedName);
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     await assertViewerRendersDataset(page, `btn-user-dataset-${savedId}`, expectedName);
     await expect(page.getByTestId("user-dataset-load-error")).toHaveCount(0);
   });
@@ -251,6 +243,7 @@ test.describe("BAG file-upload flow", () => {
     // ?noCanvas=1 skips the R3F Canvas mount — without it, headless Chromium's
     // missing WebGL context can starve the upload mutation of microtasks.
     await page.goto("/?noCanvas=1", { waitUntil: "domcontentloaded" });
+    await seedTerrain(page);
     await expect(page.getByTestId("tour-scene-canvas-disabled")).toBeVisible();
 
     if (!(await openUploadAccordion(page))) {
@@ -280,7 +273,7 @@ test.describe("BAG file-upload flow", () => {
     await expect(page.getByTestId("upload-save-error")).toHaveCount(0);
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     const persistedRow = page
       .getByTestId(/^btn-user-dataset-/)
       .filter({ hasText: expectedName });
@@ -292,7 +285,7 @@ test.describe("BAG file-upload flow", () => {
 
     // Navigate without noCanvas=1 to confirm the 3D viewer renders the dataset.
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     await assertViewerRendersDataset(
       page,
       `btn-user-dataset-${savedRow!.id}`,
@@ -304,6 +297,7 @@ test.describe("BAG file-upload flow", () => {
     page,
   }) => {
     await page.goto("/?noCanvas=1", { waitUntil: "domcontentloaded" });
+    await seedTerrain(page);
     await expect(page.getByTestId("tour-scene-canvas-disabled")).toBeVisible();
 
     if (!(await openUploadAccordion(page))) {
@@ -387,13 +381,13 @@ test.describe("NMEA file-upload flow", () => {
     expect(body.savedDatasetMeta?.name).toBe(expectedName);
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     const row = page.getByTestId(`btn-user-dataset-${savedId}`);
     await expect(row).toBeVisible({ timeout: 30_000 });
     await expect(row).toContainText(expectedName);
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     await assertViewerRendersDataset(page, `btn-user-dataset-${savedId}`, expectedName);
     await expect(page.getByTestId("user-dataset-load-error")).toHaveCount(0);
   });
@@ -406,6 +400,7 @@ test.describe("NMEA file-upload flow", () => {
     expect(await listMyUploads(request)).toHaveLength(0);
 
     await page.goto("/?noCanvas=1", { waitUntil: "domcontentloaded" });
+    await seedTerrain(page);
     await expect(page.getByTestId("tour-scene-canvas-disabled")).toBeVisible();
 
     if (!(await openUploadAccordion(page))) {
@@ -435,7 +430,7 @@ test.describe("NMEA file-upload flow", () => {
     await expect(page.getByTestId("upload-save-error")).toHaveCount(0);
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     const persistedRow = page
       .getByTestId(/^btn-user-dataset-/)
       .filter({ hasText: expectedName });
@@ -447,7 +442,7 @@ test.describe("NMEA file-upload flow", () => {
 
     // Navigate without noCanvas=1 to confirm the 3D viewer renders the dataset.
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     await assertViewerRendersDataset(
       page,
       `btn-user-dataset-${savedRow!.id}`,
@@ -459,6 +454,7 @@ test.describe("NMEA file-upload flow", () => {
     page,
   }) => {
     await page.goto("/?noCanvas=1", { waitUntil: "domcontentloaded" });
+    await seedTerrain(page);
     await expect(page.getByTestId("tour-scene-canvas-disabled")).toBeVisible();
 
     if (!(await openUploadAccordion(page))) {
@@ -473,7 +469,7 @@ test.describe("NMEA file-upload flow", () => {
     await uploadBufferViaDropzone(page, noSentences, filename, "text/plain");
 
     // The server returns details: "File must contain at least 10 valid (lon, lat, depth) rows"
-    const errorText = page.getByText(/at least 10 valid/i);
+    const errorText = page.getByText(/at least 10 valid/i).first();
     await expect(errorText).toBeVisible({ timeout: 15_000 });
 
     await expect(page.getByTestId("upload-save-error")).toHaveCount(0);
@@ -541,13 +537,13 @@ test.describe("GPX file-upload flow", () => {
     expect(body.savedDatasetMeta?.name).toBe(expectedName);
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     const row = page.getByTestId(`btn-user-dataset-${savedId}`);
     await expect(row).toBeVisible({ timeout: 30_000 });
     await expect(row).toContainText(expectedName);
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     await assertViewerRendersDataset(page, `btn-user-dataset-${savedId}`, expectedName);
     await expect(page.getByTestId("user-dataset-load-error")).toHaveCount(0);
   });
@@ -560,6 +556,7 @@ test.describe("GPX file-upload flow", () => {
     expect(await listMyUploads(request)).toHaveLength(0);
 
     await page.goto("/?noCanvas=1", { waitUntil: "domcontentloaded" });
+    await seedTerrain(page);
     await expect(page.getByTestId("tour-scene-canvas-disabled")).toBeVisible();
 
     if (!(await openUploadAccordion(page))) {
@@ -589,7 +586,7 @@ test.describe("GPX file-upload flow", () => {
     await expect(page.getByTestId("upload-save-error")).toHaveCount(0);
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     const persistedRow = page
       .getByTestId(/^btn-user-dataset-/)
       .filter({ hasText: expectedName });
@@ -601,7 +598,7 @@ test.describe("GPX file-upload flow", () => {
 
     // Navigate without noCanvas=1 to confirm the 3D viewer renders the dataset.
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     await assertViewerRendersDataset(
       page,
       `btn-user-dataset-${savedRow!.id}`,
@@ -613,6 +610,7 @@ test.describe("GPX file-upload flow", () => {
     page,
   }) => {
     await page.goto("/?noCanvas=1", { waitUntil: "domcontentloaded" });
+    await seedTerrain(page);
     await expect(page.getByTestId("tour-scene-canvas-disabled")).toBeVisible();
 
     if (!(await openUploadAccordion(page))) {

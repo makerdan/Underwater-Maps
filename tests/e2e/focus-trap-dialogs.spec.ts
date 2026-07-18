@@ -30,18 +30,33 @@ test.describe("keyboard focus trap — RemoveDatasetConfirmDialog", () => {
       try {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
       } catch {}
+      // Suppress the full-screen OnboardingOverlay (zIndex 9000), which
+      // otherwise intercepts real clicks on the remove buttons. Same
+      // pattern as dataset-upload-autosave.spec.ts.
+      try {
+        const raw = localStorage.getItem("bathyscan:settings");
+        const parsed: { state?: Record<string, unknown>; version?: number } =
+          raw ? JSON.parse(raw) : {};
+        parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: true };
+        localStorage.setItem("bathyscan:settings", JSON.stringify(parsed));
+      } catch {
+        try {
+          localStorage.setItem(
+            "bathyscan:settings",
+            JSON.stringify({ state: { hasSeenOnboarding: true }, version: 0 }),
+          );
+        } catch {}
+      }
     });
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await waitForTestApi(page);
-    // The sidebar's Explore tab shows an empty state (no DatasetPanel, so no
-    // remove buttons) until a terrain is loaded — seed one via the test
-    // bridge before injecting synthetic visible-dataset rows.
-    await page.waitForFunction(
-      () => Boolean(window.__bathyTest) && window.__bathyTest!.seedTerrain({}),
-      null,
-      { timeout: 15_000 },
-    );
+    // The "Your Data" sidebar section renders an empty state (no
+    // DatasetPanel, hence no remove buttons) until terrain is loaded —
+    // seed synthetic terrain so the panel mounts.
+    await page.evaluate(() => {
+      window.__bathyTest!.seedTerrain();
+    });
   });
 
   test("Cancel receives focus on open", async ({ page }) => {

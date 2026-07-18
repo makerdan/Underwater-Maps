@@ -44,7 +44,7 @@ const T0 = new Date("2024-06-01T00:00:00Z");
 const T12 = new Date("2024-06-01T12:00:00Z");
 const T24 = new Date("2024-06-02T00:00:00Z");
 
-const DEPTH_PROFILE_CLEARANCE = 230;
+const DEPTH_PROFILE_CLEARANCE = 340;
 
 function resetAllOverlays() {
   useUiStore.setState({

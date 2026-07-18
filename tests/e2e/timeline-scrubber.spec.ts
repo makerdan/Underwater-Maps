@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "./fixtures";
+import { test, expect, type Page, API_URL, E2E_USER_ID } from "./fixtures";
 
 /**
  * Timeline scrubber end-to-end regression tests.
@@ -33,7 +33,7 @@ const TIDE_ACTIVE_NOTICE = "[data-testid='tide-timeline-active-notice']";
 const DEPTH_PANEL        = "[data-testid='depth-profile-panel']";
 
 // Must match DEPTH_PROFILE_CLEARANCE in TimelineScrubBar.tsx
-const DEPTH_PROFILE_CLEARANCE = 360;
+const DEPTH_PROFILE_CLEARANCE = 340;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -63,6 +63,12 @@ async function patchTideOverlay(page: Page, active: boolean): Promise<void> {
     },
     { active },
   );
+  // tideOverlayActive is server-persisted; without this PUT the server
+  // settings hydrate resets the localStorage seed back to false post-load.
+  await page.request.put(`${API_URL}/api/settings`, {
+    headers: { "x-e2e-user-id": E2E_USER_ID },
+    data: { tideOverlayActive: active, currentOverlayActive: false, windOverlayActive: false },
+  });
 }
 
 /** Switch the sidebar to the Plan tab (TidePanel lives there, display:none otherwise). */
@@ -164,6 +170,41 @@ test.describe("Timeline scrubber — overlay visibility gate", () => {
 test.describe("Timeline scrubber — TidePanel cursor sync", () => {
   test("moving scrubber propagates time to TidePanel (tide-timeline-active-notice visible)", async ({ page }) => {
     await patchTideOverlay(page, true);
+    // TidePanel mounts only when showTidePanel && tidalOverlay && tidal data
+    // is non-null (App.tsx Plan-tab gate). Ensure the server-persisted flags
+    // are on and mock the tidal endpoint so data arrives deterministically.
+    await page.request.put(`${API_URL}/api/settings`, {
+      headers: { "x-e2e-user-id": E2E_USER_ID },
+      data: { showTidePanel: true, autoLoadTidal: true },
+    });
+    await page.route(/\/api\/tidal(\?|$)/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          available: true,
+          tideHeight: 1.1,
+          currentDirection: 90,
+          currentSpeed: 0.6,
+          stationName: "Mock NOAA Station",
+          stationId: "MOCK01",
+          isPredicted: false,
+          source: "noaa",
+          nextEvent: {
+            type: "high",
+            time: new Date(Date.now() + 3_600_000).toISOString(),
+            height: 1.5,
+          },
+          slack: {
+            isSlack: false,
+            phase: "flooding",
+            minutesToSlack: 45,
+            minutesSinceSlack: 0,
+            nextReversalAt: new Date(Date.now() + 45 * 60_000).toISOString(),
+          },
+        }),
+      }),
+    );
     await page.goto("/");
     await ensureScrubberVisible(page);
 
@@ -199,6 +240,31 @@ test.describe("Timeline scrubber — TidePanel cursor sync", () => {
         },
       });
     });
+
+    // TidePanel's tidal fetch is gated on terrain centre coordinates
+    // (useTidalData enabled only when centerLat/centerLon are non-null),
+    // so seed synthetic terrain via the test bridge before opening Plan.
+    await waitForTestApi(page);
+    let seeded = false;
+    for (let attempt = 0; attempt < 4 && !seeded; attempt++) {
+      if (attempt > 0) await page.waitForTimeout(500);
+      seeded = Boolean(
+        await page
+          .evaluate(() => (window as unknown as { __bathyTest?: { seedTerrain?: () => unknown } }).__bathyTest?.seedTerrain?.())
+          .catch(() => false),
+      );
+    }
+    expect(seeded, "seedTerrain must succeed so tidal data can load").toBe(true);
+
+    // Open the Plan tab (TidePanel lives there; display:none in Explore) and
+    // ensure the tidal overlay (separate from the tide HUD overlay) is on.
+    await page.getByRole("button", { name: "Plan", exact: true }).dispatchEvent("click");
+    const tidalToggle = page.locator("[data-testid='tidal-overlay-toggle']").first();
+    await expect(tidalToggle).toBeVisible({ timeout: 10_000 });
+    if ((await tidalToggle.getAttribute("aria-pressed")) !== "true") {
+      await tidalToggle.dispatchEvent("click");
+    }
+    await expect(page.locator("[data-testid='tide-panel']")).toBeVisible({ timeout: 20_000 });
 
     const input = page.locator(SCRUBBER_INPUT);
     await expect(input).toBeVisible({ timeout: 5_000 });
@@ -296,16 +362,20 @@ test.describe("Timeline scrubber — depth-profile non-overlap", () => {
     );
     expect(parseInt(bottomStyle, 10)).toBeGreaterThanOrEqual(DEPTH_PROFILE_CLEARANCE);
 
-    // The bar animates upward (transition: bottom 0.2s) — let it settle before
-    // measuring bounding boxes, otherwise the box is captured mid-transition.
-    await page.waitForTimeout(600);
-
-    // Secondary: scrubber box must not overlap the depth-profile panel
-    const scrubBox   = await page.locator(SCRUB_BAR).boundingBox();
-    const profileBox = await page.locator(DEPTH_PANEL).boundingBox();
-    if (scrubBox && profileBox) {
-      expect(scrubBox.y + scrubBox.height).toBeLessThanOrEqual(profileBox.y + 1);
-    }
+    // Secondary: scrubber box must not overlap the depth-profile panel.
+    // The bar animates `bottom` with a 0.2s CSS transition, so poll the
+    // geometry rather than sampling it once mid-animation.
+    await expect
+      .poll(
+        async () => {
+          const scrubBox   = await page.locator(SCRUB_BAR).boundingBox();
+          const profileBox = await page.locator(DEPTH_PANEL).boundingBox();
+          if (!scrubBox || !profileBox) return 0;
+          return scrubBox.y + scrubBox.height - (profileBox.y + 1);
+        },
+        { timeout: 5_000 },
+      )
+      .toBeLessThanOrEqual(0);
   });
 });
 

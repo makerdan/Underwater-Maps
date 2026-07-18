@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, API_URL, E2E_USER_ID } from "./fixtures";
 
 /**
  * Sidebar panel modes — regression hardening.
@@ -17,11 +17,21 @@ import { test, expect } from "./fixtures";
 function injectSettings(
   page: Parameters<typeof test.beforeEach>[0]["page"],
   patch: Record<string, unknown>,
-): void {
-  page.addInitScript((p) => {
+): Promise<void> {
+  // NOTE: the returned promise MUST be awaited before page.goto(). An
+  // unawaited addInitScript races the first navigation — the script can miss
+  // the initial document entirely, leaving the one-shot guard unset, and then
+  // run for the FIRST time on a later reload, clobbering state the test
+  // mutated (e.g. resetting sidebarMode back to its seeded value).
+  return page.addInitScript((p) => {
+    // localStorage guard (NOT sessionStorage): Chromium occasionally drops
+    // sessionStorage across a reload when the renderer process is swapped,
+    // which would let this init script re-run and clobber state the test
+    // mutated (e.g. resetting sidebarMode after a reload). localStorage is
+    // still fresh per test context, so the guard remains one-shot per test.
     const guard = "__sidebarModeInjected";
-    if (sessionStorage.getItem(guard)) return;
-    sessionStorage.setItem(guard, "1");
+    if (localStorage.getItem(guard)) return;
+    localStorage.setItem(guard, "1");
     try {
       const raw = localStorage.getItem("bathyscan:settings");
       const blob = raw
@@ -37,11 +47,13 @@ function injectSettings(
 function injectPanelCollapse(
   page: Parameters<typeof test.beforeEach>[0]["page"],
   collapsed: Record<string, boolean>,
-): void {
-  page.addInitScript((c) => {
+): Promise<void> {
+  // See injectSettings — the returned promise must be awaited before goto.
+  return page.addInitScript((c) => {
+    // localStorage guard — see injectSettings above for rationale.
     const guard = "__panelCollapseInjected";
-    if (sessionStorage.getItem(guard)) return;
-    sessionStorage.setItem(guard, "1");
+    if (localStorage.getItem(guard)) return;
+    localStorage.setItem(guard, "1");
     try {
       const raw = localStorage.getItem("bathyscan:panel-collapse");
       const blob = raw
@@ -89,9 +101,16 @@ async function waitForSidebarTabs(page: Parameters<typeof test.beforeEach>[0]["p
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 test("overlay toggle state is preserved across mode switches", async ({ page }) => {
-  injectSettings(page, {
+  await injectSettings(page, {
     ...BASE,
     windOverlayActive: true,
+  });
+  // Seed the server copy too: GET /api/settings hydration on mount replaces
+  // the injected localStorage value, so both sources must agree or the
+  // assertion races the hydrate → persist rewrite.
+  await page.request.put(`${API_URL}/api/settings`, {
+    headers: { "x-e2e-user-id": E2E_USER_ID },
+    data: { windOverlayActive: true },
   });
 
   await page.goto("/");
@@ -120,9 +139,16 @@ test("overlay toggle state is preserved across mode switches", async ({ page }) 
 });
 
 test("panel collapse state is preserved across mode switches", async ({ page }) => {
-  injectSettings(page, BASE);
+  await injectSettings(page, BASE);
   // Mark the 'conditions' panel as collapsed
-  injectPanelCollapse(page, { conditions: true });
+  await injectPanelCollapse(page, { conditions: true });
+  // Seed the server-side panelCollapse map as well — hydrateFromServer
+  // replaces the collapse store wholesale, wiping the localStorage seed if
+  // the server row lacks the key.
+  await page.request.put(`${API_URL}/api/settings`, {
+    headers: { "x-e2e-user-id": E2E_USER_ID },
+    data: { panelCollapse: { conditions: true } },
+  });
 
   await page.goto("/");
   await waitForSidebarTabs(page);
@@ -153,7 +179,7 @@ test("M key cycles through all four modes in order", async ({ page, context }) =
   await context.grantPermissions(["geolocation"]).catch(() => {});
   await context.setGeolocation({ latitude: 11.3733, longitude: 142.1951, accuracy: 8 });
 
-  injectSettings(page, BASE);
+  await injectSettings(page, BASE);
   await page.goto("/");
   await waitForSidebarTabs(page);
 
@@ -186,7 +212,7 @@ test("M key cycles through all four modes in order", async ({ page, context }) =
 });
 
 test("M key does not fire when cursor is in the AI assistant text input", async ({ page }) => {
-  injectSettings(page, BASE);
+  await injectSettings(page, BASE);
   await page.goto("/");
   await waitForSidebarTabs(page);
 
@@ -215,7 +241,7 @@ test("M key does not fire when cursor is in the AI assistant text input", async 
 });
 
 test("collapsing the sidebar hides mode tabs and panel content; expanding shows them", async ({ page }) => {
-  injectSettings(page, BASE);
+  await injectSettings(page, BASE);
   await page.goto("/");
   await waitForSidebarTabs(page);
 
@@ -242,7 +268,7 @@ test("collapsing the sidebar hides mode tabs and panel content; expanding shows 
 });
 
 test("sidebar-section-habitat is only visible in Analyze mode", async ({ page }) => {
-  injectSettings(page, { ...BASE, sidebarMode: "explore" });
+  await injectSettings(page, { ...BASE, sidebarMode: "explore" });
   await page.goto("/");
   await waitForSidebarTabs(page);
 
@@ -271,7 +297,7 @@ test("sidebar-section-habitat is only visible in Analyze mode", async ({ page })
 });
 
 test("sidebar-section-mapData is only visible in Explore mode", async ({ page }) => {
-  injectSettings(page, { ...BASE, sidebarMode: "explore" });
+  await injectSettings(page, { ...BASE, sidebarMode: "explore" });
   await page.goto("/");
   await waitForSidebarTabs(page);
 
@@ -308,18 +334,25 @@ test("sidebar-section-mapData is only visible in Explore mode", async ({ page })
 });
 
 test("page reload restores the previously active sidebar mode", async ({ page }) => {
-  injectSettings(page, { ...BASE, sidebarMode: "explore" });
+  await injectSettings(page, { ...BASE, sidebarMode: "explore" });
   await page.goto("/");
   await waitForSidebarTabs(page);
 
   const planTab = page.locator('[data-testid="sidebar-mode-tab-plan"]');
   const analyzeTab = page.locator('[data-testid="sidebar-mode-tab-analyze"]');
 
+  // Flush the 300 ms debounced PUT /api/settings before each reload —
+  // otherwise the reload's GET /api/settings hydrate restores the previous
+  // mode because the click's write never reached the server.
+  const flushSync = () =>
+    page.evaluate(() => window.__bathyTest!.waitForServerSettingsSync());
+
   // Switch to Plan mode
   await planTab.click();
   await expect(planTab).toHaveAttribute("aria-pressed", "true", { timeout: 5_000 });
 
   // Reload — settingsStore persist should restore 'plan'
+  await flushSync();
   await page.reload();
   await waitForSidebarTabs(page);
   await expect(planTab).toHaveAttribute("aria-pressed", "true", { timeout: 8_000 });
@@ -327,6 +360,7 @@ test("page reload restores the previously active sidebar mode", async ({ page })
   // Switch to Analyze, reload, confirm
   await analyzeTab.click();
   await expect(analyzeTab).toHaveAttribute("aria-pressed", "true", { timeout: 5_000 });
+  await flushSync();
   await page.reload();
   await waitForSidebarTabs(page);
   await expect(analyzeTab).toHaveAttribute("aria-pressed", "true", { timeout: 8_000 });
@@ -335,6 +369,7 @@ test("page reload restores the previously active sidebar mode", async ({ page })
   const exploreTab = page.locator('[data-testid="sidebar-mode-tab-explore"]');
   await exploreTab.click();
   await expect(exploreTab).toHaveAttribute("aria-pressed", "true", { timeout: 5_000 });
+  await flushSync();
   await page.reload();
   await waitForSidebarTabs(page);
   await expect(exploreTab).toHaveAttribute("aria-pressed", "true", { timeout: 8_000 });

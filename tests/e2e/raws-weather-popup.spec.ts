@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "./fixtures";
+import { test, expect, type Page, API_URL, E2E_USER_ID } from "./fixtures";
 
 /**
  * RAWS weather popup E2E coverage.
@@ -138,6 +138,12 @@ async function mockRawsStations(page: Page): Promise<void> {
 }
 
 async function enableRawsOverlay(page: Page): Promise<void> {
+  // rawsOverlayActive is server-persisted; the async settings hydrate can
+  // land after the bridge call and reset it to false, unpainting the pins.
+  await page.request.put(`${API_URL}/api/settings`, {
+    headers: { "x-e2e-user-id": E2E_USER_ID },
+    data: { rawsOverlayActive: true },
+  });
   await page.evaluate(() => {
     (
       window as unknown as {
@@ -148,6 +154,32 @@ async function enableRawsOverlay(page: Page): Promise<void> {
   // Brief pause for the mocked stations fetch to settle and for the rAF loop
   // to paint the first frame of station pins onto the canvas.
   await page.waitForTimeout(400);
+}
+
+/**
+ * Seed synthetic terrain centred on the mock RAWS station (61.2 N, -149.9 W —
+ * near Anchorage). useRawsStations is gated on centerLat/centerLon being
+ * non-null, and without matching terrain bounds the rAF loop projects the
+ * station lon/lat outside the drawn area so no pins/positions render.
+ */
+async function seedRawsTerrain(page: Page): Promise<void> {
+  await page.evaluate(() =>
+    window.__bathyTest?.seedTerrain?.({
+      minLat: 60,
+      maxLat: 62.5,
+      minLon: -152,
+      maxLon: -147.5,
+      centerLat: 61.2,
+      centerLon: -149.9,
+    }),
+  ).catch(() => {});
+  await page
+    .waitForFunction(
+      () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
+      null,
+      { timeout: 5_000 },
+    )
+    .catch(() => {});
 }
 
 test.describe("RAWS weather popup", () => {
@@ -251,13 +283,33 @@ test.describe("RAWS weather popup", () => {
 
     void pinPos; // position confirmed painted — click goes to the SVG pin below
 
-    // RAWS pin clicks are handled by onClick on the SVG <g> overlay elements
-    // (the canvas click handler no longer hit-tests pins). Click the pin's
-    // SVG group directly via dispatchEvent (bypasses canvas z-order overlap).
+    // Dispatch a real click at the pin's viewport coordinates. RAWS pins are
+    // SVG <g> elements rendered in the overlay ABOVE the canvas with their own
+    // React onClick — dispatching on the canvas element itself would bypass
+    // them. Resolve the topmost element at the point (the pin's hit target)
+    // via elementFromPoint and click that, mirroring what a user's pointer hits.
     await expect(page.locator(OVERVIEW_CANVAS_TESTID)).toBeVisible();
-    const pinEl = page.locator(`[data-testid="raws-pin-${RAWS_DATASET_ID}"]`);
-    await expect(pinEl).toBeAttached({ timeout: 5_000 });
-    await pinEl.dispatchEvent("click");
+    await page.evaluate(
+      ({ cx: pinCx, cy: pinCy, testid }) => {
+        const canvas = document.querySelector(
+          `[data-testid="${testid}"]`,
+        ) as HTMLCanvasElement | null;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const x = rect.left + pinCx;
+        const y = rect.top + pinCy;
+        const target = document.elementFromPoint(x, y) ?? canvas;
+        target.dispatchEvent(
+          new MouseEvent("click", {
+            bubbles: true,
+            cancelable: true,
+            clientX: x,
+            clientY: y,
+          }),
+        );
+      },
+      { cx: pinPos.cx, cy: pinPos.cy, testid: "overview-map-canvas" },
+    );
 
     const popover = page.locator(POPOVER_TESTID);
     await expect(popover).toBeVisible({ timeout: 8_000 });
@@ -337,6 +389,11 @@ test.describe("RAWS weather popup", () => {
       await waitForRawsHelpers(page),
       "RAWS helpers must be registered by OverviewMap",
     ).toBe(true);
+
+    // Seed terrain near the mock station: useRawsStations is gated on
+    // centerLat/centerLon being non-null, and the popover render requires
+    // the station to be present in rawsDataRef (populated from that fetch).
+    await seedRawsTerrain(page);
 
     await enableRawsOverlay(page);
 
@@ -424,6 +481,9 @@ test.describe("RAWS weather popup", () => {
       await waitForRawsHelpers(page),
       "RAWS helpers must be registered by OverviewMap",
     ).toBe(true);
+
+    // Seed terrain near the mock station (see fallback test for rationale).
+    await seedRawsTerrain(page);
 
     await enableRawsOverlay(page);
 

@@ -182,9 +182,8 @@ test.describe("Slack-tide visuals", () => {
 
     // TidePanel renders once tidalOverlay=true AND effectiveTidalData!==null,
     // both of which we just set synchronously. Give React one tick to commit.
-    // TidePanel now lives inside the Plan sidebar tab (display:none otherwise).
-    await ensurePlanTab(page);
-
+    // TidePanel lives in the Plan sidebar tab (display:none in Explore).
+    await page.getByRole("button", { name: "Plan", exact: true }).dispatchEvent("click");
     const tidalMounted = page.locator("[data-testid='tide-panel']").first();
     await expect(tidalMounted).toBeVisible({ timeout: 5_000 });
 
@@ -221,9 +220,13 @@ test.describe("Slack-tide visuals", () => {
       )
       .catch(() => {});
 
-    await clickTopBarToggle(page, "DRIFT");
-    await ensurePlanTab(page);
-    await expect(page.locator("[data-testid='weather-panel']")).toBeVisible({ timeout: 10_000 });
+    // The DRIFT toggle and Drift Planner section live in the Plan sidebar
+    // tab (hidden in Explore). Enable via the test bridge and open Plan.
+    await page.evaluate(() =>
+      (window as unknown as { __bathyTest?: { setDriftPlannerActive?: (v: boolean) => void } }).__bathyTest?.setDriftPlannerActive?.(true),
+    );
+    await page.getByRole("button", { name: "Plan", exact: true }).dispatchEvent("click");
+    await expect(page.locator("[data-testid='weather-panel']")).toBeVisible({ timeout: 5_000 });
 
     // Manual override panel must be present.
     await expect(page.locator("text=MANUAL OVERRIDE")).toBeVisible({ timeout: 10_000 });
@@ -296,9 +299,13 @@ test.describe("Slack-tide visuals", () => {
       )
       .catch(() => {});
 
-    await clickTopBarToggle(page, "DRIFT");
-    await ensurePlanTab(page);
-    await expect(page.locator("[data-testid='weather-panel']")).toBeVisible({ timeout: 10_000 });
+    // The DRIFT toggle and Drift Planner section live in the Plan sidebar
+    // tab (hidden in Explore). Enable via the test bridge and open Plan.
+    await page.evaluate(() =>
+      (window as unknown as { __bathyTest?: { setDriftPlannerActive?: (v: boolean) => void } }).__bathyTest?.setDriftPlannerActive?.(true),
+    );
+    await page.getByRole("button", { name: "Plan", exact: true }).dispatchEvent("click");
+    await expect(page.locator("[data-testid='weather-panel']")).toBeVisible({ timeout: 5_000 });
     await expect(page.locator("text=MANUAL OVERRIDE")).toBeVisible({ timeout: 10_000 });
 
     // Baseline: timeline shows the angled-line copy ("N° from vertical").

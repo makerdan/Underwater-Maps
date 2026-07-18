@@ -22,11 +22,21 @@ const MOCK_LON = 142.1951;
 function injectSettings(
   page: Parameters<typeof test.beforeEach>[0]["page"],
   patch: Record<string, unknown>,
-): void {
-  page.addInitScript((p) => {
+): Promise<void> {
+  // NOTE: the returned promise MUST be awaited before page.goto(). An
+  // unawaited addInitScript races the first navigation — the script can miss
+  // the initial document entirely, leaving the one-shot guard unset, and then
+  // run for the FIRST time on a later reload, clobbering state the test
+  // mutated (e.g. resetting sidebarMode back to its seeded value).
+  return page.addInitScript((p) => {
+    // localStorage guard (NOT sessionStorage): Chromium occasionally drops
+    // sessionStorage across a reload when the renderer process is swapped,
+    // which would let this init script re-run and clobber state the test
+    // mutated. localStorage is still fresh per test context, so the guard
+    // remains one-shot per test.
     const guard = "__liveModeInjected";
-    if (sessionStorage.getItem(guard)) return;
-    sessionStorage.setItem(guard, "1");
+    if (localStorage.getItem(guard)) return;
+    localStorage.setItem(guard, "1");
     try {
       const raw = localStorage.getItem("bathyscan:settings");
       const blob = raw
@@ -64,7 +74,7 @@ test.beforeEach(async ({ page, context }) => {
 });
 
 test("Live tab is rendered as the fourth sidebar mode tab", async ({ page }) => {
-  injectSettings(page, BASE);
+  await injectSettings(page, BASE);
   await page.goto("/");
   await waitForSidebarTabs(page);
 
@@ -74,7 +84,7 @@ test("Live tab is rendered as the fourth sidebar mode tab", async ({ page }) => 
 });
 
 test("tapping Live shows the Live panel and hides other mode panels", async ({ page }) => {
-  injectSettings(page, BASE);
+  await injectSettings(page, BASE);
   await page.goto("/");
   await waitForSidebarTabs(page);
 
@@ -96,7 +106,7 @@ test("tapping Live shows the Live panel and hides other mode panels", async ({ p
 });
 
 test("entering Live starts trail recording and GPS acquisition", async ({ page }) => {
-  injectSettings(page, BASE);
+  await injectSettings(page, BASE);
   await page.goto("/");
   await waitForSidebarTabs(page);
 
@@ -115,7 +125,7 @@ test("entering Live starts trail recording and GPS acquisition", async ({ page }
 });
 
 test("leaving Live pauses the trail; re-entering resumes without losing points", async ({ page }) => {
-  injectSettings(page, BASE);
+  await injectSettings(page, BASE);
   await page.goto("/");
   await waitForSidebarTabs(page);
 
@@ -152,7 +162,7 @@ test("leaving Live pauses the trail; re-entering resumes without losing points",
 });
 
 test("interval control changes the sampling interval from the Live panel", async ({ page }) => {
-  injectSettings(page, BASE);
+  await injectSettings(page, BASE);
   await page.goto("/");
   await waitForSidebarTabs(page);
 
@@ -186,7 +196,7 @@ test("interval control changes the sampling interval from the Live panel", async
 });
 
 test("page reload restores Live mode", async ({ page }) => {
-  injectSettings(page, BASE);
+  await injectSettings(page, BASE);
   await page.goto("/");
   await waitForSidebarTabs(page);
 

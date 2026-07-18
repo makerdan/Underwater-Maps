@@ -60,6 +60,21 @@ async function cleanupAllUploads(req: APIRequestContext): Promise<void> {
   }
 }
 
+/**
+ * The "Your Data" sidebar section renders an empty state until terrain is
+ * loaded — DatasetPanel (which hosts the MY UPLOADS rows and the upload
+ * accordion) never mounts without it. Seed synthetic terrain via the test
+ * bridge after every navigation.
+ */
+async function seedTerrain(page: Page): Promise<void> {
+  await page.waitForFunction(() => Boolean(window.__bathyTest), null, {
+    timeout: 15_000,
+  });
+  await page.evaluate(() => {
+    window.__bathyTest!.seedTerrain();
+  });
+}
+
 async function openUploadAccordion(page: Page): Promise<boolean> {
   const toggle = page.getByRole("button", { name: /UPLOAD DATASET\(S\)/i });
   const visible = await toggle
@@ -90,29 +105,6 @@ async function uploadLazViaDropzone(page: Page, filename: string): Promise<void>
 }
 
 
-/**
- * Seed synthetic terrain via the test bridge. The sidebar's "Your Data"
- * section (host of the MY UPLOADS dataset tree) renders an empty state
- * until a terrain is loaded, so API-path tests must seed one before
- * asserting on btn-user-dataset-* rows.
- */
-async function seedTerrainForSidebar(page: Page): Promise<void> {
-  await page
-    .waitForFunction(
-      () => Boolean(window.__bathyTest?.isTestBridgeReady?.()),
-      null,
-      { timeout: 10_000 },
-    )
-    .catch(() => {});
-  await page.evaluate(() => window.__bathyTest?.seedTerrain?.()).catch(() => {});
-  await page
-    .waitForFunction(
-      () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
-      null,
-      { timeout: 5_000 },
-    )
-    .catch(() => {});
-}
 
 test.describe("LAZ file-upload flow", () => {
   test.beforeAll(async ({ request }) => {
@@ -129,6 +121,23 @@ test.describe("LAZ file-upload flow", () => {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
         localStorage.removeItem("bathyscan:panel-collapse");
       } catch {}
+      // Suppress the full-screen OnboardingOverlay (zIndex 9000), which
+      // otherwise intercepts clicks on MY UPLOADS rows. Same pattern as
+      // dataset-upload-autosave.spec.ts.
+      try {
+        const raw = localStorage.getItem("bathyscan:settings");
+        const parsed: { state?: Record<string, unknown>; version?: number } =
+          raw ? JSON.parse(raw) : {};
+        parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: true };
+        localStorage.setItem("bathyscan:settings", JSON.stringify(parsed));
+      } catch {
+        try {
+          localStorage.setItem(
+            "bathyscan:settings",
+            JSON.stringify({ state: { hasSeenOnboarding: true }, version: 0 }),
+          );
+        } catch {}
+      }
     });
     await cleanupAllUploads(request);
   });
@@ -179,14 +188,14 @@ test.describe("LAZ file-upload flow", () => {
 
     // Load the app and confirm the new row is visible in MY UPLOADS.
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     const row = page.getByTestId(`btn-user-dataset-${savedId}`);
     await expect(row).toBeVisible({ timeout: 30_000 });
     await expect(row).toContainText(expectedName);
 
     // Reload — the row must survive a hard refresh (DB-backed, not just cache).
     await page.reload({ waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     const persistedRow = page.getByTestId(`btn-user-dataset-${savedId}`);
     await expect(persistedRow).toBeVisible({ timeout: 30_000 });
     await expect(persistedRow).toContainText(expectedName);
@@ -210,6 +219,7 @@ test.describe("LAZ file-upload flow", () => {
     // it can never reach production.
     await page.goto("/?noCanvas=1", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("tour-scene-canvas-disabled")).toBeVisible();
+    await seedTerrain(page);
 
     if (!(await openUploadAccordion(page))) {
       test.skip(true, "Upload accordion or dropzone not visible in this environment");
@@ -252,7 +262,7 @@ test.describe("LAZ file-upload flow", () => {
     // Hard reload: the row must still be present once React Query re-fetches
     // from the DB (regression guard for "vanish on refresh").
     await page.reload({ waitUntil: "domcontentloaded" });
-    await seedTerrainForSidebar(page);
+    await seedTerrain(page);
     const persistedRow = page
       .getByTestId(/^btn-user-dataset-/)
       .filter({ hasText: expectedName });
@@ -268,6 +278,7 @@ test.describe("LAZ file-upload flow", () => {
   }) => {
     await page.goto("/?noCanvas=1", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("tour-scene-canvas-disabled")).toBeVisible();
+    await seedTerrain(page);
 
     if (!(await openUploadAccordion(page))) {
       test.skip(true, "Upload accordion or dropzone not visible in this environment");
@@ -288,7 +299,11 @@ test.describe("LAZ file-upload flow", () => {
 
     // The dropzone should revert to the idle state and display the error
     // message returned by the server.
-    const errorText = page.getByText(/No valid soundings found in file/i);
+    // Both the DatasetPanel inline error and a toast can match — scope to
+    // the sidebar's inline error to avoid a strict-mode violation.
+    const errorText = page
+      .getByTestId("sidebar-section-mapData")
+      .getByText(/No valid soundings found in file/i);
     await expect(errorText).toBeVisible({ timeout: 15_000 });
 
     // No save-error element should appear — the upload itself failed,

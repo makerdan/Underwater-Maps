@@ -58,9 +58,10 @@ export const DEFAULT_SETTINGS = {
   colormapTheme: "ocean",
   showCompassMinimap: true,
   hasSeenOnboarding: true,
-  // sidebarMode persists server-side per user; a spec that switches to Plan
-  // (or Live) would otherwise leak that mode into the next spec, hiding the
-  // Explore tab's DatasetPanel and breaking remove-dataset flows.
+  // sidebarMode persists server-side per user, and the e2e user is shared
+  // across spec files. Without an explicit reset here, a spec that switches
+  // to Plan/Live leaves the NEXT spec loading with the Explore tab hidden
+  // (coord search, crosshair menu, dataset panels all live in Explore).
   sidebarMode: "explore",
   panelCollapse: {},
 } as const;
@@ -77,7 +78,36 @@ import { resolve as resolvePath } from "node:path";
 const fileStarts = new Map<string, number>();
 const fileSlowest = new Map<string, Array<{ name: string; durationMs: number }>>();
 
-export const test = base.extend<{ resetSettings: void; fileBudgetGuard: void }>({
+export const test = base.extend<{ resetSettings: void; fileBudgetGuard: void; suppressOnboarding: void }>({
+  // The full-screen OnboardingOverlay (zIndex 9000) renders from the
+  // localStorage-persisted client store BEFORE the server settings hydrate,
+  // so the server-side hasSeenOnboarding reset above is not enough — the
+  // overlay intercepts pointer events during the first seconds of every
+  // test. Seed localStorage before any page script runs. Specs that need
+  // the overlay (onboarding-tour.spec.ts) register their own init script
+  // later, which runs after this one and overwrites the value.
+  suppressOnboarding: [
+    async ({ page }, use) => {
+      await page.addInitScript(() => {
+        try {
+          const raw = localStorage.getItem("bathyscan:settings");
+          const parsed: { state?: Record<string, unknown>; version?: number } =
+            raw ? JSON.parse(raw) : {};
+          parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: true };
+          localStorage.setItem("bathyscan:settings", JSON.stringify(parsed));
+        } catch {
+          try {
+            localStorage.setItem(
+              "bathyscan:settings",
+              JSON.stringify({ state: { hasSeenOnboarding: true }, version: 0 }),
+            );
+          } catch {}
+        }
+      });
+      await use();
+    },
+    { auto: true },
+  ],
   fileBudgetGuard: [
     async ({}, use, testInfo) => {
       const file = testInfo.file;

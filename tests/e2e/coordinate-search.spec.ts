@@ -15,7 +15,23 @@
  * Auth: bypass mode (VITE_DEV_AUTH_BYPASS=1) — the FIND DATA button renders
  * whenever the bypass flag is set.
  */
-import { test, expect, API_URL } from "./fixtures";
+import { test, expect, API_URL, type Page } from "./fixtures";
+
+/**
+ * The coordinate + radius form lives inside a collapsed <details> section
+ * ("📍 Search by coordinates") on the Find Data Search tab. Expand it if
+ * it isn't already open.
+ */
+async function expandCoordSearchSection(page: Page): Promise<void> {
+  const section = page.getByTestId("coord-search-section");
+  await expect(section).toBeVisible({ timeout: 5_000 });
+  const isOpen = await section.evaluate(
+    (el) => (el as HTMLDetailsElement).open,
+  );
+  if (!isOpen) {
+    await page.getByTestId("coord-search-toggle").click();
+  }
+}
 
 const CATALOG_HIT = {
   id: "e2e-coord-search-dataset",
@@ -97,18 +113,9 @@ test.describe("Coordinate search — Find Data → Overview Map flow", () => {
     const panel = page.getByRole("dialog", { name: /Find Data panel/i });
     await expect(panel).toBeVisible({ timeout: 8_000 });
 
-    // The coordinate form lives on the default Search tab, inside a
-    // collapsed <details data-testid="coord-search-section"> — expand it.
-    const coordToggle = page.getByTestId("coord-search-toggle");
-    await expect(coordToggle).toBeVisible({ timeout: 5_000 });
-    const expanded = await page
-      .getByTestId("coord-search-section")
-      .evaluate((el) => (el as HTMLDetailsElement).open)
-      .catch(() => false);
-    if (!expanded) {
-      await coordToggle.click();
-    }
-
+    // The coordinate form lives inside a collapsed <details> on the default
+    // Search tab — expand it before interacting with the input.
+    await expandCoordSearchSection(page);
     const coordInput = page.getByTestId("coord-search-input");
     await expect(coordInput).toBeVisible({ timeout: 5_000 });
     await coordInput.fill("55.7, -132.45");
@@ -171,17 +178,7 @@ test.describe("Coordinate search — Find Data → Overview Map flow", () => {
     const panel = page.getByRole("dialog", { name: /Find Data panel/i });
     await expect(panel).toBeVisible({ timeout: 8_000 });
 
-    // Expand the collapsed coordinate-search <details> section first.
-    const coordToggle = page.getByTestId("coord-search-toggle");
-    await expect(coordToggle).toBeVisible({ timeout: 5_000 });
-    const expanded = await page
-      .getByTestId("coord-search-section")
-      .evaluate((el) => (el as HTMLDetailsElement).open)
-      .catch(() => false);
-    if (!expanded) {
-      await coordToggle.click();
-    }
-
+    await expandCoordSearchSection(page);
     const coordInput = page.getByTestId("coord-search-input");
     await expect(coordInput).toBeVisible({ timeout: 5_000 });
     await coordInput.fill("not real coordinates");
