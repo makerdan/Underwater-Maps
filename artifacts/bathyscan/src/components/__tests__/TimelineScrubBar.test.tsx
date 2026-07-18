@@ -15,6 +15,8 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { render, screen, act } from "@testing-library/react";
 import { useTimelineStore } from "@/lib/timelineStore";
 import { useDepthProfileStore, type DepthProfileResult } from "@/lib/depthProfileStore";
+import { useTidalStore } from "@/lib/tidalStore";
+import type { TideSample } from "@/lib/tidePrediction";
 
 // ── settingsStore mock (required by uiStore module-init call) ─────────────────
 vi.mock("@/lib/settingsStore", async (importOriginal) => {
@@ -302,6 +304,86 @@ describe("TimelineScrubBar — no-forecast fallback range", () => {
     const { getByTestId } = render(<TimelineScrubBar />);
     const input = getByTestId("timeline-scrubber") as HTMLInputElement;
     expect(parseInt(input.value, 10)).toBe(10_000);
+  });
+});
+
+describe("TimelineScrubBar — high/low tide markers on the trip window", () => {
+  /** Build 6-minute samples over [T0, T24] from an hourly height function. */
+  function buildSamples(heightAtHour: (h: number) => number): TideSample[] {
+    const out: TideSample[] = [];
+    for (let m = 0; m <= 24 * 60; m += 6) {
+      out.push({
+        tMs: T0.getTime() + m * 60_000,
+        v: heightAtHour(m / 60),
+      });
+    }
+    return out;
+  }
+
+  beforeEach(() => {
+    resetAllOverlays();
+    resetTimeline();
+    useTidalStore.setState({ samples: null });
+    useUiStore.setState({ tideOverlayActive: true });
+  });
+
+  afterEach(() => {
+    useTidalStore.setState({ samples: null });
+  });
+
+  it("renders no markers when no tide samples are loaded", () => {
+    const { queryAllByTestId } = render(<TimelineScrubBar />);
+    expect(queryAllByTestId("timeline-tide-marker-high")).toHaveLength(0);
+    expect(queryAllByTestId("timeline-tide-marker-low")).toHaveLength(0);
+  });
+
+  it("renders green high and amber low markers inside the trip window", () => {
+    // Sinusoid with a high near hour 6 and a low near hour 18.
+    useTidalStore.setState({
+      samples: buildSamples((h) => Math.sin(((h - 0) / 12) * Math.PI) * 5),
+    });
+    const { getAllByTestId } = render(<TimelineScrubBar />);
+    const highs = getAllByTestId("timeline-tide-marker-high");
+    const lows = getAllByTestId("timeline-tide-marker-low");
+    expect(highs.length).toBeGreaterThanOrEqual(1);
+    expect(lows.length).toBeGreaterThanOrEqual(1);
+    // Colours match the tide-station panel: green high, amber low.
+    expect(highs[0]!.style.background).toBe("rgb(74, 222, 128)");
+    expect(lows[0]!.style.background).toBe("rgb(251, 191, 36)");
+  });
+
+  it("positions a marker proportionally along the window", () => {
+    // High exactly at hour 12 → 50% of the 24 h window.
+    useTidalStore.setState({
+      samples: buildSamples((h) => -Math.abs(h - 12)),
+    });
+    const { getAllByTestId } = render(<TimelineScrubBar />);
+    const highs = getAllByTestId("timeline-tide-marker-high");
+    expect(highs).toHaveLength(1);
+    expect(parseFloat(highs[0]!.style.left)).toBeCloseTo(50, 0);
+  });
+
+  it("excludes extremes outside the trip window", () => {
+    // Narrow the window to hours 0–6; the high at hour 12 must not appear.
+    useTimelineStore.setState({
+      timeRange: { start: T0, end: new Date(T0.getTime() + 6 * 3_600_000) },
+      currentTime: T0,
+    });
+    useTidalStore.setState({
+      samples: buildSamples((h) => -Math.abs(h - 12)),
+    });
+    const { queryAllByTestId } = render(<TimelineScrubBar />);
+    expect(queryAllByTestId("timeline-tide-marker-high")).toHaveLength(0);
+  });
+
+  it("marker exposes an accessible high/low label with time and height", () => {
+    useTidalStore.setState({
+      samples: buildSamples((h) => -Math.abs(h - 12)),
+    });
+    const { getAllByTestId } = render(<TimelineScrubBar />);
+    const label = getAllByTestId("timeline-tide-marker-high")[0]!.getAttribute("aria-label")!;
+    expect(label).toMatch(/^High tide /);
+    expect(label).toMatch(/ft\)$/);
   });
 });
 

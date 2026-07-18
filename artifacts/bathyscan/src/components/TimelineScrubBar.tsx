@@ -15,10 +15,12 @@
  * Play mode advances currentTime by 1 real minute per second of wall-clock
  * time, pausing automatically when the end of the range is reached.
  */
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useCallback, useMemo } from "react";
 import { useUiStore } from "@/lib/uiStore";
 import { useTimelineStore } from "@/lib/timelineStore";
 import { useDepthProfileStore } from "@/lib/depthProfileStore";
+import { useTidalStore } from "@/lib/tidalStore";
+import { findTideExtremes, extremesInRange } from "@/lib/tidePrediction";
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 
@@ -72,6 +74,24 @@ export const TimelineScrubBar: React.FC = () => {
   const isPlaying = useTimelineStore((s) => s.isPlaying);
   const setTime = useTimelineStore((s) => s.setTime);
   const setPlaying = useTimelineStore((s) => s.setPlaying);
+
+  // High/low tide extremes falling inside the trip window, so anglers can
+  // line their outing up with slack water. Same detection + colours as the
+  // tide-station panel (green = high, amber = low).
+  const tideSamples = useTidalStore((s) => s.samples);
+  const allExtremes = useMemo(
+    () => (tideSamples ? findTideExtremes(tideSamples) : []),
+    [tideSamples],
+  );
+  const windowExtremes = useMemo(
+    () =>
+      extremesInRange(
+        allExtremes,
+        timeRange.start.getTime(),
+        timeRange.end.getTime(),
+      ),
+    [allExtremes, timeRange],
+  );
 
   const rangeMs = timeRange.end.getTime() - timeRange.start.getTime();
   const currentMs = currentTime.getTime() - timeRange.start.getTime();
@@ -220,18 +240,51 @@ export const TimelineScrubBar: React.FC = () => {
         </span>
       </div>
 
-      <input
-        data-testid="timeline-scrubber"
-        type="range"
-        min={0}
-        max={10_000}
-        step={1}
-        value={Math.round(rangeValue * 10_000)}
-        onChange={handleScrub}
-        style={rangeStyle}
-        aria-label="Timeline position"
-        aria-valuetext={formatTime(currentTime)}
-      />
+      <div style={{ flex: 1, position: "relative", display: "flex", alignItems: "center" }}>
+        {/* High/low tide markers along the trip window — green = high, amber = low */}
+        {rangeMs > 0 &&
+          windowExtremes.map((e) => {
+            const fraction = (e.tMs - timeRange.start.getTime()) / rangeMs;
+            const pct = Math.max(0, Math.min(100, fraction * 100));
+            const color = e.kind === "high" ? "#4ade80" : "#fbbf24";
+            const label = `${e.kind === "high" ? "High" : "Low"} tide ${formatTime(new Date(e.tMs))} (${e.v >= 0 ? "+" : ""}${e.v.toFixed(2)} ft)`;
+            return (
+              <span
+                key={e.tMs}
+                data-testid={`timeline-tide-marker-${e.kind}`}
+                title={label}
+                aria-label={label}
+                role="img"
+                style={{
+                  position: "absolute",
+                  left: `${pct}%`,
+                  top: -7,
+                  transform: "translateX(-50%)",
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  background: color,
+                  border: "1px solid #0f172a",
+                  boxShadow: `0 0 4px ${color}`,
+                  pointerEvents: "auto",
+                  zIndex: 1,
+                }}
+              />
+            );
+          })}
+        <input
+          data-testid="timeline-scrubber"
+          type="range"
+          min={0}
+          max={10_000}
+          step={1}
+          value={Math.round(rangeValue * 10_000)}
+          onChange={handleScrub}
+          style={{ ...rangeStyle, width: "100%" }}
+          aria-label="Timeline position"
+          aria-valuetext={formatTime(currentTime)}
+        />
+      </div>
 
       <div style={rangeLabel}>
         <span>
