@@ -77,6 +77,7 @@ beforeEach(() => {
 
 function openShortcutsSection() {
   render(<Settings />);
+  // Keyboard shortcuts now live in the NAVIGATION section (sidebar tab).
   fireEvent.click(screen.getByText("NAVIGATION"));
 }
 

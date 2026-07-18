@@ -66,6 +66,39 @@ describe("parseCoordinates — DMS", () => {
   });
 });
 
+describe("parseCoordinates — boundary values & whitespace", () => {
+  it("accepts exactly ±90 latitude and ±180 longitude", () => {
+    expectCoords("90, 180", 90, 180);
+    expectCoords("-90, -180", -90, -180);
+    expectCoords("90 N, 180 E", 90, 180);
+    expectCoords("90 S, 180 W", -90, -180);
+  });
+  it("rejects just past the boundary", () => {
+    expect(parseCoordinates("90.0001, 0").ok).toBe(false);
+    expect(parseCoordinates("0, 180.0001").ok).toBe(false);
+    expect(parseCoordinates("-90.0001, 0").ok).toBe(false);
+    expect(parseCoordinates("0, -180.0001").ok).toBe(false);
+  });
+  it("accepts zero, zero", () => {
+    expectCoords("0, 0", 0, 0);
+  });
+  it("tolerates surrounding and internal extra whitespace", () => {
+    expectCoords("   58.3 ,   -134.42   ", 58.3, -134.42);
+    expectCoords("58   18.076   N,   134   25.187   W", 58 + 18.076 / 60, -(134 + 25.187 / 60));
+  });
+  it("accepts mixed formats per half (decimal lat, DMS lon)", () => {
+    expectCoords(`58.5 N, 134°25'11.2"W`, 58.5, -(134 + 25 / 60 + 11.2 / 3600));
+    expectCoords("58 18.076 N, 134.42 W", 58 + 18.076 / 60, -134.42);
+  });
+  it("accepts lowercase hemisphere letters", () => {
+    expectCoords("58.3 n, 134.42 w", 58.3, -134.42);
+    expectCoords("12.5 s, 45.25 e", -12.5, 45.25);
+  });
+  it("DMS just inside the ±90 corner is accepted", () => {
+    expectCoords("89 59 59.9 N, 0", 89 + 59 / 60 + 59.9 / 3600, 0);
+  });
+});
+
 describe("parseCoordinates — errors", () => {
   it("rejects empty input", () => {
     const res = parseCoordinates("   ");
