@@ -1878,6 +1878,325 @@ router.post("/help", asyncHandler(async (req, res) => {
 // original bitmap. No error toast is surfaced to the user.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Upscale cache — server-side content-addressed cache for Topaz Labs results.
+//
+// Cache key: sha256(raw base64 image bytes + "|" + factor)  (no data-URL prefix)
+// Disk:      /tmp/upscale-cache/<sha256>.json
+// Eviction:  TTL + total-bytes cap, oldest-first
+// Single-flight: upscaleInFlight de-duplicates concurrent requests for the
+//   same key so only one Poe call is made per unique (image, factor) pair.
+//
+// Pattern: mirrors the zone-cache implementation above (safe hex filenames,
+// path-traversal guards, schema-validated reads treated as miss on failure,
+// startup hydration + sweep, registerCache integration).
+// ---------------------------------------------------------------------------
+
+const UPSCALE_CACHE_DIR = "/tmp/upscale-cache";
+
+/**
+ * Maximum age (ms) of an upscale-cache entry before TTL eviction.
+ * Configurable via UPSCALE_CACHE_TTL_MS (default: 7 days).
+ */
+const UPSCALE_CACHE_TTL_MS: number = parsePositiveIntEnv(
+  "UPSCALE_CACHE_TTL_MS",
+  7 * 24 * 60 * 60 * 1000,
+  { min: 1000, max: 365 * 24 * 60 * 60 * 1000 },
+);
+
+/**
+ * Maximum total bytes (sum of stored imageBase64 string lengths) to keep in
+ * the upscale-cache directory. When exceeded, oldest entries are evicted first.
+ * Configurable via UPSCALE_CACHE_MAX_BYTES (default: 500 MB).
+ */
+const UPSCALE_CACHE_MAX_BYTES: number = parsePositiveIntEnv(
+  "UPSCALE_CACHE_MAX_BYTES",
+  500 * 1024 * 1024,
+  { min: 1024, max: 10 * 1024 * 1024 * 1024 },
+);
+
+/**
+ * Strict allow-list for upscale-cache filenames: exactly 64 lowercase hex
+ * chars (sha256 digest). Rejects any path traversal attempt before FS access.
+ */
+const UPSCALE_CACHE_KEY_RE = /^[a-f0-9]{64}$/;
+function isValidUpscaleCacheKey(key: string): boolean {
+  return UPSCALE_CACHE_KEY_RE.test(key);
+}
+
+/**
+ * Schema for on-disk upscale-cache entries. Every read is validated before use;
+ * schema failures are treated as a cache miss (never a hard error).
+ */
+const CachedUpscaleSchema = z.object({
+  imageBase64: z.string().max(50 * 1024 * 1024), // 50 MB ceiling per entry
+  cachedAt: z.number().finite(),
+  bytes: z.number().int().nonnegative(),
+});
+type CachedUpscaleEntry = z.infer<typeof CachedUpscaleSchema>;
+
+/**
+ * In-memory upscale cache entry — stores the result alongside timestamps and
+ * byte size so TTL and bytes-cap eviction can be enforced on every read/write,
+ * not just at startup.
+ */
+interface UpscaleMemEntry {
+  /** The upscaled image data URL (or bare base64 string). */
+  data: string;
+  /** Unix ms timestamp when the entry was stored — used for TTL checks. */
+  cachedAt: number;
+  /** Byte estimate: data.length (1 char ≈ 1 byte for base64 ASCII). */
+  bytes: number;
+}
+
+/**
+ * In-memory upscale cache.  Holds UpscaleMemEntry objects keyed by the
+ * content-addressed cache key.  Registered with cacheRegistry so vitest's
+ * global beforeEach clears it between test cases.
+ */
+const upscaleMemCache = new Map<string, UpscaleMemEntry>();
+registerCache(() => upscaleMemCache.clear());
+
+/**
+ * TTL-aware in-memory cache read.
+ *
+ * Returns the cached data string if the entry exists and has not expired.
+ * Expired entries are deleted from the map so they don't waste memory —
+ * TTL is enforced on every read, not just at startup hydration.
+ */
+function getMemCacheEntry(key: string): string | null {
+  const entry = upscaleMemCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.cachedAt > UPSCALE_CACHE_TTL_MS) {
+    upscaleMemCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+/**
+ * Bytes-cap-aware in-memory cache write.
+ *
+ * Stores the entry and then, if the total bytes of all in-memory entries
+ * exceeds UPSCALE_CACHE_MAX_BYTES, evicts the oldest entries (by cachedAt)
+ * until the cap is met.  Eviction is enforced on every write so the map
+ * stays bounded throughout process lifetime, not just at startup.
+ */
+function setMemCacheEntry(key: string, data: string): void {
+  const bytes = data.length;
+  upscaleMemCache.set(key, { data, cachedAt: Date.now(), bytes });
+
+  // Sum total bytes and evict oldest-first if over cap
+  let totalBytes = 0;
+  for (const e of upscaleMemCache.values()) totalBytes += e.bytes;
+  if (totalBytes <= UPSCALE_CACHE_MAX_BYTES) return;
+
+  const sorted = [...upscaleMemCache.entries()].sort((a, b) => a[1].cachedAt - b[1].cachedAt);
+  for (const [k, e] of sorted) {
+    if (totalBytes <= UPSCALE_CACHE_MAX_BYTES) break;
+    upscaleMemCache.delete(k);
+    totalBytes -= e.bytes;
+    logger.info({ key: k.slice(0, 8), bytes: e.bytes }, "[upscale-cache] evicted from memory (bytes cap)");
+  }
+}
+
+/**
+ * Single-flight registry: maps a cache key to the in-flight Poe promise so
+ * concurrent requests for the same image+factor share one paid call.
+ * Also registered with cacheRegistry so tests start clean.
+ */
+const upscaleInFlight = new Map<string, Promise<string | null>>();
+registerCache(() => upscaleInFlight.clear());
+
+/**
+ * Derive a content-addressed cache key for an upscale request.
+ *
+ * Strips the data-URL prefix (if present) before decoding, then hashes the
+ * **binary image bytes** (not the base64 text) so that different valid
+ * base64 representations of the same image produce the same cache key.
+ */
+export function upscaleCacheKey(imageBase64: string, factor: number): string {
+  const b64 = imageBase64.startsWith("data:")
+    ? (imageBase64.split(",")[1] ?? imageBase64)
+    : imageBase64;
+  const imageBytes = Buffer.from(b64, "base64");
+  return createHash("sha256").update(imageBytes).update("|").update(String(factor)).digest("hex");
+}
+
+/**
+ * Read a single upscale-cache entry from disk by its sha256 key.
+ *
+ * Returns null on any error (missing file, corrupt JSON, schema mismatch) so
+ * callers always treat failures as a cache miss.  Also checks the TTL: an
+ * entry that has expired since the last startup sweep is deleted from disk and
+ * treated as a miss so the caller falls through to a fresh Poe call.
+ */
+export async function readUpscaleDisk(cacheKey: string): Promise<CachedUpscaleEntry | null> {
+  if (!isValidUpscaleCacheKey(cacheKey)) return null;
+  const resolved = path.resolve(path.join(UPSCALE_CACHE_DIR, `${cacheKey}.json`));
+  if (!resolved.startsWith(path.resolve(UPSCALE_CACHE_DIR) + path.sep)) return null;
+  let raw: string;
+  try {
+    raw = await fsPromises.readFile(resolved, "utf8");
+  } catch {
+    return null;
+  }
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(raw);
+  } catch {
+    logger.warn({ cacheKey }, "[upscale-cache] corrupt JSON on disk — treating as miss");
+    return null;
+  }
+  const v = CachedUpscaleSchema.safeParse(parsedJson);
+  if (!v.success) {
+    logger.warn(
+      { cacheKey, issue: v.error.issues[0]?.message },
+      "[upscale-cache] schema validation failed — treating as miss",
+    );
+    return null;
+  }
+  // TTL check on every disk read — entries that expired since the last startup
+  // sweep are stale and must not be served, even if they survive on disk.
+  if (Date.now() - v.data.cachedAt > UPSCALE_CACHE_TTL_MS) {
+    logger.info({ cacheKey }, "[upscale-cache] disk entry expired (TTL) — treating as miss");
+    void fsPromises.unlink(resolved).catch(() => {});
+    return null;
+  }
+  return v.data;
+}
+
+async function writeUpscaleDisk(cacheKey: string, data: CachedUpscaleEntry): Promise<void> {
+  if (!isValidUpscaleCacheKey(cacheKey)) {
+    logger.warn({ cacheKey }, "[upscale-cache] rejected write for invalid cacheKey");
+    return;
+  }
+  try {
+    await fsPromises.mkdir(UPSCALE_CACHE_DIR, { recursive: true });
+    const resolved = path.resolve(path.join(UPSCALE_CACHE_DIR, `${cacheKey}.json`));
+    if (!resolved.startsWith(path.resolve(UPSCALE_CACHE_DIR) + path.sep)) return;
+    await fsPromises.writeFile(resolved, JSON.stringify(data), "utf8");
+    // Enforce disk cap on every write (non-blocking) so /tmp/upscale-cache
+    // stays bounded at runtime, not just after startup hydration.
+    void evictUpscaleDiskAfterWrite();
+  } catch (err) {
+    logger.warn({ err, cacheKey }, "[upscale-cache] failed to write disk entry");
+  }
+}
+
+/**
+ * Non-blocking disk eviction triggered after each successful write.
+ *
+ * Scans the cache directory and runs the same two-phase eviction used at
+ * startup (TTL then bytes-cap, oldest-first) so disk footprint stays <=
+ * UPSCALE_CACHE_MAX_BYTES throughout process lifetime.
+ */
+async function evictUpscaleDiskAfterWrite(): Promise<void> {
+  try {
+    const files = await fsPromises.readdir(UPSCALE_CACHE_DIR).catch(() => [] as string[]);
+    const jsonFiles = files.filter(
+      (f) => f.endsWith(".json") && isValidUpscaleCacheKey(f.slice(0, -5)),
+    );
+    await evictUpscaleEntries(jsonFiles);
+  } catch (err) {
+    logger.warn({ err }, "[upscale-cache] post-write disk eviction failed");
+  }
+}
+
+/**
+ * Evict upscale-cache entries that are too old or push total bytes over the cap.
+ *
+ * Two-phase eviction:
+ *   1. **TTL** — delete entries whose `cachedAt` is older than UPSCALE_CACHE_TTL_MS.
+ *   2. **Bytes cap** — if total bytes of survivors exceeds UPSCALE_CACHE_MAX_BYTES,
+ *      evict oldest-first until the cap is met.
+ *
+ * Files that cannot be read/parsed are silently skipped; unlink failures are
+ * swallowed so one bad entry cannot abort the sweep.
+ */
+export async function evictUpscaleEntries(jsonFiles: string[]): Promise<Set<string>> {
+  const now = Date.now();
+  interface FileEntry { name: string; cachedAt: number; bytes: number; }
+
+  const entries: FileEntry[] = (
+    await Promise.all(
+      jsonFiles.map(async (f): Promise<FileEntry | null> => {
+        try {
+          const raw = await fsPromises.readFile(path.join(UPSCALE_CACHE_DIR, f), "utf8");
+          const parsed = JSON.parse(raw) as { cachedAt?: unknown; bytes?: unknown };
+          return {
+            name: f,
+            cachedAt: typeof parsed.cachedAt === "number" ? parsed.cachedAt : 0,
+            bytes: typeof parsed.bytes === "number" ? parsed.bytes : 0,
+          };
+        } catch {
+          return null;
+        }
+      }),
+    )
+  ).filter((e): e is FileEntry => e !== null);
+
+  // Phase 1: TTL eviction
+  const survivors: FileEntry[] = [];
+  await Promise.all(
+    entries.map(async (e) => {
+      if (now - e.cachedAt > UPSCALE_CACHE_TTL_MS) {
+        await fsPromises.unlink(path.join(UPSCALE_CACHE_DIR, e.name)).catch(() => {});
+        logger.info({ file: e.name }, "[upscale-cache] evicted stale entry (TTL)");
+      } else {
+        survivors.push(e);
+      }
+    }),
+  );
+
+  // Phase 2: bytes cap — evict oldest first
+  survivors.sort((a, b) => a.cachedAt - b.cachedAt);
+  let totalBytes = survivors.reduce((acc, e) => acc + e.bytes, 0);
+  while (totalBytes > UPSCALE_CACHE_MAX_BYTES && survivors.length > 0) {
+    const oldest = survivors.shift()!;
+    totalBytes -= oldest.bytes;
+    await fsPromises.unlink(path.join(UPSCALE_CACHE_DIR, oldest.name)).catch(() => {});
+    logger.info({ file: oldest.name, totalBytes }, "[upscale-cache] evicted entry (bytes cap)");
+  }
+
+  return new Set(survivors.map((e) => e.name));
+}
+
+/**
+ * Hydrate the in-memory upscale cache from disk on startup (non-blocking).
+ *
+ * Runs eviction first (TTL + bytes cap), then loads surviving entries into
+ * upscaleMemCache.  Any error is non-fatal — the cache simply starts empty.
+ */
+export async function hydrateUpscaleCacheFromDisk(): Promise<void> {
+  try {
+    await fsPromises.mkdir(UPSCALE_CACHE_DIR, { recursive: true });
+    const files = await fsPromises.readdir(UPSCALE_CACHE_DIR);
+    const jsonFiles = files.filter(
+      (f) => f.endsWith(".json") && isValidUpscaleCacheKey(f.slice(0, -5)),
+    );
+    const survivors = await evictUpscaleEntries(jsonFiles);
+    await Promise.all(
+      [...survivors].map(async (f) => {
+        const key = f.slice(0, -5);
+        if (upscaleMemCache.has(key)) return;
+        const data = await readUpscaleDisk(key); // also checks TTL per-entry
+        if (data && !upscaleMemCache.has(key)) setMemCacheEntry(key, data.imageBase64);
+      }),
+    );
+    logger.info({ count: upscaleMemCache.size }, "[upscale-cache] hydrated from disk");
+  } catch (err) {
+    logger.warn({ err }, "[upscale-cache] hydration failed — starting empty");
+  }
+}
+
+export { UPSCALE_CACHE_TTL_MS, UPSCALE_CACHE_MAX_BYTES, UPSCALE_CACHE_DIR, upscaleMemCache, upscaleInFlight };
+
+// Kick off hydration immediately (non-blocking, mirrors zone-cache pattern)
+void hydrateUpscaleCacheFromDisk();
+
+// ---------------------------------------------------------------------------
+
 const TOPAZ_MODEL = "TopazLabs";
 const POE_UPSCALE_TIMEOUT_MS = 90_000;
 
@@ -1931,75 +2250,135 @@ router.post("/upscale", asyncHandler(async (req, res) => {
   }
 
   const factor = upscaleFactor === 4 ? 4 : 2;
+  const cacheKey = upscaleCacheKey(imageBase64, factor);
 
+  // --- In-memory cache hit: fastest path, no Poe call ---
+  // getMemCacheEntry enforces TTL on every read; expired entries return null.
+  const memHit = getMemCacheEntry(cacheKey);
+  if (memHit) {
+    logger.info({ key: cacheKey.slice(0, 8), factor, bytes: memHit.length }, "[upscale-cache] HIT (memory)");
+    res.json({ imageBase64: memHit });
+    return;
+  }
+
+  // --- Disk cache hit: restore from persisted storage ---
+  // readUpscaleDisk also enforces TTL; expired disk entries are deleted and return null.
+  const diskHit = await readUpscaleDisk(cacheKey);
+  if (diskHit) {
+    setMemCacheEntry(cacheKey, diskHit.imageBase64); // enforces bytes cap on write
+    logger.info({ key: cacheKey.slice(0, 8), factor, bytes: diskHit.bytes }, "[upscale-cache] HIT (disk)");
+    res.json({ imageBase64: diskHit.imageBase64 });
+    return;
+  }
+
+  // Cache miss — check circuit breaker before attempting a paid Poe call
   if (poeBreaker.isOpen()) {
     res.status(503).json({ error: "circuit_open", details: "Upscale service temporarily unavailable" });
     return;
   }
 
-  const dataUrl = imageBase64.startsWith("data:")
-    ? imageBase64
-    : `data:image/png;base64,${imageBase64}`;
+  logger.info(
+    { key: cacheKey.slice(0, 8), factor, inputBytes: imageBase64.length },
+    "[upscale-cache] MISS — calling Poe",
+  );
 
-  try {
-    const client = getPoeClient();
+  // --- Single-flight de-duplication ---
+  // If another request is already in-flight for the same key, await it instead
+  // of issuing a duplicate paid call. A new promise is created only when no
+  // in-flight entry exists (synchronous check; safe in Node's single-threaded
+  // event loop between `await` boundaries).
+  let inflight = upscaleInFlight.get(cacheKey);
+  if (!inflight) {
+    const dataUrl = imageBase64.startsWith("data:")
+      ? imageBase64
+      : `data:image/png;base64,${imageBase64}`;
 
-    const completion = await withRetry(
-      () =>
-        client.chat.completions.create(
-          {
-            model: TOPAZ_MODEL,
-            messages: [
+    inflight = (async (): Promise<string | null> => {
+      try {
+        const client = getPoeClient();
+
+        const completion = await withRetry(
+          () =>
+            client.chat.completions.create(
               {
-                role: "user" as const,
-                content: [
+                model: TOPAZ_MODEL,
+                messages: [
                   {
-                    type: "image_url" as const,
-                    image_url: { url: dataUrl },
-                  },
-                  {
-                    type: "text" as const,
-                    text: `Upscale this image by ${factor}x. Enhance sharpness and fine detail.`,
+                    role: "user" as const,
+                    content: [
+                      {
+                        type: "image_url" as const,
+                        image_url: { url: dataUrl },
+                      },
+                      {
+                        type: "text" as const,
+                        text: `Upscale this image by ${factor}x. Enhance sharpness and fine detail.`,
+                      },
+                    ],
                   },
                 ],
+                max_tokens: 512,
+                stream: false,
               },
-            ],
-            max_tokens: 512,
-            stream: false,
-          },
-          { signal: AbortSignal.timeout(POE_UPSCALE_TIMEOUT_MS) },
-        ),
-      2,
-    );
+              { signal: AbortSignal.timeout(POE_UPSCALE_TIMEOUT_MS) },
+            ),
+          2,
+        );
 
-    poeBreaker.recordSuccess();
+        poeBreaker.recordSuccess();
 
-    const message = completion.choices[0]?.message;
+        const message = completion.choices[0]?.message;
 
-    // Extract image from response — only data URLs are accepted (no remote
-    // URL fetching) to prevent SSRF from untrusted model output.
-    const resultBase64 = extractDataUrlFromModelResponse(
-      message as Parameters<typeof extractDataUrlFromModelResponse>[0],
-    );
+        // Extract image — only data URLs accepted (no remote fetch) to prevent SSRF.
+        const resultBase64 = extractDataUrlFromModelResponse(
+          message as Parameters<typeof extractDataUrlFromModelResponse>[0],
+        );
 
-    const usage = completion.usage;
-    await logUsage(
-      userId,
-      TOPAZ_MODEL,
-      "upscale",
-      usage?.prompt_tokens ?? 0,
-      usage?.completion_tokens ?? 0,
-    );
+        const usage = completion.usage;
+        await logUsage(
+          userId,
+          TOPAZ_MODEL,
+          "upscale",
+          usage?.prompt_tokens ?? 0,
+          usage?.completion_tokens ?? 0,
+        );
 
-    if (!resultBase64) {
-      logger.warn({ model: TOPAZ_MODEL }, "[poe/upscale] TopazLabs returned no image in response");
+        if (!resultBase64) {
+          logger.warn({ model: TOPAZ_MODEL }, "[poe/upscale] TopazLabs returned no image in response");
+          return null;
+        }
+
+        // Store result: memory first (enforces bytes-cap), then disk (background write).
+        const bytes = resultBase64.length;
+        setMemCacheEntry(cacheKey, resultBase64); // also evicts oldest if over bytes cap
+        logger.info({ key: cacheKey.slice(0, 8), factor, bytes }, "[upscale-cache] STORED");
+        void writeUpscaleDisk(cacheKey, { imageBase64: resultBase64, cachedAt: Date.now(), bytes });
+
+        return resultBase64;
+      } catch (err) {
+        // Failures are not cached — failures remove themselves from in-flight
+        // via the finally block so subsequent requests can retry cleanly.
+        poeBreaker.recordFailure();
+        throw err;
+      } finally {
+        // Always remove the in-flight entry so future requests go through the
+        // normal path (cache hit or new Poe call) rather than awaiting a
+        // completed/failed promise indefinitely.
+        upscaleInFlight.delete(cacheKey);
+      }
+    })();
+
+    upscaleInFlight.set(cacheKey, inflight);
+  }
+
+  try {
+    const result = await inflight;
+    if (!result) {
       res.status(502).json({ error: "no_image_in_response", details: "TopazLabs returned no image" });
       return;
     }
-
-    res.json({ imageBase64: resultBase64 });
+    res.json({ imageBase64: result });
   } catch (err) {
-    poeBreaker.recordFailure();
     logger.warn({ err }, "[poe/upscale] Upscale request failed");
     handlePoeError(err, res);
   }

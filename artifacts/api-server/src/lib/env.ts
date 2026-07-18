@@ -100,10 +100,15 @@ export function validateStartupEnv(): EnvIssue[] {
     }
   }
 
-  // Numeric zone-cache vars: validated via parsePositiveIntEnv at their point
-  // of use in poe.ts (which logs its own fallback warning); here we only
-  // record that the raw value is malformed so startup logs surface it early.
-  for (const name of ["ZONE_CACHE_MAX_AGE_MS", "ZONE_CACHE_MAX_FILES"]) {
+  // Numeric cache vars: validated via parsePositiveIntEnv at their point of use
+  // in poe.ts (which logs its own fallback warning); here we only record that
+  // the raw value is malformed so startup logs surface it early.
+  for (const name of [
+    "ZONE_CACHE_MAX_AGE_MS",
+    "ZONE_CACHE_MAX_FILES",
+    "UPSCALE_CACHE_TTL_MS",
+    "UPSCALE_CACHE_MAX_BYTES",
+  ]) {
     const raw = process.env[name];
     if (raw !== undefined && raw !== "" && !/^\d+$/.test(raw.trim())) {
       issues.push({ name, value: raw, problem: "is not a positive integer" });
