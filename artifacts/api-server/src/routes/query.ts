@@ -1,18 +1,21 @@
 /**
- * POST /api/query — Natural-language terrain query via OpenAI tool calling.
+ * POST /api/query — Natural-language terrain query via tool calling.
  *
  * Receives a free-text query and terrain context from the frontend.
- * Builds a tool schema for the 11 terrain tools, sends to GPT with
- * tool_choice="auto", then returns { toolCalls, textResponse } to the client
- * which executes the tools locally.
+ * Builds a tool schema for the 11 terrain tools, tries Poe first (with circuit
+ * breaker + hard per-attempt timeout), then falls back to OpenAI when Poe
+ * fails or its breaker is open. Only when both fail does the request return an
+ * error. The provider that served each request is logged server-side.
  */
 import { Router } from "express";
 import { z } from "zod";
 import {
   openai,
+  type ChatCompletion,
   type ChatCompletionMessageParam,
   type ChatCompletionFunctionTool,
 } from "@workspace/integrations-openai-ai-server";
+import { getPoeClient, PoeCircuitBreaker } from "@workspace/poe";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { createRateLimit, stampBaselineRateLimitHeaders } from "../middlewares/rateLimit.js";
@@ -23,7 +26,7 @@ const router = Router();
 // ---------------------------------------------------------------------------
 // Auth + rate limit
 //
-// `/query` calls the paid OpenAI API on every request, so we gate it behind
+// `/query` calls a paid AI API on every request, so we gate it behind
 // Clerk auth and a two-layer sliding-window limiter:
 //   * per-user  — protects an individual account from runaway loops
 //   * per-IP    — protects against burst abuse before auth is even attempted
@@ -39,8 +42,30 @@ const QUERY_USER_MAX = 20;
 const QUERY_IP_WINDOW_MS = 60_000;
 const QUERY_IP_MAX = 60;
 
-/** Hard ceiling on a single OpenAI call. Long enough for tool-calling rounds, short enough to free workers. */
+/** Hard ceiling on a single upstream AI call. Long enough for tool-calling rounds, short enough to free workers. */
 const QUERY_UPSTREAM_TIMEOUT_MS = 30_000;
+
+/** Poe model used for tool-calling queries. */
+const POE_QUERY_MODEL = "Claude-Sonnet-4.6";
+
+// ---------------------------------------------------------------------------
+// Circuit breaker — module-level singleton shared across all requests.
+// Opens after 3 consecutive Poe failures; allows one probe after 60 s.
+// ---------------------------------------------------------------------------
+
+export const queryCircuitBreaker = new PoeCircuitBreaker({
+  failureThreshold: 3,
+  resetMs: 60_000,
+});
+
+/** Exposed for tests only — resets the circuit breaker to a clean closed state. */
+export function __resetQueryCircuitBreaker(): void {
+  // Re-assign by replacing the exported reference is not possible for a const,
+  // so we use the internal reset path: record enough successes to close it.
+  queryCircuitBreaker.recordSuccess();
+  // Force-close by resetting consecutive failure state via success bookkeeping.
+  // The simplest reliable reset: call recordSuccess() which closes & clears.
+}
 
 // ---------------------------------------------------------------------------
 // Tool schema
@@ -279,6 +304,82 @@ export function validateToolCalls(
 }
 
 // ---------------------------------------------------------------------------
+// Provider-agnostic query result type
+// ---------------------------------------------------------------------------
+
+interface QueryLoopResult {
+  toolCalls: ValidatedToolCall[];
+  toolErrors: ToolCallError[];
+  textResponse: string | null;
+}
+
+type RawToolCall = { function: { name: string; arguments: string } };
+
+/**
+ * Run the tool-calling loop against OpenAI and return a normalised result.
+ */
+async function runOpenAIQuery(
+  messages: ChatCompletionMessageParam[],
+  tools: ChatCompletionFunctionTool[],
+): Promise<QueryLoopResult> {
+  const response = await openai.chat.completions.create(
+    {
+      model: "gpt-5.1",
+      max_completion_tokens: 512,
+      messages,
+      tools,
+      tool_choice: "auto",
+    },
+    { signal: AbortSignal.timeout(QUERY_UPSTREAM_TIMEOUT_MS) },
+  );
+
+  const choice = response.choices[0];
+  if (!choice) throw new Error("OpenAI returned no choices");
+
+  const message = choice.message;
+  const { toolCalls, toolErrors } = validateToolCalls(
+    (message.tool_calls ?? []) as RawToolCall[],
+  );
+  return { toolCalls, toolErrors, textResponse: message.content ?? null };
+}
+
+/**
+ * Run the tool-calling loop against Poe and return a normalised result.
+ * Uses the OpenAI-compatible Poe client; no internal retries so that a stuck
+ * Poe call cannot delay the fallback beyond one timeout window.
+ */
+async function runPoeQuery(
+  messages: ChatCompletionMessageParam[],
+  tools: ChatCompletionFunctionTool[],
+): Promise<QueryLoopResult> {
+  const client = getPoeClient();
+
+  // Cast to OpenAI.ChatCompletion — the Poe client is OpenAI-compatible and
+  // stream is false (default), so the actual runtime type is ChatCompletion.
+  // We cast via unknown to avoid TypeScript overload ambiguity on the SDK's
+  // stream/non-stream discriminated union.
+  const response = await client.chat.completions.create(
+    {
+      model: POE_QUERY_MODEL,
+      max_tokens: 512,
+      messages: messages as Parameters<typeof client.chat.completions.create>[0]["messages"],
+      tools: tools as Parameters<typeof client.chat.completions.create>[0]["tools"],
+      tool_choice: "auto",
+    } as Parameters<typeof client.chat.completions.create>[0],
+    { signal: AbortSignal.timeout(QUERY_UPSTREAM_TIMEOUT_MS) },
+  ) as unknown as ChatCompletion;
+
+  const choice = response.choices[0];
+  if (!choice) throw new Error("Poe returned no choices");
+
+  const message = choice.message;
+  const { toolCalls, toolErrors } = validateToolCalls(
+    (message.tool_calls ?? []) as RawToolCall[],
+  );
+  return { toolCalls, toolErrors, textResponse: message.content ?? null };
+}
+
+// ---------------------------------------------------------------------------
 // Route + request schema
 // ---------------------------------------------------------------------------
 
@@ -348,43 +449,59 @@ router.post(
     { role: "user", content: query },
   ];
 
-  try {
-    const response = await openai.chat.completions.create(
-      {
-        model: "gpt-5.1",
-        max_completion_tokens: 512,
-        messages,
-        tools: TERRAIN_TOOLS,
-        tool_choice: "auto",
-      },
-      // Hard upstream timeout so a stuck OpenAI request cannot pin a worker
-      // indefinitely. The SDK accepts an AbortSignal as the second-arg option.
-      { signal: AbortSignal.timeout(QUERY_UPSTREAM_TIMEOUT_MS) },
-    );
+  // -------------------------------------------------------------------------
+  // Poe-first with OpenAI fallback.
+  //
+  // 1. If the circuit breaker is closed (or half-open for a probe), attempt
+  //    Poe. A hard AbortSignal timeout keeps the worst-case Poe latency
+  //    bounded at QUERY_UPSTREAM_TIMEOUT_MS — so a stuck Poe call cannot
+  //    push total latency beyond 2× that ceiling.
+  // 2. On any Poe error (including payment errors, timeouts, 5xx), record the
+  //    failure to the circuit breaker and fall through to OpenAI silently.
+  // 3. Only when both providers fail does the route return a 502.
+  // -------------------------------------------------------------------------
 
-    const choice = response.choices[0];
-    if (!choice) {
-      res.status(502).json({ error: "no_response", details: "LLM returned no choices" });
+  let result: QueryLoopResult | null = null;
+  let provider = "openai";
+  let poeError: unknown = null;
+
+  if (!queryCircuitBreaker.isOpen()) {
+    try {
+      result = await runPoeQuery(messages, TERRAIN_TOOLS);
+      queryCircuitBreaker.recordSuccess();
+      provider = "poe";
+    } catch (err) {
+      poeError = err;
+      queryCircuitBreaker.recordFailure();
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.warn({ err: msg }, "[query] Poe failed, falling back to OpenAI");
+    }
+  } else {
+    logger.info({ code: "poe_circuit_open_skip" }, "[query] Poe circuit open — using OpenAI directly");
+  }
+
+  if (!result) {
+    try {
+      result = await runOpenAIQuery(messages, TERRAIN_TOOLS);
+      provider = "openai";
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      logger.error(
+        { err: msg, poeErr: poeError instanceof Error ? poeError.message : String(poeError) },
+        "[query] Both Poe and OpenAI failed",
+      );
+      res.status(502).json({ error: "llm_error", details: msg });
       return;
     }
-
-    const message = choice.message;
-    type RawToolCall = { function: { name: string; arguments: string } };
-    const { toolCalls, toolErrors } = validateToolCalls(
-      (message.tool_calls ?? []) as RawToolCall[],
-    );
-    if (toolErrors.length > 0) {
-      logger.warn({ toolErrors }, "[query] rejected malformed LLM tool calls");
-    }
-
-    const textResponse = message.content ?? null;
-
-    res.json({ toolCalls, toolErrors, textResponse });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    logger.error({ err, msg }, "[query] OpenAI error");
-    res.status(502).json({ error: "llm_error", details: msg });
   }
+
+  logger.info({ provider }, "[query] served by provider");
+
+  if (result.toolErrors.length > 0) {
+    logger.warn({ toolErrors: result.toolErrors }, "[query] rejected malformed LLM tool calls");
+  }
+
+  res.json({ toolCalls: result.toolCalls, toolErrors: result.toolErrors, textResponse: result.textResponse });
   }),
 );
 

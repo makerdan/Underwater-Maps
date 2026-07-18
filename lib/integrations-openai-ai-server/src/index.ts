@@ -1,5 +1,6 @@
 export { openai } from "./client";
 export type {
+  ChatCompletion,
   ChatCompletionMessageParam,
   ChatCompletionFunctionTool,
 } from "openai/resources/chat/completions";

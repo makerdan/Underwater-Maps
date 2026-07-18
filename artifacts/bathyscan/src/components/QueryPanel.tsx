@@ -235,7 +235,7 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
           <div style={{ color: "#fb923c", fontWeight: 700, letterSpacing: "0.12em", marginBottom: 5 }}>
             ◈ AI QUERY — DATA NOTICE
           </div>
-          When you submit a query, the following context is sent to a third-party AI service (OpenAI): your <strong style={{ color: "#fbbf24" }}>approximate camera location & depth</strong>, <strong style={{ color: "#fbbf24" }}>dataset name</strong>, dataset depth range, water type, and top habitat zone names. Raw sonar grid data is not transmitted. Queries are not stored after processing.
+          When you submit a query, the following context is sent to a third-party AI service (Poe / OpenAI): your <strong style={{ color: "#fbbf24" }}>approximate camera location & depth</strong>, <strong style={{ color: "#fbbf24" }}>dataset name</strong>, dataset depth range, water type, and top habitat zone names. Raw sonar grid data is not transmitted. Queries are not stored after processing.
           <div style={{ marginTop: 8 }}>
             <button
               data-testid="llm-disclosure-acknowledge"

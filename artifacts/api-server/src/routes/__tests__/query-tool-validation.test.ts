@@ -5,13 +5,26 @@
  * cover validateToolCalls() directly and the /api/query route surface:
  * unknown tools, malformed JSON, schema violations, and extra keys must all
  * be rejected (moved into toolErrors) instead of being forwarded to clients.
+ *
+ * Route tests use the Poe primary path (Poe is healthy by default).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 
-const { fakeChatCompletionsCreate } = vi.hoisted(() => ({
+const { fakePoeCreate, fakeChatCompletionsCreate } = vi.hoisted(() => ({
+  fakePoeCreate: vi.fn(),
   fakeChatCompletionsCreate: vi.fn(),
 }));
+
+vi.mock("@workspace/poe", async () => {
+  const actual = await vi.importActual<typeof import("@workspace/poe")>("@workspace/poe");
+  return {
+    ...actual,
+    getPoeClient: vi.fn(() => ({
+      chat: { completions: { create: fakePoeCreate } },
+    })),
+  };
+});
 
 vi.mock("@workspace/integrations-openai-ai-server", () => ({
   openai: {
@@ -35,11 +48,6 @@ vi.mock("@workspace/db", () => ({
   userCatalogSavesTable: {},
 }));
 
-vi.mock("@workspace/poe", async () => {
-  const actual = await vi.importActual<typeof import("@workspace/poe")>("@workspace/poe");
-  return { ...actual, getPoeClient: vi.fn(() => ({})) };
-});
-
 vi.mock("@clerk/express", () => ({
   clerkMiddleware: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
   getAuth: vi.fn(() => ({ userId: null })),
@@ -54,7 +62,7 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../../app.js";
-import { validateToolCalls } from "../query.js";
+import { validateToolCalls, queryCircuitBreaker } from "../query.js";
 import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 function llmResponseWithToolCalls(
@@ -78,7 +86,13 @@ beforeEach(() => {
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
   vi.stubEnv("RATE_LIMIT_BACKEND", "memory");
   __resetRateLimitMemory();
+  queryCircuitBreaker.recordSuccess();
+  fakePoeCreate.mockReset();
   fakeChatCompletionsCreate.mockReset();
+  // Default: Poe succeeds; route tests will configure fakePoeCreate as needed.
+  fakePoeCreate.mockResolvedValue(
+    llmResponseWithToolCalls([]),
+  );
 });
 
 describe("validateToolCalls (unit)", () => {
@@ -155,7 +169,7 @@ describe("validateToolCalls (unit)", () => {
 
 describe("POST /api/query — tool-call validation (route)", () => {
   it("filters invalid tool calls out of the response and reports toolErrors", async () => {
-    fakeChatCompletionsCreate.mockResolvedValue(
+    fakePoeCreate.mockResolvedValue(
       llmResponseWithToolCalls([
         { name: "navigateTo", arguments: '{"lon": 10, "lat": 20}' },
         { name: "notATool", arguments: "{}" },
