@@ -1611,8 +1611,15 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       return false;
     }
 
-    const { jobId } = await finalResp.json() as { jobId: string };
-    // Finalize accepted — the session is safely handed off to the server.
+    const finalBody = await finalResp.json().catch(() => ({})) as unknown as { jobId?: unknown };
+    const jobId = finalBody?.jobId;
+    if (typeof jobId !== "string" || !jobId) {
+      chunkedFailedAtRef.current = totalChunks;
+      setChunkedPhase("error");
+      setChunkedError("Server accepted the upload but returned an invalid job ID — please retry.");
+      return false;
+    }
+    // Finalize accepted and jobId confirmed — the session is safely handed off to the server.
     clearUploadSession();
     setChunkedPhase("processing");
     setChunkedJobId(jobId);
