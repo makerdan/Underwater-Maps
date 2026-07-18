@@ -32,7 +32,12 @@ if ! pnpm run check:docs-stale 2>/dev/null; then
   echo "[post-merge] API route docs were stale — regenerating and committing..."
   pnpm run docs
   git add README.md replit.md
-  git diff --cached --quiet || git commit -m "chore: auto-regenerate API route docs [post-merge]"
+  if ! git diff --cached --quiet; then
+    # Set a fallback identity in case the runner has no global git config.
+    git config --local user.email "post-merge@replit.local" 2>/dev/null || true
+    git config --local user.name  "BathyScan Post-Merge Bot"  2>/dev/null || true
+    git commit -m "chore: auto-regenerate API route docs [post-merge]"
+  fi
   echo "[post-merge] API route docs updated."
 fi
 # Re-register tiered validation commands so they survive future merges and are

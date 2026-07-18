@@ -392,7 +392,6 @@ All routes are served under the `/api` prefix by the Express 5 server.
 |---|---|---|
 | POST | `/poe/classify` | Classify terrain zones via AI |
 | POST | `/poe/query` | Natural language terrain query |
-| POST | `/poe/describe` | Stream a location description via SSE |
 | GET | `/poe/models` | List available Poe models |
 | POST | `/poe/help` | Answer a BathyScan help question using Poe AI |
 | POST | `/poe/upscale` | Upscale a 2D heatmap PNG via Poe (TopazLabs model) |
