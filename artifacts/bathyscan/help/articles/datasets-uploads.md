@@ -21,7 +21,7 @@ Click **Upload** at the bottom of the Datasets panel and drop in a `.xyz` or `.c
 
 **Format:** three columns — longitude, latitude, depth (in metres, positive down). Comma or whitespace separated. First-row header optional.
 
-After upload the app builds a terrain mesh, runs zone classification, and saves it. Your new dataset appears automatically under **My Uploads** — no manual save step is required. Click it to load it immediately.
+After upload the app builds a terrain mesh, runs zone classification, and saves it. Your new dataset appears automatically under **My Saved Uploads** — no manual save step is required. Click it to load it immediately.
 
 ![Upload drop-zone](/help/upload-dropzone.png)
 

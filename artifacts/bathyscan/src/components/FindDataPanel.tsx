@@ -24,6 +24,7 @@ import {
   usePostDatasetsMySavesIdRetry,
   useDeleteDatasetsMySavesId,
   useDeleteUserDatasetsId,
+  usePatchUserDatasetsIdRename,
   useGetNceiSearch,
   usePostNceiSave,
   getGetNceiSearchQueryKey,
@@ -700,8 +701,9 @@ const UploadCard: React.FC<{
   dataset: UserDatasetMeta;
   onLoad: (id: string) => void;
   onDelete: (dataset: UserDatasetMeta) => void;
+  onRename: (id: string, name: string) => Promise<void>;
   deleting: boolean;
-}> = ({ dataset, onLoad, onDelete, deleting }) => {
+}> = ({ dataset, onLoad, onDelete, onRename, deleting }) => {
   const createdDate = useMemo(() => {
     const d = new Date(dataset.createdAt);
     if (Number.isNaN(d.getTime())) return dataset.createdAt.slice(0, 10);
@@ -712,6 +714,47 @@ const UploadCard: React.FC<{
     });
   }, [dataset.createdAt]);
 
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState("");
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState(false);
+
+  const startEdit = useCallback(() => {
+    setEditValue(dataset.name);
+    setRenameError(null);
+    setEditing(true);
+  }, [dataset.name]);
+
+  const cancelEdit = useCallback(() => {
+    setEditing(false);
+    setRenameError(null);
+  }, []);
+
+  const commitEdit = useCallback(async () => {
+    const trimmed = editValue.trim();
+    if (!trimmed) {
+      setRenameError("Name cannot be empty");
+      return;
+    }
+    if (trimmed === dataset.name) {
+      setEditing(false);
+      setRenameError(null);
+      return;
+    }
+    setRenaming(true);
+    try {
+      await onRename(dataset.id, trimmed);
+      setEditing(false);
+      setRenameError(null);
+    } catch (err) {
+      setRenameError(
+        err instanceof Error && err.message ? err.message : "Could not rename dataset",
+      );
+    } finally {
+      setRenaming(false);
+    }
+  }, [editValue, dataset.id, dataset.name, onRename]);
+
   return (
     <div
       style={{
@@ -720,26 +763,78 @@ const UploadCard: React.FC<{
         opacity: deleting ? 0.5 : 1,
       }}
       data-testid={`upload-card-${dataset.id}`}
-      aria-busy={deleting || undefined}
+      aria-busy={deleting || renaming || undefined}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ fontSize: 18 }}>📤</span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              fontSize: 15,
-              color: "#e2e8f0",
-              fontWeight: 600,
-              marginBottom: 1,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {dataset.name}
-          </div>
+          {editing ? (
+            <input
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void commitEdit();
+                if (e.key === "Escape") cancelEdit();
+              }}
+              disabled={renaming}
+              autoFocus
+              aria-label={`Rename uploaded dataset ${dataset.name}`}
+              data-testid={`input-rename-upload-${dataset.id}`}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                fontSize: 14,
+                fontFamily: "inherit",
+                color: "#e2e8f0",
+                background: "rgba(0,229,255,0.06)",
+                border: "1px solid rgba(0,229,255,0.35)",
+                borderRadius: 3,
+                padding: "2px 6px",
+                marginBottom: 1,
+              }}
+            />
+          ) : (
+            <div
+              title={dataset.name}
+              data-testid={`text-upload-name-${dataset.id}`}
+              style={{
+                fontSize: 15,
+                color: "#e2e8f0",
+                fontWeight: 600,
+                marginBottom: 1,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {dataset.name}
+            </div>
+          )}
           <div style={{ fontSize: 12, color: "#94a3b8" }}>{createdDate}</div>
         </div>
+        {!editing && (
+          <ViewscreenTooltip label="Rename this uploaded dataset" side="left">
+            <button
+              type="button"
+              data-testid={`btn-rename-upload-${dataset.id}`}
+              aria-label={`Rename uploaded dataset ${dataset.name}`}
+              disabled={deleting}
+              onClick={startEdit}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "#cbd5e1",
+                cursor: deleting ? "wait" : "pointer",
+                fontSize: 14,
+                lineHeight: 1,
+                padding: "0 2px",
+                flexShrink: 0,
+              }}
+            >
+              ✎
+            </button>
+          </ViewscreenTooltip>
+        )}
         <ViewscreenTooltip label="Delete this uploaded dataset" side="left">
           <button
             type="button"
@@ -762,6 +857,56 @@ const UploadCard: React.FC<{
           </button>
         </ViewscreenTooltip>
       </div>
+      {editing && (
+        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+          <button
+            type="button"
+            onClick={() => void commitEdit()}
+            disabled={renaming}
+            data-testid={`btn-rename-save-${dataset.id}`}
+            style={{
+              fontSize: 11,
+              padding: "2px 10px",
+              background: "rgba(0,229,255,0.1)",
+              border: "1px solid rgba(0,229,255,0.3)",
+              borderRadius: 3,
+              color: "#00e5ff",
+              cursor: renaming ? "wait" : "pointer",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}
+          >
+            {renaming ? "Saving…" : "Save"}
+          </button>
+          <button
+            type="button"
+            onClick={cancelEdit}
+            disabled={renaming}
+            data-testid={`btn-rename-cancel-${dataset.id}`}
+            style={{
+              fontSize: 11,
+              padding: "2px 10px",
+              background: "transparent",
+              border: "1px solid rgba(255,255,255,0.15)",
+              borderRadius: 3,
+              color: "#e2e8f0",
+              cursor: renaming ? "wait" : "pointer",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+      {renameError && (
+        <div
+          data-testid={`rename-upload-error-${dataset.id}`}
+          style={{ marginTop: 6, fontSize: 12, color: "#fca5a5" }}
+        >
+          ⚠ {renameError}
+        </div>
+      )}
       <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
         <button
           onClick={() => onLoad(dataset.id)}
@@ -1058,6 +1203,15 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   );
 
   const deleteUploadMutation = useDeleteUserDatasetsId();
+  const renameUploadMutation = usePatchUserDatasetsIdRename();
+
+  const handleRenameUpload = useCallback(
+    async (id: string, name: string) => {
+      await renameUploadMutation.mutateAsync({ id, data: { name } });
+      await qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+    },
+    [renameUploadMutation, qc],
+  );
 
   const handleRequestDeleteUpload = useCallback((dataset: UserDatasetMeta) => {
     setDeleteUploadError(null);
@@ -1458,7 +1612,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             <div style={{ fontSize: 13.5, color: "#94a3b8", marginBottom: 8 }}>Loading…</div>
           )}
 
-          {/* ── Catalog Saves section ── */}
+          {/* ── My Saved Uploads section ── */}
           {isSignedIn && (
             <>
               <div
@@ -1469,6 +1623,84 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                   color: "#64748b",
                   marginBottom: 8,
                   marginTop: 2,
+                }}
+              >
+                My Saved Uploads
+              </div>
+              {deleteUploadError && (
+                <div
+                  data-testid="upload-delete-error"
+                  style={{
+                    marginBottom: 8,
+                    padding: "6px 8px",
+                    border: "1px solid rgba(248,113,113,0.4)",
+                    background: "rgba(248,113,113,0.08)",
+                    borderRadius: 4,
+                    fontSize: 13.5,
+                    color: "#fca5a5",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <span>⚠ {deleteUploadError}</span>
+                  <button
+                    onClick={() => setDeleteUploadError(null)}
+                    aria-label="Dismiss error"
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "#cbd5e1",
+                      cursor: "pointer",
+                      fontSize: 15,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              {isUploadFetching && (
+                <div style={{ fontSize: 13.5, color: "#94a3b8", marginBottom: 8 }}>Loading…</div>
+              )}
+              {!isUploadFetching && uploadOnlyDatasets.length === 0 && (
+                <div
+                  style={{
+                    fontSize: 13.5,
+                    color: "#94a3b8",
+                    textAlign: "center",
+                    padding: "12px 0 16px",
+                  }}
+                >
+                  No uploaded datasets yet
+                </div>
+              )}
+              {uploadOnlyDatasets.map((dataset) => (
+                <UploadCard
+                  key={dataset.id}
+                  dataset={dataset}
+                  onLoad={handleLoadUserDataset}
+                  onDelete={handleRequestDeleteUpload}
+                  onRename={handleRenameUpload}
+                  deleting={deletingUploadIds.has(dataset.id)}
+                />
+              ))}
+            </>
+          )}
+
+          {/* ── Catalog Saves section ── */}
+          {isSignedIn && (
+            <>
+              <div
+                style={{
+                  fontSize: 11,
+                  letterSpacing: "0.15em",
+                  textTransform: "uppercase",
+                  color: "#64748b",
+                  marginBottom: 8,
+                  marginTop: 16,
+                  paddingTop: 12,
+                  borderTop: "1px solid rgba(0,229,255,0.08)",
                 }}
               >
                 Catalog Saves
@@ -1527,83 +1759,6 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                   retrying={retryingIds.has(save.id)}
                   onDelete={handleRequestDelete}
                   deleting={deletingIds.has(save.id)}
-                />
-              ))}
-            </>
-          )}
-
-          {/* ── My Uploads section ── */}
-          {isSignedIn && (
-            <>
-              <div
-                style={{
-                  fontSize: 11,
-                  letterSpacing: "0.15em",
-                  textTransform: "uppercase",
-                  color: "#64748b",
-                  marginBottom: 8,
-                  marginTop: 16,
-                  paddingTop: 12,
-                  borderTop: "1px solid rgba(0,229,255,0.08)",
-                }}
-              >
-                My Uploads
-              </div>
-              {deleteUploadError && (
-                <div
-                  data-testid="upload-delete-error"
-                  style={{
-                    marginBottom: 8,
-                    padding: "6px 8px",
-                    border: "1px solid rgba(248,113,113,0.4)",
-                    background: "rgba(248,113,113,0.08)",
-                    borderRadius: 4,
-                    fontSize: 13.5,
-                    color: "#fca5a5",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  <span>⚠ {deleteUploadError}</span>
-                  <button
-                    onClick={() => setDeleteUploadError(null)}
-                    aria-label="Dismiss error"
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: "#cbd5e1",
-                      cursor: "pointer",
-                      fontSize: 15,
-                    }}
-                  >
-                    ×
-                  </button>
-                </div>
-              )}
-              {isUploadFetching && (
-                <div style={{ fontSize: 13.5, color: "#94a3b8", marginBottom: 8 }}>Loading…</div>
-              )}
-              {!isUploadFetching && uploadOnlyDatasets.length === 0 && (
-                <div
-                  style={{
-                    fontSize: 13.5,
-                    color: "#94a3b8",
-                    textAlign: "center",
-                    padding: "12px 0 16px",
-                  }}
-                >
-                  No uploaded datasets yet
-                </div>
-              )}
-              {uploadOnlyDatasets.map((dataset) => (
-                <UploadCard
-                  key={dataset.id}
-                  dataset={dataset}
-                  onLoad={handleLoadUserDataset}
-                  onDelete={handleRequestDeleteUpload}
-                  deleting={deletingUploadIds.has(dataset.id)}
                 />
               ))}
             </>

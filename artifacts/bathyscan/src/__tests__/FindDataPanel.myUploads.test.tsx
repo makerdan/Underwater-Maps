@@ -22,6 +22,7 @@ import { FindDataPanel } from "@/components/FindDataPanel";
 // ---------------------------------------------------------------------------
 const mocks = vi.hoisted(() => ({
   deleteUploadMutateAsync: vi.fn().mockResolvedValue(undefined),
+  renameUploadMutateAsync: vi.fn().mockResolvedValue(undefined),
   setPendingExternalUserDatasetId: vi.fn(),
   requestDatasetSwitch: vi.fn(
     ({
@@ -158,6 +159,13 @@ vi.mock(
         isSuccess: false,
         variables: undefined,
       }),
+      usePatchUserDatasetsIdRename: () => ({
+        mutate: () => {},
+        mutateAsync: mocks.renameUploadMutateAsync,
+        isPending: false,
+        isSuccess: false,
+        variables: undefined,
+      }),
     }),
 );
 
@@ -256,7 +264,7 @@ describe("FindDataPanel — My Uploads section visibility", () => {
     renderPanel();
     switchToSavesTab();
 
-    expect(screen.queryByText(/My Uploads/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/My Saved Uploads/i)).not.toBeInTheDocument();
     expect(
       screen.queryByText(/No uploaded datasets yet/i),
     ).not.toBeInTheDocument();
@@ -270,6 +278,131 @@ describe("FindDataPanel — My Uploads section visibility", () => {
     switchToSavesTab();
 
     expect(screen.getByText(/No uploaded datasets yet/i)).toBeInTheDocument();
+  });
+});
+
+describe("FindDataPanel — section order and label", () => {
+  beforeEach(() => {
+    currentIsSignedIn = true;
+    currentUserDatasets = [UPLOAD_A];
+    currentMySaves = [];
+  });
+
+  it('section header reads "My Saved Uploads"', () => {
+    renderPanel();
+    switchToSavesTab();
+
+    expect(screen.getByText("My Saved Uploads")).toBeInTheDocument();
+    expect(screen.queryByText(/^My Uploads$/)).not.toBeInTheDocument();
+  });
+
+  it("My Saved Uploads section appears above Catalog Saves", () => {
+    renderPanel();
+    switchToSavesTab();
+
+    const uploadsHeader = screen.getByText("My Saved Uploads");
+    const catalogHeader = screen.getByText("Catalog Saves");
+    // DOCUMENT_POSITION_FOLLOWING (4): catalogHeader comes after uploadsHeader.
+    expect(
+      uploadsHeader.compareDocumentPosition(catalogHeader) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("upload card filename carries a title attribute with the full name", () => {
+    renderPanel();
+    switchToSavesTab();
+
+    const nameEl = screen.getByTestId("text-upload-name-upload-a");
+    expect(nameEl).toHaveAttribute("title", "Tolstoi Sonar Survey");
+  });
+});
+
+describe("FindDataPanel — My Uploads rename", () => {
+  beforeEach(() => {
+    mocks.renameUploadMutateAsync.mockClear();
+    mocks.renameUploadMutateAsync.mockResolvedValue(undefined);
+    currentIsSignedIn = true;
+    currentUserDatasets = [UPLOAD_A];
+    currentMySaves = [];
+  });
+
+  it("renames an upload via the inline editor (success path)", async () => {
+    renderPanel();
+    switchToSavesTab();
+
+    fireEvent.click(screen.getByTestId("btn-rename-upload-upload-a"));
+    const input = screen.getByTestId("input-rename-upload-upload-a");
+    fireEvent.change(input, { target: { value: "  Renamed Survey  " } });
+    fireEvent.click(screen.getByTestId("btn-rename-save-upload-a"));
+
+    await waitFor(() => {
+      expect(mocks.renameUploadMutateAsync).toHaveBeenCalledWith({
+        id: "upload-a",
+        data: { name: "Renamed Survey" },
+      });
+    });
+    // Editor closes after success.
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId("input-rename-upload-upload-a"),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("rejects empty/whitespace-only names client-side without calling the API", async () => {
+    renderPanel();
+    switchToSavesTab();
+
+    fireEvent.click(screen.getByTestId("btn-rename-upload-upload-a"));
+    const input = screen.getByTestId("input-rename-upload-upload-a");
+    fireEvent.change(input, { target: { value: "   " } });
+    fireEvent.click(screen.getByTestId("btn-rename-save-upload-a"));
+
+    expect(
+      await screen.findByTestId("rename-upload-error-upload-a"),
+    ).toHaveTextContent(/name cannot be empty/i);
+    expect(mocks.renameUploadMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("shows an error and keeps the old name when the server rejects the rename", async () => {
+    mocks.renameUploadMutateAsync.mockRejectedValueOnce(
+      new Error("server exploded"),
+    );
+    renderPanel();
+    switchToSavesTab();
+
+    fireEvent.click(screen.getByTestId("btn-rename-upload-upload-a"));
+    const input = screen.getByTestId("input-rename-upload-upload-a");
+    fireEvent.change(input, { target: { value: "New Name" } });
+    fireEvent.click(screen.getByTestId("btn-rename-save-upload-a"));
+
+    expect(
+      await screen.findByTestId("rename-upload-error-upload-a"),
+    ).toHaveTextContent("server exploded");
+
+    // Cancel back out — the original name is still shown.
+    fireEvent.click(screen.getByTestId("btn-rename-cancel-upload-a"));
+    expect(
+      screen.getByTestId("text-upload-name-upload-a"),
+    ).toHaveTextContent("Tolstoi Sonar Survey");
+  });
+
+  it("cancel via Escape closes the editor without calling the API", () => {
+    renderPanel();
+    switchToSavesTab();
+
+    fireEvent.click(screen.getByTestId("btn-rename-upload-upload-a"));
+    const input = screen.getByTestId("input-rename-upload-upload-a");
+    fireEvent.keyDown(input, { key: "Escape" });
+
+    expect(
+      screen.queryByTestId("input-rename-upload-upload-a"),
+    ).not.toBeInTheDocument();
+    expect(mocks.renameUploadMutateAsync).not.toHaveBeenCalled();
+    expect(
+      screen.getByTestId("text-upload-name-upload-a"),
+    ).toHaveTextContent("Tolstoi Sonar Survey");
   });
 });
 
