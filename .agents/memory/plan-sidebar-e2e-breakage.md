@@ -14,4 +14,4 @@ The "Plan mode sidebar" restructure moved panels into tabs (Explore/Plan/Analyze
 
 ContextMenu now re-clamps position against measured size in a useLayoutEffect (estimated ITEM_HEIGHT was stale after the ×1.5 font scaling).
 
-As of July 18 2026 the full `pnpm run test:e2e` suite passes with 0 failures — all restructure fallout was fixed (MY UPLOADS visibility, dialog focus, help deep links, tide/timeline scrubbers, onboarding sync races).
+As of July 18 2026 the full `pnpm run test:e2e` suite passes with 0 failures — all restructure fallout was fixed (MY UPLOADS visibility, dialog focus, help deep links, tide/timeline scrubbers, onboarding sync races). Note: this fallout was long masked because the test-heavy runner self-deadlocked before its full-e2e step ever ran.

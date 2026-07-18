@@ -24,7 +24,12 @@ const steps = [
     "e2e-palette",
     "bash -c 'set -o pipefail; E2E_WEB_PORT=3250 E2E_API_PORT=3261 npx playwright test tests/e2e/palette-cross-device-sync.spec.ts tests/e2e/onboarding-tour.spec.ts tests/e2e/settings-cross-device-sync.spec.ts tests/e2e/settings-save-buttons.spec.ts tests/e2e/zone-colour-server-sync.spec.ts tests/e2e/tooltips.spec.ts tests/e2e/adaptive-palette.spec.ts 2>&1 | tee .local/tmp/palette-e2e.log'",
   ],
-  ["test:e2e", "pnpm run test:e2e"],
+  // IMPORTANT: use the unwrapped test:e2e:run here. The root "test:e2e"
+  // script wraps validation-lock.mjs, but this whole serial runner already
+  // holds that lock (the test-heavy validation command acquires it) — the
+  // nested wrapper would queue behind its own parent and self-deadlock
+  // until the lock timeout.
+  ["test:e2e", "pnpm run test:e2e:run"],
 ];
 
 /**
