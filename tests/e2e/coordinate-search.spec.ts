@@ -97,7 +97,9 @@ test.describe("Coordinate search — Find Data → Overview Map flow", () => {
     const panel = page.getByRole("dialog", { name: /Find Data panel/i });
     await expect(panel).toBeVisible({ timeout: 8_000 });
 
-    // The coordinate form lives on the default Search tab.
+    // The coordinate form lives on the default Search tab, inside a
+    // collapsed <details> section — expand it before interacting.
+    await page.getByTestId("coord-search-toggle").click();
     const coordInput = page.getByTestId("coord-search-input");
     await expect(coordInput).toBeVisible({ timeout: 5_000 });
     await coordInput.fill("55.7, -132.45");
@@ -160,6 +162,8 @@ test.describe("Coordinate search — Find Data → Overview Map flow", () => {
     const panel = page.getByRole("dialog", { name: /Find Data panel/i });
     await expect(panel).toBeVisible({ timeout: 8_000 });
 
+    // Expand the collapsed "Search by coordinates" <details> section first.
+    await page.getByTestId("coord-search-toggle").click();
     const coordInput = page.getByTestId("coord-search-input");
     await expect(coordInput).toBeVisible({ timeout: 5_000 });
     await coordInput.fill("not real coordinates");

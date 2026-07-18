@@ -22,6 +22,13 @@
  * is no longer alive the lock is treated as stale and reclaimed.
  *
  * Lock location: .local/validation-serial.lock
+ *
+ * Reentrancy: some commands are double-wrapped (e.g. the test-e2e workflow
+ * runs `validation-lock.mjs -- pnpm run test:e2e` and the test:e2e script
+ * itself wraps validation-lock again). Without reentrancy the inner wrapper
+ * deadlocks waiting on the lock its own ancestor holds. The holder exports
+ * VALIDATION_LOCK_HELD_PID; a nested wrapper that sees a live holder pid in
+ * that variable skips acquisition and runs the command directly.
  */
 import { openSync, closeSync, unlinkSync, mkdirSync, writeSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
@@ -108,20 +115,35 @@ async function acquireWithTimeout() {
 
 mkdirSync(lockDir, { recursive: true });
 
-process.on("exit", releaseLock);
-for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
-  process.on(sig, () => { releaseLock(); process.exit(1); });
+// Reentrant path: an ancestor wrapper already holds the lock — don't try to
+// acquire it again (that would deadlock); just run the command.
+const heldPid = Number(process.env.VALIDATION_LOCK_HELD_PID || "");
+if (Number.isInteger(heldPid) && heldPid > 0 && heldPid !== process.pid && pidAlive(heldPid)) {
+  console.log(`[validation-lock] lock already held by ancestor pid ${heldPid} — running: ${commandLabel}`);
+  const child = spawn(command[0], command.slice(1), { stdio: "inherit" });
+  child.on("exit", (code, signal) => {
+    if (signal) process.exit(1);
+    process.exit(code ?? 1);
+  });
+} else {
+  process.on("exit", releaseLock);
+  for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+    process.on(sig, () => { releaseLock(); process.exit(1); });
+  }
+
+  const waitStart = Date.now();
+  await acquireWithTimeout();
+  lockAcquired = true;
+  const waitedSecs = ((Date.now() - waitStart) / 1000).toFixed(1);
+  console.log(`[validation-lock] lock acquired after ${waitedSecs}s wait — running: ${commandLabel}`);
+
+  const child = spawn(command[0], command.slice(1), {
+    stdio: "inherit",
+    env: { ...process.env, VALIDATION_LOCK_HELD_PID: String(process.pid) },
+  });
+  child.on("exit", (code, signal) => {
+    releaseLock();
+    if (signal) process.exit(1);
+    process.exit(code ?? 1);
+  });
 }
-
-const waitStart = Date.now();
-await acquireWithTimeout();
-lockAcquired = true;
-const waitedSecs = ((Date.now() - waitStart) / 1000).toFixed(1);
-console.log(`[validation-lock] lock acquired after ${waitedSecs}s wait — running: ${commandLabel}`);
-
-const child = spawn(command[0], command.slice(1), { stdio: "inherit" });
-child.on("exit", (code, signal) => {
-  releaseLock();
-  if (signal) process.exit(1);
-  process.exit(code ?? 1);
-});
