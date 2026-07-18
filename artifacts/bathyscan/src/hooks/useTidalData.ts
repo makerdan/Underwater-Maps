@@ -119,7 +119,9 @@ export function useTidalData(
             setData({ available: false });
           }
         }
-        void err;
+        if (import.meta.env.DEV) {
+          console.error("[useTidalData] tidal fetch failed (falling back to offline pack):", err);
+        }
       } finally {
         if (!cancelled && !controller.signal.aborted) setLoading(false);
       }

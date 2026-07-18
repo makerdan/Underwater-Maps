@@ -25,9 +25,10 @@ export function useTidalSchedule(
   lat: number | null,
   lon: number | null,
   days = 7,
-): { schedule: TidalSchedule | null; loading: boolean } {
+): { schedule: TidalSchedule | null; loading: boolean; isError: boolean } {
   const [schedule, setSchedule] = useState<TidalSchedule | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
 
   useEffect(() => {
     if (lat === null || lon === null) return;
@@ -43,11 +44,19 @@ export function useTidalSchedule(
         const res = await fetch(url, { signal: controller.signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as TidalSchedule;
-        if (!cancelled && !controller.signal.aborted) setSchedule(json);
+        if (!cancelled && !controller.signal.aborted) {
+          setSchedule(json);
+          setIsError(false);
+        }
       } catch (err) {
         if (controller.signal.aborted) return;
-        if (!cancelled) setSchedule(null);
-        void err;
+        if (!cancelled) {
+          setSchedule(null);
+          setIsError(true);
+        }
+        if (import.meta.env.DEV) {
+          console.error("[useTidalSchedule] schedule fetch failed:", err);
+        }
       } finally {
         if (!cancelled && !controller.signal.aborted) setLoading(false);
       }
@@ -60,5 +69,5 @@ export function useTidalSchedule(
     };
   }, [lat, lon, days]);
 
-  return { schedule, loading };
+  return { schedule, loading, isError };
 }

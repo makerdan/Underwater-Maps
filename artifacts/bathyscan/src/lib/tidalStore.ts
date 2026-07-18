@@ -69,6 +69,16 @@ function apiUrl(path: string): string {
   return `${base}api${path}`;
 }
 
+function logTidalError(context: string, err: unknown): void {
+  if (import.meta.env.DEV) {
+    console.error(`[tidalStore] ${context} failed:`, err);
+  }
+}
+
+// Monotonic token invalidating in-flight resolveStation calls whenever the
+// station changes (a newer resolveStation, setStation, or reset wins).
+let resolveSeq = 0;
+
 export const useTidalStore = create<TidalStoreState>((set, get) => ({
   station: null,
   stationStatus: "idle",
@@ -80,6 +90,7 @@ export const useTidalStore = create<TidalStoreState>((set, get) => ({
   datumsStatus: "idle",
 
   setStation: (station) => {
+    resolveSeq++;
     const prev = get().station;
     if (prev && prev.id === station.id && get().predictionsStatus === "ready") {
       // Same station with predictions already loaded — just refresh metadata.
@@ -102,20 +113,26 @@ export const useTidalStore = create<TidalStoreState>((set, get) => ({
   },
 
   resolveStation: async (lat, lon) => {
+    const seq = ++resolveSeq;
     set({ stationStatus: "loading" });
     try {
       const res = await fetch(apiUrl(`/tides/station?lat=${lat}&lon=${lon}`));
+      // Ignore stale responses if a newer resolve/setStation/reset ran mid-flight.
+      if (resolveSeq !== seq) return;
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = (await res.json()) as {
         available: boolean;
         station?: TideStationInfo;
       };
+      if (resolveSeq !== seq) return;
       if (!json.available || !json.station) {
         set({ station: null, stationStatus: "unavailable" });
         return;
       }
       get().setStation(json.station);
-    } catch {
+    } catch (err) {
+      if (resolveSeq !== seq) return;
+      logTidalError(`resolveStation(${lat}, ${lon})`, err);
       set({ station: null, stationStatus: "unavailable" });
     }
   },
@@ -130,21 +147,24 @@ export const useTidalStore = create<TidalStoreState>((set, get) => ({
         windowEnd: string;
         predictions: RawTideSample[];
       };
+      // Ignore stale responses if the station changed mid-flight — this must
+      // run before ANY set() so a slow empty response for a previous station
+      // cannot clobber the current station's data.
+      if (get().station?.id !== stationId) return;
       const samples = prepareTideSamples(json.predictions ?? []);
       if (samples.length === 0) {
         set({ samples: null, predictionsStatus: "unavailable" });
         return;
       }
-      // Ignore stale responses if the station changed mid-flight.
-      if (get().station?.id !== stationId) return;
       set({
         samples,
         predictionsStatus: "ready",
         windowStartMs: Date.parse(json.windowStart) || samples[0]!.tMs,
         windowEndMs: Date.parse(json.windowEnd) || samples[samples.length - 1]!.tMs,
       });
-    } catch {
+    } catch (err) {
       if (get().station?.id !== stationId) return;
+      logTidalError(`loadPredictions(${stationId})`, err);
       set({ samples: null, predictionsStatus: "unavailable" });
     }
   },
@@ -168,13 +188,15 @@ export const useTidalStore = create<TidalStoreState>((set, get) => ({
         return;
       }
       set({ datums: { stationId, mhwFt, mhhwFt }, datumsStatus: "ready" });
-    } catch {
+    } catch (err) {
       if (get().station?.id !== stationId) return;
+      logTidalError(`loadDatums(${stationId})`, err);
       set({ datums: null, datumsStatus: "unavailable" });
     }
   },
 
-  reset: () =>
+  reset: () => {
+    resolveSeq++;
     set({
       station: null,
       stationStatus: "idle",
@@ -184,5 +206,6 @@ export const useTidalStore = create<TidalStoreState>((set, get) => ({
       windowEndMs: null,
       datums: null,
       datumsStatus: "idle",
-    }),
+    });
+  },
 }));

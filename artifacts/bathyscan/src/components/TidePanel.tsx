@@ -157,7 +157,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
   const { terrain } = useAppState();
   const [hoveredEvent, setHoveredEvent] = useState<TidalScheduleEvent | null>(null);
   const units = useSettingsStore((s) => s.units);
-  const { schedule } = useTidalSchedule(lat, lon, 7);
+  const { schedule, isError: scheduleError } = useTidalSchedule(lat, lon, 7);
 
   const today = useMemo(() => {
     const d = new Date();
@@ -347,6 +347,12 @@ export const TidePanel: React.FC<TidePanelProps> = ({
           {!data.available && !loading && (
             <div style={{ color: "#cbd5e1", fontSize: 16.5 }}>
               No tidal station within {formatDistance(100_000, { units })} of this area.
+            </div>
+          )}
+
+          {scheduleError && (
+            <div data-testid="tide-schedule-error" style={{ color: "#fca5a5", fontSize: 15 }}>
+              Couldn&apos;t load the tide schedule — slack windows are temporarily unavailable.
             </div>
           )}
 
