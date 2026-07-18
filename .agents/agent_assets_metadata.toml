@@ -29,3 +29,9 @@ id = "5OuUm599gbH-0CAo6YdrN"
 uri = "file://exports/port-authority-skills.zip"
 type = "unspecified"
 title = "Port Authority Skills (both variants)"
+
+[[outputs]]
+id = "wiG-1U99As6jiE8tCgFTz"
+uri = "file://exports/bug-audit-skill.zip"
+type = "unspecified"
+title = "Bug-Audit Skill"
