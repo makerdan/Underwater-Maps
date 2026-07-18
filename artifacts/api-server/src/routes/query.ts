@@ -8,7 +8,11 @@
  */
 import { Router } from "express";
 import { z } from "zod";
-import { openai } from "@workspace/integrations-openai-ai-server";
+import {
+  openai,
+  type ChatCompletionMessageParam,
+  type ChatCompletionFunctionTool,
+} from "@workspace/integrations-openai-ai-server";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { createRateLimit, stampBaselineRateLimitHeaders } from "../middlewares/rateLimit.js";
@@ -42,15 +46,7 @@ const QUERY_UPSTREAM_TIMEOUT_MS = 30_000;
 // Tool schema
 // ---------------------------------------------------------------------------
 
-type ToolParam = {
-  type: "object";
-  properties: Record<string, { type: string; description?: string; enum?: string[] }>;
-  required?: string[];
-};
-type TerrainTool = { type: "function"; function: { name: string; description: string; parameters: ToolParam } };
-type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
-
-const TERRAIN_TOOLS: TerrainTool[] = [
+const TERRAIN_TOOLS: ChatCompletionFunctionTool[] = [
   {
     type: "function",
     function: {
@@ -347,7 +343,7 @@ router.post(
     .filter(Boolean)
     .join("\n");
 
-  const messages: ChatMessage[] = [
+  const messages: ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt },
     { role: "user", content: query },
   ];
@@ -357,10 +353,8 @@ router.post(
       {
         model: "gpt-5.1",
         max_completion_tokens: 512,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        messages: messages as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        tools: TERRAIN_TOOLS as any,
+        messages,
+        tools: TERRAIN_TOOLS,
         tool_choice: "auto",
       },
       // Hard upstream timeout so a stuck OpenAI request cannot pin a worker

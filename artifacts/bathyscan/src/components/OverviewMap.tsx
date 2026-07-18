@@ -566,6 +566,21 @@ export const OverviewMap: React.FC = () => {
     dirtyRef.current = true;
   }, [markerData]);
 
+  // Depth-pole colours parsed once per marker-data change, not per render.
+  const poleColourByMarker = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const m of markerData ?? []) {
+      if (m.type !== "depth_pole") continue;
+      let colour = "#00ffee";
+      try {
+        const parsed = JSON.parse(m.notes ?? "{}") as Record<string, unknown>;
+        if (typeof parsed["colour"] === "string") colour = parsed["colour"];
+      } catch { /* ignored */ }
+      map.set(m.id, colour);
+    }
+    return map;
+  }, [markerData]);
+
   // Catch-journal symbols per marker for the SVG overlay — one per entry
   // (duplicates kept so repeat catches stay visible).
   const catchSymbolsByMarker = useMemo(() => {
@@ -1897,13 +1912,8 @@ export const OverviewMap: React.FC = () => {
               if (m.depth === undefined || m.depth === null) return null;
               const [cx, cy] = lonLatToCanvas(m.lon, m.lat, wg, svgTransform);
               if (!inCanvas(cx, cy, 30)) return null;
-              let colour = "#00ffee";
-              try {
-                const parsed = JSON.parse(m.notes ?? "{}") as Record<string, unknown>;
-                if (typeof parsed["colour"] === "string") colour = parsed["colour"];
-              } catch { /* ignored */ }
-              const units = useSettingsStore.getState().units;
-              const depthText = units === "imperial"
+              const colour = poleColourByMarker.get(m.id) ?? "#00ffee";
+              const depthText = unitsForUi === "imperial"
                 ? `-${(m.depth * 3.28084).toFixed(0)} ft`
                 : `-${m.depth.toFixed(0)} m`;
               return (

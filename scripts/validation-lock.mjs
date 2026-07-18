@@ -167,11 +167,17 @@ async function acquireWithTimeout() {
 
 mkdirSync(lockDir, { recursive: true });
 
-// Reentrant path: an ancestor wrapper already holds the lock — don't try to
-// acquire it again (that would deadlock); just run the command.
-const heldPid = Number(process.env.VALIDATION_LOCK_HELD_PID || "");
+// Reentrancy: if an ancestor validation-lock wrapper already holds the lock
+// (e.g. test-heavy-serial runs `pnpm run test:e2e`, which wraps this script
+// again), acquiring here would deadlock — the child waits forever on a lock
+// its own ancestor holds. The holder exports VALIDATION_LOCK_HELD_PID to its
+// children; if it is set and that holder is still alive, run the command
+// directly without re-acquiring.
+const heldPid = Number(process.env.VALIDATION_LOCK_HELD_PID || 0);
 if (Number.isInteger(heldPid) && heldPid > 0 && heldPid !== process.pid && pidAlive(heldPid)) {
-  console.log(`[validation-lock] lock already held by ancestor pid ${heldPid} — running: ${commandLabel}`);
+  console.log(
+    `[validation-lock] lock already held by ancestor pid ${heldPid} — running reentrantly: ${commandLabel}`,
+  );
   const child = spawn(command[0], command.slice(1), { stdio: "inherit" });
   for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
     process.on(sig, () => {
