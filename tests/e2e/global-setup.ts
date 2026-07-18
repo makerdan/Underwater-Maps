@@ -108,6 +108,18 @@ function isBuildStale(): boolean {
 // ---------------------------------------------------------------------------
 
 export default function globalSetup() {
+  // --- Port cleanup ---
+  // A previous e2e run that was SIGKILLed (e.g. by the timeout guard) can
+  // orphan its Playwright webServer children, which then hold the fixed E2E
+  // ports and make this run's webServer boot fail (reuseExistingServer is
+  // deliberately false). Sweep those ports before Playwright starts anything.
+  // kill-port-holders.mjs is a strict no-op when the ports are already free.
+  console.log("[global-setup] Ensuring E2E ports are free…");
+  execSync("node scripts/kill-port-holders.mjs --e2e", {
+    cwd: root,
+    stdio: "inherit",
+  });
+
   // --- Codegen ---
   if (codegenMissing) {
     console.log("[global-setup] Generated API files missing — running codegen…");

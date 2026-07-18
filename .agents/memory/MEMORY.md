@@ -33,3 +33,4 @@
 - [pg.Pool needs error listener](pg-pool-error-listener.md) — unlistened 'error' on pg.Pool causes uncaughtException → process.exit(1); add pool.on('error') in lib/db/src/index.ts.
 - [Workflow limit and validation upsert](workflow-limit-validation-upsert.md) — configureWorkflow blocked at 10/10 (hidden Project meta counts); setValidationCommand upsert bypasses it. Onboarding overlay blocks Home-route e2e clicks.
 - [Workflow limit counter goes stale](workflow-limit-stale-counter.md) — configureWorkflow keeps rejecting "10/10" after a removal; listWorkflows() shows truth, retry after a few minutes.
+- [Port cleanup /proc quirks](port-cleanup-proc-quirks.md) — fuser is not on PATH (old fuser -k was a no-op); Nix node comm is "MainThread" — use scripts/kill-port-holders.mjs for freeing ports.

@@ -16,7 +16,7 @@
  * For the aggregate (test-all) layer, per-step elapsed times are echoed by
  * scripts/test-all-steps.mjs so a breach report can attribute time to steps.
  */
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -55,6 +55,13 @@ if (/^\d+$/.test(budgetKeyOrMs)) {
 }
 
 const layer = budgetKeyOrMs === "aggregate" ? "aggregate" : "run";
+// E2E runs boot Playwright webServers on the fixed E2E ports; a SIGKILL of
+// such a run can orphan those servers. Detect both a direct playwright
+// invocation and the aggregate (test-all) layer, which includes the e2e step.
+const isE2eRun =
+  command.some((part) => part.includes("playwright")) ||
+  budgetKeyOrMs === "e2e" ||
+  layer === "aggregate";
 const start = Date.now();
 console.log(`[timeout-guard] ${layer} budget ${(budgetMs / 1000).toFixed(0)}s for: ${label}`);
 
@@ -90,6 +97,17 @@ const timer = setTimeout(() => {
     try {
       process.kill(-child.pid, "SIGKILL");
     } catch { /* already gone */ }
+    // A SIGKILLed Playwright run never tears down its webServer children,
+    // leaving orphans holding the fixed E2E ports and poisoning the next run.
+    // Sweep those ports so the next e2e run starts clean. Only done for runs
+    // that actually boot e2e web servers, so a breached unit run can never
+    // kill a concurrently-running legitimate e2e session.
+    if (isE2eRun) {
+      console.error("[timeout-guard] sweeping E2E ports left behind by the killed run…");
+      spawnSync("node", [resolve(here, "kill-port-holders.mjs"), "--e2e"], {
+        stdio: "inherit",
+      });
+    }
   }, 10_000).unref();
 }, budgetMs);
 timer.unref();
