@@ -44,6 +44,13 @@ routinely kill the wrong process or "fix" a port that was never the problem.
   shell ends, or survive as port-holding orphans that break the next run.
 - Anything that runs longer than ~2 minutes belongs in a **named workflow**
   or a **registered validation command**, never an ad-hoc shell.
+  Registered validation commands come in three tiers: `test-fast`
+  (typecheck + lint only), `test-standard` (typecheck + lint + unit +
+  doc checks), and `test-heavy` (full suite including e2e and schema
+  checks). Read the `validation-tiers` skill for the decision table.
+  **Never default to `test-heavy` for every task** — it is reserved for
+  high-risk changes (new API routes, schema migrations, auth/security
+  changes, multi-package refactors).
 - Every service must read its port from the `PORT` environment variable.
   Hunt down hard-coded ports (e.g. Vite `server: { port: N }`, Express
   `app.listen(3000)`) — they are the #1 cause of port collisions and blank
@@ -152,10 +159,11 @@ entirely — do not add ping machinery speculatively.
 
 ## Phase 9 (ALWAYS) — Regression hardening
 
-- **Acceptance gate**: the full test/validation suite runs **twice
-  back-to-back** with zero manual port clearing or process killing in
-  between. If a human (or agent) had to intervene, the hygiene work is not
-  done.
+- **Acceptance gate**: the **validation tier appropriate for the work
+  done** runs **twice back-to-back** with zero manual port clearing or
+  process killing in between (consult the `validation-tiers` skill for
+  the tier decision table). If a human (or agent) had to intervene, the
+  hygiene work is not done.
 - The env guards from Phases 2 and 4 stay **permanent** — they are not
   scaffolding to remove later.
 - Any forced unlock or forced kill logs loudly so hidden hangs surface

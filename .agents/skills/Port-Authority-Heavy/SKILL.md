@@ -13,8 +13,9 @@ here and must not be skipped.
 ## Step 1 (prerequisite) — Apply `Port-Authority` in full
 
 Apply the standard `Port-Authority` skill completely before anything below.
-Do not proceed until its acceptance gate (full suite twice back-to-back with
-zero manual intervention) passes or its repairs are underway.
+Do not proceed until its acceptance gate (the appropriate validation tier
+twice back-to-back with zero manual intervention — see `validation-tiers`
+skill) passes or its repairs are underway.
 
 ## Step 2 — Workflow-count budgeting
 
@@ -35,10 +36,20 @@ ad-hoc shells.
 
 ## Step 3 — Consolidation over proliferation
 
-Prefer **one serialized heavy command** over one workflow per suite: e.g. a
-single `test-heavy` entry that runs unit + e2e + other suites in sequence
-behind the serialization lock from the standard skill (Phase 4's
-`serial-lock.mjs`). Benefits:
+Prefer **one serialized command** over one workflow per suite, run behind
+the serialization lock from the standard skill (Phase 4's
+`serial-lock.mjs`). The right consolidation command depends on the task's
+risk tier (see the `validation-tiers` skill for the full decision table):
+
+- **`test-heavy`** (all steps: unit + e2e + schema + audit) — correct for
+  schema migrations, new API routes, auth/security changes, and
+  multi-package refactors.
+- **`test-standard`** (typecheck + lint + unit + doc checks) — sufficient
+  for most feature and bug-fix work.
+- **`test-fast`** (typecheck + lint only) — appropriate for pure UI or
+  copy changes with no logic impact.
+
+The serialization lock applies to whichever tier is selected. Benefits:
 
 - Fewer workflow entries consumed.
 - The consolidation itself **enforces the serialization** those suites need

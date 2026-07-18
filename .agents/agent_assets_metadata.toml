@@ -53,3 +53,15 @@ id = "VH262b5aB8QtFemw7vfiM"
 uri = "file://.agents/skills/GoPoe-or-GoHome/SKILL.md"
 type = "text"
 title = "GoPoe-or-GoHome skill (updated)"
+
+[[outputs]]
+id = "0u8VubUptAZSAhP64fs9-"
+uri = "file://.agents/skills/Port-Authority/SKILL.md"
+type = "text"
+title = "Port-Authority/SKILL.md"
+
+[[outputs]]
+id = "lMrqDGd-JkGO5qJGnqnA7"
+uri = "file://.agents/skills/Port-Authority-Heavy/SKILL.md"
+type = "text"
+title = "Port-Authority-Heavy/SKILL.md"
