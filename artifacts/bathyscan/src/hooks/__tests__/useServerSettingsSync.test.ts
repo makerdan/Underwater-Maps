@@ -15,7 +15,7 @@ import { renderHook, act } from "@testing-library/react";
 
 const { mutateAsyncFn, toastFn } = vi.hoisted(() => {
   const mutateAsyncFn = vi.fn().mockResolvedValue({ __updatedAt: "2026-07-01T00:00:00Z" });
-  const toastFn = vi.fn();
+  const toastFn = vi.fn().mockReturnValue({ dismiss: vi.fn() });
   return { mutateAsyncFn, toastFn };
 });
 

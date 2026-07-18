@@ -2,7 +2,7 @@
 id: zones-paint-mode
 title: Zones & Paint Mode
 section: Features
-order: 6.5
+order: 6.7
 ---
 
 # Zones & Paint Mode

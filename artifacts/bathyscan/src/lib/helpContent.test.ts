@@ -9,12 +9,15 @@ import {
 
 const EXPECTED_IDS = [
   "ai-assistant",
+  "analyze-mode",
   "currents-simulation",
   "data-provenance",
   "datasets-uploads",
   "depth-profile",
   "drift-planner",
+  "drive-boat",
   "essential-fish-habitat",
+  "explore-mode",
   "faq",
   "find-data",
   "first-time-guide",
@@ -26,12 +29,14 @@ const EXPECTED_IDS = [
   "keyboard-shortcuts",
   "markers",
   "overview-map",
+  "plan-mode",
   "saved-routes",
   "settings",
   "substrate-layer",
   "temperature-profile",
   "terrain-3d-scene",
   "throttle",
+  "tidal-3d-data",
   "tidal-overlay",
   "troubleshooting",
   "weather-stations",
@@ -40,7 +45,7 @@ const EXPECTED_IDS = [
 ];
 
 describe("HELP_ARTICLES — registration", () => {
-  it("parses every .md file — expects 29 articles", () => {
+  it("parses every .md file — expects 34 articles", () => {
     expect(HELP_ARTICLES.length).toBe(EXPECTED_IDS.length);
   });
 
