@@ -77,7 +77,7 @@ beforeEach(() => {
 
 function openShortcutsSection() {
   render(<Settings />);
-  fireEvent.click(screen.getByText("SHORTCUTS"));
+  fireEvent.click(screen.getByText("NAVIGATION"));
 }
 
 describe("Settings — crosshair menu key capture", () => {

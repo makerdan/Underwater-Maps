@@ -64,6 +64,7 @@ function collectTsxFiles(dir: string): string[] {
  */
 const SCANNED_FILES: string[] = [
   "App.tsx",
+  "pages/Settings.tsx",
   "pages/TourScene.tsx",
   "pages/settings/components/PalettePickerCard.tsx",
   "components/CurrentsPanel.tsx",
@@ -288,7 +289,11 @@ describe("duplicate hook-variable declarations", () => {
     expect(violations, violations.join("\n")).toHaveLength(0);
   });
 
-  it("finds at least 10 hook declarations in each scanned file (sanity check that parsing works)", () => {
+  it("finds at least 5 hook declarations in each scanned file (sanity check that parsing works)", () => {
+    // Note: some scanned files (e.g. pages/Settings.tsx after the section
+    // extraction refactor) legitimately hold fewer than MIN_HOOKS hooks now;
+    // they stay listed so duplicate detection keeps covering them. This
+    // sanity floor only guards against the parser silently finding nothing.
     for (const relPath of SCANNED_FILES) {
       const filePath = path.join(SRC_DIR, relPath);
       const src = fs.readFileSync(filePath, "utf-8");
@@ -296,8 +301,8 @@ describe("duplicate hook-variable declarations", () => {
       const total = scopes.reduce((sum, s) => sum + s.decls.length, 0);
       expect(
         total,
-        `${relPath}: expected ≥10 hook declarations but found ${total} — parser may be broken`,
-      ).toBeGreaterThanOrEqual(10);
+        `${relPath}: expected ≥5 hook declarations but found ${total} — parser may be broken`,
+      ).toBeGreaterThanOrEqual(5);
     }
   });
 

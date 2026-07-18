@@ -65,7 +65,7 @@ vi.mock("idb-keyval", () => ({
 const mockClearUpscaleCache = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 vi.mock("@/hooks/useUpscaledHeatmap", () => ({
   clearUpscaleCache: mockClearUpscaleCache,
-  getUpscaleCacheInfo: vi.fn(() => Promise.resolve({ count: 1, bytes: 2048 })),
+  getUpscaleCacheInfo: vi.fn(() => Promise.resolve({ count: 3, bytes: 3072 })),
 }));
 
 const mockToast = vi.hoisted(() => vi.fn());
@@ -82,7 +82,9 @@ const mockCachesKeys = vi.fn(() => Promise.resolve(["terrain-v1", "tiles-v1"]));
 const mockCachesOpen = vi.fn(() =>
   Promise.resolve({
     keys: () =>
-      Promise.resolve([{ url: "https://example.com/api/datasets/demo/terrain" }]),
+      Promise.resolve([
+        { url: "https://example.test/api/datasets/demo-set/terrain" },
+      ]),
     match: () => Promise.resolve(undefined),
     delete: () => Promise.resolve(true),
   }),

@@ -36,7 +36,7 @@ describe("LandTerrainStatusBanner", () => {
     render(<LandTerrainStatusBanner />);
     const banner = screen.getByTestId("land-terrain-status-banner");
     expect(banner).toHaveTextContent("LOADING LAND TERRAIN");
-    expect(banner).not.toHaveTextContent("LAND TERRAIN UNAVAILABLE");
+    expect(banner).not.toHaveTextContent("Land terrain unavailable");
   });
 
   it("clears the banner after clear() is called", () => {
