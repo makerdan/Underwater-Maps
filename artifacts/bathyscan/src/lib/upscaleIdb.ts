@@ -12,6 +12,13 @@
 export const IDB_NAME = "bathyscan-upscale-v1";
 export const IDB_STORE = "upscaled";
 export const TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/**
+ * Maximum total character/byte length of base64 src strings loaded from IDB
+ * during cache initialisation.  Prevents startup from loading a huge persisted
+ * cache that was accumulated during a long session with the disk almost full.
+ * (base64 char ≈ 1 byte; 50 MB ≈ ~125 upscaled 512×512 PNGs.)
+ */
+export const MAX_IDB_BYTES = 50 * 1024 * 1024; // 50 MB
 
 export interface IdbEntry {
   src: string;
@@ -60,7 +67,13 @@ export async function idbSet(key: string, src: string): Promise<void> {
       req.onerror = () => { db.close(); reject(req.error); };
     });
   } catch (err) {
-    console.warn("[upscale] IDB write failed (non-fatal):", err);
+    const isQuota =
+      err instanceof DOMException && err.name === "QuotaExceededError";
+    if (isQuota) {
+      console.warn("[upscale] IDB write skipped — storage quota exceeded (non-fatal)");
+    } else {
+      console.warn("[upscale] IDB write failed (non-fatal):", err);
+    }
   }
 }
 
@@ -88,11 +101,13 @@ export async function idbDelete(key: string): Promise<void> {
 export async function initIdbCache(
   onEntry: (key: string, src: string) => void,
   maxEntries: number,
+  maxBytes: number = MAX_IDB_BYTES,
 ): Promise<void> {
   try {
     const db = await openIdb();
     const now = Date.now();
     let count = 0;
+    let bytes = 0;
 
     await new Promise<void>((resolve) => {
       const tx = db.transaction(IDB_STORE, "readwrite");
@@ -105,11 +120,13 @@ export async function initIdbCache(
 
         const entry = cursor.value as IdbEntry;
         const key = cursor.key as string;
+        const entryBytes = typeof entry.src === "string" ? entry.src.length : 0;
 
         if (now - entry.ts > TTL_MS) {
           cursor.delete();
-        } else if (count < maxEntries) {
+        } else if (count < maxEntries && bytes + entryBytes <= maxBytes) {
           onEntry(key, entry.src);
+          bytes += entryBytes;
           count++;
         }
 

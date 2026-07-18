@@ -24,14 +24,61 @@ const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 // ---------------------------------------------------------------------------
 
 const MAX_CACHE_ENTRIES = 20;
-const upscaleCache = new Map<string, HTMLImageElement>();
+/**
+ * In-memory byte cap: evict oldest entries when total estimated size
+ * (base64 char length ≈ 1 byte) exceeds this limit even if count is below
+ * MAX_CACHE_ENTRIES.  Prevents silent unbounded growth during long sessions
+ * where only a few unique bitmaps are ever requested (so count stays low but
+ * each entry is very large).
+ */
+const MAX_CACHE_BYTES = 10 * 1024 * 1024; // 10 MB
+/**
+ * Cap the total bytes loaded from IndexedDB on startup.  Matches the
+ * exported MAX_IDB_BYTES constant from upscaleIdb but kept local here so
+ * the hook does not import a constant-only symbol from the IDB module (which
+ * would be stripped from the vi.mock() factory in unit tests).
+ */
+const MAX_IDB_LOAD_BYTES = 50 * 1024 * 1024; // 50 MB
 
-/** Evict the oldest entry when the cache exceeds the size limit (Map preserves insertion order). */
+const upscaleCache = new Map<string, HTMLImageElement>();
+/** Parallel map tracking the estimated byte size (src char length) of each cache entry. */
+const upscacheSrcLen = new Map<string, number>();
+/** Running total of estimated bytes in the in-memory cache. */
+let totalMemBytes = 0;
+
+/**
+ * Insert (or replace) an entry in the module-level cache and update the byte
+ * size accounting.  Always call `evictIfNeeded` after inserting.
+ */
+function addToCache(key: string, img: HTMLImageElement, srcLen: number): void {
+  const prev = upscacheSrcLen.get(key);
+  if (prev !== undefined) totalMemBytes -= prev;
+  upscaleCache.set(key, img);
+  upscacheSrcLen.set(key, srcLen);
+  totalMemBytes += srcLen;
+}
+
+/**
+ * Evict the oldest entries until both the count and byte limits are satisfied.
+ * Map preserves insertion order, so `keys().next()` is always the oldest entry.
+ */
 function evictIfNeeded(): void {
-  if (upscaleCache.size > MAX_CACHE_ENTRIES) {
+  while (upscaleCache.size > MAX_CACHE_ENTRIES || totalMemBytes > MAX_CACHE_BYTES) {
     const oldest = upscaleCache.keys().next().value;
-    if (oldest !== undefined) upscaleCache.delete(oldest);
+    if (oldest === undefined) break;
+    upscaleCache.delete(oldest);
+    const evictedBytes = upscacheSrcLen.get(oldest) ?? 0;
+    upscacheSrcLen.delete(oldest);
+    totalMemBytes -= evictedBytes;
   }
+}
+
+/**
+ * Snapshot of the in-memory cache: number of entries and estimated byte size.
+ * Useful for diagnostics and E2E assertions without waiting for IDB.
+ */
+export function getInMemCacheStats(): { count: number; bytes: number } {
+  return { count: upscaleCache.size, bytes: totalMemBytes };
 }
 
 /**
@@ -56,6 +103,8 @@ export async function getUpscaleCacheInfo(): Promise<{ count: number; bytes: num
  */
 export async function clearUpscaleCache(): Promise<void> {
   upscaleCache.clear();
+  upscacheSrcLen.clear();
+  totalMemBytes = 0;
   await clearIdbStore();
 }
 
@@ -63,13 +112,16 @@ export async function clearUpscaleCache(): Promise<void> {
  * On module load: open IDB, prune entries older than TTL, and pre-populate the
  * in-memory cache from surviving entries so the first render hits the fast path.
  */
-const idbReady: Promise<void> = initIdbCache((key, src) => {
-  if (upscaleCache.size < MAX_CACHE_ENTRIES) {
+const idbReady: Promise<void> = initIdbCache(
+  (key, src) => {
     const img = new Image();
     img.src = src;
-    upscaleCache.set(key, img);
-  }
-}, MAX_CACHE_ENTRIES);
+    addToCache(key, img, src.length);
+    evictIfNeeded();
+  },
+  MAX_CACHE_ENTRIES,
+  MAX_IDB_LOAD_BYTES,
+);
 
 // ---------------------------------------------------------------------------
 // Bitmap hashing
@@ -276,7 +328,7 @@ export function useUpscaledHeatmap() {
           img.src = persistedSrc;
         });
         if (img.complete && img.naturalWidth > 0) {
-          upscaleCache.set(cacheKey, img);
+          addToCache(cacheKey, img, persistedSrc.length);
           evictIfNeeded();
           if (lastKeyRef.current !== cacheKey && isMountedRef.current) {
             lastKeyRef.current = cacheKey;
@@ -329,7 +381,7 @@ export function useUpscaledHeatmap() {
         });
 
         // Store in module-level cache (survives unmount).
-        upscaleCache.set(cacheKey, img);
+        addToCache(cacheKey, img, src.length);
         evictIfNeeded();
 
         // Guard IDB write and state update: the component may have unmounted

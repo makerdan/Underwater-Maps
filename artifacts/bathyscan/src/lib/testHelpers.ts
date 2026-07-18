@@ -38,8 +38,10 @@ import {
   deleteMarkersId,
   getGetMarkersQueryKey,
   getGetDatasetsIdTerrainQueryKey,
+  getGetDatasetsQueryKey,
   getGetEfhQueryKey,
   getGetSubstrateQueryKey,
+  type DatasetMeta,
   type Marker,
   type TerrainData,
   type EfhFeatureCollection,
@@ -47,6 +49,7 @@ import {
   type SubstrateFeatureCollection,
 } from "@workspace/api-client-react";
 import { useDepthProfileStore, buildProfile } from "./depthProfileStore";
+import { getUpscaleCacheInfo, getInMemCacheStats } from "../hooks/useUpscaledHeatmap";
 import { useSettingsStore } from "./settingsStore";
 import type { LastSession } from "./settingsStore";
 import { usePaletteStore } from "./paletteStore";
@@ -708,6 +711,29 @@ export interface BathyTestApi {
    * Key = datasetId, value = true only when the grid is synthetic.
    */
   getSimulatedTreatment: () => Record<string, boolean>;
+  /**
+   * Inject a synthetic entry into the React Query datasets-catalog cache for
+   * the given waterType.  Useful in E2E tests for datasets that have been
+   * removed from PRESET_DATASETS (so they won't appear in /api/datasets) but
+   * whose EFH data is still served by the API.  Merges into the existing
+   * cache array (replaces any entry with the same id, appends otherwise) so
+   * other catalog entries remain intact.
+   */
+  seedCatalogEntry: (entry: {
+    id: string;
+    name?: string;
+    hasEfh?: boolean;
+    waterType?: "saltwater" | "freshwater";
+  }) => void;
+  /**
+   * Snapshot of the upscale cache (IndexedDB entries + in-memory entries).
+   * E2E tests use this to verify that a Poe upscale result was cached and
+   * that the cache size stays within expected bounds during long sessions.
+   */
+  getUpscaleCacheInfo: () => Promise<{
+    idb: { count: number; bytes: number };
+    mem: { count: number; bytes: number };
+  }>;
 }
 
 declare global {
@@ -919,6 +945,31 @@ export function installTestHelpers(): void {
     isPaletteSuggestionDismissed: (datasetId) =>
       usePaletteSuggestionStore.getState().isDismissed(datasetId),
     getSimulatedTreatment: () => getSimulatedTreatmentMap(),
+    seedCatalogEntry: (entry) => {
+      const wt: "saltwater" | "freshwater" = entry.waterType ?? "saltwater";
+      const key = getGetDatasetsQueryKey({ waterType: wt });
+      const current =
+        queryClient.getQueryData<DatasetMeta[]>(key) ?? [];
+      const without = current.filter((d) => d.id !== entry.id);
+      const synthetic: DatasetMeta = {
+        id: entry.id,
+        name: entry.name ?? entry.id,
+        description: "",
+        waterType: wt,
+        hasEfh: entry.hasEfh ?? false,
+        minDepth: 0,
+        maxDepth: 20,
+        centerLon: 0,
+        centerLat: 0,
+        bbox: { minLon: -1, minLat: -1, maxLon: 1, maxLat: 1 },
+      };
+      queryClient.setQueryData(key, [...without, synthetic]);
+    },
+    getUpscaleCacheInfo: async () => {
+      const idb = await getUpscaleCacheInfo();
+      const mem = getInMemCacheStats();
+      return { idb, mem };
+    },
     setColormapUserSet: (v) => useSettingsStore.getState().setColormapUserSet(v),
     getColormapUserSet: () => useSettingsStore.getState().colormapUserSet,
     setColormapThemeByUser: (theme) =>

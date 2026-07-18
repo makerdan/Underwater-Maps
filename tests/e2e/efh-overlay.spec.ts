@@ -79,9 +79,70 @@ interface CasePlan {
    * Region EFH" — all valid non-TPWD sources.
    */
   sourceFamily: "noaa" | "tpwd";
+  /**
+   * Optional terrain to inject via the test bridge when the dataset's terrain
+   * is not fetchable from NCEI in the E2E environment (e.g. saltwater presets
+   * removed from PRESET_DATASETS). Seeded directly into terrainStore and the
+   * React Query cache so the terrain-sync poll resolves immediately without a
+   * network round-trip.
+   */
+  terrainSeed?: {
+    waterType: "saltwater" | "freshwater";
+    minLon: number;
+    maxLon: number;
+    minLat: number;
+    maxLat: number;
+    centerLon: number;
+    centerLat: number;
+  };
 }
 
 async function runEfhCase(page: Page, plan: CasePlan): Promise<void> {
+  // For datasets removed from PRESET_DATASETS (e.g. Thorne Bay), intercept
+  // every /api/datasets catalog response and inject a synthetic entry with
+  // hasEfh:true.  This must be set up BEFORE page.goto() to catch the
+  // initial catalog fetch.  Without this, the real server response (which
+  // doesn't include the removed dataset) overwrites our seedCatalogEntry
+  // call, causing the EFH toggle to remain hidden.
+  if (plan.terrainSeed) {
+    const { datasetId, waterType, terrainSeed } = plan;
+    await page.route(
+      (url) => new URL(url).pathname === "/api/datasets",
+      async (route) => {
+        const response = await route.fetch();
+        let existing: Array<Record<string, unknown>> = [];
+        try {
+          existing = (await response.json()) as typeof existing;
+        } catch {
+          // malformed — just continue with empty
+        }
+        const without = existing.filter((d) => d["id"] !== datasetId);
+        const synthetic: Record<string, unknown> = {
+          id: datasetId,
+          name: datasetId,
+          description: "",
+          waterType,
+          hasEfh: true,
+          minDepth: 0,
+          maxDepth: 20,
+          centerLon: terrainSeed.centerLon,
+          centerLat: terrainSeed.centerLat,
+          bbox: {
+            minLon: terrainSeed.minLon,
+            minLat: terrainSeed.minLat,
+            maxLon: terrainSeed.maxLon,
+            maxLat: terrainSeed.maxLat,
+          },
+        };
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([...without, synthetic]),
+        });
+      },
+    );
+  }
+
   // domcontentloaded (not networkidle): the bathyscan home keeps long-lived
   // requests open (terrain warm-up, EFH fetch, /api/me, etc.), so
   // networkidle frequently never resolves before Playwright's nav timeout.
@@ -98,6 +159,37 @@ async function runEfhCase(page: Page, plan: CasePlan): Promise<void> {
       "TestBridge setActiveDatasetId not registered — signed-in shell not mounted",
     );
     return;
+  }
+
+  // For datasets removed from PRESET_DATASETS (e.g. Thorne Bay), pre-seed
+  // the React Query catalog and terrain caches BEFORE setWaterType fires.
+  // This is critical ordering: setWaterType triggers useWaterTypeSideEffects
+  // which calls setActiveDatasetId, which in turn fires useGetDatasets and
+  // useGetDatasetsIdTerrain queries.  If those queries find data already in
+  // the cache, they skip the network fetch (returning our synthetic seed)
+  // instead of hitting /api/datasets/:id/terrain → 404.
+  if (plan.terrainSeed) {
+    await page.evaluate(
+      ({ id, seed, wt }) => {
+        const api = (
+          window as unknown as {
+            __bathyTest?: {
+              seedCatalogEntry?: (entry: {
+                id: string;
+                hasEfh?: boolean;
+                waterType?: "saltwater" | "freshwater";
+              }) => void;
+              seedTerrain?: (overrides: Record<string, unknown>) => boolean;
+            };
+          }
+        ).__bathyTest;
+        // 1. Seed catalog so hasEfh=true is visible to OverviewMap+EfhZoneLayer
+        api?.seedCatalogEntry?.({ id, hasEfh: true, waterType: wt });
+        // 2. Seed terrain+RQ cache so terrain-sync resolves without a fetch
+        api?.seedTerrain?.({ datasetId: id, ...seed });
+      },
+      { id: plan.datasetId, seed: plan.terrainSeed, wt: plan.waterType },
+    );
   }
 
   // Switch water type first; useWaterTypeSideEffects will auto-load the
@@ -365,6 +457,21 @@ test.describe("EFH overlay — Task #314 dataset coverage", () => {
       waterType: "saltwater",
       datasetId: "thorne-bay",
       sourceFamily: "noaa",
+      // Thorne Bay was removed from PRESET_DATASETS (Task #2365) so its terrain
+      // can no longer be fetched from NCEI in the E2E environment.  Inject a
+      // synthetic SE Alaska grid directly so the terrain-sync poll passes and
+      // the full EFH pipeline (fetch → overlay → species detail popover) still
+      // runs end-to-end.  The EFH data for "thorne-bay" is pre-computed in
+      // efhData.ts and served by /api/efh?datasetId=thorne-bay regardless.
+      terrainSeed: {
+        waterType: "saltwater",
+        minLon: -133.1,
+        maxLon: -132.5,
+        minLat: 55.6,
+        maxLat: 56.0,
+        centerLon: -132.8,
+        centerLat: 55.8,
+      },
     });
   });
 });
