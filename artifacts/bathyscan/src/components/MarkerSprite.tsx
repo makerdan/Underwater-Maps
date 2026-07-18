@@ -16,9 +16,36 @@ interface Props {
   marker: Marker;
   terrain: TerrainData;
   showLabel?: boolean;
+  /** Distinct catch-journal symbols logged at this spot (rendered in a spaced row above the pillar). */
+  catchSymbols?: string[];
 }
 
-export const MarkerSprite: React.FC<Props> = ({ marker, terrain, showLabel = true }) => {
+/** Max symbols per row before wrapping to a second row. */
+export const CATCH_SYMBOLS_PER_ROW = 5;
+/** Horizontal spacing between adjacent catch symbols (world units). */
+export const CATCH_SYMBOL_SPACING = 0.5;
+/** Vertical spacing between wrapped rows (world units). */
+export const CATCH_ROW_SPACING = 0.45;
+
+/**
+ * Lay out catch symbols in centred rows so no two symbols overlap.
+ * Returns one [x, y] offset per symbol, relative to the row anchor.
+ * Exported for unit tests.
+ */
+export function layoutCatchSymbols(count: number): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  for (let i = 0; i < count; i++) {
+    const row = Math.floor(i / CATCH_SYMBOLS_PER_ROW);
+    const idxInRow = i % CATCH_SYMBOLS_PER_ROW;
+    const rowCount = Math.min(count - row * CATCH_SYMBOLS_PER_ROW, CATCH_SYMBOLS_PER_ROW);
+    const x = (idxInRow - (rowCount - 1) / 2) * CATCH_SYMBOL_SPACING;
+    const y = row * CATCH_ROW_SPACING;
+    out.push([x, y]);
+  }
+  return out;
+}
+
+export const MarkerSprite: React.FC<Props> = ({ marker, terrain, showLabel = true, catchSymbols }) => {
   if (marker.type === "depth_pole") return null;
 
   const { x, z } = lonLatToWorldXZ(marker.lon, marker.lat, terrain);
@@ -70,6 +97,26 @@ export const MarkerSprite: React.FC<Props> = ({ marker, terrain, showLabel = tru
         <cylinderGeometry args={[0.3, 0.3, poleHeight, 8]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
+
+      {/* Catch-journal symbols — one billboard, symbols spaced in centred
+          rows above the marker icon so multiple symbols never overlap. */}
+      {catchSymbols && catchSymbols.length > 0 && (
+        <Billboard position={[x, 0.75, z]}>
+          {layoutCatchSymbols(catchSymbols.length).map(([sx, sy], i) => (
+            <Text
+              key={`${catchSymbols[i]}-${i}`}
+              position={[sx, sy, 0]}
+              fontSize={0.34}
+              anchorX="center"
+              anchorY="middle"
+              outlineColor="#000000"
+              outlineWidth={0.02}
+            >
+              {catchSymbols[i]}
+            </Text>
+          ))}
+        </Billboard>
+      )}
 
       {/* Billboard icon disc + label at the top of the pillar */}
       <Billboard position={[x, 0.05, z]}>

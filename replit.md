@@ -439,6 +439,13 @@ Authentication is handled by **Clerk** across all surfaces:
 
 | Method | Path | Purpose |
 |---|---|---|
+| GET | `/catches` | List all catch entries for the caller's markers in a dataset |
+| GET | `/markers/:markerId/catches` | List catch entries for one marker |
+| POST | `/markers/:markerId/catches` | Create a catch entry on a marker |
+| PATCH | `/catches/:id` | Edit a catch entry's symbol, notes, or photos |
+| DELETE | `/catches/:id` | Delete a catch entry |
+| POST | `/catch-photos/upload-url` | Request a short-lived signed URL for uploading one catch photo |
+| GET | `/objects/:objectPath` | Download a private stored object (e.g. a catch photo) after an ACL check |
 | POST | `/datasets/point-radius-query` | Find catalog datasets whose coverage intersects a circle around a point |
 | GET | `/efh/:id` | Essential Fish Habitat zones for a specific dataset |
 | GET | `/terrain/land` | Fetch a land-elevation (DEM) grid for a bounding box |

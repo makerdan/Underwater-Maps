@@ -804,6 +804,140 @@ export const DeleteMarkersIdParams = zod.object({
 
 
 /**
+ * @summary List all catch entries for the caller's markers in a dataset
+ */
+export const GetCatchesQueryParams = zod.object({
+  "datasetId": zod.coerce.string()
+})
+
+export const GetCatchesResponseItem = zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "markerId": zod.string().describe('Marker (spot) this catch belongs to'),
+  "symbol": zod.string().describe('Emoji \/ symbol representing what was caught'),
+  "symbolName": zod.string().describe('Human-readable name for the symbol (e.g. \"Salmon\")'),
+  "notes": zod.string().nullish(),
+  "photos": zod.array(zod.string()).describe('Normalized \"\/objects\/…\" photo paths in private storage'),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const GetCatchesResponse = zod.array(GetCatchesResponseItem)
+
+
+/**
+ * @summary List catch entries for one marker
+ */
+export const GetMarkersMarkerIdCatchesParams = zod.object({
+  "markerId": zod.coerce.string()
+})
+
+export const GetMarkersMarkerIdCatchesResponseItem = zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "markerId": zod.string().describe('Marker (spot) this catch belongs to'),
+  "symbol": zod.string().describe('Emoji \/ symbol representing what was caught'),
+  "symbolName": zod.string().describe('Human-readable name for the symbol (e.g. \"Salmon\")'),
+  "notes": zod.string().nullish(),
+  "photos": zod.array(zod.string()).describe('Normalized \"\/objects\/…\" photo paths in private storage'),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const GetMarkersMarkerIdCatchesResponse = zod.array(GetMarkersMarkerIdCatchesResponseItem)
+
+
+/**
+ * @summary Create a catch entry on a marker
+ */
+export const PostMarkersMarkerIdCatchesParams = zod.object({
+  "markerId": zod.coerce.string()
+})
+
+export const postMarkersMarkerIdCatchesBodySymbolMax = 16;
+
+export const postMarkersMarkerIdCatchesBodySymbolNameDefault = ``;
+export const postMarkersMarkerIdCatchesBodySymbolNameMax = 60;
+
+export const postMarkersMarkerIdCatchesBodyNotesMax = 1000;
+
+export const postMarkersMarkerIdCatchesBodyPhotosItemMax = 512;
+
+export const postMarkersMarkerIdCatchesBodyPhotosDefault = [];
+export const postMarkersMarkerIdCatchesBodyPhotosMax = 6;
+
+
+
+export const PostMarkersMarkerIdCatchesBody = zod.object({
+  "symbol": zod.string().min(1).max(postMarkersMarkerIdCatchesBodySymbolMax),
+  "symbolName": zod.string().max(postMarkersMarkerIdCatchesBodySymbolNameMax).default(postMarkersMarkerIdCatchesBodySymbolNameDefault),
+  "notes": zod.string().max(postMarkersMarkerIdCatchesBodyNotesMax).nullish(),
+  "photos": zod.array(zod.string().max(postMarkersMarkerIdCatchesBodyPhotosItemMax)).max(postMarkersMarkerIdCatchesBodyPhotosMax).default(postMarkersMarkerIdCatchesBodyPhotosDefault)
+})
+
+
+/**
+ * @summary Edit a catch entry's symbol, notes, or photos
+ */
+export const PatchCatchesIdParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const patchCatchesIdBodySymbolMax = 16;
+
+export const patchCatchesIdBodySymbolNameMax = 60;
+
+export const patchCatchesIdBodyNotesMax = 1000;
+
+export const patchCatchesIdBodyPhotosItemMax = 512;
+
+export const patchCatchesIdBodyPhotosMax = 6;
+
+
+
+export const PatchCatchesIdBody = zod.object({
+  "symbol": zod.string().min(1).max(patchCatchesIdBodySymbolMax).optional(),
+  "symbolName": zod.string().max(patchCatchesIdBodySymbolNameMax).optional(),
+  "notes": zod.string().max(patchCatchesIdBodyNotesMax).nullish(),
+  "photos": zod.array(zod.string().max(patchCatchesIdBodyPhotosItemMax)).max(patchCatchesIdBodyPhotosMax).optional()
+})
+
+export const PatchCatchesIdResponse = zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "markerId": zod.string().describe('Marker (spot) this catch belongs to'),
+  "symbol": zod.string().describe('Emoji \/ symbol representing what was caught'),
+  "symbolName": zod.string().describe('Human-readable name for the symbol (e.g. \"Salmon\")'),
+  "notes": zod.string().nullish(),
+  "photos": zod.array(zod.string()).describe('Normalized \"\/objects\/…\" photo paths in private storage'),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a catch entry
+ */
+export const DeleteCatchesIdParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+
+/**
+ * @summary Request a short-lived signed URL for uploading one catch photo
+ */
+export const PostCatchPhotosUploadUrlResponse = zod.object({
+  "uploadURL": zod.string(),
+  "objectPath": zod.string().describe('Normalized \"\/objects\/…\" path to store on the catch entry')
+})
+
+
+/**
+ * Streams the object bytes if the authenticated user is the owner or has been granted READ access via the object's ACL policy. objectPath is the remainder of the "/objects/…" path returned by the upload-URL endpoint.
+
+ * @summary Download a private stored object (e.g. a catch photo) after an ACL check
+ */
+export const GetObjectParams = zod.object({
+  "objectPath": zod.coerce.string()
+})
+
+
+/**
  * @summary List GPS trails for a dataset
  */
 export const GetTrailsQueryParams = zod.object({

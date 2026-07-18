@@ -46,6 +46,7 @@ import { LandTerrainStatusBanner } from "@/components/LandTerrainStatusBanner";
 import { DevApiDownBanner } from "@/components/DevApiDownBanner";
 import { DepthProfilePanel } from "@/components/DepthProfilePanel";
 import { MarkerDetailCard } from "@/components/MarkerDetailCard";
+import { CatchJournalPanel } from "@/components/CatchJournalPanel";
 import { OverviewMap } from "@/components/OverviewMap";
 import { EfhDetailPanel } from "@/components/EfhDetailPanel";
 import { SubstrateDetailPanel } from "@/components/SubstrateDetailPanel";
@@ -2064,6 +2065,7 @@ function HomeRoute() {
       <LandTerrainStatusBanner />
       <MeasurementBanner />
       <MarkerDetailCard />
+      <CatchJournalPanel />
     </QueryClientProvider>
   );
 }

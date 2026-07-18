@@ -20,6 +20,22 @@ export interface ExportMarker {
   label: string;
   type: string;
   notes?: string | null;
+  /** Catch-journal symbols logged at this spot, one per entry (appended to desc). */
+  catchSymbols?: string[];
+}
+
+/**
+ * Combine marker notes with catch-journal symbols into a single description
+ * string for GPX <desc> / KML <description>. Returns "" when there is
+ * nothing to describe.
+ */
+export function buildMarkerDescription(m: ExportMarker): string {
+  const parts: string[] = [];
+  if (m.notes && m.notes.trim().length > 0) parts.push(m.notes.trim());
+  if (m.catchSymbols && m.catchSymbols.length > 0) {
+    parts.push(`Catches: ${m.catchSymbols.join(" ")}`);
+  }
+  return parts.join(" | ");
 }
 
 export interface ExportRoutePoint {
@@ -72,8 +88,9 @@ export function serializeGpx(data: ExportData): string {
       lines.push(`    <ele>${fmtNum(-m.depth)}</ele>`);
     }
     lines.push(`    <name>${escXml(m.label)}</name>`);
-    if (m.notes && m.notes.trim().length > 0) {
-      lines.push(`    <desc>${escXml(m.notes)}</desc>`);
+    {
+      const desc = buildMarkerDescription(m);
+      if (desc) lines.push(`    <desc>${escXml(desc)}</desc>`);
     }
     if (m.type) {
       lines.push(`    <sym>${escXml(m.type)}</sym>`);
@@ -119,8 +136,9 @@ export function serializeKml(data: ExportData): string {
     const alt = Number.isFinite(m.depth) ? -m.depth : 0;
     lines.push(`    <Placemark>`);
     lines.push(`      <name>${escXml(m.label)}</name>`);
-    if (m.notes && m.notes.trim().length > 0) {
-      lines.push(`      <description>${escXml(m.notes)}</description>`);
+    {
+      const desc = buildMarkerDescription(m);
+      if (desc) lines.push(`      <description>${escXml(desc)}</description>`);
     }
     lines.push(`      <Point>`);
     lines.push(

@@ -1645,6 +1645,50 @@ export interface Marker {
   createdAt: string;
 }
 
+export interface CatchEntry {
+  /** UUID primary key */
+  id: string;
+  /** Marker (spot) this catch belongs to */
+  markerId: string;
+  /** Emoji / symbol representing what was caught */
+  symbol: string;
+  /** Human-readable name for the symbol (e.g. "Salmon") */
+  symbolName: string;
+  notes?: string | null;
+  /** Normalized "/objects/…" photo paths in private storage */
+  photos: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CatchEntryInput {
+  /**
+     * @minLength 1
+     * @maxLength 16
+     */
+  symbol: string;
+  /** @maxLength 60 */
+  symbolName?: string;
+  /** @maxLength 1000 */
+  notes?: string | null;
+  /** @maxItems 6 */
+  photos?: string[];
+}
+
+export interface CatchEntryPatch {
+  /**
+     * @minLength 1
+     * @maxLength 16
+     */
+  symbol?: string;
+  /** @maxLength 60 */
+  symbolName?: string;
+  /** @maxLength 1000 */
+  notes?: string | null;
+  /** @maxItems 6 */
+  photos?: string[];
+}
+
 export interface GpsPoint {
   lon: number;
   lat: number;
@@ -2699,6 +2743,16 @@ datasetId: string;
 
 export type DeleteMarkersMine200 = {
   deleted: number;
+};
+
+export type GetCatchesParams = {
+datasetId: string;
+};
+
+export type PostCatchPhotosUploadUrl200 = {
+  uploadURL: string;
+  /** Normalized "/objects/…" path to store on the catch entry */
+  objectPath: string;
 };
 
 export type GetTrailsParams = {

@@ -1,6 +1,7 @@
 export * from "./poe-usage.js";
 export * from "./rate-limit-events.js";
 export * from "./markers.js";
+export * from "./catches.js";
 export * from "./dataset-folders.js";
 export * from "./custom-datasets.js";
 export * from "./gps-trails.js";

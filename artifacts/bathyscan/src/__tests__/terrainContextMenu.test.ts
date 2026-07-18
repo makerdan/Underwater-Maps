@@ -3,6 +3,8 @@ import type { TerrainData } from "@workspace/api-client-react";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useContextMenuStore } from "@/lib/contextMenuStore";
 import { useMeasureStore } from "@/lib/measureStore";
+import { useCatchJournalStore } from "@/lib/catchJournalStore";
+import { useUiStore } from "@/lib/uiStore";
 import { useDepthProfileStore } from "@/lib/depthProfileStore";
 import {
   buildTerrainMenuItems,
@@ -60,6 +62,7 @@ describe("openCrosshairContextMenu", () => {
     expect(labels).toEqual(
       expect.arrayContaining([
         "Drop GPS pin here",
+        "Log a catch here",
         "Measure from here",
         "Set as home position",
         "Start straight-line profile",
@@ -113,5 +116,27 @@ describe("openCrosshairContextMenu", () => {
       lat: 47.6,
       depth: 42,
     });
+  });
+
+  it("Log a catch here opens the marker form with the pending catch-journal flag", () => {
+    useCatchJournalStore.setState({ pendingOpenForNewMarker: false });
+    useUiStore.setState({ markerFormOpen: false });
+    const items = buildTerrainMenuItems(
+      -122.5,
+      47.6,
+      42,
+      "ds-1",
+      () => fakeGrid(),
+    );
+    const logCatch = items.find((i) => i.label === "Log a catch here");
+    expect(logCatch).toBeDefined();
+    logCatch!.onClick();
+    expect(useCatchJournalStore.getState().pendingOpenForNewMarker).toBe(true);
+    expect(useCameraStore.getState().lastClickedGps).toEqual({
+      lon: -122.5,
+      lat: 47.6,
+      depth: 42,
+    });
+    expect(useUiStore.getState().markerFormOpen).toBe(true);
   });
 });

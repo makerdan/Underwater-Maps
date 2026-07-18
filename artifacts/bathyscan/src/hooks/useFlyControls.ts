@@ -23,6 +23,7 @@ import { markerGroupRef } from "@/lib/markerGroupRef";
 import { useContextMenuStore, type ContextMenuItem } from "@/lib/contextMenuStore";
 import { useMarkerDetailStore } from "@/lib/markerDetailStore";
 import { useMarkerEditStore } from "@/lib/markerEditStore";
+import { useCatchJournalStore } from "@/lib/catchJournalStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { getBoundKey } from "@/lib/keyBindings";
 import {
@@ -610,6 +611,11 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
           label: "Edit marker",
           icon: "✏️",
           onClick: () => useMarkerEditStore.getState().open(marker),
+        },
+        {
+          label: "Catch journal",
+          icon: "🎣",
+          onClick: () => useCatchJournalStore.getState().open(marker),
         },
         {
           label: "Copy coordinates",

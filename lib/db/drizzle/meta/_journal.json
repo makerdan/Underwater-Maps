@@ -57,6 +57,20 @@
       "when": 1784338543820,
       "tag": "0007_add_tide_station",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784340216386,
+      "tag": "0013_add_catch_entries",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784340216387,
+      "tag": "0014_add_conversations_messages",
+      "breakpoints": true
     }
   ]
 }

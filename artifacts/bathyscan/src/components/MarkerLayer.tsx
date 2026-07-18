@@ -8,9 +8,14 @@
  *
  * Must be rendered inside the R3F Canvas (inside SceneContents in TourScene).
  */
-import React, { useEffect } from "react";
-import { useGetMarkers, getGetMarkersQueryKey } from "@workspace/api-client-react";
-import type { Marker } from "@workspace/api-client-react";
+import React, { useEffect, useMemo } from "react";
+import {
+  useGetMarkers,
+  getGetMarkersQueryKey,
+  useGetCatches,
+  getGetCatchesQueryKey,
+} from "@workspace/api-client-react";
+import type { Marker, CatchEntry } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { useTerrainStore, VISIBLE_DATASETS_CAP } from "@/lib/terrainStore";
 import { MarkerSprite } from "./MarkerSprite";
@@ -65,6 +70,62 @@ function useAllDatasetMarkers(): Marker[] {
   });
 }
 
+/**
+ * Fetch catch entries for every visible dataset (same fixed-slot pattern as
+ * useAllDatasetMarkers) and group the distinct symbols per marker, insertion
+ * order preserved. Used to render a row of catch symbols above each spot.
+ */
+export function useCatchSymbolsByMarker(): Map<string, string[]> {
+  const visible = useTerrainStore((s) => s.visibleDatasets);
+
+  const id0 = visible[0]?.datasetId ?? "";
+  const id1 = visible[1]?.datasetId ?? "";
+  const id2 = visible[2]?.datasetId ?? "";
+  const id3 = visible[3]?.datasetId ?? "";
+
+  const { data: c0 } = useGetCatches(
+    { datasetId: id0 },
+    { query: { enabled: !!id0, queryKey: getGetCatchesQueryKey({ datasetId: id0 }) } },
+  );
+  const { data: c1 } = useGetCatches(
+    { datasetId: id1 },
+    { query: { enabled: !!id1, queryKey: getGetCatchesQueryKey({ datasetId: id1 }) } },
+  );
+  const { data: c2 } = useGetCatches(
+    { datasetId: id2 },
+    { query: { enabled: !!id2, queryKey: getGetCatchesQueryKey({ datasetId: id2 }) } },
+  );
+  const { data: c3 } = useGetCatches(
+    { datasetId: id3 },
+    { query: { enabled: !!id3 && VISIBLE_DATASETS_CAP >= 4, queryKey: getGetCatchesQueryKey({ datasetId: id3 }) } },
+  );
+
+  return useMemo(() => {
+    const all: CatchEntry[] = [
+      ...(c0 ?? []),
+      ...(c1 ?? []),
+      ...(c2 ?? []),
+      ...(c3 ?? []),
+    ];
+    return groupCatchSymbolsByMarker(all);
+  }, [c0, c1, c2, c3]);
+}
+
+/**
+ * Group catch symbols by markerId, one symbol per entry (duplicates kept —
+ * two salmon entries render two salmon symbols), insertion order preserved.
+ * Exported for unit tests.
+ */
+export function groupCatchSymbolsByMarker(entries: CatchEntry[]): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  for (const e of entries) {
+    const list = map.get(e.markerId) ?? [];
+    list.push(e.symbol);
+    if (!map.has(e.markerId)) map.set(e.markerId, list);
+  }
+  return map;
+}
+
 export const MarkerLayer: React.FC = () => {
   const { terrain } = useAppState();
   const visibleMarkerTypes = useSettingsStore((s) => s.visibleMarkerTypes);
@@ -74,6 +135,7 @@ export const MarkerLayer: React.FC = () => {
   const clear = useMarkerLayerStore((s) => s.clear);
 
   const markers = useAllDatasetMarkers();
+  const catchSymbolsByMarker = useCatchSymbolsByMarker();
 
   const visibleMarkers = (!terrain || !markers.length)
     ? []
@@ -107,7 +169,13 @@ export const MarkerLayer: React.FC = () => {
   return (
     <group ref={(g) => { markerGroupRef.current = g; }}>
       {rendered.map((m) => (
-        <MarkerSprite key={m.id} marker={m} terrain={terrain} showLabel={showMarkerLabels} />
+        <MarkerSprite
+          key={m.id}
+          marker={m}
+          terrain={terrain}
+          showLabel={showMarkerLabels}
+          catchSymbols={catchSymbolsByMarker.get(m.id)}
+        />
       ))}
     </group>
   );

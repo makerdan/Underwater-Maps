@@ -15,8 +15,10 @@ import { useFocusTrap } from "@/hooks/useFocusTrap";
 import {
   useGetMarkers,
   useGetTrollingPresets,
+  useGetCatches,
   getGetMarkersQueryKey,
   getGetTrollingPresetsQueryKey,
+  getGetCatchesQueryKey,
   type TerrainData,
 } from "@workspace/api-client-react";
 import {
@@ -52,13 +54,30 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const { data: presets } = useGetTrollingPresets({
     query: { queryKey: getGetTrollingPresetsQueryKey() },
   });
+  const { data: catches } = useGetCatches(
+    { datasetId: terrain.datasetId },
+    {
+      query: {
+        enabled: !!terrain.datasetId,
+        queryKey: getGetCatchesQueryKey({ datasetId: terrain.datasetId }),
+      },
+    },
+  );
 
   const markerCount = markers?.length ?? 0;
   const presetCount = presets?.length ?? 0;
   const nothingToExport = markerCount === 0 && presetCount === 0;
 
   const exportData = useMemo(
-    () => ({
+    () => {
+      // Catch symbols per marker, one per entry, insertion order preserved.
+      const symbolsByMarker = new Map<string, string[]>();
+      for (const c of catches ?? []) {
+        const list = symbolsByMarker.get(c.markerId) ?? [];
+        list.push(c.symbol);
+        if (!symbolsByMarker.has(c.markerId)) symbolsByMarker.set(c.markerId, list);
+      }
+      return {
       datasetName: terrain.name || "BathyScan",
       markers: (markers ?? []).map((m) => ({
         lon: m.lon,
@@ -67,6 +86,7 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
         label: m.label,
         type: m.type,
         notes: m.notes ?? undefined,
+        catchSymbols: symbolsByMarker.get(m.id),
       })),
       routes: (presets ?? [])
         .filter((p) => Array.isArray(p.waypoints) && p.waypoints.length >= 2)
@@ -74,8 +94,9 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
           name: p.name,
           points: p.waypoints.map((w) => ({ lon: w.lon, lat: w.lat })),
         })),
-    }),
-    [markers, presets, terrain.name],
+      };
+    },
+    [markers, presets, catches, terrain.name],
   );
 
   const handleDownload = () => {

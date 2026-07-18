@@ -21,6 +21,7 @@ import {
   buildPathProfile,
 } from "@/lib/depthProfileStore";
 import { useClassificationStore } from "@/lib/classificationStore";
+import { useCatchJournalStore } from "@/lib/catchJournalStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import {
   useContextMenuStore,
@@ -80,6 +81,18 @@ export function buildTerrainMenuItems(
       label: "Drop GPS pin here",
       icon: "📍",
       onClick: () => {
+        useCameraStore.getState().setLastClickedGps({ lon, lat, depth });
+        useUiStore.getState().setMarkerFormOpen(true);
+      },
+    },
+    {
+      label: "Log a catch here",
+      icon: "🎣",
+      onClick: () => {
+        // Drop a marker at this spot first (catch entries are linked to
+        // markers); once it's created the marker form auto-opens the catch
+        // journal for the new marker.
+        useCatchJournalStore.getState().setPendingOpenForNewMarker(true);
         useCameraStore.getState().setLastClickedGps({ lon, lat, depth });
         useUiStore.getState().setMarkerFormOpen(true);
       },

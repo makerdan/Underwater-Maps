@@ -32,10 +32,11 @@
 - [Rate-limit prefill pattern](rate-limit-prefill-pattern.md) — use __prefillRateLimitMemory(key, count) to set bucket state directly in tests; avoids 43+ s combined sleep waits.
 - [Playwright globalSetup port sweep self-DOS](kill-port-holders-webserver-order.md) — webServers spawn before globalSetup AND port pre-check runs before the command; sweep at config-load time with env guard, skip own-tree holders.
 - [Playwright addInitScript drops closures](playwright-addinitscript-closures.md) — factory-closure init scripts lose captured values silently; pass values as addInitScript's second arg.
+- [Express 5 wildcard routes](express5-wildcard-routes.md) — bare "*" route patterns throw in path-to-regexp v8; use named splats like "/objects/*objectPath".
+- [Playwright webServer before globalSetup](playwright-webserver-before-globalsetup.md) — webServers boot BEFORE globalSetup; port sweeps belong in each webServer command, never in globalSetup.
 - [pg.Pool needs error listener](pg-pool-error-listener.md) — unlistened 'error' on pg.Pool causes uncaughtException → process.exit(1); add pool.on('error') in lib/db/src/index.ts.
 - [Workflow limit and validation upsert](workflow-limit-validation-upsert.md) — configureWorkflow blocked at 10/10 (hidden Project meta counts); setValidationCommand upsert bypasses it. Onboarding overlay blocks Home-route e2e clicks.
 - [Workflow limit counter goes stale](workflow-limit-stale-counter.md) — configureWorkflow keeps rejecting "10/10" after a removal; listWorkflows() shows truth, retry after a few minutes.
-- [Playwright webServer before globalSetup](playwright-webserver-before-globalsetup.md) — plugin setup starts webServers BEFORE globalSetup runs; port sweeps in global-setup.ts kill the run's own servers. Sweep belongs in the test:e2e script.
 - [Port cleanup /proc quirks](port-cleanup-proc-quirks.md) — fuser is not on PATH (old fuser -k was a no-op); Nix node comm is "MainThread" — use scripts/kill-port-holders.mjs for freeing ports.
 - [E2E global-setup port sweep](e2e-global-setup-port-sweep.md) — Playwright boots webServer before globalSetup; port sweeps there must exempt own-tree holders or they kill their own servers.
 - [NCEI geoportal response format](ncei-geoportal-response-format.md) — f=json now returns atom shape (empty results); omit f for ES hits.hits format; bbox lives in envelope_geo.

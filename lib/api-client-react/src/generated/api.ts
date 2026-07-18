@@ -23,6 +23,9 @@ import type {
   AdminBucketMonitor200,
   AdminLargeDatasetsDiff200,
   ApiError,
+  CatchEntry,
+  CatchEntryInput,
+  CatchEntryPatch,
   ClassifyResult,
   CreateDatasetFolderBody,
   CreateRouteBody,
@@ -43,6 +46,7 @@ import type {
   FinalizeChunkedUpload200,
   FinalizeChunkedUploadBody,
   GeorefBody,
+  GetCatchesParams,
   GetDatasetZonesParams,
   GetDatasetsCatalogParams,
   GetDatasetsCatalogSearchParams,
@@ -113,6 +117,7 @@ import type {
   PoeQueryRequest,
   PoeUpscale200,
   PoeUpscaleBody,
+  PostCatchPhotosUploadUrl200,
   PostDatasetsBboxQuery200,
   PostDatasetsBboxQueryBody,
   PostDatasetsPointRadiusQuery200,
@@ -2154,6 +2159,530 @@ export const useDeleteMarkersId = <TError = ErrorType<ApiError>,
       > => {
       return useMutation(getDeleteMarkersIdMutationOptions(options));
     }
+
+export const getGetCatchesUrl = (params: GetCatchesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/catches?${stringifiedParams}` : `/api/catches`
+}
+
+/**
+ * @summary List all catch entries for the caller's markers in a dataset
+ */
+export const getCatches = async (params: GetCatchesParams, options?: RequestInit): Promise<CatchEntry[]> => {
+
+  return customFetch<CatchEntry[]>(getGetCatchesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCatchesQueryKey = (params?: GetCatchesParams,) => {
+    return [
+    `/api/catches`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCatchesQueryOptions = <TData = Awaited<ReturnType<typeof getCatches>>, TError = ErrorType<ApiError>>(params: GetCatchesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCatches>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCatchesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCatches>>> = ({ signal }) => getCatches(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCatches>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCatchesQueryResult = NonNullable<Awaited<ReturnType<typeof getCatches>>>
+export type GetCatchesQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List all catch entries for the caller's markers in a dataset
+ */
+
+export function useGetCatches<TData = Awaited<ReturnType<typeof getCatches>>, TError = ErrorType<ApiError>>(
+ params: GetCatchesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCatches>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCatchesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetMarkersMarkerIdCatchesUrl = (markerId: string,) => {
+
+
+
+
+  return `/api/markers/${markerId}/catches`
+}
+
+/**
+ * @summary List catch entries for one marker
+ */
+export const getMarkersMarkerIdCatches = async (markerId: string, options?: RequestInit): Promise<CatchEntry[]> => {
+
+  return customFetch<CatchEntry[]>(getGetMarkersMarkerIdCatchesUrl(markerId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMarkersMarkerIdCatchesQueryKey = (markerId: string,) => {
+    return [
+    `/api/markers/${markerId}/catches`
+    ] as const;
+    }
+
+
+export const getGetMarkersMarkerIdCatchesQueryOptions = <TData = Awaited<ReturnType<typeof getMarkersMarkerIdCatches>>, TError = ErrorType<ApiError>>(markerId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMarkersMarkerIdCatches>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMarkersMarkerIdCatchesQueryKey(markerId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMarkersMarkerIdCatches>>> = ({ signal }) => getMarkersMarkerIdCatches(markerId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(markerId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMarkersMarkerIdCatches>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMarkersMarkerIdCatchesQueryResult = NonNullable<Awaited<ReturnType<typeof getMarkersMarkerIdCatches>>>
+export type GetMarkersMarkerIdCatchesQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List catch entries for one marker
+ */
+
+export function useGetMarkersMarkerIdCatches<TData = Awaited<ReturnType<typeof getMarkersMarkerIdCatches>>, TError = ErrorType<ApiError>>(
+ markerId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMarkersMarkerIdCatches>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMarkersMarkerIdCatchesQueryOptions(markerId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPostMarkersMarkerIdCatchesUrl = (markerId: string,) => {
+
+
+
+
+  return `/api/markers/${markerId}/catches`
+}
+
+/**
+ * @summary Create a catch entry on a marker
+ */
+export const postMarkersMarkerIdCatches = async (markerId: string,
+    catchEntryInput: CatchEntryInput, options?: RequestInit): Promise<CatchEntry> => {
+
+  return customFetch<CatchEntry>(getPostMarkersMarkerIdCatchesUrl(markerId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      catchEntryInput,)
+  }
+);}
+
+
+
+
+export const getPostMarkersMarkerIdCatchesMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postMarkersMarkerIdCatches>>, TError,{markerId: string;data: BodyType<CatchEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postMarkersMarkerIdCatches>>, TError,{markerId: string;data: BodyType<CatchEntryInput>}, TContext> => {
+
+const mutationKey = ['postMarkersMarkerIdCatches'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postMarkersMarkerIdCatches>>, {markerId: string;data: BodyType<CatchEntryInput>}> = (props) => {
+          const {markerId,data} = props ?? {};
+
+          return  postMarkersMarkerIdCatches(markerId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostMarkersMarkerIdCatchesMutationResult = NonNullable<Awaited<ReturnType<typeof postMarkersMarkerIdCatches>>>
+    export type PostMarkersMarkerIdCatchesMutationBody = BodyType<CatchEntryInput>
+    export type PostMarkersMarkerIdCatchesMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Create a catch entry on a marker
+ */
+export const usePostMarkersMarkerIdCatches = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postMarkersMarkerIdCatches>>, TError,{markerId: string;data: BodyType<CatchEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postMarkersMarkerIdCatches>>,
+        TError,
+        {markerId: string;data: BodyType<CatchEntryInput>},
+        TContext
+      > => {
+      return useMutation(getPostMarkersMarkerIdCatchesMutationOptions(options));
+    }
+
+export const getPatchCatchesIdUrl = (id: string,) => {
+
+
+
+
+  return `/api/catches/${id}`
+}
+
+/**
+ * @summary Edit a catch entry's symbol, notes, or photos
+ */
+export const patchCatchesId = async (id: string,
+    catchEntryPatch: CatchEntryPatch, options?: RequestInit): Promise<CatchEntry> => {
+
+  return customFetch<CatchEntry>(getPatchCatchesIdUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      catchEntryPatch,)
+  }
+);}
+
+
+
+
+export const getPatchCatchesIdMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatchesId>>, TError,{id: string;data: BodyType<CatchEntryPatch>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchCatchesId>>, TError,{id: string;data: BodyType<CatchEntryPatch>}, TContext> => {
+
+const mutationKey = ['patchCatchesId'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchCatchesId>>, {id: string;data: BodyType<CatchEntryPatch>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  patchCatchesId(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchCatchesIdMutationResult = NonNullable<Awaited<ReturnType<typeof patchCatchesId>>>
+    export type PatchCatchesIdMutationBody = BodyType<CatchEntryPatch>
+    export type PatchCatchesIdMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Edit a catch entry's symbol, notes, or photos
+ */
+export const usePatchCatchesId = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatchesId>>, TError,{id: string;data: BodyType<CatchEntryPatch>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof patchCatchesId>>,
+        TError,
+        {id: string;data: BodyType<CatchEntryPatch>},
+        TContext
+      > => {
+      return useMutation(getPatchCatchesIdMutationOptions(options));
+    }
+
+export const getDeleteCatchesIdUrl = (id: string,) => {
+
+
+
+
+  return `/api/catches/${id}`
+}
+
+/**
+ * @summary Delete a catch entry
+ */
+export const deleteCatchesId = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteCatchesIdUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteCatchesIdMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCatchesId>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCatchesId>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteCatchesId'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCatchesId>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteCatchesId(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCatchesIdMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCatchesId>>>
+
+    export type DeleteCatchesIdMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Delete a catch entry
+ */
+export const useDeleteCatchesId = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCatchesId>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteCatchesId>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteCatchesIdMutationOptions(options));
+    }
+
+export const getPostCatchPhotosUploadUrlUrl = () => {
+
+
+
+
+  return `/api/catch-photos/upload-url`
+}
+
+/**
+ * @summary Request a short-lived signed URL for uploading one catch photo
+ */
+export const postCatchPhotosUploadUrl = async ( options?: RequestInit): Promise<PostCatchPhotosUploadUrl200> => {
+
+  return customFetch<PostCatchPhotosUploadUrl200>(getPostCatchPhotosUploadUrlUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getPostCatchPhotosUploadUrlMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatchPhotosUploadUrl>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postCatchPhotosUploadUrl>>, TError,void, TContext> => {
+
+const mutationKey = ['postCatchPhotosUploadUrl'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCatchPhotosUploadUrl>>, void> = () => {
+
+
+          return  postCatchPhotosUploadUrl(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostCatchPhotosUploadUrlMutationResult = NonNullable<Awaited<ReturnType<typeof postCatchPhotosUploadUrl>>>
+
+    export type PostCatchPhotosUploadUrlMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Request a short-lived signed URL for uploading one catch photo
+ */
+export const usePostCatchPhotosUploadUrl = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatchPhotosUploadUrl>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postCatchPhotosUploadUrl>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getPostCatchPhotosUploadUrlMutationOptions(options));
+    }
+
+export const getGetObjectUrl = (objectPath: string,) => {
+
+
+
+
+  return `/api/objects/${objectPath}`
+}
+
+/**
+ * Streams the object bytes if the authenticated user is the owner or has been granted READ access via the object's ACL policy. objectPath is the remainder of the "/objects/…" path returned by the upload-URL endpoint.
+
+ * @summary Download a private stored object (e.g. a catch photo) after an ACL check
+ */
+export const getObject = async (objectPath: string, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetObjectUrl(objectPath),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetObjectQueryKey = (objectPath: string,) => {
+    return [
+    `/api/objects/${objectPath}`
+    ] as const;
+    }
+
+
+export const getGetObjectQueryOptions = <TData = Awaited<ReturnType<typeof getObject>>, TError = ErrorType<ApiError>>(objectPath: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getObject>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetObjectQueryKey(objectPath);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getObject>>> = ({ signal }) => getObject(objectPath, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(objectPath), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getObject>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetObjectQueryResult = NonNullable<Awaited<ReturnType<typeof getObject>>>
+export type GetObjectQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Download a private stored object (e.g. a catch photo) after an ACL check
+ */
+
+export function useGetObject<TData = Awaited<ReturnType<typeof getObject>>, TError = ErrorType<ApiError>>(
+ objectPath: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getObject>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetObjectQueryOptions(objectPath,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getGetTrailsUrl = (params: GetTrailsParams,) => {
   const normalizedParams = new URLSearchParams();

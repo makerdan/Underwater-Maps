@@ -3,6 +3,8 @@ import { toast } from "@/hooks/use-toast";
 import {
   useGetMarkers,
   getGetMarkersQueryKey,
+  useGetCatches,
+  getGetCatchesQueryKey,
   useGetTrails,
   getGetTrailsQueryKey,
   getTrailsIdPoints,
@@ -144,6 +146,11 @@ export const OverviewMap: React.FC = () => {
   const { data: markerData } = useGetMarkers(
     { datasetId },
     { query: { enabled: !!datasetId, queryKey: getGetMarkersQueryKey({ datasetId }) } },
+  );
+
+  const { data: catchData } = useGetCatches(
+    { datasetId },
+    { query: { enabled: !!datasetId, queryKey: getGetCatchesQueryKey({ datasetId }) } },
   );
 
   const { data: trailsData, refetch: refetchTrails } = useGetTrails(
@@ -558,6 +565,18 @@ export const OverviewMap: React.FC = () => {
     markersRef.current = markerData ?? [];
     dirtyRef.current = true;
   }, [markerData]);
+
+  // Catch-journal symbols per marker for the SVG overlay — one per entry
+  // (duplicates kept so repeat catches stay visible).
+  const catchSymbolsByMarker = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const e of catchData ?? []) {
+      const list = map.get(e.markerId) ?? [];
+      list.push(e.symbol);
+      if (!map.has(e.markerId)) map.set(e.markerId, list);
+    }
+    return map;
+  }, [catchData]);
 
   // EFH data — either embedded in the overview grid (for user-saved noaa-efh-*
   // datasets) or fetched from /efh (for preset datasets with the hasEfh flag).
@@ -1916,6 +1935,24 @@ export const OverviewMap: React.FC = () => {
                       fontFamily="'JetBrains Mono', monospace" opacity={0.9}
                     >{m.label}</text>
                   )}
+                  {(() => {
+                    const symbols = catchSymbolsByMarker.get(m.id);
+                    if (!symbols || symbols.length === 0) return null;
+                    // Spaced row of catch symbols above the marker dot.
+                    const shown = symbols.slice(0, 5);
+                    const spacing = 12;
+                    const startX = cx - ((shown.length - 1) * spacing) / 2;
+                    return shown.map((s, i) => (
+                      <text
+                        key={`cs-${m.id}-${i}`}
+                        x={startX + i * spacing}
+                        y={cy - r - 6}
+                        fontSize={11}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                      >{s}</text>
+                    ));
+                  })()}
                 </g>
               );
             })}

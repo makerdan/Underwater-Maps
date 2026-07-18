@@ -16,6 +16,8 @@ tags:
     description: Bathymetric dataset operations
   - name: markers
     description: Persisted point-of-interest marker operations
+  - name: catches
+    description: Catch journal entries (symbols, notes, photos) linked to markers
   - name: settings
     description: Per-user application settings
   - name: user-datasets
@@ -881,6 +883,239 @@ paths:
           description: Marker deleted
         "404":
           description: Marker not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /catches:
+    get:
+      operationId: getCatches
+      tags: [catches]
+      summary: List all catch entries for the caller's markers in a dataset
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: query
+          name: datasetId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Catch entry list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CatchEntry"
+        "400":
+          description: Missing datasetId
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /markers/{markerId}/catches:
+    get:
+      operationId: getMarkersMarkerIdCatches
+      tags: [catches]
+      summary: List catch entries for one marker
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: markerId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Catch entry list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CatchEntry"
+        "404":
+          description: Marker not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    post:
+      operationId: postMarkersMarkerIdCatches
+      tags: [catches]
+      summary: Create a catch entry on a marker
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: markerId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CatchEntryInput"
+      responses:
+        "201":
+          description: Created catch entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatchEntry"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Marker not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /catches/{id}:
+    patch:
+      operationId: patchCatchesId
+      tags: [catches]
+      summary: Edit a catch entry's symbol, notes, or photos
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CatchEntryPatch"
+      responses:
+        "200":
+          description: Updated catch entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatchEntry"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Catch entry not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteCatchesId
+      tags: [catches]
+      summary: Delete a catch entry
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Catch entry deleted
+        "404":
+          description: Catch entry not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /catch-photos/upload-url:
+    post:
+      operationId: postCatchPhotosUploadUrl
+      tags: [catches]
+      summary: Request a short-lived signed URL for uploading one catch photo
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Signed upload URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uploadURL:
+                    type: string
+                  objectPath:
+                    type: string
+                    description: Normalized "/objects/…" path to store on the catch entry
+                required: [uploadURL, objectPath]
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /objects/{objectPath}:
+    get:
+      operationId: getObject
+      tags: [catches]
+      summary: Download a private stored object (e.g. a catch photo) after an ACL check
+      description: >
+        Streams the object bytes if the authenticated user is the owner or has
+        been granted READ access via the object's ACL policy. objectPath is the
+        remainder of the "/objects/…" path returned by the upload-URL endpoint.
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: objectPath
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Object bytes (content type varies by object)
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Authenticated but not permitted to read this object
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Object not found
           content:
             application/json:
               schema:
@@ -5796,6 +6031,92 @@ components:
         - type
         - label
         - createdAt
+
+    CatchEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          description: UUID primary key
+        markerId:
+          type: string
+          description: Marker (spot) this catch belongs to
+        symbol:
+          type: string
+          description: Emoji / symbol representing what was caught
+        symbolName:
+          type: string
+          description: Human-readable name for the symbol (e.g. "Salmon")
+        notes:
+          type: string
+          nullable: true
+        photos:
+          type: array
+          items:
+            type: string
+          description: Normalized "/objects/…" photo paths in private storage
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - markerId
+        - symbol
+        - symbolName
+        - photos
+        - createdAt
+        - updatedAt
+
+    CatchEntryInput:
+      type: object
+      properties:
+        symbol:
+          type: string
+          minLength: 1
+          maxLength: 16
+        symbolName:
+          type: string
+          maxLength: 60
+          default: ""
+        notes:
+          type: string
+          maxLength: 1000
+          nullable: true
+        photos:
+          type: array
+          maxItems: 6
+          items:
+            type: string
+            maxLength: 512
+          default: []
+      required:
+        - symbol
+      additionalProperties: false
+
+    CatchEntryPatch:
+      type: object
+      properties:
+        symbol:
+          type: string
+          minLength: 1
+          maxLength: 16
+        symbolName:
+          type: string
+          maxLength: 60
+        notes:
+          type: string
+          maxLength: 1000
+          nullable: true
+        photos:
+          type: array
+          maxItems: 6
+          items:
+            type: string
+            maxLength: 512
+      additionalProperties: false
 
     GpsPoint:
       type: object

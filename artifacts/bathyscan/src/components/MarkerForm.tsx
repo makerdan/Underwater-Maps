@@ -49,6 +49,7 @@ import {
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { markerLabelSchema, markerNotesSchema } from "@/lib/markerFormSchema";
 import { useMarkerEditStore } from "@/lib/markerEditStore";
+import { useCatchJournalStore } from "@/lib/catchJournalStore";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(2,8,24,0.92)",
@@ -200,6 +201,8 @@ export const MarkerForm: React.FC = () => {
   const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
 
   const handleClose = () => {
+    // Cancelling the form abandons any pending "Log a catch here" flow.
+    useCatchJournalStore.getState().setPendingOpenForNewMarker(false);
     if (isEditMode) {
       if (isDirtyRef.current) {
         setDiscardDialogOpen(true);
@@ -317,11 +320,18 @@ export const MarkerForm: React.FC = () => {
     postMarkers.mutate(
       { data: markerBody },
       {
-        onSuccess: () => {
+        onSuccess: (created) => {
           void qc.invalidateQueries({
             queryKey: getGetMarkersQueryKey({ datasetId: terrain.datasetId }),
           });
           setMarkerFormOpen(false);
+          // "Log a catch here" flow: the terrain context menu set this flag
+          // before opening the form — jump straight into the catch journal
+          // for the marker we just dropped.
+          const cj = useCatchJournalStore.getState();
+          if (cj.pendingOpenForNewMarker && created) {
+            cj.open(created);
+          }
         },
         onError: (err) => {
           // Queue to IndexedDB on any network-level failure
@@ -659,6 +669,26 @@ export const MarkerForm: React.FC = () => {
             justifyContent: "flex-end",
           }}
         >
+          {isEditMode && editMarker && (
+            <button
+              type="button"
+              onClick={() => useCatchJournalStore.getState().open(editMarker)}
+              style={{
+                fontSize: 13.5,
+                letterSpacing: "0.12em",
+                padding: "5px 14px",
+                borderRadius: 3,
+                border: "1px solid rgba(0,229,255,0.25)",
+                background: "rgba(0,229,255,0.06)",
+                color: "#00e5ff",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                marginRight: "auto",
+              }}
+            >
+              🎣 CATCH JOURNAL
+            </button>
+          )}
           <button
             type="button"
             onClick={handleCancel}

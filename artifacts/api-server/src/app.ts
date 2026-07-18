@@ -128,6 +128,8 @@ const BODY_LIMIT_RULES: Array<[string, string]> = [
   ["/api/query", "16kb"],       // free-text query + small terrain context
   ["/api/settings", "64kb"],    // flat key-value settings object
   ["/api/markers", "256kb"],    // single marker: a handful of scalar fields
+  ["/api/catches", "64kb"],     // catch entry: symbol + notes + photo paths
+  ["/api/catch-photos", "16kb"],// upload-url request: empty body
   ["/api/routes", "256kb"],     // route name + ≤20 waypoints
   // Medium limits — enough for GPS tracks or classify tile grids.
   ["/api/trails", "5mb"],       // up to 50 000 GPS points (~100 B/point)
