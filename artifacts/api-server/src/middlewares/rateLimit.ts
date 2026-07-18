@@ -267,12 +267,11 @@ const fallbackBackend: RateLimitBackend = {
 };
 
 function clientIp(req: Request): string {
-  const xff = req.headers["x-forwarded-for"];
-  if (typeof xff === "string" && xff.length > 0) {
-    const first = xff.split(",")[0];
-    if (first && first.trim().length > 0) return first.trim();
-  }
-  return req.ip ?? req.socket.remoteAddress ?? "unknown";
+  // req.ip is authoritative when app.set("trust proxy", 1) is configured —
+  // Express validates the proxy hop and strips untrustworthy XFF entries,
+  // preventing clients from spoofing arbitrary IPs via the header.
+  if (req.ip && req.ip.length > 0) return req.ip;
+  return req.socket.remoteAddress ?? "unknown";
 }
 
 export function createRateLimit(opts: RateLimitOptions): RequestHandler {

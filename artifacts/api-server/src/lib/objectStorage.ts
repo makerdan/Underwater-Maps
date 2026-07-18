@@ -1,6 +1,7 @@
 import { Storage, File } from "@google-cloud/storage";
 import { Readable } from "stream";
 import { randomUUID } from "crypto";
+import path from "path";
 import {
   ObjectAclPolicy,
   ObjectPermission,
@@ -138,7 +139,29 @@ export class ObjectStorageService {
       throw new ObjectNotFoundError();
     }
 
-    const entityId = parts.slice(1).join("/");
+    const rawEntityId = parts.slice(1).join("/");
+    // Explicitly decode percent-encoded segments before normalization so that
+    // variants like "%2e%2e", "%2E%2E", or double-encoded forms are caught.
+    // Express may or may not have decoded req.path by the time objectPath
+    // reaches here depending on the call site, so we always decode ourselves.
+    let decodedEntityId: string;
+    try {
+      decodedEntityId = decodeURIComponent(rawEntityId);
+    } catch {
+      // Malformed percent-encoding — treat as not found.
+      throw new ObjectNotFoundError();
+    }
+    // Normalize away any ".." segments, then reject any result that attempts
+    // to traverse upward or is absolute/empty/dot-only.
+    const entityId = path.posix.normalize(decodedEntityId);
+    if (
+      entityId === "." ||
+      entityId.startsWith("..") ||
+      entityId.startsWith("/") ||
+      entityId.includes("/../")
+    ) {
+      throw new ObjectNotFoundError();
+    }
     let entityDir = this.getPrivateObjectDir();
     if (!entityDir.endsWith("/")) {
       entityDir = `${entityDir}/`;

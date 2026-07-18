@@ -18,6 +18,11 @@ validateStartupEnv();
 
 const app: Express = express();
 
+// Trust the first proxy hop so req.ip reflects the real client IP rather than
+// the proxy's address. Required for IP-based rate limiting to work correctly
+// when the server runs behind Replit's proxy layer.
+app.set("trust proxy", 1);
+
 // ---------------------------------------------------------------------------
 // /health — lightweight liveness probe (no auth required)
 // ---------------------------------------------------------------------------

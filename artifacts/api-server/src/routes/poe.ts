@@ -187,8 +187,8 @@ function handlePoeError(err: unknown, res: Response): void {
   } else if (err instanceof PoeAuthError) {
     res.status(401).json({ error: "auth_error", details: "AI service authentication failed" });
   } else {
-    const msg = err instanceof Error ? err.message : "Unknown Poe API error";
-    res.status(500).json({ error: "poe_error", details: msg });
+    logger.warn({ err }, "[poe] unclassified error");
+    res.status(500).json({ error: "poe_error", details: "AI service error" });
   }
 }
 
