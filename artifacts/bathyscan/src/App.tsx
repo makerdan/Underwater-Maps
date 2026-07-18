@@ -90,6 +90,7 @@ import { WeatherPanel } from "@/components/WeatherPanel";
 import { DriftTimeline } from "@/components/DriftTimeline";
 import { HelpButton } from "@/components/help/HelpButton";
 import { HelpWindow } from "@/components/help/HelpWindow";
+import { ZoneLegendChip } from "@/components/help/ZoneLegendChip";
 import { RoutesPanel } from "@/components/RoutesPanel";
 import "@/components/help/help.css";
 import { ConditionsLegend } from "@/components/ConditionsLegend";
@@ -1205,6 +1206,10 @@ function Main() {
 
         {/* Help launch button — upper-left of main interactive area */}
         <HelpButton />
+
+        {/* Zone color legend chip — anchored below the Help button.
+            Renders only when the zone overlay is active. */}
+        <ZoneLegendChip />
 
         {/* Help floating window (renders only when open) */}
         <HelpWindow />

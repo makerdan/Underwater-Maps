@@ -19,6 +19,8 @@ export type PanelId =
   | "uploadTerrainAccordion"
   | "routes"
   | "myLibrary"
+  // ── Zone legend chip (below Help button, default: collapsed) ───────────────
+  | "zoneLegendChip"
   // ── Per-panel Advanced section collapse keys (default: collapsed) ──────────
   | "overlaysToolsAdvanced"
   | "tidePanelAdvanced"
@@ -51,6 +53,8 @@ export const DEFAULTS: Record<PanelId, boolean> = {
   uploadTerrainAccordion: true,
   routes: false,
   myLibrary: false,
+  // Zone legend chip — collapsed by default (user expands on demand)
+  zoneLegendChip: true,
   // Advanced sub-sections — collapsed by default on first use
   overlaysToolsAdvanced: true,
   tidePanelAdvanced: true,
