@@ -109,7 +109,6 @@ import type {
   NceiPortalSaveBody,
   PatchRouteBody,
   PoeClassifyRequest,
-  PoeDescribeRequest,
   PoeError,
   PoeHelp200,
   PoeHelpBody,
@@ -3948,78 +3947,6 @@ export const usePoeQuery = <TError = ErrorType<PoeError>,
         TContext
       > => {
       return useMutation(getPoeQueryMutationOptions(options));
-    }
-
-export const getPoeDescribeUrl = () => {
-
-
-
-
-  return `/api/poe/describe`
-}
-
-/**
- * Returns a Server-Sent Event stream of geological description deltas
- * @summary Stream a location description via SSE
- */
-export const poeDescribe = async (poeDescribeRequest: PoeDescribeRequest, options?: RequestInit): Promise<string> => {
-
-  return customFetch<string>(getPoeDescribeUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      poeDescribeRequest,)
-  }
-);}
-
-
-
-
-export const getPoeDescribeMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof poeDescribe>>, TError,{data: BodyType<PoeDescribeRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof poeDescribe>>, TError,{data: BodyType<PoeDescribeRequest>}, TContext> => {
-
-const mutationKey = ['poeDescribe'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof poeDescribe>>, {data: BodyType<PoeDescribeRequest>}> = (props) => {
-          const {data} = props ?? {};
-
-          return  poeDescribe(data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type PoeDescribeMutationResult = NonNullable<Awaited<ReturnType<typeof poeDescribe>>>
-    export type PoeDescribeMutationBody = BodyType<PoeDescribeRequest>
-    export type PoeDescribeMutationError = ErrorType<unknown>
-
-    /**
- * @summary Stream a location description via SSE
- */
-export const usePoeDescribe = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof poeDescribe>>, TError,{data: BodyType<PoeDescribeRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof poeDescribe>>,
-        TError,
-        {data: BodyType<PoeDescribeRequest>},
-        TContext
-      > => {
-      return useMutation(getPoeDescribeMutationOptions(options));
     }
 
 export const getGetPoeModelsUrl = () => {

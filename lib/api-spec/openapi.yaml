@@ -1630,26 +1630,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/PoeError"
 
-  /poe/describe:
-    post:
-      operationId: poeDescribe
-      tags: [poe]
-      summary: Stream a location description via SSE
-      description: Returns a Server-Sent Event stream of geological description deltas
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PoeDescribeRequest"
-      responses:
-        "200":
-          description: SSE stream of text deltas, terminated with data:[DONE]
-          content:
-            text/event-stream:
-              schema:
-                type: string
-
   /poe/models:
     get:
       operationId: getPoeModels
@@ -4725,23 +4705,6 @@ components:
           description: Poe response ID for chaining
       required:
         - toolCalls
-
-    PoeDescribeRequest:
-      type: object
-      properties:
-        lon:
-          type: number
-        lat:
-          type: number
-        depth:
-          type: number
-        zoneName:
-          type: string
-        datasetName:
-          type: string
-        waterType:
-          type: string
-          enum: [saltwater, freshwater]
 
     PoeModelList:
       type: object

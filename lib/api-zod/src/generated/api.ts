@@ -2629,20 +2629,6 @@ export const PoeQueryResponse = zod.object({
 
 
 /**
- * Returns a Server-Sent Event stream of geological description deltas
- * @summary Stream a location description via SSE
- */
-export const PoeDescribeBody = zod.object({
-  "lon": zod.number().optional(),
-  "lat": zod.number().optional(),
-  "depth": zod.number().optional(),
-  "zoneName": zod.string().optional(),
-  "datasetName": zod.string().optional(),
-  "waterType": zod.enum(['saltwater', 'freshwater']).optional()
-})
-
-
-/**
  * Returns publicly available Poe models (cached 1 hour)
  * @summary List available Poe models
  */

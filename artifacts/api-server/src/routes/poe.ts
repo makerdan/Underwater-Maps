@@ -98,7 +98,6 @@ export function __resetPoeBreaker(): void {
 const POE_MODELS_TIMEOUT_MS = 10_000;
 const POE_CLASSIFY_TIMEOUT_MS = 45_000;
 const POE_QUERY_TIMEOUT_MS = 30_000;
-const POE_DESCRIBE_TIMEOUT_MS = 60_000;
 const POE_HELP_TIMEOUT_MS = 30_000;
 
 // ---------------------------------------------------------------------------
@@ -1734,103 +1733,6 @@ router.post("/query", asyncHandler(async (req, res) => {
     });
   } catch (err) {
     handlePoeError(err, res);
-  }
-}));
-
-// ---------------------------------------------------------------------------
-// Describe (SSE streaming)
-// ---------------------------------------------------------------------------
-
-const DescribeBodySchema = z.object({
-  lon: z.number().optional(),
-  lat: z.number().optional(),
-  depth: z.number().optional(),
-  zoneName: z.string().optional(),
-  datasetName: z.string().optional(),
-  waterType: z.enum(["saltwater", "freshwater"]).optional().default("saltwater"),
-});
-
-router.post("/describe", asyncHandler(async (req, res) => {
-  const userId = getAuthenticatedUserId(req);
-
-  const parsedDescribe = DescribeBodySchema.safeParse(req.body);
-  if (!parsedDescribe.success) {
-    res.status(400).json({ error: "invalid_request", details: parsedDescribe.error.message });
-    return;
-  }
-
-  const { lon, lat, depth, zoneName, datasetName, waterType } = parsedDescribe.data;
-
-  const env = waterType === "freshwater" ? "freshwater lake or reservoir" : "ocean seafloor";
-  const systemMsg = `You are a concise marine geologist. Describe the ${env} feature in 2–3 sentences. Focus on physical characteristics and what might be found here.`;
-  const userMsg = `Depth: ${depth ?? 0}m. Zone: ${zoneName ?? "unknown"}. Dataset: ${datasetName ?? "unknown"}. Location: lat ${lat ?? 0}, lon ${lon ?? 0}. What should I know about this spot?`;
-
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.removeHeader("Content-Length");
-  res.flushHeaders();
-
-  // Abort the upstream stream as soon as the client disconnects so we don't
-  // keep paying for tokens (and pinning a worker) for a response nobody is
-  // reading. The controller is also tripped by a hard upstream timeout via
-  // AbortSignal.any so a hung upstream can't outlive the worker either.
-  const clientAbort = new AbortController();
-  const upstreamSignal = AbortSignal.any([
-    clientAbort.signal,
-    AbortSignal.timeout(POE_DESCRIBE_TIMEOUT_MS),
-  ]);
-  const onClientClose = (): void => {
-    if (!clientAbort.signal.aborted) clientAbort.abort();
-  };
-  req.on("close", onClientClose);
-  res.on("close", onClientClose);
-
-  try {
-    const client = getPoeClient();
-    const stream = await withRetry(
-      () =>
-        client.chat.completions.create(
-          {
-            model: POE_MODELS.DESCRIBE_QUICK,
-            messages: [
-              { role: "system", content: systemMsg },
-              { role: "user", content: userMsg },
-            ],
-            max_tokens: 300,
-            temperature: 0.5,
-            stream: true,
-          },
-          { signal: upstreamSignal },
-        ),
-      3,
-    );
-
-    let outputChars = 0;
-    for await (const chunk of stream) {
-      if (clientAbort.signal.aborted) break;
-      const delta = chunk.choices[0]?.delta?.content;
-      if (delta) {
-        outputChars += delta.length;
-        res.write(`data: ${JSON.stringify({ delta })}\n\n`);
-      }
-    }
-
-    if (!clientAbort.signal.aborted) {
-      res.write("data: [DONE]\n\n");
-      res.end();
-    }
-
-    const inputTokens = Math.ceil((systemMsg.length + userMsg.length) / 4);
-    const outputTokens = Math.ceil(outputChars / 4);
-    await logUsage(userId, POE_MODELS.DESCRIBE_QUICK, "describe", inputTokens, outputTokens);
-  } catch (err) {
-    if (!res.headersSent) {
-      handlePoeError(err, res);
-    } else {
-      res.write(`data: ${JSON.stringify({ error: "stream_error" })}\n\n`);
-      res.end();
-    }
   }
 }));
 

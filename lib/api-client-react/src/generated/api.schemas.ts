@@ -149,23 +149,6 @@ export interface QueryResult {
   responseId?: string | null;
 }
 
-export type PoeDescribeRequestWaterType = typeof PoeDescribeRequestWaterType[keyof typeof PoeDescribeRequestWaterType];
-
-
-export const PoeDescribeRequestWaterType = {
-  saltwater: 'saltwater',
-  freshwater: 'freshwater',
-} as const;
-
-export interface PoeDescribeRequest {
-  lon?: number;
-  lat?: number;
-  depth?: number;
-  zoneName?: string;
-  datasetName?: string;
-  waterType?: PoeDescribeRequestWaterType;
-}
-
 export type PoeModelListDataItem = {
   id: string;
   object: string;
